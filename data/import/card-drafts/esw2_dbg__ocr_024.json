@@ -1,0 +1,26 @@
+{
+  "cardId": "esw2_dbg__ocr_024",
+  "source": {
+    "image": "assets/cards/raw/1000009232.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_024.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Вялая палочка",
+    "cost": 0,
+    "victoryPoints": -1,
+    "typeRu": null,
+    "cardKind": "limpWand",
+    "cardTypes": [],
+    "textRu": "(Эффекта нет.)",
+    "markers": [],
+    "uncertainty": [
+      "OCR указал, что видимый тип карты не виден или не указан на видимой части."
+    ]
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

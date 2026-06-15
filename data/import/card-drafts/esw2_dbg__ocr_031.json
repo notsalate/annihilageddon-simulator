@@ -1,0 +1,27 @@
+{
+  "cardId": "esw2_dbg__ocr_031",
+  "source": {
+    "image": "assets/cards/raw/1000009189.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_031.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "2L",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун сбрасывает свою колоду, потом уничтожает 1 карту в своей стопке сброса.",
+    "markers": [],
+    "uncertainty": [
+      "OCR указал, что стоимость не видна или не указана на видимой части.",
+      "OCR указал, что ПО не видны или не указаны на видимой части."
+    ]
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

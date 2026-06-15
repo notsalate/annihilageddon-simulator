@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__ocr_023",
+  "source": {
+    "draft": "data/import/card-drafts/esw2_dbg__ocr_023.json",
+    "image": "assets/cards/raw/1000009231.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_023.md"
+  },
+  "visible": {
+    "nameRu": "Пшик",
+    "cost": 0,
+    "victoryPoints": 0,
+    "typeRu": "Затравка",
+    "cardKind": "starter",
+    "cardTypes": [],
+    "textRu": "(Эффекта нет.)",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "starter",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

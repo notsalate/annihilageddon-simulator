@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "deckId": "v0-main-deck-first-batch",
+  "runtimeSchema": "krutagidon.deckComposition.v0",
+  "role": "mainDeck",
+  "mappingStatus": "supported-first-batch-fixture",
+  "entries": [
+    {
+      "cardId": "esw2_dbg__ocr_001",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_002",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_004",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_005",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_006",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_008",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_009",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_010",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_011",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_012",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_013",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_014",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_015",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_016",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_017",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_018",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_019",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_003",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_028",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_029",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_031",
+      "count": 2
+    }
+  ],
+  "notes": [
+    "First-batch fixture deck. Excludes partial card esw2_dbg__ocr_007."
+  ]
+}

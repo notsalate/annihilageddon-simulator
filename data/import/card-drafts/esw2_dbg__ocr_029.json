@@ -1,0 +1,27 @@
+{
+  "cardId": "esw2_dbg__ocr_029",
+  "source": {
+    "image": "assets/cards/raw/1000009187.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_029.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "2O",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун должен либо сбросить все карты с руки и взять 5 карт, либо отхватить 5 урона.",
+    "markers": [],
+    "uncertainty": [
+      "OCR указал, что стоимость не видна или не указана на видимой части.",
+      "OCR указал, что ПО не видны или не указаны на видимой части."
+    ]
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

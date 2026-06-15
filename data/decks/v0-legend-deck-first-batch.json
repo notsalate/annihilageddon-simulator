@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "deckId": "v0-legend-deck-first-batch",
+  "runtimeSchema": "krutagidon.deckComposition.v0",
+  "role": "legendDeck",
+  "mappingStatus": "supported-first-batch-fixture",
+  "entries": [
+    {
+      "cardId": "esw2_dbg__ocr_025",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_026",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_027",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_032",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_034",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_035",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_037",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_038",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__ocr_039",
+      "count": 2
+    }
+  ],
+  "notes": [
+    "First-batch fixture deck. Excludes partial cards esw2_dbg__ocr_030, esw2_dbg__ocr_033, and esw2_dbg__ocr_036."
+  ]
+}

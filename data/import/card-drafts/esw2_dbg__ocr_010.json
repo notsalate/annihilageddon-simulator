@@ -1,0 +1,28 @@
+{
+  "cardId": "esw2_dbg__ocr_010",
+  "source": {
+    "image": "assets/cards/raw/1000009133.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_010.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Спиногрызогрызы",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": [
+      "creature"
+    ],
+    "textRu": "+2 мощи\n[символ активации: глаз и 6 стрелок]: если под твоим контролем есть ещё хотя бы 1 тварь, можешь уничтожить 1 карту у себя на руке или в стопке сброса.",
+    "markers": [
+      "activate"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

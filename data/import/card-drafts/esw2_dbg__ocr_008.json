@@ -1,0 +1,26 @@
+{
+  "cardId": "esw2_dbg__ocr_008",
+  "source": {
+    "image": "assets/cards/raw/1000009114.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_008.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Лошашлык",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": [
+      "spell"
+    ],
+    "textRu": "+3 мощи\nПолучи 1 чипсину за каждого колдуна-лошару.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

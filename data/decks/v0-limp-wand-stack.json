@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "deckId": "v0-limp-wand-stack",
+  "runtimeSchema": "krutagidon.deckComposition.v0",
+  "role": "limpWandStack",
+  "mappingStatus": "supported",
+  "entries": [
+    {
+      "cardId": "esw2_dbg__ocr_024",
+      "count": 15
+    }
+  ],
+  "notes": [
+    "Russian rules stack size: 15."
+  ]
+}

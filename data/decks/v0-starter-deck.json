@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "deckId": "v0-starter-deck",
+  "runtimeSchema": "krutagidon.deckComposition.v0",
+  "role": "starterDeckTemplate",
+  "mappingStatus": "supported",
+  "entries": [
+    {
+      "cardId": "esw2_dbg__ocr_022",
+      "count": 6
+    },
+    {
+      "cardId": "esw2_dbg__ocr_021",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__ocr_023",
+      "count": 3
+    }
+  ],
+  "notes": [
+    "Per-player starter deck: 6 Знак, 1 Сырная палочка, 3 Пшик."
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "cardId": "esw2_dbg__ocr_009",
+  "source": {
+    "image": "assets/cards/raw/1000009132.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_009.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Испанский стыд",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": [
+      "creature"
+    ],
+    "textRu": "+2 мощи\n[символ активации: глаз и 6 стрелок]: Атака: если под твоим контролем есть еще хотя бы 1 тварь, нанеси 9 урона выбранному врагу.",
+    "markers": [
+      "attack",
+      "activate"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

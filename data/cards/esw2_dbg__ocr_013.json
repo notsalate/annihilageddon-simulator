@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__ocr_013",
+  "source": {
+    "draft": "data/import/card-drafts/esw2_dbg__ocr_013.json",
+    "image": "assets/cards/raw/1000009157.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_013.md"
+  },
+  "visible": {
+    "nameRu": "Палочка-чипсалочка",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "+2 мощи\nМожешь потратить 1 чипсину, чтобы:\nАтака: нанеси 10 урона выбранному колдуну.",
+    "markers": [
+      "attack",
+      "marketChipMarker"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "cost": 3,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": true,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 2
+      },
+      {
+        "effectId": "optional_spend_chip_attack_damage",
+        "targetSelector": "chosenPlayer",
+        "chipCost": 1,
+        "timing": "onPlay",
+        "amount": 10
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

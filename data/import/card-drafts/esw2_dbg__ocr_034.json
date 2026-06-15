@@ -1,0 +1,29 @@
+{
+  "cardId": "esw2_dbg__ocr_034",
+  "source": {
+    "image": "assets/cards/raw/1000009222.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_034.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Ультимативное тронадо",
+    "cost": 18,
+    "victoryPoints": 6,
+    "typeRu": "Легенда-Место",
+    "cardKind": "legend",
+    "cardTypes": [
+      "legend",
+      "location"
+    ],
+    "textRu": "Постоянка: всякий раз, когда ты впервые за свой ход наносишь урон атакой, + столько мощи, каков суммарный нанесённый урон.",
+    "markers": [
+      "ongoing"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

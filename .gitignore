@@ -1,0 +1,4 @@
+node_modules/
+dist/
+.scratch/tmp/
+.scratch/tmp_*

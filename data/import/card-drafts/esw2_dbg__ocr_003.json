@@ -1,0 +1,28 @@
+{
+  "cardId": "esw2_dbg__ocr_003",
+  "source": {
+    "image": "assets/cards/raw/1000009091.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_003.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Глистомаг",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": [
+      "wizardCard"
+    ],
+    "textRu": "+2 мощи\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, можешь уничтожить 1 карту с руки.",
+    "markers": [
+      "defense"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

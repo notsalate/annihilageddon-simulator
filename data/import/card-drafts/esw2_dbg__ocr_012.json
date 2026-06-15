@@ -1,0 +1,29 @@
+{
+  "cardId": "esw2_dbg__ocr_012",
+  "source": {
+    "image": "assets/cards/raw/1000009135.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_012.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Пейотка",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": [
+      "creature"
+    ],
+    "textRu": "+2 мощи\n[символ активации: глаз и 6 стрелок]: если под твоим контролем есть ещё хотя бы 1 тварь, получи 1 чипсину.",
+    "markers": [
+      "activate",
+      "marketChipMarker"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

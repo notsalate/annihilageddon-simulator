@@ -1,0 +1,27 @@
+{
+  "cardId": "esw2_dbg__ocr_032",
+  "source": {
+    "image": "assets/cards/raw/1000009220.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_032.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Зад в будущее",
+    "cost": 14,
+    "victoryPoints": 5,
+    "typeRu": "Легенда-Волшебник",
+    "cardKind": "legend",
+    "cardTypes": [
+      "legend",
+      "wizardCard"
+    ],
+    "textRu": "+1 мощь\nПолучая карты с барахолки во время этого хода, можешь брать их на руку.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "cardId": "esw2_dbg__ocr_006",
+  "source": {
+    "image": "assets/cards/raw/1000009112.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_006.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Волшебные отходы",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": [
+      "spell"
+    ],
+    "textRu": "Постоянка:\n[символ активации]: уничтожь эту карту, уничтожь 2 или меньше карт с руки.",
+    "markers": [
+      "ongoing",
+      "activate"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

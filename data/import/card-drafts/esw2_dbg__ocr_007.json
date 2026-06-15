@@ -1,0 +1,28 @@
+{
+  "cardId": "esw2_dbg__ocr_007",
+  "source": {
+    "image": "assets/cards/raw/1000009113.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_007.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Ламповое желание",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": [
+      "spell"
+    ],
+    "textRu": "+3 мощи\nЗащита: можешь положить эту карту на верх своей колоды, лицевой стороной вверх, чтобы избежать атаки.",
+    "markers": [
+      "defense"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

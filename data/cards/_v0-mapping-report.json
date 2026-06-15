@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": "data/import/card-drafts",
+  "generatedBy": ".scratch/krutagidon-simulation-platform/tools/build-v0-playable-data-pack.ps1",
+  "cardCounts": {
+    "mapped": 39,
+    "supported": 35,
+    "partial": 4,
+    "unsupported": 0
+  },
+  "unsupportedCards": [
+    {
+      "cardId": "esw2_dbg__ocr_007",
+      "nameRu": "Ламповое желание",
+      "mappingStatus": "partial",
+      "reasons": [
+        "В v0 zones пока нет состояния face-up карты на верху колоды; маппинг как обычный topdeck изменил бы поведение."
+      ]
+    },
+    {
+      "cardId": "esw2_dbg__ocr_030",
+      "nameRu": "2T",
+      "mappingStatus": "partial",
+      "reasons": [
+        "Баттл с участием/пасом, раскрытием рук, сравнением суммарной стоимости и возможными ничьими победителями не входит в минимальный v0 handler set; карта не добавлена в v0 deck."
+      ]
+    },
+    {
+      "cardId": "esw2_dbg__ocr_033",
+      "nameRu": "Надёжный план",
+      "mappingStatus": "partial",
+      "reasons": [
+        "Активация требует посмотреть 5 верхних карт колоды Легенд, выбрать 1 в свою колоду и вернуть остальные в любом порядке; v0 deck manipulation/reorder handler ещё не зафиксирован."
+      ]
+    },
+    {
+      "cardId": "esw2_dbg__ocr_036",
+      "nameRu": "Палочка-ушаталочка",
+      "mappingStatus": "partial",
+      "reasons": [
+        "Мгновенная победа конкретной карты вне текущей v0 модели условий конца партии и scoring; урон замаплен, мгновенная победа не замаплена."
+      ]
+    }
+  ],
+  "deckStatus": {
+    "starterDeck": "supported",
+    "mainDeck": "supported-first-batch-fixture",
+    "wildMagicStack": "supported",
+    "limpWandStack": "supported",
+    "legendDeck": "supported-first-batch-fixture"
+  },
+  "notes": [
+    "Runtime-поведение карт закодировано явными effectId objects; engine не должен парсить visible.textRu во время партии.",
+    "v0 main/legend decks являются first-batch fixture: они используют только supported карты и исключают partial mappings."
+  ]
+}

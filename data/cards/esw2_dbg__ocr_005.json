@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__ocr_005",
+  "source": {
+    "draft": "data/import/card-drafts/esw2_dbg__ocr_005.json",
+    "image": "assets/cards/raw/1000009111.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_005.md"
+  },
+  "visible": {
+    "nameRu": "Волчий жор",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": [
+      "spell"
+    ],
+    "textRu": "+2 мощи\nАтака: нанеси 4 урона выбранному колдуну. Он сбрасывает карту.",
+    "markers": [
+      "attack",
+      "marketChipMarker"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": [
+      "spell"
+    ],
+    "cost": 3,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": true,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 2
+      },
+      {
+        "effectId": "attack_damage",
+        "targetSelector": "chosenPlayer",
+        "timing": "onPlay",
+        "amount": 4
+      },
+      {
+        "effectId": "attack_discard_cards",
+        "targetSelector": "sameAsPreviousAttackTarget",
+        "chooser": "target",
+        "timing": "onPlay",
+        "amount": 1,
+        "sourceZone": "hand"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "cardId": "esw2_dbg__ocr_011",
+  "source": {
+    "image": "assets/cards/raw/1000009134.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_011.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Желатиновый сисяк",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": [
+      "creature"
+    ],
+    "textRu": "Постоянка: +1 мощь",
+    "markers": [
+      "ongoing"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

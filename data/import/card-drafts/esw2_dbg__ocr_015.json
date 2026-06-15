@@ -1,0 +1,26 @@
+{
+  "cardId": "esw2_dbg__ocr_015",
+  "source": {
+    "image": "assets/cards/raw/1000009160.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_015.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Эпичный мерч боевых магов",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "+2 мощи\nВ этом ходу ты тратишь на 2 меньше на покупку легенд.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

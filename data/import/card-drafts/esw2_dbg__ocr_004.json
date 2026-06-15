@@ -1,0 +1,28 @@
+{
+  "cardId": "esw2_dbg__ocr_004",
+  "source": {
+    "image": "assets/cards/raw/1000009092.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_004.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Повелитель шкурок",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": [
+      "wizardCard"
+    ],
+    "textRu": "+2 мощи\nАтака: выбери правого или левого врага. Он получает 1 вялую палочку.",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

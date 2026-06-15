@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__ocr_035",
+  "source": {
+    "draft": "data/import/card-drafts/esw2_dbg__ocr_035.json",
+    "image": "assets/cards/raw/1000009223.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_035.md"
+  },
+  "visible": {
+    "nameRu": "Дерьмак гастрит",
+    "cost": 10,
+    "victoryPoints": 4,
+    "typeRu": "Легенда-Волшебник",
+    "cardKind": "legend",
+    "cardTypes": [
+      "legend",
+      "wizardCard"
+    ],
+    "textRu": "+2 мощи\nУничтожь 1 случайную легенду на барахолке легенд.\nАтака: нанеси каждому врагу столько урона, какова стоимость уничтоженной легенды.",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": [
+      "legend",
+      "wizardCard"
+    ],
+    "cost": 10,
+    "victoryPoints": 4,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 2
+      },
+      {
+        "effectId": "destroy_random_legend_market_card",
+        "rememberAs": "destroyedLegend",
+        "timing": "onPlay",
+        "sourceZone": "legendMarket",
+        "rng": "seeded"
+      },
+      {
+        "effectId": "attack_damage_equal_remembered_card_cost",
+        "targetSelector": "eachFoe",
+        "timing": "onPlay",
+        "rememberedCard": "destroyedLegend"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

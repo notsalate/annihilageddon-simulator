@@ -1,0 +1,29 @@
+{
+  "cardId": "esw2_dbg__ocr_013",
+  "source": {
+    "image": "assets/cards/raw/1000009157.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_013.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Палочка-чипсалочка",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "+2 мощи\nМожешь потратить 1 чипсину, чтобы:\nАтака: нанеси 10 урона выбранному колдуну.",
+    "markers": [
+      "attack",
+      "marketChipMarker"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "krutagidon-simulation-codex",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless deterministic simulation engine scaffold for Krutagidon 2.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build -- --pretty false && node dist/tests/rng.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "typescript": "^5.8.3"
+  }
+}

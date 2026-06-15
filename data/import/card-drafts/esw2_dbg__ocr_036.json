@@ -1,0 +1,29 @@
+{
+  "cardId": "esw2_dbg__ocr_036",
+  "source": {
+    "image": "assets/cards/raw/1000009224.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_036.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Палочка-ушаталочка",
+    "cost": 20,
+    "victoryPoints": 7,
+    "typeRu": "Легенда-Сокровище",
+    "cardKind": "legend",
+    "cardTypes": [
+      "legend",
+      "treasure"
+    ],
+    "textRu": "+8 мощи\nАтака: нанеси 1 урон выбранному врагу. Если он от этого подох, ты побеждаешь в игре (а все остальные могут лососнуть тунца).",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

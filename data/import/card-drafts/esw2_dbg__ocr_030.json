@@ -1,0 +1,27 @@
+{
+  "cardId": "esw2_dbg__ocr_030",
+  "source": {
+    "image": "assets/cards/raw/1000009188.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_030.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "2T",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Баттл \"Кто круче\": начиная с активного колдуна, каждый колдун либо заявляет об участии, либо пасует.\nЗатем все, кто не спасовал, раскрывают карты на руках. Колдун(ы) с наивысшей суммарной стоимостью берет 2 карты.\nОстальные, кто не спасовал, сбрасывают все карты с руки.",
+    "markers": [],
+    "uncertainty": [
+      "OCR указал, что стоимость не видна или не указана на видимой части.",
+      "OCR указал, что ПО не видны или не указаны на видимой части."
+    ]
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

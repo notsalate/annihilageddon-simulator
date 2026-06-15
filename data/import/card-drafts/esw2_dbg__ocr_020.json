@@ -1,0 +1,26 @@
+{
+  "cardId": "esw2_dbg__ocr_020",
+  "source": {
+    "image": "assets/cards/raw/1000009228.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_020.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Шальная магия",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": null,
+    "cardKind": "wildMagic",
+    "cardTypes": [],
+    "textRu": "Выбери одно: +2 мощи\nИЛИ можешь сыграть верхнюю карту из колоды любого врага и затем положить ее в стопку сброса владельца.\nЕсли это постоянка, вместо этого оставь её у себя, в игре.",
+    "markers": [],
+    "uncertainty": [
+      "OCR указал, что видимый тип карты не виден или не указан на видимой части."
+    ]
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "cardId": "esw2_dbg__ocr_019",
+  "source": {
+    "image": "assets/cards/raw/1000009193.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_019.md",
+    "processedMarker": "processed"
+  },
+  "visible": {
+    "nameRu": "Длань творца",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Место",
+    "cardKind": "normal",
+    "cardTypes": [
+      "location"
+    ],
+    "textRu": "Постоянка: +1 к пределу руки.",
+    "markers": [
+      "ongoing"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "needsEffectMapping": true,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

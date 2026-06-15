@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__ocr_002",
+  "source": {
+    "draft": "data/import/card-drafts/esw2_dbg__ocr_002.json",
+    "image": "assets/cards/raw/1000009090.jpg",
+    "ocrText": "data/import/card-texts/esw2_dbg__ocr_002.md"
+  },
+  "visible": {
+    "nameRu": "Чёрная овца чащоб",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": [
+      "wizardCard"
+    ],
+    "textRu": "+2 мощи\nАтака: выбранный враг уничтожает верхнюю карту колоды легенд и отхватывает столько урона, какова её стоимость.",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": [
+      "wizardCard"
+    ],
+    "cost": 5,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 2
+      },
+      {
+        "effectId": "attack_destroy_top_legend_deck_then_damage_equal_cost",
+        "damageUsesDestroyedCardCost": true,
+        "targetSelector": "chosenFoe",
+        "timing": "onPlay",
+        "destroyedCardSource": "legendDeck"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}
