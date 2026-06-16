@@ -964,6 +964,89 @@ test("fixture defense runs supported branch effects through the shared effect ru
   assert.ok(branchEventIndex > costEventIndex);
 });
 
+test("fixture multi-target attack resolves each opponent in seating order before moving to the next target", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const targets = getOpponentsInSeatingOrder(state, activePlayer);
+  assert.equal(targets.length, 2);
+  const [firstTarget, secondTarget] = targets;
+  assert.ok(firstTarget);
+  assert.ok(secondTarget);
+  firstTarget.life.current = 1;
+  secondTarget.life.current = 1;
+  state.common.deadWizardTokens.drawStack.splice(1);
+  const onlyDwt = state.common.deadWizardTokens.drawStack[0];
+  assert.ok(onlyDwt);
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_multi_target_attack",
+    timing: "onPlay",
+    amount: 4,
+    target: {
+      selector: "opponentPlayers",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(firstTarget.life.current, 20);
+  assert.equal(secondTarget.life.current, 20);
+  assert.equal(firstTarget.deadWizardTokens.length, 1);
+  assert.equal(firstTarget.deadWizardTokens[0], onlyDwt);
+  assert.equal(secondTarget.deadWizardTokens.length, 0);
+  assertEventOrder(state, [
+    (event) => event.type === "fixtureAttackTargetStarted" && event.targetPlayerId === firstTarget.playerId,
+    (event) => event.type === "effectDamageDealt" && event.targetPlayerId === firstTarget.playerId,
+    (event) => event.type === "playerDied" && event.playerId === firstTarget.playerId,
+    (event) => event.type === "playerResurrected" && event.playerId === firstTarget.playerId,
+    (event) => event.type === "fixtureAttackTargetStarted" && event.targetPlayerId === secondTarget.playerId,
+    (event) => event.type === "effectDamageDealt" && event.targetPlayerId === secondTarget.playerId,
+    (event) => event.type === "playerDied" && event.playerId === secondTarget.playerId,
+  ]);
+});
+
+test("fixture multi-target attack opens a separate defense window for each target", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const [firstTarget, secondTarget] = getOpponentsInSeatingOrder(state, activePlayer);
+  assert.ok(firstTarget);
+  assert.ok(secondTarget);
+  firstTarget.life.current = 1;
+  secondTarget.life.current = 10;
+  const defenseCard = addFixtureDefenseCardToHand(state, firstTarget, "discardSelf");
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_multi_target_attack",
+    timing: "onPlay",
+    amount: 4,
+    target: {
+      selector: "opponentPlayers",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(firstTarget.life.current, 1);
+  assert.equal(firstTarget.deadWizardTokens.length, 0);
+  assert.equal(firstTarget.discard.includes(defenseCard), true);
+  assert.equal(secondTarget.life.current, 6);
+  assertEventOrder(state, [
+    (event) => event.type === "fixtureAttackTargetStarted" && event.targetPlayerId === firstTarget.playerId,
+    (event) => event.type === "defenseChoiceSelected" && event.playerId === firstTarget.playerId,
+    (event) => event.type === "fixtureAttackAvoided" && event.targetPlayerId === firstTarget.playerId,
+    (event) => event.type === "fixtureAttackTargetStarted" && event.targetPlayerId === secondTarget.playerId,
+    (event) => event.type === "effectDamageDealt" && event.targetPlayerId === secondTarget.playerId,
+  ]);
+});
+
 test("targeted fixture effect skips when there are no legal choices by default", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   state.common.market.splice(0);
@@ -1074,6 +1157,23 @@ function playTargetedFixtureEffect(seed: number, effect: unknown): {
     firstMarketCardCost,
     selectedTargetId,
   };
+}
+
+function getOpponentsInSeatingOrder(state: GameState, player: PlayerState): PlayerState[] {
+  const playerIndex = state.players.findIndex((candidate) => candidate.playerId === player.playerId);
+  assert.notEqual(playerIndex, -1);
+  return Array.from({ length: state.players.length - 1 }, (_, offset) => {
+    return state.players[(playerIndex + offset + 1) % state.players.length];
+  }).filter((candidate): candidate is PlayerState => candidate !== undefined);
+}
+
+function assertEventOrder(state: GameState, predicates: Array<(event: GameState["eventLog"][number]) => boolean>): void {
+  let searchFrom = 0;
+  for (const predicate of predicates) {
+    const eventIndex = state.eventLog.findIndex((event, index) => index >= searchFrom && predicate(event));
+    assert.notEqual(eventIndex, -1);
+    searchFrom = eventIndex + 1;
+  }
 }
 
 function addFixtureCardToActiveHand(state: GameState, effect: unknown): string {

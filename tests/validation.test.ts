@@ -129,6 +129,31 @@ test("supported executable attack and defense fixtures pass executable effect va
   assert.deepEqual(result, { ok: true });
 });
 
+test("supported executable multi-target attack fixture passes executable effect validation", () => {
+  const card = createFixtureCard("fixture-supported-multi-target-attack-effect");
+  const dataPack = withOnlyFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "fixture_multi_target_attack",
+          timing: "onPlay",
+          amount: 4,
+          target: {
+            selector: "opponentPlayers",
+          },
+        },
+      ],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack);
+
+  assert.deepEqual(result, { ok: true });
+});
+
 test("executable data-pack validation rejects unsupported effect ids", () => {
   const dataPack = withFixtureCard({
     ...createFixtureCard("fixture-unsupported-effect"),

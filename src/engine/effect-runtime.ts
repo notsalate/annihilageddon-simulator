@@ -421,6 +421,41 @@ function executeEffect(
     return { ok: true };
   }
 
+  if (effect["effectId"] === "fixture_multi_target_attack") {
+    const target = effect["target"];
+    if (!isEffectRecord(target) || target["selector"] !== "opponentPlayers") {
+      const selector = isEffectRecord(target) ? target["selector"] : target;
+      return {
+        ok: false,
+        error: `Unsupported multi-target attack selector ${String(selector)}`,
+      };
+    }
+
+    const amount = effect["amount"];
+    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
+      return {
+        ok: false,
+        error: `Invalid attack damage amount ${String(amount)}`,
+      };
+    }
+
+    state.eventLog.push({
+      type: "fixtureAttackCreated",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId: "fixture_multi_target_attack",
+      amount,
+      sourceType: source.sourceType,
+    });
+
+    for (const targetPlayer of getOpponentsInSeatingOrder(state, player)) {
+      resolveFixtureAttackTarget(state, player, targetPlayer, amount, "fixture_multi_target_attack", source);
+    }
+
+    return { ok: true };
+  }
+
   if (effect["effectId"] === "fixture_heal") {
     const targetResult = resolveTargetChoice(state, player, effect, source);
     if (!targetResult.ok) {
@@ -451,6 +486,52 @@ function executeEffect(
   }
 
   return { ok: true };
+}
+
+function resolveFixtureAttackTarget(
+  state: GameState,
+  attackingPlayer: PlayerState,
+  targetPlayer: PlayerState,
+  amount: number,
+  effectId: string,
+  source: EffectSourceContext,
+): void {
+  state.eventLog.push({
+    type: "fixtureAttackTargetStarted",
+    playerId: attackingPlayer.playerId,
+    targetPlayerId: targetPlayer.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    amount,
+    sourceType: source.sourceType,
+  });
+
+  if (resolveDefenseWindow(state, targetPlayer)) {
+    state.eventLog.push({
+      type: "fixtureAttackAvoided",
+      playerId: targetPlayer.playerId,
+      targetPlayerId: targetPlayer.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+    return;
+  }
+
+  dealDamage(state, attackingPlayer, targetPlayer, amount, effectId, source);
+}
+
+function getOpponentsInSeatingOrder(state: GameState, player: PlayerState): PlayerState[] {
+  const playerIndex = state.players.findIndex((candidate) => candidate.playerId === player.playerId);
+  if (playerIndex < 0) {
+    return [];
+  }
+
+  return Array.from({ length: state.players.length - 1 }, (_, offset) => {
+    return state.players[(playerIndex + offset + 1) % state.players.length];
+  }).filter((candidate): candidate is PlayerState => candidate !== undefined);
 }
 
 type TargetChoice =
