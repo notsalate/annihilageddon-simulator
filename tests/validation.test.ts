@@ -77,6 +77,58 @@ test("supported executable healing fixture passes executable effect validation",
   assert.deepEqual(result, { ok: true });
 });
 
+test("supported executable attack and defense fixtures pass executable effect validation", () => {
+  const attackCard = createFixtureCard("fixture-supported-attack-effect");
+  const defenseCard = createFixtureCard("fixture-supported-defense-effect");
+  const dataPack = loadV0DataPack(rootDir);
+  const fixtureDataPack: LoadedDataPack = {
+    ...dataPack,
+    cardDefinitions: new Map([
+      [
+        attackCard.cardId,
+        {
+          ...attackCard,
+          engine: {
+            ...attackCard.engine,
+            playableInV0: true,
+            effects: [
+              {
+                effectId: "fixture_single_target_attack",
+                timing: "onPlay",
+                amount: 4,
+                target: {
+                  selector: "opponentPlayer",
+                },
+              },
+            ],
+          },
+        },
+      ],
+      [
+        defenseCard.cardId,
+        {
+          ...defenseCard,
+          engine: {
+            ...defenseCard.engine,
+            playableInV0: true,
+            effects: [
+              {
+                effectId: "fixture_avoid_attack",
+                timing: "onDefense",
+                destination: "discardSelf",
+              },
+            ],
+          },
+        },
+      ],
+    ]),
+  };
+
+  const result = validateExecutableDataPack(fixtureDataPack);
+
+  assert.deepEqual(result, { ok: true });
+});
+
 test("executable data-pack validation rejects unsupported effect ids", () => {
   const dataPack = withFixtureCard({
     ...createFixtureCard("fixture-unsupported-effect"),

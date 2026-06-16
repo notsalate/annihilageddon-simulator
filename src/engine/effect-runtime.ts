@@ -352,22 +352,61 @@ function executeEffect(
       };
     }
 
+    dealDamage(state, player, targetResult.choice.player, amount, "fixture_deal_damage", source);
+
+    return { ok: true };
+  }
+
+  if (effect["effectId"] === "fixture_single_target_attack") {
+    const targetResult = resolveTargetChoice(state, player, effect, source);
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    if (targetResult.choice === undefined) {
+      return { ok: true };
+    }
+
+    if (targetResult.choice.choiceType !== "player") {
+      return {
+        ok: false,
+        error: "Attack effect requires a player target",
+      };
+    }
+
+    const amount = effect["amount"];
+    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
+      return {
+        ok: false,
+        error: `Invalid attack damage amount ${String(amount)}`,
+      };
+    }
+
     const targetPlayer = targetResult.choice.player;
-    targetPlayer.life.current -= amount;
     state.eventLog.push({
-      type: "effectDamageDealt",
+      type: "fixtureAttackCreated",
       playerId: player.playerId,
       targetPlayerId: targetPlayer.playerId,
       cardInstanceId: source.cardInstanceId,
       definitionId: source.definitionId,
-      effectId: "fixture_deal_damage",
+      effectId: "fixture_single_target_attack",
       amount,
       sourceType: source.sourceType,
     });
-
-    if (targetPlayer.life.current < 1) {
-      resolvePlayerDeath(state, targetPlayer);
+    if (resolveDefenseWindow(state, targetPlayer)) {
+      state.eventLog.push({
+        type: "fixtureAttackAvoided",
+        playerId: targetPlayer.playerId,
+        targetPlayerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId: "fixture_single_target_attack",
+        sourceType: source.sourceType,
+      });
+      return { ok: true };
     }
+
+    dealDamage(state, player, targetPlayer, amount, "fixture_single_target_attack", source);
 
     return { ok: true };
   }
@@ -601,6 +640,116 @@ function resolvePlayerDeath(state: GameState, player: PlayerState): void {
     playerId: player.playerId,
     amount: 20,
   });
+}
+
+function dealDamage(
+  state: GameState,
+  sourcePlayer: PlayerState,
+  targetPlayer: PlayerState,
+  amount: number,
+  effectId: string,
+  source: EffectSourceContext,
+): void {
+  targetPlayer.life.current -= amount;
+  state.eventLog.push({
+    type: "effectDamageDealt",
+    playerId: sourcePlayer.playerId,
+    targetPlayerId: targetPlayer.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    amount,
+    sourceType: source.sourceType,
+  });
+
+  if (targetPlayer.life.current < 1) {
+    resolvePlayerDeath(state, targetPlayer);
+  }
+}
+
+function resolveDefenseWindow(state: GameState, defendingPlayer: PlayerState): boolean {
+  const defense = findFirstLegalDefense(state, defendingPlayer);
+  if (defense === undefined) {
+    return false;
+  }
+
+  state.eventLog.push({
+    type: "defenseChoiceSelected",
+    playerId: defendingPlayer.playerId,
+    cardInstanceId: defense.card.instanceId,
+    definitionId: defense.card.definitionId,
+    effectId: "fixture_avoid_attack",
+  });
+
+  const cardIndex = defendingPlayer.hand.findIndex((card) => card.instanceId === defense.card.instanceId);
+  if (cardIndex < 0) {
+    return false;
+  }
+
+  const [card] = defendingPlayer.hand.splice(cardIndex, 1);
+  if (card === undefined) {
+    return false;
+  }
+
+  if (defense.destination === "discardSelf") {
+    defendingPlayer.discard.push(card);
+    state.eventLog.push({
+      type: "defenseCardMoved",
+      playerId: defendingPlayer.playerId,
+      cardInstanceId: card.instanceId,
+      definitionId: card.definitionId,
+      destination: "discard",
+    });
+    return true;
+  }
+
+  if (defense.destination === "topdeckSelf") {
+    defendingPlayer.deck.unshift(card);
+    state.eventLog.push({
+      type: "defenseCardMoved",
+      playerId: defendingPlayer.playerId,
+      cardInstanceId: card.instanceId,
+      definitionId: card.definitionId,
+      destination: "deckTop",
+    });
+    return true;
+  }
+
+  return false;
+}
+
+function findFirstLegalDefense(
+  state: GameState,
+  defendingPlayer: PlayerState,
+): { card: CardInstance; destination: "discardSelf" | "topdeckSelf" } | undefined {
+  for (const card of defendingPlayer.hand) {
+    const definition = state.cardDefinitions.get(card.definitionId);
+    if (definition === undefined) {
+      continue;
+    }
+
+    const defenseEffect = definition.engine.effects.find((effect): effect is Record<string, unknown> => {
+      return (
+        isEffectRecord(effect) &&
+        effect["effectId"] === "fixture_avoid_attack" &&
+        effect["timing"] === "onDefense" &&
+        (effect["destination"] === "discardSelf" || effect["destination"] === "topdeckSelf")
+      );
+    });
+    if (defenseEffect !== undefined) {
+      const destination = defenseEffect["destination"];
+      if (destination !== "discardSelf" && destination !== "topdeckSelf") {
+        continue;
+      }
+
+      return {
+        card,
+        destination,
+      };
+    }
+  }
+
+  return undefined;
 }
 
 function healPlayer(

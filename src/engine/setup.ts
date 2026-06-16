@@ -103,6 +103,7 @@ export interface GameEvent {
   tokenDefinitionId?: string;
   effectId?: string;
   amount?: number;
+  destination?: string;
   sourceType?: string;
 }
 

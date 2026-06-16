@@ -6,8 +6,10 @@ import {
   initializeGame,
   listLegalActions,
   scoreGame,
+  type CardInstance,
   type CardDefinition,
   type GameState,
+  type PlayerState,
   type StatusInstance,
 } from "../src/index.js";
 
@@ -636,6 +638,144 @@ test("fixture healing below effective max life does not clamp", () => {
   );
 });
 
+test("fixture single-target attack damages the first opponent when no defense is available", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  assert.ok(targetPlayer);
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_single_target_attack",
+    timing: "onPlay",
+    amount: 4,
+    target: {
+      selector: "opponentPlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 16);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "fixtureAttackCreated" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 4
+      );
+    }),
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "effectDamageDealt" && event.targetPlayerId === targetPlayer.playerId && event.amount === 4;
+    }),
+  );
+});
+
+test("fixture single-target attack can be avoided by the first discard-self defense card in hand", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  assert.ok(targetPlayer);
+  targetPlayer.life.current = 1;
+  const defenseCard = addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf");
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_single_target_attack",
+    timing: "onPlay",
+    amount: 4,
+    target: {
+      selector: "opponentPlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 1);
+  assert.equal(targetPlayer.deadWizardTokens.length, 0);
+  assert.equal(targetPlayer.hand.includes(defenseCard), false);
+  assert.equal(targetPlayer.discard.includes(defenseCard), true);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "defenseChoiceSelected" &&
+        event.playerId === targetPlayer.playerId &&
+        event.cardInstanceId === defenseCard.instanceId &&
+        event.definitionId === defenseCard.definitionId
+      );
+    }),
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "defenseCardMoved" && event.cardInstanceId === defenseCard.instanceId && event.destination === "discard";
+    }),
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "fixtureAttackAvoided" && event.playerId === targetPlayer.playerId;
+    }),
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "effectDamageDealt" && event.targetPlayerId === targetPlayer.playerId),
+    false,
+  );
+});
+
+test("fixture single-target attack can be avoided by a topdeck-self defense card in hand", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  assert.ok(targetPlayer);
+  targetPlayer.life.current = 1;
+  const previousTopDeckCard = targetPlayer.deck[0];
+  assert.ok(previousTopDeckCard);
+  const defenseCard = addFixtureDefenseCardToHand(state, targetPlayer, "topdeckSelf");
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_single_target_attack",
+    timing: "onPlay",
+    amount: 4,
+    target: {
+      selector: "opponentPlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 1);
+  assert.equal(targetPlayer.deadWizardTokens.length, 0);
+  assert.equal(targetPlayer.hand.includes(defenseCard), false);
+  assert.equal(targetPlayer.deck[0], defenseCard);
+  assert.equal(targetPlayer.deck[1], previousTopDeckCard);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "defenseCardMoved" && event.cardInstanceId === defenseCard.instanceId && event.destination === "deckTop";
+    }),
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "fixtureAttackAvoided" && event.playerId === targetPlayer.playerId;
+    }),
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "effectDamageDealt" && event.targetPlayerId === targetPlayer.playerId),
+    false,
+  );
+});
+
 test("targeted fixture effect skips when there are no legal choices by default", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   state.common.market.splice(0);
@@ -787,6 +927,54 @@ function addFixtureCardToActiveHand(state: GameState, effect: unknown): string {
   });
 
   return cardInstanceId;
+}
+
+function addFixtureDefenseCardToHand(
+  state: GameState,
+  player: PlayerState,
+  destination: "discardSelf" | "topdeckSelf",
+): CardInstance {
+  const definition: CardDefinition = {
+    schemaVersion: 1,
+    cardId: `fixture-defense-${destination}`,
+    visible: {
+      nameRu: `Fixture defense ${destination}`,
+      cost: 0,
+      victoryPoints: 0,
+      typeRu: null,
+      cardKind: "normal",
+      cardTypes: [],
+      markers: [],
+    },
+    engine: {
+      runtimeSchema: "krutagidon.cardDefinition.v0",
+      mappingStatus: "fixture",
+      playableInV0: true,
+      cardKind: "normal",
+      cardTypes: [],
+      cost: 0,
+      victoryPoints: 0,
+      isOngoing: false,
+      marketChipMarker: false,
+      effects: [
+        {
+          effectId: "fixture_avoid_attack",
+          timing: "onDefense",
+          destination,
+        },
+      ],
+      unsupportedMechanics: [],
+    },
+  };
+  state.cardDefinitions = new Map([...state.cardDefinitions, [definition.cardId, definition]]);
+
+  const card: CardInstance = {
+    instanceId: `fixture-defense-card-${player.hand.length + 1}`,
+    definitionId: definition.cardId,
+    ownerId: player.playerId,
+  };
+  player.hand.push(card);
+  return card;
 }
 
 function createMaxLifeModifierStatus(playerId: StatusInstance["ownerId"], amount: number): StatusInstance {
