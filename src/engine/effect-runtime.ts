@@ -1,4 +1,5 @@
 import type { CardDefinition } from "./data.js";
+import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export type EffectSourceContext =
@@ -371,6 +372,35 @@ function executeEffect(
     return { ok: true };
   }
 
+  if (effect["effectId"] === "fixture_heal") {
+    const targetResult = resolveTargetChoice(state, player, effect, source);
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    if (targetResult.choice === undefined) {
+      return { ok: true };
+    }
+
+    if (targetResult.choice.choiceType !== "player") {
+      return {
+        ok: false,
+        error: "Heal effect requires a player target",
+      };
+    }
+
+    const amount = effect["amount"];
+    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
+      return {
+        ok: false,
+        error: `Invalid heal amount ${String(amount)}`,
+      };
+    }
+
+    healPlayer(state, player, targetResult.choice.player, amount, source);
+    return { ok: true };
+  }
+
   return { ok: true };
 }
 
@@ -506,6 +536,18 @@ function buildLegalTargetChoices(
     };
   }
 
+  if (selector === "activePlayer") {
+    return {
+      ok: true,
+      choices: [
+        {
+          choiceType: "player",
+          player,
+        },
+      ],
+    };
+  }
+
   return {
     ok: false,
     error: `Unsupported target selector ${asString(selector)}`,
@@ -559,6 +601,39 @@ function resolvePlayerDeath(state: GameState, player: PlayerState): void {
     playerId: player.playerId,
     amount: 20,
   });
+}
+
+function healPlayer(
+  state: GameState,
+  sourcePlayer: PlayerState,
+  targetPlayer: PlayerState,
+  amount: number,
+  source: EffectSourceContext,
+): void {
+  const effectiveMaxLife = calculateEffectivePlayerMaxLife(state, targetPlayer.playerId);
+  const previousLife = targetPlayer.life.current;
+  const unclampedLife = previousLife + amount;
+  targetPlayer.life.current = Math.min(unclampedLife, effectiveMaxLife);
+  const healedAmount = Math.max(0, targetPlayer.life.current - previousLife);
+
+  state.eventLog.push({
+    type: "effectLifeHealed",
+    playerId: sourcePlayer.playerId,
+    targetPlayerId: targetPlayer.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId: "fixture_heal",
+    amount: healedAmount,
+    sourceType: source.sourceType,
+  });
+
+  if (unclampedLife > effectiveMaxLife) {
+    state.eventLog.push({
+      type: "playerLifeClamped",
+      playerId: targetPlayer.playerId,
+      amount: effectiveMaxLife,
+    });
+  }
 }
 
 function moveCardToPlayerZone(

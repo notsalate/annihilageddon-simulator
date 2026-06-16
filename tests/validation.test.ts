@@ -52,6 +52,31 @@ test("supported executable damage fixture passes executable effect validation", 
   assert.deepEqual(result, { ok: true });
 });
 
+test("supported executable healing fixture passes executable effect validation", () => {
+  const card = createFixtureCard("fixture-supported-healing-effect");
+  const dataPack = withOnlyFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "fixture_heal",
+          timing: "onPlay",
+          amount: 3,
+          target: {
+            selector: "activePlayer",
+          },
+        },
+      ],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack);
+
+  assert.deepEqual(result, { ok: true });
+});
+
 test("executable data-pack validation rejects unsupported effect ids", () => {
   const dataPack = withFixtureCard({
     ...createFixtureCard("fixture-unsupported-effect"),

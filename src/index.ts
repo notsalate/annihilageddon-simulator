@@ -28,6 +28,7 @@ export {
   buildControlledObjectView,
   calculateEffectiveCardCost,
   calculateEffectiveCardVictoryPoints,
+  calculateEffectivePlayerMaxLife,
   calculateEffectiveTokenVictoryPoints,
   calculateEffectiveValue,
 } from "./engine/effective-values.js";

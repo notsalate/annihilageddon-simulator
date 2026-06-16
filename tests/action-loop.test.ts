@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyAction, initializeGame, listLegalActions, scoreGame, type CardDefinition, type GameState } from "../src/index.js";
+import {
+  applyAction,
+  initializeGame,
+  listLegalActions,
+  scoreGame,
+  type CardDefinition,
+  type GameState,
+  type StatusInstance,
+} from "../src/index.js";
 
 const rootDir = process.cwd();
 
@@ -555,6 +563,79 @@ test("targeted fixture damage can kill an opponent, give a neutral DWT, resurrec
   assert.equal(targetScore.victoryPoints, expectedCardScore + expectedTokenScore);
 });
 
+test("fixture healing uses effective max life and logs clamping without mutating base max life", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  activePlayer.life.current = 10;
+  const baseMaxLife = activePlayer.life.max;
+  activePlayer.statuses.push(createMaxLifeModifierStatus(activePlayer.playerId, -8));
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_heal",
+    timing: "onPlay",
+    amount: 20,
+    target: {
+      selector: "activePlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.life.max, baseMaxLife);
+  assert.equal(activePlayer.life.current, 17);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectLifeHealed" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === activePlayer.playerId &&
+        event.amount === 7
+      );
+    }),
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "playerLifeClamped" && event.playerId === activePlayer.playerId && event.amount === 17;
+    }),
+  );
+});
+
+test("fixture healing below effective max life does not clamp", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  activePlayer.life.current = 10;
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_heal",
+    timing: "onPlay",
+    amount: 3,
+    target: {
+      selector: "activePlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.life.current, 13);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "effectLifeHealed" && event.playerId === activePlayer.playerId && event.amount === 3;
+    }),
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "playerLifeClamped" && event.playerId === activePlayer.playerId),
+    false,
+  );
+});
+
 test("targeted fixture effect skips when there are no legal choices by default", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   state.common.market.splice(0);
@@ -706,4 +787,24 @@ function addFixtureCardToActiveHand(state: GameState, effect: unknown): string {
   });
 
   return cardInstanceId;
+}
+
+function createMaxLifeModifierStatus(playerId: StatusInstance["ownerId"], amount: number): StatusInstance {
+  return {
+    instanceId: "fixture-max-life-status",
+    statusId: "fixture-max-life-status",
+    ownerId: playerId,
+    effects: [
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "playerMaxLife",
+        operation: "add",
+        amount,
+        target: {
+          targetType: "player",
+        },
+      },
+    ],
+  };
 }

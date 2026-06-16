@@ -236,6 +236,7 @@ function isSupportedExecutableEffectId(effectId: string): boolean {
     effectId === "fixture_reveal_top_card" ||
     effectId === "fixture_play_top_card" ||
     effectId === "fixture_deal_damage" ||
+    effectId === "fixture_heal" ||
     effectId === "fixture_modify_effective_value"
   );
 }
@@ -269,6 +270,22 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
     if (!isEffectRecord(target) || target["selector"] !== "opponentPlayer") {
       const selector = isEffectRecord(target) ? target["selector"] : target;
       errors.push(`Card ${cardId} uses unsupported damage target ${String(selector)}`);
+    }
+
+    return errors;
+  }
+
+  if (effectId === "fixture_heal") {
+    const errors: string[] = [];
+    const amount = effect["amount"];
+    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
+      errors.push(`Card ${cardId} uses invalid healing amount ${String(amount)}`);
+    }
+
+    const target = effect["target"];
+    if (!isEffectRecord(target) || target["selector"] !== "activePlayer") {
+      const selector = isEffectRecord(target) ? target["selector"] : target;
+      errors.push(`Card ${cardId} uses unsupported healing target ${String(selector)}`);
     }
 
     return errors;

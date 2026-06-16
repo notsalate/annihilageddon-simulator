@@ -1,7 +1,7 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import type { CardInstance, GameState, PlayerId, StatusInstance, TokenInstance, TrophyLikeInstance } from "./setup.js";
 
-export type EffectiveValueKind = "cardCost" | "cardVictoryPoints" | "tokenVictoryPoints";
+export type EffectiveValueKind = "cardCost" | "cardVictoryPoints" | "tokenVictoryPoints" | "playerMaxLife";
 
 export type EffectiveValueTarget =
   | {
@@ -11,6 +11,9 @@ export type EffectiveValueTarget =
   | {
       targetType: "token";
       definitionId: TokenDefinition["tokenId"];
+    }
+  | {
+      targetType: "player";
     };
 
 export interface ControlledObjectView {
@@ -103,6 +106,23 @@ export function calculateEffectiveTokenVictoryPoints(
   });
 }
 
+export function calculateEffectivePlayerMaxLife(state: GameState, playerId: PlayerId): number {
+  const player = state.players.find((candidate) => candidate.playerId === playerId);
+  if (player === undefined) {
+    throw new Error(`Missing player ${playerId}`);
+  }
+
+  return calculateEffectiveValue({
+    state,
+    playerId,
+    valueKind: "playerMaxLife",
+    target: {
+      targetType: "player",
+    },
+    baseValue: player.life.max,
+  });
+}
+
 export function calculateEffectiveValue(options: {
   state: GameState;
   playerId: PlayerId;
@@ -156,6 +176,10 @@ function isModifierEffect(
 function matchesTarget(effectTarget: unknown, target: EffectiveValueTarget): boolean {
   if (!isRecord(effectTarget)) {
     return false;
+  }
+
+  if (target.targetType === "player") {
+    return effectTarget["targetType"] === target.targetType;
   }
 
   return effectTarget["targetType"] === target.targetType && effectTarget["definitionId"] === target.definitionId;
