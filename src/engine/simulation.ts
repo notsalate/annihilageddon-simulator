@@ -1,6 +1,11 @@
 import { applyAction, listLegalActions, type GameAction, type LegalAction } from "./actions.js";
-import type { CardDefinition } from "./data.js";
-import { initializeGame, type CardInstance, type GameEvent, type GameState, type PlayerId } from "./setup.js";
+import type { CardDefinition, TokenDefinition } from "./data.js";
+import {
+  calculateEffectiveCardCost,
+  calculateEffectiveCardVictoryPoints,
+  calculateEffectiveTokenVictoryPoints,
+} from "./effective-values.js";
+import { initializeGame, type CardInstance, type GameEvent, type GameState, type PlayerId, type TokenInstance } from "./setup.js";
 
 export type GameEndReason =
   | "deadWizardTokensExhausted"
@@ -115,12 +120,17 @@ export function scoreGame(state: GameState): PlayerScore[] {
       ...player.permanents.filter((card) => card.ownerId === player.playerId),
     ];
     const cardDefinitions = cards.map((card) => mustGetDefinition(state, card));
+    const deadWizardTokenDefinitions = player.deadWizardTokens.map((token) => mustGetTokenDefinition(state, token));
 
     return {
       playerId: player.playerId,
       victoryPoints:
-        cardDefinitions.reduce((total, definition) => total + definition.engine.victoryPoints, 0) -
-        player.deadWizardTokens.length * 3,
+        cardDefinitions.reduce((total, definition) => {
+          return total + calculateEffectiveCardVictoryPoints(state, player.playerId, definition);
+        }, 0) +
+        deadWizardTokenDefinitions.reduce((total, definition) => {
+          return total + calculateEffectiveTokenVictoryPoints(state, player.playerId, definition);
+        }, 0),
       legendCount: cardDefinitions.filter((definition) => definition.engine.cardKind === "legend").length,
       deadWizardTokenCount: player.deadWizardTokens.length,
     };
@@ -207,13 +217,22 @@ function getBuyActionCost(state: GameState, action: Extract<LegalAction, { type:
     return 0;
   }
 
-  return mustGetDefinition(state, card).engine.cost;
+  return calculateEffectiveCardCost(state, state.activePlayerId, mustGetDefinition(state, card));
 }
 
 function mustGetDefinition(state: GameState, card: CardInstance): CardDefinition {
   const definition = state.cardDefinitions.get(card.definitionId);
   if (definition === undefined) {
     throw new Error(`Missing card definition ${card.definitionId}`);
+  }
+
+  return definition;
+}
+
+function mustGetTokenDefinition(state: GameState, token: TokenInstance): TokenDefinition {
+  const definition = state.tokenDefinitions.get(token.definitionId);
+  if (definition === undefined) {
+    throw new Error(`Missing token definition ${token.definitionId}`);
   }
 
   return definition;

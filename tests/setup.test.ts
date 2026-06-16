@@ -20,7 +20,10 @@ test("initial game setup creates expected player and common zones", () => {
   assert.equal(state.common.legendMarket.length, 3);
   assert.equal(state.common.wildMagicStack.length, 15);
   assert.equal(state.common.limpWandStack.length, 15);
-  assert.equal(state.common.deadWizardTokens.status, "notInDataPack");
+  assert.equal(state.common.deadWizardTokens.status, "available");
+  assert.ok(state.common.deadWizardTokens.drawStack.length > 0);
+  assert.equal(state.tokenDefinitions.get("neutral-dead-wizard-token")?.kind, "deadWizardToken");
+  assert.equal(state.tokenDefinitions.get("neutral-dead-wizard-token")?.victoryPoints, -3);
 
   for (const player of state.players) {
     assert.equal(player.hand.length, 5);

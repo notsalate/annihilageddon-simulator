@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "stackId": "fixture-dead-wizard-token-stack",
+  "runtimeSchema": "krutagidon.tokenStack.v0",
+  "role": "deadWizardTokens",
+  "mappingStatus": "fixture",
+  "entries": [
+    {
+      "tokenId": "fixture-dead-wizard-token",
+      "count": 2
+    }
+  ]
+}

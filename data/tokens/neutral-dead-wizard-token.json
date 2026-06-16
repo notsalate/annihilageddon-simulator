@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "tokenId": "neutral-dead-wizard-token",
+  "runtimeSchema": "krutagidon.tokenDefinition.v0",
+  "kind": "deadWizardToken",
+  "victoryPoints": -3,
+  "effects": []
+}

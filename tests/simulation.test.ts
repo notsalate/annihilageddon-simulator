@@ -55,7 +55,14 @@ test("scoring sums owned cards from scoring zones and applies DWT penalty", () =
   const legend = state.common.legendMarket[0]!;
   legend.ownerId = player.playerId;
   player.permanents.push(legend);
-  player.deadWizardTokens.push("dwt-1", "dwt-2");
+  assert.equal(state.common.deadWizardTokens.status, "available");
+  const firstDwt = state.common.deadWizardTokens.drawStack.shift();
+  const secondDwt = state.common.deadWizardTokens.drawStack.shift();
+  assert.ok(firstDwt);
+  assert.ok(secondDwt);
+  firstDwt.ownerId = player.playerId;
+  secondDwt.ownerId = player.playerId;
+  player.deadWizardTokens.push(firstDwt, secondDwt);
   const expectedCardScore = [...player.hand, ...player.deck, ...player.discard, legend].reduce((total, card) => {
     return total + state.cardDefinitions.get(card.definitionId)!.engine.victoryPoints;
   }, 0);
@@ -66,6 +73,30 @@ test("scoring sums owned cards from scoring zones and applies DWT penalty", () =
   assert.equal(score.legendCount, 1);
   assert.equal(score.deadWizardTokenCount, 2);
   assert.equal(score.victoryPoints, expectedCardScore - 6);
+});
+
+test("scoring applies DWT victory points from token definitions", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 60615,
+    dataPackPath: "tests/fixtures/token-data-pack.json",
+  });
+  const player = state.players[0]!;
+  assert.equal(state.common.deadWizardTokens.status, "available");
+  const dwt = state.common.deadWizardTokens.drawStack.shift();
+  assert.ok(dwt);
+  dwt.ownerId = player.playerId;
+  player.deadWizardTokens.push(dwt);
+
+  const expectedCardScore = [...player.hand, ...player.deck, ...player.discard].reduce((total, card) => {
+    return total + state.cardDefinitions.get(card.definitionId)!.engine.victoryPoints;
+  }, 0);
+
+  const score = scoreGame(state).find((candidate) => candidate.playerId === player.playerId);
+
+  assert.ok(score);
+  assert.equal(state.tokenDefinitions.get("fixture-dead-wizard-token")?.victoryPoints, -5);
+  assert.equal(score.victoryPoints, expectedCardScore - 5);
 });
 
 test("winner determination applies VP, legend count, fewer DWT, then true tie", () => {

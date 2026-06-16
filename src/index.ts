@@ -1,11 +1,36 @@
 export type { RandomSource } from "./engine/rng.js";
 export { createSeededRng } from "./engine/rng.js";
-export type { CardDefinition, DeckComposition, LoadedDataPack } from "./engine/data.js";
-export { loadV0DataPack } from "./engine/data.js";
-export type { CardInstance, CommonState, GameState, PlayerId, PlayerState } from "./engine/setup.js";
+export type {
+  CardDefinition,
+  DataPackValidationResult,
+  DeckComposition,
+  LoadedDataPack,
+  TokenDefinition,
+  TokenKind,
+  TokenStackComposition,
+} from "./engine/data.js";
+export { loadV0DataPack, validateExecutableDataPack } from "./engine/data.js";
+export type {
+  CardInstance,
+  CommonState,
+  GameState,
+  PlayerId,
+  PlayerState,
+  StatusInstance,
+  TokenInstance,
+  TrophyLikeInstance,
+} from "./engine/setup.js";
 export { initializeGame } from "./engine/setup.js";
 export type { ActionResult, GameAction, LegalAction } from "./engine/actions.js";
 export { applyAction, listLegalActions } from "./engine/actions.js";
+export type { ControlledObjectView, EffectiveValueKind, EffectiveValueTarget } from "./engine/effective-values.js";
+export {
+  buildControlledObjectView,
+  calculateEffectiveCardCost,
+  calculateEffectiveCardVictoryPoints,
+  calculateEffectiveTokenVictoryPoints,
+  calculateEffectiveValue,
+} from "./engine/effective-values.js";
 export type {
   BotDecisionContext,
   BotStrategy,

@@ -1,4 +1,6 @@
 import type { CardDefinition } from "./data.js";
+import { executeOnPlayEffects } from "./effect-runtime.js";
+import { calculateEffectiveCardCost } from "./effective-values.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export type LegalAction = PlayCardAction | BuyMarketCardAction | EndTurnAction;
@@ -38,7 +40,7 @@ export function listLegalActions(state: GameState): LegalAction[] {
       cardInstanceId: card.instanceId,
     })),
     ...state.common.market
-      .filter((card) => canAfford(state, card))
+      .filter((card) => canAfford(state, activePlayer, card))
       .map((card) => ({
         type: "buyMarketCard" as const,
         cardInstanceId: card.instanceId,
@@ -111,7 +113,8 @@ function buyMarketCard(state: GameState, action: BuyMarketCardAction): ActionRes
   }
 
   const definition = mustGetDefinition(state, card.definitionId);
-  const payment = calculatePayment(state, activePlayer, definition.engine.cost, action.source);
+  const cost = calculateEffectiveCardCost(state, activePlayer.playerId, definition);
+  const payment = calculatePayment(state, activePlayer, cost, action.source);
   if (payment === undefined) {
     return {
       ok: false,
@@ -160,7 +163,16 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
     activePlayer.playedThisTurn.push(card);
   }
 
-  resolveOnPlayEffects(state, activePlayer, definition);
+  const effectResult = executeOnPlayEffects(state, activePlayer, definition, {
+    sourceType: "card",
+    playerId: activePlayer.playerId,
+    cardInstanceId: card.instanceId,
+    definitionId: card.definitionId,
+  });
+  if (!effectResult.ok) {
+    return effectResult;
+  }
+
   state.eventLog.push({
     type: "cardPlayed",
     playerId: activePlayer.playerId,
@@ -171,12 +183,14 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
   return { ok: true };
 }
 
-function canAfford(state: GameState, card: CardInstance): boolean {
-  return mustGetDefinition(state, card.definitionId).engine.cost <= state.turn.power;
+function canAfford(state: GameState, player: PlayerState, card: CardInstance): boolean {
+  const definition = mustGetDefinition(state, card.definitionId);
+  return calculateEffectiveCardCost(state, player.playerId, definition) <= state.turn.power;
 }
 
 function canAffordWithChips(state: GameState, player: PlayerState, card: CardInstance): boolean {
-  return mustGetDefinition(state, card.definitionId).engine.cost <= state.turn.power + player.chips;
+  const definition = mustGetDefinition(state, card.definitionId);
+  return calculateEffectiveCardCost(state, player.playerId, definition) <= state.turn.power + player.chips;
 }
 
 function getWildMagicBuyAction(state: GameState): BuyMarketCardAction[] {
@@ -232,28 +246,6 @@ function calculatePayment(
     remainingPower: state.turn.power - powerSpent,
     remainingChips: player.chips - (payableCost - powerSpent),
   };
-}
-
-function resolveOnPlayEffects(state: GameState, player: PlayerState, definition: CardDefinition): void {
-  for (const effect of definition.engine.effects) {
-    if (!isEffectRecord(effect) || effect["timing"] !== "onPlay") {
-      continue;
-    }
-
-    if (effect["effectId"] === "add_power") {
-      const amount = effect["amount"];
-      if (typeof amount === "number") {
-        state.turn.power += amount;
-      }
-    }
-
-    if (effect["effectId"] === "draw_cards") {
-      const amount = effect["amount"];
-      if (typeof amount === "number" && Number.isSafeInteger(amount) && amount > 0) {
-        drawCards(player, amount, state);
-      }
-    }
-  }
 }
 
 function drawCards(player: PlayerState, count: number, state: GameState): void {
@@ -375,8 +367,4 @@ function mustGetDefinition(state: GameState, definitionId: string): CardDefiniti
   }
 
   return definition;
-}
-
-function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
-  return typeof effect === "object" && effect !== null;
 }

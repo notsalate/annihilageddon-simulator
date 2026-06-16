@@ -1,4 +1,11 @@
-import { loadV0DataPack, type CardDefinition, type DeckComposition, type LoadedDataPack } from "./data.js";
+import {
+  loadV0DataPack,
+  type CardDefinition,
+  type DeckComposition,
+  type LoadedDataPack,
+  type TokenStackComposition,
+  type TokenDefinition,
+} from "./data.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
 
 export type PlayerId = `player-${number}`;
@@ -10,6 +17,26 @@ export interface CardInstance {
   ownerId: PlayerId | CommonOwner;
 }
 
+export interface TokenInstance {
+  instanceId: string;
+  definitionId: string;
+  ownerId: PlayerId | CommonOwner;
+}
+
+export interface StatusInstance {
+  instanceId: string;
+  statusId: string;
+  ownerId: PlayerId;
+  effects: unknown[];
+}
+
+export interface TrophyLikeInstance {
+  instanceId: string;
+  trophyId: string;
+  ownerId: PlayerId;
+  effects: unknown[];
+}
+
 export interface PlayerState {
   playerId: PlayerId;
   deck: CardInstance[];
@@ -17,7 +44,9 @@ export interface PlayerState {
   discard: CardInstance[];
   playedThisTurn: CardInstance[];
   permanents: CardInstance[];
-  deadWizardTokens: string[];
+  deadWizardTokens: TokenInstance[];
+  statuses: StatusInstance[];
+  trophyLikeObjects: TrophyLikeInstance[];
   chips: number;
   life: {
     current: number;
@@ -44,7 +73,7 @@ export type DeadWizardTokenState =
     }
   | {
       status: "available";
-      drawStack: string[];
+      drawStack: TokenInstance[];
     };
 
 export interface GameState {
@@ -58,6 +87,7 @@ export interface GameState {
   players: PlayerState[];
   common: CommonState;
   cardDefinitions: ReadonlyMap<string, CardDefinition>;
+  tokenDefinitions: ReadonlyMap<string, TokenDefinition>;
   eventLog: GameEvent[];
 }
 
@@ -66,6 +96,11 @@ export interface GameEvent {
   playerId?: PlayerId;
   cardInstanceId?: string;
   definitionId?: string;
+  targetCardInstanceId?: string;
+  targetDefinitionId?: string;
+  effectId?: string;
+  amount?: number;
+  sourceType?: string;
 }
 
 export interface InitializeGameOptions {
@@ -79,6 +114,10 @@ interface InstanceFactory {
   create(definitionId: string, ownerId: PlayerId | CommonOwner): CardInstance;
 }
 
+interface TokenInstanceFactory {
+  create(definitionId: string, ownerId: PlayerId | CommonOwner): TokenInstance;
+}
+
 export function initializeGame(options: InitializeGameOptions): GameState {
   const playerCount = options.playerCount ?? 2;
   if (!Number.isSafeInteger(playerCount) || playerCount < 2) {
@@ -88,6 +127,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
   const rng = createSeededRng(options.seed);
   const dataPack = loadV0DataPack(options.rootDir, options.dataPackPath);
   const factory = createInstanceFactory();
+  const tokenFactory = createTokenInstanceFactory();
 
   const players = createPlayers(playerCount, dataPack, factory, rng);
   const mainDeck = instantiateDeck(dataPack.decks.mainDeck, dataPack, factory, "common");
@@ -104,10 +144,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     limpWandStack: instantiateDeck(dataPack.decks.limpWandStack, dataPack, factory, "common"),
     destroyedMayhem: [],
     destroyedMegaMayhem: [],
-    deadWizardTokens: {
-      status: "notInDataPack",
-      drawStack: [],
-    },
+    deadWizardTokens: instantiateDeadWizardTokens(dataPack, tokenFactory),
   };
 
   fillMarket({
@@ -143,11 +180,30 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     players,
     common,
     cardDefinitions: dataPack.cardDefinitions,
+    tokenDefinitions: dataPack.tokenDefinitions,
     eventLog: [
       {
         type: "gameInitialized",
       },
     ],
+  };
+}
+
+function instantiateDeadWizardTokens(
+  dataPack: LoadedDataPack,
+  factory: TokenInstanceFactory,
+): DeadWizardTokenState {
+  const tokenStack = dataPack.tokenStacks.deadWizardTokens;
+  if (tokenStack === undefined) {
+    return {
+      status: "notInDataPack",
+      drawStack: [],
+    };
+  }
+
+  return {
+    status: "available",
+    drawStack: instantiateTokenStack(tokenStack, dataPack, factory, "common"),
   };
 }
 
@@ -170,6 +226,8 @@ function createPlayers(
       playedThisTurn: [],
       permanents: [],
       deadWizardTokens: [],
+      statuses: [],
+      trophyLikeObjects: [],
       chips: 0,
       life: {
         current: 20,
@@ -202,6 +260,32 @@ function instantiateDeck(
 
     for (let copy = 0; copy < entry.count; copy += 1) {
       instances.push(factory.create(definition.cardId, ownerId));
+    }
+  }
+
+  return instances;
+}
+
+function instantiateTokenStack(
+  stack: TokenStackComposition,
+  dataPack: LoadedDataPack,
+  factory: TokenInstanceFactory,
+  ownerId: PlayerId | CommonOwner,
+): TokenInstance[] {
+  const instances: TokenInstance[] = [];
+
+  for (const entry of stack.entries) {
+    if (!Number.isSafeInteger(entry.count) || entry.count < 0) {
+      throw new RangeError(`Invalid count for ${entry.tokenId} in ${stack.stackId}`);
+    }
+
+    const definition = dataPack.tokenDefinitions.get(entry.tokenId);
+    if (definition === undefined) {
+      throw new Error(`Token stack ${stack.stackId} references missing token definition ${entry.tokenId}`);
+    }
+
+    for (let copy = 0; copy < entry.count; copy += 1) {
+      instances.push(factory.create(definition.tokenId, ownerId));
     }
   }
 
@@ -277,6 +361,22 @@ function createInstanceFactory(): InstanceFactory {
     create(definitionId: string, ownerId: PlayerId | CommonOwner): CardInstance {
       const instance: CardInstance = {
         instanceId: `card-${nextId}`,
+        definitionId,
+        ownerId,
+      };
+      nextId += 1;
+      return instance;
+    },
+  };
+}
+
+function createTokenInstanceFactory(): TokenInstanceFactory {
+  let nextId = 1;
+
+  return {
+    create(definitionId: string, ownerId: PlayerId | CommonOwner): TokenInstance {
+      const instance: TokenInstance = {
+        instanceId: `token-${nextId}`,
         definitionId,
         ownerId,
       };

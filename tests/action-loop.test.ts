@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyAction, initializeGame, listLegalActions } from "../src/index.js";
+import { applyAction, initializeGame, listLegalActions, type CardDefinition, type GameState } from "../src/index.js";
 
 const rootDir = process.cwd();
 
@@ -28,6 +28,33 @@ test("active player can play a card from hand through the action loop", () => {
   assert.equal(activePlayer.playedThisTurn.includes(playableCard), true);
   assert.equal(state.turn.power, 1);
   assert.equal(state.eventLog.at(-1)?.type, "cardPlayed");
+});
+
+test("playing an add-power card records an immediate effect consequence", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+
+  const playableCard = activePlayer.hand.find((card) => card.definitionId === "esw2_dbg__ocr_022");
+  assert.ok(playableCard);
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: playableCard.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 1);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectAddPowerApplied" &&
+        event.playerId === activePlayer.playerId &&
+        event.cardInstanceId === playableCard.instanceId &&
+        event.definitionId === playableCard.definitionId
+      );
+    }),
+  );
 });
 
 test("illegal actions are rejected without changing game state", () => {
@@ -187,6 +214,340 @@ test("playing a v0 draw card draws from the active player's deck", () => {
   assert.equal(result.ok, true);
   assert.equal(activePlayer.deck.length, deckSizeBefore - 1);
   assert.equal(activePlayer.hand.length, handSizeBefore);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectDrawCardsApplied" &&
+        event.playerId === activePlayer.playerId &&
+        event.cardInstanceId === drawCard.instanceId &&
+        event.definitionId === drawCard.definitionId &&
+        event.amount === 1
+      );
+    }),
+  );
+});
+
+test("targeted fixture effect chooses the first legal market target deterministically", () => {
+  const first = playTargetedFixtureEffect(60615, {
+    effectId: "fixture_add_power_equal_to_target_cost",
+    timing: "onPlay",
+    target: {
+      selector: "mainMarketCard",
+    },
+  });
+  const second = playTargetedFixtureEffect(60615, {
+    effectId: "fixture_add_power_equal_to_target_cost",
+    timing: "onPlay",
+    target: {
+      selector: "mainMarketCard",
+    },
+  });
+
+  assert.equal(first.result.ok, true);
+  assert.equal(second.result.ok, true);
+  assert.equal(first.selectedTargetId, first.firstMarketCard.instanceId);
+  assert.equal(second.selectedTargetId, second.firstMarketCard.instanceId);
+  assert.equal(first.selectedTargetId, second.selectedTargetId);
+  assert.equal(first.state.turn.power, first.firstMarketCardCost);
+  assert.equal(second.state.turn.power, second.firstMarketCardCost);
+});
+
+test("fixture gain effect moves the first legal market card into the active player's discard", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const gainedCard = state.common.market[0];
+  assert.ok(gainedCard);
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_gain_card",
+    timing: "onPlay",
+    target: {
+      selector: "mainMarketCard",
+    },
+    destination: "discard",
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.common.market.includes(gainedCard), false);
+  assert.equal(activePlayer.discard.includes(gainedCard), true);
+  assert.equal(gainedCard.ownerId, activePlayer.playerId);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectCardGained" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetCardInstanceId === gainedCard.instanceId &&
+        event.targetDefinitionId === gainedCard.definitionId
+      );
+    }),
+  );
+});
+
+test("fixture discard effect moves the first legal hand card into the active player's discard", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const discardedCard = activePlayer.hand[0];
+  assert.ok(discardedCard);
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_discard_card",
+    timing: "onPlay",
+    target: {
+      selector: "activePlayerHandCard",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.hand.includes(discardedCard), false);
+  assert.equal(activePlayer.discard.includes(discardedCard), true);
+  assert.equal(discardedCard.ownerId, activePlayer.playerId);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectCardDiscarded" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetCardInstanceId === discardedCard.instanceId &&
+        event.targetDefinitionId === discardedCard.definitionId
+      );
+    }),
+  );
+});
+
+test("fixture destroy effect moves a chosen card to the destroyed zone and preserves ownership", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const destroyedCard = activePlayer.hand[0];
+  assert.ok(destroyedCard);
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_destroy_card",
+    timing: "onPlay",
+    target: {
+      selector: "activePlayerHandCard",
+    },
+    destination: "destroyedMayhem",
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.hand.includes(destroyedCard), false);
+  assert.equal(activePlayer.discard.includes(destroyedCard), false);
+  assert.equal(state.common.destroyedMayhem.includes(destroyedCard), true);
+  assert.equal(destroyedCard.ownerId, activePlayer.playerId);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectCardDestroyed" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetCardInstanceId === destroyedCard.instanceId &&
+        event.targetDefinitionId === destroyedCard.definitionId
+      );
+    }),
+  );
+});
+
+test("fixture movement effects skip by default when no legal card choice exists", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  state.common.market.splice(0);
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_gain_card",
+    timing: "onPlay",
+    target: {
+      selector: "mainMarketCard",
+    },
+    destination: "discard",
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.common.market.length, 0);
+  assert.ok(state.eventLog.some((event) => event.type === "effectChoiceSkipped"));
+  assert.equal(state.eventLog.some((event) => event.type === "effectCardGained"), false);
+});
+
+test("fixture reveal effect reveals the active player's top deck card without moving it", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const topCard = activePlayer.deck[0];
+  assert.ok(topCard);
+  const deckSizeBefore = activePlayer.deck.length;
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_reveal_top_card",
+    timing: "onPlay",
+    source: "activePlayerDeck",
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.deck.length, deckSizeBefore);
+  assert.equal(activePlayer.deck[0], topCard);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectCardRevealed" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetCardInstanceId === topCard.instanceId &&
+        event.targetDefinitionId === topCard.definitionId
+      );
+    }),
+  );
+});
+
+test("fixture reveal effect shuffles discard into an empty deck before revealing", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const revealedCard = activePlayer.deck[0];
+  assert.ok(revealedCard);
+  activePlayer.deck.splice(0);
+  activePlayer.discard.push(revealedCard);
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_reveal_top_card",
+    timing: "onPlay",
+    source: "activePlayerDeck",
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.discard.includes(revealedCard), false);
+  assert.equal(activePlayer.deck[0], revealedCard);
+  assert.ok(state.eventLog.some((event) => event.type === "discardShuffledIntoDeck"));
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "effectCardRevealed" && event.targetCardInstanceId === revealedCard.instanceId;
+    }),
+  );
+});
+
+test("fixture play-top effect plays the active player's top deck card through on-play effects", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const topPlayedCardIndex = activePlayer.hand.findIndex((card) => card.definitionId === "esw2_dbg__ocr_022");
+  assert.notEqual(topPlayedCardIndex, -1);
+  const topPlayedCard = activePlayer.hand.splice(topPlayedCardIndex, 1).at(0);
+  assert.ok(topPlayedCard);
+  activePlayer.deck.unshift(topPlayedCard);
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_play_top_card",
+    timing: "onPlay",
+    source: "activePlayerDeck",
+    destination: "play",
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.deck.includes(topPlayedCard), false);
+  assert.equal(activePlayer.playedThisTurn.includes(topPlayedCard), true);
+  assert.equal(topPlayedCard.ownerId, activePlayer.playerId);
+  assert.equal(state.turn.power, 1);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectCardPlayedFromDeck" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetCardInstanceId === topPlayedCard.instanceId &&
+        event.targetDefinitionId === topPlayedCard.definitionId
+      );
+    }),
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "effectAddPowerApplied" && event.cardInstanceId === topPlayedCard.instanceId;
+    }),
+  );
+});
+
+test("targeted fixture effect skips when there are no legal choices by default", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  state.common.market.splice(0);
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_add_power_equal_to_target_cost",
+    timing: "onPlay",
+    target: {
+      selector: "mainMarketCard",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 0);
+  assert.ok(state.eventLog.some((event) => event.type === "effectChoiceSkipped"));
+});
+
+test("targeted fixture effect can fail when legal choices are empty", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  state.common.market.splice(0);
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_add_power_equal_to_target_cost",
+    timing: "onPlay",
+    emptyChoice: "fail",
+    target: {
+      selector: "mainMarketCard",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /No legal choices/);
+});
+
+test("targeted fixture effect surfaces unsupported selectors explicitly", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_add_power_equal_to_target_cost",
+    timing: "onPlay",
+    target: {
+      selector: "unsupportedFixtureSelector",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /Unsupported target selector unsupportedFixtureSelector/);
 });
 
 function snapshotActionState(state: ReturnType<typeof initializeGame>): unknown {
@@ -208,4 +569,75 @@ function snapshotActionState(state: ReturnType<typeof initializeGame>): unknown 
     },
     eventLog: state.eventLog,
   };
+}
+
+function playTargetedFixtureEffect(seed: number, effect: unknown): {
+  result: ReturnType<typeof applyAction>;
+  state: GameState;
+  firstMarketCard: NonNullable<GameState["common"]["market"][number]>;
+  firstMarketCardCost: number;
+  selectedTargetId: string | undefined;
+} {
+  const state = initializeGame({ rootDir, seed });
+  const firstMarketCard = state.common.market[0];
+  assert.ok(firstMarketCard);
+  const firstMarketCardCost = state.cardDefinitions.get(firstMarketCard.definitionId)?.engine.cost;
+  assert.ok(firstMarketCardCost !== undefined);
+  const fixtureCardId = addFixtureCardToActiveHand(state, effect);
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  const selectedTargetId = state.eventLog.find((event) => event.type === "effectChoiceSelected")?.targetCardInstanceId;
+
+  return {
+    result,
+    state,
+    firstMarketCard,
+    firstMarketCardCost,
+    selectedTargetId,
+  };
+}
+
+function addFixtureCardToActiveHand(state: GameState, effect: unknown): string {
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const definition: CardDefinition = {
+    schemaVersion: 1,
+    cardId: "fixture-targeted-effect-card",
+    visible: {
+      nameRu: "Fixture targeted effect",
+      cost: 0,
+      victoryPoints: 0,
+      typeRu: null,
+      cardKind: "normal",
+      cardTypes: [],
+      markers: [],
+    },
+    engine: {
+      runtimeSchema: "krutagidon.cardDefinition.v0",
+      mappingStatus: "fixture",
+      playableInV0: true,
+      cardKind: "normal",
+      cardTypes: [],
+      cost: 0,
+      victoryPoints: 0,
+      isOngoing: false,
+      marketChipMarker: false,
+      effects: [effect],
+      unsupportedMechanics: [],
+    },
+  };
+  state.cardDefinitions = new Map([...state.cardDefinitions, [definition.cardId, definition]]);
+
+  const cardInstanceId = `fixture-card-${activePlayer.hand.length + 1}`;
+  activePlayer.hand.push({
+    instanceId: cardInstanceId,
+    definitionId: definition.cardId,
+    ownerId: activePlayer.playerId,
+  });
+
+  return cardInstanceId;
 }

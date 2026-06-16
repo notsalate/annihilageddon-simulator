@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "packId": "fixture-token-data-pack",
+  "runtimeSchema": "krutagidon.dataPack.v0",
+  "mappingStatus": "fixture",
+  "cardsPath": "data/cards",
+  "tokensPath": "tests/fixtures/tokens",
+  "decks": {
+    "starterDeck": "data/decks/v0-starter-deck.json",
+    "mainDeck": "data/decks/v0-main-deck-first-batch.json",
+    "legendDeck": "data/decks/v0-legend-deck-first-batch.json",
+    "wildMagicStack": "data/decks/v0-wild-magic-stack.json",
+    "limpWandStack": "data/decks/v0-limp-wand-stack.json"
+  },
+  "tokenStacks": {
+    "deadWizardTokens": "tests/fixtures/token-stack.json"
+  },
+  "needsData": []
+}
