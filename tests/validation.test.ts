@@ -27,6 +27,31 @@ test("supported executable fixture data pack passes executable effect validation
   assert.deepEqual(result, { ok: true });
 });
 
+test("supported executable damage fixture passes executable effect validation", () => {
+  const card = createFixtureCard("fixture-supported-damage-effect");
+  const dataPack = withOnlyFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "fixture_deal_damage",
+          timing: "onPlay",
+          amount: 999,
+          target: {
+            selector: "opponentPlayer",
+          },
+        },
+      ],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack);
+
+  assert.deepEqual(result, { ok: true });
+});
+
 test("executable data-pack validation rejects unsupported effect ids", () => {
   const dataPack = withFixtureCard({
     ...createFixtureCard("fixture-unsupported-effect"),

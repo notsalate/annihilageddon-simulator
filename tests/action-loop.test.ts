@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyAction, initializeGame, listLegalActions, type CardDefinition, type GameState } from "../src/index.js";
+import { applyAction, initializeGame, listLegalActions, scoreGame, type CardDefinition, type GameState } from "../src/index.js";
 
 const rootDir = process.cwd();
 
@@ -487,6 +487,72 @@ test("fixture play-top effect plays the active player's top deck card through on
       return event.type === "effectAddPowerApplied" && event.cardInstanceId === topPlayedCard.instanceId;
     }),
   );
+});
+
+test("targeted fixture damage can kill an opponent, give a neutral DWT, resurrect, and affect scoring", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  assert.ok(targetPlayer);
+  assert.equal(state.common.deadWizardTokens.status, "available");
+  const neutralDwt = state.common.deadWizardTokens.drawStack[0];
+  assert.ok(neutralDwt);
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_deal_damage",
+    timing: "onPlay",
+    amount: 999,
+    target: {
+      selector: "opponentPlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 20);
+  assert.equal(targetPlayer.deadWizardTokens.length, 1);
+  assert.equal(targetPlayer.deadWizardTokens[0], neutralDwt);
+  assert.equal(neutralDwt.ownerId, targetPlayer.playerId);
+  assert.equal(state.common.deadWizardTokens.drawStack.includes(neutralDwt), false);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectDamageDealt" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 999
+      );
+    }),
+  );
+  assert.ok(state.eventLog.some((event) => event.type === "playerDied" && event.playerId === targetPlayer.playerId));
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "deadWizardTokenGained" &&
+        event.playerId === targetPlayer.playerId &&
+        event.tokenInstanceId === neutralDwt.instanceId &&
+        event.tokenDefinitionId === neutralDwt.definitionId
+      );
+    }),
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "playerResurrected" && event.playerId === targetPlayer.playerId && event.amount === 20;
+    }),
+  );
+
+  const targetScore = scoreGame(state).find((score) => score.playerId === targetPlayer.playerId);
+  const expectedCardScore = [...targetPlayer.hand, ...targetPlayer.deck, ...targetPlayer.discard].reduce((total, card) => {
+    return total + state.cardDefinitions.get(card.definitionId)!.engine.victoryPoints;
+  }, 0);
+  const expectedTokenScore = state.tokenDefinitions.get(neutralDwt.definitionId)!.victoryPoints;
+  assert.ok(targetScore);
+  assert.equal(targetScore.deadWizardTokenCount, 1);
+  assert.equal(targetScore.victoryPoints, expectedCardScore + expectedTokenScore);
 });
 
 test("targeted fixture effect skips when there are no legal choices by default", () => {

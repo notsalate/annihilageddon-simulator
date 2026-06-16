@@ -90,11 +90,16 @@ function executeEffect(
       return { ok: true };
     }
 
-    const definition = state.cardDefinitions.get(targetResult.choice.card.definitionId);
+    const choice = requireCardChoice(targetResult.choice, "fixture_add_power_equal_to_target_cost");
+    if (!choice.ok) {
+      return choice;
+    }
+
+    const definition = state.cardDefinitions.get(choice.card.definitionId);
     if (definition === undefined) {
       return {
         ok: false,
-        error: `Missing target card definition ${targetResult.choice.card.definitionId}`,
+        error: `Missing target card definition ${choice.card.definitionId}`,
       };
     }
 
@@ -104,8 +109,8 @@ function executeEffect(
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
       definitionId: source.definitionId,
-      targetCardInstanceId: targetResult.choice.card.instanceId,
-      targetDefinitionId: targetResult.choice.card.definitionId,
+      targetCardInstanceId: choice.card.instanceId,
+      targetDefinitionId: choice.card.definitionId,
       effectId: "fixture_add_power_equal_to_target_cost",
       amount: definition.engine.cost,
       sourceType: source.sourceType,
@@ -131,11 +136,16 @@ function executeEffect(
       };
     }
 
-    const moved = moveCardToPlayerZone(state, targetResult.choice.card, player, player.discard);
+    const choice = requireCardChoice(targetResult.choice, "fixture_gain_card");
+    if (!choice.ok) {
+      return choice;
+    }
+
+    const moved = moveCardToPlayerZone(state, choice.card, player, player.discard);
     if (!moved) {
       return {
         ok: false,
-        error: `Cannot move card ${targetResult.choice.card.instanceId}`,
+        error: `Cannot move card ${choice.card.instanceId}`,
       };
     }
 
@@ -144,8 +154,8 @@ function executeEffect(
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
       definitionId: source.definitionId,
-      targetCardInstanceId: targetResult.choice.card.instanceId,
-      targetDefinitionId: targetResult.choice.card.definitionId,
+      targetCardInstanceId: choice.card.instanceId,
+      targetDefinitionId: choice.card.definitionId,
       effectId: "fixture_gain_card",
       sourceType: source.sourceType,
     });
@@ -163,11 +173,16 @@ function executeEffect(
       return { ok: true };
     }
 
-    const moved = moveCardToPlayerZone(state, targetResult.choice.card, player, player.discard);
+    const choice = requireCardChoice(targetResult.choice, "fixture_discard_card");
+    if (!choice.ok) {
+      return choice;
+    }
+
+    const moved = moveCardToPlayerZone(state, choice.card, player, player.discard);
     if (!moved) {
       return {
         ok: false,
-        error: `Cannot move card ${targetResult.choice.card.instanceId}`,
+        error: `Cannot move card ${choice.card.instanceId}`,
       };
     }
 
@@ -176,8 +191,8 @@ function executeEffect(
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
       definitionId: source.definitionId,
-      targetCardInstanceId: targetResult.choice.card.instanceId,
-      targetDefinitionId: targetResult.choice.card.definitionId,
+      targetCardInstanceId: choice.card.instanceId,
+      targetDefinitionId: choice.card.definitionId,
       effectId: "fixture_discard_card",
       sourceType: source.sourceType,
     });
@@ -202,11 +217,16 @@ function executeEffect(
       };
     }
 
-    const moved = moveCardToZonePreservingOwner(state, targetResult.choice.card, state.common.destroyedMayhem);
+    const choice = requireCardChoice(targetResult.choice, "fixture_destroy_card");
+    if (!choice.ok) {
+      return choice;
+    }
+
+    const moved = moveCardToZonePreservingOwner(state, choice.card, state.common.destroyedMayhem);
     if (!moved) {
       return {
         ok: false,
-        error: `Cannot move card ${targetResult.choice.card.instanceId}`,
+        error: `Cannot move card ${choice.card.instanceId}`,
       };
     }
 
@@ -215,8 +235,8 @@ function executeEffect(
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
       definitionId: source.definitionId,
-      targetCardInstanceId: targetResult.choice.card.instanceId,
-      targetDefinitionId: targetResult.choice.card.definitionId,
+      targetCardInstanceId: choice.card.instanceId,
+      targetDefinitionId: choice.card.definitionId,
       effectId: "fixture_destroy_card",
       sourceType: source.sourceType,
     });
@@ -306,6 +326,51 @@ function executeEffect(
     return { ok: true };
   }
 
+  if (effect["effectId"] === "fixture_deal_damage") {
+    const targetResult = resolveTargetChoice(state, player, effect, source);
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    if (targetResult.choice === undefined) {
+      return { ok: true };
+    }
+
+    if (targetResult.choice.choiceType !== "player") {
+      return {
+        ok: false,
+        error: "Damage effect requires a player target",
+      };
+    }
+
+    const amount = effect["amount"];
+    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
+      return {
+        ok: false,
+        error: `Invalid damage amount ${String(amount)}`,
+      };
+    }
+
+    const targetPlayer = targetResult.choice.player;
+    targetPlayer.life.current -= amount;
+    state.eventLog.push({
+      type: "effectDamageDealt",
+      playerId: player.playerId,
+      targetPlayerId: targetPlayer.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId: "fixture_deal_damage",
+      amount,
+      sourceType: source.sourceType,
+    });
+
+    if (targetPlayer.life.current < 1) {
+      resolvePlayerDeath(state, targetPlayer);
+    }
+
+    return { ok: true };
+  }
+
   return { ok: true };
 }
 
@@ -313,6 +378,10 @@ type TargetChoice =
   | {
       choiceType: "card";
       card: CardInstance;
+    }
+  | {
+      choiceType: "player";
+      player: PlayerState;
     };
 
 type TargetChoiceResult =
@@ -331,7 +400,7 @@ function resolveTargetChoice(
   effect: Record<string, unknown>,
   source: EffectSourceContext,
 ): TargetChoiceResult {
-  const choicesResult = buildLegalTargetChoices(state, effect);
+  const choicesResult = buildLegalTargetChoices(state, player, effect);
   if (!choicesResult.ok) {
     return choicesResult;
   }
@@ -365,8 +434,14 @@ function resolveTargetChoice(
     playerId: player.playerId,
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
-    targetCardInstanceId: choice.card.instanceId,
-    targetDefinitionId: choice.card.definitionId,
+    ...(choice.choiceType === "card"
+      ? {
+          targetCardInstanceId: choice.card.instanceId,
+          targetDefinitionId: choice.card.definitionId,
+        }
+      : {
+          targetPlayerId: choice.player.playerId,
+        }),
     effectId: asString(effect["effectId"]),
     sourceType: source.sourceType,
   });
@@ -379,6 +454,7 @@ function resolveTargetChoice(
 
 function buildLegalTargetChoices(
   state: GameState,
+  player: PlayerState,
   effect: Record<string, unknown>,
 ): { ok: true; choices: TargetChoice[] } | { ok: false; error: string } {
   const target = effect["target"];
@@ -418,6 +494,18 @@ function buildLegalTargetChoices(
     };
   }
 
+  if (selector === "opponentPlayer") {
+    return {
+      ok: true,
+      choices: state.players
+        .filter((candidate) => candidate.playerId !== player.playerId)
+        .map((candidate) => ({
+          choiceType: "player" as const,
+          player: candidate,
+        })),
+    };
+  }
+
   return {
     ok: false,
     error: `Unsupported target selector ${asString(selector)}`,
@@ -426,6 +514,51 @@ function buildLegalTargetChoices(
 
 function chooseFirstLegalChoice(choices: readonly TargetChoice[]): TargetChoice | undefined {
   return choices[0];
+}
+
+function requireCardChoice(
+  choice: TargetChoice,
+  effectId: string,
+): { ok: true; card: CardInstance } | { ok: false; error: string } {
+  if (choice.choiceType !== "card") {
+    return {
+      ok: false,
+      error: `Effect ${effectId} requires a card target`,
+    };
+  }
+
+  return {
+    ok: true,
+    card: choice.card,
+  };
+}
+
+function resolvePlayerDeath(state: GameState, player: PlayerState): void {
+  state.eventLog.push({
+    type: "playerDied",
+    playerId: player.playerId,
+  });
+
+  if (state.common.deadWizardTokens.status === "available") {
+    const token = state.common.deadWizardTokens.drawStack.shift();
+    if (token !== undefined) {
+      token.ownerId = player.playerId;
+      player.deadWizardTokens.push(token);
+      state.eventLog.push({
+        type: "deadWizardTokenGained",
+        playerId: player.playerId,
+        tokenInstanceId: token.instanceId,
+        tokenDefinitionId: token.definitionId,
+      });
+    }
+  }
+
+  player.life.current = 20;
+  state.eventLog.push({
+    type: "playerResurrected",
+    playerId: player.playerId,
+    amount: 20,
+  });
 }
 
 function moveCardToPlayerZone(

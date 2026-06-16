@@ -235,6 +235,7 @@ function isSupportedExecutableEffectId(effectId: string): boolean {
     effectId === "fixture_destroy_card" ||
     effectId === "fixture_reveal_top_card" ||
     effectId === "fixture_play_top_card" ||
+    effectId === "fixture_deal_damage" ||
     effectId === "fixture_modify_effective_value"
   );
 }
@@ -252,6 +253,22 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
 
     if (effect["destination"] !== "play") {
       errors.push(`Card ${cardId} uses unsupported play-top destination ${String(effect["destination"])}`);
+    }
+
+    return errors;
+  }
+
+  if (effectId === "fixture_deal_damage") {
+    const errors: string[] = [];
+    const amount = effect["amount"];
+    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
+      errors.push(`Card ${cardId} uses invalid damage amount ${String(amount)}`);
+    }
+
+    const target = effect["target"];
+    if (!isEffectRecord(target) || target["selector"] !== "opponentPlayer") {
+      const selector = isEffectRecord(target) ? target["selector"] : target;
+      errors.push(`Card ${cardId} uses unsupported damage target ${String(selector)}`);
     }
 
     return errors;

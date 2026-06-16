@@ -94,10 +94,13 @@ export interface GameState {
 export interface GameEvent {
   type: string;
   playerId?: PlayerId;
+  targetPlayerId?: PlayerId;
   cardInstanceId?: string;
   definitionId?: string;
   targetCardInstanceId?: string;
   targetDefinitionId?: string;
+  tokenInstanceId?: string;
+  tokenDefinitionId?: string;
   effectId?: string;
   amount?: number;
   sourceType?: string;
