@@ -172,6 +172,25 @@ test("ending a turn cleans up non-permanents, draws a new hand, and advances act
   assert.equal(state.eventLog.at(-1)?.type, "turnStarted");
 });
 
+test("Basic Trophy grants a chip at the end of its controller's turn", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  activePlayer.trophyLikeObjects.push(createBasicTrophy(activePlayer.playerId));
+
+  const result = applyAction(state, {
+    type: "endTurn",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 1);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "trophyChipGranted" && event.playerId === activePlayer.playerId && event.effectId === "basicTrophy";
+    }),
+  );
+});
+
 test("played permanents stay in the controlled permanent zone after cleanup", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
@@ -675,6 +694,125 @@ test("fixture single-target attack damages the first opponent when no defense is
       return event.type === "effectDamageDealt" && event.targetPlayerId === targetPlayer.playerId && event.amount === 4;
     }),
   );
+});
+
+test("fixture single-target attack kill awards Basic Trophy to the attacker", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  assert.ok(targetPlayer);
+  targetPlayer.life.current = 1;
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_single_target_attack",
+    timing: "onPlay",
+    amount: 4,
+    target: {
+      selector: "opponentPlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.ok(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"));
+  assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "trophyControlChanged" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.effectId === "fixture_single_target_attack"
+      );
+    }),
+  );
+});
+
+test("fixture single-target attack kill transfers Basic Trophy from its previous controller", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  assert.ok(targetPlayer);
+  targetPlayer.life.current = 1;
+  targetPlayer.trophyLikeObjects.push(createBasicTrophy(targetPlayer.playerId));
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_single_target_attack",
+    timing: "onPlay",
+    amount: 4,
+    target: {
+      selector: "opponentPlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.trophyLikeObjects.filter((trophy) => trophy.trophyId === "basicTrophy").length, 1);
+  assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
+});
+
+test("fixture self-kill damage does not move Basic Trophy", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const trophyController = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  assert.ok(trophyController);
+  activePlayer.life.current = 1;
+  trophyController.trophyLikeObjects.push(createBasicTrophy(trophyController.playerId));
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_deal_damage",
+    timing: "onPlay",
+    amount: 4,
+    target: {
+      selector: "activePlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
+  assert.equal(trophyController.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
+  assert.equal(state.eventLog.some((event) => event.type === "trophyControlChanged"), false);
+});
+
+test("fixture event-like damage kill does not move Basic Trophy", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  assert.ok(targetPlayer);
+  targetPlayer.life.current = 1;
+  targetPlayer.trophyLikeObjects.push(createBasicTrophy(targetPlayer.playerId));
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_deal_damage",
+    timing: "onPlay",
+    amount: 4,
+    target: {
+      selector: "opponentPlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
+  assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
+  assert.equal(state.eventLog.some((event) => event.type === "trophyControlChanged"), false);
 });
 
 test("fixture single-target attack can be avoided by the first discard-self defense card in hand", () => {
@@ -1288,5 +1426,14 @@ function createMaxLifeModifierStatus(playerId: StatusInstance["ownerId"], amount
         },
       },
     ],
+  };
+}
+
+function createBasicTrophy(ownerId: PlayerState["playerId"]): PlayerState["trophyLikeObjects"][number] {
+  return {
+    instanceId: "basic-trophy",
+    trophyId: "basicTrophy",
+    ownerId,
+    effects: [],
   };
 }

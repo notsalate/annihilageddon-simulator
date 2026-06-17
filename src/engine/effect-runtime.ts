@@ -705,11 +705,25 @@ function requireCardChoice(
   };
 }
 
-function resolvePlayerDeath(state: GameState, player: PlayerState): void {
+function resolvePlayerDeath(
+  state: GameState,
+  player: PlayerState,
+  killCredit:
+    | {
+        killer: PlayerState;
+        effectId: string;
+        source: EffectSourceContext;
+      }
+    | undefined,
+): void {
   state.eventLog.push({
     type: "playerDied",
     playerId: player.playerId,
   });
+
+  if (killCredit !== undefined) {
+    awardBasicTrophyForKill(state, killCredit.killer, player, killCredit.effectId, killCredit.source);
+  }
 
   if (state.common.deadWizardTokens.status === "available") {
     const token = state.common.deadWizardTokens.drawStack.shift();
@@ -733,6 +747,60 @@ function resolvePlayerDeath(state: GameState, player: PlayerState): void {
   });
 }
 
+function awardBasicTrophyForKill(
+  state: GameState,
+  killer: PlayerState,
+  defeatedPlayer: PlayerState,
+  effectId: string,
+  source: EffectSourceContext,
+): void {
+  if (killer.playerId === defeatedPlayer.playerId || !givesBasicTrophyCredit(effectId)) {
+    return;
+  }
+
+  for (const player of state.players) {
+    const trophyIndex = player.trophyLikeObjects.findIndex((trophy) => trophy.trophyId === "basicTrophy");
+    if (trophyIndex >= 0) {
+      const [trophy] = player.trophyLikeObjects.splice(trophyIndex, 1);
+      if (trophy !== undefined) {
+        trophy.ownerId = killer.playerId;
+        killer.trophyLikeObjects.push(trophy);
+      }
+
+      state.eventLog.push({
+        type: "trophyControlChanged",
+        playerId: killer.playerId,
+        targetPlayerId: defeatedPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        sourceType: source.sourceType,
+      });
+      return;
+    }
+  }
+
+  killer.trophyLikeObjects.push({
+    instanceId: "basic-trophy",
+    trophyId: "basicTrophy",
+    ownerId: killer.playerId,
+    effects: [],
+  });
+  state.eventLog.push({
+    type: "trophyControlChanged",
+    playerId: killer.playerId,
+    targetPlayerId: defeatedPlayer.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+}
+
+function givesBasicTrophyCredit(effectId: string): boolean {
+  return effectId === "fixture_single_target_attack" || effectId === "fixture_multi_target_attack";
+}
+
 function dealDamage(
   state: GameState,
   sourcePlayer: PlayerState,
@@ -754,7 +822,17 @@ function dealDamage(
   });
 
   if (targetPlayer.life.current < 1) {
-    resolvePlayerDeath(state, targetPlayer);
+    resolvePlayerDeath(
+      state,
+      targetPlayer,
+      givesBasicTrophyCredit(effectId)
+        ? {
+            killer: sourcePlayer,
+            effectId,
+            source,
+          }
+        : undefined,
+    );
   }
 }
 

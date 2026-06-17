@@ -73,6 +73,7 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
 
 function endTurn(state: GameState): ActionResult {
   const activePlayer = mustGetActivePlayer(state);
+  grantBasicTrophyChipAtEndOfTurn(state, activePlayer);
   activePlayer.discard.push(...activePlayer.hand.splice(0));
   activePlayer.discard.push(...activePlayer.playedThisTurn.splice(0));
   state.turn.power = 0;
@@ -91,6 +92,20 @@ function endTurn(state: GameState): ActionResult {
   });
 
   return { ok: true };
+}
+
+function grantBasicTrophyChipAtEndOfTurn(state: GameState, activePlayer: PlayerState): void {
+  if (!activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy")) {
+    return;
+  }
+
+  activePlayer.chips += 1;
+  state.eventLog.push({
+    type: "trophyChipGranted",
+    playerId: activePlayer.playerId,
+    effectId: "basicTrophy",
+    amount: 1,
+  });
 }
 
 function buyMarketCard(state: GameState, action: BuyMarketCardAction): ActionResult {
