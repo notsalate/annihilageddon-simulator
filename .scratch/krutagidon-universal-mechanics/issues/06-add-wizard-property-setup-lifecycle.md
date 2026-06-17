@@ -10,11 +10,11 @@ Type: AFK
 
 ## What to build
 
-Научить setup загружать свойства, выдавать игрокам стартовое свойство и хранить его как controlled starting object. Эффекты свойств могут оставаться non-executable, пока их mechanic coverage не реализован.
+Научить setup загружать набор из 10 wizard property drafts, выдавать игрокам стартовое свойство и хранить его как controlled starting object. Эффекты свойств могут оставаться non-executable, пока их mechanic coverage не реализован.
 
 ## Acceptance criteria
 
-- [ ] Data pack может ссылаться на набор wizard properties.
+- [ ] Data pack может ссылаться на набор wizard properties из 10 draft definitions.
 - [ ] Setup может детерминированно назначить свойство игроку через текущий first-legal/fallback подход.
 - [ ] Назначенное свойство доступно как controlled object для модификаторов и triggers.
 - [ ] Неисполняемые эффекты свойства не выполняются молча.
