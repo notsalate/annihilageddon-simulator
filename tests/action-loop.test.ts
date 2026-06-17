@@ -281,14 +281,14 @@ test("targeted fixture effect chooses the first legal market target deterministi
   assert.equal(second.state.turn.power, second.firstMarketCardCost);
 });
 
-test("fixture gain effect moves the first legal market card into the active player's discard", () => {
+test("gain_card moves the first legal market card into the active player's discard", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
   assert.ok(activePlayer);
   const gainedCard = state.common.market[0];
   assert.ok(gainedCard);
   const fixtureCardId = addFixtureCardToActiveHand(state, {
-    effectId: "fixture_gain_card",
+    effectId: "gain_card",
     timing: "onPlay",
     target: {
       selector: "mainMarketCard",
@@ -310,6 +310,7 @@ test("fixture gain effect moves the first legal market card into the active play
       return (
         event.type === "effectCardGained" &&
         event.playerId === activePlayer.playerId &&
+        event.effectId === "gain_card" &&
         event.targetCardInstanceId === gainedCard.instanceId &&
         event.targetDefinitionId === gainedCard.definitionId
       );
@@ -317,14 +318,14 @@ test("fixture gain effect moves the first legal market card into the active play
   );
 });
 
-test("fixture discard effect moves the first legal hand card into the active player's discard", () => {
+test("discard_card moves the first legal hand card into the active player's discard", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
   assert.ok(activePlayer);
   const discardedCard = activePlayer.hand[0];
   assert.ok(discardedCard);
   const fixtureCardId = addFixtureCardToActiveHand(state, {
-    effectId: "fixture_discard_card",
+    effectId: "discard_card",
     timing: "onPlay",
     target: {
       selector: "activePlayerHandCard",
@@ -345,6 +346,7 @@ test("fixture discard effect moves the first legal hand card into the active pla
       return (
         event.type === "effectCardDiscarded" &&
         event.playerId === activePlayer.playerId &&
+        event.effectId === "discard_card" &&
         event.targetCardInstanceId === discardedCard.instanceId &&
         event.targetDefinitionId === discardedCard.definitionId
       );
@@ -352,19 +354,18 @@ test("fixture discard effect moves the first legal hand card into the active pla
   );
 });
 
-test("fixture destroy effect moves a chosen card to the destroyed zone and preserves ownership", () => {
+test("destroy_card moves a normal card to the destroyed zone and preserves ownership", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
   assert.ok(activePlayer);
   const destroyedCard = activePlayer.hand[0];
   assert.ok(destroyedCard);
   const fixtureCardId = addFixtureCardToActiveHand(state, {
-    effectId: "fixture_destroy_card",
+    effectId: "destroy_card",
     timing: "onPlay",
     target: {
       selector: "activePlayerHandCard",
     },
-    destination: "destroyedMayhem",
   });
 
   const result = applyAction(state, {
@@ -382,6 +383,7 @@ test("fixture destroy effect moves a chosen card to the destroyed zone and prese
       return (
         event.type === "effectCardDestroyed" &&
         event.playerId === activePlayer.playerId &&
+        event.effectId === "destroy_card" &&
         event.targetCardInstanceId === destroyedCard.instanceId &&
         event.targetDefinitionId === destroyedCard.definitionId
       );
@@ -389,11 +391,61 @@ test("fixture destroy effect moves a chosen card to the destroyed zone and prese
   );
 });
 
-test("fixture movement effects skip by default when no legal card choice exists", () => {
+test("destroy_card routes wild magic and limp wand cards back to their stacks", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const wildMagic = state.common.wildMagicStack.shift();
+  const limpWand = state.common.limpWandStack.shift();
+  assert.ok(wildMagic);
+  assert.ok(limpWand);
+  wildMagic.ownerId = activePlayer.playerId;
+  limpWand.ownerId = activePlayer.playerId;
+  activePlayer.hand.unshift(wildMagic, limpWand);
+  const wildMagicStackSize = state.common.wildMagicStack.length;
+  const limpWandStackSize = state.common.limpWandStack.length;
+  const destroyWildMagicCardId = addFixtureCardToActiveHand(state, {
+    effectId: "destroy_card",
+    timing: "onPlay",
+    target: {
+      selector: "activePlayerHandCard",
+    },
+  });
+
+  const wildMagicResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: destroyWildMagicCardId,
+  });
+
+  assert.equal(wildMagicResult.ok, true);
+  assert.equal(activePlayer.hand.includes(wildMagic), false);
+  assert.equal(state.common.wildMagicStack.includes(wildMagic), true);
+  assert.equal(state.common.wildMagicStack.length, wildMagicStackSize + 1);
+  assert.equal(state.common.limpWandStack.length, limpWandStackSize);
+  const destroyLimpWandCardId = addFixtureCardToActiveHand(state, {
+    effectId: "destroy_card",
+    timing: "onPlay",
+    target: {
+      selector: "activePlayerHandCard",
+    },
+  });
+
+  const limpWandResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: destroyLimpWandCardId,
+  });
+
+  assert.equal(limpWandResult.ok, true);
+  assert.equal(activePlayer.hand.includes(limpWand), false);
+  assert.equal(state.common.limpWandStack.includes(limpWand), true);
+  assert.equal(state.common.limpWandStack.length, limpWandStackSize + 1);
+});
+
+test("card movement effects skip by default when no legal card choice exists", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   state.common.market.splice(0);
   const fixtureCardId = addFixtureCardToActiveHand(state, {
-    effectId: "fixture_gain_card",
+    effectId: "gain_card",
     timing: "onPlay",
     target: {
       selector: "mainMarketCard",
@@ -412,7 +464,7 @@ test("fixture movement effects skip by default when no legal card choice exists"
   assert.equal(state.eventLog.some((event) => event.type === "effectCardGained"), false);
 });
 
-test("fixture reveal effect reveals the active player's top deck card without moving it", () => {
+test("reveal_top_card reveals the active player's top deck card without moving it", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
   assert.ok(activePlayer);
@@ -420,7 +472,7 @@ test("fixture reveal effect reveals the active player's top deck card without mo
   assert.ok(topCard);
   const deckSizeBefore = activePlayer.deck.length;
   const fixtureCardId = addFixtureCardToActiveHand(state, {
-    effectId: "fixture_reveal_top_card",
+    effectId: "reveal_top_card",
     timing: "onPlay",
     source: "activePlayerDeck",
   });
@@ -438,6 +490,7 @@ test("fixture reveal effect reveals the active player's top deck card without mo
       return (
         event.type === "effectCardRevealed" &&
         event.playerId === activePlayer.playerId &&
+        event.effectId === "reveal_top_card" &&
         event.targetCardInstanceId === topCard.instanceId &&
         event.targetDefinitionId === topCard.definitionId
       );
@@ -445,7 +498,7 @@ test("fixture reveal effect reveals the active player's top deck card without mo
   );
 });
 
-test("fixture reveal effect shuffles discard into an empty deck before revealing", () => {
+test("reveal_top_card shuffles discard into an empty deck before revealing", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
   assert.ok(activePlayer);
@@ -454,7 +507,7 @@ test("fixture reveal effect shuffles discard into an empty deck before revealing
   activePlayer.deck.splice(0);
   activePlayer.discard.push(revealedCard);
   const fixtureCardId = addFixtureCardToActiveHand(state, {
-    effectId: "fixture_reveal_top_card",
+    effectId: "reveal_top_card",
     timing: "onPlay",
     source: "activePlayerDeck",
   });
@@ -475,7 +528,7 @@ test("fixture reveal effect shuffles discard into an empty deck before revealing
   );
 });
 
-test("fixture play-top effect plays the active player's top deck card through on-play effects", () => {
+test("play_top_card plays the active player's top deck card through on-play effects", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
   assert.ok(activePlayer);
@@ -485,7 +538,7 @@ test("fixture play-top effect plays the active player's top deck card through on
   assert.ok(topPlayedCard);
   activePlayer.deck.unshift(topPlayedCard);
   const fixtureCardId = addFixtureCardToActiveHand(state, {
-    effectId: "fixture_play_top_card",
+    effectId: "play_top_card",
     timing: "onPlay",
     source: "activePlayerDeck",
     destination: "play",
@@ -506,6 +559,7 @@ test("fixture play-top effect plays the active player's top deck card through on
       return (
         event.type === "effectCardPlayedFromDeck" &&
         event.playerId === activePlayer.playerId &&
+        event.effectId === "play_top_card" &&
         event.targetCardInstanceId === topPlayedCard.instanceId &&
         event.targetDefinitionId === topPlayedCard.definitionId
       );
@@ -518,7 +572,7 @@ test("fixture play-top effect plays the active player's top deck card through on
   );
 });
 
-test("targeted fixture damage can kill an opponent, give a neutral DWT, resurrect, and affect scoring", () => {
+test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affect scoring", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
   assert.ok(activePlayer);
@@ -528,7 +582,7 @@ test("targeted fixture damage can kill an opponent, give a neutral DWT, resurrec
   const neutralDwt = state.common.deadWizardTokens.drawStack[0];
   assert.ok(neutralDwt);
   const fixtureCardId = addFixtureCardToActiveHand(state, {
-    effectId: "fixture_deal_damage",
+    effectId: "deal_damage",
     timing: "onPlay",
     amount: 999,
     target: {
@@ -553,6 +607,7 @@ test("targeted fixture damage can kill an opponent, give a neutral DWT, resurrec
         event.type === "effectDamageDealt" &&
         event.playerId === activePlayer.playerId &&
         event.targetPlayerId === targetPlayer.playerId &&
+        event.effectId === "deal_damage" &&
         event.amount === 999
       );
     }),
@@ -765,7 +820,7 @@ test("fixture single-target attack kill transfers Basic Trophy from its previous
   assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
 });
 
-test("fixture self-kill damage does not move Basic Trophy", () => {
+test("deal_damage self-kill does not move Basic Trophy", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
   assert.ok(activePlayer);
@@ -774,7 +829,7 @@ test("fixture self-kill damage does not move Basic Trophy", () => {
   activePlayer.life.current = 1;
   trophyController.trophyLikeObjects.push(createBasicTrophy(trophyController.playerId));
   const fixtureCardId = addFixtureCardToActiveHand(state, {
-    effectId: "fixture_deal_damage",
+    effectId: "deal_damage",
     timing: "onPlay",
     amount: 4,
     target: {
@@ -793,7 +848,7 @@ test("fixture self-kill damage does not move Basic Trophy", () => {
   assert.equal(state.eventLog.some((event) => event.type === "trophyControlChanged"), false);
 });
 
-test("fixture event-like damage kill does not move Basic Trophy", () => {
+test("deal_damage kill does not move Basic Trophy", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
   assert.ok(activePlayer);
@@ -802,7 +857,7 @@ test("fixture event-like damage kill does not move Basic Trophy", () => {
   targetPlayer.life.current = 1;
   targetPlayer.trophyLikeObjects.push(createBasicTrophy(targetPlayer.playerId));
   const fixtureCardId = addFixtureCardToActiveHand(state, {
-    effectId: "fixture_deal_damage",
+    effectId: "deal_damage",
     timing: "onPlay",
     amount: 4,
     target: {

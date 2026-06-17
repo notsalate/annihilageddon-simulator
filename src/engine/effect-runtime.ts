@@ -130,7 +130,7 @@ function executeEffect(
     return { ok: true };
   }
 
-  if (effect["effectId"] === "fixture_gain_card") {
+  if (effect["effectId"] === "gain_card") {
     const targetResult = resolveTargetChoice(state, player, effect, source);
     if (!targetResult.ok) {
       return targetResult;
@@ -147,7 +147,8 @@ function executeEffect(
       };
     }
 
-    const choice = requireCardChoice(targetResult.choice, "fixture_gain_card");
+    const effectId = asString(effect["effectId"]);
+    const choice = requireCardChoice(targetResult.choice, effectId);
     if (!choice.ok) {
       return choice;
     }
@@ -167,14 +168,14 @@ function executeEffect(
       definitionId: source.definitionId,
       targetCardInstanceId: choice.card.instanceId,
       targetDefinitionId: choice.card.definitionId,
-      effectId: "fixture_gain_card",
+      effectId,
       sourceType: source.sourceType,
     });
 
     return { ok: true };
   }
 
-  if (effect["effectId"] === "fixture_discard_card") {
+  if (effect["effectId"] === "discard_card") {
     const targetResult = resolveTargetChoice(state, player, effect, source);
     if (!targetResult.ok) {
       return targetResult;
@@ -184,7 +185,8 @@ function executeEffect(
       return { ok: true };
     }
 
-    const choice = requireCardChoice(targetResult.choice, "fixture_discard_card");
+    const effectId = asString(effect["effectId"]);
+    const choice = requireCardChoice(targetResult.choice, effectId);
     if (!choice.ok) {
       return choice;
     }
@@ -204,14 +206,14 @@ function executeEffect(
       definitionId: source.definitionId,
       targetCardInstanceId: choice.card.instanceId,
       targetDefinitionId: choice.card.definitionId,
-      effectId: "fixture_discard_card",
+      effectId,
       sourceType: source.sourceType,
     });
 
     return { ok: true };
   }
 
-  if (effect["effectId"] === "fixture_destroy_card") {
+  if (effect["effectId"] === "destroy_card") {
     const targetResult = resolveTargetChoice(state, player, effect, source);
     if (!targetResult.ok) {
       return targetResult;
@@ -221,19 +223,18 @@ function executeEffect(
       return { ok: true };
     }
 
-    if (effect["destination"] !== "destroyedMayhem") {
-      return {
-        ok: false,
-        error: `Unsupported destroy destination ${asString(effect["destination"])}`,
-      };
-    }
-
-    const choice = requireCardChoice(targetResult.choice, "fixture_destroy_card");
+    const effectId = asString(effect["effectId"]);
+    const choice = requireCardChoice(targetResult.choice, effectId);
     if (!choice.ok) {
       return choice;
     }
 
-    const moved = moveCardToZonePreservingOwner(state, choice.card, state.common.destroyedMayhem);
+    const destination = getDestroyDestination(state, choice.card);
+    if (!destination.ok) {
+      return destination;
+    }
+
+    const moved = moveCardToZonePreservingOwner(state, choice.card, destination.zone);
     if (!moved) {
       return {
         ok: false,
@@ -248,14 +249,15 @@ function executeEffect(
       definitionId: source.definitionId,
       targetCardInstanceId: choice.card.instanceId,
       targetDefinitionId: choice.card.definitionId,
-      effectId: "fixture_destroy_card",
+      effectId,
       sourceType: source.sourceType,
     });
 
     return { ok: true };
   }
 
-  if (effect["effectId"] === "fixture_reveal_top_card") {
+  if (effect["effectId"] === "reveal_top_card") {
+    const effectId = asString(effect["effectId"]);
     if (effect["source"] !== "activePlayerDeck") {
       return {
         ok: false,
@@ -270,7 +272,7 @@ function executeEffect(
         playerId: player.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
-        effectId: "fixture_reveal_top_card",
+        effectId,
         sourceType: source.sourceType,
       });
       return { ok: true };
@@ -283,14 +285,15 @@ function executeEffect(
       definitionId: source.definitionId,
       targetCardInstanceId: card.instanceId,
       targetDefinitionId: card.definitionId,
-      effectId: "fixture_reveal_top_card",
+      effectId,
       sourceType: source.sourceType,
     });
 
     return { ok: true };
   }
 
-  if (effect["effectId"] === "fixture_play_top_card") {
+  if (effect["effectId"] === "play_top_card") {
+    const effectId = asString(effect["effectId"]);
     if (effect["source"] !== "activePlayerDeck") {
       return {
         ok: false,
@@ -312,7 +315,7 @@ function executeEffect(
         playerId: player.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
-        effectId: "fixture_play_top_card",
+        effectId,
         sourceType: source.sourceType,
       });
       return { ok: true };
@@ -330,14 +333,14 @@ function executeEffect(
       definitionId: source.definitionId,
       targetCardInstanceId: card.instanceId,
       targetDefinitionId: card.definitionId,
-      effectId: "fixture_play_top_card",
+      effectId,
       sourceType: source.sourceType,
     });
 
     return { ok: true };
   }
 
-  if (effect["effectId"] === "fixture_deal_damage") {
+  if (effect["effectId"] === "deal_damage") {
     const targetResult = resolveTargetChoice(state, player, effect, source);
     if (!targetResult.ok) {
       return targetResult;
@@ -362,7 +365,7 @@ function executeEffect(
       };
     }
 
-    dealDamage(state, player, targetResult.choice.player, amount, "fixture_deal_damage", source);
+    dealDamage(state, player, targetResult.choice.player, amount, asString(effect["effectId"]), source);
 
     return { ok: true };
   }
@@ -1263,6 +1266,33 @@ function moveCardToZonePreservingOwner(state: GameState, card: CardInstance, des
 
   destination.push(card);
   return true;
+}
+
+function getDestroyDestination(
+  state: GameState,
+  card: CardInstance,
+): { ok: true; zone: CardInstance[] } | { ok: false; error: string } {
+  const definition = state.cardDefinitions.get(card.definitionId);
+  if (definition === undefined) {
+    return {
+      ok: false,
+      error: `Missing target card definition ${card.definitionId}`,
+    };
+  }
+
+  if (definition.engine.cardKind === "wildMagic") {
+    return { ok: true, zone: state.common.wildMagicStack };
+  }
+
+  if (definition.engine.cardKind === "limpWand") {
+    return { ok: true, zone: state.common.limpWandStack };
+  }
+
+  if (definition.engine.cardKind === "megaMayhem") {
+    return { ok: true, zone: state.common.destroyedMegaMayhem };
+  }
+
+  return { ok: true, zone: state.common.destroyedMayhem };
 }
 
 function removeCardFromKnownZones(state: GameState, card: CardInstance): boolean {

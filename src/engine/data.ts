@@ -247,15 +247,15 @@ function isSupportedExecutableEffectId(effectId: string, mode: "combat" | "fixtu
   return (
     effectId === "add_power" ||
     effectId === "heal" ||
+    effectId === "deal_damage" ||
+    effectId === "gain_card" ||
+    effectId === "discard_card" ||
+    effectId === "destroy_card" ||
+    effectId === "reveal_top_card" ||
+    effectId === "play_top_card" ||
     effectId === "draw_cards" ||
     (mode === "fixture" &&
       (effectId === "fixture_add_power_equal_to_target_cost" ||
-        effectId === "fixture_gain_card" ||
-        effectId === "fixture_discard_card" ||
-        effectId === "fixture_destroy_card" ||
-        effectId === "fixture_reveal_top_card" ||
-        effectId === "fixture_play_top_card" ||
-        effectId === "fixture_deal_damage" ||
         effectId === "fixture_single_target_attack" ||
         effectId === "fixture_multi_target_attack" ||
         effectId === "fixture_mayhem_attack" ||
@@ -265,11 +265,11 @@ function isSupportedExecutableEffectId(effectId: string, mode: "combat" | "fixtu
 }
 
 function validateSupportedEffectShape(cardId: string, effectId: string, effect: Record<string, unknown>): string[] {
-  if (effectId === "fixture_reveal_top_card" && effect["source"] !== "activePlayerDeck") {
+  if (effectId === "reveal_top_card" && effect["source"] !== "activePlayerDeck") {
     return [`Card ${cardId} uses unsupported reveal source ${String(effect["source"])}`];
   }
 
-  if (effectId === "fixture_play_top_card") {
+  if (effectId === "play_top_card") {
     const errors: string[] = [];
     if (effect["source"] !== "activePlayerDeck") {
       errors.push(`Card ${cardId} uses unsupported play-top source ${String(effect["source"])}`);
@@ -282,7 +282,7 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
     return errors;
   }
 
-  if (effectId === "fixture_deal_damage") {
+  if (effectId === "deal_damage") {
     const errors: string[] = [];
     const amount = effect["amount"];
     if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {

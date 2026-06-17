@@ -27,31 +27,6 @@ test("supported executable fixture data pack passes executable effect validation
   assert.deepEqual(result, { ok: true });
 });
 
-test("supported executable damage fixture passes executable effect validation in fixture mode", () => {
-  const card = createFixtureCard("fixture-supported-damage-effect");
-  const dataPack = withOnlyFixtureCard({
-    ...card,
-    engine: {
-      ...card.engine,
-      playableInV0: true,
-      effects: [
-        {
-          effectId: "fixture_deal_damage",
-          timing: "onPlay",
-          amount: 999,
-          target: {
-            selector: "opponentPlayer",
-          },
-        },
-      ],
-    },
-  });
-
-  const result = validateExecutableDataPack(dataPack, { mode: "fixture" });
-
-  assert.deepEqual(result, { ok: true });
-});
-
 test("supported executable healing effect passes executable effect validation", () => {
   const card = createFixtureCard("fixture-supported-healing-effect");
   const dataPack = withOnlyFixtureCard({
@@ -67,6 +42,81 @@ test("supported executable healing effect passes executable effect validation", 
           target: {
             selector: "activePlayer",
           },
+        },
+      ],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack);
+
+  assert.deepEqual(result, { ok: true });
+});
+
+test("supported executable damage effect passes executable effect validation", () => {
+  const card = createFixtureCard("fixture-supported-damage-effect");
+  const dataPack = withOnlyFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "deal_damage",
+          timing: "onPlay",
+          amount: 4,
+          target: {
+            selector: "opponentPlayer",
+          },
+        },
+      ],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack);
+
+  assert.deepEqual(result, { ok: true });
+});
+
+test("supported executable card movement and deck effects pass executable effect validation", () => {
+  const card = createFixtureCard("fixture-supported-core-movement-effects");
+  const dataPack = withOnlyFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "gain_card",
+          timing: "onPlay",
+          target: {
+            selector: "mainMarketCard",
+          },
+          destination: "discard",
+        },
+        {
+          effectId: "discard_card",
+          timing: "onPlay",
+          target: {
+            selector: "activePlayerHandCard",
+          },
+        },
+        {
+          effectId: "destroy_card",
+          timing: "onPlay",
+          target: {
+            selector: "activePlayerHandCard",
+          },
+        },
+        {
+          effectId: "reveal_top_card",
+          timing: "onPlay",
+          source: "activePlayerDeck",
+        },
+        {
+          effectId: "play_top_card",
+          timing: "onPlay",
+          source: "activePlayerDeck",
+          destination: "play",
         },
       ],
     },
@@ -187,7 +237,7 @@ test("combat data-pack validation rejects fixture effect ids", () => {
       playableInV0: true,
       effects: [
         {
-          effectId: "fixture_deal_damage",
+          effectId: "fixture_single_target_attack",
           timing: "onPlay",
           amount: 1,
           target: {
@@ -203,7 +253,7 @@ test("combat data-pack validation rejects fixture effect ids", () => {
   assert.equal(result.ok, false);
   assert.ok(
     result.errors.some((error) => {
-      return error.includes("fixture-effect-in-combat-data") && error.includes("fixture_deal_damage");
+      return error.includes("fixture-effect-in-combat-data") && error.includes("fixture_single_target_attack");
     }),
   );
 });
@@ -295,7 +345,7 @@ test("executable data-pack validation rejects unsupported play-top destinations"
       playableInV0: true,
       effects: [
         {
-          effectId: "fixture_play_top_card",
+          effectId: "play_top_card",
           timing: "onPlay",
           source: "activePlayerDeck",
           destination: "unsupportedDestination",
@@ -304,7 +354,7 @@ test("executable data-pack validation rejects unsupported play-top destinations"
     },
   });
 
-  const result = validateExecutableDataPack(dataPack, { mode: "fixture" });
+  const result = validateExecutableDataPack(dataPack);
 
   assert.equal(result.ok, false);
   assert.ok(
