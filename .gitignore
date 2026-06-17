@@ -1,5 +1,6 @@
 node_modules/
 dist/
+assets/
 .scratch/tmp/
 .scratch/tmp_*
 .scratch/runs/
