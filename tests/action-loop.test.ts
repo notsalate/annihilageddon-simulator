@@ -1185,6 +1185,83 @@ test("fixture multi-target attack opens a separate defense window for each targe
   ]);
 });
 
+test("fixture Mayhem attack collects decisions for all players before resolving damage in active-player order", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  assert.equal(orderedPlayers[0], activePlayer);
+  const secondPlayer = orderedPlayers[1];
+  const thirdPlayer = orderedPlayers[2];
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  activePlayer.life.current = 10;
+  secondPlayer.life.current = 1;
+  thirdPlayer.life.current = 1;
+  const defenseCard = addFixtureDefenseCardToHand(state, secondPlayer, "discardSelf");
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_mayhem_attack",
+    timing: "onPlay",
+    amount: 4,
+    target: {
+      selector: "allPlayers",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.life.current, 6);
+  assert.equal(secondPlayer.life.current, 1);
+  assert.equal(thirdPlayer.life.current, 20);
+  assert.equal(secondPlayer.discard.includes(defenseCard), true);
+  assertEventOrder(state, [
+    (event) => event.type === "fixtureMayhemDecisionPhaseStarted",
+    (event) => event.type === "fixtureMayhemDecisionStarted" && event.targetPlayerId === activePlayer.playerId,
+    (event) => event.type === "fixtureMayhemDecisionStarted" && event.targetPlayerId === secondPlayer.playerId,
+    (event) => event.type === "defenseChoiceSelected" && event.playerId === secondPlayer.playerId,
+    (event) => event.type === "fixtureMayhemDecisionStarted" && event.targetPlayerId === thirdPlayer.playerId,
+    (event) => event.type === "fixtureMayhemResolutionPhaseStarted",
+    (event) => event.type === "fixtureAttackTargetStarted" && event.targetPlayerId === activePlayer.playerId,
+    (event) => event.type === "effectDamageDealt" && event.targetPlayerId === activePlayer.playerId,
+    (event) => event.type === "fixtureMayhemTargetSkipped" && event.targetPlayerId === secondPlayer.playerId,
+    (event) => event.type === "fixtureAttackTargetStarted" && event.targetPlayerId === thirdPlayer.playerId,
+    (event) => event.type === "playerDied" && event.playerId === thirdPlayer.playerId,
+  ]);
+});
+
+test("fixture Mayhem attack kill does not move Basic Trophy", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const targetPlayer = orderedPlayers[2];
+  assert.ok(targetPlayer);
+  targetPlayer.life.current = 1;
+  targetPlayer.trophyLikeObjects.push(createBasicTrophy(targetPlayer.playerId));
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_mayhem_attack",
+    timing: "onPlay",
+    amount: 4,
+    target: {
+      selector: "allPlayers",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
+  assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
+  assert.equal(state.eventLog.some((event) => event.type === "trophyControlChanged"), false);
+});
+
 test("targeted fixture effect skips when there are no legal choices by default", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   state.common.market.splice(0);
@@ -1302,6 +1379,14 @@ function getOpponentsInSeatingOrder(state: GameState, player: PlayerState): Play
   assert.notEqual(playerIndex, -1);
   return Array.from({ length: state.players.length - 1 }, (_, offset) => {
     return state.players[(playerIndex + offset + 1) % state.players.length];
+  }).filter((candidate): candidate is PlayerState => candidate !== undefined);
+}
+
+function getPlayersInActiveOrder(state: GameState): PlayerState[] {
+  const activePlayerIndex = state.players.findIndex((candidate) => candidate.playerId === state.activePlayerId);
+  assert.notEqual(activePlayerIndex, -1);
+  return Array.from({ length: state.players.length }, (_, offset) => {
+    return state.players[(activePlayerIndex + offset) % state.players.length];
   }).filter((candidate): candidate is PlayerState => candidate !== undefined);
 }
 

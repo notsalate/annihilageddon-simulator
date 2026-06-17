@@ -239,6 +239,7 @@ function isSupportedExecutableEffectId(effectId: string): boolean {
     effectId === "fixture_heal" ||
     effectId === "fixture_single_target_attack" ||
     effectId === "fixture_multi_target_attack" ||
+    effectId === "fixture_mayhem_attack" ||
     effectId === "fixture_avoid_attack" ||
     effectId === "fixture_modify_effective_value"
   );
@@ -321,6 +322,22 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
     if (!isEffectRecord(target) || target["selector"] !== "opponentPlayers") {
       const selector = isEffectRecord(target) ? target["selector"] : target;
       errors.push(`Card ${cardId} uses unsupported multi-target attack target ${String(selector)}`);
+    }
+
+    return errors;
+  }
+
+  if (effectId === "fixture_mayhem_attack") {
+    const errors: string[] = [];
+    const amount = effect["amount"];
+    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
+      errors.push(`Card ${cardId} uses invalid Mayhem attack damage amount ${String(amount)}`);
+    }
+
+    const target = effect["target"];
+    if (!isEffectRecord(target) || target["selector"] !== "allPlayers") {
+      const selector = isEffectRecord(target) ? target["selector"] : target;
+      errors.push(`Card ${cardId} uses unsupported Mayhem attack target ${String(selector)}`);
     }
 
     return errors;

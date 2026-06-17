@@ -456,6 +456,28 @@ function executeEffect(
     return { ok: true };
   }
 
+  if (effect["effectId"] === "fixture_mayhem_attack") {
+    const target = effect["target"];
+    if (!isEffectRecord(target) || target["selector"] !== "allPlayers") {
+      const selector = isEffectRecord(target) ? target["selector"] : target;
+      return {
+        ok: false,
+        error: `Unsupported Mayhem attack selector ${String(selector)}`,
+      };
+    }
+
+    const amount = effect["amount"];
+    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
+      return {
+        ok: false,
+        error: `Invalid attack damage amount ${String(amount)}`,
+      };
+    }
+
+    resolveFixtureMayhemAttack(state, player, amount, "fixture_mayhem_attack", source);
+    return { ok: true };
+  }
+
   if (effect["effectId"] === "fixture_heal") {
     const targetResult = resolveTargetChoice(state, player, effect, source);
     if (!targetResult.ok) {
@@ -523,6 +545,91 @@ function resolveFixtureAttackTarget(
   dealDamage(state, attackingPlayer, targetPlayer, amount, effectId, source);
 }
 
+function resolveFixtureMayhemAttack(
+  state: GameState,
+  sourcePlayer: PlayerState,
+  amount: number,
+  effectId: string,
+  source: EffectSourceContext,
+): void {
+  const targets = getPlayersInActiveOrder(state);
+  const decisions: Array<{ player: PlayerState; avoided: boolean }> = [];
+
+  state.eventLog.push({
+    type: "fixtureMayhemDecisionPhaseStarted",
+    playerId: sourcePlayer.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    amount,
+    sourceType: source.sourceType,
+  });
+
+  for (const targetPlayer of targets) {
+    state.eventLog.push({
+      type: "fixtureMayhemDecisionStarted",
+      playerId: sourcePlayer.playerId,
+      targetPlayerId: targetPlayer.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      amount,
+      sourceType: source.sourceType,
+    });
+    const avoided = resolveDefenseWindow(state, targetPlayer);
+    if (avoided) {
+      state.eventLog.push({
+        type: "fixtureAttackAvoided",
+        playerId: targetPlayer.playerId,
+        targetPlayerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        sourceType: source.sourceType,
+      });
+    }
+
+    decisions.push({ player: targetPlayer, avoided });
+  }
+
+  state.eventLog.push({
+    type: "fixtureMayhemResolutionPhaseStarted",
+    playerId: sourcePlayer.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    amount,
+    sourceType: source.sourceType,
+  });
+
+  for (const decision of decisions) {
+    if (decision.avoided) {
+      state.eventLog.push({
+        type: "fixtureMayhemTargetSkipped",
+        playerId: sourcePlayer.playerId,
+        targetPlayerId: decision.player.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        sourceType: source.sourceType,
+      });
+      continue;
+    }
+
+    state.eventLog.push({
+      type: "fixtureAttackTargetStarted",
+      playerId: sourcePlayer.playerId,
+      targetPlayerId: decision.player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      amount,
+      sourceType: source.sourceType,
+    });
+    dealDamage(state, sourcePlayer, decision.player, amount, effectId, source);
+  }
+}
+
 function getOpponentsInSeatingOrder(state: GameState, player: PlayerState): PlayerState[] {
   const playerIndex = state.players.findIndex((candidate) => candidate.playerId === player.playerId);
   if (playerIndex < 0) {
@@ -531,6 +638,17 @@ function getOpponentsInSeatingOrder(state: GameState, player: PlayerState): Play
 
   return Array.from({ length: state.players.length - 1 }, (_, offset) => {
     return state.players[(playerIndex + offset + 1) % state.players.length];
+  }).filter((candidate): candidate is PlayerState => candidate !== undefined);
+}
+
+function getPlayersInActiveOrder(state: GameState): PlayerState[] {
+  const playerIndex = state.players.findIndex((candidate) => candidate.playerId === state.activePlayerId);
+  if (playerIndex < 0) {
+    return [];
+  }
+
+  return Array.from({ length: state.players.length }, (_, offset) => {
+    return state.players[(playerIndex + offset) % state.players.length];
   }).filter((candidate): candidate is PlayerState => candidate !== undefined);
 }
 
