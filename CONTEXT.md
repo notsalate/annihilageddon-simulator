@@ -44,6 +44,50 @@ _Avoid_: unified controlled objects zone
 The deterministic decision hook used when an effect or rule requires a legal choice. The early baseline policy chooses the first legal option and is not intended to model strong player strategy.
 _Avoid_: hidden handler choice, random default choice
 
+**Strategy**:
+The player decision model used during a simulated game. A strategy is separate from the player's starting build and from seating position.
+_Avoid_: starting build, player identity, seed
+
+**Full Comparison Mode**:
+A user-facing analysis mode that compares strategies or starting builds across many simulated games. Full comparison modes require implemented strategies, starting builds, and a result surface for comparison; simple baseline simulation runs are not full comparison modes.
+_Avoid_: smoke simulation, baseline run, single mass summary
+
+**Best-Move Strategy**:
+A strategy that evaluates the legal options available during a player's turn and chooses the best available line according to its configured evaluation policy.
+_Avoid_: starting build analysis, first move analysis
+
+**Starting Build**:
+The initial combination of wizard properties and familiar assigned to a player before the game begins. Starting builds are compared separately from strategies.
+_Avoid_: strategy, bot policy, player position
+
+**Universal Mechanic**:
+A rules-engine capability that can be implemented and tested with fixtures before real card, token, wizard property, or familiar data is imported. Universal mechanics are separate from concrete card mapping work; full real-card import should not run ahead of the universal mechanics needed to represent those cards, but small coverage imports are allowed when they validate a promoted or universal mechanic.
+_Avoid_: imported card behavior, data import, real card coverage
+
+**Mechanics Coverage Set**:
+The short pre-import set of promoted and universal mechanics needed before broad real-card import: healing, damage, attacks and defense windows, gain/discard/destroy movement, reveal/play-top-deck effects, set-life effects, activations, wild magic, market chip markers, executable Mayhem hooks, basic token effects, and familiar lifecycle/effects.
+_Avoid_: full card import, complete card database
+
+**Fixture Mechanic**:
+A temporary test-only mechanic or effect ID used to prove a rules-engine slice before it is promoted to normal runtime data language. Fixture mechanics must not be used as the canonical IDs for real playable card data; promoted mechanics are tested through their normal runtime IDs before fixture IDs are removed.
+_Avoid_: production mechanic, real card effect ID
+
+**Promoted Mechanic**:
+A former fixture mechanic that has been checked against the rules canon, completed within its agreed scope, exposed through a normal runtime effect ID, and tested through that normal ID. Promotion is not just renaming.
+_Avoid_: renamed fixture, unchecked runtime mechanic
+
+**Runtime Effect ID**:
+The stable machine-readable English identifier used by runtime data to invoke a typed effect handler. Runtime effect IDs are separate from Russian display terms and must not depend on localized card text.
+_Avoid_: Russian display term as key, card text parsing
+
+**Healing**:
+A life-increase effect that lets a player накручивать lives up to the player's current maximum life. In current card coverage, normal healing effects heal the acting player rather than another chosen player.
+_Avoid_: set life, damage prevention
+
+**Set Life**:
+An effect that directly changes a player's current life to a specified value, such as a Mayhem or Mega Mayhem setting lives to 10 or 13. Set Life is separate from Healing because it can lower or overwrite current life instead of adding lives.
+_Avoid_: healing, damage
+
 **Empty Choice Skip**:
 The default behavior when an effect asks for a legal choice but no legal options exist. The effect is skipped unless its mapped effect data explicitly marks the empty choice as an error.
 _Avoid_: default empty-choice failure
