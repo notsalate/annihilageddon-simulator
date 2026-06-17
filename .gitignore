@@ -1,6 +1,16 @@
 node_modules/
 dist/
 assets/
+data/import/
 .scratch/tmp/
 .scratch/tmp_*
 .scratch/runs/
+.claude/worktrees/
+.env
+.env.*
+*.log
+*.db
+*.sqlite
+*.sqlite3
+coverage/
+*.tsbuildinfo
