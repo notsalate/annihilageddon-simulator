@@ -106,6 +106,9 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     if (!result.ok) {
       throw new Error(`Legal action failed: ${result.error}`);
     }
+    if (result.gameEndReason !== undefined) {
+      return summarizeGame(state, result.gameEndReason, true);
+    }
     actionsApplied += 1;
   }
 }
@@ -156,14 +159,6 @@ function summarizeGame(state: GameState, endReason: GameEndReason, isGameEnd: bo
 export function getGameEndReason(state: GameState): GameEndReason | undefined {
   if (state.common.deadWizardTokens.status === "available" && state.common.deadWizardTokens.drawStack.length === 0) {
     return "deadWizardTokensExhausted";
-  }
-
-  if (state.common.legendMarket.length < 3 && state.common.legendDeck.length === 0) {
-    return "legendDeckExhausted";
-  }
-
-  if (state.common.market.length < 5 && state.common.mainDeck.length === 0) {
-    return "mainDeckExhausted";
   }
 
   return undefined;

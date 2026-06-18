@@ -36,17 +36,67 @@ test("game end reason is dead wizard token exhaustion when the DWT stack is empt
   assert.equal(getGameEndReason(state), "deadWizardTokensExhausted");
 });
 
-test("game end reason reports exhausted market source decks", () => {
+test("game end reason does not infer market exhaustion outside Market Flow", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
 
   state.common.market.pop();
   state.common.mainDeck.splice(0);
-  assert.equal(getGameEndReason(state), "mainDeckExhausted");
+  assert.equal(getGameEndReason(state), undefined);
 
   state.common.market.push(state.common.legendMarket[0]!);
   state.common.legendMarket.pop();
   state.common.legendDeck.splice(0);
-  assert.equal(getGameEndReason(state), "legendDeckExhausted");
+  assert.equal(getGameEndReason(state), undefined);
+});
+
+test("single-game simulation uses the Market Flow main deck exhaustion reason directly", () => {
+  let prepared = false;
+  const result = runSingleGame({
+    rootDir,
+    seed: 60615,
+    maxTurns: 20,
+    bot: {
+      chooseAction({ state }) {
+        if (!prepared) {
+          state.common.market.splice(0, 1);
+          state.common.mainDeck.splice(0);
+          prepared = true;
+        }
+
+        return { type: "endTurn" };
+      },
+    },
+  });
+
+  assert.equal(result.endReason, "mainDeckExhausted");
+  assert.equal(result.isGameEnd, true);
+  assert.equal(result.eventLog.at(-1)?.type, "marketFlowFailed");
+  assert.equal(result.eventLog.some((event) => event.type === "turnStarted"), false);
+});
+
+test("single-game simulation uses the Market Flow legend deck exhaustion reason directly", () => {
+  let prepared = false;
+  const result = runSingleGame({
+    rootDir,
+    seed: 60615,
+    maxTurns: 20,
+    bot: {
+      chooseAction({ state }) {
+        if (!prepared) {
+          state.common.legendMarket.splice(0, 1);
+          state.common.legendDeck.splice(0);
+          prepared = true;
+        }
+
+        return { type: "endTurn" };
+      },
+    },
+  });
+
+  assert.equal(result.endReason, "legendDeckExhausted");
+  assert.equal(result.isGameEnd, true);
+  assert.equal(result.eventLog.at(-1)?.type, "marketFlowFailed");
+  assert.equal(result.eventLog.some((event) => event.type === "turnStarted"), false);
 });
 
 test("scoring sums owned cards from scoring zones and applies DWT penalty", () => {

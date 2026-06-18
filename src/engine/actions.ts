@@ -47,9 +47,12 @@ export interface EndTurnAction {
   type: "endTurn";
 }
 
+export type MarketFlowEndReason = "mainDeckExhausted" | "legendDeckExhausted";
+
 export type ActionResult =
   | {
       ok: true;
+      gameEndReason?: MarketFlowEndReason;
     }
   | {
       ok: false;
@@ -131,6 +134,9 @@ function endTurn(state: GameState): ActionResult {
   state.activePlayerId = getNextPlayer(state, activePlayer).playerId;
   const marketFlowResult = runMarketFlow(state);
   if (!marketFlowResult.ok) {
+    return marketFlowResult;
+  }
+  if (marketFlowResult.gameEndReason !== undefined) {
     return marketFlowResult;
   }
   state.eventLog.push({
@@ -480,8 +486,12 @@ function runMarketFlow(state: GameState): ActionResult {
     targetSize: 3,
     eventKind: "megaMayhem",
     eventLogType: "megaMayhemDestroyed",
+    endReason: "legendDeckExhausted",
   });
   if (!legendResult.ok) {
+    return legendResult;
+  }
+  if (legendResult.gameEndReason !== undefined) {
     return legendResult;
   }
 
@@ -492,8 +502,12 @@ function runMarketFlow(state: GameState): ActionResult {
     targetSize: 5,
     eventKind: "mayhem",
     eventLogType: "mayhemDestroyed",
+    endReason: "mainDeckExhausted",
   });
   if (!mainResult.ok) {
+    return mainResult;
+  }
+  if (mainResult.gameEndReason !== undefined) {
     return mainResult;
   }
 
@@ -509,6 +523,7 @@ function fillMarketThroughMarketFlow(
     targetSize: number;
     eventKind: CardDefinition["engine"]["cardKind"];
     eventLogType: string;
+    endReason: MarketFlowEndReason;
   },
 ): ActionResult {
   while (options.market.length < options.targetSize) {
@@ -517,7 +532,7 @@ function fillMarketThroughMarketFlow(
       state.eventLog.push({
         type: "marketFlowFailed",
       });
-      return { ok: true };
+      return { ok: true, gameEndReason: options.endReason };
     }
 
     const definition = mustGetDefinition(state, card.definitionId);

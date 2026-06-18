@@ -206,6 +206,80 @@ test("megaMayhem revealed during Market Flow executes its mapped onMayhemResolve
   );
 });
 
+test("mayhem revealed during Market Flow resolves and Market Flow continues with the next normal card", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-market-flow-mayhem-add-power",
+    [{ effectId: "add_power", timing: "onMayhemResolve", amount: 2 }],
+    { cardKind: "mayhem" },
+  );
+  const normalDefinition = createFixtureCardDefinition("fixture-market-flow-normal-card", []);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+    [normalDefinition.cardId, normalDefinition],
+  ]);
+  const mayhem: CardInstance = {
+    instanceId: "fixture-market-flow-mayhem-instance",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  const normalCard: CardInstance = {
+    instanceId: "fixture-market-flow-normal-instance",
+    definitionId: normalDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(0, state.common.market.length, ...state.common.market.slice(0, 4));
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem, normalCard);
+
+  const result = applyAction(state, {
+    type: "endTurn",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(state.common.market.includes(mayhem), false);
+  assert.equal(state.common.market.includes(normalCard), true);
+  assert.equal(state.common.destroyedMayhem.at(-1), mayhem);
+  assertEventOrder(state, [
+    (event) => event.type === "mayhemResolved" && event.cardInstanceId === mayhem.instanceId,
+    (event) => event.type === "mayhemDestroyed" && event.cardInstanceId === mayhem.instanceId,
+    (event) => event.type === "marketFlowCardAdded" && event.cardInstanceId === normalCard.instanceId,
+  ]);
+});
+
+test("Market Flow reports main deck exhaustion without starting the next turn", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  state.common.market.splice(0, 1);
+  state.common.mainDeck.splice(0);
+
+  const result = applyAction(state, {
+    type: "endTurn",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.gameEndReason, "mainDeckExhausted");
+  assert.equal(state.eventLog.at(-1)?.type, "marketFlowFailed");
+  assert.equal(state.eventLog.some((event) => event.type === "turnStarted"), false);
+});
+
+test("Market Flow reports legend deck exhaustion without starting the next turn", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  state.common.legendMarket.splice(0, 1);
+  state.common.legendDeck.splice(0);
+
+  const result = applyAction(state, {
+    type: "endTurn",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.gameEndReason, "legendDeckExhausted");
+  assert.equal(state.eventLog.at(-1)?.type, "marketFlowFailed");
+  assert.equal(state.eventLog.some((event) => event.type === "turnStarted"), false);
+});
+
 test("unsupported Mayhem effect fails during Market Flow instead of becoming a silent no-op", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const unsupportedMayhemDefinition: CardDefinition = {
