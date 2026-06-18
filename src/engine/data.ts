@@ -336,6 +336,10 @@ function isSupportedExecutableEffectId(effectId: string, mode: "combat" | "fixtu
     effectId === "draw_cards" ||
     effectId === "wild_magic_choice" ||
     effectId === "play_top_card_from_foe_deck" ||
+    effectId === "modify_effective_value" ||
+    effectId === "gain_chips" ||
+    effectId === "topdeck_gained_card" ||
+    effectId === "temporary_hand_limit_by_gained_card_type" ||
     (mode === "fixture" &&
       (effectId === "fixture_add_power_equal_to_target_cost" ||
         effectId === "fixture_modify_effective_value"))

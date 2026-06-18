@@ -1,14 +1,15 @@
-import type { CardDefinition } from "./data.js";
+import type { CardDefinition, TokenDefinition } from "./data.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
-import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import type { CardInstance, GameState, PlayerState, TokenInstance } from "./setup.js";
 
-export type EffectSourceContext =
-  | {
-      sourceType: "card";
-      playerId: PlayerState["playerId"];
-      cardInstanceId: CardInstance["instanceId"];
-      definitionId: CardDefinition["cardId"];
-    };
+export interface EffectSourceContext {
+  sourceType: "card" | "wizardProperty";
+  playerId: PlayerState["playerId"];
+  cardInstanceId: string;
+  definitionId: string;
+  tokenInstanceId?: TokenInstance["instanceId"];
+  tokenDefinitionId?: TokenDefinition["tokenId"];
+}
 
 export function executeOnPlayEffects(
   state: GameState,
@@ -26,6 +27,179 @@ export function executeActivationEffects(
   source: EffectSourceContext,
 ): EffectExecutionResult {
   return executeEffects(state, player, definition.engine.effects, "activation", source);
+}
+
+export function executeWizardPropertyActivationEffects(
+  state: GameState,
+  player: PlayerState,
+  definition: TokenDefinition,
+  source: EffectSourceContext,
+): EffectExecutionResult {
+  if (definition.kind !== "wizardProperty" || definition.engine === undefined) {
+    return { ok: true };
+  }
+
+  return executeEffects(state, player, definition.engine.effects, "activation", source);
+}
+
+export function hasExecutableWizardPropertyActivation(
+  state: GameState,
+  player: PlayerState,
+  definition: TokenDefinition,
+): boolean {
+  if (definition.kind !== "wizardProperty" || definition.engine === undefined || !definition.engine.playableInV0) {
+    return false;
+  }
+
+  return definition.engine.effects.some((effect) => {
+    return isEffectRecord(effect) && effect["timing"] === "activation" && effectConditionMatches(state, player, effect);
+  });
+}
+
+export function executeWizardPropertyOnPlayCardEffects(
+  state: GameState,
+  player: PlayerState,
+  playedDefinition: CardDefinition,
+): EffectExecutionResult {
+  for (const token of player.wizardProperties) {
+    const definition = state.tokenDefinitions.get(token.definitionId);
+    if (definition?.kind !== "wizardProperty" || definition.engine === undefined || !definition.engine.playableInV0) {
+      continue;
+    }
+
+    const result = executeEffects(
+      state,
+      player,
+      definition.engine.effects.filter((effect) => cardTriggerMatches(effect, playedDefinition)),
+      "onPlayCard",
+      {
+        sourceType: "wizardProperty",
+        playerId: player.playerId,
+        cardInstanceId: token.instanceId,
+        definitionId: token.definitionId,
+        tokenInstanceId: token.instanceId,
+        tokenDefinitionId: token.definitionId,
+      },
+    );
+    if (!result.ok) {
+      return result;
+    }
+  }
+
+  return { ok: true };
+}
+
+export function moveGainedCardToPlayerDestination(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance,
+): { ok: true; destination: "discard" | "deckTop" } | { ok: false; error: string } {
+  const definition = state.cardDefinitions.get(card.definitionId);
+  if (definition === undefined) {
+    return {
+      ok: false,
+      error: `Missing gained card definition ${card.definitionId}`,
+    };
+  }
+
+  const marketChips = card.marketChips;
+  if (!removeCardFromKnownZones(state, card)) {
+    return {
+      ok: false,
+      error: `Cannot move card ${card.instanceId}`,
+    };
+  }
+
+  if (marketChips > 0) {
+    player.chips += marketChips;
+    card.marketChips = 0;
+    state.eventLog.push({
+      type: "marketChipsGained",
+      playerId: player.playerId,
+      cardInstanceId: card.instanceId,
+      definitionId: card.definitionId,
+      amount: marketChips,
+    });
+  }
+
+  card.ownerId = player.playerId;
+  state.turn.gainedCardDefinitionIds.push(card.definitionId);
+  let destination: "discard" | "deckTop" = "discard";
+
+  for (const token of player.wizardProperties) {
+    const tokenDefinition = state.tokenDefinitions.get(token.definitionId);
+    if (tokenDefinition?.kind !== "wizardProperty" || tokenDefinition.engine === undefined || !tokenDefinition.engine.playableInV0) {
+      continue;
+    }
+
+    for (const effect of tokenDefinition.engine.effects) {
+      if (!isEffectRecord(effect) || effect["timing"] !== "onGainCard" || !cardTriggerMatches(effect, definition)) {
+        continue;
+      }
+
+      if (effect["effectId"] === "topdeck_gained_card") {
+        destination = "deckTop";
+        state.eventLog.push({
+          type: "effectChoiceSelected",
+          playerId: player.playerId,
+          cardInstanceId: token.instanceId,
+          definitionId: token.definitionId,
+          tokenInstanceId: token.instanceId,
+          tokenDefinitionId: token.definitionId,
+          targetCardInstanceId: card.instanceId,
+          targetDefinitionId: card.definitionId,
+          effectId: "topdeck_gained_card",
+          sourceType: "wizardProperty",
+        });
+        continue;
+      }
+
+      const result = executeEffect(state, player, effect, {
+        sourceType: "wizardProperty",
+        playerId: player.playerId,
+        cardInstanceId: token.instanceId,
+        definitionId: token.definitionId,
+        tokenInstanceId: token.instanceId,
+        tokenDefinitionId: token.definitionId,
+      });
+      if (!result.ok) {
+        return result;
+      }
+    }
+  }
+
+  if (destination === "deckTop") {
+    player.deck.unshift(card);
+  } else {
+    player.discard.push(card);
+  }
+
+  return { ok: true, destination };
+}
+
+export function calculateEndTurnDrawCount(state: GameState, player: PlayerState): number {
+  let drawCount = 5;
+  for (const token of player.wizardProperties) {
+    const definition = state.tokenDefinitions.get(token.definitionId);
+    if (definition?.kind !== "wizardProperty" || definition.engine === undefined || !definition.engine.playableInV0) {
+      continue;
+    }
+
+    for (const effect of definition.engine.effects) {
+      if (!isEffectRecord(effect) || effect["effectId"] !== "temporary_hand_limit_by_gained_card_type") {
+        continue;
+      }
+
+      const amount = effect["amount"];
+      if (effect["timing"] !== "endTurn" || typeof amount !== "number" || !Number.isSafeInteger(amount)) {
+        continue;
+      }
+
+      drawCount += amount * countGainedCardsMatchingEffect(state, effect);
+    }
+  }
+
+  return drawCount;
 }
 
 export function executeMayhemEffects(
@@ -56,6 +230,10 @@ function executeEffects(
       };
     }
 
+    if (!effectConditionMatches(state, player, effect)) {
+      continue;
+    }
+
     const result = executeEffect(state, player, effect, source);
     if (!result.ok) {
       return result;
@@ -63,6 +241,26 @@ function executeEffects(
   }
 
   return { ok: true };
+}
+
+function cardTriggerMatches(effect: unknown, definition: CardDefinition): boolean {
+  if (!isEffectRecord(effect)) {
+    return false;
+  }
+
+  const cardTypes = effect["cardTypes"];
+  const matchesType =
+    Array.isArray(cardTypes) &&
+    cardTypes.some((cardType) => typeof cardType === "string" && definition.engine.cardTypes.includes(cardType));
+  const matchesOngoing = effect["isOngoing"] === true && definition.engine.isOngoing;
+  return matchesType || matchesOngoing;
+}
+
+function countGainedCardsMatchingEffect(state: GameState, effect: Record<string, unknown>): number {
+  return state.turn.gainedCardDefinitionIds.filter((definitionId) => {
+    const definition = state.cardDefinitions.get(definitionId);
+    return definition !== undefined && cardTriggerMatches(effect, definition);
+  }).length;
 }
 
 function isSupportedMayhemRuntimeEffect(effect: Record<string, unknown>): boolean {
@@ -106,6 +304,26 @@ function executeEffect(
   effect: Record<string, unknown>,
   source: EffectSourceContext,
 ): EffectExecutionResult {
+  if (effect["effectId"] === "gain_chips") {
+    const amount = effect["amount"];
+    if (typeof amount === "number" && Number.isSafeInteger(amount) && amount > 0) {
+      player.chips += amount;
+      state.eventLog.push({
+        type: "effectChipsGained",
+        playerId: player.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        ...(source.tokenInstanceId === undefined ? {} : { tokenInstanceId: source.tokenInstanceId }),
+        ...(source.tokenDefinitionId === undefined ? {} : { tokenDefinitionId: source.tokenDefinitionId }),
+        effectId: "gain_chips",
+        amount,
+        sourceType: source.sourceType,
+      });
+    }
+
+    return { ok: true };
+  }
+
   if (effect["effectId"] === "add_power") {
     const amount = effect["amount"];
     if (typeof amount === "number") {
@@ -240,12 +458,9 @@ function executeEffect(
       return choice;
     }
 
-    const moved = moveCardToPlayerZone(state, choice.card, player, player.discard);
-    if (!moved) {
-      return {
-        ok: false,
-        error: `Cannot move card ${choice.card.instanceId}`,
-      };
+    const moved = moveGainedCardToPlayerDestination(state, player, choice.card);
+    if (!moved.ok) {
+      return moved;
     }
 
     state.eventLog.push({
@@ -256,6 +471,7 @@ function executeEffect(
       targetCardInstanceId: choice.card.instanceId,
       targetDefinitionId: choice.card.definitionId,
       effectId,
+      destination: moved.destination,
       sourceType: source.sourceType,
     });
 
@@ -932,6 +1148,36 @@ function executeEffect(
   }
 
   return { ok: true };
+}
+
+function effectConditionMatches(state: GameState, player: PlayerState, effect: Record<string, unknown>): boolean {
+  const condition = effect["condition"];
+  if (condition === undefined) {
+    return true;
+  }
+
+  if (!isEffectRecord(condition)) {
+    return false;
+  }
+
+  if (condition["conditionId"] !== "control_count") {
+    return false;
+  }
+
+  const cardTypes = condition["cardTypes"];
+  const minimumCount = condition["minimumCount"];
+  if (!Array.isArray(cardTypes) || typeof minimumCount !== "number" || !Number.isSafeInteger(minimumCount)) {
+    return false;
+  }
+
+  const matchingCount = [...player.permanents, ...player.playedThisTurn].filter((card) => {
+    const definition = state.cardDefinitions.get(card.definitionId);
+    return definition !== undefined && cardTypes.some((cardType) => {
+      return typeof cardType === "string" && definition.engine.cardTypes.includes(cardType);
+    });
+  }).length;
+
+  return matchingCount >= minimumCount;
 }
 
 function resolveAttackTarget(

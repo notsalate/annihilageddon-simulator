@@ -144,7 +144,7 @@ export function calculateEffectiveValue(options: {
   const view = buildControlledObjectView(options.state, options.playerId);
 
   for (const effect of getControlledObjectEffects(view)) {
-    if (!isModifierEffect(effect, options.valueKind, options.target)) {
+    if (!isModifierEffect(options.state, effect, options.valueKind, options.target)) {
       continue;
     }
 
@@ -181,6 +181,7 @@ function getWizardPropertyEffects(definition: TokenDefinition): unknown[] {
 }
 
 function isModifierEffect(
+  state: GameState,
   effect: unknown,
   valueKind: EffectiveValueKind,
   target: EffectiveValueTarget,
@@ -190,15 +191,15 @@ function isModifierEffect(
   }
 
   return (
-    effect["effectId"] === "fixture_modify_effective_value" &&
+    (effect["effectId"] === "fixture_modify_effective_value" || effect["effectId"] === "modify_effective_value") &&
     effect["timing"] === "whileControlled" &&
     effect["valueKind"] === valueKind &&
     typeof effect["amount"] === "number" &&
-    matchesTarget(effect["target"], target)
+    matchesTarget(state, effect["target"], target)
   );
 }
 
-function matchesTarget(effectTarget: unknown, target: EffectiveValueTarget): boolean {
+function matchesTarget(state: GameState, effectTarget: unknown, target: EffectiveValueTarget): boolean {
   if (!isRecord(effectTarget)) {
     return false;
   }
@@ -207,7 +208,22 @@ function matchesTarget(effectTarget: unknown, target: EffectiveValueTarget): boo
     return effectTarget["targetType"] === target.targetType;
   }
 
-  return effectTarget["targetType"] === target.targetType && effectTarget["definitionId"] === target.definitionId;
+  if (effectTarget["targetType"] !== target.targetType) {
+    return false;
+  }
+
+  if (effectTarget["definitionId"] === target.definitionId) {
+    return true;
+  }
+
+  if (target.targetType === "card" && Array.isArray(effectTarget["cardTypes"])) {
+    const definition = mustGetCardDefinition(state, target.definitionId);
+    return effectTarget["cardTypes"].some((cardType) => {
+      return typeof cardType === "string" && definition.engine.cardTypes.includes(cardType);
+    });
+  }
+
+  return false;
 }
 
 function mustGetCardDefinition(state: GameState, definitionId: string): CardDefinition {

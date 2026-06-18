@@ -40,9 +40,18 @@ test("initial game setup creates expected player and common zones", () => {
   }
 });
 
-test("v0 data pack loads the wizard property draft setup pool", () => {
+test("v0 data pack loads the wizard property setup pool", () => {
   const dataPack = loadV0DataPack(rootDir);
   const wizardPropertyStack = dataPack.tokenStacks.wizardProperties;
+  const executableWizardProperties = new Set([
+    "wizard-property-001",
+    "wizard-property-002",
+    "wizard-property-004",
+    "wizard-property-005",
+    "wizard-property-006",
+    "wizard-property-007",
+    "wizard-property-008",
+  ]);
 
   assert.ok(wizardPropertyStack);
   assert.equal(wizardPropertyStack.entries.length, 10);
@@ -51,7 +60,7 @@ test("v0 data pack loads the wizard property draft setup pool", () => {
     assert.equal(entry.count, 1);
     const definition = dataPack.tokenDefinitions.get(entry.tokenId);
     assert.equal(definition?.kind, "wizardProperty");
-    assert.equal(definition.engine?.playableInV0, false);
+    assert.equal(definition.engine?.playableInV0, executableWizardProperties.has(entry.tokenId));
   }
 });
 

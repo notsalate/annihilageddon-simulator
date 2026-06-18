@@ -8,6 +8,7 @@ import {
   initializeGame,
   listLegalActions,
   scoreGame,
+  type CardDefinition,
   type StatusInstance,
   type TokenDefinition,
   type TrophyLikeInstance,
@@ -121,6 +122,35 @@ test("a controlled fixture object can modify token scoring without mutating toke
   assert.equal(definition.victoryPoints, baseVictoryPoints);
 });
 
+test("wizard property discount and scoring modifier apply to owned treasures", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const player = state.players[0];
+  assert.ok(player);
+  const property = player.wizardProperties[0];
+  assert.ok(property);
+  const treasure = createTypedFixtureCardDefinition("fixture-treasure", ["treasure"], 5, 2);
+  const spell = createTypedFixtureCardDefinition("fixture-spell", ["spell"], 5, 2);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [treasure.cardId, treasure],
+    [spell.cardId, spell],
+  ]);
+  state.tokenDefinitions = new Map([
+    ...state.tokenDefinitions,
+    [property.definitionId, createTreasureDiscountWizardProperty(property.definitionId)],
+  ]);
+  player.discard.push({
+    instanceId: "fixture-owned-treasure",
+    definitionId: treasure.cardId,
+    ownerId: player.playerId,
+    marketChips: 0,
+  });
+
+  assert.equal(calculateEffectiveCardCost(state, player.playerId, treasure), 4);
+  assert.equal(calculateEffectiveCardCost(state, player.playerId, spell), 5);
+  assert.equal(scoreGame(state).find((score) => score.playerId === player.playerId)?.victoryPoints, 3);
+});
+
 test("non-executable wizard property effects fail instead of applying silently", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const player = state.players[0];
@@ -184,6 +214,78 @@ function createTokenVictoryPointModifierTrophy(
         },
       },
     ],
+  };
+}
+
+function createTreasureDiscountWizardProperty(tokenId: string): TokenDefinition {
+  return {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    engine: {
+      mappingStatus: "mapped",
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "modify_effective_value",
+          timing: "whileControlled",
+          valueKind: "cardCost",
+          operation: "add",
+          amount: -1,
+          target: {
+            targetType: "card",
+            cardTypes: ["treasure"],
+          },
+        },
+        {
+          effectId: "modify_effective_value",
+          timing: "whileControlled",
+          valueKind: "cardVictoryPoints",
+          operation: "add",
+          amount: 1,
+          target: {
+            targetType: "card",
+            cardTypes: ["treasure"],
+          },
+        },
+      ],
+      unsupportedMechanics: [],
+    },
+  };
+}
+
+function createTypedFixtureCardDefinition(
+  cardId: string,
+  cardTypes: string[],
+  cost: number,
+  victoryPoints: number,
+): CardDefinition {
+  return {
+    schemaVersion: 1,
+    cardId,
+    visible: {
+      nameRu: cardId,
+      cost,
+      victoryPoints,
+      typeRu: null,
+      cardKind: "normal",
+      cardTypes,
+      markers: [],
+    },
+    engine: {
+      runtimeSchema: "krutagidon.cardDefinition.v0",
+      mappingStatus: "fixture",
+      playableInV0: true,
+      cardKind: "normal",
+      cardTypes,
+      cost,
+      victoryPoints,
+      isOngoing: false,
+      marketChipMarker: false,
+      effects: [],
+      unsupportedMechanics: [],
+    },
   };
 }
 

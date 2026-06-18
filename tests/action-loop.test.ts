@@ -11,6 +11,7 @@ import {
   type GameState,
   type PlayerState,
   type StatusInstance,
+  type TokenDefinition,
 } from "../src/index.js";
 
 const rootDir = process.cwd();
@@ -492,6 +493,94 @@ test("active player can activate a controlled permanent once per turn", () => {
       return event.type === "cardActivated" && event.playerId === activePlayer.playerId && event.cardInstanceId === permanent;
     }),
   );
+});
+
+test("active player can activate a wizard property only when its control-count condition is met", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const property = replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    createChipActivationWizardProperty("fixture-chip-property", ["treasure", "creature"], 2),
+  );
+  assert.equal(
+    listLegalActions(state).some((action) => action.type === "activateWizardProperty" && action.tokenInstanceId === property.instanceId),
+    false,
+  );
+  addControlledFixturePermanent(state, activePlayer, "fixture-controlled-treasure", ["treasure"]);
+  addControlledFixturePermanent(state, activePlayer, "fixture-controlled-creature", ["creature"]);
+
+  assert.ok(
+    listLegalActions(state).some((action) => action.type === "activateWizardProperty" && action.tokenInstanceId === property.instanceId),
+  );
+  const result = applyAction(state, {
+    type: "activateWizardProperty",
+    tokenInstanceId: property.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(
+    listLegalActions(state).some((action) => action.type === "activateWizardProperty" && action.tokenInstanceId === property.instanceId),
+    false,
+  );
+});
+
+test("wizard property on-play trigger grants chips only for matching ongoing cards", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  replaceFirstWizardProperty(state, activePlayer, createOnPlayOngoingChipWizardProperty("fixture-ongoing-play-property"));
+  const ongoingCardId = addFixtureCardToActiveHand(state, { effectId: "add_power", timing: "onPlay", amount: 0 }, {
+    isOngoing: true,
+  });
+  const normalCardId = addFixtureCardToActiveHand(state, { effectId: "add_power", timing: "onPlay", amount: 0 });
+
+  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: normalCardId }).ok, true);
+  assert.equal(activePlayer.chips, 0);
+  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: ongoingCardId }).ok, true);
+  assert.equal(activePlayer.chips, 1);
+});
+
+test("wizard property optional topdeck for gained cards runs before normal discard", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  replaceFirstWizardProperty(state, activePlayer, createTopdeckOnGainWizardProperty("fixture-topdeck-creature-property", ["creature"]));
+  const creature = addFixtureMarketCard(state, "fixture-gained-creature", ["creature"], 0);
+  const spell = addFixtureMarketCard(state, "fixture-gained-spell", ["spell"], 0);
+
+  assert.equal(applyAction(state, { type: "buyMarketCard", cardInstanceId: creature.instanceId, source: "mainMarket" }).ok, true);
+  assert.equal(activePlayer.deck[0], creature);
+  assert.equal(activePlayer.discard.includes(creature), false);
+
+  assert.equal(applyAction(state, { type: "buyMarketCard", cardInstanceId: spell.instanceId, source: "mainMarket" }).ok, true);
+  assert.equal(activePlayer.discard.includes(spell), true);
+});
+
+test("temporary hand limit modifier counts cards gained this turn and resets after drawing", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  replaceFirstWizardProperty(state, activePlayer, createTemporaryHandLimitWizardProperty("fixture-spell-hand-limit-property", ["spell"]));
+  activePlayer.hand.splice(0);
+  activePlayer.deck.splice(0, activePlayer.deck.length, ...createFixtureCardInstances("fixture-filler", activePlayer.playerId, 7));
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [createFixtureCardDefinition("fixture-filler", []).cardId, createFixtureCardDefinition("fixture-filler", [])],
+  ]);
+  const firstSpell = addFixtureMarketCard(state, "fixture-gained-spell-1", ["spell"], 0);
+  const secondSpell = addFixtureMarketCard(state, "fixture-gained-spell-2", ["spell"], 0);
+  const creature = addFixtureMarketCard(state, "fixture-gained-creature-1", ["creature"], 0);
+
+  assert.equal(applyAction(state, { type: "buyMarketCard", cardInstanceId: firstSpell.instanceId, source: "mainMarket" }).ok, true);
+  assert.equal(applyAction(state, { type: "buyMarketCard", cardInstanceId: secondSpell.instanceId, source: "mainMarket" }).ok, true);
+  assert.equal(applyAction(state, { type: "buyMarketCard", cardInstanceId: creature.instanceId, source: "mainMarket" }).ok, true);
+  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+
+  assert.equal(activePlayer.hand.length, 7);
+  assert.deepEqual(state.turn.gainedCardDefinitionIds, []);
 });
 
 test("playing a v0 draw card draws from the active player's deck", () => {
@@ -1779,11 +1868,12 @@ function addFixtureCardToActiveHand(
   effect: unknown,
   options: {
     isOngoing?: boolean;
+    cardTypes?: string[];
   } = {},
 ): string {
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
   assert.ok(activePlayer);
-  const definition = createFixtureCardDefinition("fixture-targeted-effect-card", [effect], options);
+  const definition = createFixtureCardDefinition(`fixture-targeted-effect-card-${activePlayer.hand.length + 1}`, [effect], options);
   state.cardDefinitions = new Map([...state.cardDefinitions, [definition.cardId, definition]]);
 
   const cardInstanceId = `fixture-card-${activePlayer.hand.length + 1}`;
@@ -1802,6 +1892,7 @@ function createFixtureCardDefinition(
   effects: unknown[],
   options: {
     isOngoing?: boolean;
+    cardTypes?: string[];
   } = {},
 ): CardDefinition {
   return {
@@ -1813,7 +1904,7 @@ function createFixtureCardDefinition(
       victoryPoints: 0,
       typeRu: null,
       cardKind: "normal",
-      cardTypes: [],
+      cardTypes: options.cardTypes ?? [],
       markers: [],
     },
     engine: {
@@ -1821,12 +1912,167 @@ function createFixtureCardDefinition(
       mappingStatus: "fixture",
       playableInV0: true,
       cardKind: "normal",
-      cardTypes: [],
+      cardTypes: options.cardTypes ?? [],
       cost: 0,
       victoryPoints: 0,
       isOngoing: options.isOngoing ?? false,
       marketChipMarker: false,
       effects,
+      unsupportedMechanics: [],
+    },
+  };
+}
+
+function addControlledFixturePermanent(
+  state: GameState,
+  player: PlayerState,
+  cardId: string,
+  cardTypes: string[],
+): CardInstance {
+  const definition = createFixtureCardDefinition(cardId, [], {
+    isOngoing: true,
+    cardTypes,
+  });
+  state.cardDefinitions = new Map([...state.cardDefinitions, [definition.cardId, definition]]);
+  const card: CardInstance = {
+    instanceId: `${cardId}-instance`,
+    definitionId: definition.cardId,
+    ownerId: player.playerId,
+    marketChips: 0,
+  };
+  player.permanents.push(card);
+  return card;
+}
+
+function addFixtureMarketCard(state: GameState, cardId: string, cardTypes: string[], cost: number): CardInstance {
+  const definition = createFixtureCardDefinition(cardId, [], {
+    cardTypes,
+  });
+  definition.engine.cost = cost;
+  definition.visible.cost = cost;
+  state.cardDefinitions = new Map([...state.cardDefinitions, [definition.cardId, definition]]);
+  const card: CardInstance = {
+    instanceId: `${cardId}-instance`,
+    definitionId: definition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.push(card);
+  return card;
+}
+
+function createFixtureCardInstances(
+  definitionId: string,
+  ownerId: PlayerState["playerId"],
+  count: number,
+): CardInstance[] {
+  return Array.from({ length: count }, (_, index) => ({
+    instanceId: `${definitionId}-${index + 1}`,
+    definitionId,
+    ownerId,
+    marketChips: 0,
+  }));
+}
+
+function replaceFirstWizardProperty(
+  state: GameState,
+  player: PlayerState,
+  definition: TokenDefinition,
+): PlayerState["wizardProperties"][number] {
+  const property = player.wizardProperties[0];
+  assert.ok(property);
+  state.tokenDefinitions = new Map([...state.tokenDefinitions, [definition.tokenId, definition]]);
+  property.definitionId = definition.tokenId;
+  return property;
+}
+
+function createChipActivationWizardProperty(tokenId: string, cardTypes: string[], minimumCount: number): TokenDefinition {
+  return {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    engine: {
+      mappingStatus: "fixture",
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "gain_chips",
+          timing: "activation",
+          amount: 1,
+          condition: {
+            conditionId: "control_count",
+            cardTypes,
+            minimumCount,
+          },
+        },
+      ],
+      unsupportedMechanics: [],
+    },
+  };
+}
+
+function createOnPlayOngoingChipWizardProperty(tokenId: string): TokenDefinition {
+  return {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    engine: {
+      mappingStatus: "fixture",
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "gain_chips",
+          timing: "onPlayCard",
+          isOngoing: true,
+          amount: 1,
+        },
+      ],
+      unsupportedMechanics: [],
+    },
+  };
+}
+
+function createTopdeckOnGainWizardProperty(tokenId: string, cardTypes: string[]): TokenDefinition {
+  return {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    engine: {
+      mappingStatus: "fixture",
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "topdeck_gained_card",
+          timing: "onGainCard",
+          optional: true,
+          cardTypes,
+        },
+      ],
+      unsupportedMechanics: [],
+    },
+  };
+}
+
+function createTemporaryHandLimitWizardProperty(tokenId: string, cardTypes: string[]): TokenDefinition {
+  return {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    engine: {
+      mappingStatus: "fixture",
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "temporary_hand_limit_by_gained_card_type",
+          timing: "endTurn",
+          amount: 1,
+          cardTypes,
+        },
+      ],
       unsupportedMechanics: [],
     },
   };

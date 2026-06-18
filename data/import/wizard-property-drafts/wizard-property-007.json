@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "tokenId": "wizard-property-007",
+  "runtimeSchema": "krutagidon.tokenDefinition.v0",
+  "kind": "wizardProperty",
+  "visible": {
+    "textRu": "В конце твоего хода за каждое полученное в этот ход заклинание получи +1 к пределу руки.",
+    "sourceLabel": "Свойство 7",
+    "sourceImage": "assets/wizard-property/raw/Свойство 7.jpg"
+  },
+  "clarifications": [
+    "Свойство проверяется в конце хода игрока.",
+    "Легенда-заклинание подходит под условие.",
+    "Нужно посчитать заклинания, которые игрок получил именно в этот ход.",
+    "За каждое такое заклинание игрок получает +1 к пределу руки.",
+    "Например, игрок получил 3 заклинания за ход. Игрок берет 8 карт (5 + 3).",
+    "В следующем ходу увеличение руки сбрасывается. Чтобы заново сработало условие нужно покупать заклинания.",
+    "Например, чтобы каждый ход брать 6 карт, игроку потребуется каждый ход покупать 1 заклинание."
+  ],
+  "engine": {
+    "mappingStatus": "mapped",
+    "playableInV0": true,
+    "effects": [
+      {
+        "effectId": "temporary_hand_limit_by_gained_card_type",
+        "timing": "endTurn",
+        "amount": 1,
+        "cardTypes": ["spell"]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

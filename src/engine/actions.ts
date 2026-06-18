@@ -1,9 +1,23 @@
 import type { CardDefinition } from "./data.js";
-import { executeActivationEffects, executeMayhemEffects, executeOnPlayEffects } from "./effect-runtime.js";
+import {
+  executeActivationEffects,
+  executeMayhemEffects,
+  executeOnPlayEffects,
+  executeWizardPropertyOnPlayCardEffects,
+  executeWizardPropertyActivationEffects,
+  calculateEndTurnDrawCount,
+  hasExecutableWizardPropertyActivation,
+  moveGainedCardToPlayerDestination,
+} from "./effect-runtime.js";
 import { calculateEffectiveCardCost } from "./effective-values.js";
-import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import type { CardInstance, GameState, PlayerState, TokenInstance } from "./setup.js";
 
-export type LegalAction = PlayCardAction | BuyMarketCardAction | ActivatePermanentAction | EndTurnAction;
+export type LegalAction =
+  | PlayCardAction
+  | BuyMarketCardAction
+  | ActivatePermanentAction
+  | ActivateWizardPropertyAction
+  | EndTurnAction;
 export type GameAction = LegalAction;
 
 export interface PlayCardAction {
@@ -22,6 +36,11 @@ export type BuySource = "mainMarket" | "legendMarket" | "wildMagicStack";
 export interface ActivatePermanentAction {
   type: "activatePermanent";
   cardInstanceId: string;
+}
+
+export interface ActivateWizardPropertyAction {
+  type: "activateWizardProperty";
+  tokenInstanceId: string;
 }
 
 export interface EndTurnAction {
@@ -65,6 +84,12 @@ export function listLegalActions(state: GameState): LegalAction[] {
         type: "activatePermanent" as const,
         cardInstanceId: card.instanceId,
       })),
+    ...activePlayer.wizardProperties
+      .filter((token) => canActivateWizardProperty(state, activePlayer, token))
+      .map((token) => ({
+        type: "activateWizardProperty" as const,
+        tokenInstanceId: token.instanceId,
+      })),
     {
       type: "endTurn",
     },
@@ -79,6 +104,8 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
       return buyMarketCard(state, action);
     case "activatePermanent":
       return activatePermanent(state, action.cardInstanceId);
+    case "activateWizardProperty":
+      return activateWizardProperty(state, action.tokenInstanceId);
     case "endTurn":
       return endTurn(state);
   }
@@ -96,7 +123,9 @@ function endTurn(state: GameState): ActionResult {
     playerId: activePlayer.playerId,
   });
 
-  drawCards(activePlayer, 5, state);
+  const drawCount = calculateEndTurnDrawCount(state, activePlayer);
+  drawCards(activePlayer, drawCount, state);
+  state.turn.gainedCardDefinitionIds = [];
   state.turn.number += 1;
   state.activePlayerId = getNextPlayer(state, activePlayer).playerId;
   const refillResult = refillMarkets(state);
@@ -150,6 +179,54 @@ function activatePermanent(state: GameState, cardInstanceId: string): ActionResu
   return { ok: true };
 }
 
+function activateWizardProperty(state: GameState, tokenInstanceId: string): ActionResult {
+  const activePlayer = mustGetActivePlayer(state);
+  const token = activePlayer.wizardProperties.find((token) => token.instanceId === tokenInstanceId);
+  if (token === undefined) {
+    return {
+      ok: false,
+      error: "Token is not a controlled wizard property",
+    };
+  }
+
+  if (!canActivateWizardProperty(state, activePlayer, token)) {
+    return {
+      ok: false,
+      error: "Wizard property cannot be activated",
+    };
+  }
+
+  const definition = state.tokenDefinitions.get(token.definitionId);
+  if (definition === undefined) {
+    return {
+      ok: false,
+      error: `Missing token definition ${token.definitionId}`,
+    };
+  }
+
+  const effectResult = executeWizardPropertyActivationEffects(state, activePlayer, definition, {
+    sourceType: "wizardProperty",
+    playerId: activePlayer.playerId,
+    cardInstanceId: token.instanceId,
+    definitionId: token.definitionId,
+    tokenInstanceId: token.instanceId,
+    tokenDefinitionId: token.definitionId,
+  });
+  if (!effectResult.ok) {
+    return effectResult;
+  }
+
+  state.turn.activatedCardIds.push(token.instanceId);
+  state.eventLog.push({
+    type: "wizardPropertyActivated",
+    playerId: activePlayer.playerId,
+    tokenInstanceId: token.instanceId,
+    tokenDefinitionId: token.definitionId,
+  });
+
+  return { ok: true };
+}
+
 function grantBasicTrophyChipAtEndOfTurn(state: GameState, activePlayer: PlayerState): void {
   if (!activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy")) {
     return;
@@ -193,17 +270,18 @@ function buyMarketCard(state: GameState, action: BuyMarketCardAction): ActionRes
     };
   }
 
-  sourceZone.splice(cardIndex, 1);
   state.turn.power = payment.remainingPower;
   activePlayer.chips = payment.remainingChips;
-  gainMarketChipsFromCard(state, activePlayer, card);
-  card.ownerId = activePlayer.playerId;
-  activePlayer.discard.push(card);
+  const gainResult = moveGainedCardToPlayerDestination(state, activePlayer, card);
+  if (!gainResult.ok) {
+    return gainResult;
+  }
   state.eventLog.push({
     type: "cardBought",
     playerId: activePlayer.playerId,
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
+    destination: gainResult.destination,
   });
 
   return { ok: true };
@@ -252,6 +330,11 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
     return effectResult;
   }
 
+  const wizardPropertyResult = executeWizardPropertyOnPlayCardEffects(state, activePlayer, definition);
+  if (!wizardPropertyResult.ok) {
+    return wizardPropertyResult;
+  }
+
   state.eventLog.push({
     type: "cardPlayed",
     playerId: activePlayer.playerId,
@@ -281,6 +364,19 @@ function canActivatePermanent(state: GameState, _player: PlayerState, card: Card
   return definition.engine.effects.some((effect) => {
     return isEffectRecord(effect) && effect["timing"] === "activation";
   });
+}
+
+function canActivateWizardProperty(state: GameState, player: PlayerState, token: TokenInstance): boolean {
+  if (state.turn.activatedCardIds.includes(token.instanceId)) {
+    return false;
+  }
+
+  const definition = state.tokenDefinitions.get(token.definitionId);
+  if (definition === undefined) {
+    return false;
+  }
+
+  return hasExecutableWizardPropertyActivation(state, player, definition);
 }
 
 function getWildMagicBuyAction(state: GameState): BuyMarketCardAction[] {

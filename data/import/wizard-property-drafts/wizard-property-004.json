@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "tokenId": "wizard-property-004",
+  "runtimeSchema": "krutagidon.tokenDefinition.v0",
+  "kind": "wizardProperty",
+  "visible": {
+    "textRu": "Ты платишь на 1 меньше при покупке сокровищ. В конце игры: каждое твоё сокровище приносит тебе +1 ПО.",
+    "sourceLabel": "Свойство 4",
+    "sourceImage": "assets/wizard-property/raw/Свойство 4.jpg"
+  },
+  "clarifications": [
+    "Скидка применяется при покупке сокровищ.",
+    "При покупке легенды-сокровищ также применяется скидка.",
+    "Стоимость покупки сокровища уменьшается на 1.",
+    "В конце игры каждое сокровище игрока приносит дополнительно +1 ПО.",
+    "ПО означает победные очки.",
+    "Можно со старта свойства считать, что сокровища под владениям игрока уже дают +1 ПО."
+  ],
+  "engine": {
+    "mappingStatus": "mapped",
+    "playableInV0": true,
+    "effects": [
+      {
+        "effectId": "modify_effective_value",
+        "timing": "whileControlled",
+        "valueKind": "cardCost",
+        "operation": "add",
+        "amount": -1,
+        "target": {
+          "targetType": "card",
+          "cardTypes": ["treasure"]
+        }
+      },
+      {
+        "effectId": "modify_effective_value",
+        "timing": "whileControlled",
+        "valueKind": "cardVictoryPoints",
+        "operation": "add",
+        "amount": 1,
+        "target": {
+          "targetType": "card",
+          "cardTypes": ["treasure"]
+        }
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}
