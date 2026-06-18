@@ -45,6 +45,7 @@ export interface PlayerState {
   discard: CardInstance[];
   playedThisTurn: CardInstance[];
   permanents: CardInstance[];
+  unboughtFamiliar: CardInstance | undefined;
   deadWizardTokens: TokenInstance[];
   wizardProperties: TokenInstance[];
   statuses: StatusInstance[];
@@ -63,6 +64,7 @@ export interface CommonState {
   legendDeck: CardInstance[];
   wildMagicStack: CardInstance[];
   limpWandStack: CardInstance[];
+  destroyedPile: CardInstance[];
   destroyedMayhem: CardInstance[];
   destroyedMegaMayhem: CardInstance[];
   deadWizardTokens: DeadWizardTokenState;
@@ -138,7 +140,8 @@ export function initializeGame(options: InitializeGameOptions): GameState {
   const tokenFactory = createTokenInstanceFactory();
 
   const players = createPlayers(playerCount, dataPack, factory, rng);
-  assignStartingWizardProperties(players, dataPack, tokenFactory);
+  assignStartingFamiliars(players, dataPack, factory, createSeededRng(options.seed + 7919));
+  assignStartingWizardProperties(players, dataPack, tokenFactory, rng);
   applyWizardPropertySetupEffects(players, dataPack, factory);
   const mainDeck = instantiateDeck(dataPack.decks.mainDeck, dataPack, factory, "common");
   const legendDeck = instantiateDeck(dataPack.decks.legendDeck, dataPack, factory, "common");
@@ -152,9 +155,10 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     legendDeck,
     wildMagicStack: instantiateDeck(dataPack.decks.wildMagicStack, dataPack, factory, "common"),
     limpWandStack: instantiateDeck(dataPack.decks.limpWandStack, dataPack, factory, "common"),
+    destroyedPile: [],
     destroyedMayhem: [],
     destroyedMegaMayhem: [],
-    deadWizardTokens: instantiateDeadWizardTokens(dataPack, tokenFactory),
+    deadWizardTokens: instantiateDeadWizardTokens(dataPack, tokenFactory, rng, playerCount),
   };
 
   fillMarket({
@@ -205,6 +209,8 @@ export function initializeGame(options: InitializeGameOptions): GameState {
 function instantiateDeadWizardTokens(
   dataPack: LoadedDataPack,
   factory: TokenInstanceFactory,
+  rng: RandomSource,
+  playerCount: number,
 ): DeadWizardTokenState {
   const tokenStack = dataPack.tokenStacks.deadWizardTokens;
   if (tokenStack === undefined) {
@@ -214,9 +220,14 @@ function instantiateDeadWizardTokens(
     };
   }
 
+  const drawStackSize = 4 * playerCount;
+  const setupPool = instantiateTokenStack(tokenStack, dataPack, factory, "common");
+
+  shuffleInPlace(setupPool, rng);
+
   return {
     status: "available",
-    drawStack: instantiateTokenStack(tokenStack, dataPack, factory, "common"),
+    drawStack: setupPool.slice(0, drawStackSize),
   };
 }
 
@@ -224,6 +235,7 @@ function assignStartingWizardProperties(
   players: PlayerState[],
   dataPack: LoadedDataPack,
   factory: TokenInstanceFactory,
+  rng: RandomSource,
 ): void {
   const tokenStack = dataPack.tokenStacks.wizardProperties;
   if (tokenStack === undefined) {
@@ -235,18 +247,64 @@ function assignStartingWizardProperties(
     throw new Error(`Token stack ${tokenStack.stackId} must include at least one wizard property`);
   }
 
+  shuffleInPlace(setupPool, rng);
+
   for (let index = 0; index < players.length; index += 1) {
     const player = players[index];
-    const token = setupPool[index % setupPool.length];
-    if (player === undefined || token === undefined) {
+    const candidateOffset = players.length * 2 <= setupPool.length ? index * 2 : index;
+    const firstCandidate = setupPool[candidateOffset % setupPool.length];
+    const secondCandidate = setupPool[(candidateOffset + 1) % setupPool.length];
+    if (player === undefined || firstCandidate === undefined || secondCandidate === undefined) {
       throw new Error("Unexpected sparse array during wizard property setup");
     }
 
+    const firstDefinition = dataPack.tokenDefinitions.get(firstCandidate.definitionId);
+    const secondDefinition = dataPack.tokenDefinitions.get(secondCandidate.definitionId);
+    if (firstDefinition?.kind !== "wizardProperty" || secondDefinition?.kind !== "wizardProperty") {
+      throw new Error(`Token stack ${tokenStack.stackId} must contain only wizard property tokens`);
+    }
+
     player.wizardProperties.push({
-      ...token,
-      instanceId: `starting-${token.instanceId}-player-${index + 1}`,
+      ...firstCandidate,
+      instanceId: `starting-${firstCandidate.instanceId}-player-${index + 1}`,
       ownerId: player.playerId,
     });
+  }
+}
+
+function assignStartingFamiliars(
+  players: PlayerState[],
+  dataPack: LoadedDataPack,
+  factory: InstanceFactory,
+  rng: RandomSource,
+): void {
+  const familiarPool = dataPack.decks.familiarPool;
+  if (familiarPool === undefined) {
+    return;
+  }
+
+  const setupPool = instantiateDeck(familiarPool, dataPack, factory, "common");
+  if (setupPool.length < 2) {
+    throw new Error(`Deck ${familiarPool.deckId} must include at least two familiar setup candidates`);
+  }
+
+  shuffleInPlace(setupPool, rng);
+
+  for (let index = 0; index < players.length; index += 1) {
+    const player = players[index];
+    const firstCandidate = setupPool[(index * 2) % setupPool.length];
+    const secondCandidate = setupPool[(index * 2 + 1) % setupPool.length];
+    if (player === undefined || firstCandidate === undefined || secondCandidate === undefined) {
+      throw new Error("Unexpected sparse array during familiar setup");
+    }
+
+    const firstDefinition = mustGetDefinition(dataPack, firstCandidate.definitionId);
+    const secondDefinition = mustGetDefinition(dataPack, secondCandidate.definitionId);
+    if (firstDefinition.engine.cardKind !== "familiar" || secondDefinition.engine.cardKind !== "familiar") {
+      throw new Error(`Deck ${familiarPool.deckId} must contain only familiar cards`);
+    }
+
+    player.unboughtFamiliar = factory.create(firstCandidate.definitionId, player.playerId);
   }
 }
 
@@ -377,6 +435,7 @@ function createPlayers(
       discard: [],
       playedThisTurn: [],
       permanents: [],
+      unboughtFamiliar: undefined,
       deadWizardTokens: [],
       wizardProperties: [],
       statuses: [],

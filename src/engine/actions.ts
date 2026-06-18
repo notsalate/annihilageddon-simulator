@@ -31,7 +31,7 @@ export interface BuyMarketCardAction {
   source: BuySource;
 }
 
-export type BuySource = "mainMarket" | "legendMarket" | "wildMagicStack";
+export type BuySource = "mainMarket" | "legendMarket" | "wildMagicStack" | "familiar";
 
 export interface ActivatePermanentAction {
   type: "activatePermanent";
@@ -78,6 +78,7 @@ export function listLegalActions(state: GameState): LegalAction[] {
         source: "legendMarket" as const,
       })),
     ...getWildMagicBuyAction(state),
+    ...getFamiliarBuyAction(state, activePlayer),
     ...activePlayer.permanents
       .filter((card) => canActivatePermanent(state, activePlayer, card))
       .map((card) => ({
@@ -243,16 +244,7 @@ function grantBasicTrophyChipAtEndOfTurn(state: GameState, activePlayer: PlayerS
 
 function buyMarketCard(state: GameState, action: BuyMarketCardAction): ActionResult {
   const activePlayer = mustGetActivePlayer(state);
-  const sourceZone = getBuySourceZone(state, action.source);
-  const cardIndex = sourceZone.findIndex((card) => card.instanceId === action.cardInstanceId);
-  if (cardIndex < 0) {
-    return {
-      ok: false,
-      error: `Card is not in ${action.source}`,
-    };
-  }
-
-  const card = sourceZone[cardIndex];
+  const card = getBuyCard(state, activePlayer, action);
   if (card === undefined) {
     return {
       ok: false,
@@ -394,6 +386,30 @@ function getWildMagicBuyAction(state: GameState): BuyMarketCardAction[] {
   ];
 }
 
+function getFamiliarBuyAction(state: GameState, player: PlayerState): BuyMarketCardAction[] {
+  const familiar = player.unboughtFamiliar;
+  if (familiar === undefined || !canAfford(state, player, familiar)) {
+    return [];
+  }
+
+  return [
+    {
+      type: "buyMarketCard",
+      cardInstanceId: familiar.instanceId,
+      source: "familiar",
+    },
+  ];
+}
+
+function getBuyCard(state: GameState, activePlayer: PlayerState, action: BuyMarketCardAction): CardInstance | undefined {
+  if (action.source === "familiar") {
+    const familiar = activePlayer.unboughtFamiliar;
+    return familiar?.instanceId === action.cardInstanceId ? familiar : undefined;
+  }
+
+  return getBuySourceZone(state, action.source).find((card) => card.instanceId === action.cardInstanceId);
+}
+
 function getBuySourceZone(state: GameState, source: BuySource): CardInstance[] {
   switch (source) {
     case "mainMarket":
@@ -402,6 +418,8 @@ function getBuySourceZone(state: GameState, source: BuySource): CardInstance[] {
       return state.common.legendMarket;
     case "wildMagicStack":
       return state.common.wildMagicStack;
+    case "familiar":
+      return [];
   }
 }
 

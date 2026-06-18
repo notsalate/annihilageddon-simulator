@@ -262,6 +262,50 @@ test("active player can buy wild magic from its stack into discard", () => {
   assert.equal(wildMagicCard.ownerId, activePlayer.playerId);
 });
 
+test("active player can buy and play their setup familiar", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const foe = state.players.find((player) => player.playerId !== state.activePlayerId);
+  assert.ok(activePlayer);
+  assert.ok(foe);
+  const familiar = activePlayer.unboughtFamiliar;
+  assert.ok(familiar);
+
+  assert.equal(familiar.definitionId, "v0_placeholder_familiar");
+  assert.equal(familiar.ownerId, activePlayer.playerId);
+  assert.equal(findOwnedCard(activePlayer, familiar.definitionId), undefined);
+  assert.equal(foe.unboughtFamiliar?.instanceId === familiar.instanceId, false);
+  assert.equal(scoreGame(state).find((score) => score.playerId === activePlayer.playerId)?.victoryPoints, 0);
+
+  state.turn.power = 5;
+  assert.equal(
+    listLegalActions(state).some((action) => action.type === "buyMarketCard" && action.source === "familiar"),
+    false,
+  );
+
+  state.turn.power = 6;
+  const buyAction = listLegalActions(state).find((action) => {
+    return action.type === "buyMarketCard" && action.source === "familiar" && action.cardInstanceId === familiar.instanceId;
+  });
+  assert.ok(buyAction);
+
+  const buyResult = applyAction(state, buyAction);
+  assert.equal(buyResult.ok, true);
+  assert.equal(activePlayer.unboughtFamiliar, undefined);
+  assert.equal(activePlayer.discard.includes(familiar), true);
+  assert.equal(scoreGame(state).find((score) => score.playerId === activePlayer.playerId)?.victoryPoints, 2);
+
+  moveCardToHand(activePlayer, familiar);
+  state.turn.power = 0;
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: familiar.instanceId,
+  });
+
+  assert.equal(playResult.ok, true);
+  assert.equal(state.turn.power, 3);
+});
+
 test("playing wild magic uses the first legal choice and gains 2 power", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
@@ -738,7 +782,9 @@ test("destroy_card moves a normal card to the destroyed zone and preserves owner
   assert.equal(result.ok, true);
   assert.equal(activePlayer.hand.includes(destroyedCard), false);
   assert.equal(activePlayer.discard.includes(destroyedCard), false);
-  assert.equal(state.common.destroyedMayhem.includes(destroyedCard), true);
+  assert.equal(state.common.destroyedPile.includes(destroyedCard), true);
+  assert.equal(state.common.destroyedMayhem.includes(destroyedCard), false);
+  assert.equal(state.common.destroyedMegaMayhem.includes(destroyedCard), false);
   assert.equal(destroyedCard.ownerId, activePlayer.playerId);
   assert.ok(
     state.eventLog.some((event) => {
@@ -784,6 +830,9 @@ test("destroy_card routes wild magic and limp wand cards back to their stacks", 
   assert.equal(state.common.wildMagicStack.includes(wildMagic), true);
   assert.equal(state.common.wildMagicStack.length, wildMagicStackSize + 1);
   assert.equal(state.common.limpWandStack.length, limpWandStackSize);
+  assert.equal(state.common.destroyedPile.includes(wildMagic), false);
+  assert.equal(state.common.destroyedMayhem.includes(wildMagic), false);
+  assert.equal(state.common.destroyedMegaMayhem.includes(wildMagic), false);
   const destroyLimpWandCardId = addFixtureCardToActiveHand(state, {
     effectId: "destroy_card",
     timing: "onPlay",
@@ -801,6 +850,72 @@ test("destroy_card routes wild magic and limp wand cards back to their stacks", 
   assert.equal(activePlayer.hand.includes(limpWand), false);
   assert.equal(state.common.limpWandStack.includes(limpWand), true);
   assert.equal(state.common.limpWandStack.length, limpWandStackSize + 1);
+  assert.equal(state.common.destroyedPile.includes(limpWand), false);
+  assert.equal(state.common.destroyedMayhem.includes(limpWand), false);
+  assert.equal(state.common.destroyedMegaMayhem.includes(limpWand), false);
+});
+
+test("destroy_card keeps mayhem and megaMayhem cards in ordered event piles", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const existingMayhem = state.common.destroyedMayhem.at(-1);
+  const existingMegaMayhem = state.common.destroyedMegaMayhem.at(-1);
+  const mayhem = addFixtureCardToActiveHand(
+    state,
+    {
+      effectId: "add_power",
+      timing: "onMayhemResolve",
+      amount: 0,
+    },
+    { cardKind: "mayhem" },
+  );
+  moveHandCardToFront(activePlayer, mayhem);
+  const destroyMayhemCardId = addFixtureCardToActiveHand(state, {
+    effectId: "destroy_card",
+    timing: "onPlay",
+    target: {
+      selector: "activePlayerHandCard",
+    },
+  });
+
+  const mayhemResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: destroyMayhemCardId,
+  });
+
+  assert.equal(mayhemResult.ok, true);
+  assert.equal(state.common.destroyedMayhem.at(-1)?.instanceId, mayhem);
+  assert.equal(existingMayhem === undefined || state.common.destroyedMayhem.includes(existingMayhem), true);
+  assert.equal(state.common.destroyedPile.some((card) => card.instanceId === mayhem), false);
+
+  const megaMayhem = addFixtureCardToActiveHand(
+    state,
+    {
+      effectId: "add_power",
+      timing: "onMayhemResolve",
+      amount: 0,
+    },
+    { cardKind: "megaMayhem" },
+  );
+  moveHandCardToFront(activePlayer, megaMayhem);
+  const destroyMegaMayhemCardId = addFixtureCardToActiveHand(state, {
+    effectId: "destroy_card",
+    timing: "onPlay",
+    target: {
+      selector: "activePlayerHandCard",
+    },
+  });
+
+  const megaMayhemResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: destroyMegaMayhemCardId,
+  });
+
+  assert.equal(megaMayhemResult.ok, true);
+  assert.equal(state.common.destroyedMegaMayhem.at(-1)?.instanceId, megaMayhem);
+  assert.equal(existingMegaMayhem === undefined || state.common.destroyedMegaMayhem.includes(existingMegaMayhem), true);
+  assert.equal(state.common.destroyedPile.some((card) => card.instanceId === megaMayhem), false);
 });
 
 test("card movement effects skip by default when no legal card choice exists", () => {
@@ -932,6 +1047,49 @@ test("play_top_card plays the active player's top deck card through on-play effe
       return event.type === "effectAddPowerApplied" && event.cardInstanceId === topPlayedCard.instanceId;
     }),
   );
+});
+
+test("play_top_card triggers wizard property on-play effects and cleans up to owner discard", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  replaceFirstWizardProperty(state, activePlayer, createOnPlayTypeChipWizardProperty("fixture-play-top-property", ["spell"]));
+  const topPlayedDefinition = createFixtureCardDefinition(
+    "fixture-play-top-spell",
+    [{ effectId: "add_power", timing: "onPlay", amount: 1 }],
+    { cardTypes: ["spell"] },
+  );
+  state.cardDefinitions = new Map([...state.cardDefinitions, [topPlayedDefinition.cardId, topPlayedDefinition]]);
+  const topPlayedCard: CardInstance = {
+    instanceId: "fixture-play-top-spell-instance",
+    definitionId: topPlayedDefinition.cardId,
+    ownerId: activePlayer.playerId,
+    marketChips: 0,
+  };
+  activePlayer.deck.unshift(topPlayedCard);
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "play_top_card",
+    timing: "onPlay",
+    source: "activePlayerDeck",
+    destination: "play",
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(activePlayer.playedThisTurn.includes(topPlayedCard), true);
+
+  const endTurnResult = applyAction(state, {
+    type: "endTurn",
+  });
+
+  assert.equal(endTurnResult.ok, true);
+  assert.equal(activePlayer.playedThisTurn.includes(topPlayedCard), false);
+  assert.equal(activePlayer.discard.includes(topPlayedCard), true);
 });
 
 test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affect scoring", () => {
@@ -1994,6 +2152,7 @@ function addFixtureCardToActiveHand(
   options: {
     isOngoing?: boolean;
     cardTypes?: string[];
+    cardKind?: CardDefinition["engine"]["cardKind"];
   } = {},
 ): string {
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
@@ -2029,14 +2188,24 @@ function moveCardToHand(player: PlayerState, card: CardInstance): void {
   player.hand.push(card);
 }
 
+function moveHandCardToFront(player: PlayerState, cardInstanceId: string): void {
+  const cardIndex = player.hand.findIndex((card) => card.instanceId === cardInstanceId);
+  assert.notEqual(cardIndex, -1);
+  const [card] = player.hand.splice(cardIndex, 1);
+  assert.ok(card);
+  player.hand.unshift(card);
+}
+
 function createFixtureCardDefinition(
   cardId: string,
   effects: unknown[],
   options: {
     isOngoing?: boolean;
     cardTypes?: string[];
+    cardKind?: CardDefinition["engine"]["cardKind"];
   } = {},
 ): CardDefinition {
+  const cardKind = options.cardKind ?? "normal";
   return {
     schemaVersion: 1,
     cardId,
@@ -2045,7 +2214,7 @@ function createFixtureCardDefinition(
       cost: 0,
       victoryPoints: 0,
       typeRu: null,
-      cardKind: "normal",
+      cardKind,
       cardTypes: options.cardTypes ?? [],
       markers: [],
     },
@@ -2053,7 +2222,7 @@ function createFixtureCardDefinition(
       runtimeSchema: "krutagidon.cardDefinition.v0",
       mappingStatus: "fixture",
       playableInV0: true,
-      cardKind: "normal",
+      cardKind,
       cardTypes: options.cardTypes ?? [],
       cost: 0,
       victoryPoints: 0,
@@ -2168,6 +2337,28 @@ function createOnPlayOngoingChipWizardProperty(tokenId: string): TokenDefinition
           effectId: "gain_chips",
           timing: "onPlayCard",
           isOngoing: true,
+          amount: 1,
+        },
+      ],
+      unsupportedMechanics: [],
+    },
+  };
+}
+
+function createOnPlayTypeChipWizardProperty(tokenId: string, cardTypes: string[]): TokenDefinition {
+  return {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    engine: {
+      mappingStatus: "fixture",
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "gain_chips",
+          timing: "onPlayCard",
+          cardTypes,
           amount: 1,
         },
       ],

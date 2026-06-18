@@ -8,7 +8,8 @@ export type CardKind =
   | "mayhem"
   | "megaMayhem"
   | "wildMagic"
-  | "limpWand";
+  | "limpWand"
+  | "familiar";
 
 export interface CardDefinition {
   schemaVersion: number;
@@ -111,6 +112,7 @@ export interface DataPackManifest {
     legendDeck: string;
     wildMagicStack: string;
     limpWandStack: string;
+    familiarPool?: string;
   };
   tokenStacks?: {
     deadWizardTokens: string;
@@ -129,6 +131,7 @@ export interface LoadedDataPack {
     legendDeck: DeckComposition;
     wildMagicStack: DeckComposition;
     limpWandStack: DeckComposition;
+    familiarPool: DeckComposition | undefined;
   };
   tokenStacks: {
     deadWizardTokens: TokenStackComposition | undefined;
@@ -171,6 +174,10 @@ export function loadV0DataPack(
       legendDeck: readJsonFile<DeckComposition>(rootDir, manifest.decks.legendDeck),
       wildMagicStack: readJsonFile<DeckComposition>(rootDir, manifest.decks.wildMagicStack),
       limpWandStack: readJsonFile<DeckComposition>(rootDir, manifest.decks.limpWandStack),
+      familiarPool:
+        manifest.decks.familiarPool === undefined
+          ? undefined
+          : readJsonFile<DeckComposition>(rootDir, manifest.decks.familiarPool),
     },
     tokenStacks: {
       deadWizardTokens:
@@ -296,6 +303,10 @@ function collectManifestPaths(manifest: DataPackManifest): [string, string][] {
     ["decks.wildMagicStack", manifest.decks.wildMagicStack],
     ["decks.limpWandStack", manifest.decks.limpWandStack],
   ];
+
+  if (manifest.decks.familiarPool !== undefined) {
+    paths.push(["decks.familiarPool", manifest.decks.familiarPool]);
+  }
 
   if (manifest.tokensPath !== undefined) {
     paths.push(["tokensPath", manifest.tokensPath]);

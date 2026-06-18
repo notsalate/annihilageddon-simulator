@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { initializeGame, loadV0DataPack, type CardInstance, type GameState } from "../src/index.js";
+import { initializeGame, loadV0DataPack, scoreGame, type CardInstance, type GameState } from "../src/index.js";
 
 const rootDir = process.cwd();
 
@@ -21,7 +21,7 @@ test("initial game setup creates expected player and common zones", () => {
   assert.equal(state.common.wildMagicStack.length, 15);
   assert.equal(state.common.limpWandStack.length, 15);
   assert.equal(state.common.deadWizardTokens.status, "available");
-  assert.ok(state.common.deadWizardTokens.drawStack.length > 0);
+  assert.equal(state.common.deadWizardTokens.drawStack.length, 8);
   const neutralDeadWizardToken = state.tokenDefinitions.get("neutral-dead-wizard-token");
   assert.equal(neutralDeadWizardToken?.kind, "deadWizardToken");
   assert.equal(neutralDeadWizardToken.victoryPoints, -3);
@@ -37,6 +37,33 @@ test("initial game setup creates expected player and common zones", () => {
     assert.ok(wizardProperty);
     assert.equal(wizardProperty.ownerId, player.playerId);
     assert.equal(state.tokenDefinitions.get(wizardProperty.definitionId)?.kind, "wizardProperty");
+  }
+});
+
+test("dead wizard token setup uses four shuffled draw tokens per player", () => {
+  const state = initializeGame({ rootDir, seed: 12345, playerCount: 3 });
+
+  assert.equal(state.common.deadWizardTokens.status, "available");
+  assert.equal(state.common.deadWizardTokens.drawStack.length, 12);
+});
+
+test("dead wizard token setup order is reproducible for the same seed", () => {
+  const first = initializeGame({ rootDir, seed: 24680 });
+  const second = initializeGame({ rootDir, seed: 24680 });
+
+  assert.deepEqual(
+    tokenSnapshot(first.common.deadWizardTokens.drawStack),
+    tokenSnapshot(second.common.deadWizardTokens.drawStack),
+  );
+});
+
+test("dead wizard tokens left in setup draw stack do not score for players", () => {
+  const state = initializeGame({ rootDir, seed: 12345 });
+
+  assert.equal(state.common.deadWizardTokens.status, "available");
+  assert.equal(state.common.deadWizardTokens.drawStack.length, 8);
+  for (const score of scoreGame(state)) {
+    assert.equal(score.deadWizardTokenCount, 0);
   }
 });
 
@@ -64,6 +91,15 @@ test("v0 data pack loads the wizard property setup pool", () => {
     assert.equal(definition?.kind, "wizardProperty");
     assert.equal(definition.engine?.playableInV0, executableWizardProperties.has(entry.tokenId));
   }
+});
+
+test("wizard property setup choice is deterministic and seed-dependent", () => {
+  const first = initializeGame({ rootDir, seed: 11111 });
+  const firstRepeat = initializeGame({ rootDir, seed: 11111 });
+  const second = initializeGame({ rootDir, seed: 22222 });
+
+  assert.deepEqual(selectedWizardProperties(first), selectedWizardProperties(firstRepeat));
+  assert.notDeepEqual(selectedWizardProperties(first), selectedWizardProperties(second));
 });
 
 test("familiar-selection wizard property remains non-executable until familiar lifecycle exists", () => {
@@ -147,6 +183,7 @@ function snapshot(state: GameState): unknown {
       legendDeck: cardSnapshot(state.common.legendDeck),
       wildMagicStack: cardSnapshot(state.common.wildMagicStack),
       limpWandStack: cardSnapshot(state.common.limpWandStack),
+      destroyedPile: cardSnapshot(state.common.destroyedPile),
       destroyedMayhem: cardSnapshot(state.common.destroyedMayhem),
       destroyedMegaMayhem: cardSnapshot(state.common.destroyedMegaMayhem),
       deadWizardTokens: state.common.deadWizardTokens,
@@ -168,6 +205,14 @@ function tokenSnapshot(tokens: GameState["players"][number]["wizardProperties"])
     definitionId: token.definitionId,
     ownerId: token.ownerId,
   }));
+}
+
+function selectedWizardProperties(state: GameState): string[] {
+  return state.players.map((player) => {
+    const property = player.wizardProperties[0];
+    assert.ok(property);
+    return property.definitionId;
+  });
 }
 
 function ownedCards(state: GameState, ownerId: GameState["players"][number]["playerId"]): CardInstance[] {

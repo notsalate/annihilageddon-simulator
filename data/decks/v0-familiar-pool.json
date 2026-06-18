@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "deckId": "v0-familiar-pool",
+  "runtimeSchema": "krutagidon.deckComposition.v0",
+  "role": "familiarPool",
+  "mappingStatus": "v0-user-provided-placeholder",
+  "entries": [
+    {
+      "cardId": "v0_placeholder_familiar",
+      "count": 2
+    }
+  ]
+}

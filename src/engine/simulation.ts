@@ -210,8 +210,9 @@ function getBuyActionCost(state: GameState, action: Extract<LegalAction, { type:
     return 3;
   }
 
-  const card = [...state.common.market, ...state.common.legendMarket].find((candidate) => {
-    return candidate.instanceId === action.cardInstanceId;
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const card = [...state.common.market, ...state.common.legendMarket, activePlayer?.unboughtFamiliar].find((candidate) => {
+    return candidate !== undefined && candidate.instanceId === action.cardInstanceId;
   });
   if (card === undefined) {
     return 0;

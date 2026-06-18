@@ -2131,10 +2131,21 @@ function getDestroyDestination(
     return { ok: true, zone: state.common.destroyedMegaMayhem };
   }
 
-  return { ok: true, zone: state.common.destroyedMayhem };
+  if (definition.engine.cardKind === "mayhem") {
+    return { ok: true, zone: state.common.destroyedMayhem };
+  }
+
+  return { ok: true, zone: state.common.destroyedPile };
 }
 
 function removeCardFromKnownZones(state: GameState, card: CardInstance): boolean {
+  for (const player of state.players) {
+    if (player.unboughtFamiliar?.instanceId === card.instanceId) {
+      player.unboughtFamiliar = undefined;
+      return true;
+    }
+  }
+
   const zones = [
     state.common.market,
     state.common.legendMarket,
@@ -2142,6 +2153,7 @@ function removeCardFromKnownZones(state: GameState, card: CardInstance): boolean
     state.common.legendDeck,
     state.common.wildMagicStack,
     state.common.limpWandStack,
+    state.common.destroyedPile,
     state.common.destroyedMayhem,
     state.common.destroyedMegaMayhem,
     ...state.players.flatMap((player) => [player.deck, player.hand, player.discard, player.playedThisTurn, player.permanents]),
@@ -2242,12 +2254,17 @@ function playResolvedCard(state: GameState, player: PlayerState, card: CardInsta
     player.playedThisTurn.push(card);
   }
 
-  return executeOnPlayEffects(state, player, definition, {
+  const effectResult = executeOnPlayEffects(state, player, definition, {
     sourceType: "card",
     playerId: player.playerId,
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
   });
+  if (!effectResult.ok) {
+    return effectResult;
+  }
+
+  return executeWizardPropertyOnPlayCardEffects(state, player, definition);
 }
 
 function shuffleDiscardIntoDeckIfNeeded(player: PlayerState, state: GameState): void {
