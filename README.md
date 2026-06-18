@@ -10,23 +10,102 @@
 
 Она умеет:
 
-- загружать v0 card/deck data pack из `data/cards/` и `data/decks/`;
+- загружать v0 data pack из runtime-данных: `data/cards/`, `data/tokens/` и `data/decks/`;
+- валидировать executable data pack и запрещать runtime-ссылки на `data/import/**`;
 - создавать детерминированное начальное состояние по seed;
 - создавать отдельные card instances для игроков и общих колод;
 - вести базовый action loop для 2 игроков;
 - перечислять legal actions и применять выбранное действие;
 - играть карты из руки;
 - покупать карты из main market, Legend market и wild magic stack;
+- активировать поддержанные permanents и wizard properties;
 - завершать ход с cleanup, добором и переходом активного игрока;
 - учитывать permanents как отдельную зону;
-- исполнять часть fixture combat/effect-путей: damage, healing, defense window, multi-target attack и Mayhem-style two-phase ordering;
-- обрабатывать смерть игрока, выдачу DWT, resurrection и Basic Trophy credit для normal attack kill в текущем fixture-срезе;
+- исполнять mapped runtime effects для power, chips, draw, gain/discard/destroy, reveal/play top deck, Wild Magic choice и play-top-card-from-foe-deck;
+- исполнять combat/effect-пути: damage, healing, set life, defense window, multi-target attack и Mayhem-style two-phase ordering;
+- обрабатывать смерть игрока, выдачу DWT, resurrection и Basic Trophy credit для normal attack kill;
+- применять market chip markers;
+- применять supported wizard property setup, activation, on-play-card, on-gain-card, end-turn и modifier effects;
+- считать effective values для стоимости карт, VP карт, VP токенов и max life игрока;
 - завершать игру по v0 end conditions;
 - считать winner/tie по VP, Legend count и DWT count;
 - запускать одиночную партию;
 - запускать массовые партии с compact summary и aggregate analytics.
 
 Это v0-симулятор, а не полная реализация всех правил и карт.
+
+## Что умеет baseline bot
+
+`baselineBot` намеренно простой. Он каждый ход выбирает первое доступное действие по приоритету:
+
+1. сыграть первую legal карту из руки;
+2. купить самую дорогую доступную карту из main market, Legend market или wild magic stack;
+3. завершить ход.
+
+Legal action layer уже умеет показывать activation actions для permanents и wizard properties, но текущий baseline bot сам их не выбирает. Для анализа стратегий это отдельная следующая задача: бот должен научиться оценивать activation actions, защиту, покупку, порядок розыгрыша и состояние партии.
+
+## Реализованные механики v0
+
+### Setup и данные
+
+- загрузка runtime card definitions из `data/cards/`;
+- загрузка runtime token definitions из `data/tokens/` и `data/tokens/wizard-properties/`;
+- загрузка deck/token stack compositions из `data/decks/`;
+- отдельные runtime JSON и import-сырье: `data/import/**` не является входом движка;
+- deterministic seeded shuffle;
+- starter decks, main market, Legend market, wild magic stack, limp wand stack;
+- neutral DWT stack;
+- стартовая раздача wizard properties;
+- setup effects wizard properties: замена стартовой карты, стартовый Basic Trophy, forced starting player, starting life override.
+
+### Action loop
+
+- `playCard`;
+- `buyMarketCard` из main market, Legend market и wild magic stack;
+- `activatePermanent`;
+- `activateWizardProperty`;
+- `endTurn`;
+- cleanup non-permanents в сброс владельца;
+- добор руки с shuffle discard into deck;
+- refill main/Legend markets.
+
+### Effects и карты
+
+- `add_power`;
+- `gain_chips`;
+- `draw_cards`;
+- `gain_card`;
+- `discard_card`;
+- `destroy_card`;
+- `reveal_top_card`;
+- `play_top_card`;
+- `wild_magic_choice`;
+- `play_top_card_from_foe_deck`;
+- `modify_effective_value`;
+- market chip marker.
+
+### Combat, death, Trophy
+
+- `deal_damage`;
+- `attack_damage`;
+- `multi_target_attack`;
+- `mayhem_attack`;
+- `avoid_attack`;
+- defense destinations: discard self и topdeck self;
+- defense costs: discard other hand card, spend chips, pay nonlethal life;
+- immediate death resolution;
+- DWT gain and resurrection;
+- resurrection life replacement from wizard property;
+- Basic Trophy credit for normal attack kills;
+- Basic Trophy chip at end of controller turn.
+
+### Wizard properties
+
+Runtime JSON лежит в `data/tokens/wizard-properties/`.
+
+- `wizard-property-001`, `002`, `004`-`010` executable в v0;
+- `wizard-property-003` есть как runtime token definition, но `playableInV0: false`, потому что нет familiar lifecycle и dynamic "familiar counts as legend";
+- supported property surfaces: setup, activation, on-play-card trigger, on-gain-card destination replacement, end-turn draw count modifier, effective value modifier, owned-wand attack replacement.
 
 ## Ограничения v0
 
@@ -35,14 +114,57 @@
 - полный rules-accurate attack/defense flow за пределами fixture-срезов;
 - полноценные DWT faces/effects;
 - полный lifecycle беспределов и мегабеспределов: market refill, destroy-event pile и replacement;
-- свойства колдунов;
 - фамильяры;
+- `wizard-property-003` и любые эффекты, завязанные на familiar lifecycle;
 - Trophy за пределами Basic Trophy credit/chip behavior;
 - Dingler;
 - все typed effect handlers для полного набора карт;
+- стратегия baseline bot за пределами play/buy/end-turn;
 - удобный пошаговый debug-view партии.
 
 Некоторые mapped effects в данных уже есть, но runtime v0 исполняет только небольшой набор поддержанных эффектов.
+
+## Как искать ошибки в механиках
+
+Для багов класса "данные лежат не в том слое", "карта ушла не в ту зону", "эффект сработал не от того владельца" проверяй путь сверху вниз.
+
+1. Runtime manifest:
+   - `data/decks/v0-first-batch-data-pack.json`;
+   - runtime manifest не должен ссылаться на `data/import/**`;
+   - `git ls-files data/import` должен быть пустым для новых import-файлов.
+
+2. Runtime data:
+   - карты: `data/cards/*.json`;
+   - токены и свойства: `data/tokens/**/*.json`;
+   - колоды и stacks: `data/decks/*.json`;
+   - executable объект должен иметь stable ID, `runtimeSchema`, mapped `engine.effects`, а не только OCR/draft text.
+
+3. Setup:
+   - `src/engine/setup.ts`;
+   - проверяй instance creation, `ownerId`, стартовые зоны, wizard property setup effects, forced starting player.
+
+4. Legal actions:
+   - `src/engine/actions.ts`;
+   - проверяй, что действие появляется только когда оно legal, и что `applyAction` не меняет состояние при illegal action.
+
+5. Effect runtime:
+   - `src/engine/effect-runtime.ts`;
+   - проверяй source player, target player, `ownerId`, destination zone, event log;
+   - для багов владения особенно смотри helpers движения карт: gain, discard, destroy, play resolved card, cleanup.
+
+6. Effective values:
+   - `src/engine/effective-values.ts`;
+   - проверяй, что modifiers читаются из controlled object view и не мутируют base definitions.
+
+7. Tests:
+   - `tests/setup.test.ts` - setup, стартовые свойства, reproducibility;
+   - `tests/action-loop.test.ts` - play/buy/end-turn/effects/combat/card movement;
+   - `tests/effective-values.test.ts` - modifiers и controlled objects;
+   - `tests/validation.test.ts` - запреты на unsupported effects, draft executable и import-only runtime paths;
+   - `tests/simulation.test.ts` - end conditions, scoring, reproducibility;
+   - `tests/simulation-menu.test.ts` - CLI/menu behavior.
+
+Минимальный регрессионный тест для такого бага должен фиксировать не только event, но и физическую зону карты после действия: у кого карта в руке, колоде, сбросе, `playedThisTurn`, `permanents`, market или destroyed pile. Для ошибок типа шальной магии отдельно проверяй `ownerId` и destination: сыгранная чужая карта после cleanup должна попасть в сброс владельца, а не игрока, который временно её сыграл.
 
 ## Основные решения
 
