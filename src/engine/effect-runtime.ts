@@ -102,7 +102,6 @@ export function moveGainedCardToPlayerDestination(
     };
   }
 
-  const marketChips = card.marketChips;
   if (!removeCardFromKnownZones(state, card)) {
     return {
       ok: false,
@@ -110,18 +109,7 @@ export function moveGainedCardToPlayerDestination(
     };
   }
 
-  if (marketChips > 0) {
-    player.chips += marketChips;
-    card.marketChips = 0;
-    state.eventLog.push({
-      type: "marketChipsGained",
-      playerId: player.playerId,
-      cardInstanceId: card.instanceId,
-      definitionId: card.definitionId,
-      amount: marketChips,
-    });
-  }
-
+  moveMarketChipsToPlayer(state, player, card);
   card.ownerId = player.playerId;
   state.turn.gainedCardDefinitionIds.push(card.definitionId);
   let destination: "discard" | "deckTop" = "discard";
@@ -680,28 +668,9 @@ function executeEffect(
       return { ok: true };
     }
 
-    const originalOwnerId = card.ownerId;
-    const definition = state.cardDefinitions.get(card.definitionId);
-    if (definition === undefined) {
-      return {
-        ok: false,
-        error: `Missing card definition ${card.definitionId}`,
-      };
-    }
-
-    if (definition.engine.isOngoing) {
-      card.ownerId = player.playerId;
-      player.permanents.push(card);
-    } else {
-      card.ownerId = originalOwnerId;
-      player.playedThisTurn.push(card);
-    }
-
-    const playedResult = executeOnPlayEffects(state, player, definition, {
-      sourceType: "card",
-      playerId: player.playerId,
-      cardInstanceId: card.instanceId,
-      definitionId: card.definitionId,
+    const playedResult = playResolvedCard(state, player, card, {
+      nonOngoingOwnerId: card.ownerId,
+      ongoingOwnerId: player.playerId,
     });
     if (!playedResult.ok) {
       return playedResult;
@@ -2076,26 +2045,31 @@ function moveCardToPlayerZone(
   player: PlayerState,
   destination: CardInstance[],
 ): boolean {
-  const marketChips = card.marketChips;
   if (!removeCardFromKnownZones(state, card)) {
     return false;
   }
 
-  if (marketChips > 0) {
-    player.chips += marketChips;
-    card.marketChips = 0;
-    state.eventLog.push({
-      type: "marketChipsGained",
-      playerId: player.playerId,
-      cardInstanceId: card.instanceId,
-      definitionId: card.definitionId,
-      amount: marketChips,
-    });
-  }
-
+  moveMarketChipsToPlayer(state, player, card);
   card.ownerId = player.playerId;
   destination.push(card);
   return true;
+}
+
+function moveMarketChipsToPlayer(state: GameState, player: PlayerState, card: CardInstance): void {
+  if (card.marketChips <= 0) {
+    return;
+  }
+
+  const amount = card.marketChips;
+  player.chips += amount;
+  card.marketChips = 0;
+  state.eventLog.push({
+    type: "marketChipsGained",
+    playerId: player.playerId,
+    cardInstanceId: card.instanceId,
+    definitionId: card.definitionId,
+    amount,
+  });
 }
 
 function moveCardToZonePreservingOwner(state: GameState, card: CardInstance, destination: CardInstance[]): boolean {
@@ -2238,7 +2212,15 @@ function peekTopDeckCard(player: PlayerState, state: GameState): CardInstance | 
   return player.deck[0];
 }
 
-function playResolvedCard(state: GameState, player: PlayerState, card: CardInstance): EffectExecutionResult {
+function playResolvedCard(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance,
+  ownership: {
+    nonOngoingOwnerId?: PlayerState["playerId"] | "common";
+    ongoingOwnerId?: PlayerState["playerId"] | "common";
+  } = {},
+): EffectExecutionResult {
   const definition = state.cardDefinitions.get(card.definitionId);
   if (definition === undefined) {
     return {
@@ -2247,10 +2229,11 @@ function playResolvedCard(state: GameState, player: PlayerState, card: CardInsta
     };
   }
 
-  card.ownerId = player.playerId;
   if (definition.engine.isOngoing) {
+    card.ownerId = ownership.ongoingOwnerId ?? player.playerId;
     player.permanents.push(card);
   } else {
+    card.ownerId = ownership.nonOngoingOwnerId ?? player.playerId;
     player.playedThisTurn.push(card);
   }
 

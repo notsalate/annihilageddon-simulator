@@ -129,9 +129,9 @@ function endTurn(state: GameState): ActionResult {
   state.turn.gainedCardDefinitionIds = [];
   state.turn.number += 1;
   state.activePlayerId = getNextPlayer(state, activePlayer).playerId;
-  const refillResult = refillMarkets(state);
-  if (!refillResult.ok) {
-    return refillResult;
+  const marketFlowResult = runMarketFlow(state);
+  if (!marketFlowResult.ok) {
+    return marketFlowResult;
   }
   state.eventLog.push({
     type: "turnStarted",
@@ -472,8 +472,8 @@ function drawCards(player: PlayerState, count: number, state: GameState): void {
   }
 }
 
-function refillMarkets(state: GameState): ActionResult {
-  const legendResult = fillMarket(state, {
+function runMarketFlow(state: GameState): ActionResult {
+  const legendResult = fillMarketThroughMarketFlow(state, {
     sourceDeck: state.common.legendDeck,
     market: state.common.legendMarket,
     destroyedEvents: state.common.destroyedMegaMayhem,
@@ -485,7 +485,7 @@ function refillMarkets(state: GameState): ActionResult {
     return legendResult;
   }
 
-  const mainResult = fillMarket(state, {
+  const mainResult = fillMarketThroughMarketFlow(state, {
     sourceDeck: state.common.mainDeck,
     market: state.common.market,
     destroyedEvents: state.common.destroyedMayhem,
@@ -500,7 +500,7 @@ function refillMarkets(state: GameState): ActionResult {
   return { ok: true };
 }
 
-function fillMarket(
+function fillMarketThroughMarketFlow(
   state: GameState,
   options: {
     sourceDeck: CardInstance[];
@@ -515,7 +515,7 @@ function fillMarket(
     const card = options.sourceDeck.shift();
     if (card === undefined) {
       state.eventLog.push({
-        type: "marketRefillFailed",
+        type: "marketFlowFailed",
       });
       return { ok: true };
     }
@@ -538,7 +538,7 @@ function fillMarket(
 
     options.market.push(card);
     state.eventLog.push({
-      type: "marketCardAdded",
+      type: "marketFlowCardAdded",
       cardInstanceId: card.instanceId,
       definitionId: card.definitionId,
     });
@@ -588,23 +588,6 @@ function applyMarketChipMarker(state: GameState, market: CardInstance[], addedDe
       amount: 1,
     });
   }
-}
-
-function gainMarketChipsFromCard(state: GameState, player: PlayerState, card: CardInstance): void {
-  if (card.marketChips <= 0) {
-    return;
-  }
-
-  const amount = card.marketChips;
-  player.chips += amount;
-  card.marketChips = 0;
-  state.eventLog.push({
-    type: "marketChipsGained",
-    playerId: player.playerId,
-    cardInstanceId: card.instanceId,
-    definitionId: card.definitionId,
-    amount,
-  });
 }
 
 function getNextPlayer(state: GameState, player: PlayerState): PlayerState {
