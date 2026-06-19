@@ -1,10 +1,10 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const allowedCardKinds = new Set(["starter", "normal", "legend", "mayhem", "megaMayhem", "wildMagic", "limpWand", "familiar"]);
 const allowedCardTypes = new Set(["wizardCard", "creature", "spell", "treasure", "location", "familiar", "legend"]);
 const allowedMarkers = new Set(["ongoing", "attack", "defense", "activate", "marketChipMarker"]);
-const forbiddenRuntimeFields = new Set(["engine", "runtimeSchema", "playableInV0", "mappingStatus"]);
+const forbiddenRuntimeFields = new Set(["engine", "effects", "runtimeSchema", "playableInV0", "mappingStatus"]);
 
 export interface DraftValidationMessage {
   filePath: string;
@@ -38,7 +38,11 @@ export function validateDraft(draft: unknown, options: ValidateDraftOptions = {}
     return validateWizardPropertyDraft(draft, options);
   }
 
-  const errors = [message(filePath, "draftKind must be one of cardDraft, wizardPropertyDraft")];
+  if (draft["draftKind"] === "deadWizardTokenDraft") {
+    return validateDeadWizardTokenDraft(draft, options);
+  }
+
+  const errors = [message(filePath, "draftKind must be one of cardDraft, wizardPropertyDraft, deadWizardTokenDraft")];
   for (const fieldName of forbiddenRuntimeFields) {
     if (fieldName in draft) {
       errors.push(message(filePath, `draft contains forbidden runtime field '${fieldName}'`));
@@ -120,9 +124,47 @@ export function validateWizardPropertyDraft(draft: unknown, options: ValidateDra
   return result(errors, warnings);
 }
 
+export function validateDeadWizardTokenDraft(draft: unknown, options: ValidateDraftOptions = {}): DraftValidationResult {
+  const filePath = options.filePath ?? "<draft>";
+  const errors: DraftValidationMessage[] = [];
+  const warnings: DraftValidationMessage[] = [];
+
+  if (!isRecord(draft)) {
+    errors.push(message(filePath, "draft must be a JSON object"));
+    return result(errors, warnings);
+  }
+
+  for (const fieldName of forbiddenRuntimeFields) {
+    if (fieldName in draft) {
+      errors.push(message(filePath, `draft contains forbidden runtime field '${fieldName}'`));
+    }
+  }
+
+  if (draft["schemaVersion"] !== 1) {
+    errors.push(message(filePath, "schemaVersion must be 1"));
+  }
+
+  if (draft["draftKind"] !== "deadWizardTokenDraft") {
+    errors.push(message(filePath, "draftKind must be 'deadWizardTokenDraft'"));
+  }
+
+  if (!isNonEmptyString(draft["tokenId"])) {
+    errors.push(message(filePath, "tokenId is required"));
+  }
+
+  if (draft["kind"] !== "deadWizardToken") {
+    errors.push(message(filePath, "kind must be 'deadWizardToken'"));
+  }
+
+  validateSource(draft["source"], filePath, errors, warnings);
+  validateDeadWizardTokenVisible(draft["visible"], filePath, errors, warnings);
+
+  return result(errors, warnings);
+}
+
 export function validateDraftFiles(
   rootDir: string,
-  inputPaths = ["data/import/card-drafts", "data/import/wizard-property-drafts"],
+  inputPaths = ["data/import/card-drafts", "data/import/wizard-property-drafts", "data/import/dead-wizard-token-drafts"],
 ): DraftValidationResult {
   const errors: DraftValidationMessage[] = [];
   const warnings: DraftValidationMessage[] = [];
@@ -270,6 +312,37 @@ function validateWizardPropertyVisible(
   }
 }
 
+function validateDeadWizardTokenVisible(
+  visible: unknown,
+  filePath: string,
+  errors: DraftValidationMessage[],
+  warnings: DraftValidationMessage[],
+): void {
+  if (!isRecord(visible)) {
+    errors.push(message(filePath, "visible is required"));
+    return;
+  }
+
+  if (!isNonEmptyString(visible["sourceLabel"])) {
+    errors.push(message(filePath, "visible.sourceLabel is required"));
+  }
+
+  if (!isString(visible["textRu"]) || visible["textRu"].trim().length === 0) {
+    errors.push(message(filePath, "visible.textRu is required"));
+  }
+
+  if (!isNumberOrNull(visible["victoryPoints"])) {
+    errors.push(message(filePath, "visible.victoryPoints must be a number or null"));
+  }
+
+  const uncertainty = visible["uncertainty"];
+  if (!Array.isArray(uncertainty) || !uncertainty.every(isString)) {
+    errors.push(message(filePath, "visible.uncertainty must be an array of strings"));
+  } else if (uncertainty.length > 0) {
+    warnings.push(message(filePath, "visible.uncertainty has entries"));
+  }
+}
+
 function validateAllowedString(
   value: unknown,
   allowedValues: ReadonlySet<string>,
@@ -302,6 +375,10 @@ function validateStringArray(
 }
 
 function collectJsonFiles(absoluteInputPath: string): string[] {
+  if (!existsSync(absoluteInputPath)) {
+    return [];
+  }
+
   const inputStat = statSync(absoluteInputPath);
   if (inputStat.isFile()) {
     return absoluteInputPath.endsWith(".json") ? [absoluteInputPath] : [];

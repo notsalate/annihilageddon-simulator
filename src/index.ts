@@ -22,6 +22,7 @@ export type {
 export {
   formatDraftValidationResult,
   validateCardDraft,
+  validateDeadWizardTokenDraft,
   validateDraft,
   validateDraftFiles,
   validateWizardPropertyDraft,
