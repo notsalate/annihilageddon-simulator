@@ -22,7 +22,7 @@ test("initial game setup creates expected player and common zones", () => {
   assert.equal(state.common.limpWandStack.length, 15);
   assert.equal(state.common.deadWizardTokens.status, "available");
   assert.equal(state.common.deadWizardTokens.drawStack.length, 8);
-  const neutralDeadWizardToken = state.tokenDefinitions.get("neutral-dead-wizard-token");
+  const neutralDeadWizardToken = state.tokenDefinitions.get("esw2_dbg__dead_wizard_token_001");
   assert.equal(neutralDeadWizardToken?.kind, "deadWizardToken");
   assert.equal(neutralDeadWizardToken.victoryPoints, -3);
 
@@ -71,15 +71,15 @@ test("v0 data pack loads the wizard property setup pool", () => {
   const dataPack = loadV0DataPack(rootDir);
   const wizardPropertyStack = dataPack.tokenStacks.wizardProperties;
   const executableWizardProperties = new Set([
-    "wizard-property-001",
-    "wizard-property-002",
-    "wizard-property-004",
-    "wizard-property-005",
-    "wizard-property-006",
-    "wizard-property-007",
-    "wizard-property-008",
-    "wizard-property-009",
-    "wizard-property-010",
+    "esw2_dbg__wizard_property_001",
+    "esw2_dbg__wizard_property_002",
+    "esw2_dbg__wizard_property_004",
+    "esw2_dbg__wizard_property_005",
+    "esw2_dbg__wizard_property_006",
+    "esw2_dbg__wizard_property_007",
+    "esw2_dbg__wizard_property_008",
+    "esw2_dbg__wizard_property_009",
+    "esw2_dbg__wizard_property_010",
   ]);
 
   assert.ok(wizardPropertyStack);
@@ -104,7 +104,7 @@ test("wizard property setup choice is deterministic and seed-dependent", () => {
 
 test("familiar-selection wizard property remains non-executable until familiar lifecycle exists", () => {
   const dataPack = loadV0DataPack(rootDir);
-  const definition = dataPack.tokenDefinitions.get("wizard-property-003");
+  const definition = dataPack.tokenDefinitions.get("esw2_dbg__wizard_property_003");
 
   assert.equal(definition?.kind, "wizardProperty");
   assert.equal(definition.engine?.playableInV0, false);
@@ -131,7 +131,7 @@ test("starter deck definitions are independent physical instances per player", (
 test("wizard property setup replaces exactly one owned starter Sign with Hrenalocka Wand", () => {
   const state = initializeGame({ rootDir, seed: 777, playerCount: 9 });
   const propertyOwner = state.players.find((player) => {
-    return player.wizardProperties.some((property) => property.definitionId === "wizard-property-009");
+    return player.wizardProperties.some((property) => property.definitionId === "esw2_dbg__wizard_property_009");
   });
   assert.ok(propertyOwner);
 
@@ -149,7 +149,7 @@ test("wizard property setup replaces exactly one owned starter Sign with Hrenalo
 test("wizard property setup grants Basic Trophy, first turn, and starting life override", () => {
   const state = initializeGame({ rootDir, seed: 777, playerCount: 10 });
   const propertyOwner = state.players.find((player) => {
-    return player.wizardProperties.some((property) => property.definitionId === "wizard-property-010");
+    return player.wizardProperties.some((property) => property.definitionId === "esw2_dbg__wizard_property_010");
   });
   assert.ok(propertyOwner);
 

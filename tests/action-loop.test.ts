@@ -1535,7 +1535,7 @@ test("wizard property resurrection life override respects loser-status exception
   propertyOwner.wizardProperties = [
     {
       instanceId: "fixture-wizard-property-010",
-      definitionId: "wizard-property-010",
+      definitionId: "esw2_dbg__wizard_property_010",
       ownerId: propertyOwner.playerId,
     },
   ];
@@ -1742,7 +1742,7 @@ test("attack_damage damages the first opponent when no defense is available", ()
 test("wizard property owned wand attacks gain damage and cannot be avoided", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 9 });
   const propertyOwner = state.players.find((player) => {
-    return player.wizardProperties.some((property) => property.definitionId === "wizard-property-009");
+    return player.wizardProperties.some((property) => property.definitionId === "esw2_dbg__wizard_property_009");
   });
   assert.ok(propertyOwner);
   const targetPlayer = state.players.find((player) => player.playerId !== propertyOwner.playerId);
@@ -1767,7 +1767,7 @@ test("wizard property owned wand attacks gain damage and cannot be avoided", () 
 test("wizard property does not affect borrowed wands or non-wand attacks", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 9 });
   const propertyOwner = state.players.find((player) => {
-    return player.wizardProperties.some((property) => property.definitionId === "wizard-property-009");
+    return player.wizardProperties.some((property) => property.definitionId === "esw2_dbg__wizard_property_009");
   });
   assert.ok(propertyOwner);
   const targetPlayer = state.players.find((player) => player.playerId !== propertyOwner.playerId);

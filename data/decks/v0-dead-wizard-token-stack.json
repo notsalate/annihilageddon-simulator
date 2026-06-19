@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "stackId": "v0-neutral-dead-wizard-token-stack",
+  "stackId": "v0-dead-wizard-token-stack",
   "runtimeSchema": "krutagidon.tokenStack.v0",
   "role": "deadWizardTokens",
   "mappingStatus": "neutral-v0",
   "entries": [
     {
-      "tokenId": "neutral-dead-wizard-token",
+      "tokenId": "esw2_dbg__dead_wizard_token_001",
       "count": 30
     }
   ]

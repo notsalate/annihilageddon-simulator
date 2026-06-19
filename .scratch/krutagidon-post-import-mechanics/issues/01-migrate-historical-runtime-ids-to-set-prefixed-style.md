@@ -1,6 +1,6 @@
 # Migrate historical runtime IDs to set-prefixed style
 
-Status: ready-for-agent
+Status: done
 Label: ready-for-agent
 Type: AFK
 

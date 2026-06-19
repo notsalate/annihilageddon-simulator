@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "tokenId": "wizard-property-001",
+  "tokenId": "esw2_dbg__wizard_property_001",
   "runtimeSchema": "krutagidon.tokenDefinition.v0",
   "kind": "wizardProperty",
   "visible": {

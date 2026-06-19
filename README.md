@@ -103,8 +103,8 @@ Legal action layer уже умеет показывать activation actions д�
 
 Runtime JSON лежит в `data/tokens/wizard-properties/`.
 
-- `wizard-property-001`, `002`, `004`-`010` executable в v0;
-- `wizard-property-003` есть как runtime token definition, но `playableInV0: false`, потому что нет familiar lifecycle и dynamic "familiar counts as legend";
+- `esw2_dbg__wizard_property_001`, `002`, `004`-`010` executable в v0;
+- `esw2_dbg__wizard_property_003` есть как runtime token definition, но `playableInV0: false`, потому что нет familiar lifecycle и dynamic "familiar counts as legend";
 - supported property surfaces: setup, activation, on-play-card trigger, on-gain-card destination replacement, end-turn draw count modifier, effective value modifier, owned-wand attack replacement.
 
 ## Ограничения v0
@@ -115,7 +115,7 @@ Runtime JSON лежит в `data/tokens/wizard-properties/`.
 - полноценные DWT faces/effects;
 - полный lifecycle беспределов и мегабеспределов: Market Flow, destroy-event pile и replacement;
 - фамильяры;
-- `wizard-property-003` и любые эффекты, завязанные на familiar lifecycle;
+- `esw2_dbg__wizard_property_003` и любые эффекты, завязанные на familiar lifecycle;
 - Trophy за пределами Basic Trophy credit/chip behavior;
 - Dingler;
 - все typed effect handlers для полного набора карт;
