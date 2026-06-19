@@ -5,6 +5,18 @@ const allowedCardKinds = new Set(["starter", "normal", "legend", "mayhem", "mega
 const allowedCardTypes = new Set(["wizardCard", "creature", "spell", "treasure", "location", "familiar", "legend"]);
 const allowedMarkers = new Set(["ongoing", "attack", "defense", "activate", "marketChipMarker"]);
 const forbiddenRuntimeFields = new Set(["engine", "effects", "runtimeSchema", "playableInV0", "mappingStatus"]);
+const numberedImportIdCategories = new Set([
+  "main",
+  "legend",
+  "starter",
+  "familiar",
+  "wizard_property",
+  "dead_wizard_token",
+]);
+const singletonImportIds = new Map([
+  ["esw2_dbg__wild_magic", "wild_magic"],
+  ["esw2_dbg__limp_wand", "limp_wand"],
+]);
 
 export interface DraftValidationMessage {
   filePath: string;
@@ -78,6 +90,8 @@ export function validateCardDraft(draft: unknown, options: ValidateCardDraftOpti
 
   if (!isNonEmptyString(draft["cardId"])) {
     errors.push(message(filePath, "cardId is required"));
+  } else {
+    validateNewImportIdStyle(draft["cardId"], "cardId", expectedCardIdCategories(draft["visible"]), filePath, errors);
   }
 
   validateSource(draft["source"], filePath, errors, warnings);
@@ -112,6 +126,8 @@ export function validateWizardPropertyDraft(draft: unknown, options: ValidateDra
 
   if (!isNonEmptyString(draft["tokenId"])) {
     errors.push(message(filePath, "tokenId is required"));
+  } else {
+    validateNewImportIdStyle(draft["tokenId"], "tokenId", ["wizard_property"], filePath, errors);
   }
 
   if (draft["kind"] !== "wizardProperty") {
@@ -150,6 +166,8 @@ export function validateDeadWizardTokenDraft(draft: unknown, options: ValidateDr
 
   if (!isNonEmptyString(draft["tokenId"])) {
     errors.push(message(filePath, "tokenId is required"));
+  } else {
+    validateNewImportIdStyle(draft["tokenId"], "tokenId", ["dead_wizard_token"], filePath, errors);
   }
 
   if (draft["kind"] !== "deadWizardToken") {
@@ -352,6 +370,71 @@ function validateAllowedString(
 ): void {
   if (!isString(value) || !allowedValues.has(value)) {
     errors.push(message(filePath, `${fieldName} must be one of ${Array.from(allowedValues).join(", ")}`));
+  }
+}
+
+function validateNewImportIdStyle(
+  id: string,
+  fieldName: string,
+  expectedCategories: string[],
+  filePath: string,
+  errors: DraftValidationMessage[],
+): void {
+  const category = parseNewImportIdCategory(id);
+  if (category === undefined) {
+    errors.push(message(filePath, `${fieldName} must use new import ID style esw2_dbg__<category>_<number>`));
+    return;
+  }
+
+  if (expectedCategories.length > 0 && !expectedCategories.includes(category)) {
+    errors.push(
+      message(
+        filePath,
+        `${fieldName} category '${category}' does not match draft category; expected ${expectedCategories.join(" or ")}`,
+      ),
+    );
+  }
+}
+
+function parseNewImportIdCategory(id: string): string | undefined {
+  const singletonCategory = singletonImportIds.get(id);
+  if (singletonCategory !== undefined) {
+    return singletonCategory;
+  }
+
+  const match = /^esw2_dbg__(.+)_([0-9]{3})$/.exec(id);
+  if (match === null) {
+    return undefined;
+  }
+
+  const category = match[1];
+  if (category === undefined) {
+    return undefined;
+  }
+
+  return numberedImportIdCategories.has(category) ? category : undefined;
+}
+
+function expectedCardIdCategories(visible: unknown): string[] {
+  if (!isRecord(visible)) {
+    return [];
+  }
+
+  switch (visible["cardKind"]) {
+    case "normal":
+      return ["main"];
+    case "legend":
+      return ["legend"];
+    case "starter":
+      return ["starter"];
+    case "familiar":
+      return ["familiar"];
+    case "wildMagic":
+      return ["wild_magic"];
+    case "limpWand":
+      return ["limp_wand"];
+    default:
+      return [];
   }
 }
 

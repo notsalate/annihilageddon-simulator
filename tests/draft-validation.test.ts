@@ -20,6 +20,35 @@ test("valid cardDraft passes draft validation", () => {
   assert.deepEqual(validation.warnings, []);
 });
 
+test("draft validation accepts documented new import ID categories", () => {
+  const validCardCases = [
+    { cardId: "esw2_dbg__main_001", cardKind: "normal" },
+    { cardId: "esw2_dbg__legend_001", cardKind: "legend" },
+    { cardId: "esw2_dbg__starter_001", cardKind: "starter" },
+    { cardId: "esw2_dbg__familiar_001", cardKind: "familiar" },
+    { cardId: "esw2_dbg__wild_magic", cardKind: "wildMagic" },
+    { cardId: "esw2_dbg__limp_wand", cardKind: "limpWand" },
+  ];
+
+  for (const cardCase of validCardCases) {
+    const draft = createValidCardDraft();
+    const validation = validateCardDraft({
+      ...draft,
+      cardId: cardCase.cardId,
+      visible: {
+        ...draft.visible,
+        cardKind: cardCase.cardKind,
+      },
+    });
+
+    assert.equal(validation.ok, true, cardCase.cardId);
+    assert.deepEqual(validation.errors, []);
+  }
+
+  assert.equal(validateDraft(createValidWizardPropertyDraft()).ok, true);
+  assert.equal(validateDraft(createValidDeadWizardTokenDraft()).ok, true);
+});
+
 test("cardDraft reports missing required fields", () => {
   const validation = validateCardDraft(
     {
@@ -69,6 +98,50 @@ test("cardDraft rejects invalid card type and marker values", () => {
   assert.ok(hasMessage(validation.errors, "visible.cardKind"));
   assert.ok(hasMessage(validation.errors, "unknownType"));
   assert.ok(hasMessage(validation.errors, "unknownMarker"));
+});
+
+test("draft validation rejects new import ID category mismatches", () => {
+  const cardValidation = validateCardDraft({
+    ...createValidCardDraft(),
+    cardId: "esw2_dbg__legend_001",
+  });
+  const wizardPropertyValidation = validateDraft({
+    ...createValidWizardPropertyDraft(),
+    tokenId: "esw2_dbg__main_001",
+  });
+  const deadWizardTokenValidation = validateDraft({
+    ...createValidDeadWizardTokenDraft(),
+    tokenId: "esw2_dbg__wizard_property_001",
+  });
+
+  assert.equal(cardValidation.ok, false);
+  assert.ok(hasMessage(cardValidation.errors, "cardId category"));
+  assert.equal(wizardPropertyValidation.ok, false);
+  assert.ok(hasMessage(wizardPropertyValidation.errors, "tokenId category"));
+  assert.equal(deadWizardTokenValidation.ok, false);
+  assert.ok(hasMessage(deadWizardTokenValidation.errors, "tokenId category"));
+});
+
+test("draft validation rejects IDs outside the new import ID style", () => {
+  const cardValidation = validateCardDraft({
+    ...createValidCardDraft(),
+    cardId: "hrenalocka-wand",
+  });
+  const wizardPropertyValidation = validateDraft({
+    ...createValidWizardPropertyDraft(),
+    tokenId: "wizard-property-001",
+  });
+  const deadWizardTokenValidation = validateDraft({
+    ...createValidDeadWizardTokenDraft(),
+    tokenId: "dead_wizard_token_001",
+  });
+
+  assert.equal(cardValidation.ok, false);
+  assert.ok(hasMessage(cardValidation.errors, "cardId must use new import ID style"));
+  assert.equal(wizardPropertyValidation.ok, false);
+  assert.ok(hasMessage(wizardPropertyValidation.errors, "tokenId must use new import ID style"));
+  assert.equal(deadWizardTokenValidation.ok, false);
+  assert.ok(hasMessage(deadWizardTokenValidation.errors, "tokenId must use new import ID style"));
 });
 
 test("cardDraft reports uncertainty and missing source image as warnings", () => {
