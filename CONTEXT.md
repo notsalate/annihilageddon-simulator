@@ -28,6 +28,14 @@ _Avoid_: card kind for tokens
 Raw or intermediate local card, token, OCR, or draft data used while preparing runtime definitions. Import data is not an engine input.
 _Avoid_: runtime import data, executable draft
 
+**Draft Data**:
+Structured intermediate JSON created from raw import text before behavior is mapped for the engine. Draft data records visible/source facts and uncertainties, but excludes executable effects and runtime playability decisions.
+_Avoid_: runtime JSON, implemented card
+
+**Draft Kind**:
+The required discriminator that tells import tooling which draft schema applies, such as `cardDraft`, `wizardPropertyDraft`, or `deadWizardTokenDraft`.
+_Avoid_: infer draft type from folder only, runtime kind
+
 **Runtime Data**:
 Tracked engine-readable card and token definitions used by simulations. Runtime data contains explicit stable IDs and mapped effects instead of relying on OCR text or draft files.
 _Avoid_: raw import, card draft, OCR source
@@ -88,6 +96,10 @@ _Avoid_: production mechanic, real card effect ID
 A former fixture mechanic that has been checked against the rules canon, completed within its agreed scope, exposed through a normal runtime effect ID, and tested through that normal ID. Promotion is not just renaming.
 _Avoid_: renamed fixture, unchecked runtime mechanic
 
+**Implemented Coverage**:
+The minimal runtime behavior currently executed by the engine for a card, token, or mechanic. Implemented coverage can be partial and does not imply full rule accuracy unless the documented coverage status says so.
+_Avoid_: complete implementation, full rules support
+
 **Runtime Effect ID**:
 The stable machine-readable English identifier used by runtime data to invoke a typed effect handler. Runtime effect IDs are separate from Russian display terms and must not depend on localized card text.
 _Avoid_: Russian display term as key, card text parsing
@@ -136,6 +148,10 @@ _Avoid_: attacks without defense support
 The mapped effect sequence used when a defense card or defense-capable object is chosen during a defense window. A defense branch can both avoid the attack and perform additional supported effects through the shared effect runtime.
 _Avoid_: avoid-only defense model
 
+**Player-Caused Death**:
+A foe death whose immediate cause is a player-controlled card, defense branch, effect, or other player-controlled object. Player-caused deaths can award Trophy credit even when the damage is not an attack.
+_Avoid_: attack-only kill credit, damage-type trophy rule
+
 **Defense Cost**:
 The required payment or movement needed to use a defense branch, such as discarding the defense card, discarding another card, spending chips, or paying life. A defense option is legal only when its cost can be paid.
 _Avoid_: free defense assumption
@@ -153,5 +169,5 @@ The decision to exclude redirect defenses from the first combat slice while keep
 _Avoid_: redirect in first combat slice
 
 **Basic Trophy Credit**:
-The first combat-slice rule that a player gains control of the Trophy when their normal attack kills a foe. Self-kills, Mayhem kills, and source-less deaths do not move the Trophy; redirect kill credit is deferred with redirect support.
+The rule that a player gains control of the Trophy when that player causes a foe to die. Self-kills, source-less deaths, DWT-caused deaths, and unowned Mayhem/Mega Mayhem deaths do not move the Trophy.
 _Avoid_: no trophy until full combat

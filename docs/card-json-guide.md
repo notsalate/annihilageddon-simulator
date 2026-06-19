@@ -12,28 +12,62 @@
 
 ## Главный принцип
 
-JSON карты делится на два слоя:
+Пайплайн карты делится на два слоя:
 
-- `visible` - что написано/видно на карте;
-- `engine` - что симулятор должен исполнять.
+- draft JSON - что написано/видно на карте;
+- runtime JSON - что симулятор должен исполнять.
 
-Issue 03 заполняет в основном `visible`.
+Draft JSON не содержит исполняемых engine effects, `runtimeSchema`, `playableInV0` или `mappingStatus`.
 
-Issue 04 заполняет `engine`.
+Engine mapping заполняется только на отдельном runtime JSON шаге.
+
+Каждый draft JSON должен иметь обязательное поле `draftKind`, чтобы валидатор понял, какую схему применять:
+
+- `cardDraft`;
+- `wizardPropertyDraft`;
+- `deadWizardTokenDraft`.
+
+## Draft validation
+
+Draft-валидатор должен возвращать ошибки и предупреждения.
+
+`error` означает, что draft нельзя передавать дальше в runtime mapping:
+
+- JSON не читается;
+- нет `draftKind`;
+- нет стабильного id;
+- нет видимого текста;
+- есть запрещенная runtime-секция: `engine`, `runtimeSchema`, `playableInV0` или `mappingStatus`;
+- значение не подходит схеме выбранного `draftKind`.
+
+`warning` означает, что draft можно читать дальше, но человеку стоит проверить сомнение:
+
+- нет ссылки на исходную картинку;
+- `cost` или `victoryPoints` пустые там, где обычно ожидаются;
+- есть записи в `visible.uncertainty`;
+- `typeRu` выглядит необычно;
+- id не совпадает с ожидаемым именем файла.
+
+Для массового импорта нужен отчет с warnings. Для перехода к runtime mapping нельзя продолжать, если есть errors.
 
 ## cardId
 
-`cardId` не должен зависеть от OCR-названия карты.
+`cardId` и `tokenId` не должны зависеть от OCR-названия карты или жетона.
 
-Использовать стабильный нейтральный ID:
+Для нового импорта использовать стабильный ID с префиксом набора:
 
 ```text
 esw2_dbg__main_001
 esw2_dbg__legend_001
 esw2_dbg__starter_001
+esw2_dbg__familiar_001
+esw2_dbg__wizard_property_001
+esw2_dbg__dead_wizard_token_001
 esw2_dbg__wild_magic
 esw2_dbg__limp_wand
 ```
+
+Текущие исторические runtime IDs вроде `wizard-property-001` и `dead_wizard_token_001` нужно переименовать отдельной миграцией позже. Новый импорт должен сразу использовать новый стиль.
 
 Если каталог ещё не утверждён, использовать стабильный ID от имени исходного файла и не менять его без причины.
 
@@ -41,24 +75,23 @@ esw2_dbg__limp_wand
 
 ```json
 {
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
   "cardId": "esw2_dbg__main_001",
   "source": {
-    "image": "assets/cards/raw/1000009089.jpg"
+    "image": "assets/cards/raw/1000009089.jpg",
+    "text": "data/import/card-texts/esw2_dbg__main_001.md"
   },
   "visible": {
     "nameRu": "",
     "cost": null,
     "victoryPoints": null,
+    "typeRu": null,
     "cardKind": null,
     "cardTypes": [],
     "textRu": "",
     "markers": [],
     "uncertainty": []
-  },
-  "engine": {
-    "needsEffectMapping": true,
-    "effects": [],
-    "unsupportedMechanics": []
   }
 }
 ```
@@ -102,10 +135,6 @@ esw2_dbg__limp_wand
     "cardKind": "limpWand",
     "cardTypes": [],
     "victoryPoints": -1
-  },
-  "engine": {
-    "needsEffectMapping": true,
-    "effects": []
   }
 }
 ```
@@ -128,10 +157,6 @@ esw2_dbg__limp_wand
     "cardKind": "wildMagic",
     "cardTypes": [],
     "cost": 3
-  },
-  "engine": {
-    "needsEffectMapping": true,
-    "effects": []
   }
 }
 ```
@@ -150,7 +175,7 @@ esw2_dbg__limp_wand
 "markers": ["ongoing", "attack", "defense", "activate", "marketChipMarker"]
 ```
 
-Не назначать полноценные `engine.effects` на этапе issue 03.
+Не добавлять `engine`-секцию на этапе draft JSON.
 
 ## Когда тип не указан
 
@@ -170,3 +195,45 @@ esw2_dbg__limp_wand
 
 Для `limpWand` и `wildMagic` пустой `cardTypes` - не ошибка.
 
+## Минимальный draft свойства
+
+```json
+{
+  "schemaVersion": 1,
+  "draftKind": "wizardPropertyDraft",
+  "tokenId": "wizard-property-001",
+  "kind": "wizardProperty",
+  "source": {
+    "image": "assets/wizard-property/raw/Свойство 1.jpg",
+    "text": "data/import/wizard-property-texts/wp_001.md"
+  },
+  "visible": {
+    "sourceLabel": "Свойство 1",
+    "textRu": "",
+    "uncertainty": []
+  },
+  "notes": []
+}
+```
+
+## Минимальный draft ЖДК
+
+```json
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "dead-wizard-token-001",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/DWT/raw/example.jpg",
+    "text": "data/import/DWT-texts/dead_wizard_token_001.md"
+  },
+  "visible": {
+    "sourceLabel": "",
+    "textRu": "",
+    "victoryPoints": null,
+    "uncertainty": []
+  },
+  "notes": []
+}
+```

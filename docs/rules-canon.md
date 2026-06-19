@@ -271,7 +271,8 @@ Terminology:
    - Resolve only after every player had the opportunity to defend.
 5. Avoiding an attack instance does not cancel non-attack effects on the attacking card, such as power, and does not automatically avoid other attack instances from the same card.
 6. Defense effects that target the attacker do not work against беспредел/мегабеспредел because there is no attacker.
-7. Some фамильяр defenses redirect attacks to the attacker. This is a card-data effect:
+7. Some defenses deal separate non-attack damage to the attacker. This is not redirecting the attack, but it is still damage caused by the defending player; if it kills the attacker, the defending player gains the trophy.
+8. Some фамильяр defenses redirect attacks to the attacker. This is a card-data effect:
    - The original attacker becomes the target even if the normal target rule would not make them legal.
    - Redirect only the amount/effect that would have hit the defender.
    - The attacker may defend against the redirected attack if a legal defense is available.
@@ -415,11 +416,12 @@ Death algorithm:
 
 Trophy:
 
-- When a player kills a foe, that player gains control of the trophy.
+- When a player causes a foe to die, that player gains control of the trophy.
 - Trophy is an Ongoing controlled object.
 - At the end of each turn of its controller, the controller gains 1 chip.
 - No trophy is awarded when a player kills themselves.
-- No trophy is awarded for a death caused by a normal беспредел/мегабеспредел or another unowned market card.
+- No trophy is awarded for a death caused by a DWT, a normal беспредел/мегабеспредел, or another source not caused by a player.
+- A defense branch that deals non-attack damage to the attacker awards the trophy to the defending player if that damage kills the attacker, because the defending player caused the death.
 - If a player uses a card effect to play a беспредел/мегабеспредел, that player is the source and can gain the trophy for a kill.
 - Some mapped effects can count a target as having died even without DWT gain; trophy can still be awarded if mapped effect data says so.
 
