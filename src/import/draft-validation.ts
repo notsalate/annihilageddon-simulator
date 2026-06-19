@@ -22,6 +22,32 @@ export interface ValidateCardDraftOptions {
   filePath?: string;
 }
 
+export type ValidateDraftOptions = ValidateCardDraftOptions;
+
+export function validateDraft(draft: unknown, options: ValidateDraftOptions = {}): DraftValidationResult {
+  const filePath = options.filePath ?? "<draft>";
+  if (!isRecord(draft)) {
+    return result([message(filePath, "draft must be a JSON object")], []);
+  }
+
+  if (draft["draftKind"] === "cardDraft") {
+    return validateCardDraft(draft, options);
+  }
+
+  if (draft["draftKind"] === "wizardPropertyDraft") {
+    return validateWizardPropertyDraft(draft, options);
+  }
+
+  const errors = [message(filePath, "draftKind must be one of cardDraft, wizardPropertyDraft")];
+  for (const fieldName of forbiddenRuntimeFields) {
+    if (fieldName in draft) {
+      errors.push(message(filePath, `draft contains forbidden runtime field '${fieldName}'`));
+    }
+  }
+
+  return result(errors, []);
+}
+
 export function validateCardDraft(draft: unknown, options: ValidateCardDraftOptions = {}): DraftValidationResult {
   const filePath = options.filePath ?? "<draft>";
   const errors: DraftValidationMessage[] = [];
@@ -56,7 +82,48 @@ export function validateCardDraft(draft: unknown, options: ValidateCardDraftOpti
   return result(errors, warnings);
 }
 
-export function validateDraftFiles(rootDir: string, inputPaths = ["data/import/card-drafts"]): DraftValidationResult {
+export function validateWizardPropertyDraft(draft: unknown, options: ValidateDraftOptions = {}): DraftValidationResult {
+  const filePath = options.filePath ?? "<draft>";
+  const errors: DraftValidationMessage[] = [];
+  const warnings: DraftValidationMessage[] = [];
+
+  if (!isRecord(draft)) {
+    errors.push(message(filePath, "draft must be a JSON object"));
+    return result(errors, warnings);
+  }
+
+  for (const fieldName of forbiddenRuntimeFields) {
+    if (fieldName in draft) {
+      errors.push(message(filePath, `draft contains forbidden runtime field '${fieldName}'`));
+    }
+  }
+
+  if (draft["schemaVersion"] !== 1) {
+    errors.push(message(filePath, "schemaVersion must be 1"));
+  }
+
+  if (draft["draftKind"] !== "wizardPropertyDraft") {
+    errors.push(message(filePath, "draftKind must be 'wizardPropertyDraft'"));
+  }
+
+  if (!isNonEmptyString(draft["tokenId"])) {
+    errors.push(message(filePath, "tokenId is required"));
+  }
+
+  if (draft["kind"] !== "wizardProperty") {
+    errors.push(message(filePath, "kind must be 'wizardProperty'"));
+  }
+
+  validateSource(draft["source"], filePath, errors, warnings);
+  validateWizardPropertyVisible(draft["visible"], filePath, errors, warnings);
+
+  return result(errors, warnings);
+}
+
+export function validateDraftFiles(
+  rootDir: string,
+  inputPaths = ["data/import/card-drafts", "data/import/wizard-property-drafts"],
+): DraftValidationResult {
   const errors: DraftValidationMessage[] = [];
   const warnings: DraftValidationMessage[] = [];
   let filesChecked = 0;
@@ -77,7 +144,7 @@ export function validateDraftFiles(rootDir: string, inputPaths = ["data/import/c
         continue;
       }
 
-      const draftResult = validateCardDraft(parsed, { filePath: displayPath });
+      const draftResult = validateDraft(parsed, { filePath: displayPath });
       errors.push(...draftResult.errors);
       warnings.push(...draftResult.warnings);
     }
@@ -167,6 +234,33 @@ function validateVisible(
   validateAllowedString(visible["cardKind"], allowedCardKinds, "visible.cardKind", filePath, errors);
   validateStringArray(visible["cardTypes"], "visible.cardTypes", allowedCardTypes, filePath, errors);
   validateStringArray(visible["markers"], "visible.markers", allowedMarkers, filePath, errors);
+
+  const uncertainty = visible["uncertainty"];
+  if (!Array.isArray(uncertainty) || !uncertainty.every(isString)) {
+    errors.push(message(filePath, "visible.uncertainty must be an array of strings"));
+  } else if (uncertainty.length > 0) {
+    warnings.push(message(filePath, "visible.uncertainty has entries"));
+  }
+}
+
+function validateWizardPropertyVisible(
+  visible: unknown,
+  filePath: string,
+  errors: DraftValidationMessage[],
+  warnings: DraftValidationMessage[],
+): void {
+  if (!isRecord(visible)) {
+    errors.push(message(filePath, "visible is required"));
+    return;
+  }
+
+  if (!isNonEmptyString(visible["sourceLabel"])) {
+    errors.push(message(filePath, "visible.sourceLabel is required"));
+  }
+
+  if (!isString(visible["textRu"]) || visible["textRu"].trim().length === 0) {
+    errors.push(message(filePath, "visible.textRu is required"));
+  }
 
   const uncertainty = visible["uncertainty"];
   if (!Array.isArray(uncertainty) || !uncertainty.every(isString)) {

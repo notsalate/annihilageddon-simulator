@@ -17,11 +17,14 @@ export type {
   DraftValidationMessage,
   DraftValidationResult,
   ValidateCardDraftOptions,
+  ValidateDraftOptions,
 } from "./import/draft-validation.js";
 export {
   formatDraftValidationResult,
   validateCardDraft,
+  validateDraft,
   validateDraftFiles,
+  validateWizardPropertyDraft,
 } from "./import/draft-validation.js";
 export type {
   CardInstance,

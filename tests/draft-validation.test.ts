@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatDraftValidationResult, validateCardDraft } from "../src/index.js";
+import { formatDraftValidationResult, validateCardDraft, validateWizardPropertyDraft } from "../src/index.js";
 
 test("valid cardDraft passes draft validation", () => {
   const validation = validateCardDraft(createValidCardDraft());
@@ -97,6 +97,44 @@ test("draft validation formatter reports runtime mapping readiness", () => {
   assert.match(output, /Not ready for runtime mapping: 1 error\(s\), 0 warning\(s\)/);
 });
 
+test("valid wizardPropertyDraft passes draft validation without card-only fields", () => {
+  const validation = validateWizardPropertyDraft(createValidWizardPropertyDraft());
+
+  assert.equal(validation.ok, true);
+  assert.deepEqual(validation.errors, []);
+  assert.deepEqual(validation.warnings, []);
+});
+
+test("wizardPropertyDraft rejects runtime-only fields", () => {
+  const validation = validateWizardPropertyDraft({
+    ...createValidWizardPropertyDraft(),
+    engine: {},
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    playableInV0: true,
+    mappingStatus: "mapped",
+  });
+
+  assert.equal(validation.ok, false);
+  assert.ok(hasMessage(validation.errors, "engine"));
+  assert.ok(hasMessage(validation.errors, "runtimeSchema"));
+  assert.ok(hasMessage(validation.errors, "playableInV0"));
+  assert.ok(hasMessage(validation.errors, "mappingStatus"));
+});
+
+test("wizardPropertyDraft reports missing visible text", () => {
+  const validation = validateWizardPropertyDraft({
+    ...createValidWizardPropertyDraft(),
+    visible: {
+      sourceLabel: "Свойство 1",
+      textRu: "",
+      uncertainty: [],
+    },
+  });
+
+  assert.equal(validation.ok, false);
+  assert.ok(hasMessage(validation.errors, "visible.textRu"));
+});
+
 function createValidCardDraft() {
   return {
     schemaVersion: 1,
@@ -115,6 +153,25 @@ function createValidCardDraft() {
       cardTypes: ["spell"],
       textRu: "+2 мощи",
       markers: [],
+      uncertainty: [],
+    },
+    notes: [],
+  };
+}
+
+function createValidWizardPropertyDraft() {
+  return {
+    schemaVersion: 1,
+    draftKind: "wizardPropertyDraft",
+    tokenId: "esw2_dbg__wizard_property_001",
+    kind: "wizardProperty",
+    source: {
+      image: "assets/wizard-property/raw/Свойство 1.jpg",
+      text: "data/import/wizard-property-texts/wp_001.md",
+    },
+    visible: {
+      sourceLabel: "Свойство 1",
+      textRu: "Получив волшебника, получи 1 чипсину.",
       uncertainty: [],
     },
     notes: [],
