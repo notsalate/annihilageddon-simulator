@@ -117,7 +117,6 @@ Runtime JSON лежит в `data/tokens/wizard-properties/`.
 - фамильяры;
 - `esw2_dbg__wizard_property_003` и любые эффекты, завязанные на familiar lifecycle;
 - Trophy за пределами Basic Trophy credit/chip behavior;
-- Dingler;
 - все typed effect handlers для полного набора карт;
 - стратегия baseline bot за пределами play/buy/end-turn;
 - удобный пошаговый debug-view партии.

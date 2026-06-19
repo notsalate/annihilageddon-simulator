@@ -393,6 +393,10 @@ function isSupportedExecutableEffectId(effectId: string, mode: "combat" | "fixtu
     effectId === "play_top_card_from_foe_deck" ||
     effectId === "modify_effective_value" ||
     effectId === "gain_chips" ||
+    effectId === "gain_chips_per_player_with_status" ||
+    effectId === "gain_status" ||
+    effectId === "remove_status" ||
+    effectId === "toggle_status" ||
     effectId === "topdeck_gained_card" ||
     effectId === "temporary_hand_limit_by_gained_card_type" ||
     effectId === "replace_starting_card" ||
@@ -529,6 +533,7 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
   if (
     effectId === "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem" ||
     effectId === "mega_mayhem_each_player_toggle_dingler" ||
+    effectId === "toggle_status" ||
     effectId === "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none" ||
     effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
     effectId === "mayhem_each_player_discard_deck_then_destroy_from_discard"
@@ -540,6 +545,10 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
 
     if (effect["targetSelector"] !== "eachPlayerClockwiseFromActive") {
       errors.push(`Card ${cardId} uses unsupported Mayhem target ${String(effect["targetSelector"])}`);
+    }
+
+    if (effectId === "toggle_status" && effect["statusId"] !== "dingler") {
+      errors.push(`Card ${cardId} uses unsupported status ${String(effect["statusId"])}`);
     }
 
     return errors;

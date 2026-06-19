@@ -1,6 +1,6 @@
 # Complete Dingler mechanic
 
-Status: ready-for-agent
+Status: done
 Label: ready-for-agent
 Type: AFK
 
@@ -10,15 +10,15 @@ Complete the core Dingler mechanic without importing every card or DWT face that
 
 ## Acceptance criteria
 
-- [ ] A player can become Dingler through normal runtime effect data.
-- [ ] A player can become normal again through normal runtime effect data.
-- [ ] Toggling Dingler works for effects that say "if already Dingler, become normal".
-- [ ] Becoming Dingler clamps current life to 15.
-- [ ] Dingler max life 15 is used by healing and set-life behavior.
-- [ ] Removing Dingler restores the normal max-life cap but does not automatically heal the player.
-- [ ] Dingler gives -5 VP at game end while active.
-- [ ] Tests cover gain, removal, repeated/toggle behavior, healing, set-life, and scoring.
-- [ ] Existing supported Mega Mayhem or wizard property behavior that mentions Dingler is updated to use the completed mechanic.
+- [x] A player can become Dingler through normal runtime effect data.
+- [x] A player can become normal again through normal runtime effect data.
+- [x] Toggling Dingler works for effects that say "if already Dingler, become normal".
+- [x] Becoming Dingler clamps current life to 15.
+- [x] Dingler max life 15 is used by healing and set-life behavior.
+- [x] Removing Dingler restores the normal max-life cap but does not automatically heal the player.
+- [x] Dingler gives -5 VP at game end while active.
+- [x] Tests cover gain, removal, repeated/toggle behavior, healing, set-life, and scoring.
+- [x] Existing supported Mega Mayhem or wizard property behavior that mentions Dingler is updated to use the completed mechanic.
 
 ## Blocked by
 

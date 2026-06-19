@@ -35,8 +35,9 @@
     "marketChipMarker": false,
     "effects": [
       {
-        "effectId": "mega_mayhem_each_player_toggle_dingler",
+        "effectId": "toggle_status",
         "timing": "onMayhemResolve",
+        "statusId": "dingler",
         "targetSelector": "eachPlayerClockwiseFromActive"
       }
     ],

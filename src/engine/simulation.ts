@@ -133,11 +133,16 @@ export function scoreGame(state: GameState): PlayerScore[] {
         }, 0) +
         deadWizardTokenDefinitions.reduce((total, definition) => {
           return total + calculateEffectiveTokenVictoryPoints(state, player.playerId, definition);
-        }, 0),
+        }, 0) +
+        calculateStatusVictoryPoints(player),
       legendCount: cardDefinitions.filter((definition) => definition.engine.cardKind === "legend").length,
       deadWizardTokenCount: player.deadWizardTokens.length,
     };
   });
+}
+
+function calculateStatusVictoryPoints(player: GameState["players"][number]): number {
+  return player.statuses.some((status) => status.statusId === "dingler") ? -5 : 0;
 }
 
 function summarizeGame(state: GameState, endReason: GameEndReason, isGameEnd: boolean): SingleGameResult {

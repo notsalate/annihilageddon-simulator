@@ -268,11 +268,15 @@ function isSupportedMayhemRuntimeEffect(effect: Record<string, unknown>): boolea
     effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
     effectId === "mayhem_each_player_discard_deck_then_destroy_from_discard" ||
     effectId === "gain_card" ||
+    effectId === "gain_chips_per_player_with_status" ||
     effectId === "discard_card" ||
     effectId === "destroy_card" ||
     effectId === "reveal_top_card" ||
     effectId === "play_top_card" ||
     effectId === "draw_cards" ||
+    effectId === "gain_status" ||
+    effectId === "remove_status" ||
+    effectId === "toggle_status" ||
     effectId === "wild_magic_choice"
   );
 }
@@ -304,6 +308,29 @@ function executeEffect(
         ...(source.tokenInstanceId === undefined ? {} : { tokenInstanceId: source.tokenInstanceId }),
         ...(source.tokenDefinitionId === undefined ? {} : { tokenDefinitionId: source.tokenDefinitionId }),
         effectId: "gain_chips",
+        amount,
+        sourceType: source.sourceType,
+      });
+    }
+
+    return { ok: true };
+  }
+
+  if (effect["effectId"] === "gain_chips_per_player_with_status") {
+    const amountPerPlayer = effect["amountPerPlayer"];
+    const status = effect["status"];
+    if (typeof amountPerPlayer === "number" && Number.isSafeInteger(amountPerPlayer) && amountPerPlayer > 0 && status === "dingler") {
+      const matchingPlayerCount = state.players.filter((candidate) => {
+        return candidate.statuses.some((candidateStatus) => candidateStatus.statusId === status);
+      }).length;
+      const amount = matchingPlayerCount * amountPerPlayer;
+      player.chips += amount;
+      state.eventLog.push({
+        type: "effectChipsGained",
+        playerId: player.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId: "gain_chips_per_player_with_status",
         amount,
         sourceType: source.sourceType,
       });
@@ -894,6 +921,72 @@ function executeEffect(
     return { ok: true };
   }
 
+  if (effect["effectId"] === "gain_status") {
+    const statusId = effect["statusId"];
+    if (statusId !== "dingler") {
+      return {
+        ok: false,
+        error: `Unsupported status ${asString(statusId)}`,
+      };
+    }
+
+    const targetResult = resolveStatusTargetPlayers(state, player, effect, source);
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    for (const targetPlayer of targetResult.players) {
+      gainDinglerStatus(state, targetPlayer, asString(effect["effectId"]), source);
+    }
+
+    return { ok: true };
+  }
+
+  if (effect["effectId"] === "remove_status") {
+    const statusId = effect["statusId"];
+    if (statusId !== "dingler") {
+      return {
+        ok: false,
+        error: `Unsupported status ${asString(statusId)}`,
+      };
+    }
+
+    const targetResult = resolveStatusTargetPlayers(state, player, effect, source);
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    for (const targetPlayer of targetResult.players) {
+      removeDinglerStatus(state, targetPlayer, asString(effect["effectId"]), source);
+    }
+
+    return { ok: true };
+  }
+
+  if (effect["effectId"] === "toggle_status") {
+    const statusId = effect["statusId"];
+    if (statusId !== "dingler") {
+      return {
+        ok: false,
+        error: `Unsupported status ${asString(statusId)}`,
+      };
+    }
+
+    const targetResult = resolveStatusTargetPlayers(state, player, effect, source);
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    for (const targetPlayer of targetResult.players) {
+      if (hasDinglerStatus(targetPlayer)) {
+        removeDinglerStatus(state, targetPlayer, asString(effect["effectId"]), source);
+      } else {
+        gainDinglerStatus(state, targetPlayer, asString(effect["effectId"]), source);
+      }
+    }
+    return { ok: true };
+  }
+
   if (effect["effectId"] === "set_life") {
     const targetResult = resolveTargetChoice(state, player, effect, source);
     if (!targetResult.ok) {
@@ -919,7 +1012,7 @@ function executeEffect(
       };
     }
 
-    targetResult.choice.player.life.current = lifeTotal;
+    setPlayerLife(state, targetResult.choice.player, lifeTotal);
     state.eventLog.push({
       type: "effectLifeSet",
       playerId: player.playerId,
@@ -943,7 +1036,7 @@ function executeEffect(
     }
 
     for (const targetPlayer of getPlayersInActiveOrder(state)) {
-      targetPlayer.life.current = lifeTotal;
+      setPlayerLife(state, targetPlayer, lifeTotal);
       state.eventLog.push({
         type: "effectLifeSet",
         playerId: player.playerId,
@@ -1000,30 +1093,12 @@ function executeEffect(
 
   if (effect["effectId"] === "mega_mayhem_each_player_toggle_dingler") {
     for (const targetPlayer of getPlayersInActiveOrder(state)) {
-      const dinglerIndex = targetPlayer.statuses.findIndex((status) => status.statusId === "dingler");
-      if (dinglerIndex >= 0) {
-        targetPlayer.statuses.splice(dinglerIndex, 1);
-        state.eventLog.push({
-          type: "dinglerStatusRemoved",
-          playerId: targetPlayer.playerId,
-          cardInstanceId: source.cardInstanceId,
-          definitionId: source.definitionId,
-          effectId: asString(effect["effectId"]),
-          sourceType: source.sourceType,
-        });
+      if (hasDinglerStatus(targetPlayer)) {
+        removeDinglerStatus(state, targetPlayer, asString(effect["effectId"]), source);
         continue;
       }
 
-      targetPlayer.statuses.push(createDinglerStatus(targetPlayer.playerId));
-      targetPlayer.life.current = Math.min(targetPlayer.life.current, 15);
-      state.eventLog.push({
-        type: "dinglerStatusGained",
-        playerId: targetPlayer.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: asString(effect["effectId"]),
-        sourceType: source.sourceType,
-      });
+      gainDinglerStatus(state, targetPlayer, asString(effect["effectId"]), source);
     }
     return { ok: true };
   }
@@ -1404,6 +1479,44 @@ type TargetChoiceResult =
       ok: false;
       error: string;
     };
+
+function resolveStatusTargetPlayers(
+  state: GameState,
+  player: PlayerState,
+  effect: Record<string, unknown>,
+  source: EffectSourceContext,
+): { ok: true; players: PlayerState[] } | { ok: false; error: string } {
+  if (effect["targetSelector"] === "eachPlayerClockwiseFromActive") {
+    return {
+      ok: true,
+      players: getPlayersInActiveOrder(state),
+    };
+  }
+
+  const targetResult = resolveTargetChoice(state, player, effect, source);
+  if (!targetResult.ok) {
+    return targetResult;
+  }
+
+  if (targetResult.choice === undefined) {
+    return {
+      ok: true,
+      players: [],
+    };
+  }
+
+  if (targetResult.choice.choiceType !== "player") {
+    return {
+      ok: false,
+      error: `Status effect requires a player target`,
+    };
+  }
+
+  return {
+    ok: true,
+    players: [targetResult.choice.player],
+  };
+}
 
 function resolveTargetChoice(
   state: GameState,
@@ -2039,6 +2152,19 @@ function healPlayer(
   }
 }
 
+function setPlayerLife(state: GameState, player: PlayerState, lifeTotal: number): void {
+  const effectiveLifeTotal = hasDinglerStatus(player) ? Math.min(lifeTotal, 15) : lifeTotal;
+  player.life.current = effectiveLifeTotal;
+
+  if (effectiveLifeTotal < lifeTotal) {
+    state.eventLog.push({
+      type: "playerLifeClamped",
+      playerId: player.playerId,
+      amount: effectiveLifeTotal,
+    });
+  }
+}
+
 function moveCardToPlayerZone(
   state: GameState,
   card: CardInstance,
@@ -2200,6 +2326,53 @@ function createDinglerStatus(playerId: PlayerState["playerId"]): PlayerState["st
       },
     ],
   };
+}
+
+function hasDinglerStatus(player: PlayerState): boolean {
+  return player.statuses.some((status) => status.statusId === "dingler");
+}
+
+function gainDinglerStatus(
+  state: GameState,
+  player: PlayerState,
+  effectId: string,
+  source: EffectSourceContext,
+): void {
+  if (!hasDinglerStatus(player)) {
+    player.statuses.push(createDinglerStatus(player.playerId));
+  }
+
+  player.life.current = Math.min(player.life.current, 15);
+  state.eventLog.push({
+    type: "dinglerStatusGained",
+    playerId: player.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+}
+
+function removeDinglerStatus(
+  state: GameState,
+  player: PlayerState,
+  effectId: string,
+  source: EffectSourceContext,
+): void {
+  const dinglerIndex = player.statuses.findIndex((status) => status.statusId === "dingler");
+  if (dinglerIndex < 0) {
+    return;
+  }
+
+  player.statuses.splice(dinglerIndex, 1);
+  state.eventLog.push({
+    type: "dinglerStatusRemoved",
+    playerId: player.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
 }
 
 function drawTopDeckCard(player: PlayerState, state: GameState): CardInstance | undefined {

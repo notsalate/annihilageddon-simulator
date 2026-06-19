@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   applyAction,
+  calculateEffectivePlayerMaxLife,
   initializeGame,
   listLegalActions,
   scoreGame,
@@ -1700,6 +1701,44 @@ test("set_life sets the target player's current life without using healing clamp
   assert.equal(state.eventLog.some((event) => event.type === "playerLifeClamped"), false);
 });
 
+test("set_life uses Dingler max life as a cap", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  activePlayer.life.current = 20;
+  const gainCardId = addFixtureCardToActiveHand(state, {
+    effectId: "gain_status",
+    timing: "onPlay",
+    statusId: "dingler",
+    target: {
+      selector: "activePlayer",
+    },
+  });
+  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: gainCardId }).ok, true);
+  activePlayer.life.current = 5;
+  const setLifeCardId = addFixtureCardToActiveHand(state, {
+    effectId: "set_life",
+    timing: "onPlay",
+    lifeTotal: 20,
+    target: {
+      selector: "activePlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: setLifeCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.life.current, 15);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "playerLifeClamped" && event.playerId === activePlayer.playerId && event.amount === 15;
+    }),
+  );
+});
+
 test("attack_damage damages the first opponent when no defense is available", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
@@ -2372,6 +2411,182 @@ test("mayhem_attack kill does not move Basic Trophy", () => {
   assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
   assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
   assert.equal(state.eventLog.some((event) => event.type === "trophyControlChanged"), false);
+});
+
+test("gain_status can make the active player Dingler and clamps life to 15", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  activePlayer.life.current = 20;
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "gain_status",
+    timing: "onPlay",
+    statusId: "dingler",
+    target: {
+      selector: "activePlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.statuses.filter((status) => status.statusId === "dingler").length, 1);
+  assert.equal(activePlayer.life.current, 15);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "dinglerStatusGained" && event.playerId === activePlayer.playerId;
+    }),
+  );
+});
+
+test("remove_status makes a Dingler player normal without healing current life", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  activePlayer.life.current = 20;
+  const gainCardId = addFixtureCardToActiveHand(state, {
+    effectId: "gain_status",
+    timing: "onPlay",
+    statusId: "dingler",
+    target: {
+      selector: "activePlayer",
+    },
+  });
+  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: gainCardId }).ok, true);
+  assert.equal(activePlayer.life.current, 15);
+  assert.equal(calculateEffectivePlayerMaxLife(state, activePlayer.playerId), 15);
+
+  activePlayer.life.current = 7;
+  const removeCardId = addFixtureCardToActiveHand(state, {
+    effectId: "remove_status",
+    timing: "onPlay",
+    statusId: "dingler",
+    target: {
+      selector: "activePlayer",
+    },
+  });
+  const removeResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: removeCardId,
+  });
+
+  assert.equal(removeResult.ok, true);
+  assert.equal(activePlayer.statuses.some((status) => status.statusId === "dingler"), false);
+  assert.equal(activePlayer.life.current, 7);
+  assert.equal(calculateEffectivePlayerMaxLife(state, activePlayer.playerId), 25);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return event.type === "dinglerStatusRemoved" && event.playerId === activePlayer.playerId;
+    }),
+  );
+});
+
+test("toggle_status alternates Dingler and normal status", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  activePlayer.life.current = 20;
+  const toggleEffect = {
+    effectId: "toggle_status",
+    timing: "onPlay",
+    statusId: "dingler",
+    target: {
+      selector: "activePlayer",
+    },
+  };
+  const firstToggleCardId = addFixtureCardToActiveHand(state, toggleEffect);
+  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: firstToggleCardId }).ok, true);
+  assert.equal(activePlayer.statuses.filter((status) => status.statusId === "dingler").length, 1);
+  assert.equal(activePlayer.life.current, 15);
+
+  const secondToggleCardId = addFixtureCardToActiveHand(state, toggleEffect);
+  const secondToggleResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: secondToggleCardId,
+  });
+
+  assert.equal(secondToggleResult.ok, true);
+  assert.equal(activePlayer.statuses.some((status) => status.statusId === "dingler"), false);
+  assert.equal(calculateEffectivePlayerMaxLife(state, activePlayer.playerId), 25);
+});
+
+test("active Dingler status gives a 5 VP scoring penalty until removed", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const scoreBefore = scoreGame(state).find((score) => score.playerId === activePlayer.playerId);
+  assert.ok(scoreBefore);
+  const gainCardId = addFixtureCardToActiveHand(state, {
+    effectId: "gain_status",
+    timing: "onPlay",
+    statusId: "dingler",
+    target: {
+      selector: "activePlayer",
+    },
+  });
+  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: gainCardId }).ok, true);
+
+  const dinglerScore = scoreGame(state).find((score) => score.playerId === activePlayer.playerId);
+  assert.ok(dinglerScore);
+  assert.equal(dinglerScore.victoryPoints, scoreBefore.victoryPoints - 5);
+
+  const removeCardId = addFixtureCardToActiveHand(state, {
+    effectId: "remove_status",
+    timing: "onPlay",
+    statusId: "dingler",
+    target: {
+      selector: "activePlayer",
+    },
+  });
+  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: removeCardId }).ok, true);
+
+  const normalScore = scoreGame(state).find((score) => score.playerId === activePlayer.playerId);
+  assert.ok(normalScore);
+  assert.equal(normalScore.victoryPoints, scoreBefore.victoryPoints);
+});
+
+test("Loshashlyk gains one chip per Dingler player", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const gainSelfCardId = addFixtureCardToActiveHand(state, {
+    effectId: "gain_status",
+    timing: "onPlay",
+    statusId: "dingler",
+    target: {
+      selector: "activePlayer",
+    },
+  });
+  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: gainSelfCardId }).ok, true);
+  const gainFoeCardId = addFixtureCardToActiveHand(state, {
+    effectId: "gain_status",
+    timing: "onPlay",
+    statusId: "dingler",
+    target: {
+      selector: "opponentPlayer",
+    },
+  });
+  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: gainFoeCardId }).ok, true);
+  activePlayer.chips = 0;
+  const loshashlyk: CardInstance = {
+    instanceId: "fixture-loshashlyk",
+    definitionId: "esw2_dbg__ocr_008",
+    ownerId: activePlayer.playerId,
+    marketChips: 0,
+  };
+  activePlayer.hand.push(loshashlyk);
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: loshashlyk.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 2);
+  assert.equal(state.turn.power, 3);
 });
 
 test("targeted fixture effect skips when there are no legal choices by default", () => {
