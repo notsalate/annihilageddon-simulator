@@ -1,7 +1,7 @@
 # Add import completeness report
 
-Status: ready-for-agent
-Label: ready-for-agent
+Status: done
+Label: done
 Type: AFK
 
 ## Parent
@@ -16,13 +16,13 @@ The report should be useful after the user's external scan pipeline creates new 
 
 ## Acceptance criteria
 
-- [ ] A command or documented mode prints completeness counts for cards, wizard properties, and DWTs.
-- [ ] The report distinguishes raw markdown files, draft JSON files, and runtime JSON files.
-- [ ] The report includes validation error and warning counts from draft validation.
-- [ ] The report identifies missing draft files for existing markdown files where possible.
-- [ ] The report identifies runtime files that exist without a corresponding valid draft where possible.
-- [ ] Output is concise enough to read after a full import batch.
-- [ ] Focused tests cover representative complete, missing-draft, missing-runtime, and validation-error cases.
+- [x] A command or documented mode prints completeness counts for cards, wizard properties, and DWTs.
+- [x] The report distinguishes raw markdown files, draft JSON files, and runtime JSON files.
+- [x] The report includes validation error and warning counts from draft validation.
+- [x] The report identifies missing draft files for existing markdown files where possible.
+- [x] The report identifies runtime files that exist without a corresponding valid draft where possible.
+- [x] Output is concise enough to read after a full import batch.
+- [x] Focused tests cover representative complete, missing-draft, missing-runtime, and validation-error cases.
 
 ## Blocked by
 

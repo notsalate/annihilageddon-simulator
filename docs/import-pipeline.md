@@ -68,6 +68,16 @@ Draft-валидатор должен возвращать `errors` и `warnings
 
 Для массового импорта нужен отчет с warnings. Для перехода к runtime mapping нельзя продолжать, если есть errors.
 
+## Import Completeness Report
+
+Команда `npm run report:import` печатает короткий отчет по полноте импорта для карт, свойств волшебников и жетонов мертвого волшебника.
+
+Отчет считает raw markdown, draft JSON и runtime JSON, добавляет количество draft validation errors/warnings и показывает:
+
+- raw markdown без draft JSON;
+- валидные draft JSON без runtime JSON;
+- runtime JSON без соответствующего валидного draft.
+
 ## ID Style
 
 ID не должен зависеть от OCR-названия карты, свойства или жетона. Русское название хранится как видимое поле, а не как ключ.

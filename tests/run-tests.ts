@@ -6,3 +6,4 @@ import "./simulation.test.js";
 import "./simulation-menu.test.js";
 import "./validation.test.js";
 import "./draft-validation.test.js";
+import "./import-completeness.test.js";

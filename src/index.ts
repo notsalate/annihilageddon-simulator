@@ -27,6 +27,8 @@ export {
   validateDraftFiles,
   validateWizardPropertyDraft,
 } from "./import/draft-validation.js";
+export type { ImportCompletenessAreaReport, ImportCompletenessReport } from "./import/import-completeness.js";
+export { createImportCompletenessReport, formatImportCompletenessReport } from "./import/import-completeness.js";
 export type {
   CardInstance,
   CommonState,
