@@ -28,6 +28,10 @@ _Avoid_: card kind for tokens
 Raw or intermediate local card, token, OCR, or draft data used while preparing runtime definitions. Import data is not an engine input.
 _Avoid_: runtime import data, executable draft
 
+**Source Text**:
+A human-readable markdown transcription of a card, token, or wizard property source image used as the first import-layer text artifact. Source text does not imply OCR and is referenced through `source.text`.
+_Avoid_: ocrText, OCR text
+
 **Draft Data**:
 Structured intermediate JSON created from raw import text before behavior is mapped for the engine. Draft data records visible/source facts and uncertainties, but excludes executable effects and runtime playability decisions.
 _Avoid_: runtime JSON, implemented card
@@ -39,6 +43,22 @@ _Avoid_: infer draft type from folder only, runtime kind
 **Runtime Data**:
 Tracked engine-readable card and token definitions used by simulations. Runtime data contains explicit stable IDs and mapped effects instead of relying on OCR text or draft files.
 _Avoid_: raw import, card draft, OCR source
+
+**Runtime Card Source Group**:
+The runtime folder group for card definitions based on the game source or stack that owns the card, such as `main`, `legend`, `starter`, `familiar`, or `special`. Card source groups are separate from visible card types such as spell, creature, treasure, wizard card, or location.
+_Avoid_: grouping runtime card files by visible type
+
+**Deck Composition**:
+A runtime file that lists card definition IDs and counts for a true card deck, such as the main deck, Legend deck, or starter deck.
+_Avoid_: token stack, card definition folder
+
+**Stack Composition**:
+A runtime file that lists card or token definition IDs and counts for a shuffled stack, such as Wild Magic, Limp Wand, Dead Wizard Tokens, or wizard properties.
+_Avoid_: deck for tokens, pool
+
+**Pool Composition**:
+A runtime file that lists object definition IDs and counts for a selectable or shared pool rather than a draw deck or shuffled stack, such as familiars if they are modeled as a pool.
+_Avoid_: deck, shuffled stack
 
 **Effect Runtime**:
 The shared execution model for mapped effects from cards, tokens, statuses, and event-like objects. It uses one effect language regardless of the source object.
