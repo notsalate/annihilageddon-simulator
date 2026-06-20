@@ -12,10 +12,14 @@
     "report:import": "npm run build -- --pretty false && node dist/src/cli/report-import-completeness.js",
     "validate:drafts": "npm run build -- --pretty false && node dist/src/cli/validate-drafts.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build -- --pretty false && node dist/tests/run-tests.js"
+    "test": "npm run build -- --pretty false && node dist/tests/run-tests.js",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8",
+    "prettier": "^3.8.4",
     "typescript": "^5.8.3"
   }
 }
