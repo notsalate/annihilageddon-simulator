@@ -912,10 +912,10 @@ test("wizard property on-play trigger grants chips only for matching ongoing car
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
   assert.ok(activePlayer);
   replaceFirstWizardProperty(state, activePlayer, createOnPlayOngoingChipWizardProperty("fixture-ongoing-play-property"));
-  const ongoingCardId = addFixtureCardToActiveHand(state, { effectId: "add_power", timing: "onPlay", amount: 0 }, {
+  const ongoingCardId = addFixtureCardToActiveHand(state, { effectId: "add_power", timing: "onPlay", amount: 1 }, {
     isOngoing: true,
   });
-  const normalCardId = addFixtureCardToActiveHand(state, { effectId: "add_power", timing: "onPlay", amount: 0 });
+  const normalCardId = addFixtureCardToActiveHand(state, { effectId: "add_power", timing: "onPlay", amount: 1 });
 
   assert.equal(applyAction(state, { type: "playCard", cardInstanceId: normalCardId }).ok, true);
   assert.equal(activePlayer.chips, 0);
@@ -1232,7 +1232,7 @@ test("destroy_card keeps mayhem and megaMayhem cards in ordered event piles", ()
     {
       effectId: "add_power",
       timing: "onMayhemResolve",
-      amount: 0,
+      amount: 1,
     },
     { cardKind: "mayhem" },
   );
@@ -1260,7 +1260,7 @@ test("destroy_card keeps mayhem and megaMayhem cards in ordered event piles", ()
     {
       effectId: "add_power",
       timing: "onMayhemResolve",
-      amount: 0,
+      amount: 1,
     },
     { cardKind: "megaMayhem" },
   );

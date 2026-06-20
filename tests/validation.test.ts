@@ -33,6 +33,68 @@ test("supported executable fixture data pack passes executable effect validation
   assert.deepEqual(result, { ok: true });
 });
 
+test("executable data-pack validation rejects invalid add-power amount", () => {
+  const card = createFixtureCard("fixture-invalid-add-power");
+  const dataPack = withOnlyFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 1.5,
+        },
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: "2",
+        },
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 0,
+        },
+      ],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors.filter((error) => error.includes("invalid power amount")).length, 3);
+});
+
+test("executable data-pack validation rejects invalid add-power Wild Magic option amount", () => {
+  const card = createFixtureCard("fixture-invalid-wild-magic-add-power-option");
+  const dataPack = withOnlyFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "wild_magic_choice",
+          timing: "onPlay",
+          options: [
+            {
+              effectId: "add_power",
+              timing: "onPlay",
+              amount: "2",
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack);
+
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.includes("invalid power amount")));
+});
+
 test("supported executable healing effect passes executable effect validation", () => {
   const card = createFixtureCard("fixture-supported-healing-effect");
   const dataPack = withOnlyFixtureCard({

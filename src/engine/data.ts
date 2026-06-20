@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { getEffectRuntimeHandler } from "./effect-runtime-registry.js";
+
 export type CardKind =
   | "starter"
   | "normal"
@@ -233,7 +235,7 @@ export function validateExecutableDataPack(
         continue;
       }
 
-      errors.push(...validateSupportedEffectShape(definition.cardId, effectId, effect));
+      errors.push(...validateSupportedEffectShape(`Card ${definition.cardId}`, effectId, effect));
     }
   }
 
@@ -268,6 +270,8 @@ export function validateExecutableDataPack(
         errors.push(`Token ${definition.tokenId} uses unsupported effect id ${effectId}`);
         continue;
       }
+
+      errors.push(...validateSupportedEffectShape(`Token ${definition.tokenId}`, effectId, effect));
     }
   }
 
@@ -368,8 +372,11 @@ function readJsonFile<T>(rootDir: string, filePath: string): T {
 }
 
 function isSupportedExecutableEffectId(effectId: string, mode: "combat" | "fixture"): boolean {
+  if (getEffectRuntimeHandler(effectId) !== undefined) {
+    return true;
+  }
+
   return (
-    effectId === "add_power" ||
     effectId === "heal" ||
     effectId === "set_life" ||
     effectId === "mega_mayhem_set_life" ||
@@ -412,19 +419,24 @@ function isSupportedExecutableEffectId(effectId: string, mode: "combat" | "fixtu
   );
 }
 
-function validateSupportedEffectShape(cardId: string, effectId: string, effect: Record<string, unknown>): string[] {
+function validateSupportedEffectShape(subjectId: string, effectId: string, effect: Record<string, unknown>): string[] {
+  const runtimeHandler = getEffectRuntimeHandler(effectId);
+  if (runtimeHandler !== undefined) {
+    return runtimeHandler.validateShape(subjectId, effect);
+  }
+
   if (effectId === "reveal_top_card" && effect["source"] !== "activePlayerDeck") {
-    return [`Card ${cardId} uses unsupported reveal source ${String(effect["source"])}`];
+    return [`${subjectId} uses unsupported reveal source ${String(effect["source"])}`];
   }
 
   if (effectId === "play_top_card") {
     const errors: string[] = [];
     if (effect["source"] !== "activePlayerDeck") {
-      errors.push(`Card ${cardId} uses unsupported play-top source ${String(effect["source"])}`);
+      errors.push(`${subjectId} uses unsupported play-top source ${String(effect["source"])}`);
     }
 
     if (effect["destination"] !== "play") {
-      errors.push(`Card ${cardId} uses unsupported play-top destination ${String(effect["destination"])}`);
+      errors.push(`${subjectId} uses unsupported play-top destination ${String(effect["destination"])}`);
     }
 
     return errors;
@@ -433,19 +445,24 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
   if (effectId === "wild_magic_choice") {
     const options = effect["options"];
     if (!Array.isArray(options)) {
-      return [`Card ${cardId} uses wild_magic_choice without options`];
+      return [`${subjectId} uses wild_magic_choice without options`];
     }
 
     const errors: string[] = [];
     for (const option of options) {
       if (!isEffectRecord(option)) {
-        errors.push(`Card ${cardId} uses invalid Wild Magic option`);
+        errors.push(`${subjectId} uses invalid Wild Magic option`);
         continue;
       }
 
       const optionEffectId = option["effectId"];
       if (optionEffectId !== "add_power" && optionEffectId !== "play_top_card_from_foe_deck") {
-        errors.push(`Card ${cardId} uses unsupported Wild Magic option ${String(optionEffectId)}`);
+        errors.push(`${subjectId} uses unsupported Wild Magic option ${String(optionEffectId)}`);
+        continue;
+      }
+
+      if (typeof optionEffectId === "string") {
+        errors.push(...validateSupportedEffectShape(subjectId, optionEffectId, option));
       }
     }
 
@@ -454,7 +471,7 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
 
   if (effectId === "play_top_card_from_foe_deck") {
     if (effect["targetSelector"] !== "chosenFoe") {
-      return [`Card ${cardId} uses unsupported foe-deck target ${String(effect["targetSelector"])}`];
+      return [`${subjectId} uses unsupported foe-deck target ${String(effect["targetSelector"])}`];
     }
 
     return [];
@@ -464,13 +481,13 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
     const errors: string[] = [];
     const amount = effect["amount"];
     if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      errors.push(`Card ${cardId} uses invalid damage amount ${String(amount)}`);
+      errors.push(`${subjectId} uses invalid damage amount ${String(amount)}`);
     }
 
     const target = effect["target"];
     if (!isEffectRecord(target) || target["selector"] !== "opponentPlayer") {
       const selector = isEffectRecord(target) ? target["selector"] : target;
-      errors.push(`Card ${cardId} uses unsupported damage target ${String(selector)}`);
+      errors.push(`${subjectId} uses unsupported damage target ${String(selector)}`);
     }
 
     return errors;
@@ -480,13 +497,13 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
     const errors: string[] = [];
     const amount = effect["amount"];
     if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      errors.push(`Card ${cardId} uses invalid healing amount ${String(amount)}`);
+      errors.push(`${subjectId} uses invalid healing amount ${String(amount)}`);
     }
 
     const target = effect["target"];
     if (!isEffectRecord(target) || target["selector"] !== "activePlayer") {
       const selector = isEffectRecord(target) ? target["selector"] : target;
-      errors.push(`Card ${cardId} uses unsupported healing target ${String(selector)}`);
+      errors.push(`${subjectId} uses unsupported healing target ${String(selector)}`);
     }
 
     return errors;
@@ -496,7 +513,7 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
     const errors: string[] = [];
     const lifeTotal = effect["lifeTotal"];
     if (typeof lifeTotal !== "number" || !Number.isSafeInteger(lifeTotal) || lifeTotal < 1) {
-      errors.push(`Card ${cardId} uses invalid life total ${String(lifeTotal)}`);
+      errors.push(`${subjectId} uses invalid life total ${String(lifeTotal)}`);
     }
 
     const target = effect["target"];
@@ -506,7 +523,7 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
       targetSelector !== "eachPlayerClockwiseFromActive"
     ) {
       const selector = isEffectRecord(target) ? target["selector"] : targetSelector;
-      errors.push(`Card ${cardId} uses unsupported set-life target ${String(selector)}`);
+      errors.push(`${subjectId} uses unsupported set-life target ${String(selector)}`);
     }
 
     return errors;
@@ -516,15 +533,15 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
     const errors: string[] = [];
     const lifeTotal = effect["lifeTotal"];
     if (typeof lifeTotal !== "number" || !Number.isSafeInteger(lifeTotal) || lifeTotal < 1) {
-      errors.push(`Card ${cardId} uses invalid life total ${String(lifeTotal)}`);
+      errors.push(`${subjectId} uses invalid life total ${String(lifeTotal)}`);
     }
 
     if (effect["timing"] !== "onMayhemResolve") {
-      errors.push(`Card ${cardId} uses unsupported MegaMayhem timing ${String(effect["timing"])}`);
+      errors.push(`${subjectId} uses unsupported MegaMayhem timing ${String(effect["timing"])}`);
     }
 
     if (effect["targetSelector"] !== "eachPlayerClockwiseFromActive") {
-      errors.push(`Card ${cardId} uses unsupported MegaMayhem target ${String(effect["targetSelector"])}`);
+      errors.push(`${subjectId} uses unsupported MegaMayhem target ${String(effect["targetSelector"])}`);
     }
 
     return errors;
@@ -540,15 +557,15 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
   ) {
     const errors: string[] = [];
     if (effect["timing"] !== "onMayhemResolve") {
-      errors.push(`Card ${cardId} uses unsupported Mayhem timing ${String(effect["timing"])}`);
+      errors.push(`${subjectId} uses unsupported Mayhem timing ${String(effect["timing"])}`);
     }
 
     if (effect["targetSelector"] !== "eachPlayerClockwiseFromActive") {
-      errors.push(`Card ${cardId} uses unsupported Mayhem target ${String(effect["targetSelector"])}`);
+      errors.push(`${subjectId} uses unsupported Mayhem target ${String(effect["targetSelector"])}`);
     }
 
     if (effectId === "toggle_status" && effect["statusId"] !== "dingler") {
-      errors.push(`Card ${cardId} uses unsupported status ${String(effect["statusId"])}`);
+      errors.push(`${subjectId} uses unsupported status ${String(effect["statusId"])}`);
     }
 
     return errors;
@@ -558,7 +575,7 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
     const errors: string[] = [];
     const amount = effect["amount"];
     if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      errors.push(`Card ${cardId} uses invalid attack damage amount ${String(amount)}`);
+      errors.push(`${subjectId} uses invalid attack damage amount ${String(amount)}`);
     }
 
     const target = effect["target"];
@@ -570,7 +587,7 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
       targetSelector !== "eachFoe"
     ) {
       const selector = isEffectRecord(target) ? target["selector"] : target;
-      errors.push(`Card ${cardId} uses unsupported attack target ${String(selector)}`);
+      errors.push(`${subjectId} uses unsupported attack target ${String(selector)}`);
     }
 
     return errors;
@@ -580,13 +597,13 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
     const errors: string[] = [];
     const amount = effect["amount"];
     if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      errors.push(`Card ${cardId} uses invalid attack damage amount ${String(amount)}`);
+      errors.push(`${subjectId} uses invalid attack damage amount ${String(amount)}`);
     }
 
     const target = effect["target"];
     if (!isEffectRecord(target) || target["selector"] !== "opponentPlayers") {
       const selector = isEffectRecord(target) ? target["selector"] : target;
-      errors.push(`Card ${cardId} uses unsupported multi-target attack target ${String(selector)}`);
+      errors.push(`${subjectId} uses unsupported multi-target attack target ${String(selector)}`);
     }
 
     return errors;
@@ -596,13 +613,13 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
     const errors: string[] = [];
     const amount = effect["amount"];
     if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      errors.push(`Card ${cardId} uses invalid Mayhem attack damage amount ${String(amount)}`);
+      errors.push(`${subjectId} uses invalid Mayhem attack damage amount ${String(amount)}`);
     }
 
     const target = effect["target"];
     if (!isEffectRecord(target) || target["selector"] !== "allPlayers") {
       const selector = isEffectRecord(target) ? target["selector"] : target;
-      errors.push(`Card ${cardId} uses unsupported Mayhem attack target ${String(selector)}`);
+      errors.push(`${subjectId} uses unsupported Mayhem attack target ${String(selector)}`);
     }
 
     return errors;
@@ -611,7 +628,7 @@ function validateSupportedEffectShape(cardId: string, effectId: string, effect: 
   if (effectId === "avoid_attack") {
     const destination = effect["destination"];
     if (effect["timing"] !== "onDefense" || (destination !== "discardSelf" && destination !== "topdeckSelf")) {
-      return [`Card ${cardId} uses unsupported defense branch ${String(destination)}`];
+      return [`${subjectId} uses unsupported defense branch ${String(destination)}`];
     }
 
     return [];

@@ -1,15 +1,7 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
-import type { CardInstance, GameState, PlayerState, TokenInstance } from "./setup.js";
-
-export interface EffectSourceContext {
-  sourceType: "card" | "wizardProperty";
-  playerId: PlayerState["playerId"];
-  cardInstanceId: string;
-  definitionId: string;
-  tokenInstanceId?: TokenInstance["instanceId"];
-  tokenDefinitionId?: TokenDefinition["tokenId"];
-}
+import { getEffectRuntimeHandler, type EffectExecutionResult, type EffectSourceContext } from "./effect-runtime-registry.js";
+import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export function executeOnPlayEffects(
   state: GameState,
@@ -281,21 +273,17 @@ function isSupportedMayhemRuntimeEffect(effect: Record<string, unknown>): boolea
   );
 }
 
-export type EffectExecutionResult =
-  | {
-      ok: true;
-    }
-  | {
-      ok: false;
-      error: string;
-    };
-
 function executeEffect(
   state: GameState,
   player: PlayerState,
   effect: Record<string, unknown>,
   source: EffectSourceContext,
 ): EffectExecutionResult {
+  const runtimeHandler = typeof effect["effectId"] === "string" ? getEffectRuntimeHandler(effect["effectId"]) : undefined;
+  if (runtimeHandler !== undefined) {
+    return runtimeHandler.execute(state, player, effect, source);
+  }
+
   if (effect["effectId"] === "gain_chips") {
     const amount = effect["amount"];
     if (typeof amount === "number" && Number.isSafeInteger(amount) && amount > 0) {
@@ -331,24 +319,6 @@ function executeEffect(
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
         effectId: "gain_chips_per_player_with_status",
-        amount,
-        sourceType: source.sourceType,
-      });
-    }
-
-    return { ok: true };
-  }
-
-  if (effect["effectId"] === "add_power") {
-    const amount = effect["amount"];
-    if (typeof amount === "number") {
-      state.turn.power += amount;
-      state.eventLog.push({
-        type: "effectAddPowerApplied",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: "add_power",
         amount,
         sourceType: source.sourceType,
       });
