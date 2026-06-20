@@ -37,7 +37,9 @@ test("initial game setup creates expected player and common zones", () => {
   assert.equal(state.common.limpWandStack.length, 15);
   assert.equal(state.common.deadWizardTokens.status, "available");
   assert.equal(state.common.deadWizardTokens.drawStack.length, 8);
-  const neutralDeadWizardToken = state.tokenDefinitions.get("esw2_dbg__dead_wizard_token_001");
+  const neutralDeadWizardToken = state.tokenDefinitions.get(
+    "esw2_dbg__dead_wizard_token_001"
+  );
   assert.equal(neutralDeadWizardToken?.kind, "deadWizardToken");
   assert.equal(neutralDeadWizardToken.victoryPoints, -3);
 
@@ -51,7 +53,10 @@ test("initial game setup creates expected player and common zones", () => {
     const wizardProperty = player.wizardProperties[0];
     assert.ok(wizardProperty);
     assert.equal(wizardProperty.ownerId, player.playerId);
-    assert.equal(state.tokenDefinitions.get(wizardProperty.definitionId)?.kind, "wizardProperty");
+    assert.equal(
+      state.tokenDefinitions.get(wizardProperty.definitionId)?.kind,
+      "wizardProperty"
+    );
   }
 });
 
@@ -68,7 +73,7 @@ test("dead wizard token setup order is reproducible for the same seed", () => {
 
   assert.deepEqual(
     tokenSnapshot(first.common.deadWizardTokens.drawStack),
-    tokenSnapshot(second.common.deadWizardTokens.drawStack),
+    tokenSnapshot(second.common.deadWizardTokens.drawStack)
   );
 });
 
@@ -104,7 +109,10 @@ test("v0 data pack loads the wizard property setup pool", () => {
     assert.equal(entry.count, 1);
     const definition = dataPack.tokenDefinitions.get(entry.tokenId);
     assert.equal(definition?.kind, "wizardProperty");
-    assert.equal(definition.engine?.playableInV0, executableWizardProperties.has(entry.tokenId));
+    assert.equal(
+      definition.engine?.playableInV0,
+      executableWizardProperties.has(entry.tokenId)
+    );
   }
 });
 
@@ -113,18 +121,30 @@ test("wizard property setup choice is deterministic and seed-dependent", () => {
   const firstRepeat = initializeGame({ rootDir, seed: 11111 });
   const second = initializeGame({ rootDir, seed: 22222 });
 
-  assert.deepEqual(selectedWizardProperties(first), selectedWizardProperties(firstRepeat));
-  assert.notDeepEqual(selectedWizardProperties(first), selectedWizardProperties(second));
+  assert.deepEqual(
+    selectedWizardProperties(first),
+    selectedWizardProperties(firstRepeat)
+  );
+  assert.notDeepEqual(
+    selectedWizardProperties(first),
+    selectedWizardProperties(second)
+  );
 });
 
 test("familiar-selection wizard property remains non-executable until familiar lifecycle exists", () => {
   const dataPack = loadV0DataPack(rootDir);
-  const definition = dataPack.tokenDefinitions.get("esw2_dbg__wizard_property_003");
+  const definition = dataPack.tokenDefinitions.get(
+    "esw2_dbg__wizard_property_003"
+  );
 
   assert.equal(definition?.kind, "wizardProperty");
   assert.equal(definition.engine?.playableInV0, false);
   assert.deepEqual(definition.engine?.effects, []);
-  assert.ok(definition.engine?.unsupportedMechanics.includes("wizard-property-setup-familiar-selection"));
+  assert.ok(
+    definition.engine?.unsupportedMechanics.includes(
+      "wizard-property-setup-familiar-selection"
+    )
+  );
 });
 
 test("starter deck definitions are independent physical instances per player", () => {
@@ -132,11 +152,18 @@ test("starter deck definitions are independent physical instances per player", (
   const firstPlayerStarter = ownedCards(state, "player-1");
   const secondPlayerStarter = ownedCards(state, "player-2");
 
-  assert.equal(countDefinition(firstPlayerStarter, "esw2_dbg__ocr_022"), 6);
-  assert.equal(countDefinition(secondPlayerStarter, "esw2_dbg__ocr_022"), 6);
+  assert.equal(countDefinition(firstPlayerStarter, "esw2_dbg__starter_002"), 6);
+  assert.equal(
+    countDefinition(secondPlayerStarter, "esw2_dbg__starter_002"),
+    6
+  );
 
-  const firstPlayerIds = new Set(firstPlayerStarter.map((card) => card.instanceId));
-  const secondPlayerIds = new Set(secondPlayerStarter.map((card) => card.instanceId));
+  const firstPlayerIds = new Set(
+    firstPlayerStarter.map((card) => card.instanceId)
+  );
+  const secondPlayerIds = new Set(
+    secondPlayerStarter.map((card) => card.instanceId)
+  );
 
   assert.equal(firstPlayerIds.size, 10);
   assert.equal(secondPlayerIds.size, 10);
@@ -144,32 +171,51 @@ test("starter deck definitions are independent physical instances per player", (
 });
 
 test("wizard property setup replaces exactly one owned starter Sign with Hrenalocka Wand", () => {
-  const dataPack = createWizardPropertySetupDataPack(loadV0DataPack(rootDir), "esw2_dbg__wizard_property_009");
+  const dataPack = createWizardPropertySetupDataPack(
+    loadV0DataPack(rootDir),
+    "esw2_dbg__wizard_property_009"
+  );
   const state = initializeGame({ dataPack, seed: 777 });
 
   for (const player of state.players) {
-    assert.equal(player.wizardProperties[0]?.definitionId, "esw2_dbg__wizard_property_009");
+    assert.equal(
+      player.wizardProperties[0]?.definitionId,
+      "esw2_dbg__wizard_property_009"
+    );
     const starterCards = ownedCards(state, player.playerId);
-    assert.equal(countDefinition(starterCards, "esw2_dbg__ocr_022"), 5);
-    assert.equal(countDefinition(starterCards, "krutagidon_wizard_property_009_hrenalocka_wand"), 1);
+    assert.equal(countDefinition(starterCards, "esw2_dbg__starter_002"), 5);
+    assert.equal(countDefinition(starterCards, "esw2_dbg__starter_004"), 1);
   }
 });
 
 test("wizard property setup grants Basic Trophy, first turn, and starting life override", () => {
   const state = initializeGame({ rootDir, seed: 777, playerCount: 10 });
   const propertyOwner = state.players.find((player) => {
-    return player.wizardProperties.some((property) => property.definitionId === "esw2_dbg__wizard_property_010");
+    return player.wizardProperties.some(
+      (property) => property.definitionId === "esw2_dbg__wizard_property_010"
+    );
   });
   assert.ok(propertyOwner);
 
   assert.equal(state.activePlayerId, propertyOwner.playerId);
   assert.equal(propertyOwner.life.current, 25);
   assert.equal(propertyOwner.life.max, 25);
-  assert.ok(propertyOwner.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"));
+  assert.ok(
+    propertyOwner.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    )
+  );
 
-  for (const otherPlayer of state.players.filter((player) => player.playerId !== propertyOwner.playerId)) {
+  for (const otherPlayer of state.players.filter(
+    (player) => player.playerId !== propertyOwner.playerId
+  )) {
     assert.equal(otherPlayer.life.current, 20);
-    assert.equal(otherPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
+    assert.equal(
+      otherPlayer.trophyLikeObjects.some(
+        (trophy) => trophy.trophyId === "basicTrophy"
+      ),
+      false
+    );
   }
 });
 
@@ -208,7 +254,9 @@ function cardSnapshot(cards: CardInstance[]): unknown[] {
   }));
 }
 
-function tokenSnapshot(tokens: GameState["players"][number]["wizardProperties"]): unknown[] {
+function tokenSnapshot(
+  tokens: GameState["players"][number]["wizardProperties"]
+): unknown[] {
   return tokens.map((token) => ({
     instanceId: token.instanceId,
     definitionId: token.definitionId,
@@ -224,17 +272,31 @@ function selectedWizardProperties(state: GameState): string[] {
   });
 }
 
-function ownedCards(state: GameState, ownerId: GameState["players"][number]["playerId"]): CardInstance[] {
-  const player = state.players.find((candidate) => candidate.playerId === ownerId);
+function ownedCards(
+  state: GameState,
+  ownerId: GameState["players"][number]["playerId"]
+): CardInstance[] {
+  const player = state.players.find(
+    (candidate) => candidate.playerId === ownerId
+  );
   assert.ok(player);
-  return [...player.deck, ...player.hand, ...player.discard, ...player.playedThisTurn, ...player.permanents];
+  return [
+    ...player.deck,
+    ...player.hand,
+    ...player.discard,
+    ...player.playedThisTurn,
+    ...player.permanents,
+  ];
 }
 
 function countDefinition(cards: CardInstance[], definitionId: string): number {
   return cards.filter((card) => card.definitionId === definitionId).length;
 }
 
-function createWizardPropertySetupDataPack(dataPack: LoadedDataPack, tokenId: string): LoadedDataPack {
+function createWizardPropertySetupDataPack(
+  dataPack: LoadedDataPack,
+  tokenId: string
+): LoadedDataPack {
   return {
     ...dataPack,
     tokenStacks: {

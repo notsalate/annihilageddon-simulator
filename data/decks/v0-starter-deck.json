@@ -6,19 +6,17 @@
   "mappingStatus": "supported",
   "entries": [
     {
-      "cardId": "esw2_dbg__ocr_022",
+      "cardId": "esw2_dbg__starter_002",
       "count": 6
     },
     {
-      "cardId": "esw2_dbg__ocr_021",
+      "cardId": "esw2_dbg__starter_001",
       "count": 1
     },
     {
-      "cardId": "esw2_dbg__ocr_023",
+      "cardId": "esw2_dbg__starter_003",
       "count": 3
     }
   ],
-  "notes": [
-    "Per-player starter deck: 6 Знак, 1 Сырная палочка, 3 Пшик."
-  ]
+  "notes": ["Per-player starter deck: 6 Знак, 1 Сырная палочка, 3 Пшик."]
 }

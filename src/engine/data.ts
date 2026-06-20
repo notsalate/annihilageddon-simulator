@@ -85,7 +85,9 @@ export interface WizardPropertyDefinition extends BaseTokenDefinition {
   };
 }
 
-export type TokenDefinition = DeadWizardTokenDefinition | WizardPropertyDefinition;
+export type TokenDefinition =
+  | DeadWizardTokenDefinition
+  | WizardPropertyDefinition;
 
 export interface TokenStackComposition {
   schemaVersion: number;
@@ -105,7 +107,8 @@ export interface DataPackManifest {
   schemaVersion: number;
   packId: string;
   runtimeSchema: "krutagidon.dataPack.v0";
-  cardsPath: string;
+  cardsPath?: string;
+  cardDefinitionPaths?: string[];
   tokensPath?: string;
   tokenDefinitionPaths?: string[];
   decks: {
@@ -156,10 +159,13 @@ export interface DataPackValidationOptions {
 
 export function loadV0DataPack(
   rootDir: string,
-  manifestPath = "data/decks/v0-first-batch-data-pack.json",
+  manifestPath = "data/decks/v0-first-batch-data-pack.json"
 ): LoadedDataPack {
   const manifest = readJsonFile<DataPackManifest>(rootDir, manifestPath);
-  const cardDefinitions = loadCardDefinitions(rootDir, manifest.cardsPath);
+  const cardDefinitions = loadCardDefinitions(
+    rootDir,
+    collectCardDefinitionPaths(manifest)
+  );
   const tokenDefinitionPaths = [
     ...(manifest.tokensPath === undefined ? [] : [manifest.tokensPath]),
     ...(manifest.tokenDefinitionPaths ?? []),
@@ -171,11 +177,23 @@ export function loadV0DataPack(
     cardDefinitions,
     tokenDefinitions,
     decks: {
-      starterDeck: readJsonFile<DeckComposition>(rootDir, manifest.decks.starterDeck),
+      starterDeck: readJsonFile<DeckComposition>(
+        rootDir,
+        manifest.decks.starterDeck
+      ),
       mainDeck: readJsonFile<DeckComposition>(rootDir, manifest.decks.mainDeck),
-      legendDeck: readJsonFile<DeckComposition>(rootDir, manifest.decks.legendDeck),
-      wildMagicStack: readJsonFile<DeckComposition>(rootDir, manifest.decks.wildMagicStack),
-      limpWandStack: readJsonFile<DeckComposition>(rootDir, manifest.decks.limpWandStack),
+      legendDeck: readJsonFile<DeckComposition>(
+        rootDir,
+        manifest.decks.legendDeck
+      ),
+      wildMagicStack: readJsonFile<DeckComposition>(
+        rootDir,
+        manifest.decks.wildMagicStack
+      ),
+      limpWandStack: readJsonFile<DeckComposition>(
+        rootDir,
+        manifest.decks.limpWandStack
+      ),
       familiarPool:
         manifest.decks.familiarPool === undefined
           ? undefined
@@ -185,18 +203,24 @@ export function loadV0DataPack(
       deadWizardTokens:
         manifest.tokenStacks?.deadWizardTokens === undefined
           ? undefined
-          : readJsonFile<TokenStackComposition>(rootDir, manifest.tokenStacks.deadWizardTokens),
+          : readJsonFile<TokenStackComposition>(
+              rootDir,
+              manifest.tokenStacks.deadWizardTokens
+            ),
       wizardProperties:
         manifest.tokenStacks?.wizardProperties === undefined
           ? undefined
-          : readJsonFile<TokenStackComposition>(rootDir, manifest.tokenStacks.wizardProperties),
+          : readJsonFile<TokenStackComposition>(
+              rootDir,
+              manifest.tokenStacks.wizardProperties
+            ),
     },
   };
 }
 
 export function validateExecutableDataPack(
   dataPack: LoadedDataPack,
-  options: DataPackValidationOptions = {},
+  options: DataPackValidationOptions = {}
 ): DataPackValidationResult {
   const errors: string[] = [];
   const mode = options.mode ?? "combat";
@@ -210,7 +234,7 @@ export function validateExecutableDataPack(
 
     if (definition.engine.unsupportedMechanics.length > 0) {
       errors.push(
-        `Card ${definition.cardId} has unsupported mechanics ${definition.engine.unsupportedMechanics.join(", ")}`,
+        `Card ${definition.cardId} has unsupported mechanics ${definition.engine.unsupportedMechanics.join(", ")}`
       );
     }
 
@@ -221,32 +245,48 @@ export function validateExecutableDataPack(
 
       const effectId = effect["effectId"];
       if (typeof effectId !== "string") {
-        errors.push(`Card ${definition.cardId} uses unsupported effect id ${String(effectId)}`);
+        errors.push(
+          `Card ${definition.cardId} uses unsupported effect id ${String(effectId)}`
+        );
         continue;
       }
 
       if (mode === "combat" && effectId.startsWith("fixture_")) {
-        errors.push(`Card ${definition.cardId} uses fixture effect id ${effectId} in combat data`);
+        errors.push(
+          `Card ${definition.cardId} uses fixture effect id ${effectId} in combat data`
+        );
         continue;
       }
 
       if (!isSupportedExecutableEffectId(effectId, mode)) {
-        errors.push(`Card ${definition.cardId} uses unsupported effect id ${effectId}`);
+        errors.push(
+          `Card ${definition.cardId} uses unsupported effect id ${effectId}`
+        );
         continue;
       }
 
-      errors.push(...validateSupportedEffectShape(`Card ${definition.cardId}`, effectId, effect));
+      errors.push(
+        ...validateSupportedEffectShape(
+          `Card ${definition.cardId}`,
+          effectId,
+          effect
+        )
+      );
     }
   }
 
   for (const definition of dataPack.tokenDefinitions.values()) {
-    if (definition.kind !== "wizardProperty" || definition.engine === undefined || !definition.engine.playableInV0) {
+    if (
+      definition.kind !== "wizardProperty" ||
+      definition.engine === undefined ||
+      !definition.engine.playableInV0
+    ) {
       continue;
     }
 
     if (definition.engine.unsupportedMechanics.length > 0) {
       errors.push(
-        `Token ${definition.tokenId} has unsupported mechanics ${definition.engine.unsupportedMechanics.join(", ")}`,
+        `Token ${definition.tokenId} has unsupported mechanics ${definition.engine.unsupportedMechanics.join(", ")}`
       );
     }
 
@@ -257,21 +297,33 @@ export function validateExecutableDataPack(
 
       const effectId = effect["effectId"];
       if (typeof effectId !== "string") {
-        errors.push(`Token ${definition.tokenId} uses unsupported effect id ${String(effectId)}`);
+        errors.push(
+          `Token ${definition.tokenId} uses unsupported effect id ${String(effectId)}`
+        );
         continue;
       }
 
       if (mode === "combat" && effectId.startsWith("fixture_")) {
-        errors.push(`Token ${definition.tokenId} uses fixture effect id ${effectId} in combat data`);
+        errors.push(
+          `Token ${definition.tokenId} uses fixture effect id ${effectId} in combat data`
+        );
         continue;
       }
 
       if (!isSupportedExecutableEffectId(effectId, mode)) {
-        errors.push(`Token ${definition.tokenId} uses unsupported effect id ${effectId}`);
+        errors.push(
+          `Token ${definition.tokenId} uses unsupported effect id ${effectId}`
+        );
         continue;
       }
 
-      errors.push(...validateSupportedEffectShape(`Token ${definition.tokenId}`, effectId, effect));
+      errors.push(
+        ...validateSupportedEffectShape(
+          `Token ${definition.tokenId}`,
+          effectId,
+          effect
+        )
+      );
     }
   }
 
@@ -290,8 +342,13 @@ function validateManifestRuntimePaths(manifest: DataPackManifest): string[] {
 
   for (const [fieldName, filePath] of collectManifestPaths(manifest)) {
     const normalizedPath = filePath.replaceAll("\\", "/");
-    if (normalizedPath === "data/import" || normalizedPath.startsWith("data/import/")) {
-      errors.push(`Manifest ${fieldName} references import-only path ${filePath}`);
+    if (
+      normalizedPath === "data/import" ||
+      normalizedPath.startsWith("data/import/")
+    ) {
+      errors.push(
+        `Manifest ${fieldName} references import-only path ${filePath}`
+      );
     }
   }
 
@@ -300,13 +357,22 @@ function validateManifestRuntimePaths(manifest: DataPackManifest): string[] {
 
 function collectManifestPaths(manifest: DataPackManifest): [string, string][] {
   const paths: [string, string][] = [
-    ["cardsPath", manifest.cardsPath],
     ["decks.starterDeck", manifest.decks.starterDeck],
     ["decks.mainDeck", manifest.decks.mainDeck],
     ["decks.legendDeck", manifest.decks.legendDeck],
     ["decks.wildMagicStack", manifest.decks.wildMagicStack],
     ["decks.limpWandStack", manifest.decks.limpWandStack],
   ];
+
+  if (manifest.cardsPath !== undefined) {
+    paths.push(["cardsPath", manifest.cardsPath]);
+  }
+
+  for (const [index, filePath] of collectCardDefinitionPaths(
+    manifest
+  ).entries()) {
+    paths.push([`cardDefinitionPaths[${index}]`, filePath]);
+  }
 
   if (manifest.decks.familiarPool !== undefined) {
     paths.push(["decks.familiarPool", manifest.decks.familiarPool]);
@@ -316,41 +382,73 @@ function collectManifestPaths(manifest: DataPackManifest): [string, string][] {
     paths.push(["tokensPath", manifest.tokensPath]);
   }
 
-  for (const [index, filePath] of (manifest.tokenDefinitionPaths ?? []).entries()) {
+  for (const [index, filePath] of (
+    manifest.tokenDefinitionPaths ?? []
+  ).entries()) {
     paths.push([`tokenDefinitionPaths[${index}]`, filePath]);
   }
 
   if (manifest.tokenStacks?.deadWizardTokens !== undefined) {
-    paths.push(["tokenStacks.deadWizardTokens", manifest.tokenStacks.deadWizardTokens]);
+    paths.push([
+      "tokenStacks.deadWizardTokens",
+      manifest.tokenStacks.deadWizardTokens,
+    ]);
   }
 
   if (manifest.tokenStacks?.wizardProperties !== undefined) {
-    paths.push(["tokenStacks.wizardProperties", manifest.tokenStacks.wizardProperties]);
+    paths.push([
+      "tokenStacks.wizardProperties",
+      manifest.tokenStacks.wizardProperties,
+    ]);
   }
 
   return paths;
 }
 
-function loadCardDefinitions(rootDir: string, cardsPath: string): ReadonlyMap<string, CardDefinition> {
-  const absoluteCardsPath = path.resolve(rootDir, cardsPath);
+function collectCardDefinitionPaths(manifest: DataPackManifest): string[] {
+  return [
+    ...(manifest.cardsPath === undefined ? [] : [manifest.cardsPath]),
+    ...(manifest.cardDefinitionPaths ?? []),
+  ];
+}
+
+function loadCardDefinitions(
+  rootDir: string,
+  cardDefinitionPaths: string[]
+): ReadonlyMap<string, CardDefinition> {
+  if (cardDefinitionPaths.length === 0) {
+    throw new Error(
+      "Data pack manifest does not define any card definition paths"
+    );
+  }
+
   const cards = new Map<string, CardDefinition>();
 
-  for (const fileName of readdirSync(absoluteCardsPath).sort()) {
-    if (!fileName.endsWith(".json") || fileName.startsWith("_")) {
-      continue;
-    }
+  for (const cardsPath of cardDefinitionPaths) {
+    assertRuntimePath("cardDefinitionPaths", cardsPath);
+    const absoluteCardsPath = path.resolve(rootDir, cardsPath);
 
-    const card = readJsonFile<CardDefinition>(absoluteCardsPath, fileName);
-    cards.set(card.cardId, card);
+    for (const fileName of readdirSync(absoluteCardsPath).sort()) {
+      if (!fileName.endsWith(".json") || fileName.startsWith("_")) {
+        continue;
+      }
+
+      const card = readJsonFile<CardDefinition>(absoluteCardsPath, fileName);
+      cards.set(card.cardId, card);
+    }
   }
 
   return cards;
 }
 
-function loadTokenDefinitions(rootDir: string, tokenDefinitionPaths: string[]): ReadonlyMap<string, TokenDefinition> {
+function loadTokenDefinitions(
+  rootDir: string,
+  tokenDefinitionPaths: string[]
+): ReadonlyMap<string, TokenDefinition> {
   const tokens = new Map<string, TokenDefinition>();
 
   for (const tokensPath of tokenDefinitionPaths) {
+    assertRuntimePath("tokenDefinitionPaths", tokensPath);
     const absoluteTokensPath = path.resolve(rootDir, tokensPath);
 
     for (const fileName of readdirSync(absoluteTokensPath).sort()) {
@@ -366,12 +464,27 @@ function loadTokenDefinitions(rootDir: string, tokenDefinitionPaths: string[]): 
   return tokens;
 }
 
+function assertRuntimePath(fieldName: string, filePath: string): void {
+  const normalizedPath = filePath.replaceAll("\\", "/");
+  if (
+    normalizedPath === "data/import" ||
+    normalizedPath.startsWith("data/import/")
+  ) {
+    throw new Error(
+      `Manifest ${fieldName} references import-only path ${filePath}`
+    );
+  }
+}
+
 function readJsonFile<T>(rootDir: string, filePath: string): T {
   const absolutePath = path.resolve(rootDir, filePath);
   return JSON.parse(readFileSync(absolutePath, "utf8")) as T;
 }
 
-function isSupportedExecutableEffectId(effectId: string, mode: "combat" | "fixture"): boolean {
+function isSupportedExecutableEffectId(
+  effectId: string,
+  mode: "combat" | "fixture"
+): boolean {
   if (getEffectRuntimeHandler(effectId) !== undefined) {
     return true;
   }
@@ -380,9 +493,11 @@ function isSupportedExecutableEffectId(effectId: string, mode: "combat" | "fixtu
     effectId === "heal" ||
     effectId === "set_life" ||
     effectId === "mega_mayhem_set_life" ||
-    effectId === "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem" ||
+    effectId ===
+      "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem" ||
     effectId === "mega_mayhem_each_player_toggle_dingler" ||
-    effectId === "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none" ||
+    effectId ===
+      "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none" ||
     effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
     effectId === "mayhem_each_player_discard_deck_then_destroy_from_discard" ||
     effectId === "avoid_attack" ||
@@ -412,24 +527,37 @@ function isSupportedExecutableEffectId(effectId: string, mode: "combat" | "fixtu
   );
 }
 
-function validateSupportedEffectShape(subjectId: string, effectId: string, effect: Record<string, unknown>): string[] {
+function validateSupportedEffectShape(
+  subjectId: string,
+  effectId: string,
+  effect: Record<string, unknown>
+): string[] {
   const runtimeHandler = getEffectRuntimeHandler(effectId);
   if (runtimeHandler !== undefined) {
     return runtimeHandler.validateShape(subjectId, effect);
   }
 
-  if (effectId === "reveal_top_card" && effect["source"] !== "activePlayerDeck") {
-    return [`${subjectId} uses unsupported reveal source ${String(effect["source"])}`];
+  if (
+    effectId === "reveal_top_card" &&
+    effect["source"] !== "activePlayerDeck"
+  ) {
+    return [
+      `${subjectId} uses unsupported reveal source ${String(effect["source"])}`,
+    ];
   }
 
   if (effectId === "play_top_card") {
     const errors: string[] = [];
     if (effect["source"] !== "activePlayerDeck") {
-      errors.push(`${subjectId} uses unsupported play-top source ${String(effect["source"])}`);
+      errors.push(
+        `${subjectId} uses unsupported play-top source ${String(effect["source"])}`
+      );
     }
 
     if (effect["destination"] !== "play") {
-      errors.push(`${subjectId} uses unsupported play-top destination ${String(effect["destination"])}`);
+      errors.push(
+        `${subjectId} uses unsupported play-top destination ${String(effect["destination"])}`
+      );
     }
 
     return errors;
@@ -449,13 +577,20 @@ function validateSupportedEffectShape(subjectId: string, effectId: string, effec
       }
 
       const optionEffectId = option["effectId"];
-      if (optionEffectId !== "add_power" && optionEffectId !== "play_top_card_from_foe_deck") {
-        errors.push(`${subjectId} uses unsupported Wild Magic option ${String(optionEffectId)}`);
+      if (
+        optionEffectId !== "add_power" &&
+        optionEffectId !== "play_top_card_from_foe_deck"
+      ) {
+        errors.push(
+          `${subjectId} uses unsupported Wild Magic option ${String(optionEffectId)}`
+        );
         continue;
       }
 
       if (typeof optionEffectId === "string") {
-        errors.push(...validateSupportedEffectShape(subjectId, optionEffectId, option));
+        errors.push(
+          ...validateSupportedEffectShape(subjectId, optionEffectId, option)
+        );
       }
     }
 
@@ -464,7 +599,9 @@ function validateSupportedEffectShape(subjectId: string, effectId: string, effec
 
   if (effectId === "play_top_card_from_foe_deck") {
     if (effect["targetSelector"] !== "chosenFoe") {
-      return [`${subjectId} uses unsupported foe-deck target ${String(effect["targetSelector"])}`];
+      return [
+        `${subjectId} uses unsupported foe-deck target ${String(effect["targetSelector"])}`,
+      ];
     }
 
     return [];
@@ -473,14 +610,20 @@ function validateSupportedEffectShape(subjectId: string, effectId: string, effec
   if (effectId === "heal") {
     const errors: string[] = [];
     const amount = effect["amount"];
-    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
+    if (
+      typeof amount !== "number" ||
+      !Number.isSafeInteger(amount) ||
+      amount <= 0
+    ) {
       errors.push(`${subjectId} uses invalid healing amount ${String(amount)}`);
     }
 
     const target = effect["target"];
     if (!isEffectRecord(target) || target["selector"] !== "activePlayer") {
       const selector = isEffectRecord(target) ? target["selector"] : target;
-      errors.push(`${subjectId} uses unsupported healing target ${String(selector)}`);
+      errors.push(
+        `${subjectId} uses unsupported healing target ${String(selector)}`
+      );
     }
 
     return errors;
@@ -489,7 +632,11 @@ function validateSupportedEffectShape(subjectId: string, effectId: string, effec
   if (effectId === "set_life") {
     const errors: string[] = [];
     const lifeTotal = effect["lifeTotal"];
-    if (typeof lifeTotal !== "number" || !Number.isSafeInteger(lifeTotal) || lifeTotal < 1) {
+    if (
+      typeof lifeTotal !== "number" ||
+      !Number.isSafeInteger(lifeTotal) ||
+      lifeTotal < 1
+    ) {
       errors.push(`${subjectId} uses invalid life total ${String(lifeTotal)}`);
     }
 
@@ -499,8 +646,12 @@ function validateSupportedEffectShape(subjectId: string, effectId: string, effec
       (!isEffectRecord(target) || target["selector"] !== "activePlayer") &&
       targetSelector !== "eachPlayerClockwiseFromActive"
     ) {
-      const selector = isEffectRecord(target) ? target["selector"] : targetSelector;
-      errors.push(`${subjectId} uses unsupported set-life target ${String(selector)}`);
+      const selector = isEffectRecord(target)
+        ? target["selector"]
+        : targetSelector;
+      errors.push(
+        `${subjectId} uses unsupported set-life target ${String(selector)}`
+      );
     }
 
     return errors;
@@ -509,40 +660,56 @@ function validateSupportedEffectShape(subjectId: string, effectId: string, effec
   if (effectId === "mega_mayhem_set_life") {
     const errors: string[] = [];
     const lifeTotal = effect["lifeTotal"];
-    if (typeof lifeTotal !== "number" || !Number.isSafeInteger(lifeTotal) || lifeTotal < 1) {
+    if (
+      typeof lifeTotal !== "number" ||
+      !Number.isSafeInteger(lifeTotal) ||
+      lifeTotal < 1
+    ) {
       errors.push(`${subjectId} uses invalid life total ${String(lifeTotal)}`);
     }
 
     if (effect["timing"] !== "onMayhemResolve") {
-      errors.push(`${subjectId} uses unsupported MegaMayhem timing ${String(effect["timing"])}`);
+      errors.push(
+        `${subjectId} uses unsupported MegaMayhem timing ${String(effect["timing"])}`
+      );
     }
 
     if (effect["targetSelector"] !== "eachPlayerClockwiseFromActive") {
-      errors.push(`${subjectId} uses unsupported MegaMayhem target ${String(effect["targetSelector"])}`);
+      errors.push(
+        `${subjectId} uses unsupported MegaMayhem target ${String(effect["targetSelector"])}`
+      );
     }
 
     return errors;
   }
 
   if (
-    effectId === "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem" ||
+    effectId ===
+      "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem" ||
     effectId === "mega_mayhem_each_player_toggle_dingler" ||
     effectId === "toggle_status" ||
-    effectId === "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none" ||
+    effectId ===
+      "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none" ||
     effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
     effectId === "mayhem_each_player_discard_deck_then_destroy_from_discard"
   ) {
     const errors: string[] = [];
     if (effect["timing"] !== "onMayhemResolve") {
-      errors.push(`${subjectId} uses unsupported Mayhem timing ${String(effect["timing"])}`);
+      errors.push(
+        `${subjectId} uses unsupported Mayhem timing ${String(effect["timing"])}`
+      );
     }
 
     if (effect["targetSelector"] !== "eachPlayerClockwiseFromActive") {
-      errors.push(`${subjectId} uses unsupported Mayhem target ${String(effect["targetSelector"])}`);
+      errors.push(
+        `${subjectId} uses unsupported Mayhem target ${String(effect["targetSelector"])}`
+      );
     }
 
     if (effectId === "toggle_status" && effect["statusId"] !== "dingler") {
-      errors.push(`${subjectId} uses unsupported status ${String(effect["statusId"])}`);
+      errors.push(
+        `${subjectId} uses unsupported status ${String(effect["statusId"])}`
+      );
     }
 
     return errors;
@@ -550,8 +717,13 @@ function validateSupportedEffectShape(subjectId: string, effectId: string, effec
 
   if (effectId === "avoid_attack") {
     const destination = effect["destination"];
-    if (effect["timing"] !== "onDefense" || (destination !== "discardSelf" && destination !== "topdeckSelf")) {
-      return [`${subjectId} uses unsupported defense branch ${String(destination)}`];
+    if (
+      effect["timing"] !== "onDefense" ||
+      (destination !== "discardSelf" && destination !== "topdeckSelf")
+    ) {
+      return [
+        `${subjectId} uses unsupported defense branch ${String(destination)}`,
+      ];
     }
 
     return [];

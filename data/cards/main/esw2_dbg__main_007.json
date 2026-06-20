@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_007",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_007.json",
+    "image": "assets/cards/main/esw2_dbg__main_007.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_007.md"
+  },
+  "visible": {
+    "nameRu": "Ламповое желание",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": ["spell"],
+    "textRu": "+3 мощи\nЗащита: можешь положить эту карту на верх своей колоды, лицевой стороной вверх, чтобы избежать атаки.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "partial",
+    "playableInV0": false,
+    "needsEffectMapping": true,
+    "cardKind": "normal",
+    "cardTypes": ["spell"],
+    "cost": 5,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 3
+      }
+    ],
+    "unsupportedMechanics": [
+      {
+        "mechanic": "defense_face_up_topdeck",
+        "reason": "В v0 zones пока нет состояния face-up карты на верху колоды; маппинг как обычный topdeck изменил бы поведение.",
+        "visibleText": "Защита: можешь положить эту карту на верх своей колоды, лицевой стороной вверх, чтобы избежать атаки."
+      }
+    ]
+  }
+}

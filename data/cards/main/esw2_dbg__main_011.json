@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_011",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_011.json",
+    "image": "assets/cards/main/esw2_dbg__main_011.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_011.md"
+  },
+  "visible": {
+    "nameRu": "Желатиновый сисяк",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "textRu": "Постоянка: +1 мощь",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "cost": 5,
+    "victoryPoints": 1,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "ongoing_add_power",
+        "timing": "whileControlled",
+        "amount": 1
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

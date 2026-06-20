@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_008",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_008.json",
+    "image": "assets/cards/legend/esw2_dbg__legend_008.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_008.md"
+  },
+  "visible": {
+    "nameRu": "Палочка-ушаталочка",
+    "cost": 20,
+    "victoryPoints": 7,
+    "typeRu": "Легенда-Сокровище",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "textRu": "+8 мощи\nАтака: нанеси 1 урон выбранному врагу. Если он от этого подох, ты побеждаешь в игре (а все остальные могут лососнуть тунца).",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "partial",
+    "playableInV0": false,
+    "needsEffectMapping": true,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "cost": 20,
+    "victoryPoints": 7,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 8
+      },
+      {
+        "effectId": "attack_damage",
+        "targetSelector": "chosenFoe",
+        "timing": "onPlay",
+        "amount": 1
+      }
+    ],
+    "unsupportedMechanics": [
+      {
+        "mechanic": "alternate_win_on_kill",
+        "reason": "Мгновенная победа конкретной карты вне текущей v0 модели условий конца партии и scoring; урон замаплен, мгновенная победа не замаплена.",
+        "visibleText": "Если он от этого подох, ты побеждаешь в игре."
+      }
+    ]
+  }
+}

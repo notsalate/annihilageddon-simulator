@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_017",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_017.json",
+    "image": "assets/cards/main/esw2_dbg__main_017.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_017.md"
+  },
+  "visible": {
+    "nameRu": "Ведьмин подарочек",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "textRu": "Возьми 1 карту.\n+1 мощь за каждую твою постоянку.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "cost": 5,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "draw_cards",
+        "timing": "onPlay",
+        "amount": 1
+      },
+      {
+        "effectId": "add_power_per_controlled_permanent",
+        "timing": "onPlay",
+        "amountPerPermanent": 1
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

@@ -6,91 +6,91 @@
   "mappingStatus": "supported-first-batch-fixture",
   "entries": [
     {
-      "cardId": "esw2_dbg__ocr_001",
+      "cardId": "esw2_dbg__main_001",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_002",
+      "cardId": "esw2_dbg__main_002",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_004",
+      "cardId": "esw2_dbg__main_004",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_005",
+      "cardId": "esw2_dbg__main_005",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_006",
+      "cardId": "esw2_dbg__main_006",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_008",
+      "cardId": "esw2_dbg__main_008",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_009",
+      "cardId": "esw2_dbg__main_009",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_010",
+      "cardId": "esw2_dbg__main_010",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_011",
+      "cardId": "esw2_dbg__main_011",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_012",
+      "cardId": "esw2_dbg__main_012",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_013",
+      "cardId": "esw2_dbg__main_013",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_014",
+      "cardId": "esw2_dbg__main_014",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_015",
+      "cardId": "esw2_dbg__main_015",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_016",
+      "cardId": "esw2_dbg__main_016",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_017",
+      "cardId": "esw2_dbg__main_017",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_018",
+      "cardId": "esw2_dbg__main_018",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_019",
+      "cardId": "esw2_dbg__main_019",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_003",
+      "cardId": "esw2_dbg__main_003",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_028",
+      "cardId": "esw2_dbg__main_020",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_029",
+      "cardId": "esw2_dbg__main_021",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_031",
+      "cardId": "esw2_dbg__main_023",
       "count": 2
     }
   ],
   "notes": [
-    "First-batch fixture deck. Excludes partial card esw2_dbg__ocr_007."
+    "First-batch fixture deck. Excludes partial card esw2_dbg__main_007."
   ]
 }

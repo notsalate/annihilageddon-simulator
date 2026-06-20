@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_011",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_011.json",
+    "image": "assets/cards/legend/esw2_dbg__legend_011.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_011.md"
+  },
+  "visible": {
+    "nameRu": "Гусыня, королева-мать",
+    "cost": 10,
+    "victoryPoints": 0,
+    "typeRu": "Легенда-Тварь",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "creature"],
+    "textRu": "+1 мощь\n+2 ПО за каждую легенду, которой ты владеешь.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "creature"],
+    "cost": 10,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 1
+      },
+      {
+        "effectId": "endgame_vp_per_owned_legend",
+        "timing": "scoring",
+        "amountPerOwnedLegend": 2
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

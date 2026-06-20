@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_010",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_010.json",
+    "image": "assets/cards/legend/esw2_dbg__legend_010.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_010.md"
+  },
+  "visible": {
+    "nameRu": "Виагрус, твёрдый лорд",
+    "cost": 13,
+    "victoryPoints": 5,
+    "typeRu": "Легенда-Волшебник",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "textRu": "Постоянка: в начале своего хода можешь получить на руку 1 вялую палочку из стопки.\nВсякий раз, когда играешь вялую палочку, +3 мощи.\nВ конце игры твои вялые палочки приносят тебе ПО, а не отнимают их.",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "cost": 13,
+    "victoryPoints": 5,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "ongoing_start_turn_optional_gain_limp_wand_to_hand",
+        "destination": "hand",
+        "timing": "startOfControllerTurn",
+        "amount": 1,
+        "chooser": "controller"
+      },
+      {
+        "effectId": "ongoing_add_power_when_playing_limp_wand",
+        "timing": "afterControllerPlaysCard",
+        "amount": 3,
+        "cardKind": "limpWand"
+      },
+      {
+        "effectId": "endgame_limp_wands_score_positive",
+        "scoreMode": "absolutePositiveVictoryPoints",
+        "appliesToOwnedCardKind": "limpWand",
+        "timing": "scoring"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

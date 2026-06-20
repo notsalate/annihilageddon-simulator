@@ -6,43 +6,43 @@
   "mappingStatus": "supported-first-batch-fixture",
   "entries": [
     {
-      "cardId": "esw2_dbg__ocr_025",
+      "cardId": "esw2_dbg__legend_001",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_026",
+      "cardId": "esw2_dbg__legend_002",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_027",
+      "cardId": "esw2_dbg__legend_003",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_032",
+      "cardId": "esw2_dbg__legend_004",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_034",
+      "cardId": "esw2_dbg__legend_006",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_035",
+      "cardId": "esw2_dbg__legend_007",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_037",
+      "cardId": "esw2_dbg__legend_009",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_038",
+      "cardId": "esw2_dbg__legend_010",
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__ocr_039",
+      "cardId": "esw2_dbg__legend_011",
       "count": 2
     }
   ],
   "notes": [
-    "First-batch fixture deck. Excludes partial cards esw2_dbg__ocr_030, esw2_dbg__ocr_033, and esw2_dbg__ocr_036."
+    "First-batch fixture deck. Excludes partial cards esw2_dbg__main_022, esw2_dbg__legend_005, and esw2_dbg__legend_008."
   ]
 }

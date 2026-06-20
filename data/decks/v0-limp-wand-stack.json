@@ -6,11 +6,9 @@
   "mappingStatus": "supported",
   "entries": [
     {
-      "cardId": "esw2_dbg__ocr_024",
+      "cardId": "esw2_dbg__special_002",
       "count": 15
     }
   ],
-  "notes": [
-    "Russian rules stack size: 15."
-  ]
+  "notes": ["Russian rules stack size: 15."]
 }

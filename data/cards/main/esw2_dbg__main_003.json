@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_003",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_003.json",
+    "image": "assets/cards/main/esw2_dbg__main_003.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_003.md"
+  },
+  "visible": {
+    "nameRu": "Глистомаг",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "textRu": "+2 мощи\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, можешь уничтожить 1 карту с руки.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "cost": 3,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 2
+      },
+      {
+        "effectId": "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
+        "defenseCost": {
+          "effectId": "discard_self"
+        },
+        "timing": "defense",
+        "avoids": "attack",
+        "optionalFollowup": {
+          "sourceZones": "hand",
+          "effectId": "destroy_own_cards",
+          "amount": 1,
+          "chooser": "defendingPlayer"
+        }
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

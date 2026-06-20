@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_019",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_019.json",
+    "image": "assets/cards/main/esw2_dbg__main_019.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_019.md"
+  },
+  "visible": {
+    "nameRu": "Длань творца",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Место",
+    "cardKind": "normal",
+    "cardTypes": ["location"],
+    "textRu": "Постоянка: +1 к пределу руки.",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["location"],
+    "cost": 6,
+    "victoryPoints": 2,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "ongoing_hand_refill_bonus",
+        "timing": "whileControlled",
+        "amount": 1
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

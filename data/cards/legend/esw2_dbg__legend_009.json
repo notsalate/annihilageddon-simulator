@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_009",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_009.json",
+    "image": "assets/cards/legend/esw2_dbg__legend_009.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_009.md"
+  },
+  "visible": {
+    "nameRu": "Волшебный кролик",
+    "cost": 17,
+    "victoryPoints": 6,
+    "typeRu": "Легенда-Тварь",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "creature"],
+    "textRu": "Возьми 3 карты.\nАтака: нанеси 20 урона каждому врагу.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "creature"],
+    "cost": 17,
+    "victoryPoints": 6,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "draw_cards",
+        "timing": "onPlay",
+        "amount": 3
+      },
+      {
+        "effectId": "attack_damage",
+        "targetSelector": "eachFoe",
+        "timing": "onPlay",
+        "amount": 20
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__starter_002",
+  "source": {
+    "draft": "data/import/cards/starter/drafts/esw2_dbg__starter_002.json",
+    "image": "assets/cards/starter/esw2_dbg__starter_002.png",
+    "text": "data/import/cards/starter/texts/esw2_dbg__starter_002.md"
+  },
+  "visible": {
+    "nameRu": "Знак",
+    "cost": 0,
+    "victoryPoints": 0,
+    "typeRu": "Затравка",
+    "cardKind": "starter",
+    "cardTypes": [],
+    "textRu": "+1 мощь",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "starter",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 1
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

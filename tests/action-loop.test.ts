@@ -22,15 +22,23 @@ const rootDir = process.cwd();
 
 test("active player can play a card from hand through the action loop", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
 
-  const playableCard = activePlayer.hand.find((card) => card.definitionId === "esw2_dbg__ocr_022");
+  const playableCard = activePlayer.hand.find(
+    (card) => card.definitionId === "esw2_dbg__starter_002"
+  );
   assert.ok(playableCard);
 
   const legalActions = listLegalActions(state);
   assert.ok(
-    legalActions.some((action) => action.type === "playCard" && action.cardInstanceId === playableCard.instanceId),
+    legalActions.some(
+      (action) =>
+        action.type === "playCard" &&
+        action.cardInstanceId === playableCard.instanceId
+    )
   );
 
   const result = applyAction(state, {
@@ -53,17 +61,21 @@ test("active player can play a card from hand through the action loop", () => {
         event.ownerBefore === activePlayer.playerId &&
         event.ownerAfter === activePlayer.playerId
       );
-    }),
+    })
   );
   assert.equal(state.eventLog.at(-1)?.type, "cardPlayed");
 });
 
 test("playing an add-power card records an immediate effect consequence", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
 
-  const playableCard = activePlayer.hand.find((card) => card.definitionId === "esw2_dbg__ocr_022");
+  const playableCard = activePlayer.hand.find(
+    (card) => card.definitionId === "esw2_dbg__starter_002"
+  );
   assert.ok(playableCard);
 
   const result = applyAction(state, {
@@ -101,7 +113,9 @@ test("illegal actions are rejected without changing game state", () => {
 
 test("active player can buy an affordable market card into discard", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
 
   for (const card of [...activePlayer.hand]) {
@@ -111,10 +125,14 @@ test("active player can buy an affordable market card into discard", () => {
     });
   }
 
-  const buyAction = listLegalActions(state).find((action) => action.type === "buyMarketCard");
+  const buyAction = listLegalActions(state).find(
+    (action) => action.type === "buyMarketCard"
+  );
   assert.ok(buyAction);
 
-  const marketCard = state.common.market.find((card) => card.instanceId === buyAction.cardInstanceId);
+  const marketCard = state.common.market.find(
+    (card) => card.instanceId === buyAction.cardInstanceId
+  );
   assert.ok(marketCard);
   const powerBeforeBuy = state.turn.power;
   const cost = state.cardDefinitions.get(marketCard.definitionId)?.engine.cost;
@@ -135,22 +153,35 @@ test("market chip marker adds chips to every marked card in that market during M
   const state = initializeGame({ rootDir, seed: 60615 });
   const markedInMarket: CardInstance = {
     instanceId: "fixture-marked-in-market",
-    definitionId: "esw2_dbg__ocr_012",
+    definitionId: "esw2_dbg__main_012",
     ownerId: "common",
     marketChips: 0,
   };
   const markedMarketFlowCard: CardInstance = {
     instanceId: "fixture-marked-market-flow",
-    definitionId: "esw2_dbg__ocr_012",
+    definitionId: "esw2_dbg__main_012",
     ownerId: "common",
     marketChips: 0,
   };
   const fillerCards = state.common.market
-    .filter((card) => state.cardDefinitions.get(card.definitionId)?.engine.marketChipMarker !== true)
+    .filter(
+      (card) =>
+        state.cardDefinitions.get(card.definitionId)?.engine
+          .marketChipMarker !== true
+    )
     .slice(0, 3);
   assert.equal(fillerCards.length, 3);
-  state.common.market.splice(0, state.common.market.length, markedInMarket, ...fillerCards);
-  state.common.mainDeck.splice(0, state.common.mainDeck.length, markedMarketFlowCard);
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    markedInMarket,
+    ...fillerCards
+  );
+  state.common.mainDeck.splice(
+    0,
+    state.common.mainDeck.length,
+    markedMarketFlowCard
+  );
 
   const result = applyAction(state, {
     type: "endTurn",
@@ -162,20 +193,30 @@ test("market chip marker adds chips to every marked card in that market during M
   assert.equal(markedMarketFlowCard.marketChips, 1);
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "marketChipAdded" && event.cardInstanceId === markedInMarket.instanceId && event.amount === 1;
-    }),
+      return (
+        event.type === "marketChipAdded" &&
+        event.cardInstanceId === markedInMarket.instanceId &&
+        event.amount === 1
+      );
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "marketChipAdded" && event.cardInstanceId === markedMarketFlowCard.instanceId && event.amount === 1;
-    }),
+      return (
+        event.type === "marketChipAdded" &&
+        event.cardInstanceId === markedMarketFlowCard.instanceId &&
+        event.amount === 1
+      );
+    })
   );
 });
 
 test("turn-start Market Flow adds a normal main-deck card to the main market", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const marketFlowCard = state.common.market.find((card) => {
-    return state.cardDefinitions.get(card.definitionId)?.engine.cardKind === "normal";
+    return (
+      state.cardDefinitions.get(card.definitionId)?.engine.cardKind === "normal"
+    );
   });
   assert.ok(marketFlowCard);
   state.common.market.splice(0, 1);
@@ -189,8 +230,11 @@ test("turn-start Market Flow adds a normal main-deck card to the main market", (
   assert.equal(state.common.market.includes(marketFlowCard), true);
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "marketFlowCardAdded" && event.cardInstanceId === marketFlowCard.instanceId;
-    }),
+      return (
+        event.type === "marketFlowCardAdded" &&
+        event.cardInstanceId === marketFlowCard.instanceId
+      );
+    })
   );
 });
 
@@ -201,14 +245,23 @@ test("megaMayhem revealed during Market Flow executes its mapped onMayhemResolve
   }
   const megaMayhem: CardInstance = {
     instanceId: "fixture-mega-mayhem-set-life",
-    definitionId: "esw2_dbg__ocr_027",
+    definitionId: "esw2_dbg__legend_003",
     ownerId: "common",
     marketChips: 0,
   };
   const legendFiller = state.common.legendMarket[0];
   assert.ok(legendFiller);
-  state.common.legendMarket.splice(0, state.common.legendMarket.length, ...state.common.legendMarket.slice(0, 2));
-  state.common.legendDeck.splice(0, state.common.legendDeck.length, megaMayhem, legendFiller);
+  state.common.legendMarket.splice(
+    0,
+    state.common.legendMarket.length,
+    ...state.common.legendMarket.slice(0, 2)
+  );
+  state.common.legendDeck.splice(
+    0,
+    state.common.legendDeck.length,
+    megaMayhem,
+    legendFiller
+  );
 
   const result = applyAction(state, {
     type: "endTurn",
@@ -216,11 +269,17 @@ test("megaMayhem revealed during Market Flow executes its mapped onMayhemResolve
 
   assert.equal(result.ok, true);
   assert.equal(state.common.destroyedMegaMayhem.includes(megaMayhem), true);
-  assert.equal(state.players.every((player) => player.life.current === 5), true);
+  assert.equal(
+    state.players.every((player) => player.life.current === 5),
+    true
+  );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "mayhemResolved" && event.cardInstanceId === megaMayhem.instanceId;
-    }),
+      return (
+        event.type === "mayhemResolved" &&
+        event.cardInstanceId === megaMayhem.instanceId
+      );
+    })
   );
 });
 
@@ -229,9 +288,12 @@ test("mayhem revealed during Market Flow resolves and Market Flow continues with
   const mayhemDefinition = createFixtureCardDefinition(
     "fixture-market-flow-mayhem-add-power",
     [{ effectId: "add_power", timing: "onMayhemResolve", amount: 2 }],
-    { cardKind: "mayhem" },
+    { cardKind: "mayhem" }
   );
-  const normalDefinition = createFixtureCardDefinition("fixture-market-flow-normal-card", []);
+  const normalDefinition = createFixtureCardDefinition(
+    "fixture-market-flow-normal-card",
+    []
+  );
   state.cardDefinitions = new Map([
     ...state.cardDefinitions,
     [mayhemDefinition.cardId, mayhemDefinition],
@@ -249,8 +311,17 @@ test("mayhem revealed during Market Flow resolves and Market Flow continues with
     ownerId: "common",
     marketChips: 0,
   };
-  state.common.market.splice(0, state.common.market.length, ...state.common.market.slice(0, 4));
-  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem, normalCard);
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(
+    0,
+    state.common.mainDeck.length,
+    mayhem,
+    normalCard
+  );
 
   const result = applyAction(state, {
     type: "endTurn",
@@ -262,9 +333,15 @@ test("mayhem revealed during Market Flow resolves and Market Flow continues with
   assert.equal(state.common.market.includes(normalCard), true);
   assert.equal(state.common.destroyedMayhem.at(-1), mayhem);
   assertEventOrder(state, [
-    (event) => event.type === "mayhemResolved" && event.cardInstanceId === mayhem.instanceId,
-    (event) => event.type === "mayhemDestroyed" && event.cardInstanceId === mayhem.instanceId,
-    (event) => event.type === "marketFlowCardAdded" && event.cardInstanceId === normalCard.instanceId,
+    (event) =>
+      event.type === "mayhemResolved" &&
+      event.cardInstanceId === mayhem.instanceId,
+    (event) =>
+      event.type === "mayhemDestroyed" &&
+      event.cardInstanceId === mayhem.instanceId,
+    (event) =>
+      event.type === "marketFlowCardAdded" &&
+      event.cardInstanceId === normalCard.instanceId,
   ]);
 });
 
@@ -282,8 +359,12 @@ test("Market Flow interface keeps setup Mayhem passive and turn Mayhem active", 
   assert.equal(setupState.common.destroyedMayhem.at(-1), setupMayhem);
   assert.equal(setupState.common.market.includes(setupNormal), true);
   assert.equal(
-    setupState.eventLog.some((event) => event.type === "mayhemResolved" && event.cardInstanceId === setupMayhem.instanceId),
-    false,
+    setupState.eventLog.some(
+      (event) =>
+        event.type === "mayhemResolved" &&
+        event.cardInstanceId === setupMayhem.instanceId
+    ),
+    false
   );
 
   const turnState = createMarketFlowModeFixture();
@@ -299,9 +380,15 @@ test("Market Flow interface keeps setup Mayhem passive and turn Mayhem active", 
   assert.equal(turnState.common.destroyedMayhem.at(-1), turnMayhem);
   assert.equal(turnState.common.market.includes(turnNormal), true);
   assertEventOrder(turnState, [
-    (event) => event.type === "mayhemResolved" && event.cardInstanceId === turnMayhem.instanceId,
-    (event) => event.type === "mayhemDestroyed" && event.cardInstanceId === turnMayhem.instanceId,
-    (event) => event.type === "marketFlowCardAdded" && event.cardInstanceId === turnNormal.instanceId,
+    (event) =>
+      event.type === "mayhemResolved" &&
+      event.cardInstanceId === turnMayhem.instanceId,
+    (event) =>
+      event.type === "mayhemDestroyed" &&
+      event.cardInstanceId === turnMayhem.instanceId,
+    (event) =>
+      event.type === "marketFlowCardAdded" &&
+      event.cardInstanceId === turnNormal.instanceId,
   ]);
 });
 
@@ -317,7 +404,10 @@ test("Market Flow reports main deck exhaustion without starting the next turn", 
   assert.equal(result.ok, true);
   assert.equal(result.gameEndReason, "mainDeckExhausted");
   assert.equal(state.eventLog.at(-1)?.type, "marketFlowFailed");
-  assert.equal(state.eventLog.some((event) => event.type === "turnStarted"), false);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "turnStarted"),
+    false
+  );
 });
 
 test("Market Flow reports legend deck exhaustion without starting the next turn", () => {
@@ -332,7 +422,10 @@ test("Market Flow reports legend deck exhaustion without starting the next turn"
   assert.equal(result.ok, true);
   assert.equal(result.gameEndReason, "legendDeckExhausted");
   assert.equal(state.eventLog.at(-1)?.type, "marketFlowFailed");
-  assert.equal(state.eventLog.some((event) => event.type === "turnStarted"), false);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "turnStarted"),
+    false
+  );
 });
 
 test("unsupported Mayhem effect fails during Market Flow instead of becoming a silent no-op", () => {
@@ -368,7 +461,10 @@ test("unsupported Mayhem effect fails during Market Flow instead of becoming a s
       unsupportedMechanics: [],
     },
   };
-  state.cardDefinitions = new Map([...state.cardDefinitions, [unsupportedMayhemDefinition.cardId, unsupportedMayhemDefinition]]);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [unsupportedMayhemDefinition.cardId, unsupportedMayhemDefinition],
+  ]);
   const unsupportedMayhem: CardInstance = {
     instanceId: "fixture-unsupported-mayhem-instance",
     definitionId: unsupportedMayhemDefinition.cardId,
@@ -376,20 +472,29 @@ test("unsupported Mayhem effect fails during Market Flow instead of becoming a s
     marketChips: 0,
   };
   state.common.market.splice(0, 1);
-  state.common.mainDeck.splice(0, state.common.mainDeck.length, unsupportedMayhem);
+  state.common.mainDeck.splice(
+    0,
+    state.common.mainDeck.length,
+    unsupportedMayhem
+  );
 
   const result = applyAction(state, {
     type: "endTurn",
   });
 
   assert.equal(result.ok, false);
-  assert.match(result.error, /Unsupported Mayhem effect id unsupported_mayhem_runtime_effect/);
+  assert.match(
+    result.error,
+    /Unsupported Mayhem effect id unsupported_mayhem_runtime_effect/
+  );
   assert.equal(state.common.destroyedMayhem.includes(unsupportedMayhem), false);
 });
 
 test("active player can buy wild magic from its stack into discard", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
 
   for (const card of [...activePlayer.hand]) {
@@ -400,7 +505,9 @@ test("active player can buy wild magic from its stack into discard", () => {
   }
 
   const wildMagicAction = listLegalActions(state).find((action) => {
-    return action.type === "buyMarketCard" && action.source === "wildMagicStack";
+    return (
+      action.type === "buyMarketCard" && action.source === "wildMagicStack"
+    );
   });
   assert.ok(wildMagicAction);
 
@@ -415,28 +522,43 @@ test("active player can buy wild magic from its stack into discard", () => {
 
 test("active player can buy and play their setup familiar", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
-  const foe = state.players.find((player) => player.playerId !== state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  const foe = state.players.find(
+    (player) => player.playerId !== state.activePlayerId
+  );
   assert.ok(activePlayer);
   assert.ok(foe);
   const familiar = activePlayer.unboughtFamiliar;
   assert.ok(familiar);
 
-  assert.equal(familiar.definitionId, "v0_placeholder_familiar");
+  assert.equal(familiar.definitionId, "esw2_dbg__familiar_001");
   assert.equal(familiar.ownerId, activePlayer.playerId);
   assert.equal(findOwnedCard(activePlayer, familiar.definitionId), undefined);
   assert.equal(foe.unboughtFamiliar?.instanceId === familiar.instanceId, false);
-  assert.equal(scoreGame(state).find((score) => score.playerId === activePlayer.playerId)?.victoryPoints, 0);
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === activePlayer.playerId)
+      ?.victoryPoints,
+    0
+  );
 
   state.turn.power = 5;
   assert.equal(
-    listLegalActions(state).some((action) => action.type === "buyMarketCard" && action.source === "familiar"),
-    false,
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "buyMarketCard" && action.source === "familiar"
+    ),
+    false
   );
 
   state.turn.power = 6;
   const buyAction = listLegalActions(state).find((action) => {
-    return action.type === "buyMarketCard" && action.source === "familiar" && action.cardInstanceId === familiar.instanceId;
+    return (
+      action.type === "buyMarketCard" &&
+      action.source === "familiar" &&
+      action.cardInstanceId === familiar.instanceId
+    );
   });
   assert.ok(buyAction);
 
@@ -444,7 +566,11 @@ test("active player can buy and play their setup familiar", () => {
   assert.equal(buyResult.ok, true);
   assert.equal(activePlayer.unboughtFamiliar, undefined);
   assert.equal(activePlayer.discard.includes(familiar), true);
-  assert.equal(scoreGame(state).find((score) => score.playerId === activePlayer.playerId)?.victoryPoints, 2);
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === activePlayer.playerId)
+      ?.victoryPoints,
+    2
+  );
 
   moveCardToHand(activePlayer, familiar);
   state.turn.power = 0;
@@ -459,8 +585,12 @@ test("active player can buy and play their setup familiar", () => {
 
 test("bought familiar can discard another hand card to avoid an attack", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
-  const targetPlayer = state.players.find((player) => player.playerId !== state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== state.activePlayerId
+  );
   assert.ok(activePlayer);
   assert.ok(targetPlayer);
   const familiar = targetPlayer.unboughtFamiliar;
@@ -500,7 +630,7 @@ test("bought familiar can discard another hand card to avoid an attack", () => {
         event.cardInstanceId === familiar.instanceId &&
         event.definitionId === familiar.definitionId
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
@@ -511,23 +641,34 @@ test("bought familiar can discard another hand card to avoid an attack", () => {
         event.targetCardInstanceId === paidDiscard.instanceId &&
         event.effectId === "discard_other_hand_card"
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "attackAvoided" && event.targetPlayerId === targetPlayer.playerId;
-    }),
+      return (
+        event.type === "attackAvoided" &&
+        event.targetPlayerId === targetPlayer.playerId
+      );
+    })
   );
   assert.equal(
-    state.eventLog.some((event) => event.type === "effectDamageDealt" && event.targetPlayerId === targetPlayer.playerId),
-    false,
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.targetPlayerId === targetPlayer.playerId
+    ),
+    false
   );
 });
 
 test("bought familiar cannot defend when no other hand card can pay its discard cost", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
-  const targetPlayer = state.players.find((player) => player.playerId !== state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== state.activePlayerId
+  );
   assert.ok(activePlayer);
   assert.ok(targetPlayer);
   const familiar = targetPlayer.unboughtFamiliar;
@@ -555,17 +696,25 @@ test("bought familiar cannot defend when no other hand card can pay its discard 
   assert.equal(targetPlayer.life.current, 6);
   assert.equal(targetPlayer.hand.includes(familiar), true);
   assert.equal(targetPlayer.discard.includes(familiar), false);
-  assert.equal(state.eventLog.some((event) => event.type === "defenseChoiceSelected"), false);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
+    false
+  );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "effectDamageDealt" && event.targetPlayerId === targetPlayer.playerId;
-    }),
+      return (
+        event.type === "effectDamageDealt" &&
+        event.targetPlayerId === targetPlayer.playerId
+      );
+    })
   );
 });
 
 test("playing wild magic uses the first legal choice and gains 2 power", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const wildMagic = state.common.wildMagicStack.shift();
   assert.ok(wildMagic);
@@ -588,41 +737,51 @@ test("playing wild magic uses the first legal choice and gains 2 power", () => {
         event.cardInstanceId === wildMagic.instanceId &&
         event.effectId === "add_power"
       );
-    }),
+    })
   );
 });
 
 test("wild magic can choose to play the top card of a foe deck when that option is first legal", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
-  const foe = state.players.find((player) => player.playerId !== state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  const foe = state.players.find(
+    (player) => player.playerId !== state.activePlayerId
+  );
   assert.ok(activePlayer);
   assert.ok(foe);
-  const foeTopCardDefinition = createFixtureCardDefinition("fixture-foe-top-add-power", [
-    {
-      effectId: "add_power",
-      timing: "onPlay",
-      amount: 1,
-    },
-  ]);
-  const wildMagicDefinition = createFixtureCardDefinition("fixture-wild-magic-foe-first", [
-    {
-      effectId: "wild_magic_choice",
-      timing: "onPlay",
-      options: [
-        {
-          targetSelector: "chosenFoe",
-          effectId: "play_top_card_from_foe_deck",
-          nonOngoingCleanupDestination: "ownerDiscard",
-          ongoingOwnership: "controller",
-        },
-        {
-          effectId: "add_power",
-          amount: 2,
-        },
-      ],
-    },
-  ]);
+  const foeTopCardDefinition = createFixtureCardDefinition(
+    "fixture-foe-top-add-power",
+    [
+      {
+        effectId: "add_power",
+        timing: "onPlay",
+        amount: 1,
+      },
+    ]
+  );
+  const wildMagicDefinition = createFixtureCardDefinition(
+    "fixture-wild-magic-foe-first",
+    [
+      {
+        effectId: "wild_magic_choice",
+        timing: "onPlay",
+        options: [
+          {
+            targetSelector: "chosenFoe",
+            effectId: "play_top_card_from_foe_deck",
+            nonOngoingCleanupDestination: "ownerDiscard",
+            ongoingOwnership: "controller",
+          },
+          {
+            effectId: "add_power",
+            amount: 2,
+          },
+        ],
+      },
+    ]
+  );
   state.cardDefinitions = new Map([
     ...state.cardDefinitions,
     [foeTopCardDefinition.cardId, foeTopCardDefinition],
@@ -660,7 +819,7 @@ test("wild magic can choose to play the top card of a foe deck when that option 
         event.cardInstanceId === wildMagic.instanceId &&
         event.effectId === "play_top_card_from_foe_deck"
       );
-    }),
+    })
   );
 
   const endTurnResult = applyAction(state, {
@@ -675,30 +834,43 @@ test("wild magic can choose to play the top card of a foe deck when that option 
 
 test("wild magic foe-deck play triggers wizard property on-play effects for non-ongoing cards", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
-  const foe = state.players.find((player) => player.playerId !== state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  const foe = state.players.find(
+    (player) => player.playerId !== state.activePlayerId
+  );
   assert.ok(activePlayer);
   assert.ok(foe);
-  replaceFirstWizardProperty(state, activePlayer, createOnPlayTypeChipWizardProperty("fixture-wild-magic-spell-property", ["spell"]));
+  replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    createOnPlayTypeChipWizardProperty("fixture-wild-magic-spell-property", [
+      "spell",
+    ])
+  );
   const foeTopCardDefinition = createFixtureCardDefinition(
     "fixture-wild-magic-foe-spell",
     [{ effectId: "add_power", timing: "onPlay", amount: 1 }],
-    { cardTypes: ["spell"] },
+    { cardTypes: ["spell"] }
   );
-  const wildMagicDefinition = createFixtureCardDefinition("fixture-wild-magic-foe-spell-first", [
-    {
-      effectId: "wild_magic_choice",
-      timing: "onPlay",
-      options: [
-        {
-          targetSelector: "chosenFoe",
-          effectId: "play_top_card_from_foe_deck",
-          nonOngoingCleanupDestination: "ownerDiscard",
-          ongoingOwnership: "controller",
-        },
-      ],
-    },
-  ]);
+  const wildMagicDefinition = createFixtureCardDefinition(
+    "fixture-wild-magic-foe-spell-first",
+    [
+      {
+        effectId: "wild_magic_choice",
+        timing: "onPlay",
+        options: [
+          {
+            targetSelector: "chosenFoe",
+            effectId: "play_top_card_from_foe_deck",
+            nonOngoingCleanupDestination: "ownerDiscard",
+            ongoingOwnership: "controller",
+          },
+        ],
+      },
+    ]
+  );
   state.cardDefinitions = new Map([
     ...state.cardDefinitions,
     [foeTopCardDefinition.cardId, foeTopCardDefinition],
@@ -740,30 +912,41 @@ test("wild magic foe-deck play triggers wizard property on-play effects for non-
 
 test("wild magic foe-deck play takes ownership of ongoing cards and keeps them controlled", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
-  const foe = state.players.find((player) => player.playerId !== state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  const foe = state.players.find(
+    (player) => player.playerId !== state.activePlayerId
+  );
   assert.ok(activePlayer);
   assert.ok(foe);
-  replaceFirstWizardProperty(state, activePlayer, createOnPlayOngoingChipWizardProperty("fixture-wild-magic-ongoing-property"));
+  replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    createOnPlayOngoingChipWizardProperty("fixture-wild-magic-ongoing-property")
+  );
   const foeTopCardDefinition = createFixtureCardDefinition(
     "fixture-wild-magic-foe-ongoing",
     [{ effectId: "add_power", timing: "onPlay", amount: 1 }],
-    { isOngoing: true },
+    { isOngoing: true }
   );
-  const wildMagicDefinition = createFixtureCardDefinition("fixture-wild-magic-foe-ongoing-first", [
-    {
-      effectId: "wild_magic_choice",
-      timing: "onPlay",
-      options: [
-        {
-          targetSelector: "chosenFoe",
-          effectId: "play_top_card_from_foe_deck",
-          nonOngoingCleanupDestination: "ownerDiscard",
-          ongoingOwnership: "controller",
-        },
-      ],
-    },
-  ]);
+  const wildMagicDefinition = createFixtureCardDefinition(
+    "fixture-wild-magic-foe-ongoing-first",
+    [
+      {
+        effectId: "wild_magic_choice",
+        timing: "onPlay",
+        options: [
+          {
+            targetSelector: "chosenFoe",
+            effectId: "play_top_card_from_foe_deck",
+            nonOngoingCleanupDestination: "ownerDiscard",
+            ongoingOwnership: "controller",
+          },
+        ],
+      },
+    ]
+  );
   state.cardDefinitions = new Map([
     ...state.cardDefinitions,
     [foeTopCardDefinition.cardId, foeTopCardDefinition],
@@ -809,10 +992,14 @@ test("wild magic foe-deck play takes ownership of ongoing cards and keeps them c
 test("ending a turn cleans up non-permanents, draws a new hand, and advances active player", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const startingActivePlayerId = state.activePlayerId;
-  const activePlayer = state.players.find((player) => player.playerId === startingActivePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === startingActivePlayerId
+  );
   assert.ok(activePlayer);
 
-  const playedCard = activePlayer.hand.find((card) => card.definitionId === "esw2_dbg__ocr_022");
+  const playedCard = activePlayer.hand.find(
+    (card) => card.definitionId === "esw2_dbg__starter_002"
+  );
   assert.ok(playedCard);
   const unplayedCardIds = activePlayer.hand
     .filter((card) => card.instanceId !== playedCard.instanceId)
@@ -830,9 +1017,17 @@ test("ending a turn cleans up non-permanents, draws a new hand, and advances act
   assert.equal(result.ok, true);
   assert.equal(activePlayer.hand.length, 5);
   assert.equal(activePlayer.playedThisTurn.length, 0);
-  assert.equal(activePlayer.discard.some((card) => card.instanceId === playedCard.instanceId), true);
+  assert.equal(
+    activePlayer.discard.some(
+      (card) => card.instanceId === playedCard.instanceId
+    ),
+    true
+  );
   for (const cardId of unplayedCardIds) {
-    assert.equal(activePlayer.discard.some((card) => card.instanceId === cardId), true);
+    assert.equal(
+      activePlayer.discard.some((card) => card.instanceId === cardId),
+      true
+    );
   }
   assert.equal(state.turn.power, 0);
   assert.equal(state.turn.number, 2);
@@ -842,7 +1037,9 @@ test("ending a turn cleans up non-permanents, draws a new hand, and advances act
 
 test("Basic Trophy grants a chip at the end of its controller's turn", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   activePlayer.trophyLikeObjects.push(createBasicTrophy(activePlayer.playerId));
 
@@ -854,21 +1051,31 @@ test("Basic Trophy grants a chip at the end of its controller's turn", () => {
   assert.equal(activePlayer.chips, 1);
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "trophyChipGranted" && event.playerId === activePlayer.playerId && event.effectId === "basicTrophy";
-    }),
+      return (
+        event.type === "trophyChipGranted" &&
+        event.playerId === activePlayer.playerId &&
+        event.effectId === "basicTrophy"
+      );
+    })
   );
 });
 
 test("played permanents stay in the controlled permanent zone after cleanup", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
 
   const ongoingMarketCardIndex = state.common.market.findIndex((card) => {
-    return state.cardDefinitions.get(card.definitionId)?.engine.isOngoing === true;
+    return (
+      state.cardDefinitions.get(card.definitionId)?.engine.isOngoing === true
+    );
   });
   assert.notEqual(ongoingMarketCardIndex, -1);
-  const ongoingCard = state.common.market.splice(ongoingMarketCardIndex, 1).at(0);
+  const ongoingCard = state.common.market
+    .splice(ongoingMarketCardIndex, 1)
+    .at(0);
   assert.ok(ongoingCard);
   ongoingCard.ownerId = activePlayer.playerId;
   activePlayer.hand.push(ongoingCard);
@@ -891,7 +1098,9 @@ test("played permanents stay in the controlled permanent zone after cleanup", ()
 
 test("active player can activate a controlled permanent once per turn", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const permanent = addFixtureCardToActiveHand(
     state,
@@ -901,7 +1110,7 @@ test("active player can activate a controlled permanent once per turn", () => {
       amount: 2,
       activationLimit: "oncePerTurnWhileControlled",
     },
-    { isOngoing: true },
+    { isOngoing: true }
   );
 
   const playResult = applyAction(state, {
@@ -909,7 +1118,13 @@ test("active player can activate a controlled permanent once per turn", () => {
     cardInstanceId: permanent,
   });
   assert.equal(playResult.ok, true);
-  assert.ok(listLegalActions(state).some((action) => action.type === "activatePermanent" && action.cardInstanceId === permanent));
+  assert.ok(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "activatePermanent" &&
+        action.cardInstanceId === permanent
+    )
+  );
 
   const activationResult = applyAction(state, {
     type: "activatePermanent",
@@ -919,34 +1134,66 @@ test("active player can activate a controlled permanent once per turn", () => {
   assert.equal(activationResult.ok, true);
   assert.equal(state.turn.power, 2);
   assert.equal(
-    listLegalActions(state).some((action) => action.type === "activatePermanent" && action.cardInstanceId === permanent),
-    false,
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "activatePermanent" &&
+        action.cardInstanceId === permanent
+    ),
+    false
   );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "cardActivated" && event.playerId === activePlayer.playerId && event.cardInstanceId === permanent;
-    }),
+      return (
+        event.type === "cardActivated" &&
+        event.playerId === activePlayer.playerId &&
+        event.cardInstanceId === permanent
+      );
+    })
   );
 });
 
 test("active player can activate a wizard property only when its control-count condition is met", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const property = replaceFirstWizardProperty(
     state,
     activePlayer,
-    createChipActivationWizardProperty("fixture-chip-property", ["treasure", "creature"], 2),
+    createChipActivationWizardProperty(
+      "fixture-chip-property",
+      ["treasure", "creature"],
+      2
+    )
   );
   assert.equal(
-    listLegalActions(state).some((action) => action.type === "activateWizardProperty" && action.tokenInstanceId === property.instanceId),
-    false,
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "activateWizardProperty" &&
+        action.tokenInstanceId === property.instanceId
+    ),
+    false
   );
-  addControlledFixturePermanent(state, activePlayer, "fixture-controlled-treasure", ["treasure"]);
-  addControlledFixturePermanent(state, activePlayer, "fixture-controlled-creature", ["creature"]);
+  addControlledFixturePermanent(
+    state,
+    activePlayer,
+    "fixture-controlled-treasure",
+    ["treasure"]
+  );
+  addControlledFixturePermanent(
+    state,
+    activePlayer,
+    "fixture-controlled-creature",
+    ["creature"]
+  );
 
   assert.ok(
-    listLegalActions(state).some((action) => action.type === "activateWizardProperty" && action.tokenInstanceId === property.instanceId),
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "activateWizardProperty" &&
+        action.tokenInstanceId === property.instanceId
+    )
   );
   const result = applyAction(state, {
     type: "activateWizardProperty",
@@ -955,66 +1202,178 @@ test("active player can activate a wizard property only when its control-count c
 
   assert.equal(result.ok, true);
   assert.equal(activePlayer.chips, 1);
-  const chipEvent = state.eventLog.find((event) => event.type === "effectChipsGained" && event.playerId === activePlayer.playerId);
+  const chipEvent = state.eventLog.find(
+    (event) =>
+      event.type === "effectChipsGained" &&
+      event.playerId === activePlayer.playerId
+  );
   assert.ok(chipEvent);
   assert.equal(chipEvent.chipsBefore, 0);
   assert.equal(chipEvent.chipsAfter, 1);
   assert.equal(
-    listLegalActions(state).some((action) => action.type === "activateWizardProperty" && action.tokenInstanceId === property.instanceId),
-    false,
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "activateWizardProperty" &&
+        action.tokenInstanceId === property.instanceId
+    ),
+    false
   );
 });
 
 test("wizard property on-play trigger grants chips only for matching ongoing cards", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  replaceFirstWizardProperty(state, activePlayer, createOnPlayOngoingChipWizardProperty("fixture-ongoing-play-property"));
-  const ongoingCardId = addFixtureCardToActiveHand(state, { effectId: "add_power", timing: "onPlay", amount: 1 }, {
-    isOngoing: true,
+  replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    createOnPlayOngoingChipWizardProperty("fixture-ongoing-play-property")
+  );
+  const ongoingCardId = addFixtureCardToActiveHand(
+    state,
+    { effectId: "add_power", timing: "onPlay", amount: 1 },
+    {
+      isOngoing: true,
+    }
+  );
+  const normalCardId = addFixtureCardToActiveHand(state, {
+    effectId: "add_power",
+    timing: "onPlay",
+    amount: 1,
   });
-  const normalCardId = addFixtureCardToActiveHand(state, { effectId: "add_power", timing: "onPlay", amount: 1 });
 
-  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: normalCardId }).ok, true);
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: normalCardId }).ok,
+    true
+  );
   assert.equal(activePlayer.chips, 0);
-  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: ongoingCardId }).ok, true);
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: ongoingCardId }).ok,
+    true
+  );
   assert.equal(activePlayer.chips, 1);
 });
 
 test("wizard property optional topdeck for gained cards runs before normal discard", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  replaceFirstWizardProperty(state, activePlayer, createTopdeckOnGainWizardProperty("fixture-topdeck-creature-property", ["creature"]));
-  const creature = addFixtureMarketCard(state, "fixture-gained-creature", ["creature"], 0);
-  const spell = addFixtureMarketCard(state, "fixture-gained-spell", ["spell"], 0);
+  replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    createTopdeckOnGainWizardProperty("fixture-topdeck-creature-property", [
+      "creature",
+    ])
+  );
+  const creature = addFixtureMarketCard(
+    state,
+    "fixture-gained-creature",
+    ["creature"],
+    0
+  );
+  const spell = addFixtureMarketCard(
+    state,
+    "fixture-gained-spell",
+    ["spell"],
+    0
+  );
 
-  assert.equal(applyAction(state, { type: "buyMarketCard", cardInstanceId: creature.instanceId, source: "mainMarket" }).ok, true);
+  assert.equal(
+    applyAction(state, {
+      type: "buyMarketCard",
+      cardInstanceId: creature.instanceId,
+      source: "mainMarket",
+    }).ok,
+    true
+  );
   assert.equal(activePlayer.deck[0], creature);
   assert.equal(activePlayer.discard.includes(creature), false);
 
-  assert.equal(applyAction(state, { type: "buyMarketCard", cardInstanceId: spell.instanceId, source: "mainMarket" }).ok, true);
+  assert.equal(
+    applyAction(state, {
+      type: "buyMarketCard",
+      cardInstanceId: spell.instanceId,
+      source: "mainMarket",
+    }).ok,
+    true
+  );
   assert.equal(activePlayer.discard.includes(spell), true);
 });
 
 test("temporary hand limit modifier counts cards gained this turn and resets after drawing", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  replaceFirstWizardProperty(state, activePlayer, createTemporaryHandLimitWizardProperty("fixture-spell-hand-limit-property", ["spell"]));
+  replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    createTemporaryHandLimitWizardProperty(
+      "fixture-spell-hand-limit-property",
+      ["spell"]
+    )
+  );
   activePlayer.hand.splice(0);
-  activePlayer.deck.splice(0, activePlayer.deck.length, ...createFixtureCardInstances("fixture-filler", activePlayer.playerId, 7));
+  activePlayer.deck.splice(
+    0,
+    activePlayer.deck.length,
+    ...createFixtureCardInstances("fixture-filler", activePlayer.playerId, 7)
+  );
   state.cardDefinitions = new Map([
     ...state.cardDefinitions,
-    [createFixtureCardDefinition("fixture-filler", []).cardId, createFixtureCardDefinition("fixture-filler", [])],
+    [
+      createFixtureCardDefinition("fixture-filler", []).cardId,
+      createFixtureCardDefinition("fixture-filler", []),
+    ],
   ]);
-  const firstSpell = addFixtureMarketCard(state, "fixture-gained-spell-1", ["spell"], 0);
-  const secondSpell = addFixtureMarketCard(state, "fixture-gained-spell-2", ["spell"], 0);
-  const creature = addFixtureMarketCard(state, "fixture-gained-creature-1", ["creature"], 0);
+  const firstSpell = addFixtureMarketCard(
+    state,
+    "fixture-gained-spell-1",
+    ["spell"],
+    0
+  );
+  const secondSpell = addFixtureMarketCard(
+    state,
+    "fixture-gained-spell-2",
+    ["spell"],
+    0
+  );
+  const creature = addFixtureMarketCard(
+    state,
+    "fixture-gained-creature-1",
+    ["creature"],
+    0
+  );
 
-  assert.equal(applyAction(state, { type: "buyMarketCard", cardInstanceId: firstSpell.instanceId, source: "mainMarket" }).ok, true);
-  assert.equal(applyAction(state, { type: "buyMarketCard", cardInstanceId: secondSpell.instanceId, source: "mainMarket" }).ok, true);
-  assert.equal(applyAction(state, { type: "buyMarketCard", cardInstanceId: creature.instanceId, source: "mainMarket" }).ok, true);
+  assert.equal(
+    applyAction(state, {
+      type: "buyMarketCard",
+      cardInstanceId: firstSpell.instanceId,
+      source: "mainMarket",
+    }).ok,
+    true
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "buyMarketCard",
+      cardInstanceId: secondSpell.instanceId,
+      source: "mainMarket",
+    }).ok,
+    true
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "buyMarketCard",
+      cardInstanceId: creature.instanceId,
+      source: "mainMarket",
+    }).ok,
+    true
+  );
   assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
 
   assert.equal(activePlayer.hand.length, 7);
@@ -1023,10 +1382,14 @@ test("temporary hand limit modifier counts cards gained this turn and resets aft
 
 test("playing a v0 draw card draws from the active player's deck", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
 
-  const drawCardIndex = state.common.market.findIndex((card) => card.definitionId === "esw2_dbg__ocr_017");
+  const drawCardIndex = state.common.market.findIndex(
+    (card) => card.definitionId === "esw2_dbg__main_017"
+  );
   assert.notEqual(drawCardIndex, -1);
   const drawCard = state.common.market.splice(drawCardIndex, 1).at(0);
   assert.ok(drawCard);
@@ -1052,7 +1415,7 @@ test("playing a v0 draw card draws from the active player's deck", () => {
         event.definitionId === drawCard.definitionId &&
         event.amount === 1
       );
-    }),
+    })
   );
 });
 
@@ -1083,7 +1446,9 @@ test("targeted fixture effect chooses the first legal market target deterministi
 
 test("gain_card moves the first legal market card into the active player's discard", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const gainedCard = state.common.market[0];
   assert.ok(gainedCard);
@@ -1114,15 +1479,21 @@ test("gain_card moves the first legal market card into the active player's disca
         event.targetCardInstanceId === gainedCard.instanceId &&
         event.targetDefinitionId === gainedCard.definitionId
       );
-    }),
+    })
   );
 });
 
 test("buying and gain_card share gained-card movement guarantees", () => {
   const buyState = initializeGame({ rootDir, seed: 60615 });
   const gainState = initializeGame({ rootDir, seed: 60615 });
-  const bought = prepareGainedMovementFixture(buyState, "fixture-shared-buy-card");
-  const gained = prepareGainedMovementFixture(gainState, "fixture-shared-gain-card");
+  const bought = prepareGainedMovementFixture(
+    buyState,
+    "fixture-shared-buy-card"
+  );
+  const gained = prepareGainedMovementFixture(
+    gainState,
+    "fixture-shared-gain-card"
+  );
 
   const buyResult = applyAction(buyState, {
     type: "buyMarketCard",
@@ -1144,13 +1515,25 @@ test("buying and gain_card share gained-card movement guarantees", () => {
 
   assert.equal(buyResult.ok, true);
   assert.equal(gainResult.ok, true);
-  assertGainedMovementGuarantees(buyState, bought.player, bought.card, "cardBought");
-  assertGainedMovementGuarantees(gainState, gained.player, gained.card, "effectCardGained");
+  assertGainedMovementGuarantees(
+    buyState,
+    bought.player,
+    bought.card,
+    "cardBought"
+  );
+  assertGainedMovementGuarantees(
+    gainState,
+    gained.player,
+    gained.card,
+    "effectCardGained"
+  );
 });
 
 test("discard_card moves the first legal hand card into the active player's discard", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const discardedCard = activePlayer.hand[0];
   assert.ok(discardedCard);
@@ -1180,7 +1563,7 @@ test("discard_card moves the first legal hand card into the active player's disc
         event.targetCardInstanceId === discardedCard.instanceId &&
         event.targetDefinitionId === discardedCard.definitionId
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
@@ -1194,13 +1577,15 @@ test("discard_card moves the first legal hand card into the active player's disc
         event.ownerAfter === activePlayer.playerId &&
         event.effectId === "discard_card"
       );
-    }),
+    })
   );
 });
 
 test("destroy_card moves a normal card to the destroyed zone and preserves ownership", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const destroyedCard = activePlayer.hand[0];
   assert.ok(destroyedCard);
@@ -1233,7 +1618,7 @@ test("destroy_card moves a normal card to the destroyed zone and preserves owner
         event.targetCardInstanceId === destroyedCard.instanceId &&
         event.targetDefinitionId === destroyedCard.definitionId
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
@@ -1247,13 +1632,15 @@ test("destroy_card moves a normal card to the destroyed zone and preserves owner
         event.ownerAfter === activePlayer.playerId &&
         event.effectId === "destroy_card"
       );
-    }),
+    })
   );
 });
 
 test("destroy_card routes wild magic and limp wand cards back to their stacks", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const wildMagic = state.common.wildMagicStack.shift();
   const limpWand = state.common.limpWandStack.shift();
@@ -1309,7 +1696,9 @@ test("destroy_card routes wild magic and limp wand cards back to their stacks", 
 
 test("destroy_card keeps mayhem and megaMayhem cards in ordered event piles", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const existingMayhem = state.common.destroyedMayhem.at(-1);
   const existingMegaMayhem = state.common.destroyedMegaMayhem.at(-1);
@@ -1320,7 +1709,7 @@ test("destroy_card keeps mayhem and megaMayhem cards in ordered event piles", ()
       timing: "onMayhemResolve",
       amount: 1,
     },
-    { cardKind: "mayhem" },
+    { cardKind: "mayhem" }
   );
   moveHandCardToFront(activePlayer, mayhem);
   const destroyMayhemCardId = addFixtureCardToActiveHand(state, {
@@ -1338,8 +1727,15 @@ test("destroy_card keeps mayhem and megaMayhem cards in ordered event piles", ()
 
   assert.equal(mayhemResult.ok, true);
   assert.equal(state.common.destroyedMayhem.at(-1)?.instanceId, mayhem);
-  assert.equal(existingMayhem === undefined || state.common.destroyedMayhem.includes(existingMayhem), true);
-  assert.equal(state.common.destroyedPile.some((card) => card.instanceId === mayhem), false);
+  assert.equal(
+    existingMayhem === undefined ||
+      state.common.destroyedMayhem.includes(existingMayhem),
+    true
+  );
+  assert.equal(
+    state.common.destroyedPile.some((card) => card.instanceId === mayhem),
+    false
+  );
 
   const megaMayhem = addFixtureCardToActiveHand(
     state,
@@ -1348,7 +1744,7 @@ test("destroy_card keeps mayhem and megaMayhem cards in ordered event piles", ()
       timing: "onMayhemResolve",
       amount: 1,
     },
-    { cardKind: "megaMayhem" },
+    { cardKind: "megaMayhem" }
   );
   moveHandCardToFront(activePlayer, megaMayhem);
   const destroyMegaMayhemCardId = addFixtureCardToActiveHand(state, {
@@ -1366,8 +1762,15 @@ test("destroy_card keeps mayhem and megaMayhem cards in ordered event piles", ()
 
   assert.equal(megaMayhemResult.ok, true);
   assert.equal(state.common.destroyedMegaMayhem.at(-1)?.instanceId, megaMayhem);
-  assert.equal(existingMegaMayhem === undefined || state.common.destroyedMegaMayhem.includes(existingMegaMayhem), true);
-  assert.equal(state.common.destroyedPile.some((card) => card.instanceId === megaMayhem), false);
+  assert.equal(
+    existingMegaMayhem === undefined ||
+      state.common.destroyedMegaMayhem.includes(existingMegaMayhem),
+    true
+  );
+  assert.equal(
+    state.common.destroyedPile.some((card) => card.instanceId === megaMayhem),
+    false
+  );
 });
 
 test("card movement effects skip by default when no legal card choice exists", () => {
@@ -1389,13 +1792,20 @@ test("card movement effects skip by default when no legal card choice exists", (
 
   assert.equal(result.ok, true);
   assert.equal(state.common.market.length, 0);
-  assert.ok(state.eventLog.some((event) => event.type === "effectChoiceSkipped"));
-  assert.equal(state.eventLog.some((event) => event.type === "effectCardGained"), false);
+  assert.ok(
+    state.eventLog.some((event) => event.type === "effectChoiceSkipped")
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "effectCardGained"),
+    false
+  );
 });
 
 test("reveal_top_card reveals the active player's top deck card without moving it", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const topCard = activePlayer.deck[0];
   assert.ok(topCard);
@@ -1423,13 +1833,15 @@ test("reveal_top_card reveals the active player's top deck card without moving i
         event.targetCardInstanceId === topCard.instanceId &&
         event.targetDefinitionId === topCard.definitionId
       );
-    }),
+    })
   );
 });
 
 test("reveal_top_card shuffles discard into an empty deck before revealing", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const revealedCard = activePlayer.deck[0];
   assert.ok(revealedCard);
@@ -1449,19 +1861,28 @@ test("reveal_top_card shuffles discard into an empty deck before revealing", () 
   assert.equal(result.ok, true);
   assert.equal(activePlayer.discard.includes(revealedCard), false);
   assert.equal(activePlayer.deck[0], revealedCard);
-  assert.ok(state.eventLog.some((event) => event.type === "discardShuffledIntoDeck"));
+  assert.ok(
+    state.eventLog.some((event) => event.type === "discardShuffledIntoDeck")
+  );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "effectCardRevealed" && event.targetCardInstanceId === revealedCard.instanceId;
-    }),
+      return (
+        event.type === "effectCardRevealed" &&
+        event.targetCardInstanceId === revealedCard.instanceId
+      );
+    })
   );
 });
 
 test("play_top_card plays the active player's top deck card through on-play effects", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const topPlayedCardIndex = activePlayer.hand.findIndex((card) => card.definitionId === "esw2_dbg__ocr_022");
+  const topPlayedCardIndex = activePlayer.hand.findIndex(
+    (card) => card.definitionId === "esw2_dbg__starter_002"
+  );
   assert.notEqual(topPlayedCardIndex, -1);
   const topPlayedCard = activePlayer.hand.splice(topPlayedCardIndex, 1).at(0);
   assert.ok(topPlayedCard);
@@ -1492,26 +1913,38 @@ test("play_top_card plays the active player's top deck card through on-play effe
         event.targetCardInstanceId === topPlayedCard.instanceId &&
         event.targetDefinitionId === topPlayedCard.definitionId
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "effectAddPowerApplied" && event.cardInstanceId === topPlayedCard.instanceId;
-    }),
+      return (
+        event.type === "effectAddPowerApplied" &&
+        event.cardInstanceId === topPlayedCard.instanceId
+      );
+    })
   );
 });
 
 test("play_top_card triggers wizard property on-play effects and cleans up to owner discard", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  replaceFirstWizardProperty(state, activePlayer, createOnPlayTypeChipWizardProperty("fixture-play-top-property", ["spell"]));
+  replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    createOnPlayTypeChipWizardProperty("fixture-play-top-property", ["spell"])
+  );
   const topPlayedDefinition = createFixtureCardDefinition(
     "fixture-play-top-spell",
     [{ effectId: "add_power", timing: "onPlay", amount: 1 }],
-    { cardTypes: ["spell"] },
+    { cardTypes: ["spell"] }
   );
-  state.cardDefinitions = new Map([...state.cardDefinitions, [topPlayedDefinition.cardId, topPlayedDefinition]]);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [topPlayedDefinition.cardId, topPlayedDefinition],
+  ]);
   const topPlayedCard: CardInstance = {
     instanceId: "fixture-play-top-spell-instance",
     definitionId: topPlayedDefinition.cardId,
@@ -1546,9 +1979,13 @@ test("play_top_card triggers wizard property on-play effects and cleans up to ow
 
 test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affect scoring", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(targetPlayer);
   assert.equal(state.common.deadWizardTokens.status, "available");
   const neutralDwt = state.common.deadWizardTokens.drawStack[0];
@@ -1572,7 +2009,10 @@ test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affec
   assert.equal(targetPlayer.deadWizardTokens.length, 1);
   assert.equal(targetPlayer.deadWizardTokens[0], neutralDwt);
   assert.equal(neutralDwt.ownerId, targetPlayer.playerId);
-  assert.equal(state.common.deadWizardTokens.drawStack.includes(neutralDwt), false);
+  assert.equal(
+    state.common.deadWizardTokens.drawStack.includes(neutralDwt),
+    false
+  );
   assert.ok(
     state.eventLog.some((event) => {
       return (
@@ -1582,9 +2022,14 @@ test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affec
         event.effectId === "deal_damage" &&
         event.amount === 999
       );
-    }),
+    })
   );
-  assert.ok(state.eventLog.some((event) => event.type === "playerDied" && event.playerId === targetPlayer.playerId));
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "playerDied" && event.playerId === targetPlayer.playerId
+    )
+  );
   assert.ok(
     state.eventLog.some((event) => {
       return (
@@ -1593,31 +2038,52 @@ test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affec
         event.tokenInstanceId === neutralDwt.instanceId &&
         event.tokenDefinitionId === neutralDwt.definitionId
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "playerResurrected" && event.playerId === targetPlayer.playerId && event.amount === 20;
-    }),
+      return (
+        event.type === "playerResurrected" &&
+        event.playerId === targetPlayer.playerId &&
+        event.amount === 20
+      );
+    })
   );
 
-  const targetScore = scoreGame(state).find((score) => score.playerId === targetPlayer.playerId);
-  const expectedCardScore = [...targetPlayer.hand, ...targetPlayer.deck, ...targetPlayer.discard].reduce((total, card) => {
-    return total + state.cardDefinitions.get(card.definitionId)!.engine.victoryPoints;
+  const targetScore = scoreGame(state).find(
+    (score) => score.playerId === targetPlayer.playerId
+  );
+  const expectedCardScore = [
+    ...targetPlayer.hand,
+    ...targetPlayer.deck,
+    ...targetPlayer.discard,
+  ].reduce((total, card) => {
+    return (
+      total + state.cardDefinitions.get(card.definitionId)!.engine.victoryPoints
+    );
   }, 0);
-  const neutralDwtDefinition = state.tokenDefinitions.get(neutralDwt.definitionId);
+  const neutralDwtDefinition = state.tokenDefinitions.get(
+    neutralDwt.definitionId
+  );
   assert.equal(neutralDwtDefinition?.kind, "deadWizardToken");
   const expectedTokenScore = neutralDwtDefinition.victoryPoints;
   assert.ok(targetScore);
   assert.equal(targetScore.deadWizardTokenCount, 1);
-  assert.equal(targetScore.victoryPoints, expectedCardScore + expectedTokenScore);
+  assert.equal(
+    targetScore.victoryPoints,
+    expectedCardScore + expectedTokenScore
+  );
 });
 
 test("wizard property resurrection life override respects loser-status exception", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const propertyOwner = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const propertyOwner = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(propertyOwner);
   propertyOwner.wizardProperties = [
     {
@@ -1671,11 +2137,15 @@ test("wizard property resurrection life override respects loser-status exception
 
 test("heal uses effective max life and logs clamping without mutating base max life", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   activePlayer.life.current = 10;
   const baseMaxLife = activePlayer.life.max;
-  activePlayer.statuses.push(createMaxLifeModifierStatus(activePlayer.playerId, -8));
+  activePlayer.statuses.push(
+    createMaxLifeModifierStatus(activePlayer.playerId, -8)
+  );
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "heal",
     timing: "onPlay",
@@ -1702,18 +2172,24 @@ test("heal uses effective max life and logs clamping without mutating base max l
         event.effectId === "heal" &&
         event.amount === 7
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "playerLifeClamped" && event.playerId === activePlayer.playerId && event.amount === 17;
-    }),
+      return (
+        event.type === "playerLifeClamped" &&
+        event.playerId === activePlayer.playerId &&
+        event.amount === 17
+      );
+    })
   );
 });
 
 test("heal below effective max life does not clamp", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   activePlayer.life.current = 10;
   const fixtureCardId = addFixtureCardToActiveHand(state, {
@@ -1740,21 +2216,29 @@ test("heal below effective max life does not clamp", () => {
         event.effectId === "heal" &&
         event.amount === 3
       );
-    }),
+    })
   );
   assert.equal(
-    state.eventLog.some((event) => event.type === "playerLifeClamped" && event.playerId === activePlayer.playerId),
-    false,
+    state.eventLog.some(
+      (event) =>
+        event.type === "playerLifeClamped" &&
+        event.playerId === activePlayer.playerId
+    ),
+    false
   );
 });
 
 test("set_life sets the target player's current life without using healing clamp", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   activePlayer.life.current = 10;
   const baseMaxLife = activePlayer.life.max;
-  activePlayer.statuses.push(createMaxLifeModifierStatus(activePlayer.playerId, -8));
+  activePlayer.statuses.push(
+    createMaxLifeModifierStatus(activePlayer.playerId, -8)
+  );
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "set_life",
     timing: "onPlay",
@@ -1781,15 +2265,23 @@ test("set_life sets the target player's current life without using healing clamp
         event.effectId === "set_life" &&
         event.amount === 30
       );
-    }),
+    })
   );
-  assert.equal(state.eventLog.some((event) => event.type === "effectLifeHealed"), false);
-  assert.equal(state.eventLog.some((event) => event.type === "playerLifeClamped"), false);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "effectLifeHealed"),
+    false
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "playerLifeClamped"),
+    false
+  );
 });
 
 test("set_life uses Dingler max life as a cap", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   activePlayer.life.current = 20;
   const gainCardId = addFixtureCardToActiveHand(state, {
@@ -1800,7 +2292,10 @@ test("set_life uses Dingler max life as a cap", () => {
       selector: "activePlayer",
     },
   });
-  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: gainCardId }).ok, true);
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: gainCardId }).ok,
+    true
+  );
   activePlayer.life.current = 5;
   const setLifeCardId = addFixtureCardToActiveHand(state, {
     effectId: "set_life",
@@ -1820,16 +2315,24 @@ test("set_life uses Dingler max life as a cap", () => {
   assert.equal(activePlayer.life.current, 15);
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "playerLifeClamped" && event.playerId === activePlayer.playerId && event.amount === 15;
-    }),
+      return (
+        event.type === "playerLifeClamped" &&
+        event.playerId === activePlayer.playerId &&
+        event.amount === 15
+      );
+    })
   );
 });
 
 test("attack_damage damages the first opponent when no defense is available", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(targetPlayer);
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "attack_damage",
@@ -1855,28 +2358,40 @@ test("attack_damage damages the first opponent when no defense is available", ()
         event.targetPlayerId === targetPlayer.playerId &&
         event.amount === 4
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "effectDamageDealt" && event.targetPlayerId === targetPlayer.playerId && event.amount === 4;
-    }),
+      return (
+        event.type === "effectDamageDealt" &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 4
+      );
+    })
   );
 });
 
 test("wizard property owned wand attacks gain damage and cannot be avoided", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 9 });
   const propertyOwner = state.players.find((player) => {
-    return player.wizardProperties.some((property) => property.definitionId === "esw2_dbg__wizard_property_009");
+    return player.wizardProperties.some(
+      (property) => property.definitionId === "esw2_dbg__wizard_property_009"
+    );
   });
   assert.ok(propertyOwner);
-  const targetPlayer = state.players.find((player) => player.playerId !== propertyOwner.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== propertyOwner.playerId
+  );
   assert.ok(targetPlayer);
   state.activePlayerId = propertyOwner.playerId;
-  const wand = findOwnedCard(propertyOwner, "krutagidon_wizard_property_009_hrenalocka_wand");
+  const wand = findOwnedCard(propertyOwner, "esw2_dbg__starter_004");
   assert.ok(wand);
   moveCardToHand(propertyOwner, wand);
-  const defenseCard = addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf");
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
 
   const result = applyAction(state, {
     type: "playCard",
@@ -1886,23 +2401,34 @@ test("wizard property owned wand attacks gain damage and cannot be avoided", () 
   assert.equal(result.ok, true);
   assert.equal(targetPlayer.life.current, 18);
   assert.equal(targetPlayer.hand.includes(defenseCard), true);
-  assert.equal(state.eventLog.some((event) => event.type === "defenseChoiceSelected"), false);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
+    false
+  );
 });
 
 test("wizard property does not affect borrowed wands or non-wand attacks", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 9 });
   const propertyOwner = state.players.find((player) => {
-    return player.wizardProperties.some((property) => property.definitionId === "esw2_dbg__wizard_property_009");
+    return player.wizardProperties.some(
+      (property) => property.definitionId === "esw2_dbg__wizard_property_009"
+    );
   });
   assert.ok(propertyOwner);
-  const targetPlayer = state.players.find((player) => player.playerId !== propertyOwner.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== propertyOwner.playerId
+  );
   assert.ok(targetPlayer);
   state.activePlayerId = propertyOwner.playerId;
-  const borrowedWand = findOwnedCard(propertyOwner, "krutagidon_wizard_property_009_hrenalocka_wand");
+  const borrowedWand = findOwnedCard(propertyOwner, "esw2_dbg__starter_004");
   assert.ok(borrowedWand);
   borrowedWand.ownerId = targetPlayer.playerId;
   moveCardToHand(propertyOwner, borrowedWand);
-  const borrowedWandDefense = addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf");
+  const borrowedWandDefense = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
 
   const borrowedWandResult = applyAction(state, {
     type: "playCard",
@@ -1921,7 +2447,11 @@ test("wizard property does not affect borrowed wands or non-wand attacks", () =>
     amount: 1,
     targetSelector: "chosenFoe",
   });
-  const nonWandDefense = addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf");
+  const nonWandDefense = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
 
   const nonWandResult = applyAction(state, {
     type: "playCard",
@@ -1935,9 +2465,13 @@ test("wizard property does not affect borrowed wands or non-wand attacks", () =>
 
 test("attack_damage kill awards Basic Trophy to the attacker", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(targetPlayer);
   targetPlayer.life.current = 1;
   const fixtureCardId = addFixtureCardToActiveHand(state, {
@@ -1955,8 +2489,17 @@ test("attack_damage kill awards Basic Trophy to the attacker", () => {
   });
 
   assert.equal(result.ok, true);
-  assert.ok(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"));
-  assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
+  assert.ok(
+    activePlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    )
+  );
+  assert.equal(
+    targetPlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    false
+  );
   assert.ok(
     state.eventLog.some((event) => {
       return (
@@ -1965,15 +2508,19 @@ test("attack_damage kill awards Basic Trophy to the attacker", () => {
         event.targetPlayerId === targetPlayer.playerId &&
         event.effectId === "attack_damage"
       );
-    }),
+    })
   );
 });
 
 test("attack_damage kill transfers Basic Trophy from its previous controller", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(targetPlayer);
   targetPlayer.life.current = 1;
   targetPlayer.trophyLikeObjects.push(createBasicTrophy(targetPlayer.playerId));
@@ -1992,18 +2539,34 @@ test("attack_damage kill transfers Basic Trophy from its previous controller", (
   });
 
   assert.equal(result.ok, true);
-  assert.equal(activePlayer.trophyLikeObjects.filter((trophy) => trophy.trophyId === "basicTrophy").length, 1);
-  assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
+  assert.equal(
+    activePlayer.trophyLikeObjects.filter(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ).length,
+    1
+  );
+  assert.equal(
+    targetPlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    false
+  );
 });
 
 test("deal_damage self-kill does not move Basic Trophy", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const trophyController = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const trophyController = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(trophyController);
   activePlayer.life.current = 1;
-  trophyController.trophyLikeObjects.push(createBasicTrophy(trophyController.playerId));
+  trophyController.trophyLikeObjects.push(
+    createBasicTrophy(trophyController.playerId)
+  );
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "deal_damage",
     timing: "onPlay",
@@ -2019,16 +2582,33 @@ test("deal_damage self-kill does not move Basic Trophy", () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
-  assert.equal(trophyController.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
-  assert.equal(state.eventLog.some((event) => event.type === "trophyControlChanged"), false);
+  assert.equal(
+    activePlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    false
+  );
+  assert.equal(
+    trophyController.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    true
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "trophyControlChanged"),
+    false
+  );
 });
 
 test("player-caused deal_damage kill awards Basic Trophy to the source player", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(targetPlayer);
   targetPlayer.life.current = 1;
   targetPlayer.trophyLikeObjects.push(createBasicTrophy(targetPlayer.playerId));
@@ -2047,8 +2627,18 @@ test("player-caused deal_damage kill awards Basic Trophy to the source player", 
   });
 
   assert.equal(result.ok, true);
-  assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
-  assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
+  assert.equal(
+    activePlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    true
+  );
+  assert.equal(
+    targetPlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    false
+  );
   assert.ok(
     state.eventLog.some((event) => {
       return (
@@ -2058,18 +2648,26 @@ test("player-caused deal_damage kill awards Basic Trophy to the source player", 
         event.effectId === "deal_damage" &&
         event.sourceType === "card"
       );
-    }),
+    })
   );
 });
 
 test("attack_damage can be avoided by the first discard-self defense card in hand", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(targetPlayer);
   targetPlayer.life.current = 1;
-  const defenseCard = addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf");
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "attack_damage",
     timing: "onPlay",
@@ -2097,34 +2695,53 @@ test("attack_damage can be avoided by the first discard-self defense card in han
         event.cardInstanceId === defenseCard.instanceId &&
         event.definitionId === defenseCard.definitionId
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "defenseCardMoved" && event.cardInstanceId === defenseCard.instanceId && event.destination === "discard";
-    }),
+      return (
+        event.type === "defenseCardMoved" &&
+        event.cardInstanceId === defenseCard.instanceId &&
+        event.destination === "discard"
+      );
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "attackAvoided" && event.playerId === targetPlayer.playerId;
-    }),
+      return (
+        event.type === "attackAvoided" &&
+        event.playerId === targetPlayer.playerId
+      );
+    })
   );
   assert.equal(
-    state.eventLog.some((event) => event.type === "effectDamageDealt" && event.targetPlayerId === targetPlayer.playerId),
-    false,
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.targetPlayerId === targetPlayer.playerId
+    ),
+    false
   );
 });
 
 test("attack_damage can be avoided by a topdeck-self defense card in hand", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(targetPlayer);
   targetPlayer.life.current = 1;
   const previousTopDeckCard = targetPlayer.deck[0];
   assert.ok(previousTopDeckCard);
-  const defenseCard = addFixtureDefenseCardToHand(state, targetPlayer, "topdeckSelf");
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "topdeckSelf"
+  );
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "attack_damage",
     timing: "onPlay",
@@ -2147,25 +2764,40 @@ test("attack_damage can be avoided by a topdeck-self defense card in hand", () =
   assert.equal(targetPlayer.deck[1], previousTopDeckCard);
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "defenseCardMoved" && event.cardInstanceId === defenseCard.instanceId && event.destination === "deckTop";
-    }),
+      return (
+        event.type === "defenseCardMoved" &&
+        event.cardInstanceId === defenseCard.instanceId &&
+        event.destination === "deckTop"
+      );
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "attackAvoided" && event.playerId === targetPlayer.playerId;
-    }),
+      return (
+        event.type === "attackAvoided" &&
+        event.playerId === targetPlayer.playerId
+      );
+    })
   );
   assert.equal(
-    state.eventLog.some((event) => event.type === "effectDamageDealt" && event.targetPlayerId === targetPlayer.playerId),
-    false,
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.targetPlayerId === targetPlayer.playerId
+    ),
+    false
   );
 });
 
 test("avoid_attack defense with an unpayable discard-other-card cost is not legal", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(targetPlayer);
   targetPlayer.hand.splice(0);
   addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf", {
@@ -2187,22 +2819,38 @@ test("avoid_attack defense with an unpayable discard-other-card cost is not lega
 
   assert.equal(result.ok, true);
   assert.equal(targetPlayer.life.current, 16);
-  assert.equal(state.eventLog.some((event) => event.type === "defenseChoiceSelected"), false);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
+    false
+  );
 });
 
 test("avoid_attack defense pays discard, chip, and nonlethal life costs before avoiding an attack", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(targetPlayer);
   targetPlayer.chips = 3;
   targetPlayer.life.current = 5;
   const paidDiscard = targetPlayer.hand[0];
   assert.ok(paidDiscard);
-  const defenseCard = addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf", {
-    costs: [{ costId: "discard_other_hand_card" }, { costId: "spend_chips", amount: 2 }, { costId: "pay_life", amount: 4 }],
-  });
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf",
+    {
+      costs: [
+        { costId: "discard_other_hand_card" },
+        { costId: "spend_chips", amount: 2 },
+        { costId: "pay_life", amount: 4 },
+      ],
+    }
+  );
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "attack_damage",
     timing: "onPlay",
@@ -2232,7 +2880,7 @@ test("avoid_attack defense pays discard, chip, and nonlethal life costs before a
         event.targetCardInstanceId === paidDiscard.instanceId &&
         event.effectId === "discard_other_hand_card"
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
@@ -2243,7 +2891,7 @@ test("avoid_attack defense pays discard, chip, and nonlethal life costs before a
         event.effectId === "spend_chips" &&
         event.amount === 2
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
@@ -2254,22 +2902,30 @@ test("avoid_attack defense pays discard, chip, and nonlethal life costs before a
         event.effectId === "pay_life" &&
         event.amount === 4
       );
-    }),
+    })
   );
   assert.ok(state.eventLog.some((event) => event.type === "attackAvoided"));
 });
 
 test("avoid_attack defense with a lethal life cost is skipped for the next legal defense option", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(targetPlayer);
   targetPlayer.life.current = 5;
   addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf", {
     costs: [{ costId: "pay_life", amount: 5 }],
   });
-  const legalDefense = addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf");
+  const legalDefense = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "attack_damage",
     timing: "onPlay",
@@ -2289,32 +2945,47 @@ test("avoid_attack defense with a lethal life cost is skipped for the next legal
   assert.equal(targetPlayer.discard.includes(legalDefense), true);
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "defenseChoiceSelected" && event.cardInstanceId === legalDefense.instanceId;
-    }),
+      return (
+        event.type === "defenseChoiceSelected" &&
+        event.cardInstanceId === legalDefense.instanceId
+      );
+    })
   );
   assert.equal(
-    state.eventLog.some((event) => event.type === "defenseCostPaid" && event.effectId === "pay_life"),
-    false,
+    state.eventLog.some(
+      (event) =>
+        event.type === "defenseCostPaid" && event.effectId === "pay_life"
+    ),
+    false
   );
 });
 
 test("avoid_attack defense runs supported branch effects through the shared effect runtime after costs are paid", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(targetPlayer);
   targetPlayer.chips = 1;
-  const defenseCard = addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf", {
-    costs: [{ costId: "spend_chips", amount: 1 }],
-    branchEffects: [
-      {
-        effectId: "add_power",
-        timing: "onDefense",
-        amount: 2,
-      },
-    ],
-  });
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf",
+    {
+      costs: [{ costId: "spend_chips", amount: 1 }],
+      branchEffects: [
+        {
+          effectId: "add_power",
+          timing: "onDefense",
+          amount: 2,
+        },
+      ],
+    }
+  );
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "attack_damage",
     timing: "onPlay",
@@ -2333,7 +3004,10 @@ test("avoid_attack defense runs supported branch effects through the shared effe
   assert.equal(targetPlayer.chips, 0);
   assert.equal(state.turn.power, 2);
   const costEventIndex = state.eventLog.findIndex((event) => {
-    return event.type === "defenseCostPaid" && event.cardInstanceId === defenseCard.instanceId;
+    return (
+      event.type === "defenseCostPaid" &&
+      event.cardInstanceId === defenseCard.instanceId
+    );
   });
   const branchEventIndex = state.eventLog.findIndex((event) => {
     return (
@@ -2351,24 +3025,33 @@ test("avoid_attack defense runs supported branch effects through the shared effe
 
 test("defense branch damage kill awards Basic Trophy to the defending player", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
   assert.ok(targetPlayer);
   activePlayer.life.current = 1;
   activePlayer.trophyLikeObjects.push(createBasicTrophy(activePlayer.playerId));
-  const defenseCard = addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf", {
-    branchEffects: [
-      {
-        effectId: "deal_damage",
-        timing: "onDefense",
-        amount: 1,
-        target: {
-          selector: "opponentPlayer",
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf",
+    {
+      branchEffects: [
+        {
+          effectId: "deal_damage",
+          timing: "onDefense",
+          amount: 1,
+          target: {
+            selector: "opponentPlayer",
+          },
         },
-      },
-    ],
-  });
+      ],
+    }
+  );
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "attack_damage",
     timing: "onPlay",
@@ -2385,8 +3068,18 @@ test("defense branch damage kill awards Basic Trophy to the defending player", (
 
   assert.equal(result.ok, true);
   assert.equal(targetPlayer.discard.includes(defenseCard), true);
-  assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
-  assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
+  assert.equal(
+    activePlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    false
+  );
+  assert.equal(
+    targetPlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    true
+  );
   assert.ok(
     state.eventLog.some((event) => {
       return (
@@ -2398,13 +3091,15 @@ test("defense branch damage kill awards Basic Trophy to the defending player", (
         event.effectId === "deal_damage" &&
         event.sourceType === "card"
       );
-    }),
+    })
   );
 });
 
 test("multi_target_attack resolves each opponent in seating order before moving to the next target", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const targets = getOpponentsInSeatingOrder(state, activePlayer);
   assert.equal(targets.length, 2);
@@ -2437,26 +3132,47 @@ test("multi_target_attack resolves each opponent in seating order before moving 
   assert.equal(firstTarget.deadWizardTokens[0], onlyDwt);
   assert.equal(secondTarget.deadWizardTokens.length, 0);
   assertEventOrder(state, [
-    (event) => event.type === "attackTargetStarted" && event.targetPlayerId === firstTarget.playerId,
-    (event) => event.type === "effectDamageDealt" && event.targetPlayerId === firstTarget.playerId,
-    (event) => event.type === "playerDied" && event.playerId === firstTarget.playerId,
-    (event) => event.type === "playerResurrected" && event.playerId === firstTarget.playerId,
-    (event) => event.type === "attackTargetStarted" && event.targetPlayerId === secondTarget.playerId,
-    (event) => event.type === "effectDamageDealt" && event.targetPlayerId === secondTarget.playerId,
-    (event) => event.type === "playerDied" && event.playerId === secondTarget.playerId,
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.targetPlayerId === firstTarget.playerId,
+    (event) =>
+      event.type === "effectDamageDealt" &&
+      event.targetPlayerId === firstTarget.playerId,
+    (event) =>
+      event.type === "playerDied" && event.playerId === firstTarget.playerId,
+    (event) =>
+      event.type === "playerResurrected" &&
+      event.playerId === firstTarget.playerId,
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.targetPlayerId === secondTarget.playerId,
+    (event) =>
+      event.type === "effectDamageDealt" &&
+      event.targetPlayerId === secondTarget.playerId,
+    (event) =>
+      event.type === "playerDied" && event.playerId === secondTarget.playerId,
   ]);
 });
 
 test("multi_target_attack opens a separate defense window for each target", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const [firstTarget, secondTarget] = getOpponentsInSeatingOrder(state, activePlayer);
+  const [firstTarget, secondTarget] = getOpponentsInSeatingOrder(
+    state,
+    activePlayer
+  );
   assert.ok(firstTarget);
   assert.ok(secondTarget);
   firstTarget.life.current = 1;
   secondTarget.life.current = 10;
-  const defenseCard = addFixtureDefenseCardToHand(state, firstTarget, "discardSelf");
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    firstTarget,
+    "discardSelf"
+  );
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "multi_target_attack",
     timing: "onPlay",
@@ -2477,17 +3193,29 @@ test("multi_target_attack opens a separate defense window for each target", () =
   assert.equal(firstTarget.discard.includes(defenseCard), true);
   assert.equal(secondTarget.life.current, 6);
   assertEventOrder(state, [
-    (event) => event.type === "attackTargetStarted" && event.targetPlayerId === firstTarget.playerId,
-    (event) => event.type === "defenseChoiceSelected" && event.playerId === firstTarget.playerId,
-    (event) => event.type === "attackAvoided" && event.targetPlayerId === firstTarget.playerId,
-    (event) => event.type === "attackTargetStarted" && event.targetPlayerId === secondTarget.playerId,
-    (event) => event.type === "effectDamageDealt" && event.targetPlayerId === secondTarget.playerId,
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.targetPlayerId === firstTarget.playerId,
+    (event) =>
+      event.type === "defenseChoiceSelected" &&
+      event.playerId === firstTarget.playerId,
+    (event) =>
+      event.type === "attackAvoided" &&
+      event.targetPlayerId === firstTarget.playerId,
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.targetPlayerId === secondTarget.playerId,
+    (event) =>
+      event.type === "effectDamageDealt" &&
+      event.targetPlayerId === secondTarget.playerId,
   ]);
 });
 
 test("mayhem_attack collects decisions for all players before resolving damage in active-player order", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const orderedPlayers = getPlayersInActiveOrder(state);
   assert.equal(orderedPlayers[0], activePlayer);
@@ -2498,7 +3226,11 @@ test("mayhem_attack collects decisions for all players before resolving damage i
   activePlayer.life.current = 10;
   secondPlayer.life.current = 1;
   thirdPlayer.life.current = 1;
-  const defenseCard = addFixtureDefenseCardToHand(state, secondPlayer, "discardSelf");
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    secondPlayer,
+    "discardSelf"
+  );
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "mayhem_attack",
     timing: "onPlay",
@@ -2520,22 +3252,41 @@ test("mayhem_attack collects decisions for all players before resolving damage i
   assert.equal(secondPlayer.discard.includes(defenseCard), true);
   assertEventOrder(state, [
     (event) => event.type === "mayhemDecisionPhaseStarted",
-    (event) => event.type === "mayhemDecisionStarted" && event.targetPlayerId === activePlayer.playerId,
-    (event) => event.type === "mayhemDecisionStarted" && event.targetPlayerId === secondPlayer.playerId,
-    (event) => event.type === "defenseChoiceSelected" && event.playerId === secondPlayer.playerId,
-    (event) => event.type === "mayhemDecisionStarted" && event.targetPlayerId === thirdPlayer.playerId,
+    (event) =>
+      event.type === "mayhemDecisionStarted" &&
+      event.targetPlayerId === activePlayer.playerId,
+    (event) =>
+      event.type === "mayhemDecisionStarted" &&
+      event.targetPlayerId === secondPlayer.playerId,
+    (event) =>
+      event.type === "defenseChoiceSelected" &&
+      event.playerId === secondPlayer.playerId,
+    (event) =>
+      event.type === "mayhemDecisionStarted" &&
+      event.targetPlayerId === thirdPlayer.playerId,
     (event) => event.type === "mayhemResolutionPhaseStarted",
-    (event) => event.type === "attackTargetStarted" && event.targetPlayerId === activePlayer.playerId,
-    (event) => event.type === "effectDamageDealt" && event.targetPlayerId === activePlayer.playerId,
-    (event) => event.type === "mayhemTargetSkipped" && event.targetPlayerId === secondPlayer.playerId,
-    (event) => event.type === "attackTargetStarted" && event.targetPlayerId === thirdPlayer.playerId,
-    (event) => event.type === "playerDied" && event.playerId === thirdPlayer.playerId,
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.targetPlayerId === activePlayer.playerId,
+    (event) =>
+      event.type === "effectDamageDealt" &&
+      event.targetPlayerId === activePlayer.playerId,
+    (event) =>
+      event.type === "mayhemTargetSkipped" &&
+      event.targetPlayerId === secondPlayer.playerId,
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.targetPlayerId === thirdPlayer.playerId,
+    (event) =>
+      event.type === "playerDied" && event.playerId === thirdPlayer.playerId,
   ]);
 });
 
 test("mayhem_attack kill does not move Basic Trophy", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const orderedPlayers = getPlayersInActiveOrder(state);
   const targetPlayer = orderedPlayers[2];
@@ -2557,19 +3308,36 @@ test("mayhem_attack kill does not move Basic Trophy", () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
-  assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
-  assert.equal(state.eventLog.some((event) => event.type === "trophyControlChanged"), false);
+  assert.equal(
+    activePlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    false
+  );
+  assert.equal(
+    targetPlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    true
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "trophyControlChanged"),
+    false
+  );
 });
 
 test("unowned Mega Mayhem death does not move Basic Trophy", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   activePlayer.trophyLikeObjects.push(createBasicTrophy(activePlayer.playerId));
-  const mayhemDefinition = [...state.cardDefinitions.values()].find((definition) => {
-    return definition.engine.cardKind === "mayhem";
-  });
+  const mayhemDefinition = [...state.cardDefinitions.values()].find(
+    (definition) => {
+      return definition.engine.cardKind === "mayhem";
+    }
+  );
   assert.ok(mayhemDefinition);
   const mayhemCard: CardInstance = {
     instanceId: "fixture-top-main-deck-mayhem",
@@ -2590,14 +3358,29 @@ test("unowned Mega Mayhem death does not move Basic Trophy", () => {
   });
 
   assert.equal(result.ok, true);
-  assert.ok(state.eventLog.some((event) => event.type === "playerDied" && event.playerId === activePlayer.playerId));
-  assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
-  assert.equal(state.eventLog.some((event) => event.type === "trophyControlChanged"), false);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "playerDied" && event.playerId === activePlayer.playerId
+    )
+  );
+  assert.equal(
+    activePlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    true
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "trophyControlChanged"),
+    false
+  );
 });
 
 test("gain_status can make the active player Dingler and clamps life to 15", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   activePlayer.life.current = 20;
   const fixtureCardId = addFixtureCardToActiveHand(state, {
@@ -2615,18 +3398,27 @@ test("gain_status can make the active player Dingler and clamps life to 15", () 
   });
 
   assert.equal(result.ok, true);
-  assert.equal(activePlayer.statuses.filter((status) => status.statusId === "dingler").length, 1);
+  assert.equal(
+    activePlayer.statuses.filter((status) => status.statusId === "dingler")
+      .length,
+    1
+  );
   assert.equal(activePlayer.life.current, 15);
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "dinglerStatusGained" && event.playerId === activePlayer.playerId;
-    }),
+      return (
+        event.type === "dinglerStatusGained" &&
+        event.playerId === activePlayer.playerId
+      );
+    })
   );
 });
 
 test("remove_status makes a Dingler player normal without healing current life", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   activePlayer.life.current = 20;
   const gainCardId = addFixtureCardToActiveHand(state, {
@@ -2637,9 +3429,15 @@ test("remove_status makes a Dingler player normal without healing current life",
       selector: "activePlayer",
     },
   });
-  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: gainCardId }).ok, true);
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: gainCardId }).ok,
+    true
+  );
   assert.equal(activePlayer.life.current, 15);
-  assert.equal(calculateEffectivePlayerMaxLife(state, activePlayer.playerId), 15);
+  assert.equal(
+    calculateEffectivePlayerMaxLife(state, activePlayer.playerId),
+    15
+  );
 
   activePlayer.life.current = 7;
   const removeCardId = addFixtureCardToActiveHand(state, {
@@ -2656,19 +3454,30 @@ test("remove_status makes a Dingler player normal without healing current life",
   });
 
   assert.equal(removeResult.ok, true);
-  assert.equal(activePlayer.statuses.some((status) => status.statusId === "dingler"), false);
+  assert.equal(
+    activePlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
   assert.equal(activePlayer.life.current, 7);
-  assert.equal(calculateEffectivePlayerMaxLife(state, activePlayer.playerId), 25);
+  assert.equal(
+    calculateEffectivePlayerMaxLife(state, activePlayer.playerId),
+    25
+  );
   assert.ok(
     state.eventLog.some((event) => {
-      return event.type === "dinglerStatusRemoved" && event.playerId === activePlayer.playerId;
-    }),
+      return (
+        event.type === "dinglerStatusRemoved" &&
+        event.playerId === activePlayer.playerId
+      );
+    })
   );
 });
 
 test("toggle_status alternates Dingler and normal status", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   activePlayer.life.current = 20;
   const toggleEffect = {
@@ -2680,8 +3489,16 @@ test("toggle_status alternates Dingler and normal status", () => {
     },
   };
   const firstToggleCardId = addFixtureCardToActiveHand(state, toggleEffect);
-  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: firstToggleCardId }).ok, true);
-  assert.equal(activePlayer.statuses.filter((status) => status.statusId === "dingler").length, 1);
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: firstToggleCardId })
+      .ok,
+    true
+  );
+  assert.equal(
+    activePlayer.statuses.filter((status) => status.statusId === "dingler")
+      .length,
+    1
+  );
   assert.equal(activePlayer.life.current, 15);
 
   const secondToggleCardId = addFixtureCardToActiveHand(state, toggleEffect);
@@ -2691,15 +3508,25 @@ test("toggle_status alternates Dingler and normal status", () => {
   });
 
   assert.equal(secondToggleResult.ok, true);
-  assert.equal(activePlayer.statuses.some((status) => status.statusId === "dingler"), false);
-  assert.equal(calculateEffectivePlayerMaxLife(state, activePlayer.playerId), 25);
+  assert.equal(
+    activePlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.equal(
+    calculateEffectivePlayerMaxLife(state, activePlayer.playerId),
+    25
+  );
 });
 
 test("active Dingler status gives a 5 VP scoring penalty until removed", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const scoreBefore = scoreGame(state).find((score) => score.playerId === activePlayer.playerId);
+  const scoreBefore = scoreGame(state).find(
+    (score) => score.playerId === activePlayer.playerId
+  );
   assert.ok(scoreBefore);
   const gainCardId = addFixtureCardToActiveHand(state, {
     effectId: "gain_status",
@@ -2709,9 +3536,14 @@ test("active Dingler status gives a 5 VP scoring penalty until removed", () => {
       selector: "activePlayer",
     },
   });
-  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: gainCardId }).ok, true);
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: gainCardId }).ok,
+    true
+  );
 
-  const dinglerScore = scoreGame(state).find((score) => score.playerId === activePlayer.playerId);
+  const dinglerScore = scoreGame(state).find(
+    (score) => score.playerId === activePlayer.playerId
+  );
   assert.ok(dinglerScore);
   assert.equal(dinglerScore.victoryPoints, scoreBefore.victoryPoints - 5);
 
@@ -2723,16 +3555,23 @@ test("active Dingler status gives a 5 VP scoring penalty until removed", () => {
       selector: "activePlayer",
     },
   });
-  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: removeCardId }).ok, true);
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: removeCardId }).ok,
+    true
+  );
 
-  const normalScore = scoreGame(state).find((score) => score.playerId === activePlayer.playerId);
+  const normalScore = scoreGame(state).find(
+    (score) => score.playerId === activePlayer.playerId
+  );
   assert.ok(normalScore);
   assert.equal(normalScore.victoryPoints, scoreBefore.victoryPoints);
 });
 
 test("Loshashlyk gains one chip per Dingler player", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   const gainSelfCardId = addFixtureCardToActiveHand(state, {
     effectId: "gain_status",
@@ -2742,7 +3581,10 @@ test("Loshashlyk gains one chip per Dingler player", () => {
       selector: "activePlayer",
     },
   });
-  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: gainSelfCardId }).ok, true);
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: gainSelfCardId }).ok,
+    true
+  );
   const gainFoeCardId = addFixtureCardToActiveHand(state, {
     effectId: "gain_status",
     timing: "onPlay",
@@ -2751,11 +3593,14 @@ test("Loshashlyk gains one chip per Dingler player", () => {
       selector: "opponentPlayer",
     },
   });
-  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: gainFoeCardId }).ok, true);
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: gainFoeCardId }).ok,
+    true
+  );
   activePlayer.chips = 0;
   const loshashlyk: CardInstance = {
     instanceId: "fixture-loshashlyk",
-    definitionId: "esw2_dbg__ocr_008",
+    definitionId: "esw2_dbg__main_008",
     ownerId: activePlayer.playerId,
     marketChips: 0,
   };
@@ -2789,7 +3634,9 @@ test("targeted fixture effect skips when there are no legal choices by default",
 
   assert.equal(result.ok, true);
   assert.equal(state.turn.power, 0);
-  assert.ok(state.eventLog.some((event) => event.type === "effectChoiceSkipped"));
+  assert.ok(
+    state.eventLog.some((event) => event.type === "effectChoiceSkipped")
+  );
 });
 
 test("targeted fixture effect can fail when legal choices are empty", () => {
@@ -2829,10 +3676,15 @@ test("targeted fixture effect surfaces unsupported selectors explicitly", () => 
   });
 
   assert.equal(result.ok, false);
-  assert.match(result.error, /Unsupported target selector unsupportedFixtureSelector/);
+  assert.match(
+    result.error,
+    /Unsupported target selector unsupportedFixtureSelector/
+  );
 });
 
-function snapshotActionState(state: ReturnType<typeof initializeGame>): unknown {
+function snapshotActionState(
+  state: ReturnType<typeof initializeGame>
+): unknown {
   return {
     activePlayerId: state.activePlayerId,
     turn: state.turn,
@@ -2847,7 +3699,9 @@ function snapshotActionState(state: ReturnType<typeof initializeGame>): unknown 
     common: {
       market: state.common.market.map((card) => card.instanceId),
       legendMarket: state.common.legendMarket.map((card) => card.instanceId),
-      wildMagicStack: state.common.wildMagicStack.map((card) => card.instanceId),
+      wildMagicStack: state.common.wildMagicStack.map(
+        (card) => card.instanceId
+      ),
     },
     eventLog: state.eventLog,
   };
@@ -2855,18 +3709,27 @@ function snapshotActionState(state: ReturnType<typeof initializeGame>): unknown 
 
 function prepareGainedMovementFixture(
   state: GameState,
-  cardId: string,
+  cardId: string
 ): {
   player: PlayerState;
   card: CardInstance;
 } {
-  const player = state.players.find((candidate) => candidate.playerId === state.activePlayerId);
+  const player = state.players.find(
+    (candidate) => candidate.playerId === state.activePlayerId
+  );
   assert.ok(player);
-  replaceFirstWizardProperty(state, player, createTopdeckOnGainWizardProperty(`${cardId}-property`, ["treasure"]));
+  replaceFirstWizardProperty(
+    state,
+    player,
+    createTopdeckOnGainWizardProperty(`${cardId}-property`, ["treasure"])
+  );
   const definition = createFixtureCardDefinition(cardId, [], {
     cardTypes: ["treasure"],
   });
-  state.cardDefinitions = new Map([...state.cardDefinitions, [definition.cardId, definition]]);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
   const card: CardInstance = {
     instanceId: `${cardId}-instance`,
     definitionId: definition.cardId,
@@ -2884,7 +3747,7 @@ function assertGainedMovementGuarantees(
   state: GameState,
   player: PlayerState,
   card: CardInstance,
-  completionEventType: "cardBought" | "effectCardGained",
+  completionEventType: "cardBought" | "effectCardGained"
 ): void {
   assert.equal(state.common.market.includes(card), false);
   assert.equal(player.deck[0], card);
@@ -2902,7 +3765,7 @@ function assertGainedMovementGuarantees(
         event.chipsBefore === 0 &&
         event.chipsAfter === 2
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
@@ -2915,7 +3778,7 @@ function assertGainedMovementGuarantees(
         event.ownerBefore === "common" &&
         event.ownerAfter === player.playerId
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
@@ -2925,21 +3788,25 @@ function assertGainedMovementGuarantees(
         event.targetCardInstanceId === card.instanceId &&
         event.effectId === "topdeck_gained_card"
       );
-    }),
+    })
   );
   assert.ok(
     state.eventLog.some((event) => {
       return (
         event.type === completionEventType &&
         event.playerId === player.playerId &&
-        (event.cardInstanceId === card.instanceId || event.targetCardInstanceId === card.instanceId) &&
+        (event.cardInstanceId === card.instanceId ||
+          event.targetCardInstanceId === card.instanceId) &&
         event.destination === "deckTop"
       );
-    }),
+    })
   );
 }
 
-function playTargetedFixtureEffect(seed: number, effect: unknown): {
+function playTargetedFixtureEffect(
+  seed: number,
+  effect: unknown
+): {
   result: ReturnType<typeof applyAction>;
   state: GameState;
   firstMarketCard: NonNullable<GameState["common"]["market"][number]>;
@@ -2949,7 +3816,9 @@ function playTargetedFixtureEffect(seed: number, effect: unknown): {
   const state = initializeGame({ rootDir, seed });
   const firstMarketCard = state.common.market[0];
   assert.ok(firstMarketCard);
-  const firstMarketCardCost = state.cardDefinitions.get(firstMarketCard.definitionId)?.engine.cost;
+  const firstMarketCardCost = state.cardDefinitions.get(
+    firstMarketCard.definitionId
+  )?.engine.cost;
   assert.ok(firstMarketCardCost !== undefined);
   const fixtureCardId = addFixtureCardToActiveHand(state, effect);
 
@@ -2958,7 +3827,9 @@ function playTargetedFixtureEffect(seed: number, effect: unknown): {
     cardInstanceId: fixtureCardId,
   });
 
-  const selectedTargetId = state.eventLog.find((event) => event.type === "effectChoiceSelected")?.targetCardInstanceId;
+  const selectedTargetId = state.eventLog.find(
+    (event) => event.type === "effectChoiceSelected"
+  )?.targetCardInstanceId;
 
   return {
     result,
@@ -2969,8 +3840,13 @@ function playTargetedFixtureEffect(seed: number, effect: unknown): {
   };
 }
 
-function getOpponentsInSeatingOrder(state: GameState, player: PlayerState): PlayerState[] {
-  const playerIndex = state.players.findIndex((candidate) => candidate.playerId === player.playerId);
+function getOpponentsInSeatingOrder(
+  state: GameState,
+  player: PlayerState
+): PlayerState[] {
+  const playerIndex = state.players.findIndex(
+    (candidate) => candidate.playerId === player.playerId
+  );
   assert.notEqual(playerIndex, -1);
   return Array.from({ length: state.players.length - 1 }, (_, offset) => {
     return state.players[(playerIndex + offset + 1) % state.players.length];
@@ -2978,17 +3854,24 @@ function getOpponentsInSeatingOrder(state: GameState, player: PlayerState): Play
 }
 
 function getPlayersInActiveOrder(state: GameState): PlayerState[] {
-  const activePlayerIndex = state.players.findIndex((candidate) => candidate.playerId === state.activePlayerId);
+  const activePlayerIndex = state.players.findIndex(
+    (candidate) => candidate.playerId === state.activePlayerId
+  );
   assert.notEqual(activePlayerIndex, -1);
   return Array.from({ length: state.players.length }, (_, offset) => {
     return state.players[(activePlayerIndex + offset) % state.players.length];
   }).filter((candidate): candidate is PlayerState => candidate !== undefined);
 }
 
-function assertEventOrder(state: GameState, predicates: Array<(event: GameState["eventLog"][number]) => boolean>): void {
+function assertEventOrder(
+  state: GameState,
+  predicates: Array<(event: GameState["eventLog"][number]) => boolean>
+): void {
   let searchFrom = 0;
   for (const predicate of predicates) {
-    const eventIndex = state.eventLog.findIndex((event, index) => index >= searchFrom && predicate(event));
+    const eventIndex = state.eventLog.findIndex(
+      (event, index) => index >= searchFrom && predicate(event)
+    );
     assert.notEqual(eventIndex, -1);
     searchFrom = eventIndex + 1;
   }
@@ -3001,11 +3884,17 @@ function addFixtureCardToActiveHand(
     isOngoing?: boolean;
     cardTypes?: string[];
     cardKind?: CardDefinition["engine"]["cardKind"];
-  } = {},
+  } = {}
 ): string {
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
-  const definition = createFixtureCardDefinition(`fixture-targeted-effect-card-${activePlayer.hand.length + 1}`, [effect], options);
+  const definition = createFixtureCardDefinition(
+    `fixture-targeted-effect-card-${activePlayer.hand.length + 1}`,
+    [effect],
+    options
+  );
 
   return addFixtureDefinitionToActiveHand(state, definition, {
     instanceId: `fixture-card-${activePlayer.hand.length + 1}`,
@@ -3017,15 +3906,22 @@ function createMarketFlowModeFixture(): GameState {
   const mayhemDefinition = createFixtureCardDefinition(
     "fixture-market-flow-interface-mayhem",
     [{ effectId: "add_power", timing: "onMayhemResolve", amount: 2 }],
-    { cardKind: "mayhem" },
+    { cardKind: "mayhem" }
   );
-  const normalDefinition = createFixtureCardDefinition("fixture-market-flow-interface-normal", []);
+  const normalDefinition = createFixtureCardDefinition(
+    "fixture-market-flow-interface-normal",
+    []
+  );
   state.cardDefinitions = new Map([
     ...state.cardDefinitions,
     [mayhemDefinition.cardId, mayhemDefinition],
     [normalDefinition.cardId, normalDefinition],
   ]);
-  state.common.market.splice(0, state.common.market.length, ...state.common.market.slice(0, 4));
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
   state.common.mainDeck.splice(
     0,
     state.common.mainDeck.length,
@@ -3040,20 +3936,37 @@ function createMarketFlowModeFixture(): GameState {
       definitionId: normalDefinition.cardId,
       ownerId: "common",
       marketChips: 0,
-    },
+    }
   );
   return state;
 }
 
-function findOwnedCard(player: PlayerState, definitionId: string): CardInstance | undefined {
-  return [...player.hand, ...player.deck, ...player.discard, ...player.playedThisTurn, ...player.permanents].find((card) => {
+function findOwnedCard(
+  player: PlayerState,
+  definitionId: string
+): CardInstance | undefined {
+  return [
+    ...player.hand,
+    ...player.deck,
+    ...player.discard,
+    ...player.playedThisTurn,
+    ...player.permanents,
+  ].find((card) => {
     return card.definitionId === definitionId;
   });
 }
 
 function moveCardToHand(player: PlayerState, card: CardInstance): void {
-  for (const zone of [player.hand, player.deck, player.discard, player.playedThisTurn, player.permanents]) {
-    const cardIndex = zone.findIndex((candidate) => candidate.instanceId === card.instanceId);
+  for (const zone of [
+    player.hand,
+    player.deck,
+    player.discard,
+    player.playedThisTurn,
+    player.permanents,
+  ]) {
+    const cardIndex = zone.findIndex(
+      (candidate) => candidate.instanceId === card.instanceId
+    );
     if (cardIndex >= 0) {
       zone.splice(cardIndex, 1);
     }
@@ -3062,8 +3975,13 @@ function moveCardToHand(player: PlayerState, card: CardInstance): void {
   player.hand.push(card);
 }
 
-function moveHandCardToFront(player: PlayerState, cardInstanceId: string): void {
-  const cardIndex = player.hand.findIndex((card) => card.instanceId === cardInstanceId);
+function moveHandCardToFront(
+  player: PlayerState,
+  cardInstanceId: string
+): void {
+  const cardIndex = player.hand.findIndex(
+    (card) => card.instanceId === cardInstanceId
+  );
   assert.notEqual(cardIndex, -1);
   const [card] = player.hand.splice(cardIndex, 1);
   assert.ok(card);
@@ -3077,7 +3995,7 @@ function createFixtureCardDefinition(
     isOngoing?: boolean;
     cardTypes?: string[];
     cardKind?: CardDefinition["engine"]["cardKind"];
-  } = {},
+  } = {}
 ): CardDefinition {
   const cardKind = options.cardKind ?? "normal";
   return {
@@ -3112,13 +4030,16 @@ function addControlledFixturePermanent(
   state: GameState,
   player: PlayerState,
   cardId: string,
-  cardTypes: string[],
+  cardTypes: string[]
 ): CardInstance {
   const definition = createFixtureCardDefinition(cardId, [], {
     isOngoing: true,
     cardTypes,
   });
-  state.cardDefinitions = new Map([...state.cardDefinitions, [definition.cardId, definition]]);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
   const card: CardInstance = {
     instanceId: `${cardId}-instance`,
     definitionId: definition.cardId,
@@ -3129,13 +4050,21 @@ function addControlledFixturePermanent(
   return card;
 }
 
-function addFixtureMarketCard(state: GameState, cardId: string, cardTypes: string[], cost: number): CardInstance {
+function addFixtureMarketCard(
+  state: GameState,
+  cardId: string,
+  cardTypes: string[],
+  cost: number
+): CardInstance {
   const definition = createFixtureCardDefinition(cardId, [], {
     cardTypes,
   });
   definition.engine.cost = cost;
   definition.visible.cost = cost;
-  state.cardDefinitions = new Map([...state.cardDefinitions, [definition.cardId, definition]]);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
   const card: CardInstance = {
     instanceId: `${cardId}-instance`,
     definitionId: definition.cardId,
@@ -3149,7 +4078,7 @@ function addFixtureMarketCard(state: GameState, cardId: string, cardTypes: strin
 function createFixtureCardInstances(
   definitionId: string,
   ownerId: PlayerState["playerId"],
-  count: number,
+  count: number
 ): CardInstance[] {
   return Array.from({ length: count }, (_, index) => ({
     instanceId: `${definitionId}-${index + 1}`,
@@ -3162,12 +4091,16 @@ function createFixtureCardInstances(
 function replaceFirstWizardProperty(
   state: GameState,
   player: PlayerState,
-  definition: TokenDefinition,
+  definition: TokenDefinition
 ): PlayerState["wizardProperties"][number] {
   return replacePostSetupWizardPropertyFixture(state, player, definition);
 }
 
-function createChipActivationWizardProperty(tokenId: string, cardTypes: string[], minimumCount: number): TokenDefinition {
+function createChipActivationWizardProperty(
+  tokenId: string,
+  cardTypes: string[],
+  minimumCount: number
+): TokenDefinition {
   return {
     schemaVersion: 1,
     tokenId,
@@ -3193,7 +4126,9 @@ function createChipActivationWizardProperty(tokenId: string, cardTypes: string[]
   };
 }
 
-function createOnPlayOngoingChipWizardProperty(tokenId: string): TokenDefinition {
+function createOnPlayOngoingChipWizardProperty(
+  tokenId: string
+): TokenDefinition {
   return {
     schemaVersion: 1,
     tokenId,
@@ -3215,7 +4150,10 @@ function createOnPlayOngoingChipWizardProperty(tokenId: string): TokenDefinition
   };
 }
 
-function createOnPlayTypeChipWizardProperty(tokenId: string, cardTypes: string[]): TokenDefinition {
+function createOnPlayTypeChipWizardProperty(
+  tokenId: string,
+  cardTypes: string[]
+): TokenDefinition {
   return {
     schemaVersion: 1,
     tokenId,
@@ -3237,7 +4175,10 @@ function createOnPlayTypeChipWizardProperty(tokenId: string, cardTypes: string[]
   };
 }
 
-function createTopdeckOnGainWizardProperty(tokenId: string, cardTypes: string[]): TokenDefinition {
+function createTopdeckOnGainWizardProperty(
+  tokenId: string,
+  cardTypes: string[]
+): TokenDefinition {
   return {
     schemaVersion: 1,
     tokenId,
@@ -3259,7 +4200,10 @@ function createTopdeckOnGainWizardProperty(tokenId: string, cardTypes: string[])
   };
 }
 
-function createTemporaryHandLimitWizardProperty(tokenId: string, cardTypes: string[]): TokenDefinition {
+function createTemporaryHandLimitWizardProperty(
+  tokenId: string,
+  cardTypes: string[]
+): TokenDefinition {
   return {
     schemaVersion: 1,
     tokenId,
@@ -3288,7 +4232,7 @@ function addFixtureDefenseCardToHand(
   options: {
     costs?: unknown[];
     branchEffects?: unknown[];
-  } = {},
+  } = {}
 ): CardInstance {
   const definition: CardDefinition = {
     schemaVersion: 1,
@@ -3324,7 +4268,10 @@ function addFixtureDefenseCardToHand(
       unsupportedMechanics: [],
     },
   };
-  state.cardDefinitions = new Map([...state.cardDefinitions, [definition.cardId, definition]]);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
 
   const card: CardInstance = {
     instanceId: `fixture-defense-card-${player.hand.length + 1}`,
@@ -3336,7 +4283,10 @@ function addFixtureDefenseCardToHand(
   return card;
 }
 
-function createMaxLifeModifierStatus(playerId: StatusInstance["ownerId"], amount: number): StatusInstance {
+function createMaxLifeModifierStatus(
+  playerId: StatusInstance["ownerId"],
+  amount: number
+): StatusInstance {
   return {
     instanceId: "fixture-max-life-status",
     statusId: "fixture-max-life-status",
@@ -3356,7 +4306,9 @@ function createMaxLifeModifierStatus(playerId: StatusInstance["ownerId"], amount
   };
 }
 
-function createBasicTrophy(ownerId: PlayerState["playerId"]): PlayerState["trophyLikeObjects"][number] {
+function createBasicTrophy(
+  ownerId: PlayerState["playerId"]
+): PlayerState["trophyLikeObjects"][number] {
   return {
     instanceId: "basic-trophy",
     trophyId: "basicTrophy",

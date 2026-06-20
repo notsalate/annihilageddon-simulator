@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__special_002",
+  "source": {
+    "draft": "data/import/cards/special/drafts/esw2_dbg__special_002.json",
+    "image": "assets/cards/special/esw2_dbg__special_002.png",
+    "text": "data/import/cards/special/texts/esw2_dbg__special_002.md"
+  },
+  "visible": {
+    "nameRu": "Вялая палочка",
+    "cost": 0,
+    "victoryPoints": -1,
+    "typeRu": null,
+    "cardKind": "limpWand",
+    "cardTypes": [],
+    "textRu": "(Эффекта нет.)",
+    "markers": [],
+    "uncertainty": [
+      "OCR указал, что видимый тип карты не виден или не указан на видимой части."
+    ]
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "limpWand",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": -1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

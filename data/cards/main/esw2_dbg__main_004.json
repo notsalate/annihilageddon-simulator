@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_004",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_004.json",
+    "image": "assets/cards/main/esw2_dbg__main_004.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_004.md"
+  },
+  "visible": {
+    "nameRu": "Повелитель шкурок",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "textRu": "+2 мощи\nАтака: выбери правого или левого врага. Он получает 1 вялую палочку.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "cost": 4,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 2
+      },
+      {
+        "effectId": "attack_gain_limp_wand",
+        "destination": "targetDiscard",
+        "targetSelector": "chosenLeftOrRightFoe",
+        "timing": "onPlay",
+        "amount": 1
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

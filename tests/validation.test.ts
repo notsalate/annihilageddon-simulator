@@ -64,7 +64,11 @@ test("executable data-pack validation rejects invalid add-power amount", () => {
   const result = validateExecutableDataPack(dataPack);
 
   assert.equal(result.ok, false);
-  assert.equal(result.errors.filter((error) => error.includes("invalid power amount")).length, 3);
+  assert.equal(
+    result.errors.filter((error) => error.includes("invalid power amount"))
+      .length,
+    3
+  );
 });
 
 test("executable data-pack validation rejects invalid add-power Wild Magic option amount", () => {
@@ -93,7 +97,9 @@ test("executable data-pack validation rejects invalid add-power Wild Magic optio
   const result = validateExecutableDataPack(dataPack);
 
   assert.equal(result.ok, false);
-  assert.ok(result.errors.some((error) => error.includes("invalid power amount")));
+  assert.ok(
+    result.errors.some((error) => error.includes("invalid power amount"))
+  );
 });
 
 test("supported executable healing effect passes executable effect validation", () => {
@@ -233,10 +239,26 @@ test("executable data-pack validation rejects invalid core movement effect shape
   const result = validateExecutableDataPack(dataPack);
 
   assert.equal(result.ok, false);
-  assert.ok(result.errors.some((error) => error.includes("unsupported gain target activePlayerHandCard")));
-  assert.ok(result.errors.some((error) => error.includes("unsupported gain destination deckTop")));
-  assert.ok(result.errors.some((error) => error.includes("unsupported discard target mainMarketCard")));
-  assert.ok(result.errors.some((error) => error.includes("unsupported destroy target mainMarketCard")));
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes("unsupported gain target activePlayerHandCard")
+    )
+  );
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes("unsupported gain destination deckTop")
+    )
+  );
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes("unsupported discard target mainMarketCard")
+    )
+  );
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes("unsupported destroy target mainMarketCard")
+    )
+  );
 });
 
 test("supported executable attack and defense effects pass executable effect validation", () => {
@@ -292,7 +314,9 @@ test("supported executable attack and defense effects pass executable effect val
 });
 
 test("supported executable multi-target attack passes executable effect validation", () => {
-  const card = createFixtureCard("fixture-supported-multi-target-attack-effect");
+  const card = createFixtureCard(
+    "fixture-supported-multi-target-attack-effect"
+  );
   const dataPack = withOnlyFixtureCard({
     ...card,
     engine: {
@@ -341,7 +365,12 @@ test("supported executable Mayhem attack passes executable effect validation", (
 });
 
 test("combat effects are registered and reject invalid shapes through runtime handlers", () => {
-  const combatEffectIds = ["deal_damage", "attack_damage", "multi_target_attack", "mayhem_attack"];
+  const combatEffectIds = [
+    "deal_damage",
+    "attack_damage",
+    "multi_target_attack",
+    "mayhem_attack",
+  ];
 
   for (const effectId of combatEffectIds) {
     const handler = getEffectRuntimeHandler(effectId);
@@ -355,7 +384,7 @@ test("combat effects are registered and reject invalid shapes through runtime ha
           selector: "unsupported",
         },
       }),
-      [],
+      []
     );
   }
 });
@@ -384,8 +413,11 @@ test("combat data-pack validation rejects fixture effect ids", () => {
   assert.equal(result.ok, false);
   assert.ok(
     result.errors.some((error) => {
-      return error.includes("fixture-effect-in-combat-data") && error.includes("fixture_add_power_equal_to_target_cost");
-    }),
+      return (
+        error.includes("fixture-effect-in-combat-data") &&
+        error.includes("fixture_add_power_equal_to_target_cost")
+      );
+    })
   );
 });
 
@@ -409,8 +441,11 @@ test("fixture mode does not allow unsupported fixture effect ids", () => {
   assert.equal(result.ok, false);
   assert.ok(
     result.errors.some((error) => {
-      return error.includes("fixture-unsupported-effect-in-fixture-mode") && error.includes("fixture_not_supported");
-    }),
+      return (
+        error.includes("fixture-unsupported-effect-in-fixture-mode") &&
+        error.includes("fixture_not_supported")
+      );
+    })
   );
 });
 
@@ -434,8 +469,11 @@ test("executable data-pack validation rejects unsupported effect ids", () => {
   assert.equal(result.ok, false);
   assert.ok(
     result.errors.some((error) => {
-      return error.includes("fixture-unsupported-effect") && error.includes("fixture_not_supported");
-    }),
+      return (
+        error.includes("fixture-unsupported-effect") &&
+        error.includes("fixture_not_supported")
+      );
+    })
   );
 });
 
@@ -462,8 +500,11 @@ test("executable data-pack validation rejects unsupported mechanics", () => {
   assert.equal(result.ok, false);
   assert.ok(
     result.errors.some((error) => {
-      return error.includes("fixture-unsupported-mechanic") && error.includes("not-yet-modeled");
-    }),
+      return (
+        error.includes("fixture-unsupported-mechanic") &&
+        error.includes("not-yet-modeled")
+      );
+    })
   );
 });
 
@@ -489,8 +530,11 @@ test("executable data-pack validation rejects wizard property tokens with unsupp
   assert.equal(result.ok, false);
   assert.ok(
     result.errors.some((error) => {
-      return error.includes("wizard-property-fixture-unsupported") && error.includes("wizard-property-triggered-economy");
-    }),
+      return (
+        error.includes("wizard-property-fixture-unsupported") &&
+        error.includes("wizard-property-triggered-economy")
+      );
+    })
   );
 });
 
@@ -530,9 +574,18 @@ test("executable data-pack validation rejects manifest references to import-only
   assert.ok(
     result.errors.some((error) => {
       return (
-        error.includes("tokenDefinitionPaths[0]") && error.includes("data/import/tokens/wizard-property/drafts")
+        error.includes("tokenDefinitionPaths[0]") &&
+        error.includes("data/import/tokens/wizard-property/drafts")
       );
-    }),
+    })
+  );
+});
+
+test("loader rejects import-only card definition paths before reading draft data", () => {
+  assert.throws(
+    () =>
+      loadV0DataPack(rootDir, "tests/fixtures/import-card-path-data-pack.json"),
+    /Manifest cardDefinitionPaths references import-only path data\/import\/cards\/main\/drafts/
   );
 });
 
@@ -559,8 +612,11 @@ test("executable data-pack validation rejects unsupported play-top destinations"
   assert.equal(result.ok, false);
   assert.ok(
     result.errors.some((error) => {
-      return error.includes("fixture-unsupported-play-top-destination") && error.includes("unsupportedDestination");
-    }),
+      return (
+        error.includes("fixture-unsupported-play-top-destination") &&
+        error.includes("unsupportedDestination")
+      );
+    })
   );
 });
 
@@ -586,8 +642,11 @@ test("executable data-pack validation rejects redirect defense branches", () => 
   assert.equal(result.ok, false);
   assert.ok(
     result.errors.some((error) => {
-      return error.includes("fixture-unsupported-redirect-defense") && error.includes("redirectTarget");
-    }),
+      return (
+        error.includes("fixture-unsupported-redirect-defense") &&
+        error.includes("redirectTarget")
+      );
+    })
   );
 });
 
@@ -595,7 +654,10 @@ function withFixtureCard(card: CardDefinition): LoadedDataPack {
   const dataPack = loadV0DataPack(rootDir);
   return {
     ...dataPack,
-    cardDefinitions: new Map([...dataPack.cardDefinitions, [card.cardId, card]]),
+    cardDefinitions: new Map([
+      ...dataPack.cardDefinitions,
+      [card.cardId, card],
+    ]),
   };
 }
 

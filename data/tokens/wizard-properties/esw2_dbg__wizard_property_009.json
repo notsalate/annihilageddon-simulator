@@ -25,17 +25,17 @@
       {
         "effectId": "replace_starting_card",
         "timing": "setup",
-        "fromDefinitionId": "esw2_dbg__ocr_022",
-        "toDefinitionId": "krutagidon_wizard_property_009_hrenalocka_wand"
+        "fromDefinitionId": "esw2_dbg__starter_002",
+        "toDefinitionId": "esw2_dbg__starter_004"
       },
       {
         "effectId": "modify_owned_wand_attack_damage",
         "timing": "attackReplacement",
         "cardDefinitionIds": [
-          "esw2_dbg__ocr_021",
-          "esw2_dbg__ocr_013",
-          "esw2_dbg__ocr_036",
-          "krutagidon_wizard_property_009_hrenalocka_wand"
+          "esw2_dbg__starter_001",
+          "esw2_dbg__main_013",
+          "esw2_dbg__legend_008",
+          "esw2_dbg__starter_004"
         ],
         "amount": 1
       },
@@ -43,10 +43,10 @@
         "effectId": "prevent_defense_against_owned_wand_attacks",
         "timing": "attackReplacement",
         "cardDefinitionIds": [
-          "esw2_dbg__ocr_021",
-          "esw2_dbg__ocr_013",
-          "esw2_dbg__ocr_036",
-          "krutagidon_wizard_property_009_hrenalocka_wand"
+          "esw2_dbg__starter_001",
+          "esw2_dbg__main_013",
+          "esw2_dbg__legend_008",
+          "esw2_dbg__starter_004"
         ]
       }
     ],

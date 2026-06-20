@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_023",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_023.json",
+    "image": "assets/cards/main/esw2_dbg__main_023.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_023.md"
+  },
+  "visible": {
+    "nameRu": "2L",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун сбрасывает свою колоду, потом уничтожает 1 карту в своей стопке сброса.",
+    "markers": [],
+    "uncertainty": [
+      "OCR указал, что стоимость не видна или не указана на видимой части.",
+      "OCR указал, что ПО не видны или не указаны на видимой части."
+    ]
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "cost": null,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_each_player_discard_deck_then_destroy_from_discard",
+        "targetSelector": "eachPlayerClockwiseFromActive",
+        "chooser": "affectedPlayer",
+        "destroyAmount": 1,
+        "timing": "onMayhemResolve",
+        "destroySourceZone": "discard",
+        "discardSourceZone": "deck"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

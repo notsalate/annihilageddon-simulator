@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__special_001",
+  "source": {
+    "draft": "data/import/cards/special/drafts/esw2_dbg__special_001.json",
+    "image": "assets/cards/special/esw2_dbg__special_001.png",
+    "text": "data/import/cards/special/texts/esw2_dbg__special_001.md"
+  },
+  "visible": {
+    "nameRu": "Шальная магия",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": null,
+    "cardKind": "wildMagic",
+    "cardTypes": [],
+    "textRu": "Выбери одно: +2 мощи\nИЛИ можешь сыграть верхнюю карту из колоды любого врага и затем положить ее в стопку сброса владельца.\nЕсли это постоянка, вместо этого оставь её у себя, в игре.",
+    "markers": [],
+    "uncertainty": [
+      "OCR указал, что видимый тип карты не виден или не указан на видимой части."
+    ]
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "wildMagic",
+    "cardTypes": [],
+    "cost": 3,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "wild_magic_choice",
+        "timing": "onPlay",
+        "options": [
+          {
+            "effectId": "add_power",
+            "amount": 2
+          },
+          {
+            "targetSelector": "chosenFoe",
+            "effectId": "play_top_card_from_foe_deck",
+            "nonOngoingCleanupDestination": "ownerDiscard",
+            "ongoingOwnership": "controller"
+          }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

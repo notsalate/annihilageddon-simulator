@@ -3,11 +3,8 @@
   "packId": "v0-first-batch-playable-data-pack",
   "runtimeSchema": "krutagidon.dataPack.v0",
   "mappingStatus": "supported-first-batch-v0",
-  "cardsPath": "data/cards",
   "tokensPath": "data/tokens",
-  "tokenDefinitionPaths": [
-    "data/tokens/wizard-properties"
-  ],
+  "tokenDefinitionPaths": ["data/tokens/wizard-properties"],
   "decks": {
     "starterDeck": "data/decks/v0-starter-deck.json",
     "mainDeck": "data/decks/v0-main-deck-first-batch.json",
@@ -28,25 +25,25 @@
   },
   "unsupportedCards": [
     {
-      "cardId": "esw2_dbg__ocr_007",
+      "cardId": "esw2_dbg__main_007",
       "nameRu": "Ламповое желание",
       "mappingStatus": "partial",
       "reasons": "В v0 zones пока нет состояния face-up карты на верху колоды; маппинг как обычный topdeck изменил бы поведение."
     },
     {
-      "cardId": "esw2_dbg__ocr_030",
+      "cardId": "esw2_dbg__main_022",
       "nameRu": "2T",
       "mappingStatus": "partial",
       "reasons": "Баттл с участием/пасом, раскрытием рук, сравнением суммарной стоимости и возможными ничьими победителями не входит в минимальный v0 handler set; карта не добавлена в v0 deck."
     },
     {
-      "cardId": "esw2_dbg__ocr_033",
+      "cardId": "esw2_dbg__legend_005",
       "nameRu": "Надёжный план",
       "mappingStatus": "partial",
       "reasons": "Активация требует посмотреть 5 верхних карт колоды Легенд, выбрать 1 в свою колоду и вернуть остальные в любом порядке; v0 deck manipulation/reorder handler ещё не зафиксирован."
     },
     {
-      "cardId": "esw2_dbg__ocr_036",
+      "cardId": "esw2_dbg__legend_008",
       "nameRu": "Палочка-ушаталочка",
       "mappingStatus": "partial",
       "reasons": "Мгновенная победа конкретной карты вне текущей v0 модели условий конца партии и scoring; урон замаплен, мгновенная победа не замаплена."
@@ -56,5 +53,12 @@
   "notes": [
     "Runtime-поведение карт закодировано явными effectId objects; engine не должен парсить visible.textRu во время партии.",
     "v0 main/legend decks являются first-batch fixture: они используют только supported карты и исключают partial mappings."
+  ],
+  "cardDefinitionPaths": [
+    "data/cards/main",
+    "data/cards/legend",
+    "data/cards/starter",
+    "data/cards/familiar",
+    "data/cards/special"
   ]
 }

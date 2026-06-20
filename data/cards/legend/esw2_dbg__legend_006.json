@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_006",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_006.json",
+    "image": "assets/cards/legend/esw2_dbg__legend_006.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_006.md"
+  },
+  "visible": {
+    "nameRu": "Ультимативное тронадо",
+    "cost": 18,
+    "victoryPoints": 6,
+    "typeRu": "Легенда-Место",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "location"],
+    "textRu": "Постоянка: всякий раз, когда ты впервые за свой ход наносишь урон атакой, + столько мощи, каков суммарный нанесённый урон.",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "location"],
+    "cost": 18,
+    "victoryPoints": 6,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "ongoing_first_attack_damage_add_power",
+        "timing": "afterFirstAttackDamageEachTurn",
+        "amount": "totalDamageDealtByThatAttack"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

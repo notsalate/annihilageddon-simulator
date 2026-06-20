@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: Done
 
 # Migrate Runtime Cards and IDs
 
@@ -10,16 +10,16 @@ This issue owns card definition IDs and runtime card definition layout. It does 
 
 ## Acceptance criteria
 
-- [ ] Rename runtime card IDs from `esw2_dbg__ocr_*` to source-grouped IDs such as `esw2_dbg__main_001`, `esw2_dbg__legend_001`, `esw2_dbg__starter_001`, and `esw2_dbg__familiar_001`.
-- [ ] Keep `esw2` and `dbg` in IDs.
-- [ ] Do not encode Russian names, card text, visible card types, or behavior details into runtime IDs or filenames.
-- [ ] Replace runtime `ocrText` metadata with canonical `source.text`.
-- [ ] Update runtime source metadata for draft, source text, and image paths.
-- [ ] Split runtime card definitions into `data/cards/main`, `data/cards/legend`, `data/cards/starter`, `data/cards/familiar`, and `data/cards/special`.
-- [ ] Keep Wild Magic and Limp Wand runtime definitions under `data/cards/special`.
-- [ ] Update all runtime deck/stack references to the renamed card IDs.
-- [ ] Update the card loader to support explicit card definition paths without accidentally reading import data.
-- [ ] Update focused loader, validation, and simulation tests so the existing v0 data pack remains runnable.
+- [x] Rename runtime card IDs from `esw2_dbg__ocr_*` to source-grouped IDs such as `esw2_dbg__main_001`, `esw2_dbg__legend_001`, `esw2_dbg__starter_001`, and `esw2_dbg__familiar_001`.
+- [x] Keep `esw2` and `dbg` in IDs.
+- [x] Do not encode Russian names, card text, visible card types, or behavior details into runtime IDs or filenames.
+- [x] Replace runtime `ocrText` metadata with canonical `source.text`.
+- [x] Update runtime source metadata for draft, source text, and image paths.
+- [x] Split runtime card definitions into `data/cards/main`, `data/cards/legend`, `data/cards/starter`, `data/cards/familiar`, and `data/cards/special`.
+- [x] Keep Wild Magic and Limp Wand runtime definitions under `data/cards/special`.
+- [x] Update all runtime deck/stack references to the renamed card IDs.
+- [x] Update the card loader to support explicit card definition paths without accidentally reading import data.
+- [x] Update focused loader, validation, and simulation tests so the existing v0 data pack remains runnable.
 
 ## Blocked by
 

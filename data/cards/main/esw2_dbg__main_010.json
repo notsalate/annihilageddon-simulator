@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_010",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_010.json",
+    "image": "assets/cards/main/esw2_dbg__main_010.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_010.md"
+  },
+  "visible": {
+    "nameRu": "Спиногрызогрызы",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "textRu": "+2 мощи\n[символ активации: глаз и 6 стрелок]: если под твоим контролем есть ещё хотя бы 1 тварь, можешь уничтожить 1 карту у себя на руке или в стопке сброса.",
+    "markers": ["activate"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "cost": 3,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 2
+      },
+      {
+        "effectId": "conditional_activation_destroy_own_cards",
+        "condition": {
+          "effectId": "controls_other_card_type",
+          "minimum": 1,
+          "cardType": "creature"
+        },
+        "chooser": "controller",
+        "activationLimit": "oncePerTurnWhileControlled",
+        "sourceZones": ["hand", "discard"],
+        "timing": "activation",
+        "amount": 1
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}
