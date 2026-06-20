@@ -102,7 +102,7 @@ Token definitions хранятся отдельно от card definitions:
 
 ```text
 data/tokens/
-  dead-wizard-token/
+  dead-wizard/
   wizard-property/
 ```
 
@@ -127,7 +127,7 @@ data/pools/
 - `data/stacks/tokens/` - стопки жетонов, например Dead Wizard Tokens или wizard properties.
 - `data/pools/` - выбираемые или общие пулы, например familiars, если они моделируются как pool.
 
-Нужно сохранить runnable `v0` first-batch regression pack. Для полного импорта добавляется отдельный `full-import.json`, который может включать incomplete/non-playable mappings.
+`data/packs/v0-first-batch.json` - runnable first-batch regression pack. `data/packs/full-import.json` - future manifest для полного импорта; он может перечислять incomplete/non-playable definitions, но не означает, что все карты уже playable.
 
 ## ID Style
 

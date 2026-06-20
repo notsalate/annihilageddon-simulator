@@ -107,21 +107,23 @@ export interface DataPackManifest {
   schemaVersion: number;
   packId: string;
   runtimeSchema: "krutagidon.dataPack.v0";
-  cardsPath?: string;
-  cardDefinitionPaths?: string[];
-  tokensPath?: string;
+  cardDefinitionPaths: string[];
   tokenDefinitionPaths?: string[];
-  decks: {
+  decks?: {
     starterDeck: string;
     mainDeck: string;
     legendDeck: string;
+  };
+  cardStacks?: {
     wildMagicStack: string;
     limpWandStack: string;
-    familiarPool?: string;
   };
   tokenStacks?: {
     deadWizardTokens: string;
     wizardProperties?: string;
+  };
+  pools?: {
+    familiarPool?: string;
   };
   needsData: unknown[];
 }
@@ -159,18 +161,16 @@ export interface DataPackValidationOptions {
 
 export function loadV0DataPack(
   rootDir: string,
-  manifestPath = "data/decks/v0-first-batch-data-pack.json"
+  manifestPath = "data/packs/v0-first-batch.json"
 ): LoadedDataPack {
   const manifest = readJsonFile<DataPackManifest>(rootDir, manifestPath);
-  const cardDefinitions = loadCardDefinitions(
-    rootDir,
-    collectCardDefinitionPaths(manifest)
+  const cardDefinitions = loadCardDefinitions(rootDir, manifest);
+  const tokenDefinitions = loadTokenDefinitions(rootDir, manifest);
+  const deckPaths = requireManifestSection(manifest.decks, "decks");
+  const cardStackPaths = requireManifestSection(
+    manifest.cardStacks,
+    "cardStacks"
   );
-  const tokenDefinitionPaths = [
-    ...(manifest.tokensPath === undefined ? [] : [manifest.tokensPath]),
-    ...(manifest.tokenDefinitionPaths ?? []),
-  ];
-  const tokenDefinitions = loadTokenDefinitions(rootDir, tokenDefinitionPaths);
 
   return {
     manifest,
@@ -179,25 +179,22 @@ export function loadV0DataPack(
     decks: {
       starterDeck: readJsonFile<DeckComposition>(
         rootDir,
-        manifest.decks.starterDeck
+        deckPaths.starterDeck
       ),
-      mainDeck: readJsonFile<DeckComposition>(rootDir, manifest.decks.mainDeck),
-      legendDeck: readJsonFile<DeckComposition>(
-        rootDir,
-        manifest.decks.legendDeck
-      ),
+      mainDeck: readJsonFile<DeckComposition>(rootDir, deckPaths.mainDeck),
+      legendDeck: readJsonFile<DeckComposition>(rootDir, deckPaths.legendDeck),
       wildMagicStack: readJsonFile<DeckComposition>(
         rootDir,
-        manifest.decks.wildMagicStack
+        cardStackPaths.wildMagicStack
       ),
       limpWandStack: readJsonFile<DeckComposition>(
         rootDir,
-        manifest.decks.limpWandStack
+        cardStackPaths.limpWandStack
       ),
       familiarPool:
-        manifest.decks.familiarPool === undefined
+        manifest.pools?.familiarPool === undefined
           ? undefined
-          : readJsonFile<DeckComposition>(rootDir, manifest.decks.familiarPool),
+          : readJsonFile<DeckComposition>(rootDir, manifest.pools.familiarPool),
     },
     tokenStacks: {
       deadWizardTokens:
@@ -356,30 +353,24 @@ function validateManifestRuntimePaths(manifest: DataPackManifest): string[] {
 }
 
 function collectManifestPaths(manifest: DataPackManifest): [string, string][] {
-  const paths: [string, string][] = [
-    ["decks.starterDeck", manifest.decks.starterDeck],
-    ["decks.mainDeck", manifest.decks.mainDeck],
-    ["decks.legendDeck", manifest.decks.legendDeck],
-    ["decks.wildMagicStack", manifest.decks.wildMagicStack],
-    ["decks.limpWandStack", manifest.decks.limpWandStack],
-  ];
+  const paths: [string, string][] = [];
 
-  if (manifest.cardsPath !== undefined) {
-    paths.push(["cardsPath", manifest.cardsPath]);
-  }
-
-  for (const [index, filePath] of collectCardDefinitionPaths(
-    manifest
-  ).entries()) {
+  for (const [index, filePath] of manifest.cardDefinitionPaths.entries()) {
     paths.push([`cardDefinitionPaths[${index}]`, filePath]);
   }
 
-  if (manifest.decks.familiarPool !== undefined) {
-    paths.push(["decks.familiarPool", manifest.decks.familiarPool]);
+  if (manifest.decks !== undefined) {
+    paths.push(["decks.starterDeck", manifest.decks.starterDeck]);
+    paths.push(["decks.mainDeck", manifest.decks.mainDeck]);
+    paths.push(["decks.legendDeck", manifest.decks.legendDeck]);
   }
 
-  if (manifest.tokensPath !== undefined) {
-    paths.push(["tokensPath", manifest.tokensPath]);
+  if (manifest.cardStacks !== undefined) {
+    paths.push([
+      "cardStacks.wildMagicStack",
+      manifest.cardStacks.wildMagicStack,
+    ]);
+    paths.push(["cardStacks.limpWandStack", manifest.cardStacks.limpWandStack]);
   }
 
   for (const [index, filePath] of (
@@ -402,21 +393,18 @@ function collectManifestPaths(manifest: DataPackManifest): [string, string][] {
     ]);
   }
 
-  return paths;
-}
+  if (manifest.pools?.familiarPool !== undefined) {
+    paths.push(["pools.familiarPool", manifest.pools.familiarPool]);
+  }
 
-function collectCardDefinitionPaths(manifest: DataPackManifest): string[] {
-  return [
-    ...(manifest.cardsPath === undefined ? [] : [manifest.cardsPath]),
-    ...(manifest.cardDefinitionPaths ?? []),
-  ];
+  return paths;
 }
 
 function loadCardDefinitions(
   rootDir: string,
-  cardDefinitionPaths: string[]
+  manifest: DataPackManifest
 ): ReadonlyMap<string, CardDefinition> {
-  if (cardDefinitionPaths.length === 0) {
+  if (manifest.cardDefinitionPaths.length === 0) {
     throw new Error(
       "Data pack manifest does not define any card definition paths"
     );
@@ -424,9 +412,9 @@ function loadCardDefinitions(
 
   const cards = new Map<string, CardDefinition>();
 
-  for (const cardsPath of cardDefinitionPaths) {
-    assertRuntimePath("cardDefinitionPaths", cardsPath);
-    const absoluteCardsPath = path.resolve(rootDir, cardsPath);
+  for (const cardDefinitionsPath of manifest.cardDefinitionPaths) {
+    assertRuntimePath("cardDefinitionPaths", cardDefinitionsPath);
+    const absoluteCardsPath = path.resolve(rootDir, cardDefinitionsPath);
 
     for (const fileName of readdirSync(absoluteCardsPath).sort()) {
       if (!fileName.endsWith(".json") || fileName.startsWith("_")) {
@@ -443,13 +431,13 @@ function loadCardDefinitions(
 
 function loadTokenDefinitions(
   rootDir: string,
-  tokenDefinitionPaths: string[]
+  manifest: DataPackManifest
 ): ReadonlyMap<string, TokenDefinition> {
   const tokens = new Map<string, TokenDefinition>();
 
-  for (const tokensPath of tokenDefinitionPaths) {
-    assertRuntimePath("tokenDefinitionPaths", tokensPath);
-    const absoluteTokensPath = path.resolve(rootDir, tokensPath);
+  for (const tokenDefinitionsPath of manifest.tokenDefinitionPaths ?? []) {
+    assertRuntimePath("tokenDefinitionPaths", tokenDefinitionsPath);
+    const absoluteTokensPath = path.resolve(rootDir, tokenDefinitionsPath);
 
     for (const fileName of readdirSync(absoluteTokensPath).sort()) {
       if (!fileName.endsWith(".json") || fileName.startsWith("_")) {
@@ -462,6 +450,14 @@ function loadTokenDefinitions(
   }
 
   return tokens;
+}
+
+function requireManifestSection<T>(section: T | undefined, name: string): T {
+  if (section === undefined) {
+    throw new Error(`Data pack manifest does not define ${name}`);
+  }
+
+  return section;
 }
 
 function assertRuntimePath(fieldName: string, filePath: string): void {

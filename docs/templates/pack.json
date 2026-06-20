@@ -10,7 +10,7 @@
     "data/cards/special"
   ],
   "tokenDefinitionPaths": [
-    "data/tokens/dead-wizard-token",
+    "data/tokens/dead-wizard",
     "data/tokens/wizard-property"
   ],
   "decks": {

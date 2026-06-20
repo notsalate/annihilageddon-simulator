@@ -21,9 +21,7 @@
       {
         "effectId": "gain_chips",
         "timing": "onGainCard",
-        "cardTypes": [
-          "wizardCard"
-        ],
+        "cardTypes": ["wizardCard"],
         "amount": 1
       }
     ],

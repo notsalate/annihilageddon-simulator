@@ -25,10 +25,7 @@
         "targetSelector": "chosenFoe",
         "condition": {
           "conditionId": "control_count",
-          "cardTypes": [
-            "wizardCard",
-            "spell"
-          ],
+          "cardTypes": ["wizardCard", "spell"],
           "minimumCount": 2
         }
       }

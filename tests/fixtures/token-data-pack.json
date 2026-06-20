@@ -10,13 +10,15 @@
     "data/cards/familiar",
     "data/cards/special"
   ],
-  "tokensPath": "tests/fixtures/tokens",
+  "tokenDefinitionPaths": ["tests/fixtures/tokens"],
   "decks": {
     "starterDeck": "data/decks/v0-starter-deck.json",
     "mainDeck": "data/decks/v0-main-deck-first-batch.json",
-    "legendDeck": "data/decks/v0-legend-deck-first-batch.json",
-    "wildMagicStack": "data/decks/v0-wild-magic-stack.json",
-    "limpWandStack": "data/decks/v0-limp-wand-stack.json"
+    "legendDeck": "data/decks/v0-legend-deck-first-batch.json"
+  },
+  "cardStacks": {
+    "wildMagicStack": "data/stacks/cards/v0-wild-magic-stack.json",
+    "limpWandStack": "data/stacks/cards/v0-limp-wand-stack.json"
   },
   "tokenStacks": {
     "deadWizardTokens": "tests/fixtures/token-stack.json"

@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: Done
 
 # Split Runtime Packs, Sets, and Final Docs
 
@@ -8,21 +8,21 @@ Finish the runtime layout migration by separating packs, true decks, shuffled st
 
 ## Acceptance criteria
 
-- [ ] Move runtime manifests into `data/packs`, including the existing v0 first-batch pack.
-- [ ] Add `data/packs/full-import.json` as a future full import manifest that can include incomplete/non-playable runtime mappings explicitly.
-- [ ] Keep true card decks under `data/decks`, such as main, Legend, and starter decks.
-- [ ] Move shuffled card stacks under `data/stacks/cards`, including Wild Magic and Limp Wand.
-- [ ] Move shuffled token stacks under `data/stacks/tokens`, including Dead Wizard Tokens and wizard properties.
-- [ ] Move familiar pool composition under `data/pools`.
-- [ ] Split token definitions into `data/tokens/dead-wizard` and `data/tokens/wizard-property`.
-- [ ] Update manifest schema/types and loader code so packs reference explicit card definition paths, token definition paths, decks, stacks, and pools.
-- [ ] Preserve a runnable `v0-first-batch` regression path and verify it with focused tests.
-- [ ] Update README to describe the current project status, commands, and final data layout without duplicating full rule/import documentation.
-- [ ] Update AGENTS.md only by removing stale duplicate documentation and old paths; preserve safety, Windows/PowerShell, RTK, tests/checks, reporting, workflow, and card simulation conventions.
-- [ ] Preserve `docs/agents/domain.md`, `docs/agents/issue-tracker.md`, and `docs/agents/triage-labels.md`.
-- [ ] Remove or collapse `docs/simulation-scope.md` once unique current content has been moved to active docs.
-- [ ] Keep `docs/single-game-debug-trace.md` as the trace specification, but remove the embedded issue-draft section.
-- [ ] Verify there are no stale references to `ocrText`, `data/import/card-texts`, `data/import/card-drafts`, old universal `data/decks`, or old asset `raw` paths in active docs/code/tests/data.
+- [x] Move runtime manifests into `data/packs`, including the existing v0 first-batch pack.
+- [x] Add `data/packs/full-import.json` as a future full import manifest that can include incomplete/non-playable runtime mappings explicitly.
+- [x] Keep true card decks under `data/decks`, such as main, Legend, and starter decks.
+- [x] Move shuffled card stacks under `data/stacks/cards`, including Wild Magic and Limp Wand.
+- [x] Move shuffled token stacks under `data/stacks/tokens`, including Dead Wizard Tokens and wizard properties.
+- [x] Move familiar pool composition under `data/pools`.
+- [x] Split token definitions into `data/tokens/dead-wizard` and `data/tokens/wizard-property`.
+- [x] Update manifest schema/types and loader code so packs reference explicit card definition paths, token definition paths, decks, stacks, and pools.
+- [x] Preserve a runnable `v0-first-batch` regression path and verify it with focused tests.
+- [x] Update README to describe the current project status, commands, and final data layout without duplicating full rule/import documentation.
+- [x] Update AGENTS.md only by removing stale duplicate documentation and old paths; preserve safety, Windows/PowerShell, RTK, tests/checks, reporting, workflow, and card simulation conventions.
+- [x] Preserve `docs/agents/domain.md`, `docs/agents/issue-tracker.md`, and `docs/agents/triage-labels.md`.
+- [x] Remove or collapse `docs/simulation-scope.md` once unique current content has been moved to active docs.
+- [x] Keep `docs/single-game-debug-trace.md` as the trace specification, but remove the embedded issue-draft section.
+- [x] Verify there are no stale references to `ocrText`, `data/import/card-texts`, `data/import/card-drafts`, old universal `data/decks`, or old asset `raw` paths in active docs/code/tests/data.
 
 ## Blocked by
 

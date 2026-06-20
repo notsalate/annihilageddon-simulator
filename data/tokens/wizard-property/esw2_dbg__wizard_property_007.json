@@ -25,9 +25,7 @@
         "effectId": "temporary_hand_limit_by_gained_card_type",
         "timing": "endTurn",
         "amount": 1,
-        "cardTypes": [
-          "spell"
-        ]
+        "cardTypes": ["spell"]
       }
     ],
     "unsupportedMechanics": []

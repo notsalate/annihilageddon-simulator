@@ -49,7 +49,7 @@ data/import/tokens/wizard-property/texts/
 data/import/tokens/wizard-property/drafts/
 
 data/cards/<source-group>/
-data/tokens/dead-wizard-token/
+data/tokens/dead-wizard/
 data/tokens/wizard-property/
 data/decks/
 data/stacks/cards/
@@ -60,7 +60,7 @@ data/packs/
 
 `<source-group>` для карт: `main`, `legend`, `starter`, `familiar`, `special`.
 
-Старые пути вроде `data/import/card-texts`, `data/import/card-drafts`, `data/import/DWT-texts`, `data/import/wizard-property-texts`, `assets/cards/raw`, `assets/DWT/raw` и `assets/wizard-property/raw` считаются legacy до миграции. Не добавлять новые canonical data files в эти пути.
+Не добавлять новые canonical data files в legacy import или raw asset paths, которые не описаны в `docs/runtime-layout.md`.
 
 ## Что запрещено в draft JSON
 
@@ -164,16 +164,16 @@ esw2_dbg__dead_wizard_token_001
 
 ### cardKind
 
-| Видна на карте / из источника | `visible.cardKind` | Что важно |
-| --- | --- | --- |
-| обычная карта основной колоды | `normal` | Типы идут в `cardTypes`. |
-| карта легенды | `legend` | Также может иметь типы в `cardTypes`. |
-| беспредел | `mayhem` | Не обычная покупаемая карта. |
-| мегабеспредел | `megaMayhem` | Событие из колоды легенд. |
-| фамильяр | `familiar` | Личный покупаемый фамильяр. |
-| шальная магия | `wildMagic` | Нет обычного типа карты. |
-| вялая палочка | `limpWand` | Нет обычного типа карты. |
-| затравка | `starter` | Для стартовых карт. |
+| Видна на карте / из источника | `visible.cardKind` | Что важно                             |
+| ----------------------------- | ------------------ | ------------------------------------- |
+| обычная карта основной колоды | `normal`           | Типы идут в `cardTypes`.              |
+| карта легенды                 | `legend`           | Также может иметь типы в `cardTypes`. |
+| беспредел                     | `mayhem`           | Не обычная покупаемая карта.          |
+| мегабеспредел                 | `megaMayhem`       | Событие из колоды легенд.             |
+| фамильяр                      | `familiar`         | Личный покупаемый фамильяр.           |
+| шальная магия                 | `wildMagic`        | Нет обычного типа карты.              |
+| вялая палочка                 | `limpWand`         | Нет обычного типа карты.              |
+| затравка                      | `starter`          | Для стартовых карт.                   |
 
 ### cardTypes
 
@@ -254,7 +254,7 @@ Runtime mapping начинается только после валидного 
 
 На этом шаге человек или агент:
 
-- переносит исполняемые данные в `data/cards/<source-group>/` или `data/tokens/<token-kind>/`;
+- переносит исполняемые данные в `data/cards/<source-group>/`, `data/tokens/dead-wizard/` или `data/tokens/wizard-property/`;
 - добавляет `runtimeSchema`;
 - добавляет `engine.effects` и typed handlers только для поддержанных механик;
 - явно отмечает неподдержанные механики, если объект еще не playable в v0;

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "packId": "full-import-runtime-manifest",
+  "runtimeSchema": "krutagidon.dataPack.v0",
+  "mappingStatus": "future-full-import-incomplete",
+  "cardDefinitionPaths": [
+    "data/cards/main",
+    "data/cards/legend",
+    "data/cards/starter",
+    "data/cards/familiar",
+    "data/cards/special"
+  ],
+  "tokenDefinitionPaths": [
+    "data/tokens/dead-wizard",
+    "data/tokens/wizard-property"
+  ],
+  "needsData": [
+    {
+      "kind": "runtime-compositions",
+      "reason": "Full import pack is a manifest for complete mapped definitions, not a runnable gameplay pack until full deck, stack, pool, and playable effect coverage exists."
+    }
+  ],
+  "notes": [
+    "This manifest intentionally lists definition folders only. It must not be treated as proof that every imported card or token is playable."
+  ]
+}

@@ -3,19 +3,25 @@
   "packId": "v0-first-batch-playable-data-pack",
   "runtimeSchema": "krutagidon.dataPack.v0",
   "mappingStatus": "supported-first-batch-v0",
-  "tokensPath": "data/tokens",
-  "tokenDefinitionPaths": ["data/tokens/wizard-properties"],
+  "tokenDefinitionPaths": [
+    "data/tokens/dead-wizard",
+    "data/tokens/wizard-property"
+  ],
   "decks": {
     "starterDeck": "data/decks/v0-starter-deck.json",
     "mainDeck": "data/decks/v0-main-deck-first-batch.json",
-    "legendDeck": "data/decks/v0-legend-deck-first-batch.json",
-    "wildMagicStack": "data/decks/v0-wild-magic-stack.json",
-    "limpWandStack": "data/decks/v0-limp-wand-stack.json",
-    "familiarPool": "data/decks/v0-familiar-pool.json"
+    "legendDeck": "data/decks/v0-legend-deck-first-batch.json"
+  },
+  "cardStacks": {
+    "wildMagicStack": "data/stacks/cards/v0-wild-magic-stack.json",
+    "limpWandStack": "data/stacks/cards/v0-limp-wand-stack.json"
   },
   "tokenStacks": {
-    "deadWizardTokens": "data/decks/v0-dead-wizard-token-stack.json",
-    "wizardProperties": "data/decks/v0-wizard-property-stack.json"
+    "deadWizardTokens": "data/stacks/tokens/v0-dead-wizard-token-stack.json",
+    "wizardProperties": "data/stacks/tokens/v0-wizard-property-stack.json"
+  },
+  "pools": {
+    "familiarPool": "data/pools/v0-familiar-pool.json"
   },
   "counts": {
     "mapped": 39,

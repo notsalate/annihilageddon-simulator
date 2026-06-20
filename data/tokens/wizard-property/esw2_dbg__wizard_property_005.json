@@ -25,10 +25,7 @@
         "amount": 1,
         "condition": {
           "conditionId": "control_count",
-          "cardTypes": [
-            "treasure",
-            "creature"
-          ],
+          "cardTypes": ["treasure", "creature"],
           "minimumCount": 2
         }
       }
