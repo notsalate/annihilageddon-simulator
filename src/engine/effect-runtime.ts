@@ -1827,7 +1827,7 @@ function awardBasicTrophyForKill(
 }
 
 function givesBasicTrophyCredit(effectId: string): boolean {
-  return effectId === "attack_damage" || effectId === "multi_target_attack";
+  return effectId === "attack_damage" || effectId === "multi_target_attack" || effectId === "deal_damage";
 }
 
 function dealDamage(

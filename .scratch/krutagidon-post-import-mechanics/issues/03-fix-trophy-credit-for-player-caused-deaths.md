@@ -1,6 +1,6 @@
 # Fix Trophy credit for player-caused deaths
 
-Status: ready-for-agent
+Status: done
 Label: ready-for-agent
 Type: AFK
 
@@ -12,15 +12,19 @@ This should cover defense branch damage that kills the attacker without treating
 
 ## Acceptance criteria
 
-- [ ] The engine can represent whether a death was caused by a player-controlled source.
-- [ ] Normal attack kills still award the Trophy to the attacker.
-- [ ] Player-caused non-attack damage that kills a foe awards the Trophy to the causing player.
-- [ ] Defense branch damage that kills the attacker awards the Trophy to the defending player.
-- [ ] Self-kills do not award the Trophy.
-- [ ] DWT-caused deaths do not move the Trophy.
-- [ ] Unowned Mayhem/Mega Mayhem deaths do not move the Trophy.
-- [ ] Tests cover each Trophy-credit case above.
-- [ ] Existing event logs remain clear enough to identify the Trophy source.
+- [x] The engine can represent whether a death was caused by a player-controlled source.
+- [x] Normal attack kills still award the Trophy to the attacker.
+- [x] Player-caused non-attack damage that kills a foe awards the Trophy to the causing player.
+- [x] Defense branch damage that kills the attacker awards the Trophy to the defending player.
+- [x] Self-kills do not award the Trophy.
+- [x] DWT-caused deaths do not move the Trophy.
+- [x] Unowned Mayhem/Mega Mayhem deaths do not move the Trophy.
+- [x] Tests cover each Trophy-credit case above.
+- [x] Existing event logs remain clear enough to identify the Trophy source.
+
+## Notes
+
+There is no public executable DWT-effect path yet. DWT/source-less deaths should continue to call death resolution without kill credit; the current neutral-death regression uses an unowned Mega Mayhem path.
 
 ## Blocked by
 

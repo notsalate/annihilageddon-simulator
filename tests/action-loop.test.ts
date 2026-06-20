@@ -1938,7 +1938,7 @@ test("deal_damage self-kill does not move Basic Trophy", () => {
   assert.equal(state.eventLog.some((event) => event.type === "trophyControlChanged"), false);
 });
 
-test("deal_damage kill does not move Basic Trophy", () => {
+test("player-caused deal_damage kill awards Basic Trophy to the source player", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
   assert.ok(activePlayer);
@@ -1961,9 +1961,19 @@ test("deal_damage kill does not move Basic Trophy", () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
-  assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
-  assert.equal(state.eventLog.some((event) => event.type === "trophyControlChanged"), false);
+  assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
+  assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "trophyControlChanged" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.effectId === "deal_damage" &&
+        event.sourceType === "card"
+      );
+    }),
+  );
 });
 
 test("attack_damage can be avoided by the first discard-self defense card in hand", () => {
@@ -2253,6 +2263,59 @@ test("avoid_attack defense runs supported branch effects through the shared effe
   assert.ok(branchEventIndex > costEventIndex);
 });
 
+test("defense branch damage kill awards Basic Trophy to the defending player", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  const targetPlayer = state.players.find((player) => player.playerId !== activePlayer.playerId);
+  assert.ok(targetPlayer);
+  activePlayer.life.current = 1;
+  activePlayer.trophyLikeObjects.push(createBasicTrophy(activePlayer.playerId));
+  const defenseCard = addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf", {
+    branchEffects: [
+      {
+        effectId: "deal_damage",
+        timing: "onDefense",
+        amount: 1,
+        target: {
+          selector: "opponentPlayer",
+        },
+      },
+    ],
+  });
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 4,
+    target: {
+      selector: "opponentPlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.discard.includes(defenseCard), true);
+  assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
+  assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "trophyControlChanged" &&
+        event.playerId === targetPlayer.playerId &&
+        event.targetPlayerId === activePlayer.playerId &&
+        event.cardInstanceId === defenseCard.instanceId &&
+        event.definitionId === defenseCard.definitionId &&
+        event.effectId === "deal_damage" &&
+        event.sourceType === "card"
+      );
+    }),
+  );
+});
+
 test("multi_target_attack resolves each opponent in seating order before moving to the next target", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
@@ -2410,6 +2473,39 @@ test("mayhem_attack kill does not move Basic Trophy", () => {
   assert.equal(result.ok, true);
   assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), false);
   assert.equal(targetPlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
+  assert.equal(state.eventLog.some((event) => event.type === "trophyControlChanged"), false);
+});
+
+test("unowned Mega Mayhem death does not move Basic Trophy", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  activePlayer.trophyLikeObjects.push(createBasicTrophy(activePlayer.playerId));
+  const mayhemDefinition = [...state.cardDefinitions.values()].find((definition) => {
+    return definition.engine.cardKind === "mayhem";
+  });
+  assert.ok(mayhemDefinition);
+  const mayhemCard: CardInstance = {
+    instanceId: "fixture-top-main-deck-mayhem",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.mainDeck.unshift(mayhemCard);
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+    timing: "onPlay",
+    targetSelector: "eachPlayerClockwiseFromActive",
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.ok(state.eventLog.some((event) => event.type === "playerDied" && event.playerId === activePlayer.playerId));
+  assert.equal(activePlayer.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy"), true);
   assert.equal(state.eventLog.some((event) => event.type === "trophyControlChanged"), false);
 });
 
