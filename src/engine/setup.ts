@@ -102,6 +102,8 @@ export interface GameEvent {
   type: string;
   playerId?: PlayerId;
   targetPlayerId?: PlayerId;
+  turnNumber?: number;
+  actionIdentity?: string;
   cardInstanceId?: string;
   definitionId?: string;
   targetCardInstanceId?: string;

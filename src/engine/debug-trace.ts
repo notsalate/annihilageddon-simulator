@@ -23,15 +23,17 @@ export function formatSingleGameDebugTrace(
       continue;
     }
 
-    if (event.playerId !== undefined && event.playerId !== currentTurnPlayer) {
-      currentTurnPlayer = event.playerId;
-      lines.push("", `Turn ? - ${event.playerId}`);
+    const formatted = formatEvent(event, options);
+    if (formatted === undefined) {
+      continue;
     }
 
-    const formatted = formatEvent(event, options);
-    if (formatted !== undefined) {
-      lines.push(formatted);
+    if (event.playerId !== undefined && getTurnHeaderIdentity(event) !== currentTurnPlayer) {
+      currentTurnPlayer = getTurnHeaderIdentity(event);
+      lines.push("", `${formatTurnHeader(event)} - ${event.playerId}`);
     }
+
+    lines.push(formatted);
   }
 
   lines.push(
@@ -53,7 +55,7 @@ function formatSummary(result: SingleGameResult): string {
 
 function formatEvent(event: GameEvent, options: FormatSingleGameDebugTraceOptions): string | undefined {
   if (event.type === "botActionSelected") {
-    return "- Bot selected an action.";
+    return `- Bot selected ${event.actionIdentity ?? "an action"}.`;
   }
 
   if (event.type === "effectAddPowerApplied" && event.playerId !== undefined) {
@@ -101,6 +103,14 @@ function formatEvent(event: GameEvent, options: FormatSingleGameDebugTraceOption
   }
 
   return undefined;
+}
+
+function getTurnHeaderIdentity(event: GameEvent): string {
+  return `${event.turnNumber ?? "?"}:${event.playerId ?? "<unknown-player>"}`;
+}
+
+function formatTurnHeader(event: GameEvent): string {
+  return `Turn ${event.turnNumber ?? "?"}`;
 }
 
 function formatCard(event: GameEvent, options: FormatSingleGameDebugTraceOptions): string {

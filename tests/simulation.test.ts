@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   determineWinnerIds,
+  formatSingleGameDebugTrace,
   getGameEndReason,
   initializeGame,
   runMassSimulation,
@@ -24,6 +25,30 @@ test("single-game simulation can stop at maxTurns as a non-game termination", ()
   assert.equal(result.turnsElapsed, 1);
   assert.equal(result.players.length, 2);
   assert.ok(result.eventLog.some((event) => event.type === "botActionSelected"));
+});
+
+test("bot action selection records turn number and safe action identity for debug trace", () => {
+  const result = runSingleGame({
+    rootDir,
+    seed: 60615,
+    maxTurns: 1,
+    bot: {
+      chooseAction() {
+        return { type: "endTurn" };
+      },
+    },
+  });
+
+  const event = result.eventLog.find((candidate) => candidate.type === "botActionSelected");
+  assert.ok(event);
+  assert.equal(event.playerId, "player-1");
+  assert.equal(event.turnNumber, 1);
+  assert.equal(event.actionIdentity, "endTurn");
+
+  const trace = formatSingleGameDebugTrace(result);
+  assert.match(trace, /Turn 1 - player-1/);
+  assert.match(trace, /- Bot selected endTurn\./);
+  assert.doesNotMatch(trace, /Turn \? - player-1/);
 });
 
 test("game end reason is dead wizard token exhaustion when the DWT stack is empty", () => {

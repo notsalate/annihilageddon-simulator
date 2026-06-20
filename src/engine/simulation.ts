@@ -5,6 +5,7 @@ import {
   calculateEffectiveCardVictoryPoints,
   calculateEffectiveTokenVictoryPoints,
 } from "./effective-values.js";
+import { recordBotActionSelected } from "./event-recorder.js";
 import { initializeGame, type CardInstance, type GameEvent, type GameState, type PlayerId, type TokenInstance } from "./setup.js";
 
 export type GameEndReason =
@@ -98,10 +99,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       throw new Error(`Bot selected illegal action ${selectedAction.type}`);
     }
 
-    state.eventLog.push({
-      type: "botActionSelected",
-      playerId: state.activePlayerId,
-    });
+    recordBotActionSelected(state, selectedAction);
     const result = applyAction(state, selectedAction);
     if (!result.ok) {
       throw new Error(`Legal action failed: ${result.error}`);
