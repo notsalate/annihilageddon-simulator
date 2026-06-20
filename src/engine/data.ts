@@ -385,10 +385,6 @@ function isSupportedExecutableEffectId(effectId: string, mode: "combat" | "fixtu
     effectId === "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none" ||
     effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
     effectId === "mayhem_each_player_discard_deck_then_destroy_from_discard" ||
-    effectId === "deal_damage" ||
-    effectId === "attack_damage" ||
-    effectId === "multi_target_attack" ||
-    effectId === "mayhem_attack" ||
     effectId === "avoid_attack" ||
     effectId === "reveal_top_card" ||
     effectId === "play_top_card" ||
@@ -474,22 +470,6 @@ function validateSupportedEffectShape(subjectId: string, effectId: string, effec
     return [];
   }
 
-  if (effectId === "deal_damage") {
-    const errors: string[] = [];
-    const amount = effect["amount"];
-    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      errors.push(`${subjectId} uses invalid damage amount ${String(amount)}`);
-    }
-
-    const target = effect["target"];
-    if (!isEffectRecord(target) || target["selector"] !== "opponentPlayer") {
-      const selector = isEffectRecord(target) ? target["selector"] : target;
-      errors.push(`${subjectId} uses unsupported damage target ${String(selector)}`);
-    }
-
-    return errors;
-  }
-
   if (effectId === "heal") {
     const errors: string[] = [];
     const amount = effect["amount"];
@@ -563,60 +543,6 @@ function validateSupportedEffectShape(subjectId: string, effectId: string, effec
 
     if (effectId === "toggle_status" && effect["statusId"] !== "dingler") {
       errors.push(`${subjectId} uses unsupported status ${String(effect["statusId"])}`);
-    }
-
-    return errors;
-  }
-
-  if (effectId === "attack_damage") {
-    const errors: string[] = [];
-    const amount = effect["amount"];
-    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      errors.push(`${subjectId} uses invalid attack damage amount ${String(amount)}`);
-    }
-
-    const target = effect["target"];
-    const targetSelector = effect["targetSelector"];
-    if (
-      (!isEffectRecord(target) || target["selector"] !== "opponentPlayer") &&
-      targetSelector !== "chosenFoe" &&
-      targetSelector !== "chosenPlayer" &&
-      targetSelector !== "eachFoe"
-    ) {
-      const selector = isEffectRecord(target) ? target["selector"] : target;
-      errors.push(`${subjectId} uses unsupported attack target ${String(selector)}`);
-    }
-
-    return errors;
-  }
-
-  if (effectId === "multi_target_attack") {
-    const errors: string[] = [];
-    const amount = effect["amount"];
-    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      errors.push(`${subjectId} uses invalid attack damage amount ${String(amount)}`);
-    }
-
-    const target = effect["target"];
-    if (!isEffectRecord(target) || target["selector"] !== "opponentPlayers") {
-      const selector = isEffectRecord(target) ? target["selector"] : target;
-      errors.push(`${subjectId} uses unsupported multi-target attack target ${String(selector)}`);
-    }
-
-    return errors;
-  }
-
-  if (effectId === "mayhem_attack") {
-    const errors: string[] = [];
-    const amount = effect["amount"];
-    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      errors.push(`${subjectId} uses invalid Mayhem attack damage amount ${String(amount)}`);
-    }
-
-    const target = effect["target"];
-    if (!isEffectRecord(target) || target["selector"] !== "allPlayers") {
-      const selector = isEffectRecord(target) ? target["selector"] : target;
-      errors.push(`${subjectId} uses unsupported Mayhem attack target ${String(selector)}`);
     }
 
     return errors;

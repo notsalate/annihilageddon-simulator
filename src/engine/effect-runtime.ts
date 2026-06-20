@@ -259,10 +259,6 @@ function isSupportedMayhemRuntimeEffect(effect: Record<string, unknown>): boolea
   return (
     effectId === "heal" ||
     effectId === "set_life" ||
-    effectId === "deal_damage" ||
-    effectId === "attack_damage" ||
-    effectId === "multi_target_attack" ||
-    effectId === "mayhem_attack" ||
     effectId === "mega_mayhem_set_life" ||
     effectId === "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem" ||
     effectId === "mega_mayhem_each_player_toggle_dingler" ||
@@ -568,180 +564,6 @@ function executeEffect(
       sourceType: source.sourceType,
     });
 
-    return { ok: true };
-  }
-
-  if (effect["effectId"] === "deal_damage") {
-    const targetResult = resolveTargetChoice(state, player, effect, source);
-    if (!targetResult.ok) {
-      return targetResult;
-    }
-
-    if (targetResult.choice === undefined) {
-      return { ok: true };
-    }
-
-    if (targetResult.choice.choiceType !== "player") {
-      return {
-        ok: false,
-        error: "Damage effect requires a player target",
-      };
-    }
-
-    const amount = effect["amount"];
-    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      return {
-        ok: false,
-        error: `Invalid damage amount ${String(amount)}`,
-      };
-    }
-
-    dealDamage(state, player, targetResult.choice.player, amount, asString(effect["effectId"]), source);
-
-    return { ok: true };
-  }
-
-  if (effect["effectId"] === "attack_damage" && effect["targetSelector"] === "eachFoe") {
-    const amount = effect["amount"];
-    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      return {
-        ok: false,
-        error: `Invalid attack damage amount ${String(amount)}`,
-      };
-    }
-
-    const attackProfile = getWizardPropertyAttackProfile(state, source);
-    const attackAmount = amount + attackProfile.damageBonus;
-    state.eventLog.push({
-      type: "attackCreated",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: "attack_damage",
-      amount: attackAmount,
-      sourceType: source.sourceType,
-    });
-
-    for (const targetPlayer of getOpponentsInSeatingOrder(state, player)) {
-      resolveAttackTarget(state, player, targetPlayer, attackAmount, "attack_damage", source, attackProfile.unavoidable);
-    }
-
-    return { ok: true };
-  }
-
-  if (effect["effectId"] === "attack_damage") {
-    const targetResult = resolveTargetChoice(state, player, effect, source);
-    if (!targetResult.ok) {
-      return targetResult;
-    }
-
-    if (targetResult.choice === undefined) {
-      return { ok: true };
-    }
-
-    if (targetResult.choice.choiceType !== "player") {
-      return {
-        ok: false,
-        error: "Attack effect requires a player target",
-      };
-    }
-
-    const amount = effect["amount"];
-    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      return {
-        ok: false,
-        error: `Invalid attack damage amount ${String(amount)}`,
-      };
-    }
-
-    const effectId = asString(effect["effectId"]);
-    const targetPlayer = targetResult.choice.player;
-    const attackProfile = getWizardPropertyAttackProfile(state, source);
-    const attackAmount = amount + attackProfile.damageBonus;
-    state.eventLog.push({
-      type: "attackCreated",
-      playerId: player.playerId,
-      targetPlayerId: targetPlayer.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId,
-      amount: attackAmount,
-      sourceType: source.sourceType,
-    });
-    if (!attackProfile.unavoidable && resolveDefenseWindow(state, targetPlayer)) {
-      state.eventLog.push({
-        type: "attackAvoided",
-        playerId: targetPlayer.playerId,
-        targetPlayerId: targetPlayer.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId,
-        sourceType: source.sourceType,
-      });
-      return { ok: true };
-    }
-
-    dealDamage(state, player, targetPlayer, attackAmount, effectId, source);
-
-    return { ok: true };
-  }
-
-  if (effect["effectId"] === "multi_target_attack") {
-    const target = effect["target"];
-    if (!isEffectRecord(target) || target["selector"] !== "opponentPlayers") {
-      const selector = isEffectRecord(target) ? target["selector"] : target;
-      return {
-        ok: false,
-        error: `Unsupported multi-target attack selector ${String(selector)}`,
-      };
-    }
-
-    const amount = effect["amount"];
-    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      return {
-        ok: false,
-        error: `Invalid attack damage amount ${String(amount)}`,
-      };
-    }
-
-    const attackProfile = getWizardPropertyAttackProfile(state, source);
-    const attackAmount = amount + attackProfile.damageBonus;
-    state.eventLog.push({
-      type: "attackCreated",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: "multi_target_attack",
-      amount: attackAmount,
-      sourceType: source.sourceType,
-    });
-
-    for (const targetPlayer of getOpponentsInSeatingOrder(state, player)) {
-      resolveAttackTarget(state, player, targetPlayer, attackAmount, "multi_target_attack", source, attackProfile.unavoidable);
-    }
-
-    return { ok: true };
-  }
-
-  if (effect["effectId"] === "mayhem_attack") {
-    const target = effect["target"];
-    if (!isEffectRecord(target) || target["selector"] !== "allPlayers") {
-      const selector = isEffectRecord(target) ? target["selector"] : target;
-      return {
-        ok: false,
-        error: `Unsupported Mayhem attack selector ${String(selector)}`,
-      };
-    }
-
-    const amount = effect["amount"];
-    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
-      return {
-        ok: false,
-        error: `Invalid attack damage amount ${String(amount)}`,
-      };
-    }
-
-    resolveMayhemAttack(state, player, amount, "mayhem_attack", source);
     return { ok: true };
   }
 
@@ -1320,6 +1142,12 @@ const effectRuntimeServices: EffectRuntimeServices = {
   moveCardToPlayerZone,
   moveCardToZonePreservingOwner,
   getDestroyDestination,
+  getOpponentsInSeatingOrder,
+  getWizardPropertyAttackProfile,
+  dealDamage,
+  resolveAttackTarget,
+  resolveDefenseWindow,
+  resolveMayhemAttack,
   asString,
 };
 

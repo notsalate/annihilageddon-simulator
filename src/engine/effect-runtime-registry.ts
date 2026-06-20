@@ -58,6 +58,36 @@ export interface EffectRuntimeServices {
   moveCardToPlayerZone(state: GameState, card: CardInstance, player: PlayerState, destination: CardInstance[]): boolean;
   moveCardToZonePreservingOwner(state: GameState, card: CardInstance, destination: CardInstance[]): boolean;
   getDestroyDestination(state: GameState, card: CardInstance): { ok: true; zone: CardInstance[] } | { ok: false; error: string };
+  getOpponentsInSeatingOrder(state: GameState, player: PlayerState): PlayerState[];
+  getWizardPropertyAttackProfile(
+    state: GameState,
+    source: EffectSourceContext,
+  ): { damageBonus: number; unavoidable: boolean };
+  dealDamage(
+    state: GameState,
+    sourcePlayer: PlayerState,
+    targetPlayer: PlayerState,
+    amount: number,
+    effectId: string,
+    source: EffectSourceContext,
+  ): void;
+  resolveAttackTarget(
+    state: GameState,
+    attackingPlayer: PlayerState,
+    targetPlayer: PlayerState,
+    amount: number,
+    effectId: string,
+    source: EffectSourceContext,
+    unavoidable?: boolean,
+  ): void;
+  resolveDefenseWindow(state: GameState, defendingPlayer: PlayerState): boolean;
+  resolveMayhemAttack(
+    state: GameState,
+    sourcePlayer: PlayerState,
+    amount: number,
+    effectId: string,
+    source: EffectSourceContext,
+  ): void;
   asString(value: unknown): string;
 }
 
@@ -262,6 +292,206 @@ const destroyCardHandler: EffectRuntimeHandler = {
   },
 };
 
+const dealDamageHandler: EffectRuntimeHandler = {
+  effectId: "deal_damage",
+  validateShape(subjectId, effect) {
+    return [
+      ...validatePositiveIntegerAmount(subjectId, effect, "damage amount"),
+      ...validatePlayerTargetSelector(subjectId, effect, "damage", ["opponentPlayer"]),
+    ];
+  },
+  execute(state, player, effect, source, services) {
+    const targetResult = services.resolveTargetChoice(state, player, effect, source);
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    if (targetResult.choice === undefined) {
+      return { ok: true };
+    }
+
+    if (targetResult.choice.choiceType !== "player") {
+      return {
+        ok: false,
+        error: "Damage effect requires a player target",
+      };
+    }
+
+    const amount = requirePositiveIntegerAmount(effect, "damage amount");
+    if (!amount.ok) {
+      return amount;
+    }
+
+    services.dealDamage(state, player, targetResult.choice.player, amount.value, services.asString(effect["effectId"]), source);
+    return { ok: true };
+  },
+};
+
+const attackDamageHandler: EffectRuntimeHandler = {
+  effectId: "attack_damage",
+  validateShape(subjectId, effect) {
+    return [
+      ...validatePositiveIntegerAmount(subjectId, effect, "attack damage amount"),
+      ...validatePlayerTargetSelector(subjectId, effect, "attack", [
+        "opponentPlayer",
+        "chosenFoe",
+        "chosenPlayer",
+        "eachFoe",
+      ]),
+    ];
+  },
+  execute(state, player, effect, source, services) {
+    const amount = requirePositiveIntegerAmount(effect, "attack damage amount");
+    if (!amount.ok) {
+      return amount;
+    }
+
+    const attackProfile = services.getWizardPropertyAttackProfile(state, source);
+    const attackAmount = amount.value + attackProfile.damageBonus;
+
+    if (effect["targetSelector"] === "eachFoe") {
+      state.eventLog.push({
+        type: "attackCreated",
+        playerId: player.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId: "attack_damage",
+        amount: attackAmount,
+        sourceType: source.sourceType,
+      });
+
+      for (const targetPlayer of services.getOpponentsInSeatingOrder(state, player)) {
+        services.resolveAttackTarget(state, player, targetPlayer, attackAmount, "attack_damage", source, attackProfile.unavoidable);
+      }
+
+      return { ok: true };
+    }
+
+    const targetResult = services.resolveTargetChoice(state, player, effect, source);
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    if (targetResult.choice === undefined) {
+      return { ok: true };
+    }
+
+    if (targetResult.choice.choiceType !== "player") {
+      return {
+        ok: false,
+        error: "Attack effect requires a player target",
+      };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    const targetPlayer = targetResult.choice.player;
+    state.eventLog.push({
+      type: "attackCreated",
+      playerId: player.playerId,
+      targetPlayerId: targetPlayer.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      amount: attackAmount,
+      sourceType: source.sourceType,
+    });
+    if (!attackProfile.unavoidable && services.resolveDefenseWindow(state, targetPlayer)) {
+      state.eventLog.push({
+        type: "attackAvoided",
+        playerId: targetPlayer.playerId,
+        targetPlayerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        sourceType: source.sourceType,
+      });
+      return { ok: true };
+    }
+
+    services.dealDamage(state, player, targetPlayer, attackAmount, effectId, source);
+    return { ok: true };
+  },
+};
+
+const multiTargetAttackHandler: EffectRuntimeHandler = {
+  effectId: "multi_target_attack",
+  validateShape(subjectId, effect) {
+    return [
+      ...validatePositiveIntegerAmount(subjectId, effect, "attack damage amount"),
+      ...validatePlayerTargetSelector(subjectId, effect, "multi-target attack", ["opponentPlayers"]),
+    ];
+  },
+  execute(state, player, effect, source, services) {
+    const target = effect["target"];
+    if (!isEffectRecord(target) || target["selector"] !== "opponentPlayers") {
+      const selector = isEffectRecord(target) ? target["selector"] : target;
+      return {
+        ok: false,
+        error: `Unsupported multi-target attack selector ${String(selector)}`,
+      };
+    }
+
+    const amount = requirePositiveIntegerAmount(effect, "attack damage amount");
+    if (!amount.ok) {
+      return amount;
+    }
+
+    const attackProfile = services.getWizardPropertyAttackProfile(state, source);
+    const attackAmount = amount.value + attackProfile.damageBonus;
+    state.eventLog.push({
+      type: "attackCreated",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId: "multi_target_attack",
+      amount: attackAmount,
+      sourceType: source.sourceType,
+    });
+
+    for (const targetPlayer of services.getOpponentsInSeatingOrder(state, player)) {
+      services.resolveAttackTarget(
+        state,
+        player,
+        targetPlayer,
+        attackAmount,
+        "multi_target_attack",
+        source,
+        attackProfile.unavoidable,
+      );
+    }
+
+    return { ok: true };
+  },
+};
+
+const mayhemAttackHandler: EffectRuntimeHandler = {
+  effectId: "mayhem_attack",
+  validateShape(subjectId, effect) {
+    return [
+      ...validatePositiveIntegerAmount(subjectId, effect, "Mayhem attack damage amount"),
+      ...validatePlayerTargetSelector(subjectId, effect, "Mayhem attack", ["allPlayers"]),
+    ];
+  },
+  execute(state, player, effect, source, services) {
+    const target = effect["target"];
+    if (!isEffectRecord(target) || target["selector"] !== "allPlayers") {
+      const selector = isEffectRecord(target) ? target["selector"] : target;
+      return {
+        ok: false,
+        error: `Unsupported Mayhem attack selector ${String(selector)}`,
+      };
+    }
+
+    const amount = requirePositiveIntegerAmount(effect, "attack damage amount");
+    if (!amount.ok) {
+      return amount;
+    }
+
+    services.resolveMayhemAttack(state, player, amount.value, "mayhem_attack", source);
+    return { ok: true };
+  },
+};
+
 function validateCardTargetSelector(
   subjectId: string,
   effect: Record<string, unknown>,
@@ -277,11 +507,65 @@ function validateCardTargetSelector(
   return [];
 }
 
+function validatePlayerTargetSelector(
+  subjectId: string,
+  effect: Record<string, unknown>,
+  effectLabel: string,
+  expectedSelectors: readonly string[],
+): string[] {
+  const target = effect["target"];
+  const targetSelector = effect["targetSelector"];
+  if (
+    (isEffectRecord(target) && expectedSelectors.includes(String(target["selector"]))) ||
+    expectedSelectors.includes(String(targetSelector))
+  ) {
+    return [];
+  }
+
+  const selector = isEffectRecord(target) ? target["selector"] : targetSelector;
+  return [`${subjectId} uses unsupported ${effectLabel} target ${String(selector)}`];
+}
+
+function validatePositiveIntegerAmount(subjectId: string, effect: Record<string, unknown>, amountLabel: string): string[] {
+  const amount = effect["amount"];
+  if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
+    return [`${subjectId} uses invalid ${amountLabel} ${String(amount)}`];
+  }
+
+  return [];
+}
+
+function requirePositiveIntegerAmount(
+  effect: Record<string, unknown>,
+  amountLabel: string,
+): { ok: true; value: number } | { ok: false; error: string } {
+  const amount = effect["amount"];
+  if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) {
+    return {
+      ok: false,
+      error: `Invalid ${amountLabel} ${String(amount)}`,
+    };
+  }
+
+  return {
+    ok: true,
+    value: amount,
+  };
+}
+
+function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
+  return typeof effect === "object" && effect !== null;
+}
+
 export const effectRuntimeRegistry = new Map<string, EffectRuntimeHandler>([
   [addPowerHandler.effectId, addPowerHandler],
   [gainCardHandler.effectId, gainCardHandler],
   [discardCardHandler.effectId, discardCardHandler],
   [destroyCardHandler.effectId, destroyCardHandler],
+  [dealDamageHandler.effectId, dealDamageHandler],
+  [attackDamageHandler.effectId, attackDamageHandler],
+  [multiTargetAttackHandler.effectId, multiTargetAttackHandler],
+  [mayhemAttackHandler.effectId, mayhemAttackHandler],
 ]);
 
 export function getEffectRuntimeHandler(effectId: string): EffectRuntimeHandler | undefined {

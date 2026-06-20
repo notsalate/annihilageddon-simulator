@@ -8,6 +8,7 @@ import {
   type LoadedDataPack,
   type TokenDefinition,
 } from "../src/index.js";
+import { getEffectRuntimeHandler } from "../src/engine/effect-runtime-registry.js";
 
 const rootDir = process.cwd();
 
@@ -337,6 +338,26 @@ test("supported executable Mayhem attack passes executable effect validation", (
 
   const result = validateExecutableDataPack(dataPack);
   assert.deepEqual(result, { ok: true });
+});
+
+test("combat effects are registered and reject invalid shapes through runtime handlers", () => {
+  const combatEffectIds = ["deal_damage", "attack_damage", "multi_target_attack", "mayhem_attack"];
+
+  for (const effectId of combatEffectIds) {
+    const handler = getEffectRuntimeHandler(effectId);
+    assert.ok(handler, `${effectId} should be registered`);
+    assert.notDeepEqual(
+      handler.validateShape("Fixture", {
+        effectId,
+        timing: "onPlay",
+        amount: 0,
+        target: {
+          selector: "unsupported",
+        },
+      }),
+      [],
+    );
+  }
 });
 
 test("combat data-pack validation rejects fixture effect ids", () => {
