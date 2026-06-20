@@ -17,6 +17,7 @@ import {
   type TokenDefinition,
   type TrophyLikeInstance,
 } from "../src/index.js";
+import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 
 const rootDir = process.cwd();
 
@@ -382,53 +383,42 @@ function addFixtureStatusCardToActiveHand(state: ReturnType<typeof initializeGam
   const player = state.players.find((candidate) => candidate.playerId === state.activePlayerId);
   assert.ok(player);
   const cardId = `fixture-${effectId}-dingler-card-${player.hand.length + 1}`;
-  state.cardDefinitions = new Map([
-    ...state.cardDefinitions,
-    [
-      cardId,
-      {
-        schemaVersion: 1,
-        cardId,
-        visible: {
-          nameRu: cardId,
-          cost: 0,
-          victoryPoints: 0,
-          typeRu: null,
-          cardKind: "normal",
-          cardTypes: [],
-          markers: [],
+  const definition: CardDefinition = {
+    schemaVersion: 1,
+    cardId,
+    visible: {
+      nameRu: cardId,
+      cost: 0,
+      victoryPoints: 0,
+      typeRu: null,
+      cardKind: "normal",
+      cardTypes: [],
+      markers: [],
+    },
+    engine: {
+      runtimeSchema: "krutagidon.cardDefinition.v0",
+      mappingStatus: "fixture",
+      playableInV0: true,
+      cardKind: "normal",
+      cardTypes: [],
+      cost: 0,
+      victoryPoints: 0,
+      isOngoing: false,
+      marketChipMarker: false,
+      effects: [
+        {
+          effectId,
+          timing: "onPlay",
+          statusId: "dingler",
+          target: {
+            selector: "activePlayer",
+          },
         },
-        engine: {
-          runtimeSchema: "krutagidon.cardDefinition.v0",
-          mappingStatus: "fixture",
-          playableInV0: true,
-          cardKind: "normal",
-          cardTypes: [],
-          cost: 0,
-          victoryPoints: 0,
-          isOngoing: false,
-          marketChipMarker: false,
-          effects: [
-            {
-              effectId,
-              timing: "onPlay",
-              statusId: "dingler",
-              target: {
-                selector: "activePlayer",
-              },
-            },
-          ],
-          unsupportedMechanics: [],
-        },
-      },
-    ],
-  ]);
-  const cardInstanceId = `fixture-${effectId}-dingler-instance-${player.hand.length + 1}`;
-  player.hand.push({
-    instanceId: cardInstanceId,
-    definitionId: cardId,
-    ownerId: player.playerId,
-    marketChips: 0,
-  });
-  return cardInstanceId;
+      ],
+      unsupportedMechanics: [],
+    },
+  };
+  return addFixtureDefinitionToActiveHand(state, definition, {
+    instanceId: `fixture-${effectId}-dingler-instance-${player.hand.length + 1}`,
+  }).instanceId;
 }

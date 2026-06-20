@@ -15,6 +15,7 @@ import {
   type StatusInstance,
   type TokenDefinition,
 } from "../src/index.js";
+import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 
 const rootDir = process.cwd();
 
@@ -3004,17 +3005,10 @@ function addFixtureCardToActiveHand(
   const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
   assert.ok(activePlayer);
   const definition = createFixtureCardDefinition(`fixture-targeted-effect-card-${activePlayer.hand.length + 1}`, [effect], options);
-  state.cardDefinitions = new Map([...state.cardDefinitions, [definition.cardId, definition]]);
 
-  const cardInstanceId = `fixture-card-${activePlayer.hand.length + 1}`;
-  activePlayer.hand.push({
-    instanceId: cardInstanceId,
-    definitionId: definition.cardId,
-    ownerId: activePlayer.playerId,
-    marketChips: 0,
-  });
-
-  return cardInstanceId;
+  return addFixtureDefinitionToActiveHand(state, definition, {
+    instanceId: `fixture-card-${activePlayer.hand.length + 1}`,
+  }).instanceId;
 }
 
 function createMarketFlowModeFixture(): GameState {
