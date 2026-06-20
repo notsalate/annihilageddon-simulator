@@ -49,6 +49,7 @@ export {
   buildControlledObjectView,
   calculateEffectiveCardCost,
   calculateEffectiveCardVictoryPoints,
+  calculateEffectivePlayerVictoryPoints,
   calculateEffectivePlayerMaxLife,
   calculateEffectiveTokenVictoryPoints,
   calculateEffectiveValue,

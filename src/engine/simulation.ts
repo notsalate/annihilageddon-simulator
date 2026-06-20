@@ -3,6 +3,7 @@ import type { CardDefinition, TokenDefinition } from "./data.js";
 import {
   calculateEffectiveCardCost,
   calculateEffectiveCardVictoryPoints,
+  calculateEffectivePlayerVictoryPoints,
   calculateEffectiveTokenVictoryPoints,
 } from "./effective-values.js";
 import { recordBotActionSelected } from "./event-recorder.js";
@@ -132,15 +133,11 @@ export function scoreGame(state: GameState): PlayerScore[] {
         deadWizardTokenDefinitions.reduce((total, definition) => {
           return total + calculateEffectiveTokenVictoryPoints(state, player.playerId, definition);
         }, 0) +
-        calculateStatusVictoryPoints(player),
+        calculateEffectivePlayerVictoryPoints(state, player.playerId, 0),
       legendCount: cardDefinitions.filter((definition) => definition.engine.cardKind === "legend").length,
       deadWizardTokenCount: player.deadWizardTokens.length,
     };
   });
-}
-
-function calculateStatusVictoryPoints(player: GameState["players"][number]): number {
-  return player.statuses.some((status) => status.statusId === "dingler") ? -5 : 0;
 }
 
 function summarizeGame(state: GameState, endReason: GameEndReason, isGameEnd: boolean): SingleGameResult {

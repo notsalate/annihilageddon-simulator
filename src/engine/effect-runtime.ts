@@ -2059,11 +2059,21 @@ function createDinglerStatus(playerId: PlayerState["playerId"]): PlayerState["st
     ownerId: playerId,
     effects: [
       {
-        effectId: "fixture_modify_effective_value",
+        effectId: "modify_effective_value",
         timing: "whileControlled",
         valueKind: "playerMaxLife",
         operation: "add",
         amount: -10,
+        target: {
+          targetType: "player",
+        },
+      },
+      {
+        effectId: "modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "playerVictoryPoints",
+        operation: "add",
+        amount: -5,
         target: {
           targetType: "player",
         },

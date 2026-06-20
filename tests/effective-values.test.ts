@@ -5,7 +5,9 @@ import {
   buildControlledObjectView,
   calculateEffectiveCardCost,
   calculateEffectivePlayerMaxLife,
+  calculateEffectivePlayerVictoryPoints,
   initializeGame,
+  applyAction,
   listLegalActions,
   scoreGame,
   type CardDefinition,
@@ -170,6 +172,37 @@ test("non-executable wizard property effects fail instead of applying silently",
   );
 });
 
+test("Dingler scoring penalty is an effective player victory point modifier", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const player = state.players.find((candidate) => candidate.playerId === state.activePlayerId);
+  assert.ok(player);
+  const firstCard = player.hand[0];
+  assert.ok(firstCard);
+  const firstCardDefinition = state.cardDefinitions.get(firstCard.definitionId);
+  assert.ok(firstCardDefinition);
+  const baseCardVictoryPoints = firstCardDefinition.engine.victoryPoints;
+  const firstTokenDefinition = state.tokenDefinitions.values().next().value;
+  const tokenVictoryPointsBefore = firstTokenDefinition?.kind === "deadWizardToken" ? firstTokenDefinition.victoryPoints : undefined;
+  const scoreBefore = scoreGame(state).find((score) => score.playerId === player.playerId);
+  assert.ok(scoreBefore);
+
+  const gainCardId = addFixtureStatusCardToActiveHand(state, "gain_status");
+  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: gainCardId }).ok, true);
+
+  assert.equal(calculateEffectivePlayerVictoryPoints(state, player.playerId, 0), -5);
+  assert.equal(scoreGame(state).find((score) => score.playerId === player.playerId)?.victoryPoints, scoreBefore.victoryPoints - 5);
+  assert.equal(firstCardDefinition.engine.victoryPoints, baseCardVictoryPoints);
+  if (firstTokenDefinition?.kind === "deadWizardToken") {
+    assert.equal(firstTokenDefinition.victoryPoints, tokenVictoryPointsBefore);
+  }
+
+  const removeCardId = addFixtureStatusCardToActiveHand(state, "remove_status");
+  assert.equal(applyAction(state, { type: "playCard", cardInstanceId: removeCardId }).ok, true);
+
+  assert.equal(calculateEffectivePlayerVictoryPoints(state, player.playerId, 0), 0);
+  assert.equal(scoreGame(state).find((score) => score.playerId === player.playerId)?.victoryPoints, scoreBefore.victoryPoints);
+});
+
 function createCostModifierStatus(playerId: StatusInstance["ownerId"], definitionId: string, amount: number): StatusInstance {
   return {
     instanceId: "fixture-cost-status",
@@ -327,4 +360,59 @@ function createCostModifierEffect(definitionId: string, amount: number): unknown
       definitionId,
     },
   };
+}
+
+function addFixtureStatusCardToActiveHand(state: ReturnType<typeof initializeGame>, effectId: "gain_status" | "remove_status"): string {
+  const player = state.players.find((candidate) => candidate.playerId === state.activePlayerId);
+  assert.ok(player);
+  const cardId = `fixture-${effectId}-dingler-card-${player.hand.length + 1}`;
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [
+      cardId,
+      {
+        schemaVersion: 1,
+        cardId,
+        visible: {
+          nameRu: cardId,
+          cost: 0,
+          victoryPoints: 0,
+          typeRu: null,
+          cardKind: "normal",
+          cardTypes: [],
+          markers: [],
+        },
+        engine: {
+          runtimeSchema: "krutagidon.cardDefinition.v0",
+          mappingStatus: "fixture",
+          playableInV0: true,
+          cardKind: "normal",
+          cardTypes: [],
+          cost: 0,
+          victoryPoints: 0,
+          isOngoing: false,
+          marketChipMarker: false,
+          effects: [
+            {
+              effectId,
+              timing: "onPlay",
+              statusId: "dingler",
+              target: {
+                selector: "activePlayer",
+              },
+            },
+          ],
+          unsupportedMechanics: [],
+        },
+      },
+    ],
+  ]);
+  const cardInstanceId = `fixture-${effectId}-dingler-instance-${player.hand.length + 1}`;
+  player.hand.push({
+    instanceId: cardInstanceId,
+    definitionId: cardId,
+    ownerId: player.playerId,
+    marketChips: 0,
+  });
+  return cardInstanceId;
 }

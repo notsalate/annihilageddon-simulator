@@ -1,7 +1,12 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import type { CardInstance, GameState, PlayerId, StatusInstance, TokenInstance, TrophyLikeInstance } from "./setup.js";
 
-export type EffectiveValueKind = "cardCost" | "cardVictoryPoints" | "tokenVictoryPoints" | "playerMaxLife";
+export type EffectiveValueKind =
+  | "cardCost"
+  | "cardVictoryPoints"
+  | "tokenVictoryPoints"
+  | "playerVictoryPoints"
+  | "playerMaxLife";
 
 export type EffectiveValueTarget =
   | {
@@ -113,6 +118,18 @@ export function calculateEffectiveTokenVictoryPoints(
       definitionId: definition.tokenId,
     },
     baseValue: definition.victoryPoints,
+  });
+}
+
+export function calculateEffectivePlayerVictoryPoints(state: GameState, playerId: PlayerId, baseValue: number): number {
+  return calculateEffectiveValue({
+    state,
+    playerId,
+    valueKind: "playerVictoryPoints",
+    target: {
+      targetType: "player",
+    },
+    baseValue,
   });
 }
 
