@@ -16,6 +16,7 @@ import {
   type TokenDefinition,
 } from "../src/index.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
+import { replacePostSetupWizardPropertyFixture } from "./helpers/fixture-tokens.js";
 
 const rootDir = process.cwd();
 
@@ -3163,11 +3164,7 @@ function replaceFirstWizardProperty(
   player: PlayerState,
   definition: TokenDefinition,
 ): PlayerState["wizardProperties"][number] {
-  const property = player.wizardProperties[0];
-  assert.ok(property);
-  state.tokenDefinitions = new Map([...state.tokenDefinitions, [definition.tokenId, definition]]);
-  property.definitionId = definition.tokenId;
-  return property;
+  return replacePostSetupWizardPropertyFixture(state, player, definition);
 }
 
 function createChipActivationWizardProperty(tokenId: string, cardTypes: string[], minimumCount: number): TokenDefinition {
