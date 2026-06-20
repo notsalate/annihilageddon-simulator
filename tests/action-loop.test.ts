@@ -58,16 +58,17 @@ test("playing an add-power card records an immediate effect consequence", () => 
 
   assert.equal(result.ok, true);
   assert.equal(state.turn.power, 1);
-  assert.ok(
-    state.eventLog.some((event) => {
-      return (
-        event.type === "effectAddPowerApplied" &&
-        event.playerId === activePlayer.playerId &&
-        event.cardInstanceId === playableCard.instanceId &&
-        event.definitionId === playableCard.definitionId
-      );
-    }),
-  );
+  const powerEvent = state.eventLog.find((event) => {
+    return (
+      event.type === "effectAddPowerApplied" &&
+      event.playerId === activePlayer.playerId &&
+      event.cardInstanceId === playableCard.instanceId &&
+      event.definitionId === playableCard.definitionId
+    );
+  });
+  assert.ok(powerEvent);
+  assert.equal(powerEvent.powerBefore, 0);
+  assert.equal(powerEvent.powerAfter, 1);
 });
 
 test("illegal actions are rejected without changing game state", () => {
@@ -939,6 +940,10 @@ test("active player can activate a wizard property only when its control-count c
 
   assert.equal(result.ok, true);
   assert.equal(activePlayer.chips, 1);
+  const chipEvent = state.eventLog.find((event) => event.type === "effectChipsGained" && event.playerId === activePlayer.playerId);
+  assert.ok(chipEvent);
+  assert.equal(chipEvent.chipsBefore, 0);
+  assert.equal(chipEvent.chipsAfter, 1);
   assert.equal(
     listLegalActions(state).some((action) => action.type === "activateWizardProperty" && action.tokenInstanceId === property.instanceId),
     false,
@@ -2850,7 +2855,9 @@ function assertGainedMovementGuarantees(
         event.type === "marketChipsGained" &&
         event.playerId === player.playerId &&
         event.cardInstanceId === card.instanceId &&
-        event.amount === 2
+        event.amount === 2 &&
+        event.chipsBefore === 0 &&
+        event.chipsAfter === 2
       );
     }),
   );

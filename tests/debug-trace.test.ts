@@ -22,7 +22,29 @@ test("single-game debug trace summarizes card play and effect resolution in game
         definitionId: "fixture-power-card",
         effectId: "add_power",
         amount: 2,
+        powerBefore: 0,
+        powerAfter: 2,
         sourceType: "card",
+      },
+      {
+        type: "effectChipsGained",
+        playerId: "player-1",
+        cardInstanceId: "card-8",
+        definitionId: "fixture-chip-card",
+        effectId: "gain_chips",
+        amount: 1,
+        chipsBefore: 0,
+        chipsAfter: 1,
+        sourceType: "card",
+      },
+      {
+        type: "marketChipsGained",
+        playerId: "player-1",
+        cardInstanceId: "card-9",
+        definitionId: "fixture-market-card",
+        amount: 2,
+        chipsBefore: 1,
+        chipsAfter: 3,
       },
       {
         type: "cardPlayed",
@@ -35,7 +57,11 @@ test("single-game debug trace summarizes card play and effect resolution in game
 
   assert.equal(
     formatSingleGameDebugTrace(result, {
-      cardNames: new Map([["fixture-power-card", "Мощный тестовый посох"]]),
+      cardNames: new Map([
+        ["fixture-power-card", "Мощный тестовый посох"],
+        ["fixture-chip-card", "Чиповый тестовый посох"],
+        ["fixture-market-card", "Рыночная карта"],
+      ]),
     }),
     [
       "Game seed 60615: maxTurnsReached after 1 turn (technical stop)",
@@ -45,13 +71,15 @@ test("single-game debug trace summarizes card play and effect resolution in game
       "",
       "Turn ? - player-1",
       "- Bot selected an action.",
-      "- Effect add_power from Мощный тестовый посох (card-7): player-1 gains +2 power.",
+      "- Effect add_power from Мощный тестовый посох (card-7): player-1 power 0 -> 2.",
+      "- Effect gain_chips from Чиповый тестовый посох (card-8): player-1 chips 0 -> 1.",
+      "- Market chips from Рыночная карта (card-9): player-1 chips 1 -> 3.",
       "- Played Мощный тестовый посох (card-7).",
       "",
       "Missing instrumentation",
       "- turn number for each event",
       "- before/after hand, played, discard, deck, market and destroyed zones",
-      "- before/after life, power and chip totals for state-changing effects",
+      "- before/after life totals and remaining state-changing effects",
     ].join("\n"),
   );
 });
@@ -167,7 +195,7 @@ test("single-game debug trace summarizes targeting, zone movement, defense, deat
       "Missing instrumentation",
       "- turn number for each event",
       "- before/after hand, played, discard, deck, market and destroyed zones",
-      "- before/after life, power and chip totals for state-changing effects",
+      "- before/after life totals and remaining state-changing effects",
     ].join("\n"),
   );
 });

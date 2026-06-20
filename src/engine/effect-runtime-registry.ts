@@ -1,4 +1,5 @@
 import type { TokenDefinition } from "./data.js";
+import { recordTurnPowerChanged } from "./event-recorder.js";
 import type { CardInstance, GameState, PlayerState, TokenInstance } from "./setup.js";
 
 export interface EffectSourceContext {
@@ -130,16 +131,9 @@ const addPowerHandler: EffectRuntimeHandler = {
       };
     }
 
+    const powerBefore = state.turn.power;
     state.turn.power += amount;
-    state.eventLog.push({
-      type: "effectAddPowerApplied",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: "add_power",
-      amount,
-      sourceType: source.sourceType,
-    });
+    recordTurnPowerChanged(state, player, source, "add_power", powerBefore, state.turn.power);
 
     return { ok: true };
   },

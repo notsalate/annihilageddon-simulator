@@ -41,7 +41,7 @@ export function formatSingleGameDebugTrace(
     "Missing instrumentation",
     "- turn number for each event",
     "- before/after hand, played, discard, deck, market and destroyed zones",
-    "- before/after life, power and chip totals for state-changing effects",
+    "- before/after life totals and remaining state-changing effects",
   );
 
   return lines.join("\n");
@@ -59,7 +59,27 @@ function formatEvent(event: GameEvent, options: FormatSingleGameDebugTraceOption
   }
 
   if (event.type === "effectAddPowerApplied" && event.playerId !== undefined) {
+    if (event.powerBefore !== undefined && event.powerAfter !== undefined) {
+      return `- Effect ${event.effectId ?? "<unknown>"} from ${formatCard(event, options)}: ${event.playerId} power ${event.powerBefore} -> ${event.powerAfter}.`;
+    }
+
     return `- Effect ${event.effectId ?? "<unknown>"} from ${formatCard(event, options)}: ${event.playerId} gains +${event.amount ?? 0} power.`;
+  }
+
+  if (event.type === "effectChipsGained" && event.playerId !== undefined) {
+    if (event.chipsBefore !== undefined && event.chipsAfter !== undefined) {
+      return `- Effect ${event.effectId ?? "<unknown>"} from ${formatCard(event, options)}: ${event.playerId} chips ${event.chipsBefore} -> ${event.chipsAfter}.`;
+    }
+
+    return `- Effect ${event.effectId ?? "<unknown>"} from ${formatCard(event, options)}: ${event.playerId} gains +${event.amount ?? 0} chips.`;
+  }
+
+  if (event.type === "marketChipsGained" && event.playerId !== undefined) {
+    if (event.chipsBefore !== undefined && event.chipsAfter !== undefined) {
+      return `- Market chips from ${formatCard(event, options)}: ${event.playerId} chips ${event.chipsBefore} -> ${event.chipsAfter}.`;
+    }
+
+    return `- Market chips from ${formatCard(event, options)}: ${event.playerId} gains +${event.amount ?? 0} chips.`;
   }
 
   if (event.type === "cardPlayed") {

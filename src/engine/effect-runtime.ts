@@ -1,5 +1,6 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
+import { recordEffectChipsChanged, recordMarketChipsGained } from "./event-recorder.js";
 import {
   getEffectRuntimeHandler,
   type EffectExecutionResult,
@@ -290,18 +291,9 @@ function executeEffect(
   if (effect["effectId"] === "gain_chips") {
     const amount = effect["amount"];
     if (typeof amount === "number" && Number.isSafeInteger(amount) && amount > 0) {
+      const chipsBefore = player.chips;
       player.chips += amount;
-      state.eventLog.push({
-        type: "effectChipsGained",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        ...(source.tokenInstanceId === undefined ? {} : { tokenInstanceId: source.tokenInstanceId }),
-        ...(source.tokenDefinitionId === undefined ? {} : { tokenDefinitionId: source.tokenDefinitionId }),
-        effectId: "gain_chips",
-        amount,
-        sourceType: source.sourceType,
-      });
+      recordEffectChipsChanged(state, player, source, "gain_chips", chipsBefore, player.chips);
     }
 
     return { ok: true };
@@ -315,16 +307,9 @@ function executeEffect(
         return candidate.statuses.some((candidateStatus) => candidateStatus.statusId === status);
       }).length;
       const amount = matchingPlayerCount * amountPerPlayer;
+      const chipsBefore = player.chips;
       player.chips += amount;
-      state.eventLog.push({
-        type: "effectChipsGained",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: "gain_chips_per_player_with_status",
-        amount,
-        sourceType: source.sourceType,
-      });
+      recordEffectChipsChanged(state, player, source, "gain_chips_per_player_with_status", chipsBefore, player.chips);
     }
 
     return { ok: true };
@@ -1858,15 +1843,10 @@ function moveMarketChipsToPlayer(state: GameState, player: PlayerState, card: Ca
   }
 
   const amount = card.marketChips;
+  const chipsBefore = player.chips;
   player.chips += amount;
   card.marketChips = 0;
-  state.eventLog.push({
-    type: "marketChipsGained",
-    playerId: player.playerId,
-    cardInstanceId: card.instanceId,
-    definitionId: card.definitionId,
-    amount,
-  });
+  recordMarketChipsGained(state, player, card, chipsBefore, player.chips);
 }
 
 function moveCardToZonePreservingOwner(state: GameState, card: CardInstance, destination: CardInstance[]): boolean {

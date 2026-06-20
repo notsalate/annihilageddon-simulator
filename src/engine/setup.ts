@@ -104,6 +104,10 @@ export interface GameEvent {
   targetPlayerId?: PlayerId;
   turnNumber?: number;
   actionIdentity?: string;
+  powerBefore?: number;
+  powerAfter?: number;
+  chipsBefore?: number;
+  chipsAfter?: number;
   cardInstanceId?: string;
   definitionId?: string;
   targetCardInstanceId?: string;
