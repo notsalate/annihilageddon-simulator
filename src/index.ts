@@ -67,4 +67,6 @@ export type {
   RunMassSimulationOptions,
 } from "./engine/mass-simulation.js";
 export { runMassSimulation } from "./engine/mass-simulation.js";
+export type { FormatSingleGameDebugTraceOptions } from "./engine/debug-trace.js";
+export { formatSingleGameDebugTrace } from "./engine/debug-trace.js";
 export { formatMassSimulationSummary, formatSingleGameSummary, runSimulationMenu } from "./cli/simulation-menu.js";

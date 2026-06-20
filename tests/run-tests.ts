@@ -3,6 +3,7 @@ import "./setup.test.js";
 import "./action-loop.test.js";
 import "./effective-values.test.js";
 import "./simulation.test.js";
+import "./debug-trace.test.js";
 import "./simulation-menu.test.js";
 import "./validation.test.js";
 import "./draft-validation.test.js";
