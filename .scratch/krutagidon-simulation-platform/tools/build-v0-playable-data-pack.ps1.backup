@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..\..")
-$draftDir = Join-Path $repoRoot "data\import\cards\main\drafts"
+$draftDir = Join-Path $repoRoot "data\import\card-drafts"
 $cardsDir = Join-Path $repoRoot "data\cards"
 $decksDir = Join-Path $repoRoot "data\decks"
 
@@ -294,7 +294,7 @@ $mapping = @{
 $cardFiles = Get-ChildItem $draftDir -Filter "*.json" | Sort-Object Name
 $summary = [ordered]@{
     schemaVersion = 1
-    generatedFrom = "data/import/cards/main/drafts"
+    generatedFrom = "data/import/card-drafts"
     generatedBy = ".scratch/krutagidon-simulation-platform/tools/build-v0-playable-data-pack.ps1"
     cardCounts = [ordered]@{
         mapped = 0
@@ -361,7 +361,7 @@ foreach ($file in $cardFiles) {
         schemaVersion = 1
         cardId = $cardId
         source = [ordered]@{
-            draft = ("data/import/cards/main/drafts/{0}.json" -f $cardId)
+            draft = ("data/import/card-drafts/{0}.json" -f $cardId)
             image = $draft.source.image
             ocrText = $draft.source.ocrText
         }
