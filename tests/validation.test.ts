@@ -195,6 +195,49 @@ test("supported executable card movement and deck effects pass executable effect
   assert.deepEqual(result, { ok: true });
 });
 
+test("executable data-pack validation rejects invalid core movement effect shapes", () => {
+  const card = createFixtureCard("fixture-invalid-core-movement-effects");
+  const dataPack = withOnlyFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "gain_card",
+          timing: "onPlay",
+          target: {
+            selector: "activePlayerHandCard",
+          },
+          destination: "deckTop",
+        },
+        {
+          effectId: "discard_card",
+          timing: "onPlay",
+          target: {
+            selector: "mainMarketCard",
+          },
+        },
+        {
+          effectId: "destroy_card",
+          timing: "onPlay",
+          target: {
+            selector: "mainMarketCard",
+          },
+        },
+      ],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack);
+
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.includes("unsupported gain target activePlayerHandCard")));
+  assert.ok(result.errors.some((error) => error.includes("unsupported gain destination deckTop")));
+  assert.ok(result.errors.some((error) => error.includes("unsupported discard target mainMarketCard")));
+  assert.ok(result.errors.some((error) => error.includes("unsupported destroy target mainMarketCard")));
+});
+
 test("supported executable attack and defense effects pass executable effect validation", () => {
   const attackCard = createFixtureCard("fixture-supported-attack-effect");
   const defenseCard = createFixtureCard("fixture-supported-defense-effect");

@@ -1,6 +1,13 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
-import { getEffectRuntimeHandler, type EffectExecutionResult, type EffectSourceContext } from "./effect-runtime-registry.js";
+import {
+  getEffectRuntimeHandler,
+  type EffectExecutionResult,
+  type EffectRuntimeServices,
+  type EffectSourceContext,
+  type TargetChoice,
+  type TargetChoiceResult,
+} from "./effect-runtime-registry.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export function executeOnPlayEffects(
@@ -245,8 +252,11 @@ function countGainedCardsMatchingEffect(state: GameState, effect: Record<string,
 
 function isSupportedMayhemRuntimeEffect(effect: Record<string, unknown>): boolean {
   const effectId = effect["effectId"];
+  if (typeof effectId === "string" && getEffectRuntimeHandler(effectId) !== undefined) {
+    return true;
+  }
+
   return (
-    effectId === "add_power" ||
     effectId === "heal" ||
     effectId === "set_life" ||
     effectId === "deal_damage" ||
@@ -259,10 +269,7 @@ function isSupportedMayhemRuntimeEffect(effect: Record<string, unknown>): boolea
     effectId === "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none" ||
     effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
     effectId === "mayhem_each_player_discard_deck_then_destroy_from_discard" ||
-    effectId === "gain_card" ||
     effectId === "gain_chips_per_player_with_status" ||
-    effectId === "discard_card" ||
-    effectId === "destroy_card" ||
     effectId === "reveal_top_card" ||
     effectId === "play_top_card" ||
     effectId === "draw_cards" ||
@@ -281,7 +288,7 @@ function executeEffect(
 ): EffectExecutionResult {
   const runtimeHandler = typeof effect["effectId"] === "string" ? getEffectRuntimeHandler(effect["effectId"]) : undefined;
   if (runtimeHandler !== undefined) {
-    return runtimeHandler.execute(state, player, effect, source);
+    return runtimeHandler.execute(state, player, effect, source, effectRuntimeServices);
   }
 
   if (effect["effectId"] === "gain_chips") {
@@ -414,130 +421,6 @@ function executeEffect(
       targetDefinitionId: choice.card.definitionId,
       effectId: "fixture_add_power_equal_to_target_cost",
       amount: definition.engine.cost,
-      sourceType: source.sourceType,
-    });
-
-    return { ok: true };
-  }
-
-  if (effect["effectId"] === "gain_card") {
-    const targetResult = resolveTargetChoice(state, player, effect, source);
-    if (!targetResult.ok) {
-      return targetResult;
-    }
-
-    if (targetResult.choice === undefined) {
-      return { ok: true };
-    }
-
-    if (effect["destination"] !== "discard") {
-      return {
-        ok: false,
-        error: `Unsupported gain destination ${asString(effect["destination"])}`,
-      };
-    }
-
-    const effectId = asString(effect["effectId"]);
-    const choice = requireCardChoice(targetResult.choice, effectId);
-    if (!choice.ok) {
-      return choice;
-    }
-
-    const moved = moveGainedCardToPlayerDestination(state, player, choice.card);
-    if (!moved.ok) {
-      return moved;
-    }
-
-    state.eventLog.push({
-      type: "effectCardGained",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      targetCardInstanceId: choice.card.instanceId,
-      targetDefinitionId: choice.card.definitionId,
-      effectId,
-      destination: moved.destination,
-      sourceType: source.sourceType,
-    });
-
-    return { ok: true };
-  }
-
-  if (effect["effectId"] === "discard_card") {
-    const targetResult = resolveTargetChoice(state, player, effect, source);
-    if (!targetResult.ok) {
-      return targetResult;
-    }
-
-    if (targetResult.choice === undefined) {
-      return { ok: true };
-    }
-
-    const effectId = asString(effect["effectId"]);
-    const choice = requireCardChoice(targetResult.choice, effectId);
-    if (!choice.ok) {
-      return choice;
-    }
-
-    const moved = moveCardToPlayerZone(state, choice.card, player, player.discard);
-    if (!moved) {
-      return {
-        ok: false,
-        error: `Cannot move card ${choice.card.instanceId}`,
-      };
-    }
-
-    state.eventLog.push({
-      type: "effectCardDiscarded",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      targetCardInstanceId: choice.card.instanceId,
-      targetDefinitionId: choice.card.definitionId,
-      effectId,
-      sourceType: source.sourceType,
-    });
-
-    return { ok: true };
-  }
-
-  if (effect["effectId"] === "destroy_card") {
-    const targetResult = resolveTargetChoice(state, player, effect, source);
-    if (!targetResult.ok) {
-      return targetResult;
-    }
-
-    if (targetResult.choice === undefined) {
-      return { ok: true };
-    }
-
-    const effectId = asString(effect["effectId"]);
-    const choice = requireCardChoice(targetResult.choice, effectId);
-    if (!choice.ok) {
-      return choice;
-    }
-
-    const destination = getDestroyDestination(state, choice.card);
-    if (!destination.ok) {
-      return destination;
-    }
-
-    const moved = moveCardToZonePreservingOwner(state, choice.card, destination.zone);
-    if (!moved) {
-      return {
-        ok: false,
-        error: `Cannot move card ${choice.card.instanceId}`,
-      };
-    }
-
-    state.eventLog.push({
-      type: "effectCardDestroyed",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      targetCardInstanceId: choice.card.instanceId,
-      targetDefinitionId: choice.card.definitionId,
-      effectId,
       sourceType: source.sourceType,
     });
 
@@ -1430,25 +1313,15 @@ function getPlayersInActiveOrder(state: GameState): PlayerState[] {
   }).filter((candidate): candidate is PlayerState => candidate !== undefined);
 }
 
-type TargetChoice =
-  | {
-      choiceType: "card";
-      card: CardInstance;
-    }
-  | {
-      choiceType: "player";
-      player: PlayerState;
-    };
-
-type TargetChoiceResult =
-  | {
-      ok: true;
-      choice: TargetChoice | undefined;
-    }
-  | {
-      ok: false;
-      error: string;
-    };
+const effectRuntimeServices: EffectRuntimeServices = {
+  resolveTargetChoice,
+  requireCardChoice,
+  moveGainedCardToPlayerDestination,
+  moveCardToPlayerZone,
+  moveCardToZonePreservingOwner,
+  getDestroyDestination,
+  asString,
+};
 
 function resolveStatusTargetPlayers(
   state: GameState,

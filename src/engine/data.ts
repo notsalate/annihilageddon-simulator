@@ -390,9 +390,6 @@ function isSupportedExecutableEffectId(effectId: string, mode: "combat" | "fixtu
     effectId === "multi_target_attack" ||
     effectId === "mayhem_attack" ||
     effectId === "avoid_attack" ||
-    effectId === "gain_card" ||
-    effectId === "discard_card" ||
-    effectId === "destroy_card" ||
     effectId === "reveal_top_card" ||
     effectId === "play_top_card" ||
     effectId === "draw_cards" ||
