@@ -9,8 +9,10 @@ import {
   initializeGame,
   applyAction,
   listLegalActions,
+  loadV0DataPack,
   scoreGame,
   type CardDefinition,
+  type LoadedDataPack,
   type StatusInstance,
   type TokenDefinition,
   type TrophyLikeInstance,
@@ -125,22 +127,12 @@ test("a controlled fixture object can modify token scoring without mutating toke
 });
 
 test("wizard property discount and scoring modifier apply to owned treasures", () => {
-  const state = initializeGame({ rootDir, seed: 60615 });
-  const player = state.players[0];
-  assert.ok(player);
-  const property = player.wizardProperties[0];
-  assert.ok(property);
   const treasure = createTypedFixtureCardDefinition("fixture-treasure", ["treasure"], 5, 2);
   const spell = createTypedFixtureCardDefinition("fixture-spell", ["spell"], 5, 2);
-  state.cardDefinitions = new Map([
-    ...state.cardDefinitions,
-    [treasure.cardId, treasure],
-    [spell.cardId, spell],
-  ]);
-  state.tokenDefinitions = new Map([
-    ...state.tokenDefinitions,
-    [property.definitionId, createTreasureDiscountWizardProperty(property.definitionId)],
-  ]);
+  const dataPack = createTreasureModifierDataPack(loadV0DataPack(rootDir), treasure, spell);
+  const state = initializeGame({ dataPack, seed: 60615 });
+  const player = state.players[0];
+  assert.ok(player);
   player.discard.push({
     instanceId: "fixture-owned-treasure",
     definitionId: treasure.cardId,
@@ -247,6 +239,30 @@ function createTokenVictoryPointModifierTrophy(
         },
       },
     ],
+  };
+}
+
+function createTreasureModifierDataPack(
+  dataPack: LoadedDataPack,
+  treasure: CardDefinition,
+  spell: CardDefinition,
+): LoadedDataPack {
+  const tokenDefinitions = new Map(dataPack.tokenDefinitions);
+  for (const entry of dataPack.tokenStacks.wizardProperties?.entries ?? []) {
+    const definition = tokenDefinitions.get(entry.tokenId);
+    if (definition?.kind === "wizardProperty") {
+      tokenDefinitions.set(entry.tokenId, createTreasureDiscountWizardProperty(entry.tokenId));
+    }
+  }
+
+  return {
+    ...dataPack,
+    cardDefinitions: new Map([
+      ...dataPack.cardDefinitions,
+      [treasure.cardId, treasure],
+      [spell.cardId, spell],
+    ]),
+    tokenDefinitions,
   };
 }
 

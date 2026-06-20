@@ -124,11 +124,23 @@ export interface GameEvent {
   sourceType?: string;
 }
 
-export interface InitializeGameOptions {
-  rootDir: string;
+interface InitializeGameBaseOptions {
   seed: number;
   playerCount?: number;
+}
+
+export type InitializeGameOptions = InitializeGameFilesystemOptions | InitializeGameLoadedDataPackOptions;
+
+export interface InitializeGameFilesystemOptions extends InitializeGameBaseOptions {
+  rootDir: string;
   dataPackPath?: string;
+  dataPack?: never;
+}
+
+export interface InitializeGameLoadedDataPackOptions extends InitializeGameBaseOptions {
+  dataPack: LoadedDataPack;
+  rootDir?: never;
+  dataPackPath?: never;
 }
 
 interface InstanceFactory {
@@ -146,7 +158,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
   }
 
   const rng = createSeededRng(options.seed);
-  const dataPack = loadV0DataPack(options.rootDir, options.dataPackPath);
+  const dataPack = "dataPack" in options ? options.dataPack : loadV0DataPack(options.rootDir, options.dataPackPath);
   const factory = createInstanceFactory();
   const tokenFactory = createTokenInstanceFactory();
 

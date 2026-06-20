@@ -12,6 +12,14 @@ test("initial game setup is deterministic for the same seed", () => {
   assert.deepEqual(snapshot(first), snapshot(second));
 });
 
+test("initial game setup can use a preloaded data pack", () => {
+  const dataPack = loadV0DataPack(rootDir);
+  const fromFilesystem = initializeGame({ rootDir, seed: 60615 });
+  const fromLoadedDataPack = initializeGame({ dataPack, seed: 60615 });
+
+  assert.deepEqual(snapshot(fromLoadedDataPack), snapshot(fromFilesystem));
+});
+
 test("initial game setup creates expected player and common zones", () => {
   const state = initializeGame({ rootDir, seed: 12345 });
 
