@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "deck": "starter",
+  "source": "data/import/cards/starter/затравки.json",
+  "entries": [
+    {
+      "cardId": "starter_001",
+      "sourceImagePath": "assets/cards/starter/Затравка. Знак.png",
+      "extractionFile": "data/import/cards/starter/texts/starter_001.md"
+    },
+    {
+      "cardId": "starter_002",
+      "sourceImagePath": "assets/cards/starter/Затравка. Пшик.png",
+      "extractionFile": "data/import/cards/starter/texts/starter_002.md"
+    },
+    {
+      "cardId": "starter_003",
+      "sourceImagePath": "assets/cards/starter/Затравка. Сырная палочка.png",
+      "extractionFile": "data/import/cards/starter/texts/starter_003.md"
+    },
+    {
+      "cardId": "starter_004",
+      "sourceImagePath": "assets/cards/starter/Затравка. Палочка хреналочка.png",
+      "extractionFile": "data/import/cards/starter/texts/starter_004.md"
+    }
+  ]
+}

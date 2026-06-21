@@ -1,0 +1,339 @@
+{
+  "SaveName": "",
+  "Date": "",
+  "VersionNumber": "",
+  "GameMode": "",
+  "GameType": "",
+  "GameComplexity": "",
+  "Tags": [],
+  "Gravity": 0.5,
+  "PlayArea": 0.5,
+  "Table": "",
+  "Sky": "",
+  "Note": "",
+  "TabStates": {},
+  "LuaScript": "",
+  "LuaScriptState": "",
+  "XmlUI": "",
+  "ObjectStates": [
+    {
+      "GUID": "5915e9",
+      "Name": "Deck",
+      "Transform": {
+        "posX": -81.25026,
+        "posY": 2.43590021,
+        "posZ": 15.7500505,
+        "rotX": 0.00000150350729,
+        "rotY": 179.997284,
+        "rotZ": -7.379974e-7,
+        "scaleX": 1.70270038,
+        "scaleY": 1,
+        "scaleZ": 1.70270038
+      },
+      "Nickname": "",
+      "Description": "",
+      "GMNotes": "",
+      "AltLookAngle": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "ColorDiffuse": {
+        "r": 0.713235259,
+        "g": 0.713235259,
+        "b": 0.713235259
+      },
+      "LayoutGroupSortIndex": 0,
+      "Value": 0,
+      "Locked": false,
+      "Grid": true,
+      "Snap": true,
+      "IgnoreFoW": false,
+      "MeasureMovement": false,
+      "DragSelectable": true,
+      "Autoraise": true,
+      "Sticky": true,
+      "Tooltip": true,
+      "GridProjection": false,
+      "HideWhenFaceDown": true,
+      "Hands": false,
+      "SidewaysCard": false,
+      "DeckIDs": [205001, 204702, 220900, 221000],
+      "CustomDeck": {
+        "2047": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2467498957068706914/67BC802EA8E60CF8BFA481FEAD6FFB48A11BE840/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/16012703026828289321/65B16999802C9119BA02E8BBC7F460E201A9DFFA/",
+          "NumWidth": 4,
+          "NumHeight": 3,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "2050": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2467498957068706914/67BC802EA8E60CF8BFA481FEAD6FFB48A11BE840/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/16012703026828289321/65B16999802C9119BA02E8BBC7F460E201A9DFFA/",
+          "NumWidth": 4,
+          "NumHeight": 3,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "2209": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11982288100069843554/FDE15A89E9BD39CDBC3DB87596741E488C088BCB/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/16012703026828289321/65B16999802C9119BA02E8BBC7F460E201A9DFFA/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        },
+        "2210": {
+          "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16636240830759086777/9F28FC418795AD1AEF715C2412FD0D98D59EF3AC/",
+          "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/16012703026828289321/65B16999802C9119BA02E8BBC7F460E201A9DFFA/",
+          "NumWidth": 1,
+          "NumHeight": 1,
+          "BackIsHidden": true,
+          "UniqueBack": false,
+          "Type": 0
+        }
+      },
+      "LuaScript": "",
+      "LuaScriptState": "",
+      "XmlUI": "",
+      "ContainedObjects": [
+        {
+          "GUID": "b7305e",
+          "Name": "Card",
+          "Transform": {
+            "posX": -81.25008,
+            "posY": 2.40931726,
+            "posZ": 15.7500114,
+            "rotX": 0.000007202038,
+            "rotY": 179.997437,
+            "rotZ": 0.0000438838542,
+            "scaleX": 1.70270038,
+            "scaleY": 1,
+            "scaleZ": 1.70270038
+          },
+          "Nickname": "Знак",
+          "Description": "",
+          "GMNotes": "",
+          "AltLookAngle": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 205001,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "2050": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2467498957068706914/67BC802EA8E60CF8BFA481FEAD6FFB48A11BE840/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/16012703026828289321/65B16999802C9119BA02E8BBC7F460E201A9DFFA/",
+              "NumWidth": 4,
+              "NumHeight": 3,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "aa0c20",
+          "Name": "Card",
+          "Transform": {
+            "posX": -80.75,
+            "posY": 2.45510221,
+            "posZ": 16.25,
+            "rotX": 0.000117157259,
+            "rotY": 180.017212,
+            "rotZ": 0.00025837525,
+            "scaleX": 1.70270038,
+            "scaleY": 1,
+            "scaleZ": 1.70270038
+          },
+          "Nickname": "Пшик",
+          "Description": "",
+          "GMNotes": "",
+          "AltLookAngle": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 204702,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "2047": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/2467498957068706914/67BC802EA8E60CF8BFA481FEAD6FFB48A11BE840/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/16012703026828289321/65B16999802C9119BA02E8BBC7F460E201A9DFFA/",
+              "NumWidth": 4,
+              "NumHeight": 3,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "d14e47",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": -80.75,
+            "posY": 2.48897815,
+            "posZ": 16.75,
+            "rotX": -0.0003512413,
+            "rotY": 180.009323,
+            "rotZ": 0.0004003468,
+            "scaleX": 1.70270038,
+            "scaleY": 1,
+            "scaleZ": 1.70270038
+          },
+          "Nickname": "Сырная Палочка",
+          "Description": "",
+          "GMNotes": "",
+          "AltLookAngle": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 220900,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "2209": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/11982288100069843554/FDE15A89E9BD39CDBC3DB87596741E488C088BCB/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/16012703026828289321/65B16999802C9119BA02E8BBC7F460E201A9DFFA/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        },
+        {
+          "GUID": "951043",
+          "Name": "CardCustom",
+          "Transform": {
+            "posX": -80.75,
+            "posY": 2.498645,
+            "posZ": 16.25,
+            "rotX": 0.0000593971163,
+            "rotY": 180.024353,
+            "rotZ": 0.0001192036,
+            "scaleX": 1.70270038,
+            "scaleY": 1,
+            "scaleZ": 1.70270038
+          },
+          "Nickname": "[f932ad]Палочка-хреналочка",
+          "Description": "",
+          "GMNotes": "",
+          "AltLookAngle": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "ColorDiffuse": {
+            "r": 0.713235259,
+            "g": 0.713235259,
+            "b": 0.713235259
+          },
+          "LayoutGroupSortIndex": 0,
+          "Value": 0,
+          "Locked": false,
+          "Grid": true,
+          "Snap": true,
+          "IgnoreFoW": false,
+          "MeasureMovement": false,
+          "DragSelectable": true,
+          "Autoraise": true,
+          "Sticky": true,
+          "Tooltip": true,
+          "GridProjection": false,
+          "HideWhenFaceDown": true,
+          "Hands": true,
+          "CardID": 221000,
+          "SidewaysCard": false,
+          "CustomDeck": {
+            "2210": {
+              "FaceURL": "https://steamusercontent-a.akamaihd.net/ugc/16636240830759086777/9F28FC418795AD1AEF715C2412FD0D98D59EF3AC/",
+              "BackURL": "https://steamusercontent-a.akamaihd.net/ugc/16012703026828289321/65B16999802C9119BA02E8BBC7F460E201A9DFFA/",
+              "NumWidth": 1,
+              "NumHeight": 1,
+              "BackIsHidden": true,
+              "UniqueBack": false,
+              "Type": 0
+            }
+          },
+          "LuaScript": "",
+          "LuaScriptState": "",
+          "XmlUI": ""
+        }
+      ]
+    }
+  ]
+}

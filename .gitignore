@@ -1,7 +1,6 @@
 node_modules/
 dist/
 assets/
-data/import/
 .scratch/tmp/
 .scratch/tmp_*
 .scratch/runs/

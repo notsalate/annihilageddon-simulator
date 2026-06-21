@@ -1,0 +1,286 @@
+{
+  "schemaVersion": 1,
+  "deck": "legends",
+  "entries": [
+    {
+      "cardId": "esw2_dbg__legend_001",
+      "sourceImagePath": "assets/cards/legend/creature/Легенда-Тварь. Нарывка, Королева Генитальных Гарпий.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_001.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "creature"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_002",
+      "sourceImagePath": "assets/cards/legend/creature/Легенда-Тварь. Венерина Маголовка.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_002.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "creature"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_003",
+      "sourceImagePath": "assets/cards/legend/creature/Легенда-Тварь. Волшебный кролик.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_003.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "creature"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_004",
+      "sourceImagePath": "assets/cards/legend/creature/Легенда-Тварь. Гусын, королева-мать.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_004.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "creature"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_005",
+      "sourceImagePath": "assets/cards/legend/creature/Легенда-Тварь. Единственный в мире лохолох.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_005.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "creature"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_006",
+      "sourceImagePath": "assets/cards/legend/creature/Легенда-Тварь. Жница Любви.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_006.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "creature"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_007",
+      "sourceImagePath": "assets/cards/legend/creature/Легенда-Тварь. Мортал Комбо.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_007.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "creature"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_008",
+      "sourceImagePath": "assets/cards/legend/location/Легенда-Место. Чипсихоз-Арена.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_008.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "location"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_009",
+      "sourceImagePath": "assets/cards/legend/location/Легенда-Место. Башня радости.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_009.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "location"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_010",
+      "sourceImagePath": "assets/cards/legend/location/Легенда-Место. Парк Вурдалакционов.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_010.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "location"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_011",
+      "sourceImagePath": "assets/cards/legend/location/Легенда-Место. Трондец.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_011.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "location"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_012",
+      "sourceImagePath": "assets/cards/legend/location/Легенда-Место. Ультимативное тронадо.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_012.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "location"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_013",
+      "sourceImagePath": "assets/cards/legend/spell/Легенда-Заклинание. Смерть от холестерина.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_013.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "spell"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_014",
+      "sourceImagePath": "assets/cards/legend/spell/Легенда-Заклинание. Авада Лошавра.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_014.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "spell"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_015",
+      "sourceImagePath": "assets/cards/legend/spell/Легенда-Заклинание. Бузящая палочка Гарика Потного.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_015.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "spell"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_016",
+      "sourceImagePath": "assets/cards/legend/spell/Легенда-Заклинание. Восстание из зада.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_016.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "spell"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_017",
+      "sourceImagePath": "assets/cards/legend/spell/Легенда-Заклинание. Мальчишник в Р'льехе.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_017.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "spell"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_018",
+      "sourceImagePath": "assets/cards/legend/spell/Легенда-Заклинание. Надёжный план.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_018.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "spell"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_019",
+      "sourceImagePath": "assets/cards/legend/spell/Легенда-Заклинание. Орбитальная Евонная пушка.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_019.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "spell"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_020",
+      "sourceImagePath": "assets/cards/legend/spell/Легенда-Заклинание. Сделка с Сотоной.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_020.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "spell"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_021",
+      "sourceImagePath": "assets/cards/legend/treasure/Легенда-Сокровище. ТА САМАЯ Вялая Палочка.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_021.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "treasure"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_022",
+      "sourceImagePath": "assets/cards/legend/treasure/Легенда-Сокровище. Легендохранитель.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_022.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "treasure"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_023",
+      "sourceImagePath": "assets/cards/legend/treasure/Легенда-Сокровище. Палочка-Миниганочка.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_023.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "treasure"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_024",
+      "sourceImagePath": "assets/cards/legend/treasure/Легенда-Сокровище. Палочка-Ушаталочка.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_024.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "treasure"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_025",
+      "sourceImagePath": "assets/cards/legend/treasure/Легенда-Сокровище. Похотливый маячок.jpg",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_025.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "treasure"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_026",
+      "sourceImagePath": "assets/cards/legend/treasure/Легенда-Сокровище. Сердце мага по-эпичному.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_026.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "treasure"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_027",
+      "sourceImagePath": "assets/cards/legend/wizard-card/Легенда-Волшебник. Хахатальер Злорадник.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_027.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "wizardCard"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_028",
+      "sourceImagePath": "assets/cards/legend/wizard-card/Легенда-Волшебник. Братья лошашные.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_028.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "wizardCard"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_029",
+      "sourceImagePath": "assets/cards/legend/wizard-card/Легенда-Волшебник. Виагрус, Твёрдый Лорд.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_029.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "wizardCard"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_030",
+      "sourceImagePath": "assets/cards/legend/wizard-card/Легенда-Волшебник. Дерьмак Гастрит.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_030.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "wizardCard"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_031",
+      "sourceImagePath": "assets/cards/legend/wizard-card/Легенда-Волшебник. Зад в будущее.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_031.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "wizardCard"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_032",
+      "sourceImagePath": "assets/cards/legend/wizard-card/Легенда-Волшебник. Капитан Бартоломяу.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_032.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "wizardCard"]
+    },
+    {
+      "cardId": "esw2_dbg__legend_033",
+      "sourceImagePath": "assets/cards/legend/wizard-card/Легенда-Волшебник. Некроманка Гнилюся.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_033.md",
+      "cardKind": "legend",
+      "cardTypes": ["legend", "wizardCard"]
+    },
+    {
+      "cardId": "esw2_dbg__mega_mayhem_001",
+      "sourceImagePath": "assets/cards/mega-mayhem/МегаБеспредел. MA.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__mega_mayhem_001.md",
+      "cardKind": "megaMayhem",
+      "cardTypes": []
+    },
+    {
+      "cardId": "esw2_dbg__mega_mayhem_002",
+      "sourceImagePath": "assets/cards/mega-mayhem/МегаБеспредел. MB.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__mega_mayhem_002.md",
+      "cardKind": "megaMayhem",
+      "cardTypes": []
+    },
+    {
+      "cardId": "esw2_dbg__mega_mayhem_003",
+      "sourceImagePath": "assets/cards/mega-mayhem/МегаБеспредел. MC.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__mega_mayhem_003.md",
+      "cardKind": "megaMayhem",
+      "cardTypes": []
+    },
+    {
+      "cardId": "esw2_dbg__mega_mayhem_004",
+      "sourceImagePath": "assets/cards/mega-mayhem/МегаБеспредел. MD.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__mega_mayhem_004.md",
+      "cardKind": "megaMayhem",
+      "cardTypes": []
+    },
+    {
+      "cardId": "esw2_dbg__mega_mayhem_005",
+      "sourceImagePath": "assets/cards/mega-mayhem/МегаБеспредел. ME.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__mega_mayhem_005.md",
+      "cardKind": "megaMayhem",
+      "cardTypes": []
+    },
+    {
+      "cardId": "esw2_dbg__mega_mayhem_006",
+      "sourceImagePath": "assets/cards/mega-mayhem/МегаБеспредел. MF.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__mega_mayhem_006.md",
+      "cardKind": "megaMayhem",
+      "cardTypes": []
+    },
+    {
+      "cardId": "esw2_dbg__mega_mayhem_007",
+      "sourceImagePath": "assets/cards/mega-mayhem/МегаБеспредел. MG.png",
+      "extractionFile": "data/import/cards/legends/texts/esw2_dbg__mega_mayhem_007.md",
+      "cardKind": "megaMayhem",
+      "cardTypes": []
+    }
+  ]
+}
