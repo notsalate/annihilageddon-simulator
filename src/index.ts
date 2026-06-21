@@ -36,6 +36,18 @@ export {
   formatImportCompletenessReport,
 } from "./import/import-completeness.js";
 export type {
+  RuntimeCoverageInventory,
+  RuntimeCoverageInventoryItem,
+  RuntimeCoverageMechanicCluster,
+  RuntimeCoverageObjectKind,
+  RuntimeCoverageStatus,
+} from "./import/runtime-coverage-inventory.js";
+export {
+  createRuntimeCoverageInventory,
+  formatRuntimeCoverageInventoryMarkdown,
+  writeRuntimeCoverageInventoryMarkdown,
+} from "./import/runtime-coverage-inventory.js";
+export type {
   DraftImportBlocker,
   DraftImportGeneratedFile,
   DraftImportHarnessResult,

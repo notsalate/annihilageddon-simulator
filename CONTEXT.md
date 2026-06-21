@@ -84,6 +84,34 @@ _Avoid_: infer draft type from folder only, runtime kind
 Tracked engine-readable card and token definitions used by simulations. Runtime data contains explicit stable IDs and mapped effects instead of relying on OCR text or draft files.
 _Avoid_: raw import, card draft, OCR source
 
+**Runtime Mapping Review Needed**:
+A coverage status for old v0 runtime definitions that must be rechecked against canonical draft data and current engine capabilities before they are treated as reliable v0.5 behavior. Existing v0 runtime JSON is review-needed by default unless focused tests already cover the mapped behavior.
+_Avoid_: trusted legacy runtime, automatically supported v0 card
+
+**v0.5 Runtime Coverage**:
+The post-v0 phase that expands playable runtime data from canonical drafts while auditing old v0 mappings. v0.5 adds cards and tokens by mechanics coverage: universal mechanics can unlock many definitions, while specific mechanics remain partial or blocked until the engine supports them.
+_Avoid_: full rules completion, v0 first batch
+
+**v0 Legacy Runtime Fields**:
+Old runtime metadata such as `runtimeSchema = "krutagidon.cardDefinition.v0"` and `playableInV0`. During v0.5 work these fields may remain in existing JSON for compatibility, but they are legacy indicators rather than the source of truth for current coverage.
+_Avoid_: deleting v0 metadata as first step, treating playableInV0 as current coverage
+
+**v0.5 Coverage Status**:
+The current audit/mapping status for runtime definitions in the v0.5 phase. It should distinguish fully playable objects from partial, blocked, placeholder, and review-needed runtime data without relying on old v0 playability fields.
+_Avoid_: v0 playable flag, draft validation status
+
+**Runtime Coverage Audit Report**:
+A separate generated or maintained inventory report that classifies draft/runtime/composition coverage during v0.5 before statuses are moved into individual runtime JSON files. The first v0.5 step should use this report to avoid broad runtime JSON churn while making missing, review-needed, partial, blocked, placeholder, and fully playable objects visible.
+_Avoid_: runtime card template, mass-editing every runtime JSON as the first audit step
+
+**Fully Playable Runtime Definition**:
+A card or token definition that is considered added to the game. It has runtime JSON, is included in the appropriate deck, stack, or pool composition, and all mechanics required by that object are implemented and working in the engine.
+_Avoid_: JSON-only card, partial runtime card, draft-only import
+
+**Focused Runtime Coverage Test**:
+A small deterministic test that proves either a universal mechanic, a concrete runtime mapping's effect parameters, or a narrow integration path for a card or token. v0.5 coverage should prefer focused tests over full-game tests for every individual card, while still using integration smoke tests for complex mechanic combinations.
+_Avoid_: one huge game test per card, untested runtime mapping
+
 **Runtime Card Source Group**:
 The runtime folder group for card definitions based on the game source or stack that owns the card, such as `main`, `legend`, `starter`, `familiar`, or `special`. Card source groups are separate from visible card types such as spell, creature, treasure, wizard card, or location.
 _Avoid_: grouping runtime card files by visible type
@@ -160,6 +188,10 @@ _Avoid_: imported card behavior, data import, real card coverage
 The short pre-import set of promoted and universal mechanics needed before broad real-card import: healing, damage, attacks and defense windows, gain/discard/destroy movement, reveal/play-top-deck effects, set-life effects, activations, wild magic, market chip markers, executable Mayhem hooks, basic token effects, and familiar lifecycle/effects.
 _Avoid_: full card import, complete card database
 
+**Mechanic Cluster**:
+A planning group of cards, tokens, properties, and engine rules that must be implemented together because they depend on the same mechanic or modifier surface. v0.5 runtime mapping issues should be cut by mechanic clusters, not by incidental file location or by fixing old runtime JSON opportunistically.
+_Avoid_: drive-by runtime fixes, one-card issue for a shared mechanic
+
 **Fixture Mechanic**:
 A temporary test-only mechanic or effect ID used to prove a rules-engine slice before it is promoted to normal runtime data language. Fixture mechanics must not be used as the canonical IDs for real playable card data; promoted mechanics are tested through their normal runtime IDs before fixture IDs are removed.
 _Avoid_: production mechanic, real card effect ID
@@ -175,6 +207,10 @@ _Avoid_: complete implementation, full rules support
 **Runtime Effect ID**:
 The stable machine-readable English identifier used by runtime data to invoke a typed effect handler. Runtime effect IDs are separate from Russian display terms and must not depend on localized card text.
 _Avoid_: Russian display term as key, card text parsing
+
+**Wand Attack Card**:
+A card that qualifies for effects referring to "Палочки" when its visible Russian name contains "палочка" and its implemented behavior deals damage through an attack. A card does not qualify just because its name contains "палочка" if it is a permanent/location-style card without attack damage, and the normal `limpWand` special card does not qualify. A Legend card such as "ТА САМАЯ Вялая палочка" can qualify when it has attack damage behavior.
+_Avoid_: name-only wand match, cardTypes-only wand match, treating all limpWand cards as attack wands
 
 **Healing**:
 A life-increase effect that lets a player накручивать lives up to the player's current maximum life. In current card coverage, normal healing effects heal the acting player rather than another chosen player.
