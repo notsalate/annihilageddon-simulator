@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__wild_magic",
+  "source": {
+    "image": "assets/cards/special/esw2_dbg__wild_magic.png",
+    "text": "data/import/cards/special/texts/esw2_dbg__wild_magic.md"
+  },
+  "visible": {
+    "nameRu": "",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": null,
+    "cardKind": "wildMagic",
+    "cardTypes": [],
+    "textRu": "",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

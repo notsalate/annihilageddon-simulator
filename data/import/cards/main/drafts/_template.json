@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_001",
+  "source": {
+    "image": "assets/cards/main/esw2_dbg__main_001.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_001.md"
+  },
+  "visible": {
+    "nameRu": "",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": null,
+    "cardKind": "normal",
+    "cardTypes": [],
+    "textRu": "",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

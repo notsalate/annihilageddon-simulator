@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "wizardPropertyDraft",
+  "tokenId": "esw2_dbg__wizard_property_001",
+  "kind": "wizardProperty",
+  "source": {
+    "image": "assets/wizard-property/esw2_dbg__wizard_property_001.png",
+    "text": "data/import/tokens/wizard-property/texts/esw2_dbg__wizard_property_001.md"
+  },
+  "visible": {
+    "sourceLabel": "",
+    "textRu": "",
+    "uncertainty": []
+  },
+  "notes": []
+}

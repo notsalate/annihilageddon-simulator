@@ -9,6 +9,7 @@
     "simulate": "npm run build -- --pretty false && node dist/src/cli/run-simulation-menu.js",
     "simulate:mass": "npm run build -- --pretty false && node dist/src/cli/run-mass-simulation.js",
     "simulate:single": "npm run build -- --pretty false && node dist/src/cli/run-single-game.js",
+    "generate:drafts": "npm run build -- --pretty false && node dist/src/cli/generate-drafts.js",
     "report:import": "npm run build -- --pretty false && node dist/src/cli/report-import-completeness.js",
     "validate:drafts": "npm run build -- --pretty false && node dist/src/cli/validate-drafts.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

@@ -27,8 +27,23 @@ export {
   validateDraftFiles,
   validateWizardPropertyDraft,
 } from "./import/draft-validation.js";
-export type { ImportCompletenessAreaReport, ImportCompletenessReport } from "./import/import-completeness.js";
-export { createImportCompletenessReport, formatImportCompletenessReport } from "./import/import-completeness.js";
+export type {
+  ImportCompletenessAreaReport,
+  ImportCompletenessReport,
+} from "./import/import-completeness.js";
+export {
+  createImportCompletenessReport,
+  formatImportCompletenessReport,
+} from "./import/import-completeness.js";
+export type {
+  DraftImportBlocker,
+  DraftImportGeneratedFile,
+  DraftImportHarnessResult,
+  DraftImportKind,
+  DraftImportSource,
+  RunDraftImportHarnessOptions,
+} from "./import/draft-generator.js";
+export { runDraftImportHarness } from "./import/draft-generator.js";
 export type {
   CardInstance,
   CommonState,
@@ -40,11 +55,24 @@ export type {
   TrophyLikeInstance,
 } from "./engine/setup.js";
 export { initializeGame } from "./engine/setup.js";
-export type { ActionResult, GameAction, LegalAction } from "./engine/actions.js";
+export type {
+  ActionResult,
+  GameAction,
+  LegalAction,
+} from "./engine/actions.js";
 export { applyAction, listLegalActions } from "./engine/actions.js";
-export type { MarketFlowEndReason, MarketFlowMode, MarketFlowResult, RunMarketFlowOptions } from "./engine/market-flow.js";
+export type {
+  MarketFlowEndReason,
+  MarketFlowMode,
+  MarketFlowResult,
+  RunMarketFlowOptions,
+} from "./engine/market-flow.js";
 export { runMarketFlow } from "./engine/market-flow.js";
-export type { ControlledObjectView, EffectiveValueKind, EffectiveValueTarget } from "./engine/effective-values.js";
+export type {
+  ControlledObjectView,
+  EffectiveValueKind,
+  EffectiveValueTarget,
+} from "./engine/effective-values.js";
 export {
   buildControlledObjectView,
   calculateEffectiveCardCost,
@@ -62,7 +90,13 @@ export type {
   RunSingleGameOptions,
   SingleGameResult,
 } from "./engine/simulation.js";
-export { baselineBot, determineWinnerIds, getGameEndReason, runSingleGame, scoreGame } from "./engine/simulation.js";
+export {
+  baselineBot,
+  determineWinnerIds,
+  getGameEndReason,
+  runSingleGame,
+  scoreGame,
+} from "./engine/simulation.js";
 export type {
   CompactGameSummary,
   MassSimulationAggregate,
@@ -72,4 +106,8 @@ export type {
 export { runMassSimulation } from "./engine/mass-simulation.js";
 export type { FormatSingleGameDebugTraceOptions } from "./engine/debug-trace.js";
 export { formatSingleGameDebugTrace } from "./engine/debug-trace.js";
-export { formatMassSimulationSummary, formatSingleGameSummary, runSimulationMenu } from "./cli/simulation-menu.js";
+export {
+  formatMassSimulationSummary,
+  formatSingleGameSummary,
+  runSimulationMenu,
+} from "./cli/simulation-menu.js";

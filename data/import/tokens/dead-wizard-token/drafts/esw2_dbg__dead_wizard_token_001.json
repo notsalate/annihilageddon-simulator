@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_001",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/esw2_dbg__dead_wizard_token_001.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_001.md"
+  },
+  "visible": {
+    "sourceLabel": "Жетон мертвого волшебника 1",
+    "textRu": "Получив этот жетон, не получай немедленный эффект.",
+    "victoryPoints": -3,
+    "uncertainty": []
+  },
+  "notes": [
+    "Этот draft фиксирует видимый/source-текст только.",
+    "Runtime DWT behavior назначается отдельным mapping-шагом."
+  ]
+}

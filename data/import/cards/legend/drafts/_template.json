@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_001",
+  "source": {
+    "image": "assets/cards/legend/esw2_dbg__legend_001.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_001.md"
+  },
+  "visible": {
+    "nameRu": "",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": null,
+    "cardKind": "legend",
+    "cardTypes": [
+      "legend"
+    ],
+    "textRu": "",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

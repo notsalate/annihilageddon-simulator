@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_001",
+  "source": {
+    "image": "assets/cards/main/esw2_dbg__main_001.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_001.md"
+  },
+  "visible": {
+    "nameRu": "Сосочный проколист",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": [
+      "wizardCard"
+    ],
+    "textRu": "+2 мощи\nАтака: нанеси 7 урона каждому врагу.",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "Quantity 2 is deck composition metadata, not runtime behavior."
+  ],
+  "composition": {
+    "quantity": 2
+  }
+}

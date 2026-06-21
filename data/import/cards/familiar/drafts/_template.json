@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__familiar_001",
+  "source": {
+    "image": "assets/cards/familiar/esw2_dbg__familiar_001.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_001.md"
+  },
+  "visible": {
+    "nameRu": "",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": [
+      "familiar"
+    ],
+    "textRu": "",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}
