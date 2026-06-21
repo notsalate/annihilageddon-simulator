@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "wizardPropertyDraft",
+  "tokenId": "esw2_dbg__wizard_property_006",
+  "kind": "wizardProperty",
+  "source": {
+    "image": "assets/wizard-property/wp_006.png",
+    "text": "data/import/tokens/wizard-property/texts/esw2_dbg__wizard_property_006.md"
+  },
+  "visible": {
+    "sourceLabel": "wp_006",
+    "textRu": "Когда ты получаешь тварь, можешь положить её на верх своей колоды.",
+    "uncertainty": []
+  },
+  "notes": [
+    "Свойство срабатывает, когда игрок получает карту-тварь.",
+    "Легенда-тварь также подходит под условие",
+    "Покупка считается получением твари.",
+    "Игрок может положить полученную тварь на верх своей колоды.",
+    "Слово \"можешь\" означает, что это необязательное действие игрока.",
+    "После покупки, если игрок уже положил тварь в сброс, на верх колоды ставить его запрещается"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

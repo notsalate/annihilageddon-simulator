@@ -17,7 +17,7 @@
     "markers": ["defense"],
     "uncertainty": []
   },
-  "notes": ["cardKind = `familiar`; cardTypes = [`familiar`]."],
+  "notes": [],
   "composition": {
     "quantity": 1
   }

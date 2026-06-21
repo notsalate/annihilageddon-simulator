@@ -18,5 +18,3 @@
 Атака: нанеси каждому врагу столько урона, какова стоимость уничтоженной легенды.
 
 ## Classification / Разъяснения
-
-- `cardKind = `legend`; cardTypes = [`legend`, `wizardCard`].`

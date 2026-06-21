@@ -18,5 +18,3 @@
 В этот ход считается, что ты контролируешь сыгранную карту.
 
 ## Classification / Разъяснения
-
-- `cardKind = `legend`; cardTypes = [`legend`, `wizardCard`].`

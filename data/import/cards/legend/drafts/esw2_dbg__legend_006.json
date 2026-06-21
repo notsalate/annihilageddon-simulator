@@ -17,10 +17,7 @@
     "markers": ["attack"],
     "uncertainty": []
   },
-  "notes": [
-    "cardKind = `legend`; cardTypes = [`legend`, `creature`].",
-    "Можно атаковать самого себя, и применить эффект ЖДК своего"
-  ],
+  "notes": ["Можно атаковать самого себя, и применить эффект ЖДК своего"],
   "composition": {
     "quantity": 1
   }

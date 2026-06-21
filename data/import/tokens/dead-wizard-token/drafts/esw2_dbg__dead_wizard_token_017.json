@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_017",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_017.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_017.md"
+  },
+  "visible": {
+    "sourceLabel": "Убивший тебя колдун получает 2 чипсины",
+    "textRu": "Убивший тебя колдун получает 2 чипсины.",
+    "victoryPoints": null,
+    "uncertainty": []
+  },
+  "notes": [
+    "Эффект относится к колдуну, который убил игрока, получившего этот ЖДК.",
+    "Убийца получает 2 чипсины.",
+    "Если убийца не игрок/бот, а ЖДК, Беспредел,или другие неопределенные случаи, то эффект ЖДК не применяется.",
+    "Если игрок убил сам себя и получил этот ЖДК, то он получает 2 чипсины"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

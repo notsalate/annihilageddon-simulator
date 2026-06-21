@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_019",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_019.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_019.md"
+  },
+  "visible": {
+    "sourceLabel": "После воскрешения поменяйся жизнями с любым другим колдуном",
+    "textRu": "После воскрешения поменяйся жизнями с любым другим колдуном.",
+    "victoryPoints": null,
+    "uncertainty": []
+  },
+  "notes": [
+    "Эффект применяется после воскрешения игрока, получившего этот ЖДК.",
+    "Игрок выбирает любого другого колдуна.",
+    "Игрок и выбранный колдун меняются текущими значениями жизней.",
+    "Допускается ситуация, когда игрок выбрал другого игрока, у которого такое же количество жизней, то есть ЖДК сработал, но у двух игроков жизни не изменились",
+    "Самого себя выбрать запрещено"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

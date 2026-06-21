@@ -17,5 +17,3 @@
 Атака: нанеси 20 урона каждому врагу.
 
 ## Classification / Разъяснения
-
-- `cardKind = `legend`; cardTypes = [`legend`, `creature`].`

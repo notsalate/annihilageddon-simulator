@@ -4,17 +4,22 @@
   "tokenId": "esw2_dbg__dead_wizard_token_001",
   "kind": "deadWizardToken",
   "source": {
-    "image": "assets/dead-wizard-token/esw2_dbg__dead_wizard_token_001.png",
+    "image": "assets/dead-wizard-token/DWT_001.png",
     "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_001.md"
   },
   "visible": {
-    "sourceLabel": "Жетон мертвого волшебника 1",
-    "textRu": "Получив этот жетон, не получай немедленный эффект.",
-    "victoryPoints": -3,
+    "sourceLabel": "Получи вялую палочку за каждую легенду в твоей стопке сброса",
+    "textRu": "Получи вялую палочку за каждую легенду в твоей стопке сброса.",
+    "victoryPoints": null,
     "uncertainty": []
   },
   "notes": [
-    "Этот draft фиксирует видимый/source-текст только.",
-    "Runtime DWT behavior назначается отдельным mapping-шагом."
-  ]
+    "Игрок получает вялые палочки.",
+    "Количество вялых палочек равно количеству легенд в его стопке сброса.",
+    "\"Твоя стопка сброса\" относится к игроку, получившему этот ЖДК.",
+    "Есть маленькая вероятность ситуации, когда у игрока есть свойство [wp_003](../wizard-property-texts/wp_003.md), а в сбросе есть >0 фамильяров, то этот игрок может посчитать фамильяров за легенд, и получить вялые палочки за них. Польза от этого может быть если у игрока есть Легенда-Волшебник Виагрус, который меняет по вялой палочки с -1 на +1"
+  ],
+  "composition": {
+    "quantity": 1
+  }
 }

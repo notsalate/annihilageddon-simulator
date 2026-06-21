@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_012",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_012.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_012.md"
+  },
+  "visible": {
+    "sourceLabel": "Каждый твой враг получает 1 чипсину",
+    "textRu": "Каждый твой враг получает 1 чипсину.",
+    "victoryPoints": null,
+    "uncertainty": []
+  },
+  "notes": [
+    "Каждый враг игрока получает 1 чипсину.",
+    "Сам игрок, получивший ЖДК, не получает чипсину по этому тексту."
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

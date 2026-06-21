@@ -20,5 +20,3 @@
 Можешь взять её на руку, если это не беспредел.
 
 ## Classification / Разъяснения
-
-- `cardKind = `familiar`; cardTypes = [`familiar`].`

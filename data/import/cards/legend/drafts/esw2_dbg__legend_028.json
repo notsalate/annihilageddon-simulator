@@ -17,7 +17,7 @@
     "markers": ["defense"],
     "uncertainty": []
   },
-  "notes": ["cardKind = `legend`; cardTypes = [`legend`, `wizardCard`]."],
+  "notes": [],
   "composition": {
     "quantity": 1
   }

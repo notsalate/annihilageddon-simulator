@@ -17,5 +17,3 @@
 Уничтожь любое количество карт в своей стопке сброса.
 
 ## Classification / Разъяснения
-
-- `cardKind = `legend`; cardTypes = [`legend`, `spell`].`

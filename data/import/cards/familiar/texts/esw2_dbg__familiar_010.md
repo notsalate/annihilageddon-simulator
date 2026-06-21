@@ -20,5 +20,3 @@
 Если сбросил, возьми 1 карту.
 
 ## Classification / Разъяснения
-
-- `cardKind = `familiar`; cardTypes = [`familiar`].`

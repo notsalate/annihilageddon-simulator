@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_008",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_008.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_008.md"
+  },
+  "visible": {
+    "sourceLabel": "Замешай все легенды с руки в колоду",
+    "textRu": "Замешай все легенды с руки в колоду.",
+    "victoryPoints": null,
+    "uncertainty": []
+  },
+  "notes": [
+    "Игрок замешивает все карты легенд из своей руки в свою колоду.",
+    "Если у игрока свойство [wp_003](../wizard-property-texts/wp_003.md), то он может в этот момент не считать фамильяр легендами",
+    "Эффект касается только легенд в руке.",
+    "Если в руке нет легенд, эффект ничего не перемещает."
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

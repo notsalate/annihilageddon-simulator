@@ -20,5 +20,3 @@
 Если сбросил, возьми 1 карту и нанеси 6 урона атакующему.
 
 ## Classification / Разъяснения
-
-- `cardKind = `familiar`; cardTypes = [`familiar`].`

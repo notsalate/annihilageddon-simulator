@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_003",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_003.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_003.md"
+  },
+  "visible": {
+    "sourceLabel": "В КОНЦЕ ИГРЫ. Если у любого колдуна есть второй жетон дохлого колдуна с таким же текстом, уничтожь оба жетона. -5",
+    "textRu": "В КОНЦЕ ИГРЫ. Если у любого колдуна есть второй жетон дохлого колдуна с таким же текстом, уничтожь оба жетона.",
+    "victoryPoints": -5,
+    "uncertainty": []
+  },
+  "notes": [
+    "Это end-game эффект.",
+    "Нужно искать второй ЖДК с таким же текстом у любого колдуна.",
+    "Если найден второй ЖДК с таким же текстом, оба жетона уничтожаются.",
+    "Значение -5 относится к штрафным ПО/VP этого жетона, если JSON mapping подтвердит это как scoring value.",
+    "Всего 2 таких экземпляра ЖДК в игре"
+  ],
+  "composition": {
+    "quantity": 2
+  }
+}

@@ -18,5 +18,4 @@
 
 ## Classification / Разъяснения
 
-- `cardKind = `legend`; cardTypes = [`legend`, `spell`].`
 - При игре вдвоем урон наносится врагу 1 раз

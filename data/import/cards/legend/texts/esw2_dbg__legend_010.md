@@ -17,5 +17,3 @@
 Пока у тебя максимум жизней, +2 к пределу руки.
 
 ## Classification / Разъяснения
-
-- `cardKind = `legend`; cardTypes = [`legend`, `location`].`

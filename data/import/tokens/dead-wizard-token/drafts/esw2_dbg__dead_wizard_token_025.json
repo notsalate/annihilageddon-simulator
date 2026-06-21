@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_025",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_025.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_025.md"
+  },
+  "visible": {
+    "sourceLabel": "Раскрой все карты с руки. Отхвати столько урона, какова стоимость самой дорогой карты",
+    "textRu": "Раскрой все карты с руки. Отхвати столько урона, какова стоимость самой дорогой карты.",
+    "victoryPoints": null,
+    "uncertainty": []
+  },
+  "notes": [
+    "Игрок раскрывает все карты с руки.",
+    "Это означает, что другие игроки ВИДЯТ раскрытые карты с руки",
+    "Нужно определить самую дорогую карту среди раскрытых карт.",
+    "Игрок получает урон, равный стоимости самой дорогой карты.",
+    "Если в руке нет карт или максимальная стоимость 0, то игрок не получает"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

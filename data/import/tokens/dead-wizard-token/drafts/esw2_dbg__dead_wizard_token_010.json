@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_010",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_010.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_010.md"
+  },
+  "visible": {
+    "sourceLabel": "Каждый враг может передать тебе на руку карту знака с руки или из своей стопки сброса",
+    "textRu": "Каждый враг может передать тебе на руку карту знака с руки или из своей стопки сброса.",
+    "victoryPoints": null,
+    "uncertainty": []
+  },
+  "notes": [
+    "Каждый враг отдельно решает, передавать ли карту.",
+    "Слово \"может\" означает необязательное действие для каждого врага.",
+    "Передаваемая карта должна быть картой знака.",
+    "Источник карты: рука врага или его стопка сброса.",
+    "Получатель кладёт переданную карту на руку."
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

@@ -17,10 +17,7 @@
     "markers": ["attack"],
     "uncertainty": []
   },
-  "notes": [
-    "cardKind = `legend`; cardTypes = [`legend`, `spell`].",
-    "Атаковать можно и себя, в том числе защититься от самого себя"
-  ],
+  "notes": ["Атаковать можно и себя, в том числе защититься от самого себя"],
   "composition": {
     "quantity": 1
   }

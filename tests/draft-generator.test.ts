@@ -255,7 +255,6 @@ test("draft import harness supports legend source text dialect", () => {
   ]);
   assert.deepEqual(legendDraft["composition"], { quantity: 1 });
   assert.deepEqual(legendDraft["notes"], [
-    "cardKind = `legend`; cardTypes = [`legend`, `creature`].",
     "Если вялых палочек в стопке не хватает, выдается столько сколько хватает.",
   ]);
   assert.equal(
@@ -265,6 +264,9 @@ test("draft import harness supports legend source text dialect", () => {
   assert.deepEqual(readNested(megaMayhemDraft, ["visible", "cardTypes"]), []);
   assert.equal(readNested(megaMayhemDraft, ["visible", "cost"]), null);
   assert.equal(readNested(megaMayhemDraft, ["visible", "victoryPoints"]), null);
+  assert.deepEqual(megaMayhemDraft["notes"], [
+    "Мегабеспредел входит в колоду легенд.",
+  ]);
   assert.equal(validateDraft(legendDraft).ok, true);
   assert.equal(validateDraft(megaMayhemDraft).ok, true);
 });
@@ -369,6 +371,74 @@ test("draft import harness supports starter and singleton special source text di
   assert.equal(validateDraft(starterDraft).ok, true);
   assert.equal(validateDraft(limpWandDraft).ok, true);
   assert.equal(validateDraft(wildMagicDraft).ok, true);
+});
+
+test("draft import harness canonicalizes wizard property source text dialect", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-draft-generator-wizard-property-")
+  );
+  const propertyTextPath = "data/import/tokens/wizard-property/texts/wp_001.md";
+  writeSource(rootDir, propertyTextPath, createWizardPropertyMarkdown());
+
+  const result = runDraftImportHarness({
+    rootDir,
+    sources: [{ kind: "wizardProperty", textPath: propertyTextPath }],
+  });
+
+  assert.equal(result.blockers.length, 0);
+  assert.deepEqual(
+    result.generated.map((file) => file.draftPath),
+    [
+      "data/import/tokens/wizard-property/drafts/esw2_dbg__wizard_property_001.json",
+    ]
+  );
+
+  const propertyDraft = readJson(
+    rootDir,
+    "data/import/tokens/wizard-property/drafts/esw2_dbg__wizard_property_001.json"
+  );
+  assert.equal(propertyDraft["tokenId"], "esw2_dbg__wizard_property_001");
+  assert.deepEqual(propertyDraft["composition"], { quantity: 1 });
+  assert.deepEqual(propertyDraft["notes"], [
+    '"Получив волшебника" означает: игрок получил карту-волшебника.',
+    "Покупка карты-волшебника тоже считается получением.",
+  ]);
+  assert.equal(validateDraft(propertyDraft).ok, true);
+});
+
+test("draft import harness canonicalizes DWT dialect with visible VP and quantity rule", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-draft-generator-dwt-dialect-")
+  );
+  const tokenTextPath =
+    "data/import/tokens/dead-wizard-token/texts/dead_wizard_token_003.md";
+  writeSource(rootDir, tokenTextPath, createDeadWizardTokenWithVpMarkdown());
+
+  const result = runDraftImportHarness({
+    rootDir,
+    sources: [{ kind: "deadWizardToken", textPath: tokenTextPath }],
+  });
+
+  assert.equal(result.blockers.length, 0);
+  assert.deepEqual(
+    result.generated.map((file) => file.draftPath),
+    [
+      "data/import/tokens/dead-wizard-token/drafts/esw2_dbg__dead_wizard_token_003.json",
+    ]
+  );
+
+  const tokenDraft = readJson(
+    rootDir,
+    "data/import/tokens/dead-wizard-token/drafts/esw2_dbg__dead_wizard_token_003.json"
+  );
+  assert.equal(tokenDraft["tokenId"], "esw2_dbg__dead_wizard_token_003");
+  assert.equal(readNested(tokenDraft, ["visible", "victoryPoints"]), -5);
+  assert.deepEqual(tokenDraft["composition"], { quantity: 2 });
+  assert.deepEqual(tokenDraft["notes"], [
+    "Значение -5 относится к штрафным ПО/VP этого жетона, если JSON mapping подтвердит это как scoring value.",
+    "Всего 2 таких экземпляра ЖДК в игре",
+  ]);
+  assert.equal(validateDraft(tokenDraft).ok, true);
 });
 
 function createCardMarkdown(): string {
@@ -509,7 +579,7 @@ function createMegaMayhemMarkdown(): string {
     "",
     "## Classification / Разъяснения",
     "",
-    "- `cardKind = `megaMayhem`; cardTypes = [].`",
+    "- `cardKind = `megaMayhem`; cardTypes = []. Мегабеспредел входит в колоду легенд.`",
   ].join("\n");
 }
 
@@ -536,6 +606,43 @@ function createFamiliarMarkdown(): string {
     "## Classification / Разъяснения",
     "",
     "- `cardKind = `familiar`; cardTypes = [`familiar`].`",
+  ].join("\n");
+}
+
+function createWizardPropertyMarkdown(): string {
+  return [
+    "# wizard_property_001",
+    "",
+    "sourceImage: assets/wizard-property/wp_001.png",
+    "sourceLabel: wp_001",
+    "textRu:",
+    "Получив волшебника, получи 1 чипсину.",
+    "",
+    "clarifications:",
+    "",
+    '- "Получив волшебника" означает: игрок получил карту-волшебника.',
+    "- Покупка карты-волшебника тоже считается получением.",
+  ].join("\n");
+}
+
+function createDeadWizardTokenWithVpMarkdown(): string {
+  return [
+    "# dead_wizard_token_003",
+    "",
+    "sourceImages:",
+    "",
+    "- assets/dead-wizard-token/DWT_003.png",
+    "",
+    "sourceLabel: В КОНЦЕ ИГРЫ. Если у любого колдуна есть второй жетон дохлого колдуна с таким же текстом, уничтожь оба жетона. -5",
+    "",
+    "textRu:",
+    "В КОНЦЕ ИГРЫ. Если у любого колдуна есть второй жетон дохлого колдуна с таким же текстом, уничтожь оба жетона.",
+    "-5",
+    "",
+    "clarifications:",
+    "",
+    "- Значение -5 относится к штрафным ПО/VP этого жетона, если JSON mapping подтвердит это как scoring value.",
+    "- Всего 2 таких экземпляра ЖДК в игре",
   ].join("\n");
 }
 

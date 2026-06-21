@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_014",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_014.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_014.md"
+  },
+  "visible": {
+    "sourceLabel": "Отхвати 4 урона за каждую легенду в твоей стопке сброса",
+    "textRu": "Отхвати 4 урона за каждую легенду в твоей стопке сброса.",
+    "victoryPoints": null,
+    "uncertainty": []
+  },
+  "notes": [
+    "Игрок получает 4 урона за каждую легенду в своей стопке сброса.",
+    "\"Твоя стопка сброса\" относится к игроку, получившему этот ЖДК.",
+    "Если в стопке сброса нет легенд, урон от этого эффекта равен 0.",
+    "Игрок получивший этот ЖДК и имеющий свойство [wp_003](../wizard-property-texts/wp_003.md), может решить считать фамильяры в сбросе (если они там имеются) за легенд или нет"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

@@ -17,5 +17,3 @@
 Если есть, можешь уничтожить 1 свой жетон дохлого колдуна.
 
 ## Classification / Разъяснения
-
-- `cardKind = `legend`; cardTypes = [`legend`, `spell`].`

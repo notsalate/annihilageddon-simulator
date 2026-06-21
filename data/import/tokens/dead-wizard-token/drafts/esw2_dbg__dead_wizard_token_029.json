@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_029",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_029.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_029.md"
+  },
+  "visible": {
+    "sourceLabel": "Ты наносишь дополнительно 4 урона палочками, которые наносят урон. -4 ПО",
+    "textRu": "Ты наносишь дополнительно 4 урона палочками, которые наносят урон.",
+    "victoryPoints": -4,
+    "uncertainty": []
+  },
+  "notes": [
+    "Эффект увеличивает урон от палочек игрока.",
+    "Увеличение применяется только к палочкам, которые действительно наносят урон.",
+    "Значение -4 относится к штрафным ПО/VP этого жетона, если JSON mapping подтвердит это как scoring value.",
+    "Фактически, этот ЖДК дает -7 ПО в сумме",
+    "Дополнительный урон наносится независимо от владельца палочки, даже через шальную магию можно сыграть чужую палочку и нанести доп урон"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

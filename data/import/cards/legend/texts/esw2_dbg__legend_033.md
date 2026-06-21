@@ -18,5 +18,4 @@
 
 ## Classification / Разъяснения
 
-- `cardKind = `legend`; cardTypes = [`legend`, `wizardCard`].`
 - актвиные карты "дохляков"-постоянок также увеличивают урон, т.к являются ЖДК

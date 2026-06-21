@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_004",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_004.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_004.md"
+  },
+  "visible": {
+    "sourceLabel": "В КОНЦЕ ИГРЫ. Удвой свои штрафные ПО за вялые палочки",
+    "textRu": "В КОНЦЕ ИГРЫ: Удвой свои штрафные ПО за вялые палочки.",
+    "victoryPoints": null,
+    "uncertainty": []
+  },
+  "notes": [
+    "Это end-game эффект.",
+    "Эффект относится к штрафным ПО/VP за вялые палочки игрока.",
+    "Нужно удвоить именно штраф от вялых палочек, а не все штрафные ПО игрока.",
+    "Например, 6 вялых палочек дают -6 ПО. ЖДК удваивает ПО в -12 ПО",
+    "Не противоречит действиям Легенды-Волшебника Виагрус, который меняет ПО вялой палочки с -1 на +1",
+    "То есть 6 вялых палочек и Виагрус дают +12 ПО, а не 6"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

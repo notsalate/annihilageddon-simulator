@@ -19,5 +19,4 @@
 
 ## Classification / Разъяснения
 
-- `cardKind = `legend`; cardTypes = [`legend`, `spell`].`
 - Атаковать можно и себя, в том числе защититься от самого себя

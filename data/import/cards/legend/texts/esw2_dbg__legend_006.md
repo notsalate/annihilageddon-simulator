@@ -18,5 +18,4 @@
 
 ## Classification / Разъяснения
 
-- `cardKind = `legend`; cardTypes = [`legend`, `creature`].`
 - Можно атаковать самого себя, и применить эффект ЖДК своего

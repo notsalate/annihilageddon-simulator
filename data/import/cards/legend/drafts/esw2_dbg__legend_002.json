@@ -18,7 +18,6 @@
     "uncertainty": []
   },
   "notes": [
-    "cardKind = `legend`; cardTypes = [`legend`, `creature`].",
     "Можно = необязательное действие. Необязательно меняться жизнями или менять статус лошар. Можно просто +4 мощи"
   ],
   "composition": {

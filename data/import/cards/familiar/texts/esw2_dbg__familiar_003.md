@@ -20,5 +20,3 @@
 Если сбросил, возьми 1 карту и перенаправь атаку на атакующего.
 
 ## Classification / Разъяснения
-
-- `cardKind = `familiar`; cardTypes = [`familiar`].`

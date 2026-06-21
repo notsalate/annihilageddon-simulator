@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "wizardPropertyDraft",
+  "tokenId": "esw2_dbg__wizard_property_001",
+  "kind": "wizardProperty",
+  "source": {
+    "image": "assets/wizard-property/wp_001.png",
+    "text": "data/import/tokens/wizard-property/texts/esw2_dbg__wizard_property_001.md"
+  },
+  "visible": {
+    "sourceLabel": "wp_001",
+    "textRu": "Получив волшебника, получи 1 чипсину и, если ты лошара, можешь снова стать нормальным.",
+    "uncertainty": []
+  },
+  "notes": [
+    "\"Получив волшебника\" означает: игрок получил карту-волшебника.",
+    "Покупка карты-волшебника тоже считается получением.",
+    "Это не означает получение самого стартового свойства.",
+    "\"Можешь снова стать нормальным\" означает: если игрок лошара, он может по желанию перестать быть лошарой."
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

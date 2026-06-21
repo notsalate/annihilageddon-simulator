@@ -255,7 +255,10 @@ function createDeadWizardTokenDraft(
   markdown: ParsedMarkdown,
   blockers: DraftImportBlocker[]
 ): unknown {
-  const tokenId = path.basename(sourceTextPath, ".md");
+  const tokenId = canonicalTokenId(
+    path.basename(sourceTextPath, ".md"),
+    "dead_wizard_token"
+  );
   const sourceImage = readRequiredField(
     sourceTextPath,
     markdown,
@@ -277,13 +280,22 @@ function createDeadWizardTokenDraft(
     "textRu",
     "visible.textRu"
   );
-  const victoryPoints = readOptionalIntegerField(
-    sourceTextPath,
-    markdown,
-    blockers,
-    ["VP"],
-    "visible.victoryPoints"
-  );
+  const victoryPoints =
+    readOptionalIntegerField(
+      sourceTextPath,
+      markdown,
+      blockers,
+      ["VP"],
+      "visible.victoryPoints"
+    ) ?? inferVisibleVictoryPoints(textRu, sourceLabel);
+  const compositionQuantity =
+    readOptionalIntegerField(
+      sourceTextPath,
+      markdown,
+      blockers,
+      "quantity",
+      "composition.quantity"
+    ) ?? inferDeadWizardTokenQuantity(tokenId);
 
   return {
     schemaVersion: 1,
@@ -301,6 +313,9 @@ function createDeadWizardTokenDraft(
       uncertainty: [],
     },
     notes: collectNotes(markdown),
+    composition: {
+      quantity: compositionQuantity,
+    },
   };
 }
 
@@ -309,7 +324,10 @@ function createWizardPropertyDraft(
   markdown: ParsedMarkdown,
   blockers: DraftImportBlocker[]
 ): unknown {
-  const tokenId = path.basename(sourceTextPath, ".md");
+  const tokenId = canonicalTokenId(
+    path.basename(sourceTextPath, ".md"),
+    "wizard_property"
+  );
   const sourceImage = readRequiredField(
     sourceTextPath,
     markdown,
@@ -347,6 +365,9 @@ function createWizardPropertyDraft(
       uncertainty: [],
     },
     notes: collectNotes(markdown),
+    composition: {
+      quantity: 1,
+    },
   };
 }
 
@@ -604,18 +625,35 @@ function inferMarkers(textRu: string | undefined): string[] {
 }
 
 function collectNotes(markdown: ParsedMarkdown): string[] {
-  const notes = [...markdown.notes];
+  const notes = markdown.notes.flatMap(stripTypeClassificationNote);
   const clarifications =
     markdown.sections.get("clarifications") ??
     markdown.sections.get("classification / разъяснения") ??
     [];
   for (const clarification of clarifications) {
-    if (clarification !== "None" && !notes.includes(clarification)) {
-      notes.push(clarification);
+    const cleanedClarifications = stripTypeClassificationNote(clarification);
+    for (const cleanedClarification of cleanedClarifications) {
+      if (
+        cleanedClarification !== "None" &&
+        !notes.includes(cleanedClarification)
+      ) {
+        notes.push(cleanedClarification);
+      }
     }
   }
 
   return notes;
+}
+
+function stripTypeClassificationNote(note: string): string[] {
+  const cleanedNote = note
+    .replace(
+      /^cardKind\s*=\s*`?[^`;]+`?\s*;\s*cardTypes\s*=\s*(?:\[[^\]]*\]|\[\])\.\s*/u,
+      ""
+    )
+    .trim();
+
+  return cleanedNote.length === 0 ? [] : [cleanedNote];
 }
 
 function readStringListField(
@@ -645,7 +683,10 @@ function draftPathForSource(
   absoluteTextPath: string
 ): string {
   const sourceDir = path.dirname(absoluteTextPath);
-  const sourceId = path.basename(absoluteTextPath, ".md");
+  const sourceId = canonicalDraftFileId(
+    path.basename(absoluteTextPath, ".md"),
+    kind
+  );
 
   if (
     kind === "card" ||
@@ -656,6 +697,55 @@ function draftPathForSource(
   }
 
   return path.join(rootDir, "data", "import", "drafts", `${sourceId}.json`);
+}
+
+function canonicalDraftFileId(sourceId: string, kind: DraftImportKind): string {
+  switch (kind) {
+    case "deadWizardToken":
+      return canonicalTokenId(sourceId, "dead_wizard_token");
+    case "wizardProperty":
+      return canonicalTokenId(sourceId, "wizard_property");
+    case "card":
+      return sourceId;
+  }
+}
+
+function canonicalTokenId(sourceId: string, category: string): string {
+  if (sourceId.startsWith(`esw2_dbg__${category}_`)) {
+    return sourceId;
+  }
+
+  const numberMatch = /([0-9]{3})$/.exec(sourceId);
+  if (numberMatch === null || numberMatch[1] === undefined) {
+    return sourceId;
+  }
+
+  return `esw2_dbg__${category}_${numberMatch[1]}`;
+}
+
+function inferDeadWizardTokenQuantity(tokenId: string): number {
+  return tokenId === "esw2_dbg__dead_wizard_token_003" ? 2 : 1;
+}
+
+function inferVisibleVictoryPoints(
+  textRu: string | undefined,
+  sourceLabel: string | undefined
+): number | null {
+  const candidates = [textRu, sourceLabel].filter(
+    (value): value is string => value !== undefined
+  );
+
+  for (const candidate of candidates) {
+    const match = /(?:^|\s)(-\d+)\s*(?:ПО|VP)?(?:\s|$)/iu.exec(candidate);
+    if (match?.[1] !== undefined) {
+      const parsed = Number(match[1]);
+      if (Number.isSafeInteger(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  return null;
 }
 
 function writeJsonFile(filePath: string, value: unknown): void {

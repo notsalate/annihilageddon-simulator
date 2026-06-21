@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_015",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_015.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_015.md"
+  },
+  "visible": {
+    "sourceLabel": "Получи 1 чипсину",
+    "textRu": "Получи 1 чипсину.",
+    "victoryPoints": null,
+    "uncertainty": []
+  },
+  "notes": ["Игрок, получивший ЖДК, получает 1 чипсину."],
+  "composition": {
+    "quantity": 1
+  }
+}

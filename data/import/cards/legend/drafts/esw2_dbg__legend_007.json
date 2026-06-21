@@ -17,7 +17,7 @@
     "markers": ["attack"],
     "uncertainty": []
   },
-  "notes": ["cardKind = `legend`; cardTypes = [`legend`, `creature`]."],
+  "notes": [],
   "composition": {
     "quantity": 1
   }

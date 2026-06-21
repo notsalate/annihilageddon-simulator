@@ -17,10 +17,7 @@
     "markers": ["attack"],
     "uncertainty": []
   },
-  "notes": [
-    "cardKind = `legend`; cardTypes = [`legend`, `spell`].",
-    "При игре вдвоем урон наносится врагу 1 раз"
-  ],
+  "notes": ["При игре вдвоем урон наносится врагу 1 раз"],
   "composition": {
     "quantity": 1
   }

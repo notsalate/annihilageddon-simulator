@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_009",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_009.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_009.md"
+  },
+  "visible": {
+    "sourceLabel": "Замешай все свои карты-постоянки в свою колоду",
+    "textRu": "Замешай все свои карты-постоянки в свою колоду.",
+    "victoryPoints": null,
+    "uncertainty": []
+  },
+  "notes": [
+    "Игрок замешивает все свои карты-постоянки в свою колоду.",
+    "Замешиваются только АКТИВНЫЕ карты-постоянки (ни в руке, ни в колоде, ни в сбросе)",
+    "Если у игрока нет карт-постоянок, эффект ничего не перемещает."
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}
