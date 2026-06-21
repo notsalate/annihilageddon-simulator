@@ -4,6 +4,9 @@
 - cost: `5`
 - VP: `1`
 - visible type: `Волшебник`
+- visible card kind: `normal`
+- visible card types: `wizardCard`
+- visible markers: `attack`
 
 ## Visible Russian rules text
 

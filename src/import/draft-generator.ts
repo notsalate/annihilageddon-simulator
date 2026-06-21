@@ -62,8 +62,13 @@ const knownFieldKeys = new Set([
   "sourceimages",
   "sourcelabel",
   "textru",
+  "visible card kind",
+  "visible card types",
+  "visible cost",
+  "visible markers",
   "visible russian name",
   "visible type",
+  "visible vp",
   "vp",
   "quantity",
 ]);
@@ -181,8 +186,11 @@ function createCardDraft(
     "VP",
     "visible.victoryPoints"
   );
-  const cardTypes = inferCardTypes(typeRu, cardKind);
-  const markers = inferMarkers(textRu);
+  const cardTypes =
+    readStringListField(markdown, "visible card types") ??
+    inferCardTypes(typeRu, cardKind);
+  const markers =
+    readStringListField(markdown, "visible markers") ?? inferMarkers(textRu);
   const notes = collectNotes(markdown);
   const compositionQuantity = readOptionalIntegerField(
     sourceTextPath,
@@ -483,12 +491,21 @@ function readOptionalIntegerField(
     return null;
   }
 
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isSafeInteger(parsed)) {
+  if (!/^-?\d+$/.test(value)) {
     blockers.push({
       source: sourceTextPath,
       field: draftField,
       message: `${sourceField} must be an integer when present`,
+    });
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    blockers.push({
+      source: sourceTextPath,
+      field: draftField,
+      message: `${sourceField} must be a safe integer when present`,
     });
     return null;
   }
@@ -500,7 +517,8 @@ function inferCardKind(
   sourceGroup: string | undefined,
   markdown: ParsedMarkdown
 ): string | undefined {
-  const explicitKind = readField(markdown, "cardKind");
+  const explicitKind =
+    readField(markdown, "visible card kind") ?? readField(markdown, "cardKind");
   if (explicitKind !== undefined) {
     return explicitKind;
   }
@@ -587,6 +605,27 @@ function collectNotes(markdown: ParsedMarkdown): string[] {
   return notes;
 }
 
+function readStringListField(
+  markdown: ParsedMarkdown,
+  sourceField: string
+): string[] | undefined {
+  const key = normalizeKey(sourceField);
+  const value =
+    markdown.fields.get(key) ?? markdown.sections.get(key)?.join("\n");
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value.trim().length === 0) {
+    return [];
+  }
+
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
 function draftPathForSource(
   rootDir: string,
   kind: DraftImportKind,
@@ -611,7 +650,12 @@ function writeJsonFile(filePath: string, value: unknown): void {
 }
 
 function cleanValue(value: string): string {
-  return value.trim().replace(/^`(.*)`$/, "$1");
+  const trimmed = value.trim();
+  if (trimmed === "``") {
+    return "";
+  }
+
+  return trimmed.replace(/^`(.*)`$/, "$1");
 }
 
 function normalizeKey(value: string): string {

@@ -78,7 +78,7 @@ test("draft import harness writes blockers when source text is insufficient", ()
     [
       "# esw2_dbg__main_002",
       "- source image path: `assets/cards/main/esw2_dbg__main_002.png`",
-      "- cost: `not-a-number`",
+      "- cost: `5abc`",
     ].join("\n")
   );
 
@@ -117,6 +117,56 @@ test("draft import harness writes blockers when source text is insufficient", ()
   assert.deepEqual(report["blockers"], result.blockers);
 });
 
+test("draft import harness infers markers only when visible markers are absent", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-draft-generator-markers-")
+  );
+  const inferredTextPath = "data/import/cards/main/texts/esw2_dbg__main_003.md";
+  const explicitTextPath = "data/import/cards/main/texts/esw2_dbg__main_004.md";
+  writeSource(
+    rootDir,
+    inferredTextPath,
+    createCardMarkdown().replace("- visible markers: `attack`\n", "")
+  );
+  writeSource(
+    rootDir,
+    explicitTextPath,
+    createCardMarkdown()
+      .replaceAll("esw2_dbg__main_001", "esw2_dbg__main_004")
+      .replace("- visible markers: `attack`", "- visible markers: ``")
+  );
+
+  const result = runDraftImportHarness({
+    rootDir,
+    sources: [
+      { kind: "card", textPath: inferredTextPath },
+      { kind: "card", textPath: explicitTextPath },
+    ],
+  });
+
+  assert.equal(result.blockers.length, 0);
+  assert.deepEqual(
+    readNested(
+      readJson(
+        rootDir,
+        "data/import/cards/main/drafts/esw2_dbg__main_003.json"
+      ),
+      ["visible", "markers"]
+    ),
+    ["attack"]
+  );
+  assert.deepEqual(
+    readNested(
+      readJson(
+        rootDir,
+        "data/import/cards/main/drafts/esw2_dbg__main_004.json"
+      ),
+      ["visible", "markers"]
+    ),
+    []
+  );
+});
+
 function createCardMarkdown(): string {
   return [
     "# esw2_dbg__main_001",
@@ -125,6 +175,9 @@ function createCardMarkdown(): string {
     "- cost: `5`",
     "- VP: `1`",
     "- visible type: `Волшебник`",
+    "- visible card kind: `normal`",
+    "- visible card types: `wizardCard`",
+    "- visible markers: `attack`",
     "",
     "## Visible Russian rules text",
     "",
