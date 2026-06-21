@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_036",
+  "source": {
+    "image": "assets/cards/spell/Заклинание. Лошашлык.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_036.md"
+  },
+  "visible": {
+    "nameRu": "Лошашлык",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": [
+      "spell"
+    ],
+    "textRu": "+3 мощи\nПолучи 1 чипсину за каждого колдуна-лошару.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Если ты также являешься лошарой, то ты получаешь чипсину и за себя"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

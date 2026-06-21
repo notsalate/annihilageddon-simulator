@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_025",
+  "source": {
+    "image": "assets/cards/spell/Заклинание. Жидкая кара.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_025.md"
+  },
+  "visible": {
+    "nameRu": "Жидкая кара",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": [
+      "spell"
+    ],
+    "textRu": "+2 мощи\nАтака: нанеси 7 урона выбранному врагу. Если он избежал этой атаки, возьми 1 карту.",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 2
+  }
+}

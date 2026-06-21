@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_060",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2Q.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_060.md"
+  },
+  "visible": {
+    "nameRu": "2Q",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун может свести свои жизни к 10, чтобы получить 1 чипсину",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Если у колдуна уже 10 жизней, он не может применить эффект беспредела"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

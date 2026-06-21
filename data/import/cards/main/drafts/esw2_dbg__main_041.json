@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_041",
+  "source": {
+    "image": "assets/cards/treasure/Сокровище. Палочка-Чипсалочка.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_041.md"
+  },
+  "visible": {
+    "nameRu": "Палочка-Чипсалочка",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "+2 мощи\nМожешь потратить 1 чипсину, чтобы:\nАтака: нанеси 10 урона выбранному колдуну",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "Атаку можно нанести и себе"
+  ],
+  "composition": {
+    "quantity": 2
+  }
+}

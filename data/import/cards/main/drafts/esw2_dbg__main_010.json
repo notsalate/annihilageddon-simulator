@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_010",
+  "source": {
+    "image": "assets/cards/wizard-card/Волшебник. Сурковый агент.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_010.md"
+  },
+  "visible": {
+    "nameRu": "Сурковый агент",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": [
+      "wizardCard"
+    ],
+    "textRu": "+3 мощи\nУничтожь 3 верхние карты основной колоды. Если среди них были беспределы, можешь сыграть 1 из них и получить +3 мощи.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Если от беспредела погиб враг, то приз получаешь ты, т.к сыграл этот беспредел"
+  ],
+  "composition": {
+    "quantity": 2
+  }
+}

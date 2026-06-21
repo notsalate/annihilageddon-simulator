@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_071",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2I.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_071.md"
+  },
+  "visible": {
+    "nameRu": "2I",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун голосует за 1 любого колдуна. Колдун, набравший наибольшее количество голосов становится лошарой (если таких несколько — каждый из них)",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Колдун может проголосовать за самого себя"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

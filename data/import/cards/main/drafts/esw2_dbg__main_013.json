@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_013",
+  "source": {
+    "image": "assets/cards/treasure/Сокровище. Идол счастливой сучки.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_013.md"
+  },
+  "visible": {
+    "nameRu": "Идол счастливой сучки",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "+2 мощи\nЗащита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 1 карту и получи 1 чипсину",
+    "markers": [
+      "defense"
+    ],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 2
+  }
+}

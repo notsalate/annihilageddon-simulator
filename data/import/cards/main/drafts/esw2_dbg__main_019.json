@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_019",
+  "source": {
+    "image": "assets/cards/spell/Заклинание. Братство конца.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_019.md"
+  },
+  "visible": {
+    "nameRu": "Братство конца",
+    "cost": 2,
+    "victoryPoints": 4,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": [
+      "spell"
+    ],
+    "textRu": "Ты и любой другой колдун берёте по 1 карте.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 2
+  }
+}

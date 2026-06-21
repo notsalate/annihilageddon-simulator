@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_061",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2S.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_061.md"
+  },
+  "visible": {
+    "nameRu": "2S",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун сбрасывает 2 верхние карты своей колоды и выбирает: уничтожить обе или не уничтожать ни одной.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

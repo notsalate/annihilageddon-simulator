@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_044",
+  "source": {
+    "image": "assets/cards/treasure/Сокровище. Эпичный мерч боевых магов.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_044.md"
+  },
+  "visible": {
+    "nameRu": "Эпичный мерч боевых магов",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "+2 мощи\nВ этом ходу ты тратишь на 2 меньше на покупку легенд.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Может быть сыграно с [wp_003](../wizard-property-texts/wp_003.md). Фамильяры могут быть посчитаны за легенду, а значит скидка на них подействует"
+  ],
+  "composition": {
+    "quantity": 2
+  }
+}

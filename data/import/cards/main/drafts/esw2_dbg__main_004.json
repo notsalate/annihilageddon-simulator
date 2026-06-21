@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_004",
+  "source": {
+    "image": "assets/cards/spell/Заклинание. Мозгошторм.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_004.md"
+  },
+  "visible": {
+    "nameRu": "Мозгошторм",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": [
+      "spell"
+    ],
+    "textRu": "Возьми 2 карты",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 2
+  }
+}

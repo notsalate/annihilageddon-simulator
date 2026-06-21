@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_023",
+  "source": {
+    "image": "assets/cards/wizard-card/Волшебник. Сосочный приколист.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_023.md"
+  },
+  "visible": {
+    "nameRu": "Сосочный приколист",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": [
+      "wizardCard"
+    ],
+    "textRu": "+2 мощи\nАтака: нанеси 7 урона каждому врагу.",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 2
+  }
+}

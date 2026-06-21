@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_029",
+  "source": {
+    "image": "assets/cards/wizard-card/Волшебник. Шериф Мухтар.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_029.md"
+  },
+  "visible": {
+    "nameRu": "Шериф Мухтар",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": [
+      "wizardCard"
+    ],
+    "textRu": "Возьми 2 карты\nЗащита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 2 карты.",
+    "markers": [
+      "defense"
+    ],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

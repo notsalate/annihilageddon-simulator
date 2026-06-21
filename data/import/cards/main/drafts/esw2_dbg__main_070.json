@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_070",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2J.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_070.md"
+  },
+  "visible": {
+    "nameRu": "2J",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Атака: каждый колдун отхватывает 5 урона.",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

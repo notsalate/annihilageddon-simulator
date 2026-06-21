@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_043",
+  "source": {
+    "image": "assets/cards/creature/Тварь. Близнец-Бубенец.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_043.md"
+  },
+  "visible": {
+    "nameRu": "Близнец-Бубенец",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": [
+      "creature"
+    ],
+    "textRu": "+2 мощи\nЗащита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми другую тварь И3 своей стопки сброса на руку.",
+    "markers": [
+      "defense"
+    ],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 2
+  }
+}

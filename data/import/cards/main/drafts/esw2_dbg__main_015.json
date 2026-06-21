@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_015",
+  "source": {
+    "image": "assets/cards/treasure/Сокровище. Палочка-шлепалочка.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_015.md"
+  },
+  "visible": {
+    "nameRu": "Палочка-шлепалочка",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "+2 мощи\nАтака: нанеси 2 урона выбранному врагу. Укради у него или из запаса столько же чипсин, сколько урона нанëс",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "Если от каких-либо эффектов палочка наносит больше 2 урона, то чипсин ты берешь столько, сколько нанес. Например, нанес 4 урона - крадешь или берешь из запаса 4 урона."
+  ],
+  "composition": {
+    "quantity": 2
+  }
+}

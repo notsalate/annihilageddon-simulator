@@ -3,27 +3,23 @@
   "draftKind": "cardDraft",
   "cardId": "esw2_dbg__main_001",
   "source": {
-    "image": "assets/cards/main/esw2_dbg__main_001.png",
+    "image": "assets/cards/spell/Заклинание. Говна-Пирога.png",
     "text": "data/import/cards/main/texts/esw2_dbg__main_001.md"
   },
   "visible": {
-    "nameRu": "Сосочный проколист",
+    "nameRu": "Говна-Пирога",
     "cost": 5,
     "victoryPoints": 1,
-    "typeRu": "Волшебник",
+    "typeRu": "Заклинание",
     "cardKind": "normal",
     "cardTypes": [
-      "wizardCard"
+      "spell"
     ],
-    "textRu": "+2 мощи\nАтака: нанеси 7 урона каждому врагу.",
-    "markers": [
-      "attack"
-    ],
+    "textRu": "Раскрой верхнюю карту своей колоды. Уничтожь её или + столько мощи какова ее стоимость",
+    "markers": [],
     "uncertainty": []
   },
-  "notes": [
-    "Quantity 2 is deck composition metadata, not runtime behavior."
-  ],
+  "notes": [],
   "composition": {
     "quantity": 2
   }

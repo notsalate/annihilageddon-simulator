@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_069",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2K.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_069.md"
+  },
+  "visible": {
+    "nameRu": "2K",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Атака: каждый колдун сбрасывает половину своих карт-постоянок (округляя вверх).",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "Дается выбор какие именно постоянки сбросить"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

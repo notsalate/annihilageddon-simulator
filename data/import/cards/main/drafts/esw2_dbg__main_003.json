@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_003",
+  "source": {
+    "image": "assets/cards/treasure/Сокровище. Стаканчик из Царьбакса.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_003.md"
+  },
+  "visible": {
+    "nameRu": "Стаканчик из Царьбакса",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "+ 1 мощь\nМожешь раскрыть эту карту с руки и потратить 1 жизнь и 1 чипсину, чтобы:\nЗащита: Избеги атаки",
+    "markers": [
+      "defense"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "Защиту можно использовать несколько раз, если есть 1 чипсина и 1 жизнь",
+    "Важно, умереть от своей защиты нельзя. Если у игрока всего 1 жизнь, и 1 чипсина, то нельзя потратить 1 жизнь и 1 чипсину, (т.к игрок умрет), чтобы защититься"
+  ],
+  "composition": {
+    "quantity": 2
+  }
+}

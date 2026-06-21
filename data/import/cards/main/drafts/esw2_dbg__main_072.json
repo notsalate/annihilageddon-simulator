@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_072",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2H.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_072.md"
+  },
+  "visible": {
+    "nameRu": "2H",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Все колдуны, кроме лошар, получают по 1 чипсине.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

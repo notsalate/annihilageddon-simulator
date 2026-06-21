@@ -1,19 +1,15 @@
 # esw2_dbg__main_001
-- source image path: `assets/cards/main/esw2_dbg__main_001.png`
-- visible Russian name: `Сосочный проколист`
+- source image path: `assets/cards/spell/Заклинание. Говна-Пирога.png`
+- visible Russian name: `Говна-Пирога`
 - cost: `5`
 - VP: `1`
-- visible type: `Волшебник`
-- visible card kind: `normal`
-- visible card types: `wizardCard`
-- visible markers: `attack`
+- visible type: `Заклинание`
 
 ## Visible Russian rules text
 
-- `+2 мощи`
-- `Атака: нанеси 7 урона каждому врагу.`
+- `Раскрой верхнюю карту своей колоды. Уничтожь её или + столько мощи какова ее стоимость`
 
 ## Classification / Разъяснения
 
-- `Quantity 2 is deck composition metadata, not runtime behavior.`
+- `None`
 - quantity: `2`

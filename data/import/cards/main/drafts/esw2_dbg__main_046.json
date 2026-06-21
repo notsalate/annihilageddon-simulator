@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_046",
+  "source": {
+    "image": "assets/cards/wizard-card/Волшебник. Сладкий Смурфинёр.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_046.md"
+  },
+  "visible": {
+    "nameRu": "Сладкий Смурфинёр",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": [
+      "wizardCard"
+    ],
+    "textRu": "+2 мощи\nАтака: нанеси 4 урона выбранному врагу.\nНакрути столько жизней, сколько урона нанес.",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "Урон может быть увеличен другими эффектами, а значит накрученно жизней может быть необязательно 4",
+    "Например, нанесено 8 урона - 8 жизней накручено",
+    "Если у игрока 1 жизнь, и даже если твоя атака наносит 4 урона, то ты наносишь всего 1 урон, а значит накручиваешь 1 жизнь"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

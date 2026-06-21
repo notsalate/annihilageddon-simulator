@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_076",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2C.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_076.md"
+  },
+  "visible": {
+    "nameRu": "2C",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун может потерять половину своих чипсин(округляя вниз), чтобы уничтожить карту у себя на руке или в стопке с6роса.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Если у игрока/бота чипсин 0, он не может воспользоваться эффектом беспредела"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

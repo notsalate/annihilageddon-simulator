@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_030",
+  "source": {
+    "image": "assets/cards/treasure/Сокровише. Палочка-Лошарочка.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_030.md"
+  },
+  "visible": {
+    "nameRu": "Палочка-Лошарочка",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Сокровише",
+    "cardKind": "normal",
+    "cardTypes": [],
+    "textRu": "+3 мощи\nАтака: нанеси 5 урона выбранному колдуну.Если ОН от этого подох, он становится лошарой.",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "Атаку можно нанести себе. В таком случае если ты подох от своей же атаки, ты становишься лошарой"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

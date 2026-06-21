@@ -523,13 +523,6 @@ function inferCardKind(
     return explicitKind;
   }
 
-  if (sourceGroup !== undefined) {
-    const fromGroup = cardKindBySourceGroup.get(sourceGroup);
-    if (fromGroup !== undefined) {
-      return fromGroup;
-    }
-  }
-
   const typeRu = readField(markdown, "visible type")?.toLowerCase();
   if (typeRu === "беспредел") {
     return "mayhem";
@@ -537,6 +530,13 @@ function inferCardKind(
 
   if (typeRu === "мегабеспредел") {
     return "megaMayhem";
+  }
+
+  if (sourceGroup !== undefined) {
+    const fromGroup = cardKindBySourceGroup.get(sourceGroup);
+    if (fromGroup !== undefined) {
+      return fromGroup;
+    }
   }
 
   return undefined;

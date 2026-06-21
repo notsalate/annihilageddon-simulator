@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_002",
+  "source": {
+    "image": "assets/cards/wizard-card/Волшебник. Колдунатор.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_002.md"
+  },
+  "visible": {
+    "nameRu": "Колдунатор",
+    "cost": 7,
+    "victoryPoints": 2,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": [
+      "wizardCard"
+    ],
+    "textRu": "+5 мощи",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

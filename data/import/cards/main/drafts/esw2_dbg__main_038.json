@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_038",
+  "source": {
+    "image": "assets/cards/treasure/Сокровище. Злоширак.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_038.md"
+  },
+  "visible": {
+    "nameRu": "Злоширак",
+    "cost": 5,
+    "victoryPoints": 2,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "+3 мощи",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 2
+  }
+}

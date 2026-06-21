@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_077",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2B.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_077.md"
+  },
+  "visible": {
+    "nameRu": "2B",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун раскрывает случайную карту с руки.\nон может либо уничтожить еë, либо потратить 2 жизни, чтобы замешать раскрытую карту обратно И раскрыть новую случайную карту (можно повторять пока раскрытая карта не будет уничтожена).",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Если у игрока 2 или меньше жизней, он не может потратить 2 жизни, иначе умрет. В таком случае карта случайно раскрытая с руки обязательно уничтожается"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

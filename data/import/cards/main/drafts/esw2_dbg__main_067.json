@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_067",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2N.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_067.md"
+  },
+  "visible": {
+    "nameRu": "2N",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун может уничтожить 1 карту на руке или в своей стопке сброса. Если ты лошара, потрать 3 жизни чтобы это сделать.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

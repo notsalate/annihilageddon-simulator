@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_073",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2G.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_073.md"
+  },
+  "visible": {
+    "nameRu": "2G",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун получает 1 чипсину.\nЗатем уничтожь легендарную барахолку и выложи новые карты на замену.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

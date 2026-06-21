@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_056",
+  "source": {
+    "image": "assets/cards/treasure/Сокровище. Ведьмин подарочек.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_056.md"
+  },
+  "visible": {
+    "nameRu": "Ведьмин подарочек",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "Возьми 1 карту.\n+1 мощь за каждую твою постоянку.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Постоянками могут быть ЖДК, Главный приз, карты и тд. Текущая карта получает +1 мощь за каждую такую постоянку"
+  ],
+  "composition": {
+    "quantity": 2
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_066",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2P.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_066.md"
+  },
+  "visible": {
+    "nameRu": "2P",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый лошара может потратить 5 жизней или 1 чипсину, чтобы стать нормальным.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Если у лошары ровно 5 жизней, он не может потратить 5 жизней, так как умрет"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

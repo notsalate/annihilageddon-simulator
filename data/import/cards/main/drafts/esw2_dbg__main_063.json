@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_063",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2E.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_063.md"
+  },
+  "visible": {
+    "nameRu": "2E",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Положи 1 чипсину на каждую карту барахолки. Получая одну из этих карт с барахолки, колдун получит и чипсину.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Если у карты уже была чипсина(ы), то чипсина добавляется к ним же как +1"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_074",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2F.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_074.md"
+  },
+  "visible": {
+    "nameRu": "2F",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Атака: самый хилый колдун становится лошарой. Затем накручивает жизни до максимума(лошарного, разумеется).",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "Если самых хилых колдунов несколько, то они становятся лошарами"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

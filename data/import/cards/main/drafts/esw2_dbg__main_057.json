@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_057",
+  "source": {
+    "image": "assets/cards/treasure/Сокровище. Шлем-Тотем.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_057.md"
+  },
+  "visible": {
+    "nameRu": "Шлем-Тотем",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "+2 мощи\nМожешь потратить 1 чипсину, чтобы уничтожить 1 карту у себя на руке или в своей стопке сброса.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 2
+  }
+}

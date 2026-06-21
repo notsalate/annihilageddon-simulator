@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_016",
+  "source": {
+    "image": "assets/cards/creature/Тварь. Приунывший орк.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_016.md"
+  },
+  "visible": {
+    "nameRu": "Приунывший орк",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": [
+      "creature"
+    ],
+    "textRu": "+2 мощи\nЕсли под твоим контролем есть ещё хотя бы 1 тварь:\n+2 мощи",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 2
+  }
+}

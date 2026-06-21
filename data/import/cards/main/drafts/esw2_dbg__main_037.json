@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_037",
+  "source": {
+    "image": "assets/cards/spell/Заклинание. Мусорный ветер.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_037.md"
+  },
+  "visible": {
+    "nameRu": "Мусорный ветер",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": [
+      "spell"
+    ],
+    "textRu": "Можешь уничтожить 1 карту в стопке сброса\nАтака: нанеси 5 урона каждому врагу.",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 2
+  }
+}

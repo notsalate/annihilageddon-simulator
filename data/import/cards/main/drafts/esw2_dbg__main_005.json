@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_005",
+  "source": {
+    "image": "assets/cards/location/Место. Вялая башня.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_005.md"
+  },
+  "visible": {
+    "nameRu": "Вялая башня",
+    "cost": 3,
+    "victoryPoints": 3,
+    "typeRu": "Место",
+    "cardKind": "normal",
+    "cardTypes": [
+      "location"
+    ],
+    "textRu": "Получив эту карту, получи 2 вялые палочки.\nПостоянка: +1 мощь.",
+    "markers": [
+      "ongoing"
+    ],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

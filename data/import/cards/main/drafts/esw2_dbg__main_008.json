@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_008",
+  "source": {
+    "image": "assets/cards/location/Место. Сувернирный ларёк в зале легенд.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_008.md"
+  },
+  "visible": {
+    "nameRu": "Сувернирный ларёк в зале легенд",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Место",
+    "cardKind": "normal",
+    "cardTypes": [
+      "location"
+    ],
+    "textRu": "ПОСТОЯНКА: Получив легенду, можешь положить ее на верх своей колоды.",
+    "markers": [
+      "ongoing"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "Может быть сыграно с [wp_003](../wizard-property-texts/wp_003.md). Игрок может посчитать фамильяра легендой, купить его, и положить на верх колоды, если постоянка уже разыграна."
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

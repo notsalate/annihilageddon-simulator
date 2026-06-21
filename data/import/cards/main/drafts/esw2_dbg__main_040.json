@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_040",
+  "source": {
+    "image": "assets/cards/creature/Тварь. Потный ГикПиг.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_040.md"
+  },
+  "visible": {
+    "nameRu": "Потный ГикПиг",
+    "cost": 5,
+    "victoryPoints": 0,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": [
+      "creature"
+    ],
+    "textRu": "+2 мощи\nВ конце игры: приносит 1 ПО за каждую тварь в твоей колоде.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 2
+  }
+}

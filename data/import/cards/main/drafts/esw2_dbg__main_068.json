@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_068",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2L.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_068.md"
+  },
+  "visible": {
+    "nameRu": "2L",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун сбрасывает свою колоду, потом уничтожает 1 карту в своей стопке сброса.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Не атака. Обязательное действие"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

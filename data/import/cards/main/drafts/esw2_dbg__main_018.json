@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_018",
+  "source": {
+    "image": "assets/cards/creature/Тварь. Нечистая сила.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_018.md"
+  },
+  "visible": {
+    "nameRu": "Нечистая сила",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": [
+      "creature"
+    ],
+    "textRu": "Возьми 1 карту\nАтака: нанеси по 7 урона левому и правому врагам.",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "При игре вдвоем, 7 урона наносятся 1 раз"
+  ],
+  "composition": {
+    "quantity": 2
+  }
+}

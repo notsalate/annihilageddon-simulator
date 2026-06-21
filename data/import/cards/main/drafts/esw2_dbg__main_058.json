@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_058",
+  "source": {
+    "image": "assets/cards/treasure/Сокровище. Вурдалакар.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_058.md"
+  },
+  "visible": {
+    "nameRu": "Вурдалакар",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "+3 мощи\nЕсли это первая карта, сыгранная тобой в этот ход, можешь сбросить все карты с руки и взять 4 карты.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

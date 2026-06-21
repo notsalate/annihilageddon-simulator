@@ -167,6 +167,49 @@ test("draft import harness infers markers only when visible markers are absent",
   );
 });
 
+test("draft import harness keeps mayhem cards in main source group", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-draft-generator-main-mayhem-")
+  );
+  const cardTextPath = "data/import/cards/main/texts/esw2_dbg__main_059.md";
+  writeSource(
+    rootDir,
+    cardTextPath,
+    [
+      "# esw2_dbg__main_059",
+      "- source image path: `assets/cards/main/esw2_dbg__main_059.png`",
+      "- visible Russian name: `2O`",
+      "- cost: `None`",
+      "- VP: `None`",
+      "- visible type: `Беспредел`",
+      "",
+      "## Visible Russian rules text",
+      "",
+      "- `Каждый колдун должен либо сбросить все карты с руки и взять 5 карт, либо отхватить 5 урона.`",
+      "",
+      "## Classification / Разъяснения",
+      "",
+      "- quantity: `1`",
+    ].join("\n")
+  );
+
+  const result = runDraftImportHarness({
+    rootDir,
+    sources: [{ kind: "card", textPath: cardTextPath }],
+  });
+
+  assert.equal(result.blockers.length, 0);
+  const cardDraft = readJson(
+    rootDir,
+    "data/import/cards/main/drafts/esw2_dbg__main_059.json"
+  );
+  assert.equal(cardDraft["cardId"], "esw2_dbg__main_059");
+  assert.equal(readNested(cardDraft, ["visible", "cardKind"]), "mayhem");
+  assert.deepEqual(readNested(cardDraft, ["visible", "cardTypes"]), []);
+  assert.deepEqual(cardDraft["composition"], { quantity: 1 });
+  assert.equal(validateDraft(cardDraft).ok, true);
+});
+
 function createCardMarkdown(): string {
   return [
     "# esw2_dbg__main_001",

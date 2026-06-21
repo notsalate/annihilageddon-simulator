@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_054",
+  "source": {
+    "image": "assets/cards/treasure/Сокровище. Золотой парашют.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_054.md"
+  },
+  "visible": {
+    "nameRu": "Золотой парашют",
+    "cost": 2,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "+1 мощь\nЗащита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, получи 2 чипсины.",
+    "markers": [
+      "defense"
+    ],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 2
+  }
+}

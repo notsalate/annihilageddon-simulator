@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_065",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2R.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_065.md"
+  },
+  "visible": {
+    "nameRu": "2R",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Уничтожь легендарную барахолку.\nВыложи 4 новые легенды на замену\n(стандартный размер барахолки остаётся равен 3).",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "МегаБеспределы уничтожаются сразу, а не разыгрываются, пока не станет 4 легенд в барахолке"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_017",
+  "source": {
+    "image": "assets/cards/wizard-card/Волшебник. Бесопанки.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_017.md"
+  },
+  "visible": {
+    "nameRu": "Бесопанки",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": [
+      "wizardCard"
+    ],
+    "textRu": "Возьми 1 карту\nЗащита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 1 карту, а атакующий отхватывает 3 урона.",
+    "markers": [
+      "defense"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "Нанесение 3 урона не является атакой. От этого защититься нельзя. Если атакующий погиб из-за этой защиты, то защищающийся получает приз"
+  ],
+  "composition": {
+    "quantity": 2
+  }
+}

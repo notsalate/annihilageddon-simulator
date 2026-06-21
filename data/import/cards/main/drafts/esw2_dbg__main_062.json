@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_062",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2M.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_062.md"
+  },
+  "visible": {
+    "nameRu": "2M",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун получает 2 чипсины. Затем....\nАтака: каждый колдун отхватывает 1 урон за каждую свою чипсину.",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

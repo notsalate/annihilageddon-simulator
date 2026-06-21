@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_047",
+  "source": {
+    "image": "assets/cards/location/Место. Длань творца.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_047.md"
+  },
+  "visible": {
+    "nameRu": "Длань творца",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Место",
+    "cardKind": "normal",
+    "cardTypes": [
+      "location"
+    ],
+    "textRu": "Постоянка: +1 к пределу руки.",
+    "markers": [
+      "ongoing"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "Пример: Ты можешь брать 5 карт на руку в конце хода. С этой постоянкой - 6 карт",
+    "Другими эффектами можно еще больше увеличить предел руки"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

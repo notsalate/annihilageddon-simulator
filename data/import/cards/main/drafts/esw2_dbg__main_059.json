@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_059",
+  "source": {
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2O.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_059.md"
+  },
+  "visible": {
+    "nameRu": "2O",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун должен либо сбросить все карты с руки и взять 5 карт, либо отхватить 5 урона.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Не является атакой.",
+    "Если у колдуна меньше 5 карт, или больше 5 карт, и тот решает сбросить все карты, то он все равно берет именно 5 карт. Даже если у него постоянка, увеличивающая пределы руки.",
+    "Если ты выбрал \"Отхватить 5 урона\" и помер, то убийца не ты, а беспредел"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

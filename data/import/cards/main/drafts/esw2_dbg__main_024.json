@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_024",
+  "source": {
+    "image": "assets/cards/wizard-card/Волшебник. Берсерк щелкунчик.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_024.md"
+  },
+  "visible": {
+    "nameRu": "Берсерк щелкунчик",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": [
+      "wizardCard"
+    ],
+    "textRu": "+2 мощи\nАтака: нанеси б урона выбранному врагу.\nЗащита: можешь сбросить эту карту,чтобы избежать атаки. Если сбросил, возьми 1 карту.",
+    "markers": [
+      "attack",
+      "defense"
+    ],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 2
+  }
+}

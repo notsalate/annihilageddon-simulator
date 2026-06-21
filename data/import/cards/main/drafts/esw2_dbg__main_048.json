@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_048",
+  "source": {
+    "image": "assets/cards/creature/Тварь. Развратот.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_048.md"
+  },
+  "visible": {
+    "nameRu": "Развратот",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": [
+      "creature"
+    ],
+    "textRu": "+3 мощи\n[символ активации]: Атака: 3а каждую тварь под твоим контролем нанеси 3 урона каждому врагу.",
+    "markers": [
+      "attack"
+    ],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_027",
+  "source": {
+    "image": "assets/cards/location/Место. Цирк братьев лошашных.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_027.md"
+  },
+  "visible": {
+    "nameRu": "Цирк братьев лошашных",
+    "cost": 7,
+    "victoryPoints": 2,
+    "typeRu": "Место",
+    "cardKind": "normal",
+    "cardTypes": [
+      "location"
+    ],
+    "textRu": "Постоянка: если ты лошара, +2 мощи.\nВ конце игры: твои штрафные ПО 3а жетон лошары становятся бонусными ПО.",
+    "markers": [
+      "ongoing"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "Также работает в связке с [dwt_027](../DWT-texts/dead_wizard_token_027.md), ЖДК-27 уменьшает очки ПО лошары с -5 до -10, а текущая постоянка меняет очки ПО с -10 на +10 у Лошары"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

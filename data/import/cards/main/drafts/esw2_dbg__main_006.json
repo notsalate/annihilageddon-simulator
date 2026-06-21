@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_006",
+  "source": {
+    "image": "assets/cards/wizard-card/Волшебник. Мармеладный архимаг.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_006.md"
+  },
+  "visible": {
+    "nameRu": "Мармеладный архимаг",
+    "cost": 2,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": [
+      "wizardCard"
+    ],
+    "textRu": "Постоянка:\n[символ активации]: уничтожь эту карту: если ты лошара, можешь стать нормальным. Затем накрути 7 жизней.",
+    "markers": [
+      "ongoing"
+    ],
+    "uncertainty": []
+  },
+  "notes": [
+    "Когда игрок разыгрывает эту карту (то есть активирует постоянку), то ставит ее в активированное состояние. Сам текст после символа активации может вообще быть не использовано в игре, а может быть использовано в любом своем ходу, в любой момент своего хода"
+  ],
+  "composition": {
+    "quantity": 2
+  }
+}

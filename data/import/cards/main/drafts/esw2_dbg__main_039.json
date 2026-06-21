@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_039",
+  "source": {
+    "image": "assets/cards/treasure/Сокровище. Некрошест.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_039.md"
+  },
+  "visible": {
+    "nameRu": "Некрошест",
+    "cost": 7,
+    "victoryPoints": 2,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": [
+      "treasure"
+    ],
+    "textRu": "+2 мощи за каждый жетон дохлого колдуна под твоим контролем.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Т.к карта \"...-Дохляк\" считается за ЖДК (но +1 по, а не -3), то действие карты зависит и от карты дохляка"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__main_033",
+  "source": {
+    "image": "assets/cards/spell/Заклинание. Волшебные отходы.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_033.md"
+  },
+  "visible": {
+    "nameRu": "Волшебные отходы",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": [
+      "spell"
+    ],
+    "textRu": "[Символ активации]: Уничтожь эту карту: уничтожь 2 или меньше карт с руки.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Постоянка может быть активирована, а после текст после активации может не разыгрываться вообще в игре, а может разыграться в любой свой ход в любой момент своего хода. Необязательное действие"
+  ],
+  "composition": {
+    "quantity": 2
+  }
+}
