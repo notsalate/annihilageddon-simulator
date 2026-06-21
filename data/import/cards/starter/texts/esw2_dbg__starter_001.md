@@ -1,4 +1,4 @@
-# starter_001
+# esw2_dbg\_\_starter_001
 
 - source image path: `assets/cards/starter/Затравка. Знак.png`
 - source label: `Знак`
@@ -14,4 +14,4 @@
 
 ## Classification / Разъяснения
 
-- `
+- None

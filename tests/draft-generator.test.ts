@@ -304,6 +304,73 @@ test("draft import harness writes familiar drafts from normalized text path", ()
   assert.equal(validateDraft(familiarDraft).ok, true);
 });
 
+test("draft import harness supports starter and singleton special source text dialects", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-draft-generator-starter-special-")
+  );
+  const starterTextPath =
+    "data/import/cards/starter/texts/esw2_dbg__starter_001.md";
+  const limpWandTextPath =
+    "data/import/cards/special/texts/esw2_dbg__limp_wand.md";
+  const wildMagicTextPath =
+    "data/import/cards/special/texts/esw2_dbg__wild_magic.md";
+  writeSource(rootDir, starterTextPath, createStarterMarkdown());
+  writeSource(rootDir, limpWandTextPath, createLimpWandMarkdown());
+  writeSource(rootDir, wildMagicTextPath, createWildMagicMarkdown());
+
+  const result = runDraftImportHarness({
+    rootDir,
+    sources: [
+      { kind: "card", textPath: starterTextPath },
+      { kind: "card", textPath: limpWandTextPath },
+      { kind: "card", textPath: wildMagicTextPath },
+    ],
+  });
+
+  assert.equal(result.blockers.length, 0);
+  assert.deepEqual(
+    result.generated.map((file) => file.draftPath),
+    [
+      "data/import/cards/starter/drafts/esw2_dbg__starter_001.json",
+      "data/import/cards/special/drafts/esw2_dbg__limp_wand.json",
+      "data/import/cards/special/drafts/esw2_dbg__wild_magic.json",
+    ]
+  );
+
+  const starterDraft = readJson(
+    rootDir,
+    "data/import/cards/starter/drafts/esw2_dbg__starter_001.json"
+  );
+  const limpWandDraft = readJson(
+    rootDir,
+    "data/import/cards/special/drafts/esw2_dbg__limp_wand.json"
+  );
+  const wildMagicDraft = readJson(
+    rootDir,
+    "data/import/cards/special/drafts/esw2_dbg__wild_magic.json"
+  );
+
+  assert.equal(readNested(starterDraft, ["visible", "cardKind"]), "starter");
+  assert.deepEqual(starterDraft["composition"], { quantity: 30 });
+  assert.equal(readNested(limpWandDraft, ["visible", "cardKind"]), "limpWand");
+  assert.deepEqual(readNested(limpWandDraft, ["visible", "cardTypes"]), []);
+  assert.equal(readNested(limpWandDraft, ["visible", "victoryPoints"]), -1);
+  assert.deepEqual(limpWandDraft["composition"], { quantity: 15 });
+  assert.equal(
+    readNested(wildMagicDraft, ["visible", "cardKind"]),
+    "wildMagic"
+  );
+  assert.deepEqual(readNested(wildMagicDraft, ["visible", "cardTypes"]), []);
+  assert.equal(readNested(wildMagicDraft, ["visible", "cost"]), 3);
+  assert.deepEqual(wildMagicDraft["notes"], [
+    "Разыгранная шальной магией карта находится под контролем активного игрока, но не владельцем этой карты (если разыграна не постоянка)",
+  ]);
+  assert.deepEqual(wildMagicDraft["composition"], { quantity: 15 });
+  assert.equal(validateDraft(starterDraft).ok, true);
+  assert.equal(validateDraft(limpWandDraft).ok, true);
+  assert.equal(validateDraft(wildMagicDraft).ok, true);
+});
+
 function createCardMarkdown(): string {
   return [
     "# esw2_dbg__main_001",
@@ -325,6 +392,74 @@ function createCardMarkdown(): string {
     "",
     "- `Количество берется из source text.`",
     "- quantity: `2`",
+  ].join("\n");
+}
+
+function createStarterMarkdown(): string {
+  return [
+    "# esw2_dbg__starter_001",
+    "- source image path: `assets/cards/starter/Затравка. Знак.png`",
+    "- source label: `Знак`",
+    "- quantity: `30`",
+    "- visible Russian name: `Знак`",
+    "- visible type: `Затравка`",
+    "- visible cost: `0`",
+    "- visible victory points: `0`",
+    "",
+    "## Visible Russian rules text",
+    "",
+    "+1 мощь",
+    "",
+    "## Classification / Разъяснения",
+    "",
+    "- None",
+  ].join("\n");
+}
+
+function createLimpWandMarkdown(): string {
+  return [
+    "# esw2_dbg__limp_wand",
+    "- source image path: `assets/cards/special/Вялая палочка.png`",
+    "- source label: `Вялая палочка`",
+    "- quantity: `15`",
+    "- visible Russian name: `Вялая палочка`",
+    "- visible type: `Вялая палочка`",
+    "- visible card kind: `limpWand`",
+    "- visible card types: ``",
+    "- visible cost: `0`",
+    "- visible victory points: `-1`",
+    "",
+    "## Visible Russian rules text",
+    "",
+    "(Эффекта нет.)",
+    "",
+    "## Classification / Разъяснения",
+    "",
+    "- None",
+  ].join("\n");
+}
+
+function createWildMagicMarkdown(): string {
+  return [
+    "# esw2_dbg__wild_magic",
+    "- source image path: `assets/cards/special/Шальная магия.png`",
+    "- source label: `Шальная магия`",
+    "- quantity: `15`",
+    "- visible Russian name: `Шальная магия`",
+    "- visible type: `Шальная магия`",
+    "- visible card kind: `wildMagic`",
+    "- visible card types: ``",
+    "- visible cost: `3`",
+    "- visible victory points: `1`",
+    "",
+    "## Visible Russian rules text",
+    "",
+    "Выбери одно: +2 мощи",
+    "ИЛИ можешь сыграть верхнюю карту из колоды любого врага и затем положить ее в стопку сброса владельца. Если это постоянка, вместо этого оставь ее у себя в игре",
+    "",
+    "## Classification / Разъяснения",
+    "",
+    "- Разыгранная шальной магией карта находится под контролем активного игрока, но не владельцем этой карты (если разыграна не постоянка)",
   ].join("\n");
 }
 

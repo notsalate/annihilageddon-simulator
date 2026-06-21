@@ -1,4 +1,4 @@
-# starter_004
+# esw2_dbg\_\_starter_004
 
 - source image path: `assets/cards/starter/Затравка. Палочка хреналочка.png`
 - source label: `Палочка-хреналочка`

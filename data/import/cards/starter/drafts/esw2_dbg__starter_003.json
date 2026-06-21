@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__starter_003",
+  "source": {
+    "image": "assets/cards/starter/Затравка. Сырная палочка.png",
+    "text": "data/import/cards/starter/texts/esw2_dbg__starter_003.md"
+  },
+  "visible": {
+    "nameRu": "Сырная палочка",
+    "cost": 0,
+    "victoryPoints": 0,
+    "typeRu": "Затравка",
+    "cardKind": "starter",
+    "cardTypes": [],
+    "textRu": "+1 мощь\nАтака: нанеси 1 урон выбранному колдуну. Если он от этого помрёт, получи 3 чипсины.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 5
+  }
+}

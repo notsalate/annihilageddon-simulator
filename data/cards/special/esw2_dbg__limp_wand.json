@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "cardId": "esw2_dbg__special_002",
+  "cardId": "esw2_dbg__limp_wand",
   "source": {
-    "draft": "data/import/cards/special/drafts/esw2_dbg__special_002.json",
-    "image": "assets/cards/special/esw2_dbg__special_002.png",
-    "text": "data/import/cards/special/texts/esw2_dbg__special_002.md"
+    "draft": "data/import/cards/special/drafts/esw2_dbg__limp_wand.json",
+    "image": "assets/cards/special/Вялая палочка.png",
+    "text": "data/import/cards/special/texts/esw2_dbg__limp_wand.md"
   },
   "visible": {
     "nameRu": "Вялая палочка",

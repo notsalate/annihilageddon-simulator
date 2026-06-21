@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__wild_magic",
+  "source": {
+    "image": "assets/cards/special/Шальная магия.png",
+    "text": "data/import/cards/special/texts/esw2_dbg__wild_magic.md"
+  },
+  "visible": {
+    "nameRu": "Шальная магия",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Шальная магия",
+    "cardKind": "wildMagic",
+    "cardTypes": [],
+    "textRu": "Выбери одно: +2 мощи\nИЛИ можешь сыграть верхнюю карту из колоды любого врага и затем положить ее в стопку сброса владельца. Если это постоянка, вместо этого оставь ее у себя в игре",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "notes": [
+    "Разыгранная шальной магией карта находится под контролем активного игрока, но не владельцем этой карты (если разыграна не постоянка)"
+  ],
+  "composition": {
+    "quantity": 15
+  }
+}

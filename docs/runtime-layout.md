@@ -144,7 +144,8 @@ esw2_dbg__main_001
 esw2_dbg__legend_001
 esw2_dbg__starter_001
 esw2_dbg__familiar_001
-esw2_dbg__special_001
+esw2_dbg__limp_wand
+esw2_dbg__wild_magic
 ```
 
 ID и filenames не должны кодировать:
@@ -154,7 +155,7 @@ ID и filenames не должны кодировать:
 - текст карты;
 - поведение или эффект.
 
-Специальные runtime-карты можно хранить в `special`; их стабильный ID все равно должен оставаться source-group ID, если нет отдельного принятого исключения.
+Специальные runtime-карты можно хранить в `special`. Уникальные singleton special stack objects являются принятым исключением и используют явные стабильные IDs `esw2_dbg__limp_wand` и `esw2_dbg__wild_magic`.
 
 Token IDs используют такой же источник и стабильную категорию, например:
 

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__starter_002",
+  "source": {
+    "image": "assets/cards/starter/Затравка. Пшик.png",
+    "text": "data/import/cards/starter/texts/esw2_dbg__starter_002.md"
+  },
+  "visible": {
+    "nameRu": "Пшик",
+    "cost": 0,
+    "victoryPoints": 0,
+    "typeRu": "Затравка",
+    "cardKind": "starter",
+    "cardTypes": [],
+    "textRu": "(Эффекта нет.)",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 15
+  }
+}

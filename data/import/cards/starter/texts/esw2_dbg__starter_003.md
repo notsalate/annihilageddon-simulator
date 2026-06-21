@@ -1,4 +1,4 @@
-# starter_003
+# esw2_dbg\_\_starter_003
 
 - source image path: `assets/cards/starter/Затравка. Сырная палочка.png`
 - source label: `Сырная палочка`
@@ -15,4 +15,4 @@
 
 ## Classification / Разъяснения
 
-- `
+- None

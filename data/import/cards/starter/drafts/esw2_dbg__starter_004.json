@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__starter_004",
+  "source": {
+    "image": "assets/cards/starter/Затравка. Палочка хреналочка.png",
+    "text": "data/import/cards/starter/texts/esw2_dbg__starter_004.md"
+  },
+  "visible": {
+    "nameRu": "Палочка-хреналочка",
+    "cost": 0,
+    "victoryPoints": 0,
+    "typeRu": "Затравка",
+    "cardKind": "starter",
+    "cardTypes": [],
+    "textRu": "+1 мощь\nАтака: нанеси 1 урон выбранному колдуну. Если он от этого помрёт, можешь вернуть 2 карты или меньше из своей стопки сброса себе на руку.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": [
+    "Не входит в обычную стартовую колоду. Специальная затравка/замена, которая связана с [`wp_009`](../wizard-property-texts/wp_009.md)",
+    "Если кодун убьет сам себя, он может взять себе 2 или меньше карт со стопки сброса себе на руку"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

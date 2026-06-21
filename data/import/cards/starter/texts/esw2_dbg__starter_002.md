@@ -1,4 +1,4 @@
-# starter_002
+# esw2_dbg\_\_starter_002
 
 - source image path: `assets/cards/starter/Затравка. Пшик.png`
 - source label: `Пшик`
@@ -14,4 +14,4 @@
 
 ## Classification / Разъяснения
 
-- `
+- None

@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "cardId": "esw2_dbg__special_001",
+  "cardId": "esw2_dbg__wild_magic",
   "source": {
-    "draft": "data/import/cards/special/drafts/esw2_dbg__special_001.json",
-    "image": "assets/cards/special/esw2_dbg__special_001.png",
-    "text": "data/import/cards/special/texts/esw2_dbg__special_001.md"
+    "draft": "data/import/cards/special/drafts/esw2_dbg__wild_magic.json",
+    "image": "assets/cards/special/Шальная магия.png",
+    "text": "data/import/cards/special/texts/esw2_dbg__wild_magic.md"
   },
   "visible": {
     "nameRu": "Шальная магия",

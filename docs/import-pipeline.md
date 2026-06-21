@@ -136,10 +136,11 @@ esw2_dbg__main_001
 esw2_dbg__legend_001
 esw2_dbg__starter_001
 esw2_dbg__familiar_001
-esw2_dbg__special_001
+esw2_dbg__limp_wand
+esw2_dbg__wild_magic
 ```
 
-Карточный смысл, русские названия, видимые типы и поведение не должны попадать в IDs или filenames.
+Карточный смысл, русские названия, видимые типы и поведение не должны попадать в IDs или filenames. Исключение: уникальные singleton special stack objects используют явные стабильные IDs `esw2_dbg__limp_wand` и `esw2_dbg__wild_magic`.
 
 Для токенов использовать стабильные token IDs:
 

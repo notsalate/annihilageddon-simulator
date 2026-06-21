@@ -1,10 +1,12 @@
-# special_001
+# esw2_dbg\_\_wild_magic
 
 - source image path: `assets/cards/special/Шальная магия.png`
 - source label: `Шальная магия`
 - quantity: `15`
 - visible Russian name: `Шальная магия`
 - visible type: `Шальная магия`
+- visible card kind: `wildMagic`
+- visible card types: ``
 - visible cost: `3`
 - visible victory points: `1`
 
