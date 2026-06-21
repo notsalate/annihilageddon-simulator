@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_002",
+  "source": {
+    "image": "assets/cards/legend/creature/Легенда-Тварь. Венерина Маголовка.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_002.md"
+  },
+  "visible": {
+    "nameRu": "Венерина Маголовка",
+    "cost": 9,
+    "victoryPoints": 3,
+    "typeRu": "Легенда — Тварь",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "creature"],
+    "textRu": "+4 мощи\nАтака: можешь обменяться жизнями и/или статусом лошары с выбранным колдуном.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": [
+    "cardKind = `legend`; cardTypes = [`legend`, `creature`].",
+    "Можно = необязательное действие. Необязательно меняться жизнями или менять статус лошар. Можно просто +4 мощи"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

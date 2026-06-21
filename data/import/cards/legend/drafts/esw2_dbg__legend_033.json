@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_033",
+  "source": {
+    "image": "assets/cards/legend/wizard-card/Легенда-Волшебник. Некроманка Гнилюся.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_033.md"
+  },
+  "visible": {
+    "nameRu": "Некроманка Гнилюся",
+    "cost": 9,
+    "victoryPoints": 3,
+    "typeRu": "Легенда — Волшебник",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "textRu": "+4 мощи\nАтака: нанеси 4 урона каждому врагу за каждый жетон дохлого колдуна под твоим контролем.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": [
+    "cardKind = `legend`; cardTypes = [`legend`, `wizardCard`].",
+    "актвиные карты \"дохляков\"-постоянок также увеличивают урон, т.к являются ЖДК"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

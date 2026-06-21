@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_027",
+  "source": {
+    "image": "assets/cards/legend/wizard-card/Легенда-Волшебник. Хахатальер Злорадник.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_027.md"
+  },
+  "visible": {
+    "nameRu": "Хахатальер Злорадник",
+    "cost": 19,
+    "victoryPoints": 7,
+    "typeRu": "Легенда — Волшебник",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "textRu": "+5 мощи\nАтака: выбранный враг получает 2 жетона дохлых колдунов из стопки.\nЭту атаку нельзя перенаправить на тебя (но её можно избежать).",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": [
+    "cardKind = `legend`; cardTypes = [`legend`, `wizardCard`].",
+    "Например, защитился фамильяром, у которого защита направлена на перенаправление. В таком случае все эффекты защиты используются, а перенаправление игнорируется"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

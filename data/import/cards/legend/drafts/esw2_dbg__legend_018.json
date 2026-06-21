@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_018",
+  "source": {
+    "image": "assets/cards/legend/spell/Легенда-Заклинание. Надёжный план.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_018.md"
+  },
+  "visible": {
+    "nameRu": "Надёжный план",
+    "cost": 16,
+    "victoryPoints": 6,
+    "typeRu": "Легенда — Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "Возьми 2 карты.\n[символ активации]: если ты контролируешь 11 карт или больше, посмотри 5 верхних карт колоды легенд. Положи 1 из них на верх своей колоды, а остальные верни обратно в любом порядке.",
+    "markers": ["activate"],
+    "uncertainty": []
+  },
+  "notes": ["-"],
+  "composition": {
+    "quantity": 1
+  }
+}

@@ -8,6 +8,7 @@ const forbiddenRuntimeFields = new Set(["engine", "effects", "runtimeSchema", "p
 const numberedImportIdCategories = new Set([
   "main",
   "legend",
+  "mega_mayhem",
   "starter",
   "familiar",
   "wizard_property",

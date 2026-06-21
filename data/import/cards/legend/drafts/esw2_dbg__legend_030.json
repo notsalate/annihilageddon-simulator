@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_030",
+  "source": {
+    "image": "assets/cards/legend/wizard-card/Легенда-Волшебник. Дерьмак Гастрит.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_030.md"
+  },
+  "visible": {
+    "nameRu": "Дерьмак Гастрит",
+    "cost": 10,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Волшебник",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "textRu": "+2 мощи\nУничтожь 1 случайную легенду на барахолке легенд.\nАтака: нанеси каждому врагу столько урона, какова стоимость уничтоженной легенды.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": ["cardKind = `legend`; cardTypes = [`legend`, `wizardCard`]."],
+  "composition": {
+    "quantity": 1
+  }
+}

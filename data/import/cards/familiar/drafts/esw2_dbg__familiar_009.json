@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__familiar_009",
+  "source": {
+    "image": "assets/cards/raw/familiar/Мескалито, книжный червь.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_009.md"
+  },
+  "visible": {
+    "nameRu": "Мескалито, книжный червь",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "textRu": "Возьми 1 карту.\n+1 мощь за каждый жетон дохлого колдуна под твоим контролем.\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, возьми 1 карту и можешь обменять 1 свой жетон дохлого колдуна на 1 такой же жетон атакующего и применить эффекты обоих.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "notes": ["-"],
+  "composition": {
+    "quantity": 1
+  }
+}

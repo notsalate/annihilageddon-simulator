@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_003",
+  "source": {
+    "image": "assets/cards/legend/creature/Легенда-Тварь. Волшебный кролик.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_003.md"
+  },
+  "visible": {
+    "nameRu": "Волшебный кролик",
+    "cost": 17,
+    "victoryPoints": 6,
+    "typeRu": "Легенда — Тварь",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "creature"],
+    "textRu": "Возьми 3 карты.\nАтака: нанеси 20 урона каждому врагу.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": ["cardKind = `legend`; cardTypes = [`legend`, `creature`]."],
+  "composition": {
+    "quantity": 1
+  }
+}

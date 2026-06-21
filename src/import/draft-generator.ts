@@ -58,9 +58,11 @@ const knownFieldKeys = new Set([
   "cardkind",
   "cost",
   "source image path",
+  "source label",
   "sourceimage",
   "sourceimages",
   "sourcelabel",
+  "processed marker",
   "textru",
   "visible card kind",
   "visible card types",
@@ -68,6 +70,7 @@ const knownFieldKeys = new Set([
   "visible markers",
   "visible russian name",
   "visible type",
+  "visible victory points",
   "visible vp",
   "vp",
   "quantity",
@@ -176,14 +179,14 @@ function createCardDraft(
     sourceTextPath,
     markdown,
     blockers,
-    "cost",
+    ["cost", "visible cost"],
     "visible.cost"
   );
   const victoryPoints = readOptionalIntegerField(
     sourceTextPath,
     markdown,
     blockers,
-    "VP",
+    ["VP", "visible victory points", "visible VP"],
     "visible.victoryPoints"
   );
   const cardTypes =
@@ -278,7 +281,7 @@ function createDeadWizardTokenDraft(
     sourceTextPath,
     markdown,
     blockers,
-    "VP",
+    ["VP"],
     "visible.victoryPoints"
   );
 
@@ -483,11 +486,21 @@ function readOptionalIntegerField(
   sourceTextPath: string,
   markdown: ParsedMarkdown,
   blockers: DraftImportBlocker[],
-  sourceField: string,
+  sourceField: string | string[],
   draftField: string
 ): number | null {
-  const value = readField(markdown, sourceField);
-  if (value === undefined || value.trim().length === 0 || value === "None") {
+  const sourceFields = Array.isArray(sourceField) ? sourceField : [sourceField];
+  const matchedField = sourceFields.find(
+    (field) => readField(markdown, field) !== undefined
+  );
+  const value =
+    matchedField === undefined ? undefined : readField(markdown, matchedField);
+  if (
+    value === undefined ||
+    value.trim().length === 0 ||
+    value === "None" ||
+    value === "null"
+  ) {
     return null;
   }
 
@@ -495,7 +508,7 @@ function readOptionalIntegerField(
     blockers.push({
       source: sourceTextPath,
       field: draftField,
-      message: `${sourceField} must be an integer when present`,
+      message: `${matchedField ?? sourceFields[0]} must be an integer when present`,
     });
     return null;
   }
@@ -505,7 +518,7 @@ function readOptionalIntegerField(
     blockers.push({
       source: sourceTextPath,
       field: draftField,
-      message: `${sourceField} must be a safe integer when present`,
+      message: `${matchedField ?? sourceFields[0]} must be a safe integer when present`,
     });
     return null;
   }

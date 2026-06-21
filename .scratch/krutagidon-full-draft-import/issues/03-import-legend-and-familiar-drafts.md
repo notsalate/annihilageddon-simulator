@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: Done
 
 # Import Legend and Familiar Drafts
 
@@ -8,14 +8,14 @@ Generate canonical drafts for Legend-deck and familiar source text. Legend cards
 
 ## Acceptance criteria
 
-- [ ] Ensure familiar source text lives under `data/import/cards/familiar/texts/` and familiar drafts under `data/import/cards/familiar/drafts/`.
-- [ ] Generate familiar `cardDraft` JSON with canonical `esw2_dbg__familiar_###` IDs.
-- [ ] Generate Legend-deck `cardDraft` JSON with canonical `esw2_dbg__legend_###` IDs.
-- [ ] Keep Mega Mayhem source text in the Legend source group and represent it as `visible.cardKind = "megaMayhem"` with empty `visible.cardTypes`.
-- [ ] Preserve clarifications as mapping notes in `notes`.
-- [ ] Include `composition.quantity` for Legend and familiar drafts from source text or agreed source-group rules.
-- [ ] Update generator/parser tests for Legend and familiar source-text dialects.
-- [ ] Focused draft validation/reporting for Legend and familiar cards passes without group-specific errors.
+- [x] Ensure familiar source text lives under `data/import/cards/familiar/texts/` and familiar drafts under `data/import/cards/familiar/drafts/`.
+- [x] Generate familiar `cardDraft` JSON with canonical `esw2_dbg__familiar_###` IDs.
+- [x] Generate Legend-deck `cardDraft` JSON with canonical `esw2_dbg__legend_###` IDs.
+- [x] Keep Mega Mayhem source text in the Legend source group and represent it as `visible.cardKind = "megaMayhem"` with empty `visible.cardTypes`.
+- [x] Preserve clarifications as mapping notes in `notes`.
+- [x] Include `composition.quantity` for Legend and familiar drafts from source text or agreed source-group rules.
+- [x] Update generator/parser tests for Legend and familiar source-text dialects.
+- [x] Focused draft validation/reporting for Legend and familiar cards passes without group-specific errors.
 
 ## Blocked by
 

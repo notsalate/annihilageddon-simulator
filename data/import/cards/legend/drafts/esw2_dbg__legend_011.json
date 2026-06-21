@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_011",
+  "source": {
+    "image": "assets/cards/legend/location/Легенда-Место. Трондец.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_011.md"
+  },
+  "visible": {
+    "nameRu": "Трондец",
+    "cost": 11,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Место",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "location"],
+    "textRu": "Постоянка:\nАтака: нанеси выбранному врагу столько урона, какова стоимость любой другой карты под твоим контролем.",
+    "markers": ["ongoing", "attack"],
+    "uncertainty": []
+  },
+  "notes": ["cardKind = `legend`; cardTypes = [`legend`, `location`]."],
+  "composition": {
+    "quantity": 1
+  }
+}

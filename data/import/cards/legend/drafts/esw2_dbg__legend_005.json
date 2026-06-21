@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_005",
+  "source": {
+    "image": "assets/cards/legend/creature/Легенда-Тварь. Единственный в мире лохолох.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_005.md"
+  },
+  "visible": {
+    "nameRu": "Единственный в мире лохолох",
+    "cost": 10,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Тварь",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "creature"],
+    "textRu": "[Символ активации]: удвой свою мощь.",
+    "markers": ["activate"],
+    "uncertainty": []
+  },
+  "notes": ["На карте эффект указан через символ активации."],
+  "composition": {
+    "quantity": 1
+  }
+}

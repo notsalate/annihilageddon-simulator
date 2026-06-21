@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_004",
+  "source": {
+    "image": "assets/cards/legend/creature/Легенда-Тварь. Гусыня, королева-мать.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_004.md"
+  },
+  "visible": {
+    "nameRu": "Гусыня, королева-мать",
+    "cost": 10,
+    "victoryPoints": 0,
+    "typeRu": "Легенда — Тварь",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "creature"],
+    "textRu": "+1 мощь\n+2 ПО за каждую легенду, которой ты владеешь.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "cardKind = `legend`; cardTypes = [`legend`, `creature`].",
+    "В конце игры VP Гусыни равняется как минимум 2 ПО, т.к Гусыня начисляет 2 ПО за каждую легенду, а Гусыня является легендой",
+    "Пример: 3 легенды, в том числе Гусыня. VP Гусыни в конце игры будет равняться 6 ПО"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_016",
+  "source": {
+    "image": "assets/cards/legend/spell/Легенда-Заклинание. Восстание из зада.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_016.md"
+  },
+  "visible": {
+    "nameRu": "Восстание из зада",
+    "cost": 9,
+    "victoryPoints": 3,
+    "typeRu": "Легенда — Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "Возьми 2 карты.\nВыбери врага. Он не может использовать защиту в этот ход.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Ни от одной атаки в этот ход игрок не сможет защититься. Эффект пропадает когда владелец этой карты заканчивает ход"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

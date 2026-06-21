@@ -26,6 +26,7 @@ test("draft validation accepts documented new import ID categories", () => {
     { cardId: "esw2_dbg__legend_001", cardKind: "legend" },
     { cardId: "esw2_dbg__starter_001", cardKind: "starter" },
     { cardId: "esw2_dbg__familiar_001", cardKind: "familiar" },
+    { cardId: "esw2_dbg__mega_mayhem_001", cardKind: "megaMayhem" },
     { cardId: "esw2_dbg__wild_magic", cardKind: "wildMagic" },
     { cardId: "esw2_dbg__limp_wand", cardKind: "limpWand" },
   ];

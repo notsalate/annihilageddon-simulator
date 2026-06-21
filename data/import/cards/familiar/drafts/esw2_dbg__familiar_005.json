@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__familiar_005",
+  "source": {
+    "image": "assets/cards/raw/familiar/Фамильяр. Кондуктор Жми-На-Тормоза.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_005.md"
+  },
+  "visible": {
+    "nameRu": "Кондуктор Жми-На-Тормоза",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "textRu": "Пока эта карта под твоим контролем, она относится ко всем типам карт.\nВозьми 2 карты.\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, возьми 1 карту и перенаправь атаку на атакующего.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "notes": ["cardKind = `familiar`; cardTypes = [`familiar`]."],
+  "composition": {
+    "quantity": 1
+  }
+}

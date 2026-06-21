@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_014",
+  "source": {
+    "image": "assets/cards/legend/spell/Легенда-Заклинание. Авада Лошавра.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_014.md"
+  },
+  "visible": {
+    "nameRu": "Авада Лошавра",
+    "cost": 12,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "Возьми 2 карты.\nАтака: выбери колдуна — он становится лошарой.\nЗатем ты получаешь +1 мощь за каждого лошару в игре.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": [
+    "cardKind = `legend`; cardTypes = [`legend`, `spell`].",
+    "Атаковать можно и себя, в том числе защититься от самого себя"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

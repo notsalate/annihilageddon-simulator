@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__familiar_001",
+  "source": {
+    "image": "assets/cards/raw/familiar/Фамильяр. Поехавший нотариус.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_001.md"
+  },
+  "visible": {
+    "nameRu": "Поехавший нотариус",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "textRu": "+3 мощи\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, посмотри верхнюю карту основной колоды.\nМожешь взять её на руку, если это не беспредел.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "notes": ["cardKind = `familiar`; cardTypes = [`familiar`]."],
+  "composition": {
+    "quantity": 1
+  }
+}

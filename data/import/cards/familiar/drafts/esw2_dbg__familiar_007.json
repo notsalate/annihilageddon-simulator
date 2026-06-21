@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__familiar_007",
+  "source": {
+    "image": "assets/cards/raw/familiar/Фамильяр. Мыжсемья.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_007.md"
+  },
+  "visible": {
+    "nameRu": "Мыжсемья",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "textRu": "Возьми 1 карту.\nВ этот ход легенды стоят на 2 дешевле.\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, возьми 2 карты.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "notes": ["cardKind = `familiar`; cardTypes = [`familiar`]."],
+  "composition": {
+    "quantity": 1
+  }
+}

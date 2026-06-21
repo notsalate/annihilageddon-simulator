@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_031",
+  "source": {
+    "image": "assets/cards/legend/wizard-card/Легенда-Волшебник. Зад в будущее.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_031.md"
+  },
+  "visible": {
+    "nameRu": "Зад в будущее",
+    "cost": 14,
+    "victoryPoints": 5,
+    "typeRu": "Легенда — Волшебник",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "textRu": "+1 мощь\nПолучая карты с барахолки во время этого хода, можешь брать их на руку.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "cardKind = `legend`; cardTypes = [`legend`, `wizardCard`].",
+    "Шальная магия, барахолка/колода легенд, и прочие полученные/купленные карты не с ОБЫЧНОЙ БАРАХОЛКИ не попадают под эффект карты"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

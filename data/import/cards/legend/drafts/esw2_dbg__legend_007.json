@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_007",
+  "source": {
+    "image": "assets/cards/legend/creature/Легенда-Тварь. Мортал Комбо.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_007.md"
+  },
+  "visible": {
+    "nameRu": "Мортал Комбо",
+    "cost": 13,
+    "victoryPoints": 5,
+    "typeRu": "Легенда — Тварь",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "creature"],
+    "textRu": "+4 мощи\nАтака: убей выбранного врага. За это убийство возьми 3 жетона дохлых колдунов, отдай этому врагу 1 из них на твой выбор и верни остальные 2 в стопку.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": ["cardKind = `legend`; cardTypes = [`legend`, `creature`]."],
+  "composition": {
+    "quantity": 1
+  }
+}

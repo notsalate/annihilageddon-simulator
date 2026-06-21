@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_020",
+  "source": {
+    "image": "assets/cards/legend/spell/Легенда-Заклинание. Сделка с Сотоной.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_020.md"
+  },
+  "visible": {
+    "nameRu": "Сделка с Сотоной",
+    "cost": 17,
+    "victoryPoints": 6,
+    "typeRu": "Легенда — Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "+6 мощи\nУничтожь любое количество карт в своей стопке сброса.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": ["cardKind = `legend`; cardTypes = [`legend`, `spell`]."],
+  "composition": {
+    "quantity": 1
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_017",
+  "source": {
+    "image": "assets/cards/legend/spell/Легенда-Заклинание. Мальчишник в Р'льехе.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_017.md"
+  },
+  "visible": {
+    "nameRu": "Мальчишник в Р'льехе",
+    "cost": 11,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "Каждый колдун берёт 2 карты.\nНеизбежная атака: каждый враг сбрасывает 2 случайные карты с руки и получает столько урона, какова их суммарная стоимость.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": [
+    "Атака неизбежная, защититься невозможно",
+    "Владелец карты также берет 2 карты"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

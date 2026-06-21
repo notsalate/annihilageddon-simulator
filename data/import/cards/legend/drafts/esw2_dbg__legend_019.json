@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_019",
+  "source": {
+    "image": "assets/cards/legend/spell/Легенда-Заклинание. Орбитальная Евонная пушка.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_019.md"
+  },
+  "visible": {
+    "nameRu": "Орбитальная Евонная пушка",
+    "cost": 12,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "+5 мощи\nАтака: нанеси по 10 урона левому и правому врагу.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": [
+    "cardKind = `legend`; cardTypes = [`legend`, `spell`].",
+    "При игре вдвоем урон наносится врагу 1 раз"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

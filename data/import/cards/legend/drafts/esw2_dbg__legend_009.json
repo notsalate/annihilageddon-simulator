@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_009",
+  "source": {
+    "image": "assets/cards/legend/location/Легенда-Место. Башня радости.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_009.md"
+  },
+  "visible": {
+    "nameRu": "Башня радости",
+    "cost": 8,
+    "victoryPoints": 6,
+    "typeRu": "Легенда — Место",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "location"],
+    "textRu": "Постоянка:",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "notes": [
+    "Карта не содержит действий. Цель карты в 6 ПО за дешевую цену 8 cost"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

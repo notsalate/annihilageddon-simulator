@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__familiar_008",
+  "source": {
+    "image": "assets/cards/raw/familiar/Фамильяр. Мальчик, который выжрал.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_008.md"
+  },
+  "visible": {
+    "nameRu": "Мальчик, который выжрал",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "textRu": "+3 мощи\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, можешь взять все «Палочки» из своей стопки сброса на руку.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "notes": ["-"],
+  "composition": {
+    "quantity": 1
+  }
+}

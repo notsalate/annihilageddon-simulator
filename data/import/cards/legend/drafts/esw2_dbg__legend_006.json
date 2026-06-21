@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_006",
+  "source": {
+    "image": "assets/cards/legend/creature/Легенда-Тварь. Жница Любви.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_006.md"
+  },
+  "visible": {
+    "nameRu": "Жница Любви",
+    "cost": 16,
+    "victoryPoints": 6,
+    "typeRu": "Легенда — Тварь",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "creature"],
+    "textRu": "+4 мощи\nАтака: отдай 1 свой жетон дохлого колдуна выбранному колдуну. Этот колдун применяет его эффект.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": [
+    "cardKind = `legend`; cardTypes = [`legend`, `creature`].",
+    "Можно атаковать самого себя, и применить эффект ЖДК своего"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

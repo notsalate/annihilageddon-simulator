@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_010",
+  "source": {
+    "image": "assets/cards/legend/location/Легенда-Место. Парк Вурдалакционов.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_010.md"
+  },
+  "visible": {
+    "nameRu": "Парк Вурдалакционов",
+    "cost": 10,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Место",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "location"],
+    "textRu": "Постоянка: каждый раз, когда ты в свой ход наносишь врагу урон, накручивай столько жизней, сколько урона нанёс.\nПока у тебя максимум жизней, +2 к пределу руки.",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "notes": ["cardKind = `legend`; cardTypes = [`legend`, `location`]."],
+  "composition": {
+    "quantity": 1
+  }
+}

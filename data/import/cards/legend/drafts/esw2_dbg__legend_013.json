@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_013",
+  "source": {
+    "image": "assets/cards/legend/spell/Легенда-Заклинание. Смерть от холестерина.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_013.md"
+  },
+  "visible": {
+    "nameRu": "Смерть от холестерина",
+    "cost": 14,
+    "victoryPoints": 5,
+    "typeRu": "Легенда — Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "Если у тебя нет жетонов дохлых колдунов, +7 мощи.\nЕсли есть, можешь уничтожить 1 свой жетон дохлого колдуна.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": ["cardKind = `legend`; cardTypes = [`legend`, `spell`]."],
+  "composition": {
+    "quantity": 1
+  }
+}

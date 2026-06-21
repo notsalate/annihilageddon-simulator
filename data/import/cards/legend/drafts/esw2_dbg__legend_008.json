@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_008",
+  "source": {
+    "image": "assets/cards/legend/location/Легенда-Место. Чипсихоз-Арена.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_008.md"
+  },
+  "visible": {
+    "nameRu": "Чипсихоз-Арена",
+    "cost": 15,
+    "victoryPoints": 5,
+    "typeRu": "Легенда — Место",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "location"],
+    "textRu": "Постоянка: твои атаки наносят врагам двойной урон.",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "notes": [
+    "cardKind = `legend`; cardTypes = [`legend`, `location`].",
+    "Даже если атака проводится с помощью чужой карты (например, через шальную магию), то урон удвоен все равно"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

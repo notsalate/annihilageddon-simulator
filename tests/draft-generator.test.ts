@@ -210,6 +210,100 @@ test("draft import harness keeps mayhem cards in main source group", () => {
   assert.equal(validateDraft(cardDraft).ok, true);
 });
 
+test("draft import harness supports legend source text dialect", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-draft-generator-legend-")
+  );
+  const legendTextPath =
+    "data/import/cards/legend/texts/esw2_dbg__legend_001.md";
+  const megaMayhemTextPath =
+    "data/import/cards/legend/texts/esw2_dbg__mega_mayhem_001.md";
+  writeSource(rootDir, legendTextPath, createLegendMarkdown());
+  writeSource(rootDir, megaMayhemTextPath, createMegaMayhemMarkdown());
+
+  const result = runDraftImportHarness({
+    rootDir,
+    sources: [
+      { kind: "card", textPath: legendTextPath },
+      { kind: "card", textPath: megaMayhemTextPath },
+    ],
+  });
+
+  assert.equal(result.blockers.length, 0);
+  assert.deepEqual(
+    result.generated.map((file) => file.draftPath),
+    [
+      "data/import/cards/legend/drafts/esw2_dbg__legend_001.json",
+      "data/import/cards/legend/drafts/esw2_dbg__mega_mayhem_001.json",
+    ]
+  );
+
+  const legendDraft = readJson(
+    rootDir,
+    "data/import/cards/legend/drafts/esw2_dbg__legend_001.json"
+  );
+  const megaMayhemDraft = readJson(
+    rootDir,
+    "data/import/cards/legend/drafts/esw2_dbg__mega_mayhem_001.json"
+  );
+
+  assert.equal(readNested(legendDraft, ["visible", "cost"]), 10);
+  assert.equal(readNested(legendDraft, ["visible", "victoryPoints"]), 4);
+  assert.deepEqual(readNested(legendDraft, ["visible", "cardTypes"]), [
+    "legend",
+    "creature",
+  ]);
+  assert.deepEqual(legendDraft["composition"], { quantity: 1 });
+  assert.deepEqual(legendDraft["notes"], [
+    "cardKind = `legend`; cardTypes = [`legend`, `creature`].",
+    "Если вялых палочек в стопке не хватает, выдается столько сколько хватает.",
+  ]);
+  assert.equal(
+    readNested(megaMayhemDraft, ["visible", "cardKind"]),
+    "megaMayhem"
+  );
+  assert.deepEqual(readNested(megaMayhemDraft, ["visible", "cardTypes"]), []);
+  assert.equal(readNested(megaMayhemDraft, ["visible", "cost"]), null);
+  assert.equal(readNested(megaMayhemDraft, ["visible", "victoryPoints"]), null);
+  assert.equal(validateDraft(legendDraft).ok, true);
+  assert.equal(validateDraft(megaMayhemDraft).ok, true);
+});
+
+test("draft import harness writes familiar drafts from normalized text path", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-draft-generator-familiar-")
+  );
+  const familiarTextPath =
+    "data/import/cards/familiar/texts/esw2_dbg__familiar_001.md";
+  writeSource(rootDir, familiarTextPath, createFamiliarMarkdown());
+
+  const result = runDraftImportHarness({
+    rootDir,
+    sources: [{ kind: "card", textPath: familiarTextPath }],
+  });
+
+  assert.equal(result.blockers.length, 0);
+  assert.deepEqual(
+    result.generated.map((file) => file.draftPath),
+    ["data/import/cards/familiar/drafts/esw2_dbg__familiar_001.json"]
+  );
+
+  const familiarDraft = readJson(
+    rootDir,
+    "data/import/cards/familiar/drafts/esw2_dbg__familiar_001.json"
+  );
+  assert.equal(familiarDraft["cardId"], "esw2_dbg__familiar_001");
+  assert.equal(readNested(familiarDraft, ["source", "text"]), familiarTextPath);
+  assert.equal(readNested(familiarDraft, ["visible", "cardKind"]), "familiar");
+  assert.deepEqual(readNested(familiarDraft, ["visible", "cardTypes"]), [
+    "familiar",
+  ]);
+  assert.equal(readNested(familiarDraft, ["visible", "cost"]), 6);
+  assert.equal(readNested(familiarDraft, ["visible", "victoryPoints"]), 2);
+  assert.deepEqual(familiarDraft["composition"], { quantity: 1 });
+  assert.equal(validateDraft(familiarDraft).ok, true);
+});
+
 function createCardMarkdown(): string {
   return [
     "# esw2_dbg__main_001",
@@ -231,6 +325,82 @@ function createCardMarkdown(): string {
     "",
     "- `Количество берется из source text.`",
     "- quantity: `2`",
+  ].join("\n");
+}
+
+function createLegendMarkdown(): string {
+  return [
+    "# esw2_dbg\\_\\_legend_001",
+    "- source image path: `assets/cards/legend/creature/legend.png`",
+    "- source label: `Легенда-Тварь. Нарывка`",
+    "- quantity: `1`",
+    "- visible Russian name: `Нарывка`",
+    "- visible type: `Легенда — Тварь`",
+    "- visible card kind: `legend`",
+    "- visible card types: `legend, creature`",
+    "- visible markers: `attack`",
+    "- visible cost: `10`",
+    "- visible victory points: `4`",
+    "",
+    "## Visible Russian rules text",
+    "",
+    "+3 мощи",
+    "Атака: каждый враг получает 2 вялые палочки.",
+    "",
+    "## Classification / Разъяснения",
+    "",
+    "- `cardKind = `legend`; cardTypes = [`legend`, `creature`].`",
+    "- Если вялых палочек в стопке не хватает, выдается столько сколько хватает.",
+  ].join("\n");
+}
+
+function createMegaMayhemMarkdown(): string {
+  return [
+    "# esw2_dbg\\_\\_mega_mayhem_001",
+    "- source image path: `assets/cards/mega-mayhem/mega.png`",
+    "- source label: `МегаБеспредел. MA`",
+    "- quantity: `1`",
+    "- visible Russian name: `МегаБеспредел MA`",
+    "- visible type: `МегаБеспредел`",
+    "- visible card kind: `megaMayhem`",
+    "- visible card types: ``",
+    "- visible markers: `attack`",
+    "- visible cost: `null`",
+    "- visible victory points: `null`",
+    "",
+    "## Visible Russian rules text",
+    "",
+    "Атака: нанеси каждому колдуну столько урона, какова стоимость самой дорогой легенды на барахолке.",
+    "",
+    "## Classification / Разъяснения",
+    "",
+    "- `cardKind = `megaMayhem`; cardTypes = [].`",
+  ].join("\n");
+}
+
+function createFamiliarMarkdown(): string {
+  return [
+    "# esw2_dbg\\_\\_familiar_001",
+    "- source image path: `assets/cards/raw/familiar/familiar.png`",
+    "- source label: `Фамильяр. Поехавший нотариус`",
+    "- processed marker: `manual_from_uploaded_image`",
+    "- quantity: `1`",
+    "- visible Russian name: `Поехавший нотариус`",
+    "- visible type: `Фамильяр`",
+    "- visible card kind: `familiar`",
+    "- visible card types: `familiar`",
+    "- visible markers: `defense`",
+    "- visible cost: `6`",
+    "- visible victory points: `2`",
+    "",
+    "## Visible Russian rules text",
+    "",
+    "+3 мощи",
+    "Защита: можешь сбросить эту карту, чтобы избежать атаки.",
+    "",
+    "## Classification / Разъяснения",
+    "",
+    "- `cardKind = `familiar`; cardTypes = [`familiar`].`",
   ].join("\n");
 }
 

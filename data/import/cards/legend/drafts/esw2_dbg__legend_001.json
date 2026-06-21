@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_001",
+  "source": {
+    "image": "assets/cards/legend/creature/Легенда-Тварь. Нарывка, Королева Генитальных Гарпий.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_001.md"
+  },
+  "visible": {
+    "nameRu": "Нарывка, королева генитальных гарпий",
+    "cost": 10,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Тварь",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "creature"],
+    "textRu": "+3 мощи\nАтака: каждый враг получает 2 вялые палочки.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": [
+    "cardKind = `legend`; cardTypes = [`legend`, `creature`].",
+    "Если вялых палочек в стопке не хватает, выдается столько сколько хватает.",
+    "Например, в стопке 5 вялых, а атака на 4 игроков. 1 игроку - 2 вялых, 2 игроку - 2 вялых, 3 игроку - 1 вялая, 4 игроку - 0 вялых"
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_028",
+  "source": {
+    "image": "assets/cards/legend/wizard-card/Легенда-Волшебник. Братья лошашные.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_028.md"
+  },
+  "visible": {
+    "nameRu": "Братья лошашные",
+    "cost": 12,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Волшебник",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "textRu": "+3 мощи\nЗащита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 3 карты. Если тебя атаковал лошара, перенаправь атаку на него.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "notes": ["cardKind = `legend`; cardTypes = [`legend`, `wizardCard`]."],
+  "composition": {
+    "quantity": 1
+  }
+}

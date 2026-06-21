@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_032",
+  "source": {
+    "image": "assets/cards/legend/wizard-card/Легенда-Волшебник. Капитан Бартоломяу.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_032.md"
+  },
+  "visible": {
+    "nameRu": "Капитан Бартоломяу",
+    "cost": 9,
+    "victoryPoints": 3,
+    "typeRu": "Легенда — Волшебник",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "textRu": "+2 мощи\nАтака: раскрой 4 верхние карты колоды выбранного врага и сыграй 1 из них. Затем сбрось все 4 карты.\nВ этот ход считается, что ты контролируешь сыгранную карту.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": ["cardKind = `legend`; cardTypes = [`legend`, `wizardCard`]."],
+  "composition": {
+    "quantity": 1
+  }
+}
