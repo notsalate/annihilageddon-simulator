@@ -31,6 +31,7 @@ export interface CardDefinition {
     playableInV0: boolean;
     cardKind: CardKind;
     cardTypes: string[];
+    tags?: string[];
     cost: number;
     victoryPoints: number;
     isOngoing: boolean;

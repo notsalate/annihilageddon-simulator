@@ -7,14 +7,14 @@
     "text": "data/import/cards/starter/texts/esw2_dbg__starter_003.md"
   },
   "visible": {
-    "nameRu": "Пшик",
+    "nameRu": "Сырная палочка",
     "cost": 0,
     "victoryPoints": 0,
     "typeRu": "Затравка",
     "cardKind": "starter",
     "cardTypes": [],
-    "textRu": "(Эффекта нет.)",
-    "markers": [],
+    "textRu": "+1 мощь\nАтака: нанеси 1 урон выбранному колдуну. Если он от этого помрёт, получи 3 чипсины.",
+    "markers": ["attack"],
     "uncertainty": []
   },
   "engine": {
@@ -24,11 +24,30 @@
     "needsEffectMapping": false,
     "cardKind": "starter",
     "cardTypes": [],
+    "tags": ["wandAttackCard"],
     "cost": 0,
     "victoryPoints": 0,
     "isOngoing": false,
     "marketChipMarker": false,
-    "effects": [],
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 1
+      },
+      {
+        "effectId": "attack_damage",
+        "targetSelector": "chosenPlayer",
+        "timing": "onPlay",
+        "amount": 1,
+        "onKill": [
+          {
+            "effectId": "gain_chips",
+            "amount": 3
+          }
+        ]
+      }
+    ],
     "unsupportedMechanics": []
   }
 }

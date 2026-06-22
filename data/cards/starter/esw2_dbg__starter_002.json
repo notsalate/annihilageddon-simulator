@@ -7,13 +7,13 @@
     "text": "data/import/cards/starter/texts/esw2_dbg__starter_002.md"
   },
   "visible": {
-    "nameRu": "Знак",
+    "nameRu": "Пшик",
     "cost": 0,
     "victoryPoints": 0,
     "typeRu": "Затравка",
     "cardKind": "starter",
     "cardTypes": [],
-    "textRu": "+1 мощь",
+    "textRu": "(Эффекта нет.)",
     "markers": [],
     "uncertainty": []
   },
@@ -28,13 +28,7 @@
     "victoryPoints": 0,
     "isOngoing": false,
     "marketChipMarker": false,
-    "effects": [
-      {
-        "effectId": "add_power",
-        "timing": "onPlay",
-        "amount": 1
-      }
-    ],
+    "effects": [],
     "unsupportedMechanics": []
   }
 }

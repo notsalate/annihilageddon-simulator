@@ -28,7 +28,7 @@ test("active player can play a card from hand through the action loop", () => {
   assert.ok(activePlayer);
 
   const playableCard = activePlayer.hand.find(
-    (card) => card.definitionId === "esw2_dbg__starter_002"
+    (card) => card.definitionId === "esw2_dbg__starter_001"
   );
   assert.ok(playableCard);
 
@@ -74,7 +74,7 @@ test("playing an add-power card records an immediate effect consequence", () => 
   assert.ok(activePlayer);
 
   const playableCard = activePlayer.hand.find(
-    (card) => card.definitionId === "esw2_dbg__starter_002"
+    (card) => card.definitionId === "esw2_dbg__starter_001"
   );
   assert.ok(playableCard);
 
@@ -1067,18 +1067,11 @@ test("played permanents stay in the controlled permanent zone after cleanup", ()
   );
   assert.ok(activePlayer);
 
-  const ongoingMarketCardIndex = state.common.market.findIndex((card) => {
-    return (
-      state.cardDefinitions.get(card.definitionId)?.engine.isOngoing === true
-    );
-  });
-  assert.notEqual(ongoingMarketCardIndex, -1);
-  const ongoingCard = state.common.market
-    .splice(ongoingMarketCardIndex, 1)
-    .at(0);
-  assert.ok(ongoingCard);
-  ongoingCard.ownerId = activePlayer.playerId;
-  activePlayer.hand.push(ongoingCard);
+  const ongoingCard = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_006"
+  );
 
   const playResult = applyAction(state, {
     type: "playCard",
@@ -1387,14 +1380,11 @@ test("playing a v0 draw card draws from the active player's deck", () => {
   );
   assert.ok(activePlayer);
 
-  const drawCardIndex = state.common.market.findIndex(
-    (card) => card.definitionId === "esw2_dbg__main_017"
+  const drawCard = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_017"
   );
-  assert.notEqual(drawCardIndex, -1);
-  const drawCard = state.common.market.splice(drawCardIndex, 1).at(0);
-  assert.ok(drawCard);
-  drawCard.ownerId = activePlayer.playerId;
-  activePlayer.hand.push(drawCard);
 
   const deckSizeBefore = activePlayer.deck.length;
   const handSizeBefore = activePlayer.hand.length;
@@ -1881,7 +1871,7 @@ test("play_top_card plays the active player's top deck card through on-play effe
   );
   assert.ok(activePlayer);
   const topPlayedCardIndex = activePlayer.hand.findIndex(
-    (card) => card.definitionId === "esw2_dbg__starter_002"
+    (card) => card.definitionId === "esw2_dbg__starter_001"
   );
   assert.notEqual(topPlayedCardIndex, -1);
   const topPlayedCard = activePlayer.hand.splice(topPlayedCardIndex, 1).at(0);
@@ -2372,21 +2362,22 @@ test("attack_damage damages the first opponent when no defense is available", ()
 });
 
 test("wizard property owned wand attacks gain damage and cannot be avoided", () => {
-  const state = initializeGame({ rootDir, seed: 60615, playerCount: 9 });
-  const propertyOwner = state.players.find((player) => {
-    return player.wizardProperties.some(
-      (property) => property.definitionId === "esw2_dbg__wizard_property_009"
-    );
-  });
-  assert.ok(propertyOwner);
-  const targetPlayer = state.players.find(
-    (player) => player.playerId !== propertyOwner.playerId
-  );
-  assert.ok(targetPlayer);
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const propertyOwner = mustGetPlayer(state, "player-2");
+  const targetPlayer = mustGetPlayer(state, "player-1");
   state.activePlayerId = propertyOwner.playerId;
-  const wand = findOwnedCard(propertyOwner, "esw2_dbg__starter_004");
-  assert.ok(wand);
-  moveCardToHand(propertyOwner, wand);
+  replaceFirstWizardProperty(
+    state,
+    propertyOwner,
+    state.tokenDefinitions.get(
+      "esw2_dbg__wizard_property_009"
+    ) as TokenDefinition
+  );
+  const wand = addRuntimeCardToHand(
+    state,
+    propertyOwner,
+    "esw2_dbg__starter_004"
+  );
   const defenseCard = addFixtureDefenseCardToHand(
     state,
     targetPlayer,
@@ -2461,6 +2452,283 @@ test("wizard property does not affect borrowed wands or non-wand attacks", () =>
   assert.equal(nonWandResult.ok, true);
   assert.equal(targetPlayer.life.current, 20);
   assert.equal(targetPlayer.discard.includes(nonWandDefense), true);
+
+  const activeBorrower = state.players.find((player) => {
+    return (
+      player.playerId !== propertyOwner.playerId &&
+      player.playerId !== "player-1"
+    );
+  });
+  assert.ok(activeBorrower);
+  const ownerPropertyWandTarget = mustGetPlayer(state, "player-1");
+  activeBorrower.wizardProperties = [];
+  state.activePlayerId = activeBorrower.playerId;
+  ownerPropertyWandTarget.life.current = 20;
+  const ownerPropertyWand = addRuntimeCardToHand(
+    state,
+    propertyOwner,
+    "esw2_dbg__starter_004"
+  );
+  propertyOwner.hand = propertyOwner.hand.filter(
+    (card) => card.instanceId !== ownerPropertyWand.instanceId
+  );
+  activeBorrower.hand.unshift(ownerPropertyWand);
+  const ownerPropertyWandDefense = addFixtureDefenseCardToHand(
+    state,
+    ownerPropertyWandTarget,
+    "discardSelf"
+  );
+
+  const ownerPropertyWandResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: ownerPropertyWand.instanceId,
+  });
+
+  assert.equal(ownerPropertyWandResult.ok, true);
+  assert.equal(ownerPropertyWandTarget.life.current, 20);
+  assert.equal(
+    ownerPropertyWandTarget.discard.includes(ownerPropertyWandDefense),
+    true
+  );
+});
+
+test("Cheese Wand gains power, attacks a chosen player, and gains chips on kill", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, "player-2");
+  const targetPlayer = mustGetPlayer(state, "player-1");
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  activePlayer.chips = 0;
+  targetPlayer.life.current = 1;
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__starter_003"
+  );
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 1);
+  assert.equal(activePlayer.chips, 3);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 1
+    )
+  );
+});
+
+test("Hrenalocka Wand returns up to two discard cards to hand when its attack kills", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, "player-2");
+  const targetPlayer = mustGetPlayer(state, "player-1");
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  targetPlayer.life.current = 1;
+  const firstDiscard = activePlayer.hand[0];
+  const secondDiscard = activePlayer.hand[1];
+  assert.ok(firstDiscard);
+  assert.ok(secondDiscard);
+  activePlayer.hand.splice(0, 2);
+  activePlayer.discard.push(firstDiscard, secondDiscard);
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__starter_004"
+  );
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.hand.includes(firstDiscard), true);
+  assert.equal(activePlayer.hand.includes(secondDiscard), true);
+  assert.equal(activePlayer.discard.includes(firstDiscard), false);
+  assert.equal(activePlayer.discard.includes(secondDiscard), false);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "return_discard_to_hand" &&
+        event.choiceId === "return_2" &&
+        event.choiceIds?.includes("return_0") === true &&
+        event.choiceIds?.includes("return_1") === true &&
+        event.choiceIds?.includes("return_2") === true &&
+        event.targetCardInstanceIds?.includes(firstDiscard.instanceId) ===
+          true &&
+        event.targetCardInstanceIds?.includes(secondDiscard.instanceId) === true
+      );
+    })
+  );
+});
+
+test("Slapalocka Wand steals or gains chips equal to actual attack damage dealt", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, "player-1");
+  const targetPlayer = mustGetPlayer(state, "player-2");
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  activePlayer.chips = 0;
+  targetPlayer.chips = 1;
+  const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_015");
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(targetPlayer.life.current, 18);
+  assert.equal(targetPlayer.chips, 0);
+  assert.equal(activePlayer.chips, 2);
+});
+
+test("Losharocka Wand can self-target and makes the killed target a Dingler", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, "player-1");
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  activePlayer.life.current = 5;
+  const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_030");
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 3);
+  assert.equal(
+    activePlayer.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+});
+
+test("Chipsalocka Wand spends one chip before its optional chosen-player attack", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, "player-2");
+  const targetPlayer = mustGetPlayer(state, "player-1");
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  activePlayer.chips = 1;
+  targetPlayer.life.current = 20;
+  const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_041");
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(activePlayer.chips, 0);
+  assert.equal(targetPlayer.life.current, 10);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "attack_damage" &&
+        event.choiceId === "pay_optional_cost" &&
+        event.choiceIds?.includes("skip_optional_cost") === true &&
+        event.legalChoiceCount === 2
+      );
+    })
+  );
+});
+
+test("Chipsalocka Wand can skip its optional attack when the chip cost is unavailable", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, "player-2");
+  const targetPlayer = mustGetPlayer(state, "player-1");
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  activePlayer.chips = 0;
+  targetPlayer.life.current = 20;
+  const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_041");
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(activePlayer.chips, 0);
+  assert.equal(targetPlayer.life.current, 20);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "attack_damage" &&
+        event.choiceId === "skip_optional_cost"
+      );
+    })
+  );
+});
+
+test("Potny's Buzzing Wand chooses left or right and chains in the chosen direction", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 4 });
+  const activePlayer = mustGetPlayer(state, "player-1");
+  const leftFoe = mustGetPlayer(state, "player-2");
+  const nextLeftFoe = mustGetPlayer(state, "player-3");
+  const rightFoe = mustGetPlayer(state, "player-4");
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  leftFoe.wizardProperties = [];
+  nextLeftFoe.wizardProperties = [];
+  rightFoe.wizardProperties = [];
+  leftFoe.life.current = 1;
+  nextLeftFoe.life.current = 20;
+  rightFoe.life.current = 20;
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_015"
+  );
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 3);
+  assert.equal(leftFoe.life.current, 20);
+  assert.equal(nextLeftFoe.life.current, 10);
+  assert.equal(rightFoe.life.current, 20);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "directional_chain_attack" &&
+        event.choiceId === "left" &&
+        event.choiceIds?.includes("right") === true &&
+        event.legalChoiceCount === 2
+      );
+    })
+  );
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.definitionId === "esw2_dbg__legend_015"
+    ).length,
+    2
+  );
 });
 
 test("attack_damage kill awards Basic Trophy to the attacker", () => {
@@ -3954,6 +4222,33 @@ function findOwnedCard(
   ].find((card) => {
     return card.definitionId === definitionId;
   });
+}
+
+function mustGetPlayer(
+  state: GameState,
+  playerId: PlayerState["playerId"]
+): PlayerState {
+  const player = state.players.find(
+    (candidate) => candidate.playerId === playerId
+  );
+  assert.ok(player);
+  return player;
+}
+
+function addRuntimeCardToHand(
+  state: GameState,
+  player: PlayerState,
+  definitionId: string
+): CardInstance {
+  assert.ok(state.cardDefinitions.has(definitionId));
+  const card: CardInstance = {
+    instanceId: `fixture-runtime-${definitionId}-${player.hand.length + 1}`,
+    definitionId,
+    ownerId: player.playerId,
+    marketChips: 0,
+  };
+  player.hand.push(card);
+  return card;
 }
 
 function moveCardToHand(player: PlayerState, card: CardInstance): void {

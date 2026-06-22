@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_015",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_015.json",
+    "image": "assets/cards/legend/esw2_dbg__legend_015.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_015.md"
+  },
+  "visible": {
+    "nameRu": "Бузящая палочка Гарика Потного",
+    "cost": 9,
+    "victoryPoints": 3,
+    "typeRu": "Легенда - Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "+3 мощи\nАтака: нанеси 10 урона левому или правому врагу.\nЕсли он от этого подох, атакуй следующего врага в том же направлении.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "tags": ["wandAttackCard"],
+    "cost": 9,
+    "victoryPoints": 3,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 3
+      },
+      {
+        "effectId": "directional_chain_attack",
+        "targetSelector": "leftOrRightFoe",
+        "timing": "onPlay",
+        "amount": 10
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

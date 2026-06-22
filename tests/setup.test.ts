@@ -152,10 +152,20 @@ test("starter deck definitions are independent physical instances per player", (
   const firstPlayerStarter = ownedCards(state, "player-1");
   const secondPlayerStarter = ownedCards(state, "player-2");
 
-  assert.equal(countDefinition(firstPlayerStarter, "esw2_dbg__starter_002"), 6);
+  assert.equal(countDefinition(firstPlayerStarter, "esw2_dbg__starter_001"), 6);
+  assert.equal(countDefinition(firstPlayerStarter, "esw2_dbg__starter_003"), 1);
+  assert.equal(countDefinition(firstPlayerStarter, "esw2_dbg__starter_002"), 3);
+  assert.equal(
+    countDefinition(secondPlayerStarter, "esw2_dbg__starter_001"),
+    6
+  );
+  assert.equal(
+    countDefinition(secondPlayerStarter, "esw2_dbg__starter_003"),
+    1
+  );
   assert.equal(
     countDefinition(secondPlayerStarter, "esw2_dbg__starter_002"),
-    6
+    3
   );
 
   const firstPlayerIds = new Set(
@@ -183,7 +193,7 @@ test("wizard property setup replaces exactly one owned starter Sign with Hrenalo
       "esw2_dbg__wizard_property_009"
     );
     const starterCards = ownedCards(state, player.playerId);
-    assert.equal(countDefinition(starterCards, "esw2_dbg__starter_002"), 5);
+    assert.equal(countDefinition(starterCards, "esw2_dbg__starter_001"), 5);
     assert.equal(countDefinition(starterCards, "esw2_dbg__starter_004"), 1);
   }
 });

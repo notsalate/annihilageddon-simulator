@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
-  "cardId": "esw2_dbg__main_015",
+  "cardId": "esw2_dbg__main_030",
   "source": {
-    "draft": "data/import/cards/main/drafts/esw2_dbg__main_015.json",
-    "image": "assets/cards/main/esw2_dbg__main_015.png",
-    "text": "data/import/cards/main/texts/esw2_dbg__main_015.md"
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_030.json",
+    "image": "assets/cards/main/esw2_dbg__main_030.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_030.md"
   },
   "visible": {
-    "nameRu": "Палочка-шлепалочка",
-    "cost": 5,
-    "victoryPoints": 1,
+    "nameRu": "Палочка-Лошарочка",
+    "cost": 6,
+    "victoryPoints": 2,
     "typeRu": "Сокровище",
     "cardKind": "normal",
     "cardTypes": ["treasure"],
-    "textRu": "+2 мощи\nАтака: нанеси 2 урона выбранному врагу. Укради у него или из запаса столько же чипсин, сколько урона нанёс",
+    "textRu": "+3 мощи\nАтака: нанеси 5 урона выбранному колдуну. Если он от этого подох, он становится лошарой.",
     "markers": ["attack"],
     "uncertainty": []
   },
@@ -25,24 +25,26 @@
     "cardKind": "normal",
     "cardTypes": ["treasure"],
     "tags": ["wandAttackCard"],
-    "cost": 5,
-    "victoryPoints": 1,
+    "cost": 6,
+    "victoryPoints": 2,
     "isOngoing": false,
     "marketChipMarker": false,
     "effects": [
       {
         "effectId": "add_power",
         "timing": "onPlay",
-        "amount": 2
+        "amount": 3
       },
       {
         "effectId": "attack_damage",
-        "targetSelector": "chosenFoe",
+        "targetSelector": "chosenPlayer",
         "timing": "onPlay",
-        "amount": 2,
-        "onDamageDealt": [
+        "amount": 5,
+        "onKill": [
           {
-            "effectId": "gain_chips_equal_damage_dealt"
+            "effectId": "gain_status",
+            "statusId": "dingler",
+            "target": "damagedPlayer"
           }
         ]
       }

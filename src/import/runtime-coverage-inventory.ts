@@ -359,6 +359,35 @@ function collectCompositionMembership(
     }
   }
 
+  const tokenFiles = collectFiles(rootDir, ["data/tokens"], ".json");
+  for (const filePath of tokenFiles) {
+    const parsed = getRecord(readJson(filePath));
+    const tokenId =
+      getString(parsed["tokenId"]) ?? path.basename(filePath, ".json");
+    const rawEffects = getRecord(parsed["engine"])["effects"];
+    const effects = Array.isArray(rawEffects) ? rawEffects : [];
+
+    for (const effect of effects) {
+      const record = getRecord(effect);
+      if (record["effectId"] !== "replace_starting_card") {
+        continue;
+      }
+
+      const toDefinitionId = getString(record["toDefinitionId"]);
+      if (toDefinitionId === undefined) {
+        continue;
+      }
+
+      const current = memberships.get(toDefinitionId) ?? [];
+      current.push({
+        label: `replacement:${tokenId}`,
+        role: "starterReplacement",
+        entryKind: "card",
+      });
+      memberships.set(toDefinitionId, current);
+    }
+  }
+
   return memberships;
 }
 
@@ -701,7 +730,8 @@ function hasAppropriateComposition(
     if (source.sourceGroupOrTokenKind === "starter") {
       return (
         membership.role === "starterDeck" ||
-        membership.role === "starterDeckTemplate"
+        membership.role === "starterDeckTemplate" ||
+        membership.role === "starterReplacement"
       );
     }
     if (source.sourceGroupOrTokenKind === "familiar") {

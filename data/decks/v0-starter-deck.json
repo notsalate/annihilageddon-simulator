@@ -6,15 +6,15 @@
   "mappingStatus": "supported",
   "entries": [
     {
-      "cardId": "esw2_dbg__starter_002",
+      "cardId": "esw2_dbg__starter_001",
       "count": 6
     },
     {
-      "cardId": "esw2_dbg__starter_001",
+      "cardId": "esw2_dbg__starter_003",
       "count": 1
     },
     {
-      "cardId": "esw2_dbg__starter_003",
+      "cardId": "esw2_dbg__starter_002",
       "count": 3
     }
   ],

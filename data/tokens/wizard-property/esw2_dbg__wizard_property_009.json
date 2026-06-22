@@ -25,29 +25,19 @@
       {
         "effectId": "replace_starting_card",
         "timing": "setup",
-        "fromDefinitionId": "esw2_dbg__starter_002",
+        "fromDefinitionId": "esw2_dbg__starter_001",
         "toDefinitionId": "esw2_dbg__starter_004"
       },
       {
         "effectId": "modify_owned_wand_attack_damage",
         "timing": "attackReplacement",
-        "cardDefinitionIds": [
-          "esw2_dbg__starter_001",
-          "esw2_dbg__main_013",
-          "esw2_dbg__legend_008",
-          "esw2_dbg__starter_004"
-        ],
+        "cardTags": ["wandAttackCard"],
         "amount": 1
       },
       {
         "effectId": "prevent_defense_against_owned_wand_attacks",
         "timing": "attackReplacement",
-        "cardDefinitionIds": [
-          "esw2_dbg__starter_001",
-          "esw2_dbg__main_013",
-          "esw2_dbg__legend_008",
-          "esw2_dbg__starter_004"
-        ]
+        "cardTags": ["wandAttackCard"]
       }
     ],
     "unsupportedMechanics": []

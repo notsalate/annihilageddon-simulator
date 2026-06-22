@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
-  "cardId": "esw2_dbg__main_015",
+  "cardId": "esw2_dbg__main_041",
   "source": {
-    "draft": "data/import/cards/main/drafts/esw2_dbg__main_015.json",
-    "image": "assets/cards/main/esw2_dbg__main_015.png",
-    "text": "data/import/cards/main/texts/esw2_dbg__main_015.md"
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_041.json",
+    "image": "assets/cards/main/esw2_dbg__main_041.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_041.md"
   },
   "visible": {
-    "nameRu": "Палочка-шлепалочка",
-    "cost": 5,
+    "nameRu": "Палочка-Чипсалочка",
+    "cost": 3,
     "victoryPoints": 1,
     "typeRu": "Сокровище",
     "cardKind": "normal",
     "cardTypes": ["treasure"],
-    "textRu": "+2 мощи\nАтака: нанеси 2 урона выбранному врагу. Укради у него или из запаса столько же чипсин, сколько урона нанёс",
+    "textRu": "+2 мощи\nМожешь потратить 1 чипсину, чтобы:\nАтака: нанеси 10 урона выбранному колдуну",
     "markers": ["attack"],
     "uncertainty": []
   },
@@ -25,7 +25,7 @@
     "cardKind": "normal",
     "cardTypes": ["treasure"],
     "tags": ["wandAttackCard"],
-    "cost": 5,
+    "cost": 3,
     "victoryPoints": 1,
     "isOngoing": false,
     "marketChipMarker": false,
@@ -37,12 +37,14 @@
       },
       {
         "effectId": "attack_damage",
-        "targetSelector": "chosenFoe",
+        "targetSelector": "chosenPlayer",
         "timing": "onPlay",
-        "amount": 2,
-        "onDamageDealt": [
+        "amount": 10,
+        "optional": true,
+        "costs": [
           {
-            "effectId": "gain_chips_equal_damage_dealt"
+            "costId": "spend_chips",
+            "amount": 1
           }
         ]
       }

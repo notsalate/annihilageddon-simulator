@@ -24,6 +24,7 @@
     "needsEffectMapping": false,
     "cardKind": "starter",
     "cardTypes": ["wand"],
+    "tags": ["wandAttackCard"],
     "cost": 0,
     "victoryPoints": 0,
     "isOngoing": false,
@@ -38,7 +39,13 @@
         "effectId": "attack_damage",
         "targetSelector": "chosenPlayer",
         "timing": "onPlay",
-        "amount": 1
+        "amount": 1,
+        "onKill": [
+          {
+            "effectId": "return_discard_to_hand",
+            "amount": 2
+          }
+        ]
       }
     ],
     "unsupportedMechanics": []
