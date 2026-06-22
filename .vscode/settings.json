@@ -1,0 +1,10 @@
+{
+  "files.exclude": {
+    "**/.scratch/tmp/**": true,
+    "**/.scratch/runs/**": true,
+    "**/data/import/**": true,
+    "**/dist/**": true,
+    "**/node_modules/**": true,
+    "**/*.log": true
+  }
+}
