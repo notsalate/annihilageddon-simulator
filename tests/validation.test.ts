@@ -612,6 +612,31 @@ test("Mega Mayhem destroy-top-main-deck effect is registered and rejects invalid
   );
 });
 
+test("Mayhem discard-top-deck destroy effect is registered and rejects invalid shape through runtime handler", () => {
+  const effectId =
+    "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none";
+
+  assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
+  assert.deepEqual(
+    getEffectRuntimeHandler(effectId)?.validateShape("Fixture", {
+      effectId,
+      timing: "onMayhemResolve",
+      targetSelector: "eachPlayerClockwiseFromActive",
+      amount: 1,
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler(effectId)?.validateShape("Fixture", {
+      effectId,
+      timing: "onPlay",
+      targetSelector: "activePlayer",
+      amount: -1,
+    }),
+    []
+  );
+});
+
 test("wizard property setup effects are registered and reject invalid shapes through runtime handlers", () => {
   const setupEffectIds = [
     "replace_starting_card",

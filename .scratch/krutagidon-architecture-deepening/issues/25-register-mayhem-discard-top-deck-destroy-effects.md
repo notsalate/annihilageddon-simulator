@@ -1,5 +1,5 @@
-Status: ready-for-agent
-Label: ready-for-agent
+Status: Done
+Label: done
 Type: AFK
 
 # Перенести Mayhem discard-top-deck destroy effect в Effect Runtime Catalog
@@ -16,12 +16,12 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] `mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none` регистрируется в Effect Runtime Catalog.
-- [ ] Validation отклоняет invalid amount, timing и targetSelector.
-- [ ] Effect сохраняет active-player order.
-- [ ] Discarded cards уничтожаются через текущий destroy destination path.
-- [ ] Event log сохраняет текущий Mayhem discard/destroy event.
-- [ ] Focused tests покрывают successful discard/destroy path и invalid amount.
+- [x] `mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none` регистрируется в Effect Runtime Catalog.
+- [x] Validation отклоняет invalid amount, timing и targetSelector.
+- [x] Effect сохраняет active-player order.
+- [x] Discarded cards уничтожаются через текущий destroy destination path.
+- [x] Event log сохраняет текущий Mayhem discard/destroy event.
+- [x] Focused tests покрывают successful discard/destroy path и invalid amount.
 
 ## Blocked by
 

@@ -492,6 +492,102 @@ test("megaMayhem destroys top main deck cards in active-player order and kills p
   );
 });
 
+test("Mayhem discards top deck cards and destroys them in active-player order", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+
+  const normalDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-discard-top-normal",
+    []
+  );
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-discard-top-deck-destroy",
+    [
+      {
+        effectId:
+          "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        amount: 1,
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [normalDefinition.cardId, normalDefinition],
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+
+  const activeTopDeckCard: CardInstance = {
+    instanceId: "fixture-mayhem-discard-active-top",
+    definitionId: normalDefinition.cardId,
+    ownerId: activePlayer.playerId,
+    marketChips: 0,
+  };
+  const secondTopDeckCard: CardInstance = {
+    instanceId: "fixture-mayhem-discard-second-top",
+    definitionId: normalDefinition.cardId,
+    ownerId: secondPlayer.playerId,
+    marketChips: 0,
+  };
+  const thirdTopDeckCard: CardInstance = {
+    instanceId: "fixture-mayhem-discard-third-top",
+    definitionId: normalDefinition.cardId,
+    ownerId: thirdPlayer.playerId,
+    marketChips: 0,
+  };
+  activePlayer.deck.splice(0, activePlayer.deck.length, activeTopDeckCard);
+  secondPlayer.deck.splice(0, secondPlayer.deck.length, secondTopDeckCard);
+  thirdPlayer.deck.splice(0, thirdPlayer.deck.length, thirdTopDeckCard);
+
+  const mayhem: CardInstance = {
+    instanceId: "fixture-mayhem-discard-top-deck-instance",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "mayhemDiscardedTopDeckCardsDestroyed")
+      .map((event) => ({
+        playerId: event.playerId,
+        amount: event.amount,
+      })),
+    [
+      { playerId: activePlayer.playerId, amount: 1 },
+      { playerId: secondPlayer.playerId, amount: 1 },
+      { playerId: thirdPlayer.playerId, amount: 1 },
+    ]
+  );
+  assert.deepEqual(
+    state.common.destroyedPile.map((card) => card.instanceId),
+    [
+      activeTopDeckCard.instanceId,
+      secondTopDeckCard.instanceId,
+      thirdTopDeckCard.instanceId,
+    ]
+  );
+  assert.equal(activeTopDeckCard.ownerId, activePlayer.playerId);
+  assert.equal(secondTopDeckCard.ownerId, secondPlayer.playerId);
+  assert.equal(thirdTopDeckCard.ownerId, thirdPlayer.playerId);
+});
+
 test("mayhem revealed during Market Flow resolves and Market Flow continues with the next normal card", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const mayhemDefinition = createFixtureCardDefinition(

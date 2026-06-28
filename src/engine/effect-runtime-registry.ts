@@ -94,6 +94,11 @@ export interface EffectRuntimeServices {
     effectId: string,
     source: EffectSourceContext
   ): boolean;
+  discardTopDeckCards(
+    state: GameState,
+    player: PlayerState,
+    count: number
+  ): CardInstance[];
   getDestroyDestination(
     state: GameState,
     card: CardInstance
@@ -861,6 +866,85 @@ const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler = {
         services.resolvePlayerDeath(state, targetPlayer);
       }
     }
+    return { ok: true };
+  },
+};
+
+const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler = {
+  effectId:
+    "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
+  validateShape(subjectId, effect) {
+    const errors = validateMayhemEachPlayerShape(subjectId, effect);
+    const amount = effect["amount"];
+    if (
+      typeof amount !== "number" ||
+      !Number.isSafeInteger(amount) ||
+      amount < 0
+    ) {
+      errors.push(
+        `${subjectId} uses invalid Mayhem discard amount ${String(amount)}`
+      );
+    }
+    return errors;
+  },
+  execute(state, _player, effect, source, services) {
+    const amount = effect["amount"];
+    if (
+      typeof amount !== "number" ||
+      !Number.isSafeInteger(amount) ||
+      amount < 0
+    ) {
+      return {
+        ok: false,
+        error: `Invalid Mayhem discard amount ${String(amount)}`,
+      };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+      const discardedCards = services.discardTopDeckCards(
+        state,
+        targetPlayer,
+        amount
+      );
+      for (const discardedCard of discardedCards) {
+        const destination = services.getDestroyDestination(
+          state,
+          discardedCard
+        );
+        if (!destination.ok) {
+          return destination;
+        }
+
+        if (
+          !services.moveCardToZonePreservingOwner(
+            state,
+            targetPlayer,
+            discardedCard,
+            destination.zone,
+            destination.zoneName,
+            effectId,
+            source
+          )
+        ) {
+          return {
+            ok: false,
+            error: `Cannot destroy discarded card ${discardedCard.instanceId}`,
+          };
+        }
+      }
+
+      state.eventLog.push({
+        type: "mayhemDiscardedTopDeckCardsDestroyed",
+        playerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        amount: discardedCards.length,
+        sourceType: source.sourceType,
+      });
+    }
+
     return { ok: true };
   },
 };
@@ -1886,6 +1970,24 @@ function validateMegaMayhemEachPlayerShape(
   return errors;
 }
 
+function validateMayhemEachPlayerShape(
+  subjectId: string,
+  effect: Record<string, unknown>
+): string[] {
+  const errors: string[] = [];
+  if (effect["timing"] !== "onMayhemResolve") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem timing ${String(effect["timing"])}`
+    );
+  }
+  if (effect["targetSelector"] !== "eachPlayerClockwiseFromActive") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem target ${String(effect["targetSelector"])}`
+    );
+  }
+  return errors;
+}
+
 function payOptionalCosts(
   state: GameState,
   player: PlayerState,
@@ -2326,6 +2428,10 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [
     megaMayhemEachPlayerDestroyTopMainDeckHandler.effectId,
     toCatalogEntry(megaMayhemEachPlayerDestroyTopMainDeckHandler),
+  ],
+  [
+    mayhemEachPlayerDiscardTopDeckDestroyHandler.effectId,
+    toCatalogEntry(mayhemEachPlayerDiscardTopDeckDestroyHandler),
   ],
   [
     replaceStartingCardHandler.effectId,

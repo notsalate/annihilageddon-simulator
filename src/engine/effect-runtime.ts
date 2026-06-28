@@ -360,8 +360,6 @@ function isSupportedMayhemRuntimeEffect(
     effectId === "set_life" ||
     effectId === "mega_mayhem_set_life" ||
     effectId === "mega_mayhem_each_player_toggle_dingler" ||
-    effectId ===
-      "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none" ||
     effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
     effectId === "mayhem_each_player_discard_deck_then_destroy_from_discard" ||
     effectId === "gain_chips_per_player_with_status" ||
@@ -434,61 +432,6 @@ function executeEffect(
       sourceType: source.sourceType,
     });
 
-    return { ok: true };
-  }
-
-  if (
-    effect["effectId"] ===
-    "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none"
-  ) {
-    const amount = effect["amount"];
-    if (
-      typeof amount !== "number" ||
-      !Number.isSafeInteger(amount) ||
-      amount < 0
-    ) {
-      return {
-        ok: false,
-        error: `Invalid Mayhem discard amount ${String(amount)}`,
-      };
-    }
-
-    for (const targetPlayer of getPlayersInActiveOrder(state)) {
-      const discardedCards = discardTopDeckCards(state, targetPlayer, amount);
-      for (const discardedCard of discardedCards) {
-        const destination = getDestroyDestination(state, discardedCard);
-        if (!destination.ok) {
-          return destination;
-        }
-
-        if (
-          !moveCardToZonePreservingOwner(
-            state,
-            targetPlayer,
-            discardedCard,
-            destination.zone,
-            destination.zoneName,
-            asString(effect["effectId"]),
-            source
-          )
-        ) {
-          return {
-            ok: false,
-            error: `Cannot destroy discarded card ${discardedCard.instanceId}`,
-          };
-        }
-      }
-
-      state.eventLog.push({
-        type: "mayhemDiscardedTopDeckCardsDestroyed",
-        playerId: targetPlayer.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: asString(effect["effectId"]),
-        amount: discardedCards.length,
-        sourceType: source.sourceType,
-      });
-    }
     return { ok: true };
   }
 
@@ -910,6 +853,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   moveGainedCardToPlayerDestination,
   moveCardToPlayerZone,
   moveCardToZonePreservingOwner,
+  discardTopDeckCards,
   getDestroyDestination,
   getOpponentsInSeatingOrder,
   getPlayersInActiveOrder,
