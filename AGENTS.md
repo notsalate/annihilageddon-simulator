@@ -22,16 +22,15 @@ This repository is:
 Agent workflow docs live in `docs/agents/`.
 They describe local process conventions, not domain truth or engine behavior.
 
-## Workflow Priority
+## Task Context Priority
 
-Prefer this context order for this repository:
+After applying the user's current task, use this repository context order:
 
-1. `AGENTS.md`
-2. the exact issue or handoff file under `.scratch/` when the task points to one
-3. `README.md`
-4. `CONTEXT.md`
-5. focused docs such as `docs/import-pipeline.md`, `docs/runtime-layout.md`, `docs/rules-canon.md`
-6. relevant source and tests
+1. the exact issue, PRD, or handoff file under `.scratch/` when the task points to one
+2. `README.md`
+3. `CONTEXT.md`
+4. focused docs such as `docs/import-pipeline.md`, `docs/runtime-layout.md`, `docs/rules-canon.md`
+5. relevant source and tests
 
 Keep the active scope tight.
 Do not automatically fix adjacent debt or unrelated issues when a task is issue-scoped.
@@ -153,6 +152,13 @@ For mechanics bugs, start by checking:
 
 ## Checks Before Reporting
 
+A task is not done until:
+
+- the requested change is implemented or explicitly blocked;
+- the narrowest relevant checks were run, or the reason they were not run is stated;
+- the diff was reviewed;
+- any incomplete behavior, skipped checks, or assumptions are reported.
+
 Run the narrowest relevant checks for the task.
 Prefer focused tests or targeted verification before broader commands.
 
@@ -160,11 +166,13 @@ Before final reporting, review the diff with:
 
 ```powershell
 rtk git diff
+rtk git diff
 ```
 
 If RTK is unavailable, fall back to:
 
 ```powershell
+git status
 git diff
 ```
 
