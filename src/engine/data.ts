@@ -486,10 +486,9 @@ function isLegacyCompatibilityEffectId(
   mode: "combat" | "fixture"
 ): boolean {
   return (
-    effectId === "modify_effective_value" ||
-    (mode === "fixture" &&
-      (effectId === "fixture_add_power_equal_to_target_cost" ||
-        effectId === "fixture_modify_effective_value"))
+    mode === "fixture" &&
+    (effectId === "fixture_add_power_equal_to_target_cost" ||
+      effectId === "fixture_modify_effective_value")
   );
 }
 

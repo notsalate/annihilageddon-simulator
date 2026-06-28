@@ -799,6 +799,174 @@ test("wizard property setup effects are registered and reject invalid shapes thr
   );
 });
 
+test("wizard property effective-value modifier is registered and rejects invalid shapes through runtime handlers", () => {
+  assert.equal(
+    getEffectRuntimeCatalogEntry("modify_effective_value")?.effectId,
+    "modify_effective_value"
+  );
+
+  const handler = getEffectRuntimeHandler("modify_effective_value");
+  assert.ok(handler);
+
+  for (const effect of [
+    {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "cardCost",
+      operation: "add",
+      amount: -1,
+      target: {
+        targetType: "card",
+        definitionId: "fixture-card",
+      },
+    },
+    {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "cardVictoryPoints",
+      operation: "add",
+      amount: 1,
+      target: {
+        targetType: "card",
+        cardTypes: ["treasure"],
+      },
+    },
+    {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "tokenVictoryPoints",
+      operation: "add",
+      amount: 1,
+      target: {
+        targetType: "token",
+        definitionId: "fixture-token",
+      },
+    },
+    {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "playerMaxLife",
+      operation: "add",
+      amount: -10,
+      target: {
+        targetType: "player",
+      },
+    },
+    {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "playerVictoryPoints",
+      operation: "add",
+      amount: -5,
+      target: {
+        targetType: "player",
+      },
+    },
+  ]) {
+    assert.deepEqual(handler.validateShape("Token", effect), []);
+  }
+
+  for (const effect of [
+    {
+      effectId: "modify_effective_value",
+      timing: "onPlay",
+      valueKind: "cardCost",
+      operation: "add",
+      amount: -1,
+      target: {
+        targetType: "card",
+        definitionId: "fixture-card",
+      },
+    },
+    {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "handLimit",
+      operation: "add",
+      amount: 1,
+      target: {
+        targetType: "player",
+      },
+    },
+    {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "cardCost",
+      operation: "multiply",
+      amount: 2,
+      target: {
+        targetType: "card",
+        definitionId: "fixture-card",
+      },
+    },
+    {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "cardCost",
+      operation: "add",
+      amount: 1.5,
+      target: {
+        targetType: "card",
+        definitionId: "fixture-card",
+      },
+    },
+    {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "cardCost",
+      operation: "add",
+      amount: -1,
+      target: {
+        targetType: "player",
+      },
+    },
+  ]) {
+    assert.notDeepEqual(handler.validateShape("Token", effect), []);
+  }
+});
+
+test("executable data-pack validation rejects invalid effective-value modifier shape through the catalog", () => {
+  const dataPack = withFixtureToken({
+    schemaVersion: 1,
+    tokenId: "wizard-property-fixture-invalid-effective-value",
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    visible: {
+      textRu: "Твоя скидка на сокровища считается неверно.",
+    },
+    engine: {
+      mappingStatus: "fixture",
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "modify_effective_value",
+          timing: "whileControlled",
+          valueKind: "cardCost",
+          operation: "multiply",
+          amount: -1,
+          target: {
+            targetType: "card",
+            cardTypes: ["treasure"],
+          },
+        },
+      ],
+      unsupportedMechanics: [],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack);
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => {
+      return (
+        error.includes("wizard-property-fixture-invalid-effective-value") &&
+        error.includes("unsupported effective-value operation multiply")
+      );
+    })
+  );
+});
+
 test("combat data-pack validation rejects fixture effect ids", () => {
   const card = createFixtureCard("fixture-effect-in-combat-data");
   const dataPack = withOnlyFixtureCard({

@@ -1150,6 +1150,56 @@ const setResurrectionLifeTotalHandler: EffectRuntimeHandler = {
   },
 };
 
+const modifyEffectiveValueHandler: EffectRuntimeHandler = {
+  effectId: "modify_effective_value",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["timing"] !== "whileControlled") {
+      errors.push(
+        `${subjectId} uses unsupported effective-value timing ${String(effect["timing"])}`
+      );
+    }
+
+    const valueKind = effect["valueKind"];
+    if (
+      valueKind !== "cardCost" &&
+      valueKind !== "cardVictoryPoints" &&
+      valueKind !== "tokenVictoryPoints" &&
+      valueKind !== "playerMaxLife" &&
+      valueKind !== "playerVictoryPoints"
+    ) {
+      errors.push(
+        `${subjectId} uses unsupported effective-value kind ${String(valueKind)}`
+      );
+    }
+
+    const operation = effect["operation"];
+    if (operation !== "add") {
+      errors.push(
+        `${subjectId} uses unsupported effective-value operation ${String(operation)}`
+      );
+    }
+
+    const amount = effect["amount"];
+    if (typeof amount !== "number" || !Number.isSafeInteger(amount)) {
+      errors.push(
+        `${subjectId} uses invalid effective-value amount ${String(amount)}`
+      );
+    }
+
+    errors.push(
+      ...validateEffectiveValueModifierTarget(subjectId, valueKind, effect)
+    );
+    return errors;
+  },
+  execute() {
+    return {
+      ok: false,
+      error: "modify_effective_value is an effective-value-only effect",
+    };
+  },
+};
+
 const topdeckGainedCardHandler: EffectRuntimeHandler = {
   effectId: "topdeck_gained_card",
   validateShape(subjectId, effect) {
@@ -2144,6 +2194,69 @@ function validateReplacementTiming(
   return [];
 }
 
+function validateEffectiveValueModifierTarget(
+  subjectId: string,
+  valueKind: unknown,
+  effect: Record<string, unknown>
+): string[] {
+  const target = effect["target"];
+  if (!isEffectRecord(target)) {
+    return [
+      `${subjectId} uses invalid effective-value target ${String(target)}`,
+    ];
+  }
+
+  if (valueKind === "cardCost" || valueKind === "cardVictoryPoints") {
+    if (target["targetType"] !== "card") {
+      return [
+        `${subjectId} uses unsupported effective-value target ${String(target["targetType"])}`,
+      ];
+    }
+
+    if (isNonEmptyString(target["definitionId"])) {
+      return [];
+    }
+
+    const cardTypes = target["cardTypes"];
+    if (
+      Array.isArray(cardTypes) &&
+      cardTypes.length > 0 &&
+      cardTypes.every(isNonEmptyString)
+    ) {
+      return [];
+    }
+
+    return [
+      `${subjectId} uses invalid effective-value card target ${String(target["definitionId"])}`,
+    ];
+  }
+
+  if (valueKind === "tokenVictoryPoints") {
+    if (
+      target["targetType"] === "token" &&
+      isNonEmptyString(target["definitionId"])
+    ) {
+      return [];
+    }
+
+    return [
+      `${subjectId} uses unsupported effective-value target ${String(target["targetType"])}`,
+    ];
+  }
+
+  if (valueKind === "playerMaxLife" || valueKind === "playerVictoryPoints") {
+    if (target["targetType"] === "player") {
+      return [];
+    }
+
+    return [
+      `${subjectId} uses unsupported effective-value target ${String(target["targetType"])}`,
+    ];
+  }
+
+  return [];
+}
+
 function validateWandAttackReplacementShape(
   subjectId: string,
   effect: Record<string, unknown>
@@ -2802,6 +2915,10 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [
     setResurrectionLifeTotalHandler.effectId,
     toCatalogEntry(setResurrectionLifeTotalHandler),
+  ],
+  [
+    modifyEffectiveValueHandler.effectId,
+    toCatalogEntry(modifyEffectiveValueHandler),
   ],
   [topdeckGainedCardHandler.effectId, toCatalogEntry(topdeckGainedCardHandler)],
   [
