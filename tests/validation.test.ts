@@ -488,6 +488,56 @@ test("top-deck and Wild Magic effects are registered and reject invalid shapes t
   );
 });
 
+test("life and Dingler status effects are registered and reject invalid shapes through runtime handlers", () => {
+  const effectIds = [
+    "heal",
+    "set_life",
+    "gain_status",
+    "remove_status",
+    "toggle_status",
+  ];
+
+  for (const effectId of effectIds) {
+    assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
+  }
+
+  assert.notDeepEqual(
+    getEffectRuntimeHandler("heal")?.validateShape("Fixture", {
+      effectId: "heal",
+      timing: "onPlay",
+      amount: 0,
+      target: {
+        selector: "mainMarketCard",
+      },
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler("set_life")?.validateShape("Fixture", {
+      effectId: "set_life",
+      timing: "onPlay",
+      lifeTotal: 0,
+      target: {
+        selector: "mainMarketCard",
+      },
+    }),
+    []
+  );
+  for (const effectId of ["gain_status", "remove_status", "toggle_status"]) {
+    assert.notDeepEqual(
+      getEffectRuntimeHandler(effectId)?.validateShape("Fixture", {
+        effectId,
+        timing: "onPlay",
+        statusId: "wizard",
+        target: {
+          selector: "mainMarketCard",
+        },
+      }),
+      []
+    );
+  }
+});
+
 test("combat data-pack validation rejects fixture effect ids", () => {
   const card = createFixtureCard("fixture-effect-in-combat-data");
   const dataPack = withOnlyFixtureCard({

@@ -486,8 +486,6 @@ function isLegacyCompatibilityEffectId(
   mode: "combat" | "fixture"
 ): boolean {
   return (
-    effectId === "heal" ||
-    effectId === "set_life" ||
     effectId === "mega_mayhem_set_life" ||
     effectId ===
       "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem" ||
@@ -497,9 +495,6 @@ function isLegacyCompatibilityEffectId(
     effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
     effectId === "mayhem_each_player_discard_deck_then_destroy_from_discard" ||
     effectId === "modify_effective_value" ||
-    effectId === "gain_status" ||
-    effectId === "remove_status" ||
-    effectId === "toggle_status" ||
     effectId === "topdeck_gained_card" ||
     effectId === "temporary_hand_limit_by_gained_card_type" ||
     effectId === "replace_starting_card" ||
@@ -521,56 +516,6 @@ function validateLegacyCompatibilityEffectShape(
   effect: Record<string, unknown>,
   mode: "combat" | "fixture"
 ): string[] {
-  if (effectId === "heal") {
-    const errors: string[] = [];
-    const amount = effect["amount"];
-    if (
-      typeof amount !== "number" ||
-      !Number.isSafeInteger(amount) ||
-      amount <= 0
-    ) {
-      errors.push(`${subjectId} uses invalid healing amount ${String(amount)}`);
-    }
-
-    const target = effect["target"];
-    if (!isEffectRecord(target) || target["selector"] !== "activePlayer") {
-      const selector = isEffectRecord(target) ? target["selector"] : target;
-      errors.push(
-        `${subjectId} uses unsupported healing target ${String(selector)}`
-      );
-    }
-
-    return errors;
-  }
-
-  if (effectId === "set_life") {
-    const errors: string[] = [];
-    const lifeTotal = effect["lifeTotal"];
-    if (
-      typeof lifeTotal !== "number" ||
-      !Number.isSafeInteger(lifeTotal) ||
-      lifeTotal < 1
-    ) {
-      errors.push(`${subjectId} uses invalid life total ${String(lifeTotal)}`);
-    }
-
-    const target = effect["target"];
-    const targetSelector = effect["targetSelector"];
-    if (
-      (!isEffectRecord(target) || target["selector"] !== "activePlayer") &&
-      targetSelector !== "eachPlayerClockwiseFromActive"
-    ) {
-      const selector = isEffectRecord(target)
-        ? target["selector"]
-        : targetSelector;
-      errors.push(
-        `${subjectId} uses unsupported set-life target ${String(selector)}`
-      );
-    }
-
-    return errors;
-  }
-
   if (effectId === "mega_mayhem_set_life") {
     const errors: string[] = [];
     const lifeTotal = effect["lifeTotal"];
@@ -601,7 +546,6 @@ function validateLegacyCompatibilityEffectShape(
     effectId ===
       "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem" ||
     effectId === "mega_mayhem_each_player_toggle_dingler" ||
-    effectId === "toggle_status" ||
     effectId ===
       "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none" ||
     effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
@@ -617,12 +561,6 @@ function validateLegacyCompatibilityEffectShape(
     if (effect["targetSelector"] !== "eachPlayerClockwiseFromActive") {
       errors.push(
         `${subjectId} uses unsupported Mayhem target ${String(effect["targetSelector"])}`
-      );
-    }
-
-    if (effectId === "toggle_status" && effect["statusId"] !== "dingler") {
-      errors.push(
-        `${subjectId} uses unsupported status ${String(effect["statusId"])}`
       );
     }
 

@@ -124,6 +124,34 @@ export interface EffectRuntimeServices {
     effectId: string,
     source: EffectSourceContext
   ): DamageResult;
+  healPlayer(
+    state: GameState,
+    sourcePlayer: PlayerState,
+    targetPlayer: PlayerState,
+    amount: number,
+    effectId: string,
+    source: EffectSourceContext
+  ): void;
+  setPlayerLife(state: GameState, player: PlayerState, lifeTotal: number): void;
+  resolveStatusTargetPlayers(
+    state: GameState,
+    player: PlayerState,
+    effect: Record<string, unknown>,
+    source: EffectSourceContext
+  ): { ok: true; players: PlayerState[] } | { ok: false; error: string };
+  gainDinglerStatus(
+    state: GameState,
+    player: PlayerState,
+    effectId: string,
+    source: EffectSourceContext
+  ): void;
+  removeDinglerStatus(
+    state: GameState,
+    player: PlayerState,
+    effectId: string,
+    source: EffectSourceContext
+  ): void;
+  hasDinglerStatus(player: PlayerState): boolean;
   resolveAttackTarget(
     state: GameState,
     attackingPlayer: PlayerState,
@@ -479,6 +507,244 @@ const dealDamageHandler: EffectRuntimeHandler = {
       services.asString(effect["effectId"]),
       source
     );
+    return { ok: true };
+  },
+};
+
+const healHandler: EffectRuntimeHandler = {
+  effectId: "heal",
+  validateShape(subjectId, effect) {
+    return [
+      ...validatePositiveIntegerAmount(subjectId, effect, "healing amount"),
+      ...validatePlayerTargetSelector(subjectId, effect, "healing", [
+        "activePlayer",
+      ]),
+    ];
+  },
+  execute(state, player, effect, source, services) {
+    const targetResult = services.resolveTargetChoice(
+      state,
+      player,
+      effect,
+      source
+    );
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    if (targetResult.choice === undefined) {
+      return { ok: true };
+    }
+
+    if (targetResult.choice.choiceType !== "player") {
+      return {
+        ok: false,
+        error: "Heal effect requires a player target",
+      };
+    }
+
+    const amount = requirePositiveIntegerAmount(effect, "heal amount");
+    if (!amount.ok) {
+      return amount;
+    }
+
+    services.healPlayer(
+      state,
+      player,
+      targetResult.choice.player,
+      amount.value,
+      services.asString(effect["effectId"]),
+      source
+    );
+    return { ok: true };
+  },
+};
+
+const setLifeHandler: EffectRuntimeHandler = {
+  effectId: "set_life",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    const lifeTotal = effect["lifeTotal"];
+    if (
+      typeof lifeTotal !== "number" ||
+      !Number.isSafeInteger(lifeTotal) ||
+      lifeTotal < 1
+    ) {
+      errors.push(`${subjectId} uses invalid life total ${String(lifeTotal)}`);
+    }
+
+    errors.push(
+      ...validatePlayerTargetSelector(subjectId, effect, "set-life", [
+        "activePlayer",
+      ])
+    );
+    return errors;
+  },
+  execute(state, player, effect, source, services) {
+    const targetResult = services.resolveTargetChoice(
+      state,
+      player,
+      effect,
+      source
+    );
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    if (targetResult.choice === undefined) {
+      return { ok: true };
+    }
+
+    if (targetResult.choice.choiceType !== "player") {
+      return {
+        ok: false,
+        error: "Set-life effect requires a player target",
+      };
+    }
+
+    const lifeTotal = effect["lifeTotal"];
+    if (
+      typeof lifeTotal !== "number" ||
+      !Number.isSafeInteger(lifeTotal) ||
+      lifeTotal < 1
+    ) {
+      return {
+        ok: false,
+        error: `Invalid life total ${String(lifeTotal)}`,
+      };
+    }
+
+    services.setPlayerLife(state, targetResult.choice.player, lifeTotal);
+    state.eventLog.push({
+      type: "effectLifeSet",
+      playerId: player.playerId,
+      targetPlayerId: targetResult.choice.player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId: services.asString(effect["effectId"]),
+      amount: lifeTotal,
+      sourceType: source.sourceType,
+    });
+    return { ok: true };
+  },
+};
+
+const gainStatusHandler: EffectRuntimeHandler = {
+  effectId: "gain_status",
+  validateShape(subjectId, effect) {
+    return validateDinglerStatusEffectShape(subjectId, effect, "gain-status");
+  },
+  execute(state, player, effect, source, services) {
+    const statusId = effect["statusId"];
+    if (statusId !== "dingler") {
+      return {
+        ok: false,
+        error: `Unsupported status ${services.asString(statusId)}`,
+      };
+    }
+
+    const targetResult = services.resolveStatusTargetPlayers(
+      state,
+      player,
+      effect,
+      source
+    );
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    for (const targetPlayer of targetResult.players) {
+      services.gainDinglerStatus(
+        state,
+        targetPlayer,
+        services.asString(effect["effectId"]),
+        source
+      );
+    }
+
+    return { ok: true };
+  },
+};
+
+const removeStatusHandler: EffectRuntimeHandler = {
+  effectId: "remove_status",
+  validateShape(subjectId, effect) {
+    return validateDinglerStatusEffectShape(subjectId, effect, "remove-status");
+  },
+  execute(state, player, effect, source, services) {
+    const statusId = effect["statusId"];
+    if (statusId !== "dingler") {
+      return {
+        ok: false,
+        error: `Unsupported status ${services.asString(statusId)}`,
+      };
+    }
+
+    const targetResult = services.resolveStatusTargetPlayers(
+      state,
+      player,
+      effect,
+      source
+    );
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    for (const targetPlayer of targetResult.players) {
+      services.removeDinglerStatus(
+        state,
+        targetPlayer,
+        services.asString(effect["effectId"]),
+        source
+      );
+    }
+
+    return { ok: true };
+  },
+};
+
+const toggleStatusHandler: EffectRuntimeHandler = {
+  effectId: "toggle_status",
+  validateShape(subjectId, effect) {
+    return validateDinglerStatusEffectShape(subjectId, effect, "toggle-status");
+  },
+  execute(state, player, effect, source, services) {
+    const statusId = effect["statusId"];
+    if (statusId !== "dingler") {
+      return {
+        ok: false,
+        error: `Unsupported status ${services.asString(statusId)}`,
+      };
+    }
+
+    const targetResult = services.resolveStatusTargetPlayers(
+      state,
+      player,
+      effect,
+      source
+    );
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    for (const targetPlayer of targetResult.players) {
+      if (services.hasDinglerStatus(targetPlayer)) {
+        services.removeDinglerStatus(
+          state,
+          targetPlayer,
+          services.asString(effect["effectId"]),
+          source
+        );
+      } else {
+        services.gainDinglerStatus(
+          state,
+          targetPlayer,
+          services.asString(effect["effectId"]),
+          source
+        );
+      }
+    }
+
     return { ok: true };
   },
 };
@@ -1304,6 +1570,27 @@ function validatePositiveIntegerAmount(
   return [];
 }
 
+function validateDinglerStatusEffectShape(
+  subjectId: string,
+  effect: Record<string, unknown>,
+  effectLabel: string
+): string[] {
+  const errors: string[] = [];
+  if (effect["statusId"] !== "dingler") {
+    errors.push(
+      `${subjectId} uses unsupported status ${String(effect["statusId"])}`
+    );
+  }
+
+  errors.push(
+    ...validatePlayerTargetSelector(subjectId, effect, effectLabel, [
+      "activePlayer",
+      "opponentPlayer",
+    ])
+  );
+  return errors;
+}
+
 function payOptionalCosts(
   state: GameState,
   player: PlayerState,
@@ -1562,42 +1849,7 @@ function executeAttackBranch(
     branch["effectId"] === "gain_status" &&
     branch["statusId"] === "dingler"
   ) {
-    targetPlayer.statuses.push({
-      instanceId: `dingler-${targetPlayer.playerId}`,
-      statusId: "dingler",
-      ownerId: targetPlayer.playerId,
-      effects: [
-        {
-          effectId: "modify_effective_value",
-          timing: "whileControlled",
-          valueKind: "playerMaxLife",
-          operation: "add",
-          amount: -10,
-          target: {
-            targetType: "player",
-          },
-        },
-        {
-          effectId: "modify_effective_value",
-          timing: "whileControlled",
-          valueKind: "playerVictoryPoints",
-          operation: "add",
-          amount: -5,
-          target: {
-            targetType: "player",
-          },
-        },
-      ],
-    });
-    targetPlayer.life.current = Math.min(targetPlayer.life.current, 15);
-    state.eventLog.push({
-      type: "dinglerStatusGained",
-      playerId: targetPlayer.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: "gain_status",
-      sourceType: source.sourceType,
-    });
+    services.gainDinglerStatus(state, targetPlayer, "gain_status", source);
     return { ok: true };
   }
 
@@ -1759,6 +2011,11 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [discardCardHandler.effectId, toCatalogEntry(discardCardHandler)],
   [destroyCardHandler.effectId, toCatalogEntry(destroyCardHandler)],
   [dealDamageHandler.effectId, toCatalogEntry(dealDamageHandler)],
+  [healHandler.effectId, toCatalogEntry(healHandler)],
+  [setLifeHandler.effectId, toCatalogEntry(setLifeHandler)],
+  [gainStatusHandler.effectId, toCatalogEntry(gainStatusHandler)],
+  [removeStatusHandler.effectId, toCatalogEntry(removeStatusHandler)],
+  [toggleStatusHandler.effectId, toCatalogEntry(toggleStatusHandler)],
   [attackDamageHandler.effectId, toCatalogEntry(attackDamageHandler)],
   [avoidAttackHandler.effectId, toCatalogEntry(avoidAttackHandler)],
   [gainChipsHandler.effectId, toCatalogEntry(gainChipsHandler)],

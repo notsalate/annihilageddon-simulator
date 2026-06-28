@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: Done
 Label: ready-for-agent
 Type: AFK
 
@@ -16,12 +16,12 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] `heal`, `set_life`, `gain_status`, `remove_status` и `toggle_status` регистрируются в Effect Runtime Catalog.
-- [ ] Validation отклоняет invalid healing amount, invalid life total, non-player target и неподдержанный status.
-- [ ] Healing продолжает лечить до текущего max life, не переписывая Effective Value logic.
-- [ ] Set Life может понижать или повышать current life согласно текущему behavior.
-- [ ] Dingler gain/remove/toggle сохраняют max life и VP последствия через существующий Effective Value path.
-- [ ] Focused tests покрывают heal, set life, gain/remove/toggle Dingler и invalid shape.
+- [x] `heal`, `set_life`, `gain_status`, `remove_status` и `toggle_status` регистрируются в Effect Runtime Catalog.
+- [x] Validation отклоняет invalid healing amount, invalid life total, non-player target и неподдержанный status.
+- [x] Healing продолжает лечить до текущего max life, не переписывая Effective Value logic.
+- [x] Set Life может понижать или повышать current life согласно текущему behavior.
+- [x] Dingler gain/remove/toggle сохраняют max life и VP последствия через существующий Effective Value path.
+- [x] Focused tests покрывают heal, set life, gain/remove/toggle Dingler и invalid shape.
 
 ## Blocked by
 
