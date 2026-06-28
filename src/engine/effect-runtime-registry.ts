@@ -949,6 +949,51 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler = {
   },
 };
 
+const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
+  effectId: "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
+  validateShape(subjectId, effect) {
+    const errors = validateMayhemEachPlayerShape(subjectId, effect);
+    if (effect["chooser"] !== "affectedPlayer") {
+      errors.push(
+        `${subjectId} uses unsupported Mayhem chooser ${String(effect["chooser"])}`
+      );
+    }
+
+    errors.push(...validateMayhemHandRedrawOptions(subjectId, effect));
+    return errors;
+  },
+  execute(state, _player, effect, source, services) {
+    const errors = mayhemEachPlayerHandRedrawChoiceHandler.validateShape(
+      "Effect mayhem_each_player_choose_discard_hand_draw_or_take_damage",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid Mayhem hand-redraw choice effect",
+      };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+      const discardedCount = targetPlayer.hand.length;
+      targetPlayer.discard.push(...targetPlayer.hand.splice(0));
+      const drawnCount = drawCards(targetPlayer, 5, state);
+      state.eventLog.push({
+        type: "mayhemHandDiscardedAndRedrawn",
+        playerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        amount: discardedCount + drawnCount,
+        sourceType: source.sourceType,
+      });
+    }
+
+    return { ok: true };
+  },
+};
+
 const replaceStartingCardHandler: EffectRuntimeHandler = {
   effectId: "replace_starting_card",
   validateShape(subjectId, effect) {
@@ -1988,6 +2033,44 @@ function validateMayhemEachPlayerShape(
   return errors;
 }
 
+function validateMayhemHandRedrawOptions(
+  subjectId: string,
+  effect: Record<string, unknown>
+): string[] {
+  const options = effect["options"];
+  if (!Array.isArray(options) || options.length !== 2) {
+    return [`${subjectId} uses unsupported Mayhem hand-redraw options`];
+  }
+
+  const [redrawOption, damageOption] = options;
+  const errors: string[] = [];
+  if (
+    !isEffectRecord(redrawOption) ||
+    redrawOption["effectId"] !== "discard_hand_then_draw_cards" ||
+    redrawOption["drawAmount"] !== 5
+  ) {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem hand-redraw option ${String(
+        isEffectRecord(redrawOption) ? redrawOption["effectId"] : redrawOption
+      )}`
+    );
+  }
+
+  if (
+    !isEffectRecord(damageOption) ||
+    damageOption["effectId"] !== "take_damage" ||
+    damageOption["amount"] !== 5
+  ) {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem damage option ${String(
+        isEffectRecord(damageOption) ? damageOption["effectId"] : damageOption
+      )}`
+    );
+  }
+
+  return errors;
+}
+
 function payOptionalCosts(
   state: GameState,
   player: PlayerState,
@@ -2432,6 +2515,10 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [
     mayhemEachPlayerDiscardTopDeckDestroyHandler.effectId,
     toCatalogEntry(mayhemEachPlayerDiscardTopDeckDestroyHandler),
+  ],
+  [
+    mayhemEachPlayerHandRedrawChoiceHandler.effectId,
+    toCatalogEntry(mayhemEachPlayerHandRedrawChoiceHandler),
   ],
   [
     replaceStartingCardHandler.effectId,

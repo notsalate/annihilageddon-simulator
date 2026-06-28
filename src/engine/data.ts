@@ -486,7 +486,6 @@ function isLegacyCompatibilityEffectId(
   mode: "combat" | "fixture"
 ): boolean {
   return (
-    effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
     effectId === "mayhem_each_player_discard_deck_then_destroy_from_discard" ||
     effectId === "modify_effective_value" ||
     effectId === "topdeck_gained_card" ||
@@ -506,7 +505,6 @@ function validateLegacyCompatibilityEffectShape(
   mode: "combat" | "fixture"
 ): string[] {
   if (
-    effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
     effectId === "mayhem_each_player_discard_deck_then_destroy_from_discard"
   ) {
     const errors: string[] = [];

@@ -360,7 +360,6 @@ function isSupportedMayhemRuntimeEffect(
     effectId === "set_life" ||
     effectId === "mega_mayhem_set_life" ||
     effectId === "mega_mayhem_each_player_toggle_dingler" ||
-    effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
     effectId === "mayhem_each_player_discard_deck_then_destroy_from_discard" ||
     effectId === "gain_chips_per_player_with_status" ||
     effectId === "reveal_top_card" ||
@@ -432,27 +431,6 @@ function executeEffect(
       sourceType: source.sourceType,
     });
 
-    return { ok: true };
-  }
-
-  if (
-    effect["effectId"] ===
-    "mayhem_each_player_choose_discard_hand_draw_or_take_damage"
-  ) {
-    for (const targetPlayer of getPlayersInActiveOrder(state)) {
-      const discardedCount = targetPlayer.hand.length;
-      targetPlayer.discard.push(...targetPlayer.hand.splice(0));
-      const drawnCount = drawCards(targetPlayer, 5, state);
-      state.eventLog.push({
-        type: "mayhemHandDiscardedAndRedrawn",
-        playerId: targetPlayer.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: asString(effect["effectId"]),
-        amount: discardedCount + drawnCount,
-        sourceType: source.sourceType,
-      });
-    }
     return { ok: true };
   }
 

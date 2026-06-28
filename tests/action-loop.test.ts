@@ -588,6 +588,125 @@ test("Mayhem discards top deck cards and destroys them in active-player order", 
   assert.equal(thirdTopDeckCard.ownerId, thirdPlayer.playerId);
 });
 
+test("Mayhem hand-redraw choice discards hands and draws in active-player order", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+
+  const normalDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-hand-redraw-normal",
+    []
+  );
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-hand-redraw",
+    [
+      {
+        effectId: "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        options: [
+          {
+            effectId: "discard_hand_then_draw_cards",
+            drawAmount: 5,
+          },
+          {
+            effectId: "take_damage",
+            amount: 5,
+          },
+        ],
+        chooser: "affectedPlayer",
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [normalDefinition.cardId, normalDefinition],
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+
+  const players = [activePlayer, secondPlayer, thirdPlayer];
+  const discardedHandCards = players.map((player) => {
+    return [0, 1].map((cardIndex) => {
+      return {
+        instanceId: `fixture-hand-redraw-${player.playerId}-hand-${cardIndex}`,
+        definitionId: normalDefinition.cardId,
+        ownerId: player.playerId,
+        marketChips: 0,
+      } satisfies CardInstance;
+    });
+  });
+  const drawnDeckCards = players.map((player) => {
+    return Array.from({ length: 5 }, (_value, cardIndex) => {
+      return {
+        instanceId: `fixture-hand-redraw-${player.playerId}-deck-${cardIndex}`,
+        definitionId: normalDefinition.cardId,
+        ownerId: player.playerId,
+        marketChips: 0,
+      } satisfies CardInstance;
+    });
+  });
+
+  for (const [playerIndex, player] of players.entries()) {
+    const handCards = discardedHandCards[playerIndex];
+    const deckCards = drawnDeckCards[playerIndex];
+    assert.ok(handCards);
+    assert.ok(deckCards);
+    player.hand.splice(0, player.hand.length, ...handCards);
+    player.deck.splice(0, player.deck.length, ...deckCards);
+    player.discard.splice(0, player.discard.length);
+  }
+
+  const mayhem: CardInstance = {
+    instanceId: "fixture-mayhem-hand-redraw-instance",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "mayhemHandDiscardedAndRedrawn")
+      .map((event) => ({
+        playerId: event.playerId,
+        amount: event.amount,
+      })),
+    [
+      { playerId: activePlayer.playerId, amount: 7 },
+      { playerId: secondPlayer.playerId, amount: 7 },
+      { playerId: thirdPlayer.playerId, amount: 7 },
+    ]
+  );
+  for (const [playerIndex, player] of players.entries()) {
+    const handCards = discardedHandCards[playerIndex];
+    const deckCards = drawnDeckCards[playerIndex];
+    assert.ok(handCards);
+    assert.ok(deckCards);
+    assert.deepEqual(
+      player.hand.map((card) => card.instanceId),
+      deckCards.map((card) => card.instanceId)
+    );
+    assert.deepEqual(
+      player.discard.map((card) => card.instanceId),
+      handCards.map((card) => card.instanceId)
+    );
+    assert.deepEqual(player.deck, []);
+  }
+});
+
 test("mayhem revealed during Market Flow resolves and Market Flow continues with the next normal card", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const mayhemDefinition = createFixtureCardDefinition(

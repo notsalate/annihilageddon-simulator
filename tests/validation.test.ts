@@ -637,6 +637,50 @@ test("Mayhem discard-top-deck destroy effect is registered and rejects invalid s
   );
 });
 
+test("Mayhem hand-redraw choice effect is registered and rejects unsupported options through runtime handler", () => {
+  const effectId = "mayhem_each_player_choose_discard_hand_draw_or_take_damage";
+
+  assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
+  assert.deepEqual(
+    getEffectRuntimeHandler(effectId)?.validateShape("Fixture", {
+      effectId,
+      timing: "onMayhemResolve",
+      targetSelector: "eachPlayerClockwiseFromActive",
+      options: [
+        {
+          effectId: "discard_hand_then_draw_cards",
+          drawAmount: 5,
+        },
+        {
+          effectId: "take_damage",
+          amount: 5,
+        },
+      ],
+      chooser: "affectedPlayer",
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler(effectId)?.validateShape("Fixture", {
+      effectId,
+      timing: "onMayhemResolve",
+      targetSelector: "eachPlayerClockwiseFromActive",
+      options: [
+        {
+          effectId: "discard_hand_then_draw_cards",
+          drawAmount: 5,
+        },
+        {
+          effectId: "take_damage",
+          amount: 3,
+        },
+      ],
+      chooser: "affectedPlayer",
+    }),
+    []
+  );
+});
+
 test("wizard property setup effects are registered and reject invalid shapes through runtime handlers", () => {
   const setupEffectIds = [
     "replace_starting_card",
