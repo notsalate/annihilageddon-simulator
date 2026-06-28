@@ -487,8 +487,6 @@ function isLegacyCompatibilityEffectId(
 ): boolean {
   return (
     effectId === "modify_effective_value" ||
-    effectId === "modify_owned_wand_attack_damage" ||
-    effectId === "prevent_defense_against_owned_wand_attacks" ||
     (mode === "fixture" &&
       (effectId === "fixture_add_power_equal_to_target_cost" ||
         effectId === "fixture_modify_effective_value"))

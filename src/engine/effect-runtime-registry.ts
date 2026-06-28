@@ -1247,6 +1247,40 @@ const temporaryHandLimitByGainedCardTypeHandler: EffectRuntimeHandler = {
   },
 };
 
+const modifyOwnedWandAttackDamageHandler: EffectRuntimeHandler = {
+  effectId: "modify_owned_wand_attack_damage",
+  validateShape(subjectId, effect) {
+    return [
+      ...validateWandAttackReplacementShape(subjectId, effect),
+      ...validatePositiveIntegerAmount(
+        subjectId,
+        effect,
+        "wand attack damage amount"
+      ),
+    ];
+  },
+  execute() {
+    return {
+      ok: false,
+      error: "modify_owned_wand_attack_damage is an attack replacement effect",
+    };
+  },
+};
+
+const preventDefenseAgainstOwnedWandAttacksHandler: EffectRuntimeHandler = {
+  effectId: "prevent_defense_against_owned_wand_attacks",
+  validateShape(subjectId, effect) {
+    return validateWandAttackReplacementShape(subjectId, effect);
+  },
+  execute() {
+    return {
+      ok: false,
+      error:
+        "prevent_defense_against_owned_wand_attacks is an attack replacement effect",
+    };
+  },
+};
+
 const attackDamageHandler: EffectRuntimeHandler = {
   effectId: "attack_damage",
   validateShape(subjectId, effect) {
@@ -2110,6 +2144,64 @@ function validateReplacementTiming(
   return [];
 }
 
+function validateWandAttackReplacementShape(
+  subjectId: string,
+  effect: Record<string, unknown>
+): string[] {
+  const errors: string[] = [];
+  if (effect["timing"] !== "attackReplacement") {
+    errors.push(
+      `${subjectId} uses unsupported wand-attack replacement timing ${String(effect["timing"])}`
+    );
+  }
+
+  const cardDefinitionIds = effect["cardDefinitionIds"];
+  const cardTags = effect["cardTags"];
+  const hasValidCardDefinitionIds =
+    Array.isArray(cardDefinitionIds) &&
+    cardDefinitionIds.length > 0 &&
+    cardDefinitionIds.every(isNonEmptyString);
+  const hasValidCardTags =
+    Array.isArray(cardTags) &&
+    cardTags.length > 0 &&
+    cardTags.every(isNonEmptyString);
+
+  if (cardDefinitionIds !== undefined && !hasValidCardDefinitionIds) {
+    errors.push(
+      `${subjectId} uses unsupported wand-attack replacement filter cardDefinitionIds`
+    );
+  }
+
+  if (cardTags !== undefined && !hasValidCardTags) {
+    errors.push(
+      `${subjectId} uses unsupported wand-attack replacement filter cardTags`
+    );
+  }
+
+  if (cardDefinitionIds === undefined && cardTags === undefined) {
+    errors.push(
+      `${subjectId} uses unsupported wand-attack replacement filter cardDefinitionIds/cardTags`
+    );
+  }
+
+  for (const fieldName of [
+    "target",
+    "targetSelector",
+    "cardTypes",
+    "cardKind",
+    "isOngoing",
+    "destination",
+  ]) {
+    if (effect[fieldName] !== undefined) {
+      errors.push(
+        `${subjectId} uses unsupported wand-attack replacement field ${fieldName}`
+      );
+    }
+  }
+
+  return errors;
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
@@ -2715,6 +2807,14 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [
     temporaryHandLimitByGainedCardTypeHandler.effectId,
     toCatalogEntry(temporaryHandLimitByGainedCardTypeHandler),
+  ],
+  [
+    modifyOwnedWandAttackDamageHandler.effectId,
+    toCatalogEntry(modifyOwnedWandAttackDamageHandler),
+  ],
+  [
+    preventDefenseAgainstOwnedWandAttacksHandler.effectId,
+    toCatalogEntry(preventDefenseAgainstOwnedWandAttacksHandler),
   ],
   [attackDamageHandler.effectId, toCatalogEntry(attackDamageHandler)],
   [avoidAttackHandler.effectId, toCatalogEntry(avoidAttackHandler)],

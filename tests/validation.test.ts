@@ -1050,6 +1050,89 @@ test("temporary hand-limit effect validates supported and invalid shapes", () =>
   ]);
 });
 
+test("wand attack replacement effects validate supported and invalid shapes", () => {
+  const modifyDamageEffectId = "modify_owned_wand_attack_damage";
+  const preventDefenseEffectId = "prevent_defense_against_owned_wand_attacks";
+
+  for (const effectId of [modifyDamageEffectId, preventDefenseEffectId]) {
+    assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
+  }
+  assert.deepEqual(
+    getEffectRuntimeHandler(modifyDamageEffectId)?.validateShape("Token", {
+      effectId: modifyDamageEffectId,
+      timing: "attackReplacement",
+      amount: 1,
+      cardTags: ["wand"],
+    }),
+    []
+  );
+  assert.deepEqual(
+    getEffectRuntimeHandler(preventDefenseEffectId)?.validateShape("Token", {
+      effectId: preventDefenseEffectId,
+      timing: "attackReplacement",
+      cardDefinitionIds: ["esw2_dbg__starter_004"],
+    }),
+    []
+  );
+
+  const dataPack = withFixtureToken({
+    schemaVersion: 1,
+    tokenId: "wizard-property-fixture-wand-attack-replacement-validation",
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    visible: {
+      textRu: "Твои атаки жезла получают +1 и их нельзя защитить.",
+    },
+    engine: {
+      mappingStatus: "fixture",
+      playableInV0: true,
+      effects: [
+        {
+          effectId: modifyDamageEffectId,
+          timing: "onPlay",
+          amount: 1,
+          cardTags: ["wand"],
+        },
+        {
+          effectId: modifyDamageEffectId,
+          timing: "attackReplacement",
+          amount: 0,
+          cardTags: ["wand"],
+        },
+        {
+          effectId: modifyDamageEffectId,
+          timing: "attackReplacement",
+          amount: 1,
+          cardTags: [],
+        },
+        {
+          effectId: preventDefenseEffectId,
+          timing: "attackReplacement",
+          cardDefinitionIds: [42],
+        },
+        {
+          effectId: preventDefenseEffectId,
+          timing: "attackReplacement",
+          cardTags: ["wand"],
+          targetSelector: "chosenFoe",
+        },
+      ],
+      unsupportedMechanics: [],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [
+    "Token wizard-property-fixture-wand-attack-replacement-validation uses unsupported wand-attack replacement timing onPlay",
+    "Token wizard-property-fixture-wand-attack-replacement-validation uses invalid wand attack damage amount 0",
+    "Token wizard-property-fixture-wand-attack-replacement-validation uses unsupported wand-attack replacement filter cardTags",
+    "Token wizard-property-fixture-wand-attack-replacement-validation uses unsupported wand-attack replacement filter cardDefinitionIds",
+    "Token wizard-property-fixture-wand-attack-replacement-validation uses unsupported wand-attack replacement field targetSelector",
+  ]);
+});
+
 test("executable data-pack validation rejects unsupported mechanics", () => {
   const card = createFixtureCard("fixture-unsupported-mechanic");
   const dataPack = withFixtureCard({

@@ -1,5 +1,5 @@
-Status: ready-for-agent
-Label: ready-for-agent
+Status: Done
+Label: done
 Type: AFK
 
 # Перенести Wand Attack replacement effects в Effect Runtime Catalog
@@ -16,12 +16,28 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] `modify_owned_wand_attack_damage` и `prevent_defense_against_owned_wand_attacks` валидируются через Effect Runtime Catalog.
-- [ ] Validation отклоняет invalid amount, timing, cardDefinitionIds/cardTags и unsupported target fields.
-- [ ] Owned Wand Attack Card получает текущий damage bonus и unavoidable behavior.
-- [ ] Borrowed wand и non-wand attack не получают wizard-property replacement.
-- [ ] Existing Wand Attack Card tests продолжают проходить.
-- [ ] Focused tests покрывают owner-only success path и invalid replacement shape.
+- [x] `modify_owned_wand_attack_damage` и `prevent_defense_against_owned_wand_attacks` валидируются через Effect Runtime Catalog.
+- [x] Validation отклоняет invalid amount, timing, cardDefinitionIds/cardTags и unsupported target fields.
+- [x] Owned Wand Attack Card получает текущий damage bonus и unavoidable behavior.
+- [x] Borrowed wand и non-wand attack не получают wizard-property replacement.
+- [x] Existing Wand Attack Card tests продолжают проходить.
+- [x] Focused tests покрывают owner-only success path и invalid replacement shape.
+
+## Evidence
+
+- Добавлены catalog handlers для `modify_owned_wand_attack_damage` и `prevent_defense_against_owned_wand_attacks`.
+- Оба ID удалены из legacy compatibility allowlist в `src/engine/data.ts`.
+- Добавлен focused validation тест на supported/invalid Wand Attack replacement shapes.
+- Existing behavior покрыт текущими `tests/action-loop.test.ts` тестами:
+  - `wizard property owned wand attacks gain damage and cannot be avoided`
+  - `wizard property does not affect borrowed wands or non-wand attacks`
+
+## Checks
+
+- `npm test -- tests/validation.test.ts`
+- `npm test -- tests/action-loop.test.ts`
+- `npm run typecheck`
+- `npm test`
 
 ## Blocked by
 
