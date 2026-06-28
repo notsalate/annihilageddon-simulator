@@ -815,6 +815,92 @@ const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler = {
   },
 };
 
+const replaceStartingCardHandler: EffectRuntimeHandler = {
+  effectId: "replace_starting_card",
+  validateShape(subjectId, effect) {
+    const errors = validateSetupTiming(subjectId, effect);
+    const fromDefinitionId = effect["fromDefinitionId"];
+    if (!isNonEmptyString(fromDefinitionId)) {
+      errors.push(
+        `${subjectId} uses invalid replacement source card ${String(fromDefinitionId)}`
+      );
+    }
+
+    const toDefinitionId = effect["toDefinitionId"];
+    if (!isNonEmptyString(toDefinitionId)) {
+      errors.push(
+        `${subjectId} uses invalid replacement target card ${String(toDefinitionId)}`
+      );
+    }
+
+    return errors;
+  },
+  execute() {
+    return setupOnlyExecutionError("replace_starting_card");
+  },
+};
+
+const startWithBasicTrophyHandler: EffectRuntimeHandler = {
+  effectId: "start_with_basic_trophy",
+  validateShape(subjectId, effect) {
+    return validateSetupTiming(subjectId, effect);
+  },
+  execute() {
+    return setupOnlyExecutionError("start_with_basic_trophy");
+  },
+};
+
+const forceStartingPlayerHandler: EffectRuntimeHandler = {
+  effectId: "force_starting_player",
+  validateShape(subjectId, effect) {
+    const errors = validateSetupTiming(subjectId, effect);
+    const targetSelector = effect["targetSelector"];
+    if (targetSelector !== undefined && targetSelector !== "activePlayer") {
+      errors.push(
+        `${subjectId} uses unsupported force-starting-player target ${String(targetSelector)}`
+      );
+    }
+
+    return errors;
+  },
+  execute() {
+    return setupOnlyExecutionError("force_starting_player");
+  },
+};
+
+const setStartingLifeTotalHandler: EffectRuntimeHandler = {
+  effectId: "set_starting_life_total",
+  validateShape(subjectId, effect) {
+    return [
+      ...validateSetupTiming(subjectId, effect),
+      ...validateLifeTotal(subjectId, effect),
+    ];
+  },
+  execute() {
+    return setupOnlyExecutionError("set_starting_life_total");
+  },
+};
+
+const setResurrectionLifeTotalHandler: EffectRuntimeHandler = {
+  effectId: "set_resurrection_life_total",
+  validateShape(subjectId, effect) {
+    const errors = validateReplacementTiming(subjectId, effect);
+    errors.push(...validateLifeTotal(subjectId, effect));
+
+    const unlessStatusId = effect["unlessStatusId"];
+    if (unlessStatusId !== undefined && !isNonEmptyString(unlessStatusId)) {
+      errors.push(
+        `${subjectId} uses invalid resurrection exception status ${String(unlessStatusId)}`
+      );
+    }
+
+    return errors;
+  },
+  execute() {
+    return setupOnlyExecutionError("set_resurrection_life_total");
+  },
+};
+
 const attackDamageHandler: EffectRuntimeHandler = {
   effectId: "attack_damage",
   validateShape(subjectId, effect) {
@@ -1636,6 +1722,52 @@ function validatePositiveIntegerAmount(
   return [];
 }
 
+function validateLifeTotal(
+  subjectId: string,
+  effect: Record<string, unknown>
+): string[] {
+  const lifeTotal = effect["lifeTotal"];
+  if (
+    typeof lifeTotal !== "number" ||
+    !Number.isSafeInteger(lifeTotal) ||
+    lifeTotal < 1
+  ) {
+    return [`${subjectId} uses invalid life total ${String(lifeTotal)}`];
+  }
+
+  return [];
+}
+
+function validateSetupTiming(
+  subjectId: string,
+  effect: Record<string, unknown>
+): string[] {
+  if (effect["timing"] !== "setup") {
+    return [
+      `${subjectId} uses unsupported setup timing ${String(effect["timing"])}`,
+    ];
+  }
+
+  return [];
+}
+
+function validateReplacementTiming(
+  subjectId: string,
+  effect: Record<string, unknown>
+): string[] {
+  if (effect["timing"] !== "replacement") {
+    return [
+      `${subjectId} uses unsupported replacement timing ${String(effect["timing"])}`,
+    ];
+  }
+
+  return [];
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
 function validateDinglerStatusEffectShape(
   subjectId: string,
   effect: Record<string, unknown>,
@@ -2118,6 +2250,13 @@ function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
   return typeof effect === "object" && effect !== null;
 }
 
+function setupOnlyExecutionError(effectId: string): EffectExecutionResult {
+  return {
+    ok: false,
+    error: `${effectId} is a setup-only wizard property effect`,
+  };
+}
+
 export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [addPowerHandler.effectId, toCatalogEntry(addPowerHandler)],
   [gainCardHandler.effectId, toCatalogEntry(gainCardHandler)],
@@ -2133,6 +2272,26 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [
     megaMayhemEachPlayerToggleDinglerHandler.effectId,
     toCatalogEntry(megaMayhemEachPlayerToggleDinglerHandler),
+  ],
+  [
+    replaceStartingCardHandler.effectId,
+    toCatalogEntry(replaceStartingCardHandler),
+  ],
+  [
+    startWithBasicTrophyHandler.effectId,
+    toCatalogEntry(startWithBasicTrophyHandler),
+  ],
+  [
+    forceStartingPlayerHandler.effectId,
+    toCatalogEntry(forceStartingPlayerHandler),
+  ],
+  [
+    setStartingLifeTotalHandler.effectId,
+    toCatalogEntry(setStartingLifeTotalHandler),
+  ],
+  [
+    setResurrectionLifeTotalHandler.effectId,
+    toCatalogEntry(setResurrectionLifeTotalHandler),
   ],
   [attackDamageHandler.effectId, toCatalogEntry(attackDamageHandler)],
   [avoidAttackHandler.effectId, toCatalogEntry(avoidAttackHandler)],

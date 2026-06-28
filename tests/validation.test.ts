@@ -589,6 +589,102 @@ test("Mega Mayhem life and Dingler status effects are registered and reject inva
   );
 });
 
+test("wizard property setup effects are registered and reject invalid shapes through runtime handlers", () => {
+  const setupEffectIds = [
+    "replace_starting_card",
+    "start_with_basic_trophy",
+    "force_starting_player",
+    "set_starting_life_total",
+    "set_resurrection_life_total",
+  ];
+
+  for (const effectId of setupEffectIds) {
+    assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
+  }
+
+  assert.deepEqual(
+    getEffectRuntimeHandler("replace_starting_card")?.validateShape("Token", {
+      effectId: "replace_starting_card",
+      timing: "setup",
+      fromDefinitionId: "esw2_dbg__starter_001",
+      toDefinitionId: "esw2_dbg__starter_004",
+    }),
+    []
+  );
+  assert.deepEqual(
+    getEffectRuntimeHandler("start_with_basic_trophy")?.validateShape("Token", {
+      effectId: "start_with_basic_trophy",
+      timing: "setup",
+    }),
+    []
+  );
+  assert.deepEqual(
+    getEffectRuntimeHandler("force_starting_player")?.validateShape("Token", {
+      effectId: "force_starting_player",
+      timing: "setup",
+    }),
+    []
+  );
+  assert.deepEqual(
+    getEffectRuntimeHandler("set_starting_life_total")?.validateShape("Token", {
+      effectId: "set_starting_life_total",
+      timing: "setup",
+      lifeTotal: 25,
+    }),
+    []
+  );
+  assert.deepEqual(
+    getEffectRuntimeHandler("set_resurrection_life_total")?.validateShape(
+      "Token",
+      {
+        effectId: "set_resurrection_life_total",
+        timing: "replacement",
+        lifeTotal: 25,
+        unlessStatusId: "loser",
+      }
+    ),
+    []
+  );
+
+  assert.notDeepEqual(
+    getEffectRuntimeHandler("replace_starting_card")?.validateShape("Token", {
+      effectId: "replace_starting_card",
+      timing: "setup",
+      fromDefinitionId: "",
+      toDefinitionId: 42,
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler("force_starting_player")?.validateShape("Token", {
+      effectId: "force_starting_player",
+      timing: "setup",
+      targetSelector: "chosenFoe",
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler("set_starting_life_total")?.validateShape("Token", {
+      effectId: "set_starting_life_total",
+      timing: "setup",
+      lifeTotal: 0,
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler("set_resurrection_life_total")?.validateShape(
+      "Token",
+      {
+        effectId: "set_resurrection_life_total",
+        timing: "replacement",
+        lifeTotal: "25",
+        unlessStatusId: 5,
+      }
+    ),
+    []
+  );
+});
+
 test("combat data-pack validation rejects fixture effect ids", () => {
   const card = createFixtureCard("fixture-effect-in-combat-data");
   const dataPack = withOnlyFixtureCard({
