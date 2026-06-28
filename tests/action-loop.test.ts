@@ -365,6 +365,133 @@ test("megaMayhem Dingler toggle resolves for each player in active-player order"
   ]);
 });
 
+test("megaMayhem destroys top main deck cards in active-player order and kills players when Mayhem is destroyed", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mega-mayhem-destroy-top-mayhem",
+    [],
+    { cardKind: "mayhem" }
+  );
+  const normalDefinition = createFixtureCardDefinition(
+    "fixture-mega-mayhem-destroy-top-normal",
+    []
+  );
+  const megaMayhemDefinition = createFixtureCardDefinition(
+    "fixture-mega-mayhem-destroy-top-main-deck",
+    [
+      {
+        effectId:
+          "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+      },
+    ],
+    { cardKind: "megaMayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+    [normalDefinition.cardId, normalDefinition],
+    [megaMayhemDefinition.cardId, megaMayhemDefinition],
+  ]);
+
+  const mayhemCard: CardInstance = {
+    instanceId: "fixture-destroy-top-mayhem",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  const activeNormalCard: CardInstance = {
+    instanceId: "fixture-destroy-top-active-normal",
+    definitionId: normalDefinition.cardId,
+    ownerId: activePlayer.playerId,
+    marketChips: 0,
+  };
+  const thirdNormalCard: CardInstance = {
+    instanceId: "fixture-destroy-top-third-normal",
+    definitionId: normalDefinition.cardId,
+    ownerId: thirdPlayer.playerId,
+    marketChips: 0,
+  };
+  const megaMayhem: CardInstance = {
+    instanceId: "fixture-mega-mayhem-destroy-top-instance",
+    definitionId: megaMayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  const legendFiller = state.common.legendMarket[0];
+  assert.ok(legendFiller);
+  state.common.legendMarket.splice(
+    0,
+    state.common.legendMarket.length,
+    ...state.common.legendMarket.slice(0, 2)
+  );
+  state.common.legendDeck.splice(
+    0,
+    state.common.legendDeck.length,
+    megaMayhem,
+    legendFiller
+  );
+  state.common.mainDeck.splice(
+    0,
+    state.common.mainDeck.length,
+    activeNormalCard,
+    mayhemCard,
+    thirdNormalCard
+  );
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "effectTopMainDeckCardDestroyed")
+      .map((event) => ({
+        playerId: event.playerId,
+        targetCardInstanceId: event.targetCardInstanceId,
+      })),
+    [
+      {
+        playerId: activePlayer.playerId,
+        targetCardInstanceId: activeNormalCard.instanceId,
+      },
+      {
+        playerId: secondPlayer.playerId,
+        targetCardInstanceId: mayhemCard.instanceId,
+      },
+      {
+        playerId: thirdPlayer.playerId,
+        targetCardInstanceId: thirdNormalCard.instanceId,
+      },
+    ]
+  );
+  assert.equal(state.common.destroyedPile.includes(activeNormalCard), true);
+  assert.equal(state.common.destroyedMayhem.includes(mayhemCard), true);
+  assert.equal(state.common.destroyedPile.includes(thirdNormalCard), true);
+  assert.equal(activeNormalCard.ownerId, activePlayer.playerId);
+  assert.equal(thirdNormalCard.ownerId, thirdPlayer.playerId);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "playerDied" && event.playerId === secondPlayer.playerId
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "playerResurrected" &&
+        event.playerId === secondPlayer.playerId
+    )
+  );
+});
+
 test("mayhem revealed during Market Flow resolves and Market Flow continues with the next normal card", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const mayhemDefinition = createFixtureCardDefinition(

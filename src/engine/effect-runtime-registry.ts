@@ -170,6 +170,7 @@ export interface EffectRuntimeServices {
     effectId: string,
     source: EffectSourceContext
   ): void;
+  resolvePlayerDeath(state: GameState, player: PlayerState): void;
   peekTopDeckCard(
     player: PlayerState,
     state: GameState
@@ -811,6 +812,55 @@ const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler = {
       );
     }
 
+    return { ok: true };
+  },
+};
+
+const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler = {
+  effectId: "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+  validateShape(subjectId, effect) {
+    return validateMegaMayhemEachPlayerShape(subjectId, effect);
+  },
+  execute(state, _player, effect, source, services) {
+    const effectId = services.asString(effect["effectId"]);
+    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+      const destroyedCard = state.common.mainDeck.shift();
+      if (destroyedCard === undefined) {
+        state.eventLog.push({
+          type: "effectDestroyTopMainDeckSkipped",
+          playerId: targetPlayer.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          effectId,
+          sourceType: source.sourceType,
+        });
+        continue;
+      }
+
+      const destination = services.getDestroyDestination(state, destroyedCard);
+      if (!destination.ok) {
+        return destination;
+      }
+
+      destination.zone.push(destroyedCard);
+      state.eventLog.push({
+        type: "effectTopMainDeckCardDestroyed",
+        playerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        targetCardInstanceId: destroyedCard.instanceId,
+        targetDefinitionId: destroyedCard.definitionId,
+        effectId,
+        sourceType: source.sourceType,
+      });
+
+      const destroyedDefinition = state.cardDefinitions.get(
+        destroyedCard.definitionId
+      );
+      if (destroyedDefinition?.engine.cardKind === "mayhem") {
+        services.resolvePlayerDeath(state, targetPlayer);
+      }
+    }
     return { ok: true };
   },
 };
@@ -2272,6 +2322,10 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [
     megaMayhemEachPlayerToggleDinglerHandler.effectId,
     toCatalogEntry(megaMayhemEachPlayerToggleDinglerHandler),
+  ],
+  [
+    megaMayhemEachPlayerDestroyTopMainDeckHandler.effectId,
+    toCatalogEntry(megaMayhemEachPlayerDestroyTopMainDeckHandler),
   ],
   [
     replaceStartingCardHandler.effectId,

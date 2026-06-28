@@ -589,6 +589,29 @@ test("Mega Mayhem life and Dingler status effects are registered and reject inva
   );
 });
 
+test("Mega Mayhem destroy-top-main-deck effect is registered and rejects invalid shape through runtime handler", () => {
+  const effectId =
+    "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem";
+
+  assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
+  assert.deepEqual(
+    getEffectRuntimeHandler(effectId)?.validateShape("Fixture", {
+      effectId,
+      timing: "onMayhemResolve",
+      targetSelector: "eachPlayerClockwiseFromActive",
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler(effectId)?.validateShape("Fixture", {
+      effectId,
+      timing: "onPlay",
+      targetSelector: "activePlayer",
+    }),
+    []
+  );
+});
+
 test("wizard property setup effects are registered and reject invalid shapes through runtime handlers", () => {
   const setupEffectIds = [
     "replace_starting_card",

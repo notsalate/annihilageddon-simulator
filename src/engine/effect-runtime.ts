@@ -359,8 +359,6 @@ function isSupportedMayhemRuntimeEffect(
     effectId === "heal" ||
     effectId === "set_life" ||
     effectId === "mega_mayhem_set_life" ||
-    effectId ===
-      "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem" ||
     effectId === "mega_mayhem_each_player_toggle_dingler" ||
     effectId ===
       "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none" ||
@@ -436,51 +434,6 @@ function executeEffect(
       sourceType: source.sourceType,
     });
 
-    return { ok: true };
-  }
-
-  if (
-    effect["effectId"] ===
-    "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem"
-  ) {
-    for (const targetPlayer of getPlayersInActiveOrder(state)) {
-      const destroyedCard = state.common.mainDeck.shift();
-      if (destroyedCard === undefined) {
-        state.eventLog.push({
-          type: "effectDestroyTopMainDeckSkipped",
-          playerId: targetPlayer.playerId,
-          cardInstanceId: source.cardInstanceId,
-          definitionId: source.definitionId,
-          effectId: asString(effect["effectId"]),
-          sourceType: source.sourceType,
-        });
-        continue;
-      }
-
-      const destination = getDestroyDestination(state, destroyedCard);
-      if (!destination.ok) {
-        return destination;
-      }
-
-      destination.zone.push(destroyedCard);
-      state.eventLog.push({
-        type: "effectTopMainDeckCardDestroyed",
-        playerId: targetPlayer.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        targetCardInstanceId: destroyedCard.instanceId,
-        targetDefinitionId: destroyedCard.definitionId,
-        effectId: asString(effect["effectId"]),
-        sourceType: source.sourceType,
-      });
-
-      const destroyedDefinition = state.cardDefinitions.get(
-        destroyedCard.definitionId
-      );
-      if (destroyedDefinition?.engine.cardKind === "mayhem") {
-        resolvePlayerDeath(state, targetPlayer, undefined);
-      }
-    }
     return { ok: true };
   }
 
@@ -972,6 +925,9 @@ const effectRuntimeServices: EffectRuntimeServices = {
   resolveAttackTarget,
   resolveDefenseWindow,
   resolveMayhemAttack,
+  resolvePlayerDeath(state, player) {
+    resolvePlayerDeath(state, player, undefined);
+  },
   peekTopDeckCard,
   drawTopDeckCard,
   playResolvedCard,

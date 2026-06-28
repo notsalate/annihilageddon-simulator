@@ -1,5 +1,5 @@
-Status: ready-for-agent
-Label: ready-for-agent
+Status: Done
+Label: done
 Type: AFK
 
 # Перенести Mega Mayhem destroy-top-main-deck effect в Effect Runtime Catalog
@@ -16,12 +16,12 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] `mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem` регистрируется в Effect Runtime Catalog.
-- [ ] Validation отклоняет неподдержанные timing и targetSelector.
-- [ ] Effect сохраняет active-player order.
-- [ ] Destroyed card попадает в текущий destroy destination без потери ownerId semantics.
-- [ ] Если destroyed card является Mayhem, сохраняется текущий death/resurrection behavior.
-- [ ] Focused tests покрывают successful destroy/death path и invalid shape.
+- [x] `mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem` регистрируется в Effect Runtime Catalog.
+- [x] Validation отклоняет неподдержанные timing и targetSelector.
+- [x] Effect сохраняет active-player order.
+- [x] Destroyed card попадает в текущий destroy destination без потери ownerId semantics.
+- [x] Если destroyed card является Mayhem, сохраняется текущий death/resurrection behavior.
+- [x] Focused tests покрывают successful destroy/death path и invalid shape.
 
 ## Blocked by
 

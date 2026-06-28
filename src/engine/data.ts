@@ -487,8 +487,6 @@ function isLegacyCompatibilityEffectId(
 ): boolean {
   return (
     effectId ===
-      "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem" ||
-    effectId ===
       "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none" ||
     effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
     effectId === "mayhem_each_player_discard_deck_then_destroy_from_discard" ||
@@ -510,8 +508,6 @@ function validateLegacyCompatibilityEffectShape(
   mode: "combat" | "fixture"
 ): string[] {
   if (
-    effectId ===
-      "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem" ||
     effectId ===
       "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none" ||
     effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
