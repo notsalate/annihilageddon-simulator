@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: Done
 Label: ready-for-agent
 Type: AFK
 
@@ -16,12 +16,12 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] `reveal_top_card`, `play_top_card`, `play_top_card_from_foe_deck` и `wild_magic_choice` проходят validation через Effect Runtime Catalog.
-- [ ] Validation отклоняет неподдержанные reveal/play sources, play destinations и foe-deck target selectors.
-- [ ] Wild Magic options валидируются через общий catalog path для вложенных supported effects.
-- [ ] `play_top_card_from_foe_deck` сохраняет ownerId и cleanup destination для borrowed card.
-- [ ] Empty deck / no legal Wild Magic option behavior остается skip, а не failure.
-- [ ] Focused tests покрывают reveal, play own top deck, play foe top deck, Wild Magic choice и invalid nested option.
+- [x] `reveal_top_card`, `play_top_card`, `play_top_card_from_foe_deck` и `wild_magic_choice` проходят validation через Effect Runtime Catalog.
+- [x] Validation отклоняет неподдержанные reveal/play sources, play destinations и foe-deck target selectors.
+- [x] Wild Magic options валидируются через общий catalog path для вложенных supported effects.
+- [x] `play_top_card_from_foe_deck` сохраняет ownerId и cleanup destination для borrowed card.
+- [x] Empty deck / no legal Wild Magic option behavior остается skip, а не failure.
+- [x] Focused tests покрывают reveal, play own top deck, play foe top deck, Wild Magic choice и invalid nested option.
 
 ## Blocked by
 

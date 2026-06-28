@@ -397,45 +397,6 @@ function executeEffect(
     );
   }
 
-  if (effect["effectId"] === "wild_magic_choice") {
-    const options = effect["options"];
-    if (!Array.isArray(options)) {
-      return {
-        ok: false,
-        error: "Wild Magic effect requires options",
-      };
-    }
-
-    for (const option of options) {
-      if (
-        !isEffectRecord(option) ||
-        !isLegalWildMagicOption(state, player, option)
-      ) {
-        continue;
-      }
-
-      state.eventLog.push({
-        type: "wildMagicChoiceSelected",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: asString(option["effectId"]),
-        sourceType: source.sourceType,
-      });
-      return executeEffect(state, player, option, source);
-    }
-
-    state.eventLog.push({
-      type: "wildMagicChoiceSkipped",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: "wild_magic_choice",
-      sourceType: source.sourceType,
-    });
-    return { ok: true };
-  }
-
   if (effect["effectId"] === "fixture_add_power_equal_to_target_cost") {
     const targetResult = resolveTargetChoice(state, player, effect, source);
     if (!targetResult.ok) {
@@ -472,150 +433,6 @@ function executeEffect(
       targetDefinitionId: choice.card.definitionId,
       effectId: "fixture_add_power_equal_to_target_cost",
       amount: definition.engine.cost,
-      sourceType: source.sourceType,
-    });
-
-    return { ok: true };
-  }
-
-  if (effect["effectId"] === "reveal_top_card") {
-    const effectId = asString(effect["effectId"]);
-    if (effect["source"] !== "activePlayerDeck") {
-      return {
-        ok: false,
-        error: `Unsupported reveal source ${asString(effect["source"])}`,
-      };
-    }
-
-    const card = peekTopDeckCard(player, state);
-    if (card === undefined) {
-      state.eventLog.push({
-        type: "effectRevealSkipped",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId,
-        sourceType: source.sourceType,
-      });
-      return { ok: true };
-    }
-
-    state.eventLog.push({
-      type: "effectCardRevealed",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      targetCardInstanceId: card.instanceId,
-      targetDefinitionId: card.definitionId,
-      effectId,
-      sourceType: source.sourceType,
-    });
-
-    return { ok: true };
-  }
-
-  if (effect["effectId"] === "play_top_card") {
-    const effectId = asString(effect["effectId"]);
-    if (effect["source"] !== "activePlayerDeck") {
-      return {
-        ok: false,
-        error: `Unsupported play-top source ${asString(effect["source"])}`,
-      };
-    }
-
-    if (effect["destination"] !== "play") {
-      return {
-        ok: false,
-        error: `Unsupported play-top destination ${asString(effect["destination"])}`,
-      };
-    }
-
-    const card = drawTopDeckCard(player, state);
-    if (card === undefined) {
-      state.eventLog.push({
-        type: "effectPlayTopSkipped",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId,
-        sourceType: source.sourceType,
-      });
-      return { ok: true };
-    }
-
-    const playedResult = playResolvedCard(state, player, card);
-    if (!playedResult.ok) {
-      return playedResult;
-    }
-
-    state.eventLog.push({
-      type: "effectCardPlayedFromDeck",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      targetCardInstanceId: card.instanceId,
-      targetDefinitionId: card.definitionId,
-      effectId,
-      sourceType: source.sourceType,
-    });
-
-    return { ok: true };
-  }
-
-  if (effect["effectId"] === "play_top_card_from_foe_deck") {
-    if (effect["targetSelector"] !== "chosenFoe") {
-      return {
-        ok: false,
-        error: `Unsupported foe-deck target ${asString(effect["targetSelector"])}`,
-      };
-    }
-
-    const foe = getOpponentsInSeatingOrder(state, player).find((candidate) => {
-      return candidate.deck.length > 0 || candidate.discard.length > 0;
-    });
-    if (foe === undefined) {
-      state.eventLog.push({
-        type: "effectPlayTopFoeDeckSkipped",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: asString(effect["effectId"]),
-        sourceType: source.sourceType,
-      });
-      return { ok: true };
-    }
-
-    const card = drawTopDeckCard(foe, state);
-    if (card === undefined) {
-      state.eventLog.push({
-        type: "effectPlayTopFoeDeckSkipped",
-        playerId: player.playerId,
-        targetPlayerId: foe.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: asString(effect["effectId"]),
-        sourceType: source.sourceType,
-      });
-      return { ok: true };
-    }
-
-    const playedResult = playResolvedCard(state, player, card, {
-      nonOngoingOwnerId: card.ownerId,
-      ongoingOwnerId: player.playerId,
-    });
-    if (!playedResult.ok) {
-      return playedResult;
-    }
-
-    state.eventLog.push({
-      type: "effectFoeDeckCardPlayed",
-      playerId: player.playerId,
-      targetPlayerId: foe.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      targetCardInstanceId: card.instanceId,
-      targetDefinitionId: card.definitionId,
-      effectId: asString(effect["effectId"]),
       sourceType: source.sourceType,
     });
 
@@ -1386,6 +1203,11 @@ const effectRuntimeServices: EffectRuntimeServices = {
   resolveAttackTarget,
   resolveDefenseWindow,
   resolveMayhemAttack,
+  peekTopDeckCard,
+  drawTopDeckCard,
+  playResolvedCard,
+  isLegalWildMagicOption,
+  executeEffect,
   asString,
 };
 

@@ -433,6 +433,61 @@ test("economy and draw effects are registered and reject invalid shapes through 
   );
 });
 
+test("top-deck and Wild Magic effects are registered and reject invalid shapes through runtime handlers", () => {
+  const effectIds = [
+    "reveal_top_card",
+    "play_top_card",
+    "play_top_card_from_foe_deck",
+    "wild_magic_choice",
+  ];
+
+  for (const effectId of effectIds) {
+    assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
+  }
+
+  assert.notDeepEqual(
+    getEffectRuntimeHandler("reveal_top_card")?.validateShape("Fixture", {
+      effectId: "reveal_top_card",
+      timing: "onPlay",
+      source: "unsupportedDeck",
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler("play_top_card")?.validateShape("Fixture", {
+      effectId: "play_top_card",
+      timing: "onPlay",
+      source: "activePlayerDeck",
+      destination: "unsupportedDestination",
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler("play_top_card_from_foe_deck")?.validateShape(
+      "Fixture",
+      {
+        effectId: "play_top_card_from_foe_deck",
+        timing: "onPlay",
+        targetSelector: "unsupportedFoe",
+      }
+    ),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler("wild_magic_choice")?.validateShape("Fixture", {
+      effectId: "wild_magic_choice",
+      timing: "onPlay",
+      options: [
+        {
+          effectId: "add_power",
+          amount: "2",
+        },
+      ],
+    }),
+    []
+  );
+});
+
 test("combat data-pack validation rejects fixture effect ids", () => {
   const card = createFixtureCard("fixture-effect-in-combat-data");
   const dataPack = withOnlyFixtureCard({

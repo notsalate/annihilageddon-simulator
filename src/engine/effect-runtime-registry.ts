@@ -141,6 +141,34 @@ export interface EffectRuntimeServices {
     effectId: string,
     source: EffectSourceContext
   ): void;
+  peekTopDeckCard(
+    player: PlayerState,
+    state: GameState
+  ): CardInstance | undefined;
+  drawTopDeckCard(
+    player: PlayerState,
+    state: GameState
+  ): CardInstance | undefined;
+  playResolvedCard(
+    state: GameState,
+    player: PlayerState,
+    card: CardInstance,
+    ownership?: {
+      nonOngoingOwnerId?: CardInstance["ownerId"];
+      ongoingOwnerId?: CardInstance["ownerId"];
+    }
+  ): EffectExecutionResult;
+  isLegalWildMagicOption(
+    state: GameState,
+    player: PlayerState,
+    option: Record<string, unknown>
+  ): boolean;
+  executeEffect(
+    state: GameState,
+    player: PlayerState,
+    effect: Record<string, unknown>,
+    source: EffectSourceContext
+  ): EffectExecutionResult;
   asString(value: unknown): string;
 }
 
@@ -947,6 +975,276 @@ const mayhemAttackHandler: EffectRuntimeHandler = {
   },
 };
 
+const revealTopCardHandler: EffectRuntimeHandler = {
+  effectId: "reveal_top_card",
+  validateShape(subjectId, effect) {
+    if (effect["source"] !== "activePlayerDeck") {
+      return [
+        `${subjectId} uses unsupported reveal source ${String(effect["source"])}`,
+      ];
+    }
+
+    return [];
+  },
+  execute(state, player, effect, source, services) {
+    const errors = revealTopCardHandler.validateShape(
+      "Effect reveal_top_card",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid reveal_top_card effect",
+      };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    const card = services.peekTopDeckCard(player, state);
+    if (card === undefined) {
+      state.eventLog.push({
+        type: "effectRevealSkipped",
+        playerId: player.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        sourceType: source.sourceType,
+      });
+      return { ok: true };
+    }
+
+    state.eventLog.push({
+      type: "effectCardRevealed",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      targetCardInstanceId: card.instanceId,
+      targetDefinitionId: card.definitionId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+
+    return { ok: true };
+  },
+};
+
+const playTopCardHandler: EffectRuntimeHandler = {
+  effectId: "play_top_card",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["source"] !== "activePlayerDeck") {
+      errors.push(
+        `${subjectId} uses unsupported play-top source ${String(effect["source"])}`
+      );
+    }
+
+    if (effect["destination"] !== "play") {
+      errors.push(
+        `${subjectId} uses unsupported play-top destination ${String(effect["destination"])}`
+      );
+    }
+
+    return errors;
+  },
+  execute(state, player, effect, source, services) {
+    const errors = playTopCardHandler.validateShape(
+      "Effect play_top_card",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid play_top_card effect",
+      };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    const card = services.drawTopDeckCard(player, state);
+    if (card === undefined) {
+      state.eventLog.push({
+        type: "effectPlayTopSkipped",
+        playerId: player.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        sourceType: source.sourceType,
+      });
+      return { ok: true };
+    }
+
+    const playedResult = services.playResolvedCard(state, player, card);
+    if (!playedResult.ok) {
+      return playedResult;
+    }
+
+    state.eventLog.push({
+      type: "effectCardPlayedFromDeck",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      targetCardInstanceId: card.instanceId,
+      targetDefinitionId: card.definitionId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+
+    return { ok: true };
+  },
+};
+
+const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
+  effectId: "play_top_card_from_foe_deck",
+  validateShape(subjectId, effect) {
+    if (effect["targetSelector"] !== "chosenFoe") {
+      return [
+        `${subjectId} uses unsupported foe-deck target ${String(effect["targetSelector"])}`,
+      ];
+    }
+
+    return [];
+  },
+  execute(state, player, effect, source, services) {
+    const errors = playTopCardFromFoeDeckHandler.validateShape(
+      "Effect play_top_card_from_foe_deck",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid play_top_card_from_foe_deck effect",
+      };
+    }
+
+    const foe = services
+      .getOpponentsInSeatingOrder(state, player)
+      .find((candidate) => {
+        return candidate.deck.length > 0 || candidate.discard.length > 0;
+      });
+    if (foe === undefined) {
+      state.eventLog.push({
+        type: "effectPlayTopFoeDeckSkipped",
+        playerId: player.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId: services.asString(effect["effectId"]),
+        sourceType: source.sourceType,
+      });
+      return { ok: true };
+    }
+
+    const card = services.drawTopDeckCard(foe, state);
+    if (card === undefined) {
+      state.eventLog.push({
+        type: "effectPlayTopFoeDeckSkipped",
+        playerId: player.playerId,
+        targetPlayerId: foe.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId: services.asString(effect["effectId"]),
+        sourceType: source.sourceType,
+      });
+      return { ok: true };
+    }
+
+    const playedResult = services.playResolvedCard(state, player, card, {
+      nonOngoingOwnerId: card.ownerId,
+      ongoingOwnerId: player.playerId,
+    });
+    if (!playedResult.ok) {
+      return playedResult;
+    }
+
+    state.eventLog.push({
+      type: "effectFoeDeckCardPlayed",
+      playerId: player.playerId,
+      targetPlayerId: foe.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      targetCardInstanceId: card.instanceId,
+      targetDefinitionId: card.definitionId,
+      effectId: services.asString(effect["effectId"]),
+      sourceType: source.sourceType,
+    });
+
+    return { ok: true };
+  },
+};
+
+const wildMagicChoiceHandler: EffectRuntimeHandler = {
+  effectId: "wild_magic_choice",
+  validateShape(subjectId, effect) {
+    const options = effect["options"];
+    if (!Array.isArray(options)) {
+      return [`${subjectId} uses wild_magic_choice without options`];
+    }
+
+    const errors: string[] = [];
+    for (const option of options) {
+      if (!isEffectRecord(option)) {
+        errors.push(`${subjectId} uses invalid Wild Magic option`);
+        continue;
+      }
+
+      const optionEffectId = option["effectId"];
+      if (typeof optionEffectId !== "string") {
+        errors.push(
+          `${subjectId} uses unsupported Wild Magic option ${String(optionEffectId)}`
+        );
+        continue;
+      }
+
+      const catalogEntry = effectRuntimeCatalog.get(optionEffectId);
+      if (catalogEntry === undefined) {
+        errors.push(
+          `${subjectId} uses unsupported Wild Magic option ${optionEffectId}`
+        );
+        continue;
+      }
+
+      errors.push(...catalogEntry.handler.validateShape(subjectId, option));
+    }
+
+    return errors;
+  },
+  execute(state, player, effect, source, services) {
+    const options = effect["options"];
+    if (!Array.isArray(options)) {
+      return {
+        ok: false,
+        error: "Wild Magic effect requires options",
+      };
+    }
+
+    for (const option of options) {
+      if (
+        !isEffectRecord(option) ||
+        !services.isLegalWildMagicOption(state, player, option)
+      ) {
+        continue;
+      }
+
+      state.eventLog.push({
+        type: "wildMagicChoiceSelected",
+        playerId: player.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId: services.asString(option["effectId"]),
+        sourceType: source.sourceType,
+      });
+      return services.executeEffect(state, player, option, source);
+    }
+
+    state.eventLog.push({
+      type: "wildMagicChoiceSkipped",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId: "wild_magic_choice",
+      sourceType: source.sourceType,
+    });
+    return { ok: true };
+  },
+};
+
 function validateCardTargetSelector(
   subjectId: string,
   effect: Record<string, unknown>,
@@ -1469,6 +1767,13 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
     toCatalogEntry(gainChipsPerPlayerWithStatusHandler),
   ],
   [drawCardsHandler.effectId, toCatalogEntry(drawCardsHandler)],
+  [revealTopCardHandler.effectId, toCatalogEntry(revealTopCardHandler)],
+  [playTopCardHandler.effectId, toCatalogEntry(playTopCardHandler)],
+  [
+    playTopCardFromFoeDeckHandler.effectId,
+    toCatalogEntry(playTopCardFromFoeDeckHandler),
+  ],
+  [wildMagicChoiceHandler.effectId, toCatalogEntry(wildMagicChoiceHandler)],
   [
     directionalChainAttackHandler.effectId,
     toCatalogEntry(directionalChainAttackHandler),

@@ -496,10 +496,6 @@ function isLegacyCompatibilityEffectId(
       "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none" ||
     effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" ||
     effectId === "mayhem_each_player_discard_deck_then_destroy_from_discard" ||
-    effectId === "reveal_top_card" ||
-    effectId === "play_top_card" ||
-    effectId === "wild_magic_choice" ||
-    effectId === "play_top_card_from_foe_deck" ||
     effectId === "modify_effective_value" ||
     effectId === "gain_status" ||
     effectId === "remove_status" ||
@@ -525,81 +521,6 @@ function validateLegacyCompatibilityEffectShape(
   effect: Record<string, unknown>,
   mode: "combat" | "fixture"
 ): string[] {
-  if (
-    effectId === "reveal_top_card" &&
-    effect["source"] !== "activePlayerDeck"
-  ) {
-    return [
-      `${subjectId} uses unsupported reveal source ${String(effect["source"])}`,
-    ];
-  }
-
-  if (effectId === "play_top_card") {
-    const errors: string[] = [];
-    if (effect["source"] !== "activePlayerDeck") {
-      errors.push(
-        `${subjectId} uses unsupported play-top source ${String(effect["source"])}`
-      );
-    }
-
-    if (effect["destination"] !== "play") {
-      errors.push(
-        `${subjectId} uses unsupported play-top destination ${String(effect["destination"])}`
-      );
-    }
-
-    return errors;
-  }
-
-  if (effectId === "wild_magic_choice") {
-    const options = effect["options"];
-    if (!Array.isArray(options)) {
-      return [`${subjectId} uses wild_magic_choice without options`];
-    }
-
-    const errors: string[] = [];
-    for (const option of options) {
-      if (!isEffectRecord(option)) {
-        errors.push(`${subjectId} uses invalid Wild Magic option`);
-        continue;
-      }
-
-      const optionEffectId = option["effectId"];
-      if (
-        optionEffectId !== "add_power" &&
-        optionEffectId !== "play_top_card_from_foe_deck"
-      ) {
-        errors.push(
-          `${subjectId} uses unsupported Wild Magic option ${String(optionEffectId)}`
-        );
-        continue;
-      }
-
-      if (typeof optionEffectId === "string") {
-        errors.push(
-          ...validateRuntimeEffectDefinition(
-            subjectId,
-            optionEffectId,
-            option,
-            mode
-          )
-        );
-      }
-    }
-
-    return errors;
-  }
-
-  if (effectId === "play_top_card_from_foe_deck") {
-    if (effect["targetSelector"] !== "chosenFoe") {
-      return [
-        `${subjectId} uses unsupported foe-deck target ${String(effect["targetSelector"])}`,
-      ];
-    }
-
-    return [];
-  }
-
   if (effectId === "heal") {
     const errors: string[] = [];
     const amount = effect["amount"];
