@@ -40,6 +40,20 @@ export {
   formatImportCompletenessReport,
 } from "./import/import-completeness.js";
 export type {
+  CardClusterDecision,
+  CardClusterDecisionFile,
+  CardClusterDecisionStatus,
+  CardRuntimeClusterItem,
+  CardRuntimeClusterReport,
+  SyncCardClusterDecisionsResult,
+} from "./import/card-runtime-clusters.js";
+export {
+  createCardRuntimeClusterReport,
+  formatCardRuntimeClusterMarkdown,
+  syncCardClusterDecisions,
+  writeCardRuntimeClusterMatrix,
+} from "./import/card-runtime-clusters.js";
+export type {
   RuntimeCoverageInventory,
   RuntimeCoverageInventoryItem,
   RuntimeCoverageMechanicCluster,

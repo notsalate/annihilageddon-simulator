@@ -1,0 +1,528 @@
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import path from "node:path";
+
+export type CardClusterDecisionStatus = "needsClusterDecision" | "clustered";
+
+export interface CardClusterDecision {
+  cardId: string;
+  status: CardClusterDecisionStatus;
+  clusterId?: string;
+  notes?: string;
+}
+
+export interface CardClusterDecisionFile {
+  schemaVersion: 1;
+  decisions: CardClusterDecision[];
+}
+
+export interface CardRuntimeClusterItem {
+  cardId: string;
+  sourceGroup: CardSourceGroup;
+  visibleNameRu?: string;
+  visibleTextRu?: string;
+  draftTextPath?: string;
+  runtimePresence: "present" | "missing";
+  compositionMembership: string[];
+  decisionStatus: CardClusterDecisionStatus;
+  clusterId?: string;
+  notes?: string;
+}
+
+export interface CardRuntimeClusterReport {
+  items: CardRuntimeClusterItem[];
+  summary: {
+    totalCards: number;
+    runtimePresent: number;
+    inCurrentCompositions: number;
+    needsClusterDecision: number;
+    clustered: number;
+  };
+  generatedAt: string;
+}
+
+export interface SyncCardClusterDecisionsResult {
+  addedCardIds: string[];
+  decisionFilePath: string;
+}
+
+interface CardDraftSource {
+  sourceGroup: CardSourceGroup;
+  draftDir: string;
+}
+
+interface CardDraftItem {
+  cardId: string;
+  sourceGroup: CardSourceGroup;
+  visibleNameRu: string | undefined;
+  visibleTextRu: string | undefined;
+  draftTextPath: string | undefined;
+}
+
+type CardSourceGroup = "main" | "legend" | "starter" | "familiar" | "special";
+
+interface CompositionMembership {
+  label: string;
+}
+
+const decisionFilePath =
+  ".scratch/krutagidon-card-runtime-clusters/card-cluster-decisions.json";
+const matrixOutputPath =
+  ".scratch/krutagidon-card-runtime-clusters/card-runtime-cluster-matrix.md";
+
+const cardDraftSources: CardDraftSource[] = [
+  {
+    sourceGroup: "main",
+    draftDir: "data/import/cards/main/drafts",
+  },
+  {
+    sourceGroup: "legend",
+    draftDir: "data/import/cards/legend/drafts",
+  },
+  {
+    sourceGroup: "starter",
+    draftDir: "data/import/cards/starter/drafts",
+  },
+  {
+    sourceGroup: "familiar",
+    draftDir: "data/import/cards/familiar/drafts",
+  },
+  {
+    sourceGroup: "special",
+    draftDir: "data/import/cards/special/drafts",
+  },
+];
+
+export function syncCardClusterDecisions(
+  rootDir: string
+): SyncCardClusterDecisionsResult {
+  const drafts = collectCardDrafts(rootDir);
+  const draftIds = new Set(drafts.map((draft) => draft.cardId));
+  const existing = readDecisionFile(rootDir);
+  validateDecisionFile(existing, draftIds);
+
+  const decisionsById = new Map(
+    existing?.decisions.map((decision) => [decision.cardId, decision])
+  );
+  const addedCardIds = drafts
+    .map((draft) => draft.cardId)
+    .filter((cardId) => !decisionsById.has(cardId))
+    .sort();
+
+  const nextFile: CardClusterDecisionFile = {
+    schemaVersion: 1,
+    decisions: [
+      ...(existing?.decisions ?? []),
+      ...addedCardIds.map((cardId) => ({
+        cardId,
+        status: "needsClusterDecision" as const,
+      })),
+    ].sort((left, right) => left.cardId.localeCompare(right.cardId)),
+  };
+
+  const absolutePath = path.resolve(rootDir, decisionFilePath);
+  mkdirSync(path.dirname(absolutePath), { recursive: true });
+  writeFileSync(absolutePath, `${JSON.stringify(nextFile, null, 2)}\n`, "utf8");
+
+  return {
+    addedCardIds,
+    decisionFilePath,
+  };
+}
+
+export function createCardRuntimeClusterReport(
+  rootDir: string
+): CardRuntimeClusterReport {
+  const drafts = collectCardDrafts(rootDir);
+  const draftIds = new Set(drafts.map((draft) => draft.cardId));
+  const decisions = requireDecisionFile(rootDir, draftIds);
+  const runtimeCardIds = collectRuntimeCardIds(rootDir);
+  const compositionsById = collectCompositionMembership(rootDir);
+
+  const items = drafts
+    .map((draft) => {
+      const decision = decisions.get(draft.cardId);
+      if (decision === undefined) {
+        throw new Error(`Missing card cluster decisions: ${draft.cardId}`);
+      }
+
+      return {
+        cardId: draft.cardId,
+        sourceGroup: draft.sourceGroup,
+        runtimePresence: runtimeCardIds.has(draft.cardId)
+          ? ("present" as const)
+          : ("missing" as const),
+        compositionMembership: (compositionsById.get(draft.cardId) ?? [])
+          .map((membership) => membership.label)
+          .sort(),
+        decisionStatus: decision.status,
+        ...(draft.visibleNameRu === undefined
+          ? {}
+          : { visibleNameRu: draft.visibleNameRu }),
+        ...(draft.visibleTextRu === undefined
+          ? {}
+          : { visibleTextRu: draft.visibleTextRu }),
+        ...(draft.draftTextPath === undefined
+          ? {}
+          : { draftTextPath: draft.draftTextPath }),
+        ...(decision.clusterId === undefined
+          ? {}
+          : { clusterId: decision.clusterId }),
+        ...(decision.notes === undefined ? {} : { notes: decision.notes }),
+      };
+    })
+    .sort((left, right) => left.cardId.localeCompare(right.cardId));
+
+  return {
+    items,
+    summary: {
+      totalCards: items.length,
+      runtimePresent: items.filter((item) => item.runtimePresence === "present")
+        .length,
+      inCurrentCompositions: items.filter(
+        (item) => item.compositionMembership.length > 0
+      ).length,
+      needsClusterDecision: items.filter(
+        (item) => item.decisionStatus === "needsClusterDecision"
+      ).length,
+      clustered: items.filter((item) => item.decisionStatus === "clustered")
+        .length,
+    },
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+export function formatCardRuntimeClusterMarkdown(
+  report: CardRuntimeClusterReport
+): string {
+  const lines = [
+    "# Card Runtime Cluster Matrix",
+    "",
+    "Generated from canonical card draft JSON, current runtime card JSON, current compositions, and manual card cluster decisions.",
+    "",
+    "## Summary",
+    "",
+    `- total cards: ${report.summary.totalCards}`,
+    `- runtime present: ${report.summary.runtimePresent}`,
+    `- in current compositions: ${report.summary.inCurrentCompositions}`,
+    `- clustered: ${report.summary.clustered}`,
+    `- needsClusterDecision: ${report.summary.needsClusterDecision}`,
+    "",
+    "## Matrix",
+    "",
+    "| stable ID | source group | visible name | source text | draft text path | runtime | current compositions | decision status | cluster ID | notes |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+  ];
+
+  for (const item of report.items) {
+    lines.push(
+      [
+        code(item.cardId),
+        item.sourceGroup,
+        escapeMarkdownTableCell(item.visibleNameRu ?? "none"),
+        escapeMarkdownTableCell(item.visibleTextRu ?? "none"),
+        code(item.draftTextPath ?? "none"),
+        item.runtimePresence,
+        item.compositionMembership.length === 0
+          ? "none"
+          : item.compositionMembership.map(code).join("<br>"),
+        item.decisionStatus,
+        item.clusterId === undefined ? "none" : code(item.clusterId),
+        escapeMarkdownTableCell(item.notes ?? "none"),
+      ]
+        .join(" | ")
+        .replace(/^/, "| ")
+        .replace(/$/, " |")
+    );
+  }
+
+  lines.push("", `Generated at: ${report.generatedAt}`, "");
+  return lines.join("\n");
+}
+
+export function writeCardRuntimeClusterMatrix(
+  rootDir: string
+): CardRuntimeClusterReport {
+  const report = createCardRuntimeClusterReport(rootDir);
+  const absolutePath = path.resolve(rootDir, matrixOutputPath);
+  mkdirSync(path.dirname(absolutePath), { recursive: true });
+  writeFileSync(absolutePath, formatCardRuntimeClusterMarkdown(report), "utf8");
+  return report;
+}
+
+function requireDecisionFile(
+  rootDir: string,
+  draftIds: Set<string>
+): Map<string, CardClusterDecision> {
+  const parsed = readDecisionFile(rootDir);
+  validateDecisionFile(parsed, draftIds);
+
+  const missingCardIds = Array.from(draftIds)
+    .filter(
+      (cardId) =>
+        !parsed?.decisions.some((decision) => decision.cardId === cardId)
+    )
+    .sort();
+
+  if (parsed === undefined || missingCardIds.length > 0) {
+    throw new Error(
+      `Missing card cluster decisions: ${missingCardIds.join(", ")}`
+    );
+  }
+
+  return new Map(
+    parsed.decisions.map((decision) => [decision.cardId, decision])
+  );
+}
+
+function validateDecisionFile(
+  parsed: CardClusterDecisionFile | undefined,
+  draftIds: Set<string>
+): void {
+  if (parsed === undefined) {
+    return;
+  }
+
+  const seen = new Set<string>();
+  const unknownCardIds: string[] = [];
+
+  for (const decision of parsed.decisions) {
+    if (seen.has(decision.cardId)) {
+      throw new Error(`Duplicate card cluster decision: ${decision.cardId}`);
+    }
+    seen.add(decision.cardId);
+
+    if (!draftIds.has(decision.cardId)) {
+      unknownCardIds.push(decision.cardId);
+    }
+
+    if (
+      decision.status === "clustered" &&
+      (decision.clusterId === undefined || decision.clusterId.trim() === "")
+    ) {
+      throw new Error(
+        `Clustered card decision requires clusterId: ${decision.cardId}`
+      );
+    }
+  }
+
+  if (unknownCardIds.length > 0) {
+    throw new Error(
+      `Card cluster decisions reference non-existent drafts: ${unknownCardIds.sort().join(", ")}`
+    );
+  }
+}
+
+function readDecisionFile(
+  rootDir: string
+): CardClusterDecisionFile | undefined {
+  const absolutePath = path.resolve(rootDir, decisionFilePath);
+  if (!safeExists(absolutePath)) {
+    return undefined;
+  }
+
+  const parsed = getRecord(JSON.parse(readFileSync(absolutePath, "utf8")));
+  const rawDecisions = Array.isArray(parsed["decisions"])
+    ? parsed["decisions"]
+    : [];
+
+  return {
+    schemaVersion: 1,
+    decisions: rawDecisions.map((rawDecision) => {
+      const record = getRecord(rawDecision);
+      const clusterId = getOptionalString(record["clusterId"]);
+      const notes = getOptionalString(record["notes"]);
+      return {
+        cardId: requireString(record["cardId"], "decision.cardId"),
+        status: requireDecisionStatus(record["status"]),
+        ...(clusterId === undefined ? {} : { clusterId }),
+        ...(notes === undefined ? {} : { notes }),
+      };
+    }),
+  };
+}
+
+function collectCardDrafts(rootDir: string): CardDraftItem[] {
+  return cardDraftSources
+    .flatMap((source) =>
+      collectFiles(rootDir, [source.draftDir], ".json")
+        .filter((draftPath) => !path.basename(draftPath).startsWith("_"))
+        .map((draftPath) => {
+          const draft = getRecord(readJson(draftPath));
+          const visible = getRecord(draft["visible"]);
+          const sourceRecord = getRecord(draft["source"]);
+          return {
+            cardId:
+              getOptionalString(draft["cardId"]) ??
+              path.basename(draftPath, ".json"),
+            sourceGroup: source.sourceGroup,
+            visibleNameRu: getOptionalString(visible["nameRu"]),
+            visibleTextRu: normalizeWhitespace(
+              getOptionalString(visible["textRu"])
+            ),
+            draftTextPath: getOptionalString(sourceRecord["text"]),
+          };
+        })
+    )
+    .sort((left, right) => left.cardId.localeCompare(right.cardId));
+}
+
+function collectRuntimeCardIds(rootDir: string): Set<string> {
+  const runtimeCardIds = new Set<string>();
+
+  for (const filePath of collectFiles(rootDir, ["data/cards"], ".json")) {
+    const parsed = getRecord(readJson(filePath));
+    const cardId = getOptionalString(parsed["cardId"]);
+    if (cardId !== undefined) {
+      runtimeCardIds.add(cardId);
+    }
+  }
+
+  return runtimeCardIds;
+}
+
+function collectCompositionMembership(
+  rootDir: string
+): Map<string, CompositionMembership[]> {
+  const memberships = new Map<string, CompositionMembership[]>();
+  const compositionFiles = collectFiles(
+    rootDir,
+    ["data/decks", "data/stacks", "data/pools"],
+    ".json"
+  );
+
+  for (const filePath of compositionFiles) {
+    const parsed = getRecord(readJson(filePath));
+    const label = `${getCompositionPrefix(filePath)}:${getOptionalString(parsed["deckId"]) ?? getOptionalString(parsed["stackId"]) ?? getOptionalString(parsed["poolId"]) ?? path.basename(filePath, ".json")}`;
+    const entries = Array.isArray(parsed["entries"]) ? parsed["entries"] : [];
+
+    for (const entry of entries) {
+      const record = getRecord(entry);
+      const cardId = getOptionalString(record["cardId"]);
+      if (cardId === undefined) {
+        continue;
+      }
+
+      const current = memberships.get(cardId) ?? [];
+      current.push({ label });
+      memberships.set(cardId, current);
+    }
+  }
+
+  for (const filePath of collectFiles(rootDir, ["data/tokens"], ".json")) {
+    const parsed = getRecord(readJson(filePath));
+    const tokenId =
+      getOptionalString(parsed["tokenId"]) ?? path.basename(filePath, ".json");
+    const effects = Array.isArray(getRecord(parsed["engine"])["effects"])
+      ? (getRecord(parsed["engine"])["effects"] as unknown[])
+      : [];
+
+    for (const effect of effects) {
+      const record = getRecord(effect);
+      if (record["effectId"] !== "replace_starting_card") {
+        continue;
+      }
+
+      const toDefinitionId = getOptionalString(record["toDefinitionId"]);
+      if (toDefinitionId === undefined) {
+        continue;
+      }
+
+      const current = memberships.get(toDefinitionId) ?? [];
+      current.push({ label: `replacement:${tokenId}` });
+      memberships.set(toDefinitionId, current);
+    }
+  }
+
+  return memberships;
+}
+
+function collectFiles(
+  rootDir: string,
+  relativeDirs: string[],
+  extension: string
+): string[] {
+  return relativeDirs.flatMap((relativeDir) => {
+    const absoluteDir = path.resolve(rootDir, relativeDir);
+    if (!safeExists(absoluteDir)) {
+      return [];
+    }
+    return collectFilesRecursive(absoluteDir, extension);
+  });
+}
+
+function collectFilesRecursive(dirPath: string, extension: string): string[] {
+  return readdirSync(dirPath, { withFileTypes: true }).flatMap((entry) => {
+    const absolutePath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      return collectFilesRecursive(absolutePath, extension);
+    }
+    return absolutePath.endsWith(extension) ? [absolutePath] : [];
+  });
+}
+
+function readJson(filePath: string): unknown {
+  return JSON.parse(readFileSync(filePath, "utf8"));
+}
+
+function getRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function getOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function requireString(value: unknown, label: string): string {
+  const stringValue = getOptionalString(value);
+  if (stringValue === undefined || stringValue.trim() === "") {
+    throw new Error(`Expected string for ${label}`);
+  }
+  return stringValue;
+}
+
+function requireDecisionStatus(value: unknown): CardClusterDecisionStatus {
+  if (value === "needsClusterDecision" || value === "clustered") {
+    return value;
+  }
+  throw new Error(`Unsupported card cluster decision status: ${String(value)}`);
+}
+
+function getCompositionPrefix(filePath: string): "deck" | "stack" | "pool" {
+  const normalizedPath = filePath.replaceAll("\\", "/");
+  if (normalizedPath.includes("/data/decks/")) {
+    return "deck";
+  }
+  if (normalizedPath.includes("/data/stacks/")) {
+    return "stack";
+  }
+  return "pool";
+}
+
+function code(value: string): string {
+  return `\`${value}\``;
+}
+
+function escapeMarkdownTableCell(value: string): string {
+  return normalizeWhitespace(value)?.replaceAll("|", "\\|") ?? "";
+}
+
+function normalizeWhitespace(value: string | undefined): string | undefined {
+  return value?.replace(/\s+/g, " ").trim();
+}
+
+function safeExists(targetPath: string): boolean {
+  try {
+    statSync(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}

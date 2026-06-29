@@ -11,6 +11,7 @@
     "simulate:single": "npm run build -- --pretty false && node dist/src/cli/run-single-game.js",
     "generate:drafts": "npm run build -- --pretty false && node dist/src/cli/generate-drafts.js",
     "report:import": "npm run build -- --pretty false && node dist/src/cli/report-import-completeness.js",
+    "report:card-runtime-clusters": "npm run build -- --pretty false && node dist/src/cli/report-card-runtime-clusters.js",
     "report:runtime-coverage": "npm run build -- --pretty false && node dist/src/cli/report-runtime-coverage.js",
     "validate:drafts": "npm run build -- --pretty false && node dist/src/cli/validate-drafts.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

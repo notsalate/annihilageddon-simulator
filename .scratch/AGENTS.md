@@ -30,4 +30,4 @@ This folder contains local planning artifacts: PRDs, issue files, handoffs, run 
 
 ## Child DOX Index
 
-None.
+- `.scratch/krutagidon-card-runtime-clusters/AGENTS.md` - manual decisions and generated matrix workflow for card runtime cluster planning.

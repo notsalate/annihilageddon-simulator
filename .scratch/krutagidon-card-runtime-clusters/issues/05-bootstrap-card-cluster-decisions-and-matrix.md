@@ -1,5 +1,5 @@
-Status: Ready
-Label: ready-for-agent
+Status: Done
+Label: done
 Type: AFK
 
 # Сгенерировать базовые card cluster decisions и matrix
@@ -26,18 +26,18 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] Добавлен import-side generator для card runtime cluster workflow.
-- [ ] Добавлен CLI/npm script `npm run report:card-runtime-clusters`.
-- [ ] Команда без write-флагов печатает/проверяет report, но не меняет decisions молча.
-- [ ] `--write-decisions` создаёт или дополняет `.scratch/krutagidon-card-runtime-clusters/card-cluster-decisions.json` всеми реальными card draft IDs.
-- [ ] Новые generated decisions получают статус `needsClusterDecision`.
-- [ ] `--write` создаёт или обновляет `.scratch/krutagidon-card-runtime-clusters/card-runtime-cluster-matrix.md`.
-- [ ] Matrix генерируется из `data/import/cards/**/drafts`, current runtime data, current compositions и decisions JSON.
-- [ ] `.scratch/krutagidon-card-runtime-clusters/AGENTS.md` создан и фиксирует команды, ownership, generated/manual file rules и запрет ручного редактирования matrix.
-- [ ] Decisions JSON, matrix и local AGENTS находятся в `.scratch/krutagidon-card-runtime-clusters/`.
-- [ ] Добавлены focused tests для bootstrap decisions и generated matrix на fixture data.
-- [ ] `npm run typecheck` проходит.
-- [ ] Focused generator tests проходят.
+- [x] Добавлен import-side generator для card runtime cluster workflow.
+- [x] Добавлен CLI/npm script `npm run report:card-runtime-clusters`.
+- [x] Команда без write-флагов печатает/проверяет report, но не меняет decisions молча.
+- [x] `--write-decisions` создаёт или дополняет `.scratch/krutagidon-card-runtime-clusters/card-cluster-decisions.json` всеми реальными card draft IDs.
+- [x] Новые generated decisions получают статус `needsClusterDecision`.
+- [x] `--write` создаёт или обновляет `.scratch/krutagidon-card-runtime-clusters/card-runtime-cluster-matrix.md`.
+- [x] Matrix генерируется из `data/import/cards/**/drafts`, current runtime data, current compositions и decisions JSON.
+- [x] `.scratch/krutagidon-card-runtime-clusters/AGENTS.md` создан и фиксирует команды, ownership, generated/manual file rules и запрет ручного редактирования matrix.
+- [x] Decisions JSON, matrix и local AGENTS находятся в `.scratch/krutagidon-card-runtime-clusters/`.
+- [x] Добавлены focused tests для bootstrap decisions и generated matrix на fixture data.
+- [x] `npm run typecheck` проходит.
+- [x] Focused generator tests проходят.
 
 ## Blocked by
 
@@ -48,3 +48,18 @@ Type: AFK
 - Decisions JSON должен быть ручным source of truth для решений, но не для фактов, которые можно вычислить из drafts/runtime/compositions.
 - Generated matrix руками не править.
 - Не использовать старые удалённые runtime card JSON как input.
+
+## Evidence
+
+- Добавлен новый import-side модуль `src/import/card-runtime-clusters.ts` и CLI `src/cli/report-card-runtime-clusters.ts`.
+- Сгенерированы `.scratch/krutagidon-card-runtime-clusters/card-cluster-decisions.json` и `.scratch/krutagidon-card-runtime-clusters/card-runtime-cluster-matrix.md`.
+- Bootstrap на текущих данных создал `128` manual decisions со статусом `needsClusterDecision`.
+- При реализации добавлен регрессионный фильтр для `drafts/_template.json`, чтобы шаблоны не попадали в decisions/matrix.
+
+## Checks
+
+- `npm test`
+- `npm run typecheck`
+- `npm run report:card-runtime-clusters`
+- `npm run report:card-runtime-clusters -- --write-decisions --write`
+- `git diff --check`
