@@ -19,6 +19,8 @@ if (shouldWriteMatrix) {
   const report = writeCardRuntimeClusterMatrix(process.cwd());
   console.log("Card runtime cluster matrix written");
   console.log(`items: ${report.summary.totalCards}`);
+  console.log(`fullRuntime: ${report.summary.fullRuntime}`);
+  console.log(`missingRuntime: ${report.summary.missingRuntime}`);
   console.log(`needsClusterDecision: ${report.summary.needsClusterDecision}`);
 } else {
   console.log(

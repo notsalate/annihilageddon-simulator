@@ -16,6 +16,9 @@ This folder contains the local planning workflow for card runtime clusters.
 - Do not edit `card-runtime-cluster-matrix.md` manually; regenerate it from the command.
 - Generated matrix facts must come from import drafts, current runtime card JSON, current compositions, and manual decisions only.
 - Do not use deleted legacy runtime card JSON as planning input.
+- `fullRuntime` means the card has current runtime card JSON, direct current deck/stack/pool membership, and focused test refs.
+- `missingRuntime` is normal backlog state, not a process error by itself.
+- `npm run report:card-runtime-clusters` must block non-full runtime card JSON, runtime card JSON without matching drafts, invalid decision references, and direct composition entries that point at missing runtime card definitions.
 
 ## Work Guidance
 
@@ -26,6 +29,7 @@ This folder contains the local planning workflow for card runtime clusters.
 ## Verification
 
 - Run `npm run report:card-runtime-clusters` to verify that every draft card has an explicit decision.
+- Run `npm run report:card-runtime-clusters` to verify that every present runtime card satisfies the `fullRuntime` guardrail.
 - Run `npm run report:card-runtime-clusters -- --write` after decision changes that should update the matrix.
 
 ## Child DOX Index

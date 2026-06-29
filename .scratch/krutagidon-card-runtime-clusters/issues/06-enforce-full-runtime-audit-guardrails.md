@@ -1,5 +1,5 @@
-Status: Ready
-Label: ready-for-agent
+Status: Done
+Label: done
 Type: AFK
 
 # Ввести fullRuntime audit guardrails
@@ -26,20 +26,20 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] Card cluster report использует статус `fullRuntime` для карт, у которых есть runtime JSON, composition membership и требуемые evidence/test refs.
-- [ ] Правило `fullRuntime` явно описано в local workflow docs или report help.
-- [ ] Report обнаруживает decisions, которые ссылаются на несуществующие card drafts.
-- [ ] Report обнаруживает card drafts без decisions.
-- [ ] Report обнаруживает composition entries, которые ссылаются на отсутствующие runtime card definitions.
-- [ ] Report обнаруживает runtime card JSON без matching draft.
-- [ ] Report явно падает или выдаёт blocking error для новых card runtime JSON с partial/non-full признаками.
-- [ ] Report не считает `missingRuntime` ошибкой процесса.
-- [ ] Старые двусмысленные статусы не являются целевым языком нового card workflow.
-- [ ] Focused tests покрывают `fullRuntime`, invalid decision, missing decision, invalid composition reference, runtime-without-draft и partial runtime guardrail.
-- [ ] `npm run report:card-runtime-clusters` проходит на текущем clean baseline.
-- [ ] `npm run typecheck` проходит.
-- [ ] Focused generator tests проходят.
-- [ ] `git diff --check` проходит.
+- [x] Card cluster report использует статус `fullRuntime` для карт, у которых есть runtime JSON, composition membership и требуемые evidence/test refs.
+- [x] Правило `fullRuntime` явно описано в local workflow docs или report help.
+- [x] Report обнаруживает decisions, которые ссылаются на несуществующие card drafts.
+- [x] Report обнаруживает card drafts без decisions.
+- [x] Report обнаруживает composition entries, которые ссылаются на отсутствующие runtime card definitions.
+- [x] Report обнаруживает runtime card JSON без matching draft.
+- [x] Report явно падает или выдаёт blocking error для новых card runtime JSON с partial/non-full признаками.
+- [x] Report не считает `missingRuntime` ошибкой процесса.
+- [x] Старые двусмысленные статусы не являются целевым языком нового card workflow.
+- [x] Focused tests покрывают `fullRuntime`, invalid decision, missing decision, invalid composition reference, runtime-without-draft и partial runtime guardrail.
+- [x] `npm run report:card-runtime-clusters` проходит на текущем clean baseline.
+- [x] `npm run typecheck` проходит.
+- [x] Focused generator tests проходят.
+- [x] `git diff --check` проходит.
 
 ## Blocked by
 
@@ -49,3 +49,22 @@ Type: AFK
 
 - Этот issue не реализует новые карты и не выбирает Block C clusters.
 - Если `fullRuntime` требует test evidence, правило должно быть явным и проверяемым, а не скрытым эвристическим выводом.
+
+## Evidence
+
+- В `src/import/card-runtime-clusters.ts` введён явный `runtimeStatus` с целевым языком `fullRuntime`/`missingRuntime`.
+- Report теперь собирает focused test refs, проверяет direct deck/stack/pool membership и блокирует non-full runtime card JSON.
+- Report отдельно валидирует invalid decision references, runtime card JSON without matching draft и direct composition entries without runtime card definitions.
+- `src/cli/report-card-runtime-clusters.ts` выводит summary в терминах `fullRuntime`/`missingRuntime`.
+- `.scratch/krutagidon-card-runtime-clusters/AGENTS.md` обновлён под новый guardrail workflow.
+- `tests/card-runtime-clusters.test.ts` покрывает invalid decision, missing decision, fullRuntime, partial runtime guardrail, invalid composition reference и runtime-without-draft.
+- `tests/run-tests.ts` теперь включает `card-runtime-clusters.test.ts` в общий `npm test`.
+
+## Checks
+
+- `npm run build -- --pretty false`
+- `node --test dist/tests/card-runtime-clusters.test.js`
+- `npm run typecheck`
+- `npm run report:card-runtime-clusters`
+- `git diff --check`
+- `npm test`

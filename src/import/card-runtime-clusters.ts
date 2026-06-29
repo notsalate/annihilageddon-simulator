@@ -8,6 +8,7 @@ import {
 import path from "node:path";
 
 export type CardClusterDecisionStatus = "needsClusterDecision" | "clustered";
+export type CardRuntimeStatus = "missingRuntime" | "fullRuntime";
 
 export interface CardClusterDecision {
   cardId: string;
@@ -27,8 +28,9 @@ export interface CardRuntimeClusterItem {
   visibleNameRu?: string;
   visibleTextRu?: string;
   draftTextPath?: string;
-  runtimePresence: "present" | "missing";
+  runtimeStatus: CardRuntimeStatus;
   compositionMembership: string[];
+  focusedTestRefs: string[];
   decisionStatus: CardClusterDecisionStatus;
   clusterId?: string;
   notes?: string;
@@ -38,8 +40,8 @@ export interface CardRuntimeClusterReport {
   items: CardRuntimeClusterItem[];
   summary: {
     totalCards: number;
-    runtimePresent: number;
-    inCurrentCompositions: number;
+    fullRuntime: number;
+    missingRuntime: number;
     needsClusterDecision: number;
     clustered: number;
   };
@@ -68,6 +70,14 @@ type CardSourceGroup = "main" | "legend" | "starter" | "familiar" | "special";
 
 interface CompositionMembership {
   label: string;
+  filePath: string;
+  derivedFromToken: boolean;
+}
+
+interface RuntimeCardRecord {
+  cardId: string;
+  filePath: string;
+  record: Record<string, unknown>;
 }
 
 const decisionFilePath =
@@ -141,8 +151,17 @@ export function createCardRuntimeClusterReport(
   const drafts = collectCardDrafts(rootDir);
   const draftIds = new Set(drafts.map((draft) => draft.cardId));
   const decisions = requireDecisionFile(rootDir, draftIds);
-  const runtimeCardIds = collectRuntimeCardIds(rootDir);
+  const runtimeCardsById = collectRuntimeCards(rootDir);
   const compositionsById = collectCompositionMembership(rootDir);
+  const focusedTestRefsById = collectFocusedTestRefs(rootDir);
+
+  validateRuntimeGuardrails(
+    rootDir,
+    draftIds,
+    runtimeCardsById,
+    compositionsById,
+    focusedTestRefsById
+  );
 
   const items = drafts
     .map((draft) => {
@@ -151,15 +170,23 @@ export function createCardRuntimeClusterReport(
         throw new Error(`Missing card cluster decisions: ${draft.cardId}`);
       }
 
+      const runtimeCard = runtimeCardsById.get(draft.cardId);
+      const compositionMembership = (compositionsById.get(draft.cardId) ?? [])
+        .map((membership) => membership.label)
+        .sort();
+      const focusedTestRefs = [
+        ...(focusedTestRefsById.get(draft.cardId) ?? []),
+      ].sort();
+
       return {
         cardId: draft.cardId,
         sourceGroup: draft.sourceGroup,
-        runtimePresence: runtimeCardIds.has(draft.cardId)
-          ? ("present" as const)
-          : ("missing" as const),
-        compositionMembership: (compositionsById.get(draft.cardId) ?? [])
-          .map((membership) => membership.label)
-          .sort(),
+        runtimeStatus:
+          runtimeCard === undefined
+            ? ("missingRuntime" as const)
+            : ("fullRuntime" as const),
+        compositionMembership,
+        focusedTestRefs,
         decisionStatus: decision.status,
         ...(draft.visibleNameRu === undefined
           ? {}
@@ -182,10 +209,10 @@ export function createCardRuntimeClusterReport(
     items,
     summary: {
       totalCards: items.length,
-      runtimePresent: items.filter((item) => item.runtimePresence === "present")
+      fullRuntime: items.filter((item) => item.runtimeStatus === "fullRuntime")
         .length,
-      inCurrentCompositions: items.filter(
-        (item) => item.compositionMembership.length > 0
+      missingRuntime: items.filter(
+        (item) => item.runtimeStatus === "missingRuntime"
       ).length,
       needsClusterDecision: items.filter(
         (item) => item.decisionStatus === "needsClusterDecision"
@@ -204,19 +231,21 @@ export function formatCardRuntimeClusterMarkdown(
     "# Card Runtime Cluster Matrix",
     "",
     "Generated from canonical card draft JSON, current runtime card JSON, current compositions, and manual card cluster decisions.",
+    "`fullRuntime` requires current runtime card JSON, direct current deck/stack/pool membership, and focused test refs.",
+    "`missingRuntime` is normal backlog and is not a process error by itself.",
     "",
     "## Summary",
     "",
     `- total cards: ${report.summary.totalCards}`,
-    `- runtime present: ${report.summary.runtimePresent}`,
-    `- in current compositions: ${report.summary.inCurrentCompositions}`,
+    `- fullRuntime: ${report.summary.fullRuntime}`,
+    `- missingRuntime: ${report.summary.missingRuntime}`,
     `- clustered: ${report.summary.clustered}`,
     `- needsClusterDecision: ${report.summary.needsClusterDecision}`,
     "",
     "## Matrix",
     "",
-    "| stable ID | source group | visible name | source text | draft text path | runtime | current compositions | decision status | cluster ID | notes |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| stable ID | source group | visible name | source text | draft text path | runtime status | current compositions | focused tests | cluster decision | cluster ID | notes |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ];
 
   for (const item of report.items) {
@@ -227,10 +256,13 @@ export function formatCardRuntimeClusterMarkdown(
         escapeMarkdownTableCell(item.visibleNameRu ?? "none"),
         escapeMarkdownTableCell(item.visibleTextRu ?? "none"),
         code(item.draftTextPath ?? "none"),
-        item.runtimePresence,
+        item.runtimeStatus,
         item.compositionMembership.length === 0
           ? "none"
           : item.compositionMembership.map(code).join("<br>"),
+        item.focusedTestRefs.length === 0
+          ? "none"
+          : item.focusedTestRefs.map(code).join("<br>"),
         item.decisionStatus,
         item.clusterId === undefined ? "none" : code(item.clusterId),
         escapeMarkdownTableCell(item.notes ?? "none"),
@@ -372,18 +404,30 @@ function collectCardDrafts(rootDir: string): CardDraftItem[] {
     .sort((left, right) => left.cardId.localeCompare(right.cardId));
 }
 
-function collectRuntimeCardIds(rootDir: string): Set<string> {
-  const runtimeCardIds = new Set<string>();
+function collectRuntimeCards(rootDir: string): Map<string, RuntimeCardRecord> {
+  const runtimeCardsById = new Map<string, RuntimeCardRecord>();
 
   for (const filePath of collectFiles(rootDir, ["data/cards"], ".json")) {
     const parsed = getRecord(readJson(filePath));
     const cardId = getOptionalString(parsed["cardId"]);
     if (cardId !== undefined) {
-      runtimeCardIds.add(cardId);
+      if (runtimeCardsById.has(cardId)) {
+        throw new Error(
+          `Duplicate runtime card JSON: ${cardId} (${formatRelativePath(
+            rootDir,
+            filePath
+          )})`
+        );
+      }
+      runtimeCardsById.set(cardId, {
+        cardId,
+        filePath,
+        record: parsed,
+      });
     }
   }
 
-  return runtimeCardIds;
+  return runtimeCardsById;
 }
 
 function collectCompositionMembership(
@@ -409,7 +453,11 @@ function collectCompositionMembership(
       }
 
       const current = memberships.get(cardId) ?? [];
-      current.push({ label });
+      current.push({
+        label,
+        filePath,
+        derivedFromToken: false,
+      });
       memberships.set(cardId, current);
     }
   }
@@ -434,12 +482,134 @@ function collectCompositionMembership(
       }
 
       const current = memberships.get(toDefinitionId) ?? [];
-      current.push({ label: `replacement:${tokenId}` });
+      current.push({
+        label: `replacement:${tokenId}`,
+        filePath,
+        derivedFromToken: true,
+      });
       memberships.set(toDefinitionId, current);
     }
   }
 
   return memberships;
+}
+
+function collectFocusedTestRefs(rootDir: string): Map<string, string[]> {
+  const refs = new Map<string, string[]>();
+  const idPattern = /esw2_dbg__[a-z0-9_]+/g;
+
+  for (const filePath of collectFiles(rootDir, ["tests"], ".ts")) {
+    const text = readFileSync(filePath, "utf8");
+    for (const match of text.matchAll(idPattern)) {
+      const cardId = match[0];
+      const current = refs.get(cardId) ?? [];
+      const relativePath = formatRelativePath(rootDir, filePath);
+      if (!current.includes(relativePath)) {
+        current.push(relativePath);
+      }
+      refs.set(cardId, current);
+    }
+  }
+
+  return refs;
+}
+
+function validateRuntimeGuardrails(
+  rootDir: string,
+  draftIds: Set<string>,
+  runtimeCardsById: Map<string, RuntimeCardRecord>,
+  compositionsById: Map<string, CompositionMembership[]>,
+  focusedTestRefsById: Map<string, string[]>
+): void {
+  const errors: string[] = [];
+
+  for (const [cardId, runtimeCard] of runtimeCardsById) {
+    if (!draftIds.has(cardId)) {
+      errors.push(
+        `Runtime card JSON without matching draft: ${cardId} (${formatRelativePath(
+          rootDir,
+          runtimeCard.filePath
+        )})`
+      );
+    }
+  }
+
+  for (const [cardId, memberships] of compositionsById) {
+    const directMemberships = memberships.filter(
+      (membership) => !membership.derivedFromToken
+    );
+    if (directMemberships.length > 0 && !runtimeCardsById.has(cardId)) {
+      errors.push(
+        `Composition entries reference missing runtime card definitions: ${cardId} (${directMemberships
+          .map((membership) => formatRelativePath(rootDir, membership.filePath))
+          .sort()
+          .join(", ")})`
+      );
+    }
+  }
+
+  for (const [cardId, runtimeCard] of runtimeCardsById) {
+    const reasons = getNonFullRuntimeReasons(
+      runtimeCard.record,
+      compositionsById.get(cardId) ?? [],
+      focusedTestRefsById.get(cardId) ?? []
+    );
+    if (reasons.length > 0) {
+      errors.push(
+        `Non-full runtime card JSON is blocked: ${cardId} (${reasons.join(
+          "; "
+        )}) (${formatRelativePath(rootDir, runtimeCard.filePath)})`
+      );
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(errors.join("\n"));
+  }
+}
+
+function getNonFullRuntimeReasons(
+  runtimeCard: Record<string, unknown>,
+  memberships: CompositionMembership[],
+  focusedTestRefs: string[]
+): string[] {
+  const reasons: string[] = [];
+  const engine = getRecord(runtimeCard["engine"]);
+  const directMemberships = memberships.filter(
+    (membership) => !membership.derivedFromToken
+  );
+  const runtimeMappingStatus =
+    getOptionalString(engine["mappingStatus"]) ??
+    getOptionalString(runtimeCard["mappingStatus"]);
+  const playableInV0 = getOptionalBoolean(engine["playableInV0"]);
+  const needsEffectMapping = getOptionalBoolean(engine["needsEffectMapping"]);
+  const unsupportedMechanics = getStringArray(engine["unsupportedMechanics"]);
+
+  if (directMemberships.length === 0) {
+    reasons.push("missing current deck/stack/pool composition membership");
+  }
+  if (focusedTestRefs.length === 0) {
+    reasons.push("missing focused test refs");
+  }
+  if (runtimeMappingStatus === "draft") {
+    reasons.push("mappingStatus=draft");
+  } else if (
+    runtimeMappingStatus !== undefined &&
+    /placeholder/i.test(runtimeMappingStatus)
+  ) {
+    reasons.push(`mappingStatus=${runtimeMappingStatus}`);
+  }
+  if (playableInV0 === false) {
+    reasons.push("playableInV0=false");
+  }
+  if (needsEffectMapping === true) {
+    reasons.push("needsEffectMapping=true");
+  }
+  for (const mechanic of unsupportedMechanics) {
+    reasons.push(`unsupported mechanic: ${mechanic}`);
+  }
+
+  return reasons;
 }
 
 function collectFiles(
@@ -480,6 +650,16 @@ function getOptionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+function getOptionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function getStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
 function requireString(value: unknown, label: string): string {
   const stringValue = getOptionalString(value);
   if (stringValue === undefined || stringValue.trim() === "") {
@@ -516,6 +696,10 @@ function escapeMarkdownTableCell(value: string): string {
 
 function normalizeWhitespace(value: string | undefined): string | undefined {
   return value?.replace(/\s+/g, " ").trim();
+}
+
+function formatRelativePath(rootDir: string, targetPath: string): string {
+  return path.relative(rootDir, targetPath).replaceAll("\\", "/");
 }
 
 function safeExists(targetPath: string): boolean {
