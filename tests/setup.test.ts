@@ -74,6 +74,43 @@ test("current runtime data pack keeps only special runtime cards and empty norma
   assert.deepEqual(dataPack.decks.familiarPool?.entries, []);
 });
 
+test("current runtime special cards stay as reviewed full cards", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const wildMagic = dataPack.cardDefinitions.get("esw2_dbg__wild_magic");
+  const limpWand = dataPack.cardDefinitions.get("esw2_dbg__limp_wand");
+
+  assert.ok(wildMagic);
+  assert.equal(wildMagic.visible.typeRu, "Шальная магия");
+  assert.equal(wildMagic.engine.effects.length, 1);
+  assert.deepEqual(wildMagic.engine.effects[0], {
+    effectId: "wild_magic_choice",
+    timing: "onPlay",
+    options: [
+      {
+        effectId: "add_power",
+        amount: 2,
+      },
+      {
+        targetSelector: "chosenFoe",
+        effectId: "play_top_card_from_foe_deck",
+        nonOngoingCleanupDestination: "ownerDiscard",
+        ongoingOwnership: "controller",
+      },
+    ],
+  });
+
+  assert.ok(limpWand);
+  assert.equal(limpWand.visible.typeRu, "Вялая палочка");
+  assert.deepEqual(limpWand.engine.effects, []);
+
+  assert.deepEqual(dataPack.decks.wildMagicStack.entries, [
+    { cardId: "esw2_dbg__wild_magic", count: 15 },
+  ]);
+  assert.deepEqual(dataPack.decks.limpWandStack.entries, [
+    { cardId: "esw2_dbg__limp_wand", count: 15 },
+  ]);
+});
+
 test("initial game setup keeps current runtime runnable with empty normal compositions", () => {
   const state = initializeGame({ rootDir, seed: 12345 });
 

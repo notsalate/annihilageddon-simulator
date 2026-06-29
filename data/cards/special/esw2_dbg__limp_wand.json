@@ -10,14 +10,12 @@
     "nameRu": "Вялая палочка",
     "cost": 0,
     "victoryPoints": -1,
-    "typeRu": null,
+    "typeRu": "Вялая палочка",
     "cardKind": "limpWand",
     "cardTypes": [],
     "textRu": "(Эффекта нет.)",
     "markers": [],
-    "uncertainty": [
-      "OCR указал, что видимый тип карты не виден или не указан на видимой части."
-    ]
+    "uncertainty": []
   },
   "engine": {
     "runtimeSchema": "krutagidon.cardDefinition.v0",
