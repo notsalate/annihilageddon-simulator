@@ -257,6 +257,63 @@ test("wizard property setup grants Basic Trophy, first turn, and starting life o
   }
 });
 
+test("incomplete-full-only setup skips missing familiar pool and wizard property stack", () => {
+  const dataPack = createIncompleteSetupDataPack(
+    loadCurrentRuntimeDataPack(rootDir),
+    {
+      omitFamiliarPool: true,
+      omitWizardPropertyStack: true,
+    }
+  );
+
+  const state = initializeGame({ dataPack, seed: 4242 });
+
+  for (const player of state.players) {
+    assert.equal(player.unboughtFamiliar, undefined);
+    assert.deepEqual(player.wizardProperties, []);
+  }
+});
+
+test("incomplete-full-only setup skips empty familiar pool and wizard property stack", () => {
+  const dataPack = createIncompleteSetupDataPack(
+    loadCurrentRuntimeDataPack(rootDir),
+    {
+      emptyFamiliarPool: true,
+      emptyWizardPropertyStack: true,
+    }
+  );
+
+  const state = initializeGame({ dataPack, seed: 4343 });
+
+  for (const player of state.players) {
+    assert.equal(player.unboughtFamiliar, undefined);
+    assert.deepEqual(player.wizardProperties, []);
+  }
+});
+
+test("incomplete-full-only initialization tolerates empty starter, main, and legend compositions", () => {
+  const dataPack = createIncompleteSetupDataPack(
+    loadCurrentRuntimeDataPack(rootDir),
+    {
+      emptyStarterDeck: true,
+      emptyMainDeck: true,
+      emptyLegendDeck: true,
+    }
+  );
+
+  const state = initializeGame({ dataPack, seed: 4444 });
+
+  for (const player of state.players) {
+    assert.deepEqual(player.hand, []);
+    assert.deepEqual(player.deck, []);
+  }
+
+  assert.deepEqual(state.common.market, []);
+  assert.deepEqual(state.common.legendMarket, []);
+  assert.deepEqual(state.common.mainDeck, []);
+  assert.deepEqual(state.common.legendDeck, []);
+});
+
 function snapshot(state: GameState): unknown {
   return {
     activePlayerId: state.activePlayerId,
@@ -347,6 +404,80 @@ function createWizardPropertySetupDataPack(
         mappingStatus: "fixture",
         entries: [{ tokenId, count: 2 }],
       },
+    },
+  };
+}
+
+function createIncompleteSetupDataPack(
+  dataPack: LoadedDataPack,
+  options: {
+    omitFamiliarPool?: boolean;
+    emptyFamiliarPool?: boolean;
+    omitWizardPropertyStack?: boolean;
+    emptyWizardPropertyStack?: boolean;
+    emptyStarterDeck?: boolean;
+    emptyMainDeck?: boolean;
+    emptyLegendDeck?: boolean;
+  }
+): LoadedDataPack {
+  const manifestTokenStacks = options.omitWizardPropertyStack
+    ? dataPack.manifest.tokenStacks === undefined
+      ? undefined
+      : {
+          deadWizardTokens: dataPack.manifest.tokenStacks.deadWizardTokens,
+        }
+    : dataPack.manifest.tokenStacks;
+  const manifest = {
+    ...dataPack.manifest,
+    ...(options.omitFamiliarPool ? {} : { pools: dataPack.manifest.pools }),
+    ...(manifestTokenStacks === undefined
+      ? {}
+      : { tokenStacks: manifestTokenStacks }),
+  };
+
+  return {
+    ...dataPack,
+    manifest,
+    decks: {
+      ...dataPack.decks,
+      starterDeck: options.emptyStarterDeck
+        ? {
+            ...dataPack.decks.starterDeck,
+            entries: [],
+          }
+        : dataPack.decks.starterDeck,
+      mainDeck: options.emptyMainDeck
+        ? {
+            ...dataPack.decks.mainDeck,
+            entries: [],
+          }
+        : dataPack.decks.mainDeck,
+      legendDeck: options.emptyLegendDeck
+        ? {
+            ...dataPack.decks.legendDeck,
+            entries: [],
+          }
+        : dataPack.decks.legendDeck,
+      familiarPool: options.omitFamiliarPool
+        ? undefined
+        : options.emptyFamiliarPool && dataPack.decks.familiarPool !== undefined
+          ? {
+              ...dataPack.decks.familiarPool,
+              entries: [],
+            }
+          : dataPack.decks.familiarPool,
+    },
+    tokenStacks: {
+      ...dataPack.tokenStacks,
+      wizardProperties: options.omitWizardPropertyStack
+        ? undefined
+        : options.emptyWizardPropertyStack &&
+            dataPack.tokenStacks.wizardProperties !== undefined
+          ? {
+              ...dataPack.tokenStacks.wizardProperties,
+              entries: [],
+            }
+          : dataPack.tokenStacks.wizardProperties,
     },
   };
 }

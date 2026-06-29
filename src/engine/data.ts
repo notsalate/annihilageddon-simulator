@@ -237,6 +237,7 @@ export function validateExecutableDataPack(
   const mode = options.mode ?? "combat";
 
   errors.push(...validateManifestRuntimePaths(dataPack.manifest));
+  errors.push(...validateSetupDataPackCompatibility(dataPack));
 
   for (const definition of dataPack.cardDefinitions.values()) {
     if (!definition.engine.playableInV0) {
@@ -322,6 +323,12 @@ export function validateExecutableDataPack(
   return { ok: true };
 }
 
+export function isIncompleteFullOnlyDataPack(
+  dataPack: Pick<LoadedDataPack, "manifest">
+): boolean {
+  return dataPack.manifest.mappingStatus === "incomplete-full-only";
+}
+
 function validateManifestRuntimePaths(manifest: DataPackManifest): string[] {
   const errors: string[] = [];
 
@@ -335,6 +342,72 @@ function validateManifestRuntimePaths(manifest: DataPackManifest): string[] {
         `Manifest ${fieldName} references import-only path ${filePath}`
       );
     }
+  }
+
+  return errors;
+}
+
+function validateSetupDataPackCompatibility(
+  dataPack: LoadedDataPack
+): string[] {
+  const errors: string[] = [];
+  const allowsIncompleteSetup = isIncompleteFullOnlyDataPack(dataPack);
+
+  if (
+    !allowsIncompleteSetup &&
+    totalDeckEntryCount(dataPack.decks.starterDeck) === 0
+  ) {
+    errors.push(
+      "Data pack manifest must include starter cards outside incomplete-full-only"
+    );
+  }
+
+  if (
+    !allowsIncompleteSetup &&
+    totalDeckEntryCount(dataPack.decks.mainDeck) === 0
+  ) {
+    errors.push(
+      "Data pack manifest must include main-deck cards outside incomplete-full-only"
+    );
+  }
+
+  if (
+    !allowsIncompleteSetup &&
+    totalDeckEntryCount(dataPack.decks.legendDeck) === 0
+  ) {
+    errors.push(
+      "Data pack manifest must include legend-deck cards outside incomplete-full-only"
+    );
+  }
+
+  if (dataPack.decks.familiarPool === undefined) {
+    if (!allowsIncompleteSetup) {
+      errors.push(
+        "Data pack manifest must define familiar pool outside incomplete-full-only"
+      );
+    }
+  } else if (
+    !allowsIncompleteSetup &&
+    totalDeckEntryCount(dataPack.decks.familiarPool) < 2
+  ) {
+    errors.push(
+      "Data pack familiar pool must include at least two setup candidates outside incomplete-full-only"
+    );
+  }
+
+  if (dataPack.tokenStacks.wizardProperties === undefined) {
+    if (!allowsIncompleteSetup) {
+      errors.push(
+        "Data pack manifest must define wizard property stack outside incomplete-full-only"
+      );
+    }
+  } else if (
+    !allowsIncompleteSetup &&
+    totalTokenStackEntryCount(dataPack.tokenStacks.wizardProperties) === 0
+  ) {
+    errors.push(
+      "Data pack wizard property stack must include at least one token outside incomplete-full-only"
+    );
   }
 
   return errors;
@@ -386,6 +459,14 @@ function collectManifestPaths(manifest: DataPackManifest): [string, string][] {
   }
 
   return paths;
+}
+
+function totalDeckEntryCount(deck: DeckComposition): number {
+  return deck.entries.reduce((total, entry) => total + entry.count, 0);
+}
+
+function totalTokenStackEntryCount(stack: TokenStackComposition): number {
+  return stack.entries.reduce((total, entry) => total + entry.count, 0);
 }
 
 function loadCardDefinitions(

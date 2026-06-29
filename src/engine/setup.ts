@@ -1,4 +1,5 @@
 import {
+  isIncompleteFullOnlyDataPack,
   loadCurrentRuntimeDataPack,
   type CardDefinition,
   type DeckComposition,
@@ -255,9 +256,11 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     throw new Error(marketFlowResult.error);
   }
   if (marketFlowResult.gameEndReason !== undefined) {
-    throw new Error(
-      `Cannot initialize game: ${marketFlowResult.gameEndReason}`
-    );
+    if (!isIncompleteFullOnlyDataPack(dataPack)) {
+      throw new Error(
+        `Cannot initialize game: ${marketFlowResult.gameEndReason}`
+      );
+    }
   }
 
   state.eventLog.push({
@@ -305,6 +308,11 @@ function assignStartingWizardProperties(
 ): void {
   const tokenStack = dataPack.tokenStacks.wizardProperties;
   if (tokenStack === undefined) {
+    if (!isIncompleteFullOnlyDataPack(dataPack)) {
+      throw new Error(
+        "Data pack manifest must define wizard property stack outside incomplete-full-only"
+      );
+    }
     return;
   }
 
@@ -315,6 +323,9 @@ function assignStartingWizardProperties(
     "common"
   );
   if (setupPool.length === 0) {
+    if (isIncompleteFullOnlyDataPack(dataPack)) {
+      return;
+    }
     throw new Error(
       `Token stack ${tokenStack.stackId} must include at least one wizard property`
     );
@@ -367,11 +378,19 @@ function assignStartingFamiliars(
 ): void {
   const familiarPool = dataPack.decks.familiarPool;
   if (familiarPool === undefined) {
+    if (!isIncompleteFullOnlyDataPack(dataPack)) {
+      throw new Error(
+        "Data pack manifest must define familiar pool outside incomplete-full-only"
+      );
+    }
     return;
   }
 
   const setupPool = instantiateDeck(familiarPool, dataPack, factory, "common");
   if (setupPool.length < 2) {
+    if (isIncompleteFullOnlyDataPack(dataPack)) {
+      return;
+    }
     throw new Error(
       `Deck ${familiarPool.deckId} must include at least two familiar setup candidates`
     );

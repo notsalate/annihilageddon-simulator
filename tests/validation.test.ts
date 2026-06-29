@@ -1464,6 +1464,65 @@ test("compatibility v0 loader delegates to current runtime manifest by default",
   assert.equal(dataPack.manifest.decks?.mainDeck, "data/decks/main-deck.json");
 });
 
+test("executable data-pack validation allows incomplete-full-only packs without optional setup surfaces", () => {
+  const result = validateExecutableDataPack(
+    createSetupValidationDataPack("incomplete-full-only", {
+      omitFamiliarPool: true,
+      omitWizardPropertyStack: true,
+      emptyStarterDeck: true,
+      emptyMainDeck: true,
+      emptyLegendDeck: true,
+    })
+  );
+
+  assert.deepEqual(result, { ok: true });
+});
+
+test("executable data-pack validation keeps optional setup tolerance out of strict packs", () => {
+  const result = validateExecutableDataPack(
+    createSetupValidationDataPack("fixture", {
+      omitFamiliarPool: true,
+      omitWizardPropertyStack: true,
+      emptyStarterDeck: true,
+      emptyMainDeck: true,
+      emptyLegendDeck: true,
+    })
+  );
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes("must define familiar pool outside incomplete-full-only")
+    )
+  );
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes(
+        "must define wizard property stack outside incomplete-full-only"
+      )
+    )
+  );
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes("must include starter cards outside incomplete-full-only")
+    )
+  );
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes(
+        "must include main-deck cards outside incomplete-full-only"
+      )
+    )
+  );
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes(
+        "must include legend-deck cards outside incomplete-full-only"
+      )
+    )
+  );
+});
+
 test("executable data-pack validation rejects unsupported play-top destinations", () => {
   const card = createFixtureCard("fixture-unsupported-play-top-destination");
   const dataPack = withFixtureCard({
@@ -1555,6 +1614,71 @@ function withFixtureToken(token: TokenDefinition): LoadedDataPack {
     ...dataPack,
     cardDefinitions: new Map(),
     tokenDefinitions: new Map([[token.tokenId, token]]),
+  };
+}
+
+function createSetupValidationDataPack(
+  mappingStatus: string,
+  options: {
+    omitFamiliarPool?: boolean;
+    omitWizardPropertyStack?: boolean;
+    emptyStarterDeck?: boolean;
+    emptyMainDeck?: boolean;
+    emptyLegendDeck?: boolean;
+  }
+): LoadedDataPack {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const manifestTokenStacks = options.omitWizardPropertyStack
+    ? dataPack.manifest.tokenStacks === undefined
+      ? undefined
+      : {
+          deadWizardTokens: dataPack.manifest.tokenStacks.deadWizardTokens,
+        }
+    : dataPack.manifest.tokenStacks;
+  const manifest = {
+    ...dataPack.manifest,
+    mappingStatus,
+    ...(options.omitFamiliarPool ? {} : { pools: dataPack.manifest.pools }),
+    ...(manifestTokenStacks === undefined
+      ? {}
+      : { tokenStacks: manifestTokenStacks }),
+  };
+
+  return {
+    ...dataPack,
+    cardDefinitions: new Map(),
+    tokenDefinitions: new Map(),
+    manifest,
+    decks: {
+      ...dataPack.decks,
+      familiarPool: options.omitFamiliarPool
+        ? undefined
+        : dataPack.decks.familiarPool,
+      starterDeck: options.emptyStarterDeck
+        ? {
+            ...dataPack.decks.starterDeck,
+            entries: [],
+          }
+        : dataPack.decks.starterDeck,
+      mainDeck: options.emptyMainDeck
+        ? {
+            ...dataPack.decks.mainDeck,
+            entries: [],
+          }
+        : dataPack.decks.mainDeck,
+      legendDeck: options.emptyLegendDeck
+        ? {
+            ...dataPack.decks.legendDeck,
+            entries: [],
+          }
+        : dataPack.decks.legendDeck,
+    },
+    tokenStacks: {
+      ...dataPack.tokenStacks,
+      wizardProperties: options.omitWizardPropertyStack
+        ? undefined
+        : dataPack.tokenStacks.wizardProperties,
+    },
   };
 }
 

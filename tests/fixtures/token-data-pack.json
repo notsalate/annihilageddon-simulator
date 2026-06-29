@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packId": "fixture-token-data-pack",
   "runtimeSchema": "krutagidon.dataPack.v0",
-  "mappingStatus": "fixture",
+  "mappingStatus": "incomplete-full-only",
   "cardDefinitionPaths": [
     "data/cards/main",
     "data/cards/legend",

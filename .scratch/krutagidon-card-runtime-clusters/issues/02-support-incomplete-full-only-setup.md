@@ -1,5 +1,5 @@
-Status: Ready
-Label: ready-for-agent
+Status: Done
+Label: done
 Type: AFK
 
 # Поддержать setup для incomplete-full-only runtime pack
@@ -24,16 +24,16 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] Для `incomplete-full-only` pack отсутствующий familiar pool не приводит к ошибке setup.
-- [ ] Для `incomplete-full-only` pack пустой familiar pool не требует двух setup candidates и пропускает familiar assignment.
-- [ ] Для `incomplete-full-only` pack отсутствующий wizard-property stack не приводит к ошибке setup.
-- [ ] Для `incomplete-full-only` pack пустой wizard-property stack пропускает wizard-property assignment.
-- [ ] Пустые main/legend/starter card compositions не ломают initialization.
-- [ ] Поведение strict/complete pack не ослаблено без явного будущего решения; tolerance привязан к incomplete mode.
-- [ ] Добавлены focused tests для incomplete setup без placeholder data.
-- [ ] Current runtime pack можно загрузить и инициализировать в тесте.
-- [ ] `npm run typecheck` проходит.
-- [ ] Focused setup/validation tests проходят.
+- [x] Для `incomplete-full-only` pack отсутствующий familiar pool не приводит к ошибке setup.
+- [x] Для `incomplete-full-only` pack пустой familiar pool не требует двух setup candidates и пропускает familiar assignment.
+- [x] Для `incomplete-full-only` pack отсутствующий wizard-property stack не приводит к ошибке setup.
+- [x] Для `incomplete-full-only` pack пустой wizard-property stack пропускает wizard-property assignment.
+- [x] Пустые main/legend/starter card compositions не ломают initialization.
+- [x] Поведение strict/complete pack не ослаблено без явного будущего решения; tolerance привязан к incomplete mode.
+- [x] Добавлены focused tests для incomplete setup без placeholder data.
+- [x] Current runtime pack можно загрузить и инициализировать в тесте.
+- [x] `npm run typecheck` проходит.
+- [x] Focused setup/validation tests проходят.
 
 ## Blocked by
 
@@ -43,3 +43,11 @@ Type: AFK
 
 - Не моделировать отсутствующих фамильяров или wizard properties заглушками.
 - Если manifest status удобно читать через helper, держать helper рядом с data-pack/setup code, а не размазывать строковые проверки по engine.
+
+## Verification
+
+- `npm run build -- --pretty false`
+- `node --test dist/tests/setup.test.js dist/tests/validation.test.js`
+- `npm run typecheck`
+- `npm test`
+- `git diff --check`
