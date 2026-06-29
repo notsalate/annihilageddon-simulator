@@ -10,31 +10,11 @@
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__main_002",
-      "count": 2
-    },
-    {
-      "cardId": "esw2_dbg__main_004",
-      "count": 2
-    },
-    {
-      "cardId": "esw2_dbg__main_005",
-      "count": 2
-    },
-    {
-      "cardId": "esw2_dbg__main_006",
-      "count": 2
-    },
-    {
       "cardId": "esw2_dbg__main_008",
       "count": 2
     },
     {
       "cardId": "esw2_dbg__main_009",
-      "count": 2
-    },
-    {
-      "cardId": "esw2_dbg__main_010",
       "count": 2
     },
     {
@@ -46,31 +26,11 @@
       "count": 2
     },
     {
-      "cardId": "esw2_dbg__main_013",
-      "count": 2
-    },
-    {
       "cardId": "esw2_dbg__main_014",
       "count": 2
     },
     {
       "cardId": "esw2_dbg__main_015",
-      "count": 2
-    },
-    {
-      "cardId": "esw2_dbg__main_016",
-      "count": 2
-    },
-    {
-      "cardId": "esw2_dbg__main_017",
-      "count": 2
-    },
-    {
-      "cardId": "esw2_dbg__main_018",
-      "count": 2
-    },
-    {
-      "cardId": "esw2_dbg__main_019",
       "count": 2
     },
     {
@@ -99,6 +59,6 @@
     }
   ],
   "notes": [
-    "First-batch fixture deck. Excludes partial card esw2_dbg__main_007."
+    "First-batch fixture deck. Excludes partial cards esw2_dbg__main_002, esw2_dbg__main_004, esw2_dbg__main_005, esw2_dbg__main_006, esw2_dbg__main_007, esw2_dbg__main_010, esw2_dbg__main_013, esw2_dbg__main_016, esw2_dbg__main_017, esw2_dbg__main_018, and esw2_dbg__main_019."
   ]
 }

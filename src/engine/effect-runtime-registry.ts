@@ -7,8 +7,11 @@ import type {
   TokenInstance,
 } from "./setup.js";
 
+export type EffectRuntimeMode = "combat" | "fixture";
+
 export interface EffectSourceContext {
   sourceType: "card" | "wizardProperty";
+  runtimeMode: EffectRuntimeMode;
   playerId: PlayerState["playerId"];
   cardInstanceId: string;
   definitionId: string;
@@ -222,7 +225,13 @@ export interface EffectRuntimeHandler {
 export interface EffectRuntimeCatalogEntry {
   effectId: string;
   handler: EffectRuntimeHandler;
+  supportedModes: readonly EffectRuntimeMode[];
 }
+
+const allEffectRuntimeModes: readonly EffectRuntimeMode[] = [
+  "combat",
+  "fixture",
+];
 
 const addPowerHandler: EffectRuntimeHandler = {
   effectId: "add_power",
@@ -1197,6 +1206,75 @@ const modifyEffectiveValueHandler: EffectRuntimeHandler = {
       ok: false,
       error: "modify_effective_value is an effective-value-only effect",
     };
+  },
+};
+
+const fixtureModifyEffectiveValueHandler: EffectRuntimeHandler = {
+  ...modifyEffectiveValueHandler,
+  effectId: "fixture_modify_effective_value",
+  execute() {
+    return {
+      ok: false,
+      error: "fixture_modify_effective_value is an effective-value-only effect",
+    };
+  },
+};
+
+const fixtureAddPowerEqualToTargetCostHandler: EffectRuntimeHandler = {
+  effectId: "fixture_add_power_equal_to_target_cost",
+  validateShape(subjectId, effect) {
+    return validateCardTargetSelector(
+      subjectId,
+      effect,
+      "fixture target-cost power",
+      "mainMarketCard"
+    );
+  },
+  execute(state, player, effect, source, services) {
+    const targetResult = services.resolveTargetChoice(
+      state,
+      player,
+      effect,
+      source
+    );
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    if (targetResult.choice === undefined) {
+      return { ok: true };
+    }
+
+    const choice = services.requireCardChoice(
+      targetResult.choice,
+      "fixture_add_power_equal_to_target_cost"
+    );
+    if (!choice.ok) {
+      return choice;
+    }
+
+    const definition = state.cardDefinitions.get(choice.card.definitionId);
+    if (definition === undefined) {
+      return {
+        ok: false,
+        error: `Missing target card definition ${choice.card.definitionId}`,
+      };
+    }
+
+    state.turn.power += definition.engine.cost;
+    state.eventLog.push({
+      type: "effectFixtureTargetCostPowerApplied",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      targetCardInstanceId: choice.card.instanceId,
+      targetDefinitionId: choice.card.definitionId,
+      effectId: "fixture_add_power_equal_to_target_cost",
+      amount: definition.engine.cost,
+      sourceType: source.sourceType,
+    });
+
+    return { ok: true };
   },
 };
 
@@ -2920,6 +2998,14 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
     modifyEffectiveValueHandler.effectId,
     toCatalogEntry(modifyEffectiveValueHandler),
   ],
+  [
+    fixtureModifyEffectiveValueHandler.effectId,
+    toFixtureOnlyCatalogEntry(fixtureModifyEffectiveValueHandler),
+  ],
+  [
+    fixtureAddPowerEqualToTargetCostHandler.effectId,
+    toFixtureOnlyCatalogEntry(fixtureAddPowerEqualToTargetCostHandler),
+  ],
   [topdeckGainedCardHandler.effectId, toCatalogEntry(topdeckGainedCardHandler)],
   [
     temporaryHandLimitByGainedCardTypeHandler.effectId,
@@ -2975,11 +3061,29 @@ export function getEffectRuntimeHandler(
   return getEffectRuntimeCatalogEntry(effectId)?.handler;
 }
 
+export function isEffectRuntimeCatalogEntrySupportedInMode(
+  entry: EffectRuntimeCatalogEntry,
+  mode: EffectRuntimeMode
+): boolean {
+  return entry.supportedModes.includes(mode);
+}
+
 function toCatalogEntry(
   handler: EffectRuntimeHandler
 ): EffectRuntimeCatalogEntry {
   return {
     effectId: handler.effectId,
     handler,
+    supportedModes: allEffectRuntimeModes,
+  };
+}
+
+function toFixtureOnlyCatalogEntry(
+  handler: EffectRuntimeHandler
+): EffectRuntimeCatalogEntry {
+  return {
+    effectId: handler.effectId,
+    handler,
+    supportedModes: ["fixture"],
   };
 }

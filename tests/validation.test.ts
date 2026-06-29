@@ -11,6 +11,7 @@ import {
 import {
   getEffectRuntimeCatalogEntry,
   getEffectRuntimeHandler,
+  isEffectRuntimeCatalogEntrySupportedInMode,
 } from "../src/engine/effect-runtime-registry.js";
 
 const rootDir = process.cwd();
@@ -996,6 +997,45 @@ test("combat data-pack validation rejects fixture effect ids", () => {
         error.includes("fixture_add_power_equal_to_target_cost")
       );
     })
+  );
+});
+
+test("effect runtime catalog marks fixture-only effects by validation mode", () => {
+  const fixturePowerEntry = getEffectRuntimeCatalogEntry(
+    "fixture_add_power_equal_to_target_cost"
+  );
+  assert.ok(fixturePowerEntry);
+  assert.equal(
+    isEffectRuntimeCatalogEntrySupportedInMode(fixturePowerEntry, "fixture"),
+    true
+  );
+  assert.equal(
+    isEffectRuntimeCatalogEntrySupportedInMode(fixturePowerEntry, "combat"),
+    false
+  );
+
+  const fixtureModifierEntry = getEffectRuntimeCatalogEntry(
+    "fixture_modify_effective_value"
+  );
+  assert.ok(fixtureModifierEntry);
+  assert.equal(
+    isEffectRuntimeCatalogEntrySupportedInMode(fixtureModifierEntry, "fixture"),
+    true
+  );
+  assert.equal(
+    isEffectRuntimeCatalogEntrySupportedInMode(fixtureModifierEntry, "combat"),
+    false
+  );
+
+  const combatEntry = getEffectRuntimeCatalogEntry("add_power");
+  assert.ok(combatEntry);
+  assert.equal(
+    isEffectRuntimeCatalogEntrySupportedInMode(combatEntry, "fixture"),
+    true
+  );
+  assert.equal(
+    isEffectRuntimeCatalogEntrySupportedInMode(combatEntry, "combat"),
+    true
   );
 });
 

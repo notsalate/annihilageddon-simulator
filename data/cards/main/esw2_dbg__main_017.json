@@ -19,9 +19,9 @@
   },
   "engine": {
     "runtimeSchema": "krutagidon.cardDefinition.v0",
-    "mappingStatus": "supported",
-    "playableInV0": true,
-    "needsEffectMapping": false,
+    "mappingStatus": "partial",
+    "playableInV0": false,
+    "needsEffectMapping": true,
     "cardKind": "normal",
     "cardTypes": ["treasure"],
     "cost": 5,
@@ -40,6 +40,6 @@
         "amountPerPermanent": 1
       }
     ],
-    "unsupportedMechanics": []
+    "unsupportedMechanics": ["add_power_per_controlled_permanent"]
   }
 }

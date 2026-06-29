@@ -19,9 +19,9 @@
   },
   "engine": {
     "runtimeSchema": "krutagidon.cardDefinition.v0",
-    "mappingStatus": "supported",
-    "playableInV0": true,
-    "needsEffectMapping": false,
+    "mappingStatus": "partial",
+    "playableInV0": false,
+    "needsEffectMapping": true,
     "cardKind": "normal",
     "cardTypes": ["treasure"],
     "cost": 4,
@@ -43,6 +43,6 @@
         "chooser": "controller"
       }
     ],
-    "unsupportedMechanics": []
+    "unsupportedMechanics": ["optional_spend_chip_destroy_own_cards"]
   }
 }

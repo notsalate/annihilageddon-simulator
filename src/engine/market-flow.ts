@@ -19,7 +19,10 @@ export interface RunMarketFlowOptions {
   mode: MarketFlowMode;
 }
 
-export function runMarketFlow(state: GameState, options: RunMarketFlowOptions): MarketFlowResult {
+export function runMarketFlow(
+  state: GameState,
+  options: RunMarketFlowOptions
+): MarketFlowResult {
   const legendResult = fillMarket(state, {
     sourceDeck: state.common.legendDeck,
     market: state.common.legendMarket,
@@ -62,7 +65,7 @@ function fillMarket(
     eventLogType: string;
     endReason: MarketFlowEndReason;
     mode: MarketFlowMode;
-  },
+  }
 ): MarketFlowResult {
   while (options.market.length < options.targetSize) {
     const card = options.sourceDeck.shift();
@@ -109,10 +112,17 @@ function fillMarket(
   return { ok: true };
 }
 
-function executeMayhemCard(state: GameState, card: CardInstance, definition: CardDefinition): MarketFlowResult {
+function executeMayhemCard(
+  state: GameState,
+  card: CardInstance,
+  definition: CardDefinition
+): MarketFlowResult {
   const activePlayer = mustGetActivePlayer(state);
   const effectResult = executeMayhemEffects(state, activePlayer, definition, {
     sourceType: "card",
+    runtimeMode: card.definitionId.startsWith("fixture-")
+      ? "fixture"
+      : "combat",
     playerId: activePlayer.playerId,
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
@@ -134,7 +144,7 @@ function applyMarketChipMarker(
   state: GameState,
   market: CardInstance[],
   addedDefinition: CardDefinition,
-  mode: MarketFlowMode,
+  mode: MarketFlowMode
 ): void {
   if (!addedDefinition.engine.marketChipMarker) {
     return;
@@ -159,7 +169,9 @@ function applyMarketChipMarker(
 }
 
 function mustGetActivePlayer(state: GameState): PlayerState {
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   if (activePlayer === undefined) {
     throw new Error(`Missing active player ${state.activePlayerId}`);
   }
@@ -167,7 +179,10 @@ function mustGetActivePlayer(state: GameState): PlayerState {
   return activePlayer;
 }
 
-function mustGetDefinition(state: GameState, definitionId: string): CardDefinition {
+function mustGetDefinition(
+  state: GameState,
+  definitionId: string
+): CardDefinition {
   const definition = state.cardDefinitions.get(definitionId);
   if (definition === undefined) {
     throw new Error(`Missing card definition ${definitionId}`);

@@ -19,9 +19,9 @@
   },
   "engine": {
     "runtimeSchema": "krutagidon.cardDefinition.v0",
-    "mappingStatus": "supported",
-    "playableInV0": true,
-    "needsEffectMapping": false,
+    "mappingStatus": "partial",
+    "playableInV0": false,
+    "needsEffectMapping": true,
     "cardKind": "legend",
     "cardTypes": ["legend", "wizardCard"],
     "cost": 10,
@@ -48,6 +48,6 @@
         "rememberedCard": "destroyedLegend"
       }
     ],
-    "unsupportedMechanics": []
+    "unsupportedMechanics": ["destroy_random_legend_market_card"]
   }
 }

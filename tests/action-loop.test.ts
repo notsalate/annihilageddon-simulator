@@ -1919,17 +1919,21 @@ test("playing a v0 draw card draws from the active player's deck", () => {
   );
   assert.ok(activePlayer);
 
-  const drawCard = addRuntimeCardToHand(
-    state,
-    activePlayer,
-    "esw2_dbg__main_017"
+  const drawCardId = addFixtureCardToActiveHand(state, {
+    effectId: "draw_cards",
+    timing: "onPlay",
+    amount: 1,
+  });
+  const drawCard = activePlayer.hand.find(
+    (card) => card.instanceId === drawCardId
   );
+  assert.ok(drawCard);
 
   const deckSizeBefore = activePlayer.deck.length;
   const handSizeBefore = activePlayer.hand.length;
   const result = applyAction(state, {
     type: "playCard",
-    cardInstanceId: drawCard.instanceId,
+    cardInstanceId: drawCardId,
   });
 
   assert.equal(result.ok, true);
@@ -4486,6 +4490,59 @@ test("targeted fixture effect surfaces unsupported selectors explicitly", () => 
   assert.match(
     result.error,
     /Unsupported target selector unsupportedFixtureSelector/
+  );
+});
+
+test("runtime execution rejects unsupported effect ids explicitly", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "fixture_runtime_effect_not_in_catalog",
+    timing: "onPlay",
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(
+    result.error,
+    /Unsupported effect id fixture_runtime_effect_not_in_catalog/
+  );
+});
+
+test("runtime execution rejects fixture-only effects in combat mode", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  const definition = createFixtureCardDefinition(
+    "combat-card-with-fixture-only-effect",
+    [
+      {
+        effectId: "fixture_add_power_equal_to_target_cost",
+        timing: "onPlay",
+        targetSelector: "mainMarketCard",
+      },
+    ]
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const card = addRuntimeCardToHand(state, activePlayer, definition.cardId);
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: card.instanceId,
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.error,
+    "Effect id fixture_add_power_equal_to_target_cost is not supported in combat runtime mode"
   );
 });
 

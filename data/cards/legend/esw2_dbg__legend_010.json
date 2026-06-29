@@ -19,9 +19,9 @@
   },
   "engine": {
     "runtimeSchema": "krutagidon.cardDefinition.v0",
-    "mappingStatus": "supported",
-    "playableInV0": true,
-    "needsEffectMapping": false,
+    "mappingStatus": "partial",
+    "playableInV0": false,
+    "needsEffectMapping": true,
     "cardKind": "legend",
     "cardTypes": ["legend", "wizardCard"],
     "cost": 13,
@@ -49,6 +49,9 @@
         "timing": "scoring"
       }
     ],
-    "unsupportedMechanics": []
+    "unsupportedMechanics": [
+      "ongoing_start_turn_optional_gain_limp_wand_to_hand",
+      "endgame_limp_wands_score_positive"
+    ]
   }
 }

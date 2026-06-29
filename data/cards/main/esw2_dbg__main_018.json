@@ -19,9 +19,9 @@
   },
   "engine": {
     "runtimeSchema": "krutagidon.cardDefinition.v0",
-    "mappingStatus": "supported",
-    "playableInV0": true,
-    "needsEffectMapping": false,
+    "mappingStatus": "partial",
+    "playableInV0": false,
+    "needsEffectMapping": true,
     "cardKind": "normal",
     "cardTypes": ["location"],
     "cost": 3,
@@ -41,6 +41,6 @@
         "amount": 1
       }
     ],
-    "unsupportedMechanics": []
+    "unsupportedMechanics": ["on_gain_self_gain_limp_wands"]
   }
 }

@@ -1,7 +1,11 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { getEffectRuntimeCatalogEntry } from "./effect-runtime-registry.js";
+import {
+  getEffectRuntimeCatalogEntry,
+  isEffectRuntimeCatalogEntrySupportedInMode,
+  type EffectRuntimeMode,
+} from "./effect-runtime-registry.js";
 
 export type CardKind =
   | "starter"
@@ -157,7 +161,7 @@ export type DataPackValidationResult =
     };
 
 export interface DataPackValidationOptions {
-  mode?: "combat" | "fixture";
+  mode?: EffectRuntimeMode;
 }
 
 export function loadV0DataPack(
@@ -456,49 +460,26 @@ function validateRuntimeEffectDefinition(
   subjectId: string,
   effectId: string,
   effect: Record<string, unknown>,
-  mode: "combat" | "fixture"
+  mode: EffectRuntimeMode
 ): string[] {
-  if (mode === "combat" && effectId.startsWith("fixture_")) {
-    return [`${subjectId} uses fixture effect id ${effectId} in combat data`];
-  }
-
   const catalogEntry = getEffectRuntimeCatalogEntry(effectId);
   if (catalogEntry !== undefined) {
+    if (!isEffectRuntimeCatalogEntrySupportedInMode(catalogEntry, mode)) {
+      if (mode === "combat" && effectId.startsWith("fixture_")) {
+        return [
+          `${subjectId} uses fixture effect id ${effectId} in combat data`,
+        ];
+      }
+
+      return [
+        `${subjectId} uses effect id ${effectId} outside supported ${mode} mode`,
+      ];
+    }
+
     return catalogEntry.handler.validateShape(subjectId, effect);
   }
 
-  if (!isLegacyCompatibilityEffectId(effectId, mode)) {
-    return [`${subjectId} uses unsupported effect id ${effectId}`];
-  }
-
-  return validateLegacyCompatibilityEffectShape(
-    subjectId,
-    effectId,
-    effect,
-    mode
-  );
-}
-
-// TODO(issue 23): remove this compatibility path after legacy effect IDs are
-// registered in Effect Runtime Catalog slices.
-function isLegacyCompatibilityEffectId(
-  effectId: string,
-  mode: "combat" | "fixture"
-): boolean {
-  return (
-    mode === "fixture" &&
-    (effectId === "fixture_add_power_equal_to_target_cost" ||
-      effectId === "fixture_modify_effective_value")
-  );
-}
-
-function validateLegacyCompatibilityEffectShape(
-  subjectId: string,
-  effectId: string,
-  effect: Record<string, unknown>,
-  mode: "combat" | "fixture"
-): string[] {
-  return [];
+  return [`${subjectId} uses unsupported effect id ${effectId}`];
 }
 
 function isEffectRecord(effect: unknown): effect is Record<string, unknown> {

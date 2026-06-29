@@ -19,9 +19,9 @@
   },
   "engine": {
     "runtimeSchema": "krutagidon.cardDefinition.v0",
-    "mappingStatus": "supported",
-    "playableInV0": true,
-    "needsEffectMapping": false,
+    "mappingStatus": "partial",
+    "playableInV0": false,
+    "needsEffectMapping": true,
     "cardKind": "normal",
     "cardTypes": ["spell"],
     "cost": 3,
@@ -49,6 +49,6 @@
         "sourceZone": "hand"
       }
     ],
-    "unsupportedMechanics": []
+    "unsupportedMechanics": ["attack_discard_cards"]
   }
 }

@@ -19,9 +19,9 @@
   },
   "engine": {
     "runtimeSchema": "krutagidon.cardDefinition.v0",
-    "mappingStatus": "supported",
-    "playableInV0": true,
-    "needsEffectMapping": false,
+    "mappingStatus": "partial",
+    "playableInV0": false,
+    "needsEffectMapping": true,
     "cardKind": "starter",
     "cardTypes": ["wand"],
     "tags": ["wandAttackCard"],
@@ -48,6 +48,6 @@
         ]
       }
     ],
-    "unsupportedMechanics": []
+    "unsupportedMechanics": ["return_discard_to_hand"]
   }
 }

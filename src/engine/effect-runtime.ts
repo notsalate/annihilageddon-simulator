@@ -8,10 +8,11 @@ import {
 import {
   type DamageResult,
   type EffectChoice,
-  getEffectRuntimeHandler,
+  getEffectRuntimeCatalogEntry,
   type EffectExecutionResult,
   type EffectRuntimeServices,
   type EffectSourceContext,
+  isEffectRuntimeCatalogEntrySupportedInMode,
   type TargetChoice,
   type TargetChoiceResult,
 } from "./effect-runtime-registry.js";
@@ -112,6 +113,7 @@ export function executeWizardPropertyOnPlayCardEffects(
       "onPlayCard",
       {
         sourceType: "wizardProperty",
+        runtimeMode: "combat",
         playerId: player.playerId,
         cardInstanceId: token.instanceId,
         definitionId: token.definitionId,
@@ -194,6 +196,7 @@ export function moveGainedCardToPlayerDestination(
 
       const result = executeEffect(state, player, effect, {
         sourceType: "wizardProperty",
+        runtimeMode: "combat",
         playerId: player.playerId,
         cardInstanceId: token.instanceId,
         definitionId: token.definitionId,
@@ -348,26 +351,9 @@ function isSupportedMayhemRuntimeEffect(
   effect: Record<string, unknown>
 ): boolean {
   const effectId = effect["effectId"];
-  if (
-    typeof effectId === "string" &&
-    getEffectRuntimeHandler(effectId) !== undefined
-  ) {
-    return true;
-  }
-
   return (
-    effectId === "heal" ||
-    effectId === "set_life" ||
-    effectId === "mega_mayhem_set_life" ||
-    effectId === "mega_mayhem_each_player_toggle_dingler" ||
-    effectId === "gain_chips_per_player_with_status" ||
-    effectId === "reveal_top_card" ||
-    effectId === "play_top_card" ||
-    effectId === "draw_cards" ||
-    effectId === "gain_status" ||
-    effectId === "remove_status" ||
-    effectId === "toggle_status" ||
-    effectId === "wild_magic_choice"
+    typeof effectId === "string" &&
+    getEffectRuntimeCatalogEntry(effectId) !== undefined
   );
 }
 
@@ -377,12 +363,24 @@ function executeEffect(
   effect: Record<string, unknown>,
   source: EffectSourceContext
 ): EffectExecutionResult {
-  const runtimeHandler =
+  const catalogEntry =
     typeof effect["effectId"] === "string"
-      ? getEffectRuntimeHandler(effect["effectId"])
+      ? getEffectRuntimeCatalogEntry(effect["effectId"])
       : undefined;
-  if (runtimeHandler !== undefined) {
-    return runtimeHandler.execute(
+  if (catalogEntry !== undefined) {
+    if (
+      !isEffectRuntimeCatalogEntrySupportedInMode(
+        catalogEntry,
+        source.runtimeMode
+      )
+    ) {
+      return {
+        ok: false,
+        error: `Effect id ${catalogEntry.effectId} is not supported in ${source.runtimeMode} runtime mode`,
+      };
+    }
+
+    return catalogEntry.handler.execute(
       state,
       player,
       effect,
@@ -391,49 +389,10 @@ function executeEffect(
     );
   }
 
-  if (effect["effectId"] === "fixture_add_power_equal_to_target_cost") {
-    const targetResult = resolveTargetChoice(state, player, effect, source);
-    if (!targetResult.ok) {
-      return targetResult;
-    }
-
-    if (targetResult.choice === undefined) {
-      return { ok: true };
-    }
-
-    const choice = requireCardChoice(
-      targetResult.choice,
-      "fixture_add_power_equal_to_target_cost"
-    );
-    if (!choice.ok) {
-      return choice;
-    }
-
-    const definition = state.cardDefinitions.get(choice.card.definitionId);
-    if (definition === undefined) {
-      return {
-        ok: false,
-        error: `Missing target card definition ${choice.card.definitionId}`,
-      };
-    }
-
-    state.turn.power += definition.engine.cost;
-    state.eventLog.push({
-      type: "effectFixtureTargetCostPowerApplied",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      targetCardInstanceId: choice.card.instanceId,
-      targetDefinitionId: choice.card.definitionId,
-      effectId: "fixture_add_power_equal_to_target_cost",
-      amount: definition.engine.cost,
-      sourceType: source.sourceType,
-    });
-
-    return { ok: true };
-  }
-
-  return { ok: true };
+  return {
+    ok: false,
+    error: `Unsupported effect id ${asString(effect["effectId"])}`,
+  };
 }
 
 function effectConditionMatches(
@@ -1303,6 +1262,7 @@ function resolveDefenseWindow(
       "onDefense",
       {
         sourceType: "card",
+        runtimeMode: getCardEffectRuntimeMode(defense.card.definitionId),
         playerId: defendingPlayer.playerId,
         cardInstanceId: defense.card.instanceId,
         definitionId: defense.card.definitionId,
@@ -1992,6 +1952,7 @@ function playResolvedCard(
 
   const effectResult = executeOnPlayEffects(state, player, definition, {
     sourceType: "card",
+    runtimeMode: getCardEffectRuntimeMode(card.definitionId),
     playerId: player.playerId,
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
@@ -2035,4 +1996,8 @@ function shuffleInPlace<T>(items: T[], state: GameState): void {
 
 function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
   return typeof effect === "object" && effect !== null;
+}
+
+function getCardEffectRuntimeMode(definitionId: string): "combat" | "fixture" {
+  return definitionId.startsWith("fixture-") ? "fixture" : "combat";
 }

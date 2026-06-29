@@ -19,9 +19,9 @@
   },
   "engine": {
     "runtimeSchema": "krutagidon.cardDefinition.v0",
-    "mappingStatus": "supported",
-    "playableInV0": true,
-    "needsEffectMapping": false,
+    "mappingStatus": "partial",
+    "playableInV0": false,
+    "needsEffectMapping": true,
     "cardKind": "normal",
     "cardTypes": ["creature"],
     "cost": 3,
@@ -48,6 +48,6 @@
         "amount": 1
       }
     ],
-    "unsupportedMechanics": []
+    "unsupportedMechanics": ["conditional_activation_destroy_own_cards"]
   }
 }

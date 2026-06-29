@@ -19,9 +19,9 @@
   },
   "engine": {
     "runtimeSchema": "krutagidon.cardDefinition.v0",
-    "mappingStatus": "supported",
-    "playableInV0": true,
-    "needsEffectMapping": false,
+    "mappingStatus": "partial",
+    "playableInV0": false,
+    "needsEffectMapping": true,
     "cardKind": "legend",
     "cardTypes": ["legend", "creature"],
     "cost": 10,
@@ -40,6 +40,6 @@
         "amountPerOwnedLegend": 2
       }
     ],
-    "unsupportedMechanics": []
+    "unsupportedMechanics": ["endgame_vp_per_owned_legend"]
   }
 }

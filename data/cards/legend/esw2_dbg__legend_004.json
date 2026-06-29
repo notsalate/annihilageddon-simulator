@@ -19,9 +19,9 @@
   },
   "engine": {
     "runtimeSchema": "krutagidon.cardDefinition.v0",
-    "mappingStatus": "supported",
-    "playableInV0": true,
-    "needsEffectMapping": false,
+    "mappingStatus": "partial",
+    "playableInV0": false,
+    "needsEffectMapping": true,
     "cardKind": "legend",
     "cardTypes": ["legend", "wizardCard"],
     "cost": 14,
@@ -42,6 +42,6 @@
         "destinationOverride": "hand"
       }
     ],
-    "unsupportedMechanics": []
+    "unsupportedMechanics": ["optional_gain_market_cards_to_hand_this_turn"]
   }
 }

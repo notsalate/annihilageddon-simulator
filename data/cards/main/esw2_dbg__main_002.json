@@ -19,9 +19,9 @@
   },
   "engine": {
     "runtimeSchema": "krutagidon.cardDefinition.v0",
-    "mappingStatus": "supported",
-    "playableInV0": true,
-    "needsEffectMapping": false,
+    "mappingStatus": "partial",
+    "playableInV0": false,
+    "needsEffectMapping": true,
     "cardKind": "normal",
     "cardTypes": ["wizardCard"],
     "cost": 5,
@@ -42,6 +42,8 @@
         "destroyedCardSource": "legendDeck"
       }
     ],
-    "unsupportedMechanics": []
+    "unsupportedMechanics": [
+      "attack_destroy_top_legend_deck_then_damage_equal_cost"
+    ]
   }
 }

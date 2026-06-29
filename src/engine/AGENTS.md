@@ -15,6 +15,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Preserve deterministic behavior through seeded RNG.
 - Do not add filesystem, terminal, or UI concerns to engine modules except the existing data-loading boundary in `data.ts`.
 - Keep card behavior in explicit typed runtime effects and handlers.
+- Add runtime effect IDs only through `effect-runtime-registry.ts`; executable data must not reference IDs outside the Effect Runtime Catalog.
 - Do not use localized display names as primary identifiers.
 - Preserve existing tested behavior unless the issue explicitly requires a rules change.
 - Thread execution/validation mode explicitly instead of adding hidden global assumptions.
