@@ -20,16 +20,15 @@ Block A creates a clean `current-runtime` baseline:
 - rename the old v0/first-batch pack, decks, stacks, and pool to current runtime names;
 - rename the default data-pack loader away from `loadV0DataPack`;
 - mark the pack as `incomplete-full-only`;
-- remove old non-special runtime card JSON as runtime truth;
-- review the two existing special runtime cards before deciding whether to keep them;
+- remove old non-special runtime card JSON as runtime truth and clear only the compositions that reference those removed cards;
+- review the two existing special runtime cards in a separate slice before deciding whether to keep their runtime JSON and stack entries;
 - make setup tolerate incomplete packs without placeholder familiars or wizard properties.
 
 Block B creates the full-runtime planning workflow:
 
-- introduce `fullRuntime` vocabulary;
-- replace the stale committed runtime coverage markdown snapshot with a generated card cluster matrix;
-- store manual card-cluster decisions in structured JSON;
-- generate a matrix from drafts, current runtime data, compositions, and decisions;
+- bootstrap a generated card cluster matrix from draft data and structured decisions;
+- introduce `fullRuntime` vocabulary and validation guardrails after the basic generator exists;
+- replace the stale committed runtime coverage markdown snapshot with the generated matrix workflow;
 - forbid new partial runtime card JSON.
 
 New cards are implemented only after Block A and Block B are complete.
@@ -69,6 +68,7 @@ New cards are implemented only after Block A and Block B are complete.
 - Existing special runtime cards `esw2_dbg__wild_magic` and `esw2_dbg__limp_wand` will be reviewed in Block A and kept only if they satisfy the new full standard.
 - Current card compositions must not reference deleted card IDs.
 - Incomplete runtime setup must allow absent or empty optional setup surfaces where appropriate, including familiar pool and wizard-property stack.
+- Setup tolerance does not by itself decide manifest shape. Manifest or composition edits belong only to the issue that explicitly owns that data change.
 - Block B will introduce a new import-side generator for card runtime cluster planning.
 - Manual card decisions will live in `.scratch/krutagidon-card-runtime-clusters/card-cluster-decisions.json`.
 - Generated matrix output will live in `.scratch/krutagidon-card-runtime-clusters/card-runtime-cluster-matrix.md`.
