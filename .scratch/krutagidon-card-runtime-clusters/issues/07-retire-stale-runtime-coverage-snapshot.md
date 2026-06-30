@@ -1,5 +1,5 @@
-Status: Ready
-Label: ready-for-agent
+Status: Done
+Label: done
 Type: AFK
 
 # Удалить stale runtime coverage snapshot из docs
@@ -22,13 +22,13 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] `docs/runtime-coverage-v05-inventory.md` удалён как stale generated snapshot.
-- [ ] Ни один локальный workflow doc не указывает на этот markdown как на source of truth.
-- [ ] Документация или `.scratch/krutagidon-card-runtime-clusters/AGENTS.md` объясняет, что dynamic command и generated matrix заменяют old committed coverage snapshot.
-- [ ] Если `npm run report:runtime-coverage` остаётся, его роль описана как dynamic audit, а не committed planning artifact.
-- [ ] `npm run report:card-runtime-clusters` проходит после удаления snapshot.
-- [ ] `npm run typecheck` проходит, если затронуты exports/scripts.
-- [ ] `git diff --check` проходит.
+- [x] `docs/runtime-coverage-v05-inventory.md` удалён как stale generated snapshot.
+- [x] Ни один локальный workflow doc не указывает на этот markdown как на source of truth.
+- [x] Документация или `.scratch/krutagidon-card-runtime-clusters/AGENTS.md` объясняет, что dynamic command и generated matrix заменяют old committed coverage snapshot.
+- [x] Если `npm run report:runtime-coverage` остаётся, его роль описана как dynamic audit, а не committed planning artifact.
+- [x] `npm run report:card-runtime-clusters` проходит после удаления snapshot.
+- [x] `npm run typecheck` проходит, если затронуты exports/scripts.
+- [x] `git diff --check` проходит.
 
 ## Blocked by
 
@@ -38,3 +38,10 @@ Type: AFK
 
 - Не удалять сам dynamic runtime coverage command только потому, что удаляется stale markdown.
 - Не реализовывать новые карты в этом issue.
+
+## Result
+
+- Выполнено в коммите `eb3e3d8 docs(project): удалить stale runtime coverage snapshot`.
+- Snapshot `docs/runtime-coverage-v05-inventory.md` удалён.
+- Durable docs переведены на dynamic audit/report workflow.
+- Статус tracker-файла синхронизирован после review-находки.

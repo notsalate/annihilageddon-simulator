@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "stackId": "wild-magic-stack",
-  "runtimeSchema": "krutagidon.stackComposition.v0",
+  "deckId": "wild-magic-stack",
+  "runtimeSchema": "krutagidon.deckComposition.v0",
   "role": "wildMagicStack",
-  "objectType": "card",
+  "mappingStatus": "supported",
   "entries": [
     {
       "cardId": "esw2_dbg__wild_magic",

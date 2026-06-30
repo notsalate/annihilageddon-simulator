@@ -3,6 +3,7 @@
   "deckId": "main-deck",
   "runtimeSchema": "krutagidon.deckComposition.v0",
   "role": "mainDeck",
+  "mappingStatus": "supported",
   "entries": [
     {
       "cardId": "esw2_dbg__main_001",
