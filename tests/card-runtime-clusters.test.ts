@@ -163,7 +163,7 @@ test("card runtime clusters matrix combines drafts, runtime, compositions, and m
   writeText(
     rootDir,
     "tests/runtime.test.ts",
-    'const cardId = "esw2_dbg__main_003";\n'
+    'import { initializeGame } from "../src/index.js";\ninitializeGame({ rootDir: process.cwd(), seed: 1 });\nconst cardId = "esw2_dbg__main_003";\n'
   );
 
   const report = writeCardRuntimeClusterMatrix(rootDir);
@@ -230,7 +230,7 @@ test("card runtime clusters mark fullRuntime when runtime has composition and fo
   writeText(
     rootDir,
     "tests/setup.test.ts",
-    'const cardId = "esw2_dbg__wild_magic";\n'
+    'import { initializeGame } from "../src/index.js";\ninitializeGame({ rootDir: process.cwd(), seed: 1 });\nconst cardId = "esw2_dbg__wild_magic";\n'
   );
 
   const report = createCardRuntimeClusterReport(rootDir);
@@ -239,6 +239,55 @@ test("card runtime clusters mark fullRuntime when runtime has composition and fo
   assert.equal(report.summary.missingRuntime, 0);
   assert.equal(report.items[0]?.runtimeStatus, "fullRuntime");
   assert.deepEqual(report.items[0]?.focusedTestRefs, ["tests/setup.test.ts"]);
+});
+
+test("card runtime clusters ignore non-runtime test mentions as focused evidence", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-card-runtime-clusters-non-runtime-ref-")
+  );
+
+  writeCardDraft(rootDir, "special", "esw2_dbg__wild_magic", {
+    nameRu: "Шальная магия",
+    textRu: "Выбери одно",
+  });
+  writeJson(rootDir, "data/cards/special/esw2_dbg__wild_magic.json", {
+    schemaVersion: 1,
+    cardId: "esw2_dbg__wild_magic",
+    engine: {
+      mappingStatus: "supported",
+      playableInV0: true,
+      needsEffectMapping: false,
+      unsupportedMechanics: [],
+      effects: [{ effectId: "wild_magic_choice", timing: "onPlay" }],
+    },
+  });
+  writeJson(rootDir, "data/stacks/cards/wild-magic-stack.json", {
+    stackId: "wild-magic-stack",
+    entries: [{ cardId: "esw2_dbg__wild_magic", count: 15 }],
+  });
+  writeJson(
+    rootDir,
+    ".scratch/krutagidon-card-runtime-clusters/card-cluster-decisions.json",
+    {
+      schemaVersion: 1,
+      decisions: [
+        {
+          cardId: "esw2_dbg__wild_magic",
+          status: "needsClusterDecision",
+        },
+      ],
+    }
+  );
+  writeText(
+    rootDir,
+    "tests/draft-validation.test.ts",
+    'const cardId = "esw2_dbg__wild_magic";\n'
+  );
+
+  assert.throws(
+    () => createCardRuntimeClusterReport(rootDir),
+    /Non-full runtime card JSON is blocked: esw2_dbg__wild_magic \(missing focused test refs/
+  );
 });
 
 test("card runtime clusters block non-full runtime card json", () => {

@@ -500,6 +500,10 @@ function collectFocusedTestRefs(rootDir: string): Map<string, string[]> {
 
   for (const filePath of collectFiles(rootDir, ["tests"], ".ts")) {
     const text = readFileSync(filePath, "utf8");
+    if (!isFocusedRuntimeTestFile(filePath, text)) {
+      continue;
+    }
+
     for (const match of text.matchAll(idPattern)) {
       const cardId = match[0];
       const current = refs.get(cardId) ?? [];
@@ -512,6 +516,16 @@ function collectFocusedTestRefs(rootDir: string): Map<string, string[]> {
   }
 
   return refs;
+}
+
+function isFocusedRuntimeTestFile(filePath: string, text: string): boolean {
+  if (!path.basename(filePath).endsWith(".test.ts")) {
+    return false;
+  }
+
+  return /\b(applyAction|buildControlledObjectView|calculateEffectiveCardCost|calculateEffectivePlayerMaxLife|calculateEffectivePlayerVictoryPoints|initializeGame|listLegalActions|runMarketFlow|runMassSimulation|runSingleGame|scoreGame)\s*\(/.test(
+    text
+  );
 }
 
 function validateRuntimeGuardrails(
