@@ -7,6 +7,8 @@ import {
   type EffectRuntimeMode,
 } from "./effect-runtime-registry.js";
 
+type RuntimeEffectSourceKind = "card" | "wizardProperty";
+
 export type CardKind =
   | "starter"
   | "normal"
@@ -277,7 +279,8 @@ export function validateExecutableDataPack(
           `Card ${definition.cardId}`,
           effectId,
           effect,
-          mode
+          mode,
+          "card"
         )
       );
     }
@@ -316,7 +319,8 @@ export function validateExecutableDataPack(
           `Token ${definition.tokenId}`,
           effectId,
           effect,
-          mode
+          mode,
+          "wizardProperty"
         )
       );
     }
@@ -559,8 +563,16 @@ function validateRuntimeEffectDefinition(
   subjectId: string,
   effectId: string,
   effect: Record<string, unknown>,
-  mode: EffectRuntimeMode
+  mode: EffectRuntimeMode,
+  sourceKind: RuntimeEffectSourceKind
 ): string[] {
+  if (
+    sourceKind === "card" &&
+    effectId === "temporary_hand_limit_by_gained_card_type"
+  ) {
+    return [`${subjectId} uses token-only effect id ${effectId}`];
+  }
+
   const catalogEntry = getEffectRuntimeCatalogEntry(effectId);
   if (catalogEntry !== undefined) {
     if (!isEffectRuntimeCatalogEntrySupportedInMode(catalogEntry, mode)) {

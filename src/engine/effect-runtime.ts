@@ -254,7 +254,8 @@ export function calculateEndTurnDrawCount(
       if (
         effect["timing"] !== "endTurn" ||
         typeof amount !== "number" ||
-        !Number.isSafeInteger(amount)
+        !Number.isSafeInteger(amount) ||
+        amount <= 0
       ) {
         continue;
       }

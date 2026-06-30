@@ -1206,6 +1206,38 @@ test("temporary hand-limit effect validates supported and invalid shapes", () =>
     []
   );
 
+  assert.deepEqual(
+    getEffectRuntimeHandler(effectId)?.validateShape("Token", {
+      effectId,
+      timing: "endTurn",
+      amount: 1,
+      cardTypes: ["spel"],
+    }),
+    ["Token uses unknown temporary-hand-limit card type spel"]
+  );
+
+  const card = createFixtureCard("fixture-temporary-hand-limit-on-card-source");
+  const cardDataPack = withOnlyFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      effects: [
+        {
+          effectId,
+          timing: "endTurn",
+          amount: 1,
+          cardTypes: ["spell"],
+        },
+      ],
+    },
+  });
+  const cardResult = validateExecutableDataPack(cardDataPack);
+
+  assert.equal(cardResult.ok, false);
+  assert.deepEqual(cardResult.errors, [
+    "Card fixture-temporary-hand-limit-on-card-source uses token-only effect id temporary_hand_limit_by_gained_card_type",
+  ]);
+
   const dataPack = withFixtureToken({
     schemaVersion: 1,
     tokenId: "wizard-property-fixture-temporary-hand-limit-validation",

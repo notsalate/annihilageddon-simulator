@@ -9,6 +9,13 @@ import type {
 
 export type EffectRuntimeMode = "combat" | "fixture";
 
+const RUNTIME_CARD_TYPES = new Set([
+  "wizardCard",
+  "spell",
+  "treasure",
+  "creature",
+]);
+
 export interface EffectSourceContext {
   sourceType: "card" | "wizardProperty";
   runtimeMode: EffectRuntimeMode;
@@ -1354,6 +1361,14 @@ const temporaryHandLimitByGainedCardTypeHandler: EffectRuntimeHandler = {
       errors.push(
         `${subjectId} uses unsupported temporary-hand-limit filter cardTypes`
       );
+    } else {
+      for (const cardType of cardTypes) {
+        if (!RUNTIME_CARD_TYPES.has(cardType)) {
+          errors.push(
+            `${subjectId} uses unknown temporary-hand-limit card type ${cardType}`
+          );
+        }
+      }
     }
 
     for (const filterField of ["cardDefinitionIds", "cardKind", "isOngoing"]) {

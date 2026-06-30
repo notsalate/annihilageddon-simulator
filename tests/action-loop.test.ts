@@ -2047,6 +2047,58 @@ test("temporary hand limit modifier counts cards gained this turn and resets aft
   assert.deepEqual(state.turn.gainedCardDefinitionIds, []);
 });
 
+test("temporary hand limit modifier ignores invalid runtime amount", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    createTemporaryHandLimitWizardProperty(
+      "fixture-invalid-hand-limit-property",
+      ["spell"],
+      -1
+    )
+  );
+  activePlayer.hand.splice(0);
+  activePlayer.deck.splice(
+    0,
+    activePlayer.deck.length,
+    ...createFixtureCardInstances("fixture-filler", activePlayer.playerId, 5)
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [
+      createFixtureCardDefinition("fixture-filler", []).cardId,
+      createFixtureCardDefinition("fixture-filler", []),
+    ],
+  ]);
+  const spell = addFixtureMarketCard(
+    state,
+    "fixture-invalid-limit-gained-spell",
+    ["spell"],
+    0
+  );
+
+  assert.equal(
+    applyAction(state, {
+      type: "buyMarketCard",
+      cardInstanceId: spell.instanceId,
+      source: "mainMarket",
+    }).ok,
+    true
+  );
+  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+
+  assert.equal(activePlayer.hand.length, 5);
+});
+
 test("playing a v0 draw card draws from the active player's deck", () => {
   const state = initializeGame({
     rootDir,
@@ -5463,7 +5515,8 @@ function createTopdeckOnGainWizardProperty(
 
 function createTemporaryHandLimitWizardProperty(
   tokenId: string,
-  cardTypes: string[]
+  cardTypes: string[],
+  amount = 1
 ): TokenDefinition {
   return {
     schemaVersion: 1,
@@ -5477,7 +5530,7 @@ function createTemporaryHandLimitWizardProperty(
         {
           effectId: "temporary_hand_limit_by_gained_card_type",
           timing: "endTurn",
-          amount: 1,
+          amount,
           cardTypes,
         },
       ],
