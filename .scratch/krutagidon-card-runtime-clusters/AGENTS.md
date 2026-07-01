@@ -16,6 +16,11 @@ This folder contains the local planning workflow for card runtime clusters.
 
 - Edit `card-cluster-decisions.json` manually when assigning or revising card clusters.
 - Edit `mechanic-clusters.md` manually when defining or revising final mechanic cluster meanings.
+- Assign exactly one final `clusterId` per card.
+- Choose the final `clusterId` by the card's primary runtime mechanic: the large mechanic or modifier surface that gives the card its playable identity.
+- Do not choose `clusterId` by the hardest sub-effect, by every secondary payload, or by an action window such as attack or defense by default.
+- Attack and defense can be clusters, but a mixed card belongs elsewhere when another surface such as DWT exchange/scaling is the main mechanic shared by its actions.
+- If no current cluster fits a card, keep or set `status: "needsClusterDecision"` and add a short `notes` reason instead of forcing the card into the closest cluster.
 - Do not edit `card-runtime-cluster-matrix.md` manually; regenerate it from the command.
 - Generated matrix facts must come from import drafts, current runtime card JSON, current compositions, and manual decisions only.
 - Do not use deleted legacy runtime card JSON as planning input.

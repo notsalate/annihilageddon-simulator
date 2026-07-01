@@ -192,6 +192,10 @@ _Avoid_: full card import, complete card database
 A planning group of cards, tokens, properties, and engine rules that must be implemented together because they depend on the same mechanic or modifier surface. v0.5 runtime mapping issues should be cut by mechanic clusters, not by incidental file location or by fixing old runtime JSON opportunistically.
 _Avoid_: drive-by runtime fixes, one-card issue for a shared mechanic
 
+**Primary Runtime Mechanic**:
+The main mechanic or modifier surface that best explains why a card belongs in a mechanic cluster. A card can use several action windows or payloads, but its primary runtime mechanic is the larger surface that gives the card its playable identity.
+_Avoid_: hardest sub-effect, every secondary payload, action window by default
+
 **Fixture Mechanic**:
 A temporary test-only mechanic or effect ID used to prove a rules-engine slice before it is promoted to normal runtime data language. Fixture mechanics must not be used as the canonical IDs for real playable card data; promoted mechanics are tested through their normal runtime IDs before fixture IDs are removed.
 _Avoid_: production mechanic, real card effect ID
