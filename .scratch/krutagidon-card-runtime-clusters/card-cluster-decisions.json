@@ -3,259 +3,352 @@
   "decisions": [
     {
       "cardId": "esw2_dbg__familiar_001",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "defense-effects"
     },
     {
       "cardId": "esw2_dbg__familiar_002",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "defense-effects"
     },
     {
       "cardId": "esw2_dbg__familiar_003",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "special-card-stack",
+      "notes": "Главная механика — выдача Limp Wand через атаку; перенаправление в защите вторично."
     },
     {
       "cardId": "esw2_dbg__familiar_004",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects",
+      "notes": "Выбран attack-effects: карта задаёт модификатор следующей неизбежной атаки; перенаправление в защите вторично."
     },
     {
       "cardId": "esw2_dbg__familiar_005",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "ongoing-modifiers",
+      "notes": "Главная поверхность — изменение типов контролируемой карты; добор и перенаправление в защите вторичны."
     },
     {
       "cardId": "esw2_dbg__familiar_006",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "defense-effects"
     },
     {
       "cardId": "esw2_dbg__familiar_007",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "market-effects"
     },
     {
       "cardId": "esw2_dbg__familiar_008",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement"
     },
     {
       "cardId": "esw2_dbg__familiar_009",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions",
+      "notes": "Подсчёт и обмен DWT важнее защитного канала."
     },
     {
       "cardId": "esw2_dbg__familiar_010",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects",
+      "notes": "Главная механика — распределённая атака с условием по контролируемой легенде; защита фамильяра вторична."
     },
     {
       "cardId": "esw2_dbg__legend_001",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "special-card-stack"
     },
     {
       "cardId": "esw2_dbg__legend_002",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "life-total-effects",
+      "notes": "Обмен жизнями выбран как основная механика; обмен Dingler status остаётся примечанием к реализации."
     },
     {
       "cardId": "esw2_dbg__legend_003",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects"
     },
     {
       "cardId": "esw2_dbg__legend_004",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "scoring-effects"
     },
     {
       "cardId": "esw2_dbg__legend_005",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "activation-effects"
     },
     {
       "cardId": "esw2_dbg__legend_006",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions"
     },
     {
       "cardId": "esw2_dbg__legend_007",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions"
     },
     {
       "cardId": "esw2_dbg__legend_008",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "ongoing-modifiers"
     },
     {
       "cardId": "esw2_dbg__legend_009",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "simple-baseline"
     },
     {
       "cardId": "esw2_dbg__legend_010",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "life-total-effects",
+      "notes": "Триггер лечения от нанесённого урона определяет карту; модификатор предела руки вторичен."
     },
     {
       "cardId": "esw2_dbg__legend_011",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "controlled-object-conditions",
+      "notes": "Урон считается от стоимости другой контролируемой карты; рамка атаки вторична."
     },
     {
       "cardId": "esw2_dbg__legend_012",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "ongoing-modifiers",
+      "notes": "Постоянный триггер первого урона атакой и прибавка мощи важнее деталей атаки."
     },
     {
       "cardId": "esw2_dbg__legend_013",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions"
     },
     {
       "cardId": "esw2_dbg__legend_014",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dingler-status",
+      "notes": "Назначение Dingler status и подсчёт лошар главные; атака в себя вторична."
     },
     {
       "cardId": "esw2_dbg__legend_015",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects",
+      "notes": "Направленная цепная атака и последовательность смертей главные; wand-классификация вторична."
     },
     {
       "cardId": "esw2_dbg__legend_016",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects"
     },
     {
       "cardId": "esw2_dbg__legend_017",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects",
+      "notes": "Неизбежная многоцелевая атака со случайным сбросом и уроном по стоимости важнее общего добора."
     },
     {
       "cardId": "esw2_dbg__legend_018",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "activation-effects",
+      "notes": "Активация с условием по числу контролируемых карт главная; добор и движение карт Legend deck остаются частью эффекта."
     },
     {
       "cardId": "esw2_dbg__legend_019",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects"
     },
     {
       "cardId": "esw2_dbg__legend_020",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement"
     },
     {
       "cardId": "esw2_dbg__legend_027",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions",
+      "notes": "Выдача DWT — основная часть эффекта; запрет перенаправления остаётся примечанием к атаке."
     },
     {
       "cardId": "esw2_dbg__legend_028",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "defense-effects"
     },
     {
       "cardId": "esw2_dbg__legend_029",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "special-card-stack",
+      "notes": "Получение Limp Wand, триггер на её розыгрыш и переоценка очков завязаны на special stack."
     },
     {
       "cardId": "esw2_dbg__legend_030",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "market-effects",
+      "notes": "Случайное уничтожение Legend market — исходная механика; урон атаки считается от уничтоженной карты."
     },
     {
       "cardId": "esw2_dbg__legend_031",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "market-effects"
     },
     {
       "cardId": "esw2_dbg__legend_032",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement",
+      "notes": "Раскрытие колоды врага, розыгрыш чужой карты и временный контроль важнее рамки атаки."
     },
     {
       "cardId": "esw2_dbg__legend_033",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions"
     },
     {
       "cardId": "esw2_dbg__limp_wand",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "special-card-stack"
     },
     {
       "cardId": "esw2_dbg__main_001",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement",
+      "notes": "Раскрытие верхней карты с веткой уничтожения или мощи — основная поверхность."
     },
     {
       "cardId": "esw2_dbg__main_002",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "simple-baseline"
     },
     {
       "cardId": "esw2_dbg__main_003",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "defense-effects"
     },
     {
       "cardId": "esw2_dbg__main_004",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "simple-baseline"
     },
     {
       "cardId": "esw2_dbg__main_005",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "special-card-stack",
+      "notes": "Получение Limp Wand при покупке важнее простой постоянной мощи."
     },
     {
       "cardId": "esw2_dbg__main_006",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "activation-effects"
     },
     {
       "cardId": "esw2_dbg__main_007",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement",
+      "notes": "Раскрытие и возможное уничтожение верхней карты ведут механику; переменная атака — альтернативная часть эффекта."
     },
     {
       "cardId": "esw2_dbg__main_008",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "market-effects",
+      "notes": "Изменение места для полученной легенды относится к market-gain replacement; type override вторичен."
     },
     {
       "cardId": "esw2_dbg__main_009",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "ongoing-modifiers",
+      "notes": "Постоянный модификатор урона wand-карт и триггер мощи от их розыгрыша являются ongoing-механиками."
     },
     {
       "cardId": "esw2_dbg__main_010",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement",
+      "notes": "Уничтожение карт основной колоды и возможный розыгрыш найденного Mayhem определяют карту."
     },
     {
       "cardId": "esw2_dbg__main_011",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "ongoing-modifiers"
     },
     {
       "cardId": "esw2_dbg__main_012",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "activation-effects"
     },
     {
       "cardId": "esw2_dbg__main_013",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "defense-effects"
     },
     {
       "cardId": "esw2_dbg__main_014",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "activation-effects"
     },
     {
       "cardId": "esw2_dbg__main_015",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "chipsin-economy",
+      "notes": "Кража или получение chipsins по фактическому урону — главная экономика; wand attack вторична."
     },
     {
       "cardId": "esw2_dbg__main_016",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "controlled-object-conditions"
     },
     {
       "cardId": "esw2_dbg__main_017",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "defense-effects",
+      "notes": "Защитная ветка с ответным уроном и призом важнее простого добора."
     },
     {
       "cardId": "esw2_dbg__main_018",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects"
     },
     {
       "cardId": "esw2_dbg__main_019",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement"
     },
     {
       "cardId": "esw2_dbg__main_020",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "controlled-object-conditions",
+      "notes": "Урон атаки считается от стоимости контролируемых карт, поэтому проверка контролируемых карт главная."
     },
     {
       "cardId": "esw2_dbg__main_021",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects"
     },
     {
       "cardId": "esw2_dbg__main_022",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement",
+      "notes": "Уничтожение верхней карты Legend deck и исключение Mega-Mayhem главные; урон выводится из этого движения."
     },
     {
       "cardId": "esw2_dbg__main_023",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects"
     },
     {
       "cardId": "esw2_dbg__main_024",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects",
+      "notes": "Атака и её урон выбраны главными несмотря на OCR-неясность; защита вторична."
     },
     {
       "cardId": "esw2_dbg__main_025",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects",
+      "notes": "Фиксированная атака и награда за избегание этой атаки относятся к разрешению атаки."
     },
     {
       "cardId": "esw2_dbg__main_026",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "special-card-stack"
     },
     {
       "cardId": "esw2_dbg__main_027",
