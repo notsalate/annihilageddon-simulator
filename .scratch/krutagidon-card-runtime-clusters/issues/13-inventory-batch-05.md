@@ -1,4 +1,4 @@
-Status: Ready
+Status: Done
 Label: ready-for-agent
 Type: AFK
 
@@ -49,17 +49,17 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] Создан или обновлён `.scratch/krutagidon-card-runtime-clusters/inventory/05.md`.
-- [ ] Inventory file перечисляет все cardId из этого issue.
-- [ ] Для каждой карты указаны candidate primary mechanics.
-- [ ] Для каждой карты указаны secondary mechanics, если они видны из текста.
-- [ ] Для каждой карты указаны blockers или `none`.
-- [ ] Для каждой карты указано, какие related runtime surfaces стоит проверить позже: wizard properties, Dead Wizard Tokens, special cards, engine gaps или `none/unknown`.
-- [ ] Inventory явно помечает ambiguous/mixed cards, где главную механику нельзя выбрать без дальнейшего решения.
-- [ ] Не редактировать `card-cluster-decisions.json`.
-- [ ] Не редактировать `mechanic-clusters.md`, кроме случаев, когда issue 08 уже задал обязательный inventory reference формат.
-- [ ] Не реализовывать новые runtime cards.
-- [ ] `git diff --check` проходит.
+- [x] Создан или обновлён `.scratch/krutagidon-card-runtime-clusters/inventory/05.md`.
+- [x] Inventory file перечисляет все cardId из этого issue.
+- [x] Для каждой карты указаны candidate primary mechanics.
+- [x] Для каждой карты указаны secondary mechanics, если они видны из текста.
+- [x] Для каждой карты указаны blockers или `none`.
+- [x] Для каждой карты указано, какие related runtime surfaces стоит проверить позже: wizard properties, Dead Wizard Tokens, special cards, engine gaps или `none/unknown`.
+- [x] Inventory явно помечает ambiguous/mixed cards, где главную механику нельзя выбрать без дальнейшего решения.
+- [x] Не редактировать `card-cluster-decisions.json`.
+- [x] Не редактировать `mechanic-clusters.md`, кроме случаев, когда issue 08 уже задал обязательный inventory reference формат.
+- [x] Не реализовывать новые runtime cards.
+- [x] `git diff --check` проходит.
 
 ## Blocked by
 
