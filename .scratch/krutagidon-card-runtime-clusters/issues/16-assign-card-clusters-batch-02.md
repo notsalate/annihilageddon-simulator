@@ -1,4 +1,4 @@
-Status: Ready
+Status: Done
 Label: ready-for-agent
 Type: AFK
 
@@ -13,6 +13,8 @@ Type: AFK
 Назначить финальный `clusterId` для второй половины карт из `card-cluster-decisions.json` в текущем порядке и довести всю cluster taxonomy до проверяемого состояния.
 
 Это planning slice: нужно глубоко разобрать каждую карту из списка, выбрать ровно один основной кластер по `mechanic-clusters.md` и правилам `.scratch/krutagidon-card-runtime-clusters/AGENTS.md`, либо оставить `needsClusterDecision` с короткой причиной в `notes`, если текущие кластеры не подходят.
+
+Перед назначениями использовать synthesis artifact `.scratch/krutagidon-card-runtime-clusters/inventory/merged.md`. Он подтверждает текущий two-batch split, перечисляет normalized candidate mechanics, secondary-only mechanics и ambiguous/mixed cards.
 
 Не полагаться только на summary buckets или название карты. Для каждой карты нужно сверить её inventory entry, canonical draft/source text и зафиксированные blockers/ambiguity.
 
@@ -85,25 +87,30 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] Для каждой карты из списка прочитана её точная запись в `inventory/01.md`-`inventory/05.md`.
-- [ ] Для каждой карты из списка сверены canonical draft/source text; summary buckets не используются как единственный источник решения.
-- [ ] Для каждой ambiguous/mixed карты решение явно учитывает competing mechanics из inventory entry.
-- [ ] Для каждой карты выбран ровно один основной `clusterId`, если текущая taxonomy подходит.
-- [ ] Если ни один текущий кластер не подходит, карта остаётся или переводится в `status: "needsClusterDecision"` с коротким `notes`, где названа причина.
-- [ ] Для спорного, но назначенного случая `notes` кратко объясняет, почему выбран именно этот кластер.
-- [ ] Не добавлять новые кластеры без явного follow-up notes; если найден реальный taxonomy gap, оставить карту `needsClusterDecision` и описать gap.
-- [ ] Не назначать clusterId картам вне списка этого issue, кроме точечных исправлений явных ошибок из issue 15 с notes.
-- [ ] После batch 02 финальный набор `mechanic-clusters.md` и `card-cluster-decisions.json` согласован: нет использованных `clusterId` без heading и нет лишних unused headings.
-- [ ] Не реализовывать runtime cards.
-- [ ] `npm run report:card-runtime-clusters` проходит.
-- [ ] Если matrix должна обновиться после решений, выполнен `npm run report:card-runtime-clusters -- --write`.
-- [ ] `git diff --check` проходит.
+- [x] Для каждой карты из списка прочитана её точная запись в `inventory/01.md`-`inventory/05.md`.
+- [x] Прочитан `.scratch/krutagidon-card-runtime-clusters/inventory/merged.md`, включая `Ambiguous Or Mixed Cards` и `Follow-Up Notes For Issues 15 And 16`.
+- [x] Для каждой карты из списка сверены canonical draft/source text; summary buckets не используются как единственный источник решения.
+- [x] Для каждой ambiguous/mixed карты решение явно учитывает competing mechanics из inventory entry.
+- [x] Для каждой карты выбран ровно один основной `clusterId`, если текущая taxonomy подходит.
+- [x] Если ни один текущий кластер не подходит, карта остаётся или переводится в `status: "needsClusterDecision"` с коротким `notes`, где названа причина.
+- [x] Для спорного, но назначенного случая `notes` кратко объясняет, почему выбран именно этот кластер.
+- [x] Не добавлять новые кластеры без явного follow-up notes; если найден реальный taxonomy gap, оставить карту `needsClusterDecision` и описать gap.
+- [x] Не назначать clusterId картам вне списка этого issue, кроме точечных исправлений явных ошибок из issue 15 с notes.
+- [x] После batch 02 финальный набор `mechanic-clusters.md` и `card-cluster-decisions.json` согласован: нет использованных `clusterId` без heading и нет лишних unused headings.
+- [x] Не реализовывать runtime cards.
+- [x] `npm run report:card-runtime-clusters` проходит.
+- [x] Если matrix должна обновиться после решений, выполнен `npm run report:card-runtime-clusters -- --write`.
+- [x] `git diff --check` проходит.
 
 ## Blocked by
 
-- `.scratch/krutagidon-card-runtime-clusters/issues/15-assign-card-clusters-batch-01.md`
+Нет — issue 15 закрыт.
 
 ## Notes
 
+- Issue 14 created `.scratch/krutagidon-card-runtime-clusters/inventory/merged.md` and confirmed this issue's explicit `cardId` batch.
 - Mayhem/Mega-Mayhem не являются автоматическим кластером. Если главная механика карты — рынок, атака, Dingler, chipsins, card movement или другая конкретная поверхность, выбирать её, а Mayhem/Mega-Mayhem оставлять implementation note.
 - Выбор и random не являются отдельными кластерами; они остаются notes внутри главной механики.
+- Подтверждение: в `.scratch/krutagidon-card-runtime-clusters/card-cluster-decisions.json` назначены все 64 карты issue 16; `needsClusterDecision` стал `0`.
+- Matrix обновлена командой `npm run report:card-runtime-clusters -- --write`.
+- Проверки: `npm run report:card-runtime-clusters` прошёл; `npm run report:card-runtime-clusters -- --write` прошёл; `npm test` прошёл; `git diff --check` прошёл.

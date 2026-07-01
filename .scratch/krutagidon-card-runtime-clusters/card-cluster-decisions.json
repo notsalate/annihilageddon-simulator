@@ -352,259 +352,362 @@
     },
     {
       "cardId": "esw2_dbg__main_027",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "scoring-effects",
+      "notes": "Главная механика — инверсия штрафных ПО за DWT в конце игры; бонус мощи от Dingler status вторичен."
     },
     {
       "cardId": "esw2_dbg__main_028",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects"
     },
     {
       "cardId": "esw2_dbg__main_029",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "defense-effects"
     },
     {
       "cardId": "esw2_dbg__main_030",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dingler-status",
+      "notes": "Смерть от wand attack назначает Dingler status; урон и самонацеливание остаются деталями атаки."
     },
     {
       "cardId": "esw2_dbg__main_031",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "activation-effects",
+      "notes": "Главная поверхность — активация с самоуничтожением контролируемой карты; Dingler attack payload вторичен."
     },
     {
       "cardId": "esw2_dbg__main_032",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions",
+      "notes": "Замена выдачи DWT при следующем убийстве главная; получение Legend из рынка вторично."
     },
     {
       "cardId": "esw2_dbg__main_033",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "activation-effects"
     },
     {
       "cardId": "esw2_dbg__main_034",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "activation-effects",
+      "notes": "Activation marker задаёт основной runtime action; условие по контролируемой твари и атака вторичны."
     },
     {
       "cardId": "esw2_dbg__main_035",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "simple-baseline"
     },
     {
       "cardId": "esw2_dbg__main_036",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "chipsin-economy"
     },
     {
       "cardId": "esw2_dbg__main_037",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement",
+      "notes": "Опциональное уничтожение карты из discard pile выбрано главным; multi-target attack вторична."
     },
     {
       "cardId": "esw2_dbg__main_038",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "simple-baseline"
     },
     {
       "cardId": "esw2_dbg__main_039",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions",
+      "notes": "Подсчёт DWT и DWT-like card identity определяют механику."
     },
     {
       "cardId": "esw2_dbg__main_040",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "scoring-effects"
     },
     {
       "cardId": "esw2_dbg__main_041",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "chipsin-economy",
+      "notes": "Опциональная chipsin cost открывает атаку; damage branch остаётся payload."
     },
     {
       "cardId": "esw2_dbg__main_042",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "defense-effects"
     },
     {
       "cardId": "esw2_dbg__main_043",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "defense-effects"
     },
     {
       "cardId": "esw2_dbg__main_044",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "market-effects"
     },
     {
       "cardId": "esw2_dbg__main_045",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "defense-effects"
     },
     {
       "cardId": "esw2_dbg__main_046",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "life-total-effects",
+      "notes": "Лечение по фактически нанесённому урону определяет карту; attack damage accounting вторичен."
     },
     {
       "cardId": "esw2_dbg__main_047",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "ongoing-modifiers"
     },
     {
       "cardId": "esw2_dbg__main_048",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "activation-effects",
+      "notes": "Активируемая all-foe attack главная; controlled creature scaling остаётся условием расчёта."
     },
     {
       "cardId": "esw2_dbg__main_049",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions",
+      "notes": "DWT-like identity Дохляка ведёт и self-counting, и chipsin payout."
     },
     {
       "cardId": "esw2_dbg__main_050",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions",
+      "notes": "DWT-like identity Дохляка ведёт и self-counting, и chipsin payout."
     },
     {
       "cardId": "esw2_dbg__main_051",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions",
+      "notes": "DWT-like identity Дохляка ведёт и self-counting, и chipsin payout."
     },
     {
       "cardId": "esw2_dbg__main_052",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions",
+      "notes": "DWT-like identity Дохляка ведёт и self-counting, и chipsin payout."
     },
     {
       "cardId": "esw2_dbg__main_053",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions",
+      "notes": "DWT-like identity Дохляка ведёт и self-counting, и chipsin payout."
     },
     {
       "cardId": "esw2_dbg__main_054",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "defense-effects"
     },
     {
       "cardId": "esw2_dbg__main_055",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "activation-effects"
     },
     {
       "cardId": "esw2_dbg__main_056",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "controlled-object-conditions"
     },
     {
       "cardId": "esw2_dbg__main_057",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement",
+      "notes": "Уничтожение карты из hand/discard — основная механика; chipsin cost является условием."
     },
     {
       "cardId": "esw2_dbg__main_058",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement",
+      "notes": "First-played condition ведёт к hand reset: сбросу всей руки и фиксированному добору."
     },
     {
       "cardId": "esw2_dbg__main_059",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "mayhem-events",
+      "notes": "Главная поверхность — table-wide Mayhem choice между hand reset и non-attack damage."
     },
     {
       "cardId": "esw2_dbg__main_060",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "life-total-effects",
+      "notes": "Сведение жизни к 10 является cost/effect; chipsin reward вторичен."
     },
     {
       "cardId": "esw2_dbg__main_061",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement"
     },
     {
       "cardId": "esw2_dbg__main_062",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "chipsin-economy",
+      "notes": "Table-wide chipsin gain и chipsin-scaled damage образуют основную экономику; attack frame вторичен."
     },
     {
       "cardId": "esw2_dbg__main_063",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "market-effects"
     },
     {
       "cardId": "esw2_dbg__main_064",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "mayhem-events",
+      "notes": "Battle mini-game с ordered participation, reveal и tie handling доминирует над добором и сбросом."
     },
     {
       "cardId": "esw2_dbg__main_065",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "market-effects",
+      "notes": "Legend market wipe/refill и временный refill size главные; Mega-Mayhem handling остаётся частью market refill."
     },
     {
       "cardId": "esw2_dbg__main_066",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dingler-status",
+      "notes": "Восстановление Dingler status до normal главнее выбора life/chipsin cost."
     },
     {
       "cardId": "esw2_dbg__main_067",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement",
+      "notes": "Опциональное уничтожение hand/discard card главное; Dingler life surcharge вторичен."
     },
     {
       "cardId": "esw2_dbg__main_068",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement"
     },
     {
       "cardId": "esw2_dbg__main_069",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects",
+      "notes": "All-wizard attack с defense windows главная; discard controlled ongoing cards является payload."
     },
     {
       "cardId": "esw2_dbg__main_070",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects"
     },
     {
       "cardId": "esw2_dbg__main_071",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "mayhem-events",
+      "notes": "Table-wide voting и tie handling главные; Dingler assignment является результатом голосования."
     },
     {
       "cardId": "esw2_dbg__main_072",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "chipsin-economy"
     },
     {
       "cardId": "esw2_dbg__main_073",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "market-effects",
+      "notes": "Legend market wipe/refill выбран главным; table-wide chip gain вторичен."
     },
     {
       "cardId": "esw2_dbg__main_074",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dingler-status",
+      "notes": "Lowest-life targets become Dinglers, затем нормализуется Dingler max life; attack frame вторичен."
     },
     {
       "cardId": "esw2_dbg__main_075",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "chipsin-economy"
     },
     {
       "cardId": "esw2_dbg__main_076",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement",
+      "notes": "Уничтожение hand/discard card главное; chip-loss cost вторичен."
     },
     {
       "cardId": "esw2_dbg__main_077",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement",
+      "notes": "Random hand reveal, shuffle reroll и forced destroy образуют card movement loop; life cost вторичен."
     },
     {
       "cardId": "esw2_dbg__main_078",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects"
     },
     {
       "cardId": "esw2_dbg__mega_mayhem_001",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects",
+      "notes": "Legend market cost только задаёт damage amount; основная механика — all-wizard attack."
     },
     {
       "cardId": "esw2_dbg__mega_mayhem_002",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "special-card-stack",
+      "notes": "Выдача нескольких Limp Wands каждому игроку главная; Mega-Mayhem attack frame вторичен."
     },
     {
       "cardId": "esw2_dbg__mega_mayhem_003",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dwt-interactions",
+      "notes": "Подсчёт DWT каждого игрока определяет chipsin payout."
     },
     {
       "cardId": "esw2_dbg__mega_mayhem_004",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "dingler-status",
+      "notes": "Global Dingler toggle главнее attack frame и defense sequencing."
     },
     {
       "cardId": "esw2_dbg__mega_mayhem_005",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "life-total-effects"
     },
     {
       "cardId": "esw2_dbg__mega_mayhem_006",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement",
+      "notes": "Top main-deck destroy и Mayhem death condition главные; attack frame задаёт защитный канал."
     },
     {
       "cardId": "esw2_dbg__mega_mayhem_007",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "card-movement",
+      "notes": "Hand/discard destroy choices главные; Dingler gate меняет число destroy options."
     },
     {
       "cardId": "esw2_dbg__starter_001",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "simple-baseline"
     },
     {
       "cardId": "esw2_dbg__starter_002",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "simple-baseline"
     },
     {
       "cardId": "esw2_dbg__starter_003",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects",
+      "notes": "Targeted starter attack главная; on-kill chipsin reward вторичен."
     },
     {
       "cardId": "esw2_dbg__starter_004",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "attack-effects",
+      "notes": "Targeted starter attack и on-kill reward главные; wp_009 replacement является setup note."
     },
     {
       "cardId": "esw2_dbg__wild_magic",
-      "status": "needsClusterDecision"
+      "status": "clustered",
+      "clusterId": "special-card-stack",
+      "notes": "Wild Magic special-card execution и ownership/control split главные; modal +2 power вторичен."
     }
   ]
 }
