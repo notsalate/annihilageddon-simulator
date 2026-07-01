@@ -425,7 +425,8 @@
     {
       "cardId": "esw2_dbg__main_040",
       "status": "clustered",
-      "clusterId": "scoring-effects"
+      "clusterId": "scoring-effects",
+      "notes": "End-game deck scoring задаёт основную runtime-идентичность; простая мощь вторична."
     },
     {
       "cardId": "esw2_dbg__main_041",
