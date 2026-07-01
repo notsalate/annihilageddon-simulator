@@ -184,19 +184,22 @@ function compareScores(left: PlayerScore, right: PlayerScore): number {
 
 function isLegalAction(action: GameAction, legalActions: readonly LegalAction[]): boolean {
   return legalActions.some((legalAction) => {
-    if (legalAction.type !== action.type) {
-      return false;
+    switch (action.type) {
+      case "playCard":
+        return legalAction.type === "playCard" && legalAction.cardInstanceId === action.cardInstanceId;
+      case "buyMarketCard":
+        return (
+          legalAction.type === "buyMarketCard" &&
+          legalAction.cardInstanceId === action.cardInstanceId &&
+          legalAction.source === action.source
+        );
+      case "activatePermanent":
+        return legalAction.type === "activatePermanent" && legalAction.cardInstanceId === action.cardInstanceId;
+      case "activateWizardProperty":
+        return legalAction.type === "activateWizardProperty" && legalAction.tokenInstanceId === action.tokenInstanceId;
+      case "endTurn":
+        return legalAction.type === "endTurn";
     }
-
-    if (legalAction.type === "playCard" && action.type === "playCard") {
-      return legalAction.cardInstanceId === action.cardInstanceId;
-    }
-
-    if (legalAction.type === "buyMarketCard" && action.type === "buyMarketCard") {
-      return legalAction.cardInstanceId === action.cardInstanceId && legalAction.source === action.source;
-    }
-
-    return legalAction.type === "endTurn";
   });
 }
 
