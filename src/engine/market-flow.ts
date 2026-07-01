@@ -62,7 +62,7 @@ function fillMarket(
     destroyedEvents: CardInstance[];
     targetSize: number;
     eventKind: CardDefinition["engine"]["cardKind"];
-    eventLogType: string;
+    eventLogType: "megaMayhemDestroyed" | "mayhemDestroyed";
     endReason: MarketFlowEndReason;
     mode: MarketFlowMode;
   }
