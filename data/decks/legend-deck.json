@@ -4,8 +4,13 @@
   "runtimeSchema": "krutagidon.deckComposition.v0",
   "role": "legendDeck",
   "mappingStatus": "incomplete-full-only",
-  "entries": [],
+  "entries": [
+    {
+      "cardId": "esw2_dbg__legend_009",
+      "count": 1
+    }
+  ],
   "notes": [
-    "Current runtime deck baseline is intentionally empty until new full-runtime card generation lands."
+    "Current runtime legend deck includes the simple-baseline Block D slice."
   ]
 }

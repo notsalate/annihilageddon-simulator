@@ -4,8 +4,25 @@
   "runtimeSchema": "krutagidon.deckComposition.v0",
   "role": "mainDeck",
   "mappingStatus": "incomplete-full-only",
-  "entries": [],
+  "entries": [
+    {
+      "cardId": "esw2_dbg__main_002",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_004",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_035",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_038",
+      "count": 2
+    }
+  ],
   "notes": [
-    "Current runtime deck baseline is intentionally empty until new full-runtime card generation lands."
+    "Current runtime main deck includes the simple-baseline Block D slice."
   ]
 }

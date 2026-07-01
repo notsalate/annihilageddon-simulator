@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_002",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_002.json",
+    "image": "assets/cards/wizard-card/Волшебник. Колдунатор.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_002.md"
+  },
+  "visible": {
+    "nameRu": "Колдунатор",
+    "cost": 7,
+    "victoryPoints": 2,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "textRu": "+5 мощи",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "cost": 7,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 5
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

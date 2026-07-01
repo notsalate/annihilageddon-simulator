@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_009",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_009.json",
+    "image": "assets/cards/legend/location/Легенда-Место. Башня радости.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_009.md"
+  },
+  "visible": {
+    "nameRu": "Башня радости",
+    "cost": 8,
+    "victoryPoints": 6,
+    "typeRu": "Легенда — Место",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "location"],
+    "textRu": "Постоянка:",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "location"],
+    "cost": 8,
+    "victoryPoints": 6,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [],
+    "unsupportedMechanics": []
+  }
+}

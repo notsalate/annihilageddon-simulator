@@ -68,16 +68,33 @@ test("current runtime data pack uses current-runtime manifest and composition pa
   );
 });
 
-test("current runtime data pack keeps only special runtime cards and empty normal compositions", () => {
+test("current runtime data pack includes simple-baseline runtime cards in matching compositions", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
 
   assert.deepEqual([...dataPack.cardDefinitions.keys()].sort(), [
+    "esw2_dbg__legend_009",
     "esw2_dbg__limp_wand",
+    "esw2_dbg__main_002",
+    "esw2_dbg__main_004",
+    "esw2_dbg__main_035",
+    "esw2_dbg__main_038",
+    "esw2_dbg__starter_001",
+    "esw2_dbg__starter_002",
     "esw2_dbg__wild_magic",
   ]);
-  assert.deepEqual(dataPack.decks.starterDeck.entries, []);
-  assert.deepEqual(dataPack.decks.mainDeck.entries, []);
-  assert.deepEqual(dataPack.decks.legendDeck.entries, []);
+  assert.deepEqual(dataPack.decks.starterDeck.entries, [
+    { cardId: "esw2_dbg__starter_001", count: 30 },
+    { cardId: "esw2_dbg__starter_002", count: 15 },
+  ]);
+  assert.deepEqual(dataPack.decks.mainDeck.entries, [
+    { cardId: "esw2_dbg__main_002", count: 1 },
+    { cardId: "esw2_dbg__main_004", count: 2 },
+    { cardId: "esw2_dbg__main_035", count: 1 },
+    { cardId: "esw2_dbg__main_038", count: 2 },
+  ]);
+  assert.deepEqual(dataPack.decks.legendDeck.entries, [
+    { cardId: "esw2_dbg__legend_009", count: 1 },
+  ]);
   assert.deepEqual(dataPack.decks.familiarPool?.entries, []);
 });
 
@@ -118,14 +135,27 @@ test("current runtime special cards stay as reviewed full cards", () => {
   ]);
 });
 
-test("initial game setup keeps current runtime runnable with empty normal compositions", () => {
+test("initial game setup keeps current runtime runnable with simple-baseline compositions", () => {
   const state = initializeGame({ rootDir, seed: 12345 });
 
   assert.equal(state.players.length, 2);
   assert.equal(state.common.market.length, 0);
-  assert.equal(state.common.legendMarket.length, 0);
-  assert.equal(state.common.mainDeck.length, 0);
+  assert.equal(state.common.legendMarket.length, 1);
+  assert.equal(state.common.mainDeck.length, 6);
   assert.equal(state.common.legendDeck.length, 0);
+  assert.deepEqual(
+    countDefinitions(state.common.mainDeck),
+    new Map([
+      ["esw2_dbg__main_002", 1],
+      ["esw2_dbg__main_004", 2],
+      ["esw2_dbg__main_035", 1],
+      ["esw2_dbg__main_038", 2],
+    ])
+  );
+  assert.equal(
+    state.common.legendMarket[0]?.definitionId,
+    "esw2_dbg__legend_009"
+  );
   assert.equal(state.common.wildMagicStack.length, 15);
   assert.equal(state.common.limpWandStack.length, 15);
   assert.equal(state.common.deadWizardTokens.status, "available");
@@ -137,8 +167,15 @@ test("initial game setup keeps current runtime runnable with empty normal compos
   assert.equal(neutralDeadWizardToken.victoryPoints, -3);
 
   for (const player of state.players) {
-    assert.equal(player.hand.length, 0);
-    assert.equal(player.deck.length, 0);
+    assert.equal(player.hand.length, 5);
+    assert.equal(player.deck.length, 40);
+    assert.deepEqual(
+      countDefinitions([...player.hand, ...player.deck]),
+      new Map([
+        ["esw2_dbg__starter_001", 30],
+        ["esw2_dbg__starter_002", 15],
+      ])
+    );
     assert.equal(player.discard.length, 0);
     assert.equal(player.playedThisTurn.length, 0);
     assert.equal(player.permanents.length, 0);
@@ -482,6 +519,14 @@ function ownedCards(
 
 function countDefinition(cards: CardInstance[], definitionId: string): number {
   return cards.filter((card) => card.definitionId === definitionId).length;
+}
+
+function countDefinitions(cards: CardInstance[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const card of cards) {
+    counts.set(card.definitionId, (counts.get(card.definitionId) ?? 0) + 1);
+  }
+  return counts;
 }
 
 function createWizardPropertySetupDataPack(

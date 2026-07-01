@@ -108,6 +108,102 @@ test("playing an add-power card records an immediate effect consequence", () => 
   assert.equal(powerEvent.powerAfter, 1);
 });
 
+test("simple-baseline current runtime cards execute printed baseline play behavior", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const expectedPowerByCardId = new Map([
+    ["esw2_dbg__starter_001", 1],
+    ["esw2_dbg__main_002", 5],
+    ["esw2_dbg__main_035", 4],
+    ["esw2_dbg__main_038", 3],
+  ]);
+
+  for (const [definitionId, expectedPower] of expectedPowerByCardId) {
+    state.turn.power = 0;
+    const card = addRuntimeCardToHand(state, activePlayer, definitionId);
+    const result = applyAction(state, {
+      type: "playCard",
+      cardInstanceId: card.instanceId,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(state.turn.power, expectedPower);
+    assert.ok(
+      state.eventLog.some((event) => {
+        return (
+          event.type === "effectAddPowerApplied" &&
+          event.cardInstanceId === card.instanceId &&
+          event.definitionId === definitionId &&
+          event.powerBefore === 0 &&
+          event.powerAfter === expectedPower
+        );
+      })
+    );
+  }
+
+  const drawCard = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_004"
+  );
+  activePlayer.deck.unshift(
+    {
+      instanceId: "simple-baseline-draw-target-1",
+      definitionId: "esw2_dbg__starter_002",
+      ownerId: activePlayer.playerId,
+      marketChips: 0,
+    },
+    {
+      instanceId: "simple-baseline-draw-target-2",
+      definitionId: "esw2_dbg__starter_002",
+      ownerId: activePlayer.playerId,
+      marketChips: 0,
+    }
+  );
+  const drawHandSizeBefore = activePlayer.hand.length;
+  const drawDeckSizeBefore = activePlayer.deck.length;
+  const drawResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: drawCard.instanceId,
+  });
+
+  assert.equal(drawResult.ok, true);
+  assert.equal(activePlayer.deck.length, drawDeckSizeBefore - 2);
+  assert.equal(activePlayer.hand.length, drawHandSizeBefore + 1);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectDrawCardsApplied" &&
+        event.cardInstanceId === drawCard.instanceId &&
+        event.definitionId === "esw2_dbg__main_004" &&
+        event.amount === 2
+      );
+    })
+  );
+
+  for (const definitionId of [
+    "esw2_dbg__starter_002",
+    "esw2_dbg__legend_009",
+  ]) {
+    state.turn.power = 0;
+    const card = addRuntimeCardToHand(state, activePlayer, definitionId);
+    const eventCountBefore = state.eventLog.length;
+    const result = applyAction(state, {
+      type: "playCard",
+      cardInstanceId: card.instanceId,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(state.turn.power, 0);
+    assert.equal(
+      state.eventLog
+        .slice(eventCountBefore)
+        .some((event) => event.type.startsWith("effect")),
+      false
+    );
+  }
+});
+
 test("illegal actions are rejected without changing game state", () => {
   const state = initializeGame({
     rootDir,

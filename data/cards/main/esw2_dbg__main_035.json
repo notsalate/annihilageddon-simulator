@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_035",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_035.json",
+    "image": "assets/cards/creature/Тварь. Пивохранилище.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_035.md"
+  },
+  "visible": {
+    "nameRu": "Пивохранилище",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "textRu": "+4 мощи",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "cost": 6,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 4
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

@@ -4,8 +4,17 @@
   "runtimeSchema": "krutagidon.deckComposition.v0",
   "role": "starterDeckTemplate",
   "mappingStatus": "incomplete-full-only",
-  "entries": [],
+  "entries": [
+    {
+      "cardId": "esw2_dbg__starter_001",
+      "count": 30
+    },
+    {
+      "cardId": "esw2_dbg__starter_002",
+      "count": 15
+    }
+  ],
   "notes": [
-    "Current runtime starter baseline is intentionally empty until new full-runtime card generation lands."
+    "Current runtime starter deck includes the simple-baseline Block D slice."
   ]
 }

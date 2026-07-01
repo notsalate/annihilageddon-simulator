@@ -24,8 +24,8 @@
     "familiarPool": "data/pools/familiar-pool.json"
   },
   "counts": {
-    "mapped": 2,
-    "supported": 2,
+    "mapped": 9,
+    "supported": 9,
     "partial": 0,
     "unsupported": 0
   },
@@ -33,7 +33,7 @@
   "needsData": [],
   "notes": [
     "Runtime-поведение карт закодировано явными effectId objects; engine не должен парсить visible.textRu во время партии.",
-    "Current runtime baseline keeps only reviewed special cards; normal card runtime is expected missing-runtime backlog."
+    "Current runtime baseline is incomplete-full-only and grows by fully implemented card slices."
   ],
   "cardDefinitionPaths": [
     "data/cards/main",
