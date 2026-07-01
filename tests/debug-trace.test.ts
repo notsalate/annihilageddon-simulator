@@ -149,7 +149,7 @@ test("single-game debug trace summarizes targeting, zone movement, defense, deat
         amount: 3,
         sourceType: "card",
       },
-      { type: "playerDefeated", playerId: "player-1" },
+      { type: "playerDied", playerId: "player-1" },
       {
         type: "trophyControlChanged",
         playerId: "player-2",
