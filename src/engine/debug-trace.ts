@@ -114,7 +114,7 @@ function formatEvent(event: GameEvent, options: FormatSingleGameDebugTraceOption
     return `- Damage: ${event.playerId} deals ${event.amount ?? 0} to ${event.targetPlayerId} with ${formatCard(event, options)} via ${event.effectId ?? "<unknown>"}.`;
   }
 
-  if (event.type === "playerDefeated" && event.playerId !== undefined) {
+  if (event.type === "playerDied" && event.playerId !== undefined) {
     return `- Death: ${event.playerId} is defeated.`;
   }
 
