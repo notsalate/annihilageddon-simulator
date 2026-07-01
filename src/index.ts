@@ -74,6 +74,7 @@ export type {
   RunDraftImportHarnessOptions,
 } from "./import/draft-generator.js";
 export { runDraftImportHarness } from "./import/draft-generator.js";
+export type { GameEvent, GameEventType } from "./engine/events.js";
 export type {
   CardInstance,
   CommonState,
