@@ -1080,6 +1080,170 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
   },
 };
 
+const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler = {
+  effectId: "mayhem_each_player_battle_highest_hand_cost",
+  validateShape(subjectId, effect) {
+    return validateMayhemBattleHighestHandCostShape(subjectId, effect);
+  },
+  execute(state, _player, effect, source, services) {
+    const errors = mayhemEachPlayerBattleHighestHandCostHandler.validateShape(
+      "Effect mayhem_each_player_battle_highest_hand_cost",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid Mayhem battle effect",
+      };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    const winnerDrawAmount = effect["winnerDrawAmount"];
+    if (typeof winnerDrawAmount !== "number") {
+      return {
+        ok: false,
+        error: "Invalid Mayhem battle winner draw amount",
+      };
+    }
+
+    const participants: Array<{ player: PlayerState; handCost: number }> = [];
+    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+      const participationChoice = services.chooseEffectChoice(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        [{ choiceId: "participate" }, { choiceId: "pass" }]
+      );
+      if (participationChoice?.choiceId !== "participate") {
+        continue;
+      }
+
+      const handCost = sumHandCost(state, targetPlayer);
+      participants.push({ player: targetPlayer, handCost });
+      state.eventLog.push({
+        type: "mayhemBattleParticipationSelected",
+        playerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        amount: handCost,
+        sourceType: source.sourceType,
+      });
+    }
+
+    const highestCost = Math.max(
+      ...participants.map((participant) => participant.handCost),
+      0
+    );
+    const winners = participants
+      .filter((participant) => participant.handCost === highestCost)
+      .map((participant) => participant.player);
+    const winnerIds = winners.map((winner) => winner.playerId);
+
+    for (const winner of winners) {
+      drawCards(winner, winnerDrawAmount, state);
+    }
+    for (const participant of participants) {
+      if (winnerIds.includes(participant.player.playerId)) {
+        continue;
+      }
+      participant.player.discard.push(...participant.player.hand.splice(0));
+    }
+
+    state.eventLog.push({
+      type: "mayhemBattleResolved",
+      playerId: source.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      amount: highestCost,
+      participantPlayerIds: participants.map(
+        (participant) => participant.player.playerId
+      ),
+      winnerPlayerIds: winnerIds,
+      sourceType: source.sourceType,
+    });
+
+    return { ok: true };
+  },
+};
+
+const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler = {
+  effectId: "mayhem_each_player_vote_dingler",
+  validateShape(subjectId, effect) {
+    return validateMayhemVoteDinglerShape(subjectId, effect);
+  },
+  execute(state, _player, effect, source, services) {
+    const errors = mayhemEachPlayerVoteDinglerHandler.validateShape(
+      "Effect mayhem_each_player_vote_dingler",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid Mayhem vote effect",
+      };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    const players = services.getPlayersInActiveOrder(state);
+    const votes = new Map<PlayerState["playerId"], number>();
+
+    for (const votingPlayer of players) {
+      const choice = services.chooseEffectChoice(
+        state,
+        votingPlayer,
+        source,
+        effectId,
+        players.map((targetPlayer) => ({
+          choiceId: `vote-${targetPlayer.playerId}`,
+          players: [targetPlayer],
+        }))
+      );
+      const votedPlayer = choice?.players?.[0];
+      if (votedPlayer === undefined) {
+        continue;
+      }
+
+      votes.set(
+        votedPlayer.playerId,
+        (votes.get(votedPlayer.playerId) ?? 0) + 1
+      );
+      state.eventLog.push({
+        type: "mayhemVoteRecorded",
+        playerId: votingPlayer.playerId,
+        targetPlayerId: votedPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        sourceType: source.sourceType,
+      });
+    }
+
+    const highestVoteCount = Math.max(...votes.values(), 0);
+    const winners = players.filter(
+      (candidate) => votes.get(candidate.playerId) === highestVoteCount
+    );
+    for (const winner of winners) {
+      services.gainDinglerStatus(state, winner, effectId, source);
+    }
+
+    state.eventLog.push({
+      type: "mayhemVoteResolved",
+      playerId: source.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      amount: highestVoteCount,
+      winnerPlayerIds: winners.map((winner) => winner.playerId),
+      sourceType: source.sourceType,
+    });
+
+    return { ok: true };
+  },
+};
+
 const replaceStartingCardHandler: EffectRuntimeHandler = {
   effectId: "replace_starting_card",
   validateShape(subjectId, effect) {
@@ -2570,6 +2734,54 @@ function validateMayhemHandRedrawOptions(
   return errors;
 }
 
+function validateMayhemBattleHighestHandCostShape(
+  subjectId: string,
+  effect: Record<string, unknown>
+): string[] {
+  const errors = validateMayhemEachPlayerShape(subjectId, effect);
+  if (effect["chooser"] !== "affectedPlayer") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem chooser ${String(effect["chooser"])}`
+    );
+  }
+  const winnerDrawAmount = effect["winnerDrawAmount"];
+  if (
+    typeof winnerDrawAmount !== "number" ||
+    !Number.isSafeInteger(winnerDrawAmount) ||
+    winnerDrawAmount < 0
+  ) {
+    errors.push(
+      `${subjectId} uses invalid Mayhem winner draw amount ${String(winnerDrawAmount)}`
+    );
+  }
+  return errors;
+}
+
+function validateMayhemVoteDinglerShape(
+  subjectId: string,
+  effect: Record<string, unknown>
+): string[] {
+  const errors = validateMayhemEachPlayerShape(subjectId, effect);
+  if (effect["chooser"] !== "affectedPlayer") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem chooser ${String(effect["chooser"])}`
+    );
+  }
+  if (effect["voteTargetSelector"] !== "anyPlayer") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem vote target ${String(
+        effect["voteTargetSelector"]
+      )}`
+    );
+  }
+  if (effect["statusId"] !== "dingler") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem vote status ${String(effect["statusId"])}`
+    );
+  }
+  return errors;
+}
+
 function payOptionalCosts(
   state: GameState,
   player: PlayerState,
@@ -2950,6 +3162,13 @@ function drawCards(
   return drawnCount;
 }
 
+function sumHandCost(state: GameState, player: PlayerState): number {
+  return player.hand.reduce((total, card) => {
+    const cost = state.cardDefinitions.get(card.definitionId)?.engine.cost;
+    return total + (typeof cost === "number" ? cost : 0);
+  }, 0);
+}
+
 function shuffleDiscardIntoDeckIfNeeded(
   player: PlayerState,
   state: GameState
@@ -3022,6 +3241,14 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [
     mayhemEachPlayerHandRedrawChoiceHandler.effectId,
     toCatalogEntry(mayhemEachPlayerHandRedrawChoiceHandler),
+  ],
+  [
+    mayhemEachPlayerBattleHighestHandCostHandler.effectId,
+    toCatalogEntry(mayhemEachPlayerBattleHighestHandCostHandler),
+  ],
+  [
+    mayhemEachPlayerVoteDinglerHandler.effectId,
+    toCatalogEntry(mayhemEachPlayerVoteDinglerHandler),
   ],
   [
     replaceStartingCardHandler.effectId,

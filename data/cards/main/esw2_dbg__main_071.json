@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_071",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_071.json",
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2I.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_071.md"
+  },
+  "visible": {
+    "nameRu": "2I",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун голосует за 1 любого колдуна. Колдун, набравший наибольшее количество голосов становится лошарой (если таких несколько — каждый из них)",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_each_player_vote_dingler",
+        "timing": "onMayhemResolve",
+        "targetSelector": "eachPlayerClockwiseFromActive",
+        "chooser": "affectedPlayer",
+        "voteTargetSelector": "anyPlayer",
+        "statusId": "dingler"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

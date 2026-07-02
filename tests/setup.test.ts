@@ -81,6 +81,9 @@ test("current runtime data pack includes full runtime cards in matching composit
     "esw2_dbg__main_035",
     "esw2_dbg__main_038",
     "esw2_dbg__main_040",
+    "esw2_dbg__main_059",
+    "esw2_dbg__main_064",
+    "esw2_dbg__main_071",
     "esw2_dbg__starter_001",
     "esw2_dbg__starter_002",
     "esw2_dbg__wild_magic",
@@ -96,6 +99,9 @@ test("current runtime data pack includes full runtime cards in matching composit
     { cardId: "esw2_dbg__main_035", count: 1 },
     { cardId: "esw2_dbg__main_040", count: 2 },
     { cardId: "esw2_dbg__main_038", count: 2 },
+    { cardId: "esw2_dbg__main_059", count: 1 },
+    { cardId: "esw2_dbg__main_064", count: 1 },
+    { cardId: "esw2_dbg__main_071", count: 1 },
   ]);
   assert.deepEqual(dataPack.decks.legendDeck.entries, [
     { cardId: "esw2_dbg__legend_004", count: 1 },
@@ -147,7 +153,7 @@ test("initial game setup keeps current runtime runnable with full-runtime compos
   assert.equal(state.players.length, 2);
   assert.equal(state.common.market.length, 0);
   assert.equal(state.common.legendMarket.length, 2);
-  assert.equal(state.common.mainDeck.length, 9);
+  assert.equal(state.common.mainDeck.length, 12);
   assert.equal(state.common.legendDeck.length, 0);
   assert.deepEqual(
     countDefinitions(state.common.mainDeck),
@@ -158,6 +164,9 @@ test("initial game setup keeps current runtime runnable with full-runtime compos
       ["esw2_dbg__main_035", 1],
       ["esw2_dbg__main_040", 2],
       ["esw2_dbg__main_038", 2],
+      ["esw2_dbg__main_059", 1],
+      ["esw2_dbg__main_064", 1],
+      ["esw2_dbg__main_071", 1],
     ])
   );
   assert.deepEqual(

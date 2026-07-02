@@ -705,6 +705,63 @@ test("Mayhem hand-redraw choice effect is registered and rejects unsupported opt
   );
 });
 
+test("Mayhem battle and vote event effects are registered and reject invalid shapes through runtime handlers", () => {
+  const battleEffectId = "mayhem_each_player_battle_highest_hand_cost";
+  const voteEffectId = "mayhem_each_player_vote_dingler";
+
+  assert.equal(
+    getEffectRuntimeCatalogEntry(battleEffectId)?.effectId,
+    battleEffectId
+  );
+  assert.deepEqual(
+    getEffectRuntimeHandler(battleEffectId)?.validateShape("Fixture", {
+      effectId: battleEffectId,
+      timing: "onMayhemResolve",
+      targetSelector: "eachPlayerClockwiseFromActive",
+      chooser: "affectedPlayer",
+      winnerDrawAmount: 2,
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler(battleEffectId)?.validateShape("Fixture", {
+      effectId: battleEffectId,
+      timing: "onPlay",
+      targetSelector: "activePlayer",
+      chooser: "activePlayer",
+      winnerDrawAmount: 0,
+    }),
+    []
+  );
+
+  assert.equal(
+    getEffectRuntimeCatalogEntry(voteEffectId)?.effectId,
+    voteEffectId
+  );
+  assert.deepEqual(
+    getEffectRuntimeHandler(voteEffectId)?.validateShape("Fixture", {
+      effectId: voteEffectId,
+      timing: "onMayhemResolve",
+      targetSelector: "eachPlayerClockwiseFromActive",
+      chooser: "affectedPlayer",
+      voteTargetSelector: "anyPlayer",
+      statusId: "dingler",
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler(voteEffectId)?.validateShape("Fixture", {
+      effectId: voteEffectId,
+      timing: "onPlay",
+      targetSelector: "activePlayer",
+      chooser: "activePlayer",
+      voteTargetSelector: "opponentPlayer",
+      statusId: "loser",
+    }),
+    []
+  );
+});
+
 test("wizard property setup effects are registered and reject invalid shapes through runtime handlers", () => {
   const setupEffectIds = [
     "replace_starting_card",

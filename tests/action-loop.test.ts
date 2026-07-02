@@ -973,6 +973,305 @@ test("Mayhem hand-redraw choice discards hands and draws in active-player order"
   }
 });
 
+test("Mayhem battle keeps highest-cost participants and discards losing hands in active-player order", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  state.activePlayerId = "player-2";
+  const [activePlayer, secondPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+
+  const lowCostDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-battle-low-cost",
+    []
+  );
+  lowCostDefinition.engine.cost = 2;
+  lowCostDefinition.visible.cost = 2;
+  const highCostDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-battle-high-cost",
+    []
+  );
+  highCostDefinition.engine.cost = 8;
+  highCostDefinition.visible.cost = 8;
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-battle",
+    [
+      {
+        effectId: "mayhem_each_player_battle_highest_hand_cost",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        winnerDrawAmount: 2,
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [lowCostDefinition.cardId, lowCostDefinition],
+    [highCostDefinition.cardId, highCostDefinition],
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+
+  const activeHand = createFixtureCardInstances(
+    lowCostDefinition.cardId,
+    activePlayer.playerId,
+    2
+  );
+  const secondHand = createFixtureCardInstances(
+    highCostDefinition.cardId,
+    secondPlayer.playerId,
+    1
+  );
+  const thirdHand = createFixtureCardInstances(
+    highCostDefinition.cardId,
+    thirdPlayer.playerId,
+    1
+  );
+  const winnerDrawCards = [secondPlayer, thirdPlayer].map((player) =>
+    createFixtureCardInstances(lowCostDefinition.cardId, player.playerId, 2)
+  );
+  const secondDrawCards = winnerDrawCards[0];
+  const thirdDrawCards = winnerDrawCards[1];
+  assert.ok(secondDrawCards);
+  assert.ok(thirdDrawCards);
+  activePlayer.hand.splice(0, activePlayer.hand.length, ...activeHand);
+  secondPlayer.hand.splice(0, secondPlayer.hand.length, ...secondHand);
+  thirdPlayer.hand.splice(0, thirdPlayer.hand.length, ...thirdHand);
+  activePlayer.discard.splice(0, activePlayer.discard.length);
+  secondPlayer.discard.splice(0, secondPlayer.discard.length);
+  thirdPlayer.discard.splice(0, thirdPlayer.discard.length);
+  secondPlayer.deck.splice(0, secondPlayer.deck.length, ...secondDrawCards);
+  thirdPlayer.deck.splice(0, thirdPlayer.deck.length, ...thirdDrawCards);
+
+  const mayhem: CardInstance = {
+    instanceId: "fixture-mayhem-battle-instance",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "mayhemBattleParticipationSelected")
+      .map((event) => event.playerId),
+    [activePlayer.playerId, secondPlayer.playerId, thirdPlayer.playerId]
+  );
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "mayhemBattleResolved")
+      .map((event) => {
+        const eventRecord = event as unknown as Record<string, unknown>;
+        return {
+          playerId: event.playerId,
+          amount: event.amount,
+          winnerPlayerIds: eventRecord["winnerPlayerIds"],
+        };
+      }),
+    [
+      {
+        playerId: activePlayer.playerId,
+        amount: 8,
+        winnerPlayerIds: [secondPlayer.playerId, thirdPlayer.playerId],
+      },
+    ]
+  );
+  assert.deepEqual(
+    activePlayer.discard.map((card) => card.instanceId),
+    activeHand.map((card) => card.instanceId)
+  );
+  assert.deepEqual(
+    secondPlayer.hand.map((card) => card.instanceId),
+    [...secondHand, ...secondDrawCards].map((card) => card.instanceId)
+  );
+  assert.deepEqual(
+    thirdPlayer.hand.map((card) => card.instanceId),
+    [...thirdHand, ...thirdDrawCards].map((card) => card.instanceId)
+  );
+});
+
+test("Mayhem vote makes the top-voted player Dingler after affected-player votes", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  state.activePlayerId = "player-2";
+  const [activePlayer, secondPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  for (const player of [activePlayer, secondPlayer, thirdPlayer]) {
+    player.life.current = 20;
+  }
+
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-vote-dingler",
+    [
+      {
+        effectId: "mayhem_each_player_vote_dingler",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        voteTargetSelector: "anyPlayer",
+        statusId: "dingler",
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  const mayhem: CardInstance = {
+    instanceId: "fixture-mayhem-vote-dingler-instance",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "mayhemVoteRecorded")
+      .map((event) => ({
+        playerId: event.playerId,
+        targetPlayerId: event.targetPlayerId,
+      })),
+    [
+      {
+        playerId: activePlayer.playerId,
+        targetPlayerId: activePlayer.playerId,
+      },
+      {
+        playerId: secondPlayer.playerId,
+        targetPlayerId: activePlayer.playerId,
+      },
+      { playerId: thirdPlayer.playerId, targetPlayerId: activePlayer.playerId },
+    ]
+  );
+  assert.equal(
+    activePlayer.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+  assert.equal(activePlayer.life.current, 15);
+  assert.equal(
+    secondPlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.equal(
+    thirdPlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      const eventRecord = event as unknown as Record<string, unknown>;
+      const winnerPlayerIds = eventRecord["winnerPlayerIds"];
+      return (
+        event.type === "mayhemVoteResolved" &&
+        Array.isArray(winnerPlayerIds) &&
+        winnerPlayerIds.length === 1 &&
+        winnerPlayerIds[0] === activePlayer.playerId
+      );
+    })
+  );
+});
+
+test("current runtime mayhem-events cards resolve their mapped event effects", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 60615,
+    playerCount: 3,
+  });
+  const runtimeMayhemIds = [
+    "esw2_dbg__main_059",
+    "esw2_dbg__main_064",
+    "esw2_dbg__main_071",
+  ];
+
+  for (const definitionId of runtimeMayhemIds) {
+    const definition = state.cardDefinitions.get(definitionId);
+    assert.ok(definition, `${definitionId} should be loaded`);
+    assert.equal(definition.engine.cardKind, "mayhem");
+    assert.ok(
+      state.common.mainDeck.some((card) => card.definitionId === definitionId),
+      `${definitionId} should be in the current main deck`
+    );
+  }
+
+  const eventTypesByCardId = new Map([
+    ["esw2_dbg__main_059", "mayhemHandDiscardedAndRedrawn"],
+    ["esw2_dbg__main_064", "mayhemBattleResolved"],
+    ["esw2_dbg__main_071", "mayhemVoteResolved"],
+  ]);
+
+  for (const [definitionId, expectedEventType] of eventTypesByCardId) {
+    const cardState = initializeGame({
+      rootDir,
+      seed: 60615,
+      playerCount: 3,
+    });
+    const mayhem: CardInstance = {
+      instanceId: `fixture-runtime-${definitionId}`,
+      definitionId,
+      ownerId: "common",
+      marketChips: 0,
+    };
+    const legendFiller = cardState.common.legendMarket[0];
+    assert.ok(legendFiller);
+    cardState.common.legendMarket.push({
+      ...legendFiller,
+      instanceId: `fixture-runtime-${definitionId}-legend-filler`,
+    });
+    cardState.common.market.splice(
+      0,
+      cardState.common.market.length,
+      ...cardState.common.market.slice(0, 4)
+    );
+    cardState.common.mainDeck.splice(
+      0,
+      cardState.common.mainDeck.length,
+      mayhem
+    );
+    const eventCountBefore = cardState.eventLog.length;
+
+    const result = runMarketFlow(cardState, { mode: "turn" });
+
+    assert.equal(result.ok, true);
+    assert.ok(
+      cardState.eventLog
+        .slice(eventCountBefore)
+        .some((event) => event.type === expectedEventType),
+      `${definitionId} should emit ${expectedEventType}`
+    );
+  }
+});
+
 test("mayhem revealed during Market Flow resolves and Market Flow continues with the next normal card", () => {
   const state = initializeGame({
     rootDir,

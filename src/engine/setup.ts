@@ -130,6 +130,8 @@ export interface GameEvent {
   destination?: string;
   targetCardInstanceIds?: string[];
   targetDefinitionIds?: string[];
+  participantPlayerIds?: PlayerId[];
+  winnerPlayerIds?: PlayerId[];
   sourceType?: string;
 }
 
