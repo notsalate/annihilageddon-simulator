@@ -1,4 +1,5 @@
-import type { TokenDefinition } from "./data.js";
+import type { CardDefinition, TokenDefinition } from "./data.js";
+import { calculateEffectiveCardCost } from "./effective-values.js";
 import { recordTurnPowerChanged } from "./event-recorder.js";
 import type {
   CardInstance,
@@ -1772,6 +1773,322 @@ const attackDamageHandler: EffectRuntimeHandler = {
   },
 };
 
+const addPowerPerControlledObjectHandler: EffectRuntimeHandler = {
+  effectId: "add_power_per_controlled_object",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["timing"] !== "onPlay") {
+      errors.push(
+        `${subjectId} uses unsupported add-power timing ${String(effect["timing"])}`
+      );
+    }
+
+    return [
+      ...errors,
+      ...validatePositiveIntegerAmount(
+        subjectId,
+        effect,
+        "controlled-object power amount"
+      ),
+    ];
+  },
+  execute(state, player, effect, source) {
+    const amountPerObject = requirePositiveIntegerAmount(
+      effect,
+      "controlled-object power amount"
+    );
+    if (!amountPerObject.ok) {
+      return amountPerObject;
+    }
+
+    const amount = countControlledObjects(player) * amountPerObject.value;
+    if (amount === 0) {
+      return { ok: true };
+    }
+
+    const powerBefore = state.turn.power;
+    state.turn.power += amount;
+    recordTurnPowerChanged(
+      state,
+      player,
+      source,
+      "add_power_per_controlled_object",
+      powerBefore,
+      state.turn.power
+    );
+
+    return { ok: true };
+  },
+};
+
+const attackDamageEqualToControlledCardCostHandler: EffectRuntimeHandler = {
+  effectId: "attack_damage_equal_to_controlled_card_cost",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    const costMode = effect["costMode"];
+    if (costMode !== "highest" && costMode !== "chosen") {
+      errors.push(
+        `${subjectId} uses unsupported controlled-card cost mode ${String(costMode)}`
+      );
+    }
+
+    if (
+      effect["excludeSource"] !== undefined &&
+      typeof effect["excludeSource"] !== "boolean"
+    ) {
+      errors.push(`${subjectId} uses non-boolean excludeSource`);
+    }
+
+    return [
+      ...errors,
+      ...validatePlayerTargetSelector(subjectId, effect, "attack", [
+        "opponentPlayer",
+        "chosenFoe",
+        "chosenPlayer",
+        "eachFoe",
+      ]),
+    ];
+  },
+  execute(state, player, effect, source, services) {
+    const costResult = payOptionalCosts(
+      state,
+      player,
+      effect,
+      source,
+      services
+    );
+    if (!costResult.ok || costResult.skipped) {
+      return costResult.ok ? { ok: true } : costResult;
+    }
+
+    const amountResult = resolveControlledCardCost(
+      state,
+      player,
+      effect,
+      source,
+      services
+    );
+    if (!amountResult.ok) {
+      return amountResult;
+    }
+
+    if (amountResult.amount <= 0) {
+      return { ok: true };
+    }
+
+    return executeAttackWithAmount(
+      state,
+      player,
+      effect,
+      source,
+      services,
+      amountResult.amount
+    );
+  },
+};
+
+function countControlledObjects(player: PlayerState): number {
+  return (
+    player.permanents.length +
+    player.deadWizardTokens.length +
+    player.wizardProperties.length +
+    player.statuses.length +
+    player.trophyLikeObjects.length
+  );
+}
+
+function resolveControlledCardCost(
+  state: GameState,
+  player: PlayerState,
+  effect: Record<string, unknown>,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): { ok: true; amount: number } | { ok: false; error: string } {
+  const cards = getControlledCardsForCost(state, player, effect, source);
+  if (cards.length === 0) {
+    return { ok: true, amount: 0 };
+  }
+
+  if (effect["costMode"] === "highest") {
+    return {
+      ok: true,
+      amount: Math.max(
+        ...cards.map(({ definition }) =>
+          calculateEffectiveCardCost(state, player.playerId, definition)
+        )
+      ),
+    };
+  }
+
+  if (effect["costMode"] === "chosen") {
+    const choices = cards.map(({ card, definition }) => ({
+      choiceId: card.instanceId,
+      cards: [card],
+      amount: calculateEffectiveCardCost(state, player.playerId, definition),
+    }));
+    const choice = services.chooseEffectChoice(
+      state,
+      player,
+      source,
+      "attack_damage_equal_to_controlled_card_cost",
+      choices
+    );
+
+    return { ok: true, amount: choice?.amount ?? 0 };
+  }
+
+  return {
+    ok: false,
+    error: `Unsupported controlled-card cost mode ${String(effect["costMode"])}`,
+  };
+}
+
+function getControlledCardsForCost(
+  state: GameState,
+  player: PlayerState,
+  effect: Record<string, unknown>,
+  source: EffectSourceContext
+): { card: CardInstance; definition: CardDefinition }[] {
+  return player.permanents
+    .filter(
+      (card) =>
+        effect["excludeSource"] !== true ||
+        card.instanceId !== source.cardInstanceId
+    )
+    .map((card) => {
+      const definition = state.cardDefinitions.get(card.definitionId);
+      if (definition === undefined) {
+        throw new Error(`Missing card definition ${card.definitionId}`);
+      }
+
+      return { card, definition };
+    });
+}
+
+function executeAttackWithAmount(
+  state: GameState,
+  player: PlayerState,
+  effect: Record<string, unknown>,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices,
+  amount: number
+): EffectExecutionResult {
+  const attackProfile = services.getWizardPropertyAttackProfile(
+    state,
+    player,
+    source
+  );
+  const attackAmount = amount + attackProfile.damageBonus;
+  const effectId = services.asString(effect["effectId"]);
+
+  if (effect["targetSelector"] === "eachFoe") {
+    state.eventLog.push({
+      type: "attackCreated",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      amount: attackAmount,
+      sourceType: source.sourceType,
+    });
+
+    for (const targetPlayer of services.getOpponentsInSeatingOrder(
+      state,
+      player
+    )) {
+      const attackResult = services.resolveAttackTarget(
+        state,
+        player,
+        targetPlayer,
+        attackAmount,
+        effectId,
+        source,
+        attackProfile.unavoidable
+      );
+      const branchResult = executeAttackBranches(
+        state,
+        player,
+        effect,
+        source,
+        targetPlayer,
+        attackResult,
+        services
+      );
+      if (!branchResult.ok) {
+        return branchResult;
+      }
+    }
+
+    return { ok: true };
+  }
+
+  const targetResult = services.resolveTargetChoice(
+    state,
+    player,
+    effect,
+    source
+  );
+  if (!targetResult.ok) {
+    return targetResult;
+  }
+
+  if (targetResult.choice === undefined) {
+    return { ok: true };
+  }
+
+  if (targetResult.choice.choiceType !== "player") {
+    return {
+      ok: false,
+      error: "Attack effect requires a player target",
+    };
+  }
+
+  const targetPlayer = targetResult.choice.player;
+  state.eventLog.push({
+    type: "attackCreated",
+    playerId: player.playerId,
+    targetPlayerId: targetPlayer.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    amount: attackAmount,
+    sourceType: source.sourceType,
+  });
+  if (
+    !attackProfile.unavoidable &&
+    services.resolveDefenseWindow(state, targetPlayer)
+  ) {
+    state.eventLog.push({
+      type: "attackAvoided",
+      playerId: targetPlayer.playerId,
+      targetPlayerId: targetPlayer.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+    return { ok: true };
+  }
+
+  const attackResult = services.dealDamage(
+    state,
+    player,
+    targetPlayer,
+    attackAmount,
+    effectId,
+    source
+  );
+  return executeAttackBranches(
+    state,
+    player,
+    effect,
+    source,
+    targetPlayer,
+    { ...attackResult, avoided: false },
+    services
+  );
+}
+
 const avoidAttackHandler: EffectRuntimeHandler = {
   effectId: "avoid_attack",
   validateShape(subjectId, effect) {
@@ -3212,12 +3529,20 @@ function setupOnlyExecutionError(effectId: string): EffectExecutionResult {
 
 export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [addPowerHandler.effectId, toCatalogEntry(addPowerHandler)],
+  [
+    addPowerPerControlledObjectHandler.effectId,
+    toCatalogEntry(addPowerPerControlledObjectHandler),
+  ],
   [gainCardHandler.effectId, toCatalogEntry(gainCardHandler)],
   [discardCardHandler.effectId, toCatalogEntry(discardCardHandler)],
   [destroyCardHandler.effectId, toCatalogEntry(destroyCardHandler)],
   [dealDamageHandler.effectId, toCatalogEntry(dealDamageHandler)],
   [healHandler.effectId, toCatalogEntry(healHandler)],
   [setLifeHandler.effectId, toCatalogEntry(setLifeHandler)],
+  [
+    attackDamageEqualToControlledCardCostHandler.effectId,
+    toCatalogEntry(attackDamageEqualToControlledCardCostHandler),
+  ],
   [gainStatusHandler.effectId, toCatalogEntry(gainStatusHandler)],
   [removeStatusHandler.effectId, toCatalogEntry(removeStatusHandler)],
   [toggleStatusHandler.effectId, toCatalogEntry(toggleStatusHandler)],

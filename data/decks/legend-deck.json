@@ -12,9 +12,13 @@
     {
       "cardId": "esw2_dbg__legend_009",
       "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__legend_011",
+      "count": 1
     }
   ],
   "notes": [
-    "Current runtime legend deck includes the simple-baseline Block D slice."
+    "Current runtime legend deck includes the simple-baseline and controlled-object-conditions Block D slices."
   ]
 }

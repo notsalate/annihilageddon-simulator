@@ -373,6 +373,7 @@ test("combat effects are registered and reject invalid shapes through runtime ha
   const combatEffectIds = [
     "deal_damage",
     "attack_damage",
+    "attack_damage_equal_to_controlled_card_cost",
     "multi_target_attack",
     "mayhem_attack",
   ];
@@ -392,6 +393,20 @@ test("combat effects are registered and reject invalid shapes through runtime ha
       []
     );
   }
+});
+
+test("controlled-object power effect is registered and rejects invalid shapes", () => {
+  const handler = getEffectRuntimeHandler("add_power_per_controlled_object");
+
+  assert.ok(handler);
+  assert.notDeepEqual(
+    handler.validateShape("Fixture", {
+      effectId: "add_power_per_controlled_object",
+      timing: "onPlay",
+      amount: 0,
+    }),
+    []
+  );
 });
 
 test("economy and draw effects are registered and reject invalid shapes through runtime handlers", () => {

@@ -204,6 +204,144 @@ test("simple-baseline current runtime cards execute printed baseline play behavi
   }
 });
 
+test("controlled-object current runtime cards resolve printed power behavior", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+
+  state.turn.power = 0;
+  const sadOrc = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_016"
+  );
+  let result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: sadOrc.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+
+  state.turn.power = 0;
+  activePlayer.hand.splice(0);
+  const controlledCreature = createRuntimeCardInstance(
+    activePlayer,
+    "esw2_dbg__main_035",
+    "controlled-creature"
+  );
+  activePlayer.permanents.push(controlledCreature);
+  const sadOrcWithCreature = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_016"
+  );
+  result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: sadOrcWithCreature.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 4);
+
+  state.turn.power = 0;
+  activePlayer.hand.splice(0);
+  activePlayer.deck.push(
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "drawn")
+  );
+  activePlayer.deadWizardTokens.push({
+    instanceId: "controlled-dwt",
+    definitionId: "esw2_dbg__dead_wizard_token_001",
+    ownerId: activePlayer.playerId,
+  });
+  activePlayer.trophyLikeObjects.push({
+    instanceId: "controlled-basic-trophy",
+    trophyId: "controlled-basic-trophy",
+    ownerId: activePlayer.playerId,
+    effects: [],
+  });
+  const gift = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_056");
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__main_040", "gift-helper")
+  );
+  result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: gift.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 5);
+  assert.equal(activePlayer.hand.length, 1);
+});
+
+test("controlled-object attack cards use controlled card costs", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+
+  activePlayer.hand.splice(0);
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__main_040", "cost-five"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__legend_004", "cost-ten")
+  );
+  const slippers = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_020"
+  );
+  let lifeBefore = targetPlayer.life.current;
+  let result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: slippers.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, lifeBefore - 10);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackCreated" &&
+        event.definitionId === "esw2_dbg__main_020" &&
+        event.amount === 10
+      );
+    })
+  );
+
+  activePlayer.hand.splice(0);
+  activePlayer.permanents.splice(0);
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__main_040", "chosen-five")
+  );
+  const throne = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_011"
+  );
+  activePlayer.permanents.push(throne);
+  lifeBefore = targetPlayer.life.current;
+  result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: throne.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, lifeBefore - 5);
+  assert.ok(
+    state.eventLog.some((event) => {
+      const eventRecord = event as unknown as Record<string, unknown>;
+      const targetCardInstanceIds = eventRecord["targetCardInstanceIds"];
+      return (
+        event.type === "effectChoiceSelected" &&
+        event.definitionId === "esw2_dbg__legend_011" &&
+        Array.isArray(targetCardInstanceIds) &&
+        targetCardInstanceIds.includes("fixture-runtime-chosen-five")
+      );
+    })
+  );
+});
+
 test("illegal actions are rejected without changing game state", () => {
   const state = initializeGame({
     rootDir,
@@ -1219,8 +1357,12 @@ test("current runtime mayhem-events cards resolve their mapped event effects", (
     assert.ok(definition, `${definitionId} should be loaded`);
     assert.equal(definition.engine.cardKind, "mayhem");
     assert.ok(
-      state.common.mainDeck.some((card) => card.definitionId === definitionId),
-      `${definitionId} should be in the current main deck`
+      [
+        ...state.common.mainDeck,
+        ...state.common.destroyedMayhem,
+        ...state.common.destroyedMegaMayhem,
+      ].some((card) => card.definitionId === definitionId),
+      `${definitionId} should be in the current main deck or resolved setup event pile`
     );
   }
 
@@ -5654,13 +5796,26 @@ function addRuntimeCardToHand(
   definitionId: string
 ): CardInstance {
   assert.ok(state.cardDefinitions.has(definitionId));
+  const card = createRuntimeCardInstance(
+    player,
+    definitionId,
+    `${definitionId}-${player.hand.length + 1}`
+  );
+  player.hand.push(card);
+  return card;
+}
+
+function createRuntimeCardInstance(
+  player: PlayerState,
+  definitionId: string,
+  instanceIdSuffix: string
+): CardInstance {
   const card: CardInstance = {
-    instanceId: `fixture-runtime-${definitionId}-${player.hand.length + 1}`,
+    instanceId: `fixture-runtime-${instanceIdSuffix}`,
     definitionId,
     ownerId: player.playerId,
     marketChips: 0,
   };
-  player.hand.push(card);
   return card;
 }
 
