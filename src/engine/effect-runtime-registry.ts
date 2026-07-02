@@ -645,6 +645,22 @@ const healHandler: EffectRuntimeHandler = {
   },
 };
 
+const healEqualDamageDealtOnOwnTurnHandler: EffectRuntimeHandler = {
+  effectId: "heal_equal_damage_dealt_on_own_turn",
+  validateShape(subjectId, effect) {
+    if (effect["timing"] !== "afterDamageDealt") {
+      return [
+        `${subjectId} uses unsupported damage trigger timing ${String(effect["timing"])}`,
+      ];
+    }
+
+    return [];
+  },
+  execute() {
+    return { ok: true };
+  },
+};
+
 const setLifeHandler: EffectRuntimeHandler = {
   effectId: "set_life",
   validateShape(subjectId, effect) {
@@ -710,6 +726,86 @@ const setLifeHandler: EffectRuntimeHandler = {
       amount: lifeTotal,
       sourceType: source.sourceType,
     });
+    return { ok: true };
+  },
+};
+
+const exchangeLifeAndDinglerStatusHandler: EffectRuntimeHandler = {
+  effectId: "exchange_life_and_dingler_status",
+  validateShape(subjectId, effect) {
+    return validatePlayerTargetSelector(subjectId, effect, "life exchange", [
+      "opponentPlayer",
+      "chosenFoe",
+    ]);
+  },
+  execute(state, player, effect, source, services) {
+    const effectId = services.asString(effect["effectId"]);
+    if (effect["optional"] === true) {
+      const choice = services.chooseEffectChoice(
+        state,
+        player,
+        source,
+        effectId,
+        [
+          {
+            choiceId: "exchange_life_and_dingler_status",
+          },
+          {
+            choiceId: "pass",
+          },
+        ]
+      );
+      if (choice?.choiceId === "pass") {
+        return { ok: true };
+      }
+    }
+
+    const targetResult = services.resolveTargetChoice(
+      state,
+      player,
+      effect,
+      source
+    );
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    if (targetResult.choice === undefined) {
+      return { ok: true };
+    }
+
+    if (targetResult.choice.choiceType !== "player") {
+      return {
+        ok: false,
+        error: "Life exchange effect requires a player target",
+      };
+    }
+
+    const targetPlayer = targetResult.choice.player;
+    const playerLife = player.life.current;
+    player.life.current = targetPlayer.life.current;
+    targetPlayer.life.current = playerLife;
+    state.eventLog.push({
+      type: "effectLifeExchanged",
+      playerId: player.playerId,
+      targetPlayerId: targetPlayer.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+
+    const playerHadDingler = services.hasDinglerStatus(player);
+    const targetHadDingler = services.hasDinglerStatus(targetPlayer);
+    if (playerHadDingler && !targetHadDingler) {
+      services.removeDinglerStatus(state, player, effectId, source);
+      services.gainDinglerStatus(state, targetPlayer, effectId, source);
+    }
+    if (!playerHadDingler && targetHadDingler) {
+      services.removeDinglerStatus(state, targetPlayer, effectId, source);
+      services.gainDinglerStatus(state, player, effectId, source);
+    }
+
     return { ok: true };
   },
 };
@@ -1138,6 +1234,128 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
       });
     }
 
+    return { ok: true };
+  },
+};
+
+const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler = {
+  effectId: "mayhem_each_player_reduce_life_to_gain_chips",
+  validateShape(subjectId, effect) {
+    const errors = validateMayhemEachPlayerShape(subjectId, effect);
+    const lifeTotal = effect["lifeTotal"];
+    if (
+      typeof lifeTotal !== "number" ||
+      !Number.isSafeInteger(lifeTotal) ||
+      lifeTotal < 1
+    ) {
+      errors.push(`${subjectId} uses invalid life total ${String(lifeTotal)}`);
+    }
+
+    const chipAmount = effect["chipAmount"];
+    if (
+      typeof chipAmount !== "number" ||
+      !Number.isSafeInteger(chipAmount) ||
+      chipAmount < 1
+    ) {
+      errors.push(
+        `${subjectId} uses invalid chip amount ${String(chipAmount)}`
+      );
+    }
+
+    if (effect["chooser"] !== "affectedPlayer") {
+      errors.push(
+        `${subjectId} uses unsupported Mayhem chooser ${String(effect["chooser"])}`
+      );
+    }
+
+    return errors;
+  },
+  execute(state, _player, effect, source, services) {
+    const errors = mayhemEachPlayerReduceLifeToGainChipsHandler.validateShape(
+      "Effect mayhem_each_player_reduce_life_to_gain_chips",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid Mayhem life-for-chips effect",
+      };
+    }
+
+    const lifeTotal = effect["lifeTotal"];
+    const chipAmount = effect["chipAmount"];
+    if (typeof lifeTotal !== "number" || typeof chipAmount !== "number") {
+      return { ok: false, error: "Invalid Mayhem life-for-chips effect" };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+      if (targetPlayer.life.current <= lifeTotal) {
+        continue;
+      }
+
+      const choice = services.chooseEffectChoice(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        [{ choiceId: "reduce_life_gain_chips" }, { choiceId: "pass" }]
+      );
+      if (choice?.choiceId !== "reduce_life_gain_chips") {
+        continue;
+      }
+
+      services.setPlayerLife(state, targetPlayer, lifeTotal);
+      const chipsBefore = targetPlayer.chips;
+      targetPlayer.chips += chipAmount;
+      state.eventLog.push({
+        type: "effectLifeSet",
+        playerId: targetPlayer.playerId,
+        targetPlayerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        amount: lifeTotal,
+        sourceType: source.sourceType,
+      });
+      recordEffectChipsChanged(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        chipsBefore,
+        targetPlayer.chips
+      );
+    }
+
+    return { ok: true };
+  },
+};
+
+const increaseHandLimitAtMaxLifeHandler: EffectRuntimeHandler = {
+  effectId: "increase_hand_limit_at_max_life",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["timing"] !== "endTurn") {
+      errors.push(
+        `${subjectId} uses unsupported hand-limit timing ${String(effect["timing"])}`
+      );
+    }
+
+    const amount = effect["amount"];
+    if (
+      typeof amount !== "number" ||
+      !Number.isSafeInteger(amount) ||
+      amount < 1
+    ) {
+      errors.push(
+        `${subjectId} uses invalid hand-limit amount ${String(amount)}`
+      );
+    }
+
+    return errors;
+  },
+  execute() {
     return { ok: true };
   },
 };
@@ -3544,6 +3762,18 @@ function executeAttackBranch(
     return { ok: true };
   }
 
+  if (branch["effectId"] === "heal_equal_damage_dealt") {
+    services.healPlayer(
+      state,
+      player,
+      player,
+      attackResult.damageDealt,
+      "heal_equal_damage_dealt",
+      source
+    );
+    return { ok: true };
+  }
+
   if (branch["effectId"] === "return_discard_to_hand") {
     const amount = branch["amount"];
     if (
@@ -3770,7 +4000,15 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [destroyCardHandler.effectId, toCatalogEntry(destroyCardHandler)],
   [dealDamageHandler.effectId, toCatalogEntry(dealDamageHandler)],
   [healHandler.effectId, toCatalogEntry(healHandler)],
+  [
+    healEqualDamageDealtOnOwnTurnHandler.effectId,
+    toCatalogEntry(healEqualDamageDealtOnOwnTurnHandler),
+  ],
   [setLifeHandler.effectId, toCatalogEntry(setLifeHandler)],
+  [
+    exchangeLifeAndDinglerStatusHandler.effectId,
+    toCatalogEntry(exchangeLifeAndDinglerStatusHandler),
+  ],
   [
     attackDamageEqualToControlledCardCostHandler.effectId,
     toCatalogEntry(attackDamageEqualToControlledCardCostHandler),
@@ -3798,6 +4036,14 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [
     mayhemEachPlayerHandRedrawChoiceHandler.effectId,
     toCatalogEntry(mayhemEachPlayerHandRedrawChoiceHandler),
+  ],
+  [
+    mayhemEachPlayerReduceLifeToGainChipsHandler.effectId,
+    toCatalogEntry(mayhemEachPlayerReduceLifeToGainChipsHandler),
+  ],
+  [
+    increaseHandLimitAtMaxLifeHandler.effectId,
+    toCatalogEntry(increaseHandLimitAtMaxLifeHandler),
   ],
   [
     mayhemEachPlayerBattleHighestHandCostHandler.effectId,

@@ -6,11 +6,19 @@
   "mappingStatus": "incomplete-full-only",
   "entries": [
     {
+      "cardId": "esw2_dbg__legend_002",
+      "count": 1
+    },
+    {
       "cardId": "esw2_dbg__legend_004",
       "count": 1
     },
     {
       "cardId": "esw2_dbg__legend_009",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__legend_010",
       "count": 1
     },
     {
@@ -24,9 +32,13 @@
     {
       "cardId": "esw2_dbg__mega_mayhem_004",
       "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__mega_mayhem_005",
+      "count": 1
     }
   ],
   "notes": [
-    "Current runtime legend deck includes the simple-baseline, controlled-object-conditions, and dingler-status Block D slices."
+    "Current runtime legend deck includes the simple-baseline, controlled-object-conditions, dingler-status, and life-total-effects Block D slices."
   ]
 }

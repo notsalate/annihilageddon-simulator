@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_046",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_046.json",
+    "image": "assets/cards/wizard-card/Волшебник. Сладкий Смурфинёр.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_046.md"
+  },
+  "visible": {
+    "nameRu": "Сладкий Смурфинёр",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "textRu": "+2 мощи\nАтака: нанеси 4 урона выбранному врагу.\nНакрути столько жизней, сколько урона нанес.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "cost": 5,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 2
+      },
+      {
+        "effectId": "attack_damage",
+        "timing": "onPlay",
+        "amount": 4,
+        "targetSelector": "chosenFoe",
+        "onDamageDealt": [
+          {
+            "effectId": "heal_equal_damage_dealt"
+          }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

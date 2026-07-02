@@ -3573,7 +3573,7 @@ test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affec
         event.playerId === activePlayer.playerId &&
         event.targetPlayerId === targetPlayer.playerId &&
         event.effectId === "deal_damage" &&
-        event.amount === 999
+        event.amount === 20
       );
     })
   );
@@ -4354,6 +4354,198 @@ test("Potny's Buzzing Wand chooses left or right and chains in the chosen direct
     ).length,
     2
   );
+});
+
+test("Sweet Smurfinier heals only actual attack damage dealt", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  targetPlayer.hand = [];
+  activePlayer.life.current = 10;
+  targetPlayer.life.current = 1;
+  const card = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_046");
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: card.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(activePlayer.life.current, 11);
+  assert.equal(targetPlayer.life.current, 20);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectLifeHealed" &&
+        event.definitionId === "esw2_dbg__main_046" &&
+        event.amount === 1
+    )
+  );
+});
+
+test("Venerina Magolovka exchanges life totals and Dingler status with a chosen foe", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  activePlayer.life.current = 7;
+  targetPlayer.life.current = 13;
+  activePlayer.statuses.push(createDinglerStatus(activePlayer));
+  const card = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_002"
+  );
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: card.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 4);
+  assert.equal(activePlayer.life.current, 13);
+  assert.equal(targetPlayer.life.current, 7);
+  assert.equal(hasDinglerStatus(activePlayer), false);
+  assert.equal(hasDinglerStatus(targetPlayer), true);
+});
+
+test("2Q lets players above 10 reduce life to gain one chip", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  activePlayer.life.current = 12;
+  secondPlayer.life.current = 10;
+  thirdPlayer.life.current = 7;
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_060");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.life.current, 10);
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(secondPlayer.life.current, 10);
+  assert.equal(secondPlayer.chips, 0);
+  assert.equal(thirdPlayer.life.current, 7);
+  assert.equal(thirdPlayer.chips, 0);
+  assert.equal(state.common.destroyedMayhem.includes(mayhem), true);
+});
+
+test("Park Vurdalaktionov heals damage dealt on its controller's turn and adds hand limit at max life", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  targetPlayer.hand = [];
+  activePlayer.life.current = 16;
+  targetPlayer.life.current = 20;
+  const park = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_010"
+  );
+
+  const playParkResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: park.instanceId,
+  });
+  assert.equal(playParkResult.ok, true);
+  assert.equal(activePlayer.permanents.includes(park), true);
+
+  const attackCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 3,
+    target: {
+      selector: "opponentPlayer",
+    },
+  });
+  const attackResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attackCardId,
+  });
+
+  assert.equal(attackResult.ok, true);
+  assert.equal(activePlayer.life.current, 19);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectLifeHealed" &&
+        event.definitionId === "esw2_dbg__legend_010" &&
+        event.amount === 3
+    )
+  );
+
+  activePlayer.life.current = calculateEffectivePlayerMaxLife(
+    state,
+    activePlayer.playerId
+  );
+  activePlayer.hand = [];
+  activePlayer.deck = [
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-1"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-2"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-3"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-4"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-5"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-6"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-7"),
+  ];
+
+  const endTurnResult = applyAction(state, { type: "endTurn" });
+
+  assert.equal(endTurnResult.ok, true);
+  assert.equal(activePlayer.hand.length, 7);
+});
+
+test("Mega Mayhem ME sets every wizard life to 5", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  for (const player of state.players) {
+    player.life.current = 17;
+  }
+  const megaMayhem = createCommonRuntimeCard("esw2_dbg__mega_mayhem_005");
+  const legendFiller = state.common.legendMarket[0];
+  assert.ok(legendFiller);
+  state.common.legendMarket.splice(
+    0,
+    state.common.legendMarket.length,
+    ...state.common.legendMarket.slice(0, 2)
+  );
+  state.common.legendDeck.splice(
+    0,
+    state.common.legendDeck.length,
+    megaMayhem,
+    legendFiller
+  );
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    state.players.every((player) => player.life.current === 5),
+    true
+  );
+  assert.equal(state.common.destroyedMegaMayhem.includes(megaMayhem), true);
 });
 
 test("attack_damage kill awards Basic Trophy to the attacker", () => {
@@ -6057,6 +6249,28 @@ function createRuntimeCardInstance(
     marketChips: 0,
   };
   return card;
+}
+
+function createCommonRuntimeCard(definitionId: string): CardInstance {
+  return {
+    instanceId: `fixture-runtime-${definitionId}`,
+    definitionId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+}
+
+function createDinglerStatus(player: PlayerState): StatusInstance {
+  return {
+    instanceId: `fixture-dingler-${player.playerId}`,
+    statusId: "dingler",
+    ownerId: player.playerId,
+    effects: [],
+  };
+}
+
+function hasDinglerStatus(player: PlayerState): boolean {
+  return player.statuses.some((status) => status.statusId === "dingler");
 }
 
 function moveCardToHand(player: PlayerState, card: CardInstance): void {
