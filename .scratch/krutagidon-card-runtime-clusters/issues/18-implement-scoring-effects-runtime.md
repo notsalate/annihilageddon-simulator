@@ -1,4 +1,4 @@
-Status: Todo
+Status: Done
 Label: ready-for-agent
 Type: AFK
 
@@ -31,19 +31,19 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] Для каждой карты из списка прочитан canonical draft/source text.
-- [ ] Для каждой карты из списка добавлен current runtime card JSON, основанный на import draft/source text.
-- [ ] Все выбранные карты добавлены в соответствующие current compositions.
-- [ ] Каждая выбранная карта становится `fullRuntime` в generated matrix.
-- [ ] Полностью реализовано printed scoring behavior каждой выбранной карты.
-- [ ] Focused tests покрывают scoring behavior и дают `focusedTestRefs` для каждой выбранной карты.
-- [ ] Не реализовывать карты вне списка этого issue.
-- [ ] Не менять cluster assignment и не переоткрывать Block C taxonomy.
-- [ ] Выполнен `npm run report:card-runtime-clusters -- --write`.
-- [ ] `npm run report:card-runtime-clusters` проходит.
-- [ ] `npm run typecheck` проходит.
-- [ ] `npm test` проходит.
-- [ ] `git diff --check` проходит.
+- [x] Для каждой карты из списка прочитан canonical draft/source text.
+- [x] Для каждой карты из списка добавлен current runtime card JSON, основанный на import draft/source text.
+- [x] Все выбранные карты добавлены в соответствующие current compositions.
+- [x] Каждая выбранная карта становится `fullRuntime` в generated matrix.
+- [x] Полностью реализовано printed scoring behavior каждой выбранной карты.
+- [x] Focused tests покрывают scoring behavior и дают `focusedTestRefs` для каждой выбранной карты.
+- [x] Не реализовывать карты вне списка этого issue.
+- [x] Не менять cluster assignment и не переоткрывать Block C taxonomy.
+- [x] Выполнен `npm run report:card-runtime-clusters -- --write`.
+- [x] `npm run report:card-runtime-clusters` проходит.
+- [x] `npm run typecheck` проходит.
+- [x] `npm test` проходит.
+- [x] `git diff --check` проходит.
 
 ## Blocked by
 
@@ -53,3 +53,12 @@ None - can start immediately
 
 - Issue остаётся внутри `clusterId: "scoring-effects"`.
 - `fullRuntime` означает участие карты в игре через current composition, а не только наличие JSON.
+
+## Completion Evidence
+
+- Added current runtime definitions for `esw2_dbg__legend_004`, `esw2_dbg__main_027`, and `esw2_dbg__main_040`.
+- Added the selected cards to `legend-deck` and `main-deck` current compositions.
+- Implemented `whileScoring` effective-value modifiers for owned scoring cards:
+  `legend_004` scores +2 VP per owned Legend, `main_040` scores +1 VP per owned creature, and `main_027` turns owned negative DWT VP into positive VP.
+- Focused coverage: `tests/effective-values.test.ts` and current runtime setup assertions in `tests/setup.test.ts`.
+- Checks run: `npm run report:card-runtime-clusters -- --write`, `npm run report:card-runtime-clusters`, `npm run typecheck`, `npm test`, `git diff --check`.

@@ -1,4 +1,9 @@
-import { applyAction, listLegalActions, type GameAction, type LegalAction } from "./actions.js";
+import {
+  applyAction,
+  listLegalActions,
+  type GameAction,
+  type LegalAction,
+} from "./actions.js";
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import {
   calculateEffectiveCardCost,
@@ -7,7 +12,14 @@ import {
   calculateEffectiveTokenVictoryPoints,
 } from "./effective-values.js";
 import { recordBotActionSelected } from "./event-recorder.js";
-import { initializeGame, type CardInstance, type GameEvent, type GameState, type PlayerId, type TokenInstance } from "./setup.js";
+import {
+  initializeGame,
+  type CardInstance,
+  type GameEvent,
+  type GameState,
+  type PlayerId,
+  type TokenInstance,
+} from "./setup.js";
 
 export type GameEndReason =
   | "deadWizardTokensExhausted"
@@ -53,15 +65,19 @@ export interface PlayerScore {
 
 export const baselineBot: BotStrategy = {
   chooseAction({ state, legalActions }: BotDecisionContext): GameAction {
-    const playAction = legalActions.find((action) => action.type === "playCard");
+    const playAction = legalActions.find(
+      (action) => action.type === "playCard"
+    );
     if (playAction !== undefined) {
       return playAction;
     }
 
     const buyActions = legalActions
-      .filter((action): action is Extract<LegalAction, { type: "buyMarketCard" }> => {
-        return action.type === "buyMarketCard";
-      })
+      .filter(
+        (action): action is Extract<LegalAction, { type: "buyMarketCard" }> => {
+          return action.type === "buyMarketCard";
+        }
+      )
       .sort((left, right) => {
         return getBuyActionCost(state, right) - getBuyActionCost(state, left);
       });
@@ -122,25 +138,48 @@ export function scoreGame(state: GameState): PlayerScore[] {
       ...player.permanents.filter((card) => card.ownerId === player.playerId),
     ];
     const cardDefinitions = cards.map((card) => mustGetDefinition(state, card));
-    const deadWizardTokenDefinitions = player.deadWizardTokens.map((token) => mustGetTokenDefinition(state, token));
+    const deadWizardTokenDefinitions = player.deadWizardTokens.map((token) =>
+      mustGetTokenDefinition(state, token)
+    );
 
     return {
       playerId: player.playerId,
       victoryPoints:
-        cardDefinitions.reduce((total, definition) => {
-          return total + calculateEffectiveCardVictoryPoints(state, player.playerId, definition);
+        cards.reduce((total, card) => {
+          return (
+            total +
+            calculateEffectiveCardVictoryPoints(
+              state,
+              player.playerId,
+              mustGetDefinition(state, card),
+              card
+            )
+          );
         }, 0) +
         deadWizardTokenDefinitions.reduce((total, definition) => {
-          return total + calculateEffectiveTokenVictoryPoints(state, player.playerId, definition);
+          return (
+            total +
+            calculateEffectiveTokenVictoryPoints(
+              state,
+              player.playerId,
+              definition
+            )
+          );
         }, 0) +
         calculateEffectivePlayerVictoryPoints(state, player.playerId, 0),
-      legendCount: cardDefinitions.filter((definition) => definition.engine.cardKind === "legend").length,
+      legendCount: cardDefinitions.filter(
+        (definition) => definition.engine.cardKind === "legend"
+      ).length,
       deadWizardTokenCount: player.deadWizardTokens.length,
     };
   });
 }
 
-function summarizeGame(state: GameState, endReason: GameEndReason, isGameEnd: boolean): SingleGameResult {
+function summarizeGame(
+  state: GameState,
+  endReason: GameEndReason,
+  isGameEnd: boolean
+): SingleGameResult {
   const players = scoreGame(state);
   const winnerIds = determineWinnerIds(players);
 
@@ -157,21 +196,28 @@ function summarizeGame(state: GameState, endReason: GameEndReason, isGameEnd: bo
 }
 
 export function getGameEndReason(state: GameState): GameEndReason | undefined {
-  if (state.common.deadWizardTokens.status === "available" && state.common.deadWizardTokens.drawStack.length === 0) {
+  if (
+    state.common.deadWizardTokens.status === "available" &&
+    state.common.deadWizardTokens.drawStack.length === 0
+  ) {
     return "deadWizardTokensExhausted";
   }
 
   return undefined;
 }
 
-export function determineWinnerIds(players: readonly PlayerScore[]): PlayerId[] {
+export function determineWinnerIds(
+  players: readonly PlayerScore[]
+): PlayerId[] {
   const sorted = [...players].sort(compareScores);
   const best = sorted[0];
   if (best === undefined) {
     return [];
   }
 
-  return sorted.filter((player) => compareScores(player, best) === 0).map((player) => player.playerId);
+  return sorted
+    .filter((player) => compareScores(player, best) === 0)
+    .map((player) => player.playerId);
 }
 
 function compareScores(left: PlayerScore, right: PlayerScore): number {
@@ -182,11 +228,17 @@ function compareScores(left: PlayerScore, right: PlayerScore): number {
   );
 }
 
-function isLegalAction(action: GameAction, legalActions: readonly LegalAction[]): boolean {
+function isLegalAction(
+  action: GameAction,
+  legalActions: readonly LegalAction[]
+): boolean {
   return legalActions.some((legalAction) => {
     switch (action.type) {
       case "playCard":
-        return legalAction.type === "playCard" && legalAction.cardInstanceId === action.cardInstanceId;
+        return (
+          legalAction.type === "playCard" &&
+          legalAction.cardInstanceId === action.cardInstanceId
+        );
       case "buyMarketCard":
         return (
           legalAction.type === "buyMarketCard" &&
@@ -194,32 +246,56 @@ function isLegalAction(action: GameAction, legalActions: readonly LegalAction[])
           legalAction.source === action.source
         );
       case "activatePermanent":
-        return legalAction.type === "activatePermanent" && legalAction.cardInstanceId === action.cardInstanceId;
+        return (
+          legalAction.type === "activatePermanent" &&
+          legalAction.cardInstanceId === action.cardInstanceId
+        );
       case "activateWizardProperty":
-        return legalAction.type === "activateWizardProperty" && legalAction.tokenInstanceId === action.tokenInstanceId;
+        return (
+          legalAction.type === "activateWizardProperty" &&
+          legalAction.tokenInstanceId === action.tokenInstanceId
+        );
       case "endTurn":
         return legalAction.type === "endTurn";
     }
   });
 }
 
-function getBuyActionCost(state: GameState, action: Extract<LegalAction, { type: "buyMarketCard" }>): number {
+function getBuyActionCost(
+  state: GameState,
+  action: Extract<LegalAction, { type: "buyMarketCard" }>
+): number {
   if (action.source === "wildMagicStack") {
     return 3;
   }
 
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
-  const card = [...state.common.market, ...state.common.legendMarket, activePlayer?.unboughtFamiliar].find((candidate) => {
-    return candidate !== undefined && candidate.instanceId === action.cardInstanceId;
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  const card = [
+    ...state.common.market,
+    ...state.common.legendMarket,
+    activePlayer?.unboughtFamiliar,
+  ].find((candidate) => {
+    return (
+      candidate !== undefined && candidate.instanceId === action.cardInstanceId
+    );
   });
   if (card === undefined) {
     return 0;
   }
 
-  return calculateEffectiveCardCost(state, state.activePlayerId, mustGetDefinition(state, card));
+  return calculateEffectiveCardCost(
+    state,
+    state.activePlayerId,
+    mustGetDefinition(state, card)
+  );
 }
 
-function mustGetDefinition(state: GameState, card: CardInstance): CardDefinition {
+function mustGetDefinition(
+  state: GameState,
+  card: CardInstance
+): CardDefinition {
   const definition = state.cardDefinitions.get(card.definitionId);
   if (definition === undefined) {
     throw new Error(`Missing card definition ${card.definitionId}`);
@@ -228,7 +304,10 @@ function mustGetDefinition(state: GameState, card: CardInstance): CardDefinition
   return definition;
 }
 
-function mustGetTokenDefinition(state: GameState, token: TokenInstance): TokenDefinition {
+function mustGetTokenDefinition(
+  state: GameState,
+  token: TokenInstance
+): TokenDefinition {
   const definition = state.tokenDefinitions.get(token.definitionId);
   if (definition === undefined) {
     throw new Error(`Missing token definition ${token.definitionId}`);

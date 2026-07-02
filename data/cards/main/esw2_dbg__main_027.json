@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_027",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_027.json",
+    "image": "assets/cards/location/Место. Цирк братьев лошашных.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_027.md"
+  },
+  "visible": {
+    "nameRu": "Цирк братьев лошашных",
+    "cost": 7,
+    "victoryPoints": 2,
+    "typeRu": "Место",
+    "cardKind": "normal",
+    "cardTypes": ["location"],
+    "textRu": "Постоянка: если ты лошара, +2 мощи.\nВ конце игры: твои штрафные ПО 3а жетон лошары становятся бонусными ПО.",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["location"],
+    "cost": 7,
+    "victoryPoints": 2,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "modify_effective_value",
+        "timing": "whileScoring",
+        "valueKind": "tokenVictoryPoints",
+        "operation": "invertNegative",
+        "target": {
+          "targetType": "token",
+          "tokenKind": "deadWizardToken"
+        }
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

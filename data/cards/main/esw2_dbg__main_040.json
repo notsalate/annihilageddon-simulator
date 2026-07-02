@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_040",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_040.json",
+    "image": "assets/cards/creature/Тварь. Потный ГикПиг.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_040.md"
+  },
+  "visible": {
+    "nameRu": "Потный ГикПиг",
+    "cost": 5,
+    "victoryPoints": 0,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "textRu": "+2 мощи\nВ конце игры: приносит 1 ПО за каждую тварь в твоей колоде.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "cost": 5,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 2
+      },
+      {
+        "effectId": "modify_effective_value",
+        "timing": "whileScoring",
+        "valueKind": "cardVictoryPoints",
+        "operation": "add",
+        "amountPerOwnedCard": 1,
+        "countedCardTypes": ["creature"],
+        "target": {
+          "targetType": "card",
+          "definitionId": "esw2_dbg__main_040"
+        }
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

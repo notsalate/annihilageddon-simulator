@@ -1170,7 +1170,10 @@ const modifyEffectiveValueHandler: EffectRuntimeHandler = {
   effectId: "modify_effective_value",
   validateShape(subjectId, effect) {
     const errors: string[] = [];
-    if (effect["timing"] !== "whileControlled") {
+    if (
+      effect["timing"] !== "whileControlled" &&
+      effect["timing"] !== "whileScoring"
+    ) {
       errors.push(
         `${subjectId} uses unsupported effective-value timing ${String(effect["timing"])}`
       );
@@ -1190,17 +1193,47 @@ const modifyEffectiveValueHandler: EffectRuntimeHandler = {
     }
 
     const operation = effect["operation"];
-    if (operation !== "add") {
+    if (operation !== "add" && operation !== "invertNegative") {
       errors.push(
         `${subjectId} uses unsupported effective-value operation ${String(operation)}`
       );
     }
 
     const amount = effect["amount"];
-    if (typeof amount !== "number" || !Number.isSafeInteger(amount)) {
+    const amountPerOwnedCard = effect["amountPerOwnedCard"];
+    if (
+      operation === "add" &&
+      (typeof amount !== "number" || !Number.isSafeInteger(amount)) &&
+      (typeof amountPerOwnedCard !== "number" ||
+        !Number.isSafeInteger(amountPerOwnedCard))
+    ) {
       errors.push(
         `${subjectId} uses invalid effective-value amount ${String(amount)}`
       );
+    }
+    if (operation === "invertNegative" && amount !== undefined) {
+      errors.push(`${subjectId} cannot combine invertNegative with amount`);
+    }
+    if (
+      amountPerOwnedCard !== undefined &&
+      (typeof amountPerOwnedCard !== "number" ||
+        !Number.isSafeInteger(amountPerOwnedCard))
+    ) {
+      errors.push(
+        `${subjectId} uses invalid effective-value amountPerOwnedCard ${String(amountPerOwnedCard)}`
+      );
+    }
+    if (amountPerOwnedCard !== undefined) {
+      const countedCardTypes = effect["countedCardTypes"];
+      if (
+        !Array.isArray(countedCardTypes) ||
+        countedCardTypes.length === 0 ||
+        !countedCardTypes.every(isNonEmptyString)
+      ) {
+        errors.push(
+          `${subjectId} uses invalid effective-value countedCardTypes`
+        );
+      }
     }
 
     errors.push(
@@ -2327,7 +2360,8 @@ function validateEffectiveValueModifierTarget(
   if (valueKind === "tokenVictoryPoints") {
     if (
       target["targetType"] === "token" &&
-      isNonEmptyString(target["definitionId"])
+      (isNonEmptyString(target["definitionId"]) ||
+        target["tokenKind"] === "deadWizardToken")
     ) {
       return [];
     }
