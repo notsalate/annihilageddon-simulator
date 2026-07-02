@@ -26,6 +26,10 @@
       "count": 1
     },
     {
+      "cardId": "esw2_dbg__main_030",
+      "count": 1
+    },
+    {
       "cardId": "esw2_dbg__main_035",
       "count": 1
     },
@@ -50,11 +54,19 @@
       "count": 1
     },
     {
+      "cardId": "esw2_dbg__main_066",
+      "count": 1
+    },
+    {
       "cardId": "esw2_dbg__main_071",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_074",
       "count": 1
     }
   ],
   "notes": [
-    "Current runtime main deck includes the simple-baseline and controlled-object-conditions Block D slices."
+    "Current runtime main deck includes the simple-baseline, controlled-object-conditions, mayhem-events, and dingler-status Block D slices."
   ]
 }

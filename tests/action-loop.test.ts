@@ -1340,6 +1340,246 @@ test("Mayhem vote makes the top-voted player Dingler after affected-player votes
   );
 });
 
+test("Mayhem Dingler recovery lets each Dingler pay life or chips to become normal", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  state.activePlayerId = "player-2";
+  const [activePlayer, chipPlayer, blockedPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(chipPlayer);
+  assert.ok(blockedPlayer);
+
+  activePlayer.life.current = 6;
+  chipPlayer.life.current = 5;
+  chipPlayer.chips = 1;
+  blockedPlayer.life.current = 5;
+  for (const player of [activePlayer, chipPlayer, blockedPlayer]) {
+    player.statuses.push({
+      instanceId: `fixture-${player.playerId}-dingler-status`,
+      statusId: "dingler",
+      ownerId: player.playerId,
+      effects: [],
+    });
+  }
+
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-dingler-recovery",
+    [
+      {
+        effectId:
+          "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        statusId: "dingler",
+        lifeCost: 5,
+        chipCost: 1,
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  const mayhem: CardInstance = {
+    instanceId: "fixture-mayhem-dingler-recovery-instance",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    activePlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.equal(activePlayer.life.current, 1);
+  assert.equal(
+    chipPlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.equal(chipPlayer.chips, 0);
+  assert.equal(
+    blockedPlayer.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+  assert.equal(blockedPlayer.life.current, 5);
+  assertEventOrder(state, [
+    (event) =>
+      event.type === "effectCostPaid" &&
+      event.playerId === activePlayer.playerId &&
+      event.effectId ===
+        "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status" &&
+      event.costId === "pay_life" &&
+      event.amount === 5,
+    (event) =>
+      event.type === "dinglerStatusRemoved" &&
+      event.playerId === activePlayer.playerId,
+    (event) =>
+      event.type === "effectCostPaid" &&
+      event.playerId === chipPlayer.playerId &&
+      event.effectId ===
+        "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status" &&
+      event.costId === "spend_chips" &&
+      event.amount === 1,
+    (event) =>
+      event.type === "dinglerStatusRemoved" &&
+      event.playerId === chipPlayer.playerId,
+  ]);
+});
+
+test("Dingler count power effect adds one power per Dingler player", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const firstFoe = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(firstFoe);
+  for (const player of [activePlayer, firstFoe]) {
+    player.statuses.push({
+      instanceId: `fixture-${player.playerId}-dingler-status`,
+      statusId: "dingler",
+      ownerId: player.playerId,
+      effects: [],
+    });
+  }
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "add_power_per_player_with_status",
+    timing: "onPlay",
+    statusId: "dingler",
+    amountPerPlayer: 1,
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectAddPowerApplied" &&
+        event.effectId === "add_power_per_player_with_status" &&
+        event.amount === 2
+      );
+    })
+  );
+});
+
+test("Mayhem lowest-life Dingler effect normalizes tied players to Dingler max life", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  state.activePlayerId = "player-2";
+  const [activePlayer, tiedPlayer, highLifePlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(tiedPlayer);
+  assert.ok(highLifePlayer);
+  activePlayer.life.current = 3;
+  tiedPlayer.life.current = 3;
+  highLifePlayer.life.current = 8;
+
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-lowest-life-dingler",
+    [
+      {
+        effectId: "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
+        timing: "onMayhemResolve",
+        statusId: "dingler",
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  const mayhem: CardInstance = {
+    instanceId: "fixture-mayhem-lowest-life-dingler-instance",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  for (const player of [activePlayer, tiedPlayer]) {
+    assert.equal(
+      player.statuses.some((status) => status.statusId === "dingler"),
+      true
+    );
+    assert.equal(player.life.current, 15);
+  }
+  assert.equal(
+    highLifePlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.equal(highLifePlayer.life.current, 8);
+});
+
+test("dingler-status current runtime cards load with mapped Dingler effects", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  const expectedEffectsByCardId = new Map([
+    [
+      "esw2_dbg__legend_014",
+      ["draw_cards", "gain_status", "add_power_per_player_with_status"],
+    ],
+    ["esw2_dbg__main_030", ["add_power", "attack_damage"]],
+    [
+      "esw2_dbg__main_066",
+      ["mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status"],
+    ],
+    [
+      "esw2_dbg__main_074",
+      ["mayhem_lowest_life_players_gain_dingler_and_set_to_max_life"],
+    ],
+    ["esw2_dbg__mega_mayhem_004", ["mega_mayhem_each_player_toggle_dingler"]],
+  ]);
+
+  for (const [definitionId, effectIds] of expectedEffectsByCardId) {
+    const definition = state.cardDefinitions.get(definitionId);
+    assert.ok(definition, `${definitionId} should be loaded`);
+    assert.deepEqual(
+      definition.engine.effects.map(
+        (effect) => (effect as Record<string, unknown>)["effectId"]
+      ),
+      effectIds
+    );
+  }
+});
+
 test("current runtime mayhem-events cards resolve their mapped event effects", () => {
   const state = initializeGame({
     rootDir,

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_030",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_030.json",
+    "image": "assets/cards/treasure/Сокровише. Палочка-Лошарочка.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_030.md"
+  },
+  "visible": {
+    "nameRu": "Палочка-Лошарочка",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "textRu": "+3 мощи\nАтака: нанеси 5 урона выбранному колдуну. Если он от этого подох, он становится лошарой.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "tags": ["wandAttackCard"],
+    "cost": 6,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 3
+      },
+      {
+        "effectId": "attack_damage",
+        "targetSelector": "chosenPlayer",
+        "timing": "onPlay",
+        "amount": 5,
+        "onKill": [
+          {
+            "effectId": "gain_status",
+            "statusId": "dingler",
+            "target": "damagedPlayer"
+          }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

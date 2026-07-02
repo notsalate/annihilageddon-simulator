@@ -1,5 +1,8 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
-import { calculateEffectiveCardCost } from "./effective-values.js";
+import {
+  calculateEffectiveCardCost,
+  calculateEffectivePlayerMaxLife,
+} from "./effective-values.js";
 import { recordTurnPowerChanged } from "./event-recorder.js";
 import type {
   CardInstance,
@@ -283,6 +286,64 @@ const addPowerHandler: EffectRuntimeHandler = {
       state.turn.power
     );
 
+    return { ok: true };
+  },
+};
+
+const addPowerPerPlayerWithStatusHandler: EffectRuntimeHandler = {
+  effectId: "add_power_per_player_with_status",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["statusId"] !== "dingler") {
+      errors.push(
+        `${subjectId} uses unsupported status ${String(effect["statusId"])}`
+      );
+    }
+    const amountPerPlayer = effect["amountPerPlayer"];
+    if (
+      typeof amountPerPlayer !== "number" ||
+      !Number.isSafeInteger(amountPerPlayer) ||
+      amountPerPlayer <= 0
+    ) {
+      errors.push(
+        `${subjectId} uses invalid power amount per player ${String(amountPerPlayer)}`
+      );
+    }
+    return errors;
+  },
+  execute(state, player, effect, source, services) {
+    const errors = addPowerPerPlayerWithStatusHandler.validateShape(
+      "Effect add_power_per_player_with_status",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid add_power_per_player_with_status effect",
+      };
+    }
+
+    const amountPerPlayer = effect["amountPerPlayer"];
+    if (typeof amountPerPlayer !== "number") {
+      return {
+        ok: false,
+        error: "Invalid add_power_per_player_with_status effect",
+      };
+    }
+
+    const matchingPlayerCount = state.players.filter((candidate) =>
+      services.hasDinglerStatus(candidate)
+    ).length;
+    const powerBefore = state.turn.power;
+    state.turn.power += matchingPlayerCount * amountPerPlayer;
+    recordTurnPowerChanged(
+      state,
+      player,
+      source,
+      "add_power_per_player_with_status",
+      powerBefore,
+      state.turn.power
+    );
     return { ok: true };
   },
 };
@@ -1240,6 +1301,146 @@ const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler = {
       winnerPlayerIds: winners.map((winner) => winner.playerId),
       sourceType: source.sourceType,
     });
+
+    return { ok: true };
+  },
+};
+
+const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler = {
+  effectId: "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+  validateShape(subjectId, effect) {
+    return validateMayhemDinglerRecoveryShape(subjectId, effect);
+  },
+  execute(state, _player, effect, source, services) {
+    const errors = mayhemEachDinglerRecoveryChoiceHandler.validateShape(
+      "Effect mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid Mayhem Dingler recovery effect",
+      };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    const lifeCost = effect["lifeCost"];
+    const chipCost = effect["chipCost"];
+    if (typeof lifeCost !== "number" || typeof chipCost !== "number") {
+      return { ok: false, error: "Invalid Mayhem Dingler recovery costs" };
+    }
+
+    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+      if (!services.hasDinglerStatus(targetPlayer)) {
+        continue;
+      }
+
+      const choices: EffectChoice[] = [];
+      if (targetPlayer.life.current - lifeCost >= 1) {
+        choices.push({ choiceId: "pay_life" });
+      }
+      if (targetPlayer.chips >= chipCost) {
+        choices.push({ choiceId: "spend_chips" });
+      }
+      choices.push({ choiceId: "skip" });
+
+      const choice = services.chooseEffectChoice(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        choices
+      );
+      if (choice?.choiceId === "pay_life") {
+        targetPlayer.life.current -= lifeCost;
+        state.eventLog.push({
+          type: "effectCostPaid",
+          playerId: targetPlayer.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          effectId,
+          costId: "pay_life",
+          amount: lifeCost,
+          sourceType: source.sourceType,
+        });
+        services.removeDinglerStatus(state, targetPlayer, effectId, source);
+        continue;
+      }
+
+      if (choice?.choiceId === "spend_chips") {
+        targetPlayer.chips -= chipCost;
+        state.eventLog.push({
+          type: "effectCostPaid",
+          playerId: targetPlayer.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          effectId,
+          costId: "spend_chips",
+          amount: chipCost,
+          sourceType: source.sourceType,
+        });
+        services.removeDinglerStatus(state, targetPlayer, effectId, source);
+      }
+    }
+
+    return { ok: true };
+  },
+};
+
+const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler = {
+  effectId: "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["timing"] !== "onMayhemResolve") {
+      errors.push(
+        `${subjectId} uses unsupported Mayhem timing ${String(effect["timing"])}`
+      );
+    }
+    if (effect["statusId"] !== "dingler") {
+      errors.push(
+        `${subjectId} uses unsupported Mayhem lowest-life status ${String(effect["statusId"])}`
+      );
+    }
+    return errors;
+  },
+  execute(state, _player, effect, source, services) {
+    const errors = mayhemLowestLifeDinglerMaxLifeHandler.validateShape(
+      "Effect mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid Mayhem lowest-life Dingler effect",
+      };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    const lowestLife = Math.min(
+      ...state.players.map((candidate) => candidate.life.current)
+    );
+    const targets = services
+      .getPlayersInActiveOrder(state)
+      .filter((candidate) => candidate.life.current === lowestLife);
+
+    for (const targetPlayer of targets) {
+      services.gainDinglerStatus(state, targetPlayer, effectId, source);
+      const maxLife = calculateEffectivePlayerMaxLife(
+        state,
+        targetPlayer.playerId
+      );
+      services.setPlayerLife(state, targetPlayer, maxLife);
+      state.eventLog.push({
+        type: "effectLifeSet",
+        playerId: source.playerId,
+        targetPlayerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        amount: maxLife,
+        sourceType: source.sourceType,
+      });
+    }
 
     return { ok: true };
   },
@@ -2943,6 +3144,7 @@ function validateDinglerStatusEffectShape(
     ...validatePlayerTargetSelector(subjectId, effect, effectLabel, [
       "activePlayer",
       "opponentPlayer",
+      "anyPlayer",
     ])
   );
   return errors;
@@ -3095,6 +3297,32 @@ function validateMayhemVoteDinglerShape(
     errors.push(
       `${subjectId} uses unsupported Mayhem vote status ${String(effect["statusId"])}`
     );
+  }
+  return errors;
+}
+
+function validateMayhemDinglerRecoveryShape(
+  subjectId: string,
+  effect: Record<string, unknown>
+): string[] {
+  const errors = validateMayhemEachPlayerShape(subjectId, effect);
+  if (effect["chooser"] !== "affectedPlayer") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem chooser ${String(effect["chooser"])}`
+    );
+  }
+  if (effect["statusId"] !== "dingler") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem recovery status ${String(effect["statusId"])}`
+    );
+  }
+  for (const costField of ["lifeCost", "chipCost"]) {
+    const cost = effect[costField];
+    if (typeof cost !== "number" || !Number.isSafeInteger(cost) || cost <= 0) {
+      errors.push(
+        `${subjectId} uses invalid Mayhem recovery ${costField} ${String(cost)}`
+      );
+    }
   }
   return errors;
 }
@@ -3530,6 +3758,10 @@ function setupOnlyExecutionError(effectId: string): EffectExecutionResult {
 export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [addPowerHandler.effectId, toCatalogEntry(addPowerHandler)],
   [
+    addPowerPerPlayerWithStatusHandler.effectId,
+    toCatalogEntry(addPowerPerPlayerWithStatusHandler),
+  ],
+  [
     addPowerPerControlledObjectHandler.effectId,
     toCatalogEntry(addPowerPerControlledObjectHandler),
   ],
@@ -3574,6 +3806,14 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [
     mayhemEachPlayerVoteDinglerHandler.effectId,
     toCatalogEntry(mayhemEachPlayerVoteDinglerHandler),
+  ],
+  [
+    mayhemEachDinglerRecoveryChoiceHandler.effectId,
+    toCatalogEntry(mayhemEachDinglerRecoveryChoiceHandler),
+  ],
+  [
+    mayhemLowestLifeDinglerMaxLifeHandler.effectId,
+    toCatalogEntry(mayhemLowestLifeDinglerMaxLifeHandler),
   ],
   [
     replaceStartingCardHandler.effectId,

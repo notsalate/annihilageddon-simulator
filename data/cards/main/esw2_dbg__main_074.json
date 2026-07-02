@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_074",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_074.json",
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2F.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_074.md"
+  },
+  "visible": {
+    "nameRu": "2F",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Атака: самый хилый колдун становится лошарой. Затем накручивает жизни до максимума(лошарного, разумеется).",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
+        "timing": "onMayhemResolve",
+        "statusId": "dingler"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}
