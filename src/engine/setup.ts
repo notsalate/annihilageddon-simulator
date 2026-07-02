@@ -8,6 +8,7 @@ import {
   type TokenStackComposition,
   type TokenDefinition,
 } from "./data.js";
+import type { GameEvent as StrictGameEvent } from "./events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
 
@@ -100,38 +101,7 @@ export interface GameState {
   eventLog: GameEvent[];
 }
 
-export interface GameEvent {
-  type: string;
-  playerId?: PlayerId;
-  targetPlayerId?: PlayerId;
-  turnNumber?: number;
-  actionIdentity?: string;
-  powerBefore?: number;
-  powerAfter?: number;
-  chipsBefore?: number;
-  chipsAfter?: number;
-  sourceZone?: string;
-  destinationZone?: string;
-  ownerBefore?: PlayerId | CommonOwner;
-  ownerAfter?: PlayerId | CommonOwner;
-  cardInstanceId?: string;
-  definitionId?: string;
-  targetCardInstanceId?: string;
-  targetDefinitionId?: string;
-  tokenInstanceId?: string;
-  tokenDefinitionId?: string;
-  effectId?: string;
-  costId?: string;
-  choiceId?: string;
-  choiceIds?: string[];
-  direction?: string;
-  legalChoiceCount?: number;
-  amount?: number;
-  destination?: string;
-  targetCardInstanceIds?: string[];
-  targetDefinitionIds?: string[];
-  sourceType?: string;
-}
+export interface GameEvent extends StrictGameEvent {}
 
 interface InitializeGameBaseOptions {
   seed: number;
