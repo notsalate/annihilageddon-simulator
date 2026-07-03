@@ -10,6 +10,25 @@ import {
   writeCardRuntimeClusterMatrix,
 } from "../src/index.js";
 
+interface ClusterDecisionFile {
+  schemaVersion: number;
+  decisions: Array<{
+    cardId: string;
+    status: string;
+    clusterId?: string;
+    notes?: string;
+  }>;
+}
+
+function isClusterDecisionFile(value: unknown): value is ClusterDecisionFile {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  return record["schemaVersion"] === 1 && Array.isArray(record["decisions"]);
+}
+
 test("card runtime clusters report fails when draft cards are missing manual decisions", () => {
   const rootDir = mkdtempSync(
     path.join(tmpdir(), "krutagidon-card-runtime-clusters-missing-")
@@ -41,7 +60,7 @@ test("card runtime clusters bootstrap decisions with needsClusterDecision status
     "esw2_dbg__main_002",
   ]);
 
-  const decisions = JSON.parse(
+  const parsedDecisions: unknown = JSON.parse(
     readFileSync(
       path.join(
         rootDir,
@@ -50,6 +69,8 @@ test("card runtime clusters bootstrap decisions with needsClusterDecision status
       "utf8"
     )
   );
+  assert.ok(isClusterDecisionFile(parsedDecisions));
+  const decisions = parsedDecisions;
 
   assert.equal(decisions.schemaVersion, 1);
   assert.deepEqual(decisions.decisions, [

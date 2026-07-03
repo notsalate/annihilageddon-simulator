@@ -637,7 +637,7 @@ function createPlayers(
   rng: RandomSource
 ): PlayerState[] {
   return Array.from({ length: playerCount }, (_, index) => {
-    const playerId = `player-${index + 1}` as PlayerId;
+    const playerId: PlayerId = `player-${index + 1}`;
     const deck = instantiateDeck(
       dataPack.decks.starterDeck,
       dataPack,

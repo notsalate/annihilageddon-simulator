@@ -65,7 +65,10 @@ rtk read <file>
 rtk tree <path>
 rtk npm run build
 rtk npx lint-staged
+rtk npm run check
+rtk npm run lint
 rtk npm run typecheck
+rtk npm run typecheck:strictest
 rtk npm test
 ```
 
@@ -89,7 +92,10 @@ Repository commands that are confirmed to exist:
 
 ```powershell
 npm run
+npm run check
+npm run lint
 npm run typecheck
+npm run typecheck:strictest
 npm test
 npm run build
 npm run validate:drafts
@@ -103,8 +109,7 @@ Pre-commit currently runs:
 
 ```powershell
 npx lint-staged
-npm run typecheck
-npm run test
+npm run check
 ```
 
 Do not invent scripts, tools, or repository structure that are not present.
