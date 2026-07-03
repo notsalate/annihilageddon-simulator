@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildControlledObjectView,
   calculateEffectiveCardCost,
+  calculateEffectiveCardVictoryPoints,
   calculateEffectivePlayerMaxLife,
   calculateEffectivePlayerVictoryPoints,
   initializeGame,
@@ -413,6 +414,72 @@ test("Potnyi GeekPig self-scoring applies once per physical copy", () => {
     scoreGame(state).find((score) => score.playerId === player.playerId)
       ?.victoryPoints,
     4
+  );
+});
+
+test("scoring zones stay aligned between scoreGame and whileScoring modifiers", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({ dataPack, seed: 60615 });
+  const player = state.players[0];
+  assert.ok(player);
+  const gusynya = state.cardDefinitions.get("esw2_dbg__legend_004");
+  const tower = state.cardDefinitions.get("esw2_dbg__legend_009");
+  const geekPig = state.cardDefinitions.get("esw2_dbg__main_040");
+  const pivohranilishche = state.cardDefinitions.get("esw2_dbg__main_035");
+  assert.ok(gusynya);
+  assert.ok(tower);
+  assert.ok(geekPig);
+  assert.ok(pivohranilishche);
+
+  const playedLegend = createCardInstance(
+    "fixture-played-gusynya",
+    gusynya.cardId,
+    player.playerId
+  );
+  const permanentLegend = createCardInstance(
+    "fixture-permanent-tower",
+    tower.cardId,
+    player.playerId
+  );
+  const discardGeekPig = createCardInstance(
+    "fixture-discard-geekpig",
+    geekPig.cardId,
+    player.playerId
+  );
+  const playedCreature = createCardInstance(
+    "fixture-played-pivohranilishche",
+    pivohranilishche.cardId,
+    player.playerId
+  );
+
+  player.playedThisTurn.push(playedLegend, playedCreature);
+  player.permanents.push(permanentLegend);
+  player.discard.push(discardGeekPig);
+
+  assert.equal(
+    calculateEffectiveCardVictoryPoints(
+      state,
+      player.playerId,
+      gusynya,
+      playedLegend
+    ),
+    4
+  );
+  assert.equal(
+    calculateEffectiveCardVictoryPoints(
+      state,
+      player.playerId,
+      geekPig,
+      discardGeekPig
+    ),
+    3
+  );
+  const expectedScore =
+    tower.engine.victoryPoints + pivohranilishche.engine.victoryPoints + 4 + 3;
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === player.playerId)
+      ?.victoryPoints,
+    expectedScore
   );
 });
 

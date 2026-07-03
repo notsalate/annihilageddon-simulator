@@ -114,7 +114,7 @@ export function calculateEffectiveCardVictoryPoints(
       definitionId: definition.cardId,
     },
     baseValue: definition.engine.victoryPoints,
-    scoringCards: getScoringCards(state, playerId),
+    scoringCards: getOwnedScoringCards(state, playerId),
     ...(card === undefined ? {} : { scoredCard: card }),
   });
 }
@@ -137,7 +137,7 @@ export function calculateEffectiveTokenVictoryPoints(
       definitionId: definition.tokenId,
     },
     baseValue: definition.victoryPoints,
-    scoringCards: getScoringCards(state, playerId),
+    scoringCards: getOwnedScoringCards(state, playerId),
   });
 }
 
@@ -154,7 +154,7 @@ export function calculateEffectivePlayerVictoryPoints(
       targetType: "player",
     },
     baseValue,
-    scoringCards: getScoringCards(state, playerId),
+    scoringCards: getOwnedScoringCards(state, playerId),
   });
 }
 
@@ -225,7 +225,7 @@ export function calculateEffectiveValue(options: {
   return value;
 }
 
-function getScoringCards(
+export function getOwnedScoringCards(
   state: GameState,
   playerId: PlayerId
 ): ControlledCardObject[] {
@@ -377,7 +377,7 @@ function countOwnedScoringCards(
     return 0;
   }
 
-  return getScoringCards(state, playerId).filter((object) => {
+  return getOwnedScoringCards(state, playerId).filter((object) => {
     return countedCardTypes.some((cardType) => {
       return (
         typeof cardType === "string" &&

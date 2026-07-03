@@ -10,6 +10,7 @@ import {
   calculateEffectiveCardVictoryPoints,
   calculateEffectivePlayerVictoryPoints,
   calculateEffectiveTokenVictoryPoints,
+  getOwnedScoringCards,
 } from "./effective-values.js";
 import { recordBotActionSelected } from "./event-recorder.js";
 import {
@@ -140,14 +141,8 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
 
 export function scoreGame(state: GameState): PlayerScore[] {
   return state.players.map((player) => {
-    const cards = [
-      ...player.hand,
-      ...player.deck,
-      ...player.discard,
-      ...player.playedThisTurn,
-      ...player.permanents.filter((card) => card.ownerId === player.playerId),
-    ];
-    const cardDefinitions = cards.map((card) => mustGetDefinition(state, card));
+    const scoringCards = getOwnedScoringCards(state, player.playerId);
+    const cardDefinitions = scoringCards.map((object) => object.definition);
     const deadWizardTokenDefinitions = player.deadWizardTokens.map((token) =>
       mustGetTokenDefinition(state, token)
     );
@@ -155,14 +150,14 @@ export function scoreGame(state: GameState): PlayerScore[] {
     return {
       playerId: player.playerId,
       victoryPoints:
-        cards.reduce((total, card) => {
+        scoringCards.reduce((total, object) => {
           return (
             total +
             calculateEffectiveCardVictoryPoints(
               state,
               player.playerId,
-              mustGetDefinition(state, card),
-              card
+              object.definition,
+              object.card
             )
           );
         }, 0) +
