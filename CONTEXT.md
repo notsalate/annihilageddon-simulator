@@ -161,7 +161,7 @@ A read-only helper view that gathers separately stored controlled cards, tokens,
 _Avoid_: unified controlled objects zone
 
 **Choice Policy**:
-The deterministic decision hook used when an effect or rule requires a legal choice. The early baseline policy chooses the first legal option and is not intended to model strong player strategy.
+The deterministic decision hook used when an effect or rule requires a legal choice. The early baseline policy is a temporary stub that chooses the first legal option and is not intended to model strong player strategy or search for a strong line.
 _Avoid_: hidden handler choice, random default choice
 
 **Strategy**:
@@ -173,7 +173,7 @@ A user-facing analysis mode that compares strategies or starting builds across m
 _Avoid_: smoke simulation, baseline run, single mass summary
 
 **Best-Move Strategy**:
-A strategy that evaluates the legal options available during a player's turn and chooses the best available line according to its configured evaluation policy.
+A separate strategy that evaluates the legal options available during a player's turn and chooses the best available line according to its configured evaluation policy. It is distinct from the temporary `first legal choice` stub used by the baseline choice policy.
 _Avoid_: starting build analysis, first move analysis
 
 **Starting Build**:
@@ -241,16 +241,16 @@ The rule that multi-target effects resolve one target at a time in seating order
 _Avoid_: batch target resolution
 
 **Sequential Player Attack Resolution**:
-The rule that normal player-controlled attacks resolve target by target: each affected target decides whether to defend, then that target's attack result is immediately resolved before moving to the next target.
-_Avoid_: collect-all-defenses for normal attacks
+The rule that normal player-controlled attacks with several affected targets use two phases: first each affected target decides whether to defend, then the attack result is resolved target by target in seating order against the targets that did not avoid it.
+_Avoid_: resolve-target-immediately-before-later-defenses, treating normal attacks like Mayhem wording
 
 **State-Sensitive Attack Order**:
-The rule that state changes from one target of a normal player-controlled attack can affect later targets of the same attack, including later defense choices, modifiers, death, and DWT effects.
+The rule that state changes from one resolved target of a normal player-controlled attack can affect later targets of the same attack during the resolution phase, including modifiers, death, and DWT effects.
 _Avoid_: snapshotting normal attack state
 
 **Two-Phase Mayhem Attack Resolution**:
-The rule that Mayhem and Mega Mayhem attacks first collect defense decisions from affected players in seating order, then resolve the attack in seating order against targets that did not avoid it.
-_Avoid_: defend-and-resolve-per-target for Mayhem attacks
+The rule that Mayhem and Mega Mayhem attacks also use two phases: they first collect defense decisions from affected players in seating order, then resolve the attack in seating order against targets that did not avoid it. This is separate from normal player-controlled multi-target attacks even though both flows collect defenses before resolving damage.
+_Avoid_: defend-and-resolve-per-target for Mayhem attacks, collapsing Mayhem wording into the generic attack rule
 
 **Minimal Defense Window**:
 The early supported defense workflow for attack resolution: an affected target may choose one legal defense from hand to avoid that attack instance, and the defense card moves according to mapped defense branch data. Redirects and complex extra defense effects can be added separately.
