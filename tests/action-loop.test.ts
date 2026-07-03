@@ -5153,6 +5153,216 @@ test("2Q can skip its optional life-for-chips choice when a custom chooser passe
   );
 });
 
+test("2O can use its discard-and-draw branch as the default reachable choice", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+
+  const normalDefinition = createFixtureCardDefinition("fixture-2o-normal", []);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [normalDefinition.cardId, normalDefinition],
+  ]);
+
+  const players = [activePlayer, secondPlayer, thirdPlayer];
+  const discardedHandCards = players.map((player) => {
+    return [0, 1].map((cardIndex) => {
+      return {
+        instanceId: `fixture-2o-${player.playerId}-hand-${cardIndex}`,
+        definitionId: normalDefinition.cardId,
+        ownerId: player.playerId,
+        marketChips: 0,
+      } satisfies CardInstance;
+    });
+  });
+  const drawnDeckCards = players.map((player) => {
+    return Array.from({ length: 5 }, (_value, cardIndex) => {
+      return {
+        instanceId: `fixture-2o-${player.playerId}-deck-${cardIndex}`,
+        definitionId: normalDefinition.cardId,
+        ownerId: player.playerId,
+        marketChips: 0,
+      } satisfies CardInstance;
+    });
+  });
+
+  for (const [playerIndex, player] of players.entries()) {
+    const handCards = discardedHandCards[playerIndex];
+    const deckCards = drawnDeckCards[playerIndex];
+    assert.ok(handCards);
+    assert.ok(deckCards);
+    player.hand.splice(0, player.hand.length, ...handCards);
+    player.deck.splice(0, player.deck.length, ...deckCards);
+    player.discard.splice(0, player.discard.length);
+    player.life.current = 20;
+  }
+
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_059");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "mayhemHandDiscardedAndRedrawn")
+      .map((event) => ({
+        playerId: event.playerId,
+        amount: event.amount,
+      })),
+    [
+      { playerId: activePlayer.playerId, amount: 7 },
+      { playerId: secondPlayer.playerId, amount: 7 },
+      { playerId: thirdPlayer.playerId, amount: 7 },
+    ]
+  );
+  for (const [playerIndex, player] of players.entries()) {
+    const handCards = discardedHandCards[playerIndex];
+    const deckCards = drawnDeckCards[playerIndex];
+    assert.ok(handCards);
+    assert.ok(deckCards);
+    assert.equal(player.life.current, 20);
+    assert.deepEqual(
+      player.hand.map((card) => card.instanceId),
+      deckCards.map((card) => card.instanceId)
+    );
+    assert.deepEqual(
+      player.discard.map((card) => card.instanceId),
+      handCards.map((card) => card.instanceId)
+    );
+    assert.deepEqual(player.deck, []);
+  }
+});
+
+test("2O can reach its take-damage branch for an affected player", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+
+  const normalDefinition = createFixtureCardDefinition(
+    "fixture-2o-mixed-normal",
+    []
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [normalDefinition.cardId, normalDefinition],
+  ]);
+
+  const players = [activePlayer, secondPlayer, thirdPlayer];
+  const discardedHandCards = players.map((player) => {
+    return [0, 1].map((cardIndex) => {
+      return {
+        instanceId: `fixture-2o-mixed-${player.playerId}-hand-${cardIndex}`,
+        definitionId: normalDefinition.cardId,
+        ownerId: player.playerId,
+        marketChips: 0,
+      } satisfies CardInstance;
+    });
+  });
+  const drawnDeckCards = players.map((player) => {
+    return Array.from({ length: 5 }, (_value, cardIndex) => {
+      return {
+        instanceId: `fixture-2o-mixed-${player.playerId}-deck-${cardIndex}`,
+        definitionId: normalDefinition.cardId,
+        ownerId: player.playerId,
+        marketChips: 0,
+      } satisfies CardInstance;
+    });
+  });
+
+  for (const [playerIndex, player] of players.entries()) {
+    const handCards = discardedHandCards[playerIndex];
+    const deckCards = drawnDeckCards[playerIndex];
+    assert.ok(handCards);
+    assert.ok(deckCards);
+    player.hand.splice(0, player.hand.length, ...handCards);
+    player.deck.splice(0, player.deck.length, ...deckCards);
+    player.discard.splice(0, player.discard.length);
+    player.life.current = 20;
+  }
+
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (
+      effectId !== "mayhem_each_player_choose_discard_hand_draw_or_take_damage"
+    ) {
+      return undefined;
+    }
+    if (player.playerId !== secondPlayer.playerId) {
+      return undefined;
+    }
+    return choices.find((choice) => choice.choiceId === "take_damage");
+  });
+
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_059");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.life.current, 20);
+  assert.equal(secondPlayer.life.current, 15);
+  assert.equal(thirdPlayer.life.current, 20);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectChoiceSelected" &&
+        event.playerId === secondPlayer.playerId &&
+        event.effectId ===
+          "mayhem_each_player_choose_discard_hand_draw_or_take_damage" &&
+        event.choiceId === "take_damage" &&
+        event.choiceIds?.includes("discard_hand_then_draw_cards") === true
+      );
+    })
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectDamageDealt" &&
+        event.playerId === secondPlayer.playerId &&
+        event.targetPlayerId === secondPlayer.playerId &&
+        event.definitionId === "esw2_dbg__main_059" &&
+        event.effectId ===
+          "mayhem_each_player_choose_discard_hand_draw_or_take_damage" &&
+        event.amount === 5
+      );
+    })
+  );
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "mayhemHandDiscardedAndRedrawn" &&
+        event.playerId === secondPlayer.playerId
+    ).length,
+    0
+  );
+  assert.deepEqual(
+    secondPlayer.hand.map((card) => card.instanceId),
+    discardedHandCards[1]?.map((card) => card.instanceId)
+  );
+  assert.deepEqual(
+    secondPlayer.discard.map((card) => card.instanceId),
+    []
+  );
+  assert.deepEqual(
+    activePlayer.hand.map((card) => card.instanceId),
+    drawnDeckCards[0]?.map((card) => card.instanceId)
+  );
+  assert.deepEqual(
+    thirdPlayer.hand.map((card) => card.instanceId),
+    drawnDeckCards[2]?.map((card) => card.instanceId)
+  );
+});
+
 test("Park Vurdalaktionov heals damage dealt on its controller's turn and adds hand limit at max life", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = mustGetPlayer(state, state.activePlayerId);

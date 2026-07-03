@@ -1281,10 +1281,64 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
     }
 
     const effectId = services.asString(effect["effectId"]);
+    const options = effect["options"];
+    if (!Array.isArray(options)) {
+      return { ok: false, error: "Invalid Mayhem hand-redraw choice effect" };
+    }
+
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+      const choice = services.chooseEffectChoice(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        [
+          { choiceId: "discard_hand_then_draw_cards" },
+          { choiceId: "take_damage" },
+        ]
+      );
+      const selectedChoiceId =
+        choice?.choiceId ?? "discard_hand_then_draw_cards";
+      if (selectedChoiceId === "take_damage") {
+        const damageOption = options[1];
+        if (
+          typeof damageOption !== "object" ||
+          damageOption === null ||
+          typeof damageOption["amount"] !== "number"
+        ) {
+          return {
+            ok: false,
+            error: "Invalid Mayhem hand-redraw damage option",
+          };
+        }
+
+        services.dealDamage(
+          state,
+          targetPlayer,
+          targetPlayer,
+          damageOption["amount"],
+          effectId,
+          source
+        );
+        continue;
+      }
+
+      const redrawOption = options[0];
+      if (
+        typeof redrawOption !== "object" ||
+        redrawOption === null ||
+        typeof redrawOption["drawAmount"] !== "number"
+      ) {
+        return { ok: false, error: "Invalid Mayhem hand-redraw option" };
+      }
+
       const discardedCount = targetPlayer.hand.length;
       targetPlayer.discard.push(...targetPlayer.hand.splice(0));
-      const drawnCount = drawCards(targetPlayer, 5, state);
+      const drawnCount = drawCards(
+        targetPlayer,
+        redrawOption["drawAmount"],
+        state
+      );
       state.eventLog.push({
         type: "mayhemHandDiscardedAndRedrawn",
         playerId: targetPlayer.playerId,
