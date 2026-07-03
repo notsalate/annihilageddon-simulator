@@ -2147,120 +2147,13 @@ const attackDamageHandler: EffectRuntimeHandler = {
     if (!amount.ok) {
       return amount;
     }
-
-    const attackProfile = services.getWizardPropertyAttackProfile(
-      state,
-      player,
-      source
-    );
-    const attackAmount = amount.value + attackProfile.damageBonus;
-
-    if (effect["targetSelector"] === "eachFoe") {
-      state.eventLog.push({
-        type: "attackCreated",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: "attack_damage",
-        amount: attackAmount,
-        sourceType: source.sourceType,
-      });
-
-      for (const targetPlayer of services.getOpponentsInSeatingOrder(
-        state,
-        player
-      )) {
-        const attackResult = services.resolveAttackTarget(
-          state,
-          player,
-          targetPlayer,
-          attackAmount,
-          "attack_damage",
-          source,
-          attackProfile.unavoidable
-        );
-        const branchResult = executeAttackBranches(
-          state,
-          player,
-          effect,
-          source,
-          targetPlayer,
-          attackResult,
-          services
-        );
-        if (!branchResult.ok) {
-          return branchResult;
-        }
-      }
-
-      return { ok: true };
-    }
-
-    const targetResult = services.resolveTargetChoice(
-      state,
-      player,
-      effect,
-      source
-    );
-    if (!targetResult.ok) {
-      return targetResult;
-    }
-
-    if (targetResult.choice === undefined) {
-      return { ok: true };
-    }
-
-    if (targetResult.choice.choiceType !== "player") {
-      return {
-        ok: false,
-        error: "Attack effect requires a player target",
-      };
-    }
-
-    const effectId = services.asString(effect["effectId"]);
-    const targetPlayer = targetResult.choice.player;
-    state.eventLog.push({
-      type: "attackCreated",
-      playerId: player.playerId,
-      targetPlayerId: targetPlayer.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId,
-      amount: attackAmount,
-      sourceType: source.sourceType,
-    });
-    if (
-      !attackProfile.unavoidable &&
-      services.resolveDefenseWindow(state, targetPlayer)
-    ) {
-      state.eventLog.push({
-        type: "attackAvoided",
-        playerId: targetPlayer.playerId,
-        targetPlayerId: targetPlayer.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId,
-        sourceType: source.sourceType,
-      });
-      return { ok: true };
-    }
-
-    const attackResult = services.dealDamage(
-      state,
-      player,
-      targetPlayer,
-      attackAmount,
-      effectId,
-      source
-    );
-    return executeAttackBranches(
+    return executeAttackWithAmount(
       state,
       player,
       effect,
       source,
-      targetPlayer,
-      { ...attackResult, avoided: false },
-      services
+      services,
+      amount.value
     );
   },
 };

@@ -4433,6 +4433,181 @@ test("attack_damage damages the first opponent when no defense is available", ()
   );
 });
 
+test("attack_damage_equal_to_controlled_card_cost reuses attack branches when no defense is available", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  targetPlayer.life.current = 4;
+  addControlledFixturePermanentWithCost(
+    state,
+    activePlayer,
+    "fixture-variable-attack-source",
+    ["wand"],
+    4
+  );
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage_equal_to_controlled_card_cost",
+    timing: "onPlay",
+    costMode: "highest",
+    target: {
+      selector: "opponentPlayer",
+    },
+    onKill: [
+      {
+        effectId: "gain_chips",
+        amount: 2,
+      },
+    ],
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 2);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackCreated" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.effectId === "attack_damage_equal_to_controlled_card_cost" &&
+        event.amount === 4
+      );
+    })
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectDamageDealt" &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.effectId === "attack_damage_equal_to_controlled_card_cost" &&
+        event.amount === 4
+      );
+    })
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectChipsChanged" &&
+        event.playerId === activePlayer.playerId &&
+        event.effectId === "gain_chips" &&
+        event.chipsAfter === 2
+      );
+    })
+  );
+});
+
+test("attack_damage_equal_to_controlled_card_cost can be avoided after choosing a non-first controlled-card amount", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  targetPlayer.life.current = 6;
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
+  const firstControlled = addControlledFixturePermanentWithCost(
+    state,
+    activePlayer,
+    "fixture-variable-attack-low",
+    ["wand"],
+    2
+  );
+  const secondControlled = addControlledFixturePermanentWithCost(
+    state,
+    activePlayer,
+    "fixture-variable-attack-high",
+    ["wand"],
+    5
+  );
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (effectId !== "attack_damage_equal_to_controlled_card_cost") {
+      return undefined;
+    }
+    if (player.playerId !== activePlayer.playerId) {
+      return undefined;
+    }
+    return choices.find(
+      (choice) => choice.choiceId === secondControlled.instanceId
+    );
+  });
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage_equal_to_controlled_card_cost",
+    timing: "onPlay",
+    costMode: "chosen",
+    target: {
+      selector: "opponentPlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 6);
+  assert.equal(targetPlayer.discard.includes(defenseCard), true);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectChoiceSelected" &&
+        event.playerId === activePlayer.playerId &&
+        event.effectId === "attack_damage_equal_to_controlled_card_cost" &&
+        event.choiceId === secondControlled.instanceId
+      );
+    })
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackCreated" &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.effectId === "attack_damage_equal_to_controlled_card_cost" &&
+        event.amount === 5
+      );
+    })
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackAvoided" &&
+        event.targetPlayerId === targetPlayer.playerId
+      );
+    })
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.targetPlayerId === targetPlayer.playerId
+    ),
+    false
+  );
+  assert.equal(
+    firstControlled.instanceId === secondControlled.instanceId,
+    false
+  );
+});
+
 test("wizard property owned wand attacks gain damage and cannot be avoided", () => {
   const state = initializeGame({
     rootDir,
@@ -6887,10 +7062,28 @@ function addControlledFixturePermanent(
   cardId: string,
   cardTypes: string[]
 ): CardInstance {
+  return addControlledFixturePermanentWithCost(
+    state,
+    player,
+    cardId,
+    cardTypes,
+    0
+  );
+}
+
+function addControlledFixturePermanentWithCost(
+  state: GameState,
+  player: PlayerState,
+  cardId: string,
+  cardTypes: string[],
+  cost: number
+): CardInstance {
   const definition = createFixtureCardDefinition(cardId, [], {
     isOngoing: true,
     cardTypes,
   });
+  definition.engine.cost = cost;
+  definition.visible.cost = cost;
   state.cardDefinitions = new Map([
     ...state.cardDefinitions,
     [definition.cardId, definition],
