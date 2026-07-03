@@ -22,6 +22,20 @@ This repository is:
 Agent workflow docs live in `docs/agents/`.
 They describe local process conventions, not domain truth or engine behavior.
 
+## Agent skills
+
+### Issue tracker
+
+Primary tracker: GitHub Issues and external PR triage via `gh`. Local `.scratch/` stays the working area for PRDs, handoffs, temporary local issues, and session materials. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repo is `single-context`: one root `CONTEXT.md`, with ADRs under `docs/adr/` when present. See `docs/agents/domain.md`.
+
 ## Task Context Priority
 
 After applying the user's current task, use this repository context order:
