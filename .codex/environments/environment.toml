@@ -17,6 +17,12 @@ $env:NPM_CONFIG_FUND = "false"
 
 npm ci
 npm run build -- --pretty false
+
+if (!(Test-Path -LiteralPath ".codegraph\codegraph.db")) {
+  codegraph init .
+} else {
+  codegraph sync .
+}
 '''
 
 [cleanup]

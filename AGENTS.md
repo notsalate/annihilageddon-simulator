@@ -46,10 +46,20 @@ Prefer RTK first for repo diagnostics:
 rtk git status
 rtk git diff
 rtk git log -n 10
-rtk grep "<pattern>" <existing-source-or-test-paths>
+rtk rg "<pattern>" <existing-source-or-test-paths>
+rtk read <file>
+rtk tree <path>
+rtk npm run build
+rtk npx lint-staged
+rtk npm run typecheck
+rtk npm test
 ```
 
-If RTK is unavailable or does not support the command, say so briefly and fall back to PowerShell or Git.
+Do not prefix PowerShell cmdlets, shell builtins, navigation, variables, redirects, pipes, or compound shell syntax with `rtk`.
+
+If RTK is unavailable or unsupported, say so briefly and fall back to PowerShell, Git, or npm.
+
+If `rtk rg` fails because `rg` is missing, fall back to `Select-String` and say that ripgrep is unavailable.
 
 Prefer PowerShell equivalents over Unix-only commands:
 
@@ -207,10 +217,10 @@ A task is not done until:
 Run the narrowest relevant checks for the task.
 Prefer focused tests or targeted verification before broader commands.
 
-Before final reporting, review the diff with:
+Before final reporting, review the repo state with:
 
 ```powershell
-rtk git diff
+rtk git status
 rtk git diff
 ```
 
@@ -290,6 +300,73 @@ For risky work, state:
 
 Never commit or push unless the user explicitly asks.
 Never delete user data unless the user explicitly asks and confirms the exact target.
+
+## Russian review language
+
+Для коммитов, PR и итоговых отчётов пиши естественным русским языком для русскоязычного ревьюера.
+
+Используй `ru-text` как редакторский ориентир для русского текста: убирай канцелярит, машинные формулировки, лишнюю тяжесть и русско-английскую кальку. Не запускай отдельную глубокую проверку, `ru-score` или загрузку справочников ради короткого commit/PR message, если пользователь явно не попросил.
+
+Английский оставляй только для:
+
+- точных имён из кода;
+- команд;
+- путей и имён файлов;
+- API;
+- Git/npm-терминов;
+- точных идентификаторов из данных;
+- устойчивых терминов проекта, которые реально используются как имена сущностей.
+
+Если слово можно нормально сказать по-русски — переводи.
+
+Не делай русско-английскую кальку:
+
+- `focused tests` → точечные тесты
+- `full test suite` → полный набор тестов
+- `validation checks` → проверки / проверки валидации
+- `generated matrix` → сгенерированная матрица
+- `deck membership` → состав колоды / привязка карты к колоде
+- `effect shapes` → структуры эффектов
+- `runtime paths` → пути выполнения / исполняемая логика
+- `current setup` → текущая настройка / текущий набор
+- `scope` → область изменений / соседние изменения
+- `typed handlers` → типизированные обработчики
+- `typed effects` → типизированные эффекты
+- `runtime-набор` → игровой набор / исполняемый набор / набор runtime-описаний
+- `runtime-аудит` → аудит runtime
+- `main-deck composition` → состав основной колоды
+- `issue evidence` → доказательства по issue / материалы по issue
+- `setup expectations` → ожидаемые данные setup
+
+Плохо:
+`feat(import/runtime-audit): ввести guardrails полного runtime audit`
+
+Хорошо:
+`feat(import/runtime-audit): ввести защиту полного аудита runtime`
+
+Плохо:
+`docs(project): удалить stale runtime coverage snapshot`
+
+Хорошо:
+`docs(project): удалить устаревший снимок покрытия runtime`
+
+Плохо:
+`Добавлены focused tests, validation checks и обновлена generated matrix.`
+
+Хорошо:
+`Добавлены точечные тесты, проверки валидации и сгенерированная матрица.`
+
+Плохо:
+`Реализованы Mayhem battle и vote handlers с проверкой форм effect shapes.`
+
+Хорошо:
+`Реализованы обработчики боя и голосования для карт Mayhem с проверкой структуры эффектов.`
+
+Плохо:
+`Риск ограничен Mayhem runtime paths и current main-deck composition.`
+
+Хорошо:
+`Риск ограничен логикой выполнения событий Mayhem и текущим составом основной колоды.`
 
 # DOX framework
 
