@@ -2,6 +2,8 @@
 
 How the engineering skills should consume this repo's domain documentation when exploring the codebase.
 
+This repo is a single-context repo: use the root `CONTEXT.md` as the primary domain glossary and check `docs/adr/` when ADRs exist for the area.
+
 ## Before exploring, read these
 
 - **`CONTEXT.md`** at the repo root, or

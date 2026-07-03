@@ -17,7 +17,8 @@ This folder contains local agent workflow documentation.
 
 ## Work Guidance
 
-- Keep issue tracker and triage labels aligned with `.scratch/` conventions.
+- Keep issue tracker guidance aligned with the actual split: GitHub Issues as the main tracker, `.scratch/` as the local working area.
+- Keep triage labels aligned with the configured GitHub labels.
 - Keep domain-doc consumption guidance pointed at actual durable domain docs.
 
 ## Verification
