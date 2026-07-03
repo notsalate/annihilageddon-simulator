@@ -311,6 +311,77 @@ test("card runtime clusters matrix combines drafts, runtime, compositions, and m
   assert.match(markdown, /needsClusterDecision/);
 });
 
+test("card runtime clusters matrix stays deterministic across repeated writes", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-card-runtime-clusters-deterministic-")
+  );
+
+  writeCardDraft(rootDir, "main", "esw2_dbg__main_021", {
+    nameRu: "Детерминированная карта",
+    textRu: "Получи 1 мощь.",
+  });
+  writeJson(rootDir, "data/cards/main/esw2_dbg__main_021.json", {
+    schemaVersion: 1,
+    cardId: "esw2_dbg__main_021",
+    engine: {
+      mappingStatus: "supported",
+      playableInV0: true,
+      needsEffectMapping: false,
+      unsupportedMechanics: [],
+      effects: [{ effectId: "add_power", timing: "onPlay", amount: 1 }],
+    },
+  });
+  writeJson(rootDir, "data/decks/main-deck.json", {
+    deckId: "main-deck",
+    entries: [{ cardId: "esw2_dbg__main_021", count: 1 }],
+  });
+  writeJson(
+    rootDir,
+    ".scratch/krutagidon-card-runtime-clusters/card-cluster-decisions.json",
+    {
+      schemaVersion: 1,
+      decisions: [
+        {
+          cardId: "esw2_dbg__main_021",
+          status: "clustered",
+          clusterId: "economy-cards",
+        },
+      ],
+    }
+  );
+  writeText(
+    rootDir,
+    ".scratch/krutagidon-card-runtime-clusters/mechanic-clusters.md",
+    "# Mechanic Clusters\n\n## economy-cards\n\nPrimary mechanic: power gain.\n"
+  );
+  writeText(
+    rootDir,
+    "tests/setup.test.ts",
+    'import { initializeGame } from "../src/index.js";\ninitializeGame({ rootDir: process.cwd(), seed: 1 });\nconst cardId = "esw2_dbg__main_021";\n'
+  );
+
+  writeCardRuntimeClusterMatrix(rootDir);
+  const firstMarkdown = readFileSync(
+    path.join(
+      rootDir,
+      ".scratch/krutagidon-card-runtime-clusters/card-runtime-cluster-matrix.md"
+    ),
+    "utf8"
+  );
+
+  writeCardRuntimeClusterMatrix(rootDir);
+  const secondMarkdown = readFileSync(
+    path.join(
+      rootDir,
+      ".scratch/krutagidon-card-runtime-clusters/card-runtime-cluster-matrix.md"
+    ),
+    "utf8"
+  );
+
+  assert.equal(firstMarkdown, secondMarkdown);
+  assert.doesNotMatch(secondMarkdown, /Generated at:/);
+});
+
 test("card runtime clusters mark fullRuntime when runtime has composition and focused tests", () => {
   const rootDir = mkdtempSync(
     path.join(tmpdir(), "krutagidon-card-runtime-clusters-full-runtime-")

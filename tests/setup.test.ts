@@ -268,6 +268,29 @@ test("dead wizard token setup uses four shuffled draw tokens per player", () => 
   assert.equal(state.common.deadWizardTokens.drawStack.length, 12);
 });
 
+test("setup rejects dead wizard token pools that are smaller than four per player", () => {
+  const dataPack = {
+    ...loadPlayableRuntimeDataPack(),
+    tokenStacks: {
+      ...loadPlayableRuntimeDataPack().tokenStacks,
+      deadWizardTokens: {
+        ...loadPlayableRuntimeDataPack().tokenStacks.deadWizardTokens!,
+        entries: [
+          {
+            tokenId: "esw2_dbg__dead_wizard_token_001",
+            count: 7,
+          },
+        ],
+      },
+    },
+  };
+
+  assert.throws(
+    () => initializeGame({ dataPack, seed: 12345, playerCount: 2 }),
+    /dead wizard token.*requires at least 8.*playerCount 2.*got 7/i
+  );
+});
+
 test("dead wizard token setup order is reproducible for the same seed", () => {
   const first = initializeGame({ rootDir, seed: 24680 });
   const second = initializeGame({ rootDir, seed: 24680 });
@@ -330,6 +353,86 @@ test("wizard property setup choice is deterministic and seed-dependent", () => {
     selectedWizardProperties(first),
     selectedWizardProperties(second)
   );
+});
+
+test("setup rejects wizard property pools that are smaller than two candidates per player", () => {
+  const sourceDataPack = loadPlayableRuntimeDataPack();
+  const dataPack = {
+    ...sourceDataPack,
+    tokenStacks: {
+      ...sourceDataPack.tokenStacks,
+      wizardProperties: {
+        ...sourceDataPack.tokenStacks.wizardProperties!,
+        entries: [
+          {
+            tokenId: "esw2_dbg__wizard_property_001",
+            count: 1,
+          },
+          {
+            tokenId: "esw2_dbg__wizard_property_002",
+            count: 1,
+          },
+          {
+            tokenId: "esw2_dbg__wizard_property_003",
+            count: 1,
+          },
+        ],
+      },
+    },
+  };
+
+  assert.throws(
+    () => initializeGame({ dataPack, seed: 12345, playerCount: 2 }),
+    /wizard property.*requires at least 4.*playerCount 2.*got 3/i
+  );
+});
+
+test("setup rejects familiar pools that are smaller than two candidates per player", () => {
+  const sourceDataPack = loadPlayableRuntimeDataPack();
+  const dataPack = {
+    ...sourceDataPack,
+    decks: {
+      ...sourceDataPack.decks,
+      familiarPool: {
+        ...sourceDataPack.decks.familiarPool!,
+        entries: [
+          {
+            cardId: "esw2_dbg__familiar_001",
+            count: 3,
+          },
+        ],
+      },
+    },
+  };
+
+  assert.throws(
+    () => initializeGame({ dataPack, seed: 12345, playerCount: 2 }),
+    /familiar.*requires at least 4.*playerCount 2.*got 3/i
+  );
+});
+
+test("default setup choice policy records alwaysPickFirst for wizard properties and familiars", () => {
+  const state = initializeGame({
+    dataPack: createExplicitSetupChoiceDataPack(loadPlayableRuntimeDataPack()),
+    seed: 24680,
+  });
+  const setupChoiceEvents = state.eventLog
+    .filter((event) => event.type === "setupChoiceSelected")
+    .map((event) => event as unknown as Record<string, unknown>);
+
+  assert.equal(setupChoiceEvents.length, 4);
+  assert.deepEqual(
+    setupChoiceEvents.map((event) => event["policyId"]),
+    ["alwaysPickFirst", "alwaysPickFirst", "alwaysPickFirst", "alwaysPickFirst"]
+  );
+
+  for (const event of setupChoiceEvents) {
+    assert.ok(Array.isArray(event["candidateDefinitionIds"]));
+    assert.equal(
+      event["chosenDefinitionId"],
+      event["candidateDefinitionIds"][0]
+    );
+  }
 });
 
 test("familiar-selection wizard property remains non-executable until familiar lifecycle exists", () => {
@@ -404,7 +507,20 @@ test("wizard property setup replaces exactly one owned starter Sign with Hrenalo
 });
 
 test("wizard property setup grants Basic Trophy, first turn, and starting life override", () => {
-  const state = initializeGame({ rootDir, seed: 777, playerCount: 10 });
+  const state = initializeGame({
+    dataPack: createWizardPropertySetupEntriesDataPack(
+      createExpandedDeadWizardTokenSetupDataPack(
+        loadCurrentRuntimeDataPack(rootDir),
+        40
+      ),
+      [
+        { tokenId: "esw2_dbg__wizard_property_010", count: 2 },
+        { tokenId: "esw2_dbg__wizard_property_001", count: 2 },
+      ]
+    ),
+    seed: 777,
+    playerCount: 2,
+  });
   const propertyOwner = state.players.find((player) => {
     return player.wizardProperties.some(
       (property) => property.definitionId === "esw2_dbg__wizard_property_010"
@@ -603,6 +719,15 @@ function createWizardPropertySetupDataPack(
   dataPack: LoadedDataPack,
   tokenId: string
 ): LoadedDataPack {
+  return createWizardPropertySetupEntriesDataPack(dataPack, [
+    { tokenId, count: 4 },
+  ]);
+}
+
+function createWizardPropertySetupEntriesDataPack(
+  dataPack: LoadedDataPack,
+  entries: ReadonlyArray<{ tokenId: string; count: number }>
+): LoadedDataPack {
   return {
     ...dataPack,
     tokenStacks: {
@@ -613,7 +738,36 @@ function createWizardPropertySetupDataPack(
         runtimeSchema: "krutagidon.tokenStack.v0",
         role: "wizardProperties",
         mappingStatus: "fixture",
-        entries: [{ tokenId, count: 2 }],
+        entries: entries.map((entry) => ({
+          tokenId: entry.tokenId,
+          count: entry.count,
+        })),
+      },
+    },
+  };
+}
+
+function createExpandedDeadWizardTokenSetupDataPack(
+  dataPack: LoadedDataPack,
+  count: number
+): LoadedDataPack {
+  const deadWizardTokens = dataPack.tokenStacks.deadWizardTokens;
+  assert.ok(deadWizardTokens);
+  const [firstEntry] = deadWizardTokens.entries;
+  assert.ok(firstEntry);
+
+  return {
+    ...dataPack,
+    tokenStacks: {
+      ...dataPack.tokenStacks,
+      deadWizardTokens: {
+        ...deadWizardTokens,
+        entries: [
+          {
+            tokenId: firstEntry.tokenId,
+            count,
+          },
+        ],
       },
     },
   };
@@ -689,6 +843,63 @@ function createIncompleteSetupDataPack(
               entries: [],
             }
           : dataPack.tokenStacks.wizardProperties,
+    },
+  };
+}
+
+function createExplicitSetupChoiceDataPack(
+  dataPack: LoadedDataPack
+): LoadedDataPack {
+  const baseFamiliar = dataPack.cardDefinitions.get("esw2_dbg__familiar_001");
+  assert.ok(baseFamiliar);
+
+  return {
+    ...dataPack,
+    cardDefinitions: new Map([
+      ...dataPack.cardDefinitions,
+      [
+        "esw2_dbg__familiar_002",
+        {
+          ...baseFamiliar,
+          cardId: "esw2_dbg__familiar_002",
+          visible: {
+            ...baseFamiliar.visible,
+            nameRu: `${baseFamiliar.visible.nameRu} II`,
+          },
+        },
+      ],
+    ]),
+    decks: {
+      ...dataPack.decks,
+      familiarPool: {
+        ...dataPack.decks.familiarPool!,
+        entries: [
+          {
+            cardId: "esw2_dbg__familiar_001",
+            count: 2,
+          },
+          {
+            cardId: "esw2_dbg__familiar_002",
+            count: 2,
+          },
+        ],
+      },
+    },
+    tokenStacks: {
+      ...dataPack.tokenStacks,
+      wizardProperties: {
+        ...dataPack.tokenStacks.wizardProperties!,
+        entries: [
+          {
+            tokenId: "esw2_dbg__wizard_property_001",
+            count: 2,
+          },
+          {
+            tokenId: "esw2_dbg__wizard_property_002",
+            count: 2,
+          },
+        ],
+      },
     },
   };
 }
