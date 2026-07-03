@@ -35,7 +35,7 @@
         "amount": 2
       },
       {
-        "effectId": "gain_status",
+        "effectId": "attack_gain_status",
         "timing": "onPlay",
         "statusId": "dingler",
         "target": {

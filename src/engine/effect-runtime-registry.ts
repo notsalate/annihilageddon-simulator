@@ -842,6 +842,71 @@ const gainStatusHandler: EffectRuntimeHandler = {
   },
 };
 
+const attackGainStatusHandler: EffectRuntimeHandler = {
+  effectId: "attack_gain_status",
+  validateShape(subjectId, effect) {
+    const errors = validateDinglerStatusEffectShape(
+      subjectId,
+      effect,
+      "attack-status"
+    );
+    if (effect["timing"] !== "onPlay") {
+      errors.unshift(
+        `${subjectId} uses unsupported attack-status timing ${String(effect["timing"])}`
+      );
+    }
+    return errors;
+  },
+  execute(state, player, effect, source, services) {
+    const statusId = effect["statusId"];
+    if (statusId !== "dingler") {
+      return {
+        ok: false,
+        error: `Unsupported status ${services.asString(statusId)}`,
+      };
+    }
+
+    const targetResult = services.resolveStatusTargetPlayers(
+      state,
+      player,
+      effect,
+      source
+    );
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    for (const targetPlayer of targetResult.players) {
+      state.eventLog.push({
+        type: "attackCreated",
+        playerId: player.playerId,
+        targetPlayerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        sourceType: source.sourceType,
+      });
+      if (services.resolveDefenseWindow(state, targetPlayer)) {
+        state.eventLog.push({
+          type: "attackAvoided",
+          playerId: targetPlayer.playerId,
+          targetPlayerId: targetPlayer.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          effectId,
+          sourceType: source.sourceType,
+        });
+        continue;
+      }
+
+      services.gainDinglerStatus(state, targetPlayer, effectId, source);
+    }
+
+    return { ok: true };
+  },
+};
+
 const removeStatusHandler: EffectRuntimeHandler = {
   effectId: "remove_status",
   validateShape(subjectId, effect) {
@@ -967,23 +1032,25 @@ const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler = {
     return validateMegaMayhemEachPlayerToggleDinglerShape(subjectId, effect);
   },
   execute(state, _player, effect, source, services) {
-    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
-      if (services.hasDinglerStatus(targetPlayer)) {
-        services.removeDinglerStatus(
-          state,
-          targetPlayer,
-          services.asString(effect["effectId"]),
-          source
-        );
+    const effectId = services.asString(effect["effectId"]);
+    const decisions = collectMayhemAttackDefenseDecisions(
+      state,
+      services.getPlayersInActiveOrder(state),
+      effectId,
+      source,
+      services
+    );
+    for (const { player: targetPlayer, avoided } of decisions) {
+      if (avoided) {
         continue;
       }
 
-      services.gainDinglerStatus(
-        state,
-        targetPlayer,
-        services.asString(effect["effectId"]),
-        source
-      );
+      if (services.hasDinglerStatus(targetPlayer)) {
+        services.removeDinglerStatus(state, targetPlayer, effectId, source);
+        continue;
+      }
+
+      services.gainDinglerStatus(state, targetPlayer, effectId, source);
     }
 
     return { ok: true };
@@ -1636,7 +1703,18 @@ const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler = {
       .getPlayersInActiveOrder(state)
       .filter((candidate) => candidate.life.current === lowestLife);
 
-    for (const targetPlayer of targets) {
+    const decisions = collectMayhemAttackDefenseDecisions(
+      state,
+      targets,
+      effectId,
+      source,
+      services
+    );
+    for (const { player: targetPlayer, avoided } of decisions) {
+      if (avoided) {
+        continue;
+      }
+
       services.gainDinglerStatus(state, targetPlayer, effectId, source);
       const maxLife = calculateEffectivePlayerMaxLife(
         state,
@@ -3731,6 +3809,62 @@ function executeAttackBranches(
   return { ok: true };
 }
 
+function collectMayhemAttackDefenseDecisions(
+  state: GameState,
+  targets: readonly PlayerState[],
+  effectId: string,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): Array<{ player: PlayerState; avoided: boolean }> {
+  const decisions: Array<{ player: PlayerState; avoided: boolean }> = [];
+
+  state.eventLog.push({
+    type: "mayhemDecisionPhaseStarted",
+    playerId: source.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+
+  for (const targetPlayer of targets) {
+    state.eventLog.push({
+      type: "mayhemDecisionStarted",
+      playerId: source.playerId,
+      targetPlayerId: targetPlayer.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+    const avoided = services.resolveDefenseWindow(state, targetPlayer);
+    if (avoided) {
+      state.eventLog.push({
+        type: "attackAvoided",
+        playerId: targetPlayer.playerId,
+        targetPlayerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        sourceType: source.sourceType,
+      });
+    }
+
+    decisions.push({ player: targetPlayer, avoided });
+  }
+
+  state.eventLog.push({
+    type: "mayhemResolutionPhaseStarted",
+    playerId: source.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+
+  return decisions;
+}
+
 function executeAttackBranch(
   state: GameState,
   player: PlayerState,
@@ -4047,6 +4181,7 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
     toCatalogEntry(attackDamageEqualToControlledCardCostHandler),
   ],
   [gainStatusHandler.effectId, toCatalogEntry(gainStatusHandler)],
+  [attackGainStatusHandler.effectId, toCatalogEntry(attackGainStatusHandler)],
   [removeStatusHandler.effectId, toCatalogEntry(removeStatusHandler)],
   [toggleStatusHandler.effectId, toCatalogEntry(toggleStatusHandler)],
   [megaMayhemSetLifeHandler.effectId, toCatalogEntry(megaMayhemSetLifeHandler)],

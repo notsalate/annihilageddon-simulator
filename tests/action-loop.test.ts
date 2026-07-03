@@ -1882,12 +1882,164 @@ test("Mayhem lowest-life Dingler effect normalizes tied players to Dingler max l
   assert.equal(highLifePlayer.life.current, 8);
 });
 
+test("Avada Loshavra attack-marked Dingler assignment can be avoided by defense", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
+  const card = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_014"
+  );
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: card.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(hasDinglerStatus(targetPlayer), false);
+  assert.equal(state.turn.power, 0);
+  assert.equal(targetPlayer.hand.includes(defenseCard), false);
+  assert.equal(targetPlayer.discard.includes(defenseCard), true);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackAvoided" &&
+        event.playerId === targetPlayer.playerId &&
+        event.definitionId === "esw2_dbg__legend_014"
+    )
+  );
+});
+
+test("Avada Loshavra makes an undefended target Dingler and counts it for power", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  const card = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_014"
+  );
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: card.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(hasDinglerStatus(targetPlayer), true);
+  assert.equal(state.turn.power, 1);
+});
+
+test("2F skips a defended lowest-life player and still applies Dingler max-life normalization to an undefended tie", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const [activePlayer, tiedPlayer, highLifePlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(tiedPlayer);
+  assert.ok(highLifePlayer);
+  activePlayer.life.current = 3;
+  tiedPlayer.life.current = 3;
+  highLifePlayer.life.current = 8;
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    activePlayer,
+    "discardSelf"
+  );
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_074");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(hasDinglerStatus(activePlayer), false);
+  assert.equal(activePlayer.life.current, 3);
+  assert.equal(activePlayer.discard.includes(defenseCard), true);
+  assert.equal(hasDinglerStatus(tiedPlayer), true);
+  assert.equal(tiedPlayer.life.current, 15);
+  assert.equal(hasDinglerStatus(highLifePlayer), false);
+  assert.equal(highLifePlayer.life.current, 8);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackAvoided" &&
+        event.playerId === activePlayer.playerId &&
+        event.definitionId === "esw2_dbg__main_074"
+    )
+  );
+});
+
+test("MegaMayhem MD skips a defended player and still toggles undefended players", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const [activePlayer, secondPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  activePlayer.statuses.push(createDinglerStatus(activePlayer));
+  thirdPlayer.statuses.push(createDinglerStatus(thirdPlayer));
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    activePlayer,
+    "discardSelf"
+  );
+  const megaMayhem = createCommonRuntimeCard("esw2_dbg__mega_mayhem_004");
+  const legendFiller = state.common.legendMarket[0];
+  assert.ok(legendFiller);
+  state.common.legendMarket.splice(
+    0,
+    state.common.legendMarket.length,
+    ...state.common.legendMarket.slice(0, 2)
+  );
+  state.common.legendDeck.splice(
+    0,
+    state.common.legendDeck.length,
+    megaMayhem,
+    legendFiller
+  );
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(hasDinglerStatus(activePlayer), true);
+  assert.equal(activePlayer.discard.includes(defenseCard), true);
+  assert.equal(hasDinglerStatus(secondPlayer), true);
+  assert.equal(hasDinglerStatus(thirdPlayer), false);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackAvoided" &&
+        event.playerId === activePlayer.playerId &&
+        event.definitionId === "esw2_dbg__mega_mayhem_004"
+    )
+  );
+});
+
 test("dingler-status current runtime cards load with mapped Dingler effects", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
   const expectedEffectsByCardId = new Map([
     [
       "esw2_dbg__legend_014",
-      ["draw_cards", "gain_status", "add_power_per_player_with_status"],
+      ["draw_cards", "attack_gain_status", "add_power_per_player_with_status"],
     ],
     ["esw2_dbg__main_030", ["add_power", "attack_damage"]],
     [
