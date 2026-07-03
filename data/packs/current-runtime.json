@@ -24,8 +24,8 @@
     "familiarPool": "data/pools/familiar-pool.json"
   },
   "counts": {
-    "mapped": 9,
-    "supported": 9,
+    "mapped": 24,
+    "supported": 24,
     "partial": 0,
     "unsupported": 0
   },

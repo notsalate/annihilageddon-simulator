@@ -1,4 +1,4 @@
-Status: Todo
+Status: Done
 Label: ready-for-agent
 Type: AFK
 
@@ -32,19 +32,19 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] Для каждой карты из списка прочитан canonical draft/source text.
-- [ ] Для каждой карты из списка добавлен current runtime card JSON, основанный на import draft/source text.
-- [ ] Все выбранные карты добавлены в соответствующие current compositions.
-- [ ] Каждая выбранная карта становится `fullRuntime` в generated matrix.
-- [ ] Полностью реализованы controlled-object checks/counts/scaling для каждой выбранной карты.
-- [ ] Focused tests покрывают positive и relevant negative cases для условий.
-- [ ] Не реализовывать карты вне списка этого issue.
-- [ ] Не менять cluster assignment и не переоткрывать Block C taxonomy.
-- [ ] Выполнен `npm run report:card-runtime-clusters -- --write`.
-- [ ] `npm run report:card-runtime-clusters` проходит.
-- [ ] `npm run typecheck` проходит.
-- [ ] `npm test` проходит.
-- [ ] `git diff --check` проходит.
+- [x] Для каждой карты из списка прочитан canonical draft/source text.
+- [x] Для каждой карты из списка добавлен current runtime card JSON, основанный на import draft/source text.
+- [x] Все выбранные карты добавлены в соответствующие current compositions.
+- [x] Каждая выбранная карта становится `fullRuntime` в generated matrix.
+- [x] Полностью реализованы controlled-object checks/counts/scaling для каждой выбранной карты.
+- [x] Focused tests покрывают positive и relevant negative cases для условий.
+- [x] Не реализовывать карты вне списка этого issue.
+- [x] Не менять cluster assignment и не переоткрывать Block C taxonomy.
+- [x] Выполнен `npm run report:card-runtime-clusters -- --write`.
+- [x] `npm run report:card-runtime-clusters` проходит.
+- [x] `npm run typecheck` проходит.
+- [x] `npm test` проходит.
+- [x] `git diff --check` проходит.
 
 ## Blocked by
 
@@ -53,3 +53,11 @@ None - can start immediately
 ## Notes
 
 - Issue остаётся внутри `clusterId: "controlled-object-conditions"`.
+
+## Completion Evidence
+
+- Added current runtime definitions for `esw2_dbg__legend_011`, `esw2_dbg__main_016`, `esw2_dbg__main_020`, and `esw2_dbg__main_056`.
+- Added the selected cards to `legend-deck` and `main-deck` current compositions.
+- Implemented controlled-object runtime support: `main_016` checks controlled creatures, `main_020` attacks for the highest controlled card cost, `legend_011` attacks for a chosen other controlled card cost, and `main_056` gains power from controlled objects.
+- Focused coverage: `tests/action-loop.test.ts`, current runtime setup assertions in `tests/setup.test.ts`, and runtime handler validation in `tests/validation.test.ts`.
+- Checks run: `npm run build -- --pretty false`, focused `node --test dist/tests/action-loop.test.js dist/tests/setup.test.js dist/tests/validation.test.js`, `npm run report:card-runtime-clusters -- --write`, `npm run report:card-runtime-clusters`, `npm run typecheck`, `npm test`, `git diff --check`.

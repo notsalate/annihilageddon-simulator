@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_059",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_059.json",
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2O.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_059.md"
+  },
+  "visible": {
+    "nameRu": "2O",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун должен либо сбросить все карты с руки и взять 5 карт, либо отхватить 5 урона.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
+        "timing": "onMayhemResolve",
+        "targetSelector": "eachPlayerClockwiseFromActive",
+        "options": [
+          {
+            "effectId": "discard_hand_then_draw_cards",
+            "drawAmount": 5
+          },
+          {
+            "effectId": "take_damage",
+            "amount": 5
+          }
+        ],
+        "chooser": "affectedPlayer"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

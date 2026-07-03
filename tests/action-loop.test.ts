@@ -6,6 +6,7 @@ import {
   calculateEffectivePlayerMaxLife,
   initializeGame,
   listLegalActions,
+  loadCurrentRuntimeDataPack,
   runMarketFlow,
   scoreGame,
   type CardInstance,
@@ -202,6 +203,219 @@ test("simple-baseline current runtime cards execute printed baseline play behavi
       false
     );
   }
+});
+
+test("controlled-object current runtime cards resolve printed power behavior", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+
+  state.turn.power = 0;
+  const sadOrc = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_016"
+  );
+  let result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: sadOrc.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+
+  state.turn.power = 0;
+  activePlayer.hand.splice(0);
+  const controlledCreature = createRuntimeCardInstance(
+    activePlayer,
+    "esw2_dbg__main_035",
+    "controlled-creature"
+  );
+  activePlayer.permanents.push(controlledCreature);
+  const sadOrcWithCreature = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_016"
+  );
+  result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: sadOrcWithCreature.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 4);
+
+  state.turn.power = 0;
+  activePlayer.hand.splice(0);
+  activePlayer.deck.push(
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "drawn")
+  );
+  activePlayer.deadWizardTokens.push({
+    instanceId: "controlled-dwt",
+    definitionId: "esw2_dbg__dead_wizard_token_001",
+    ownerId: activePlayer.playerId,
+  });
+  activePlayer.trophyLikeObjects.push({
+    instanceId: "controlled-basic-trophy",
+    trophyId: "controlled-basic-trophy",
+    ownerId: activePlayer.playerId,
+    effects: [],
+  });
+  const gift = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_056");
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__main_040", "gift-helper")
+  );
+  result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: gift.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 5);
+  assert.equal(activePlayer.hand.length, 1);
+});
+
+test("controlled-object attack cards use controlled card costs", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+
+  activePlayer.hand.splice(0);
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__main_040", "cost-five"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__legend_004", "cost-ten")
+  );
+  const slippers = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_020"
+  );
+  let lifeBefore = targetPlayer.life.current;
+  let result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: slippers.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, lifeBefore - 10);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackCreated" &&
+        event.definitionId === "esw2_dbg__main_020" &&
+        event.amount === 10
+      );
+    })
+  );
+
+  activePlayer.hand.splice(0);
+  activePlayer.playedThisTurn.splice(0);
+  activePlayer.permanents.splice(0);
+  const selfCountedSlippers = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_020"
+  );
+  targetPlayer.life.current = 20;
+  lifeBefore = targetPlayer.life.current;
+  result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: selfCountedSlippers.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, lifeBefore - 6);
+  assert.equal(activePlayer.playedThisTurn.includes(selfCountedSlippers), true);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackCreated" &&
+        event.cardInstanceId === selfCountedSlippers.instanceId &&
+        event.definitionId === "esw2_dbg__main_020" &&
+        event.amount === 6
+      );
+    })
+  );
+
+  activePlayer.hand.splice(0);
+  activePlayer.playedThisTurn.splice(0);
+  activePlayer.permanents.splice(0);
+  const playedThisTurnDefinition = createFixtureCardDefinition(
+    "fixture-played-this-turn-cost-seven",
+    []
+  );
+  playedThisTurnDefinition.engine.cost = 7;
+  playedThisTurnDefinition.visible.cost = 7;
+  const alreadyPlayedCard = addFixtureDefinitionToActiveHand(
+    state,
+    playedThisTurnDefinition,
+    { instanceId: "fixture-played-this-turn-cost-seven-instance" }
+  );
+  result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: alreadyPlayedCard.instanceId,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.playedThisTurn.includes(alreadyPlayedCard), true);
+  const playedThisTurnSlippers = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_020"
+  );
+  targetPlayer.life.current = 20;
+  lifeBefore = targetPlayer.life.current;
+  result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: playedThisTurnSlippers.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, lifeBefore - 7);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackCreated" &&
+        event.cardInstanceId === playedThisTurnSlippers.instanceId &&
+        event.definitionId === "esw2_dbg__main_020" &&
+        event.amount === 7
+      );
+    })
+  );
+
+  activePlayer.hand.splice(0);
+  activePlayer.playedThisTurn.splice(0);
+  activePlayer.permanents.splice(0);
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__main_040", "chosen-five")
+  );
+  const throne = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_011"
+  );
+  activePlayer.permanents.push(throne);
+  lifeBefore = targetPlayer.life.current;
+  result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: throne.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, lifeBefore - 5);
+  assert.ok(
+    state.eventLog.some((event) => {
+      const eventRecord = event as unknown as Record<string, unknown>;
+      const targetCardInstanceIds = eventRecord["targetCardInstanceIds"];
+      return (
+        event.type === "effectChoiceSelected" &&
+        event.definitionId === "esw2_dbg__legend_011" &&
+        Array.isArray(targetCardInstanceIds) &&
+        targetCardInstanceIds.includes("fixture-runtime-chosen-five")
+      );
+    })
+  );
 });
 
 test("illegal actions are rejected without changing game state", () => {
@@ -970,6 +1184,958 @@ test("Mayhem hand-redraw choice discards hands and draws in active-player order"
       handCards.map((card) => card.instanceId)
     );
     assert.deepEqual(player.deck, []);
+  }
+});
+
+test("Mayhem battle keeps highest-cost participants and discards losing hands in active-player order", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  state.activePlayerId = "player-2";
+  const [activePlayer, secondPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+
+  const lowCostDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-battle-low-cost",
+    []
+  );
+  lowCostDefinition.engine.cost = 2;
+  lowCostDefinition.visible.cost = 2;
+  const highCostDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-battle-high-cost",
+    []
+  );
+  highCostDefinition.engine.cost = 8;
+  highCostDefinition.visible.cost = 8;
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-battle",
+    [
+      {
+        effectId: "mayhem_each_player_battle_highest_hand_cost",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        winnerDrawAmount: 2,
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [lowCostDefinition.cardId, lowCostDefinition],
+    [highCostDefinition.cardId, highCostDefinition],
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+
+  const activeHand = createFixtureCardInstances(
+    lowCostDefinition.cardId,
+    activePlayer.playerId,
+    2
+  );
+  const secondHand = createFixtureCardInstances(
+    highCostDefinition.cardId,
+    secondPlayer.playerId,
+    1
+  );
+  const thirdHand = createFixtureCardInstances(
+    highCostDefinition.cardId,
+    thirdPlayer.playerId,
+    1
+  );
+  const winnerDrawCards = [secondPlayer, thirdPlayer].map((player) =>
+    createFixtureCardInstances(lowCostDefinition.cardId, player.playerId, 2)
+  );
+  const secondDrawCards = winnerDrawCards[0];
+  const thirdDrawCards = winnerDrawCards[1];
+  assert.ok(secondDrawCards);
+  assert.ok(thirdDrawCards);
+  activePlayer.hand.splice(0, activePlayer.hand.length, ...activeHand);
+  secondPlayer.hand.splice(0, secondPlayer.hand.length, ...secondHand);
+  thirdPlayer.hand.splice(0, thirdPlayer.hand.length, ...thirdHand);
+  activePlayer.discard.splice(0, activePlayer.discard.length);
+  secondPlayer.discard.splice(0, secondPlayer.discard.length);
+  thirdPlayer.discard.splice(0, thirdPlayer.discard.length);
+  secondPlayer.deck.splice(0, secondPlayer.deck.length, ...secondDrawCards);
+  thirdPlayer.deck.splice(0, thirdPlayer.deck.length, ...thirdDrawCards);
+
+  const mayhem: CardInstance = {
+    instanceId: "fixture-mayhem-battle-instance",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "mayhemBattleParticipationSelected")
+      .map((event) => event.playerId),
+    [activePlayer.playerId, secondPlayer.playerId, thirdPlayer.playerId]
+  );
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "mayhemBattleResolved")
+      .map((event) => {
+        const eventRecord = event as unknown as Record<string, unknown>;
+        return {
+          playerId: event.playerId,
+          amount: event.amount,
+          winnerPlayerIds: eventRecord["winnerPlayerIds"],
+        };
+      }),
+    [
+      {
+        playerId: activePlayer.playerId,
+        amount: 8,
+        winnerPlayerIds: [secondPlayer.playerId, thirdPlayer.playerId],
+      },
+    ]
+  );
+  assert.deepEqual(
+    activePlayer.discard.map((card) => card.instanceId),
+    activeHand.map((card) => card.instanceId)
+  );
+  assert.deepEqual(
+    secondPlayer.hand.map((card) => card.instanceId),
+    [...secondHand, ...secondDrawCards].map((card) => card.instanceId)
+  );
+  assert.deepEqual(
+    thirdPlayer.hand.map((card) => card.instanceId),
+    [...thirdHand, ...thirdDrawCards].map((card) => card.instanceId)
+  );
+});
+
+test("Mayhem vote makes the top-voted player Dingler after affected-player votes", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  state.activePlayerId = "player-2";
+  const [activePlayer, secondPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  for (const player of [activePlayer, secondPlayer, thirdPlayer]) {
+    player.life.current = 20;
+  }
+
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-vote-dingler",
+    [
+      {
+        effectId: "mayhem_each_player_vote_dingler",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        voteTargetSelector: "anyPlayer",
+        statusId: "dingler",
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  const mayhem: CardInstance = {
+    instanceId: "fixture-mayhem-vote-dingler-instance",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "mayhemVoteRecorded")
+      .map((event) => ({
+        playerId: event.playerId,
+        targetPlayerId: event.targetPlayerId,
+      })),
+    [
+      {
+        playerId: activePlayer.playerId,
+        targetPlayerId: activePlayer.playerId,
+      },
+      {
+        playerId: secondPlayer.playerId,
+        targetPlayerId: activePlayer.playerId,
+      },
+      { playerId: thirdPlayer.playerId, targetPlayerId: activePlayer.playerId },
+    ]
+  );
+  assert.equal(
+    activePlayer.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+  assert.equal(activePlayer.life.current, 15);
+  assert.equal(
+    secondPlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.equal(
+    thirdPlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      const eventRecord = event as unknown as Record<string, unknown>;
+      const winnerPlayerIds = eventRecord["winnerPlayerIds"];
+      return (
+        event.type === "mayhemVoteResolved" &&
+        Array.isArray(winnerPlayerIds) &&
+        winnerPlayerIds.length === 1 &&
+        winnerPlayerIds[0] === activePlayer.playerId
+      );
+    })
+  );
+});
+
+test("Mayhem vote can use a non-first affected-player choice", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  state.activePlayerId = "player-2";
+  const [activePlayer, secondPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  for (const player of [activePlayer, secondPlayer, thirdPlayer]) {
+    player.life.current = 20;
+  }
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId !== "mayhem_each_player_vote_dingler") {
+      return undefined;
+    }
+    return choices.find(
+      (choice) => choice.choiceId === `vote-${secondPlayer.playerId}`
+    );
+  });
+
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-vote-dingler-non-first-choice",
+    [
+      {
+        effectId: "mayhem_each_player_vote_dingler",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        voteTargetSelector: "anyPlayer",
+        statusId: "dingler",
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  const mayhem: CardInstance = {
+    instanceId: "fixture-mayhem-vote-dingler-non-first-choice-instance",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "mayhemVoteRecorded")
+      .map((event) => event.targetPlayerId),
+    [secondPlayer.playerId, secondPlayer.playerId, secondPlayer.playerId]
+  );
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "mayhem_each_player_vote_dingler" &&
+        event.choiceId === `vote-${secondPlayer.playerId}`
+    ).length,
+    3
+  );
+  assert.equal(
+    activePlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.equal(
+    secondPlayer.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+  assert.equal(
+    thirdPlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+});
+
+test("Mayhem Dingler recovery lets each Dingler pay life or chips to become normal", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  state.activePlayerId = "player-2";
+  const [activePlayer, chipPlayer, blockedPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(chipPlayer);
+  assert.ok(blockedPlayer);
+
+  activePlayer.life.current = 6;
+  chipPlayer.life.current = 5;
+  chipPlayer.chips = 1;
+  blockedPlayer.life.current = 5;
+  for (const player of [activePlayer, chipPlayer, blockedPlayer]) {
+    player.statuses.push({
+      instanceId: `fixture-${player.playerId}-dingler-status`,
+      statusId: "dingler",
+      ownerId: player.playerId,
+      effects: [],
+    });
+  }
+
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-dingler-recovery",
+    [
+      {
+        effectId:
+          "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        statusId: "dingler",
+        lifeCost: 5,
+        chipCost: 1,
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  const mayhem: CardInstance = {
+    instanceId: "fixture-mayhem-dingler-recovery-instance",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    activePlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.equal(activePlayer.life.current, 1);
+  assert.equal(
+    chipPlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.equal(chipPlayer.chips, 0);
+  assert.equal(
+    blockedPlayer.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+  assert.equal(blockedPlayer.life.current, 5);
+  assertEventOrder(state, [
+    (event) =>
+      event.type === "effectCostPaid" &&
+      event.playerId === activePlayer.playerId &&
+      event.effectId ===
+        "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status" &&
+      event.costId === "pay_life" &&
+      event.amount === 5,
+    (event) =>
+      event.type === "dinglerStatusRemoved" &&
+      event.playerId === activePlayer.playerId,
+    (event) =>
+      event.type === "effectCostPaid" &&
+      event.playerId === chipPlayer.playerId &&
+      event.effectId ===
+        "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status" &&
+      event.costId === "spend_chips" &&
+      event.amount === 1,
+    (event) =>
+      event.type === "dinglerStatusRemoved" &&
+      event.playerId === chipPlayer.playerId,
+  ]);
+});
+
+test("Mayhem Dingler recovery can choose a non-first legal chip cost", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  state.activePlayerId = "player-2";
+  const [activePlayer, chipPlayer, blockedPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(chipPlayer);
+  assert.ok(blockedPlayer);
+
+  activePlayer.life.current = 6;
+  activePlayer.chips = 1;
+  chipPlayer.life.current = 5;
+  chipPlayer.chips = 1;
+  blockedPlayer.life.current = 5;
+  for (const player of [activePlayer, chipPlayer, blockedPlayer]) {
+    player.statuses.push({
+      instanceId: `fixture-${player.playerId}-non-first-dingler-status`,
+      statusId: "dingler",
+      ownerId: player.playerId,
+      effects: [],
+    });
+  }
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (
+      effectId !==
+      "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status"
+    ) {
+      return undefined;
+    }
+    if (player.playerId !== activePlayer.playerId) {
+      return undefined;
+    }
+    return choices.find((choice) => choice.choiceId === "spend_chips");
+  });
+
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-dingler-recovery-non-first-cost",
+    [
+      {
+        effectId:
+          "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        statusId: "dingler",
+        lifeCost: 5,
+        chipCost: 1,
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  const mayhem: CardInstance = {
+    instanceId: "fixture-mayhem-dingler-recovery-non-first-cost-instance",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.life.current, 6);
+  assert.equal(activePlayer.chips, 0);
+  assert.equal(
+    activePlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectChoiceSelected" &&
+        event.playerId === activePlayer.playerId &&
+        event.effectId ===
+          "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status" &&
+        event.choiceId === "spend_chips" &&
+        event.choiceIds?.includes("pay_life") === true
+      );
+    })
+  );
+});
+
+test("Dingler count power effect adds one power per Dingler player", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const firstFoe = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(firstFoe);
+  for (const player of [activePlayer, firstFoe]) {
+    player.statuses.push({
+      instanceId: `fixture-${player.playerId}-dingler-status`,
+      statusId: "dingler",
+      ownerId: player.playerId,
+      effects: [],
+    });
+  }
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "add_power_per_player_with_status",
+    timing: "onPlay",
+    statusId: "dingler",
+    amountPerPlayer: 1,
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectAddPowerApplied" &&
+        event.effectId === "add_power_per_player_with_status" &&
+        event.amount === 2
+      );
+    })
+  );
+});
+
+test("Tsirk bratiev loshashnykh grants passive power to a Dingler controller", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({
+    dataPack,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  activePlayer.statuses.push(createDinglerStatus(activePlayer));
+  const circus = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_027"
+  );
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: circus.instanceId,
+  });
+
+  assert.equal(playResult.ok, true);
+  assert.equal(activePlayer.permanents.includes(circus), true);
+  assert.equal(state.turn.power, 2);
+
+  const firstEndTurnResult = applyAction(state, {
+    type: "endTurn",
+  });
+  assert.equal(firstEndTurnResult.ok, true);
+
+  const secondEndTurnResult = applyAction(state, {
+    type: "endTurn",
+  });
+
+  assert.equal(secondEndTurnResult.ok, true);
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(state.turn.power, 2);
+});
+
+test("Tsirk bratiev loshashnykh does not grant passive power without Dingler status", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({
+    dataPack,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const circus = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_027"
+  );
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: circus.instanceId,
+  });
+
+  assert.equal(playResult.ok, true);
+  assert.equal(activePlayer.permanents.includes(circus), true);
+  assert.equal(state.turn.power, 0);
+
+  const firstEndTurnResult = applyAction(state, {
+    type: "endTurn",
+  });
+  assert.equal(firstEndTurnResult.ok, true);
+
+  const secondEndTurnResult = applyAction(state, {
+    type: "endTurn",
+  });
+
+  assert.equal(secondEndTurnResult.ok, true);
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(state.turn.power, 0);
+});
+
+test("Mayhem lowest-life Dingler effect normalizes tied players to Dingler max life", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  state.activePlayerId = "player-2";
+  const [activePlayer, tiedPlayer, highLifePlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(tiedPlayer);
+  assert.ok(highLifePlayer);
+  activePlayer.life.current = 3;
+  tiedPlayer.life.current = 3;
+  highLifePlayer.life.current = 8;
+
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-lowest-life-dingler",
+    [
+      {
+        effectId: "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
+        timing: "onMayhemResolve",
+        statusId: "dingler",
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  const mayhem: CardInstance = {
+    instanceId: "fixture-mayhem-lowest-life-dingler-instance",
+    definitionId: mayhemDefinition.cardId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  for (const player of [activePlayer, tiedPlayer]) {
+    assert.equal(
+      player.statuses.some((status) => status.statusId === "dingler"),
+      true
+    );
+    assert.equal(player.life.current, 15);
+  }
+  assert.equal(
+    highLifePlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.equal(highLifePlayer.life.current, 8);
+});
+
+test("Avada Loshavra attack-marked Dingler assignment can be avoided by defense", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
+  const card = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_014"
+  );
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: card.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(hasDinglerStatus(targetPlayer), false);
+  assert.equal(state.turn.power, 0);
+  assert.equal(targetPlayer.hand.includes(defenseCard), false);
+  assert.equal(targetPlayer.discard.includes(defenseCard), true);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackAvoided" &&
+        event.playerId === targetPlayer.playerId &&
+        event.definitionId === "esw2_dbg__legend_014"
+    )
+  );
+});
+
+test("Avada Loshavra makes an undefended target Dingler and counts it for power", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  const card = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_014"
+  );
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: card.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(hasDinglerStatus(targetPlayer), true);
+  assert.equal(state.turn.power, 1);
+});
+
+test("2F skips a defended lowest-life player and still applies Dingler max-life normalization to an undefended tie", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const [activePlayer, tiedPlayer, highLifePlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(tiedPlayer);
+  assert.ok(highLifePlayer);
+  activePlayer.life.current = 3;
+  tiedPlayer.life.current = 3;
+  highLifePlayer.life.current = 8;
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    activePlayer,
+    "discardSelf"
+  );
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_074");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(hasDinglerStatus(activePlayer), false);
+  assert.equal(activePlayer.life.current, 3);
+  assert.equal(activePlayer.discard.includes(defenseCard), true);
+  assert.equal(hasDinglerStatus(tiedPlayer), true);
+  assert.equal(tiedPlayer.life.current, 15);
+  assert.equal(hasDinglerStatus(highLifePlayer), false);
+  assert.equal(highLifePlayer.life.current, 8);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackAvoided" &&
+        event.playerId === activePlayer.playerId &&
+        event.definitionId === "esw2_dbg__main_074"
+    )
+  );
+});
+
+test("MegaMayhem MD skips a defended player and still toggles undefended players", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const [activePlayer, secondPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  activePlayer.statuses.push(createDinglerStatus(activePlayer));
+  thirdPlayer.statuses.push(createDinglerStatus(thirdPlayer));
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    activePlayer,
+    "discardSelf"
+  );
+  const megaMayhem = createCommonRuntimeCard("esw2_dbg__mega_mayhem_004");
+  const legendFiller = state.common.legendMarket[0];
+  assert.ok(legendFiller);
+  state.common.legendMarket.splice(
+    0,
+    state.common.legendMarket.length,
+    ...state.common.legendMarket.slice(0, 2)
+  );
+  state.common.legendDeck.splice(
+    0,
+    state.common.legendDeck.length,
+    megaMayhem,
+    legendFiller
+  );
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(hasDinglerStatus(activePlayer), true);
+  assert.equal(activePlayer.discard.includes(defenseCard), true);
+  assert.equal(hasDinglerStatus(secondPlayer), true);
+  assert.equal(hasDinglerStatus(thirdPlayer), false);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackAvoided" &&
+        event.playerId === activePlayer.playerId &&
+        event.definitionId === "esw2_dbg__mega_mayhem_004"
+    )
+  );
+});
+
+test("dingler-status current runtime cards load with mapped Dingler effects", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  const expectedEffectsByCardId = new Map([
+    [
+      "esw2_dbg__legend_014",
+      ["draw_cards", "attack_gain_status", "add_power_per_player_with_status"],
+    ],
+    ["esw2_dbg__main_030", ["add_power", "attack_damage"]],
+    [
+      "esw2_dbg__main_066",
+      ["mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status"],
+    ],
+    [
+      "esw2_dbg__main_074",
+      ["mayhem_lowest_life_players_gain_dingler_and_set_to_max_life"],
+    ],
+    ["esw2_dbg__mega_mayhem_004", ["mega_mayhem_each_player_toggle_dingler"]],
+  ]);
+
+  for (const [definitionId, effectIds] of expectedEffectsByCardId) {
+    const definition = state.cardDefinitions.get(definitionId);
+    assert.ok(definition, `${definitionId} should be loaded`);
+    assert.deepEqual(
+      definition.engine.effects.map(
+        (effect) => (effect as Record<string, unknown>)["effectId"]
+      ),
+      effectIds
+    );
+  }
+});
+
+test("current runtime mayhem-events cards resolve their mapped event effects", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 60615,
+    playerCount: 3,
+  });
+  const runtimeMayhemIds = [
+    "esw2_dbg__main_059",
+    "esw2_dbg__main_064",
+    "esw2_dbg__main_071",
+  ];
+
+  for (const definitionId of runtimeMayhemIds) {
+    const definition = state.cardDefinitions.get(definitionId);
+    assert.ok(definition, `${definitionId} should be loaded`);
+    assert.equal(definition.engine.cardKind, "mayhem");
+    assert.ok(
+      [
+        ...state.common.mainDeck,
+        ...state.common.destroyedMayhem,
+        ...state.common.destroyedMegaMayhem,
+      ].some((card) => card.definitionId === definitionId),
+      `${definitionId} should be in the current main deck or resolved setup event pile`
+    );
+  }
+
+  const eventTypesByCardId = new Map([
+    ["esw2_dbg__main_059", "mayhemHandDiscardedAndRedrawn"],
+    ["esw2_dbg__main_064", "mayhemBattleResolved"],
+    ["esw2_dbg__main_071", "mayhemVoteResolved"],
+  ]);
+
+  for (const [definitionId, expectedEventType] of eventTypesByCardId) {
+    const cardState = initializeGame({
+      rootDir,
+      seed: 60615,
+      playerCount: 3,
+    });
+    const mayhem: CardInstance = {
+      instanceId: `fixture-runtime-${definitionId}`,
+      definitionId,
+      ownerId: "common",
+      marketChips: 0,
+    };
+    const legendFiller = cardState.common.legendMarket[0];
+    assert.ok(legendFiller);
+    cardState.common.legendMarket.push({
+      ...legendFiller,
+      instanceId: `fixture-runtime-${definitionId}-legend-filler`,
+    });
+    cardState.common.market.splice(
+      0,
+      cardState.common.market.length,
+      ...cardState.common.market.slice(0, 4)
+    );
+    cardState.common.mainDeck.splice(
+      0,
+      cardState.common.mainDeck.length,
+      mayhem
+    );
+    const eventCountBefore = cardState.eventLog.length;
+
+    const result = runMarketFlow(cardState, { mode: "turn" });
+
+    assert.equal(result.ok, true);
+    assert.ok(
+      cardState.eventLog
+        .slice(eventCountBefore)
+        .some((event) => event.type === expectedEventType),
+      `${definitionId} should emit ${expectedEventType}`
+    );
   }
 });
 
@@ -2892,7 +4058,7 @@ test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affec
         event.playerId === activePlayer.playerId &&
         event.targetPlayerId === targetPlayer.playerId &&
         event.effectId === "deal_damage" &&
-        event.amount === 999
+        event.amount === 20
       );
     })
   );
@@ -3264,6 +4430,181 @@ test("attack_damage damages the first opponent when no defense is available", ()
         event.amount === 4
       );
     })
+  );
+});
+
+test("attack_damage_equal_to_controlled_card_cost reuses attack branches when no defense is available", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  targetPlayer.life.current = 4;
+  addControlledFixturePermanentWithCost(
+    state,
+    activePlayer,
+    "fixture-variable-attack-source",
+    ["wand"],
+    4
+  );
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage_equal_to_controlled_card_cost",
+    timing: "onPlay",
+    costMode: "highest",
+    target: {
+      selector: "opponentPlayer",
+    },
+    onKill: [
+      {
+        effectId: "gain_chips",
+        amount: 2,
+      },
+    ],
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 2);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackCreated" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.effectId === "attack_damage_equal_to_controlled_card_cost" &&
+        event.amount === 4
+      );
+    })
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectDamageDealt" &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.effectId === "attack_damage_equal_to_controlled_card_cost" &&
+        event.amount === 4
+      );
+    })
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectChipsChanged" &&
+        event.playerId === activePlayer.playerId &&
+        event.effectId === "gain_chips" &&
+        event.chipsAfter === 2
+      );
+    })
+  );
+});
+
+test("attack_damage_equal_to_controlled_card_cost can be avoided after choosing a non-first controlled-card amount", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  targetPlayer.life.current = 6;
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
+  const firstControlled = addControlledFixturePermanentWithCost(
+    state,
+    activePlayer,
+    "fixture-variable-attack-low",
+    ["wand"],
+    2
+  );
+  const secondControlled = addControlledFixturePermanentWithCost(
+    state,
+    activePlayer,
+    "fixture-variable-attack-high",
+    ["wand"],
+    5
+  );
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (effectId !== "attack_damage_equal_to_controlled_card_cost") {
+      return undefined;
+    }
+    if (player.playerId !== activePlayer.playerId) {
+      return undefined;
+    }
+    return choices.find(
+      (choice) => choice.choiceId === secondControlled.instanceId
+    );
+  });
+  const fixtureCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage_equal_to_controlled_card_cost",
+    timing: "onPlay",
+    costMode: "chosen",
+    target: {
+      selector: "opponentPlayer",
+    },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 6);
+  assert.equal(targetPlayer.discard.includes(defenseCard), true);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectChoiceSelected" &&
+        event.playerId === activePlayer.playerId &&
+        event.effectId === "attack_damage_equal_to_controlled_card_cost" &&
+        event.choiceId === secondControlled.instanceId
+      );
+    })
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackCreated" &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.effectId === "attack_damage_equal_to_controlled_card_cost" &&
+        event.amount === 5
+      );
+    })
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackAvoided" &&
+        event.targetPlayerId === targetPlayer.playerId
+      );
+    })
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.targetPlayerId === targetPlayer.playerId
+    ),
+    false
+  );
+  assert.equal(
+    firstControlled.instanceId === secondControlled.instanceId,
+    false
   );
 });
 
@@ -3673,6 +5014,758 @@ test("Potny's Buzzing Wand chooses left or right and chains in the chosen direct
     ).length,
     2
   );
+});
+
+test("Sweet Smurfinier heals only actual attack damage dealt", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  targetPlayer.hand = [];
+  activePlayer.life.current = 10;
+  targetPlayer.life.current = 1;
+  const card = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_046");
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: card.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(activePlayer.life.current, 11);
+  assert.equal(targetPlayer.life.current, 20);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectLifeHealed" &&
+        event.definitionId === "esw2_dbg__main_046" &&
+        event.amount === 1
+    )
+  );
+});
+
+test("Venerina Magolovka supports pass, life-only, Dingler-only, and full exchange branches", () => {
+  const cases = [
+    {
+      selectedChoiceId: "pass",
+      expectedActiveLife: 7,
+      expectedTargetLife: 13,
+      expectedActiveDingler: true,
+      expectedTargetDingler: false,
+    },
+    {
+      selectedChoiceId: "exchange_life_only",
+      expectedActiveLife: 13,
+      expectedTargetLife: 7,
+      expectedActiveDingler: true,
+      expectedTargetDingler: false,
+    },
+    {
+      selectedChoiceId: "exchange_dingler_status_only",
+      expectedActiveLife: 7,
+      expectedTargetLife: 13,
+      expectedActiveDingler: false,
+      expectedTargetDingler: true,
+    },
+    {
+      selectedChoiceId: "exchange_life_and_dingler_status",
+      expectedActiveLife: 13,
+      expectedTargetLife: 7,
+      expectedActiveDingler: false,
+      expectedTargetDingler: true,
+    },
+  ] as const;
+
+  for (const testCase of cases) {
+    const state = initializeGame({ rootDir, seed: 60615 });
+    const activePlayer = mustGetPlayer(state, state.activePlayerId);
+    const targetPlayer = state.players.find(
+      (player) => player.playerId !== activePlayer.playerId
+    );
+    assert.ok(targetPlayer);
+    activePlayer.wizardProperties = [];
+    targetPlayer.wizardProperties = [];
+    activePlayer.life.current = 7;
+    targetPlayer.life.current = 13;
+    activePlayer.statuses.push(createDinglerStatus(activePlayer));
+    chooseEffectChoice(state, ({ effectId, definitionId, choices }) => {
+      if (
+        effectId !== "exchange_life_and_dingler_status" ||
+        definitionId !== "esw2_dbg__legend_002"
+      ) {
+        return undefined;
+      }
+
+      return choices.find(
+        (choice) => choice.choiceId === testCase.selectedChoiceId
+      );
+    });
+    const card = addRuntimeCardToHand(
+      state,
+      activePlayer,
+      "esw2_dbg__legend_002"
+    );
+
+    const result = applyAction(state, {
+      type: "playCard",
+      cardInstanceId: card.instanceId,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(state.turn.power, 4);
+    assert.equal(activePlayer.life.current, testCase.expectedActiveLife);
+    assert.equal(targetPlayer.life.current, testCase.expectedTargetLife);
+    assert.equal(
+      hasDinglerStatus(activePlayer),
+      testCase.expectedActiveDingler
+    );
+    assert.equal(
+      hasDinglerStatus(targetPlayer),
+      testCase.expectedTargetDingler
+    );
+    assert.ok(
+      state.eventLog.some((event) => {
+        return (
+          event.type === "effectChoiceSelected" &&
+          event.effectId === "exchange_life_and_dingler_status" &&
+          event.choiceId === testCase.selectedChoiceId &&
+          event.choiceIds?.includes("pass") === true &&
+          event.choiceIds?.includes("exchange_life_only") === true &&
+          event.choiceIds?.includes("exchange_dingler_status_only") === true &&
+          event.choiceIds?.includes("exchange_life_and_dingler_status") ===
+            true &&
+          event.legalChoiceCount === 4
+        );
+      })
+    );
+  }
+});
+
+test("2Q lets players above 10 reduce life to gain one chip", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  activePlayer.life.current = 12;
+  secondPlayer.life.current = 10;
+  thirdPlayer.life.current = 7;
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_060");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.life.current, 10);
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(secondPlayer.life.current, 10);
+  assert.equal(secondPlayer.chips, 0);
+  assert.equal(thirdPlayer.life.current, 7);
+  assert.equal(thirdPlayer.chips, 0);
+  assert.equal(state.common.destroyedMayhem.includes(mayhem), true);
+});
+
+test("2Q can skip its optional life-for-chips choice when a custom chooser passes", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  activePlayer.life.current = 12;
+  secondPlayer.life.current = 10;
+  thirdPlayer.life.current = 7;
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (effectId !== "mayhem_each_player_reduce_life_to_gain_chips") {
+      return undefined;
+    }
+    if (player.playerId !== activePlayer.playerId) {
+      return undefined;
+    }
+    return choices.find((choice) => choice.choiceId === "pass");
+  });
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_060");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.life.current, 12);
+  assert.equal(activePlayer.chips, 0);
+  assert.equal(secondPlayer.life.current, 10);
+  assert.equal(secondPlayer.chips, 0);
+  assert.equal(thirdPlayer.life.current, 7);
+  assert.equal(thirdPlayer.chips, 0);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectChoiceSelected" &&
+        event.playerId === activePlayer.playerId &&
+        event.effectId === "mayhem_each_player_reduce_life_to_gain_chips" &&
+        event.choiceId === "pass" &&
+        event.choiceIds?.includes("reduce_life_gain_chips") === true
+      );
+    })
+  );
+});
+
+test("2N current runtime honors pass and participate branches for Mayhem battle", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const [activePlayer, secondPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+
+  activePlayer.hand = createFixtureCardInstances(
+    "esw2_dbg__starter_001",
+    activePlayer.playerId,
+    1
+  );
+  secondPlayer.hand = createFixtureCardInstances(
+    "esw2_dbg__main_056",
+    secondPlayer.playerId,
+    1
+  );
+  thirdPlayer.hand = createFixtureCardInstances(
+    "esw2_dbg__starter_002",
+    thirdPlayer.playerId,
+    1
+  );
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (effectId !== "mayhem_each_player_battle_highest_hand_cost") {
+      return undefined;
+    }
+    if (player.playerId === secondPlayer.playerId) {
+      return choices.find((choice) => choice.choiceId === "pass");
+    }
+    return choices.find((choice) => choice.choiceId === "participate");
+  });
+
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_064");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(secondPlayer.hand.length, 1);
+  assert.equal(secondPlayer.discard.length, 0);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.playerId === secondPlayer.playerId &&
+        event.effectId === "mayhem_each_player_battle_highest_hand_cost" &&
+        event.choiceId === "pass" &&
+        event.choiceIds?.includes("participate") === true
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "mayhemBattleParticipationSelected" &&
+        event.playerId === activePlayer.playerId &&
+        event.effectId === "mayhem_each_player_battle_highest_hand_cost"
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "mayhemBattleParticipationSelected" &&
+        event.playerId === thirdPlayer.playerId &&
+        event.effectId === "mayhem_each_player_battle_highest_hand_cost"
+    )
+  );
+  assert.ok(
+    state.eventLog.some((event) => event.type === "mayhemBattleResolved")
+  );
+});
+
+test("2R current runtime supports non-first vote targets and Dingler ties", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 4 });
+  state.activePlayerId = "player-2";
+  const [activePlayer, secondPlayer, thirdPlayer, fourthPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  assert.ok(fourthPlayer);
+  for (const player of [
+    activePlayer,
+    secondPlayer,
+    thirdPlayer,
+    fourthPlayer,
+  ]) {
+    player.life.current = 20;
+  }
+
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (effectId !== "mayhem_each_player_vote_dingler") {
+      return undefined;
+    }
+    if (
+      player.playerId === activePlayer.playerId ||
+      player.playerId === secondPlayer.playerId
+    ) {
+      return choices.find(
+        (choice) => choice.choiceId === `vote-${secondPlayer.playerId}`
+      );
+    }
+    return choices.find(
+      (choice) => choice.choiceId === `vote-${thirdPlayer.playerId}`
+    );
+  });
+
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_071");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    secondPlayer.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+  assert.equal(
+    thirdPlayer.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+  assert.equal(
+    fourthPlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.playerId === activePlayer.playerId &&
+        event.effectId === "mayhem_each_player_vote_dingler" &&
+        event.choiceId === `vote-${secondPlayer.playerId}` &&
+        event.choiceIds?.includes(`vote-${thirdPlayer.playerId}`) === true
+    )
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      const eventRecord = event as unknown as Record<string, unknown>;
+      const winnerPlayerIds = eventRecord["winnerPlayerIds"];
+      return (
+        event.type === "mayhemVoteResolved" &&
+        Array.isArray(winnerPlayerIds) &&
+        winnerPlayerIds.length === 2 &&
+        winnerPlayerIds.includes(secondPlayer.playerId) &&
+        winnerPlayerIds.includes(thirdPlayer.playerId)
+      );
+    })
+  );
+});
+
+test("2P current runtime supports life payment, chip payment, and skip branches", () => {
+  const cases = [
+    {
+      selectedChoiceId: "pay_life",
+      life: 6,
+      chips: 1,
+      expectedLife: 1,
+      expectedChips: 1,
+      expectRemoved: true,
+    },
+    {
+      selectedChoiceId: "spend_chips",
+      life: 6,
+      chips: 1,
+      expectedLife: 6,
+      expectedChips: 0,
+      expectRemoved: true,
+    },
+    {
+      selectedChoiceId: "skip",
+      life: 6,
+      chips: 1,
+      expectedLife: 6,
+      expectedChips: 1,
+      expectRemoved: false,
+    },
+  ] as const;
+
+  for (const testCase of cases) {
+    const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+    state.activePlayerId = "player-2";
+    const [activePlayer, secondPlayer, thirdPlayer] =
+      getPlayersInActiveOrder(state);
+    assert.ok(activePlayer);
+    assert.ok(secondPlayer);
+    assert.ok(thirdPlayer);
+
+    activePlayer.life.current = testCase.life;
+    activePlayer.chips = testCase.chips;
+    secondPlayer.life.current = 20;
+    thirdPlayer.life.current = 20;
+    activePlayer.statuses.push(createDinglerStatus(activePlayer));
+
+    chooseEffectChoice(state, ({ effectId, player, choices }) => {
+      if (
+        effectId !==
+          "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status" ||
+        player.playerId !== activePlayer.playerId
+      ) {
+        return undefined;
+      }
+      return choices.find(
+        (choice) => choice.choiceId === testCase.selectedChoiceId
+      );
+    });
+
+    const mayhem = createCommonRuntimeCard("esw2_dbg__main_066");
+    state.common.market.splice(0, state.common.market.length);
+    state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+    const result = runMarketFlow(state, { mode: "turn" });
+
+    assert.equal(result.ok, true);
+    assert.equal(activePlayer.life.current, testCase.expectedLife);
+    assert.equal(activePlayer.chips, testCase.expectedChips);
+    assert.equal(
+      activePlayer.statuses.some((status) => status.statusId === "dingler"),
+      !testCase.expectRemoved
+    );
+    assert.ok(
+      state.eventLog.some(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.playerId === activePlayer.playerId &&
+          event.effectId ===
+            "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status" &&
+          event.choiceId === testCase.selectedChoiceId &&
+          event.choiceIds?.includes("pay_life") === true &&
+          event.choiceIds?.includes("spend_chips") === true &&
+          event.choiceIds?.includes("skip") === true
+      )
+    );
+  }
+});
+
+test("2O can use its discard-and-draw branch as the default reachable choice", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+
+  const normalDefinition = createFixtureCardDefinition("fixture-2o-normal", []);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [normalDefinition.cardId, normalDefinition],
+  ]);
+
+  const players = [activePlayer, secondPlayer, thirdPlayer];
+  const discardedHandCards = players.map((player) => {
+    return [0, 1].map((cardIndex) => {
+      return {
+        instanceId: `fixture-2o-${player.playerId}-hand-${cardIndex}`,
+        definitionId: normalDefinition.cardId,
+        ownerId: player.playerId,
+        marketChips: 0,
+      } satisfies CardInstance;
+    });
+  });
+  const drawnDeckCards = players.map((player) => {
+    return Array.from({ length: 5 }, (_value, cardIndex) => {
+      return {
+        instanceId: `fixture-2o-${player.playerId}-deck-${cardIndex}`,
+        definitionId: normalDefinition.cardId,
+        ownerId: player.playerId,
+        marketChips: 0,
+      } satisfies CardInstance;
+    });
+  });
+
+  for (const [playerIndex, player] of players.entries()) {
+    const handCards = discardedHandCards[playerIndex];
+    const deckCards = drawnDeckCards[playerIndex];
+    assert.ok(handCards);
+    assert.ok(deckCards);
+    player.hand.splice(0, player.hand.length, ...handCards);
+    player.deck.splice(0, player.deck.length, ...deckCards);
+    player.discard.splice(0, player.discard.length);
+    player.life.current = 20;
+  }
+
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_059");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "mayhemHandDiscardedAndRedrawn")
+      .map((event) => ({
+        playerId: event.playerId,
+        amount: event.amount,
+      })),
+    [
+      { playerId: activePlayer.playerId, amount: 7 },
+      { playerId: secondPlayer.playerId, amount: 7 },
+      { playerId: thirdPlayer.playerId, amount: 7 },
+    ]
+  );
+  for (const [playerIndex, player] of players.entries()) {
+    const handCards = discardedHandCards[playerIndex];
+    const deckCards = drawnDeckCards[playerIndex];
+    assert.ok(handCards);
+    assert.ok(deckCards);
+    assert.equal(player.life.current, 20);
+    assert.deepEqual(
+      player.hand.map((card) => card.instanceId),
+      deckCards.map((card) => card.instanceId)
+    );
+    assert.deepEqual(
+      player.discard.map((card) => card.instanceId),
+      handCards.map((card) => card.instanceId)
+    );
+    assert.deepEqual(player.deck, []);
+  }
+});
+
+test("2O can reach its take-damage branch for an affected player", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+
+  const normalDefinition = createFixtureCardDefinition(
+    "fixture-2o-mixed-normal",
+    []
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [normalDefinition.cardId, normalDefinition],
+  ]);
+
+  const players = [activePlayer, secondPlayer, thirdPlayer];
+  const discardedHandCards = players.map((player) => {
+    return [0, 1].map((cardIndex) => {
+      return {
+        instanceId: `fixture-2o-mixed-${player.playerId}-hand-${cardIndex}`,
+        definitionId: normalDefinition.cardId,
+        ownerId: player.playerId,
+        marketChips: 0,
+      } satisfies CardInstance;
+    });
+  });
+  const drawnDeckCards = players.map((player) => {
+    return Array.from({ length: 5 }, (_value, cardIndex) => {
+      return {
+        instanceId: `fixture-2o-mixed-${player.playerId}-deck-${cardIndex}`,
+        definitionId: normalDefinition.cardId,
+        ownerId: player.playerId,
+        marketChips: 0,
+      } satisfies CardInstance;
+    });
+  });
+
+  for (const [playerIndex, player] of players.entries()) {
+    const handCards = discardedHandCards[playerIndex];
+    const deckCards = drawnDeckCards[playerIndex];
+    assert.ok(handCards);
+    assert.ok(deckCards);
+    player.hand.splice(0, player.hand.length, ...handCards);
+    player.deck.splice(0, player.deck.length, ...deckCards);
+    player.discard.splice(0, player.discard.length);
+    player.life.current = 20;
+  }
+
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (
+      effectId !== "mayhem_each_player_choose_discard_hand_draw_or_take_damage"
+    ) {
+      return undefined;
+    }
+    if (player.playerId !== secondPlayer.playerId) {
+      return undefined;
+    }
+    return choices.find((choice) => choice.choiceId === "take_damage");
+  });
+
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_059");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.life.current, 20);
+  assert.equal(secondPlayer.life.current, 15);
+  assert.equal(thirdPlayer.life.current, 20);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectChoiceSelected" &&
+        event.playerId === secondPlayer.playerId &&
+        event.effectId ===
+          "mayhem_each_player_choose_discard_hand_draw_or_take_damage" &&
+        event.choiceId === "take_damage" &&
+        event.choiceIds?.includes("discard_hand_then_draw_cards") === true
+      );
+    })
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "effectDamageDealt" &&
+        event.playerId === secondPlayer.playerId &&
+        event.targetPlayerId === secondPlayer.playerId &&
+        event.definitionId === "esw2_dbg__main_059" &&
+        event.effectId ===
+          "mayhem_each_player_choose_discard_hand_draw_or_take_damage" &&
+        event.amount === 5
+      );
+    })
+  );
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "mayhemHandDiscardedAndRedrawn" &&
+        event.playerId === secondPlayer.playerId
+    ).length,
+    0
+  );
+  assert.deepEqual(
+    secondPlayer.hand.map((card) => card.instanceId),
+    discardedHandCards[1]?.map((card) => card.instanceId)
+  );
+  assert.deepEqual(
+    secondPlayer.discard.map((card) => card.instanceId),
+    []
+  );
+  assert.deepEqual(
+    activePlayer.hand.map((card) => card.instanceId),
+    drawnDeckCards[0]?.map((card) => card.instanceId)
+  );
+  assert.deepEqual(
+    thirdPlayer.hand.map((card) => card.instanceId),
+    drawnDeckCards[2]?.map((card) => card.instanceId)
+  );
+});
+
+test("Park Vurdalaktionov heals damage dealt on its controller's turn and adds hand limit at max life", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  targetPlayer.hand = [];
+  activePlayer.life.current = 16;
+  targetPlayer.life.current = 20;
+  const park = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_010"
+  );
+
+  const playParkResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: park.instanceId,
+  });
+  assert.equal(playParkResult.ok, true);
+  assert.equal(activePlayer.permanents.includes(park), true);
+
+  const attackCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 3,
+    target: {
+      selector: "opponentPlayer",
+    },
+  });
+  const attackResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attackCardId,
+  });
+
+  assert.equal(attackResult.ok, true);
+  assert.equal(activePlayer.life.current, 19);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectLifeHealed" &&
+        event.definitionId === "esw2_dbg__legend_010" &&
+        event.amount === 3
+    )
+  );
+
+  activePlayer.life.current = calculateEffectivePlayerMaxLife(
+    state,
+    activePlayer.playerId
+  );
+  activePlayer.hand = [];
+  activePlayer.deck = [
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-1"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-2"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-3"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-4"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-5"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-6"),
+    createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "park-7"),
+  ];
+
+  const endTurnResult = applyAction(state, { type: "endTurn" });
+
+  assert.equal(endTurnResult.ok, true);
+  assert.equal(activePlayer.hand.length, 7);
+});
+
+test("Mega Mayhem ME sets every wizard life to 5", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  for (const player of state.players) {
+    player.life.current = 17;
+  }
+  const megaMayhem = createCommonRuntimeCard("esw2_dbg__mega_mayhem_005");
+  const legendFiller = state.common.legendMarket[0];
+  assert.ok(legendFiller);
+  state.common.legendMarket.splice(
+    0,
+    state.common.legendMarket.length,
+    ...state.common.legendMarket.slice(0, 2)
+  );
+  state.common.legendDeck.splice(
+    0,
+    state.common.legendDeck.length,
+    megaMayhem,
+    legendFiller
+  );
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    state.players.every((player) => player.life.current === 5),
+    true
+  );
+  assert.equal(state.common.destroyedMegaMayhem.includes(megaMayhem), true);
 });
 
 test("attack_damage kill awards Basic Trophy to the attacker", () => {
@@ -5255,6 +7348,13 @@ function assertEventOrder(
   }
 }
 
+function chooseEffectChoice(
+  state: GameState,
+  selector: NonNullable<GameState["effectChoiceStrategy"]>
+): void {
+  state.effectChoiceStrategy = selector;
+}
+
 function addFixtureCardToActiveHand(
   state: GameState,
   effect: unknown,
@@ -5355,14 +7455,49 @@ function addRuntimeCardToHand(
   definitionId: string
 ): CardInstance {
   assert.ok(state.cardDefinitions.has(definitionId));
+  const card = createRuntimeCardInstance(
+    player,
+    definitionId,
+    `${definitionId}-${player.hand.length + 1}`
+  );
+  player.hand.push(card);
+  return card;
+}
+
+function createRuntimeCardInstance(
+  player: PlayerState,
+  definitionId: string,
+  instanceIdSuffix: string
+): CardInstance {
   const card: CardInstance = {
-    instanceId: `fixture-runtime-${definitionId}-${player.hand.length + 1}`,
+    instanceId: `fixture-runtime-${instanceIdSuffix}`,
     definitionId,
     ownerId: player.playerId,
     marketChips: 0,
   };
-  player.hand.push(card);
   return card;
+}
+
+function createCommonRuntimeCard(definitionId: string): CardInstance {
+  return {
+    instanceId: `fixture-runtime-${definitionId}`,
+    definitionId,
+    ownerId: "common",
+    marketChips: 0,
+  };
+}
+
+function createDinglerStatus(player: PlayerState): StatusInstance {
+  return {
+    instanceId: `fixture-dingler-${player.playerId}`,
+    statusId: "dingler",
+    ownerId: player.playerId,
+    effects: [],
+  };
+}
+
+function hasDinglerStatus(player: PlayerState): boolean {
+  return player.statuses.some((status) => status.statusId === "dingler");
 }
 
 function moveCardToHand(player: PlayerState, card: CardInstance): void {
@@ -5441,10 +7576,28 @@ function addControlledFixturePermanent(
   cardId: string,
   cardTypes: string[]
 ): CardInstance {
+  return addControlledFixturePermanentWithCost(
+    state,
+    player,
+    cardId,
+    cardTypes,
+    0
+  );
+}
+
+function addControlledFixturePermanentWithCost(
+  state: GameState,
+  player: PlayerState,
+  cardId: string,
+  cardTypes: string[],
+  cost: number
+): CardInstance {
   const definition = createFixtureCardDefinition(cardId, [], {
     isOngoing: true,
     cardTypes,
   });
+  definition.engine.cost = cost;
+  definition.visible.cost = cost;
   state.cardDefinitions = new Map([
     ...state.cardDefinitions,
     [definition.cardId, definition],

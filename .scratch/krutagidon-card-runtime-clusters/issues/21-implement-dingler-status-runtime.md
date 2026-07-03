@@ -1,4 +1,4 @@
-Status: Todo
+Status: Done
 Label: ready-for-agent
 Type: AFK
 
@@ -33,19 +33,35 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] Для каждой карты из списка прочитан canonical draft/source text.
-- [ ] Для каждой карты из списка добавлен current runtime card JSON, основанный на import draft/source text.
-- [ ] Все выбранные карты добавлены в соответствующие current compositions.
-- [ ] Каждая выбранная карта становится `fullRuntime` в generated matrix.
-- [ ] Полностью реализовано Dingler status behavior каждой выбранной карты.
-- [ ] Focused tests покрывают status changes, max-life effects и relevant edge cases.
-- [ ] Не реализовывать карты вне списка этого issue.
-- [ ] Не менять cluster assignment и не переоткрывать Block C taxonomy.
-- [ ] Выполнен `npm run report:card-runtime-clusters -- --write`.
-- [ ] `npm run report:card-runtime-clusters` проходит.
-- [ ] `npm run typecheck` проходит.
-- [ ] `npm test` проходит.
-- [ ] `git diff --check` проходит.
+- [x] Для каждой карты из списка прочитан canonical draft/source text.
+- [x] Для каждой карты из списка добавлен current runtime card JSON, основанный на import draft/source text.
+- [x] Все выбранные карты добавлены в соответствующие current compositions.
+- [x] Каждая выбранная карта становится `fullRuntime` в generated matrix.
+- [x] Полностью реализовано Dingler status behavior каждой выбранной карты.
+- [x] Focused tests покрывают status changes, max-life effects и relevant edge cases.
+- [x] Не реализовывать карты вне списка этого issue.
+- [x] Не менять cluster assignment и не переоткрывать Block C taxonomy.
+- [x] Выполнен `npm run report:card-runtime-clusters -- --write`.
+- [x] `npm run report:card-runtime-clusters` проходит.
+- [x] `npm run typecheck` проходит.
+- [x] `npm test` проходит.
+- [x] `git diff --check` проходит.
+
+## Implementation evidence
+
+- Added current runtime JSON for `esw2_dbg__legend_014`, `esw2_dbg__main_030`, `esw2_dbg__main_066`, `esw2_dbg__main_074`, and `esw2_dbg__mega_mayhem_004`.
+- Added the selected cards to `data/decks/main-deck.json` and `data/decks/legend-deck.json`.
+- Added typed effect runtime support for Dingler recovery, Dingler-count power, and lowest-life Dingler max-life normalization.
+- Refreshed `.scratch/krutagidon-card-runtime-clusters/card-runtime-cluster-matrix.md`; report summary: `fullRuntime: 24`, `missingRuntime: 104`, `needsClusterDecision: 0`.
+
+## Validation
+
+- `npm test -- --test-name-pattern "Dingler|dingler-status|current runtime data pack includes full runtime cards|initial game setup keeps current runtime runnable|life and Dingler status effects|Mega Mayhem life and Dingler status effects|Mayhem battle and vote"` - passed.
+- `npm run report:card-runtime-clusters -- --write` - passed.
+- `npm run report:card-runtime-clusters` - passed.
+- `npm run typecheck` - passed.
+- `npm test` - passed.
+- `git diff --check` - passed.
 
 ## Blocked by
 

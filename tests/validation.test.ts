@@ -373,6 +373,7 @@ test("combat effects are registered and reject invalid shapes through runtime ha
   const combatEffectIds = [
     "deal_damage",
     "attack_damage",
+    "attack_damage_equal_to_controlled_card_cost",
     "multi_target_attack",
     "mayhem_attack",
   ];
@@ -392,6 +393,20 @@ test("combat effects are registered and reject invalid shapes through runtime ha
       []
     );
   }
+});
+
+test("controlled-object power effect is registered and rejects invalid shapes", () => {
+  const handler = getEffectRuntimeHandler("add_power_per_controlled_object");
+
+  assert.ok(handler);
+  assert.notDeepEqual(
+    handler.validateShape("Fixture", {
+      effectId: "add_power_per_controlled_object",
+      timing: "onPlay",
+      amount: 0,
+    }),
+    []
+  );
 });
 
 test("economy and draw effects are registered and reject invalid shapes through runtime handlers", () => {
@@ -497,6 +512,7 @@ test("life and Dingler status effects are registered and reject invalid shapes t
     "gain_status",
     "remove_status",
     "toggle_status",
+    "add_power_per_player_with_status",
   ];
 
   for (const effectId of effectIds) {
@@ -538,6 +554,30 @@ test("life and Dingler status effects are registered and reject invalid shapes t
       []
     );
   }
+  assert.deepEqual(
+    getEffectRuntimeHandler("add_power_per_player_with_status")?.validateShape(
+      "Fixture",
+      {
+        effectId: "add_power_per_player_with_status",
+        timing: "onPlay",
+        statusId: "dingler",
+        amountPerPlayer: 1,
+      }
+    ),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler("add_power_per_player_with_status")?.validateShape(
+      "Fixture",
+      {
+        effectId: "add_power_per_player_with_status",
+        timing: "onPlay",
+        statusId: "wizard",
+        amountPerPlayer: 0,
+      }
+    ),
+    []
+  );
 });
 
 test("Mega Mayhem life and Dingler status effects are registered and reject invalid shapes through runtime handlers", () => {
@@ -700,6 +740,117 @@ test("Mayhem hand-redraw choice effect is registered and rejects unsupported opt
         },
       ],
       chooser: "affectedPlayer",
+    }),
+    []
+  );
+});
+
+test("Mayhem battle and vote event effects are registered and reject invalid shapes through runtime handlers", () => {
+  const battleEffectId = "mayhem_each_player_battle_highest_hand_cost";
+  const voteEffectId = "mayhem_each_player_vote_dingler";
+  const recoveryEffectId =
+    "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status";
+  const lowestLifeEffectId =
+    "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life";
+
+  assert.equal(
+    getEffectRuntimeCatalogEntry(battleEffectId)?.effectId,
+    battleEffectId
+  );
+  assert.deepEqual(
+    getEffectRuntimeHandler(battleEffectId)?.validateShape("Fixture", {
+      effectId: battleEffectId,
+      timing: "onMayhemResolve",
+      targetSelector: "eachPlayerClockwiseFromActive",
+      chooser: "affectedPlayer",
+      winnerDrawAmount: 2,
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler(battleEffectId)?.validateShape("Fixture", {
+      effectId: battleEffectId,
+      timing: "onPlay",
+      targetSelector: "activePlayer",
+      chooser: "activePlayer",
+      winnerDrawAmount: 0,
+    }),
+    []
+  );
+
+  assert.equal(
+    getEffectRuntimeCatalogEntry(voteEffectId)?.effectId,
+    voteEffectId
+  );
+  assert.deepEqual(
+    getEffectRuntimeHandler(voteEffectId)?.validateShape("Fixture", {
+      effectId: voteEffectId,
+      timing: "onMayhemResolve",
+      targetSelector: "eachPlayerClockwiseFromActive",
+      chooser: "affectedPlayer",
+      voteTargetSelector: "anyPlayer",
+      statusId: "dingler",
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler(voteEffectId)?.validateShape("Fixture", {
+      effectId: voteEffectId,
+      timing: "onPlay",
+      targetSelector: "activePlayer",
+      chooser: "activePlayer",
+      voteTargetSelector: "opponentPlayer",
+      statusId: "loser",
+    }),
+    []
+  );
+
+  assert.equal(
+    getEffectRuntimeCatalogEntry(recoveryEffectId)?.effectId,
+    recoveryEffectId
+  );
+  assert.deepEqual(
+    getEffectRuntimeHandler(recoveryEffectId)?.validateShape("Fixture", {
+      effectId: recoveryEffectId,
+      timing: "onMayhemResolve",
+      targetSelector: "eachPlayerClockwiseFromActive",
+      chooser: "affectedPlayer",
+      statusId: "dingler",
+      lifeCost: 5,
+      chipCost: 1,
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler(recoveryEffectId)?.validateShape("Fixture", {
+      effectId: recoveryEffectId,
+      timing: "onPlay",
+      targetSelector: "activePlayer",
+      chooser: "activePlayer",
+      statusId: "loser",
+      lifeCost: 0,
+      chipCost: 0,
+    }),
+    []
+  );
+
+  assert.equal(
+    getEffectRuntimeCatalogEntry(lowestLifeEffectId)?.effectId,
+    lowestLifeEffectId
+  );
+  assert.deepEqual(
+    getEffectRuntimeHandler(lowestLifeEffectId)?.validateShape("Fixture", {
+      effectId: lowestLifeEffectId,
+      timing: "onMayhemResolve",
+      statusId: "dingler",
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    getEffectRuntimeHandler(lowestLifeEffectId)?.validateShape("Fixture", {
+      effectId: lowestLifeEffectId,
+      timing: "onPlay",
+      statusId: "loser",
     }),
     []
   );

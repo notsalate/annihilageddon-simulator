@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__mega_mayhem_004",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__mega_mayhem_004.json",
+    "image": "assets/cards/mega-mayhem/МегаБеспредел. MD.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__mega_mayhem_004.md"
+  },
+  "visible": {
+    "nameRu": "МегаБеспредел MD",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "МегаБеспредел",
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "textRu": "Атака: каждый колдун становится лошарой.\nЕсли ты и так лошара, ты становишься нормальным.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mega_mayhem_each_player_toggle_dingler",
+        "timing": "onMayhemResolve",
+        "targetSelector": "eachPlayerClockwiseFromActive"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

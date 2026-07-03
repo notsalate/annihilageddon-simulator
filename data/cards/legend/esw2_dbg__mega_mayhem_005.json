@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__mega_mayhem_005",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__mega_mayhem_005.json",
+    "image": "assets/cards/mega-mayhem/МегаБеспредел. ME.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__mega_mayhem_005.md"
+  },
+  "visible": {
+    "nameRu": "МегаБеспредел ME",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "МегаБеспредел",
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "textRu": "Атака: каждый колдун сводит свои жизни к 5.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mega_mayhem_set_life",
+        "timing": "onMayhemResolve",
+        "targetSelector": "eachPlayerClockwiseFromActive",
+        "lifeTotal": 5
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

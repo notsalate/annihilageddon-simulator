@@ -68,16 +68,36 @@ test("current runtime data pack uses current-runtime manifest and composition pa
   );
 });
 
-test("current runtime data pack includes simple-baseline runtime cards in matching compositions", () => {
+test("current runtime data pack includes full runtime cards in matching compositions", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
 
   assert.deepEqual([...dataPack.cardDefinitions.keys()].sort(), [
+    "esw2_dbg__legend_002",
+    "esw2_dbg__legend_004",
     "esw2_dbg__legend_009",
+    "esw2_dbg__legend_010",
+    "esw2_dbg__legend_011",
+    "esw2_dbg__legend_014",
     "esw2_dbg__limp_wand",
     "esw2_dbg__main_002",
     "esw2_dbg__main_004",
+    "esw2_dbg__main_016",
+    "esw2_dbg__main_020",
+    "esw2_dbg__main_027",
+    "esw2_dbg__main_030",
     "esw2_dbg__main_035",
     "esw2_dbg__main_038",
+    "esw2_dbg__main_040",
+    "esw2_dbg__main_046",
+    "esw2_dbg__main_056",
+    "esw2_dbg__main_059",
+    "esw2_dbg__main_060",
+    "esw2_dbg__main_064",
+    "esw2_dbg__main_066",
+    "esw2_dbg__main_071",
+    "esw2_dbg__main_074",
+    "esw2_dbg__mega_mayhem_004",
+    "esw2_dbg__mega_mayhem_005",
     "esw2_dbg__starter_001",
     "esw2_dbg__starter_002",
     "esw2_dbg__wild_magic",
@@ -89,11 +109,31 @@ test("current runtime data pack includes simple-baseline runtime cards in matchi
   assert.deepEqual(dataPack.decks.mainDeck.entries, [
     { cardId: "esw2_dbg__main_002", count: 1 },
     { cardId: "esw2_dbg__main_004", count: 2 },
+    { cardId: "esw2_dbg__main_016", count: 2 },
+    { cardId: "esw2_dbg__main_020", count: 2 },
+    { cardId: "esw2_dbg__main_027", count: 1 },
+    { cardId: "esw2_dbg__main_030", count: 1 },
     { cardId: "esw2_dbg__main_035", count: 1 },
+    { cardId: "esw2_dbg__main_040", count: 2 },
+    { cardId: "esw2_dbg__main_046", count: 1 },
+    { cardId: "esw2_dbg__main_056", count: 2 },
     { cardId: "esw2_dbg__main_038", count: 2 },
+    { cardId: "esw2_dbg__main_059", count: 1 },
+    { cardId: "esw2_dbg__main_060", count: 1 },
+    { cardId: "esw2_dbg__main_064", count: 1 },
+    { cardId: "esw2_dbg__main_066", count: 1 },
+    { cardId: "esw2_dbg__main_071", count: 1 },
+    { cardId: "esw2_dbg__main_074", count: 1 },
   ]);
   assert.deepEqual(dataPack.decks.legendDeck.entries, [
+    { cardId: "esw2_dbg__legend_002", count: 1 },
+    { cardId: "esw2_dbg__legend_004", count: 1 },
     { cardId: "esw2_dbg__legend_009", count: 1 },
+    { cardId: "esw2_dbg__legend_010", count: 1 },
+    { cardId: "esw2_dbg__legend_011", count: 1 },
+    { cardId: "esw2_dbg__legend_014", count: 1 },
+    { cardId: "esw2_dbg__mega_mayhem_004", count: 1 },
+    { cardId: "esw2_dbg__mega_mayhem_005", count: 1 },
   ]);
   assert.deepEqual(dataPack.decks.familiarPool?.entries, []);
 });
@@ -135,26 +175,56 @@ test("current runtime special cards stay as reviewed full cards", () => {
   ]);
 });
 
-test("initial game setup keeps current runtime runnable with simple-baseline compositions", () => {
+test("initial game setup keeps current runtime runnable with full-runtime compositions", () => {
   const state = initializeGame({ rootDir, seed: 12345 });
 
   assert.equal(state.players.length, 2);
-  assert.equal(state.common.market.length, 0);
-  assert.equal(state.common.legendMarket.length, 1);
-  assert.equal(state.common.mainDeck.length, 6);
-  assert.equal(state.common.legendDeck.length, 0);
+  assert.equal(state.common.market.length, 5);
+  assert.equal(state.common.legendMarket.length, 3);
+  assert.equal(state.common.mainDeck.length, 17);
+  assert.equal(state.common.legendDeck.length, 5);
   assert.deepEqual(
     countDefinitions(state.common.mainDeck),
     new Map([
+      ["esw2_dbg__main_060", 1],
+      ["esw2_dbg__main_056", 1],
+      ["esw2_dbg__main_027", 1],
+      ["esw2_dbg__main_040", 1],
+      ["esw2_dbg__main_046", 1],
+      ["esw2_dbg__main_074", 1],
+      ["esw2_dbg__main_016", 2],
+      ["esw2_dbg__main_038", 1],
+      ["esw2_dbg__main_066", 1],
       ["esw2_dbg__main_002", 1],
-      ["esw2_dbg__main_004", 2],
+      ["esw2_dbg__main_004", 1],
+      ["esw2_dbg__main_030", 1],
+      ["esw2_dbg__main_064", 1],
+      ["esw2_dbg__main_071", 1],
+      ["esw2_dbg__main_020", 1],
       ["esw2_dbg__main_035", 1],
-      ["esw2_dbg__main_038", 2],
     ])
   );
-  assert.equal(
-    state.common.legendMarket[0]?.definitionId,
-    "esw2_dbg__legend_009"
+  assert.deepEqual(
+    countDefinitions(state.common.legendDeck),
+    new Map([
+      ["esw2_dbg__mega_mayhem_004", 1],
+      ["esw2_dbg__legend_002", 1],
+      ["esw2_dbg__legend_009", 1],
+      ["esw2_dbg__legend_014", 1],
+      ["esw2_dbg__mega_mayhem_005", 1],
+    ])
+  );
+  assert.deepEqual(
+    countDefinitions(state.common.legendMarket),
+    new Map([
+      ["esw2_dbg__legend_010", 1],
+      ["esw2_dbg__legend_011", 1],
+      ["esw2_dbg__legend_004", 1],
+    ])
+  );
+  assert.deepEqual(
+    countDefinitions(state.common.destroyedMegaMayhem),
+    new Map()
   );
   assert.equal(state.common.wildMagicStack.length, 15);
   assert.equal(state.common.limpWandStack.length, 15);

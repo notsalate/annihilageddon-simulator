@@ -1,4 +1,5 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
+import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
 import {
   recordCardMoved,
@@ -261,6 +262,39 @@ export function calculateEndTurnDrawCount(
       }
 
       drawCount += amount * countGainedCardsMatchingEffect(state, effect);
+    }
+  }
+
+  for (const card of player.permanents) {
+    const definition = state.cardDefinitions.get(card.definitionId);
+    if (definition === undefined || !definition.engine.playableInV0) {
+      continue;
+    }
+
+    for (const effect of definition.engine.effects) {
+      if (
+        !isEffectRecord(effect) ||
+        effect["effectId"] !== "increase_hand_limit_at_max_life"
+      ) {
+        continue;
+      }
+
+      const amount = effect["amount"];
+      if (
+        effect["timing"] !== "endTurn" ||
+        typeof amount !== "number" ||
+        !Number.isSafeInteger(amount) ||
+        amount <= 0
+      ) {
+        continue;
+      }
+
+      if (
+        player.life.current >=
+        calculateEffectivePlayerMaxLife(state, player.playerId)
+      ) {
+        drawCount += amount;
+      }
     }
   }
 
@@ -869,7 +903,18 @@ function chooseEffectChoice(
   effectId: string,
   choices: readonly EffectChoice[]
 ): EffectChoice | undefined {
-  const choice = choices[0];
+  const selectedChoice = state.effectChoiceStrategy?.({
+    player,
+    effectId,
+    sourceType: source.sourceType,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    choices,
+  });
+  const choice =
+    selectedChoice !== undefined && choices.includes(selectedChoice)
+      ? selectedChoice
+      : choices[0];
   if (choice === undefined) {
     state.eventLog.push({
       type: "effectChoiceSkipped",
@@ -1200,7 +1245,9 @@ function dealDamage(
   effectId: string,
   source: EffectSourceContext
 ): DamageResult {
+  const previousLife = targetPlayer.life.current;
   targetPlayer.life.current -= amount;
+  const damageDealt = Math.max(0, Math.min(previousLife, amount));
   state.eventLog.push({
     type: "effectDamageDealt",
     playerId: sourcePlayer.playerId,
@@ -1208,7 +1255,7 @@ function dealDamage(
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
     effectId,
-    amount,
+    amount: damageDealt,
     sourceType: source.sourceType,
   });
 
@@ -1227,10 +1274,64 @@ function dealDamage(
     );
   }
 
+  applyDamageDealtTriggers(
+    state,
+    sourcePlayer,
+    targetPlayer,
+    damageDealt,
+    source
+  );
+
   return {
-    damageDealt: amount,
+    damageDealt,
     killed,
   };
+}
+
+function applyDamageDealtTriggers(
+  state: GameState,
+  sourcePlayer: PlayerState,
+  targetPlayer: PlayerState,
+  damageDealt: number,
+  damageSource: EffectSourceContext
+): void {
+  if (
+    damageDealt <= 0 ||
+    sourcePlayer.playerId === targetPlayer.playerId ||
+    state.activePlayerId !== sourcePlayer.playerId
+  ) {
+    return;
+  }
+
+  for (const permanent of sourcePlayer.permanents) {
+    const definition = state.cardDefinitions.get(permanent.definitionId);
+    if (definition === undefined || !definition.engine.playableInV0) {
+      continue;
+    }
+
+    for (const effect of definition.engine.effects) {
+      if (
+        !isEffectRecord(effect) ||
+        effect["effectId"] !== "heal_equal_damage_dealt_on_own_turn" ||
+        effect["timing"] !== "afterDamageDealt"
+      ) {
+        continue;
+      }
+
+      healPlayer(
+        state,
+        sourcePlayer,
+        sourcePlayer,
+        damageDealt,
+        "heal_equal_damage_dealt_on_own_turn",
+        {
+          ...damageSource,
+          cardInstanceId: permanent.instanceId,
+          definitionId: permanent.definitionId,
+        }
+      );
+    }
+  }
 }
 
 function resolveDefenseWindow(
@@ -1884,6 +1985,7 @@ function gainDinglerStatus(
     effectId,
     sourceType: source.sourceType,
   });
+  reconcileActivePlayerControlledPower(state);
 }
 
 function removeDinglerStatus(
@@ -1908,6 +2010,7 @@ function removeDinglerStatus(
     effectId,
     sourceType: source.sourceType,
   });
+  reconcileActivePlayerControlledPower(state);
 }
 
 function drawTopDeckCard(

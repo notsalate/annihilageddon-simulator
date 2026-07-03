@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildControlledObjectView,
   calculateEffectiveCardCost,
+  calculateEffectiveCardVictoryPoints,
   calculateEffectivePlayerMaxLife,
   calculateEffectivePlayerVictoryPoints,
   initializeGame,
@@ -11,6 +12,7 @@ import {
   listLegalActions,
   loadCurrentRuntimeDataPack,
   scoreGame,
+  type CardInstance,
   type CardDefinition,
   type LoadedDataPack,
   type StatusInstance,
@@ -321,6 +323,166 @@ test("Dingler scoring penalty is an effective player victory point modifier", ()
   );
 });
 
+test("Gusynya scores two VP per owned Legend card", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({ dataPack, seed: 60615 });
+  const player = state.players[0];
+  assert.ok(player);
+  const gusynya = state.cardDefinitions.get("esw2_dbg__legend_004");
+  const tower = state.cardDefinitions.get("esw2_dbg__legend_009");
+  assert.ok(gusynya);
+  assert.ok(tower);
+  player.discard.push(
+    createCardInstance("fixture-gusynya", gusynya.cardId, player.playerId),
+    createCardInstance("fixture-tower", tower.cardId, player.playerId)
+  );
+
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === player.playerId)
+      ?.victoryPoints,
+    10
+  );
+  assert.equal(gusynya.engine.victoryPoints, 0);
+});
+
+test("Tsirk bratiev loshashnykh turns owned DWT penalties into bonus VP", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({ dataPack, seed: 60615 });
+  const player = state.players[0];
+  assert.ok(player);
+  const circus = state.cardDefinitions.get("esw2_dbg__main_027");
+  assert.ok(circus);
+  player.discard.push(
+    createCardInstance("fixture-circus", circus.cardId, player.playerId)
+  );
+  assert.equal(state.common.deadWizardTokens.status, "available");
+  const dwt = state.common.deadWizardTokens.drawStack.shift();
+  assert.ok(dwt);
+  dwt.ownerId = player.playerId;
+  player.deadWizardTokens.push(dwt);
+  const dwtDefinition = state.tokenDefinitions.get(dwt.definitionId);
+  assert.equal(dwtDefinition?.kind, "deadWizardToken");
+  assert.ok(dwtDefinition.victoryPoints < 0);
+
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === player.playerId)
+      ?.victoryPoints,
+    2 + Math.abs(dwtDefinition.victoryPoints)
+  );
+  assert.equal(dwtDefinition.victoryPoints, -3);
+});
+
+test("Potnyi GeekPig scores one VP per owned creature card", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({ dataPack, seed: 60615 });
+  const player = state.players[0];
+  assert.ok(player);
+  const geekPig = state.cardDefinitions.get("esw2_dbg__main_040");
+  const pivohranilishche = state.cardDefinitions.get("esw2_dbg__main_035");
+  assert.ok(geekPig);
+  assert.ok(pivohranilishche);
+  player.discard.push(
+    createCardInstance("fixture-geekpig", geekPig.cardId, player.playerId),
+    createCardInstance(
+      "fixture-pivohranilishche",
+      pivohranilishche.cardId,
+      player.playerId
+    )
+  );
+
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === player.playerId)
+      ?.victoryPoints,
+    4
+  );
+  assert.equal(geekPig.engine.victoryPoints, 0);
+});
+
+test("Potnyi GeekPig self-scoring applies once per physical copy", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({ dataPack, seed: 60615 });
+  const player = state.players[0];
+  assert.ok(player);
+  const geekPig = state.cardDefinitions.get("esw2_dbg__main_040");
+  assert.ok(geekPig);
+  player.discard.push(
+    createCardInstance("fixture-geekpig-1", geekPig.cardId, player.playerId),
+    createCardInstance("fixture-geekpig-2", geekPig.cardId, player.playerId)
+  );
+
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === player.playerId)
+      ?.victoryPoints,
+    4
+  );
+});
+
+test("scoring zones stay aligned between scoreGame and whileScoring modifiers", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({ dataPack, seed: 60615 });
+  const player = state.players[0];
+  assert.ok(player);
+  const gusynya = state.cardDefinitions.get("esw2_dbg__legend_004");
+  const tower = state.cardDefinitions.get("esw2_dbg__legend_009");
+  const geekPig = state.cardDefinitions.get("esw2_dbg__main_040");
+  const pivohranilishche = state.cardDefinitions.get("esw2_dbg__main_035");
+  assert.ok(gusynya);
+  assert.ok(tower);
+  assert.ok(geekPig);
+  assert.ok(pivohranilishche);
+
+  const playedLegend = createCardInstance(
+    "fixture-played-gusynya",
+    gusynya.cardId,
+    player.playerId
+  );
+  const permanentLegend = createCardInstance(
+    "fixture-permanent-tower",
+    tower.cardId,
+    player.playerId
+  );
+  const discardGeekPig = createCardInstance(
+    "fixture-discard-geekpig",
+    geekPig.cardId,
+    player.playerId
+  );
+  const playedCreature = createCardInstance(
+    "fixture-played-pivohranilishche",
+    pivohranilishche.cardId,
+    player.playerId
+  );
+
+  player.playedThisTurn.push(playedLegend, playedCreature);
+  player.permanents.push(permanentLegend);
+  player.discard.push(discardGeekPig);
+
+  assert.equal(
+    calculateEffectiveCardVictoryPoints(
+      state,
+      player.playerId,
+      gusynya,
+      playedLegend
+    ),
+    4
+  );
+  assert.equal(
+    calculateEffectiveCardVictoryPoints(
+      state,
+      player.playerId,
+      geekPig,
+      discardGeekPig
+    ),
+    3
+  );
+  const expectedScore =
+    tower.engine.victoryPoints + pivohranilishche.engine.victoryPoints + 4 + 3;
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === player.playerId)
+      ?.victoryPoints,
+    expectedScore
+  );
+});
+
 function createCostModifierStatus(
   playerId: StatusInstance["ownerId"],
   definitionId: string,
@@ -516,6 +678,19 @@ function createCostModifierEffect(
       targetType: "card",
       definitionId,
     },
+  };
+}
+
+function createCardInstance(
+  instanceId: string,
+  definitionId: string,
+  ownerId: CardInstance["ownerId"]
+): CardInstance {
+  return {
+    instanceId,
+    definitionId,
+    ownerId,
+    marketChips: 0,
   };
 }
 

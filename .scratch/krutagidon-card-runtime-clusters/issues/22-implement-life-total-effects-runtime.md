@@ -1,4 +1,4 @@
-Status: Todo
+Status: Done
 Label: ready-for-agent
 Type: AFK
 
@@ -33,19 +33,19 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] Для каждой карты из списка прочитан canonical draft/source text.
-- [ ] Для каждой карты из списка добавлен current runtime card JSON, основанный на import draft/source text.
-- [ ] Все выбранные карты добавлены в соответствующие current compositions.
-- [ ] Каждая выбранная карта становится `fullRuntime` в generated matrix.
-- [ ] Полностью реализовано life-total behavior каждой выбранной карты.
-- [ ] Focused tests покрывают health changes, costs, exchanges и damage-accounting where relevant.
-- [ ] Не реализовывать карты вне списка этого issue.
-- [ ] Не менять cluster assignment и не переоткрывать Block C taxonomy.
-- [ ] Выполнен `npm run report:card-runtime-clusters -- --write`.
-- [ ] `npm run report:card-runtime-clusters` проходит.
-- [ ] `npm run typecheck` проходит.
-- [ ] `npm test` проходит.
-- [ ] `git diff --check` проходит.
+- [x] Для каждой карты из списка прочитан canonical draft/source text.
+- [x] Для каждой карты из списка добавлен current runtime card JSON, основанный на import draft/source text.
+- [x] Все выбранные карты добавлены в соответствующие current compositions.
+- [x] Каждая выбранная карта становится `fullRuntime` в generated matrix.
+- [x] Полностью реализовано life-total behavior каждой выбранной карты.
+- [x] Focused tests покрывают health changes, costs, exchanges и damage-accounting where relevant.
+- [x] Не реализовывать карты вне списка этого issue.
+- [x] Не менять cluster assignment и не переоткрывать Block C taxonomy.
+- [x] Выполнен `npm run report:card-runtime-clusters -- --write`.
+- [x] `npm run report:card-runtime-clusters` проходит.
+- [x] `npm run typecheck` проходит.
+- [x] `npm test` проходит.
+- [x] `git diff --check` проходит.
 
 ## Blocked by
 
@@ -54,3 +54,12 @@ None - can start immediately
 ## Notes
 
 - Issue остаётся внутри `clusterId: "life-total-effects"`.
+- `playableInV0: true` оставлен как текущий признак участия runtime-карт в current compositions.
+
+## Completion Evidence
+
+- Added current runtime definitions for `esw2_dbg__legend_002`, `esw2_dbg__legend_010`, `esw2_dbg__main_046`, `esw2_dbg__main_060`, and `esw2_dbg__mega_mayhem_005`.
+- Added the selected cards to `legend-deck` and `main-deck` current compositions.
+- Implemented life exchange with Dingler status transfer, life-set events, life costs for chip gain, damage-to-healing branches, own-turn damage healing, and max-life hand-limit behavior.
+- Focused coverage: `tests/action-loop.test.ts` and current runtime setup assertions in `tests/setup.test.ts`.
+- Checks run: `npm run report:card-runtime-clusters -- --write`, `npm run report:card-runtime-clusters`, `npm run typecheck`, `npm test`, `git diff --check`.

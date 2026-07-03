@@ -1,9 +1,14 @@
-import type { TokenDefinition } from "./data.js";
+import type { CardDefinition, TokenDefinition } from "./data.js";
+import {
+  calculateEffectiveCardCost,
+  calculateEffectivePlayerMaxLife,
+} from "./effective-values.js";
 import { recordTurnPowerChanged } from "./event-recorder.js";
 import type {
   CardInstance,
   GameState,
   PlayerState,
+  RuntimeEffectChoice,
   TokenInstance,
 } from "./setup.js";
 
@@ -45,13 +50,7 @@ export type TargetChoice =
       player: PlayerState;
     };
 
-export interface EffectChoice {
-  choiceId: string;
-  amount?: number;
-  direction?: "left" | "right";
-  cards?: CardInstance[];
-  players?: PlayerState[];
-}
+export type EffectChoice = RuntimeEffectChoice;
 
 export type TargetChoiceResult =
   | {
@@ -282,6 +281,64 @@ const addPowerHandler: EffectRuntimeHandler = {
       state.turn.power
     );
 
+    return { ok: true };
+  },
+};
+
+const addPowerPerPlayerWithStatusHandler: EffectRuntimeHandler = {
+  effectId: "add_power_per_player_with_status",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["statusId"] !== "dingler") {
+      errors.push(
+        `${subjectId} uses unsupported status ${String(effect["statusId"])}`
+      );
+    }
+    const amountPerPlayer = effect["amountPerPlayer"];
+    if (
+      typeof amountPerPlayer !== "number" ||
+      !Number.isSafeInteger(amountPerPlayer) ||
+      amountPerPlayer <= 0
+    ) {
+      errors.push(
+        `${subjectId} uses invalid power amount per player ${String(amountPerPlayer)}`
+      );
+    }
+    return errors;
+  },
+  execute(state, player, effect, source, services) {
+    const errors = addPowerPerPlayerWithStatusHandler.validateShape(
+      "Effect add_power_per_player_with_status",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid add_power_per_player_with_status effect",
+      };
+    }
+
+    const amountPerPlayer = effect["amountPerPlayer"];
+    if (typeof amountPerPlayer !== "number") {
+      return {
+        ok: false,
+        error: "Invalid add_power_per_player_with_status effect",
+      };
+    }
+
+    const matchingPlayerCount = state.players.filter((candidate) =>
+      services.hasDinglerStatus(candidate)
+    ).length;
+    const powerBefore = state.turn.power;
+    state.turn.power += matchingPlayerCount * amountPerPlayer;
+    recordTurnPowerChanged(
+      state,
+      player,
+      source,
+      "add_power_per_player_with_status",
+      powerBefore,
+      state.turn.power
+    );
     return { ok: true };
   },
 };
@@ -583,6 +640,22 @@ const healHandler: EffectRuntimeHandler = {
   },
 };
 
+const healEqualDamageDealtOnOwnTurnHandler: EffectRuntimeHandler = {
+  effectId: "heal_equal_damage_dealt_on_own_turn",
+  validateShape(subjectId, effect) {
+    if (effect["timing"] !== "afterDamageDealt") {
+      return [
+        `${subjectId} uses unsupported damage trigger timing ${String(effect["timing"])}`,
+      ];
+    }
+
+    return [];
+  },
+  execute() {
+    return { ok: true };
+  },
+};
+
 const setLifeHandler: EffectRuntimeHandler = {
   effectId: "set_life",
   validateShape(subjectId, effect) {
@@ -652,6 +725,172 @@ const setLifeHandler: EffectRuntimeHandler = {
   },
 };
 
+const exchangeLifeAndDinglerStatusHandler: EffectRuntimeHandler = {
+  effectId: "exchange_life_and_dingler_status",
+  validateShape(subjectId, effect) {
+    const errors = validatePlayerTargetSelector(
+      subjectId,
+      effect,
+      "life exchange",
+      ["opponentPlayer", "chosenFoe"]
+    );
+    for (const flag of [
+      "allowLifeExchange",
+      "allowDinglerStatusExchange",
+    ] as const) {
+      const value = effect[flag];
+      if (value !== undefined && typeof value !== "boolean") {
+        errors.push(`${subjectId} uses invalid ${flag} flag ${String(value)}`);
+      }
+    }
+    return errors;
+  },
+  execute(state, player, effect, source, services) {
+    const effectId = services.asString(effect["effectId"]);
+    const allowLifeExchange =
+      effect["allowLifeExchange"] === undefined
+        ? true
+        : effect["allowLifeExchange"] === true;
+    const allowDinglerStatusExchange =
+      effect["allowDinglerStatusExchange"] === undefined
+        ? true
+        : effect["allowDinglerStatusExchange"] === true;
+
+    if (effect["optional"] === true) {
+      const choices: EffectChoice[] = [{ choiceId: "pass" }];
+      if (allowLifeExchange) {
+        choices.push({ choiceId: "exchange_life_only" });
+      }
+      if (allowDinglerStatusExchange) {
+        choices.push({ choiceId: "exchange_dingler_status_only" });
+      }
+      if (allowLifeExchange && allowDinglerStatusExchange) {
+        choices.push({ choiceId: "exchange_life_and_dingler_status" });
+      }
+      const choice = services.chooseEffectChoice(
+        state,
+        player,
+        source,
+        effectId,
+        choices
+      );
+      if (choice?.choiceId === "pass") {
+        return { ok: true };
+      }
+      if (choice?.choiceId === "exchange_life_only") {
+        return exchangeLifeAndOrDinglerStatus(
+          state,
+          player,
+          effect,
+          source,
+          services,
+          true,
+          false
+        );
+      }
+      if (choice?.choiceId === "exchange_dingler_status_only") {
+        return exchangeLifeAndOrDinglerStatus(
+          state,
+          player,
+          effect,
+          source,
+          services,
+          false,
+          true
+        );
+      }
+      if (choice?.choiceId === "exchange_life_and_dingler_status") {
+        return exchangeLifeAndOrDinglerStatus(
+          state,
+          player,
+          effect,
+          source,
+          services,
+          true,
+          true
+        );
+      }
+    }
+
+    return exchangeLifeAndOrDinglerStatus(
+      state,
+      player,
+      effect,
+      source,
+      services,
+      allowLifeExchange,
+      allowDinglerStatusExchange
+    );
+  },
+};
+
+function exchangeLifeAndOrDinglerStatus(
+  state: GameState,
+  player: PlayerState,
+  effect: Record<string, unknown>,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices,
+  exchangeLife: boolean,
+  exchangeDinglerStatus: boolean
+): EffectExecutionResult {
+  if (!exchangeLife && !exchangeDinglerStatus) {
+    return { ok: true };
+  }
+
+  const effectId = services.asString(effect["effectId"]);
+  const targetResult = services.resolveTargetChoice(
+    state,
+    player,
+    effect,
+    source
+  );
+  if (!targetResult.ok) {
+    return targetResult;
+  }
+
+  if (targetResult.choice === undefined) {
+    return { ok: true };
+  }
+
+  if (targetResult.choice.choiceType !== "player") {
+    return {
+      ok: false,
+      error: "Life exchange effect requires a player target",
+    };
+  }
+
+  const targetPlayer = targetResult.choice.player;
+  if (exchangeLife) {
+    const playerLife = player.life.current;
+    player.life.current = targetPlayer.life.current;
+    targetPlayer.life.current = playerLife;
+    state.eventLog.push({
+      type: "effectLifeExchanged",
+      playerId: player.playerId,
+      targetPlayerId: targetPlayer.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+  }
+
+  if (exchangeDinglerStatus) {
+    const playerHadDingler = services.hasDinglerStatus(player);
+    const targetHadDingler = services.hasDinglerStatus(targetPlayer);
+    if (playerHadDingler && !targetHadDingler) {
+      services.removeDinglerStatus(state, player, effectId, source);
+      services.gainDinglerStatus(state, targetPlayer, effectId, source);
+    }
+    if (!playerHadDingler && targetHadDingler) {
+      services.removeDinglerStatus(state, targetPlayer, effectId, source);
+      services.gainDinglerStatus(state, player, effectId, source);
+    }
+  }
+
+  return { ok: true };
+}
+
 const gainStatusHandler: EffectRuntimeHandler = {
   effectId: "gain_status",
   validateShape(subjectId, effect) {
@@ -683,6 +922,71 @@ const gainStatusHandler: EffectRuntimeHandler = {
         services.asString(effect["effectId"]),
         source
       );
+    }
+
+    return { ok: true };
+  },
+};
+
+const attackGainStatusHandler: EffectRuntimeHandler = {
+  effectId: "attack_gain_status",
+  validateShape(subjectId, effect) {
+    const errors = validateDinglerStatusEffectShape(
+      subjectId,
+      effect,
+      "attack-status"
+    );
+    if (effect["timing"] !== "onPlay") {
+      errors.unshift(
+        `${subjectId} uses unsupported attack-status timing ${String(effect["timing"])}`
+      );
+    }
+    return errors;
+  },
+  execute(state, player, effect, source, services) {
+    const statusId = effect["statusId"];
+    if (statusId !== "dingler") {
+      return {
+        ok: false,
+        error: `Unsupported status ${services.asString(statusId)}`,
+      };
+    }
+
+    const targetResult = services.resolveStatusTargetPlayers(
+      state,
+      player,
+      effect,
+      source
+    );
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    for (const targetPlayer of targetResult.players) {
+      state.eventLog.push({
+        type: "attackCreated",
+        playerId: player.playerId,
+        targetPlayerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        sourceType: source.sourceType,
+      });
+      if (services.resolveDefenseWindow(state, targetPlayer)) {
+        state.eventLog.push({
+          type: "attackAvoided",
+          playerId: targetPlayer.playerId,
+          targetPlayerId: targetPlayer.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          effectId,
+          sourceType: source.sourceType,
+        });
+        continue;
+      }
+
+      services.gainDinglerStatus(state, targetPlayer, effectId, source);
     }
 
     return { ok: true };
@@ -814,23 +1118,25 @@ const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler = {
     return validateMegaMayhemEachPlayerToggleDinglerShape(subjectId, effect);
   },
   execute(state, _player, effect, source, services) {
-    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
-      if (services.hasDinglerStatus(targetPlayer)) {
-        services.removeDinglerStatus(
-          state,
-          targetPlayer,
-          services.asString(effect["effectId"]),
-          source
-        );
+    const effectId = services.asString(effect["effectId"]);
+    const decisions = collectMayhemAttackDefenseDecisions(
+      state,
+      services.getPlayersInActiveOrder(state),
+      effectId,
+      source,
+      services
+    );
+    for (const { player: targetPlayer, avoided } of decisions) {
+      if (avoided) {
         continue;
       }
 
-      services.gainDinglerStatus(
-        state,
-        targetPlayer,
-        services.asString(effect["effectId"]),
-        source
-      );
+      if (services.hasDinglerStatus(targetPlayer)) {
+        services.removeDinglerStatus(state, targetPlayer, effectId, source);
+        continue;
+      }
+
+      services.gainDinglerStatus(state, targetPlayer, effectId, source);
     }
 
     return { ok: true };
@@ -1061,10 +1367,64 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
     }
 
     const effectId = services.asString(effect["effectId"]);
+    const options = effect["options"];
+    if (!Array.isArray(options)) {
+      return { ok: false, error: "Invalid Mayhem hand-redraw choice effect" };
+    }
+
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+      const choice = services.chooseEffectChoice(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        [
+          { choiceId: "discard_hand_then_draw_cards" },
+          { choiceId: "take_damage" },
+        ]
+      );
+      const selectedChoiceId =
+        choice?.choiceId ?? "discard_hand_then_draw_cards";
+      if (selectedChoiceId === "take_damage") {
+        const damageOption = options[1];
+        if (
+          typeof damageOption !== "object" ||
+          damageOption === null ||
+          typeof damageOption["amount"] !== "number"
+        ) {
+          return {
+            ok: false,
+            error: "Invalid Mayhem hand-redraw damage option",
+          };
+        }
+
+        services.dealDamage(
+          state,
+          targetPlayer,
+          targetPlayer,
+          damageOption["amount"],
+          effectId,
+          source
+        );
+        continue;
+      }
+
+      const redrawOption = options[0];
+      if (
+        typeof redrawOption !== "object" ||
+        redrawOption === null ||
+        typeof redrawOption["drawAmount"] !== "number"
+      ) {
+        return { ok: false, error: "Invalid Mayhem hand-redraw option" };
+      }
+
       const discardedCount = targetPlayer.hand.length;
       targetPlayer.discard.push(...targetPlayer.hand.splice(0));
-      const drawnCount = drawCards(targetPlayer, 5, state);
+      const drawnCount = drawCards(
+        targetPlayer,
+        redrawOption["drawAmount"],
+        state
+      );
       state.eventLog.push({
         type: "mayhemHandDiscardedAndRedrawn",
         playerId: targetPlayer.playerId,
@@ -1072,6 +1432,443 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
         definitionId: source.definitionId,
         effectId,
         amount: discardedCount + drawnCount,
+        sourceType: source.sourceType,
+      });
+    }
+
+    return { ok: true };
+  },
+};
+
+const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler = {
+  effectId: "mayhem_each_player_reduce_life_to_gain_chips",
+  validateShape(subjectId, effect) {
+    const errors = validateMayhemEachPlayerShape(subjectId, effect);
+    const lifeTotal = effect["lifeTotal"];
+    if (
+      typeof lifeTotal !== "number" ||
+      !Number.isSafeInteger(lifeTotal) ||
+      lifeTotal < 1
+    ) {
+      errors.push(`${subjectId} uses invalid life total ${String(lifeTotal)}`);
+    }
+
+    const chipAmount = effect["chipAmount"];
+    if (
+      typeof chipAmount !== "number" ||
+      !Number.isSafeInteger(chipAmount) ||
+      chipAmount < 1
+    ) {
+      errors.push(
+        `${subjectId} uses invalid chip amount ${String(chipAmount)}`
+      );
+    }
+
+    if (effect["chooser"] !== "affectedPlayer") {
+      errors.push(
+        `${subjectId} uses unsupported Mayhem chooser ${String(effect["chooser"])}`
+      );
+    }
+
+    return errors;
+  },
+  execute(state, _player, effect, source, services) {
+    const errors = mayhemEachPlayerReduceLifeToGainChipsHandler.validateShape(
+      "Effect mayhem_each_player_reduce_life_to_gain_chips",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid Mayhem life-for-chips effect",
+      };
+    }
+
+    const lifeTotal = effect["lifeTotal"];
+    const chipAmount = effect["chipAmount"];
+    if (typeof lifeTotal !== "number" || typeof chipAmount !== "number") {
+      return { ok: false, error: "Invalid Mayhem life-for-chips effect" };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+      if (targetPlayer.life.current <= lifeTotal) {
+        continue;
+      }
+
+      const choice = services.chooseEffectChoice(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        [{ choiceId: "reduce_life_gain_chips" }, { choiceId: "pass" }]
+      );
+      if (choice?.choiceId !== "reduce_life_gain_chips") {
+        continue;
+      }
+
+      services.setPlayerLife(state, targetPlayer, lifeTotal);
+      const chipsBefore = targetPlayer.chips;
+      targetPlayer.chips += chipAmount;
+      state.eventLog.push({
+        type: "effectLifeSet",
+        playerId: targetPlayer.playerId,
+        targetPlayerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        amount: lifeTotal,
+        sourceType: source.sourceType,
+      });
+      recordEffectChipsChanged(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        chipsBefore,
+        targetPlayer.chips
+      );
+    }
+
+    return { ok: true };
+  },
+};
+
+const increaseHandLimitAtMaxLifeHandler: EffectRuntimeHandler = {
+  effectId: "increase_hand_limit_at_max_life",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["timing"] !== "endTurn") {
+      errors.push(
+        `${subjectId} uses unsupported hand-limit timing ${String(effect["timing"])}`
+      );
+    }
+
+    const amount = effect["amount"];
+    if (
+      typeof amount !== "number" ||
+      !Number.isSafeInteger(amount) ||
+      amount < 1
+    ) {
+      errors.push(
+        `${subjectId} uses invalid hand-limit amount ${String(amount)}`
+      );
+    }
+
+    return errors;
+  },
+  execute() {
+    return { ok: true };
+  },
+};
+
+const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler = {
+  effectId: "mayhem_each_player_battle_highest_hand_cost",
+  validateShape(subjectId, effect) {
+    return validateMayhemBattleHighestHandCostShape(subjectId, effect);
+  },
+  execute(state, _player, effect, source, services) {
+    const errors = mayhemEachPlayerBattleHighestHandCostHandler.validateShape(
+      "Effect mayhem_each_player_battle_highest_hand_cost",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid Mayhem battle effect",
+      };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    const winnerDrawAmount = effect["winnerDrawAmount"];
+    if (typeof winnerDrawAmount !== "number") {
+      return {
+        ok: false,
+        error: "Invalid Mayhem battle winner draw amount",
+      };
+    }
+
+    const participants: Array<{ player: PlayerState; handCost: number }> = [];
+    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+      const participationChoice = services.chooseEffectChoice(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        [{ choiceId: "participate" }, { choiceId: "pass" }]
+      );
+      if (participationChoice?.choiceId !== "participate") {
+        continue;
+      }
+
+      const handCost = sumHandCost(state, targetPlayer);
+      participants.push({ player: targetPlayer, handCost });
+      state.eventLog.push({
+        type: "mayhemBattleParticipationSelected",
+        playerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        amount: handCost,
+        sourceType: source.sourceType,
+      });
+    }
+
+    const highestCost = Math.max(
+      ...participants.map((participant) => participant.handCost),
+      0
+    );
+    const winners = participants
+      .filter((participant) => participant.handCost === highestCost)
+      .map((participant) => participant.player);
+    const winnerIds = winners.map((winner) => winner.playerId);
+
+    for (const winner of winners) {
+      drawCards(winner, winnerDrawAmount, state);
+    }
+    for (const participant of participants) {
+      if (winnerIds.includes(participant.player.playerId)) {
+        continue;
+      }
+      participant.player.discard.push(...participant.player.hand.splice(0));
+    }
+
+    state.eventLog.push({
+      type: "mayhemBattleResolved",
+      playerId: source.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      amount: highestCost,
+      participantPlayerIds: participants.map(
+        (participant) => participant.player.playerId
+      ),
+      winnerPlayerIds: winnerIds,
+      sourceType: source.sourceType,
+    });
+
+    return { ok: true };
+  },
+};
+
+const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler = {
+  effectId: "mayhem_each_player_vote_dingler",
+  validateShape(subjectId, effect) {
+    return validateMayhemVoteDinglerShape(subjectId, effect);
+  },
+  execute(state, _player, effect, source, services) {
+    const errors = mayhemEachPlayerVoteDinglerHandler.validateShape(
+      "Effect mayhem_each_player_vote_dingler",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid Mayhem vote effect",
+      };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    const players = services.getPlayersInActiveOrder(state);
+    const votes = new Map<PlayerState["playerId"], number>();
+
+    for (const votingPlayer of players) {
+      const choice = services.chooseEffectChoice(
+        state,
+        votingPlayer,
+        source,
+        effectId,
+        players.map((targetPlayer) => ({
+          choiceId: `vote-${targetPlayer.playerId}`,
+          players: [targetPlayer],
+        }))
+      );
+      const votedPlayer = choice?.players?.[0];
+      if (votedPlayer === undefined) {
+        continue;
+      }
+
+      votes.set(
+        votedPlayer.playerId,
+        (votes.get(votedPlayer.playerId) ?? 0) + 1
+      );
+      state.eventLog.push({
+        type: "mayhemVoteRecorded",
+        playerId: votingPlayer.playerId,
+        targetPlayerId: votedPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        sourceType: source.sourceType,
+      });
+    }
+
+    const highestVoteCount = Math.max(...votes.values(), 0);
+    const winners = players.filter(
+      (candidate) => votes.get(candidate.playerId) === highestVoteCount
+    );
+    for (const winner of winners) {
+      services.gainDinglerStatus(state, winner, effectId, source);
+    }
+
+    state.eventLog.push({
+      type: "mayhemVoteResolved",
+      playerId: source.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      amount: highestVoteCount,
+      winnerPlayerIds: winners.map((winner) => winner.playerId),
+      sourceType: source.sourceType,
+    });
+
+    return { ok: true };
+  },
+};
+
+const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler = {
+  effectId: "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+  validateShape(subjectId, effect) {
+    return validateMayhemDinglerRecoveryShape(subjectId, effect);
+  },
+  execute(state, _player, effect, source, services) {
+    const errors = mayhemEachDinglerRecoveryChoiceHandler.validateShape(
+      "Effect mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid Mayhem Dingler recovery effect",
+      };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    const lifeCost = effect["lifeCost"];
+    const chipCost = effect["chipCost"];
+    if (typeof lifeCost !== "number" || typeof chipCost !== "number") {
+      return { ok: false, error: "Invalid Mayhem Dingler recovery costs" };
+    }
+
+    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+      if (!services.hasDinglerStatus(targetPlayer)) {
+        continue;
+      }
+
+      const choices: EffectChoice[] = [];
+      if (targetPlayer.life.current - lifeCost >= 1) {
+        choices.push({ choiceId: "pay_life" });
+      }
+      if (targetPlayer.chips >= chipCost) {
+        choices.push({ choiceId: "spend_chips" });
+      }
+      choices.push({ choiceId: "skip" });
+
+      const choice = services.chooseEffectChoice(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        choices
+      );
+      if (choice?.choiceId === "pay_life") {
+        targetPlayer.life.current -= lifeCost;
+        state.eventLog.push({
+          type: "effectCostPaid",
+          playerId: targetPlayer.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          effectId,
+          costId: "pay_life",
+          amount: lifeCost,
+          sourceType: source.sourceType,
+        });
+        services.removeDinglerStatus(state, targetPlayer, effectId, source);
+        continue;
+      }
+
+      if (choice?.choiceId === "spend_chips") {
+        targetPlayer.chips -= chipCost;
+        state.eventLog.push({
+          type: "effectCostPaid",
+          playerId: targetPlayer.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          effectId,
+          costId: "spend_chips",
+          amount: chipCost,
+          sourceType: source.sourceType,
+        });
+        services.removeDinglerStatus(state, targetPlayer, effectId, source);
+      }
+    }
+
+    return { ok: true };
+  },
+};
+
+const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler = {
+  effectId: "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["timing"] !== "onMayhemResolve") {
+      errors.push(
+        `${subjectId} uses unsupported Mayhem timing ${String(effect["timing"])}`
+      );
+    }
+    if (effect["statusId"] !== "dingler") {
+      errors.push(
+        `${subjectId} uses unsupported Mayhem lowest-life status ${String(effect["statusId"])}`
+      );
+    }
+    return errors;
+  },
+  execute(state, _player, effect, source, services) {
+    const errors = mayhemLowestLifeDinglerMaxLifeHandler.validateShape(
+      "Effect mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
+      effect
+    );
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        error: errors[0] ?? "Invalid Mayhem lowest-life Dingler effect",
+      };
+    }
+
+    const effectId = services.asString(effect["effectId"]);
+    const lowestLife = Math.min(
+      ...state.players.map((candidate) => candidate.life.current)
+    );
+    const targets = services
+      .getPlayersInActiveOrder(state)
+      .filter((candidate) => candidate.life.current === lowestLife);
+
+    const decisions = collectMayhemAttackDefenseDecisions(
+      state,
+      targets,
+      effectId,
+      source,
+      services
+    );
+    for (const { player: targetPlayer, avoided } of decisions) {
+      if (avoided) {
+        continue;
+      }
+
+      services.gainDinglerStatus(state, targetPlayer, effectId, source);
+      const maxLife = calculateEffectivePlayerMaxLife(
+        state,
+        targetPlayer.playerId
+      );
+      services.setPlayerLife(state, targetPlayer, maxLife);
+      state.eventLog.push({
+        type: "effectLifeSet",
+        playerId: source.playerId,
+        targetPlayerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        amount: maxLife,
         sourceType: source.sourceType,
       });
     }
@@ -1170,7 +1967,10 @@ const modifyEffectiveValueHandler: EffectRuntimeHandler = {
   effectId: "modify_effective_value",
   validateShape(subjectId, effect) {
     const errors: string[] = [];
-    if (effect["timing"] !== "whileControlled") {
+    if (
+      effect["timing"] !== "whileControlled" &&
+      effect["timing"] !== "whileScoring"
+    ) {
       errors.push(
         `${subjectId} uses unsupported effective-value timing ${String(effect["timing"])}`
       );
@@ -1190,17 +1990,47 @@ const modifyEffectiveValueHandler: EffectRuntimeHandler = {
     }
 
     const operation = effect["operation"];
-    if (operation !== "add") {
+    if (operation !== "add" && operation !== "invertNegative") {
       errors.push(
         `${subjectId} uses unsupported effective-value operation ${String(operation)}`
       );
     }
 
     const amount = effect["amount"];
-    if (typeof amount !== "number" || !Number.isSafeInteger(amount)) {
+    const amountPerOwnedCard = effect["amountPerOwnedCard"];
+    if (
+      operation === "add" &&
+      (typeof amount !== "number" || !Number.isSafeInteger(amount)) &&
+      (typeof amountPerOwnedCard !== "number" ||
+        !Number.isSafeInteger(amountPerOwnedCard))
+    ) {
       errors.push(
         `${subjectId} uses invalid effective-value amount ${String(amount)}`
       );
+    }
+    if (operation === "invertNegative" && amount !== undefined) {
+      errors.push(`${subjectId} cannot combine invertNegative with amount`);
+    }
+    if (
+      amountPerOwnedCard !== undefined &&
+      (typeof amountPerOwnedCard !== "number" ||
+        !Number.isSafeInteger(amountPerOwnedCard))
+    ) {
+      errors.push(
+        `${subjectId} uses invalid effective-value amountPerOwnedCard ${String(amountPerOwnedCard)}`
+      );
+    }
+    if (amountPerOwnedCard !== undefined) {
+      const countedCardTypes = effect["countedCardTypes"];
+      if (
+        !Array.isArray(countedCardTypes) ||
+        countedCardTypes.length === 0 ||
+        !countedCardTypes.every(isNonEmptyString)
+      ) {
+        errors.push(
+          `${subjectId} uses invalid effective-value countedCardTypes`
+        );
+      }
     }
 
     errors.push(
@@ -1457,123 +2287,366 @@ const attackDamageHandler: EffectRuntimeHandler = {
     if (!amount.ok) {
       return amount;
     }
-
-    const attackProfile = services.getWizardPropertyAttackProfile(
-      state,
-      player,
-      source
-    );
-    const attackAmount = amount.value + attackProfile.damageBonus;
-
-    if (effect["targetSelector"] === "eachFoe") {
-      state.eventLog.push({
-        type: "attackCreated",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: "attack_damage",
-        amount: attackAmount,
-        sourceType: source.sourceType,
-      });
-
-      for (const targetPlayer of services.getOpponentsInSeatingOrder(
-        state,
-        player
-      )) {
-        const attackResult = services.resolveAttackTarget(
-          state,
-          player,
-          targetPlayer,
-          attackAmount,
-          "attack_damage",
-          source,
-          attackProfile.unavoidable
-        );
-        const branchResult = executeAttackBranches(
-          state,
-          player,
-          effect,
-          source,
-          targetPlayer,
-          attackResult,
-          services
-        );
-        if (!branchResult.ok) {
-          return branchResult;
-        }
-      }
-
-      return { ok: true };
-    }
-
-    const targetResult = services.resolveTargetChoice(
+    return executeAttackWithAmount(
       state,
       player,
       effect,
-      source
+      source,
+      services,
+      amount.value
     );
-    if (!targetResult.ok) {
-      return targetResult;
+  },
+};
+
+const addPowerIfPlayerHasStatusHandler: EffectRuntimeHandler = {
+  effectId: "add_power_if_player_has_status",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["timing"] !== "whileControlled") {
+      errors.push(
+        `${subjectId} uses unsupported passive power timing ${String(effect["timing"])}`
+      );
+    }
+    if (effect["statusId"] !== "dingler") {
+      errors.push(
+        `${subjectId} uses unsupported status ${String(effect["statusId"])}`
+      );
+    }
+    const amount = effect["amount"];
+    if (
+      typeof amount !== "number" ||
+      !Number.isSafeInteger(amount) ||
+      amount <= 0
+    ) {
+      errors.push(
+        `${subjectId} uses invalid passive power amount ${String(amount)}`
+      );
+    }
+    return errors;
+  },
+  execute() {
+    return {
+      ok: false,
+      error: "add_power_if_player_has_status is a passive controlled effect",
+    };
+  },
+};
+
+const addPowerPerControlledObjectHandler: EffectRuntimeHandler = {
+  effectId: "add_power_per_controlled_object",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["timing"] !== "onPlay") {
+      errors.push(
+        `${subjectId} uses unsupported add-power timing ${String(effect["timing"])}`
+      );
     }
 
-    if (targetResult.choice === undefined) {
+    return [
+      ...errors,
+      ...validatePositiveIntegerAmount(
+        subjectId,
+        effect,
+        "controlled-object power amount"
+      ),
+    ];
+  },
+  execute(state, player, effect, source) {
+    const amountPerObject = requirePositiveIntegerAmount(
+      effect,
+      "controlled-object power amount"
+    );
+    if (!amountPerObject.ok) {
+      return amountPerObject;
+    }
+
+    const amount = countControlledObjects(player) * amountPerObject.value;
+    if (amount === 0) {
       return { ok: true };
     }
 
-    if (targetResult.choice.choiceType !== "player") {
-      return {
-        ok: false,
-        error: "Attack effect requires a player target",
-      };
+    const powerBefore = state.turn.power;
+    state.turn.power += amount;
+    recordTurnPowerChanged(
+      state,
+      player,
+      source,
+      "add_power_per_controlled_object",
+      powerBefore,
+      state.turn.power
+    );
+
+    return { ok: true };
+  },
+};
+
+const attackDamageEqualToControlledCardCostHandler: EffectRuntimeHandler = {
+  effectId: "attack_damage_equal_to_controlled_card_cost",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    const costMode = effect["costMode"];
+    if (costMode !== "highest" && costMode !== "chosen") {
+      errors.push(
+        `${subjectId} uses unsupported controlled-card cost mode ${String(costMode)}`
+      );
     }
 
-    const effectId = services.asString(effect["effectId"]);
-    const targetPlayer = targetResult.choice.player;
+    if (
+      effect["excludeSource"] !== undefined &&
+      typeof effect["excludeSource"] !== "boolean"
+    ) {
+      errors.push(`${subjectId} uses non-boolean excludeSource`);
+    }
+
+    return [
+      ...errors,
+      ...validatePlayerTargetSelector(subjectId, effect, "attack", [
+        "opponentPlayer",
+        "chosenFoe",
+        "chosenPlayer",
+        "eachFoe",
+      ]),
+    ];
+  },
+  execute(state, player, effect, source, services) {
+    const costResult = payOptionalCosts(
+      state,
+      player,
+      effect,
+      source,
+      services
+    );
+    if (!costResult.ok || costResult.skipped) {
+      return costResult.ok ? { ok: true } : costResult;
+    }
+
+    const amountResult = resolveControlledCardCost(
+      state,
+      player,
+      effect,
+      source,
+      services
+    );
+    if (!amountResult.ok) {
+      return amountResult;
+    }
+
+    if (amountResult.amount <= 0) {
+      return { ok: true };
+    }
+
+    return executeAttackWithAmount(
+      state,
+      player,
+      effect,
+      source,
+      services,
+      amountResult.amount
+    );
+  },
+};
+
+function countControlledObjects(player: PlayerState): number {
+  return (
+    player.permanents.length +
+    player.deadWizardTokens.length +
+    player.wizardProperties.length +
+    player.statuses.length +
+    player.trophyLikeObjects.length
+  );
+}
+
+function resolveControlledCardCost(
+  state: GameState,
+  player: PlayerState,
+  effect: Record<string, unknown>,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): { ok: true; amount: number } | { ok: false; error: string } {
+  const cards = getControlledCardsForCost(state, player, effect, source);
+  if (cards.length === 0) {
+    return { ok: true, amount: 0 };
+  }
+
+  if (effect["costMode"] === "highest") {
+    return {
+      ok: true,
+      amount: Math.max(
+        ...cards.map(({ definition }) =>
+          calculateEffectiveCardCost(state, player.playerId, definition)
+        )
+      ),
+    };
+  }
+
+  if (effect["costMode"] === "chosen") {
+    const choices = cards.map(({ card, definition }) => ({
+      choiceId: card.instanceId,
+      cards: [card],
+      amount: calculateEffectiveCardCost(state, player.playerId, definition),
+    }));
+    const choice = services.chooseEffectChoice(
+      state,
+      player,
+      source,
+      "attack_damage_equal_to_controlled_card_cost",
+      choices
+    );
+
+    return { ok: true, amount: choice?.amount ?? 0 };
+  }
+
+  return {
+    ok: false,
+    error: `Unsupported controlled-card cost mode ${String(effect["costMode"])}`,
+  };
+}
+
+function getControlledCardsForCost(
+  state: GameState,
+  player: PlayerState,
+  effect: Record<string, unknown>,
+  source: EffectSourceContext
+): { card: CardInstance; definition: CardDefinition }[] {
+  return [...player.permanents, ...player.playedThisTurn]
+    .filter(
+      (card) =>
+        effect["excludeSource"] !== true ||
+        card.instanceId !== source.cardInstanceId
+    )
+    .map((card) => {
+      const definition = state.cardDefinitions.get(card.definitionId);
+      if (definition === undefined) {
+        throw new Error(`Missing card definition ${card.definitionId}`);
+      }
+
+      return { card, definition };
+    });
+}
+
+function executeAttackWithAmount(
+  state: GameState,
+  player: PlayerState,
+  effect: Record<string, unknown>,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices,
+  amount: number
+): EffectExecutionResult {
+  const attackProfile = services.getWizardPropertyAttackProfile(
+    state,
+    player,
+    source
+  );
+  const attackAmount = amount + attackProfile.damageBonus;
+  const effectId = services.asString(effect["effectId"]);
+
+  if (effect["targetSelector"] === "eachFoe") {
     state.eventLog.push({
       type: "attackCreated",
       playerId: player.playerId,
-      targetPlayerId: targetPlayer.playerId,
       cardInstanceId: source.cardInstanceId,
       definitionId: source.definitionId,
       effectId,
       amount: attackAmount,
       sourceType: source.sourceType,
     });
-    if (
-      !attackProfile.unavoidable &&
-      services.resolveDefenseWindow(state, targetPlayer)
-    ) {
-      state.eventLog.push({
-        type: "attackAvoided",
-        playerId: targetPlayer.playerId,
-        targetPlayerId: targetPlayer.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
+
+    for (const targetPlayer of services.getOpponentsInSeatingOrder(
+      state,
+      player
+    )) {
+      const attackResult = services.resolveAttackTarget(
+        state,
+        player,
+        targetPlayer,
+        attackAmount,
         effectId,
-        sourceType: source.sourceType,
-      });
-      return { ok: true };
+        source,
+        attackProfile.unavoidable
+      );
+      const branchResult = executeAttackBranches(
+        state,
+        player,
+        effect,
+        source,
+        targetPlayer,
+        attackResult,
+        services
+      );
+      if (!branchResult.ok) {
+        return branchResult;
+      }
     }
 
-    const attackResult = services.dealDamage(
-      state,
-      player,
-      targetPlayer,
-      attackAmount,
+    return { ok: true };
+  }
+
+  const targetResult = services.resolveTargetChoice(
+    state,
+    player,
+    effect,
+    source
+  );
+  if (!targetResult.ok) {
+    return targetResult;
+  }
+
+  if (targetResult.choice === undefined) {
+    return { ok: true };
+  }
+
+  if (targetResult.choice.choiceType !== "player") {
+    return {
+      ok: false,
+      error: "Attack effect requires a player target",
+    };
+  }
+
+  const targetPlayer = targetResult.choice.player;
+  state.eventLog.push({
+    type: "attackCreated",
+    playerId: player.playerId,
+    targetPlayerId: targetPlayer.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    amount: attackAmount,
+    sourceType: source.sourceType,
+  });
+  if (
+    !attackProfile.unavoidable &&
+    services.resolveDefenseWindow(state, targetPlayer)
+  ) {
+    state.eventLog.push({
+      type: "attackAvoided",
+      playerId: targetPlayer.playerId,
+      targetPlayerId: targetPlayer.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
       effectId,
-      source
-    );
-    return executeAttackBranches(
-      state,
-      player,
-      effect,
-      source,
-      targetPlayer,
-      { ...attackResult, avoided: false },
-      services
-    );
-  },
-};
+      sourceType: source.sourceType,
+    });
+    return { ok: true };
+  }
+
+  const attackResult = services.dealDamage(
+    state,
+    player,
+    targetPlayer,
+    attackAmount,
+    effectId,
+    source
+  );
+  return executeAttackBranches(
+    state,
+    player,
+    effect,
+    source,
+    targetPlayer,
+    { ...attackResult, avoided: false },
+    services
+  );
+}
 
 const avoidAttackHandler: EffectRuntimeHandler = {
   effectId: "avoid_attack",
@@ -2327,7 +3400,8 @@ function validateEffectiveValueModifierTarget(
   if (valueKind === "tokenVictoryPoints") {
     if (
       target["targetType"] === "token" &&
-      isNonEmptyString(target["definitionId"])
+      (isNonEmptyString(target["definitionId"]) ||
+        target["tokenKind"] === "deadWizardToken")
     ) {
       return [];
     }
@@ -2428,6 +3502,7 @@ function validateDinglerStatusEffectShape(
     ...validatePlayerTargetSelector(subjectId, effect, effectLabel, [
       "activePlayer",
       "opponentPlayer",
+      "anyPlayer",
     ])
   );
   return errors;
@@ -2533,6 +3608,80 @@ function validateMayhemHandRedrawOptions(
     );
   }
 
+  return errors;
+}
+
+function validateMayhemBattleHighestHandCostShape(
+  subjectId: string,
+  effect: Record<string, unknown>
+): string[] {
+  const errors = validateMayhemEachPlayerShape(subjectId, effect);
+  if (effect["chooser"] !== "affectedPlayer") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem chooser ${String(effect["chooser"])}`
+    );
+  }
+  const winnerDrawAmount = effect["winnerDrawAmount"];
+  if (
+    typeof winnerDrawAmount !== "number" ||
+    !Number.isSafeInteger(winnerDrawAmount) ||
+    winnerDrawAmount < 0
+  ) {
+    errors.push(
+      `${subjectId} uses invalid Mayhem winner draw amount ${String(winnerDrawAmount)}`
+    );
+  }
+  return errors;
+}
+
+function validateMayhemVoteDinglerShape(
+  subjectId: string,
+  effect: Record<string, unknown>
+): string[] {
+  const errors = validateMayhemEachPlayerShape(subjectId, effect);
+  if (effect["chooser"] !== "affectedPlayer") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem chooser ${String(effect["chooser"])}`
+    );
+  }
+  if (effect["voteTargetSelector"] !== "anyPlayer") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem vote target ${String(
+        effect["voteTargetSelector"]
+      )}`
+    );
+  }
+  if (effect["statusId"] !== "dingler") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem vote status ${String(effect["statusId"])}`
+    );
+  }
+  return errors;
+}
+
+function validateMayhemDinglerRecoveryShape(
+  subjectId: string,
+  effect: Record<string, unknown>
+): string[] {
+  const errors = validateMayhemEachPlayerShape(subjectId, effect);
+  if (effect["chooser"] !== "affectedPlayer") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem chooser ${String(effect["chooser"])}`
+    );
+  }
+  if (effect["statusId"] !== "dingler") {
+    errors.push(
+      `${subjectId} uses unsupported Mayhem recovery status ${String(effect["statusId"])}`
+    );
+  }
+  for (const costField of ["lifeCost", "chipCost"]) {
+    const cost = effect[costField];
+    if (typeof cost !== "number" || !Number.isSafeInteger(cost) || cost <= 0) {
+      errors.push(
+        `${subjectId} uses invalid Mayhem recovery ${costField} ${String(cost)}`
+      );
+    }
+  }
   return errors;
 }
 
@@ -2693,6 +3842,62 @@ function executeAttackBranches(
   return { ok: true };
 }
 
+function collectMayhemAttackDefenseDecisions(
+  state: GameState,
+  targets: readonly PlayerState[],
+  effectId: string,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): Array<{ player: PlayerState; avoided: boolean }> {
+  const decisions: Array<{ player: PlayerState; avoided: boolean }> = [];
+
+  state.eventLog.push({
+    type: "mayhemDecisionPhaseStarted",
+    playerId: source.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+
+  for (const targetPlayer of targets) {
+    state.eventLog.push({
+      type: "mayhemDecisionStarted",
+      playerId: source.playerId,
+      targetPlayerId: targetPlayer.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+    const avoided = services.resolveDefenseWindow(state, targetPlayer);
+    if (avoided) {
+      state.eventLog.push({
+        type: "attackAvoided",
+        playerId: targetPlayer.playerId,
+        targetPlayerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId,
+        sourceType: source.sourceType,
+      });
+    }
+
+    decisions.push({ player: targetPlayer, avoided });
+  }
+
+  state.eventLog.push({
+    type: "mayhemResolutionPhaseStarted",
+    playerId: source.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+
+  return decisions;
+}
+
 function executeAttackBranch(
   state: GameState,
   player: PlayerState,
@@ -2750,6 +3955,18 @@ function executeAttackBranch(
       amount: attackResult.damageDealt,
       sourceType: source.sourceType,
     });
+    return { ok: true };
+  }
+
+  if (branch["effectId"] === "heal_equal_damage_dealt") {
+    services.healPlayer(
+      state,
+      player,
+      player,
+      attackResult.damageDealt,
+      "heal_equal_damage_dealt",
+      source
+    );
     return { ok: true };
   }
 
@@ -2916,6 +4133,13 @@ function drawCards(
   return drawnCount;
 }
 
+function sumHandCost(state: GameState, player: PlayerState): number {
+  return player.hand.reduce((total, card) => {
+    const cost = state.cardDefinitions.get(card.definitionId)?.engine.cost;
+    return total + (typeof cost === "number" ? cost : 0);
+  }, 0);
+}
+
 function shuffleDiscardIntoDeckIfNeeded(
   player: PlayerState,
   state: GameState
@@ -2959,13 +4183,38 @@ function setupOnlyExecutionError(effectId: string): EffectExecutionResult {
 
 export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [addPowerHandler.effectId, toCatalogEntry(addPowerHandler)],
+  [
+    addPowerPerPlayerWithStatusHandler.effectId,
+    toCatalogEntry(addPowerPerPlayerWithStatusHandler),
+  ],
+  [
+    addPowerIfPlayerHasStatusHandler.effectId,
+    toCatalogEntry(addPowerIfPlayerHasStatusHandler),
+  ],
+  [
+    addPowerPerControlledObjectHandler.effectId,
+    toCatalogEntry(addPowerPerControlledObjectHandler),
+  ],
   [gainCardHandler.effectId, toCatalogEntry(gainCardHandler)],
   [discardCardHandler.effectId, toCatalogEntry(discardCardHandler)],
   [destroyCardHandler.effectId, toCatalogEntry(destroyCardHandler)],
   [dealDamageHandler.effectId, toCatalogEntry(dealDamageHandler)],
   [healHandler.effectId, toCatalogEntry(healHandler)],
+  [
+    healEqualDamageDealtOnOwnTurnHandler.effectId,
+    toCatalogEntry(healEqualDamageDealtOnOwnTurnHandler),
+  ],
   [setLifeHandler.effectId, toCatalogEntry(setLifeHandler)],
+  [
+    exchangeLifeAndDinglerStatusHandler.effectId,
+    toCatalogEntry(exchangeLifeAndDinglerStatusHandler),
+  ],
+  [
+    attackDamageEqualToControlledCardCostHandler.effectId,
+    toCatalogEntry(attackDamageEqualToControlledCardCostHandler),
+  ],
   [gainStatusHandler.effectId, toCatalogEntry(gainStatusHandler)],
+  [attackGainStatusHandler.effectId, toCatalogEntry(attackGainStatusHandler)],
   [removeStatusHandler.effectId, toCatalogEntry(removeStatusHandler)],
   [toggleStatusHandler.effectId, toCatalogEntry(toggleStatusHandler)],
   [megaMayhemSetLifeHandler.effectId, toCatalogEntry(megaMayhemSetLifeHandler)],
@@ -2988,6 +4237,30 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [
     mayhemEachPlayerHandRedrawChoiceHandler.effectId,
     toCatalogEntry(mayhemEachPlayerHandRedrawChoiceHandler),
+  ],
+  [
+    mayhemEachPlayerReduceLifeToGainChipsHandler.effectId,
+    toCatalogEntry(mayhemEachPlayerReduceLifeToGainChipsHandler),
+  ],
+  [
+    increaseHandLimitAtMaxLifeHandler.effectId,
+    toCatalogEntry(increaseHandLimitAtMaxLifeHandler),
+  ],
+  [
+    mayhemEachPlayerBattleHighestHandCostHandler.effectId,
+    toCatalogEntry(mayhemEachPlayerBattleHighestHandCostHandler),
+  ],
+  [
+    mayhemEachPlayerVoteDinglerHandler.effectId,
+    toCatalogEntry(mayhemEachPlayerVoteDinglerHandler),
+  ],
+  [
+    mayhemEachDinglerRecoveryChoiceHandler.effectId,
+    toCatalogEntry(mayhemEachDinglerRecoveryChoiceHandler),
+  ],
+  [
+    mayhemLowestLifeDinglerMaxLifeHandler.effectId,
+    toCatalogEntry(mayhemLowestLifeDinglerMaxLifeHandler),
   ],
   [
     replaceStartingCardHandler.effectId,

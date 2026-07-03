@@ -83,6 +83,27 @@ export type DeadWizardTokenState =
       drawStack: TokenInstance[];
     };
 
+export interface RuntimeEffectChoice {
+  choiceId: string;
+  amount?: number;
+  direction?: "left" | "right";
+  cards?: CardInstance[];
+  players?: PlayerState[];
+}
+
+export interface RuntimeEffectChoiceRequest {
+  player: PlayerState;
+  effectId: string;
+  sourceType: "card" | "wizardProperty";
+  cardInstanceId: string;
+  definitionId: string;
+  choices: readonly RuntimeEffectChoice[];
+}
+
+export type RuntimeEffectChoiceStrategy = (
+  request: RuntimeEffectChoiceRequest
+) => RuntimeEffectChoice | undefined;
+
 export interface GameState {
   seed: number;
   rng: RandomSource;
@@ -90,6 +111,7 @@ export interface GameState {
   turn: {
     number: number;
     power: number;
+    controlledPowerBonus: number;
     activatedCardIds: string[];
     gainedCardDefinitionIds: string[];
   };
@@ -98,6 +120,7 @@ export interface GameState {
   cardDefinitions: ReadonlyMap<string, CardDefinition>;
   tokenDefinitions: ReadonlyMap<string, TokenDefinition>;
   eventLog: GameEvent[];
+  effectChoiceStrategy?: RuntimeEffectChoiceStrategy;
 }
 
 export interface GameEvent {
@@ -130,12 +153,15 @@ export interface GameEvent {
   destination?: string;
   targetCardInstanceIds?: string[];
   targetDefinitionIds?: string[];
+  participantPlayerIds?: PlayerId[];
+  winnerPlayerIds?: PlayerId[];
   sourceType?: string;
 }
 
 interface InitializeGameBaseOptions {
   seed: number;
   playerCount?: number;
+  effectChoiceStrategy?: RuntimeEffectChoiceStrategy;
 }
 
 export type InitializeGameOptions =
@@ -250,6 +276,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     turn: {
       number: 1,
       power: 0,
+      controlledPowerBonus: 0,
       activatedCardIds: [],
       gainedCardDefinitionIds: [],
     },
@@ -258,6 +285,9 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     cardDefinitions: dataPack.cardDefinitions,
     tokenDefinitions: dataPack.tokenDefinitions,
     eventLog: [],
+    ...(options.effectChoiceStrategy === undefined
+      ? {}
+      : { effectChoiceStrategy: options.effectChoiceStrategy }),
   };
 
   const marketFlowResult = runMarketFlow(state, { mode: "setup" });

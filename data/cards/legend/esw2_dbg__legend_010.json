@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_010",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_010.json",
+    "image": "assets/cards/legend/location/Легенда-Место. Парк Вурдалакционов.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_010.md"
+  },
+  "visible": {
+    "nameRu": "Парк Вурдалакционов",
+    "cost": 10,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Место",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "location"],
+    "textRu": "Постоянка: каждый раз, когда ты в свой ход наносишь врагу урон, накручивай столько жизней, сколько урона нанёс.\nПока у тебя максимум жизней, +2 к пределу руки.",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "location"],
+    "cost": 10,
+    "victoryPoints": 4,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "heal_equal_damage_dealt_on_own_turn",
+        "timing": "afterDamageDealt"
+      },
+      {
+        "effectId": "increase_hand_limit_at_max_life",
+        "timing": "endTurn",
+        "amount": 2
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

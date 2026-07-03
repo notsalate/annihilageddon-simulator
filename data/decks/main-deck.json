@@ -14,15 +14,67 @@
       "count": 2
     },
     {
+      "cardId": "esw2_dbg__main_016",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_020",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_027",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_030",
+      "count": 1
+    },
+    {
       "cardId": "esw2_dbg__main_035",
       "count": 1
     },
     {
+      "cardId": "esw2_dbg__main_040",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_046",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_056",
+      "count": 2
+    },
+    {
       "cardId": "esw2_dbg__main_038",
       "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_059",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_060",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_064",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_066",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_071",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_074",
+      "count": 1
     }
   ],
   "notes": [
-    "Current runtime main deck includes the simple-baseline Block D slice."
+    "Current runtime main deck includes the simple-baseline, controlled-object-conditions, mayhem-events, dingler-status, and life-total-effects Block D slices."
   ]
 }

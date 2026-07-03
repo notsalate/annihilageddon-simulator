@@ -1,4 +1,4 @@
-Status: Todo
+Status: Done
 Label: ready-for-agent
 Type: AFK
 
@@ -31,19 +31,19 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] Для каждой карты из списка прочитан canonical draft/source text.
-- [ ] Для каждой карты из списка добавлен current runtime card JSON, основанный на import draft/source text.
-- [ ] Все выбранные карты добавлены в соответствующие current compositions.
-- [ ] Каждая выбранная карта становится `fullRuntime` в generated matrix.
-- [ ] Полностью реализовано printed Mayhem/event-frame behavior каждой выбранной карты.
-- [ ] Focused tests покрывают порядок выбора, результат события и `focusedTestRefs` для каждой выбранной карты.
-- [ ] Не реализовывать карты вне списка этого issue.
-- [ ] Не менять cluster assignment и не переоткрывать Block C taxonomy.
-- [ ] Выполнен `npm run report:card-runtime-clusters -- --write`.
-- [ ] `npm run report:card-runtime-clusters` проходит.
-- [ ] `npm run typecheck` проходит.
-- [ ] `npm test` проходит.
-- [ ] `git diff --check` проходит.
+- [x] Для каждой карты из списка прочитан canonical draft/source text.
+- [x] Для каждой карты из списка добавлен current runtime card JSON, основанный на import draft/source text.
+- [x] Все выбранные карты добавлены в соответствующие current compositions.
+- [x] Каждая выбранная карта становится `fullRuntime` в generated matrix.
+- [x] Полностью реализовано printed Mayhem/event-frame behavior каждой выбранной карты.
+- [x] Focused tests покрывают порядок выбора, результат события и `focusedTestRefs` для каждой выбранной карты.
+- [x] Не реализовывать карты вне списка этого issue.
+- [x] Не менять cluster assignment и не переоткрывать Block C taxonomy.
+- [x] Выполнен `npm run report:card-runtime-clusters -- --write`.
+- [x] `npm run report:card-runtime-clusters` проходит.
+- [x] `npm run typecheck` проходит.
+- [x] `npm test` проходит.
+- [x] `git diff --check` проходит.
 
 ## Blocked by
 
@@ -53,3 +53,12 @@ None - can start immediately
 
 - Issue остаётся внутри `clusterId: "mayhem-events"`.
 - Не расширять scope до Mayhem cards, которые в Block C отнесены к другим кластерам.
+
+## Evidence
+
+- Runtime JSON добавлены только для `esw2_dbg__main_059`, `esw2_dbg__main_064`, `esw2_dbg__main_071`.
+- `esw2_dbg__main_064` реализует battle event: выбор участия в active-player order, подсчёт стоимости руки, добор победителей и сброс рук проигравших участников.
+- `esw2_dbg__main_071` реализует vote event: голосование каждого игрока, определение top-voted wizard(s), выдача Dingler.
+- `esw2_dbg__main_059` подключён к уже существующему full runtime Mayhem hand-redraw effect.
+- Matrix обновлена через `npm run report:card-runtime-clusters -- --write`; выбранные карты стали `fullRuntime`.
+- Проверки: focused Mayhem tests, `npm run report:card-runtime-clusters`, `npm run typecheck`, `npm test`, `git diff --check`.

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_002",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_002.json",
+    "image": "assets/cards/legend/creature/Легенда-Тварь. Венерина Маголовка.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_002.md"
+  },
+  "visible": {
+    "nameRu": "Венерина Маголовка",
+    "cost": 9,
+    "victoryPoints": 3,
+    "typeRu": "Легенда — Тварь",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "creature"],
+    "textRu": "+4 мощи\nАтака: можешь обменяться жизнями и/или статусом лошары с выбранным колдуном.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "creature"],
+    "cost": 9,
+    "victoryPoints": 3,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 4
+      },
+      {
+        "effectId": "exchange_life_and_dingler_status",
+        "timing": "onPlay",
+        "targetSelector": "chosenFoe",
+        "optional": true,
+        "allowLifeExchange": true,
+        "allowDinglerStatusExchange": true
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}
