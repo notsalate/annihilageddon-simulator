@@ -109,8 +109,7 @@ Pre-commit currently runs:
 
 ```powershell
 npx lint-staged
-npm run typecheck
-npm run test
+npm run check
 ```
 
 Do not invent scripts, tools, or repository structure that are not present.
