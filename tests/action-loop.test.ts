@@ -5219,6 +5219,244 @@ test("2Q can skip its optional life-for-chips choice when a custom chooser passe
   );
 });
 
+test("2N current runtime honors pass and participate branches for Mayhem battle", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = "player-2";
+  const [activePlayer, secondPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+
+  activePlayer.hand = createFixtureCardInstances(
+    "esw2_dbg__starter_001",
+    activePlayer.playerId,
+    1
+  );
+  secondPlayer.hand = createFixtureCardInstances(
+    "esw2_dbg__main_056",
+    secondPlayer.playerId,
+    1
+  );
+  thirdPlayer.hand = createFixtureCardInstances(
+    "esw2_dbg__starter_002",
+    thirdPlayer.playerId,
+    1
+  );
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (effectId !== "mayhem_each_player_battle_highest_hand_cost") {
+      return undefined;
+    }
+    if (player.playerId === secondPlayer.playerId) {
+      return choices.find((choice) => choice.choiceId === "pass");
+    }
+    return choices.find((choice) => choice.choiceId === "participate");
+  });
+
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_064");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(secondPlayer.hand.length, 1);
+  assert.equal(secondPlayer.discard.length, 0);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.playerId === secondPlayer.playerId &&
+        event.effectId === "mayhem_each_player_battle_highest_hand_cost" &&
+        event.choiceId === "pass" &&
+        event.choiceIds?.includes("participate") === true
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "mayhemBattleParticipationSelected" &&
+        event.playerId === activePlayer.playerId &&
+        event.effectId === "mayhem_each_player_battle_highest_hand_cost"
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "mayhemBattleParticipationSelected" &&
+        event.playerId === thirdPlayer.playerId &&
+        event.effectId === "mayhem_each_player_battle_highest_hand_cost"
+    )
+  );
+  assert.ok(
+    state.eventLog.some((event) => event.type === "mayhemBattleResolved")
+  );
+});
+
+test("2R current runtime supports non-first vote targets and Dingler ties", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 4 });
+  state.activePlayerId = "player-2";
+  const [activePlayer, secondPlayer, thirdPlayer, fourthPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  assert.ok(fourthPlayer);
+  for (const player of [
+    activePlayer,
+    secondPlayer,
+    thirdPlayer,
+    fourthPlayer,
+  ]) {
+    player.life.current = 20;
+  }
+
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (effectId !== "mayhem_each_player_vote_dingler") {
+      return undefined;
+    }
+    if (
+      player.playerId === activePlayer.playerId ||
+      player.playerId === secondPlayer.playerId
+    ) {
+      return choices.find(
+        (choice) => choice.choiceId === `vote-${secondPlayer.playerId}`
+      );
+    }
+    return choices.find(
+      (choice) => choice.choiceId === `vote-${thirdPlayer.playerId}`
+    );
+  });
+
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_071");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    secondPlayer.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+  assert.equal(
+    thirdPlayer.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+  assert.equal(
+    fourthPlayer.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.playerId === activePlayer.playerId &&
+        event.effectId === "mayhem_each_player_vote_dingler" &&
+        event.choiceId === `vote-${secondPlayer.playerId}` &&
+        event.choiceIds?.includes(`vote-${thirdPlayer.playerId}`) === true
+    )
+  );
+  assert.ok(
+    state.eventLog.some((event) => {
+      const eventRecord = event as unknown as Record<string, unknown>;
+      const winnerPlayerIds = eventRecord["winnerPlayerIds"];
+      return (
+        event.type === "mayhemVoteResolved" &&
+        Array.isArray(winnerPlayerIds) &&
+        winnerPlayerIds.length === 2 &&
+        winnerPlayerIds.includes(secondPlayer.playerId) &&
+        winnerPlayerIds.includes(thirdPlayer.playerId)
+      );
+    })
+  );
+});
+
+test("2P current runtime supports life payment, chip payment, and skip branches", () => {
+  const cases = [
+    {
+      selectedChoiceId: "pay_life",
+      life: 6,
+      chips: 1,
+      expectedLife: 1,
+      expectedChips: 1,
+      expectRemoved: true,
+    },
+    {
+      selectedChoiceId: "spend_chips",
+      life: 6,
+      chips: 1,
+      expectedLife: 6,
+      expectedChips: 0,
+      expectRemoved: true,
+    },
+    {
+      selectedChoiceId: "skip",
+      life: 6,
+      chips: 1,
+      expectedLife: 6,
+      expectedChips: 1,
+      expectRemoved: false,
+    },
+  ] as const;
+
+  for (const testCase of cases) {
+    const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+    state.activePlayerId = "player-2";
+    const [activePlayer, secondPlayer, thirdPlayer] =
+      getPlayersInActiveOrder(state);
+    assert.ok(activePlayer);
+    assert.ok(secondPlayer);
+    assert.ok(thirdPlayer);
+
+    activePlayer.life.current = testCase.life;
+    activePlayer.chips = testCase.chips;
+    secondPlayer.life.current = 20;
+    thirdPlayer.life.current = 20;
+    activePlayer.statuses.push(createDinglerStatus(activePlayer));
+
+    chooseEffectChoice(state, ({ effectId, player, choices }) => {
+      if (
+        effectId !==
+          "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status" ||
+        player.playerId !== activePlayer.playerId
+      ) {
+        return undefined;
+      }
+      return choices.find(
+        (choice) => choice.choiceId === testCase.selectedChoiceId
+      );
+    });
+
+    const mayhem = createCommonRuntimeCard("esw2_dbg__main_066");
+    state.common.market.splice(0, state.common.market.length);
+    state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+    const result = runMarketFlow(state, { mode: "turn" });
+
+    assert.equal(result.ok, true);
+    assert.equal(activePlayer.life.current, testCase.expectedLife);
+    assert.equal(activePlayer.chips, testCase.expectedChips);
+    assert.equal(
+      activePlayer.statuses.some((status) => status.statusId === "dingler"),
+      !testCase.expectRemoved
+    );
+    assert.ok(
+      state.eventLog.some(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.playerId === activePlayer.playerId &&
+          event.effectId ===
+            "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status" &&
+          event.choiceId === testCase.selectedChoiceId &&
+          event.choiceIds?.includes("pay_life") === true &&
+          event.choiceIds?.includes("spend_chips") === true &&
+          event.choiceIds?.includes("skip") === true
+      )
+    );
+  }
+});
+
 test("2O can use its discard-and-draw branch as the default reachable choice", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
   state.activePlayerId = "player-2";
