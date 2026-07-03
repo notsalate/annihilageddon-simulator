@@ -32,6 +32,8 @@ Draft JSON фиксирует то, что видно на карте, свой�
 
 Runtime JSON - единственный слой, где появляются engine effects, runtime schemas, playability flags, mapping status и другие решения о поведении в симуляторе.
 
+Для текущего workflow реализации runtime-карт этого документа недостаточно: порядок доведения конкретных карт до playable runtime, generated matrix и `fullRuntime` guardrails живут в `.scratch/krutagidon-card-runtime-clusters/` и проверяются командой `npm run report:card-runtime-clusters`.
+
 ## Целевые пути
 
 Целевой layout описан в `docs/runtime-layout.md`. Для нового импорта использовать эти пути:
@@ -67,6 +69,7 @@ data/packs/
 Draft JSON не должен содержать runtime-поля:
 
 - `engine`;
+- `effects`;
 - `runtimeSchema`;
 - `playableInV0`;
 - `mappingStatus`.
@@ -93,7 +96,7 @@ Draft-валидатор должен возвращать `errors` и `warnings
 - нет `draftKind`;
 - нет стабильного id;
 - нет видимого текста;
-- есть запрещенное runtime-поле: `engine`, `runtimeSchema`, `playableInV0` или `mappingStatus`;
+- есть запрещенное runtime-поле: `engine`, `effects`, `runtimeSchema`, `playableInV0` или `mappingStatus`;
 - значение не подходит схеме выбранного `draftKind`.
 
 `warning` означает, что draft можно читать дальше, но человеку стоит проверить сомнение:
@@ -109,13 +112,14 @@ Draft-валидатор должен возвращать `errors` и `warnings
 
 ## Import Completeness Report
 
-Команда `npm run report:import` должна считать полноту импорта по наличию файлов:
+Команда `npm run report:import` считает полноту импорта по наличию файлов:
 
 - source image;
 - source markdown;
 - draft JSON;
-- runtime JSON;
-- inclusion в pack/deck/stack/pool.
+- runtime JSON.
+
+Проверку inclusion в `pack` / `deck` / `stack` / `pool` и `fullRuntime` guardrails нужно делать отдельным workflow через `npm run report:card-runtime-clusters`. Не считать `report:import` источником истины для playable inclusion.
 
 `processed`, `processedMarker` и `status: processed` не являются canonical data markers и не должны использоваться как источник статуса.
 
@@ -251,6 +255,12 @@ Wizard property и dead wizard token остаются token definitions. Они 
 
 ## Runtime Mapping
 
+Для boundary source/draft/runtime использовать этот документ вместе с card runtime cluster workflow:
+
+- `.scratch/krutagidon-card-runtime-clusters/AGENTS.md`
+- `.scratch/krutagidon-card-runtime-clusters/card-runtime-cluster-matrix.md`
+- `npm run report:card-runtime-clusters`
+
 Runtime mapping начинается только после валидного draft JSON.
 
 На этом шаге человек или агент:
@@ -258,10 +268,18 @@ Runtime mapping начинается только после валидного 
 - переносит исполняемые данные в `data/cards/<source-group>/`, `data/tokens/dead-wizard/` или `data/tokens/wizard-property/`;
 - добавляет `runtimeSchema`;
 - добавляет `engine.effects` и typed handlers только для поддержанных механик;
-- явно отмечает неподдержанные механики, если объект еще не playable в v0;
 - не меняет source facts без причины.
 
 Runtime JSON должен быть самодостаточным для engine. Он не должен ссылаться на `data/import/**` как на исполняемый источник.
+
+Для текущего card runtime workflow:
+
+- runtime card JSON создается только когда карта доводится до `fullRuntime`;
+- `missingRuntime` — нормальный backlog state;
+- partial/unsupported runtime card JSON не должно использоваться как промежуточное покрытие для карт, если конкретное issue явно не разрешает это;
+- non-full runtime card JSON должно блокироваться guardrails, а не накапливаться как обычный промежуточный слой.
+
+Ссылки `source.draft`, `source.text` и `source.image` в runtime JSON допустимы только как metadata/traceability для ревью и сверки. Движок не должен читать эти ссылки во время партии и не должен выводить из них поведение карты.
 
 После runtime mapping объект должен быть включен в нужный `deck`, `stack`, `pool` и `pack`. Шаблоны лежат в:
 

@@ -4,45 +4,45 @@ Source: `Pravila_Krutagidon_2.pdf`, rules version 1.0. Page references are PDF p
 
 This document is for engine implementation. It intentionally omits tutorial, flavor, marketing text, examples that do not add rules, and card-specific behavior that must come from card data or token data.
 
-Current status: full global mechanics canon where the Russian rulebook gives source rules. v0 remains a smaller implementation slice in `docs/simulation-scope.md`, but this file describes the executable global systems future engine and card-mapping agents should target. Card-specific effects and individual token faces are recorded as data dependencies instead of inferred behavior.
+Current status: full global mechanics canon where the Russian rulebook gives source rules. Earlier runnable slices covered a smaller subset, but this file describes the executable global systems future engine and card-mapping agents should target. Card-specific effects and individual token faces are recorded as data dependencies instead of inferred behavior.
 
 Runtime representation: the simulator is headless and bot-driven. During a game, the engine reads only mapped card/token/deck data and bot choices. It must not inspect OCR output, source layout, or natural-language card text. Source notation and wording are import evidence only; runtime behavior must already be represented as explicit kinds, types, effects, target selectors, attack instances, defense branches, activation effects, and market chip markers.
 
 ## Scope Markers
 
-| Marker | Meaning |
-| --- | --- |
-| `executable` | Global rule is specified enough for engine implementation. |
-| `data-required` | Global algorithm is known, but exact branches/effects require imported card, token, deck, or component data. |
-| `project-decision` | Rulebook omits a final detail; project scope provides the implementation decision. |
-| `v0-slice` | Required for the first runnable simulator described in `docs/simulation-scope.md`. |
+| Marker             | Meaning                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `executable`       | Global rule is specified enough for engine implementation.                                                   |
+| `data-required`    | Global algorithm is known, but exact branches/effects require imported card, token, deck, or component data. |
+| `project-decision` | Rulebook omits a final detail; project scope provides the implementation decision.                           |
+| `v0-slice`         | Required for the first runnable simulator slice.                                                             |
 
 ## Game Entities
 
-| Entity | Canon rule | Status | Source |
-| --- | --- | --- | --- |
-| Колдун | Each participant is a player wizard. Turn order proceeds clockwise from a random first player. | `executable` | p. 8 |
-| Life / lives | By default each player starts at `currentLife = 20` and `maxLife = 25`. The 25 value is only the healing/effect cap, not current life. Setup/token data may change starting life or max life. Dingler max is 15. | `executable` | pp. 4, 14, 16 |
-| Power / мощь | Turn-local currency produced by cards. Power can be spent across multiple purchases and is not lost until cleanup. Unspent power is lost during end-of-turn cleanup. | `executable` | pp. 8-9, 20 |
-| Чипсины | Spendable tokens with no VP value. Chips reduce the power needed to buy cards of `карта легенды` at 1 chip = 1 power. They can also be spent only by mapped effects that explicitly spend chips. Spent chips move back to supply. | `executable` | p. 15 |
-| Жетоны дохлых колдунов / ЖДК | Shuffled token stack with hidden/random draw order. Setup uses 4 tokens per player. A dying player gains the next/random token, controls it, reveals it for effects/logging, then resurrects. Each token has at least -3 VP unless token data modifies scoring. | `executable`; faces are `data-required` | pp. 6, 14, 18 |
-| Главный приз | The player who kills a foe gains control of the trophy. At the end of each controller turn, the trophy grants 1 chip. No trophy is awarded for self-kill, беспредел kill, or kill by an unowned market card. | `executable` | p. 14 |
-| Лошара | Status represented by a token. A player can have at most one token, max life becomes 15, and the player has -5 VP at game end unless the status is removed. | `executable` | p. 14 |
+| Entity                       | Canon rule                                                                                                                                                                                                                                                                                               | Status                                  | Source        |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------- |
+| Колдун                       | Each participant is a player wizard. Turn order proceeds clockwise from a random first player.                                                                                                                                                                                                           | `executable`                            | p. 8          |
+| Life / lives                 | By default each player starts at `currentLife = 20` and `maxLife = 25`. The 25 value is only the healing/effect cap, not current life. Setup/token data may change starting life or max life. Dingler max is 15.                                                                                         | `executable`                            | pp. 4, 14, 16 |
+| Power / мощь                 | Turn-local currency produced by cards. Power can be spent across multiple purchases and is not lost until cleanup. Unspent power is lost during end-of-turn cleanup.                                                                                                                                     | `executable`                            | pp. 8-9, 20   |
+| Чипсины                      | Spendable tokens with no VP value. Chips reduce the power needed to buy cards of `карта легенды` at 1 chip = 1 power. They can also be spent only by mapped effects that explicitly spend chips. Spent chips move back to supply.                                                                        | `executable`                            | p. 15         |
+| Жетоны дохлых колдунов / ЖДК | Shuffled token stack with hidden/random draw order. Setup uses 4 tokens per player. A dying player gains the next token from the already shuffled hidden DWT draw stack, controls it, reveals it for effects/logging, then resurrects. Each token has at least -3 VP unless token data modifies scoring. | `executable`; faces are `data-required` | pp. 6, 14, 18 |
+| Главный приз                 | The player-controlled source that kills a foe gains control of the trophy. At the end of each controller turn, the trophy grants 1 chip. Self-kill, DWT kill, and unresolved market Mayhem/Mega Mayhem kill do not award the trophy.                                                                     | `executable`                            | p. 14         |
+| Лошара                       | Status represented by a token. A player can have at most one token, max life becomes 15, and the player has -5 VP at game end unless the status is removed.                                                                                                                                              | `executable`                            | p. 14         |
 
 ## Card Kinds and Decks
 
-| Card kind / pile | Canon rule | Status | Source |
-| --- | --- | --- | --- |
-| Starter deck | Each player starts with 6 `Знак`, 1 `Сырная палочка`, and 3 `Пшик` cards. Each player's starter cards are separate card instances. | `executable`, `v0-slice` | p. 4 |
-| Основная колода | 114 cards: карты волшебников, тварей, заклинаний, сокровищ, мест и беспределов. It must not contain карты легенд or мегабеспределы. Exact card IDs/counts come from deck data. | `executable`; composition is `data-required` | p. 6 |
-| Колода легенд | 33 карты легенд plus 7 мегабеспределов in the Russian rulebook. Each карта легенды may also have another Russian type: волшебник, заклинание, место, сокровище, or тварь. Exact card IDs/counts come from deck data. | `executable`; composition is `data-required` | pp. 6, 11 |
-| Барахолка | Main market contains 5 public non-беспредел cards. Market Flow restores it from main deck. Беспределы are resolved and destroyed instead of staying in the market. | `executable` | pp. 6, 8, 13, 20 |
-| Барахолка легенд | Legend market contains 3 public non-мегабеспредел cards. Market Flow restores it from Legend deck. Мегабеспределы are resolved and destroyed instead of staying in the market. | `executable` | pp. 6, 8, 13, 20 |
-| Шальная магия | Separate stack of 15 cards, always buyable on a player's turn while available. Cost is 3 power. Its engine `cardKind` is `wildMagic`, but it has no main card type such as место/сокровище/тварь/заклинание/волшебник/фамильяр. On play, bot/action choice selects +2 power or playing the top card of a foe deck. Destroyed cards move to this stack. | `executable` | pp. 6, 12 |
-| Вялая палочка | Separate stack of 15 cards. Never bought; only gained by effects. Its engine `cardKind` is `limpWand`, but it has no main card type such as место/сокровище/тварь/заклинание/волшебник/фамильяр. No play effect. Each owned card from this stack is -1 VP at game end. Destroyed cards move to this stack. | `executable` | pp. 6, 13 |
-| Фамильяр | Each player has a personal unbought фамильяр slot. Its engine `cardKind` and card type is `familiar`. Only that player may buy it, for 6 power. While unbought, its effects and VP are inactive. Once bought, it moves to discard and behaves as a normal owned card. | `executable`; effects are `data-required` | pp. 4, 10 |
-| Жетон колдунского свойства | Setup grants each player a selected visible ability token. It grants the player a strategic effect from token data. | setup is `executable`; faces are `data-required` | pp. 4, 18 |
-| Стопка уничтоженных карт | Destroyed cards move to a public out-of-play destroyed zone. Destroyed беспределы/мегабеспределы must preserve order because mapped effects can refer to them. Шальная магия and вялая палочка move to their stacks instead of staying destroyed. | `executable` | pp. 12-13 |
+| Card kind / pile           | Canon rule                                                                                                                                                                                                                                                                                                                                             | Status                                           | Source           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ | ---------------- |
+| Starter deck               | Each player starts with 6 `Знак`, 1 `Сырная палочка`, and 3 `Пшик` cards. Each player's starter cards are separate card instances.                                                                                                                                                                                                                     | `executable`, `v0-slice`                         | p. 4             |
+| Основная колода            | 114 cards: карты волшебников, тварей, заклинаний, сокровищ, мест и беспределов. It must not contain карты легенд or мегабеспределы. Exact card IDs/counts come from deck data.                                                                                                                                                                         | `executable`; composition is `data-required`     | p. 6             |
+| Колода легенд              | 33 карты легенд plus 7 мегабеспределов in the Russian rulebook. Each карта легенды may also have another Russian type: волшебник, заклинание, место, сокровище, or тварь. Exact card IDs/counts come from deck data.                                                                                                                                   | `executable`; composition is `data-required`     | pp. 6, 11        |
+| Барахолка                  | Main market contains 5 public non-беспредел cards. Market Flow restores it from main deck. Беспределы are resolved and destroyed instead of staying in the market.                                                                                                                                                                                     | `executable`                                     | pp. 6, 8, 13, 20 |
+| Барахолка легенд           | Legend market contains 3 public non-мегабеспредел cards. Market Flow restores it from Legend deck. Мегабеспределы are resolved and destroyed instead of staying in the market.                                                                                                                                                                         | `executable`                                     | pp. 6, 8, 13, 20 |
+| Шальная магия              | Separate stack of 15 cards, always buyable on a player's turn while available. Cost is 3 power. Its engine `cardKind` is `wildMagic`, but it has no main card type such as место/сокровище/тварь/заклинание/волшебник/фамильяр. On play, bot/action choice selects +2 power or playing the top card of a foe deck. Destroyed cards move to this stack. | `executable`                                     | pp. 6, 12        |
+| Вялая палочка              | Separate stack of 15 cards. Never bought; only gained by effects. Its engine `cardKind` is `limpWand`, but it has no main card type such as место/сокровище/тварь/заклинание/волшебник/фамильяр. No play effect. Each owned card from this stack is -1 VP at game end. Destroyed cards move to this stack.                                             | `executable`                                     | pp. 6, 13        |
+| Фамильяр                   | Each player has a personal unbought фамильяр slot. Its engine `cardKind` and card type is `familiar`. Only that player may buy it, for 6 power. While unbought, its effects and VP are inactive. Once bought, it moves to discard and behaves as a normal owned card.                                                                                  | `executable`; effects are `data-required`        | pp. 4, 10        |
+| Жетон колдунского свойства | Setup grants each player a selected visible ability token. It grants the player a strategic effect from token data.                                                                                                                                                                                                                                    | setup is `executable`; faces are `data-required` | pp. 4, 18        |
+| Стопка уничтоженных карт   | Destroyed cards move to a public out-of-play destroyed zone. Destroyed беспределы/мегабеспределы must preserve order because mapped effects can refer to them. Шальная магия and вялая палочка move to their stacks instead of staying destroyed.                                                                                                      | `executable`                                     | pp. 12-13        |
 
 ## Setup Algorithm
 
@@ -50,12 +50,12 @@ Source: pp. 4, 6, 8.
 
 1. Select each player's жетон колдунского свойства:
    - Sample 2 random candidate tokens.
-   - Bot/setup config selects 1 candidate.
+   - Choose 1 candidate; baseline deterministic fallback uses the first legal candidate in stable engine order.
    - Selected token enters the player's setup token zone and is public.
    - Unselected token moves to unused/out-of-game setup components.
 2. Select each player's фамильяр:
    - Sample 2 random candidate фамильяр cards.
-   - Bot/setup config selects 1 candidate.
+   - Choose 1 candidate; baseline deterministic fallback uses the first legal candidate in stable engine order.
    - Selected фамильяр enters that player's unbought familiar slot.
    - Unselected фамильяр moves to unused/out-of-game setup components.
    - If familiar data references a specific wizard identity/name, store that identifier in player state; the simulator does not need a separate wizard-board object.
@@ -73,22 +73,36 @@ Source: pp. 4, 6, 8.
    - If it is мегабеспредел during initial setup, move it to the destroyed мегабеспредел pile and reveal another card.
    - Otherwise move it to the барахолка легенд and apply chip marker movement if mapped card data has the market chip marker.
 7. Initialize `wildMagicStack` and `limpWandStack`. They are not part of either market.
-8. Shuffle ЖДК, select `4 * playerCount` as the hidden/random DWT draw stack, and move the rest to unused/out-of-game setup components.
+8. Shuffle ЖДК once, take `4 * playerCount` as the hidden DWT draw stack, and move the rest to unused/out-of-game setup components.
 9. Select first player using the seeded RNG.
 10. Each player draws 5 cards.
 
+## Deterministic Choice and Ordering Policy
+
+These are project decisions for places where the rulebook requires a legal choice but does not define a smart strategy:
+
+1. Baseline deterministic fallback:
+   - Use the first legal option in stable engine order.
+   - This applies to setup picks, target ties, and similar required choices unless a test or strategy explicitly injects another chooser.
+2. Best-move or exhaustive branching:
+   - This is a separate strategy/analysis mode, not the baseline engine rule.
+   - It may evaluate multiple legal lines, but it must not redefine the canon of how effects resolve.
+3. Same-window ordering owned by one player:
+   - If the rulebook does not specify an order, baseline resolution uses the first legal ordering in stable engine order.
+   - Analysis or strategy layers may explore alternative legal orderings separately.
+
 ## Player Zones and Ownership
 
-| Zone | Canon rule | Status | Source |
-| --- | --- | --- | --- |
-| `deck` | Facedown personal deck. Shuffle discard into deck only when a card must be drawn, played, discarded, or revealed from an empty deck. | `executable` | pp. 11, 20 |
-| `hand` | Cards available for play, discard, defense, and reveal-by-effect. End of turn discards all remaining hand cards. | `executable` | pp. 8-11 |
-| `discard` | Public pile for purchased, gained, discarded, and most played cards unless mapped effect/component data changes the destination. | `executable` | pp. 8-9, 11-12 |
-| `playedThisTurn` | Non-Ongoing cards being played or already played and controlled by this player during the current turn. It can temporarily contain cards owned by another player if an effect plays them under this player's control. Default cleanup destination is the card owner's discard unless play context or mapped data changes it. | `executable` | pp. 9, 11-12 |
-| `permanents` | Ongoing objects in the player's persistent controlled zone, including cards or non-card components whose rule makes them Ongoing. They remain in play until an effect moves/removes them. | `executable` | pp. 11, 14 |
-| `deadWizardTokens` | Controlled DWTs in `deadWizardTokens`. Count for scoring and may have immediate, Ongoing, end-game, or other token-data effects. | `executable`; faces are `data-required` | pp. 14, 18 |
-| `chips` | Player's chip count. Bounded by the modeled token supply if supply is finite. | `executable` | p. 15 |
-| `dinglerStatus` | Boolean/status token. Max life and VP penalty are derived from it. | `executable` | p. 14 |
+| Zone               | Canon rule                                                                                                                                                                                                                                                                                                                   | Status                                  | Source         |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | -------------- |
+| `deck`             | Facedown personal deck. Shuffle discard into deck only when a card must be drawn, played, discarded, or revealed from an empty deck.                                                                                                                                                                                         | `executable`                            | pp. 11, 20     |
+| `hand`             | Cards available for play, discard, defense, and reveal-by-effect. End of turn discards all remaining hand cards.                                                                                                                                                                                                             | `executable`                            | pp. 8-11       |
+| `discard`          | Public pile for purchased, gained, discarded, and most played cards unless mapped effect/component data changes the destination.                                                                                                                                                                                             | `executable`                            | pp. 8-9, 11-12 |
+| `playedThisTurn`   | Non-Ongoing cards being played or already played and controlled by this player during the current turn. It can temporarily contain cards owned by another player if an effect plays them under this player's control. Default cleanup destination is the card owner's discard unless play context or mapped data changes it. | `executable`                            | pp. 9, 11-12   |
+| `permanents`       | Ongoing objects in the player's persistent controlled zone, including cards or non-card components whose rule makes them Ongoing. They remain in play until an effect moves/removes them.                                                                                                                                    | `executable`                            | pp. 11, 14     |
+| `deadWizardTokens` | Controlled DWTs in `deadWizardTokens`. Count for scoring and may have immediate, Ongoing, end-game, or other token-data effects.                                                                                                                                                                                             | `executable`; faces are `data-required` | pp. 14, 18     |
+| `chips`            | Player's chip count. Bounded by the modeled token supply if supply is finite.                                                                                                                                                                                                                                                | `executable`                            | p. 15          |
+| `dinglerStatus`    | Boolean/status token. Max life and VP penalty are derived from it.                                                                                                                                                                                                                                                           | `executable`                            | p. 14          |
 
 Ownership/control rules:
 
@@ -118,12 +132,12 @@ Source: pp. 8-9, 20.
    - play a card from hand;
    - buy a card;
    - use an unused activation ability on a controlled card.
-   Effects may also play cards from sources other than hand as part of resolving an action or card effect.
+     Effects may also play cards from sources other than hand as part of resolving an action or card effect.
 7. Active player declares end of turn. No more voluntary main-loop actions may be taken.
 8. Discard all remaining hand cards to the player's discard.
 9. Resolve effects labeled "at the end of turn":
    - Include controlled Ongoing cards/tokens such as the trophy.
-   - Use deterministic ordering chosen by engine policy when multiple same-window effects are controlled by the same player and the rulebook does not specify an order.
+   - If the rulebook does not specify an order for multiple same-window effects controlled by the same player, use the baseline deterministic fallback from [Deterministic Choice and Ordering Policy](#deterministic-choice-and-ordering-policy).
 10. Move played non-Ongoing cards from `playedThisTurn` to their cleanup destinations. Default destination is the owner's discard. Ongoing cards remain in play. Unspent power is lost.
 11. Draw 5 cards, modified by effects if card/token data changes hand refill.
 12. Pass turn clockwise to the next player, who starts again at step 1.
@@ -154,13 +168,13 @@ Use this algorithm for both setup market fill and turn-start Market Flow. During
 
 ## Legal Actions in the Main Action Loop
 
-| Action | Preconditions | Effects | Source |
-| --- | --- | --- | --- |
-| Play card from hand | Active player has the card in hand. | Move non-Ongoing cards to `playedThisTurn` or Ongoing cards to `permanents`. Set current controller to the active player. Apply mapped immediate effects, including the activation `onPlay` effect if present. Mapped activation effects can be activated later while the player controls the card. | pp. 8, 11, 16 |
-| Play card by effect | Resolving effect explicitly plays a card from a specified source, such as a foe deck. | Use the same play procedure, but source, owner, controller, and cleanup destination come from effect/card data. | pp. 11-12, 16 |
-| Buy market card | Active player can pay total cost using power and allowed chips/discounts. Card is available in main market, барахолка легенд, шальная магия stack, or personal фамильяр slot. | Pay cost, move gained card to active player's discard unless mapped effect data changes the destination, and immediately gain any chips on the market card. Market Flow waits until the next turn-start Market Flow step. | pp. 8, 10, 12, 15 |
-| Use activation | Active player controls a card with mapped activation effect, has not used that card's activation this turn, and can pay any costs. | Resolve the mapped activation effect once for this turn. Unused activation rights do not carry to later turns. | pp. 8, 16 |
-| End turn | Always legal for active player. | Enter end-turn sequence. | p. 9 |
+| Action              | Preconditions                                                                                                                                                                 | Effects                                                                                                                                                                                                                                                                                             | Source            |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| Play card from hand | Active player has the card in hand.                                                                                                                                           | Move non-Ongoing cards to `playedThisTurn` or Ongoing cards to `permanents`. Set current controller to the active player. Apply mapped immediate effects, including the activation `onPlay` effect if present. Mapped activation effects can be activated later while the player controls the card. | pp. 8, 11, 16     |
+| Play card by effect | Resolving effect explicitly plays a card from a specified source, such as a foe deck.                                                                                         | Use the same play procedure, but source, owner, controller, and cleanup destination come from effect/card data.                                                                                                                                                                                     | pp. 11-12, 16     |
+| Buy market card     | Active player can pay total cost using power and allowed chips/discounts. Card is available in main market, барахолка легенд, шальная магия stack, or personal фамильяр slot. | Pay cost, move gained card to active player's discard unless mapped effect data changes the destination, and immediately gain any chips on the market card. Market Flow waits until the next turn-start Market Flow step.                                                                           | pp. 8, 10, 12, 15 |
+| Use activation      | Active player controls a card with mapped activation effect, has not used that card's activation this turn, and can pay any costs.                                            | Resolve the mapped activation effect once for this turn. Unused activation rights do not carry to later turns.                                                                                                                                                                                      | pp. 8, 16         |
+| End turn            | Always legal for active player.                                                                                                                                               | Enter end-turn sequence.                                                                                                                                                                                                                                                                            | p. 9              |
 
 ## Draw, Reveal, Play From Deck, and Shuffle
 
@@ -192,7 +206,7 @@ Play context:
    - For cards with mapped activation, resolve the `onPlay` / before-activation part now.
    - The mapped activation effect is not resolved on play; it is available while the card remains controlled.
 3. If playing the card triggers other controlled effects, resolve the played card completely first.
-4. Resolve secondary triggered effects after the played card is complete. Engine policy must define deterministic ordering for multiple simultaneous secondary triggers controlled by the same player unless card/token data specifies order.
+4. Resolve secondary triggered effects after the played card is complete. If multiple simultaneous secondary triggers are controlled by the same player and card/token data does not specify order, use the baseline deterministic fallback from [Deterministic Choice and Ordering Policy](#deterministic-choice-and-ordering-policy).
 5. At end-of-turn cleanup, move non-Ongoing cards in `playedThisTurn` to their play-context destination unless an effect moved them earlier. Default destination is the owner's discard.
 
 Dual attack/defense cards:
@@ -208,17 +222,17 @@ Source: p. 11.
 
 Source: pp. 8, 10, 12-13, 15.
 
-| Rule | Status |
-| --- | --- |
-| A player may buy any number of available cards in a turn as long as total paid cost does not exceed available power plus allowed alternative payments. | `executable` |
-| Buying шальная магия is legal while its stack is non-empty and the active player can pay 3 power. | `executable` |
-| Buying a personal фамильяр is legal only for its owner, costs 6 power, and moves it into that player's discard. | `executable` |
-| Bought or gained cards go to the gaining player's discard unless mapped effect data changes the destination. | `executable` |
-| Gaining by effect does not require paying cost unless mapped effect data requires a cost. | `executable` |
-| If an effect asks to gain a card by name, type, or cost and no eligible card exists, no card is gained. | `executable` |
-| If an effect gives a вялая палочка and the вялая палочка stack is empty, that part of the effect does nothing; all other effect parts still resolve. | `executable` |
+| Rule                                                                                                                                                                                                                                                           | Status       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| A player may buy any number of available cards in a turn as long as total paid cost does not exceed available power plus allowed alternative payments.                                                                                                         | `executable` |
+| Buying шальная магия is legal while its stack is non-empty and the active player can pay 3 power.                                                                                                                                                              | `executable` |
+| Buying a personal фамильяр is legal only for its owner, costs 6 power, and moves it into that player's discard.                                                                                                                                                | `executable` |
+| Bought or gained cards go to the gaining player's discard unless mapped effect data changes the destination.                                                                                                                                                   | `executable` |
+| Gaining by effect does not require paying cost unless mapped effect data requires a cost.                                                                                                                                                                      | `executable` |
+| If an effect asks to gain a card by name, type, or cost and no eligible card exists, no card is gained.                                                                                                                                                        | `executable` |
+| If an effect gives a вялая палочка and the вялая палочка stack is empty, that part of the effect does nothing; all other effect parts still resolve.                                                                                                           | `executable` |
 | Беспредел/мегабеспредел cards cannot be bought or gained into a player's personal deck. If a gain effect selects or reveals one, move that event card to the matching destroyed event pile without resolving it, and do not gain or reveal a replacement card. | `executable` |
-| When a player gains a market card that has chips on it, the player immediately gains those chips too. | `executable` |
+| When a player gains a market card that has chips on it, the player immediately gains those chips too.                                                                                                                                                          | `executable` |
 
 ## Destroying Cards
 
@@ -267,9 +281,9 @@ Terminology:
 1. Each affected target may use at most 1 defense card/effect from hand for that attack instance, even if the target is also the attacker.
 2. Defense protects only the defending player, not other targets.
 3. For a normal attack by a player:
-   - If the attack has independent effects per target, a target that declines/cannot defend is affected immediately when their defense decision is reached.
-   - If the attack requires interaction among multiple players, collect all defense decisions before resolving the attack.
-   - Engine can always collect all defense decisions before resolution; this is compatible and easier to log.
+   - Collect all defense decisions from affected targets before resolving attack results.
+   - Then resolve the attack target by target in the normal resolution order, skipping targets that avoided it.
+   - Earlier resolved targets can still change later targets through death, modifiers, trophy movement, or other state changes before those later targets resolve.
 4. For a беспредел/мегабеспредел attack:
    - Active player decides first.
    - Continue defense decisions clockwise.
@@ -408,7 +422,7 @@ Death algorithm:
 
 1. When a player's life drops below 1, they die immediately.
 2. Excess damage has no extra effect.
-3. If a DWT is available, draw/gain the next/random DWT from the hidden DWT draw stack.
+3. If a DWT is available, gain the next token from the already shuffled hidden DWT draw stack.
 4. If no DWT is available during death resolution, no DWT is gained; keep the DWT exhaustion state for the next start-of-turn check.
 5. If a DWT was gained, move it to that player's `deadWizardTokens`, mark it public, and mark it controlled by that player.
 6. Set player life to 20 unless DWT data changes the resurrection life value.
@@ -421,14 +435,23 @@ Death algorithm:
 
 Trophy:
 
-- When a player causes a foe to die, that player gains control of the trophy.
+- When a player-controlled source causes a foe to die, that player gains control of the trophy.
 - Trophy is an Ongoing controlled object.
 - At the end of each turn of its controller, the controller gains 1 chip.
 - No trophy is awarded when a player kills themselves.
-- No trophy is awarded for a death caused by a DWT, a normal беспредел/мегабеспредел, or another source not caused by a player.
+- No trophy is awarded for a death caused by a DWT, a normal market-triggered беспредел/мегабеспредел, or another source not caused by a player.
 - A defense branch that deals non-attack damage to the attacker awards the trophy to the defending player if that damage kills the attacker, because the defending player caused the death.
-- If a player uses a card effect to play a беспредел/мегабеспредел, that player is the source and can gain the trophy for a kill.
+- If a player uses a card effect to play a беспредел/мегабеспредел, that player is the player-controlled source and can gain the trophy for a kill.
 - Some mapped effects can count a target as having died even without DWT gain; trophy can still be awarded if mapped effect data says so.
+
+Cause of death for trophy credit:
+
+- Death from a player's card, activated ability, Ongoing effect, or other player-controlled effect gives the trophy to that player.
+- Self-kill never moves the trophy.
+- Death from a DWT never moves the trophy.
+- Death from a normal market-triggered беспредел/мегабеспредел never moves the trophy because there is no player-controlled source.
+- Death from defense belongs to the defending player if the defense branch caused the lethal damage/effect.
+- Death from a player-triggered беспредел/мегабеспредел belongs to the player who triggered or played that event effect.
 
 Dingler:
 
@@ -449,15 +472,15 @@ Source: p. 16.
 
 ## End Conditions and Scoring
 
-Source: pp. 9, 13-14, 20; tie fallback from `docs/simulation-scope.md`.
+Source: pp. 9, 13-14, 20, plus project decision for the final unresolved tie.
 
 The game ends during start-of-turn checks, before the active player resolves start-of-turn effects or main-loop actions, if any of these conditions is true:
 
-| End condition | Status |
-| --- | --- |
+| End condition                                                                                       | Status       |
+| --------------------------------------------------------------------------------------------------- | ------------ |
 | Legend deck cannot provide enough non-event cards to restore Legend market to 3 during Market Flow. | `executable` |
-| Main deck cannot provide enough non-event cards to restore main market to 5 during Market Flow. | `executable` |
-| DWT stack is empty. | `executable` |
+| Main deck cannot provide enough non-event cards to restore main market to 5 during Market Flow.     | `executable` |
+| DWT stack is empty.                                                                                 | `executable` |
 
 Before scoring:
 
@@ -468,48 +491,48 @@ Before scoring:
 
 Scoring order:
 
-| Order | Rule | Source |
-| --- | --- | --- |
-| 1 | Highest total VP wins. | p. 9 |
-| 2 | If tied, tied player with more owned cards of `карта легенды` wins. | p. 9 |
-| 3 | If still tied, tied player with fewer ЖДК wins. | p. 9 |
-| 4 | If still tied, treat as a true tie. | `docs/simulation-scope.md`; PDF does not state an additional breaker |
+| Order | Rule                                                                | Source                                                     |
+| ----- | ------------------------------------------------------------------- | ---------------------------------------------------------- |
+| 1     | Highest total VP wins.                                              | p. 9                                                       |
+| 2     | If tied, tied player with more owned cards of `карта легенды` wins. | p. 9                                                       |
+| 3     | If still tied, tied player with fewer ЖДК wins.                     | p. 9                                                       |
+| 4     | If still tied, treat as a true tie.                                 | project decision; PDF does not state an additional breaker |
 
 Known global score modifiers:
 
-| Modifier | VP | Status | Source |
-| --- | --- | --- | --- |
+| Modifier         | VP                                        | Status                                  | Source     |
+| ---------------- | ----------------------------------------- | --------------------------------------- | ---------- |
 | ЖДК base penalty | -3 VP each, plus token-specific modifiers | `executable`; faces are `data-required` | pp. 14, 18 |
-| Вялая палочка | -1 VP each | `executable` | p. 13 |
-| Dingler status | -5 VP if still Dingler at game end | `executable` | p. 14 |
+| Вялая палочка    | -1 VP each                                | `executable`                            | p. 13      |
+| Dingler status   | -5 VP if still Dingler at game end        | `executable`                            | p. 14      |
 
 ## Machine-Oriented Mechanics Table
 
-| Mechanic id | Russian term | Engine meaning | Status | Source |
-| --- | --- | --- | --- | --- |
-| `power` | мощь | Turn-local buy resource; can accumulate across play/buy actions during the same turn; lost at cleanup. | `executable` | pp. 8-9 |
-| `victory_points` | победные очки / ПО | Numeric end-game score on cards and modifiers. | `executable` | pp. 5, 9 |
-| `legend_count` | количество карт легенд | Tie-breaker count of owned cards with type `карта легенды` for tied players. | `executable` | p. 9 |
-| `dead_wizard_token` | жетон дохлого колдуна / ЖДК | Death token, controlled by player, base -3 VP, may have immediate/end/Ongoing effects. | `executable`; faces `data-required` | pp. 14, 18 |
-| `ongoing` | Постоянка | Card/object attribute: when played or created in play, it uses the `permanents` zone and stays under control until removed; it is not discarded during normal cleanup. | `executable` | pp. 11, 14 |
-| `activate` | активация | Mapped activation: the before-activation part resolves on play; the activation effect can be used once per turn while the card is controlled. | `executable` | pp. 8, 16 |
-| `attack` | атака | Attack instance that affected players may avoid with defense. One card may define several attack instances through card mapping. | `executable` | pp. 10-11 |
-| `defense` | защита | Hand card/effect that avoids one attack instance for the defending player only. Mapped defense branch data controls whether the same card can defend later attacks. | `executable` | pp. 10-11 |
-| `redirect_attack` | перенаправить атаку | Defense effect can redirect attack to attacker even if attacker was not a legal original target. | `data-required` | p. 17 |
-| `destroy` | уничтожить | Move card out of game to destroyed area; шальная магия and вялая палочка move to their stacks. | `executable` | pp. 12-13 |
-| `gain` | получить карту | Take a specified/eligible card without paying and move it to discard unless mapped effect data changes the destination. | `executable` | p. 12 |
-| `discard` | сбросить карту | Default source is hand unless another source is specified; deck-discard also counts as discard. | `executable` | p. 11 |
-| `reveal_from_deck` | раскрыть карту из колоды | If deck empty, shuffle discard first; card-specific effect decides destination. | `executable`; destination may be `data-required` | pp. 11, 20 |
-| `wild_magic` | шальная магия | Buyable stack card kind, cost 3, no main card type, choice on play between +2 power or playing top card of foe deck. | `executable` | p. 12 |
-| `limp_wand` | вялая палочка | Stack-gained junk card kind, no main card type, no effect, -1 VP. | `executable` | p. 13 |
-| `mayhem` | беспредел | Event card from main deck; resolves during Market Flow, then is destroyed and Market Flow continues. | `executable`; effect `data-required` | p. 13 |
-| `mega_mayhem` | мегабеспредел | Event card from Legend deck; resolves during Market Flow, then is destroyed and Market Flow continues. | `executable`; effect `data-required` | p. 13 |
-| `chip` | чипсина | Spendable token; reduces power cost 1:1 when buying cards of `карта легенды`, and can be spent by effects that explicitly say to spend chips. | `executable` | p. 15 |
-| `market_chip_marker` | символ чипсины | When a marked card enters market, move 1 chip from supply onto every marked market card before continuing Market Flow. | `executable` | p. 15 |
-| `dingler` | лошара | Status: max 15 life, -5 VP at end, only one token. | `executable` | p. 14 |
-| `trophy` | главный приз Крутагидона | Controlled Ongoing trophy awarded for killing a foe; grants 1 chip at end of controller's turn. | `executable` | p. 14 |
-| `heal` | накручивать жизни | Increase life up to current max; usable even at max. | `executable` | p. 16 |
-| `not_participate_in_mayhem` | не участвовать в беспределе | Player skips all беспредел attack/actions and interactions. | `data-required` | p. 13 |
+| Mechanic id                 | Russian term                | Engine meaning                                                                                                                                                         | Status                                           | Source     |
+| --------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ---------- |
+| `power`                     | мощь                        | Turn-local buy resource; can accumulate across play/buy actions during the same turn; lost at cleanup.                                                                 | `executable`                                     | pp. 8-9    |
+| `victory_points`            | победные очки / ПО          | Numeric end-game score on cards and modifiers.                                                                                                                         | `executable`                                     | pp. 5, 9   |
+| `legend_count`              | количество карт легенд      | Tie-breaker count of owned cards with type `карта легенды` for tied players.                                                                                           | `executable`                                     | p. 9       |
+| `dead_wizard_token`         | жетон дохлого колдуна / ЖДК | Death token, controlled by player, base -3 VP, may have immediate/end/Ongoing effects.                                                                                 | `executable`; faces `data-required`              | pp. 14, 18 |
+| `ongoing`                   | Постоянка                   | Card/object attribute: when played or created in play, it uses the `permanents` zone and stays under control until removed; it is not discarded during normal cleanup. | `executable`                                     | pp. 11, 14 |
+| `activate`                  | активация                   | Mapped activation: the before-activation part resolves on play; the activation effect can be used once per turn while the card is controlled.                          | `executable`                                     | pp. 8, 16  |
+| `attack`                    | атака                       | Attack instance that affected players may avoid with defense. One card may define several attack instances through card mapping.                                       | `executable`                                     | pp. 10-11  |
+| `defense`                   | защита                      | Hand card/effect that avoids one attack instance for the defending player only. Mapped defense branch data controls whether the same card can defend later attacks.    | `executable`                                     | pp. 10-11  |
+| `redirect_attack`           | перенаправить атаку         | Defense effect can redirect attack to attacker even if attacker was not a legal original target.                                                                       | `data-required`                                  | p. 17      |
+| `destroy`                   | уничтожить                  | Move card out of game to destroyed area; шальная магия and вялая палочка move to their stacks.                                                                         | `executable`                                     | pp. 12-13  |
+| `gain`                      | получить карту              | Take a specified/eligible card without paying and move it to discard unless mapped effect data changes the destination.                                                | `executable`                                     | p. 12      |
+| `discard`                   | сбросить карту              | Default source is hand unless another source is specified; deck-discard also counts as discard.                                                                        | `executable`                                     | p. 11      |
+| `reveal_from_deck`          | раскрыть карту из колоды    | If deck empty, shuffle discard first; card-specific effect decides destination.                                                                                        | `executable`; destination may be `data-required` | pp. 11, 20 |
+| `wild_magic`                | шальная магия               | Buyable stack card kind, cost 3, no main card type, choice on play between +2 power or playing top card of foe deck.                                                   | `executable`                                     | p. 12      |
+| `limp_wand`                 | вялая палочка               | Stack-gained junk card kind, no main card type, no effect, -1 VP.                                                                                                      | `executable`                                     | p. 13      |
+| `mayhem`                    | беспредел                   | Event card from main deck; resolves during Market Flow, then is destroyed and Market Flow continues.                                                                   | `executable`; effect `data-required`             | p. 13      |
+| `mega_mayhem`               | мегабеспредел               | Event card from Legend deck; resolves during Market Flow, then is destroyed and Market Flow continues.                                                                 | `executable`; effect `data-required`             | p. 13      |
+| `chip`                      | чипсина                     | Spendable token; reduces power cost 1:1 when buying cards of `карта легенды`, and can be spent by effects that explicitly say to spend chips.                          | `executable`                                     | p. 15      |
+| `market_chip_marker`        | символ чипсины              | When a marked card enters market, move 1 chip from supply onto every marked market card before continuing Market Flow.                                                 | `executable`                                     | p. 15      |
+| `dingler`                   | лошара                      | Status: max 15 life, -5 VP at end, only one token.                                                                                                                     | `executable`                                     | p. 14      |
+| `trophy`                    | главный приз Крутагидона    | Controlled Ongoing trophy awarded for killing a foe; grants 1 chip at end of controller's turn.                                                                        | `executable`                                     | p. 14      |
+| `heal`                      | накручивать жизни           | Increase life up to current max; usable even at max.                                                                                                                   | `executable`                                     | p. 16      |
+| `not_participate_in_mayhem` | не участвовать в беспределе | Player skips all беспредел attack/actions and interactions.                                                                                                            | `data-required`                                  | p. 13      |
 
 ## Explicit v0 Implementation Set
 
