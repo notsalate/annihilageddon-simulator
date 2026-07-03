@@ -18,6 +18,8 @@ import {
   type GameEvent,
   type GameState,
   type PlayerId,
+  type RuntimeEffectChoice,
+  type RuntimeEffectChoiceRequest,
   type TokenInstance,
 } from "./setup.js";
 
@@ -43,6 +45,9 @@ export interface BotDecisionContext {
 
 export interface BotStrategy {
   chooseAction(context: BotDecisionContext): GameAction;
+  chooseEffectChoice?(
+    request: RuntimeEffectChoiceRequest
+  ): RuntimeEffectChoice | undefined;
 }
 
 export interface SingleGameResult {
@@ -91,8 +96,13 @@ export const baselineBot: BotStrategy = {
 };
 
 export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
-  const state = initializeGame(options);
   const bot = options.bot ?? baselineBot;
+  const state = initializeGame({
+    ...options,
+    ...(bot.chooseEffectChoice === undefined
+      ? {}
+      : { effectChoiceStrategy: bot.chooseEffectChoice }),
+  });
   const actionLimit = options.maxTurns * 200;
   let actionsApplied = 0;
 

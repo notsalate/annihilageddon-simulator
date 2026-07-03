@@ -902,7 +902,18 @@ function chooseEffectChoice(
   effectId: string,
   choices: readonly EffectChoice[]
 ): EffectChoice | undefined {
-  const choice = choices[0];
+  const selectedChoice = state.effectChoiceStrategy?.({
+    player,
+    effectId,
+    sourceType: source.sourceType,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    choices,
+  });
+  const choice =
+    selectedChoice !== undefined && choices.includes(selectedChoice)
+      ? selectedChoice
+      : choices[0];
   if (choice === undefined) {
     state.eventLog.push({
       type: "effectChoiceSkipped",

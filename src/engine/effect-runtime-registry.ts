@@ -8,6 +8,7 @@ import type {
   CardInstance,
   GameState,
   PlayerState,
+  RuntimeEffectChoice,
   TokenInstance,
 } from "./setup.js";
 
@@ -49,13 +50,7 @@ export type TargetChoice =
       player: PlayerState;
     };
 
-export interface EffectChoice {
-  choiceId: string;
-  amount?: number;
-  direction?: "left" | "right";
-  cards?: CardInstance[];
-  players?: PlayerState[];
-}
+export type EffectChoice = RuntimeEffectChoice;
 
 export type TargetChoiceResult =
   | {
