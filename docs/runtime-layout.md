@@ -16,27 +16,16 @@
 ```text
 assets/
   cards/
-    creature/
-    familiar/
+    main/
     legend/
-      creature/
-      location/
-      spell/
-      treasure/
-      wizard-card/
-    location/
-    mayhem/
-    mega-mayhem/
-    special/
-    spell/
     starter/
-    treasure/
-    wizard-card/
+    familiar/
+    special/
   dead-wizard-token/
   wizard-property/
 ```
 
-`special` используется для особых runtime-карт и стопок, например Wild Magic и Limp Wand. Если позже появятся реальные варианты обработанных изображений, для них нужно явно зафиксировать отдельный контракт. Слова `processed` в пути или данных не являются каноническим маркером статуса.
+Это целевой layout для новых import files и source image links. Историческая физическая раскладка по видимым типам карты может еще встречаться в репозитории как legacy layout, но она не является новым контрактом для добавления source images. `special` используется для особых runtime-карт и стопок, например Wild Magic и Limp Wand. Слова `processed` в пути или данных не являются каноническим маркером статуса.
 
 ## Import Data
 
@@ -71,7 +60,7 @@ data/import/
 
 Markdown в `texts/` - это source text. Он может быть сделан вручную или любым локальным способом, но каноническое поле ссылки всегда `source.text`.
 
-Draft JSON хранит видимые/source-факты и сомнения. Draft не содержит исполняемые effects, `runtimeSchema`, `playableInV0` или runtime `mappingStatus`.
+Draft JSON хранит видимые/source-факты и сомнения. Draft не содержит исполняемые effects, `runtimeSchema`, `playableInV0`, top-level `effects` или runtime `mappingStatus`.
 
 ## Runtime Cards
 
@@ -127,7 +116,11 @@ data/pools/
 - `data/stacks/tokens/` - стопки жетонов, например Dead Wizard Tokens или wizard properties.
 - `data/pools/` - выбираемые или общие пулы, например familiars, если они моделируются как pool.
 
-`data/packs/current-runtime.json` - runnable current runtime pack. `data/packs/full-import.json` - future manifest для полного импорта; он может перечислять incomplete/non-playable definitions, но не означает, что все карты уже playable.
+`data/packs/current-runtime.json` - runnable current runtime pack.
+
+`data/packs/full-import.json` сейчас не является активным workflow для хранения incomplete runtime definitions. Это будущая идея, а не текущий обходной manifest. Его нельзя использовать, чтобы парковать non-full runtime card JSON или обходить `fullRuntime` guardrails из card runtime cluster workflow.
+
+Runtime JSON может содержать `source.draft`, `source.text` и `source.image`, но только как metadata/traceability. Эти ссылки не являются исполняемым входом движка.
 
 ## ID Style
 
@@ -166,13 +159,14 @@ esw2_dbg__wizard_property_001
 
 ## Status
 
-`processed`, `processedMarker` и `status: processed` не являются каноническими markers. Статус импорта выводится из наличия файлов:
+`processed`, `processedMarker` и `status: processed` не являются каноническими markers. Статус import-side полноты выводится из наличия файлов:
 
 1. source image;
 2. source markdown;
 3. draft JSON;
-4. runtime JSON;
-5. inclusion в pack/deck/stack/pool.
+4. runtime JSON.
+
+Inclusion в `pack` / `deck` / `stack` / `pool`, а также `fullRuntime` readiness для конкретных карт проверяются не этим layout-документом, а card runtime cluster workflow и командой `npm run report:card-runtime-clusters`.
 
 Gameplay markers остаются реальными данными, если они видны на карте:
 
