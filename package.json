@@ -15,6 +15,7 @@
     "report:runtime-coverage": "npm run build -- --pretty false && node dist/src/cli/report-runtime-coverage.js",
     "validate:drafts": "npm run build -- --pretty false && node dist/src/cli/validate-drafts.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:strictest": "tsc -p tsconfig.strictest.json --noEmit",
     "test": "npm run build -- --pretty false && node dist/tests/run-tests.js",
     "prepare": "husky"
   },

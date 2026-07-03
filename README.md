@@ -58,6 +58,7 @@ npm run simulate:mass -- --firstSeed 9000 --games 100 --maxTurns 200
 | -------------------------------------- | ------------------------------------------------------------------- |
 | `npm run build`                        | Собирает TypeScript в `dist/`                                       |
 | `npm run typecheck`                    | Проверяет типы без сборки                                           |
+| `npm run typecheck:strictest`          | Запускает максимально строгую проверку TypeScript без сборки        |
 | `npm test`                             | Собирает проект и запускает тесты                                   |
 | `npm run simulate`                     | Открывает CLI-меню симулятора                                       |
 | `npm run simulate:single`              | Запускает одну партию                                               |

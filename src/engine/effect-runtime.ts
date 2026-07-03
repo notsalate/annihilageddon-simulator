@@ -1,11 +1,7 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
-import {
-  recordCardMoved,
-  recordEffectChipsChanged,
-  recordMarketChipsGained,
-} from "./event-recorder.js";
+import { recordCardMoved, recordMarketChipsGained } from "./event-recorder.js";
 import {
   type DamageResult,
   type EffectChoice,
@@ -1886,27 +1882,6 @@ function removeCardFromKnownZones(
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "<unknown>";
-}
-
-function drawCards(
-  player: PlayerState,
-  count: number,
-  state: GameState
-): number {
-  let drawnCount = 0;
-  for (let index = 0; index < count; index += 1) {
-    shuffleDiscardIntoDeckIfNeeded(player, state);
-
-    const card = player.deck.shift();
-    if (card === undefined) {
-      return drawnCount;
-    }
-
-    player.hand.push(card);
-    drawnCount += 1;
-  }
-
-  return drawnCount;
 }
 
 function discardTopDeckCards(
