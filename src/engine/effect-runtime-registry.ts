@@ -2363,7 +2363,7 @@ function getControlledCardsForCost(
   effect: Record<string, unknown>,
   source: EffectSourceContext
 ): { card: CardInstance; definition: CardDefinition }[] {
-  return player.permanents
+  return [...player.permanents, ...player.playedThisTurn]
     .filter(
       (card) =>
         effect["excludeSource"] !== true ||

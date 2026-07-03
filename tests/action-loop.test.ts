@@ -310,6 +310,81 @@ test("controlled-object attack cards use controlled card costs", () => {
   );
 
   activePlayer.hand.splice(0);
+  activePlayer.playedThisTurn.splice(0);
+  activePlayer.permanents.splice(0);
+  const selfCountedSlippers = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_020"
+  );
+  targetPlayer.life.current = 20;
+  lifeBefore = targetPlayer.life.current;
+  result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: selfCountedSlippers.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, lifeBefore - 6);
+  assert.equal(activePlayer.playedThisTurn.includes(selfCountedSlippers), true);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackCreated" &&
+        event.cardInstanceId === selfCountedSlippers.instanceId &&
+        event.definitionId === "esw2_dbg__main_020" &&
+        event.amount === 6
+      );
+    })
+  );
+
+  activePlayer.hand.splice(0);
+  activePlayer.playedThisTurn.splice(0);
+  activePlayer.permanents.splice(0);
+  const playedThisTurnDefinition = createFixtureCardDefinition(
+    "fixture-played-this-turn-cost-seven",
+    []
+  );
+  playedThisTurnDefinition.engine.cost = 7;
+  playedThisTurnDefinition.visible.cost = 7;
+  const alreadyPlayedCard = addFixtureDefinitionToActiveHand(
+    state,
+    playedThisTurnDefinition,
+    { instanceId: "fixture-played-this-turn-cost-seven-instance" }
+  );
+  result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: alreadyPlayedCard.instanceId,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.playedThisTurn.includes(alreadyPlayedCard), true);
+  const playedThisTurnSlippers = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_020"
+  );
+  targetPlayer.life.current = 20;
+  lifeBefore = targetPlayer.life.current;
+  result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: playedThisTurnSlippers.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, lifeBefore - 7);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackCreated" &&
+        event.cardInstanceId === playedThisTurnSlippers.instanceId &&
+        event.definitionId === "esw2_dbg__main_020" &&
+        event.amount === 7
+      );
+    })
+  );
+
+  activePlayer.hand.splice(0);
+  activePlayer.playedThisTurn.splice(0);
   activePlayer.permanents.splice(0);
   activePlayer.permanents.push(
     createRuntimeCardInstance(activePlayer, "esw2_dbg__main_040", "chosen-five")
