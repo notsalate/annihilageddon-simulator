@@ -14,16 +14,20 @@
     "report:card-runtime-clusters": "npm run build -- --pretty false && node dist/src/cli/report-card-runtime-clusters.js",
     "report:runtime-coverage": "npm run build -- --pretty false && node dist/src/cli/report-runtime-coverage.js",
     "validate:drafts": "npm run build -- --pretty false && node dist/src/cli/validate-drafts.js",
+    "lint": "eslint src/**/*.ts tests/**/*.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:strictest": "tsc -p tsconfig.strictest.json --noEmit",
     "test": "npm run build -- --pretty false && node dist/tests/run-tests.js",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.15.30",
+    "eslint": "^10.6.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.8",
     "prettier": "^3.8.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.62.1"
   }
 }

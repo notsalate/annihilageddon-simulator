@@ -740,7 +740,11 @@ const exchangeLifeAndDinglerStatusHandler: EffectRuntimeHandler = {
     ] as const) {
       const value = effect[flag];
       if (value !== undefined && typeof value !== "boolean") {
-        errors.push(`${subjectId} uses invalid ${flag} flag ${String(value)}`);
+        errors.push(
+          `${subjectId} uses invalid ${flag} flag ${
+            value === null ? "null" : typeof value
+          }`
+        );
       }
     }
     return errors;
@@ -1386,10 +1390,9 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
       const selectedChoiceId =
         choice?.choiceId ?? "discard_hand_then_draw_cards";
       if (selectedChoiceId === "take_damage") {
-        const damageOption = options[1];
+        const damageOption: unknown = options[1];
         if (
-          typeof damageOption !== "object" ||
-          damageOption === null ||
+          !isEffectRecord(damageOption) ||
           typeof damageOption["amount"] !== "number"
         ) {
           return {
@@ -1409,10 +1412,9 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
         continue;
       }
 
-      const redrawOption = options[0];
+      const redrawOption: unknown = options[0];
       if (
-        typeof redrawOption !== "object" ||
-        redrawOption === null ||
+        !isEffectRecord(redrawOption) ||
         typeof redrawOption["drawAmount"] !== "number"
       ) {
         return { ok: false, error: "Invalid Mayhem hand-redraw option" };
@@ -1919,7 +1921,9 @@ const forceStartingPlayerHandler: EffectRuntimeHandler = {
     const targetSelector = effect["targetSelector"];
     if (targetSelector !== undefined && targetSelector !== "activePlayer") {
       errors.push(
-        `${subjectId} uses unsupported force-starting-player target ${String(targetSelector)}`
+        `${subjectId} uses unsupported force-starting-player target ${
+          typeof targetSelector === "string" ? targetSelector : "<unknown>"
+        }`
       );
     }
 
@@ -1952,7 +1956,9 @@ const setResurrectionLifeTotalHandler: EffectRuntimeHandler = {
     const unlessStatusId = effect["unlessStatusId"];
     if (unlessStatusId !== undefined && !isNonEmptyString(unlessStatusId)) {
       errors.push(
-        `${subjectId} uses invalid resurrection exception status ${String(unlessStatusId)}`
+        `${subjectId} uses invalid resurrection exception status ${
+          typeof unlessStatusId === "string" ? unlessStatusId : "<unknown>"
+        }`
       );
     }
 
@@ -2017,7 +2023,11 @@ const modifyEffectiveValueHandler: EffectRuntimeHandler = {
         !Number.isSafeInteger(amountPerOwnedCard))
     ) {
       errors.push(
-        `${subjectId} uses invalid effective-value amountPerOwnedCard ${String(amountPerOwnedCard)}`
+        `${subjectId} uses invalid effective-value amountPerOwnedCard ${
+          typeof amountPerOwnedCard === "number"
+            ? amountPerOwnedCard
+            : "<unknown>"
+        }`
       );
     }
     if (amountPerOwnedCard !== undefined) {
@@ -2128,7 +2138,9 @@ const topdeckGainedCardHandler: EffectRuntimeHandler = {
     const destination = effect["destination"];
     if (destination !== undefined && destination !== "deckTop") {
       errors.push(
-        `${subjectId} uses unsupported topdeck-gained-card destination ${String(destination)}`
+        `${subjectId} uses unsupported topdeck-gained-card destination ${
+          typeof destination === "string" ? destination : "<unknown>"
+        }`
       );
     }
 
@@ -3494,7 +3506,11 @@ function validateDinglerStatusEffectShape(
   const errors: string[] = [];
   if (effect["statusId"] !== "dingler") {
     errors.push(
-      `${subjectId} uses unsupported status ${String(effect["statusId"])}`
+      `${subjectId} uses unsupported status ${
+        typeof effect["statusId"] === "string"
+          ? effect["statusId"]
+          : "<unknown>"
+      }`
     );
   }
 
@@ -3531,7 +3547,11 @@ function validateMegaMayhemEachPlayerToggleDinglerShape(
   const errors = validateMegaMayhemEachPlayerShape(subjectId, effect);
   if (effect["statusId"] !== undefined) {
     errors.push(
-      `${subjectId} uses unsupported status ${String(effect["statusId"])}`
+      `${subjectId} uses unsupported status ${
+        typeof effect["statusId"] === "string"
+          ? effect["statusId"]
+          : "<unknown>"
+      }`
     );
   }
   return errors;
@@ -3582,7 +3602,8 @@ function validateMayhemHandRedrawOptions(
     return [`${subjectId} uses unsupported Mayhem hand-redraw options`];
   }
 
-  const [redrawOption, damageOption] = options;
+  const redrawOption: unknown = options[0];
+  const damageOption: unknown = options[1];
   const errors: string[] = [];
   if (
     !isEffectRecord(redrawOption) ||

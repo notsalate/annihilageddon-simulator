@@ -65,6 +65,7 @@ rtk read <file>
 rtk tree <path>
 rtk npm run build
 rtk npx lint-staged
+rtk npm run lint
 rtk npm run typecheck
 rtk npm run typecheck:strictest
 rtk npm test
@@ -90,6 +91,7 @@ Repository commands that are confirmed to exist:
 
 ```powershell
 npm run
+npm run lint
 npm run typecheck
 npm run typecheck:strictest
 npm test

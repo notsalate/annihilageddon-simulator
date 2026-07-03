@@ -526,20 +526,22 @@ function readOptionalIntegerField(
   }
 
   if (!/^-?\d+$/.test(value)) {
+    const fieldLabel = matchedField ?? sourceFields[0] ?? draftField;
     blockers.push({
       source: sourceTextPath,
       field: draftField,
-      message: `${matchedField ?? sourceFields[0]} must be an integer when present`,
+      message: `${fieldLabel} must be an integer when present`,
     });
     return null;
   }
 
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed)) {
+    const fieldLabel = matchedField ?? sourceFields[0] ?? draftField;
     blockers.push({
       source: sourceTextPath,
       field: draftField,
-      message: `${matchedField ?? sourceFields[0]} must be a safe integer when present`,
+      message: `${fieldLabel} must be a safe integer when present`,
     });
     return null;
   }
