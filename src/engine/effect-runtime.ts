@@ -1,4 +1,5 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
+import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
 import {
   recordCardMoved,
@@ -1984,6 +1985,7 @@ function gainDinglerStatus(
     effectId,
     sourceType: source.sourceType,
   });
+  reconcileActivePlayerControlledPower(state);
 }
 
 function removeDinglerStatus(
@@ -2008,6 +2010,7 @@ function removeDinglerStatus(
     effectId,
     sourceType: source.sourceType,
   });
+  reconcileActivePlayerControlledPower(state);
 }
 
 function drawTopDeckCard(

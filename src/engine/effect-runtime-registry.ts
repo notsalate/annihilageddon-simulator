@@ -2187,6 +2187,40 @@ const attackDamageHandler: EffectRuntimeHandler = {
   },
 };
 
+const addPowerIfPlayerHasStatusHandler: EffectRuntimeHandler = {
+  effectId: "add_power_if_player_has_status",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["timing"] !== "whileControlled") {
+      errors.push(
+        `${subjectId} uses unsupported passive power timing ${String(effect["timing"])}`
+      );
+    }
+    if (effect["statusId"] !== "dingler") {
+      errors.push(
+        `${subjectId} uses unsupported status ${String(effect["statusId"])}`
+      );
+    }
+    const amount = effect["amount"];
+    if (
+      typeof amount !== "number" ||
+      !Number.isSafeInteger(amount) ||
+      amount <= 0
+    ) {
+      errors.push(
+        `${subjectId} uses invalid passive power amount ${String(amount)}`
+      );
+    }
+    return errors;
+  },
+  execute() {
+    return {
+      ok: false,
+      error: "add_power_if_player_has_status is a passive controlled effect",
+    };
+  },
+};
+
 const addPowerPerControlledObjectHandler: EffectRuntimeHandler = {
   effectId: "add_power_per_controlled_object",
   validateShape(subjectId, effect) {
@@ -3985,6 +4019,10 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [
     addPowerPerPlayerWithStatusHandler.effectId,
     toCatalogEntry(addPowerPerPlayerWithStatusHandler),
+  ],
+  [
+    addPowerIfPlayerHasStatusHandler.effectId,
+    toCatalogEntry(addPowerIfPlayerHasStatusHandler),
   ],
   [
     addPowerPerControlledObjectHandler.effectId,

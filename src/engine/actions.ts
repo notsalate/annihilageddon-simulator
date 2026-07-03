@@ -7,6 +7,7 @@ import {
   hasExecutableWizardPropertyActivation,
   moveGainedCardToPlayerDestination,
 } from "./effect-runtime.js";
+import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import { calculateEffectiveCardCost } from "./effective-values.js";
 import { recordCardMoved } from "./event-recorder.js";
 import { runMarketFlow, type MarketFlowEndReason } from "./market-flow.js";
@@ -131,6 +132,7 @@ function endTurn(state: GameState): ActionResult {
   activePlayer.discard.push(...activePlayer.hand.splice(0));
   cleanupPlayedCards(state, activePlayer);
   state.turn.power = 0;
+  state.turn.controlledPowerBonus = 0;
   state.turn.activatedCardIds = [];
   state.eventLog.push({
     type: "turnEnded",
@@ -149,6 +151,7 @@ function endTurn(state: GameState): ActionResult {
   if (marketFlowResult.gameEndReason !== undefined) {
     return marketFlowResult;
   }
+  reconcileActivePlayerControlledPower(state);
   state.eventLog.push({
     type: "turnStarted",
     playerId: state.activePlayerId,
@@ -405,6 +408,8 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
   if (!wizardPropertyResult.ok) {
     return wizardPropertyResult;
   }
+
+  reconcileActivePlayerControlledPower(state);
 
   state.eventLog.push({
     type: "cardPlayed",

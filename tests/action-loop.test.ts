@@ -6,6 +6,7 @@ import {
   calculateEffectivePlayerMaxLife,
   initializeGame,
   listLegalActions,
+  loadCurrentRuntimeDataPack,
   runMarketFlow,
   scoreGame,
   type CardInstance,
@@ -1744,6 +1745,79 @@ test("Dingler count power effect adds one power per Dingler player", () => {
       );
     })
   );
+});
+
+test("Tsirk bratiev loshashnykh grants passive power to a Dingler controller", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({
+    dataPack,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  activePlayer.statuses.push(createDinglerStatus(activePlayer));
+  const circus = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_027"
+  );
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: circus.instanceId,
+  });
+
+  assert.equal(playResult.ok, true);
+  assert.equal(activePlayer.permanents.includes(circus), true);
+  assert.equal(state.turn.power, 2);
+
+  const firstEndTurnResult = applyAction(state, {
+    type: "endTurn",
+  });
+  assert.equal(firstEndTurnResult.ok, true);
+
+  const secondEndTurnResult = applyAction(state, {
+    type: "endTurn",
+  });
+
+  assert.equal(secondEndTurnResult.ok, true);
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(state.turn.power, 2);
+});
+
+test("Tsirk bratiev loshashnykh does not grant passive power without Dingler status", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({
+    dataPack,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const circus = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_027"
+  );
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: circus.instanceId,
+  });
+
+  assert.equal(playResult.ok, true);
+  assert.equal(activePlayer.permanents.includes(circus), true);
+  assert.equal(state.turn.power, 0);
+
+  const firstEndTurnResult = applyAction(state, {
+    type: "endTurn",
+  });
+  assert.equal(firstEndTurnResult.ok, true);
+
+  const secondEndTurnResult = applyAction(state, {
+    type: "endTurn",
+  });
+
+  assert.equal(secondEndTurnResult.ok, true);
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(state.turn.power, 0);
 });
 
 test("Mayhem lowest-life Dingler effect normalizes tied players to Dingler max life", () => {

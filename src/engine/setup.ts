@@ -111,6 +111,7 @@ export interface GameState {
   turn: {
     number: number;
     power: number;
+    controlledPowerBonus: number;
     activatedCardIds: string[];
     gainedCardDefinitionIds: string[];
   };
@@ -275,6 +276,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     turn: {
       number: 1,
       power: 0,
+      controlledPowerBonus: 0,
       activatedCardIds: [],
       gainedCardDefinitionIds: [],
     },
