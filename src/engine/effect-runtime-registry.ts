@@ -728,55 +728,139 @@ const setLifeHandler: EffectRuntimeHandler = {
 const exchangeLifeAndDinglerStatusHandler: EffectRuntimeHandler = {
   effectId: "exchange_life_and_dingler_status",
   validateShape(subjectId, effect) {
-    return validatePlayerTargetSelector(subjectId, effect, "life exchange", [
-      "opponentPlayer",
-      "chosenFoe",
-    ]);
+    const errors = validatePlayerTargetSelector(
+      subjectId,
+      effect,
+      "life exchange",
+      ["opponentPlayer", "chosenFoe"]
+    );
+    for (const flag of [
+      "allowLifeExchange",
+      "allowDinglerStatusExchange",
+    ] as const) {
+      const value = effect[flag];
+      if (value !== undefined && typeof value !== "boolean") {
+        errors.push(`${subjectId} uses invalid ${flag} flag ${String(value)}`);
+      }
+    }
+    return errors;
   },
   execute(state, player, effect, source, services) {
     const effectId = services.asString(effect["effectId"]);
+    const allowLifeExchange =
+      effect["allowLifeExchange"] === undefined
+        ? true
+        : effect["allowLifeExchange"] === true;
+    const allowDinglerStatusExchange =
+      effect["allowDinglerStatusExchange"] === undefined
+        ? true
+        : effect["allowDinglerStatusExchange"] === true;
+
     if (effect["optional"] === true) {
+      const choices: EffectChoice[] = [{ choiceId: "pass" }];
+      if (allowLifeExchange) {
+        choices.push({ choiceId: "exchange_life_only" });
+      }
+      if (allowDinglerStatusExchange) {
+        choices.push({ choiceId: "exchange_dingler_status_only" });
+      }
+      if (allowLifeExchange && allowDinglerStatusExchange) {
+        choices.push({ choiceId: "exchange_life_and_dingler_status" });
+      }
       const choice = services.chooseEffectChoice(
         state,
         player,
         source,
         effectId,
-        [
-          {
-            choiceId: "exchange_life_and_dingler_status",
-          },
-          {
-            choiceId: "pass",
-          },
-        ]
+        choices
       );
       if (choice?.choiceId === "pass") {
         return { ok: true };
       }
+      if (choice?.choiceId === "exchange_life_only") {
+        return exchangeLifeAndOrDinglerStatus(
+          state,
+          player,
+          effect,
+          source,
+          services,
+          true,
+          false
+        );
+      }
+      if (choice?.choiceId === "exchange_dingler_status_only") {
+        return exchangeLifeAndOrDinglerStatus(
+          state,
+          player,
+          effect,
+          source,
+          services,
+          false,
+          true
+        );
+      }
+      if (choice?.choiceId === "exchange_life_and_dingler_status") {
+        return exchangeLifeAndOrDinglerStatus(
+          state,
+          player,
+          effect,
+          source,
+          services,
+          true,
+          true
+        );
+      }
     }
 
-    const targetResult = services.resolveTargetChoice(
+    return exchangeLifeAndOrDinglerStatus(
       state,
       player,
       effect,
-      source
+      source,
+      services,
+      allowLifeExchange,
+      allowDinglerStatusExchange
     );
-    if (!targetResult.ok) {
-      return targetResult;
-    }
+  },
+};
 
-    if (targetResult.choice === undefined) {
-      return { ok: true };
-    }
+function exchangeLifeAndOrDinglerStatus(
+  state: GameState,
+  player: PlayerState,
+  effect: Record<string, unknown>,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices,
+  exchangeLife: boolean,
+  exchangeDinglerStatus: boolean
+): EffectExecutionResult {
+  if (!exchangeLife && !exchangeDinglerStatus) {
+    return { ok: true };
+  }
 
-    if (targetResult.choice.choiceType !== "player") {
-      return {
-        ok: false,
-        error: "Life exchange effect requires a player target",
-      };
-    }
+  const effectId = services.asString(effect["effectId"]);
+  const targetResult = services.resolveTargetChoice(
+    state,
+    player,
+    effect,
+    source
+  );
+  if (!targetResult.ok) {
+    return targetResult;
+  }
 
-    const targetPlayer = targetResult.choice.player;
+  if (targetResult.choice === undefined) {
+    return { ok: true };
+  }
+
+  if (targetResult.choice.choiceType !== "player") {
+    return {
+      ok: false,
+      error: "Life exchange effect requires a player target",
+    };
+  }
+
+  const targetPlayer = targetResult.choice.player;
+  if (exchangeLife) {
     const playerLife = player.life.current;
     player.life.current = targetPlayer.life.current;
     targetPlayer.life.current = playerLife;
@@ -789,7 +873,9 @@ const exchangeLifeAndDinglerStatusHandler: EffectRuntimeHandler = {
       effectId,
       sourceType: source.sourceType,
     });
+  }
 
+  if (exchangeDinglerStatus) {
     const playerHadDingler = services.hasDinglerStatus(player);
     const targetHadDingler = services.hasDinglerStatus(targetPlayer);
     if (playerHadDingler && !targetHadDingler) {
@@ -800,10 +886,10 @@ const exchangeLifeAndDinglerStatusHandler: EffectRuntimeHandler = {
       services.removeDinglerStatus(state, targetPlayer, effectId, source);
       services.gainDinglerStatus(state, player, effectId, source);
     }
+  }
 
-    return { ok: true };
-  },
-};
+  return { ok: true };
+}
 
 const gainStatusHandler: EffectRuntimeHandler = {
   effectId: "gain_status",

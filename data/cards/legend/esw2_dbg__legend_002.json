@@ -38,7 +38,9 @@
         "effectId": "exchange_life_and_dingler_status",
         "timing": "onPlay",
         "targetSelector": "chosenFoe",
-        "optional": true
+        "optional": true,
+        "allowLifeExchange": true,
+        "allowDinglerStatusExchange": true
       }
     ],
     "unsupportedMechanics": []

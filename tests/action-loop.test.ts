@@ -5049,35 +5049,101 @@ test("Sweet Smurfinier heals only actual attack damage dealt", () => {
   );
 });
 
-test("Venerina Magolovka exchanges life totals and Dingler status with a chosen foe", () => {
-  const state = initializeGame({ rootDir, seed: 60615 });
-  const activePlayer = mustGetPlayer(state, state.activePlayerId);
-  const targetPlayer = state.players.find(
-    (player) => player.playerId !== activePlayer.playerId
-  );
-  assert.ok(targetPlayer);
-  activePlayer.wizardProperties = [];
-  targetPlayer.wizardProperties = [];
-  activePlayer.life.current = 7;
-  targetPlayer.life.current = 13;
-  activePlayer.statuses.push(createDinglerStatus(activePlayer));
-  const card = addRuntimeCardToHand(
-    state,
-    activePlayer,
-    "esw2_dbg__legend_002"
-  );
+test("Venerina Magolovka supports pass, life-only, Dingler-only, and full exchange branches", () => {
+  const cases = [
+    {
+      selectedChoiceId: "pass",
+      expectedActiveLife: 7,
+      expectedTargetLife: 13,
+      expectedActiveDingler: true,
+      expectedTargetDingler: false,
+    },
+    {
+      selectedChoiceId: "exchange_life_only",
+      expectedActiveLife: 13,
+      expectedTargetLife: 7,
+      expectedActiveDingler: true,
+      expectedTargetDingler: false,
+    },
+    {
+      selectedChoiceId: "exchange_dingler_status_only",
+      expectedActiveLife: 7,
+      expectedTargetLife: 13,
+      expectedActiveDingler: false,
+      expectedTargetDingler: true,
+    },
+    {
+      selectedChoiceId: "exchange_life_and_dingler_status",
+      expectedActiveLife: 13,
+      expectedTargetLife: 7,
+      expectedActiveDingler: false,
+      expectedTargetDingler: true,
+    },
+  ] as const;
 
-  const result = applyAction(state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
+  for (const testCase of cases) {
+    const state = initializeGame({ rootDir, seed: 60615 });
+    const activePlayer = mustGetPlayer(state, state.activePlayerId);
+    const targetPlayer = state.players.find(
+      (player) => player.playerId !== activePlayer.playerId
+    );
+    assert.ok(targetPlayer);
+    activePlayer.wizardProperties = [];
+    targetPlayer.wizardProperties = [];
+    activePlayer.life.current = 7;
+    targetPlayer.life.current = 13;
+    activePlayer.statuses.push(createDinglerStatus(activePlayer));
+    chooseEffectChoice(state, ({ effectId, definitionId, choices }) => {
+      if (
+        effectId !== "exchange_life_and_dingler_status" ||
+        definitionId !== "esw2_dbg__legend_002"
+      ) {
+        return undefined;
+      }
 
-  assert.equal(result.ok, true);
-  assert.equal(state.turn.power, 4);
-  assert.equal(activePlayer.life.current, 13);
-  assert.equal(targetPlayer.life.current, 7);
-  assert.equal(hasDinglerStatus(activePlayer), false);
-  assert.equal(hasDinglerStatus(targetPlayer), true);
+      return choices.find(
+        (choice) => choice.choiceId === testCase.selectedChoiceId
+      );
+    });
+    const card = addRuntimeCardToHand(
+      state,
+      activePlayer,
+      "esw2_dbg__legend_002"
+    );
+
+    const result = applyAction(state, {
+      type: "playCard",
+      cardInstanceId: card.instanceId,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(state.turn.power, 4);
+    assert.equal(activePlayer.life.current, testCase.expectedActiveLife);
+    assert.equal(targetPlayer.life.current, testCase.expectedTargetLife);
+    assert.equal(
+      hasDinglerStatus(activePlayer),
+      testCase.expectedActiveDingler
+    );
+    assert.equal(
+      hasDinglerStatus(targetPlayer),
+      testCase.expectedTargetDingler
+    );
+    assert.ok(
+      state.eventLog.some((event) => {
+        return (
+          event.type === "effectChoiceSelected" &&
+          event.effectId === "exchange_life_and_dingler_status" &&
+          event.choiceId === testCase.selectedChoiceId &&
+          event.choiceIds?.includes("pass") === true &&
+          event.choiceIds?.includes("exchange_life_only") === true &&
+          event.choiceIds?.includes("exchange_dingler_status_only") === true &&
+          event.choiceIds?.includes("exchange_life_and_dingler_status") ===
+            true &&
+          event.legalChoiceCount === 4
+        );
+      })
+    );
+  }
 });
 
 test("2Q lets players above 10 reduce life to gain one chip", () => {
