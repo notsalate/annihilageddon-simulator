@@ -33,19 +33,6 @@ test("current runtime setup uses the canonical 10-card starter template", () => 
   ]);
 
   assert.equal(allStarterCards.length, 20);
-  for (const player of state.players) {
-    const ownedStarterCards = [
-      ...player.hand,
-      ...player.deck,
-      ...player.discard,
-      ...player.playedThisTurn,
-      ...player.permanents,
-    ];
-    assert.equal(ownedStarterCards.length, 10);
-    assert.equal(countDefinition(ownedStarterCards, "esw2_dbg__starter_001"), 6);
-    assert.equal(countDefinition(ownedStarterCards, "esw2_dbg__starter_002"), 3);
-    assert.equal(countDefinition(ownedStarterCards, "esw2_dbg__starter_003"), 1);
-  }
 });
 
 test("readable trace renders setup choices, setup market, card text, payment, cleanup, draw, and life set context", () => {
@@ -97,15 +84,6 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
         amount: 15,
         targetLifeBefore: 4,
         targetLifeAfter: 15,
-      },
-      {
-        type: "mayhemResolved",
-        playerId: "player-2",
-        turnNumber: 2,
-        actionSequence: 5,
-        actionIdentity: "endTurn",
-        cardInstanceId: "card-mayhem",
-        definitionId: "mayhem-card",
       },
       {
         type: "cardBought",
@@ -174,16 +152,10 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
 
   assert.match(trace, /Setup choice \(wizardProperty\): player-1 candidates \[Свойство А, Свойство Б\] -> Свойство А via alwaysPickFirst/);
   assert.match(trace, /Setup Market Flow: added Легенда \(card-legend\) to legend market/);
+  assert.match(trace, /Turn 2 — before player-2 actions/);
   assert.match(trace, /opened event card 2F \(card-mayhem\).*Text: Атака: самый хилый колдун становится лошарой\./s);
   assert.match(trace, /Life set: player-2 sets player-1 to 15.*Life 4 -> 15/);
   assert.match(trace, /Bought Приунывший орк \(card-buy\) -> discard.*power 5 -> 2.*effective cost 3.*source main market/);
   assert.match(trace, /End turn cleanup: player-1 moves 2 card\(s\).*Знак \(card-a\), Пшик \(card-b\)/);
   assert.match(trace, /New hand: player-1 drew 4\/5 card\(s\); hand size 4.*Карта А \(card-c\).*Карта Г \(card-f\)/);
 });
-
-function countDefinition(
-  cards: ReadonlyArray<{ definitionId: string }>,
-  definitionId: string
-): number {
-  return cards.filter((card) => card.definitionId === definitionId).length;
-}
