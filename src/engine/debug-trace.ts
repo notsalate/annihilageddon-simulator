@@ -275,10 +275,10 @@ function formatEvent(
   }
 
   if (event.type === "handDrawn" && event.playerId !== undefined) {
-    const requestedCount = getNumberEventField(event, "requestedCount") ?? 0;
-    const drawnCount = getNumberEventField(event, "drawnCount") ?? 0;
-    const handSizeAfter = getNumberEventField(event, "handSizeAfter");
-    return `- New hand: ${event.playerId} drew ${drawnCount}/${requestedCount} card(s); hand size ${handSizeAfter ?? "?"}${formatTargetDefinitionList(event, options)}.`;
+    const requestedCount = event.amount ?? 0;
+    const drawnCount = event.legalChoiceCount ?? 0;
+    const handSizeAfter = event.choiceId ?? "?";
+    return `- New hand: ${event.playerId} drew ${drawnCount}/${requestedCount} card(s); hand size ${handSizeAfter}${formatTargetDefinitionList(event, options)}.`;
   }
 
   if (event.type === "marketEventCardOpened") {
@@ -411,14 +411,6 @@ function formatTargetLifeDelta(event: GameEvent): string {
   return event.targetLifeBefore === undefined || event.targetLifeAfter === undefined
     ? ""
     : ` Life ${event.targetLifeBefore} -> ${event.targetLifeAfter}.`;
-}
-
-function getNumberEventField(
-  event: GameEvent,
-  fieldName: string
-): number | undefined {
-  const value = (event as unknown as Record<string, unknown>)[fieldName];
-  return typeof value === "number" ? value : undefined;
 }
 
 function formatPaymentSummary(event: GameEvent): string {
