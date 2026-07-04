@@ -12,6 +12,7 @@ import {
   type CardInstance,
   type CardDefinition,
   type GameState,
+  type LoadedDataPack,
   type PlayerState,
   type StatusInstance,
   type TokenDefinition,
@@ -4650,11 +4651,20 @@ test("wizard property owned wand attacks gain damage and cannot be avoided", () 
 });
 
 test("wizard property does not affect borrowed wands or non-wand attacks", () => {
+  const dataPack = createWizardPropertySetupEntriesDataPack(
+    createExpandedDeadWizardTokenSetupDataPack(
+      loadCurrentRuntimeDataPack(rootDir, playableRuntimeDataPackPath),
+      40
+    ),
+    [
+      { tokenId: "esw2_dbg__wizard_property_009", count: 2 },
+      { tokenId: "esw2_dbg__wizard_property_001", count: 4 },
+    ]
+  );
   const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
+    dataPack,
     seed: 60615,
-    playerCount: 9,
+    playerCount: 3,
   });
   const propertyOwner = state.players.find((player) => {
     return player.wizardProperties.some(
@@ -7784,6 +7794,51 @@ function createTemporaryHandLimitWizardProperty(
         },
       ],
       unsupportedMechanics: [],
+    },
+  };
+}
+
+function createWizardPropertySetupEntriesDataPack(
+  dataPack: LoadedDataPack,
+  entries: ReadonlyArray<{ tokenId: string; count: number }>
+): LoadedDataPack {
+  return {
+    ...dataPack,
+    tokenStacks: {
+      ...dataPack.tokenStacks,
+      wizardProperties: {
+        schemaVersion: 1,
+        stackId: "fixture-wizard-property-setup-stack",
+        runtimeSchema: "krutagidon.tokenStack.v0",
+        role: "wizardProperties",
+        mappingStatus: "fixture",
+        entries: entries.map((entry) => ({
+          tokenId: entry.tokenId,
+          count: entry.count,
+        })),
+      },
+    },
+  };
+}
+
+function createExpandedDeadWizardTokenSetupDataPack(
+  dataPack: LoadedDataPack,
+  count: number
+): LoadedDataPack {
+  const deadWizardTokens = dataPack.tokenStacks.deadWizardTokens;
+  assert.ok(deadWizardTokens);
+
+  return {
+    ...dataPack,
+    tokenStacks: {
+      ...dataPack.tokenStacks,
+      deadWizardTokens: {
+        ...deadWizardTokens,
+        entries: deadWizardTokens.entries.map((entry) => ({
+          tokenId: entry.tokenId,
+          count,
+        })),
+      },
     },
   };
 }

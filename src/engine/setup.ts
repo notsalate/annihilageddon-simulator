@@ -156,6 +156,10 @@ export interface GameEvent {
   participantPlayerIds?: PlayerId[];
   winnerPlayerIds?: PlayerId[];
   sourceType?: string;
+  setupChoiceKind?: "familiar" | "wizardProperty";
+  policyId?: string;
+  candidateDefinitionIds?: string[];
+  chosenDefinitionId?: string;
 }
 
 interface InitializeGameBaseOptions {
@@ -188,6 +192,10 @@ interface TokenInstanceFactory {
   create(definitionId: string, ownerId: PlayerId | CommonOwner): TokenInstance;
 }
 
+interface SetupCandidate<TDefinitionId extends string> {
+  definitionId: TDefinitionId;
+}
+
 export function initializeGame(options: InitializeGameOptions): GameState {
   const playerCount = options.playerCount ?? 2;
   if (!Number.isSafeInteger(playerCount) || playerCount < 2) {
@@ -209,15 +217,23 @@ export function initializeGame(options: InitializeGameOptions): GameState {
   }
   const factory = createInstanceFactory();
   const tokenFactory = createTokenInstanceFactory();
+  const setupEvents: GameEvent[] = [];
 
   const players = createPlayers(playerCount, dataPack, factory, rng);
   assignStartingFamiliars(
     players,
     dataPack,
     factory,
-    createSeededRng(options.seed + 7919)
+    createSeededRng(options.seed + 7919),
+    setupEvents
   );
-  assignStartingWizardProperties(players, dataPack, tokenFactory, rng);
+  assignStartingWizardProperties(
+    players,
+    dataPack,
+    tokenFactory,
+    rng,
+    setupEvents
+  );
   applyWizardPropertySetupEffects(players, dataPack, factory);
   const mainDeck = instantiateDeck(
     dataPack.decks.mainDeck,
@@ -284,7 +300,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     common,
     cardDefinitions: dataPack.cardDefinitions,
     tokenDefinitions: dataPack.tokenDefinitions,
-    eventLog: [],
+    eventLog: [...setupEvents],
     ...(options.effectChoiceStrategy === undefined
       ? {}
       : { effectChoiceStrategy: options.effectChoiceStrategy }),
@@ -330,6 +346,12 @@ function instantiateDeadWizardTokens(
     factory,
     "common"
   );
+  assertSetupPoolSize(
+    setupPool.length,
+    drawStackSize,
+    "Dead wizard token",
+    playerCount
+  );
 
   shuffleInPlace(setupPool, rng);
 
@@ -343,7 +365,8 @@ function assignStartingWizardProperties(
   players: PlayerState[],
   dataPack: LoadedDataPack,
   factory: TokenInstanceFactory,
-  rng: RandomSource
+  rng: RandomSource,
+  eventLog: GameEvent[]
 ): void {
   const tokenStack = dataPack.tokenStacks.wizardProperties;
   if (tokenStack === undefined) {
@@ -369,6 +392,12 @@ function assignStartingWizardProperties(
       `Token stack ${tokenStack.stackId} must include at least one wizard property`
     );
   }
+  assertSetupPoolSize(
+    setupPool.length,
+    players.length * 2,
+    "Wizard property setup pool",
+    players.length
+  );
 
   shuffleInPlace(setupPool, rng);
 
@@ -401,9 +430,16 @@ function assignStartingWizardProperties(
       );
     }
 
+    const selectedCandidate = alwaysPickFirstSetupChoice(
+      player,
+      "wizardProperty",
+      [firstCandidate, secondCandidate],
+      eventLog
+    );
+
     player.wizardProperties.push({
-      ...firstCandidate,
-      instanceId: `starting-${firstCandidate.instanceId}-player-${index + 1}`,
+      ...selectedCandidate,
+      instanceId: `starting-${selectedCandidate.instanceId}-player-${index + 1}`,
       ownerId: player.playerId,
     });
   }
@@ -413,7 +449,8 @@ function assignStartingFamiliars(
   players: PlayerState[],
   dataPack: LoadedDataPack,
   factory: InstanceFactory,
-  rng: RandomSource
+  rng: RandomSource,
+  eventLog: GameEvent[]
 ): void {
   const familiarPool = dataPack.decks.familiarPool;
   if (familiarPool === undefined) {
@@ -434,6 +471,12 @@ function assignStartingFamiliars(
       `Deck ${familiarPool.deckId} must include at least two familiar setup candidates`
     );
   }
+  assertSetupPoolSize(
+    setupPool.length,
+    players.length * 2,
+    "Familiar setup pool",
+    players.length
+  );
 
   shuffleInPlace(setupPool, rng);
 
@@ -466,9 +509,49 @@ function assignStartingFamiliars(
       );
     }
 
+    const selectedCandidate = alwaysPickFirstSetupChoice(
+      player,
+      "familiar",
+      [firstCandidate, secondCandidate],
+      eventLog
+    );
+
     player.unboughtFamiliar = factory.create(
-      firstCandidate.definitionId,
+      selectedCandidate.definitionId,
       player.playerId
+    );
+  }
+}
+
+function alwaysPickFirstSetupChoice<TCandidate extends SetupCandidate<string>>(
+  player: PlayerState,
+  setupChoiceKind: "familiar" | "wizardProperty",
+  candidates: readonly [TCandidate, TCandidate],
+  eventLog: GameEvent[]
+): TCandidate {
+  const chosenCandidate = candidates[0];
+  eventLog.push({
+    type: "setupChoiceSelected",
+    playerId: player.playerId,
+    setupChoiceKind,
+    policyId: "alwaysPickFirst",
+    candidateDefinitionIds: candidates.map(
+      (candidate) => candidate.definitionId
+    ),
+    chosenDefinitionId: chosenCandidate.definitionId,
+  });
+  return chosenCandidate;
+}
+
+function assertSetupPoolSize(
+  actualSize: number,
+  requiredSize: number,
+  label: string,
+  playerCount: number
+): void {
+  if (actualSize < requiredSize) {
+    throw new Error(
+      `${label} requires at least ${requiredSize} entries for playerCount ${playerCount}; got ${actualSize}`
     );
   }
 }

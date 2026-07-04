@@ -493,6 +493,7 @@ function loadCardDefinitions(
   }
 
   const cards = new Map<string, CardDefinition>();
+  const cardSourcePaths = new Map<string, string>();
 
   for (const cardDefinitionsPath of manifest.cardDefinitionPaths) {
     assertRuntimePath("cardDefinitionPaths", cardDefinitionsPath);
@@ -504,7 +505,17 @@ function loadCardDefinitions(
       }
 
       const card = readJsonFile<CardDefinition>(absoluteCardsPath, fileName);
+      const relativeFilePath = normalizeRuntimeFilePath(
+        path.join(cardDefinitionsPath, fileName)
+      );
+      const existingSourcePath = cardSourcePaths.get(card.cardId);
+      if (existingSourcePath !== undefined) {
+        throw new Error(
+          `Duplicate runtime cardId ${card.cardId}: ${existingSourcePath} conflicts with ${relativeFilePath}`
+        );
+      }
       cards.set(card.cardId, card);
+      cardSourcePaths.set(card.cardId, relativeFilePath);
     }
   }
 
@@ -516,6 +527,7 @@ function loadTokenDefinitions(
   manifest: DataPackManifest
 ): ReadonlyMap<string, TokenDefinition> {
   const tokens = new Map<string, TokenDefinition>();
+  const tokenSourcePaths = new Map<string, string>();
 
   for (const tokenDefinitionsPath of manifest.tokenDefinitionPaths ?? []) {
     assertRuntimePath("tokenDefinitionPaths", tokenDefinitionsPath);
@@ -527,7 +539,17 @@ function loadTokenDefinitions(
       }
 
       const token = readJsonFile<TokenDefinition>(absoluteTokensPath, fileName);
+      const relativeFilePath = normalizeRuntimeFilePath(
+        path.join(tokenDefinitionsPath, fileName)
+      );
+      const existingSourcePath = tokenSourcePaths.get(token.tokenId);
+      if (existingSourcePath !== undefined) {
+        throw new Error(
+          `Duplicate runtime tokenId ${token.tokenId}: ${existingSourcePath} conflicts with ${relativeFilePath}`
+        );
+      }
       tokens.set(token.tokenId, token);
+      tokenSourcePaths.set(token.tokenId, relativeFilePath);
     }
   }
 
@@ -557,6 +579,10 @@ function assertRuntimePath(fieldName: string, filePath: string): void {
 function readJsonFile<T>(rootDir: string, filePath: string): T {
   const absolutePath = path.resolve(rootDir, filePath);
   return JSON.parse(readFileSync(absolutePath, "utf8")) as T;
+}
+
+function normalizeRuntimeFilePath(filePath: string): string {
+  return filePath.replaceAll("\\", "/");
 }
 
 function validateRuntimeEffectDefinition(

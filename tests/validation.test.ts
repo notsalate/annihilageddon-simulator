@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -1640,6 +1643,62 @@ test("loader rejects import-only card definition paths before reading draft data
   );
 });
 
+test("loader rejects duplicate runtime card ids with both conflicting paths", () => {
+  const fixtureRootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-duplicate-card-id-")
+  );
+
+  writeRuntimeManifest(fixtureRootDir, {
+    cardDefinitionPaths: ["runtime/cards-a", "runtime/cards-b"],
+  });
+  writeRuntimeCard(
+    fixtureRootDir,
+    "runtime/cards-a/first.json",
+    "duplicate-card"
+  );
+  writeRuntimeCard(
+    fixtureRootDir,
+    "runtime/cards-b/second.json",
+    "duplicate-card"
+  );
+
+  assert.throws(
+    () => loadCurrentRuntimeDataPack(fixtureRootDir, "runtime/pack.json"),
+    /Duplicate runtime cardId duplicate-card.*runtime\/cards-a\/first\.json.*runtime\/cards-b\/second\.json/s
+  );
+});
+
+test("loader rejects duplicate runtime token ids with both conflicting paths", () => {
+  const fixtureRootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-duplicate-token-id-")
+  );
+
+  writeRuntimeManifest(fixtureRootDir, {
+    cardDefinitionPaths: ["runtime/cards"],
+    tokenDefinitionPaths: ["runtime/tokens-a", "runtime/tokens-b"],
+  });
+  writeRuntimeCard(
+    fixtureRootDir,
+    "runtime/cards/only-card.json",
+    "unique-card"
+  );
+  writeRuntimeToken(
+    fixtureRootDir,
+    "runtime/tokens-a/first.json",
+    "duplicate-token"
+  );
+  writeRuntimeToken(
+    fixtureRootDir,
+    "runtime/tokens-b/second.json",
+    "duplicate-token"
+  );
+
+  assert.throws(
+    () => loadCurrentRuntimeDataPack(fixtureRootDir, "runtime/pack.json"),
+    /Duplicate runtime tokenId duplicate-token.*runtime\/tokens-a\/first\.json.*runtime\/tokens-b\/second\.json/s
+  );
+});
+
 test("compatibility v0 loader delegates to current runtime manifest by default", () => {
   const dataPack = loadV0DataPack(rootDir);
 
@@ -1923,4 +1982,87 @@ function createFixtureCard(cardId: string): CardDefinition {
       unsupportedMechanics: [],
     },
   };
+}
+
+function writeRuntimeManifest(
+  fixtureRootDir: string,
+  overrides: Partial<{
+    cardDefinitionPaths: string[];
+    tokenDefinitionPaths: string[];
+  }>
+): void {
+  writeJsonFile(fixtureRootDir, "runtime/decks/starter.json", {
+    entries: [],
+  });
+  writeJsonFile(fixtureRootDir, "runtime/decks/main.json", {
+    entries: [],
+  });
+  writeJsonFile(fixtureRootDir, "runtime/decks/legend.json", {
+    entries: [],
+  });
+  writeJsonFile(fixtureRootDir, "runtime/stacks/wild-magic.json", {
+    entries: [],
+  });
+  writeJsonFile(fixtureRootDir, "runtime/stacks/limp-wand.json", {
+    entries: [],
+  });
+  writeJsonFile(fixtureRootDir, "runtime/pack.json", {
+    schemaVersion: 1,
+    packId: "duplicate-runtime-id-fixture",
+    runtimeSchema: "krutagidon.dataPack.v0",
+    mappingStatus: "fixture",
+    cardDefinitionPaths: overrides.cardDefinitionPaths ?? ["runtime/cards"],
+    decks: {
+      starterDeck: "runtime/decks/starter.json",
+      mainDeck: "runtime/decks/main.json",
+      legendDeck: "runtime/decks/legend.json",
+    },
+    cardStacks: {
+      wildMagicStack: "runtime/stacks/wild-magic.json",
+      limpWandStack: "runtime/stacks/limp-wand.json",
+    },
+    ...(overrides.tokenDefinitionPaths === undefined
+      ? {}
+      : { tokenDefinitionPaths: overrides.tokenDefinitionPaths }),
+  });
+}
+
+function writeRuntimeCard(
+  fixtureRootDir: string,
+  relativePath: string,
+  cardId: string
+): void {
+  writeJsonFile(fixtureRootDir, relativePath, createFixtureCard(cardId));
+}
+
+function writeRuntimeToken(
+  fixtureRootDir: string,
+  relativePath: string,
+  tokenId: string
+): void {
+  writeJsonFile(fixtureRootDir, relativePath, {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    visible: {
+      textRu: "Fixture token",
+    },
+    engine: {
+      mappingStatus: "fixture",
+      playableInV0: false,
+      effects: [],
+      unsupportedMechanics: [],
+    },
+  });
+}
+
+function writeJsonFile(
+  fixtureRootDir: string,
+  relativePath: string,
+  value: unknown
+): void {
+  const absolutePath = path.join(fixtureRootDir, relativePath);
+  mkdirSync(path.dirname(absolutePath), { recursive: true });
+  writeFileSync(absolutePath, JSON.stringify(value), "utf8");
 }

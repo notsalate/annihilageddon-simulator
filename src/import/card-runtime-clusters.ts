@@ -45,7 +45,6 @@ export interface CardRuntimeClusterReport {
     needsClusterDecision: number;
     clustered: number;
   };
-  generatedAt: string;
 }
 
 export interface SyncCardClusterDecisionsResult {
@@ -223,7 +222,6 @@ export function createCardRuntimeClusterReport(
       clustered: items.filter((item) => item.decisionStatus === "clustered")
         .length,
     },
-    generatedAt: new Date().toISOString(),
   };
 }
 
@@ -276,7 +274,7 @@ export function formatCardRuntimeClusterMarkdown(
     );
   }
 
-  lines.push("", `Generated at: ${report.generatedAt}`, "");
+  lines.push("");
   return lines.join("\n");
 }
 
