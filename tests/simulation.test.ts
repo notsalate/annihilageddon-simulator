@@ -10,6 +10,7 @@ import {
   runSingleGame,
   scoreGame,
 } from "../src/index.js";
+import { markPlayerId } from "../src/domain/types.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -49,7 +50,7 @@ test("bot action selection records turn number and safe action identity for debu
     (candidate) => candidate.type === "botActionSelected"
   );
   assert.ok(event);
-  assert.equal(event.playerId, "player-1");
+  assert.equal(event.playerId, markPlayerId("player-1"));
   assert.equal(event.turnNumber, 1);
   assert.equal(event.actionIdentity, "endTurn");
   assert.equal(event.actionSequence, 1);
@@ -228,13 +229,13 @@ test("winner determination applies VP, legend count, fewer DWT, then true tie", 
   assert.deepEqual(
     determineWinnerIds([
       {
-        playerId: "player-1",
+        playerId: markPlayerId("player-1"),
         victoryPoints: 8,
         legendCount: 0,
         deadWizardTokenCount: 0,
       },
       {
-        playerId: "player-2",
+        playerId: markPlayerId("player-2"),
         victoryPoints: 7,
         legendCount: 10,
         deadWizardTokenCount: 0,
@@ -245,13 +246,13 @@ test("winner determination applies VP, legend count, fewer DWT, then true tie", 
   assert.deepEqual(
     determineWinnerIds([
       {
-        playerId: "player-1",
+        playerId: markPlayerId("player-1"),
         victoryPoints: 8,
         legendCount: 1,
         deadWizardTokenCount: 0,
       },
       {
-        playerId: "player-2",
+        playerId: markPlayerId("player-2"),
         victoryPoints: 8,
         legendCount: 2,
         deadWizardTokenCount: 3,
@@ -262,13 +263,13 @@ test("winner determination applies VP, legend count, fewer DWT, then true tie", 
   assert.deepEqual(
     determineWinnerIds([
       {
-        playerId: "player-1",
+        playerId: markPlayerId("player-1"),
         victoryPoints: 8,
         legendCount: 2,
         deadWizardTokenCount: 1,
       },
       {
-        playerId: "player-2",
+        playerId: markPlayerId("player-2"),
         victoryPoints: 8,
         legendCount: 2,
         deadWizardTokenCount: 0,
@@ -279,13 +280,13 @@ test("winner determination applies VP, legend count, fewer DWT, then true tie", 
   assert.deepEqual(
     determineWinnerIds([
       {
-        playerId: "player-1",
+        playerId: markPlayerId("player-1"),
         victoryPoints: 8,
         legendCount: 2,
         deadWizardTokenCount: 0,
       },
       {
-        playerId: "player-2",
+        playerId: markPlayerId("player-2"),
         victoryPoints: 8,
         legendCount: 2,
         deadWizardTokenCount: 0,

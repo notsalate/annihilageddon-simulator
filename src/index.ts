@@ -2,6 +2,7 @@ export { assertNever, isPlainRecord } from "./common.js";
 export type {
   CardDefinitionId,
   CardInstanceId,
+  PlayerId,
   TokenDefinitionId,
   TokenInstanceId,
 } from "./domain/types.js";
@@ -97,7 +98,6 @@ export type {
   CardInstance,
   CommonState,
   GameState,
-  PlayerId,
   PlayerState,
   RuntimeEffectChoice,
   RuntimeEffectChoiceRequest,

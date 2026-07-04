@@ -8,6 +8,7 @@ import {
   listLegalActions,
   runSingleGame,
 } from "../src/index.js";
+import { markPlayerId } from "../src/domain/types.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -80,7 +81,7 @@ test("game state invariants reject a missing active player", () => {
     seed: 60615,
   });
 
-  state.activePlayerId = "player-99";
+  state.activePlayerId = markPlayerId("player-99");
 
   assert.throws(
     () => assertGameStateInvariants(state),

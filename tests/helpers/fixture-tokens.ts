@@ -5,6 +5,7 @@ import type {
   PlayerState,
   TokenDefinition,
 } from "../../src/index.js";
+import { markTokenDefinitionId } from "../../src/domain/types.js";
 
 export function replacePostSetupWizardPropertyFixture(
   state: GameState,
@@ -18,7 +19,7 @@ export function replacePostSetupWizardPropertyFixture(
     ...state.tokenDefinitions,
     [definition.tokenId, definition],
   ]);
-  property.definitionId = definition.tokenId;
+  property.definitionId = markTokenDefinitionId(definition.tokenId);
 
   return property;
 }

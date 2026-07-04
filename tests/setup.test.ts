@@ -7,6 +7,11 @@ import {
   type CardInstance,
   type GameState,
 } from "../src/index.js";
+import {
+  markCardDefinitionId,
+  markCardInstanceId,
+  markPlayerId,
+} from "../src/domain/types.js";
 
 const rootDir = process.cwd();
 
@@ -85,8 +90,8 @@ test("setup records initial market additions as setup-phase events", () => {
 
 test("starter card instances are independent between players", () => {
   const state = initializeGame({ rootDir, seed: 777 });
-  const firstPlayerStarter = ownedCards(state, "player-1");
-  const secondPlayerStarter = ownedCards(state, "player-2");
+  const firstPlayerStarter = ownedCards(state, markPlayerId("player-1"));
+  const secondPlayerStarter = ownedCards(state, markPlayerId("player-2"));
   const firstPlayerIds = new Set(
     firstPlayerStarter.map((card) => card.instanceId)
   );
@@ -122,8 +127,8 @@ function snapshot(state: GameState): unknown {
       deck: cardSnapshot(player.deck),
       hand: cardSnapshot(player.hand),
       wizardProperties: player.wizardProperties.map((token) => ({
-        instanceId: token.instanceId,
-        definitionId: token.definitionId,
+        instanceId: markCardInstanceId(token.instanceId),
+        definitionId: markCardDefinitionId(token.definitionId),
         ownerId: token.ownerId,
       })),
     })),
@@ -136,8 +141,8 @@ function snapshot(state: GameState): unknown {
 
 function cardSnapshot(cards: CardInstance[]): unknown[] {
   return cards.map((card) => ({
-    instanceId: card.instanceId,
-    definitionId: card.definitionId,
+    instanceId: markCardInstanceId(card.instanceId),
+    definitionId: markCardDefinitionId(card.definitionId),
     ownerId: card.ownerId,
   }));
 }

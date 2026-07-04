@@ -7,7 +7,7 @@ import type {
   PlayerId,
   TokenDefinitionId,
   TokenInstanceId,
-} from "../src/domain/types.js";
+} from "../src/index.js";
 import {
   createCardDefinitionId,
   createCardInstanceId,
@@ -19,7 +19,7 @@ import {
   markPlayerId,
   markTokenDefinitionId,
   markTokenInstanceId,
-} from "../src/domain/types.js";
+} from "../src/index.js";
 
 type Assert<T extends true> = T;
 type IsAssignable<From, To> = From extends To ? true : false;

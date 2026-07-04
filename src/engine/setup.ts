@@ -2,6 +2,14 @@ import {
   createCardInstanceId,
   createPlayerId,
   createTokenInstanceId,
+  markCardDefinitionId,
+  markTokenInstanceId,
+  markTokenDefinitionId,
+  type CardDefinitionId,
+  type CardInstanceId,
+  type PlayerId,
+  type TokenDefinitionId,
+  type TokenInstanceId,
 } from "../domain/types.js";
 import {
   isIncompleteFullOnlyDataPack,
@@ -17,19 +25,19 @@ import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
 
-export type PlayerId = `player-${number}`;
+export type { PlayerId } from "../domain/types.js";
 export type CommonOwner = "common";
 
 export interface CardInstance {
-  instanceId: string;
-  definitionId: string;
+  instanceId: CardInstanceId;
+  definitionId: CardDefinitionId;
   ownerId: PlayerId | CommonOwner;
   marketChips: number;
 }
 
 export interface TokenInstance {
-  instanceId: string;
-  definitionId: string;
+  instanceId: TokenInstanceId;
+  definitionId: TokenDefinitionId;
   ownerId: PlayerId | CommonOwner;
 }
 
@@ -197,11 +205,17 @@ export interface InitializeGameLoadedDataPackOptions extends InitializeGameBaseO
 }
 
 interface InstanceFactory {
-  create(definitionId: string, ownerId: PlayerId | CommonOwner): CardInstance;
+  create(
+    definitionId: CardDefinitionId,
+    ownerId: PlayerId | CommonOwner
+  ): CardInstance;
 }
 
 interface TokenInstanceFactory {
-  create(definitionId: string, ownerId: PlayerId | CommonOwner): TokenInstance;
+  create(
+    definitionId: TokenDefinitionId,
+    ownerId: PlayerId | CommonOwner
+  ): TokenInstance;
 }
 
 interface SetupCandidate<TDefinitionId extends string> {
@@ -452,7 +466,9 @@ function assignStartingWizardProperties(
 
     player.wizardProperties.push({
       ...selectedCandidate,
-      instanceId: `starting-${selectedCandidate.instanceId}-player-${index + 1}`,
+      instanceId: markTokenInstanceId(
+        `starting-${selectedCandidate.instanceId}-player-${index + 1}`
+      ),
       ownerId: player.playerId,
     });
   }
@@ -688,7 +704,11 @@ function replaceStartingCard(
       continue;
     }
 
-    zone.splice(cardIndex, 1, factory.create(toDefinitionId, player.playerId));
+    zone.splice(
+      cardIndex,
+      1,
+      factory.create(markCardDefinitionId(toDefinitionId), player.playerId)
+    );
     return;
   }
 
@@ -789,7 +809,9 @@ function instantiateDeck(
     }
 
     for (let copy = 0; copy < entry.count; copy += 1) {
-      instances.push(factory.create(definition.cardId, ownerId));
+      instances.push(
+        factory.create(markCardDefinitionId(definition.cardId), ownerId)
+      );
     }
   }
 
@@ -819,7 +841,9 @@ function instantiateTokenStack(
     }
 
     for (let copy = 0; copy < entry.count; copy += 1) {
-      instances.push(factory.create(definition.tokenId, ownerId));
+      instances.push(
+        factory.create(markTokenDefinitionId(definition.tokenId), ownerId)
+      );
     }
   }
 
@@ -872,7 +896,7 @@ function createInstanceFactory(): InstanceFactory {
 
   return {
     create(
-      definitionId: string,
+      definitionId: CardDefinitionId,
       ownerId: PlayerId | CommonOwner
     ): CardInstance {
       const instance: CardInstance = {
@@ -892,7 +916,7 @@ function createTokenInstanceFactory(): TokenInstanceFactory {
 
   return {
     create(
-      definitionId: string,
+      definitionId: TokenDefinitionId,
       ownerId: PlayerId | CommonOwner
     ): TokenInstance {
       const instance: TokenInstance = {

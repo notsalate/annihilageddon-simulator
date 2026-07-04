@@ -20,6 +20,10 @@ import {
   type TrophyLikeInstance,
 } from "../src/index.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
+import {
+  markCardInstanceId,
+  markCardDefinitionId,
+} from "../src/domain/types.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -219,8 +223,8 @@ test("wizard property discount and scoring modifier apply to owned treasures", (
   const player = state.players[0];
   assert.ok(player);
   player.discard.push({
-    instanceId: "fixture-owned-treasure",
-    definitionId: treasure.cardId,
+    instanceId: markCardInstanceId("fixture-owned-treasure"),
+    definitionId: markCardDefinitionId(treasure.cardId),
     ownerId: player.playerId,
     marketChips: 0,
   });
@@ -489,7 +493,7 @@ function createCostModifierStatus(
   amount: number
 ): StatusInstance {
   return {
-    instanceId: "fixture-cost-status",
+    instanceId: markCardInstanceId("fixture-cost-status"),
     statusId: "fixture-cost-status",
     ownerId: playerId,
     effects: [createCostModifierEffect(definitionId, amount)],
@@ -502,7 +506,7 @@ function createCostModifierTrophy(
   amount: number
 ): TrophyLikeInstance {
   return {
-    instanceId: "fixture-cost-trophy",
+    instanceId: markCardInstanceId("fixture-cost-trophy"),
     trophyId: "fixture-cost-trophy",
     ownerId: playerId,
     effects: [createCostModifierEffect(definitionId, amount)],
@@ -515,7 +519,7 @@ function createTokenVictoryPointModifierTrophy(
   amount: number
 ): TrophyLikeInstance {
   return {
-    instanceId: "fixture-token-vp-trophy",
+    instanceId: markCardInstanceId("fixture-token-vp-trophy"),
     trophyId: "fixture-token-vp-trophy",
     ownerId: playerId,
     effects: [
@@ -687,8 +691,8 @@ function createCardInstance(
   ownerId: CardInstance["ownerId"]
 ): CardInstance {
   return {
-    instanceId,
-    definitionId,
+    instanceId: markCardInstanceId(instanceId),
+    definitionId: markCardDefinitionId(definitionId),
     ownerId,
     marketChips: 0,
   };
@@ -739,6 +743,8 @@ function addFixtureStatusCardToActiveHand(
     },
   };
   return addFixtureDefinitionToActiveHand(state, definition, {
-    instanceId: `fixture-${effectId}-dingler-instance-${player.hand.length + 1}`,
+    instanceId: markCardInstanceId(
+      `fixture-${effectId}-dingler-instance-${player.hand.length + 1}`
+    ),
   }).instanceId;
 }

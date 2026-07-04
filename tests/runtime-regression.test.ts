@@ -14,6 +14,11 @@ import {
   type GameState,
   type SingleGameResult,
 } from "../src/index.js";
+import {
+  markCardDefinitionId,
+  markCardInstanceId,
+  markPlayerId,
+} from "../src/domain/types.js";
 
 const rootDir = process.cwd();
 
@@ -110,7 +115,7 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
     setupState: {
       players: [
         {
-          playerId: "player-1",
+          playerId: markPlayerId("player-1"),
           handSize: 2,
           deckSize: 8,
           life: 20,
@@ -118,29 +123,36 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
           chips: 1,
           hand: [
             {
-              instanceId: "card-start-a",
-              definitionId: "hand-a",
+              instanceId: markCardInstanceId("card-start-a"),
+              definitionId: markCardDefinitionId("hand-a"),
               marketChips: 0,
             },
             {
-              instanceId: "card-start-b",
-              definitionId: "hand-b",
+              instanceId: markCardInstanceId("card-start-b"),
+              definitionId: markCardDefinitionId("hand-b"),
               marketChips: 0,
             },
           ],
           wizardProperties: [
-            { instanceId: "token-prop-a", definitionId: "prop-a" },
+            {
+              instanceId: markCardInstanceId("token-prop-a"),
+              definitionId: markCardDefinitionId("prop-a"),
+            },
           ],
           statuses: ["Dingler"],
         },
       ],
       mainMarket: [
-        { instanceId: "card-buy", definitionId: "buy-card", marketChips: 0 },
+        {
+          instanceId: markCardInstanceId("card-buy"),
+          definitionId: markCardDefinitionId("buy-card"),
+          marketChips: 0,
+        },
       ],
       legendMarket: [
         {
-          instanceId: "card-legend",
-          definitionId: "legend-card",
+          instanceId: markCardInstanceId("card-legend"),
+          definitionId: markCardDefinitionId("legend-card"),
           marketChips: 0,
         },
       ],
@@ -153,7 +165,7 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
     eventLog: [
       {
         type: "setupChoiceSelected",
-        playerId: "player-1",
+        playerId: markPlayerId("player-1"),
         setupChoiceKind: "wizardProperty",
         policyId: "alwaysPickFirst",
         candidateDefinitionIds: ["prop-a", "prop-b"],
@@ -164,28 +176,28 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
         sourceType: "setup",
         destinationZone: "legendMarket",
         cardInstanceId: "card-legend",
-        definitionId: "legend-card",
+        definitionId: markCardDefinitionId("legend-card"),
       },
       {
         type: "marketEventCardOpened",
-        playerId: "player-2",
+        playerId: markPlayerId("player-2"),
         turnNumber: 2,
         actionSequence: 5,
         actionIdentity: "endTurn",
         sourceType: "turn",
         destinationZone: "mainMarket",
         cardInstanceId: "card-mayhem",
-        definitionId: "mayhem-card",
+        definitionId: markCardDefinitionId("mayhem-card"),
       },
       {
         type: "effectLifeSet",
-        playerId: "player-2",
-        targetPlayerId: "player-1",
+        playerId: markPlayerId("player-2"),
+        targetPlayerId: markPlayerId("player-1"),
         turnNumber: 2,
         actionSequence: 5,
         actionIdentity: "endTurn",
         cardInstanceId: "card-mayhem",
-        definitionId: "mayhem-card",
+        definitionId: markCardDefinitionId("mayhem-card"),
         effectId: "set_life",
         amount: 15,
         targetLifeBefore: 4,
@@ -193,21 +205,21 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
       },
       {
         type: "mayhemResolved",
-        playerId: "player-2",
+        playerId: markPlayerId("player-2"),
         turnNumber: 2,
         actionSequence: 5,
         actionIdentity: "endTurn",
         cardInstanceId: "card-mayhem",
-        definitionId: "mayhem-card",
+        definitionId: markCardDefinitionId("mayhem-card"),
       },
       {
         type: "cardBought",
-        playerId: "player-1",
+        playerId: markPlayerId("player-1"),
         turnNumber: 2,
         actionSequence: 6,
         actionIdentity: "buyMarketCard:mainMarket",
         cardInstanceId: "card-buy",
-        definitionId: "buy-card",
+        definitionId: markCardDefinitionId("buy-card"),
         destination: "discard",
         sourceZone: "mainMarket",
         amount: 3,
@@ -218,7 +230,7 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
       },
       {
         type: "endTurnCleanupMoved",
-        playerId: "player-1",
+        playerId: markPlayerId("player-1"),
         turnNumber: 2,
         actionSequence: 7,
         actionIdentity: "endTurn",
@@ -230,7 +242,7 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
       },
       {
         type: "handDrawn",
-        playerId: "player-1",
+        playerId: markPlayerId("player-1"),
         turnNumber: 2,
         actionSequence: 7,
         actionIdentity: "endTurn",
@@ -496,10 +508,10 @@ test("readable trace can render multiline card text for a real runtime event", (
 test("end-turn cleanup records actual owner discard destination for non-owned played cards", () => {
   const state = initializeGame({ rootDir, seed: 12345 });
   const activePlayer = state.players.find(
-    (player) => player.playerId === "player-1"
+    (player) => player.playerId === markPlayerId("player-1")
   );
   const ownerPlayer = state.players.find(
-    (player) => player.playerId === "player-2"
+    (player) => player.playerId === markPlayerId("player-2")
   );
   assert.ok(activePlayer);
   assert.ok(ownerPlayer);
@@ -598,8 +610,8 @@ function createCardInstance(
   ownerId: CardInstance["ownerId"] = "common"
 ): CardInstance {
   return {
-    instanceId,
-    definitionId,
+    instanceId: markCardInstanceId(instanceId),
+    definitionId: markCardDefinitionId(definitionId),
     ownerId,
     marketChips: 0,
   };

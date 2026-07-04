@@ -11,6 +11,7 @@ import {
   type MassSimulationResult,
   type SingleGameResult,
 } from "../src/index.js";
+import { markPlayerId } from "../src/domain/types.js";
 
 test("single-game menu summary is Russian and includes seed, result, and scores", () => {
   const result: SingleGameResult = {
@@ -18,17 +19,17 @@ test("single-game menu summary is Russian and includes seed, result, and scores"
     endReason: "mainDeckExhausted",
     isGameEnd: true,
     turnsElapsed: 42,
-    winnerIds: ["player-1"],
+    winnerIds: [markPlayerId("player-1")],
     isTie: false,
     players: [
       {
-        playerId: "player-1",
+        playerId: markPlayerId("player-1"),
         victoryPoints: 31,
         legendCount: 2,
         deadWizardTokenCount: 1,
       },
       {
-        playerId: "player-2",
+        playerId: markPlayerId("player-2"),
         victoryPoints: 24,
         legendCount: 0,
         deadWizardTokenCount: 3,
@@ -81,17 +82,17 @@ test("simulation menu handles invalid input and uses a generated seed for empty 
         endReason: "mainDeckExhausted",
         isGameEnd: true,
         turnsElapsed: 1,
-        winnerIds: ["player-1"],
+        winnerIds: [markPlayerId("player-1")],
         isTie: false,
         players: [
           {
-            playerId: "player-1",
+            playerId: markPlayerId("player-1"),
             victoryPoints: 1,
             legendCount: 0,
             deadWizardTokenCount: 0,
           },
           {
-            playerId: "player-2",
+            playerId: markPlayerId("player-2"),
             victoryPoints: 0,
             legendCount: 0,
             deadWizardTokenCount: 0,
@@ -273,22 +274,25 @@ test("mass simulation menu summary includes Russian aggregate metrics and turn-l
     games: [
       {
         seed: 100,
-        winnerIds: ["player-1"],
+        winnerIds: [markPlayerId("player-1")],
         isTie: false,
         endReason: "mainDeckExhausted",
         isGameEnd: true,
         turnsElapsed: 10,
         totalPurchases: 4,
-        purchasesByPlayer: { "player-1": 2, "player-2": 2 },
+        purchasesByPlayer: {
+          [markPlayerId("player-1")]: 2,
+          [markPlayerId("player-2")]: 2,
+        },
         players: [
           {
-            playerId: "player-1",
+            playerId: markPlayerId("player-1"),
             victoryPoints: 20,
             legendCount: 1,
             deadWizardTokenCount: 0,
           },
           {
-            playerId: "player-2",
+            playerId: markPlayerId("player-2"),
             victoryPoints: 15,
             legendCount: 0,
             deadWizardTokenCount: 1,
@@ -297,22 +301,25 @@ test("mass simulation menu summary includes Russian aggregate metrics and turn-l
       },
       {
         seed: 101,
-        winnerIds: ["player-1", "player-2"],
+        winnerIds: [markPlayerId("player-1"), markPlayerId("player-2")],
         isTie: true,
         endReason: "maxTurnsReached",
         isGameEnd: false,
         turnsElapsed: 20,
         totalPurchases: 6,
-        purchasesByPlayer: { "player-1": 3, "player-2": 3 },
+        purchasesByPlayer: {
+          [markPlayerId("player-1")]: 3,
+          [markPlayerId("player-2")]: 3,
+        },
         players: [
           {
-            playerId: "player-1",
+            playerId: markPlayerId("player-1"),
             victoryPoints: 18,
             legendCount: 0,
             deadWizardTokenCount: 2,
           },
           {
-            playerId: "player-2",
+            playerId: markPlayerId("player-2"),
             victoryPoints: 18,
             legendCount: 0,
             deadWizardTokenCount: 2,
@@ -322,8 +329,8 @@ test("mass simulation menu summary includes Russian aggregate metrics and turn-l
     ],
     aggregate: {
       totalGames: 2,
-      winCounts: { "player-1": 1 },
-      winRates: { "player-1": 0.5 },
+      winCounts: { [markPlayerId("player-1")]: 1 },
+      winRates: { [markPlayerId("player-1")]: 0.5 },
       tieCount: 1,
       tieRate: 0.5,
       endReasonCounts: {
