@@ -1,13 +1,16 @@
 import type { GameAction } from "./actions.js";
 import type { EffectSourceContext } from "./effect-runtime-registry.js";
+import { beginGameAction } from "./game-events.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
-export function recordBotActionSelected(state: GameState, action: GameAction): void {
+export function recordBotActionSelected(
+  state: GameState,
+  action: GameAction
+): void {
+  beginGameAction(state, action);
   state.eventLog.push({
     type: "botActionSelected",
     playerId: state.activePlayerId,
-    turnNumber: state.turn.number,
-    actionIdentity: getActionIdentity(action),
   });
 }
 
@@ -17,7 +20,7 @@ export function recordTurnPowerChanged(
   source: EffectSourceContext,
   effectId: string,
   powerBefore: number,
-  powerAfter: number,
+  powerAfter: number
 ): void {
   state.eventLog.push({
     type: "effectAddPowerApplied",
@@ -38,15 +41,19 @@ export function recordEffectChipsChanged(
   source: EffectSourceContext,
   effectId: string,
   chipsBefore: number,
-  chipsAfter: number,
+  chipsAfter: number
 ): void {
   state.eventLog.push({
     type: "effectChipsGained",
     playerId: player.playerId,
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
-    ...(source.tokenInstanceId === undefined ? {} : { tokenInstanceId: source.tokenInstanceId }),
-    ...(source.tokenDefinitionId === undefined ? {} : { tokenDefinitionId: source.tokenDefinitionId }),
+    ...(source.tokenInstanceId === undefined
+      ? {}
+      : { tokenInstanceId: source.tokenInstanceId }),
+    ...(source.tokenDefinitionId === undefined
+      ? {}
+      : { tokenDefinitionId: source.tokenDefinitionId }),
     effectId,
     amount: chipsAfter - chipsBefore,
     chipsBefore,
@@ -60,7 +67,7 @@ export function recordMarketChipsGained(
   player: PlayerState,
   card: CardInstance,
   chipsBefore: number,
-  chipsAfter: number,
+  chipsAfter: number
 ): void {
   state.eventLog.push({
     type: "marketChipsGained",
@@ -84,7 +91,7 @@ export function recordCardMoved(
     ownerAfter: CardInstance["ownerId"];
     effectId?: string;
     sourceType?: string;
-  },
+  }
 ): void {
   state.eventLog.push({
     type: "cardMoved",
@@ -96,14 +103,8 @@ export function recordCardMoved(
     ownerBefore: movement.ownerBefore,
     ownerAfter: movement.ownerAfter,
     ...(movement.effectId === undefined ? {} : { effectId: movement.effectId }),
-    ...(movement.sourceType === undefined ? {} : { sourceType: movement.sourceType }),
+    ...(movement.sourceType === undefined
+      ? {}
+      : { sourceType: movement.sourceType }),
   });
-}
-
-function getActionIdentity(action: GameAction): string {
-  if (action.type === "buyMarketCard") {
-    return `${action.type}:${action.source}`;
-  }
-
-  return action.type;
 }

@@ -88,6 +88,7 @@ export type {
   TrophyLikeInstance,
 } from "./engine/setup.js";
 export { initializeGame } from "./engine/setup.js";
+export { assertGameStateInvariants } from "./engine/invariants.js";
 export type {
   ActionResult,
   GameAction,
