@@ -12,13 +12,9 @@
     "victoryPoints": 1,
     "typeRu": "Волшебник",
     "cardKind": "normal",
-    "cardTypes": [
-      "wizardCard"
-    ],
+    "cardTypes": ["wizardCard"],
     "textRu": "+2 мощи\nАтака: выбери правого или левого врага. Он получает 1 вялую палочку.",
-    "markers": [
-      "attack"
-    ],
+    "markers": ["attack"],
     "uncertainty": []
   },
   "notes": [],

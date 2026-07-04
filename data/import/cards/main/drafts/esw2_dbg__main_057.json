@@ -12,9 +12,7 @@
     "victoryPoints": 1,
     "typeRu": "Сокровище",
     "cardKind": "normal",
-    "cardTypes": [
-      "treasure"
-    ],
+    "cardTypes": ["treasure"],
     "textRu": "+2 мощи\nМожешь потратить 1 чипсину, чтобы уничтожить 1 карту у себя на руке или в своей стопке сброса.",
     "markers": [],
     "uncertainty": []

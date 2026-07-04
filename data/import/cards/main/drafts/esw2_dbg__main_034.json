@@ -12,13 +12,9 @@
     "victoryPoints": 1,
     "typeRu": "Тварь",
     "cardKind": "normal",
-    "cardTypes": [
-      "creature"
-    ],
+    "cardTypes": ["creature"],
     "textRu": "+2 мощи\n[символ активации:]: Атака: если под твоим контролем есть ещё хотя бы 1 тварь, нанеси 9 урона выбранному врагу.",
-    "markers": [
-      "attack"
-    ],
+    "markers": ["attack"],
     "uncertainty": []
   },
   "notes": [],

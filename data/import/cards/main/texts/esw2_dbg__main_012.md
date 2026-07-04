@@ -1,4 +1,5 @@
-# esw2_dbg__main_012
+# esw2_dbg\_\_main_012
+
 - source image path: `assets/cards/creature/Тварь. Пейотка.png`
 - visible Russian name: `Пейотка`
 - cost: `3`

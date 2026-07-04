@@ -12,13 +12,9 @@
     "victoryPoints": 2,
     "typeRu": "Место",
     "cardKind": "normal",
-    "cardTypes": [
-      "location"
-    ],
+    "cardTypes": ["location"],
     "textRu": "Постоянка: +1 к пределу руки.",
-    "markers": [
-      "ongoing"
-    ],
+    "markers": ["ongoing"],
     "uncertainty": []
   },
   "notes": [

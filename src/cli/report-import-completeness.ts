@@ -1,4 +1,7 @@
-import { createImportCompletenessReport, formatImportCompletenessReport } from "../import/import-completeness.js";
+import {
+  createImportCompletenessReport,
+  formatImportCompletenessReport,
+} from "../import/import-completeness.js";
 
 const report = createImportCompletenessReport(process.cwd());
 

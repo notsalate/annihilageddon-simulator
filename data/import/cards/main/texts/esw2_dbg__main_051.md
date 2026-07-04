@@ -1,4 +1,5 @@
-# esw2_dbg__main_051
+# esw2_dbg\_\_main_051
+
 - source image path: `assets/cards/treasure/Сокровище. Зак-Дохляк.png`
 - visible Russian name: `Зак-Дохляк`
 - cost: `1`

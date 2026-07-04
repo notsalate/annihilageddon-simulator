@@ -1,4 +1,5 @@
-# esw2_dbg__main_006
+# esw2_dbg\_\_main_006
+
 - source image path: `assets/cards/wizard-card/Волшебник. Мармеладный архимаг.png`
 - visible Russian name: `Мармеладный архимаг`
 - cost: `2`

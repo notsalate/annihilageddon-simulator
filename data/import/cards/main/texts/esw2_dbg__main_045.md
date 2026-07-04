@@ -1,4 +1,5 @@
-# esw2_dbg__main_045
+# esw2_dbg\_\_main_045
+
 - source image path: `assets/cards/wizard-card/Волшебник. Глистомаг.png`
 - visible Russian name: `Глистомаг`
 - cost: `3`

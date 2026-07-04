@@ -112,4 +112,3 @@ This PRD should not implement combat itself. It prepares the reusable substrate 
 This PRD depends on the current rules canon and project glossary. It intentionally creates the reusable substrate before adding the combat/life layer.
 
 The most important architectural constraint is that effect behavior must be explicit and typed before runtime. Runtime must not parse natural-language card text.
-

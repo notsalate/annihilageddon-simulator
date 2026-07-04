@@ -12,9 +12,7 @@
     "victoryPoints": 1,
     "typeRu": "Заклинание",
     "cardKind": "normal",
-    "cardTypes": [
-      "spell"
-    ],
+    "cardTypes": ["spell"],
     "textRu": "[Символ активации]: Уничтожь эту карту: уничтожь 2 или меньше карт с руки.",
     "markers": [],
     "uncertainty": []

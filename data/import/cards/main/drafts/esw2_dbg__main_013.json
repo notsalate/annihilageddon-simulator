@@ -12,13 +12,9 @@
     "victoryPoints": 1,
     "typeRu": "Сокровище",
     "cardKind": "normal",
-    "cardTypes": [
-      "treasure"
-    ],
+    "cardTypes": ["treasure"],
     "textRu": "+2 мощи\nЗащита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 1 карту и получи 1 чипсину",
-    "markers": [
-      "defense"
-    ],
+    "markers": ["defense"],
     "uncertainty": []
   },
   "notes": [],

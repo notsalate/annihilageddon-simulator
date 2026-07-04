@@ -1,4 +1,5 @@
-# esw2_dbg__main_009
+# esw2_dbg\_\_main_009
+
 - source image path: `assets/cards/location/Место. Смазочная  грязная палка.png`
 - visible Russian name: `Смазочная "грязная палка"`
 - cost: `5`

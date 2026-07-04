@@ -1,4 +1,5 @@
-# esw2_dbg__main_036
+# esw2_dbg\_\_main_036
+
 - source image path: `assets/cards/spell/Заклинание. Лошашлык.png`
 - visible Russian name: `Лошашлык`
 - cost: `6`

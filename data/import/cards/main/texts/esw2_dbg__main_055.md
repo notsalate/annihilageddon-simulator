@@ -1,4 +1,5 @@
-# esw2_dbg__main_055
+# esw2_dbg\_\_main_055
+
 - source image path: `assets/cards/creature/Тварь. Трахангутан.png`
 - visible Russian name: `Трахангутан`
 - cost: `7`

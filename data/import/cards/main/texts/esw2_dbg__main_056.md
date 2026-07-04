@@ -1,4 +1,5 @@
-# esw2_dbg__main_056
+# esw2_dbg\_\_main_056
+
 - source image path: `assets/cards/treasure/Сокровище. Ведьмин подарочек.png`
 - visible Russian name: `Ведьмин подарочек`
 - cost: `5`

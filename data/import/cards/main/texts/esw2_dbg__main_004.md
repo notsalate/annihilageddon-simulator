@@ -1,4 +1,5 @@
-# esw2_dbg__main_004
+# esw2_dbg\_\_main_004
+
 - source image path: `assets/cards/spell/Заклинание. Мозгошторм.png`
 - visible Russian name: `Мозгошторм`
 - cost: `5`

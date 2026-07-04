@@ -1,4 +1,5 @@
-# esw2_dbg__main_039
+# esw2_dbg\_\_main_039
+
 - source image path: `assets/cards/treasure/Сокровище. Некрошест.png`
 - visible Russian name: `Некрошест`
 - cost: `7`

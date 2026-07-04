@@ -12,13 +12,9 @@
     "victoryPoints": 1,
     "typeRu": "Тварь",
     "cardKind": "normal",
-    "cardTypes": [
-      "creature"
-    ],
+    "cardTypes": ["creature"],
     "textRu": "Постоянка: +1 мощь",
-    "markers": [
-      "ongoing"
-    ],
+    "markers": ["ongoing"],
     "uncertainty": []
   },
   "notes": [],

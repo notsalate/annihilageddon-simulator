@@ -1,4 +1,5 @@
-# esw2_dbg__main_023
+# esw2_dbg\_\_main_023
+
 - source image path: `assets/cards/wizard-card/Волшебник. Сосочный приколист.png`
 - visible Russian name: `Сосочный приколист`
 - cost: `5`

@@ -1,4 +1,5 @@
-# esw2_dbg__main_025
+# esw2_dbg\_\_main_025
+
 - source image path: `assets/cards/spell/Заклинание. Жидкая кара.png`
 - visible Russian name: `Жидкая кара`
 - cost: `4`

@@ -12,13 +12,9 @@
     "victoryPoints": 1,
     "typeRu": "Место",
     "cardKind": "normal",
-    "cardTypes": [
-      "location"
-    ],
+    "cardTypes": ["location"],
     "textRu": "ПОСТОЯНКА: Получив легенду, можешь положить ее на верх своей колоды.",
-    "markers": [
-      "ongoing"
-    ],
+    "markers": ["ongoing"],
     "uncertainty": []
   },
   "notes": [

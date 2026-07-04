@@ -12,13 +12,9 @@
     "victoryPoints": 1,
     "typeRu": "Сокровище",
     "cardKind": "normal",
-    "cardTypes": [
-      "treasure"
-    ],
+    "cardTypes": ["treasure"],
     "textRu": "+ 1 мощь\nМожешь раскрыть эту карту с руки и потратить 1 жизнь и 1 чипсину, чтобы:\nЗащита: Избеги атаки",
-    "markers": [
-      "defense"
-    ],
+    "markers": ["defense"],
     "uncertainty": []
   },
   "notes": [

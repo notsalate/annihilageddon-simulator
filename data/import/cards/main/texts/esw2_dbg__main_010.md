@@ -1,4 +1,5 @@
-# esw2_dbg__main_010
+# esw2_dbg\_\_main_010
+
 - source image path: `assets/cards/wizard-card/Волшебник. Сурковый агент.png`
 - visible Russian name: `Сурковый агент`
 - cost: `6`

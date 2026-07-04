@@ -12,13 +12,9 @@
     "victoryPoints": 1,
     "typeRu": "Волшебник",
     "cardKind": "normal",
-    "cardTypes": [
-      "wizardCard"
-    ],
+    "cardTypes": ["wizardCard"],
     "textRu": "Постоянка:\n[символ активации]: уничтожь эту карту: если ты лошара, можешь стать нормальным. Затем накрути 7 жизней.",
-    "markers": [
-      "ongoing"
-    ],
+    "markers": ["ongoing"],
     "uncertainty": []
   },
   "notes": [

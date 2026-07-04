@@ -1,4 +1,5 @@
-# esw2_dbg__main_027
+# esw2_dbg\_\_main_027
+
 - source image path: `assets/cards/location/Место. Цирк братьев лошашных.png`
 - visible Russian name: `Цирк братьев лошашных`
 - cost: `7`

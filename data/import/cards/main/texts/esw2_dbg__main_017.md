@@ -1,4 +1,5 @@
-# esw2_dbg__main_017
+# esw2_dbg\_\_main_017
+
 - source image path: `assets/cards/wizard-card/Волшебник. Бесопанки.png`
 - visible Russian name: `Бесопанки`
 - cost: `4`

@@ -1,4 +1,5 @@
-# esw2_dbg__main_030
+# esw2_dbg\_\_main_030
+
 - source image path: `assets/cards/treasure/Сокровише. Палочка-Лошарочка.png`
 - visible Russian name: `Палочка-Лошарочка`
 - cost: `6`

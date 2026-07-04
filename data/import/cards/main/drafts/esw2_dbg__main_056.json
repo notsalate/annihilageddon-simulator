@@ -12,9 +12,7 @@
     "victoryPoints": 1,
     "typeRu": "Сокровище",
     "cardKind": "normal",
-    "cardTypes": [
-      "treasure"
-    ],
+    "cardTypes": ["treasure"],
     "textRu": "Возьми 1 карту.\n+1 мощь за каждую твою постоянку.",
     "markers": [],
     "uncertainty": []

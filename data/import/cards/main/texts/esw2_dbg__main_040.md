@@ -1,4 +1,5 @@
-# esw2_dbg__main_040
+# esw2_dbg\_\_main_040
+
 - source image path: `assets/cards/creature/Тварь. Потный ГикПиг.png`
 - visible Russian name: `Потный ГикПиг`
 - cost: `5`

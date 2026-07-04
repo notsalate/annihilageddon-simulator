@@ -31,4 +31,3 @@ This slice should execute an event-like attack fixture where affected players fi
 - `.scratch/krutagidon-simulation-platform/issues/18-avoid-a-single-target-attack-with-a-basic-hand-defense.md`
 - `.scratch/krutagidon-simulation-platform/issues/19-pay-defense-costs-and-run-defense-branch-effects.md`
 - `.scratch/krutagidon-simulation-platform/issues/20-resolve-a-state-sensitive-multi-target-player-attack.md`
-

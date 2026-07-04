@@ -12,9 +12,7 @@
     "victoryPoints": null,
     "typeRu": "Фамильяр",
     "cardKind": "familiar",
-    "cardTypes": [
-      "familiar"
-    ],
+    "cardTypes": ["familiar"],
     "textRu": "",
     "markers": [],
     "uncertainty": []

@@ -1,4 +1,5 @@
-# esw2_dbg__main_003
+# esw2_dbg\_\_main_003
+
 - source image path: `assets/cards/treasure/Сокровище. Стаканчик из Царьбакса.png`
 - visible Russian name: `Стаканчик из Царьбакса`
 - cost: `3`

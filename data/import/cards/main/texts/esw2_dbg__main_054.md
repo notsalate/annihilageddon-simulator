@@ -1,4 +1,5 @@
-# esw2_dbg__main_054
+# esw2_dbg\_\_main_054
+
 - source image path: `assets/cards/treasure/Сокровище. Золотой парашют.png`
 - visible Russian name: `Золотой парашют`
 - cost: `2`

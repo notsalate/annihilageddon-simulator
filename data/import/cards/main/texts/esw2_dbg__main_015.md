@@ -1,4 +1,5 @@
-# esw2_dbg__main_015
+# esw2_dbg\_\_main_015
+
 - source image path: `assets/cards/treasure/Сокровище. Палочка-шлепалочка.png`
 - visible Russian name: `Палочка-шлепалочка`
 - cost: `5`

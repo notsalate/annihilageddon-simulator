@@ -28,4 +28,3 @@ This slice should let an effect ask for legal target or object choices, let the 
 ## Blocked by
 
 - `.scratch/krutagidon-simulation-platform/issues/10-execute-existing-play-effects-through-shared-effect-runtime.md`
-

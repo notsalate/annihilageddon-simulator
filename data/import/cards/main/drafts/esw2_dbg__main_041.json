@@ -12,18 +12,12 @@
     "victoryPoints": 1,
     "typeRu": "Сокровище",
     "cardKind": "normal",
-    "cardTypes": [
-      "treasure"
-    ],
+    "cardTypes": ["treasure"],
     "textRu": "+2 мощи\nМожешь потратить 1 чипсину, чтобы:\nАтака: нанеси 10 урона выбранному колдуну",
-    "markers": [
-      "attack"
-    ],
+    "markers": ["attack"],
     "uncertainty": []
   },
-  "notes": [
-    "Атаку можно нанести и себе"
-  ],
+  "notes": ["Атаку можно нанести и себе"],
   "composition": {
     "quantity": 2
   }

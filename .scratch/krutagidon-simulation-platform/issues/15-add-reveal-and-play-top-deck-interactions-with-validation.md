@@ -32,4 +32,3 @@ This slice should let fixture effects reveal cards from decks, play top cards th
 - `.scratch/krutagidon-simulation-platform/issues/10-execute-existing-play-effects-through-shared-effect-runtime.md`
 - `.scratch/krutagidon-simulation-platform/issues/12-resolve-first-legal-choices-for-a-targeted-fixture-effect.md`
 - `.scratch/krutagidon-simulation-platform/issues/14-add-generic-gain-discard-destroy-movement-effects.md`
-

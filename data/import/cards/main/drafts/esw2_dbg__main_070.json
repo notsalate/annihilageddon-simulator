@@ -14,9 +14,7 @@
     "cardKind": "mayhem",
     "cardTypes": [],
     "textRu": "Атака: каждый колдун отхватывает 5 урона.",
-    "markers": [
-      "attack"
-    ],
+    "markers": ["attack"],
     "uncertainty": []
   },
   "notes": [],

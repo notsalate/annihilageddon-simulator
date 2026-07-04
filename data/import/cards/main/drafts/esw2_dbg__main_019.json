@@ -12,9 +12,7 @@
     "victoryPoints": 4,
     "typeRu": "Заклинание",
     "cardKind": "normal",
-    "cardTypes": [
-      "spell"
-    ],
+    "cardTypes": ["spell"],
     "textRu": "Ты и любой другой колдун берёте по 1 карте.",
     "markers": [],
     "uncertainty": []

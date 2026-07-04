@@ -1,4 +1,5 @@
-# esw2_dbg__main_011
+# esw2_dbg\_\_main_011
+
 - source image path: `assets/cards/creature/Тварь. Желатиновый сисяк.png`
 - visible Russian name: `Желатиновый сисяк`
 - cost: `5`

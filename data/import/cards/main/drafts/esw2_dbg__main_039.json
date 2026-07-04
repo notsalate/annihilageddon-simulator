@@ -12,9 +12,7 @@
     "victoryPoints": 2,
     "typeRu": "Сокровище",
     "cardKind": "normal",
-    "cardTypes": [
-      "treasure"
-    ],
+    "cardTypes": ["treasure"],
     "textRu": "+2 мощи за каждый жетон дохлого колдуна под твоим контролем.",
     "markers": [],
     "uncertainty": []

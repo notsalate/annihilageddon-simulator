@@ -1,4 +1,5 @@
-# esw2_dbg__main_032
+# esw2_dbg\_\_main_032
+
 - source image path: `assets/cards/spell/Заклинание. Браталити.png`
 - visible Russian name: `Браталити`
 - cost: `7`

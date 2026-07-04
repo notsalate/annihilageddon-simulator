@@ -32,4 +32,3 @@ This slice should make defense legality depend on payable costs such as discardi
 - `.scratch/krutagidon-simulation-platform/issues/14-add-generic-gain-discard-destroy-movement-effects.md`
 - `.scratch/krutagidon-simulation-platform/issues/15-add-reveal-and-play-top-deck-interactions-with-validation.md`
 - `.scratch/krutagidon-simulation-platform/issues/18-avoid-a-single-target-attack-with-a-basic-hand-defense.md`
-

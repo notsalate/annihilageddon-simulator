@@ -1,4 +1,5 @@
-# esw2_dbg__main_048
+# esw2_dbg\_\_main_048
+
 - source image path: `assets/cards/creature/Тварь. Развратот.png`
 - visible Russian name: `Развратот`
 - cost: `6`

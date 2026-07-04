@@ -1,4 +1,5 @@
-# esw2_dbg__main_053
+# esw2_dbg\_\_main_053
+
 - source image path: `assets/cards/treasure/Сокровище. Чак-Дохляк.png`
 - visible Russian name: `Чак-Дохляк`
 - cost: `1`

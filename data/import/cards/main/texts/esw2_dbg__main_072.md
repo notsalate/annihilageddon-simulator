@@ -1,4 +1,5 @@
-# esw2_dbg__main_072
+# esw2_dbg\_\_main_072
+
 - source image path: `assets/cards/mayhem/БЕСПРЕДЕЛ. 2H.png`
 - visible Russian name: `2H`
 - cost: `None`

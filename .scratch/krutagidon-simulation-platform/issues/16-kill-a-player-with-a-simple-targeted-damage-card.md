@@ -33,4 +33,3 @@ This slice should use a simple fixture card effect that chooses a target, deals 
 - `.scratch/krutagidon-simulation-platform/issues/11-add-token-definitions-with-neutral-dwt-scoring-path.md`
 - `.scratch/krutagidon-simulation-platform/issues/12-resolve-first-legal-choices-for-a-targeted-fixture-effect.md`
 - `.scratch/krutagidon-simulation-platform/issues/13-apply-controlled-object-modifiers-through-effective-values.md`
-

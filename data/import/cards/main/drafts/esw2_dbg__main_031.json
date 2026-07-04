@@ -12,14 +12,9 @@
     "victoryPoints": 2,
     "typeRu": "Тварь",
     "cardKind": "normal",
-    "cardTypes": [
-      "creature"
-    ],
+    "cardTypes": ["creature"],
     "textRu": "Постоянка:\n[Символ активации]: Уничтожь эту карту: атака: выбранный колдун становится лошарой.",
-    "markers": [
-      "attack",
-      "ongoing"
-    ],
+    "markers": ["attack", "ongoing"],
     "uncertainty": []
   },
   "notes": [

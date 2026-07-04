@@ -1,4 +1,5 @@
-# esw2_dbg__main_044
+# esw2_dbg\_\_main_044
+
 - source image path: `assets/cards/treasure/Сокровище. Эпичный мерч боевых магов.png`
 - visible Russian name: `Эпичный мерч боевых магов`
 - cost: `4`

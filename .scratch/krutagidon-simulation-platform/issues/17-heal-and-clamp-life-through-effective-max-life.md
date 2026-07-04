@@ -31,4 +31,3 @@ This slice should execute a fixture healing effect, calculate the player's effec
 - `.scratch/krutagidon-simulation-platform/issues/10-execute-existing-play-effects-through-shared-effect-runtime.md`
 - `.scratch/krutagidon-simulation-platform/issues/13-apply-controlled-object-modifiers-through-effective-values.md`
 - `.scratch/krutagidon-simulation-platform/issues/16-kill-a-player-with-a-simple-targeted-damage-card.md`
-

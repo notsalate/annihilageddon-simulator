@@ -1,4 +1,5 @@
-# esw2_dbg__main_052
+# esw2_dbg\_\_main_052
+
 - source image path: `assets/cards/treasure/Сокровище. Исаак-Дохляк.png`
 - visible Russian name: `Исаак-Дохляк`
 - cost: `1`

@@ -1,4 +1,5 @@
-# esw2_dbg__main_033
+# esw2_dbg\_\_main_033
+
 - source image path: `assets/cards/spell/Заклинание. Волшебные отходы.png`
 - visible Russian name: `Волшебные отходы`
 - cost: `3`

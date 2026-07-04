@@ -126,4 +126,3 @@ The key gameplay decision from discussion is that ordinary player attacks and Ma
 - Mayhem/Mega Mayhem attack: collect defense/participation decisions first, then resolve.
 
 Redirect is intentionally deferred, but the domain decision is already recorded: when implemented later, a redirected attack becomes an attack from the defending player for source, Trophy credit, and attack modifiers.
-

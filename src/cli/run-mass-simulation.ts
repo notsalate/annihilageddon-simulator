@@ -24,7 +24,11 @@ function parseArgs(args: string[]): CliOptions {
   };
 }
 
-function readNumberOption(args: string[], optionName: string, fallback: number): number {
+function readNumberOption(
+  args: string[],
+  optionName: string,
+  fallback: number
+): number {
   const optionIndex = args.indexOf(optionName);
   if (optionIndex < 0) {
     return fallback;

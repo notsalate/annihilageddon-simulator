@@ -12,13 +12,9 @@
     "victoryPoints": 1,
     "typeRu": "Сокровище",
     "cardKind": "normal",
-    "cardTypes": [
-      "treasure"
-    ],
+    "cardTypes": ["treasure"],
     "textRu": "Сыграв эту карту, получи 1 чипсину за каждый свой жетон дохлого колдуна.\nПостоянка: эта карта считается жетоном дохлого колдуна",
-    "markers": [
-      "ongoing"
-    ],
+    "markers": ["ongoing"],
     "uncertainty": []
   },
   "notes": [

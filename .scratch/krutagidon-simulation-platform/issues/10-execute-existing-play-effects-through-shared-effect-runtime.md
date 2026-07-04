@@ -28,4 +28,3 @@ This slice should make the current `add_power` and `draw_cards` behavior execute
 ## Blocked by
 
 None - can start immediately
-

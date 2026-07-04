@@ -1,4 +1,5 @@
-# esw2_dbg__main_035
+# esw2_dbg\_\_main_035
+
 - source image path: `assets/cards/creature/Тварь. Пивохранилище.png`
 - visible Russian name: `Пивохранилище`
 - cost: `6`

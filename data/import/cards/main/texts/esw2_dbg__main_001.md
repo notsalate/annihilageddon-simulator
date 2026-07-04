@@ -1,4 +1,5 @@
-# esw2_dbg__main_001
+# esw2_dbg\_\_main_001
+
 - source image path: `assets/cards/spell/Заклинание. Говна-Пирога.png`
 - visible Russian name: `Говна-Пирога`
 - cost: `5`

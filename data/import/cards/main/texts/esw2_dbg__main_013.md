@@ -1,4 +1,5 @@
-# esw2_dbg__main_013
+# esw2_dbg\_\_main_013
+
 - source image path: `assets/cards/treasure/Сокровище. Идол счастливой сучки.png`
 - visible Russian name: `Идол счастливой сучки`
 - cost: `4`
