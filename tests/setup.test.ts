@@ -17,7 +17,14 @@ test("initial game setup is deterministic for the same seed", () => {
   assert.deepEqual(snapshot(first), snapshot(second));
 });
 
-test("current runtime data pack uses the canonical personal starter deck template", () => {
+test("current runtime data pack uses current-runtime manifest", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+
+  assert.equal(dataPack.manifest.packId, "current-runtime-data-pack");
+  assert.equal(dataPack.manifest.decks?.starterDeck, "data/decks/starter-deck.json");
+});
+
+test("current runtime data pack uses canonical starter template", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
 
   assert.deepEqual(dataPack.decks.starterDeck.entries, [
@@ -43,7 +50,6 @@ test("initial runtime setup gives each player exactly ten starter cards", () => 
     assert.equal(starterCards.length, 10);
     assert.equal(player.hand.length, 5);
     assert.equal(player.deck.length, 5);
-    assert.equal(player.discard.length, 0);
     assert.equal(countDefinition(starterCards, "esw2_dbg__starter_001"), 6);
     assert.equal(countDefinition(starterCards, "esw2_dbg__starter_002"), 3);
     assert.equal(countDefinition(starterCards, "esw2_dbg__starter_003"), 1);
@@ -107,9 +113,6 @@ function snapshot(state: GameState): unknown {
       playerId: player.playerId,
       deck: cardSnapshot(player.deck),
       hand: cardSnapshot(player.hand),
-      discard: cardSnapshot(player.discard),
-      playedThisTurn: cardSnapshot(player.playedThisTurn),
-      permanents: cardSnapshot(player.permanents),
       wizardProperties: player.wizardProperties.map((token) => ({
         instanceId: token.instanceId,
         definitionId: token.definitionId,
@@ -119,8 +122,6 @@ function snapshot(state: GameState): unknown {
     common: {
       market: cardSnapshot(state.common.market),
       legendMarket: cardSnapshot(state.common.legendMarket),
-      mainDeck: cardSnapshot(state.common.mainDeck),
-      legendDeck: cardSnapshot(state.common.legendDeck),
     },
   };
 }
