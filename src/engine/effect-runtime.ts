@@ -1,4 +1,5 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
+import { isPlainRecord } from "../common.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
 import { recordCardMoved, recordMarketChipsGained } from "./event-recorder.js";
@@ -2095,7 +2096,7 @@ function shuffleInPlace<T>(items: T[], state: GameState): void {
 }
 
 function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
-  return typeof effect === "object" && effect !== null;
+  return isPlainRecord(effect);
 }
 
 function getCardEffectRuntimeMode(definitionId: string): "combat" | "fixture" {

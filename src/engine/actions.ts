@@ -7,6 +7,7 @@ import {
   hasExecutableWizardPropertyActivation,
   moveGainedCardToPlayerDestination,
 } from "./effect-runtime.js";
+import { assertNever, isPlainRecord } from "../common.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import { calculateEffectiveCardCost } from "./effective-values.js";
 import { recordCardMoved } from "./event-recorder.js";
@@ -123,6 +124,8 @@ export function applyAction(
       return activateWizardProperty(state, action.tokenInstanceId);
     case "endTurn":
       return endTurn(state);
+    default:
+      return assertNever(action);
   }
 }
 
@@ -537,6 +540,8 @@ function getBuySourceZone(state: GameState, source: BuySource): CardInstance[] {
       return state.common.wildMagicStack;
     case "familiar":
       return [];
+    default:
+      return assertNever(source);
   }
 }
 
@@ -636,5 +641,5 @@ function mustGetDefinition(state: GameState, definitionId: string) {
 }
 
 function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
-  return typeof effect === "object" && effect !== null;
+  return isPlainRecord(effect);
 }

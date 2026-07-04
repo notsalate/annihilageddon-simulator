@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { isPlainRecord } from "../common.js";
 import {
   getEffectRuntimeCatalogEntry,
   isEffectRuntimeCatalogEntrySupportedInMode,
@@ -620,5 +621,5 @@ function validateRuntimeEffectDefinition(
 }
 
 function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
-  return typeof effect === "object" && effect !== null;
+  return isPlainRecord(effect);
 }

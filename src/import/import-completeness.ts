@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { isPlainRecord } from "../common.js";
 import { validateDraft } from "./draft-validation.js";
 
 const maxGapIdsPerArea = 10;
@@ -68,37 +69,68 @@ const importAreas: ImportAreaConfig[] = [
   },
 ];
 
-export function createImportCompletenessReport(rootDir: string): ImportCompletenessReport {
+export function createImportCompletenessReport(
+  rootDir: string
+): ImportCompletenessReport {
   const areas = importAreas.map((area) => createAreaReport(rootDir, area));
 
   return {
     areas,
     validationErrorCount: areas.reduce((sum, area) => sum + area.errorCount, 0),
-    validationWarningCount: areas.reduce((sum, area) => sum + area.warningCount, 0),
+    validationWarningCount: areas.reduce(
+      (sum, area) => sum + area.warningCount,
+      0
+    ),
   };
 }
 
-export function formatImportCompletenessReport(report: ImportCompletenessReport): string {
+export function formatImportCompletenessReport(
+  report: ImportCompletenessReport
+): string {
   const lines = ["Import completeness:"];
 
   for (const area of report.areas) {
     lines.push(
-      `${area.label}: raw ${area.rawCount}, drafts ${area.draftCount} (valid ${area.validDraftCount}, invalid ${area.invalidDraftCount}, warnings ${area.warningCount}), runtime ${area.runtimeCount}`,
+      `${area.label}: raw ${area.rawCount}, drafts ${area.draftCount} (valid ${area.validDraftCount}, invalid ${area.invalidDraftCount}, warnings ${area.warningCount}), runtime ${area.runtimeCount}`
     );
   }
 
-  lines.push(`draft validation: ${report.validationErrorCount} error(s), ${report.validationWarningCount} warning(s)`);
-  pushGapLine(lines, "missing drafts", report.areas, (area) => area.missingDraftIds);
-  pushGapLine(lines, "missing runtime", report.areas, (area) => area.missingRuntimeIds);
-  pushGapLine(lines, "runtime without valid draft", report.areas, (area) => area.runtimeWithoutValidDraftIds);
+  lines.push(
+    `draft validation: ${report.validationErrorCount} error(s), ${report.validationWarningCount} warning(s)`
+  );
+  pushGapLine(
+    lines,
+    "missing drafts",
+    report.areas,
+    (area) => area.missingDraftIds
+  );
+  pushGapLine(
+    lines,
+    "missing runtime",
+    report.areas,
+    (area) => area.missingRuntimeIds
+  );
+  pushGapLine(
+    lines,
+    "runtime without valid draft",
+    report.areas,
+    (area) => area.runtimeWithoutValidDraftIds
+  );
 
   return lines.join("\n");
 }
 
-function createAreaReport(rootDir: string, area: ImportAreaConfig): ImportCompletenessAreaReport {
+function createAreaReport(
+  rootDir: string,
+  area: ImportAreaConfig
+): ImportCompletenessAreaReport {
   const rawIds = collectIdsFromFiles(rootDir, area.rawDirs, ".md");
   const draftFiles = collectFiles(rootDir, area.draftDirs, ".json");
-  const runtimeIds = collectRuntimeIds(rootDir, area.runtimeDirs, area.runtimeKind);
+  const runtimeIds = collectRuntimeIds(
+    rootDir,
+    area.runtimeDirs,
+    area.runtimeKind
+  );
   const draftIds = new Set<string>();
   const validDraftIds = new Set<string>();
   let errorCount = 0;
@@ -118,7 +150,9 @@ function createAreaReport(rootDir: string, area: ImportAreaConfig): ImportComple
       draftIds.add(draftId);
     }
 
-    const validation = validateDraft(parsed, { filePath: path.relative(rootDir, draftFile).replaceAll("\\", "/") });
+    const validation = validateDraft(parsed, {
+      filePath: path.relative(rootDir, draftFile).replaceAll("\\", "/"),
+    });
     errorCount += validation.errors.length;
     warningCount += validation.warnings.length;
     if (validation.ok) {
@@ -140,16 +174,30 @@ function createAreaReport(rootDir: string, area: ImportAreaConfig): ImportComple
     warningCount,
     runtimeCount: runtimeIds.length,
     missingDraftIds: rawIds.filter((id) => !draftIds.has(id)),
-    missingRuntimeIds: validDraftIdList.filter((id) => !runtimeIds.includes(id)),
-    runtimeWithoutValidDraftIds: runtimeIds.filter((id) => !validDraftIds.has(id)),
+    missingRuntimeIds: validDraftIdList.filter(
+      (id) => !runtimeIds.includes(id)
+    ),
+    runtimeWithoutValidDraftIds: runtimeIds.filter(
+      (id) => !validDraftIds.has(id)
+    ),
   };
 }
 
-function collectIdsFromFiles(rootDir: string, inputDirs: string[], extension: string): string[] {
-  return collectFiles(rootDir, inputDirs, extension).map((filePath) => path.basename(filePath, extension)).sort();
+function collectIdsFromFiles(
+  rootDir: string,
+  inputDirs: string[],
+  extension: string
+): string[] {
+  return collectFiles(rootDir, inputDirs, extension)
+    .map((filePath) => path.basename(filePath, extension))
+    .sort();
 }
 
-function collectRuntimeIds(rootDir: string, inputDirs: string[], runtimeKind: string | undefined): string[] {
+function collectRuntimeIds(
+  rootDir: string,
+  inputDirs: string[],
+  runtimeKind: string | undefined
+): string[] {
   const ids: string[] = [];
 
   for (const filePath of collectFiles(rootDir, inputDirs, ".json")) {
@@ -165,7 +213,10 @@ function collectRuntimeIds(rootDir: string, inputDirs: string[], runtimeKind: st
       continue;
     }
 
-    if (!isRecord(parsed) || (runtimeKind !== undefined && parsed["kind"] !== runtimeKind)) {
+    if (
+      !isRecord(parsed) ||
+      (runtimeKind !== undefined && parsed["kind"] !== runtimeKind)
+    ) {
       continue;
     }
 
@@ -175,18 +226,30 @@ function collectRuntimeIds(rootDir: string, inputDirs: string[], runtimeKind: st
   return ids.sort();
 }
 
-function collectFiles(rootDir: string, inputDirs: string[], extension: string): string[] {
-  return inputDirs.flatMap((inputDir) => {
-    const absoluteInputDir = path.resolve(rootDir, inputDir);
-    if (!existsSync(absoluteInputDir) || !statSync(absoluteInputDir).isDirectory()) {
-      return [];
-    }
+function collectFiles(
+  rootDir: string,
+  inputDirs: string[],
+  extension: string
+): string[] {
+  return inputDirs
+    .flatMap((inputDir) => {
+      const absoluteInputDir = path.resolve(rootDir, inputDir);
+      if (
+        !existsSync(absoluteInputDir) ||
+        !statSync(absoluteInputDir).isDirectory()
+      ) {
+        return [];
+      }
 
-    return collectFilesRecursive(absoluteInputDir, extension);
-  }).sort();
+      return collectFilesRecursive(absoluteInputDir, extension);
+    })
+    .sort();
 }
 
-function collectFilesRecursive(absoluteInputDir: string, extension: string): string[] {
+function collectFilesRecursive(
+  absoluteInputDir: string,
+  extension: string
+): string[] {
   return readdirSync(absoluteInputDir, { withFileTypes: true })
     .flatMap((entry) => {
       const absoluteEntryPath = path.join(absoluteInputDir, entry.name);
@@ -198,7 +261,9 @@ function collectFilesRecursive(absoluteInputDir: string, extension: string): str
         return collectFilesRecursive(absoluteEntryPath, extension);
       }
 
-      return entry.isFile() && entry.name.endsWith(extension) ? [absoluteEntryPath] : [];
+      return entry.isFile() && entry.name.endsWith(extension)
+        ? [absoluteEntryPath]
+        : [];
     })
     .sort();
 }
@@ -231,7 +296,7 @@ function pushGapLine(
   lines: string[],
   prefix: string,
   areas: ImportCompletenessAreaReport[],
-  selectIds: (area: ImportCompletenessAreaReport) => string[],
+  selectIds: (area: ImportCompletenessAreaReport) => string[]
 ): void {
   const parts: string[] = [];
   for (const area of areas) {
@@ -257,7 +322,7 @@ function formatIdList(ids: string[]): string {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return isPlainRecord(value);
 }
 
 function isString(value: unknown): value is string {

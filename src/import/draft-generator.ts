@@ -1,6 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { assertNever } from "../common.js";
+
 export type DraftImportKind = "card" | "deadWizardToken" | "wizardProperty";
 
 export interface DraftImportSource {
@@ -148,6 +150,8 @@ function createDraft(
       return createDeadWizardTokenDraft(sourceTextPath, markdown, blockers);
     case "wizardProperty":
       return createWizardPropertyDraft(sourceTextPath, markdown, blockers);
+    default:
+      return assertNever(kind);
   }
 }
 
@@ -709,6 +713,8 @@ function canonicalDraftFileId(sourceId: string, kind: DraftImportKind): string {
       return canonicalTokenId(sourceId, "wizard_property");
     case "card":
       return sourceId;
+    default:
+      return assertNever(kind);
   }
 }
 

@@ -4,6 +4,8 @@ import {
   calculateEffectivePlayerMaxLife,
 } from "./effective-values.js";
 import { recordTurnPowerChanged } from "./event-recorder.js";
+import { isPlainRecord } from "../common.js";
+
 import type {
   CardInstance,
   GameState,
@@ -3292,10 +3294,7 @@ function validateCardTargetSelector(
   expectedSelector: string
 ): string[] {
   const target = effect["target"];
-  const selector =
-    typeof target === "object" && target !== null
-      ? (target as Record<string, unknown>)["selector"]
-      : target;
+  const selector = isPlainRecord(target) ? target["selector"] : target;
   if (selector !== expectedSelector) {
     return [
       `${subjectId} uses unsupported ${effectLabel} target ${String(selector)}`,
@@ -4206,7 +4205,7 @@ function shuffleInPlace<T>(items: T[], state: GameState): void {
 }
 
 function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
-  return typeof effect === "object" && effect !== null;
+  return isPlainRecord(effect);
 }
 
 function setupOnlyExecutionError(effectId: string): EffectExecutionResult {

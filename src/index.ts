@@ -1,3 +1,4 @@
+export { assertNever, isPlainRecord } from "./common.js";
 export type { RandomSource } from "./engine/rng.js";
 export { createSeededRng } from "./engine/rng.js";
 export type {

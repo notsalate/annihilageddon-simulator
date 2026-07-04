@@ -8,6 +8,8 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { isPlainRecord } from "../common.js";
+
 export type RuntimeCoverageStatus =
   | "missingRuntime"
   | "reviewNeeded"
@@ -860,9 +862,7 @@ function code(value: string): string {
 }
 
 function getRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return isPlainRecord(value) ? value : {};
 }
 
 function getString(value: unknown): string | undefined {

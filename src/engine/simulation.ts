@@ -4,6 +4,7 @@ import {
   type GameAction,
   type LegalAction,
 } from "./actions.js";
+import { assertNever } from "../common.js";
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import {
   calculateEffectiveCardCost,
@@ -273,6 +274,8 @@ function isLegalAction(
         );
       case "endTurn":
         return legalAction.type === "endTurn";
+      default:
+        return assertNever(action);
     }
   });
 }
