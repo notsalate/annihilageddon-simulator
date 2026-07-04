@@ -7,6 +7,12 @@ import {
   type GameState,
   type TokenDefinition,
 } from "../src/index.js";
+import {
+  markCardDefinitionId,
+  markCardInstanceId,
+  markTokenDefinitionId,
+  markTokenInstanceId,
+} from "../src/domain/types.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -139,14 +145,16 @@ function addActivationFixturesToActivePlayer(state: GameState): void {
     [fixtureWizardPropertyDefinition.tokenId, fixtureWizardPropertyDefinition],
   ]);
   activePlayer.permanents.push({
-    instanceId: permanentInstanceId,
-    definitionId: fixturePermanentDefinition.cardId,
+    instanceId: markCardInstanceId(permanentInstanceId),
+    definitionId: markCardDefinitionId(fixturePermanentDefinition.cardId),
     ownerId: activePlayer.playerId,
     marketChips: 0,
   });
   activePlayer.wizardProperties.push({
-    instanceId: wizardPropertyInstanceId,
-    definitionId: fixtureWizardPropertyDefinition.tokenId,
+    instanceId: markTokenInstanceId(wizardPropertyInstanceId),
+    definitionId: markTokenDefinitionId(
+      fixtureWizardPropertyDefinition.tokenId
+    ),
     ownerId: activePlayer.playerId,
   });
 }

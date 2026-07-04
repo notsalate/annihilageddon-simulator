@@ -382,7 +382,10 @@ function validateSetupDataPackCompatibility(
     );
   }
 
-  if (!allowsIncompleteSetup) {
+  if (
+    !allowsIncompleteSetup ||
+    totalDeckEntryCount(dataPack.decks.starterDeck) > 0
+  ) {
     errors.push(
       ...validateCanonicalStarterTemplate(dataPack.decks.starterDeck)
     );

@@ -19,6 +19,13 @@ import {
 } from "../src/index.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 import { replacePostSetupWizardPropertyFixture } from "./helpers/fixture-tokens.js";
+import {
+  markCardDefinitionId,
+  markCardInstanceId,
+  markPlayerId,
+  markTokenDefinitionId,
+  markTokenInstanceId,
+} from "../src/domain/types.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -150,14 +157,14 @@ test("simple-baseline current runtime cards execute printed baseline play behavi
   );
   activePlayer.deck.unshift(
     {
-      instanceId: "simple-baseline-draw-target-1",
-      definitionId: "esw2_dbg__starter_002",
+      instanceId: markCardInstanceId("simple-baseline-draw-target-1"),
+      definitionId: markCardDefinitionId("esw2_dbg__starter_002"),
       ownerId: activePlayer.playerId,
       marketChips: 0,
     },
     {
-      instanceId: "simple-baseline-draw-target-2",
-      definitionId: "esw2_dbg__starter_002",
+      instanceId: markCardInstanceId("simple-baseline-draw-target-2"),
+      definitionId: markCardDefinitionId("esw2_dbg__starter_002"),
       ownerId: activePlayer.playerId,
       marketChips: 0,
     }
@@ -251,12 +258,12 @@ test("controlled-object current runtime cards resolve printed power behavior", (
     createRuntimeCardInstance(activePlayer, "esw2_dbg__starter_001", "drawn")
   );
   activePlayer.deadWizardTokens.push({
-    instanceId: "controlled-dwt",
-    definitionId: "esw2_dbg__dead_wizard_token_001",
+    instanceId: markTokenInstanceId("controlled-dwt"),
+    definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_001"),
     ownerId: activePlayer.playerId,
   });
   activePlayer.trophyLikeObjects.push({
-    instanceId: "controlled-basic-trophy",
+    instanceId: markCardInstanceId("controlled-basic-trophy"),
     trophyId: "controlled-basic-trophy",
     ownerId: activePlayer.playerId,
     effects: [],
@@ -352,7 +359,11 @@ test("controlled-object attack cards use controlled card costs", () => {
   const alreadyPlayedCard = addFixtureDefinitionToActiveHand(
     state,
     playedThisTurnDefinition,
-    { instanceId: "fixture-played-this-turn-cost-seven-instance" }
+    {
+      instanceId: markCardInstanceId(
+        "fixture-played-this-turn-cost-seven-instance"
+      ),
+    }
   );
   result = applyAction(state, {
     type: "playCard",
@@ -485,14 +496,14 @@ test("market chip marker adds chips to every marked card in that market during M
     seed: 60615,
   });
   const markedInMarket: CardInstance = {
-    instanceId: "fixture-marked-in-market",
-    definitionId: "esw2_dbg__main_012",
+    instanceId: markCardInstanceId("fixture-marked-in-market"),
+    definitionId: markCardDefinitionId("esw2_dbg__main_012"),
     ownerId: "common",
     marketChips: 0,
   };
   const markedMarketFlowCard: CardInstance = {
-    instanceId: "fixture-marked-market-flow",
-    definitionId: "esw2_dbg__main_012",
+    instanceId: markCardInstanceId("fixture-marked-market-flow"),
+    definitionId: markCardDefinitionId("esw2_dbg__main_012"),
     ownerId: "common",
     marketChips: 0,
   };
@@ -585,8 +596,8 @@ test("megaMayhem revealed during Market Flow executes its mapped onMayhemResolve
     player.life.current = 20;
   }
   const megaMayhem: CardInstance = {
-    instanceId: "fixture-mega-mayhem-set-life",
-    definitionId: "esw2_dbg__legend_003",
+    instanceId: markCardInstanceId("fixture-mega-mayhem-set-life"),
+    definitionId: markCardDefinitionId("esw2_dbg__legend_003"),
     ownerId: "common",
     marketChips: 0,
   };
@@ -631,7 +642,7 @@ test("megaMayhem Dingler toggle resolves for each player in active-player order"
     seed: 60615,
     playerCount: 3,
   });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const orderedPlayers = getPlayersInActiveOrder(state);
   const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
   assert.ok(activePlayer);
@@ -641,7 +652,7 @@ test("megaMayhem Dingler toggle resolves for each player in active-player order"
   secondPlayer.life.current = 20;
   thirdPlayer.life.current = 20;
   activePlayer.statuses.push({
-    instanceId: "fixture-active-dingler-status",
+    instanceId: markCardInstanceId("fixture-active-dingler-status"),
     statusId: "dingler",
     ownerId: activePlayer.playerId,
     effects: [],
@@ -663,8 +674,10 @@ test("megaMayhem Dingler toggle resolves for each player in active-player order"
     [megaMayhemDefinition.cardId, megaMayhemDefinition],
   ]);
   const megaMayhem: CardInstance = {
-    instanceId: "fixture-mega-mayhem-toggle-dingler-instance",
-    definitionId: megaMayhemDefinition.cardId,
+    instanceId: markCardInstanceId(
+      "fixture-mega-mayhem-toggle-dingler-instance"
+    ),
+    definitionId: markCardDefinitionId(megaMayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -718,7 +731,7 @@ test("megaMayhem destroys top main deck cards in active-player order and kills p
     seed: 60615,
     playerCount: 3,
   });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const orderedPlayers = getPlayersInActiveOrder(state);
   const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
   assert.ok(activePlayer);
@@ -754,26 +767,26 @@ test("megaMayhem destroys top main deck cards in active-player order and kills p
   ]);
 
   const mayhemCard: CardInstance = {
-    instanceId: "fixture-destroy-top-mayhem",
-    definitionId: mayhemDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-destroy-top-mayhem"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
   const activeNormalCard: CardInstance = {
-    instanceId: "fixture-destroy-top-active-normal",
-    definitionId: normalDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-destroy-top-active-normal"),
+    definitionId: markCardDefinitionId(normalDefinition.cardId),
     ownerId: activePlayer.playerId,
     marketChips: 0,
   };
   const thirdNormalCard: CardInstance = {
-    instanceId: "fixture-destroy-top-third-normal",
-    definitionId: normalDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-destroy-top-third-normal"),
+    definitionId: markCardDefinitionId(normalDefinition.cardId),
     ownerId: thirdPlayer.playerId,
     marketChips: 0,
   };
   const megaMayhem: CardInstance = {
-    instanceId: "fixture-mega-mayhem-destroy-top-instance",
-    definitionId: megaMayhemDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-mega-mayhem-destroy-top-instance"),
+    definitionId: markCardDefinitionId(megaMayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -850,7 +863,7 @@ test("Mayhem discards top deck cards and destroys them in active-player order", 
     seed: 60615,
     playerCount: 3,
   });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const orderedPlayers = getPlayersInActiveOrder(state);
   const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
   assert.ok(activePlayer);
@@ -881,20 +894,20 @@ test("Mayhem discards top deck cards and destroys them in active-player order", 
   ]);
 
   const activeTopDeckCard: CardInstance = {
-    instanceId: "fixture-mayhem-discard-active-top",
-    definitionId: normalDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-mayhem-discard-active-top"),
+    definitionId: markCardDefinitionId(normalDefinition.cardId),
     ownerId: activePlayer.playerId,
     marketChips: 0,
   };
   const secondTopDeckCard: CardInstance = {
-    instanceId: "fixture-mayhem-discard-second-top",
-    definitionId: normalDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-mayhem-discard-second-top"),
+    definitionId: markCardDefinitionId(normalDefinition.cardId),
     ownerId: secondPlayer.playerId,
     marketChips: 0,
   };
   const thirdTopDeckCard: CardInstance = {
-    instanceId: "fixture-mayhem-discard-third-top",
-    definitionId: normalDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-mayhem-discard-third-top"),
+    definitionId: markCardDefinitionId(normalDefinition.cardId),
     ownerId: thirdPlayer.playerId,
     marketChips: 0,
   };
@@ -903,8 +916,8 @@ test("Mayhem discards top deck cards and destroys them in active-player order", 
   thirdPlayer.deck.splice(0, thirdPlayer.deck.length, thirdTopDeckCard);
 
   const mayhem: CardInstance = {
-    instanceId: "fixture-mayhem-discard-top-deck-instance",
-    definitionId: mayhemDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-mayhem-discard-top-deck-instance"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -951,7 +964,7 @@ test("Mayhem discards each deck and destroys the first discard in active-player 
     seed: 60615,
     playerCount: 3,
   });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const orderedPlayers = getPlayersInActiveOrder(state);
   const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
   assert.ok(activePlayer);
@@ -983,8 +996,10 @@ test("Mayhem discards each deck and destroys the first discard in active-player 
   const deckCards = players.map((player) => {
     return [0, 1].map((cardIndex) => {
       return {
-        instanceId: `fixture-discard-deck-${player.playerId}-${cardIndex}`,
-        definitionId: normalDefinition.cardId,
+        instanceId: markCardInstanceId(
+          `fixture-discard-deck-${player.playerId}-${cardIndex}`
+        ),
+        definitionId: markCardDefinitionId(normalDefinition.cardId),
         ownerId: player.playerId,
         marketChips: 0,
       } satisfies CardInstance;
@@ -999,8 +1014,8 @@ test("Mayhem discards each deck and destroys the first discard in active-player 
   }
 
   const mayhem: CardInstance = {
-    instanceId: "fixture-mayhem-discard-deck-instance",
-    definitionId: mayhemDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-mayhem-discard-deck-instance"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -1071,7 +1086,7 @@ test("Mayhem hand-redraw choice discards hands and draws in active-player order"
     seed: 60615,
     playerCount: 3,
   });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const orderedPlayers = getPlayersInActiveOrder(state);
   const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
   assert.ok(activePlayer);
@@ -1114,8 +1129,10 @@ test("Mayhem hand-redraw choice discards hands and draws in active-player order"
   const discardedHandCards = players.map((player) => {
     return [0, 1].map((cardIndex) => {
       return {
-        instanceId: `fixture-hand-redraw-${player.playerId}-hand-${cardIndex}`,
-        definitionId: normalDefinition.cardId,
+        instanceId: markCardInstanceId(
+          `fixture-hand-redraw-${player.playerId}-hand-${cardIndex}`
+        ),
+        definitionId: markCardDefinitionId(normalDefinition.cardId),
         ownerId: player.playerId,
         marketChips: 0,
       } satisfies CardInstance;
@@ -1124,8 +1141,10 @@ test("Mayhem hand-redraw choice discards hands and draws in active-player order"
   const drawnDeckCards = players.map((player) => {
     return Array.from({ length: 5 }, (_value, cardIndex) => {
       return {
-        instanceId: `fixture-hand-redraw-${player.playerId}-deck-${cardIndex}`,
-        definitionId: normalDefinition.cardId,
+        instanceId: markCardInstanceId(
+          `fixture-hand-redraw-${player.playerId}-deck-${cardIndex}`
+        ),
+        definitionId: markCardDefinitionId(normalDefinition.cardId),
         ownerId: player.playerId,
         marketChips: 0,
       } satisfies CardInstance;
@@ -1143,8 +1162,8 @@ test("Mayhem hand-redraw choice discards hands and draws in active-player order"
   }
 
   const mayhem: CardInstance = {
-    instanceId: "fixture-mayhem-hand-redraw-instance",
-    definitionId: mayhemDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-mayhem-hand-redraw-instance"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -1195,7 +1214,7 @@ test("Mayhem battle keeps highest-cost participants and discards losing hands in
     seed: 60615,
     playerCount: 3,
   });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const [activePlayer, secondPlayer, thirdPlayer] =
     getPlayersInActiveOrder(state);
   assert.ok(activePlayer);
@@ -1266,8 +1285,8 @@ test("Mayhem battle keeps highest-cost participants and discards losing hands in
   thirdPlayer.deck.splice(0, thirdPlayer.deck.length, ...thirdDrawCards);
 
   const mayhem: CardInstance = {
-    instanceId: "fixture-mayhem-battle-instance",
-    definitionId: mayhemDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-mayhem-battle-instance"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -1327,7 +1346,7 @@ test("Mayhem vote makes the top-voted player Dingler after affected-player votes
     seed: 60615,
     playerCount: 3,
   });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const [activePlayer, secondPlayer, thirdPlayer] =
     getPlayersInActiveOrder(state);
   assert.ok(activePlayer);
@@ -1356,8 +1375,8 @@ test("Mayhem vote makes the top-voted player Dingler after affected-player votes
     [mayhemDefinition.cardId, mayhemDefinition],
   ]);
   const mayhem: CardInstance = {
-    instanceId: "fixture-mayhem-vote-dingler-instance",
-    definitionId: mayhemDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-mayhem-vote-dingler-instance"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -1424,7 +1443,7 @@ test("Mayhem vote can use a non-first affected-player choice", () => {
     seed: 60615,
     playerCount: 3,
   });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const [activePlayer, secondPlayer, thirdPlayer] =
     getPlayersInActiveOrder(state);
   assert.ok(activePlayer);
@@ -1461,8 +1480,10 @@ test("Mayhem vote can use a non-first affected-player choice", () => {
     [mayhemDefinition.cardId, mayhemDefinition],
   ]);
   const mayhem: CardInstance = {
-    instanceId: "fixture-mayhem-vote-dingler-non-first-choice-instance",
-    definitionId: mayhemDefinition.cardId,
+    instanceId: markCardInstanceId(
+      "fixture-mayhem-vote-dingler-non-first-choice-instance"
+    ),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -1512,7 +1533,7 @@ test("Mayhem Dingler recovery lets each Dingler pay life or chips to become norm
     seed: 60615,
     playerCount: 3,
   });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const [activePlayer, chipPlayer, blockedPlayer] =
     getPlayersInActiveOrder(state);
   assert.ok(activePlayer);
@@ -1525,7 +1546,9 @@ test("Mayhem Dingler recovery lets each Dingler pay life or chips to become norm
   blockedPlayer.life.current = 5;
   for (const player of [activePlayer, chipPlayer, blockedPlayer]) {
     player.statuses.push({
-      instanceId: `fixture-${player.playerId}-dingler-status`,
+      instanceId: markCardInstanceId(
+        `fixture-${player.playerId}-dingler-status`
+      ),
       statusId: "dingler",
       ownerId: player.playerId,
       effects: [],
@@ -1553,8 +1576,8 @@ test("Mayhem Dingler recovery lets each Dingler pay life or chips to become norm
     [mayhemDefinition.cardId, mayhemDefinition],
   ]);
   const mayhem: CardInstance = {
-    instanceId: "fixture-mayhem-dingler-recovery-instance",
-    definitionId: mayhemDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-mayhem-dingler-recovery-instance"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -1614,7 +1637,7 @@ test("Mayhem Dingler recovery can choose a non-first legal chip cost", () => {
     seed: 60615,
     playerCount: 3,
   });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const [activePlayer, chipPlayer, blockedPlayer] =
     getPlayersInActiveOrder(state);
   assert.ok(activePlayer);
@@ -1628,7 +1651,9 @@ test("Mayhem Dingler recovery can choose a non-first legal chip cost", () => {
   blockedPlayer.life.current = 5;
   for (const player of [activePlayer, chipPlayer, blockedPlayer]) {
     player.statuses.push({
-      instanceId: `fixture-${player.playerId}-non-first-dingler-status`,
+      instanceId: markCardInstanceId(
+        `fixture-${player.playerId}-non-first-dingler-status`
+      ),
       statusId: "dingler",
       ownerId: player.playerId,
       effects: [],
@@ -1668,8 +1693,10 @@ test("Mayhem Dingler recovery can choose a non-first legal chip cost", () => {
     [mayhemDefinition.cardId, mayhemDefinition],
   ]);
   const mayhem: CardInstance = {
-    instanceId: "fixture-mayhem-dingler-recovery-non-first-cost-instance",
-    definitionId: mayhemDefinition.cardId,
+    instanceId: markCardInstanceId(
+      "fixture-mayhem-dingler-recovery-non-first-cost-instance"
+    ),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -1717,7 +1744,9 @@ test("Dingler count power effect adds one power per Dingler player", () => {
   assert.ok(firstFoe);
   for (const player of [activePlayer, firstFoe]) {
     player.statuses.push({
-      instanceId: `fixture-${player.playerId}-dingler-status`,
+      instanceId: markCardInstanceId(
+        `fixture-${player.playerId}-dingler-status`
+      ),
       statusId: "dingler",
       ownerId: player.playerId,
       effects: [],
@@ -1828,7 +1857,7 @@ test("Mayhem lowest-life Dingler effect normalizes tied players to Dingler max l
     seed: 60615,
     playerCount: 3,
   });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const [activePlayer, tiedPlayer, highLifePlayer] =
     getPlayersInActiveOrder(state);
   assert.ok(activePlayer);
@@ -1854,8 +1883,10 @@ test("Mayhem lowest-life Dingler effect normalizes tied players to Dingler max l
     [mayhemDefinition.cardId, mayhemDefinition],
   ]);
   const mayhem: CardInstance = {
-    instanceId: "fixture-mayhem-lowest-life-dingler-instance",
-    definitionId: mayhemDefinition.cardId,
+    instanceId: markCardInstanceId(
+      "fixture-mayhem-lowest-life-dingler-instance"
+    ),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -1950,7 +1981,7 @@ test("Avada Loshavra makes an undefended target Dingler and counts it for power"
 
 test("2F skips a defended lowest-life player and still applies Dingler max-life normalization to an undefended tie", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const [activePlayer, tiedPlayer, highLifePlayer] =
     getPlayersInActiveOrder(state);
   assert.ok(activePlayer);
@@ -1990,7 +2021,7 @@ test("2F skips a defended lowest-life player and still applies Dingler max-life 
 
 test("MegaMayhem MD skips a defended player and still toggles undefended players", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const [activePlayer, secondPlayer, thirdPlayer] =
     getPlayersInActiveOrder(state);
   assert.ok(activePlayer);
@@ -2105,8 +2136,8 @@ test("current runtime mayhem-events cards resolve their mapped event effects", (
       playerCount: 3,
     });
     const mayhem: CardInstance = {
-      instanceId: `fixture-runtime-${definitionId}`,
-      definitionId,
+      instanceId: markCardInstanceId(`fixture-runtime-${definitionId}`),
+      definitionId: markCardDefinitionId(definitionId),
       ownerId: "common",
       marketChips: 0,
     };
@@ -2114,7 +2145,9 @@ test("current runtime mayhem-events cards resolve their mapped event effects", (
     assert.ok(legendFiller);
     cardState.common.legendMarket.push({
       ...legendFiller,
-      instanceId: `fixture-runtime-${definitionId}-legend-filler`,
+      instanceId: markCardInstanceId(
+        `fixture-runtime-${definitionId}-legend-filler`
+      ),
     });
     cardState.common.market.splice(
       0,
@@ -2161,14 +2194,14 @@ test("mayhem revealed during Market Flow resolves and Market Flow continues with
     [normalDefinition.cardId, normalDefinition],
   ]);
   const mayhem: CardInstance = {
-    instanceId: "fixture-market-flow-mayhem-instance",
-    definitionId: mayhemDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-market-flow-mayhem-instance"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
   const normalCard: CardInstance = {
-    instanceId: "fixture-market-flow-normal-instance",
-    definitionId: normalDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-market-flow-normal-instance"),
+    definitionId: markCardDefinitionId(normalDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -2339,8 +2372,8 @@ test("unsupported Mayhem effect fails during Market Flow instead of becoming a s
     [unsupportedMayhemDefinition.cardId, unsupportedMayhemDefinition],
   ]);
   const unsupportedMayhem: CardInstance = {
-    instanceId: "fixture-unsupported-mayhem-instance",
-    definitionId: unsupportedMayhemDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-unsupported-mayhem-instance"),
+    definitionId: markCardDefinitionId(unsupportedMayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -2685,14 +2718,14 @@ test("wild magic can choose to play the top card of a foe deck when that option 
     [wildMagicDefinition.cardId, wildMagicDefinition],
   ]);
   const foeTopCard: CardInstance = {
-    instanceId: "fixture-foe-top-card",
-    definitionId: foeTopCardDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-foe-top-card"),
+    definitionId: markCardDefinitionId(foeTopCardDefinition.cardId),
     ownerId: foe.playerId,
     marketChips: 0,
   };
   const wildMagic: CardInstance = {
-    instanceId: "fixture-wild-magic-card",
-    definitionId: wildMagicDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-wild-magic-card"),
+    definitionId: markCardDefinitionId(wildMagicDefinition.cardId),
     ownerId: activePlayer.playerId,
     marketChips: 0,
   };
@@ -2778,14 +2811,14 @@ test("wild magic foe-deck play triggers wizard property on-play effects for non-
     [wildMagicDefinition.cardId, wildMagicDefinition],
   ]);
   const foeTopCard: CardInstance = {
-    instanceId: "fixture-wild-magic-foe-spell-card",
-    definitionId: foeTopCardDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-wild-magic-foe-spell-card"),
+    definitionId: markCardDefinitionId(foeTopCardDefinition.cardId),
     ownerId: foe.playerId,
     marketChips: 0,
   };
   const wildMagic: CardInstance = {
-    instanceId: "fixture-wild-magic-foe-spell-card-source",
-    definitionId: wildMagicDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-wild-magic-foe-spell-card-source"),
+    definitionId: markCardDefinitionId(wildMagicDefinition.cardId),
     ownerId: activePlayer.playerId,
     marketChips: 0,
   };
@@ -2858,14 +2891,16 @@ test("wild magic foe-deck play takes ownership of ongoing cards and keeps them c
     [wildMagicDefinition.cardId, wildMagicDefinition],
   ]);
   const foeTopCard: CardInstance = {
-    instanceId: "fixture-wild-magic-foe-ongoing-card",
-    definitionId: foeTopCardDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-wild-magic-foe-ongoing-card"),
+    definitionId: markCardDefinitionId(foeTopCardDefinition.cardId),
     ownerId: foe.playerId,
     marketChips: 0,
   };
   const wildMagic: CardInstance = {
-    instanceId: "fixture-wild-magic-foe-ongoing-card-source",
-    definitionId: wildMagicDefinition.cardId,
+    instanceId: markCardInstanceId(
+      "fixture-wild-magic-foe-ongoing-card-source"
+    ),
+    definitionId: markCardDefinitionId(wildMagicDefinition.cardId),
     ownerId: activePlayer.playerId,
     marketChips: 0,
   };
@@ -3981,8 +4016,8 @@ test("play_top_card triggers wizard property on-play effects and cleans up to ow
     [topPlayedDefinition.cardId, topPlayedDefinition],
   ]);
   const topPlayedCard: CardInstance = {
-    instanceId: "fixture-play-top-spell-instance",
-    definitionId: topPlayedDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-play-top-spell-instance"),
+    definitionId: markCardDefinitionId(topPlayedDefinition.cardId),
     ownerId: activePlayer.playerId,
     marketChips: 0,
   };
@@ -4130,8 +4165,8 @@ test("wizard property resurrection life override respects loser-status exception
   assert.ok(propertyOwner);
   propertyOwner.wizardProperties = [
     {
-      instanceId: "fixture-wizard-property-010",
-      definitionId: "esw2_dbg__wizard_property_010",
+      instanceId: markTokenInstanceId("fixture-wizard-property-010"),
+      definitionId: markTokenDefinitionId("esw2_dbg__wizard_property_010"),
       ownerId: propertyOwner.playerId,
     },
   ];
@@ -4154,7 +4189,7 @@ test("wizard property resurrection life override respects loser-status exception
   assert.equal(propertyOwner.life.current, 25);
 
   propertyOwner.statuses.push({
-    instanceId: "fixture-loser-status",
+    instanceId: markCardInstanceId("fixture-loser-status"),
     statusId: "loser",
     ownerId: propertyOwner.playerId,
     effects: [],
@@ -4615,8 +4650,8 @@ test("wizard property owned wand attacks gain damage and cannot be avoided", () 
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
   });
-  const propertyOwner = mustGetPlayer(state, "player-2");
-  const targetPlayer = mustGetPlayer(state, "player-1");
+  const propertyOwner = mustGetPlayer(state, markPlayerId("player-2"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
   state.activePlayerId = propertyOwner.playerId;
   replaceFirstWizardProperty(
     state,
@@ -4722,11 +4757,14 @@ test("wizard property does not affect borrowed wands or non-wand attacks", () =>
   const activeBorrower = state.players.find((player) => {
     return (
       player.playerId !== propertyOwner.playerId &&
-      player.playerId !== "player-1"
+      player.playerId !== markPlayerId("player-1")
     );
   });
   assert.ok(activeBorrower);
-  const ownerPropertyWandTarget = mustGetPlayer(state, "player-1");
+  const ownerPropertyWandTarget = mustGetPlayer(
+    state,
+    markPlayerId("player-1")
+  );
   activeBorrower.wizardProperties = [];
   state.activePlayerId = activeBorrower.playerId;
   ownerPropertyWandTarget.life.current = 20;
@@ -4764,8 +4802,8 @@ test("Cheese Wand gains power, attacks a chosen player, and gains chips on kill"
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
   });
-  const activePlayer = mustGetPlayer(state, "player-2");
-  const targetPlayer = mustGetPlayer(state, "player-1");
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
   state.activePlayerId = activePlayer.playerId;
   activePlayer.wizardProperties = [];
   targetPlayer.wizardProperties = [];
@@ -4801,8 +4839,8 @@ test("Hrenalocka Wand returns up to two discard cards to hand when its attack ki
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
   });
-  const activePlayer = mustGetPlayer(state, "player-2");
-  const targetPlayer = mustGetPlayer(state, "player-1");
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
   state.activePlayerId = activePlayer.playerId;
   activePlayer.wizardProperties = [];
   targetPlayer.wizardProperties = [];
@@ -4852,8 +4890,8 @@ test("Slapalocka Wand steals or gains chips equal to actual attack damage dealt"
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
   });
-  const activePlayer = mustGetPlayer(state, "player-1");
-  const targetPlayer = mustGetPlayer(state, "player-2");
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
   state.activePlayerId = activePlayer.playerId;
   activePlayer.wizardProperties = [];
   targetPlayer.wizardProperties = [];
@@ -4879,7 +4917,7 @@ test("Losharocka Wand can self-target and makes the killed target a Dingler", ()
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
   });
-  const activePlayer = mustGetPlayer(state, "player-1");
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
   state.activePlayerId = activePlayer.playerId;
   activePlayer.wizardProperties = [];
   activePlayer.life.current = 5;
@@ -4904,8 +4942,8 @@ test("Chipsalocka Wand spends one chip before its optional chosen-player attack"
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
   });
-  const activePlayer = mustGetPlayer(state, "player-2");
-  const targetPlayer = mustGetPlayer(state, "player-1");
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
   state.activePlayerId = activePlayer.playerId;
   activePlayer.wizardProperties = [];
   targetPlayer.wizardProperties = [];
@@ -4941,8 +4979,8 @@ test("Chipsalocka Wand can skip its optional attack when the chip cost is unavai
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
   });
-  const activePlayer = mustGetPlayer(state, "player-2");
-  const targetPlayer = mustGetPlayer(state, "player-1");
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
   state.activePlayerId = activePlayer.playerId;
   activePlayer.wizardProperties = [];
   targetPlayer.wizardProperties = [];
@@ -4977,10 +5015,10 @@ test("Potny's Buzzing Wand chooses left or right and chains in the chosen direct
     seed: 60615,
     playerCount: 4,
   });
-  const activePlayer = mustGetPlayer(state, "player-1");
-  const leftFoe = mustGetPlayer(state, "player-2");
-  const nextLeftFoe = mustGetPlayer(state, "player-3");
-  const rightFoe = mustGetPlayer(state, "player-4");
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const leftFoe = mustGetPlayer(state, markPlayerId("player-2"));
+  const nextLeftFoe = mustGetPlayer(state, markPlayerId("player-3"));
+  const rightFoe = mustGetPlayer(state, markPlayerId("player-4"));
   state.activePlayerId = activePlayer.playerId;
   activePlayer.wizardProperties = [];
   leftFoe.wizardProperties = [];
@@ -5158,7 +5196,7 @@ test("Venerina Magolovka supports pass, life-only, Dingler-only, and full exchan
 
 test("2Q lets players above 10 reduce life to gain one chip", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const orderedPlayers = getPlayersInActiveOrder(state);
   const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
   assert.ok(activePlayer);
@@ -5185,7 +5223,7 @@ test("2Q lets players above 10 reduce life to gain one chip", () => {
 
 test("2Q can skip its optional life-for-chips choice when a custom chooser passes", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const orderedPlayers = getPlayersInActiveOrder(state);
   const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
   assert.ok(activePlayer);
@@ -5231,7 +5269,7 @@ test("2Q can skip its optional life-for-chips choice when a custom chooser passe
 
 test("2N current runtime honors pass and participate branches for Mayhem battle", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const [activePlayer, secondPlayer, thirdPlayer] =
     getPlayersInActiveOrder(state);
   assert.ok(activePlayer);
@@ -5305,7 +5343,7 @@ test("2N current runtime honors pass and participate branches for Mayhem battle"
 
 test("2R current runtime supports non-first vote targets and Dingler ties", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 4 });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const [activePlayer, secondPlayer, thirdPlayer, fourthPlayer] =
     getPlayersInActiveOrder(state);
   assert.ok(activePlayer);
@@ -5412,7 +5450,7 @@ test("2P current runtime supports life payment, chip payment, and skip branches"
 
   for (const testCase of cases) {
     const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-    state.activePlayerId = "player-2";
+    state.activePlayerId = markPlayerId("player-2");
     const [activePlayer, secondPlayer, thirdPlayer] =
       getPlayersInActiveOrder(state);
     assert.ok(activePlayer);
@@ -5469,7 +5507,7 @@ test("2P current runtime supports life payment, chip payment, and skip branches"
 
 test("2O can use its discard-and-draw branch as the default reachable choice", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const orderedPlayers = getPlayersInActiveOrder(state);
   const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
   assert.ok(activePlayer);
@@ -5486,8 +5524,10 @@ test("2O can use its discard-and-draw branch as the default reachable choice", (
   const discardedHandCards = players.map((player) => {
     return [0, 1].map((cardIndex) => {
       return {
-        instanceId: `fixture-2o-${player.playerId}-hand-${cardIndex}`,
-        definitionId: normalDefinition.cardId,
+        instanceId: markCardInstanceId(
+          `fixture-2o-${player.playerId}-hand-${cardIndex}`
+        ),
+        definitionId: markCardDefinitionId(normalDefinition.cardId),
         ownerId: player.playerId,
         marketChips: 0,
       } satisfies CardInstance;
@@ -5496,8 +5536,10 @@ test("2O can use its discard-and-draw branch as the default reachable choice", (
   const drawnDeckCards = players.map((player) => {
     return Array.from({ length: 5 }, (_value, cardIndex) => {
       return {
-        instanceId: `fixture-2o-${player.playerId}-deck-${cardIndex}`,
-        definitionId: normalDefinition.cardId,
+        instanceId: markCardInstanceId(
+          `fixture-2o-${player.playerId}-deck-${cardIndex}`
+        ),
+        definitionId: markCardDefinitionId(normalDefinition.cardId),
         ownerId: player.playerId,
         marketChips: 0,
       } satisfies CardInstance;
@@ -5555,7 +5597,7 @@ test("2O can use its discard-and-draw branch as the default reachable choice", (
 
 test("2O can reach its take-damage branch for an affected player", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   const orderedPlayers = getPlayersInActiveOrder(state);
   const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
   assert.ok(activePlayer);
@@ -5575,8 +5617,10 @@ test("2O can reach its take-damage branch for an affected player", () => {
   const discardedHandCards = players.map((player) => {
     return [0, 1].map((cardIndex) => {
       return {
-        instanceId: `fixture-2o-mixed-${player.playerId}-hand-${cardIndex}`,
-        definitionId: normalDefinition.cardId,
+        instanceId: markCardInstanceId(
+          `fixture-2o-mixed-${player.playerId}-hand-${cardIndex}`
+        ),
+        definitionId: markCardDefinitionId(normalDefinition.cardId),
         ownerId: player.playerId,
         marketChips: 0,
       } satisfies CardInstance;
@@ -5585,8 +5629,10 @@ test("2O can reach its take-damage branch for an affected player", () => {
   const drawnDeckCards = players.map((player) => {
     return Array.from({ length: 5 }, (_value, cardIndex) => {
       return {
-        instanceId: `fixture-2o-mixed-${player.playerId}-deck-${cardIndex}`,
-        definitionId: normalDefinition.cardId,
+        instanceId: markCardInstanceId(
+          `fixture-2o-mixed-${player.playerId}-deck-${cardIndex}`
+        ),
+        definitionId: markCardDefinitionId(normalDefinition.cardId),
         ownerId: player.playerId,
         marketChips: 0,
       } satisfies CardInstance;
@@ -5749,7 +5795,7 @@ test("Park Vurdalaktionov heals damage dealt on its controller's turn and adds h
 
 test("Mega Mayhem ME sets every wizard life to 5", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
-  state.activePlayerId = "player-2";
+  state.activePlayerId = markPlayerId("player-2");
   for (const player of state.players) {
     player.life.current = 17;
   }
@@ -6724,8 +6770,8 @@ test("unowned Mega Mayhem death does not move Basic Trophy", () => {
   );
   assert.ok(mayhemDefinition);
   const mayhemCard: CardInstance = {
-    instanceId: "fixture-top-main-deck-mayhem",
-    definitionId: mayhemDefinition.cardId,
+    instanceId: markCardInstanceId("fixture-top-main-deck-mayhem"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -7003,8 +7049,8 @@ test("Loshashlyk gains one chip per Dingler player", () => {
   );
   activePlayer.chips = 0;
   const loshashlyk: CardInstance = {
-    instanceId: "fixture-loshashlyk",
-    definitionId: "esw2_dbg__main_008",
+    instanceId: markCardInstanceId("fixture-loshashlyk"),
+    definitionId: markCardDefinitionId("esw2_dbg__main_008"),
     ownerId: activePlayer.playerId,
     marketChips: 0,
   };
@@ -7208,8 +7254,8 @@ function prepareGainedMovementFixture(
     [definition.cardId, definition],
   ]);
   const card: CardInstance = {
-    instanceId: `${cardId}-instance`,
-    definitionId: definition.cardId,
+    instanceId: markCardInstanceId(`${cardId}-instance`),
+    definitionId: markCardDefinitionId(definition.cardId),
     ownerId: "common",
     marketChips: 2,
   };
@@ -7385,7 +7431,9 @@ function addFixtureCardToActiveHand(
   );
 
   return addFixtureDefinitionToActiveHand(state, definition, {
-    instanceId: `fixture-card-${activePlayer.hand.length + 1}`,
+    instanceId: markCardInstanceId(
+      `fixture-card-${activePlayer.hand.length + 1}`
+    ),
   }).instanceId;
 }
 
@@ -7418,14 +7466,18 @@ function createMarketFlowModeFixture(): GameState {
     0,
     state.common.mainDeck.length,
     {
-      instanceId: "fixture-market-flow-interface-mayhem-instance",
-      definitionId: mayhemDefinition.cardId,
+      instanceId: markCardInstanceId(
+        "fixture-market-flow-interface-mayhem-instance"
+      ),
+      definitionId: markCardDefinitionId(mayhemDefinition.cardId),
       ownerId: "common",
       marketChips: 0,
     },
     {
-      instanceId: "fixture-market-flow-interface-normal-instance",
-      definitionId: normalDefinition.cardId,
+      instanceId: markCardInstanceId(
+        "fixture-market-flow-interface-normal-instance"
+      ),
+      definitionId: markCardDefinitionId(normalDefinition.cardId),
       ownerId: "common",
       marketChips: 0,
     }
@@ -7480,8 +7532,8 @@ function createRuntimeCardInstance(
   instanceIdSuffix: string
 ): CardInstance {
   const card: CardInstance = {
-    instanceId: `fixture-runtime-${instanceIdSuffix}`,
-    definitionId,
+    instanceId: markCardInstanceId(`fixture-runtime-${instanceIdSuffix}`),
+    definitionId: markCardDefinitionId(definitionId),
     ownerId: player.playerId,
     marketChips: 0,
   };
@@ -7490,8 +7542,8 @@ function createRuntimeCardInstance(
 
 function createCommonRuntimeCard(definitionId: string): CardInstance {
   return {
-    instanceId: `fixture-runtime-${definitionId}`,
-    definitionId,
+    instanceId: markCardInstanceId(`fixture-runtime-${definitionId}`),
+    definitionId: markCardDefinitionId(definitionId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -7499,7 +7551,7 @@ function createCommonRuntimeCard(definitionId: string): CardInstance {
 
 function createDinglerStatus(player: PlayerState): StatusInstance {
   return {
-    instanceId: `fixture-dingler-${player.playerId}`,
+    instanceId: markCardInstanceId(`fixture-dingler-${player.playerId}`),
     statusId: "dingler",
     ownerId: player.playerId,
     effects: [],
@@ -7613,8 +7665,8 @@ function addControlledFixturePermanentWithCost(
     [definition.cardId, definition],
   ]);
   const card: CardInstance = {
-    instanceId: `${cardId}-instance`,
-    definitionId: definition.cardId,
+    instanceId: markCardInstanceId(`${cardId}-instance`),
+    definitionId: markCardDefinitionId(definition.cardId),
     ownerId: player.playerId,
     marketChips: 0,
   };
@@ -7638,8 +7690,8 @@ function addFixtureMarketCard(
     [definition.cardId, definition],
   ]);
   const card: CardInstance = {
-    instanceId: `${cardId}-instance`,
-    definitionId: definition.cardId,
+    instanceId: markCardInstanceId(`${cardId}-instance`),
+    definitionId: markCardDefinitionId(definition.cardId),
     ownerId: "common",
     marketChips: 0,
   };
@@ -7653,8 +7705,8 @@ function createFixtureCardInstances(
   count: number
 ): CardInstance[] {
   return Array.from({ length: count }, (_, index) => ({
-    instanceId: `${definitionId}-${index + 1}`,
-    definitionId,
+    instanceId: markCardInstanceId(`${definitionId}-${index + 1}`),
+    definitionId: markCardDefinitionId(definitionId),
     ownerId,
     marketChips: 0,
   }));
@@ -7892,8 +7944,10 @@ function addFixtureDefenseCardToHand(
   ]);
 
   const card: CardInstance = {
-    instanceId: `fixture-defense-card-${player.hand.length + 1}`,
-    definitionId: definition.cardId,
+    instanceId: markCardInstanceId(
+      `fixture-defense-card-${player.hand.length + 1}`
+    ),
+    definitionId: markCardDefinitionId(definition.cardId),
     ownerId: player.playerId,
     marketChips: 0,
   };
@@ -7906,7 +7960,7 @@ function createMaxLifeModifierStatus(
   amount: number
 ): StatusInstance {
   return {
-    instanceId: "fixture-max-life-status",
+    instanceId: markCardInstanceId("fixture-max-life-status"),
     statusId: "fixture-max-life-status",
     ownerId: playerId,
     effects: [
@@ -7928,7 +7982,7 @@ function createBasicTrophy(
   ownerId: PlayerState["playerId"]
 ): PlayerState["trophyLikeObjects"][number] {
   return {
-    instanceId: "basic-trophy",
+    instanceId: markCardInstanceId("basic-trophy"),
     trophyId: "basicTrophy",
     ownerId,
     effects: [],

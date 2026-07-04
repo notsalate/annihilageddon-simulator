@@ -1,12 +1,15 @@
 import "./common.test.js";
+import "./id-types.test.js";
 import "./rng.test.js";
 import "./setup.test.js";
 import "./action-loop.test.js";
 import "./effective-values.test.js";
 import "./simulation.test.js";
+import "./simulation-legal-actions.test.js";
 import "./debug-trace.test.js";
 import "./invariants.test.js";
 import "./simulation-menu.test.js";
+import "./runtime-regression.test.js";
 import "./validation.test.js";
 import "./draft-validation.test.js";
 import "./draft-generator.test.js";

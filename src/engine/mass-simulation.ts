@@ -36,8 +36,8 @@ export interface MassSimulationResult {
 
 export interface MassSimulationAggregate {
   totalGames: number;
-  winCounts: Record<PlayerId, number>;
-  winRates: Record<PlayerId, number>;
+  winCounts: Partial<Record<PlayerId, number>>;
+  winRates: Partial<Record<PlayerId, number>>;
   tieCount: number;
   tieRate: number;
   endReasonCounts: Record<GameEndReason, number>;
@@ -119,7 +119,7 @@ function toCompactSummary(
 function aggregateMassSimulation(
   games: readonly CompactGameSummary[]
 ): MassSimulationAggregate {
-  const winCounts: Record<PlayerId, number> = {};
+  const winCounts = new Map<PlayerId, number>();
   const endReasonCounts = createZeroedEndReasonCounts();
   let tieCount = 0;
   let totalTurnsElapsed = 0;
@@ -137,13 +137,13 @@ function aggregateMassSimulation(
 
     const winnerId = game.winnerIds[0];
     if (winnerId !== undefined) {
-      winCounts[winnerId] = (winCounts[winnerId] ?? 0) + 1;
+      winCounts.set(winnerId, (winCounts.get(winnerId) ?? 0) + 1);
     }
   }
 
   return {
     totalGames: games.length,
-    winCounts,
+    winCounts: toPlayerStatRecord(winCounts),
     winRates: toRates(winCounts, games.length),
     tieCount,
     tieRate: tieCount / games.length,
@@ -155,28 +155,32 @@ function aggregateMassSimulation(
 }
 
 function toRates(
-  counts: Record<PlayerId, number>,
+  counts: ReadonlyMap<PlayerId, number>,
   totalGames: number
-): Record<PlayerId, number> {
-  const rates: Record<PlayerId, number> = {};
-  for (const [playerId, count] of Object.entries(counts) as Array<
-    [PlayerId, number]
-  >) {
+): Partial<Record<PlayerId, number>> {
+  const rates: Partial<Record<PlayerId, number>> = {};
+  for (const [playerId, count] of counts) {
     rates[playerId] = count / totalGames;
   }
 
   return rates;
 }
 
-function createZeroedPlayerRecord(
-  playerIds: readonly PlayerId[]
-): Record<PlayerId, number> {
-  const record: Record<PlayerId, number> = {};
-  for (const playerId of playerIds) {
-    record[playerId] = 0;
+function toPlayerStatRecord(
+  counts: ReadonlyMap<PlayerId, number>
+): Partial<Record<PlayerId, number>> {
+  const record: Partial<Record<PlayerId, number>> = {};
+  for (const [playerId, count] of counts) {
+    record[playerId] = count;
   }
 
   return record;
+}
+
+function createZeroedPlayerRecord(
+  playerIds: readonly PlayerId[]
+): Record<PlayerId, number> {
+  return Object.fromEntries(playerIds.map((playerId) => [playerId, 0]));
 }
 
 function createZeroedEndReasonCounts(): Record<GameEndReason, number> {

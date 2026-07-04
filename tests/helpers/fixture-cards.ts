@@ -5,6 +5,10 @@ import type {
   CardInstance,
   GameState,
 } from "../../src/index.js";
+import {
+  markCardDefinitionId,
+  markCardInstanceId,
+} from "../../src/domain/types.js";
 
 export function addFixtureDefinitionToActiveHand(
   state: GameState,
@@ -24,10 +28,11 @@ export function addFixtureDefinitionToActiveHand(
   ]);
 
   const card: CardInstance = {
-    instanceId:
+    instanceId: markCardInstanceId(
       options.instanceId ??
-      `${definition.cardId}-instance-${activePlayer.hand.length + 1}`,
-    definitionId: definition.cardId,
+        `${definition.cardId}-instance-${activePlayer.hand.length + 1}`
+    ),
+    definitionId: markCardDefinitionId(definition.cardId),
     ownerId: activePlayer.playerId,
     marketChips: 0,
   };

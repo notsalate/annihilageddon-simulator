@@ -1,4 +1,23 @@
 export { assertNever, isPlainRecord } from "./common.js";
+export type {
+  CardDefinitionId,
+  CardInstanceId,
+  PlayerId,
+  TokenDefinitionId,
+  TokenInstanceId,
+} from "./domain/types.js";
+export {
+  createCardDefinitionId,
+  createCardInstanceId,
+  createPlayerId,
+  createTokenDefinitionId,
+  createTokenInstanceId,
+  markCardDefinitionId,
+  markCardInstanceId,
+  markPlayerId,
+  markTokenDefinitionId,
+  markTokenInstanceId,
+} from "./domain/types.js";
 export type { RandomSource } from "./engine/rng.js";
 export { createSeededRng } from "./engine/rng.js";
 export type {
@@ -79,7 +98,6 @@ export type {
   CardInstance,
   CommonState,
   GameState,
-  PlayerId,
   PlayerState,
   RuntimeEffectChoice,
   RuntimeEffectChoiceRequest,
