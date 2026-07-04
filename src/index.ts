@@ -123,6 +123,10 @@ export type {
   GameEndReason,
   PlayerScore,
   RunSingleGameOptions,
+  SetupCardSnapshot,
+  SetupPlayerSnapshot,
+  SetupStateSnapshot,
+  SetupTokenSnapshot,
   SingleGameResult,
 } from "./engine/simulation.js";
 export {
