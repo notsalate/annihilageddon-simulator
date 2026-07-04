@@ -3,6 +3,7 @@ import type { SingleGameResult } from "./simulation.js";
 
 export interface FormatSingleGameDebugTraceOptions {
   cardNames?: ReadonlyMap<string, string>;
+  cardTexts?: ReadonlyMap<string, string>;
   tokenNames?: ReadonlyMap<string, string>;
 }
 
@@ -11,8 +12,8 @@ export function formatSingleGameDebugTrace(
   options: FormatSingleGameDebugTraceOptions = {}
 ): string {
   const lines = [formatSummary(result), "", "Setup"];
-
   let currentGroupIdentity: string | undefined;
+
   for (const event of result.eventLog) {
     if (event.type === "gameInitialized") {
       lines.push("- Game initialized.");
@@ -21,6 +22,11 @@ export function formatSingleGameDebugTrace(
 
     const formatted = formatEvent(event, options);
     if (formatted === undefined) {
+      continue;
+    }
+
+    if (isSetupTraceEvent(event)) {
+      lines.push(formatted);
       continue;
     }
 
@@ -49,50 +55,48 @@ function formatEvent(
   event: GameEvent,
   options: FormatSingleGameDebugTraceOptions
 ): string | undefined {
+  if (event.type === "setupChoiceSelected" && event.playerId !== undefined) {
+    const candidates = (event.candidateDefinitionIds ?? [])
+      .map((id) => formatDefinitionLabel(id, event, options))
+      .join(", ");
+    const chosen = event.chosenDefinitionId === undefined ? "<unknown-choice>" : formatDefinitionLabel(event.chosenDefinitionId, event, options);
+    return `- Setup choice (${event.setupChoiceKind ?? "unknown"}): ${event.playerId} candidates [${candidates}] -> ${chosen} via ${event.policyId ?? "<unknown-policy>"}.`;
+  }
+
   if (event.type === "botActionSelected") {
     return `- Bot selected ${event.actionIdentity ?? "an action"}.`;
   }
 
   if (event.type === "effectAddPowerApplied" && event.playerId !== undefined) {
-    if (event.powerBefore !== undefined && event.powerAfter !== undefined) {
-      return `- Effect ${event.effectId ?? "<unknown>"} from ${formatCard(event, options)}: ${event.playerId} power ${event.powerBefore} -> ${event.powerAfter}.`;
-    }
-
-    return `- Effect ${event.effectId ?? "<unknown>"} from ${formatCard(event, options)}: ${event.playerId} gains +${event.amount ?? 0} power.`;
+    return event.powerBefore !== undefined && event.powerAfter !== undefined
+      ? `- Effect ${event.effectId ?? "<unknown>"} from ${formatCard(event, options)}: ${event.playerId} power ${event.powerBefore} -> ${event.powerAfter}.`
+      : `- Effect ${event.effectId ?? "<unknown>"} from ${formatCard(event, options)}: ${event.playerId} gains +${event.amount ?? 0} power.`;
   }
 
   if (event.type === "effectChipsGained" && event.playerId !== undefined) {
-    if (event.chipsBefore !== undefined && event.chipsAfter !== undefined) {
-      return `- Effect ${event.effectId ?? "<unknown>"} from ${formatCard(event, options)}: ${event.playerId} chips ${event.chipsBefore} -> ${event.chipsAfter}.`;
-    }
-
-    return `- Effect ${event.effectId ?? "<unknown>"} from ${formatCard(event, options)}: ${event.playerId} gains +${event.amount ?? 0} chips.`;
+    return event.chipsBefore !== undefined && event.chipsAfter !== undefined
+      ? `- Effect ${event.effectId ?? "<unknown>"} from ${formatCard(event, options)}: ${event.playerId} chips ${event.chipsBefore} -> ${event.chipsAfter}.`
+      : `- Effect ${event.effectId ?? "<unknown>"} from ${formatCard(event, options)}: ${event.playerId} gains +${event.amount ?? 0} chips.`;
   }
 
   if (event.type === "marketChipsGained" && event.playerId !== undefined) {
-    if (event.chipsBefore !== undefined && event.chipsAfter !== undefined) {
-      return `- Market chips from ${formatCard(event, options)}: ${event.playerId} chips ${event.chipsBefore} -> ${event.chipsAfter}.`;
-    }
-
-    return `- Market chips from ${formatCard(event, options)}: ${event.playerId} gains +${event.amount ?? 0} chips.`;
+    return event.chipsBefore !== undefined && event.chipsAfter !== undefined
+      ? `- Market chips from ${formatCard(event, options)}: ${event.playerId} chips ${event.chipsBefore} -> ${event.chipsAfter}.`
+      : `- Market chips from ${formatCard(event, options)}: ${event.playerId} gains +${event.amount ?? 0} chips.`;
   }
 
   if (event.type === "cardMoved") {
-    const ownerDelta =
-      event.ownerBefore === undefined || event.ownerAfter === undefined
-        ? ""
-        : `, owner ${event.ownerBefore} -> ${event.ownerAfter}`;
-    const effectSource =
-      event.effectId === undefined ? "" : ` via ${event.effectId}`;
+    const ownerDelta = event.ownerBefore === undefined || event.ownerAfter === undefined ? "" : `, owner ${event.ownerBefore} -> ${event.ownerAfter}`;
+    const effectSource = event.effectId === undefined ? "" : ` via ${event.effectId}`;
     return `- Move: ${formatCard(event, options)} ${formatZone(event.sourceZone)} -> ${formatZone(event.destinationZone)}${ownerDelta}${effectSource}.`;
   }
 
   if (event.type === "cardPlayed") {
-    return `- Played ${formatCard(event, options)}.`;
+    return `- Played ${formatCard(event, options)}.${formatTextSuffix(event, options)}`;
   }
 
   if (event.type === "cardBought") {
-    return `- Bought ${formatCard(event, options)} -> ${event.destination ?? "<unknown-zone>"}.`;
+    return `- Bought ${formatCard(event, options)} -> ${event.destination ?? "<unknown-zone>"}${formatPaymentSummary(event)}.`;
   }
 
   if (event.type === "effectCardGained" && event.playerId !== undefined) {
@@ -107,58 +111,23 @@ function formatEvent(
     return `- Zone move: ${formatCard(event, options)} -> ${event.destination ?? "<unknown-zone>"}.`;
   }
 
-  if (
-    event.type === "effectDamageDealt" &&
-    event.playerId !== undefined &&
-    event.targetPlayerId !== undefined
-  ) {
-    const lifeDelta =
-      event.targetLifeBefore === undefined ||
-      event.targetLifeAfter === undefined
-        ? ""
-        : ` Life ${event.targetLifeBefore} -> ${event.targetLifeAfter}.`;
-    return `- Damage: ${event.playerId} deals ${event.amount ?? 0} to ${event.targetPlayerId} with ${formatCard(event, options)} via ${event.effectId ?? "<unknown>"}.${lifeDelta}`;
+  if (event.type === "effectDamageDealt" && event.playerId !== undefined && event.targetPlayerId !== undefined) {
+    return `- Damage: ${event.playerId} deals ${event.amount ?? 0} to ${event.targetPlayerId} with ${formatCard(event, options)} via ${event.effectId ?? "<unknown>"}.${formatTargetLifeDelta(event)}`;
   }
 
-  if (
-    event.type === "effectLifeHealed" &&
-    event.playerId !== undefined &&
-    event.targetPlayerId !== undefined
-  ) {
-    const lifeDelta =
-      event.targetLifeBefore === undefined ||
-      event.targetLifeAfter === undefined
-        ? ""
-        : ` Life ${event.targetLifeBefore} -> ${event.targetLifeAfter}.`;
-    return `- Healing: ${event.playerId} heals ${event.targetPlayerId} for ${event.amount ?? 0} with ${formatCard(event, options)} via ${event.effectId ?? "<unknown>"}.${lifeDelta}`;
+  if (event.type === "effectLifeHealed" && event.playerId !== undefined && event.targetPlayerId !== undefined) {
+    return `- Healing: ${event.playerId} heals ${event.targetPlayerId} for ${event.amount ?? 0} with ${formatCard(event, options)} via ${event.effectId ?? "<unknown>"}.${formatTargetLifeDelta(event)}`;
   }
 
-  if (
-    event.type === "effectLifeSet" &&
-    event.playerId !== undefined &&
-    event.targetPlayerId !== undefined
-  ) {
-    const lifeDelta =
-      event.targetLifeBefore === undefined ||
-      event.targetLifeAfter === undefined
-        ? ""
-        : ` Life ${event.targetLifeBefore} -> ${event.targetLifeAfter}.`;
-    return `- Life set: ${event.playerId} sets ${event.targetPlayerId} to ${event.amount ?? 0} with ${formatCard(event, options)} via ${event.effectId ?? "<unknown>"}.${lifeDelta}`;
+  if (event.type === "effectLifeSet" && event.playerId !== undefined && event.targetPlayerId !== undefined) {
+    return `- Life set: ${event.playerId} sets ${event.targetPlayerId} to ${event.amount ?? 0} with ${formatCard(event, options)} via ${event.effectId ?? "<unknown>"}.${formatTargetLifeDelta(event)}`;
   }
 
   if (event.type === "playerDied" && event.playerId !== undefined) {
-    const lifeSuffix =
-      event.lifeAfter === undefined
-        ? ""
-        : ` after reaching ${event.lifeAfter} life`;
-    return `- Death: ${event.playerId} is defeated${lifeSuffix}.`;
+    return `- Death: ${event.playerId} is defeated${event.lifeAfter === undefined ? "" : ` after reaching ${event.lifeAfter} life`}.`;
   }
 
-  if (
-    event.type === "trophyControlChanged" &&
-    event.playerId !== undefined &&
-    event.targetPlayerId !== undefined
-  ) {
+  if (event.type === "trophyControlChanged" && event.playerId !== undefined && event.targetPlayerId !== undefined) {
     return `- Trophy: Basic Trophy moves to ${event.playerId} after defeating ${event.targetPlayerId} with ${formatCard(event, options)}.`;
   }
 
@@ -167,156 +136,137 @@ function formatEvent(
   }
 
   if (event.type === "playerResurrected" && event.playerId !== undefined) {
-    if (event.lifeBefore !== undefined && event.lifeAfter !== undefined) {
-      return `- Resurrection: ${event.playerId} life ${event.lifeBefore} -> ${event.lifeAfter}.`;
-    }
-
-    return `- Resurrection: ${event.playerId} returns at ${event.amount ?? 0} life.`;
+    return event.lifeBefore !== undefined && event.lifeAfter !== undefined
+      ? `- Resurrection: ${event.playerId} life ${event.lifeBefore} -> ${event.lifeAfter}.`
+      : `- Resurrection: ${event.playerId} returns at ${event.amount ?? 0} life.`;
   }
 
   if (event.type === "defenseCostPaid" && event.playerId !== undefined) {
-    if (
-      event.effectId === "spend_chips" &&
-      event.chipsBefore !== undefined &&
-      event.chipsAfter !== undefined
-    ) {
+    if (event.effectId === "spend_chips" && event.chipsBefore !== undefined && event.chipsAfter !== undefined) {
       return `- Defense cost: ${event.playerId} pays ${event.amount ?? 0} chips with ${formatCard(event, options)}. Chips ${event.chipsBefore} -> ${event.chipsAfter}.`;
     }
-
-    if (
-      event.effectId === "pay_life" &&
-      event.lifeBefore !== undefined &&
-      event.lifeAfter !== undefined
-    ) {
+    if (event.effectId === "pay_life" && event.lifeBefore !== undefined && event.lifeAfter !== undefined) {
       return `- Defense cost: ${event.playerId} pays ${event.amount ?? 0} life with ${formatCard(event, options)}. Life ${event.lifeBefore} -> ${event.lifeAfter}.`;
     }
-
     if (event.effectId === "discard_other_hand_card") {
       return `- Defense cost: ${event.playerId} discards ${formatTargetCard(event, options)} for ${formatCard(event, options)}.`;
     }
   }
 
+  if (event.type === "marketEventCardOpened") {
+    const prefix = event.sourceType === "setup" ? "Setup Market Flow" : "Market Flow";
+    return `- ${prefix}: opened event card ${formatCard(event, options)} for ${formatMarketName(event.destinationZone)}.${formatTextSuffix(event, options)}`;
+  }
+
   if (event.type === "marketFlowCardAdded") {
-    return `- Market Flow: added ${formatCard(event, options)} to market.`;
+    const prefix = event.sourceType === "setup" ? "Setup Market Flow" : "Market Flow";
+    return `- ${prefix}: added ${formatCard(event, options)} to ${formatMarketName(event.destinationZone)}.`;
   }
 
   if (event.type === "marketChipAdded") {
-    return `- Market chip: ${formatCard(event, options)} gains +${event.amount ?? 0} market chip.`;
+    const prefix = event.sourceType === "setup" ? "Setup market chip" : "Market chip";
+    return `- ${prefix}: ${formatCard(event, options)} gains +${event.amount ?? 0} market chip.`;
   }
 
   if (event.type === "mayhemResolved" && event.playerId !== undefined) {
     return `- Mayhem: ${formatCard(event, options)} resolves for ${event.playerId}.`;
   }
 
-  if (
-    event.type === "mayhemDestroyed" ||
-    event.type === "megaMayhemDestroyed"
-  ) {
-    return `- Market Flow: ${formatCard(event, options)} is destroyed.`;
+  if (event.type === "mayhemDestroyed" || event.type === "megaMayhemDestroyed") {
+    const prefix = event.sourceType === "setup" ? "Setup Market Flow" : "Market Flow";
+    return `- ${prefix}: ${formatCard(event, options)} is destroyed.`;
   }
 
   return undefined;
+}
+
+function isSetupTraceEvent(event: GameEvent): boolean {
+  return event.type === "setupChoiceSelected" || event.sourceType === "setup" || event.turnNumber === undefined;
 }
 
 function getTraceGroupIdentity(event: GameEvent): string {
-  if (event.actionSequence !== undefined) {
-    return `action:${event.actionSequence}`;
-  }
-
-  return `turn:${event.turnNumber ?? "?"}:${event.playerId ?? "<unknown-player>"}`;
+  return event.actionSequence === undefined
+    ? `turn:${event.turnNumber ?? "?"}:${event.playerId ?? "<unknown-player>"}`
+    : `action:${event.actionSequence}:turn:${event.turnNumber ?? "?"}`;
 }
 
 function formatTraceHeader(event: GameEvent): string | undefined {
+  if (isPreActionMarketFlowEvent(event)) {
+    return `Turn ${event.turnNumber ?? "?"} — before ${event.playerId ?? "active player"} actions`;
+  }
   if (event.actionSequence !== undefined && event.playerId !== undefined) {
-    const actionIdentity =
-      event.actionIdentity === undefined ? "" : ` (${event.actionIdentity})`;
+    const actionIdentity = event.actionIdentity === undefined ? "" : ` (${event.actionIdentity})`;
     return `Turn ${event.turnNumber ?? "?"}, Action ${event.actionSequence} - ${event.playerId}${actionIdentity}`;
   }
-
-  if (event.playerId !== undefined) {
-    return `Turn ${event.turnNumber ?? "?"} - ${event.playerId}`;
-  }
-
+  if (event.playerId !== undefined) return `Turn ${event.turnNumber ?? "?"} - ${event.playerId}`;
+  if (event.turnNumber !== undefined) return `Turn ${event.turnNumber} — before active player actions`;
   return undefined;
 }
 
-function formatCard(
-  event: GameEvent,
-  options: FormatSingleGameDebugTraceOptions
-): string {
+function isPreActionMarketFlowEvent(event: GameEvent): boolean {
+  return event.actionIdentity === "endTurn" && ["marketEventCardOpened", "marketFlowCardAdded", "marketChipAdded", "mayhemDestroyed", "megaMayhemDestroyed"].includes(event.type);
+}
+
+function formatCard(event: GameEvent, options: FormatSingleGameDebugTraceOptions): string {
   const definitionId = event.definitionId ?? "<unknown-card>";
   const label = options.cardNames?.get(definitionId) ?? definitionId;
-  if (event.cardInstanceId === undefined) {
-    return label;
-  }
+  return event.cardInstanceId === undefined ? label : `${label} (${event.cardInstanceId})`;
+}
 
-  return `${label} (${event.cardInstanceId})`;
+function formatTargetCard(event: GameEvent, options: FormatSingleGameDebugTraceOptions): string {
+  const definitionId = event.targetDefinitionId ?? "<unknown-card>";
+  const label = options.cardNames?.get(definitionId) ?? definitionId;
+  return event.targetCardInstanceId === undefined ? label : `${label} (${event.targetCardInstanceId})`;
+}
+
+function formatToken(event: GameEvent, options: FormatSingleGameDebugTraceOptions): string {
+  const definitionId = event.tokenDefinitionId ?? "<unknown-token>";
+  const label = options.tokenNames?.get(definitionId) ?? definitionId;
+  return event.tokenInstanceId === undefined ? label : `${label} (${event.tokenInstanceId})`;
+}
+
+function formatDefinitionLabel(definitionId: string, event: GameEvent, options: FormatSingleGameDebugTraceOptions): string {
+  return event.setupChoiceKind === "wizardProperty" ? options.tokenNames?.get(definitionId) ?? definitionId : options.cardNames?.get(definitionId) ?? definitionId;
+}
+
+function formatTextSuffix(event: GameEvent, options: FormatSingleGameDebugTraceOptions): string {
+  const text = event.definitionId === undefined ? undefined : options.cardTexts?.get(event.definitionId);
+  return text === undefined ? "" : `\n  Text: ${text}`;
+}
+
+function formatTargetLifeDelta(event: GameEvent): string {
+  return event.targetLifeBefore === undefined || event.targetLifeAfter === undefined ? "" : ` Life ${event.targetLifeBefore} -> ${event.targetLifeAfter}.`;
+}
+
+function formatPaymentSummary(event: GameEvent): string {
+  const parts: string[] = [];
+  if (event.powerBefore !== undefined && event.powerAfter !== undefined) parts.push(`power ${event.powerBefore} -> ${event.powerAfter}`, `spent ${event.powerBefore - event.powerAfter}`);
+  if (event.chipsBefore !== undefined && event.chipsAfter !== undefined) parts.push(`chips ${event.chipsBefore} -> ${event.chipsAfter}`);
+  if (event.amount !== undefined) parts.push(`effective cost ${event.amount}`);
+  if (event.sourceZone !== undefined) parts.push(`source ${formatMarketName(event.sourceZone)}`);
+  return parts.length === 0 ? "" : ` (${parts.join(", ")})`;
+}
+
+function formatMarketName(zone: string | undefined): string {
+  if (zone === "mainMarket") return "main market";
+  if (zone === "legendMarket") return "legend market";
+  return formatZone(zone);
 }
 
 function formatZone(zone: string | undefined): string {
-  if (zone === undefined) {
-    return "<unknown-zone>";
-  }
-
-  if (zone === "mainMarket") {
-    return "main market";
-  }
-
-  if (zone === "legendMarket") {
-    return "legend market";
-  }
-
+  if (zone === undefined) return "<unknown-zone>";
+  if (zone === "mainMarket") return "main market";
+  if (zone === "legendMarket") return "legend market";
   const playerZone = zone.match(/^(player-\d+)\.(.+)$/);
-  if (playerZone === null) {
-    return zone;
-  }
-
+  if (playerZone === null) return zone;
   const [, playerId, zoneName] = playerZone;
-  if (playerId === undefined || zoneName === undefined) {
-    return zone;
-  }
-
+  if (playerId === undefined || zoneName === undefined) return zone;
   return `${playerId} ${formatPlayerZoneName(zoneName)}`;
 }
 
 function formatPlayerZoneName(zoneName: string): string {
-  if (zoneName === "playedThisTurn") {
-    return "played this turn";
-  }
-
-  if (zoneName === "deckTop") {
-    return "deck top";
-  }
-
-  if (zoneName === "unboughtFamiliar") {
-    return "unbought familiar";
-  }
-
+  if (zoneName === "playedThisTurn") return "played this turn";
+  if (zoneName === "deckTop") return "deck top";
+  if (zoneName === "unboughtFamiliar") return "unbought familiar";
   return zoneName;
-}
-
-function formatTargetCard(
-  event: GameEvent,
-  options: FormatSingleGameDebugTraceOptions
-): string {
-  const definitionId = event.targetDefinitionId ?? "<unknown-card>";
-  const label = options.cardNames?.get(definitionId) ?? definitionId;
-  if (event.targetCardInstanceId === undefined) {
-    return label;
-  }
-
-  return `${label} (${event.targetCardInstanceId})`;
-}
-
-function formatToken(
-  event: GameEvent,
-  options: FormatSingleGameDebugTraceOptions
-): string {
-  const definitionId = event.tokenDefinitionId ?? "<unknown-token>";
-  const label = options.tokenNames?.get(definitionId) ?? definitionId;
-  if (event.tokenInstanceId === undefined) {
-    return label;
-  }
-
-  return `${label} (${event.tokenInstanceId})`;
 }
