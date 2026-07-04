@@ -75,6 +75,7 @@ function fillMarket(
     if (card === undefined) {
       state.eventLog.push({
         type: "marketFlowFailed",
+        playerId: state.activePlayerId,
         sourceType: options.mode,
         destinationZone: options.marketName,
       });
@@ -102,6 +103,7 @@ function fillMarket(
       options.destroyedEvents.push(card);
       state.eventLog.push({
         type: options.eventLogType,
+        playerId: state.activePlayerId,
         sourceType: options.mode,
         destinationZone: options.marketName,
         cardInstanceId: card.instanceId,
@@ -113,6 +115,7 @@ function fillMarket(
     options.market.push(card);
     state.eventLog.push({
       type: "marketFlowCardAdded",
+      playerId: state.activePlayerId,
       sourceType: options.mode,
       destinationZone: options.marketName,
       cardInstanceId: card.instanceId,
@@ -171,6 +174,7 @@ function applyMarketChipMarker(
     card.marketChips += 1;
     state.eventLog.push({
       type: "marketChipAdded",
+      playerId: state.activePlayerId,
       sourceType: mode,
       cardInstanceId: card.instanceId,
       definitionId: card.definitionId,
