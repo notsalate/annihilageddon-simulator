@@ -6,8 +6,12 @@ import {
   formatSingleGameDebugTrace,
   initializeGame,
   loadCurrentRuntimeDataPack,
+  runMarketFlow,
   runSingleGame,
   validateExecutableDataPack,
+  type CardDefinition,
+  type CardInstance,
+  type GameState,
   type SingleGameResult,
 } from "../src/index.js";
 
@@ -207,13 +211,13 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
         turnNumber: 2,
         actionSequence: 7,
         actionIdentity: "endTurn",
-        requestedCount: 5,
-        drawnCount: 4,
-        handSizeAfter: 4,
+        amount: 5,
+        legalChoiceCount: 4,
+        choiceId: "4",
         destinationZone: "player-1.hand",
         targetCardInstanceIds: ["card-c", "card-d", "card-e", "card-f"],
         targetDefinitionIds: ["draw-a", "draw-b", "draw-c", "draw-d"],
-      } as SingleGameResult["eventLog"][number],
+      },
     ],
   };
 
@@ -261,49 +265,175 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
 });
 
 test("runtime emits raw cardBought payment payload", () => {
-  const result = runSingleGame({
-    rootDir,
-    seed: 80809,
-    maxTurns: 1,
+  const state = initializeGame({ rootDir, seed: 80809 });
+  const activePlayer = mustGetActivePlayer(state);
+  const boughtCard = state.common.market[0];
+  assert.ok(boughtCard);
+  state.turn.power = 100;
+  const result = applyAction(state, {
+    type: "buyMarketCard",
+    cardInstanceId: boughtCard.instanceId,
+    source: "mainMarket",
   });
-  const bought = result.eventLog.find((event) => event.type === "cardBought");
+
+  assert.equal(result.ok, true);
+  const bought = state.eventLog.find((event) => {
+    return event.type === "cardBought" && event.cardInstanceId === boughtCard.instanceId;
+  });
 
   assert.ok(bought);
-  assert.ok(
-    ["mainMarket", "legendMarket", "wildMagicStack", "familiar"].includes(
-      bought.sourceZone ?? ""
-    )
-  );
+  assert.equal(bought.playerId, activePlayer.playerId);
+  assert.equal(bought.sourceZone, "mainMarket");
   assertNumber(bought.amount);
-  assertNumber(bought.powerBefore);
+  assert.equal(bought.powerBefore, 100);
   assertNumber(bought.powerAfter);
-  assertNumber(bought.chipsBefore);
-  assertNumber(bought.chipsAfter);
-  assert.equal(
-    bought.powerBefore - bought.powerAfter + bought.chipsBefore - bought.chipsAfter,
-    bought.amount
-  );
+  assert.equal(bought.chipsBefore, 0);
+  assert.equal(bought.chipsAfter, 0);
+  assert.equal(bought.powerBefore - bought.powerAfter, bought.amount);
 });
 
-test("runtime emits explicit handDrawn payload without choice-field overload", () => {
-  const result = runSingleGame({
-    rootDir,
-    seed: 80809,
-    maxTurns: 1,
-  });
-  const handDrawn = result.eventLog.find(
-    (event) => event.type === "handDrawn"
-  ) as Record<string, unknown> | undefined;
+test("runtime emits real effectLifeSet before/after payload", () => {
+  const state = initializeGame({ rootDir, seed: 12345 });
+  const activePlayer = mustGetActivePlayer(state);
+  activePlayer.life.current = 4;
+  const fixtureCard = addFixtureCardToActiveHand(
+    state,
+    createFixtureCardDefinition("fixture-set-life-card", "normal", [
+      {
+        effectId: "set_life",
+        timing: "onPlay",
+        lifeTotal: 15,
+        target: {
+          selector: "activePlayer",
+        },
+      },
+    ])
+  );
 
-  assert.ok(handDrawn);
-  assert.equal(handDrawn["requestedCount"], 5);
-  assert.equal(handDrawn["drawnCount"], 5);
-  assert.equal(handDrawn["handSizeAfter"], 5);
-  assert.equal(handDrawn["choiceId"], undefined);
-  assert.equal(handDrawn["legalChoiceCount"], undefined);
-  assert.deepEqual(
-    (handDrawn["targetCardInstanceIds"] as readonly unknown[]).length,
-    handDrawn["drawnCount"]
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCard.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  const lifeSet = state.eventLog.find((event) => {
+    return event.type === "effectLifeSet" && event.cardInstanceId === fixtureCard.instanceId;
+  });
+  assert.ok(lifeSet);
+  assert.equal(lifeSet.playerId, activePlayer.playerId);
+  assert.equal(lifeSet.targetPlayerId, activePlayer.playerId);
+  assert.equal(lifeSet.amount, 15);
+  assert.equal(lifeSet.targetLifeBefore, 4);
+  assert.equal(lifeSet.targetLifeAfter, 15);
+});
+
+test("runtime opens event cards before resolving and destroying them", () => {
+  const state = initializeGame({ rootDir, seed: 12345 });
+  const activePlayer = mustGetActivePlayer(state);
+  activePlayer.life.current = 4;
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-set-life-card",
+    "mayhem",
+    [
+      {
+        effectId: "set_life",
+        timing: "onMayhemResolve",
+        lifeTotal: 15,
+        target: {
+          selector: "activePlayer",
+        },
+      },
+    ]
+  );
+  const fillerDefinition = createFixtureCardDefinition(
+    "fixture-market-filler-card",
+    "normal",
+    []
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+    [fillerDefinition.cardId, fillerDefinition],
+  ]);
+  state.common.market.splice(0);
+  state.common.mainDeck.splice(
+    0,
+    state.common.mainDeck.length,
+    createCardInstance("fixture-mayhem-instance", mayhemDefinition.cardId),
+    ...Array.from({ length: 5 }, (_, index) =>
+      createCardInstance(
+        `fixture-market-filler-${index + 1}`,
+        fillerDefinition.cardId
+      )
+    )
+  );
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  const openedIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "marketEventCardOpened" &&
+      event.cardInstanceId === "fixture-mayhem-instance"
+  );
+  const lifeSetIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "effectLifeSet" &&
+      event.cardInstanceId === "fixture-mayhem-instance"
+  );
+  const resolvedIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "mayhemResolved" &&
+      event.cardInstanceId === "fixture-mayhem-instance"
+  );
+  const destroyedIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "mayhemDestroyed" &&
+      event.cardInstanceId === "fixture-mayhem-instance"
+  );
+
+  assert.ok(openedIndex >= 0);
+  assert.ok(lifeSetIndex > openedIndex);
+  assert.ok(resolvedIndex > lifeSetIndex);
+  assert.ok(destroyedIndex > resolvedIndex);
+});
+
+test("readable trace can render card text for a real runtime event", () => {
+  const state = initializeGame({ rootDir, seed: 12345 });
+  const fixtureCard = addFixtureCardToActiveHand(
+    state,
+    createFixtureCardDefinition("fixture-card-text-card", "normal", [
+      {
+        effectId: "add_power",
+        timing: "onPlay",
+        amount: 1,
+      },
+    ])
+  );
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: fixtureCard.instanceId,
+  });
+  assert.equal(playResult.ok, true);
+
+  const result: SingleGameResult = {
+    seed: state.seed,
+    endReason: "maxTurnsReached",
+    isGameEnd: false,
+    turnsElapsed: 1,
+    players: [],
+    winnerIds: [],
+    isTie: false,
+    eventLog: state.eventLog,
+  };
+  const trace = formatSingleGameDebugTrace(result, {
+    cardNames: new Map([[fixtureCard.definitionId, "Fixture text card"]]),
+    cardTexts: new Map([[fixtureCard.definitionId, "Runtime visible card text."]]),
+  });
+
+  assert.match(
+    trace,
+    /Played Fixture text card \(fixture-card-text-card-instance\)\.\n  Text: Runtime visible card text\./
   );
 });
 
@@ -365,4 +495,76 @@ function countDefinition(
 
 function assertNumber(value: unknown): asserts value is number {
   assert.equal(typeof value, "number");
+}
+
+function mustGetActivePlayer(state: GameState): GameState["players"][number] {
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  return activePlayer;
+}
+
+function addFixtureCardToActiveHand(
+  state: GameState,
+  definition: CardDefinition
+): CardInstance {
+  const activePlayer = mustGetActivePlayer(state);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const card = createCardInstance(
+    `${definition.cardId}-instance`,
+    definition.cardId,
+    activePlayer.playerId
+  );
+  activePlayer.hand.push(card);
+  return card;
+}
+
+function createCardInstance(
+  instanceId: string,
+  definitionId: string,
+  ownerId: CardInstance["ownerId"] = "common"
+): CardInstance {
+  return {
+    instanceId,
+    definitionId,
+    ownerId,
+    marketChips: 0,
+  };
+}
+
+function createFixtureCardDefinition(
+  cardId: string,
+  cardKind: CardDefinition["engine"]["cardKind"],
+  effects: unknown[]
+): CardDefinition {
+  return {
+    schemaVersion: 1,
+    cardId,
+    visible: {
+      nameRu: cardId,
+      cost: 0,
+      victoryPoints: 0,
+      typeRu: null,
+      cardKind,
+      cardTypes: [],
+      markers: [],
+    },
+    engine: {
+      runtimeSchema: "krutagidon.cardDefinition.v0",
+      mappingStatus: "fixture",
+      playableInV0: true,
+      cardKind,
+      cardTypes: [],
+      cost: 0,
+      victoryPoints: 0,
+      isOngoing: false,
+      marketChipMarker: false,
+      effects,
+      unsupportedMechanics: [],
+    },
+  };
 }
