@@ -1,4 +1,5 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
+import { isPlainRecord } from "../common.js";
 import type {
   CardInstance,
   GameState,
@@ -457,5 +458,5 @@ function mustGetTokenDefinition(
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return isPlainRecord(value);
 }

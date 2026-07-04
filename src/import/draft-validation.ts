@@ -1,10 +1,41 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
-const allowedCardKinds = new Set(["starter", "normal", "legend", "mayhem", "megaMayhem", "wildMagic", "limpWand", "familiar"]);
-const allowedCardTypes = new Set(["wizardCard", "creature", "spell", "treasure", "location", "familiar", "legend"]);
-const allowedMarkers = new Set(["ongoing", "attack", "defense", "activate", "marketChipMarker"]);
-const forbiddenRuntimeFields = new Set(["engine", "effects", "runtimeSchema", "playableInV0", "mappingStatus"]);
+import { isPlainRecord } from "../common.js";
+
+const allowedCardKinds = new Set([
+  "starter",
+  "normal",
+  "legend",
+  "mayhem",
+  "megaMayhem",
+  "wildMagic",
+  "limpWand",
+  "familiar",
+]);
+const allowedCardTypes = new Set([
+  "wizardCard",
+  "creature",
+  "spell",
+  "treasure",
+  "location",
+  "familiar",
+  "legend",
+]);
+const allowedMarkers = new Set([
+  "ongoing",
+  "attack",
+  "defense",
+  "activate",
+  "marketChipMarker",
+]);
+const forbiddenRuntimeFields = new Set([
+  "engine",
+  "effects",
+  "runtimeSchema",
+  "playableInV0",
+  "mappingStatus",
+]);
 const numberedImportIdCategories = new Set([
   "main",
   "legend",
@@ -46,7 +77,10 @@ export interface ValidateCardDraftOptions {
 
 export type ValidateDraftOptions = ValidateCardDraftOptions;
 
-export function validateDraft(draft: unknown, options: ValidateDraftOptions = {}): DraftValidationResult {
+export function validateDraft(
+  draft: unknown,
+  options: ValidateDraftOptions = {}
+): DraftValidationResult {
   const filePath = options.filePath ?? "<draft>";
   if (!isRecord(draft)) {
     return result([message(filePath, "draft must be a JSON object")], []);
@@ -64,17 +98,30 @@ export function validateDraft(draft: unknown, options: ValidateDraftOptions = {}
     return validateDeadWizardTokenDraft(draft, options);
   }
 
-  const errors = [message(filePath, "draftKind must be one of cardDraft, wizardPropertyDraft, deadWizardTokenDraft")];
+  const errors = [
+    message(
+      filePath,
+      "draftKind must be one of cardDraft, wizardPropertyDraft, deadWizardTokenDraft"
+    ),
+  ];
   for (const fieldName of forbiddenRuntimeFields) {
     if (fieldName in draft) {
-      errors.push(message(filePath, `draft contains forbidden runtime field '${fieldName}'`));
+      errors.push(
+        message(
+          filePath,
+          `draft contains forbidden runtime field '${fieldName}'`
+        )
+      );
     }
   }
 
   return result(errors, []);
 }
 
-export function validateCardDraft(draft: unknown, options: ValidateCardDraftOptions = {}): DraftValidationResult {
+export function validateCardDraft(
+  draft: unknown,
+  options: ValidateCardDraftOptions = {}
+): DraftValidationResult {
   const filePath = options.filePath ?? "<draft>";
   const errors: DraftValidationMessage[] = [];
   const warnings: DraftValidationMessage[] = [];
@@ -86,7 +133,12 @@ export function validateCardDraft(draft: unknown, options: ValidateCardDraftOpti
 
   for (const fieldName of forbiddenRuntimeFields) {
     if (fieldName in draft) {
-      errors.push(message(filePath, `draft contains forbidden runtime field '${fieldName}'`));
+      errors.push(
+        message(
+          filePath,
+          `draft contains forbidden runtime field '${fieldName}'`
+        )
+      );
     }
   }
 
@@ -101,7 +153,13 @@ export function validateCardDraft(draft: unknown, options: ValidateCardDraftOpti
   if (!isNonEmptyString(draft["cardId"])) {
     errors.push(message(filePath, "cardId is required"));
   } else {
-    validateNewImportIdStyle(draft["cardId"], "cardId", expectedCardIdCategories(draft["visible"]), filePath, errors);
+    validateNewImportIdStyle(
+      draft["cardId"],
+      "cardId",
+      expectedCardIdCategories(draft["visible"]),
+      filePath,
+      errors
+    );
   }
 
   validateSource(draft["source"], filePath, errors, warnings);
@@ -110,7 +168,10 @@ export function validateCardDraft(draft: unknown, options: ValidateCardDraftOpti
   return result(errors, warnings);
 }
 
-export function validateWizardPropertyDraft(draft: unknown, options: ValidateDraftOptions = {}): DraftValidationResult {
+export function validateWizardPropertyDraft(
+  draft: unknown,
+  options: ValidateDraftOptions = {}
+): DraftValidationResult {
   const filePath = options.filePath ?? "<draft>";
   const errors: DraftValidationMessage[] = [];
   const warnings: DraftValidationMessage[] = [];
@@ -122,7 +183,12 @@ export function validateWizardPropertyDraft(draft: unknown, options: ValidateDra
 
   for (const fieldName of forbiddenRuntimeFields) {
     if (fieldName in draft) {
-      errors.push(message(filePath, `draft contains forbidden runtime field '${fieldName}'`));
+      errors.push(
+        message(
+          filePath,
+          `draft contains forbidden runtime field '${fieldName}'`
+        )
+      );
     }
   }
 
@@ -137,7 +203,13 @@ export function validateWizardPropertyDraft(draft: unknown, options: ValidateDra
   if (!isNonEmptyString(draft["tokenId"])) {
     errors.push(message(filePath, "tokenId is required"));
   } else {
-    validateNewImportIdStyle(draft["tokenId"], "tokenId", ["wizard_property"], filePath, errors);
+    validateNewImportIdStyle(
+      draft["tokenId"],
+      "tokenId",
+      ["wizard_property"],
+      filePath,
+      errors
+    );
   }
 
   if (draft["kind"] !== "wizardProperty") {
@@ -150,7 +222,10 @@ export function validateWizardPropertyDraft(draft: unknown, options: ValidateDra
   return result(errors, warnings);
 }
 
-export function validateDeadWizardTokenDraft(draft: unknown, options: ValidateDraftOptions = {}): DraftValidationResult {
+export function validateDeadWizardTokenDraft(
+  draft: unknown,
+  options: ValidateDraftOptions = {}
+): DraftValidationResult {
   const filePath = options.filePath ?? "<draft>";
   const errors: DraftValidationMessage[] = [];
   const warnings: DraftValidationMessage[] = [];
@@ -162,7 +237,12 @@ export function validateDeadWizardTokenDraft(draft: unknown, options: ValidateDr
 
   for (const fieldName of forbiddenRuntimeFields) {
     if (fieldName in draft) {
-      errors.push(message(filePath, `draft contains forbidden runtime field '${fieldName}'`));
+      errors.push(
+        message(
+          filePath,
+          `draft contains forbidden runtime field '${fieldName}'`
+        )
+      );
     }
   }
 
@@ -177,7 +257,13 @@ export function validateDeadWizardTokenDraft(draft: unknown, options: ValidateDr
   if (!isNonEmptyString(draft["tokenId"])) {
     errors.push(message(filePath, "tokenId is required"));
   } else {
-    validateNewImportIdStyle(draft["tokenId"], "tokenId", ["dead_wizard_token"], filePath, errors);
+    validateNewImportIdStyle(
+      draft["tokenId"],
+      "tokenId",
+      ["dead_wizard_token"],
+      filePath,
+      errors
+    );
   }
 
   if (draft["kind"] !== "deadWizardToken") {
@@ -192,7 +278,7 @@ export function validateDeadWizardTokenDraft(draft: unknown, options: ValidateDr
 
 export function validateDraftFiles(
   rootDir: string,
-  inputPaths = defaultDraftInputPaths,
+  inputPaths = defaultDraftInputPaths
 ): DraftValidationResult {
   const errors: DraftValidationMessage[] = [];
   const warnings: DraftValidationMessage[] = [];
@@ -204,13 +290,17 @@ export function validateDraftFiles(
 
     for (const draftFile of draftFiles) {
       filesChecked += 1;
-      const displayPath = path.relative(rootDir, draftFile).replaceAll("\\", "/");
+      const displayPath = path
+        .relative(rootDir, draftFile)
+        .replaceAll("\\", "/");
       let parsed: unknown;
 
       try {
         parsed = JSON.parse(readFileSync(draftFile, "utf8"));
       } catch (error) {
-        errors.push(message(displayPath, `JSON is not readable: ${errorMessage(error)}`));
+        errors.push(
+          message(displayPath, `JSON is not readable: ${errorMessage(error)}`)
+        );
         continue;
       }
 
@@ -228,7 +318,9 @@ export function validateDraftFiles(
   };
 }
 
-export function formatDraftValidationResult(validation: DraftValidationResult): string {
+export function formatDraftValidationResult(
+  validation: DraftValidationResult
+): string {
   const lines = [`Draft validation: ${validation.filesChecked} file(s)`];
 
   for (const error of validation.errors) {
@@ -240,10 +332,12 @@ export function formatDraftValidationResult(validation: DraftValidationResult): 
   }
 
   if (validation.ok) {
-    lines.push(`Ready for runtime mapping: 0 error(s), ${validation.warnings.length} warning(s)`);
+    lines.push(
+      `Ready for runtime mapping: 0 error(s), ${validation.warnings.length} warning(s)`
+    );
   } else {
     lines.push(
-      `Not ready for runtime mapping: ${validation.errors.length} error(s), ${validation.warnings.length} warning(s)`,
+      `Not ready for runtime mapping: ${validation.errors.length} error(s), ${validation.warnings.length} warning(s)`
     );
   }
 
@@ -254,7 +348,7 @@ function validateSource(
   source: unknown,
   filePath: string,
   errors: DraftValidationMessage[],
-  warnings: DraftValidationMessage[],
+  warnings: DraftValidationMessage[]
 ): void {
   if (!isRecord(source)) {
     errors.push(message(filePath, "source is required"));
@@ -274,7 +368,7 @@ function validateVisible(
   visible: unknown,
   filePath: string,
   errors: DraftValidationMessage[],
-  warnings: DraftValidationMessage[],
+  warnings: DraftValidationMessage[]
 ): void {
   if (!isRecord(visible)) {
     errors.push(message(filePath, "visible is required"));
@@ -290,7 +384,9 @@ function validateVisible(
   }
 
   if (!isNumberOrNull(visible["victoryPoints"])) {
-    errors.push(message(filePath, "visible.victoryPoints must be a number or null"));
+    errors.push(
+      message(filePath, "visible.victoryPoints must be a number or null")
+    );
   }
 
   if (!isStringOrNull(visible["typeRu"])) {
@@ -301,13 +397,33 @@ function validateVisible(
     errors.push(message(filePath, "visible.textRu is required"));
   }
 
-  validateAllowedString(visible["cardKind"], allowedCardKinds, "visible.cardKind", filePath, errors);
-  validateStringArray(visible["cardTypes"], "visible.cardTypes", allowedCardTypes, filePath, errors);
-  validateStringArray(visible["markers"], "visible.markers", allowedMarkers, filePath, errors);
+  validateAllowedString(
+    visible["cardKind"],
+    allowedCardKinds,
+    "visible.cardKind",
+    filePath,
+    errors
+  );
+  validateStringArray(
+    visible["cardTypes"],
+    "visible.cardTypes",
+    allowedCardTypes,
+    filePath,
+    errors
+  );
+  validateStringArray(
+    visible["markers"],
+    "visible.markers",
+    allowedMarkers,
+    filePath,
+    errors
+  );
 
   const uncertainty = visible["uncertainty"];
   if (!Array.isArray(uncertainty) || !uncertainty.every(isString)) {
-    errors.push(message(filePath, "visible.uncertainty must be an array of strings"));
+    errors.push(
+      message(filePath, "visible.uncertainty must be an array of strings")
+    );
   } else if (uncertainty.length > 0) {
     warnings.push(message(filePath, "visible.uncertainty has entries"));
   }
@@ -317,7 +433,7 @@ function validateWizardPropertyVisible(
   visible: unknown,
   filePath: string,
   errors: DraftValidationMessage[],
-  warnings: DraftValidationMessage[],
+  warnings: DraftValidationMessage[]
 ): void {
   if (!isRecord(visible)) {
     errors.push(message(filePath, "visible is required"));
@@ -334,7 +450,9 @@ function validateWizardPropertyVisible(
 
   const uncertainty = visible["uncertainty"];
   if (!Array.isArray(uncertainty) || !uncertainty.every(isString)) {
-    errors.push(message(filePath, "visible.uncertainty must be an array of strings"));
+    errors.push(
+      message(filePath, "visible.uncertainty must be an array of strings")
+    );
   } else if (uncertainty.length > 0) {
     warnings.push(message(filePath, "visible.uncertainty has entries"));
   }
@@ -344,7 +462,7 @@ function validateDeadWizardTokenVisible(
   visible: unknown,
   filePath: string,
   errors: DraftValidationMessage[],
-  warnings: DraftValidationMessage[],
+  warnings: DraftValidationMessage[]
 ): void {
   if (!isRecord(visible)) {
     errors.push(message(filePath, "visible is required"));
@@ -360,12 +478,16 @@ function validateDeadWizardTokenVisible(
   }
 
   if (!isNumberOrNull(visible["victoryPoints"])) {
-    errors.push(message(filePath, "visible.victoryPoints must be a number or null"));
+    errors.push(
+      message(filePath, "visible.victoryPoints must be a number or null")
+    );
   }
 
   const uncertainty = visible["uncertainty"];
   if (!Array.isArray(uncertainty) || !uncertainty.every(isString)) {
-    errors.push(message(filePath, "visible.uncertainty must be an array of strings"));
+    errors.push(
+      message(filePath, "visible.uncertainty must be an array of strings")
+    );
   } else if (uncertainty.length > 0) {
     warnings.push(message(filePath, "visible.uncertainty has entries"));
   }
@@ -376,10 +498,15 @@ function validateAllowedString(
   allowedValues: ReadonlySet<string>,
   fieldName: string,
   filePath: string,
-  errors: DraftValidationMessage[],
+  errors: DraftValidationMessage[]
 ): void {
   if (!isString(value) || !allowedValues.has(value)) {
-    errors.push(message(filePath, `${fieldName} must be one of ${Array.from(allowedValues).join(", ")}`));
+    errors.push(
+      message(
+        filePath,
+        `${fieldName} must be one of ${Array.from(allowedValues).join(", ")}`
+      )
+    );
   }
 }
 
@@ -388,11 +515,16 @@ function validateNewImportIdStyle(
   fieldName: string,
   expectedCategories: string[],
   filePath: string,
-  errors: DraftValidationMessage[],
+  errors: DraftValidationMessage[]
 ): void {
   const category = parseNewImportIdCategory(id);
   if (category === undefined) {
-    errors.push(message(filePath, `${fieldName} must use new import ID style esw2_dbg__<category>_<number>`));
+    errors.push(
+      message(
+        filePath,
+        `${fieldName} must use new import ID style esw2_dbg__<category>_<number>`
+      )
+    );
     return;
   }
 
@@ -400,8 +532,8 @@ function validateNewImportIdStyle(
     errors.push(
       message(
         filePath,
-        `${fieldName} category '${category}' does not match draft category; expected ${expectedCategories.join(" or ")}`,
-      ),
+        `${fieldName} category '${category}' does not match draft category; expected ${expectedCategories.join(" or ")}`
+      )
     );
   }
 }
@@ -453,7 +585,7 @@ function validateStringArray(
   fieldName: string,
   allowedValues: ReadonlySet<string>,
   filePath: string,
-  errors: DraftValidationMessage[],
+  errors: DraftValidationMessage[]
 ): void {
   if (!Array.isArray(value)) {
     errors.push(message(filePath, `${fieldName} must be an array`));
@@ -462,7 +594,12 @@ function validateStringArray(
 
   for (const item of value) {
     if (!isString(item) || !allowedValues.has(item)) {
-      errors.push(message(filePath, `${fieldName} contains unsupported value ${String(item)}`));
+      errors.push(
+        message(
+          filePath,
+          `${fieldName} contains unsupported value ${String(item)}`
+        )
+      );
     }
   }
 }
@@ -478,12 +615,17 @@ function collectJsonFiles(absoluteInputPath: string): string[] {
   }
 
   return readdirSync(absoluteInputPath)
-    .filter((fileName) => fileName.endsWith(".json") && !fileName.startsWith("_"))
+    .filter(
+      (fileName) => fileName.endsWith(".json") && !fileName.startsWith("_")
+    )
     .sort()
     .map((fileName) => path.join(absoluteInputPath, fileName));
 }
 
-function result(errors: DraftValidationMessage[], warnings: DraftValidationMessage[]): DraftValidationResult {
+function result(
+  errors: DraftValidationMessage[],
+  warnings: DraftValidationMessage[]
+): DraftValidationResult {
   return {
     ok: errors.length === 0,
     filesChecked: 1,
@@ -492,7 +634,10 @@ function result(errors: DraftValidationMessage[], warnings: DraftValidationMessa
   };
 }
 
-function message(filePath: string, messageText: string): DraftValidationMessage {
+function message(
+  filePath: string,
+  messageText: string
+): DraftValidationMessage {
   return {
     filePath,
     message: messageText,
@@ -500,7 +645,7 @@ function message(filePath: string, messageText: string): DraftValidationMessage 
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return isPlainRecord(value);
 }
 
 function isString(value: unknown): value is string {
@@ -516,7 +661,9 @@ function isStringOrNull(value: unknown): value is string | null {
 }
 
 function isNumberOrNull(value: unknown): value is number | null {
-  return (typeof value === "number" && Number.isSafeInteger(value)) || value === null;
+  return (
+    (typeof value === "number" && Number.isSafeInteger(value)) || value === null
+  );
 }
 
 function errorMessage(error: unknown): string {
