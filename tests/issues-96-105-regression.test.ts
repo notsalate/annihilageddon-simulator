@@ -5,6 +5,7 @@ import {
   formatSingleGameDebugTrace,
   initializeGame,
   loadCurrentRuntimeDataPack,
+  runSingleGame,
   type SingleGameResult,
 } from "../src/index.js";
 
@@ -57,6 +58,37 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
     players: [],
     winnerIds: [],
     isTie: false,
+    setupState: {
+      players: [
+        {
+          playerId: "player-1",
+          handSize: 2,
+          deckSize: 8,
+          life: 20,
+          maxLife: 25,
+          chips: 1,
+          hand: [
+            { instanceId: "card-start-a", definitionId: "hand-a", marketChips: 0 },
+            { instanceId: "card-start-b", definitionId: "hand-b", marketChips: 0 },
+          ],
+          wizardProperties: [
+            { instanceId: "token-prop-a", definitionId: "prop-a" },
+          ],
+          statuses: ["Dingler"],
+        },
+      ],
+      mainMarket: [
+        { instanceId: "card-buy", definitionId: "buy-card", marketChips: 0 },
+      ],
+      legendMarket: [
+        { instanceId: "card-legend", definitionId: "legend-card", marketChips: 0 },
+      ],
+      mainDeckSize: 42,
+      legendDeckSize: 12,
+      wildMagicStackSize: 16,
+      limpWandStackSize: 8,
+      deadWizardTokenStackSize: 8,
+    },
     eventLog: [
       {
         type: "setupChoiceSelected",
@@ -179,6 +211,11 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
   assert.ok(openedIndex >= 0);
   assert.ok(effectIndex > openedIndex);
   assert.ok(resolvedIndex > effectIndex);
+  assert.match(trace, /Setup state:/);
+  assert.match(trace, /player-1: life 20\/25, chips 1, hand 2 \[Знак \(card-start-a\), Пшик \(card-start-b\)\], deck 8, wizard properties \[Свойство А \(token-prop-a\)\], statuses \[Dingler\]/);
+  assert.match(trace, /main market \(1\): Приунывший орк \(card-buy\)/);
+  assert.match(trace, /legend market \(1\): Легенда \(card-legend\)/);
+  assert.match(trace, /stacks: main deck 42, legend deck 12, wild magic 16, limp wand 8, DWT 8/);
   assert.match(trace, /Setup choice \(wizardProperty\): player-1 candidates \[Свойство А, Свойство Б\] -> Свойство А via alwaysPickFirst/);
   assert.match(trace, /Setup Market Flow: added Легенда \(card-legend\) to legend market/);
   assert.match(trace, /Turn 2 — before player-2 actions/);
@@ -187,6 +224,23 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
   assert.match(trace, /Bought Приунывший орк \(card-buy\) -> discard.*power 5 -> 2.*effective cost 3.*source main market/);
   assert.match(trace, /End turn cleanup: player-1 moves 2 card\(s\).*Знак \(card-a\), Пшик \(card-b\)/);
   assert.match(trace, /New hand: player-1 drew 4\/5 card\(s\); hand size 4.*Карта А \(card-c\).*Карта Г \(card-f\)/);
+});
+
+test("single-game trace renders compact setup state for a stable seed", () => {
+  const result = runSingleGame({
+    rootDir,
+    seed: 12345,
+    maxTurns: 1,
+  });
+  const trace = formatSingleGameDebugTrace(result);
+
+  assert.ok(result.setupState);
+  assert.match(trace, /Setup state:/);
+  assert.match(trace, /player-1: life \d+\/\d+, chips \d+, hand \d+ \[[^\]]+\], deck \d+, wizard properties \[[^\]]+\]/);
+  assert.match(trace, /player-2: life \d+\/\d+, chips \d+, hand \d+ \[[^\]]+\], deck \d+, wizard properties \[[^\]]+\]/);
+  assert.match(trace, /main market \(\d+\): [^.]+\./);
+  assert.match(trace, /legend market \(\d+\): [^.]+\./);
+  assert.match(trace, /stacks: main deck \d+, legend deck \d+, wild magic \d+, limp wand \d+, DWT \d+\./);
 });
 
 function countDefinition(
