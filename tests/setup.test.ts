@@ -21,7 +21,10 @@ test("current runtime data pack uses current-runtime manifest", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
 
   assert.equal(dataPack.manifest.packId, "current-runtime-data-pack");
-  assert.equal(dataPack.manifest.decks?.starterDeck, "data/decks/starter-deck.json");
+  assert.equal(
+    dataPack.manifest.decks?.starterDeck,
+    "data/decks/starter-deck.json"
+  );
 });
 
 test("current runtime data pack uses canonical starter template", () => {
