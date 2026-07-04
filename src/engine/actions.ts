@@ -178,13 +178,13 @@ function endTurn(state: GameState): ActionResult {
   state.eventLog.push({
     type: "handDrawn",
     playerId: activePlayer.playerId,
-    requestedCount: drawResult.requestedCount,
-    drawnCount: drawResult.drawnCards.length,
-    handSizeAfter: activePlayer.hand.length,
+    amount: drawResult.requestedCount,
+    legalChoiceCount: drawResult.drawnCards.length,
+    choiceId: String(activePlayer.hand.length),
     destinationZone: `${activePlayer.playerId}.hand`,
     targetCardInstanceIds: drawResult.drawnCards.map((card) => card.instanceId),
     targetDefinitionIds: drawResult.drawnCards.map((card) => card.definitionId),
-  } as GameState["eventLog"][number]);
+  });
 
   state.turn.gainedCardDefinitionIds = [];
   state.turn.number += 1;
