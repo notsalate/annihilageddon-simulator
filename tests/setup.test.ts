@@ -50,6 +50,25 @@ test("initial runtime setup gives each player exactly ten starter cards", () => 
   }
 });
 
+test("setup records initial market additions as setup-phase events", () => {
+  const state = initializeGame({ rootDir, seed: 12345 });
+  const setupMarketEvents = state.eventLog.filter(
+    (event) =>
+      event.type === "marketFlowCardAdded" && event.sourceType === "setup"
+  );
+
+  assert.equal(
+    setupMarketEvents.filter((event) => event.destinationZone === "mainMarket")
+      .length,
+    5
+  );
+  assert.equal(
+    setupMarketEvents.filter((event) => event.destinationZone === "legendMarket")
+      .length,
+    3
+  );
+});
+
 test("starter card instances are independent between players", () => {
   const state = initializeGame({ rootDir, seed: 777 });
   const firstPlayerStarter = ownedCards(state, "player-1");
