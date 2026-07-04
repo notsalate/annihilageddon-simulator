@@ -12,13 +12,9 @@
     "victoryPoints": 1,
     "typeRu": "Волшебник",
     "cardKind": "normal",
-    "cardTypes": [
-      "wizardCard"
-    ],
+    "cardTypes": ["wizardCard"],
     "textRu": "Возьми 1 карту\nЗащита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 1 карту, а атакующий отхватывает 3 урона.",
-    "markers": [
-      "defense"
-    ],
+    "markers": ["defense"],
     "uncertainty": []
   },
   "notes": [

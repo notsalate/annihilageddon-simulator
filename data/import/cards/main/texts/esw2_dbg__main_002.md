@@ -1,4 +1,5 @@
-# esw2_dbg__main_002
+# esw2_dbg\_\_main_002
+
 - source image path: `assets/cards/wizard-card/Волшебник. Колдунатор.png`
 - visible Russian name: `Колдунатор`
 - cost: `7`

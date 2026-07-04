@@ -29,4 +29,3 @@ This slice should gather separately stored controlled cards, tokens, statuses, a
 
 - `.scratch/krutagidon-simulation-platform/issues/10-execute-existing-play-effects-through-shared-effect-runtime.md`
 - `.scratch/krutagidon-simulation-platform/issues/11-add-token-definitions-with-neutral-dwt-scoring-path.md`
-

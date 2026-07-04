@@ -1,4 +1,5 @@
-# esw2_dbg__main_029
+# esw2_dbg\_\_main_029
+
 - source image path: `assets/cards/wizard-card/Волшебник. Шериф Мухтар.png`
 - visible Russian name: `Шериф Мухтар`
 - cost: `6`

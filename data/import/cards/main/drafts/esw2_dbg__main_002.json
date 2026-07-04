@@ -12,9 +12,7 @@
     "victoryPoints": 2,
     "typeRu": "Волшебник",
     "cardKind": "normal",
-    "cardTypes": [
-      "wizardCard"
-    ],
+    "cardTypes": ["wizardCard"],
     "textRu": "+5 мощи",
     "markers": [],
     "uncertainty": []

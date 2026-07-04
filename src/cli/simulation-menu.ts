@@ -2,8 +2,18 @@ import { randomInt } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { runMassSimulation, type MassSimulationResult, type RunMassSimulationOptions } from "../engine/mass-simulation.js";
-import { runSingleGame, type GameEndReason, type PlayerScore, type RunSingleGameOptions, type SingleGameResult } from "../engine/simulation.js";
+import {
+  runMassSimulation,
+  type MassSimulationResult,
+  type RunMassSimulationOptions,
+} from "../engine/mass-simulation.js";
+import {
+  runSingleGame,
+  type GameEndReason,
+  type PlayerScore,
+  type RunSingleGameOptions,
+  type SingleGameResult,
+} from "../engine/simulation.js";
 import type { PlayerId } from "../engine/setup.js";
 
 export interface SimulationMenuOptions {
@@ -15,10 +25,14 @@ export interface SimulationMenuOptions {
   nowMs?: () => number;
   createSeed?: () => number;
   runSingleGame?: (options: RunSingleGameOptions) => SingleGameResult;
-  runMassSimulation?: (options: RunMassSimulationOptions) => MassSimulationResult;
+  runMassSimulation?: (
+    options: RunMassSimulationOptions
+  ) => MassSimulationResult;
 }
 
-export async function runSimulationMenu(options: SimulationMenuOptions): Promise<void> {
+export async function runSimulationMenu(
+  options: SimulationMenuOptions
+): Promise<void> {
   const createSeed = options.createSeed ?? createRandomPositiveSafeInteger;
   const singleRunner = options.runSingleGame ?? runSingleGame;
   const massRunner = options.runMassSimulation ?? runMassSimulation;
@@ -26,7 +40,15 @@ export async function runSimulationMenu(options: SimulationMenuOptions): Promise
 
   while (true) {
     const menuChoice = (
-      await options.ask(["Крутагидон 2: симулятор", "1. Одна партия", "2. Массовый прогон", "0. Выход", "> "].join("\n"))
+      await options.ask(
+        [
+          "Крутагидон 2: симулятор",
+          "1. Одна партия",
+          "2. Массовый прогон",
+          "0. Выход",
+          "> ",
+        ].join("\n")
+      )
     ).trim();
 
     if (menuChoice === "0") {
@@ -34,7 +56,11 @@ export async function runSimulationMenu(options: SimulationMenuOptions): Promise
     }
 
     if (menuChoice === "1") {
-      const seed = await askPositiveSafeInteger(options, "Seed партии [Enter = случайный]: ", createSeed);
+      const seed = await askPositiveSafeInteger(
+        options,
+        "Seed партии [Enter = случайный]: ",
+        createSeed
+      );
       try {
         const result = singleRunner({
           rootDir: options.rootDir,
@@ -48,14 +74,20 @@ export async function runSimulationMenu(options: SimulationMenuOptions): Promise
           seed,
           maxTurns: options.maxTurns,
         });
-        options.write(`Симуляция остановлена из-за ошибки. Технический отчет сохранен: ${reportPath}`);
+        options.write(
+          `Симуляция остановлена из-за ошибки. Технический отчет сохранен: ${reportPath}`
+        );
       }
       await options.ask("Нажмите Enter, чтобы вернуться в меню");
       continue;
     }
 
     if (menuChoice === "2") {
-      const gameCount = await askPositiveSafeInteger(options, "Количество партий [Enter = 10000]: ", () => 10000);
+      const gameCount = await askPositiveSafeInteger(
+        options,
+        "Количество партий [Enter = 10000]: ",
+        () => 10000
+      );
       const firstSeed = createSeed();
       const startedAt = nowMs();
       try {
@@ -74,7 +106,9 @@ export async function runSimulationMenu(options: SimulationMenuOptions): Promise
           gameCount,
           maxTurns: options.maxTurns,
         });
-        options.write(`Симуляция остановлена из-за ошибки. Технический отчет сохранен: ${reportPath}`);
+        options.write(
+          `Симуляция остановлена из-за ошибки. Технический отчет сохранен: ${reportPath}`
+        );
       }
       await options.ask("Нажмите Enter, чтобы вернуться в меню");
       continue;
@@ -85,7 +119,9 @@ export async function runSimulationMenu(options: SimulationMenuOptions): Promise
 }
 
 export function formatSingleGameSummary(result: SingleGameResult): string {
-  const winnerLine = result.isTie ? `Ничья: ${result.winnerIds.join(", ")}` : `Победитель: ${result.winnerIds[0] ?? "нет"}`;
+  const winnerLine = result.isTie
+    ? `Ничья: ${result.winnerIds.join(", ")}`
+    : `Победитель: ${result.winnerIds[0] ?? "нет"}`;
 
   return [
     "Одна партия завершена",
@@ -100,11 +136,17 @@ export function formatSingleGameSummary(result: SingleGameResult): string {
   ].join("\n");
 }
 
-export function formatMassSimulationSummary(result: MassSimulationResult, elapsedSeconds: number): string {
+export function formatMassSimulationSummary(
+  result: MassSimulationResult,
+  elapsedSeconds: number
+): string {
   const playerIds = getPlayerIds(result);
   const endReasonLines = Object.entries(result.aggregate.endReasonCounts)
     .filter(([, count]) => count > 0)
-    .map(([reason, count]) => `- ${formatEndReason(reason as GameEndReason)}: ${count}`);
+    .map(
+      ([reason, count]) =>
+        `- ${formatEndReason(reason as GameEndReason)}: ${count}`
+    );
   const turnLimitCount = result.aggregate.endReasonCounts.maxTurnsReached;
   const lines = [
     "Массовый прогон завершен",
@@ -113,7 +155,10 @@ export function formatMassSimulationSummary(result: MassSimulationResult, elapse
     "Победы:",
     ...playerIds
       .filter((playerId) => (result.aggregate.winCounts[playerId] ?? 0) > 0)
-      .map((playerId) => `- ${playerId}: ${formatPercent(result.aggregate.winRates[playerId] ?? 0)}`),
+      .map(
+        (playerId) =>
+          `- ${playerId}: ${formatPercent(result.aggregate.winRates[playerId] ?? 0)}`
+      ),
     `- Ничья: ${formatPercent(result.aggregate.tieRate)}`,
     "Средние значения:",
     `- Ходы: ${formatNumber(result.aggregate.averageTurnsElapsed)}`,
@@ -127,7 +172,9 @@ export function formatMassSimulationSummary(result: MassSimulationResult, elapse
   ];
 
   if (turnLimitCount > 0) {
-    lines.push(`Внимание: ${turnLimitCount} партий достигли технического лимита ходов.`);
+    lines.push(
+      `Внимание: ${turnLimitCount} партий достигли технического лимита ходов.`
+    );
   }
 
   return lines.join("\n");
@@ -155,12 +202,17 @@ function getPlayerIds(result: MassSimulationResult): PlayerId[] {
   return firstGame.players.map((player) => player.playerId);
 }
 
-function averagePlayerScore(result: MassSimulationResult, playerId: PlayerId): Pick<PlayerScore, "victoryPoints" | "deadWizardTokenCount"> {
+function averagePlayerScore(
+  result: MassSimulationResult,
+  playerId: PlayerId
+): Pick<PlayerScore, "victoryPoints" | "deadWizardTokenCount"> {
   let totalVictoryPoints = 0;
   let totalDeadWizardTokens = 0;
 
   for (const game of result.games) {
-    const player = game.players.find((candidate) => candidate.playerId === playerId);
+    const player = game.players.find(
+      (candidate) => candidate.playerId === playerId
+    );
     if (player === undefined) {
       continue;
     }
@@ -185,7 +237,7 @@ function formatNumber(value: number): string {
 async function askPositiveSafeInteger(
   options: Pick<SimulationMenuOptions, "ask" | "write">,
   prompt: string,
-  createDefault: () => number,
+  createDefault: () => number
 ): Promise<number> {
   while (true) {
     const input = (await options.ask(prompt)).trim();
@@ -209,17 +261,30 @@ function createRandomPositiveSafeInteger(): number {
 async function writeErrorReport(
   options: Pick<SimulationMenuOptions, "rootDir" | "errorReportDir" | "nowMs">,
   error: unknown,
-  context: Record<string, string | number>,
+  context: Record<string, string | number>
 ): Promise<string> {
   const timestamp = new Date((options.nowMs ?? Date.now)()).toISOString();
-  const reportDir = options.errorReportDir ?? join(options.rootDir, ".scratch", "runs", "errors");
+  const reportDir =
+    options.errorReportDir ??
+    join(options.rootDir, ".scratch", "runs", "errors");
   await mkdir(reportDir, { recursive: true });
-  const reportPath = join(reportDir, `simulation-menu-error-${timestamp.replace(/[:.]/g, "-")}.md`);
-  await writeFile(reportPath, formatErrorReport(timestamp, error, context), "utf8");
+  const reportPath = join(
+    reportDir,
+    `simulation-menu-error-${timestamp.replace(/[:.]/g, "-")}.md`
+  );
+  await writeFile(
+    reportPath,
+    formatErrorReport(timestamp, error, context),
+    "utf8"
+  );
   return reportPath;
 }
 
-function formatErrorReport(timestamp: string, error: unknown, context: Record<string, string | number>): string {
+function formatErrorReport(
+  timestamp: string,
+  error: unknown,
+  context: Record<string, string | number>
+): string {
   const normalizedError = normalizeError(error);
   return [
     "# Simulation Menu Error",

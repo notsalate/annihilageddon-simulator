@@ -1,4 +1,5 @@
-# esw2_dbg__main_026
+# esw2_dbg\_\_main_026
+
 - source image path: `assets/cards/wizard-card/Волшебник. Повелитель шкурок.png`
 - visible Russian name: `Повелитель шкурок`
 - cost: `4`

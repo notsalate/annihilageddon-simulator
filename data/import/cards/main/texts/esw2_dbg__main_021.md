@@ -1,4 +1,5 @@
-# esw2_dbg__main_021
+# esw2_dbg\_\_main_021
+
 - source image path: `assets/cards/spell/Заклинание. Волчий жор.png`
 - visible Russian name: `Волчий жор`
 - cost: `3`

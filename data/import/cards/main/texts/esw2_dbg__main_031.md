@@ -1,4 +1,5 @@
-# esw2_dbg__main_031
+# esw2_dbg\_\_main_031
+
 - source image path: `assets/cards/creature/Тварь. Баклажаб.png`
 - visible Russian name: `Баклажаб`
 - cost: `2`

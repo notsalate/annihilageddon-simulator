@@ -1,4 +1,5 @@
-# esw2_dbg__main_008
+# esw2_dbg\_\_main_008
+
 - source image path: `assets/cards/location/Место. Сувернирный ларёк в зале легенд.png`
 - visible Russian name: `Сувернирный ларёк в зале легенд`
 - cost: `4`

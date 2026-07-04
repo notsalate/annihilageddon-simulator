@@ -8,7 +8,9 @@ test("seeded RNG produces repeatable sequences", () => {
   const secondRun = createSeededRng(20260615);
 
   const firstSequence = Array.from({ length: 8 }, () => firstRun.nextInt(1000));
-  const secondSequence = Array.from({ length: 8 }, () => secondRun.nextInt(1000));
+  const secondSequence = Array.from({ length: 8 }, () =>
+    secondRun.nextInt(1000)
+  );
 
   assert.deepEqual(firstSequence, secondSequence);
 });
@@ -18,7 +20,9 @@ test("different seeds produce different sequences", () => {
   const secondRun = createSeededRng(2);
 
   const firstSequence = Array.from({ length: 8 }, () => firstRun.nextInt(1000));
-  const secondSequence = Array.from({ length: 8 }, () => secondRun.nextInt(1000));
+  const secondSequence = Array.from({ length: 8 }, () =>
+    secondRun.nextInt(1000)
+  );
 
   assert.notDeepEqual(firstSequence, secondSequence);
 });

@@ -12,9 +12,7 @@
     "victoryPoints": null,
     "typeRu": null,
     "cardKind": "legend",
-    "cardTypes": [
-      "legend"
-    ],
+    "cardTypes": ["legend"],
     "textRu": "",
     "markers": [],
     "uncertainty": []

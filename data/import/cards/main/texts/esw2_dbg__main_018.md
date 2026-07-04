@@ -1,4 +1,5 @@
-# esw2_dbg__main_018
+# esw2_dbg\_\_main_018
+
 - source image path: `assets/cards/creature/Тварь. Нечистая сила.png`
 - visible Russian name: `Нечистая сила`
 - cost: `5`

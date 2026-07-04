@@ -1,4 +1,5 @@
-# esw2_dbg__main_058
+# esw2_dbg\_\_main_058
+
 - source image path: `assets/cards/treasure/Сокровище. Вурдалакар.png`
 - visible Russian name: `Вурдалакар`
 - cost: `6`

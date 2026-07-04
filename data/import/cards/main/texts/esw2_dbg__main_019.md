@@ -1,4 +1,5 @@
-# esw2_dbg__main_019
+# esw2_dbg\_\_main_019
+
 - source image path: `assets/cards/spell/Заклинание. Братство конца.png`
 - visible Russian name: `Братство конца`
 - cost: `2`

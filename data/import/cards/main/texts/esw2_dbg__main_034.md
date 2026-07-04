@@ -1,4 +1,5 @@
-# esw2_dbg__main_034
+# esw2_dbg\_\_main_034
+
 - source image path: `assets/cards/creature/Тварь. Испанский стыд.png`
 - visible Russian name: `Испанский стыд`
 - cost: `4`

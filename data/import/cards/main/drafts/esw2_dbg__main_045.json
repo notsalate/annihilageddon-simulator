@@ -12,18 +12,12 @@
     "victoryPoints": 1,
     "typeRu": "Волшебник",
     "cardKind": "normal",
-    "cardTypes": [
-      "wizardCard"
-    ],
+    "cardTypes": ["wizardCard"],
     "textRu": "+2 мощи\nЗащита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, можешь уничтожить 1 карту с руки",
-    "markers": [
-      "defense"
-    ],
+    "markers": ["defense"],
     "uncertainty": []
   },
-  "notes": [
-    "Если карт останется 0, эффект не применяется. Нечего уничтожать"
-  ],
+  "notes": ["Если карт останется 0, эффект не применяется. Нечего уничтожать"],
   "composition": {
     "quantity": 2
   }

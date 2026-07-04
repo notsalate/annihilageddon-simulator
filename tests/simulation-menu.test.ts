@@ -21,8 +21,18 @@ test("single-game menu summary is Russian and includes seed, result, and scores"
     winnerIds: ["player-1"],
     isTie: false,
     players: [
-      { playerId: "player-1", victoryPoints: 31, legendCount: 2, deadWizardTokenCount: 1 },
-      { playerId: "player-2", victoryPoints: 24, legendCount: 0, deadWizardTokenCount: 3 },
+      {
+        playerId: "player-1",
+        victoryPoints: 31,
+        legendCount: 2,
+        deadWizardTokenCount: 1,
+      },
+      {
+        playerId: "player-2",
+        victoryPoints: 24,
+        legendCount: 0,
+        deadWizardTokenCount: 3,
+      },
     ],
     eventLog: [],
   };
@@ -38,7 +48,7 @@ test("single-game menu summary is Russian and includes seed, result, and scores"
       "Счет:",
       "- player-1: 31 ПО, Легенды: 2, ЖДК: 1",
       "- player-2: 24 ПО, Легенды: 0, ЖДК: 3",
-    ].join("\n"),
+    ].join("\n")
   );
 });
 
@@ -74,8 +84,18 @@ test("simulation menu handles invalid input and uses a generated seed for empty 
         winnerIds: ["player-1"],
         isTie: false,
         players: [
-          { playerId: "player-1", victoryPoints: 1, legendCount: 0, deadWizardTokenCount: 0 },
-          { playerId: "player-2", victoryPoints: 0, legendCount: 0, deadWizardTokenCount: 0 },
+          {
+            playerId: "player-1",
+            victoryPoints: 1,
+            legendCount: 0,
+            deadWizardTokenCount: 0,
+          },
+          {
+            playerId: "player-2",
+            victoryPoints: 0,
+            legendCount: 0,
+            deadWizardTokenCount: 0,
+          },
         ],
         eventLog: [],
       };
@@ -86,7 +106,9 @@ test("simulation menu handles invalid input and uses a generated seed for empty 
   });
 
   assert.deepEqual(usedSeeds, [777]);
-  assert.ok(prompts.some((prompt) => prompt.includes("Крутагидон 2: симулятор")));
+  assert.ok(
+    prompts.some((prompt) => prompt.includes("Крутагидон 2: симулятор"))
+  );
   assert.ok(prompts.includes("Seed партии [Enter = случайный]: "));
   assert.ok(prompts.includes("Нажмите Enter, чтобы вернуться в меню"));
   assert.ok(output.includes("Неверный пункт меню. Попробуйте еще раз."));
@@ -117,7 +139,10 @@ test("simulation menu repeats invalid mass count input and runs numeric count wi
       throw new Error("single path should not run");
     },
     runMassSimulation(options) {
-      massRuns.push({ firstSeed: options.firstSeed, gameCount: options.gameCount });
+      massRuns.push({
+        firstSeed: options.firstSeed,
+        gameCount: options.gameCount,
+      });
       return {
         firstSeed: options.firstSeed,
         gameCount: options.gameCount,
@@ -148,7 +173,9 @@ test("simulation menu repeats invalid mass count input and runs numeric count wi
 });
 
 test("simulation menu writes a local technical report for unexpected single-game failures", async () => {
-  const errorReportDir = await mkdtemp(join(tmpdir(), "krutagidon-menu-errors-"));
+  const errorReportDir = await mkdtemp(
+    join(tmpdir(), "krutagidon-menu-errors-")
+  );
   const output: string[] = [];
   const inputs = ["1", "123", "", "0"];
 
@@ -178,7 +205,11 @@ test("simulation menu writes a local technical report for unexpected single-game
   const reportPath = join(errorReportDir, files[0]!);
   const report = await readFile(reportPath, "utf8");
 
-  assert.ok(output.some((message) => message.includes("Симуляция остановлена из-за ошибки.")));
+  assert.ok(
+    output.some((message) =>
+      message.includes("Симуляция остановлена из-за ошибки.")
+    )
+  );
   assert.ok(output.some((message) => message.includes(reportPath)));
   assert.match(report, /mode: single-game/);
   assert.match(report, /seed: 123/);
@@ -188,7 +219,9 @@ test("simulation menu writes a local technical report for unexpected single-game
 });
 
 test("simulation menu writes seed range and game count for unexpected mass failures", async () => {
-  const errorReportDir = await mkdtemp(join(tmpdir(), "krutagidon-menu-errors-"));
+  const errorReportDir = await mkdtemp(
+    join(tmpdir(), "krutagidon-menu-errors-")
+  );
   const output: string[] = [];
   const inputs = ["2", "", "", "0"];
 
@@ -221,7 +254,11 @@ test("simulation menu writes seed range and game count for unexpected mass failu
   const reportPath = join(errorReportDir, files[0]!);
   const report = await readFile(reportPath, "utf8");
 
-  assert.ok(output.some((message) => message.includes("Симуляция остановлена из-за ошибки.")));
+  assert.ok(
+    output.some((message) =>
+      message.includes("Симуляция остановлена из-за ошибки.")
+    )
+  );
   assert.ok(output.some((message) => message.includes(reportPath)));
   assert.match(report, /mode: mass-simulation/);
   assert.match(report, /seedRange: 500-10499/);
@@ -244,8 +281,18 @@ test("mass simulation menu summary includes Russian aggregate metrics and turn-l
         totalPurchases: 4,
         purchasesByPlayer: { "player-1": 2, "player-2": 2 },
         players: [
-          { playerId: "player-1", victoryPoints: 20, legendCount: 1, deadWizardTokenCount: 0 },
-          { playerId: "player-2", victoryPoints: 15, legendCount: 0, deadWizardTokenCount: 1 },
+          {
+            playerId: "player-1",
+            victoryPoints: 20,
+            legendCount: 1,
+            deadWizardTokenCount: 0,
+          },
+          {
+            playerId: "player-2",
+            victoryPoints: 15,
+            legendCount: 0,
+            deadWizardTokenCount: 1,
+          },
         ],
       },
       {
@@ -258,8 +305,18 @@ test("mass simulation menu summary includes Russian aggregate metrics and turn-l
         totalPurchases: 6,
         purchasesByPlayer: { "player-1": 3, "player-2": 3 },
         players: [
-          { playerId: "player-1", victoryPoints: 18, legendCount: 0, deadWizardTokenCount: 2 },
-          { playerId: "player-2", victoryPoints: 18, legendCount: 0, deadWizardTokenCount: 2 },
+          {
+            playerId: "player-1",
+            victoryPoints: 18,
+            legendCount: 0,
+            deadWizardTokenCount: 2,
+          },
+          {
+            playerId: "player-2",
+            victoryPoints: 18,
+            legendCount: 0,
+            deadWizardTokenCount: 2,
+          },
         ],
       },
     ],
@@ -299,6 +356,6 @@ test("mass simulation menu summary includes Russian aggregate metrics and turn-l
       "- достигнут технический лимит ходов: 1",
       "Время: 1.2 сек.",
       "Внимание: 1 партий достигли технического лимита ходов.",
-    ].join("\n"),
+    ].join("\n")
   );
 });

@@ -1,4 +1,5 @@
-# esw2_dbg__main_047
+# esw2_dbg\_\_main_047
+
 - source image path: `assets/cards/location/Место. Длань творца.png`
 - visible Russian name: `Длань творца`
 - cost: `6`

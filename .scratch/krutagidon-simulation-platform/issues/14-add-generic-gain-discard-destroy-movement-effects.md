@@ -31,4 +31,3 @@ This slice should make fixture effects move cards between real game zones using 
 
 - `.scratch/krutagidon-simulation-platform/issues/10-execute-existing-play-effects-through-shared-effect-runtime.md`
 - `.scratch/krutagidon-simulation-platform/issues/12-resolve-first-legal-choices-for-a-targeted-fixture-effect.md`
-

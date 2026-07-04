@@ -1,4 +1,5 @@
-# esw2_dbg__main_007
+# esw2_dbg\_\_main_007
+
 - source image path: `assets/cards/spell/Заклинание. Пушка-Блевушка.png`
 - visible Russian name: `Пушка-Блевушка`
 - cost: `4`

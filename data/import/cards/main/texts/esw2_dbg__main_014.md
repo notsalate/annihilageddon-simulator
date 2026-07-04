@@ -1,4 +1,5 @@
-# esw2_dbg__main_014
+# esw2_dbg\_\_main_014
+
 - source image path: `assets/cards/creature/Тварь. Спиногрызогрызы.png`
 - visible Russian name: `Спиногрызогрызы`
 - cost: `3`

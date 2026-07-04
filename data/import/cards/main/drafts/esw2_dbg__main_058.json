@@ -12,9 +12,7 @@
     "victoryPoints": 2,
     "typeRu": "Сокровище",
     "cardKind": "normal",
-    "cardTypes": [
-      "treasure"
-    ],
+    "cardTypes": ["treasure"],
     "textRu": "+3 мощи\nЕсли это первая карта, сыгранная тобой в этот ход, можешь сбросить все карты с руки и взять 4 карты.",
     "markers": [],
     "uncertainty": []

@@ -1,4 +1,5 @@
-# esw2_dbg__main_037
+# esw2_dbg\_\_main_037
+
 - source image path: `assets/cards/spell/Заклинание. Мусорный ветер.png`
 - visible Russian name: `Мусорный ветер`
 - cost: `4`

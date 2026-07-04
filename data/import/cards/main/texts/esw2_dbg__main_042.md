@@ -1,4 +1,5 @@
-# esw2_dbg__main_042
+# esw2_dbg\_\_main_042
+
 - source image path: `assets/cards/spell/Заклинание. Ламповое желание.png`
 - visible Russian name: `Ламповое желание`
 - cost: `5`

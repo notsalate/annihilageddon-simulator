@@ -12,13 +12,9 @@
     "victoryPoints": 1,
     "typeRu": "Сокровище",
     "cardKind": "normal",
-    "cardTypes": [
-      "treasure"
-    ],
+    "cardTypes": ["treasure"],
     "textRu": "+2 мощи\nАтака: нанеси 2 урона выбранному врагу. Укради у него или из запаса столько же чипсин, сколько урона нанëс",
-    "markers": [
-      "attack"
-    ],
+    "markers": ["attack"],
     "uncertainty": []
   },
   "notes": [

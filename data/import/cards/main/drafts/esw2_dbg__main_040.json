@@ -12,9 +12,7 @@
     "victoryPoints": 0,
     "typeRu": "Тварь",
     "cardKind": "normal",
-    "cardTypes": [
-      "creature"
-    ],
+    "cardTypes": ["creature"],
     "textRu": "+2 мощи\nВ конце игры: приносит 1 ПО за каждую тварь в твоей колоде.",
     "markers": [],
     "uncertainty": []

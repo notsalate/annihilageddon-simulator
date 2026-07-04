@@ -31,4 +31,3 @@ This slice should track attack source and kill credit well enough that when a pl
 - `.scratch/krutagidon-simulation-platform/issues/11-add-token-definitions-with-neutral-dwt-scoring-path.md`
 - `.scratch/krutagidon-simulation-platform/issues/16-kill-a-player-with-a-simple-targeted-damage-card.md`
 - `.scratch/krutagidon-simulation-platform/issues/18-avoid-a-single-target-attack-with-a-basic-hand-defense.md`
-

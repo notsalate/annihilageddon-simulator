@@ -1,4 +1,5 @@
-# esw2_dbg__main_038
+# esw2_dbg\_\_main_038
+
 - source image path: `assets/cards/treasure/Сокровище. Злоширак.png`
 - visible Russian name: `Злоширак`
 - cost: `5`

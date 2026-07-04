@@ -14,9 +14,7 @@
     "cardKind": "normal",
     "cardTypes": [],
     "textRu": "+3 мощи\nАтака: нанеси 5 урона выбранному колдуну.Если ОН от этого подох, он становится лошарой.",
-    "markers": [
-      "attack"
-    ],
+    "markers": ["attack"],
     "uncertainty": []
   },
   "notes": [

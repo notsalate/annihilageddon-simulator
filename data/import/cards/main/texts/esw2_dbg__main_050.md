@@ -1,4 +1,5 @@
-# esw2_dbg__main_050
+# esw2_dbg\_\_main_050
+
 - source image path: `assets/cards/treasure/Сокровище. Ермак-Дохляк.png`
 - visible Russian name: `Ермак-Дохляк`
 - cost: `1`

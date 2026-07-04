@@ -14,9 +14,7 @@
     "cardKind": "mayhem",
     "cardTypes": [],
     "textRu": "Атака: каждый колдун отхватывает столько урона, какова стоимость самой дорогой карты у него на руке.",
-    "markers": [
-      "attack"
-    ],
+    "markers": ["attack"],
     "uncertainty": []
   },
   "notes": [],

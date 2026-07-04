@@ -12,9 +12,7 @@
     "victoryPoints": 2,
     "typeRu": "Сокровище",
     "cardKind": "normal",
-    "cardTypes": [
-      "treasure"
-    ],
+    "cardTypes": ["treasure"],
     "textRu": "+3 мощи",
     "markers": [],
     "uncertainty": []

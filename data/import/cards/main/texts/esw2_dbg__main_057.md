@@ -1,4 +1,5 @@
-# esw2_dbg__main_057
+# esw2_dbg\_\_main_057
+
 - source image path: `assets/cards/treasure/Сокровище. Шлем-Тотем.png`
 - visible Russian name: `Шлем-Тотем`
 - cost: `4`

@@ -12,13 +12,9 @@
     "victoryPoints": 1,
     "typeRu": "Заклинание",
     "cardKind": "normal",
-    "cardTypes": [
-      "spell"
-    ],
+    "cardTypes": ["spell"],
     "textRu": "+3 мощи\nЗащита: можешь положить эту карту на верх своей колоды лицевой стороной вверх, чтобы избежать атак",
-    "markers": [
-      "defense"
-    ],
+    "markers": ["defense"],
     "uncertainty": []
   },
   "notes": [],

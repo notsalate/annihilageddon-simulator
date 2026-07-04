@@ -12,9 +12,7 @@
     "victoryPoints": 2,
     "typeRu": "Тварь",
     "cardKind": "normal",
-    "cardTypes": [
-      "creature"
-    ],
+    "cardTypes": ["creature"],
     "textRu": "[символ активации:]: +3 мощи за каждую тварь под твоим контролем.",
     "markers": [],
     "uncertainty": []

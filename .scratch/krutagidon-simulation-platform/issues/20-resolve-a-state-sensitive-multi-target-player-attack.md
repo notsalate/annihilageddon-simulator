@@ -30,4 +30,3 @@ This slice should execute a fixture attack that affects multiple targets in seat
 - `.scratch/krutagidon-simulation-platform/issues/16-kill-a-player-with-a-simple-targeted-damage-card.md`
 - `.scratch/krutagidon-simulation-platform/issues/18-avoid-a-single-target-attack-with-a-basic-hand-defense.md`
 - `.scratch/krutagidon-simulation-platform/issues/19-pay-defense-costs-and-run-defense-branch-effects.md`
-

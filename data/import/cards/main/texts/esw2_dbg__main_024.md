@@ -1,4 +1,5 @@
-# esw2_dbg__main_024
+# esw2_dbg\_\_main_024
+
 - source image path: `assets/cards/wizard-card/Волшебник. Берсерк щелкунчик.png`
 - visible Russian name: `Берсерк щелкунчик`
 - cost: `4`

@@ -1,4 +1,5 @@
-# esw2_dbg__main_005
+# esw2_dbg\_\_main_005
+
 - source image path: `assets/cards/location/Место. Вялая башня.png`
 - visible Russian name: `Вялая башня`
 - cost: `3`

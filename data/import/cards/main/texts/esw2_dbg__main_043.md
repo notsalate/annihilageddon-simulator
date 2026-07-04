@@ -1,4 +1,5 @@
-# esw2_dbg__main_043
+# esw2_dbg\_\_main_043
+
 - source image path: `assets/cards/creature/Тварь. Близнец-Бубенец.png`
 - visible Russian name: `Близнец-Бубенец`
 - cost: `4`

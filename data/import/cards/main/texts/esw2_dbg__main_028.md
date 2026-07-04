@@ -1,4 +1,5 @@
-# esw2_dbg__main_028
+# esw2_dbg\_\_main_028
+
 - source image path: `assets/cards/wizard-card/Волшебник. Члены банды.png`
 - visible Russian name: `Члены банды`
 - cost: `3`

@@ -1,4 +1,5 @@
-# esw2_dbg__main_046
+# esw2_dbg\_\_main_046
+
 - source image path: `assets/cards/wizard-card/Волшебник. Сладкий Смурфинёр.png`
 - visible Russian name: `Сладкий Смурфинёр`
 - cost: `5`

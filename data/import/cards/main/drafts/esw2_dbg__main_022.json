@@ -12,18 +12,12 @@
     "victoryPoints": 1,
     "typeRu": "Волшебник",
     "cardKind": "normal",
-    "cardTypes": [
-      "wizardCard"
-    ],
+    "cardTypes": ["wizardCard"],
     "textRu": "+2 мощи\nАтака: выбранный враг уничтожает верхнюю карту колоды легенд и отхватывает столько урона, какова еë стоимость.",
-    "markers": [
-      "attack"
-    ],
+    "markers": ["attack"],
     "uncertainty": []
   },
-  "notes": [
-    "Если МегаБеспредел - урона 0"
-  ],
+  "notes": ["Если МегаБеспредел - урона 0"],
   "composition": {
     "quantity": 2
   }

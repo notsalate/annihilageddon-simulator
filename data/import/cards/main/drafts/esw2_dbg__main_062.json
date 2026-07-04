@@ -14,9 +14,7 @@
     "cardKind": "mayhem",
     "cardTypes": [],
     "textRu": "Каждый колдун получает 2 чипсины. Затем....\nАтака: каждый колдун отхватывает 1 урон за каждую свою чипсину.",
-    "markers": [
-      "attack"
-    ],
+    "markers": ["attack"],
     "uncertainty": []
   },
   "notes": [],

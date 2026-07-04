@@ -1,4 +1,9 @@
-import { runSingleGame, type GameEndReason, type PlayerScore, type RunSingleGameOptions } from "./simulation.js";
+import {
+  runSingleGame,
+  type GameEndReason,
+  type PlayerScore,
+  type RunSingleGameOptions,
+} from "./simulation.js";
 import type { PlayerId } from "./setup.js";
 
 export interface RunMassSimulationOptions {
@@ -41,7 +46,9 @@ export interface MassSimulationAggregate {
   averagePurchasesPerGame: number;
 }
 
-export function runMassSimulation(options: RunMassSimulationOptions): MassSimulationResult {
+export function runMassSimulation(
+  options: RunMassSimulationOptions
+): MassSimulationResult {
   if (!Number.isSafeInteger(options.gameCount) || options.gameCount < 1) {
     throw new RangeError("gameCount must be a positive safe integer");
   }
@@ -51,7 +58,7 @@ export function runMassSimulation(options: RunMassSimulationOptions): MassSimula
       runSingleGame({
         ...toSingleGameOptions(options),
         seed: options.firstSeed + index,
-      }),
+      })
     );
   });
 
@@ -63,17 +70,27 @@ export function runMassSimulation(options: RunMassSimulationOptions): MassSimula
   };
 }
 
-function toSingleGameOptions(options: RunMassSimulationOptions): Omit<RunSingleGameOptions, "seed"> {
+function toSingleGameOptions(
+  options: RunMassSimulationOptions
+): Omit<RunSingleGameOptions, "seed"> {
   return {
     rootDir: options.rootDir,
     maxTurns: options.maxTurns,
-    ...(options.playerCount === undefined ? {} : { playerCount: options.playerCount }),
-    ...(options.dataPackPath === undefined ? {} : { dataPackPath: options.dataPackPath }),
+    ...(options.playerCount === undefined
+      ? {}
+      : { playerCount: options.playerCount }),
+    ...(options.dataPackPath === undefined
+      ? {}
+      : { dataPackPath: options.dataPackPath }),
   };
 }
 
-function toCompactSummary(result: ReturnType<typeof runSingleGame>): CompactGameSummary {
-  const purchasesByPlayer = createZeroedPlayerRecord(result.players.map((player) => player.playerId));
+function toCompactSummary(
+  result: ReturnType<typeof runSingleGame>
+): CompactGameSummary {
+  const purchasesByPlayer = createZeroedPlayerRecord(
+    result.players.map((player) => player.playerId)
+  );
   let totalPurchases = 0;
 
   for (const event of result.eventLog) {
@@ -81,7 +98,8 @@ function toCompactSummary(result: ReturnType<typeof runSingleGame>): CompactGame
       continue;
     }
 
-    purchasesByPlayer[event.playerId] = (purchasesByPlayer[event.playerId] ?? 0) + 1;
+    purchasesByPlayer[event.playerId] =
+      (purchasesByPlayer[event.playerId] ?? 0) + 1;
     totalPurchases += 1;
   }
 
@@ -98,7 +116,9 @@ function toCompactSummary(result: ReturnType<typeof runSingleGame>): CompactGame
   };
 }
 
-function aggregateMassSimulation(games: readonly CompactGameSummary[]): MassSimulationAggregate {
+function aggregateMassSimulation(
+  games: readonly CompactGameSummary[]
+): MassSimulationAggregate {
   const winCounts: Record<PlayerId, number> = {};
   const endReasonCounts = createZeroedEndReasonCounts();
   let tieCount = 0;
@@ -134,16 +154,23 @@ function aggregateMassSimulation(games: readonly CompactGameSummary[]): MassSimu
   };
 }
 
-function toRates(counts: Record<PlayerId, number>, totalGames: number): Record<PlayerId, number> {
+function toRates(
+  counts: Record<PlayerId, number>,
+  totalGames: number
+): Record<PlayerId, number> {
   const rates: Record<PlayerId, number> = {};
-  for (const [playerId, count] of Object.entries(counts) as Array<[PlayerId, number]>) {
+  for (const [playerId, count] of Object.entries(counts) as Array<
+    [PlayerId, number]
+  >) {
     rates[playerId] = count / totalGames;
   }
 
   return rates;
 }
 
-function createZeroedPlayerRecord(playerIds: readonly PlayerId[]): Record<PlayerId, number> {
+function createZeroedPlayerRecord(
+  playerIds: readonly PlayerId[]
+): Record<PlayerId, number> {
   const record: Record<PlayerId, number> = {};
   for (const playerId of playerIds) {
     record[playerId] = 0;

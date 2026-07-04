@@ -1,4 +1,5 @@
-# esw2_dbg__main_020
+# esw2_dbg\_\_main_020
+
 - source image path: `assets/cards/spell/Заклинание. Тапки-Донатки. Второй экземпляр.png`
 - visible Russian name: `Тапки-Донатки`
 - cost: `6`

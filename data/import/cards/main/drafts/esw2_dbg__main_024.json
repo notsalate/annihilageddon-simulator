@@ -12,14 +12,9 @@
     "victoryPoints": 1,
     "typeRu": "Волшебник",
     "cardKind": "normal",
-    "cardTypes": [
-      "wizardCard"
-    ],
+    "cardTypes": ["wizardCard"],
     "textRu": "+2 мощи\nАтака: нанеси б урона выбранному врагу.\nЗащита: можешь сбросить эту карту,чтобы избежать атаки. Если сбросил, возьми 1 карту.",
-    "markers": [
-      "attack",
-      "defense"
-    ],
+    "markers": ["attack", "defense"],
     "uncertainty": []
   },
   "notes": [],

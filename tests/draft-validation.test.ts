@@ -57,7 +57,7 @@ test("cardDraft reports missing required fields", () => {
       source: {},
       visible: {},
     },
-    { filePath: "missing.json" },
+    { filePath: "missing.json" }
   );
 
   assert.equal(validation.ok, false);
@@ -138,11 +138,23 @@ test("draft validation rejects IDs outside the new import ID style", () => {
   });
 
   assert.equal(cardValidation.ok, false);
-  assert.ok(hasMessage(cardValidation.errors, "cardId must use new import ID style"));
+  assert.ok(
+    hasMessage(cardValidation.errors, "cardId must use new import ID style")
+  );
   assert.equal(wizardPropertyValidation.ok, false);
-  assert.ok(hasMessage(wizardPropertyValidation.errors, "tokenId must use new import ID style"));
+  assert.ok(
+    hasMessage(
+      wizardPropertyValidation.errors,
+      "tokenId must use new import ID style"
+    )
+  );
   assert.equal(deadWizardTokenValidation.ok, false);
-  assert.ok(hasMessage(deadWizardTokenValidation.errors, "tokenId must use new import ID style"));
+  assert.ok(
+    hasMessage(
+      deadWizardTokenValidation.errors,
+      "tokenId must use new import ID style"
+    )
+  );
 });
 
 test("cardDraft reports uncertainty and missing source image as warnings", () => {
@@ -170,7 +182,7 @@ test("draft validation formatter reports runtime mapping readiness", () => {
       ...createValidCardDraft(),
       engine: {},
     },
-    { filePath: "data/import/cards/main/drafts/example.json" },
+    { filePath: "data/import/cards/main/drafts/example.json" }
   );
 
   const output = formatDraftValidationResult(validation);
@@ -178,13 +190,18 @@ test("draft validation formatter reports runtime mapping readiness", () => {
   assert.match(output, /Draft validation: 1 file\(s\)/);
   assert.match(
     output,
-    /ERROR data\/import\/cards\/main\/drafts\/example\.json: draft contains forbidden runtime field 'engine'/,
+    /ERROR data\/import\/cards\/main\/drafts\/example\.json: draft contains forbidden runtime field 'engine'/
   );
-  assert.match(output, /Not ready for runtime mapping: 1 error\(s\), 0 warning\(s\)/);
+  assert.match(
+    output,
+    /Not ready for runtime mapping: 1 error\(s\), 0 warning\(s\)/
+  );
 });
 
 test("valid wizardPropertyDraft passes draft validation without card-only fields", () => {
-  const validation = validateWizardPropertyDraft(createValidWizardPropertyDraft());
+  const validation = validateWizardPropertyDraft(
+    createValidWizardPropertyDraft()
+  );
 
   assert.equal(validation.ok, true);
   assert.deepEqual(validation.errors, []);
@@ -264,12 +281,32 @@ test("deadWizardTokenDraft reports uncertainty and missing source image as warni
 });
 
 test("draft file validation includes dead wizard token drafts by default", () => {
-  const rootDir = mkdtempSync(path.join(tmpdir(), "krutagidon-draft-validation-"));
-  mkdirSync(path.join(rootDir, "data", "import", "tokens", "dead-wizard-token", "drafts"), { recursive: true });
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-draft-validation-")
+  );
+  mkdirSync(
+    path.join(
+      rootDir,
+      "data",
+      "import",
+      "tokens",
+      "dead-wizard-token",
+      "drafts"
+    ),
+    { recursive: true }
+  );
   writeFileSync(
-    path.join(rootDir, "data", "import", "tokens", "dead-wizard-token", "drafts", "dwt-001.json"),
+    path.join(
+      rootDir,
+      "data",
+      "import",
+      "tokens",
+      "dead-wizard-token",
+      "drafts",
+      "dwt-001.json"
+    ),
     JSON.stringify(createValidDeadWizardTokenDraft()),
-    "utf8",
+    "utf8"
   );
 
   const validation = validateDraftFiles(rootDir);
@@ -372,6 +409,9 @@ function createValidDeadWizardTokenDraft() {
   };
 }
 
-function hasMessage(messages: { message: string }[], expectedText: string): boolean {
+function hasMessage(
+  messages: { message: string }[],
+  expectedText: string
+): boolean {
   return messages.some((message) => message.message.includes(expectedText));
 }

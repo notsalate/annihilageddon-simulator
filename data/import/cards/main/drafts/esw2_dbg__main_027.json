@@ -12,13 +12,9 @@
     "victoryPoints": 2,
     "typeRu": "Место",
     "cardKind": "normal",
-    "cardTypes": [
-      "location"
-    ],
+    "cardTypes": ["location"],
     "textRu": "Постоянка: если ты лошара, +2 мощи.\nВ конце игры: твои штрафные ПО 3а жетон лошары становятся бонусными ПО.",
-    "markers": [
-      "ongoing"
-    ],
+    "markers": ["ongoing"],
     "uncertainty": []
   },
   "notes": [

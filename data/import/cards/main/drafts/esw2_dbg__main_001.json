@@ -12,9 +12,7 @@
     "victoryPoints": 1,
     "typeRu": "Заклинание",
     "cardKind": "normal",
-    "cardTypes": [
-      "spell"
-    ],
+    "cardTypes": ["spell"],
     "textRu": "Раскрой верхнюю карту своей колоды. Уничтожь её или + столько мощи какова ее стоимость",
     "markers": [],
     "uncertainty": []

@@ -12,18 +12,12 @@
     "victoryPoints": 1,
     "typeRu": "Тварь",
     "cardKind": "normal",
-    "cardTypes": [
-      "creature"
-    ],
+    "cardTypes": ["creature"],
     "textRu": "Возьми 1 карту\nАтака: нанеси по 7 урона левому и правому врагам.",
-    "markers": [
-      "attack"
-    ],
+    "markers": ["attack"],
     "uncertainty": []
   },
-  "notes": [
-    "При игре вдвоем, 7 урона наносятся 1 раз"
-  ],
+  "notes": ["При игре вдвоем, 7 урона наносятся 1 раз"],
   "composition": {
     "quantity": 2
   }

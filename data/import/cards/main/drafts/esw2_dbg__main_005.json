@@ -12,13 +12,9 @@
     "victoryPoints": 3,
     "typeRu": "Место",
     "cardKind": "normal",
-    "cardTypes": [
-      "location"
-    ],
+    "cardTypes": ["location"],
     "textRu": "Получив эту карту, получи 2 вялые палочки.\nПостоянка: +1 мощь.",
-    "markers": [
-      "ongoing"
-    ],
+    "markers": ["ongoing"],
     "uncertainty": []
   },
   "notes": [],

@@ -12,13 +12,9 @@
     "victoryPoints": 1,
     "typeRu": "Место",
     "cardKind": "normal",
-    "cardTypes": [
-      "location"
-    ],
+    "cardTypes": ["location"],
     "textRu": "Постоянка: Все ТВОИ «Палочки», наносящие урон, получают +2 к урону.\nКаждый раз, когда ты разыгрываешь «Палочку», + 1 мощь.",
-    "markers": [
-      "ongoing"
-    ],
+    "markers": ["ongoing"],
     "uncertainty": []
   },
   "notes": [

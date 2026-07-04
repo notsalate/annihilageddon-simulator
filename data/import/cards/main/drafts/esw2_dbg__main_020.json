@@ -12,13 +12,9 @@
     "victoryPoints": 2,
     "typeRu": "Заклинание",
     "cardKind": "normal",
-    "cardTypes": [
-      "spell"
-    ],
+    "cardTypes": ["spell"],
     "textRu": "+3 мощи\nАтака: нанеси выбранному врагу столько урона, какова самая высокая стоимость карты под твоим контролем",
-    "markers": [
-      "attack"
-    ],
+    "markers": ["attack"],
     "uncertainty": []
   },
   "notes": [],
