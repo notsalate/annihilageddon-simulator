@@ -345,7 +345,7 @@ test("single-game run keeps a compact golden event projection for stable seeds",
   );
 
   for (const projection of projections) {
-    const eventTypes = projection.eventLog.map((event) => event.type);
+    const eventTypes = projection.eventLog.map((event) => event["type"]);
 
     assert.deepEqual(eventTypes.slice(0, 5), [
       "setupChoiceSelected",
@@ -362,16 +362,18 @@ test("single-game run keeps a compact golden event projection for stable seeds",
     assert.equal(eventTypes.at(-1), "turnStarted");
 
     const initialized = projection.eventLog.find(
-      (event) => event.type === "gameInitialized"
+      (event) => event["type"] === "gameInitialized"
     );
-    assert.equal(initialized?.eventSequence, 1);
-    assert.equal(initialized?.turnNumber, 1);
+    assert.equal(initialized?.["eventSequence"], 1);
+    assert.equal(initialized?.["turnNumber"], 1);
 
-    const bought = projection.eventLog.find((event) => event.type === "cardBought");
-    assert.equal(bought?.destination, "discard");
-    assert.equal(bought?.sourceZone, undefined);
-    assert.equal(bought?.powerBefore, undefined);
-    assert.equal(bought?.chipsBefore, undefined);
+    const bought = projection.eventLog.find(
+      (event) => event["type"] === "cardBought"
+    );
+    assert.equal(bought?.["destination"], "discard");
+    assert.equal(bought?.["sourceZone"], undefined);
+    assert.equal(bought?.["powerBefore"], undefined);
+    assert.equal(bought?.["chipsBefore"], undefined);
   }
 });
 
