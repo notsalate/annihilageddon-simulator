@@ -66,6 +66,7 @@ test("setup records initial market additions as setup-phase events", () => {
       event.type === "marketFlowCardAdded" && event.sourceType === "setup"
   );
 
+  assert.equal(setupMarketEvents.length, 8);
   assert.equal(
     setupMarketEvents.filter((event) => event.destinationZone === "mainMarket")
       .length,
