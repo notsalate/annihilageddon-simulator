@@ -11,6 +11,7 @@ export interface FormatSingleGameDebugTraceOptions {
   cardNames?: ReadonlyMap<string, string>;
   cardTexts?: ReadonlyMap<string, string>;
   tokenNames?: ReadonlyMap<string, string>;
+  tokenTexts?: ReadonlyMap<string, string>;
 }
 
 export function formatSingleGameDebugTrace(
@@ -65,7 +66,7 @@ function formatSetupState(
   options: FormatSingleGameDebugTraceOptions
 ): string[] {
   return [
-    "- Setup state:",
+    "- Post-setup state:",
     ...setupState.players.map((player) => formatSetupPlayer(player, options)),
     `  - main market (${setupState.mainMarket.length}): ${formatSetupCards(setupState.mainMarket, options)}.`,
     `  - legend market (${setupState.legendMarket.length}): ${formatSetupCards(setupState.legendMarket, options)}.`,
@@ -143,7 +144,11 @@ function formatEvent(
       event.chosenDefinitionId === undefined
         ? "<unknown-choice>"
         : formatDefinitionLabel(event.chosenDefinitionId, event, options);
-    return `- Setup choice (${event.setupChoiceKind ?? "unknown"}): ${event.playerId} candidates [${candidates}] -> ${chosen} via ${event.policyId ?? "<unknown-policy>"}.`;
+    const textSuffix =
+      event.chosenDefinitionId === undefined
+        ? ""
+        : formatDefinitionTextSuffix(event.chosenDefinitionId, event, options);
+    return `- Setup choice (${event.setupChoiceKind ?? "unknown"}): ${event.playerId} candidates [${candidates}] -> ${chosen} via ${event.policyId ?? "<unknown-policy>"}.${textSuffix}`;
   }
 
   if (event.type === "botActionSelected") {
@@ -404,7 +409,27 @@ function formatTextSuffix(
     event.definitionId === undefined
       ? undefined
       : options.cardTexts?.get(event.definitionId);
-  return text === undefined ? "" : `\n  Text: ${text}`;
+  return text === undefined ? "" : formatTextBlock(text);
+}
+
+function formatDefinitionTextSuffix(
+  definitionId: string,
+  event: GameEvent,
+  options: FormatSingleGameDebugTraceOptions
+): string {
+  const text =
+    event.setupChoiceKind === "wizardProperty"
+      ? options.tokenTexts?.get(definitionId)
+      : options.cardTexts?.get(definitionId);
+  return text === undefined ? "" : formatTextBlock(text);
+}
+
+function formatTextBlock(text: string): string {
+  if (!text.includes("\n")) {
+    return `\n  Text: ${text}`;
+  }
+
+  return ["", "  Text:", ...text.split("\n").map((line) => `    ${line}`)].join("\n");
 }
 
 function formatTargetLifeDelta(event: GameEvent): string {
