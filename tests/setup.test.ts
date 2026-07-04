@@ -74,9 +74,10 @@ test("default setup choice policy records alwaysPickFirst", () => {
 
   assert.equal(setupChoiceEvents.length, 2);
   for (const event of setupChoiceEvents) {
+    const candidates = event.candidateDefinitionIds ?? [];
     assert.equal(event.policyId, "alwaysPickFirst");
-    assert.ok(Array.isArray(event.candidateDefinitionIds));
-    assert.equal(event.chosenDefinitionId, event.candidateDefinitionIds[0]);
+    assert.ok(candidates.length > 0);
+    assert.equal(event.chosenDefinitionId, candidates[0]);
   }
 });
 
