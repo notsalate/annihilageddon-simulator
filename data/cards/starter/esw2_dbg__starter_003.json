@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__starter_003",
+  "source": {
+    "draft": "data/import/cards/starter/drafts/esw2_dbg__starter_003.json",
+    "image": "assets/cards/starter/esw2_dbg__starter_003.png",
+    "text": "data/import/cards/starter/texts/esw2_dbg__starter_003.md"
+  },
+  "visible": {
+    "nameRu": "Сырная палочка",
+    "cost": 0,
+    "victoryPoints": 0,
+    "typeRu": "Затравка",
+    "cardKind": "starter",
+    "cardTypes": [],
+    "textRu": "+1 мощь\nАтака: нанеси 1 урон выбранному колдуну. Если он от этого помрёт, получи 3 чипсины.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "starter",
+    "cardTypes": [],
+    "tags": ["wandAttackCard"],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 1
+      },
+      {
+        "effectId": "attack_damage",
+        "targetSelector": "chosenPlayer",
+        "timing": "onPlay",
+        "amount": 1,
+        "onKill": [
+          {
+            "effectId": "gain_chips",
+            "amount": 3
+          }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

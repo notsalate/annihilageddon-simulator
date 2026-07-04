@@ -68,6 +68,23 @@ export type ActionResult =
       error: string;
     };
 
+interface PaymentResult {
+  remainingPower: number;
+  remainingChips: number;
+  payableCost: number;
+}
+
+interface DrawCardsResult {
+  requestedCount: number;
+  drawnCards: CardInstance[];
+}
+
+interface CleanupMoveRecord {
+  card: CardInstance;
+  sourceZone: string;
+  destinationZone: string;
+}
+
 export function listLegalActions(state: GameState): LegalAction[] {
   const activePlayer = mustGetActivePlayer(state);
   return [
@@ -132,8 +149,22 @@ export function applyAction(
 function endTurn(state: GameState): ActionResult {
   const activePlayer = mustGetActivePlayer(state);
   grantBasicTrophyChipAtEndOfTurn(state, activePlayer);
-  activePlayer.discard.push(...activePlayer.hand.splice(0));
-  cleanupPlayedCards(state, activePlayer);
+
+  const cleanedHandCards = activePlayer.hand.splice(0);
+  activePlayer.discard.push(...cleanedHandCards);
+  recordEndTurnCleanup(
+    state,
+    activePlayer,
+    cleanedHandCards.map((card) => ({
+      card,
+      sourceZone: `${activePlayer.playerId}.hand`,
+      destinationZone: `${activePlayer.playerId}.discard`,
+    }))
+  );
+
+  const cleanedPlayedCards = cleanupPlayedCards(state, activePlayer);
+  recordEndTurnCleanup(state, activePlayer, cleanedPlayedCards);
+
   state.turn.power = 0;
   state.turn.controlledPowerBonus = 0;
   state.turn.activatedCardIds = [];
@@ -143,7 +174,18 @@ function endTurn(state: GameState): ActionResult {
   });
 
   const drawCount = calculateEndTurnDrawCount(state, activePlayer);
-  drawCards(activePlayer, drawCount, state);
+  const drawResult = drawCards(activePlayer, drawCount, state);
+  state.eventLog.push({
+    type: "handDrawn",
+    playerId: activePlayer.playerId,
+    amount: drawResult.requestedCount,
+    legalChoiceCount: drawResult.drawnCards.length,
+    choiceId: String(activePlayer.hand.length),
+    destinationZone: `${activePlayer.playerId}.hand`,
+    targetCardInstanceIds: drawResult.drawnCards.map((card) => card.instanceId),
+    targetDefinitionIds: drawResult.drawnCards.map((card) => card.definitionId),
+  });
+
   state.turn.gainedCardDefinitionIds = [];
   state.turn.number += 1;
   state.activePlayerId = getNextPlayer(state, activePlayer).playerId;
@@ -314,6 +356,8 @@ function buyMarketCard(
     activePlayer.playerId,
     definition
   );
+  const powerBefore = state.turn.power;
+  const chipsBefore = activePlayer.chips;
   const payment = calculatePayment(state, activePlayer, cost, action.source);
   if (payment === undefined) {
     return {
@@ -338,17 +382,68 @@ function buyMarketCard(
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
     destination: gainResult.destination,
+    sourceZone: action.source,
+    amount: payment.payableCost,
+    powerBefore,
+    powerAfter: payment.remainingPower,
+    chipsBefore,
+    chipsAfter: payment.remainingChips,
   });
 
   return { ok: true };
 }
 
-function cleanupPlayedCards(state: GameState, activePlayer: PlayerState): void {
+function cleanupPlayedCards(
+  state: GameState,
+  activePlayer: PlayerState
+): CleanupMoveRecord[] {
+  const cleanedCards: CleanupMoveRecord[] = [];
   for (const card of activePlayer.playedThisTurn.splice(0)) {
     const owner = state.players.find(
       (player) => player.playerId === card.ownerId
     );
-    (owner ?? activePlayer).discard.push(card);
+    const destinationPlayer = owner ?? activePlayer;
+    destinationPlayer.discard.push(card);
+    cleanedCards.push({
+      card,
+      sourceZone: `${activePlayer.playerId}.playedThisTurn`,
+      destinationZone: `${destinationPlayer.playerId}.discard`,
+    });
+  }
+
+  return cleanedCards;
+}
+
+function recordEndTurnCleanup(
+  state: GameState,
+  activePlayer: PlayerState,
+  moves: readonly CleanupMoveRecord[]
+): void {
+  if (moves.length === 0) {
+    return;
+  }
+
+  const groups = new Map<string, CleanupMoveRecord[]>();
+  for (const move of moves) {
+    const key = `${move.sourceZone}->${move.destinationZone}`;
+    groups.set(key, [...(groups.get(key) ?? []), move]);
+  }
+
+  for (const group of groups.values()) {
+    const firstMove = group[0];
+    if (firstMove === undefined) {
+      continue;
+    }
+
+    state.eventLog.push({
+      type: "endTurnCleanupMoved",
+      playerId: activePlayer.playerId,
+      amount: group.length,
+      sourceZone: firstMove.sourceZone,
+      destinationZone: firstMove.destinationZone,
+      targetCardInstanceIds: group.map((move) => move.card.instanceId),
+      targetDefinitionIds: group.map((move) => move.card.definitionId),
+    });
   }
 }
 
@@ -550,7 +645,7 @@ function calculatePayment(
   player: PlayerState,
   cost: number,
   source: BuySource
-): { remainingPower: number; remainingChips: number } | undefined {
+): PaymentResult | undefined {
   const payableCost = source === "wildMagicStack" ? 3 : cost;
   if (source !== "legendMarket") {
     if (payableCost > state.turn.power) {
@@ -558,6 +653,7 @@ function calculatePayment(
     }
 
     return {
+      payableCost,
       remainingPower: state.turn.power - payableCost,
       remainingChips: player.chips,
     };
@@ -569,12 +665,18 @@ function calculatePayment(
 
   const powerSpent = Math.min(state.turn.power, payableCost);
   return {
+    payableCost,
     remainingPower: state.turn.power - powerSpent,
     remainingChips: player.chips - (payableCost - powerSpent),
   };
 }
 
-function drawCards(player: PlayerState, count: number, state: GameState): void {
+function drawCards(
+  player: PlayerState,
+  count: number,
+  state: GameState
+): DrawCardsResult {
+  const drawnCards: CardInstance[] = [];
   for (let index = 0; index < count; index += 1) {
     if (player.deck.length === 0 && player.discard.length > 0) {
       player.deck.push(...player.discard.splice(0));
@@ -587,11 +689,17 @@ function drawCards(player: PlayerState, count: number, state: GameState): void {
 
     const card = player.deck.shift();
     if (card === undefined) {
-      return;
+      break;
     }
 
     player.hand.push(card);
+    drawnCards.push(card);
   }
+
+  return {
+    requestedCount: count,
+    drawnCards,
+  };
 }
 
 function getNextPlayer(state: GameState, player: PlayerState): PlayerState {

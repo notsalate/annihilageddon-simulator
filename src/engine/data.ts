@@ -10,6 +10,12 @@ import {
 
 type RuntimeEffectSourceKind = "card" | "wizardProperty";
 
+const CANONICAL_STARTER_TEMPLATE = new Map([
+  ["esw2_dbg__starter_001", 6],
+  ["esw2_dbg__starter_002", 3],
+  ["esw2_dbg__starter_003", 1],
+]);
+
 export type CardKind =
   | "starter"
   | "normal"
@@ -376,6 +382,12 @@ function validateSetupDataPackCompatibility(
     );
   }
 
+  if (!allowsIncompleteSetup) {
+    errors.push(
+      ...validateCanonicalStarterTemplate(dataPack.decks.starterDeck)
+    );
+  }
+
   if (
     !allowsIncompleteSetup &&
     totalDeckEntryCount(dataPack.decks.mainDeck) === 0
@@ -422,6 +434,47 @@ function validateSetupDataPackCompatibility(
     errors.push(
       "Data pack wizard property stack must include at least one token outside incomplete-full-only"
     );
+  }
+
+  return errors;
+}
+
+function validateCanonicalStarterTemplate(deck: DeckComposition): string[] {
+  const errors: string[] = [];
+  const actualCounts = new Map<string, number>();
+  for (const entry of deck.entries) {
+    actualCounts.set(
+      entry.cardId,
+      (actualCounts.get(entry.cardId) ?? 0) + entry.count
+    );
+  }
+
+  const expectedTotal = [...CANONICAL_STARTER_TEMPLATE.values()].reduce(
+    (total, count) => total + count,
+    0
+  );
+  const actualTotal = totalDeckEntryCount(deck);
+  if (actualTotal !== expectedTotal) {
+    errors.push(
+      `Raw starter template ${deck.deckId} must contain ${expectedTotal} cards before setup modifiers; got ${actualTotal}`
+    );
+  }
+
+  for (const [cardId, expectedCount] of CANONICAL_STARTER_TEMPLATE) {
+    const actualCount = actualCounts.get(cardId) ?? 0;
+    if (actualCount !== expectedCount) {
+      errors.push(
+        `Raw starter template ${deck.deckId} must contain ${expectedCount} ${cardId}; got ${actualCount}`
+      );
+    }
+  }
+
+  for (const cardId of actualCounts.keys()) {
+    if (!CANONICAL_STARTER_TEMPLATE.has(cardId)) {
+      errors.push(
+        `Raw starter template ${deck.deckId} must not include unexpected starter card ${cardId}`
+      );
+    }
   }
 
   return errors;

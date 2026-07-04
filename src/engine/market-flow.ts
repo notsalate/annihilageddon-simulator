@@ -26,6 +26,7 @@ export function runMarketFlow(
   const legendResult = fillMarket(state, {
     sourceDeck: state.common.legendDeck,
     market: state.common.legendMarket,
+    marketName: "legendMarket",
     destroyedEvents: state.common.destroyedMegaMayhem,
     targetSize: 3,
     eventKind: "megaMayhem",
@@ -40,6 +41,7 @@ export function runMarketFlow(
   const mainResult = fillMarket(state, {
     sourceDeck: state.common.mainDeck,
     market: state.common.market,
+    marketName: "mainMarket",
     destroyedEvents: state.common.destroyedMayhem,
     targetSize: 5,
     eventKind: "mayhem",
@@ -59,6 +61,7 @@ function fillMarket(
   options: {
     sourceDeck: CardInstance[];
     market: CardInstance[];
+    marketName: "mainMarket" | "legendMarket";
     destroyedEvents: CardInstance[];
     targetSize: number;
     eventKind: CardDefinition["engine"]["cardKind"];
@@ -70,16 +73,26 @@ function fillMarket(
   while (options.market.length < options.targetSize) {
     const card = options.sourceDeck.shift();
     if (card === undefined) {
-      if (options.mode === "turn") {
-        state.eventLog.push({
-          type: "marketFlowFailed",
-        });
-      }
+      state.eventLog.push({
+        type: "marketFlowFailed",
+        playerId: state.activePlayerId,
+        sourceType: options.mode,
+        destinationZone: options.marketName,
+      });
       return { ok: true, gameEndReason: options.endReason };
     }
 
     const definition = mustGetDefinition(state, card.definitionId);
     if (definition.engine.cardKind === options.eventKind) {
+      state.eventLog.push({
+        type: "marketEventCardOpened",
+        playerId: state.activePlayerId,
+        sourceType: options.mode,
+        destinationZone: options.marketName,
+        cardInstanceId: card.instanceId,
+        definitionId: card.definitionId,
+      });
+
       if (options.mode === "turn") {
         const mayhemResult = executeMayhemCard(state, card, definition);
         if (!mayhemResult.ok) {
@@ -88,24 +101,26 @@ function fillMarket(
       }
 
       options.destroyedEvents.push(card);
-      if (options.mode === "turn") {
-        state.eventLog.push({
-          type: options.eventLogType,
-          cardInstanceId: card.instanceId,
-          definitionId: card.definitionId,
-        });
-      }
+      state.eventLog.push({
+        type: options.eventLogType,
+        playerId: state.activePlayerId,
+        sourceType: options.mode,
+        destinationZone: options.marketName,
+        cardInstanceId: card.instanceId,
+        definitionId: card.definitionId,
+      });
       continue;
     }
 
     options.market.push(card);
-    if (options.mode === "turn") {
-      state.eventLog.push({
-        type: "marketFlowCardAdded",
-        cardInstanceId: card.instanceId,
-        definitionId: card.definitionId,
-      });
-    }
+    state.eventLog.push({
+      type: "marketFlowCardAdded",
+      playerId: state.activePlayerId,
+      sourceType: options.mode,
+      destinationZone: options.marketName,
+      cardInstanceId: card.instanceId,
+      definitionId: card.definitionId,
+    });
     applyMarketChipMarker(state, options.market, definition, options.mode);
   }
 
@@ -157,14 +172,14 @@ function applyMarketChipMarker(
     }
 
     card.marketChips += 1;
-    if (mode === "turn") {
-      state.eventLog.push({
-        type: "marketChipAdded",
-        cardInstanceId: card.instanceId,
-        definitionId: card.definitionId,
-        amount: 1,
-      });
-    }
+    state.eventLog.push({
+      type: "marketChipAdded",
+      playerId: state.activePlayerId,
+      sourceType: mode,
+      cardInstanceId: card.instanceId,
+      definitionId: card.definitionId,
+      amount: 1,
+    });
   }
 }
 

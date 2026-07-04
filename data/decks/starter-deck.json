@@ -7,14 +7,18 @@
   "entries": [
     {
       "cardId": "esw2_dbg__starter_001",
-      "count": 30
+      "count": 6
     },
     {
       "cardId": "esw2_dbg__starter_002",
-      "count": 15
+      "count": 3
+    },
+    {
+      "cardId": "esw2_dbg__starter_003",
+      "count": 1
     }
   ],
   "notes": [
-    "Current runtime starter deck includes the simple-baseline Block D slice."
+    "Runtime starter deck is the personal 10-card setup template: 6 signs, 3 pshiks, and 1 cheese stick. Shared starter component pool counts must not be encoded here."
   ]
 }

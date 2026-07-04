@@ -54,6 +54,41 @@ export interface BotStrategy {
   ): RuntimeEffectChoice | undefined;
 }
 
+export interface SetupCardSnapshot {
+  instanceId: string;
+  definitionId: string;
+  marketChips: number;
+}
+
+export interface SetupTokenSnapshot {
+  instanceId: string;
+  definitionId: string;
+}
+
+export interface SetupPlayerSnapshot {
+  playerId: PlayerId;
+  handSize: number;
+  deckSize: number;
+  life: number;
+  maxLife: number;
+  chips: number;
+  hand: SetupCardSnapshot[];
+  wizardProperties: SetupTokenSnapshot[];
+  statuses: string[];
+  unboughtFamiliar?: SetupCardSnapshot;
+}
+
+export interface SetupStateSnapshot {
+  players: SetupPlayerSnapshot[];
+  mainMarket: SetupCardSnapshot[];
+  legendMarket: SetupCardSnapshot[];
+  mainDeckSize: number;
+  legendDeckSize: number;
+  wildMagicStackSize: number;
+  limpWandStackSize: number;
+  deadWizardTokenStackSize: number;
+}
+
 export interface SingleGameResult {
   seed: number;
   endReason: GameEndReason;
@@ -63,6 +98,7 @@ export interface SingleGameResult {
   winnerIds: PlayerId[];
   isTie: boolean;
   eventLog: GameEvent[];
+  setupState?: SetupStateSnapshot;
 }
 
 export interface PlayerScore {
@@ -107,6 +143,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       ? {}
       : { effectChoiceStrategy: bot.chooseEffectChoice }),
   });
+  const setupState = snapshotSetupState(state);
   if (options.validateInvariants) {
     assertGameStateInvariants(state);
   }
@@ -119,11 +156,11 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     }
     const endReason = getGameEndReason(state);
     if (endReason !== undefined) {
-      return summarizeGame(state, endReason, true);
+      return summarizeGame(state, endReason, true, setupState);
     }
 
     if (state.turn.number > options.maxTurns) {
-      return summarizeGame(state, "maxTurnsReached", false);
+      return summarizeGame(state, "maxTurnsReached", false, setupState);
     }
 
     if (actionsApplied >= actionLimit) {
@@ -145,7 +182,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       assertGameStateInvariants(state);
     }
     if (result.gameEndReason !== undefined) {
-      return summarizeGame(state, result.gameEndReason, true);
+      return summarizeGame(state, result.gameEndReason, true, setupState);
     }
     actionsApplied += 1;
   }
@@ -195,7 +232,8 @@ export function scoreGame(state: GameState): PlayerScore[] {
 function summarizeGame(
   state: GameState,
   endReason: GameEndReason,
-  isGameEnd: boolean
+  isGameEnd: boolean,
+  setupState: SetupStateSnapshot
 ): SingleGameResult {
   const players = scoreGame(state);
   const winnerIds = determineWinnerIds(players);
@@ -209,6 +247,55 @@ function summarizeGame(
     winnerIds,
     isTie: winnerIds.length > 1,
     eventLog: [...state.eventLog],
+    setupState,
+  };
+}
+
+function snapshotSetupState(state: GameState): SetupStateSnapshot {
+  return {
+    players: state.players.map((player) => {
+      const familiar = snapshotOptionalCard(player.unboughtFamiliar);
+      return {
+        playerId: player.playerId,
+        handSize: player.hand.length,
+        deckSize: player.deck.length,
+        life: player.life.current,
+        maxLife: player.life.max,
+        chips: player.chips,
+        hand: player.hand.map(snapshotCard),
+        wizardProperties: player.wizardProperties.map(snapshotToken),
+        statuses: player.statuses.map((status) => status.statusId),
+        ...(familiar === undefined ? {} : { unboughtFamiliar: familiar }),
+      };
+    }),
+    mainMarket: state.common.market.map(snapshotCard),
+    legendMarket: state.common.legendMarket.map(snapshotCard),
+    mainDeckSize: state.common.mainDeck.length,
+    legendDeckSize: state.common.legendDeck.length,
+    wildMagicStackSize: state.common.wildMagicStack.length,
+    limpWandStackSize: state.common.limpWandStack.length,
+    deadWizardTokenStackSize: state.common.deadWizardTokens.drawStack.length,
+  };
+}
+
+function snapshotOptionalCard(
+  card: CardInstance | undefined
+): SetupCardSnapshot | undefined {
+  return card === undefined ? undefined : snapshotCard(card);
+}
+
+function snapshotCard(card: CardInstance): SetupCardSnapshot {
+  return {
+    instanceId: card.instanceId,
+    definitionId: card.definitionId,
+    marketChips: card.marketChips,
+  };
+}
+
+function snapshotToken(token: TokenInstance): SetupTokenSnapshot {
+  return {
+    instanceId: token.instanceId,
+    definitionId: token.definitionId,
   };
 }
 
