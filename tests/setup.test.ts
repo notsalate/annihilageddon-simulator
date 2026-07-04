@@ -76,6 +76,9 @@ test("setup records initial market additions as setup-phase events", () => {
       .length,
     3
   );
+  for (const event of setupMarketEvents) {
+    assert.equal(event.playerId, state.activePlayerId);
+  }
 });
 
 test("starter card instances are independent between players", () => {
