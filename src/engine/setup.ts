@@ -1,4 +1,9 @@
 import {
+  createCardInstanceId,
+  createPlayerId,
+  createTokenInstanceId,
+} from "../domain/types.js";
+import {
   isIncompleteFullOnlyDataPack,
   loadCurrentRuntimeDataPack,
   validateExecutableDataPack,
@@ -728,7 +733,7 @@ function createPlayers(
   rng: RandomSource
 ): PlayerState[] {
   return Array.from({ length: playerCount }, (_, index) => {
-    const playerId: PlayerId = `player-${index + 1}`;
+    const playerId: PlayerId = createPlayerId(index + 1);
     const deck = instantiateDeck(
       dataPack.decks.starterDeck,
       dataPack,
@@ -871,7 +876,7 @@ function createInstanceFactory(): InstanceFactory {
       ownerId: PlayerId | CommonOwner
     ): CardInstance {
       const instance: CardInstance = {
-        instanceId: `card-${nextId}`,
+        instanceId: createCardInstanceId(nextId),
         definitionId,
         ownerId,
         marketChips: 0,
@@ -891,7 +896,7 @@ function createTokenInstanceFactory(): TokenInstanceFactory {
       ownerId: PlayerId | CommonOwner
     ): TokenInstance {
       const instance: TokenInstance = {
-        instanceId: `token-${nextId}`,
+        instanceId: createTokenInstanceId(nextId),
         definitionId,
         ownerId,
       };

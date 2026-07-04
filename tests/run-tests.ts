@@ -1,4 +1,5 @@
 import "./common.test.js";
+import "./id-types.test.js";
 import "./rng.test.js";
 import "./setup.test.js";
 import "./action-loop.test.js";
