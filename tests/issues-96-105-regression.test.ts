@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  applyAction,
   formatSingleGameDebugTrace,
   initializeGame,
   loadCurrentRuntimeDataPack,
   runSingleGame,
+  validateExecutableDataPack,
   type SingleGameResult,
 } from "../src/index.js";
 
@@ -46,6 +48,38 @@ test("current runtime setup uses the canonical 10-card starter template", () => 
     assert.equal(countDefinition(ownedStarterCards, "esw2_dbg__starter_001"), 6);
     assert.equal(countDefinition(ownedStarterCards, "esw2_dbg__starter_002"), 3);
     assert.equal(countDefinition(ownedStarterCards, "esw2_dbg__starter_003"), 1);
+  }
+});
+
+test("executable validation rejects non-canonical raw starter templates before setup modifiers", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const result = validateExecutableDataPack({
+    ...dataPack,
+    decks: {
+      ...dataPack.decks,
+      starterDeck: {
+        ...dataPack.decks.starterDeck,
+        entries: [
+          { cardId: "esw2_dbg__starter_001", count: 30 },
+          { cardId: "esw2_dbg__starter_002", count: 15 },
+        ],
+      },
+    },
+  });
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("Raw starter template") &&
+        error.includes("esw2_dbg__starter_003")
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("Raw starter template") && error.includes("45")
+      )
+    );
   }
 });
 
@@ -173,13 +207,13 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
         turnNumber: 2,
         actionSequence: 7,
         actionIdentity: "endTurn",
-        amount: 5,
-        legalChoiceCount: 4,
-        choiceId: "4",
+        requestedCount: 5,
+        drawnCount: 4,
+        handSizeAfter: 4,
         destinationZone: "player-1.hand",
         targetCardInstanceIds: ["card-c", "card-d", "card-e", "card-f"],
         targetDefinitionIds: ["draw-a", "draw-b", "draw-c", "draw-d"],
-      },
+      } as SingleGameResult["eventLog"][number],
     ],
   };
 
@@ -226,6 +260,85 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
   assert.match(trace, /New hand: player-1 drew 4\/5 card\(s\); hand size 4.*Карта А \(card-c\).*Карта Г \(card-f\)/);
 });
 
+test("runtime emits raw cardBought payment payload", () => {
+  const result = runSingleGame({
+    rootDir,
+    seed: 80809,
+    maxTurns: 1,
+  });
+  const bought = result.eventLog.find((event) => event.type === "cardBought");
+
+  assert.ok(bought);
+  assert.ok(
+    ["mainMarket", "legendMarket", "wildMagicStack", "familiar"].includes(
+      bought.sourceZone ?? ""
+    )
+  );
+  assertNumber(bought.amount);
+  assertNumber(bought.powerBefore);
+  assertNumber(bought.powerAfter);
+  assertNumber(bought.chipsBefore);
+  assertNumber(bought.chipsAfter);
+  assert.equal(
+    bought.powerBefore - bought.powerAfter + bought.chipsBefore - bought.chipsAfter,
+    bought.amount
+  );
+});
+
+test("runtime emits explicit handDrawn payload without choice-field overload", () => {
+  const result = runSingleGame({
+    rootDir,
+    seed: 80809,
+    maxTurns: 1,
+  });
+  const handDrawn = result.eventLog.find(
+    (event) => event.type === "handDrawn"
+  ) as Record<string, unknown> | undefined;
+
+  assert.ok(handDrawn);
+  assert.equal(handDrawn["requestedCount"], 5);
+  assert.equal(handDrawn["drawnCount"], 5);
+  assert.equal(handDrawn["handSizeAfter"], 5);
+  assert.equal(handDrawn["choiceId"], undefined);
+  assert.equal(handDrawn["legalChoiceCount"], undefined);
+  assert.deepEqual(
+    (handDrawn["targetCardInstanceIds"] as readonly unknown[]).length,
+    handDrawn["drawnCount"]
+  );
+});
+
+test("end-turn cleanup records actual owner discard destination for non-owned played cards", () => {
+  const state = initializeGame({ rootDir, seed: 12345 });
+  const activePlayer = state.players.find((player) => player.playerId === "player-1");
+  const ownerPlayer = state.players.find((player) => player.playerId === "player-2");
+  assert.ok(activePlayer);
+  assert.ok(ownerPlayer);
+
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.hand.splice(0);
+  const borrowedCard = ownerPlayer.deck.pop();
+  assert.ok(borrowedCard);
+  activePlayer.playedThisTurn.push(borrowedCard);
+
+  const actionResult = applyAction(state, { type: "endTurn" });
+
+  assert.equal(actionResult.ok, true);
+  assert.ok(
+    ownerPlayer.discard.some(
+      (card) => card.instanceId === borrowedCard.instanceId
+    )
+  );
+  const cleanupEvent = state.eventLog.find((event) => {
+    return (
+      event.type === "endTurnCleanupMoved" &&
+      event.targetCardInstanceIds?.includes(borrowedCard.instanceId)
+    );
+  });
+  assert.ok(cleanupEvent);
+  assert.equal(cleanupEvent.sourceZone, "player-1.playedThisTurn");
+  assert.equal(cleanupEvent.destinationZone, "player-2.discard");
+});
+
 test("single-game trace renders compact setup state for a stable seed", () => {
   const result = runSingleGame({
     rootDir,
@@ -248,4 +361,8 @@ function countDefinition(
   definitionId: string
 ): number {
   return cards.filter((card) => card.definitionId === definitionId).length;
+}
+
+function assertNumber(value: unknown): asserts value is number {
+  assert.equal(typeof value, "number");
 }
