@@ -147,7 +147,11 @@ export interface EffectRuntimeServices {
     effectId: string,
     source: EffectSourceContext
   ): void;
-  setPlayerLife(state: GameState, player: PlayerState, lifeTotal: number): void;
+  setPlayerLife(
+    state: GameState,
+    player: PlayerState,
+    lifeTotal: number
+  ): { lifeAfter: number; lifeBefore: number };
   resolveStatusTargetPlayers(
     state: GameState,
     player: PlayerState,
@@ -710,7 +714,11 @@ const setLifeHandler: EffectRuntimeHandler = {
       };
     }
 
-    services.setPlayerLife(state, targetResult.choice.player, lifeTotal);
+    const lifeChange = services.setPlayerLife(
+      state,
+      targetResult.choice.player,
+      lifeTotal
+    );
     state.eventLog.push({
       type: "effectLifeSet",
       playerId: player.playerId,
@@ -719,6 +727,8 @@ const setLifeHandler: EffectRuntimeHandler = {
       definitionId: source.definitionId,
       effectId: services.asString(effect["effectId"]),
       amount: lifeTotal,
+      targetLifeBefore: lifeChange.lifeBefore,
+      targetLifeAfter: lifeChange.lifeAfter,
       sourceType: source.sourceType,
     });
     return { ok: true };
@@ -1099,7 +1109,7 @@ const megaMayhemSetLifeHandler: EffectRuntimeHandler = {
     }
 
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
-      services.setPlayerLife(state, targetPlayer, lifeTotal);
+      const lifeChange = services.setPlayerLife(state, targetPlayer, lifeTotal);
       state.eventLog.push({
         type: "effectLifeSet",
         playerId: player.playerId,
@@ -1108,6 +1118,8 @@ const megaMayhemSetLifeHandler: EffectRuntimeHandler = {
         definitionId: source.definitionId,
         effectId: services.asString(effect["effectId"]),
         amount: lifeTotal,
+        targetLifeBefore: lifeChange.lifeBefore,
+        targetLifeAfter: lifeChange.lifeAfter,
         sourceType: source.sourceType,
       });
     }
@@ -1509,7 +1521,7 @@ const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler = {
         continue;
       }
 
-      services.setPlayerLife(state, targetPlayer, lifeTotal);
+      const lifeChange = services.setPlayerLife(state, targetPlayer, lifeTotal);
       const chipsBefore = targetPlayer.chips;
       targetPlayer.chips += chipAmount;
       state.eventLog.push({
@@ -1520,6 +1532,8 @@ const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler = {
         definitionId: source.definitionId,
         effectId,
         amount: lifeTotal,
+        targetLifeBefore: lifeChange.lifeBefore,
+        targetLifeAfter: lifeChange.lifeAfter,
         sourceType: source.sourceType,
       });
       recordEffectChipsChanged(

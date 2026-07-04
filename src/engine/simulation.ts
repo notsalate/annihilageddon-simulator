@@ -23,6 +23,7 @@ import {
   type RuntimeEffectChoiceRequest,
   type TokenInstance,
 } from "./setup.js";
+import { assertGameStateInvariants } from "./invariants.js";
 
 export type GameEndReason =
   | "deadWizardTokensExhausted"
@@ -37,6 +38,7 @@ export interface RunSingleGameOptions {
   playerCount?: number;
   dataPackPath?: string;
   bot?: BotStrategy;
+  validateInvariants?: boolean;
 }
 
 export interface BotDecisionContext {
@@ -104,10 +106,16 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       ? {}
       : { effectChoiceStrategy: bot.chooseEffectChoice }),
   });
+  if (options.validateInvariants) {
+    assertGameStateInvariants(state);
+  }
   const actionLimit = options.maxTurns * 200;
   let actionsApplied = 0;
 
   while (true) {
+    if (options.validateInvariants) {
+      assertGameStateInvariants(state);
+    }
     const endReason = getGameEndReason(state);
     if (endReason !== undefined) {
       return summarizeGame(state, endReason, true);
@@ -131,6 +139,9 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     const result = applyAction(state, selectedAction);
     if (!result.ok) {
       throw new Error(`Legal action failed: ${result.error}`);
+    }
+    if (options.validateInvariants) {
+      assertGameStateInvariants(state);
     }
     if (result.gameEndReason !== undefined) {
       return summarizeGame(state, result.gameEndReason, true);

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatSingleGameDebugTrace, type SingleGameResult } from "../src/index.js";
+import {
+  formatSingleGameDebugTrace,
+  type SingleGameResult,
+} from "../src/index.js";
 
 test("single-game debug trace summarizes card play and effect resolution in game terms", () => {
   const result: SingleGameResult = {
@@ -14,10 +17,19 @@ test("single-game debug trace summarizes card play and effect resolution in game
     isTie: false,
     eventLog: [
       { type: "gameInitialized" },
-      { type: "botActionSelected", playerId: "player-1" },
+      {
+        type: "botActionSelected",
+        playerId: "player-1",
+        turnNumber: 1,
+        actionSequence: 1,
+        actionIdentity: "playCard",
+      },
       {
         type: "effectAddPowerApplied",
         playerId: "player-1",
+        turnNumber: 1,
+        actionSequence: 1,
+        actionIdentity: "playCard",
         cardInstanceId: "card-7",
         definitionId: "fixture-power-card",
         effectId: "add_power",
@@ -29,6 +41,9 @@ test("single-game debug trace summarizes card play and effect resolution in game
       {
         type: "effectChipsGained",
         playerId: "player-1",
+        turnNumber: 1,
+        actionSequence: 1,
+        actionIdentity: "playCard",
         cardInstanceId: "card-8",
         definitionId: "fixture-chip-card",
         effectId: "gain_chips",
@@ -40,6 +55,9 @@ test("single-game debug trace summarizes card play and effect resolution in game
       {
         type: "marketChipsGained",
         playerId: "player-1",
+        turnNumber: 1,
+        actionSequence: 1,
+        actionIdentity: "playCard",
         cardInstanceId: "card-9",
         definitionId: "fixture-market-card",
         amount: 2,
@@ -49,6 +67,9 @@ test("single-game debug trace summarizes card play and effect resolution in game
       {
         type: "cardMoved",
         playerId: "player-1",
+        turnNumber: 1,
+        actionSequence: 1,
+        actionIdentity: "playCard",
         cardInstanceId: "card-10",
         definitionId: "fixture-moved-card",
         sourceZone: "mainMarket",
@@ -59,6 +80,9 @@ test("single-game debug trace summarizes card play and effect resolution in game
       {
         type: "cardPlayed",
         playerId: "player-1",
+        turnNumber: 1,
+        actionSequence: 1,
+        actionIdentity: "playCard",
         cardInstanceId: "card-7",
         definitionId: "fixture-power-card",
       },
@@ -80,19 +104,14 @@ test("single-game debug trace summarizes card play and effect resolution in game
       "Setup",
       "- Game initialized.",
       "",
-      "Turn ? - player-1",
-      "- Bot selected an action.",
+      "Turn 1, Action 1 - player-1 (playCard)",
+      "- Bot selected playCard.",
       "- Effect add_power from Мощный тестовый посох (card-7): player-1 power 0 -> 2.",
       "- Effect gain_chips from Чиповый тестовый посох (card-8): player-1 chips 0 -> 1.",
       "- Market chips from Рыночная карта (card-9): player-1 chips 1 -> 3.",
       "- Move: Купленная карта (card-10) main market -> player-1 discard, owner common -> player-1.",
       "- Played Мощный тестовый посох (card-7).",
-      "",
-      "Missing instrumentation",
-      "- turn number for each event",
-      "- before/after hand, played, discard, deck, market and destroyed zones",
-      "- before/after life totals and remaining state-changing effects",
-    ].join("\n"),
+    ].join("\n")
   );
 });
 
@@ -110,6 +129,9 @@ test("single-game debug trace summarizes targeting, zone movement, defense, deat
       {
         type: "cardBought",
         playerId: "player-1",
+        turnNumber: 4,
+        actionSequence: 1,
+        actionIdentity: "buyMarketCard:mainMarket",
         cardInstanceId: "card-21",
         definitionId: "fixture-market-card",
         destination: "discard",
@@ -117,6 +139,9 @@ test("single-game debug trace summarizes targeting, zone movement, defense, deat
       {
         type: "effectCardGained",
         playerId: "player-1",
+        turnNumber: 4,
+        actionSequence: 1,
+        actionIdentity: "buyMarketCard:mainMarket",
         cardInstanceId: "card-7",
         definitionId: "fixture-gain-card",
         targetCardInstanceId: "card-22",
@@ -128,6 +153,9 @@ test("single-game debug trace summarizes targeting, zone movement, defense, deat
       {
         type: "defenseChoiceSelected",
         playerId: "player-2",
+        turnNumber: 4,
+        actionSequence: 2,
+        actionIdentity: "playCard",
         cardInstanceId: "card-9",
         definitionId: "fixture-defense-card",
         effectId: "avoid_attack",
@@ -135,6 +163,9 @@ test("single-game debug trace summarizes targeting, zone movement, defense, deat
       {
         type: "defenseCardMoved",
         playerId: "player-2",
+        turnNumber: 4,
+        actionSequence: 2,
+        actionIdentity: "playCard",
         cardInstanceId: "card-9",
         definitionId: "fixture-defense-card",
         destination: "discard",
@@ -143,17 +174,32 @@ test("single-game debug trace summarizes targeting, zone movement, defense, deat
         type: "effectDamageDealt",
         playerId: "player-2",
         targetPlayerId: "player-1",
+        turnNumber: 4,
+        actionSequence: 2,
+        actionIdentity: "playCard",
         cardInstanceId: "card-9",
         definitionId: "fixture-defense-card",
         effectId: "deal_damage",
         amount: 3,
+        targetLifeBefore: 2,
+        targetLifeAfter: -1,
         sourceType: "card",
       },
-      { type: "playerDied", playerId: "player-1" },
+      {
+        type: "playerDied",
+        playerId: "player-1",
+        turnNumber: 4,
+        actionSequence: 2,
+        actionIdentity: "playCard",
+        lifeAfter: -1,
+      },
       {
         type: "trophyControlChanged",
         playerId: "player-2",
         targetPlayerId: "player-1",
+        turnNumber: 4,
+        actionSequence: 2,
+        actionIdentity: "playCard",
         cardInstanceId: "card-9",
         definitionId: "fixture-defense-card",
         effectId: "deal_damage",
@@ -162,10 +208,22 @@ test("single-game debug trace summarizes targeting, zone movement, defense, deat
       {
         type: "deadWizardTokenGained",
         playerId: "player-1",
+        turnNumber: 4,
+        actionSequence: 2,
+        actionIdentity: "playCard",
         tokenInstanceId: "token-4",
         tokenDefinitionId: "fixture-dwt",
       },
-      { type: "playerResurrected", playerId: "player-1", amount: 20 },
+      {
+        type: "playerResurrected",
+        playerId: "player-1",
+        turnNumber: 4,
+        actionSequence: 2,
+        actionIdentity: "playCard",
+        amount: 20,
+        lifeBefore: -1,
+        lifeAfter: 20,
+      },
     ],
   };
 
@@ -185,29 +243,18 @@ test("single-game debug trace summarizes targeting, zone movement, defense, deat
       "Setup",
       "- Game initialized.",
       "",
-      "Turn ? - player-1",
+      "Turn 4, Action 1 - player-1 (buyMarketCard:mainMarket)",
       "- Bought Рыночная карта (card-21) -> discard.",
       "- Effect gain_card from Карта получения (card-7): player-1 chooses Целевая карта (card-22) -> deckTop.",
       "",
-      "Turn ? - player-2",
+      "Turn 4, Action 2 - player-2 (playCard)",
       "- Defense: player-2 chooses Защитная карта (card-9) for avoid_attack.",
       "- Zone move: Защитная карта (card-9) -> discard.",
-      "- Damage: player-2 deals 3 to player-1 with Защитная карта (card-9) via deal_damage.",
-      "",
-      "Turn ? - player-1",
-      "- Death: player-1 is defeated.",
-      "",
-      "Turn ? - player-2",
+      "- Damage: player-2 deals 3 to player-1 with Защитная карта (card-9) via deal_damage. Life 2 -> -1.",
+      "- Death: player-1 is defeated after reaching -1 life.",
       "- Trophy: Basic Trophy moves to player-2 after defeating player-1 with Защитная карта (card-9).",
-      "",
-      "Turn ? - player-1",
       "- DWT: player-1 gains Жетон мертвого волшебника (token-4).",
-      "- Resurrection: player-1 returns at 20 life.",
-      "",
-      "Missing instrumentation",
-      "- turn number for each event",
-      "- before/after hand, played, discard, deck, market and destroyed zones",
-      "- before/after life totals and remaining state-changing effects",
-    ].join("\n"),
+      "- Resurrection: player-1 life -1 -> 20.",
+    ].join("\n")
   );
 });

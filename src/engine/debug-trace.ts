@@ -8,15 +8,11 @@ export interface FormatSingleGameDebugTraceOptions {
 
 export function formatSingleGameDebugTrace(
   result: SingleGameResult,
-  options: FormatSingleGameDebugTraceOptions = {},
+  options: FormatSingleGameDebugTraceOptions = {}
 ): string {
-  const lines = [
-    formatSummary(result),
-    "",
-    "Setup",
-  ];
+  const lines = [formatSummary(result), "", "Setup"];
 
-  let currentTurnPlayer: string | undefined;
+  let currentGroupIdentity: string | undefined;
   for (const event of result.eventLog) {
     if (event.type === "gameInitialized") {
       lines.push("- Game initialized.");
@@ -28,21 +24,17 @@ export function formatSingleGameDebugTrace(
       continue;
     }
 
-    if (event.playerId !== undefined && getTurnHeaderIdentity(event) !== currentTurnPlayer) {
-      currentTurnPlayer = getTurnHeaderIdentity(event);
-      lines.push("", `${formatTurnHeader(event)} - ${event.playerId}`);
+    const groupIdentity = getTraceGroupIdentity(event);
+    if (groupIdentity !== currentGroupIdentity) {
+      currentGroupIdentity = groupIdentity;
+      const header = formatTraceHeader(event);
+      if (header !== undefined) {
+        lines.push("", header);
+      }
     }
 
     lines.push(formatted);
   }
-
-  lines.push(
-    "",
-    "Missing instrumentation",
-    "- turn number for each event",
-    "- before/after hand, played, discard, deck, market and destroyed zones",
-    "- before/after life totals and remaining state-changing effects",
-  );
 
   return lines.join("\n");
 }
@@ -53,7 +45,10 @@ function formatSummary(result: SingleGameResult): string {
   return `Game seed ${result.seed}: ${result.endReason} after ${result.turnsElapsed} ${turnWord} (${stopKind})`;
 }
 
-function formatEvent(event: GameEvent, options: FormatSingleGameDebugTraceOptions): string | undefined {
+function formatEvent(
+  event: GameEvent,
+  options: FormatSingleGameDebugTraceOptions
+): string | undefined {
   if (event.type === "botActionSelected") {
     return `- Bot selected ${event.actionIdentity ?? "an action"}.`;
   }
@@ -87,7 +82,9 @@ function formatEvent(event: GameEvent, options: FormatSingleGameDebugTraceOption
       event.ownerBefore === undefined || event.ownerAfter === undefined
         ? ""
         : `, owner ${event.ownerBefore} -> ${event.ownerAfter}`;
-    return `- Move: ${formatCard(event, options)} ${formatZone(event.sourceZone)} -> ${formatZone(event.destinationZone)}${ownerDelta}.`;
+    const effectSource =
+      event.effectId === undefined ? "" : ` via ${event.effectId}`;
+    return `- Move: ${formatCard(event, options)} ${formatZone(event.sourceZone)} -> ${formatZone(event.destinationZone)}${ownerDelta}${effectSource}.`;
   }
 
   if (event.type === "cardPlayed") {
@@ -110,15 +107,58 @@ function formatEvent(event: GameEvent, options: FormatSingleGameDebugTraceOption
     return `- Zone move: ${formatCard(event, options)} -> ${event.destination ?? "<unknown-zone>"}.`;
   }
 
-  if (event.type === "effectDamageDealt" && event.playerId !== undefined && event.targetPlayerId !== undefined) {
-    return `- Damage: ${event.playerId} deals ${event.amount ?? 0} to ${event.targetPlayerId} with ${formatCard(event, options)} via ${event.effectId ?? "<unknown>"}.`;
+  if (
+    event.type === "effectDamageDealt" &&
+    event.playerId !== undefined &&
+    event.targetPlayerId !== undefined
+  ) {
+    const lifeDelta =
+      event.targetLifeBefore === undefined ||
+      event.targetLifeAfter === undefined
+        ? ""
+        : ` Life ${event.targetLifeBefore} -> ${event.targetLifeAfter}.`;
+    return `- Damage: ${event.playerId} deals ${event.amount ?? 0} to ${event.targetPlayerId} with ${formatCard(event, options)} via ${event.effectId ?? "<unknown>"}.${lifeDelta}`;
+  }
+
+  if (
+    event.type === "effectLifeHealed" &&
+    event.playerId !== undefined &&
+    event.targetPlayerId !== undefined
+  ) {
+    const lifeDelta =
+      event.targetLifeBefore === undefined ||
+      event.targetLifeAfter === undefined
+        ? ""
+        : ` Life ${event.targetLifeBefore} -> ${event.targetLifeAfter}.`;
+    return `- Healing: ${event.playerId} heals ${event.targetPlayerId} for ${event.amount ?? 0} with ${formatCard(event, options)} via ${event.effectId ?? "<unknown>"}.${lifeDelta}`;
+  }
+
+  if (
+    event.type === "effectLifeSet" &&
+    event.playerId !== undefined &&
+    event.targetPlayerId !== undefined
+  ) {
+    const lifeDelta =
+      event.targetLifeBefore === undefined ||
+      event.targetLifeAfter === undefined
+        ? ""
+        : ` Life ${event.targetLifeBefore} -> ${event.targetLifeAfter}.`;
+    return `- Life set: ${event.playerId} sets ${event.targetPlayerId} to ${event.amount ?? 0} with ${formatCard(event, options)} via ${event.effectId ?? "<unknown>"}.${lifeDelta}`;
   }
 
   if (event.type === "playerDied" && event.playerId !== undefined) {
-    return `- Death: ${event.playerId} is defeated.`;
+    const lifeSuffix =
+      event.lifeAfter === undefined
+        ? ""
+        : ` after reaching ${event.lifeAfter} life`;
+    return `- Death: ${event.playerId} is defeated${lifeSuffix}.`;
   }
 
-  if (event.type === "trophyControlChanged" && event.playerId !== undefined && event.targetPlayerId !== undefined) {
+  if (
+    event.type === "trophyControlChanged" &&
+    event.playerId !== undefined &&
+    event.targetPlayerId !== undefined
+  ) {
     return `- Trophy: Basic Trophy moves to ${event.playerId} after defeating ${event.targetPlayerId} with ${formatCard(event, options)}.`;
   }
 
@@ -127,21 +167,83 @@ function formatEvent(event: GameEvent, options: FormatSingleGameDebugTraceOption
   }
 
   if (event.type === "playerResurrected" && event.playerId !== undefined) {
+    if (event.lifeBefore !== undefined && event.lifeAfter !== undefined) {
+      return `- Resurrection: ${event.playerId} life ${event.lifeBefore} -> ${event.lifeAfter}.`;
+    }
+
     return `- Resurrection: ${event.playerId} returns at ${event.amount ?? 0} life.`;
+  }
+
+  if (event.type === "defenseCostPaid" && event.playerId !== undefined) {
+    if (
+      event.effectId === "spend_chips" &&
+      event.chipsBefore !== undefined &&
+      event.chipsAfter !== undefined
+    ) {
+      return `- Defense cost: ${event.playerId} pays ${event.amount ?? 0} chips with ${formatCard(event, options)}. Chips ${event.chipsBefore} -> ${event.chipsAfter}.`;
+    }
+
+    if (
+      event.effectId === "pay_life" &&
+      event.lifeBefore !== undefined &&
+      event.lifeAfter !== undefined
+    ) {
+      return `- Defense cost: ${event.playerId} pays ${event.amount ?? 0} life with ${formatCard(event, options)}. Life ${event.lifeBefore} -> ${event.lifeAfter}.`;
+    }
+
+    if (event.effectId === "discard_other_hand_card") {
+      return `- Defense cost: ${event.playerId} discards ${formatTargetCard(event, options)} for ${formatCard(event, options)}.`;
+    }
+  }
+
+  if (event.type === "marketFlowCardAdded") {
+    return `- Market Flow: added ${formatCard(event, options)} to market.`;
+  }
+
+  if (event.type === "marketChipAdded") {
+    return `- Market chip: ${formatCard(event, options)} gains +${event.amount ?? 0} market chip.`;
+  }
+
+  if (event.type === "mayhemResolved" && event.playerId !== undefined) {
+    return `- Mayhem: ${formatCard(event, options)} resolves for ${event.playerId}.`;
+  }
+
+  if (
+    event.type === "mayhemDestroyed" ||
+    event.type === "megaMayhemDestroyed"
+  ) {
+    return `- Market Flow: ${formatCard(event, options)} is destroyed.`;
   }
 
   return undefined;
 }
 
-function getTurnHeaderIdentity(event: GameEvent): string {
-  return `${event.turnNumber ?? "?"}:${event.playerId ?? "<unknown-player>"}`;
+function getTraceGroupIdentity(event: GameEvent): string {
+  if (event.actionSequence !== undefined) {
+    return `action:${event.actionSequence}`;
+  }
+
+  return `turn:${event.turnNumber ?? "?"}:${event.playerId ?? "<unknown-player>"}`;
 }
 
-function formatTurnHeader(event: GameEvent): string {
-  return `Turn ${event.turnNumber ?? "?"}`;
+function formatTraceHeader(event: GameEvent): string | undefined {
+  if (event.actionSequence !== undefined && event.playerId !== undefined) {
+    const actionIdentity =
+      event.actionIdentity === undefined ? "" : ` (${event.actionIdentity})`;
+    return `Turn ${event.turnNumber ?? "?"}, Action ${event.actionSequence} - ${event.playerId}${actionIdentity}`;
+  }
+
+  if (event.playerId !== undefined) {
+    return `Turn ${event.turnNumber ?? "?"} - ${event.playerId}`;
+  }
+
+  return undefined;
 }
 
-function formatCard(event: GameEvent, options: FormatSingleGameDebugTraceOptions): string {
+function formatCard(
+  event: GameEvent,
+  options: FormatSingleGameDebugTraceOptions
+): string {
   const definitionId = event.definitionId ?? "<unknown-card>";
   const label = options.cardNames?.get(definitionId) ?? definitionId;
   if (event.cardInstanceId === undefined) {
@@ -193,7 +295,10 @@ function formatPlayerZoneName(zoneName: string): string {
   return zoneName;
 }
 
-function formatTargetCard(event: GameEvent, options: FormatSingleGameDebugTraceOptions): string {
+function formatTargetCard(
+  event: GameEvent,
+  options: FormatSingleGameDebugTraceOptions
+): string {
   const definitionId = event.targetDefinitionId ?? "<unknown-card>";
   const label = options.cardNames?.get(definitionId) ?? definitionId;
   if (event.targetCardInstanceId === undefined) {
@@ -203,7 +308,10 @@ function formatTargetCard(event: GameEvent, options: FormatSingleGameDebugTraceO
   return `${label} (${event.targetCardInstanceId})`;
 }
 
-function formatToken(event: GameEvent, options: FormatSingleGameDebugTraceOptions): string {
+function formatToken(
+  event: GameEvent,
+  options: FormatSingleGameDebugTraceOptions
+): string {
   const definitionId = event.tokenDefinitionId ?? "<unknown-token>";
   const label = options.tokenNames?.get(definitionId) ?? definitionId;
   if (event.tokenInstanceId === undefined) {

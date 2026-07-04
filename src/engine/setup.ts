@@ -8,6 +8,7 @@ import {
   type TokenStackComposition,
   type TokenDefinition,
 } from "./data.js";
+import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
 
@@ -125,14 +126,20 @@ export interface GameState {
 
 export interface GameEvent {
   type: string;
+  eventSequence?: number;
   playerId?: PlayerId;
   targetPlayerId?: PlayerId;
   turnNumber?: number;
+  actionSequence?: number;
   actionIdentity?: string;
   powerBefore?: number;
   powerAfter?: number;
   chipsBefore?: number;
   chipsAfter?: number;
+  lifeBefore?: number;
+  lifeAfter?: number;
+  targetLifeBefore?: number;
+  targetLifeAfter?: number;
   sourceZone?: string;
   destinationZone?: string;
   ownerBefore?: PlayerId | CommonOwner;
@@ -305,6 +312,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       ? {}
       : { effectChoiceStrategy: options.effectChoiceStrategy }),
   };
+  installGameEventLog(state);
 
   const marketFlowResult = runMarketFlow(state, { mode: "setup" });
   if (!marketFlowResult.ok) {

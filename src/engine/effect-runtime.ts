@@ -786,7 +786,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   resolveDefenseWindow,
   resolveMayhemAttack,
   resolvePlayerDeath(state, player) {
-    resolvePlayerDeath(state, player, undefined);
+    resolvePlayerDeath(state, player, player.life.current, undefined);
   },
   peekTopDeckCard,
   drawTopDeckCard,
@@ -1079,6 +1079,7 @@ function requireCardChoice(
 function resolvePlayerDeath(
   state: GameState,
   player: PlayerState,
+  lifeAfterDamage: number,
   killCredit:
     | {
         killer: PlayerState;
@@ -1090,6 +1091,7 @@ function resolvePlayerDeath(
   state.eventLog.push({
     type: "playerDied",
     playerId: player.playerId,
+    lifeAfter: lifeAfterDamage,
   });
 
   if (killCredit !== undefined) {
@@ -1117,11 +1119,14 @@ function resolvePlayerDeath(
   }
 
   const resurrectionLifeTotal = getResurrectionLifeTotal(state, player);
+  const lifeBeforeResurrection = player.life.current;
   player.life.current = resurrectionLifeTotal;
   state.eventLog.push({
     type: "playerResurrected",
     playerId: player.playerId,
     amount: resurrectionLifeTotal,
+    lifeBefore: lifeBeforeResurrection,
+    lifeAfter: resurrectionLifeTotal,
   });
 }
 
@@ -1252,6 +1257,8 @@ function dealDamage(
     definitionId: source.definitionId,
     effectId,
     amount: damageDealt,
+    targetLifeBefore: previousLife,
+    targetLifeAfter: targetPlayer.life.current,
     sourceType: source.sourceType,
   });
 
@@ -1260,6 +1267,7 @@ function dealDamage(
     resolvePlayerDeath(
       state,
       targetPlayer,
+      targetPlayer.life.current,
       givesBasicTrophyCredit(effectId)
         ? {
             killer: sourcePlayer,
@@ -1584,6 +1592,8 @@ function payDefenseCosts(
         definitionId: defenseCard.definitionId,
         effectId: "spend_chips",
         amount,
+        chipsBefore: defendingPlayer.chips + amount,
+        chipsAfter: defendingPlayer.chips,
       });
       continue;
     }
@@ -1599,6 +1609,7 @@ function payDefenseCosts(
         return false;
       }
 
+      const lifeBefore = defendingPlayer.life.current;
       defendingPlayer.life.current -= amount;
       state.eventLog.push({
         type: "defenseCostPaid",
@@ -1607,6 +1618,8 @@ function payDefenseCosts(
         definitionId: defenseCard.definitionId,
         effectId: "pay_life",
         amount,
+        lifeBefore,
+        lifeAfter: defendingPlayer.life.current,
       });
       continue;
     }
@@ -1642,6 +1655,8 @@ function healPlayer(
     definitionId: source.definitionId,
     effectId,
     amount: healedAmount,
+    targetLifeBefore: previousLife,
+    targetLifeAfter: targetPlayer.life.current,
     sourceType: source.sourceType,
   });
 
@@ -1658,7 +1673,8 @@ function setPlayerLife(
   state: GameState,
   player: PlayerState,
   lifeTotal: number
-): void {
+): { lifeAfter: number; lifeBefore: number } {
+  const lifeBefore = player.life.current;
   const effectiveLifeTotal = hasDinglerStatus(player)
     ? Math.min(lifeTotal, 15)
     : lifeTotal;
@@ -1671,6 +1687,11 @@ function setPlayerLife(
       amount: effectiveLifeTotal,
     });
   }
+
+  return {
+    lifeBefore,
+    lifeAfter: effectiveLifeTotal,
+  };
 }
 
 function moveCardToPlayerZone(
