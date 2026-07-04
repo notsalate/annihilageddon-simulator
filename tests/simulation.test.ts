@@ -443,7 +443,8 @@ function projectMeaningfulEventLog(
       turnNumber: event.turnNumber,
       actionSequence: event.actionSequence,
       actionIdentity: event.actionIdentity,
-      playerId: event.type === "marketFlowCardAdded" ? undefined : event.playerId,
+      playerId:
+        event.type === "marketFlowCardAdded" ? undefined : event.playerId,
       targetPlayerId: event.targetPlayerId,
       cardInstanceId: event.cardInstanceId,
       definitionId: event.definitionId,

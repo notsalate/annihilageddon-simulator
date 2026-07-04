@@ -49,9 +49,18 @@ test("current runtime setup uses the canonical 10-card starter template", () => 
       ...player.permanents,
     ];
     assert.equal(ownedStarterCards.length, 10);
-    assert.equal(countDefinition(ownedStarterCards, "esw2_dbg__starter_001"), 6);
-    assert.equal(countDefinition(ownedStarterCards, "esw2_dbg__starter_002"), 3);
-    assert.equal(countDefinition(ownedStarterCards, "esw2_dbg__starter_003"), 1);
+    assert.equal(
+      countDefinition(ownedStarterCards, "esw2_dbg__starter_001"),
+      6
+    );
+    assert.equal(
+      countDefinition(ownedStarterCards, "esw2_dbg__starter_002"),
+      3
+    );
+    assert.equal(
+      countDefinition(ownedStarterCards, "esw2_dbg__starter_003"),
+      1
+    );
   }
 });
 
@@ -74,14 +83,16 @@ test("executable validation rejects non-canonical raw starter templates before s
   assert.equal(result.ok, false);
   if (!result.ok) {
     assert.ok(
-      result.errors.some((error) =>
-        error.includes("Raw starter template") &&
-        error.includes("esw2_dbg__starter_003")
+      result.errors.some(
+        (error) =>
+          error.includes("Raw starter template") &&
+          error.includes("esw2_dbg__starter_003")
       )
     );
     assert.ok(
-      result.errors.some((error) =>
-        error.includes("Raw starter template") && error.includes("45")
+      result.errors.some(
+        (error) =>
+          error.includes("Raw starter template") && error.includes("45")
       )
     );
   }
@@ -106,8 +117,16 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
           maxLife: 25,
           chips: 1,
           hand: [
-            { instanceId: "card-start-a", definitionId: "hand-a", marketChips: 0 },
-            { instanceId: "card-start-b", definitionId: "hand-b", marketChips: 0 },
+            {
+              instanceId: "card-start-a",
+              definitionId: "hand-a",
+              marketChips: 0,
+            },
+            {
+              instanceId: "card-start-b",
+              definitionId: "hand-b",
+              marketChips: 0,
+            },
           ],
           wizardProperties: [
             { instanceId: "token-prop-a", definitionId: "prop-a" },
@@ -119,7 +138,11 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
         { instanceId: "card-buy", definitionId: "buy-card", marketChips: 0 },
       ],
       legendMarket: [
-        { instanceId: "card-legend", definitionId: "legend-card", marketChips: 0 },
+        {
+          instanceId: "card-legend",
+          definitionId: "legend-card",
+          marketChips: 0,
+        },
       ],
       mainDeckSize: 42,
       legendDeckSize: 12,
@@ -240,9 +263,7 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
       ["prop-a", "Свойство А"],
       ["prop-b", "Свойство Б"],
     ]),
-    tokenTexts: new Map([
-      ["prop-a", "Получив волшебника, получи 1 чипсину."],
-    ]),
+    tokenTexts: new Map([["prop-a", "Получив волшебника, получи 1 чипсину."]]),
   });
 
   const openedIndex = trace.indexOf("opened event card 2F");
@@ -253,18 +274,42 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
   assert.ok(effectIndex > openedIndex);
   assert.ok(resolvedIndex > effectIndex);
   assert.match(trace, /Post-setup state:/);
-  assert.match(trace, /player-1: life 20\/25, chips 1, hand 2 \[Знак \(card-start-a\), Пшик \(card-start-b\)\], deck 8, wizard properties \[Свойство А \(token-prop-a\)\], statuses \[Dingler\]/);
+  assert.match(
+    trace,
+    /player-1: life 20\/25, chips 1, hand 2 \[Знак \(card-start-a\), Пшик \(card-start-b\)\], deck 8, wizard properties \[Свойство А \(token-prop-a\)\], statuses \[Dingler\]/
+  );
   assert.match(trace, /main market \(1\): Приунывший орк \(card-buy\)/);
   assert.match(trace, /legend market \(1\): Легенда \(card-legend\)/);
-  assert.match(trace, /stacks: main deck 42, legend deck 12, wild magic 16, limp wand 8, DWT 8/);
-  assert.match(trace, /Setup choice \(wizardProperty\): player-1 candidates \[Свойство А, Свойство Б\] -> Свойство А via alwaysPickFirst\.\n  Text: Получив волшебника, получи 1 чипсину\./);
-  assert.match(trace, /Setup Market Flow: added Легенда \(card-legend\) to legend market/);
+  assert.match(
+    trace,
+    /stacks: main deck 42, legend deck 12, wild magic 16, limp wand 8, DWT 8/
+  );
+  assert.match(
+    trace,
+    /Setup choice \(wizardProperty\): player-1 candidates \[Свойство А, Свойство Б\] -> Свойство А via alwaysPickFirst\.\n {2}Text: Получив волшебника, получи 1 чипсину\./
+  );
+  assert.match(
+    trace,
+    /Setup Market Flow: added Легенда \(card-legend\) to legend market/
+  );
   assert.match(trace, /Turn 2 — before player-2 actions/);
-  assert.match(trace, /opened event card 2F \(card-mayhem\).*Text:\n    Атака:\n    самый хилый колдун становится лошарой\./s);
+  assert.match(
+    trace,
+    /opened event card 2F \(card-mayhem\).*Text:\n {4}Атака:\n {4}самый хилый колдун становится лошарой\./s
+  );
   assert.match(trace, /Life set: player-2 sets player-1 to 15.*Life 4 -> 15/);
-  assert.match(trace, /Bought Приунывший орк \(card-buy\) -> discard.*power 5 -> 2.*effective cost 3.*source main market/);
-  assert.match(trace, /End turn cleanup: player-1 moves 2 card\(s\).*Знак \(card-a\), Пшик \(card-b\)/);
-  assert.match(trace, /New hand: player-1 drew 4\/5 card\(s\); hand size 4.*Карта А \(card-c\).*Карта Г \(card-f\)/);
+  assert.match(
+    trace,
+    /Bought Приунывший орк \(card-buy\) -> discard.*power 5 -> 2.*effective cost 3.*source main market/
+  );
+  assert.match(
+    trace,
+    /End turn cleanup: player-1 moves 2 card\(s\).*Знак \(card-a\), Пшик \(card-b\)/
+  );
+  assert.match(
+    trace,
+    /New hand: player-1 drew 4\/5 card\(s\); hand size 4.*Карта А \(card-c\).*Карта Г \(card-f\)/
+  );
 });
 
 test("runtime emits raw cardBought payment payload", () => {
@@ -281,7 +326,10 @@ test("runtime emits raw cardBought payment payload", () => {
 
   assert.equal(result.ok, true);
   const bought = state.eventLog.find((event) => {
-    return event.type === "cardBought" && event.cardInstanceId === boughtCard.instanceId;
+    return (
+      event.type === "cardBought" &&
+      event.cardInstanceId === boughtCard.instanceId
+    );
   });
 
   assert.ok(bought);
@@ -320,7 +368,10 @@ test("runtime emits real effectLifeSet before/after payload", () => {
 
   assert.equal(result.ok, true);
   const lifeSet = state.eventLog.find((event) => {
-    return event.type === "effectLifeSet" && event.cardInstanceId === fixtureCard.instanceId;
+    return (
+      event.type === "effectLifeSet" &&
+      event.cardInstanceId === fixtureCard.instanceId
+    );
   });
   assert.ok(lifeSet);
   assert.equal(lifeSet.playerId, activePlayer.playerId);
@@ -431,19 +482,25 @@ test("readable trace can render multiline card text for a real runtime event", (
   };
   const trace = formatSingleGameDebugTrace(result, {
     cardNames: new Map([[fixtureCard.definitionId, "Fixture text card"]]),
-    cardTexts: new Map([[fixtureCard.definitionId, "+1 мощь\nАтака: нанеси 1 урон."]]),
+    cardTexts: new Map([
+      [fixtureCard.definitionId, "+1 мощь\nАтака: нанеси 1 урон."],
+    ]),
   });
 
   assert.match(
     trace,
-    /Played Fixture text card \(fixture-card-text-card-instance\)\.\n  Text:\n    \+1 мощь\n    Атака: нанеси 1 урон\./
+    /Played Fixture text card \(fixture-card-text-card-instance\)\.\n {2}Text:\n {4}\+1 мощь\n {4}Атака: нанеси 1 урон\./
   );
 });
 
 test("end-turn cleanup records actual owner discard destination for non-owned played cards", () => {
   const state = initializeGame({ rootDir, seed: 12345 });
-  const activePlayer = state.players.find((player) => player.playerId === "player-1");
-  const ownerPlayer = state.players.find((player) => player.playerId === "player-2");
+  const activePlayer = state.players.find(
+    (player) => player.playerId === "player-1"
+  );
+  const ownerPlayer = state.players.find(
+    (player) => player.playerId === "player-2"
+  );
   assert.ok(activePlayer);
   assert.ok(ownerPlayer);
 
@@ -482,11 +539,20 @@ test("single-game trace renders compact post-setup state for a stable seed", () 
 
   assert.ok(result.setupState);
   assert.match(trace, /Post-setup state:/);
-  assert.match(trace, /player-1: life \d+\/\d+, chips \d+, hand \d+ \[[^\]]+\], deck \d+, wizard properties \[[^\]]+\]/);
-  assert.match(trace, /player-2: life \d+\/\d+, chips \d+, hand \d+ \[[^\]]+\], deck \d+, wizard properties \[[^\]]+\]/);
+  assert.match(
+    trace,
+    /player-1: life \d+\/\d+, chips \d+, hand \d+ \[[^\]]+\], deck \d+, wizard properties \[[^\]]+\]/
+  );
+  assert.match(
+    trace,
+    /player-2: life \d+\/\d+, chips \d+, hand \d+ \[[^\]]+\], deck \d+, wizard properties \[[^\]]+\]/
+  );
   assert.match(trace, /main market \(\d+\): [^.]+\./);
   assert.match(trace, /legend market \(\d+\): [^.]+\./);
-  assert.match(trace, /stacks: main deck \d+, legend deck \d+, wild magic \d+, limp wand \d+, DWT \d+\./);
+  assert.match(
+    trace,
+    /stacks: main deck \d+, legend deck \d+, wild magic \d+, limp wand \d+, DWT \d+\./
+  );
 });
 
 function countDefinition(

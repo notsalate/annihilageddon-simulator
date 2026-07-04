@@ -73,8 +73,9 @@ test("setup records initial market additions as setup-phase events", () => {
     5
   );
   assert.equal(
-    setupMarketEvents.filter((event) => event.destinationZone === "legendMarket")
-      .length,
+    setupMarketEvents.filter(
+      (event) => event.destinationZone === "legendMarket"
+    ).length,
     3
   );
   for (const event of setupMarketEvents) {

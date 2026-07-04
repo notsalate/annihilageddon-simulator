@@ -383,7 +383,9 @@ function validateSetupDataPackCompatibility(
   }
 
   if (!allowsIncompleteSetup) {
-    errors.push(...validateCanonicalStarterTemplate(dataPack.decks.starterDeck));
+    errors.push(
+      ...validateCanonicalStarterTemplate(dataPack.decks.starterDeck)
+    );
   }
 
   if (
@@ -441,7 +443,10 @@ function validateCanonicalStarterTemplate(deck: DeckComposition): string[] {
   const errors: string[] = [];
   const actualCounts = new Map<string, number>();
   for (const entry of deck.entries) {
-    actualCounts.set(entry.cardId, (actualCounts.get(entry.cardId) ?? 0) + entry.count);
+    actualCounts.set(
+      entry.cardId,
+      (actualCounts.get(entry.cardId) ?? 0) + entry.count
+    );
   }
 
   const expectedTotal = [...CANONICAL_STARTER_TEMPLATE.values()].reduce(

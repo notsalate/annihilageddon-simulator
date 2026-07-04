@@ -86,9 +86,7 @@ function formatSetupPlayer(
     `wizard properties [${formatSetupTokens(player.wizardProperties, options)}]`,
   ];
   if (player.unboughtFamiliar !== undefined) {
-    parts.push(
-      `familiar ${formatSetupCard(player.unboughtFamiliar, options)}`
-    );
+    parts.push(`familiar ${formatSetupCard(player.unboughtFamiliar, options)}`);
   }
   if (player.statuses.length > 0) {
     parts.push(`statuses [${player.statuses.join(", ")}]`);
@@ -128,7 +126,8 @@ function formatSetupToken(
   token: SetupTokenSnapshot,
   options: FormatSingleGameDebugTraceOptions
 ): string {
-  const label = options.tokenNames?.get(token.definitionId) ?? token.definitionId;
+  const label =
+    options.tokenNames?.get(token.definitionId) ?? token.definitionId;
   return `${label} (${token.instanceId})`;
 }
 
@@ -287,17 +286,20 @@ function formatEvent(
   }
 
   if (event.type === "marketEventCardOpened") {
-    const prefix = event.sourceType === "setup" ? "Setup Market Flow" : "Market Flow";
+    const prefix =
+      event.sourceType === "setup" ? "Setup Market Flow" : "Market Flow";
     return `- ${prefix}: opened event card ${formatCard(event, options)} for ${formatMarketName(event.destinationZone)}.${formatTextSuffix(event, options)}`;
   }
 
   if (event.type === "marketFlowCardAdded") {
-    const prefix = event.sourceType === "setup" ? "Setup Market Flow" : "Market Flow";
+    const prefix =
+      event.sourceType === "setup" ? "Setup Market Flow" : "Market Flow";
     return `- ${prefix}: added ${formatCard(event, options)} to ${formatMarketName(event.destinationZone)}.`;
   }
 
   if (event.type === "marketChipAdded") {
-    const prefix = event.sourceType === "setup" ? "Setup market chip" : "Market chip";
+    const prefix =
+      event.sourceType === "setup" ? "Setup market chip" : "Market chip";
     return `- ${prefix}: ${formatCard(event, options)} gains +${event.amount ?? 0} market chip.`;
   }
 
@@ -305,8 +307,12 @@ function formatEvent(
     return `- Mayhem: ${formatCard(event, options)} resolves for ${event.playerId}.`;
   }
 
-  if (event.type === "mayhemDestroyed" || event.type === "megaMayhemDestroyed") {
-    const prefix = event.sourceType === "setup" ? "Setup Market Flow" : "Market Flow";
+  if (
+    event.type === "mayhemDestroyed" ||
+    event.type === "megaMayhemDestroyed"
+  ) {
+    const prefix =
+      event.sourceType === "setup" ? "Setup Market Flow" : "Market Flow";
     return `- ${prefix}: ${formatCard(event, options)} is destroyed.`;
   }
 
@@ -429,11 +435,14 @@ function formatTextBlock(text: string): string {
     return `\n  Text: ${text}`;
   }
 
-  return ["", "  Text:", ...text.split("\n").map((line) => `    ${line}`)].join("\n");
+  return ["", "  Text:", ...text.split("\n").map((line) => `    ${line}`)].join(
+    "\n"
+  );
 }
 
 function formatTargetLifeDelta(event: GameEvent): string {
-  return event.targetLifeBefore === undefined || event.targetLifeAfter === undefined
+  return event.targetLifeBefore === undefined ||
+    event.targetLifeAfter === undefined
     ? ""
     : ` Life ${event.targetLifeBefore} -> ${event.targetLifeAfter}.`;
 }
