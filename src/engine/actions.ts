@@ -79,6 +79,12 @@ interface DrawCardsResult {
   drawnCards: CardInstance[];
 }
 
+interface CleanupMoveRecord {
+  card: CardInstance;
+  sourceZone: string;
+  destinationZone: string;
+}
+
 export function listLegalActions(state: GameState): LegalAction[] {
   const activePlayer = mustGetActivePlayer(state);
   return [
@@ -146,15 +152,18 @@ function endTurn(state: GameState): ActionResult {
 
   const cleanedHandCards = activePlayer.hand.splice(0);
   activePlayer.discard.push(...cleanedHandCards);
-  recordEndTurnCleanup(state, activePlayer, cleanedHandCards, "hand");
-
-  const cleanedPlayedCards = cleanupPlayedCards(state, activePlayer);
   recordEndTurnCleanup(
     state,
     activePlayer,
-    cleanedPlayedCards,
-    "playedThisTurn"
+    cleanedHandCards.map((card) => ({
+      card,
+      sourceZone: `${activePlayer.playerId}.hand`,
+      destinationZone: `${activePlayer.playerId}.discard`,
+    }))
   );
+
+  const cleanedPlayedCards = cleanupPlayedCards(state, activePlayer);
+  recordEndTurnCleanup(state, activePlayer, cleanedPlayedCards);
 
   state.turn.power = 0;
   state.turn.controlledPowerBonus = 0;
@@ -169,13 +178,13 @@ function endTurn(state: GameState): ActionResult {
   state.eventLog.push({
     type: "handDrawn",
     playerId: activePlayer.playerId,
-    amount: drawResult.requestedCount,
-    legalChoiceCount: drawResult.drawnCards.length,
-    choiceId: String(activePlayer.hand.length),
+    requestedCount: drawResult.requestedCount,
+    drawnCount: drawResult.drawnCards.length,
+    handSizeAfter: activePlayer.hand.length,
     destinationZone: `${activePlayer.playerId}.hand`,
     targetCardInstanceIds: drawResult.drawnCards.map((card) => card.instanceId),
     targetDefinitionIds: drawResult.drawnCards.map((card) => card.definitionId),
-  });
+  } as GameState["eventLog"][number]);
 
   state.turn.gainedCardDefinitionIds = [];
   state.turn.number += 1;
@@ -387,14 +396,19 @@ function buyMarketCard(
 function cleanupPlayedCards(
   state: GameState,
   activePlayer: PlayerState
-): CardInstance[] {
-  const cleanedCards: CardInstance[] = [];
+): CleanupMoveRecord[] {
+  const cleanedCards: CleanupMoveRecord[] = [];
   for (const card of activePlayer.playedThisTurn.splice(0)) {
     const owner = state.players.find(
       (player) => player.playerId === card.ownerId
     );
-    (owner ?? activePlayer).discard.push(card);
-    cleanedCards.push(card);
+    const destinationPlayer = owner ?? activePlayer;
+    destinationPlayer.discard.push(card);
+    cleanedCards.push({
+      card,
+      sourceZone: `${activePlayer.playerId}.playedThisTurn`,
+      destinationZone: `${destinationPlayer.playerId}.discard`,
+    });
   }
 
   return cleanedCards;
@@ -403,22 +417,34 @@ function cleanupPlayedCards(
 function recordEndTurnCleanup(
   state: GameState,
   activePlayer: PlayerState,
-  cards: readonly CardInstance[],
-  sourceZoneName: "hand" | "playedThisTurn"
+  moves: readonly CleanupMoveRecord[]
 ): void {
-  if (cards.length === 0) {
+  if (moves.length === 0) {
     return;
   }
 
-  state.eventLog.push({
-    type: "endTurnCleanupMoved",
-    playerId: activePlayer.playerId,
-    amount: cards.length,
-    sourceZone: `${activePlayer.playerId}.${sourceZoneName}`,
-    destinationZone: `${activePlayer.playerId}.discard`,
-    targetCardInstanceIds: cards.map((card) => card.instanceId),
-    targetDefinitionIds: cards.map((card) => card.definitionId),
-  });
+  const groups = new Map<string, CleanupMoveRecord[]>();
+  for (const move of moves) {
+    const key = `${move.sourceZone}->${move.destinationZone}`;
+    groups.set(key, [...(groups.get(key) ?? []), move]);
+  }
+
+  for (const group of groups.values()) {
+    const firstMove = group[0];
+    if (firstMove === undefined) {
+      continue;
+    }
+
+    state.eventLog.push({
+      type: "endTurnCleanupMoved",
+      playerId: activePlayer.playerId,
+      amount: group.length,
+      sourceZone: firstMove.sourceZone,
+      destinationZone: firstMove.destinationZone,
+      targetCardInstanceIds: group.map((move) => move.card.instanceId),
+      targetDefinitionIds: group.map((move) => move.card.definitionId),
+    });
+  }
 }
 
 function playCard(state: GameState, cardInstanceId: string): ActionResult {
