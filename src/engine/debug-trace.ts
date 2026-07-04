@@ -1,5 +1,11 @@
 import type { GameEvent } from "./setup.js";
-import type { SingleGameResult } from "./simulation.js";
+import type {
+  SetupCardSnapshot,
+  SetupPlayerSnapshot,
+  SetupStateSnapshot,
+  SetupTokenSnapshot,
+  SingleGameResult,
+} from "./simulation.js";
 
 export interface FormatSingleGameDebugTraceOptions {
   cardNames?: ReadonlyMap<string, string>;
@@ -12,6 +18,9 @@ export function formatSingleGameDebugTrace(
   options: FormatSingleGameDebugTraceOptions = {}
 ): string {
   const lines = [formatSummary(result), "", "Setup"];
+  if (result.setupState !== undefined) {
+    lines.push(...formatSetupState(result.setupState, options));
+  }
   let currentGroupIdentity: string | undefined;
 
   for (const event of result.eventLog) {
@@ -49,6 +58,77 @@ function formatSummary(result: SingleGameResult): string {
   const turnWord = result.turnsElapsed === 1 ? "turn" : "turns";
   const stopKind = result.isGameEnd ? "game end" : "technical stop";
   return `Game seed ${result.seed}: ${result.endReason} after ${result.turnsElapsed} ${turnWord} (${stopKind})`;
+}
+
+function formatSetupState(
+  setupState: SetupStateSnapshot,
+  options: FormatSingleGameDebugTraceOptions
+): string[] {
+  return [
+    "- Setup state:",
+    ...setupState.players.map((player) => formatSetupPlayer(player, options)),
+    `  - main market (${setupState.mainMarket.length}): ${formatSetupCards(setupState.mainMarket, options)}.`,
+    `  - legend market (${setupState.legendMarket.length}): ${formatSetupCards(setupState.legendMarket, options)}.`,
+    `  - stacks: main deck ${setupState.mainDeckSize}, legend deck ${setupState.legendDeckSize}, wild magic ${setupState.wildMagicStackSize}, limp wand ${setupState.limpWandStackSize}, DWT ${setupState.deadWizardTokenStackSize}.`,
+  ];
+}
+
+function formatSetupPlayer(
+  player: SetupPlayerSnapshot,
+  options: FormatSingleGameDebugTraceOptions
+): string {
+  const parts = [
+    `life ${player.life}/${player.maxLife}`,
+    `chips ${player.chips}`,
+    `hand ${player.handSize} [${formatSetupCards(player.hand, options)}]`,
+    `deck ${player.deckSize}`,
+    `wizard properties [${formatSetupTokens(player.wizardProperties, options)}]`,
+  ];
+  if (player.unboughtFamiliar !== undefined) {
+    parts.push(
+      `familiar ${formatSetupCard(player.unboughtFamiliar, options)}`
+    );
+  }
+  if (player.statuses.length > 0) {
+    parts.push(`statuses [${player.statuses.join(", ")}]`);
+  }
+
+  return `  - ${player.playerId}: ${parts.join(", ")}.`;
+}
+
+function formatSetupCards(
+  cards: readonly SetupCardSnapshot[],
+  options: FormatSingleGameDebugTraceOptions
+): string {
+  return cards.length === 0
+    ? "none"
+    : cards.map((card) => formatSetupCard(card, options)).join(", ");
+}
+
+function formatSetupCard(
+  card: SetupCardSnapshot,
+  options: FormatSingleGameDebugTraceOptions
+): string {
+  const label = options.cardNames?.get(card.definitionId) ?? card.definitionId;
+  const chipSuffix = card.marketChips > 0 ? ` +${card.marketChips} chip` : "";
+  return `${label} (${card.instanceId})${chipSuffix}`;
+}
+
+function formatSetupTokens(
+  tokens: readonly SetupTokenSnapshot[],
+  options: FormatSingleGameDebugTraceOptions
+): string {
+  return tokens.length === 0
+    ? "none"
+    : tokens.map((token) => formatSetupToken(token, options)).join(", ");
+}
+
+function formatSetupToken(
+  token: SetupTokenSnapshot,
+  options: FormatSingleGameDebugTraceOptions
+): string {
+  const label = options.tokenNames?.get(token.definitionId) ?? token.definitionId;
+  return `${label} (${token.instanceId})`;
 }
 
 function formatEvent(
