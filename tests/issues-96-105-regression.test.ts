@@ -99,6 +99,15 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
         targetLifeAfter: 15,
       },
       {
+        type: "mayhemResolved",
+        playerId: "player-2",
+        turnNumber: 2,
+        actionSequence: 5,
+        actionIdentity: "endTurn",
+        cardInstanceId: "card-mayhem",
+        definitionId: "mayhem-card",
+      },
+      {
         type: "cardBought",
         playerId: "player-1",
         turnNumber: 2,
@@ -163,6 +172,13 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
     ]),
   });
 
+  const openedIndex = trace.indexOf("opened event card 2F");
+  const effectIndex = trace.indexOf("Life set: player-2 sets player-1");
+  const resolvedIndex = trace.indexOf("Mayhem: 2F");
+
+  assert.ok(openedIndex >= 0);
+  assert.ok(effectIndex > openedIndex);
+  assert.ok(resolvedIndex > effectIndex);
   assert.match(trace, /Setup choice \(wizardProperty\): player-1 candidates \[Свойство А, Свойство Б\] -> Свойство А via alwaysPickFirst/);
   assert.match(trace, /Setup Market Flow: added Легенда \(card-legend\) to legend market/);
   assert.match(trace, /Turn 2 — before player-2 actions/);
