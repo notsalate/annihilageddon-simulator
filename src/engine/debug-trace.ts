@@ -417,7 +417,7 @@ function getNumberEventField(
   event: GameEvent,
   fieldName: string
 ): number | undefined {
-  const value = (event as Record<string, unknown>)[fieldName];
+  const value = (event as unknown as Record<string, unknown>)[fieldName];
   return typeof value === "number" ? value : undefined;
 }
 
