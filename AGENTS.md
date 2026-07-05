@@ -36,6 +36,10 @@ Use the default label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent
 
 This repo is `single-context`: one root `CONTEXT.md`, with ADRs under `docs/adr/` when present. See `docs/agents/domain.md`.
 
+### Repo safety
+
+`ai-repo-safety` assets are connected to this repo. Use `uvx ai-repo-safety scan --target .` for local safety scans and `uvx ai-repo-safety prepush --target .` before pushes when running outside the installed Husky hook.
+
 ## Task Context Priority
 
 After applying the user's current task, use this repository context order:
@@ -471,7 +475,7 @@ When the user requests a durable behavior change, record it here or in the relev
 
 ## Child DOX Index
 
-Root owns repository-wide workflow, top-level config, `README.md`, `CONTEXT.md`, rulebook PDFs, package metadata, and hidden local tool config unless a closer child `AGENTS.md` exists.
+Root owns repository-wide workflow, top-level config, GitHub workflow config, `README.md`, `CONTEXT.md`, rulebook PDFs, package metadata, `.repo-safety/`, `scripts/security/`, and hidden local tool config unless a closer child `AGENTS.md` exists.
 
 Direct children:
 

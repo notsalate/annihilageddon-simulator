@@ -8,7 +8,18 @@
 *.json text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+*.py text eol=lf
+*.toml text eol=lf
 *.tsx text eol=lf
 *.jsx text eol=lf
 *.mjs text eol=lf
 *.cjs text eol=lf
+.dockerignore text eol=lf
+.env.example text eol=lf
+.semgrepignore text eol=lf
+.husky/* text eol=lf
+CODEOWNERS.example text eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
