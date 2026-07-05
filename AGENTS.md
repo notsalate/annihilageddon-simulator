@@ -93,6 +93,7 @@ Repository commands that are confirmed to exist:
 ```powershell
 npm run
 npm run check
+npm run check:engine-unknown-arrays
 npm run lint
 npm run typecheck
 npm run typecheck:strictest

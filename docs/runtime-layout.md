@@ -117,6 +117,7 @@ data/pools/
 - `data/pools/` - выбираемые или общие пулы, например familiars, если они моделируются как pool.
 
 `data/packs/current-runtime.json` - runnable current runtime pack.
+Он хранит состав pack и runtime paths, но не ручную report metadata вроде `counts`, `unsupportedCards`, `needsData` или `notes`; эти сведения проверяются командой `npm run report:runtime-coverage` и тестами.
 
 `data/packs/full-import.json` сейчас не является активным workflow для хранения incomplete runtime definitions. Это будущая идея, а не текущий обходной manifest. Его нельзя использовать, чтобы парковать non-full runtime card JSON или обходить `fullRuntime` guardrails из card runtime cluster workflow.
 

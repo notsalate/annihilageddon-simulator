@@ -22,6 +22,7 @@ export type { RandomSource } from "./engine/rng.js";
 export { createSeededRng } from "./engine/rng.js";
 export type {
   CardDefinition,
+  DecodeResult,
   DataPackValidationOptions,
   DataPackValidationResult,
   DeadWizardTokenDefinition,
@@ -33,6 +34,7 @@ export type {
   WizardPropertyDefinition,
 } from "./engine/data.js";
 export {
+  decodeCurrentRuntimeDataPack,
   loadCurrentRuntimeDataPack,
   loadV0DataPack,
   validateExecutableDataPack,

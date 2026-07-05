@@ -23,18 +23,6 @@
   "pools": {
     "familiarPool": "data/pools/familiar-pool.json"
   },
-  "counts": {
-    "mapped": 24,
-    "supported": 24,
-    "partial": 0,
-    "unsupported": 0
-  },
-  "unsupportedCards": [],
-  "needsData": [],
-  "notes": [
-    "Runtime-поведение карт закодировано явными effectId objects; engine не должен парсить visible.textRu во время партии.",
-    "Current runtime baseline is incomplete-full-only and grows by fully implemented card slices."
-  ],
   "cardDefinitionPaths": [
     "data/cards/main",
     "data/cards/legend",

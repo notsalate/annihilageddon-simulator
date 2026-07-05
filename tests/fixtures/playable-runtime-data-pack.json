@@ -29,5 +29,6 @@
   },
   "pools": {
     "familiarPool": "tests/fixtures/runtime-pools/familiar-pool.json"
-  }
+  },
+  "needsData": []
 }

@@ -29,6 +29,5 @@
   },
   "pools": {
     "familiarPool": "data/pools/familiar-pool.json"
-  },
-  "notes": []
+  }
 }
