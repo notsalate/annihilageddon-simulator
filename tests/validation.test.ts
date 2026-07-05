@@ -1,14 +1,16 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import {
+  decodeCurrentRuntimeDataPack,
   loadCurrentRuntimeDataPack,
   loadV0DataPack,
   validateExecutableDataPack,
   type CardDefinition,
+  type DecodeResult,
   type LoadedDataPack,
   type TokenDefinition,
 } from "../src/index.js";
@@ -19,6 +21,421 @@ import {
 } from "../src/engine/effect-runtime-registry.js";
 
 const rootDir = process.cwd();
+
+test("runtime data decoder exposes a narrowed successful decoded value", () => {
+  const result: DecodeResult<LoadedDataPack> =
+    decodeCurrentRuntimeDataPack(rootDir);
+
+  if (result.ok) {
+    assert.equal(result.value.manifest.runtimeSchema, "krutagidon.dataPack.v0");
+    assert.ok(result.value.cardDefinitions.size > 0);
+  } else {
+    const errors: string[] = result.errors;
+    assert.fail(
+      `Expected current runtime data to decode: ${errors.join("; ")}`
+    );
+  }
+});
+
+test("current runtime manifest omits manual report metadata", () => {
+  const manifest = JSON.parse(
+    readFileSync(path.join(rootDir, "data/packs/current-runtime.json"), "utf8")
+  ) as Record<string, unknown>;
+
+  for (const fieldName of [
+    "counts",
+    "unsupportedCards",
+    "needsData",
+    "notes",
+  ]) {
+    assert.equal(fieldName in manifest, false);
+  }
+});
+
+test("runtime data decoder aggregates file and section errors", () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "runtime-data-decode-"));
+  mkdirSync(path.join(tempRoot, "cards"));
+  mkdirSync(path.join(tempRoot, "tokens"));
+  mkdirSync(path.join(tempRoot, "decks"));
+  mkdirSync(path.join(tempRoot, "stacks"));
+
+  writeFileSync(
+    path.join(tempRoot, "manifest.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      packId: "fixture-invalid-runtime",
+      runtimeSchema: "krutagidon.dataPack.v0",
+      mappingStatus: "fixture",
+      cardDefinitionPaths: ["cards"],
+      tokenDefinitionPaths: ["tokens"],
+      decks: {
+        starterDeck: "decks/starter.json",
+        mainDeck: "decks/main.json",
+        legendDeck: "decks/legend.json",
+      },
+      cardStacks: {
+        wildMagicStack: "stacks/wild.json",
+        limpWandStack: "stacks/limp.json",
+      },
+      tokenStacks: {
+        deadWizardTokens: "tokens/dead-stack.json",
+      },
+      needsData: [],
+    }),
+    "utf8"
+  );
+  writeFileSync(path.join(tempRoot, "decks", "starter.json"), "{", "utf8");
+  writeFileSync(path.join(tempRoot, "stacks", "wild.json"), "{", "utf8");
+
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(
+      result.errors.some((error) =>
+        error.startsWith("Runtime data decks.starterDeck decks/starter.json:")
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.startsWith(
+          "Runtime data cardStacks.wildMagicStack stacks/wild.json:"
+        )
+      )
+    );
+  }
+});
+
+test("runtime data decoder rejects invalid manifest field shapes", () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "runtime-manifest-shape-"));
+  writeJsonFile(tempRoot, "manifest.json", {
+    schemaVersion: "1",
+    packId: "fixture-invalid-manifest",
+    runtimeSchema: "krutagidon.dataPack.v0",
+    mappingStatus: "fixture",
+    cardDefinitionPaths: ["cards"],
+    decks: {
+      starterDeck: "decks/starter.json",
+      mainDeck: 42,
+      legendDeck: "decks/legend.json",
+    },
+    cardStacks: {
+      wildMagicStack: "stacks/wild.json",
+      limpWandStack: "stacks/limp.json",
+    },
+    needsData: [],
+  });
+
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("schemaVersion must be a finite number")
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("decks.mainDeck must be a string")
+      )
+    );
+  }
+});
+
+test("runtime data decoder rejects invalid decoded field shapes", () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "runtime-data-shape-"));
+  const validDeck = {
+    schemaVersion: 1,
+    deckId: "fixture-valid",
+    runtimeSchema: "krutagidon.deckComposition.v0",
+    role: "fixture",
+    mappingStatus: "fixture",
+    entries: [],
+  };
+  const validTokenStack = {
+    schemaVersion: 1,
+    stackId: "fixture-valid",
+    runtimeSchema: "krutagidon.tokenStack.v0",
+    role: "fixture",
+    mappingStatus: "fixture",
+    entries: [],
+  };
+
+  writeJsonFile(tempRoot, "manifest.json", {
+    schemaVersion: 1,
+    packId: "fixture-invalid-shape",
+    runtimeSchema: "krutagidon.dataPack.v0",
+    mappingStatus: "fixture",
+    cardDefinitionPaths: ["cards"],
+    tokenDefinitionPaths: [],
+    decks: {
+      starterDeck: "decks/starter.json",
+      mainDeck: "decks/main.json",
+      legendDeck: "decks/legend.json",
+    },
+    cardStacks: {
+      wildMagicStack: "stacks/wild.json",
+      limpWandStack: "stacks/limp.json",
+    },
+    tokenStacks: {
+      deadWizardTokens: "token-stacks/dead-wizards.json",
+    },
+    needsData: [],
+  });
+  writeJsonFile(tempRoot, "cards/fixture-card.json", createFixtureCard("c1"));
+  writeJsonFile(tempRoot, "decks/starter.json", {
+    ...validDeck,
+    deckId: "fixture-invalid-starter",
+    entries: [{ cardId: "c1", count: "1" }],
+  });
+  writeJsonFile(tempRoot, "decks/main.json", validDeck);
+  writeJsonFile(tempRoot, "decks/legend.json", validDeck);
+  writeJsonFile(tempRoot, "stacks/wild.json", validDeck);
+  writeJsonFile(tempRoot, "stacks/limp.json", validDeck);
+  writeJsonFile(tempRoot, "token-stacks/dead-wizards.json", {
+    ...validTokenStack,
+    entries: [{ tokenId: "dead-wizard", count: "1" }],
+  });
+
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(
+      result.errors.some((error) =>
+        error.startsWith("Runtime data decks.starterDeck decks/starter.json:")
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("entries[0].count must be a finite number")
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.startsWith(
+          "Runtime data tokenStacks.deadWizardTokens token-stacks/dead-wizards.json:"
+        )
+      )
+    );
+  }
+});
+
+test("runtime data decoder rejects invalid card and token definition field shapes", () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "runtime-object-shape-"));
+  const invalidCard = createFixtureCard("bad-card");
+  const validDeck = {
+    schemaVersion: 1,
+    deckId: "fixture-valid",
+    runtimeSchema: "krutagidon.deckComposition.v0",
+    role: "fixture",
+    mappingStatus: "fixture",
+    entries: [],
+  };
+
+  writeJsonFile(tempRoot, "manifest.json", {
+    schemaVersion: 1,
+    packId: "fixture-invalid-runtime-object",
+    runtimeSchema: "krutagidon.dataPack.v0",
+    mappingStatus: "fixture",
+    cardDefinitionPaths: ["cards"],
+    tokenDefinitionPaths: ["tokens"],
+    decks: {
+      starterDeck: "decks/starter.json",
+      mainDeck: "decks/main.json",
+      legendDeck: "decks/legend.json",
+    },
+    cardStacks: {
+      wildMagicStack: "stacks/wild.json",
+      limpWandStack: "stacks/limp.json",
+    },
+  });
+  writeJsonFile(tempRoot, "cards/bad-card.json", {
+    ...invalidCard,
+    visible: {
+      ...invalidCard.visible,
+      cardKind: "unknown",
+    },
+    engine: {
+      ...invalidCard.engine,
+      playableInV0: "yes",
+    },
+  });
+  writeJsonFile(tempRoot, "tokens/bad-token.json", {
+    schemaVersion: 1,
+    tokenId: "bad-token",
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    visible: {
+      textRu: 7,
+    },
+    engine: {
+      mappingStatus: "fixture",
+      playableInV0: false,
+      effects: "none",
+      unsupportedMechanics: [],
+    },
+  });
+  writeJsonFile(tempRoot, "decks/starter.json", validDeck);
+  writeJsonFile(tempRoot, "decks/main.json", validDeck);
+  writeJsonFile(tempRoot, "decks/legend.json", validDeck);
+  writeJsonFile(tempRoot, "stacks/wild.json", validDeck);
+  writeJsonFile(tempRoot, "stacks/limp.json", validDeck);
+
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(
+      result.errors.some((error) =>
+        error.startsWith(
+          "Runtime data cardDefinitionPaths cards/bad-card.json:"
+        )
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes(
+          "visible.cardKind contains unsupported card kind unknown"
+        )
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("engine.playableInV0 must be a boolean")
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.startsWith(
+          "Runtime data tokenDefinitionPaths tokens/bad-token.json:"
+        )
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("visible.textRu must be a string")
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("engine.effects must be an array")
+      )
+    );
+  }
+});
+
+test("runtime data decoder does not pass raw object fields through", () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "runtime-data-raw-"));
+  const fixtureCard = createFixtureCard("runtime-card");
+  const validDeck = {
+    schemaVersion: 1,
+    deckId: "fixture-valid",
+    runtimeSchema: "krutagidon.deckComposition.v0",
+    role: "fixture",
+    mappingStatus: "fixture",
+    entries: [{ cardId: "runtime-card", count: 1, rawOnly: true }],
+    rawOnly: true,
+  };
+  const validTokenStack = {
+    schemaVersion: 1,
+    stackId: "fixture-valid-tokens",
+    runtimeSchema: "krutagidon.tokenStack.v0",
+    role: "fixture",
+    mappingStatus: "fixture",
+    entries: [{ tokenId: "dead-token", count: 1, rawOnly: true }],
+    rawOnly: true,
+  };
+
+  writeJsonFile(tempRoot, "manifest.json", {
+    schemaVersion: 1,
+    packId: "fixture-raw-fields",
+    runtimeSchema: "krutagidon.dataPack.v0",
+    mappingStatus: "fixture",
+    cardDefinitionPaths: ["cards"],
+    tokenDefinitionPaths: ["tokens"],
+    decks: {
+      starterDeck: "decks/starter.json",
+      mainDeck: "decks/main.json",
+      legendDeck: "decks/legend.json",
+      rawOnly: true,
+    },
+    cardStacks: {
+      wildMagicStack: "stacks/wild.json",
+      limpWandStack: "stacks/limp.json",
+      rawOnly: true,
+    },
+    tokenStacks: {
+      deadWizardTokens: "token-stacks/dead-wizards.json",
+      rawOnly: true,
+    },
+    pools: {
+      rawOnly: true,
+    },
+    rawOnly: true,
+  });
+  writeJsonFile(tempRoot, "cards/runtime-card.json", {
+    ...fixtureCard,
+    visible: {
+      ...fixtureCard.visible,
+      rawOnly: true,
+    },
+    engine: {
+      ...fixtureCard.engine,
+      rawOnly: true,
+    },
+    rawOnly: true,
+  });
+  writeJsonFile(tempRoot, "tokens/dead-token.json", {
+    schemaVersion: 1,
+    tokenId: "dead-token",
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "deadWizardToken",
+    victoryPoints: 0,
+    effects: [],
+    rawOnly: true,
+  });
+  writeJsonFile(tempRoot, "decks/starter.json", validDeck);
+  writeJsonFile(tempRoot, "decks/main.json", validDeck);
+  writeJsonFile(tempRoot, "decks/legend.json", validDeck);
+  writeJsonFile(tempRoot, "stacks/wild.json", validDeck);
+  writeJsonFile(tempRoot, "stacks/limp.json", validDeck);
+  writeJsonFile(tempRoot, "token-stacks/dead-wizards.json", validTokenStack);
+
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    const decodedCard = result.value.cardDefinitions.get("runtime-card");
+    const decodedToken = result.value.tokenDefinitions.get("dead-token");
+
+    assert.equal("rawOnly" in result.value.manifest, false);
+    assert.equal("rawOnly" in result.value.manifest.decks!, false);
+    assert.equal("rawOnly" in result.value.manifest.cardStacks!, false);
+    assert.equal("rawOnly" in result.value.manifest.tokenStacks!, false);
+    assert.equal("rawOnly" in result.value.manifest.pools!, false);
+    assert.equal(decodedCard === undefined, false);
+    assert.equal(decodedToken === undefined, false);
+    assert.equal("rawOnly" in decodedCard!, false);
+    assert.equal("rawOnly" in decodedCard!.visible, false);
+    assert.equal("rawOnly" in decodedCard!.engine, false);
+    assert.equal("rawOnly" in decodedToken!, false);
+    assert.equal("rawOnly" in result.value.decks.starterDeck, false);
+    assert.equal(
+      "rawOnly" in result.value.decks.starterDeck.entries[0]!,
+      false
+    );
+    assert.equal(
+      "rawOnly" in result.value.tokenStacks.deadWizardTokens!,
+      false
+    );
+    assert.equal(
+      "rawOnly" in result.value.tokenStacks.deadWizardTokens!.entries[0]!,
+      false
+    );
+  }
+});
 
 test("supported executable fixture data pack passes executable effect validation", () => {
   const card = createFixtureCard("fixture-supported-effect");
@@ -2012,6 +2429,7 @@ function writeRuntimeManifest(
     runtimeSchema: "krutagidon.dataPack.v0",
     mappingStatus: "fixture",
     cardDefinitionPaths: overrides.cardDefinitionPaths ?? ["runtime/cards"],
+    needsData: [],
     decks: {
       starterDeck: "runtime/decks/starter.json",
       mainDeck: "runtime/decks/main.json",
