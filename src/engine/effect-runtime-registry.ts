@@ -227,17 +227,27 @@ export interface EffectRuntimeServices {
   asString(value: unknown): string;
 }
 
-export interface EffectRuntimeHandler {
+export interface EffectRuntimeHandler<
+  Effect extends Record<string, unknown> = Record<string, unknown>,
+> {
   effectId: RuntimeEffectId;
   validateShape(subjectId: string, effect: Record<string, unknown>): string[];
   execute(
     state: GameState,
     player: PlayerState,
-    effect: Record<string, unknown>,
+    effect: Effect,
     source: EffectSourceContext,
     services: EffectRuntimeServices
   ): EffectExecutionResult;
 }
+
+type PositiveAmountRuntimeEffect<EffectId extends RuntimeEffectId> = Extract<
+  RuntimeEffect,
+  { effectId: EffectId }
+> & { amount: number };
+
+type AddPowerRuntimeEffect = PositiveAmountRuntimeEffect<"add_power">;
+type GainChipsRuntimeEffect = PositiveAmountRuntimeEffect<"gain_chips">;
 
 export interface EffectRuntimeCatalogEntry {
   effectId: RuntimeEffectId;
@@ -250,7 +260,7 @@ const allEffectRuntimeModes: readonly EffectRuntimeMode[] = [
   "fixture",
 ];
 
-const addPowerHandler: EffectRuntimeHandler = {
+const addPowerHandler: EffectRuntimeHandler<AddPowerRuntimeEffect> = {
   effectId: "add_power",
   validateShape(subjectId, effect) {
     const amount = effect["amount"];
@@ -273,16 +283,8 @@ const addPowerHandler: EffectRuntimeHandler = {
       };
     }
 
-    const amount = effect["amount"];
-    if (typeof amount !== "number") {
-      return {
-        ok: false,
-        error: "Invalid add_power effect",
-      };
-    }
-
     const powerBefore = state.turn.power;
-    state.turn.power += amount;
+    state.turn.power += effect.amount;
     recordTurnPowerChanged(
       state,
       player,
@@ -2736,19 +2738,14 @@ const avoidAttackHandler: EffectRuntimeHandler = {
   },
 };
 
-const gainChipsHandler: EffectRuntimeHandler = {
+const gainChipsHandler: EffectRuntimeHandler<GainChipsRuntimeEffect> = {
   effectId: "gain_chips",
   validateShape(subjectId, effect) {
     return validatePositiveIntegerAmount(subjectId, effect, "chip amount");
   },
   execute(state, player, effect, source) {
-    const amount = requirePositiveIntegerAmount(effect, "chip amount");
-    if (!amount.ok) {
-      return amount;
-    }
-
     const chipsBefore = player.chips;
-    player.chips += amount.value;
+    player.chips += effect.amount;
     recordEffectChipsChanged(
       state,
       player,

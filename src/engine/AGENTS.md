@@ -17,6 +17,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Keep card behavior in explicit typed runtime effects and handlers.
 - Model runtime effect choices as a discriminated union; record selected typed targets in the event log.
 - Keep the typed effect-handler catalog as the source of truth; derive lookup maps from it.
+- Give effect handlers concrete typed inputs after the validation boundary; keep raw record access at that boundary.
 - Add runtime effect IDs only through `effect-runtime-registry.ts`; executable data must not reference IDs outside the Effect Runtime Catalog.
 - Do not use localized display names as primary identifiers.
 - Preserve existing tested behavior unless the issue explicitly requires a rules change.
