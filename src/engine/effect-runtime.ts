@@ -84,8 +84,7 @@ export function hasExecutableWizardPropertyActivation(
 
   return definition.engine.effects.some((effect) => {
     return (
-      isEffectRecord(effect) &&
-      effect["timing"] === "activation" &&
+      effect.timing === "activation" &&
       effectConditionMatches(state, player, effect)
     );
   });
@@ -425,47 +424,31 @@ function executeEffect(
 function effectConditionMatches(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>
+  effect: RuntimeEffect
 ): boolean {
-  const condition = effect["condition"];
+  const { condition } = effect;
   if (condition === undefined) {
     return true;
   }
 
-  if (!isEffectRecord(condition)) {
-    return false;
-  }
-
-  if (condition["conditionId"] !== "control_count") {
-    return false;
-  }
-
-  const cardTypes = condition["cardTypes"];
-  const minimumCount = condition["minimumCount"];
-  if (
-    !Array.isArray(cardTypes) ||
-    typeof minimumCount !== "number" ||
-    !Number.isSafeInteger(minimumCount)
-  ) {
-    return false;
-  }
-
-  const matchingCount = [...player.permanents, ...player.playedThisTurn].filter(
-    (card) => {
+  if ("conditionId" in condition) {
+    const matchingCount = [
+      ...player.permanents,
+      ...player.playedThisTurn,
+    ].filter((card) => {
       const definition = state.cardDefinitions.get(card.definitionId);
       return (
         definition !== undefined &&
-        cardTypes.some((cardType) => {
-          return (
-            typeof cardType === "string" &&
-            definition.engine.cardTypes.includes(cardType)
-          );
-        })
+        condition.cardTypes.some((cardType) =>
+          definition.engine.cardTypes.includes(cardType)
+        )
       );
-    }
-  ).length;
+    }).length;
 
-  return matchingCount >= minimumCount;
+    return matchingCount >= condition.minimumCount;
+  }
+
+  return false;
 }
 
 function getWizardPropertyAttackProfile(

@@ -111,6 +111,22 @@ export type RuntimeEffectTargetSelector =
   | "mainMarketCard"
   | "sameAsPreviousAttackTarget";
 
+export interface ControlCountEffectCondition {
+  conditionId: "control_count";
+  cardTypes: string[];
+  minimumCount: number;
+}
+
+interface LegacyControlsOtherCardTypeEffectCondition {
+  effectId: "controls_other_card_type";
+  minimum: number;
+  cardType: string;
+}
+
+export type RuntimeEffectCondition =
+  | ControlCountEffectCondition
+  | LegacyControlsOtherCardTypeEffectCondition;
+
 const knownRuntimeEffectIds = [
   "activation_destroy_self_then_destroy_own_cards",
   "add_power",
@@ -202,6 +218,7 @@ type KnownRuntimeEffectId = (typeof knownRuntimeEffectIds)[number];
 type RuntimeEffectVariant<EffectId extends KnownRuntimeEffectId> = {
   effectId: EffectId;
   timing: EffectTiming;
+  condition?: RuntimeEffectCondition;
   target?: RuntimeEffectTarget;
   targetSelector?: RuntimeEffectTargetSelector;
 } & Record<string, unknown>;
@@ -215,6 +232,30 @@ export type RuntimeEffectId = RuntimeEffect["effectId"];
 export function isEffectTiming(value: unknown): value is EffectTiming {
   return (
     typeof value === "string" && effectTimings.includes(value as EffectTiming)
+  );
+}
+
+export function isRuntimeEffectCondition(
+  value: unknown
+): value is RuntimeEffectCondition {
+  if (!isRuntimeEffectTargetRecord(value)) {
+    return false;
+  }
+
+  if (value["conditionId"] === "control_count") {
+    return (
+      Array.isArray(value["cardTypes"]) &&
+      value["cardTypes"].every(isString) &&
+      typeof value["minimumCount"] === "number" &&
+      Number.isSafeInteger(value["minimumCount"])
+    );
+  }
+
+  return (
+    value["effectId"] === "controls_other_card_type" &&
+    typeof value["cardType"] === "string" &&
+    typeof value["minimum"] === "number" &&
+    Number.isSafeInteger(value["minimum"])
   );
 }
 

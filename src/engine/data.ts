@@ -9,6 +9,7 @@ import {
 } from "./effect-runtime-registry.js";
 import {
   isEffectTiming,
+  isRuntimeEffectCondition,
   isRuntimeEffectTarget,
   isRuntimeEffectTargetSelector,
   isRuntimeEffectId,
@@ -1686,6 +1687,16 @@ function requireRuntimeEffectArrayField(
     if (!isEffectTiming(value["timing"])) {
       errors.push(
         `${label}[${index}].timing must be a supported effect timing`
+      );
+      continue;
+    }
+
+    if (
+      value["condition"] !== undefined &&
+      !isRuntimeEffectCondition(value["condition"])
+    ) {
+      errors.push(
+        `${label}[${index}].condition must use a supported condition shape`
       );
       continue;
     }

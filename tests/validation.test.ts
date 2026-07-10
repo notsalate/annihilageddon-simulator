@@ -14,6 +14,7 @@ import {
   type EffectTiming,
   type LoadedDataPack,
   type RuntimeEffect,
+  type RuntimeEffectCondition,
   type RuntimeEffectId,
   type RuntimeEffectSelectorTarget,
   type RuntimeEffectTarget,
@@ -59,6 +60,16 @@ test("runtime data decoder exposes typed effects after the raw JSON boundary", (
   assert.equal(typeof effects[0]?.effectId, "string");
   const timing: EffectTiming | undefined = effects[0]?.timing;
   assert.equal(typeof timing, "string");
+});
+
+test("runtime effect conditions are exposed as a typed union", () => {
+  const condition: RuntimeEffectCondition = {
+    conditionId: "control_count",
+    cardTypes: ["treasure"],
+    minimumCount: 2,
+  };
+
+  assert.equal(condition.conditionId, "control_count");
 });
 
 test("effect runtime catalog accepts only decoded runtime effect ids", () => {
@@ -339,6 +350,14 @@ test("runtime data decoder rejects invalid card and token definition field shape
           amount: 1,
           targetSelector: "unsupported_selector",
         },
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 1,
+          condition: {
+            conditionId: "unsupported_condition",
+          },
+        },
       ],
     },
   });
@@ -407,6 +426,13 @@ test("runtime data decoder rejects invalid card and token definition field shape
     );
     assert.ok(
       result.errors.some((error) =>
+        error.includes(
+          "engine.effects[3].condition must use a supported condition shape"
+        )
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
         error.startsWith(
           "Runtime data tokenDefinitionPaths tokens/bad-token.json:"
         )
@@ -427,7 +453,25 @@ test("runtime data decoder rejects invalid card and token definition field shape
 
 test("runtime data decoder does not pass raw object fields through", () => {
   const tempRoot = mkdtempSync(path.join(tmpdir(), "runtime-data-raw-"));
-  const fixtureCard = createFixtureCard("runtime-card");
+  const baseFixtureCard = createFixtureCard("runtime-card");
+  const fixtureCard = {
+    ...baseFixtureCard,
+    engine: {
+      ...baseFixtureCard.engine,
+      effects: [
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 1,
+          condition: {
+            conditionId: "control_count",
+            cardTypes: ["treasure"],
+            minimumCount: 2,
+          },
+        },
+      ],
+    },
+  };
   const validDeck = {
     schemaVersion: 1,
     deckId: "fixture-valid",
@@ -519,6 +563,11 @@ test("runtime data decoder does not pass raw object fields through", () => {
     assert.equal("rawOnly" in decodedCard!, false);
     assert.equal("rawOnly" in decodedCard!.visible, false);
     assert.equal("rawOnly" in decodedCard!.engine, false);
+    assert.deepEqual(decodedCard!.engine.effects[0]?.condition, {
+      conditionId: "control_count",
+      cardTypes: ["treasure"],
+      minimumCount: 2,
+    });
     assert.equal("rawOnly" in decodedToken!, false);
     assert.equal("rawOnly" in result.value.decks.starterDeck, false);
     assert.equal(
