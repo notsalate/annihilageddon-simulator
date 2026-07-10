@@ -24,7 +24,7 @@ import {
 import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
-import type { RuntimeEffectId } from "./runtime-effect.js";
+import type { RuntimeEffect, RuntimeEffectId } from "./runtime-effect.js";
 
 export type { PlayerId } from "../domain/types.js";
 export type CommonOwner = "common";
@@ -46,7 +46,7 @@ export interface StatusInstance {
   instanceId: string;
   statusId: string;
   ownerId: PlayerId;
-  effects: unknown[];
+  effects: RuntimeEffect[];
 }
 
 export interface TrophyLikeInstance {

@@ -48,7 +48,7 @@ const allowedViolations = [
     filePath: "src/engine/setup.ts",
     source: "effects: unknown[];",
     issues: ["#53", "#54"],
-    expectedCount: 2,
+    expectedCount: 1,
   },
 ];
 
