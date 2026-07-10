@@ -97,13 +97,36 @@ export type DeadWizardTokenState =
       drawStack: TokenInstance[];
     };
 
-export interface RuntimeEffectChoice {
+export interface RuntimeEffectChoiceOption {
+  choiceKind: "option";
   choiceId: string;
-  amount?: number;
-  direction?: "left" | "right";
-  cards?: CardInstance[];
-  players?: PlayerState[];
 }
+
+export interface RuntimeEffectChoicePlayerTarget {
+  choiceKind: "playerTarget";
+  choiceId: string;
+  players: readonly PlayerState[];
+}
+
+export interface RuntimeEffectChoiceCardTarget {
+  choiceKind: "cardTarget";
+  choiceId: string;
+  cards: readonly CardInstance[];
+  amount: number;
+}
+
+export interface RuntimeEffectChoiceDirectionalPlayerTarget {
+  choiceKind: "directionalPlayerTarget";
+  choiceId: string;
+  direction: "left" | "right";
+  players: readonly PlayerState[];
+}
+
+export type RuntimeEffectChoice =
+  | RuntimeEffectChoiceOption
+  | RuntimeEffectChoicePlayerTarget
+  | RuntimeEffectChoiceCardTarget
+  | RuntimeEffectChoiceDirectionalPlayerTarget;
 
 export interface RuntimeEffectChoiceRequest {
   player: PlayerState;
@@ -142,6 +165,7 @@ export interface GameEvent {
   eventSequence?: number;
   playerId?: PlayerId;
   targetPlayerId?: PlayerId;
+  targetPlayerIds?: PlayerId[];
   turnNumber?: number;
   actionSequence?: number;
   actionIdentity?: string;

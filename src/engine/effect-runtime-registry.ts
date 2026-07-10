@@ -778,15 +778,23 @@ const exchangeLifeAndDinglerStatusHandler: EffectRuntimeHandler = {
         : effect["allowDinglerStatusExchange"] === true;
 
     if (effect["optional"] === true) {
-      const choices: EffectChoice[] = [{ choiceId: "pass" }];
+      const choices: EffectChoice[] = [
+        { choiceKind: "option", choiceId: "pass" },
+      ];
       if (allowLifeExchange) {
-        choices.push({ choiceId: "exchange_life_only" });
+        choices.push({ choiceKind: "option", choiceId: "exchange_life_only" });
       }
       if (allowDinglerStatusExchange) {
-        choices.push({ choiceId: "exchange_dingler_status_only" });
+        choices.push({
+          choiceKind: "option",
+          choiceId: "exchange_dingler_status_only",
+        });
       }
       if (allowLifeExchange && allowDinglerStatusExchange) {
-        choices.push({ choiceId: "exchange_life_and_dingler_status" });
+        choices.push({
+          choiceKind: "option",
+          choiceId: "exchange_life_and_dingler_status",
+        });
       }
       const choice = services.chooseEffectChoice(
         state,
@@ -1402,8 +1410,8 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
         source,
         effectId,
         [
-          { choiceId: "discard_hand_then_draw_cards" },
-          { choiceId: "take_damage" },
+          { choiceKind: "option", choiceId: "discard_hand_then_draw_cards" },
+          { choiceKind: "option", choiceId: "take_damage" },
         ]
       );
       const selectedChoiceId =
@@ -1522,7 +1530,10 @@ const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler = {
         targetPlayer,
         source,
         effectId,
-        [{ choiceId: "reduce_life_gain_chips" }, { choiceId: "pass" }]
+        [
+          { choiceKind: "option", choiceId: "reduce_life_gain_chips" },
+          { choiceKind: "option", choiceId: "pass" },
+        ]
       );
       if (choice?.choiceId !== "reduce_life_gain_chips") {
         continue;
@@ -1618,7 +1629,10 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler = {
         targetPlayer,
         source,
         effectId,
-        [{ choiceId: "participate" }, { choiceId: "pass" }]
+        [
+          { choiceKind: "option", choiceId: "participate" },
+          { choiceKind: "option", choiceId: "pass" },
+        ]
       );
       if (participationChoice?.choiceId !== "participate") {
         continue;
@@ -1702,11 +1716,13 @@ const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler = {
         source,
         effectId,
         players.map((targetPlayer) => ({
+          choiceKind: "playerTarget" as const,
           choiceId: `vote-${targetPlayer.playerId}`,
           players: [targetPlayer],
         }))
       );
-      const votedPlayer = choice?.players?.[0];
+      const votedPlayer =
+        choice?.choiceKind === "playerTarget" ? choice.players[0] : undefined;
       if (votedPlayer === undefined) {
         continue;
       }
@@ -1780,12 +1796,12 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler = {
 
       const choices: EffectChoice[] = [];
       if (targetPlayer.life.current - lifeCost >= 1) {
-        choices.push({ choiceId: "pay_life" });
+        choices.push({ choiceKind: "option", choiceId: "pay_life" });
       }
       if (targetPlayer.chips >= chipCost) {
-        choices.push({ choiceId: "spend_chips" });
+        choices.push({ choiceKind: "option", choiceId: "spend_chips" });
       }
-      choices.push({ choiceId: "skip" });
+      choices.push({ choiceKind: "option", choiceId: "skip" });
 
       const choice = services.chooseEffectChoice(
         state,
@@ -2514,6 +2530,7 @@ function resolveControlledCardCost(
 
   if (effect["costMode"] === "chosen") {
     const choices = cards.map(({ card, definition }) => ({
+      choiceKind: "cardTarget" as const,
       choiceId: card.instanceId,
       cards: [card],
       amount: calculateEffectiveCardCost(state, player.playerId, definition),
@@ -2526,7 +2543,10 @@ function resolveControlledCardCost(
       choices
     );
 
-    return { ok: true, amount: choice?.amount ?? 0 };
+    return {
+      ok: true,
+      amount: choice?.choiceKind === "cardTarget" ? choice.amount : 0,
+    };
   }
 
   return {
@@ -2867,18 +2887,23 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
       "directional_chain_attack",
       [
         {
+          choiceKind: "directionalPlayerTarget",
           choiceId: "left",
           direction: "left",
           players: leftFoes,
         },
         {
+          choiceKind: "directionalPlayerTarget",
           choiceId: "right",
           direction: "right",
           players: rightFoes,
         },
       ]
     );
-    const foes = directionChoice?.players ?? [];
+    const foes =
+      directionChoice?.choiceKind === "directionalPlayerTarget"
+        ? directionChoice.players
+        : [];
     const attacked = new Set<string>();
 
     state.eventLog.push({
@@ -3743,14 +3768,17 @@ function payOptionalCosts(
     const choices: EffectChoice[] = canPay
       ? [
           {
+            choiceKind: "option",
             choiceId: "pay_optional_cost",
           },
           {
+            choiceKind: "option",
             choiceId: "skip_optional_cost",
           },
         ]
       : [
           {
+            choiceKind: "option",
             choiceId: "skip_optional_cost",
           },
         ];
@@ -4003,7 +4031,8 @@ function executeAttackBranch(
       "return_discard_to_hand",
       buildDiscardReturnChoices(player.discard, amount)
     );
-    const returned = returnChoice?.cards ?? [];
+    const returned =
+      returnChoice?.choiceKind === "cardTarget" ? returnChoice.cards : [];
     for (const card of returned) {
       const index = player.discard.indexOf(card);
       if (index >= 0) {
@@ -4046,6 +4075,7 @@ function buildDiscardReturnChoices(
   for (let amount = cappedAmount; amount >= 1; amount -= 1) {
     for (const cards of chooseCardCombinations(discard, amount)) {
       choices.push({
+        choiceKind: "cardTarget",
         choiceId: `return_${amount}`,
         amount,
         cards,
@@ -4054,6 +4084,7 @@ function buildDiscardReturnChoices(
   }
 
   choices.push({
+    choiceKind: "cardTarget",
     choiceId: "return_0",
     amount: 0,
     cards: [],

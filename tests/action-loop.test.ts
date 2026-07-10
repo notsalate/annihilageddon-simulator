@@ -1513,6 +1513,16 @@ test("Mayhem vote can use a non-first affected-player choice", () => {
     ).length,
     3
   );
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.effectId === "mayhem_each_player_vote_dingler"
+      )
+      .map((event) => event.targetPlayerIds),
+    [[secondPlayer.playerId], [secondPlayer.playerId], [secondPlayer.playerId]]
+  );
   assert.equal(
     activePlayer.statuses.some((status) => status.statusId === "dingler"),
     false

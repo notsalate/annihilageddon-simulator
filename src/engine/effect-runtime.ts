@@ -912,14 +912,22 @@ function chooseEffectChoice(
     choiceId: choice.choiceId,
     choiceIds: choices.map((candidate) => candidate.choiceId),
     legalChoiceCount: choices.length,
-    ...(choice.direction === undefined ? {} : { direction: choice.direction }),
-    ...(choice.amount === undefined ? {} : { amount: choice.amount }),
-    ...(choice.cards === undefined
-      ? {}
-      : {
+    ...(choice.choiceKind === "directionalPlayerTarget"
+      ? {
+          direction: choice.direction,
+          targetPlayerIds: choice.players.map((player) => player.playerId),
+        }
+      : {}),
+    ...(choice.choiceKind === "playerTarget"
+      ? { targetPlayerIds: choice.players.map((player) => player.playerId) }
+      : {}),
+    ...(choice.choiceKind === "cardTarget"
+      ? {
+          amount: choice.amount,
           targetCardInstanceIds: choice.cards.map((card) => card.instanceId),
           targetDefinitionIds: choice.cards.map((card) => card.definitionId),
-        }),
+        }
+      : {}),
     sourceType: source.sourceType,
   });
   return choice;
