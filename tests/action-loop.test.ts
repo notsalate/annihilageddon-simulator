@@ -14,6 +14,7 @@ import {
   type GameState,
   type LoadedDataPack,
   type PlayerState,
+  type RuntimeEffect,
   type StatusInstance,
   type TokenDefinition,
 } from "../src/index.js";
@@ -2363,7 +2364,7 @@ test("unsupported Mayhem effect fails during Market Flow instead of becoming a s
           effectId: "unsupported_mayhem_runtime_effect",
           timing: "onMayhemResolve",
         },
-      ],
+      ] as unknown as RuntimeEffect[],
       unsupportedMechanics: [],
     },
   };
@@ -7426,7 +7427,7 @@ function addFixtureCardToActiveHand(
   assert.ok(activePlayer);
   const definition = createFixtureCardDefinition(
     `fixture-targeted-effect-card-${activePlayer.hand.length + 1}`,
-    [effect],
+    [effect as RuntimeEffect],
     options
   );
 
@@ -7596,7 +7597,7 @@ function moveHandCardToFront(
 
 function createFixtureCardDefinition(
   cardId: string,
-  effects: unknown[],
+  effects: RuntimeEffect[],
   options: {
     isOngoing?: boolean;
     cardTypes?: string[];

@@ -5,6 +5,7 @@ import {
 } from "./effective-values.js";
 import { recordTurnPowerChanged } from "./event-recorder.js";
 import { isPlainRecord } from "../common.js";
+import { isRuntimeEffectId, type RuntimeEffectId } from "./runtime-effect.js";
 
 import type {
   CardInstance,
@@ -223,7 +224,7 @@ export interface EffectRuntimeServices {
 }
 
 export interface EffectRuntimeHandler {
-  effectId: string;
+  effectId: RuntimeEffectId;
   validateShape(subjectId: string, effect: Record<string, unknown>): string[];
   execute(
     state: GameState,
@@ -235,7 +236,7 @@ export interface EffectRuntimeHandler {
 }
 
 export interface EffectRuntimeCatalogEntry {
-  effectId: string;
+  effectId: RuntimeEffectId;
   handler: EffectRuntimeHandler;
   supportedModes: readonly EffectRuntimeMode[];
 }
@@ -3227,7 +3228,7 @@ const wildMagicChoiceHandler: EffectRuntimeHandler = {
       }
 
       const optionEffectId = option["effectId"];
-      if (typeof optionEffectId !== "string") {
+      if (!isRuntimeEffectId(optionEffectId)) {
         errors.push(
           `${subjectId} uses unsupported Wild Magic option ${String(optionEffectId)}`
         );
@@ -4215,7 +4216,10 @@ function setupOnlyExecutionError(effectId: string): EffectExecutionResult {
   };
 }
 
-export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
+export const effectRuntimeCatalog = new Map<
+  RuntimeEffectId,
+  EffectRuntimeCatalogEntry
+>([
   [addPowerHandler.effectId, toCatalogEntry(addPowerHandler)],
   [
     addPowerPerPlayerWithStatusHandler.effectId,
@@ -4364,7 +4368,10 @@ export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
   [mayhemAttackHandler.effectId, toCatalogEntry(mayhemAttackHandler)],
 ]);
 
-export const effectRuntimeRegistry = new Map<string, EffectRuntimeHandler>(
+export const effectRuntimeRegistry = new Map<
+  RuntimeEffectId,
+  EffectRuntimeHandler
+>(
   [...effectRuntimeCatalog].map(([effectId, entry]) => [
     effectId,
     entry.handler,
@@ -4372,13 +4379,13 @@ export const effectRuntimeRegistry = new Map<string, EffectRuntimeHandler>(
 );
 
 export function getEffectRuntimeCatalogEntry(
-  effectId: string
+  effectId: RuntimeEffectId
 ): EffectRuntimeCatalogEntry | undefined {
   return effectRuntimeCatalog.get(effectId);
 }
 
 export function getEffectRuntimeHandler(
-  effectId: string
+  effectId: RuntimeEffectId
 ): EffectRuntimeHandler | undefined {
   return getEffectRuntimeCatalogEntry(effectId)?.handler;
 }

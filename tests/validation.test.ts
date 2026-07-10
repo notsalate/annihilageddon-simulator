@@ -11,7 +11,10 @@ import {
   validateExecutableDataPack,
   type CardDefinition,
   type DecodeResult,
+  type EffectTiming,
   type LoadedDataPack,
+  type RuntimeEffect,
+  type RuntimeEffectId,
   type TokenDefinition,
 } from "../src/index.js";
 import {
@@ -36,6 +39,49 @@ test("runtime data decoder exposes a narrowed successful decoded value", () => {
     );
   }
 });
+
+test("runtime data decoder exposes typed effects after the raw JSON boundary", () => {
+  const result = decodeCurrentRuntimeDataPack(rootDir);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+
+  const effects: RuntimeEffect[] = [
+    ...result.value.cardDefinitions.values(),
+  ].flatMap((definition) => definition.engine.effects);
+
+  assert.ok(effects.length > 0);
+  assert.equal(typeof effects[0]?.effectId, "string");
+  const timing: EffectTiming | undefined = effects[0]?.timing;
+  assert.equal(typeof timing, "string");
+});
+
+test("effect runtime catalog accepts only decoded runtime effect ids", () => {
+  const result = decodeCurrentRuntimeDataPack(rootDir);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+
+  const effect = [...result.value.cardDefinitions.values()]
+    .flatMap((definition) => definition.engine.effects)
+    .at(0);
+  assert.ok(effect);
+
+  const effectId: RuntimeEffectId = effect.effectId;
+  assert.ok(getEffectRuntimeHandler(effectId));
+
+  type CatalogLookupParameter = Parameters<typeof getEffectRuntimeHandler>[0];
+  const rawStringIsRejectedAtTheDecoderBoundary: Assert<
+    string extends CatalogLookupParameter ? false : true
+  > = true;
+  assert.equal(rawStringIsRejectedAtTheDecoderBoundary, true);
+});
+
+type Assert<T extends true> = T;
 
 test("current runtime manifest omits manual report metadata", () => {
   const manifest = JSON.parse(
@@ -260,6 +306,13 @@ test("runtime data decoder rejects invalid card and token definition field shape
     engine: {
       ...invalidCard.engine,
       playableInV0: "yes",
+      effects: [
+        {
+          effectId: "add_power",
+          timing: "unsupported_timing",
+          amount: 1,
+        },
+      ],
     },
   });
   writeJsonFile(tempRoot, "tokens/bad-token.json", {
@@ -304,6 +357,13 @@ test("runtime data decoder rejects invalid card and token definition field shape
     assert.ok(
       result.errors.some((error) =>
         error.includes("engine.playableInV0 must be a boolean")
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes(
+          "engine.effects[0].timing must be a supported effect timing"
+        )
       )
     );
     assert.ok(
@@ -796,7 +856,7 @@ test("combat effects are registered and reject invalid shapes through runtime ha
     "attack_damage_equal_to_controlled_card_cost",
     "multi_target_attack",
     "mayhem_attack",
-  ];
+  ] as const satisfies readonly RuntimeEffectId[];
 
   for (const effectId of combatEffectIds) {
     const handler = getEffectRuntimeHandler(effectId);
@@ -834,7 +894,7 @@ test("economy and draw effects are registered and reject invalid shapes through 
     "gain_chips",
     "gain_chips_per_player_with_status",
     "draw_cards",
-  ];
+  ] as const satisfies readonly RuntimeEffectId[];
 
   for (const effectId of effectIds) {
     assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
@@ -876,7 +936,7 @@ test("top-deck and Wild Magic effects are registered and reject invalid shapes t
     "play_top_card",
     "play_top_card_from_foe_deck",
     "wild_magic_choice",
-  ];
+  ] as const satisfies readonly RuntimeEffectId[];
 
   for (const effectId of effectIds) {
     assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
@@ -933,7 +993,7 @@ test("life and Dingler status effects are registered and reject invalid shapes t
     "remove_status",
     "toggle_status",
     "add_power_per_player_with_status",
-  ];
+  ] as const satisfies readonly RuntimeEffectId[];
 
   for (const effectId of effectIds) {
     assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
@@ -961,7 +1021,11 @@ test("life and Dingler status effects are registered and reject invalid shapes t
     }),
     []
   );
-  for (const effectId of ["gain_status", "remove_status", "toggle_status"]) {
+  for (const effectId of [
+    "gain_status",
+    "remove_status",
+    "toggle_status",
+  ] as const satisfies readonly RuntimeEffectId[]) {
     assert.notDeepEqual(
       getEffectRuntimeHandler(effectId)?.validateShape("Fixture", {
         effectId,
@@ -1004,7 +1068,7 @@ test("Mega Mayhem life and Dingler status effects are registered and reject inva
   const effectIds = [
     "mega_mayhem_set_life",
     "mega_mayhem_each_player_toggle_dingler",
-  ];
+  ] as const satisfies readonly RuntimeEffectId[];
 
   for (const effectId of effectIds) {
     assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
@@ -1283,7 +1347,7 @@ test("wizard property setup effects are registered and reject invalid shapes thr
     "force_starting_player",
     "set_starting_life_total",
     "set_resurrection_life_total",
-  ];
+  ] as const satisfies readonly RuntimeEffectId[];
 
   for (const effectId of setupEffectIds) {
     assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
@@ -1635,7 +1699,7 @@ test("effect runtime catalog validates supported, unknown, and fixture-only effe
             selector: "mainMarketCard",
           },
         },
-      ],
+      ] as unknown as RuntimeEffect[],
     },
   });
 
@@ -1659,7 +1723,7 @@ test("fixture mode does not allow unsupported fixture effect ids", () => {
           effectId: "fixture_not_supported",
           timing: "onPlay",
         },
-      ],
+      ] as unknown as RuntimeEffect[],
     },
   });
 
@@ -1687,7 +1751,7 @@ test("executable data-pack validation rejects unsupported effect ids", () => {
           effectId: "fixture_not_supported",
           timing: "onPlay",
         },
-      ],
+      ] as unknown as RuntimeEffect[],
     },
   });
 
@@ -1863,8 +1927,10 @@ test("temporary hand-limit effect validates supported and invalid shapes", () =>
 });
 
 test("wand attack replacement effects validate supported and invalid shapes", () => {
-  const modifyDamageEffectId = "modify_owned_wand_attack_damage";
-  const preventDefenseEffectId = "prevent_defense_against_owned_wand_attacks";
+  const modifyDamageEffectId: RuntimeEffectId =
+    "modify_owned_wand_attack_damage";
+  const preventDefenseEffectId: RuntimeEffectId =
+    "prevent_defense_against_owned_wand_attacks";
 
   for (const effectId of [modifyDamageEffectId, preventDefenseEffectId]) {
     assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);

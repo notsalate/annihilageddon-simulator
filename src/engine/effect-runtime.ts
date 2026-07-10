@@ -14,6 +14,7 @@ import {
   type TargetChoice,
   type TargetChoiceResult,
 } from "./effect-runtime-registry.js";
+import type { RuntimeEffect } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export function executeOnPlayEffects(
@@ -316,12 +317,12 @@ export function executeMayhemEffects(
 function executeEffects(
   state: GameState,
   player: PlayerState,
-  effects: readonly unknown[],
-  timing: string,
+  effects: readonly RuntimeEffect[],
+  timing: RuntimeEffect["timing"],
   source: EffectSourceContext
 ): EffectExecutionResult {
   for (const effect of effects) {
-    if (!isEffectRecord(effect) || effect["timing"] !== timing) {
+    if (effect.timing !== timing) {
       continue;
     }
 
@@ -379,26 +380,17 @@ function countGainedCardsMatchingEffect(
   }).length;
 }
 
-function isSupportedMayhemRuntimeEffect(
-  effect: Record<string, unknown>
-): boolean {
-  const effectId = effect["effectId"];
-  return (
-    typeof effectId === "string" &&
-    getEffectRuntimeCatalogEntry(effectId) !== undefined
-  );
+function isSupportedMayhemRuntimeEffect(effect: RuntimeEffect): boolean {
+  return getEffectRuntimeCatalogEntry(effect.effectId) !== undefined;
 }
 
 function executeEffect(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffect,
   source: EffectSourceContext
 ): EffectExecutionResult {
-  const catalogEntry =
-    typeof effect["effectId"] === "string"
-      ? getEffectRuntimeCatalogEntry(effect["effectId"])
-      : undefined;
+  const catalogEntry = getEffectRuntimeCatalogEntry(effect.effectId);
   if (catalogEntry !== undefined) {
     if (
       !isEffectRuntimeCatalogEntrySupportedInMode(
@@ -1435,17 +1427,14 @@ function findFirstLegalDefense(
       continue;
     }
 
-    const defenseEffect = definition.engine.effects.find(
-      (effect): effect is Record<string, unknown> => {
-        return (
-          isEffectRecord(effect) &&
-          effect["effectId"] === "avoid_attack" &&
-          effect["timing"] === "onDefense" &&
-          (effect["destination"] === "discardSelf" ||
-            effect["destination"] === "topdeckSelf")
-        );
-      }
-    );
+    const defenseEffect = definition.engine.effects.find((effect) => {
+      return (
+        effect.effectId === "avoid_attack" &&
+        effect.timing === "onDefense" &&
+        (effect["destination"] === "discardSelf" ||
+          effect["destination"] === "topdeckSelf")
+      );
+    });
     if (
       defenseEffect !== undefined &&
       canPayDefenseCosts(defendingPlayer, card, defenseEffect)
