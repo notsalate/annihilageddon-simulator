@@ -1,0 +1,5 @@
+[allowlist]
+description = "Krutagidon stable card and token identifiers"
+regexes = [
+  '''esw2_dbg__[a-z]+_[0-9]{3}''',
+]
