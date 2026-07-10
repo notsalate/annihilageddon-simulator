@@ -9,6 +9,8 @@ import {
 } from "./effect-runtime-registry.js";
 import {
   isEffectTiming,
+  isRuntimeEffectTarget,
+  isRuntimeEffectTargetSelector,
   isRuntimeEffectId,
   type RuntimeEffect,
 } from "./runtime-effect.js";
@@ -1684,6 +1686,24 @@ function requireRuntimeEffectArrayField(
     if (!isEffectTiming(value["timing"])) {
       errors.push(
         `${label}[${index}].timing must be a supported effect timing`
+      );
+      continue;
+    }
+
+    if (
+      value["target"] !== undefined &&
+      !isRuntimeEffectTarget(value["target"])
+    ) {
+      errors.push(`${label}[${index}].target must use a supported selector`);
+      continue;
+    }
+
+    if (
+      value["targetSelector"] !== undefined &&
+      !isRuntimeEffectTargetSelector(value["targetSelector"])
+    ) {
+      errors.push(
+        `${label}[${index}].targetSelector must be a supported selector`
       );
       continue;
     }

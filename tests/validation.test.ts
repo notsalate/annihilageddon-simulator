@@ -15,6 +15,9 @@ import {
   type LoadedDataPack,
   type RuntimeEffect,
   type RuntimeEffectId,
+  type RuntimeEffectSelectorTarget,
+  type RuntimeEffectTarget,
+  type TargetSelector,
   type TokenDefinition,
 } from "../src/index.js";
 import {
@@ -79,6 +82,16 @@ test("effect runtime catalog accepts only decoded runtime effect ids", () => {
     string extends CatalogLookupParameter ? false : true
   > = true;
   assert.equal(rawStringIsRejectedAtTheDecoderBoundary, true);
+});
+
+test("runtime effect target selectors are exposed as a literal union", () => {
+  const target: RuntimeEffectSelectorTarget = { selector: "opponentPlayer" };
+  const selector: TargetSelector = target.selector;
+
+  const effectTarget: RuntimeEffectTarget = target;
+
+  assert.equal(selector, "opponentPlayer");
+  assert.deepEqual(effectTarget, target);
 });
 
 type Assert<T extends true> = T;
@@ -312,6 +325,20 @@ test("runtime data decoder rejects invalid card and token definition field shape
           timing: "unsupported_timing",
           amount: 1,
         },
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 1,
+          target: {
+            selector: "unsupported_selector",
+          },
+        },
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 1,
+          targetSelector: "unsupported_selector",
+        },
       ],
     },
   });
@@ -363,6 +390,18 @@ test("runtime data decoder rejects invalid card and token definition field shape
       result.errors.some((error) =>
         error.includes(
           "engine.effects[0].timing must be a supported effect timing"
+        )
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("engine.effects[1].target must use a supported selector")
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes(
+          "engine.effects[2].targetSelector must be a supported selector"
         )
       )
     );

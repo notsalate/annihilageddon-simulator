@@ -14,7 +14,10 @@ import {
   type TargetChoice,
   type TargetChoiceResult,
 } from "./effect-runtime-registry.js";
-import type { RuntimeEffect } from "./runtime-effect.js";
+import {
+  isRuntimeEffectSelectorTarget,
+  type RuntimeEffect,
+} from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export function executeOnPlayEffects(
@@ -975,7 +978,14 @@ function buildLegalTargetChoices(
     };
   }
 
-  const selector = target["selector"];
+  if (!isRuntimeEffectSelectorTarget(target)) {
+    return {
+      ok: false,
+      error: `Unsupported target selector ${asString(target["selector"])}`,
+    };
+  }
+
+  const selector = target.selector;
   if (selector === "mainMarketCard") {
     return {
       ok: true,

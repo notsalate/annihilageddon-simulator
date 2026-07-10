@@ -23,6 +23,94 @@ const effectTimings = [
 
 export type EffectTiming = (typeof effectTimings)[number];
 
+export type TargetSelector =
+  | "activePlayer"
+  | "activePlayerHandCard"
+  | "allPlayers"
+  | "anyPlayer"
+  | "mainMarketCard"
+  | "opponentPlayer"
+  | "opponentPlayers";
+
+export interface RuntimeEffectSelectorTarget {
+  selector: TargetSelector;
+}
+
+export type RuntimeEffectTarget =
+  | RuntimeEffectSelectorTarget
+  | {
+      targetType: "card";
+      definitionId?: string;
+      cardTypes?: string[];
+    }
+  | {
+      targetType: "token";
+      definitionId?: string;
+    }
+  | {
+      targetType: "player";
+    };
+
+export function isRuntimeEffectTarget(
+  value: unknown
+): value is RuntimeEffectTarget {
+  if (!isRuntimeEffectTargetRecord(value)) {
+    return false;
+  }
+
+  if ("selector" in value) {
+    return isRuntimeEffectSelectorTarget(value);
+  }
+
+  if (value["targetType"] === "card") {
+    return (
+      isOptionalString(value["definitionId"]) &&
+      isOptionalStringArray(value["cardTypes"])
+    );
+  }
+
+  if (value["targetType"] === "token") {
+    return isOptionalString(value["definitionId"]);
+  }
+
+  return value["targetType"] === "player";
+}
+
+export function isRuntimeEffectSelectorTarget(
+  value: unknown
+): value is RuntimeEffectSelectorTarget {
+  return (
+    isRuntimeEffectTargetRecord(value) && isTargetSelector(value["selector"])
+  );
+}
+
+export function isRuntimeEffectTargetSelector(
+  value: unknown
+): value is RuntimeEffectTargetSelector {
+  return (
+    value === "activePlayer" ||
+    value === "chosenFoe" ||
+    value === "chosenLeftOrRightFoe" ||
+    value === "chosenPlayer" ||
+    value === "eachFoe" ||
+    value === "eachPlayerClockwiseFromActive" ||
+    value === "leftOrRightFoe" ||
+    value === "mainMarketCard" ||
+    value === "sameAsPreviousAttackTarget"
+  );
+}
+
+export type RuntimeEffectTargetSelector =
+  | "activePlayer"
+  | "chosenFoe"
+  | "chosenLeftOrRightFoe"
+  | "chosenPlayer"
+  | "eachFoe"
+  | "eachPlayerClockwiseFromActive"
+  | "leftOrRightFoe"
+  | "mainMarketCard"
+  | "sameAsPreviousAttackTarget";
+
 const knownRuntimeEffectIds = [
   "activation_destroy_self_then_destroy_own_cards",
   "add_power",
@@ -114,6 +202,8 @@ type KnownRuntimeEffectId = (typeof knownRuntimeEffectIds)[number];
 type RuntimeEffectVariant<EffectId extends KnownRuntimeEffectId> = {
   effectId: EffectId;
   timing: EffectTiming;
+  target?: RuntimeEffectTarget;
+  targetSelector?: RuntimeEffectTargetSelector;
 } & Record<string, unknown>;
 
 export type RuntimeEffect = {
@@ -126,6 +216,36 @@ export function isEffectTiming(value: unknown): value is EffectTiming {
   return (
     typeof value === "string" && effectTimings.includes(value as EffectTiming)
   );
+}
+
+function isTargetSelector(value: unknown): value is TargetSelector {
+  return (
+    value === "activePlayer" ||
+    value === "activePlayerHandCard" ||
+    value === "allPlayers" ||
+    value === "anyPlayer" ||
+    value === "mainMarketCard" ||
+    value === "opponentPlayer" ||
+    value === "opponentPlayers"
+  );
+}
+
+function isRuntimeEffectTargetRecord(
+  value: unknown
+): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function isOptionalStringArray(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every(isString));
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
 }
 
 export function isRuntimeEffectId(value: unknown): value is RuntimeEffectId {

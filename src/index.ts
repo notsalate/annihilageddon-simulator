@@ -37,6 +37,10 @@ export type {
   EffectTiming,
   RuntimeEffect,
   RuntimeEffectId,
+  RuntimeEffectSelectorTarget,
+  RuntimeEffectTarget,
+  RuntimeEffectTargetSelector,
+  TargetSelector,
 } from "./engine/runtime-effect.js";
 export {
   decodeCurrentRuntimeDataPack,
