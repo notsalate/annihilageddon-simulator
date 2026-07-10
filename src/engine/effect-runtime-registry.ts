@@ -19,7 +19,12 @@ import type {
   TokenInstance,
 } from "./setup.js";
 
-export type EffectRuntimeMode = "combat" | "fixture";
+export const effectRuntimeModes = ["combat", "fixture"] as const;
+export type EffectRuntimeMode = (typeof effectRuntimeModes)[number];
+export type EffectRuntimeSupportedModes = readonly [
+  EffectRuntimeMode,
+  ...EffectRuntimeMode[],
+];
 
 const RUNTIME_CARD_TYPES = new Set([
   "wizardCard",
@@ -252,13 +257,10 @@ type GainChipsRuntimeEffect = PositiveAmountRuntimeEffect<"gain_chips">;
 export interface EffectRuntimeCatalogEntry {
   effectId: RuntimeEffectId;
   handler: EffectRuntimeHandler;
-  supportedModes: readonly EffectRuntimeMode[];
+  supportedModes: EffectRuntimeSupportedModes;
 }
 
-const allEffectRuntimeModes: readonly EffectRuntimeMode[] = [
-  "combat",
-  "fixture",
-];
+const allEffectRuntimeModes: EffectRuntimeSupportedModes = effectRuntimeModes;
 
 const addPowerHandler: EffectRuntimeHandler<AddPowerRuntimeEffect> = {
   effectId: "add_power",
