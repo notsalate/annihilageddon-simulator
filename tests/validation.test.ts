@@ -23,6 +23,8 @@ import {
   type TokenDefinition,
 } from "../src/index.js";
 import {
+  effectRuntimeCatalog,
+  effectRuntimeCatalogSource,
   getEffectRuntimeCatalogEntry,
   getEffectRuntimeHandler,
   isEffectRuntimeCatalogEntrySupportedInMode,
@@ -103,6 +105,13 @@ test("effect runtime catalog accepts only decoded runtime effect ids", () => {
     string extends CatalogLookupParameter ? false : true
   > = true;
   assert.equal(rawStringIsRejectedAtTheDecoderBoundary, true);
+});
+
+test("effect runtime lookup is derived from its typed catalog source", () => {
+  assert.deepEqual(
+    Array.from(effectRuntimeCatalog.keys()).sort(),
+    Object.keys(effectRuntimeCatalogSource).sort()
+  );
 });
 
 test("runtime effect target selectors are exposed as a literal union", () => {

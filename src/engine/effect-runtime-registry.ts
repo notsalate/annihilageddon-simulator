@@ -4228,157 +4228,115 @@ function setupOnlyExecutionError(effectId: string): EffectExecutionResult {
   };
 }
 
+export const effectRuntimeCatalogSource = {
+  add_power: toCatalogEntry(addPowerHandler),
+  add_power_per_player_with_status: toCatalogEntry(
+    addPowerPerPlayerWithStatusHandler
+  ),
+  add_power_if_player_has_status: toCatalogEntry(
+    addPowerIfPlayerHasStatusHandler
+  ),
+  add_power_per_controlled_object: toCatalogEntry(
+    addPowerPerControlledObjectHandler
+  ),
+  gain_card: toCatalogEntry(gainCardHandler),
+  discard_card: toCatalogEntry(discardCardHandler),
+  destroy_card: toCatalogEntry(destroyCardHandler),
+  deal_damage: toCatalogEntry(dealDamageHandler),
+  heal: toCatalogEntry(healHandler),
+  heal_equal_damage_dealt_on_own_turn: toCatalogEntry(
+    healEqualDamageDealtOnOwnTurnHandler
+  ),
+  set_life: toCatalogEntry(setLifeHandler),
+  exchange_life_and_dingler_status: toCatalogEntry(
+    exchangeLifeAndDinglerStatusHandler
+  ),
+  attack_damage_equal_to_controlled_card_cost: toCatalogEntry(
+    attackDamageEqualToControlledCardCostHandler
+  ),
+  gain_status: toCatalogEntry(gainStatusHandler),
+  attack_gain_status: toCatalogEntry(attackGainStatusHandler),
+  remove_status: toCatalogEntry(removeStatusHandler),
+  toggle_status: toCatalogEntry(toggleStatusHandler),
+  mega_mayhem_set_life: toCatalogEntry(megaMayhemSetLifeHandler),
+  mega_mayhem_each_player_toggle_dingler: toCatalogEntry(
+    megaMayhemEachPlayerToggleDinglerHandler
+  ),
+  mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem: toCatalogEntry(
+    megaMayhemEachPlayerDestroyTopMainDeckHandler
+  ),
+  mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none:
+    toCatalogEntry(mayhemEachPlayerDiscardTopDeckDestroyHandler),
+  mayhem_each_player_discard_deck_then_destroy_from_discard: toCatalogEntry(
+    mayhemEachPlayerDiscardDeckDestroyHandler
+  ),
+  mayhem_each_player_choose_discard_hand_draw_or_take_damage: toCatalogEntry(
+    mayhemEachPlayerHandRedrawChoiceHandler
+  ),
+  mayhem_each_player_reduce_life_to_gain_chips: toCatalogEntry(
+    mayhemEachPlayerReduceLifeToGainChipsHandler
+  ),
+  increase_hand_limit_at_max_life: toCatalogEntry(
+    increaseHandLimitAtMaxLifeHandler
+  ),
+  mayhem_each_player_battle_highest_hand_cost: toCatalogEntry(
+    mayhemEachPlayerBattleHighestHandCostHandler
+  ),
+  mayhem_each_player_vote_dingler: toCatalogEntry(
+    mayhemEachPlayerVoteDinglerHandler
+  ),
+  mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status: toCatalogEntry(
+    mayhemEachDinglerRecoveryChoiceHandler
+  ),
+  mayhem_lowest_life_players_gain_dingler_and_set_to_max_life: toCatalogEntry(
+    mayhemLowestLifeDinglerMaxLifeHandler
+  ),
+  replace_starting_card: toCatalogEntry(replaceStartingCardHandler),
+  start_with_basic_trophy: toCatalogEntry(startWithBasicTrophyHandler),
+  force_starting_player: toCatalogEntry(forceStartingPlayerHandler),
+  set_starting_life_total: toCatalogEntry(setStartingLifeTotalHandler),
+  set_resurrection_life_total: toCatalogEntry(setResurrectionLifeTotalHandler),
+  modify_effective_value: toCatalogEntry(modifyEffectiveValueHandler),
+  fixture_modify_effective_value: toFixtureOnlyCatalogEntry(
+    fixtureModifyEffectiveValueHandler
+  ),
+  fixture_add_power_equal_to_target_cost: toFixtureOnlyCatalogEntry(
+    fixtureAddPowerEqualToTargetCostHandler
+  ),
+  topdeck_gained_card: toCatalogEntry(topdeckGainedCardHandler),
+  temporary_hand_limit_by_gained_card_type: toCatalogEntry(
+    temporaryHandLimitByGainedCardTypeHandler
+  ),
+  modify_owned_wand_attack_damage: toCatalogEntry(
+    modifyOwnedWandAttackDamageHandler
+  ),
+  prevent_defense_against_owned_wand_attacks: toCatalogEntry(
+    preventDefenseAgainstOwnedWandAttacksHandler
+  ),
+  attack_damage: toCatalogEntry(attackDamageHandler),
+  avoid_attack: toCatalogEntry(avoidAttackHandler),
+  gain_chips: toCatalogEntry(gainChipsHandler),
+  gain_chips_per_player_with_status: toCatalogEntry(
+    gainChipsPerPlayerWithStatusHandler
+  ),
+  draw_cards: toCatalogEntry(drawCardsHandler),
+  reveal_top_card: toCatalogEntry(revealTopCardHandler),
+  play_top_card: toCatalogEntry(playTopCardHandler),
+  play_top_card_from_foe_deck: toCatalogEntry(playTopCardFromFoeDeckHandler),
+  wild_magic_choice: toCatalogEntry(wildMagicChoiceHandler),
+  directional_chain_attack: toCatalogEntry(directionalChainAttackHandler),
+  multi_target_attack: toCatalogEntry(multiTargetAttackHandler),
+  mayhem_attack: toCatalogEntry(mayhemAttackHandler),
+} satisfies Partial<Record<RuntimeEffectId, EffectRuntimeCatalogEntry>>;
+
 export const effectRuntimeCatalog = new Map<
   RuntimeEffectId,
   EffectRuntimeCatalogEntry
->([
-  [addPowerHandler.effectId, toCatalogEntry(addPowerHandler)],
-  [
-    addPowerPerPlayerWithStatusHandler.effectId,
-    toCatalogEntry(addPowerPerPlayerWithStatusHandler),
-  ],
-  [
-    addPowerIfPlayerHasStatusHandler.effectId,
-    toCatalogEntry(addPowerIfPlayerHasStatusHandler),
-  ],
-  [
-    addPowerPerControlledObjectHandler.effectId,
-    toCatalogEntry(addPowerPerControlledObjectHandler),
-  ],
-  [gainCardHandler.effectId, toCatalogEntry(gainCardHandler)],
-  [discardCardHandler.effectId, toCatalogEntry(discardCardHandler)],
-  [destroyCardHandler.effectId, toCatalogEntry(destroyCardHandler)],
-  [dealDamageHandler.effectId, toCatalogEntry(dealDamageHandler)],
-  [healHandler.effectId, toCatalogEntry(healHandler)],
-  [
-    healEqualDamageDealtOnOwnTurnHandler.effectId,
-    toCatalogEntry(healEqualDamageDealtOnOwnTurnHandler),
-  ],
-  [setLifeHandler.effectId, toCatalogEntry(setLifeHandler)],
-  [
-    exchangeLifeAndDinglerStatusHandler.effectId,
-    toCatalogEntry(exchangeLifeAndDinglerStatusHandler),
-  ],
-  [
-    attackDamageEqualToControlledCardCostHandler.effectId,
-    toCatalogEntry(attackDamageEqualToControlledCardCostHandler),
-  ],
-  [gainStatusHandler.effectId, toCatalogEntry(gainStatusHandler)],
-  [attackGainStatusHandler.effectId, toCatalogEntry(attackGainStatusHandler)],
-  [removeStatusHandler.effectId, toCatalogEntry(removeStatusHandler)],
-  [toggleStatusHandler.effectId, toCatalogEntry(toggleStatusHandler)],
-  [megaMayhemSetLifeHandler.effectId, toCatalogEntry(megaMayhemSetLifeHandler)],
-  [
-    megaMayhemEachPlayerToggleDinglerHandler.effectId,
-    toCatalogEntry(megaMayhemEachPlayerToggleDinglerHandler),
-  ],
-  [
-    megaMayhemEachPlayerDestroyTopMainDeckHandler.effectId,
-    toCatalogEntry(megaMayhemEachPlayerDestroyTopMainDeckHandler),
-  ],
-  [
-    mayhemEachPlayerDiscardTopDeckDestroyHandler.effectId,
-    toCatalogEntry(mayhemEachPlayerDiscardTopDeckDestroyHandler),
-  ],
-  [
-    mayhemEachPlayerDiscardDeckDestroyHandler.effectId,
-    toCatalogEntry(mayhemEachPlayerDiscardDeckDestroyHandler),
-  ],
-  [
-    mayhemEachPlayerHandRedrawChoiceHandler.effectId,
-    toCatalogEntry(mayhemEachPlayerHandRedrawChoiceHandler),
-  ],
-  [
-    mayhemEachPlayerReduceLifeToGainChipsHandler.effectId,
-    toCatalogEntry(mayhemEachPlayerReduceLifeToGainChipsHandler),
-  ],
-  [
-    increaseHandLimitAtMaxLifeHandler.effectId,
-    toCatalogEntry(increaseHandLimitAtMaxLifeHandler),
-  ],
-  [
-    mayhemEachPlayerBattleHighestHandCostHandler.effectId,
-    toCatalogEntry(mayhemEachPlayerBattleHighestHandCostHandler),
-  ],
-  [
-    mayhemEachPlayerVoteDinglerHandler.effectId,
-    toCatalogEntry(mayhemEachPlayerVoteDinglerHandler),
-  ],
-  [
-    mayhemEachDinglerRecoveryChoiceHandler.effectId,
-    toCatalogEntry(mayhemEachDinglerRecoveryChoiceHandler),
-  ],
-  [
-    mayhemLowestLifeDinglerMaxLifeHandler.effectId,
-    toCatalogEntry(mayhemLowestLifeDinglerMaxLifeHandler),
-  ],
-  [
-    replaceStartingCardHandler.effectId,
-    toCatalogEntry(replaceStartingCardHandler),
-  ],
-  [
-    startWithBasicTrophyHandler.effectId,
-    toCatalogEntry(startWithBasicTrophyHandler),
-  ],
-  [
-    forceStartingPlayerHandler.effectId,
-    toCatalogEntry(forceStartingPlayerHandler),
-  ],
-  [
-    setStartingLifeTotalHandler.effectId,
-    toCatalogEntry(setStartingLifeTotalHandler),
-  ],
-  [
-    setResurrectionLifeTotalHandler.effectId,
-    toCatalogEntry(setResurrectionLifeTotalHandler),
-  ],
-  [
-    modifyEffectiveValueHandler.effectId,
-    toCatalogEntry(modifyEffectiveValueHandler),
-  ],
-  [
-    fixtureModifyEffectiveValueHandler.effectId,
-    toFixtureOnlyCatalogEntry(fixtureModifyEffectiveValueHandler),
-  ],
-  [
-    fixtureAddPowerEqualToTargetCostHandler.effectId,
-    toFixtureOnlyCatalogEntry(fixtureAddPowerEqualToTargetCostHandler),
-  ],
-  [topdeckGainedCardHandler.effectId, toCatalogEntry(topdeckGainedCardHandler)],
-  [
-    temporaryHandLimitByGainedCardTypeHandler.effectId,
-    toCatalogEntry(temporaryHandLimitByGainedCardTypeHandler),
-  ],
-  [
-    modifyOwnedWandAttackDamageHandler.effectId,
-    toCatalogEntry(modifyOwnedWandAttackDamageHandler),
-  ],
-  [
-    preventDefenseAgainstOwnedWandAttacksHandler.effectId,
-    toCatalogEntry(preventDefenseAgainstOwnedWandAttacksHandler),
-  ],
-  [attackDamageHandler.effectId, toCatalogEntry(attackDamageHandler)],
-  [avoidAttackHandler.effectId, toCatalogEntry(avoidAttackHandler)],
-  [gainChipsHandler.effectId, toCatalogEntry(gainChipsHandler)],
-  [
-    gainChipsPerPlayerWithStatusHandler.effectId,
-    toCatalogEntry(gainChipsPerPlayerWithStatusHandler),
-  ],
-  [drawCardsHandler.effectId, toCatalogEntry(drawCardsHandler)],
-  [revealTopCardHandler.effectId, toCatalogEntry(revealTopCardHandler)],
-  [playTopCardHandler.effectId, toCatalogEntry(playTopCardHandler)],
-  [
-    playTopCardFromFoeDeckHandler.effectId,
-    toCatalogEntry(playTopCardFromFoeDeckHandler),
-  ],
-  [wildMagicChoiceHandler.effectId, toCatalogEntry(wildMagicChoiceHandler)],
-  [
-    directionalChainAttackHandler.effectId,
-    toCatalogEntry(directionalChainAttackHandler),
-  ],
-  [multiTargetAttackHandler.effectId, toCatalogEntry(multiTargetAttackHandler)],
-  [mayhemAttackHandler.effectId, toCatalogEntry(mayhemAttackHandler)],
-]);
+>(
+  Object.entries(effectRuntimeCatalogSource) as Array<
+    [RuntimeEffectId, EffectRuntimeCatalogEntry]
+  >
+);
 
 export const effectRuntimeRegistry = new Map<
   RuntimeEffectId,
