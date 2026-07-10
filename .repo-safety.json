@@ -1,20 +1,9 @@
 {
   "version": 1,
-  "mcp_policy": {
-    "audit_log": ".repo-safety/logs/mcp-audit.jsonl",
-    "allow_write_tools": []
-  },
   "github_read_guard": {
     "mode": "strict",
-    "allowed_repositories": [
-      "notsalate/annihilageddon-simulator"
-    ],
-    "allowed_resources": [
-      "issues",
-      "pulls",
-      "branches",
-      "commits"
-    ],
+    "allowed_repositories": ["notsalate/annihilageddon-simulator"],
+    "allowed_resources": ["issues", "pulls", "branches", "commits"],
     "resource_aliases": {
       "mrs": "pulls",
       "merge_requests": "pulls",
