@@ -4225,106 +4225,251 @@ function setupOnlyExecutionError(effectId: string): EffectExecutionResult {
   };
 }
 
-export const effectRuntimeCatalogSource = {
-  add_power: toCatalogEntry(addPowerHandler),
-  add_power_per_player_with_status: toCatalogEntry(
-    addPowerPerPlayerWithStatusHandler
-  ),
-  add_power_if_player_has_status: toCatalogEntry(
-    addPowerIfPlayerHasStatusHandler
-  ),
-  add_power_per_controlled_object: toCatalogEntry(
-    addPowerPerControlledObjectHandler
-  ),
-  gain_card: toCatalogEntry(gainCardHandler),
-  discard_card: toCatalogEntry(discardCardHandler),
-  destroy_card: toCatalogEntry(destroyCardHandler),
-  deal_damage: toCatalogEntry(dealDamageHandler),
-  heal: toCatalogEntry(healHandler),
-  heal_equal_damage_dealt_on_own_turn: toCatalogEntry(
-    healEqualDamageDealtOnOwnTurnHandler
-  ),
-  set_life: toCatalogEntry(setLifeHandler),
-  exchange_life_and_dingler_status: toCatalogEntry(
-    exchangeLifeAndDinglerStatusHandler
-  ),
-  attack_damage_equal_to_controlled_card_cost: toCatalogEntry(
-    attackDamageEqualToControlledCardCostHandler
-  ),
-  gain_status: toCatalogEntry(gainStatusHandler),
-  attack_gain_status: toCatalogEntry(attackGainStatusHandler),
-  remove_status: toCatalogEntry(removeStatusHandler),
-  toggle_status: toCatalogEntry(toggleStatusHandler),
-  mega_mayhem_set_life: toCatalogEntry(megaMayhemSetLifeHandler),
-  mega_mayhem_each_player_toggle_dingler: toCatalogEntry(
-    megaMayhemEachPlayerToggleDinglerHandler
-  ),
-  mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem: toCatalogEntry(
-    megaMayhemEachPlayerDestroyTopMainDeckHandler
-  ),
+function createUnsupportedEffectHandler(
+  effectId: RuntimeEffectId
+): EffectRuntimeHandler {
+  return {
+    effectId,
+    validateShape(subjectId) {
+      return [`${subjectId} uses unsupported effect ${effectId}`];
+    },
+    execute() {
+      return { ok: false, error: `Unsupported effect id ${effectId}` };
+    },
+  };
+}
+export const effectRuntimeHandlerMap = {
+  add_power: addPowerHandler,
+  add_power_per_player_with_status: addPowerPerPlayerWithStatusHandler,
+  add_power_if_player_has_status: addPowerIfPlayerHasStatusHandler,
+  add_power_per_controlled_object: addPowerPerControlledObjectHandler,
+  gain_card: gainCardHandler,
+  discard_card: discardCardHandler,
+  destroy_card: destroyCardHandler,
+  deal_damage: dealDamageHandler,
+  heal: healHandler,
+  heal_equal_damage_dealt_on_own_turn: healEqualDamageDealtOnOwnTurnHandler,
+  set_life: setLifeHandler,
+  exchange_life_and_dingler_status: exchangeLifeAndDinglerStatusHandler,
+  attack_damage_equal_to_controlled_card_cost:
+    attackDamageEqualToControlledCardCostHandler,
+  gain_status: gainStatusHandler,
+  attack_gain_status: attackGainStatusHandler,
+  remove_status: removeStatusHandler,
+  toggle_status: toggleStatusHandler,
+  mega_mayhem_set_life: megaMayhemSetLifeHandler,
+  mega_mayhem_each_player_toggle_dingler:
+    megaMayhemEachPlayerToggleDinglerHandler,
+  mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem:
+    megaMayhemEachPlayerDestroyTopMainDeckHandler,
   mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none:
-    toCatalogEntry(mayhemEachPlayerDiscardTopDeckDestroyHandler),
-  mayhem_each_player_discard_deck_then_destroy_from_discard: toCatalogEntry(
-    mayhemEachPlayerDiscardDeckDestroyHandler
+    mayhemEachPlayerDiscardTopDeckDestroyHandler,
+  mayhem_each_player_discard_deck_then_destroy_from_discard:
+    mayhemEachPlayerDiscardDeckDestroyHandler,
+  mayhem_each_player_choose_discard_hand_draw_or_take_damage:
+    mayhemEachPlayerHandRedrawChoiceHandler,
+  mayhem_each_player_reduce_life_to_gain_chips:
+    mayhemEachPlayerReduceLifeToGainChipsHandler,
+  increase_hand_limit_at_max_life: increaseHandLimitAtMaxLifeHandler,
+  mayhem_each_player_battle_highest_hand_cost:
+    mayhemEachPlayerBattleHighestHandCostHandler,
+  mayhem_each_player_vote_dingler: mayhemEachPlayerVoteDinglerHandler,
+  mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status:
+    mayhemEachDinglerRecoveryChoiceHandler,
+  mayhem_lowest_life_players_gain_dingler_and_set_to_max_life:
+    mayhemLowestLifeDinglerMaxLifeHandler,
+  replace_starting_card: replaceStartingCardHandler,
+  start_with_basic_trophy: startWithBasicTrophyHandler,
+  force_starting_player: forceStartingPlayerHandler,
+  set_starting_life_total: setStartingLifeTotalHandler,
+  set_resurrection_life_total: setResurrectionLifeTotalHandler,
+  modify_effective_value: modifyEffectiveValueHandler,
+  fixture_modify_effective_value: fixtureModifyEffectiveValueHandler,
+  fixture_add_power_equal_to_target_cost:
+    fixtureAddPowerEqualToTargetCostHandler,
+  topdeck_gained_card: topdeckGainedCardHandler,
+  temporary_hand_limit_by_gained_card_type:
+    temporaryHandLimitByGainedCardTypeHandler,
+  modify_owned_wand_attack_damage: modifyOwnedWandAttackDamageHandler,
+  prevent_defense_against_owned_wand_attacks:
+    preventDefenseAgainstOwnedWandAttacksHandler,
+  attack_damage: attackDamageHandler,
+  avoid_attack: avoidAttackHandler,
+  gain_chips: gainChipsHandler,
+  gain_chips_per_player_with_status: gainChipsPerPlayerWithStatusHandler,
+  draw_cards: drawCardsHandler,
+  reveal_top_card: revealTopCardHandler,
+  play_top_card: playTopCardHandler,
+  play_top_card_from_foe_deck: playTopCardFromFoeDeckHandler,
+  wild_magic_choice: wildMagicChoiceHandler,
+  directional_chain_attack: directionalChainAttackHandler,
+  multi_target_attack: multiTargetAttackHandler,
+  mayhem_attack: mayhemAttackHandler,
+  activation_destroy_self_then_destroy_own_cards:
+    createUnsupportedEffectHandler(
+      "activation_destroy_self_then_destroy_own_cards"
+    ),
+  add_power_per_controlled_permanent: createUnsupportedEffectHandler(
+    "add_power_per_controlled_permanent"
   ),
-  mayhem_each_player_choose_discard_hand_draw_or_take_damage: toCatalogEntry(
-    mayhemEachPlayerHandRedrawChoiceHandler
+  attack_damage_equal_remembered_card_cost: createUnsupportedEffectHandler(
+    "attack_damage_equal_remembered_card_cost"
   ),
-  mayhem_each_player_reduce_life_to_gain_chips: toCatalogEntry(
-    mayhemEachPlayerReduceLifeToGainChipsHandler
+  attack_destroy_top_legend_deck_then_damage_equal_cost:
+    createUnsupportedEffectHandler(
+      "attack_destroy_top_legend_deck_then_damage_equal_cost"
+    ),
+  attack_discard_cards: createUnsupportedEffectHandler("attack_discard_cards"),
+  attack_gain_limp_wand: createUnsupportedEffectHandler(
+    "attack_gain_limp_wand"
   ),
-  increase_hand_limit_at_max_life: toCatalogEntry(
-    increaseHandLimitAtMaxLifeHandler
+  conditional_activation_attack_damage: createUnsupportedEffectHandler(
+    "conditional_activation_attack_damage"
   ),
-  mayhem_each_player_battle_highest_hand_cost: toCatalogEntry(
-    mayhemEachPlayerBattleHighestHandCostHandler
+  conditional_activation_destroy_own_cards: createUnsupportedEffectHandler(
+    "conditional_activation_destroy_own_cards"
   ),
-  mayhem_each_player_vote_dingler: toCatalogEntry(
-    mayhemEachPlayerVoteDinglerHandler
+  conditional_activation_gain_chips: createUnsupportedEffectHandler(
+    "conditional_activation_gain_chips"
   ),
-  mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status: toCatalogEntry(
-    mayhemEachDinglerRecoveryChoiceHandler
+  controls_other_card_type: createUnsupportedEffectHandler(
+    "controls_other_card_type"
   ),
-  mayhem_lowest_life_players_gain_dingler_and_set_to_max_life: toCatalogEntry(
-    mayhemLowestLifeDinglerMaxLifeHandler
+  defense_discard_self_avoid_attack_then_optional_destroy_hand_card:
+    createUnsupportedEffectHandler(
+      "defense_discard_self_avoid_attack_then_optional_destroy_hand_card"
+    ),
+  destroy_own_cards: createUnsupportedEffectHandler("destroy_own_cards"),
+  destroy_random_legend_market_card: createUnsupportedEffectHandler(
+    "destroy_random_legend_market_card"
   ),
-  replace_starting_card: toCatalogEntry(replaceStartingCardHandler),
-  start_with_basic_trophy: toCatalogEntry(startWithBasicTrophyHandler),
-  force_starting_player: toCatalogEntry(forceStartingPlayerHandler),
-  set_starting_life_total: toCatalogEntry(setStartingLifeTotalHandler),
-  set_resurrection_life_total: toCatalogEntry(setResurrectionLifeTotalHandler),
-  modify_effective_value: toCatalogEntry(modifyEffectiveValueHandler),
-  fixture_modify_effective_value: toFixtureOnlyCatalogEntry(
-    fixtureModifyEffectiveValueHandler
+  destroyed_card_kind_is: createUnsupportedEffectHandler(
+    "destroyed_card_kind_is"
   ),
-  fixture_add_power_equal_to_target_cost: toFixtureOnlyCatalogEntry(
-    fixtureAddPowerEqualToTargetCostHandler
+  discard_hand_then_draw_cards: createUnsupportedEffectHandler(
+    "discard_hand_then_draw_cards"
   ),
-  topdeck_gained_card: toCatalogEntry(topdeckGainedCardHandler),
-  temporary_hand_limit_by_gained_card_type: toCatalogEntry(
-    temporaryHandLimitByGainedCardTypeHandler
+  discard_self: createUnsupportedEffectHandler("discard_self"),
+  endgame_limp_wands_score_positive: createUnsupportedEffectHandler(
+    "endgame_limp_wands_score_positive"
   ),
-  modify_owned_wand_attack_damage: toCatalogEntry(
-    modifyOwnedWandAttackDamageHandler
+  endgame_vp_per_owned_legend: createUnsupportedEffectHandler(
+    "endgame_vp_per_owned_legend"
   ),
-  prevent_defense_against_owned_wand_attacks: toCatalogEntry(
-    preventDefenseAgainstOwnedWandAttacksHandler
+  gain_chips_equal_damage_dealt: createUnsupportedEffectHandler(
+    "gain_chips_equal_damage_dealt"
   ),
-  attack_damage: toCatalogEntry(attackDamageHandler),
-  avoid_attack: toCatalogEntry(avoidAttackHandler),
-  gain_chips: toCatalogEntry(gainChipsHandler),
-  gain_chips_per_player_with_status: toCatalogEntry(
-    gainChipsPerPlayerWithStatusHandler
+  heal_equal_damage_dealt: createUnsupportedEffectHandler(
+    "heal_equal_damage_dealt"
   ),
-  draw_cards: toCatalogEntry(drawCardsHandler),
-  reveal_top_card: toCatalogEntry(revealTopCardHandler),
-  play_top_card: toCatalogEntry(playTopCardHandler),
-  play_top_card_from_foe_deck: toCatalogEntry(playTopCardFromFoeDeckHandler),
-  wild_magic_choice: toCatalogEntry(wildMagicChoiceHandler),
-  directional_chain_attack: toCatalogEntry(directionalChainAttackHandler),
-  multi_target_attack: toCatalogEntry(multiTargetAttackHandler),
-  mayhem_attack: toCatalogEntry(mayhemAttackHandler),
-} satisfies Partial<Record<RuntimeEffectId, EffectRuntimeCatalogEntry>>;
+  on_gain_self_gain_limp_wands: createUnsupportedEffectHandler(
+    "on_gain_self_gain_limp_wands"
+  ),
+  ongoing_add_power: createUnsupportedEffectHandler("ongoing_add_power"),
+  ongoing_add_power_when_playing_limp_wand: createUnsupportedEffectHandler(
+    "ongoing_add_power_when_playing_limp_wand"
+  ),
+  ongoing_first_attack_damage_add_power: createUnsupportedEffectHandler(
+    "ongoing_first_attack_damage_add_power"
+  ),
+  ongoing_hand_refill_bonus: createUnsupportedEffectHandler(
+    "ongoing_hand_refill_bonus"
+  ),
+  ongoing_start_turn_optional_gain_limp_wand_to_hand:
+    createUnsupportedEffectHandler(
+      "ongoing_start_turn_optional_gain_limp_wand_to_hand"
+    ),
+  optional_gain_market_cards_to_hand_this_turn: createUnsupportedEffectHandler(
+    "optional_gain_market_cards_to_hand_this_turn"
+  ),
+  optional_spend_chip_attack_damage: createUnsupportedEffectHandler(
+    "optional_spend_chip_attack_damage"
+  ),
+  optional_spend_chip_destroy_own_cards: createUnsupportedEffectHandler(
+    "optional_spend_chip_destroy_own_cards"
+  ),
+  return_discard_to_hand: createUnsupportedEffectHandler(
+    "return_discard_to_hand"
+  ),
+} satisfies Record<RuntimeEffectId, EffectRuntimeHandler>;
+
+const effectRuntimeCatalogModes = {
+  add_power: allEffectRuntimeModes,
+  add_power_per_player_with_status: allEffectRuntimeModes,
+  add_power_if_player_has_status: allEffectRuntimeModes,
+  add_power_per_controlled_object: allEffectRuntimeModes,
+  gain_card: allEffectRuntimeModes,
+  discard_card: allEffectRuntimeModes,
+  destroy_card: allEffectRuntimeModes,
+  deal_damage: allEffectRuntimeModes,
+  heal: allEffectRuntimeModes,
+  heal_equal_damage_dealt_on_own_turn: allEffectRuntimeModes,
+  set_life: allEffectRuntimeModes,
+  exchange_life_and_dingler_status: allEffectRuntimeModes,
+  attack_damage_equal_to_controlled_card_cost: allEffectRuntimeModes,
+  gain_status: allEffectRuntimeModes,
+  attack_gain_status: allEffectRuntimeModes,
+  remove_status: allEffectRuntimeModes,
+  toggle_status: allEffectRuntimeModes,
+  mega_mayhem_set_life: allEffectRuntimeModes,
+  mega_mayhem_each_player_toggle_dingler: allEffectRuntimeModes,
+  mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem:
+    allEffectRuntimeModes,
+  mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none:
+    allEffectRuntimeModes,
+  mayhem_each_player_discard_deck_then_destroy_from_discard:
+    allEffectRuntimeModes,
+  mayhem_each_player_choose_discard_hand_draw_or_take_damage:
+    allEffectRuntimeModes,
+  mayhem_each_player_reduce_life_to_gain_chips: allEffectRuntimeModes,
+  increase_hand_limit_at_max_life: allEffectRuntimeModes,
+  mayhem_each_player_battle_highest_hand_cost: allEffectRuntimeModes,
+  mayhem_each_player_vote_dingler: allEffectRuntimeModes,
+  mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status:
+    allEffectRuntimeModes,
+  mayhem_lowest_life_players_gain_dingler_and_set_to_max_life:
+    allEffectRuntimeModes,
+  replace_starting_card: allEffectRuntimeModes,
+  start_with_basic_trophy: allEffectRuntimeModes,
+  force_starting_player: allEffectRuntimeModes,
+  set_starting_life_total: allEffectRuntimeModes,
+  set_resurrection_life_total: allEffectRuntimeModes,
+  modify_effective_value: allEffectRuntimeModes,
+  fixture_modify_effective_value: ["fixture"],
+  fixture_add_power_equal_to_target_cost: ["fixture"],
+  topdeck_gained_card: allEffectRuntimeModes,
+  temporary_hand_limit_by_gained_card_type: allEffectRuntimeModes,
+  modify_owned_wand_attack_damage: allEffectRuntimeModes,
+  prevent_defense_against_owned_wand_attacks: allEffectRuntimeModes,
+  attack_damage: allEffectRuntimeModes,
+  avoid_attack: allEffectRuntimeModes,
+  gain_chips: allEffectRuntimeModes,
+  gain_chips_per_player_with_status: allEffectRuntimeModes,
+  draw_cards: allEffectRuntimeModes,
+  reveal_top_card: allEffectRuntimeModes,
+  play_top_card: allEffectRuntimeModes,
+  play_top_card_from_foe_deck: allEffectRuntimeModes,
+  wild_magic_choice: allEffectRuntimeModes,
+  directional_chain_attack: allEffectRuntimeModes,
+  multi_target_attack: allEffectRuntimeModes,
+  mayhem_attack: allEffectRuntimeModes,
+} satisfies Partial<Record<RuntimeEffectId, readonly EffectRuntimeMode[]>>;
+
+export const effectRuntimeCatalogSource = Object.fromEntries(
+  Object.entries(effectRuntimeCatalogModes).map(
+    ([effectId, supportedModes]) => {
+      const runtimeEffectId = effectId as RuntimeEffectId;
+      return [
+        runtimeEffectId,
+        {
+          effectId: runtimeEffectId,
+          handler: effectRuntimeHandlerMap[runtimeEffectId],
+          supportedModes,
+        },
+      ];
+    }
+  )
+) as Partial<Record<RuntimeEffectId, EffectRuntimeCatalogEntry>>;
 
 export const effectRuntimeCatalog = new Map<
   RuntimeEffectId,
@@ -4362,24 +4507,4 @@ export function isEffectRuntimeCatalogEntrySupportedInMode(
   mode: EffectRuntimeMode
 ): boolean {
   return entry.supportedModes.includes(mode);
-}
-
-function toCatalogEntry(
-  handler: EffectRuntimeHandler
-): EffectRuntimeCatalogEntry {
-  return {
-    effectId: handler.effectId,
-    handler,
-    supportedModes: allEffectRuntimeModes,
-  };
-}
-
-function toFixtureOnlyCatalogEntry(
-  handler: EffectRuntimeHandler
-): EffectRuntimeCatalogEntry {
-  return {
-    effectId: handler.effectId,
-    handler,
-    supportedModes: ["fixture"],
-  };
 }
