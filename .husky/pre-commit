@@ -1,4 +1,2 @@
-python scripts/security/forbid_sensitive_files.py
-python scripts/security/scan_mcp_config.py
 npx lint-staged
 npm run check

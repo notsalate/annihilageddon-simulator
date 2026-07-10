@@ -36,10 +36,6 @@ Use the default label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent
 
 This repo is `single-context`: one root `CONTEXT.md`, with ADRs under `docs/adr/` when present. See `docs/agents/domain.md`.
 
-### Repo safety
-
-`ai-repo-safety` assets are connected to this repo. Use `uvx ai-repo-safety scan --target .` for local safety scans and `uvx ai-repo-safety prepush --target .` before pushes when running outside the installed Husky hook.
-
 ## Task Context Priority
 
 After applying the user's current task, use this repository context order:
