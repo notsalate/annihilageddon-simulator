@@ -15,6 +15,7 @@ import {
   type LoadedDataPack,
   type RuntimeEffect,
   type RuntimeEffectCondition,
+  type RuntimeEffectCost,
   type RuntimeEffectId,
   type RuntimeEffectSelectorTarget,
   type RuntimeEffectTarget,
@@ -70,6 +71,15 @@ test("runtime effect conditions are exposed as a typed union", () => {
   };
 
   assert.equal(condition.conditionId, "control_count");
+});
+
+test("runtime effect costs are exposed as a typed union", () => {
+  const cost: RuntimeEffectCost = {
+    costId: "spend_chips",
+    amount: 2,
+  };
+
+  assert.equal(cost.costId, "spend_chips");
 });
 
 test("effect runtime catalog accepts only decoded runtime effect ids", () => {
@@ -358,6 +368,12 @@ test("runtime data decoder rejects invalid card and token definition field shape
             conditionId: "unsupported_condition",
           },
         },
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 1,
+          costs: [{ costId: "unsupported_cost" }],
+        },
       ],
     },
   });
@@ -433,6 +449,11 @@ test("runtime data decoder rejects invalid card and token definition field shape
     );
     assert.ok(
       result.errors.some((error) =>
+        error.includes("engine.effects[4].costs must use supported cost shapes")
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
         error.startsWith(
           "Runtime data tokenDefinitionPaths tokens/bad-token.json:"
         )
@@ -468,6 +489,7 @@ test("runtime data decoder does not pass raw object fields through", () => {
             cardTypes: ["treasure"],
             minimumCount: 2,
           },
+          costs: [{ costId: "spend_chips", amount: 1 }],
         },
       ],
     },
@@ -568,6 +590,9 @@ test("runtime data decoder does not pass raw object fields through", () => {
       cardTypes: ["treasure"],
       minimumCount: 2,
     });
+    assert.deepEqual(decodedCard!.engine.effects[0]?.costs, [
+      { costId: "spend_chips", amount: 1 },
+    ]);
     assert.equal("rawOnly" in decodedToken!, false);
     assert.equal("rawOnly" in result.value.decks.starterDeck, false);
     assert.equal(

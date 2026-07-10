@@ -10,6 +10,7 @@ import {
 import {
   isEffectTiming,
   isRuntimeEffectCondition,
+  isRuntimeEffectCost,
   isRuntimeEffectTarget,
   isRuntimeEffectTargetSelector,
   isRuntimeEffectId,
@@ -1698,6 +1699,15 @@ function requireRuntimeEffectArrayField(
       errors.push(
         `${label}[${index}].condition must use a supported condition shape`
       );
+      continue;
+    }
+
+    if (
+      value["costs"] !== undefined &&
+      (!Array.isArray(value["costs"]) ||
+        !value["costs"].every(isRuntimeEffectCost))
+    ) {
+      errors.push(`${label}[${index}].costs must use supported cost shapes`);
       continue;
     }
 

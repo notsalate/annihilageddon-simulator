@@ -127,6 +127,25 @@ export type RuntimeEffectCondition =
   | ControlCountEffectCondition
   | LegacyControlsOtherCardTypeEffectCondition;
 
+export interface DiscardOtherHandCardRuntimeEffectCost {
+  costId: "discard_other_hand_card";
+}
+
+export interface SpendChipsRuntimeEffectCost {
+  costId: "spend_chips";
+  amount: number;
+}
+
+export interface PayLifeRuntimeEffectCost {
+  costId: "pay_life";
+  amount: number;
+}
+
+export type RuntimeEffectCost =
+  | DiscardOtherHandCardRuntimeEffectCost
+  | SpendChipsRuntimeEffectCost
+  | PayLifeRuntimeEffectCost;
+
 const knownRuntimeEffectIds = [
   "activation_destroy_self_then_destroy_own_cards",
   "add_power",
@@ -219,6 +238,7 @@ type RuntimeEffectVariant<EffectId extends KnownRuntimeEffectId> = {
   effectId: EffectId;
   timing: EffectTiming;
   condition?: RuntimeEffectCondition;
+  costs?: RuntimeEffectCost[];
   target?: RuntimeEffectTarget;
   targetSelector?: RuntimeEffectTargetSelector;
 } & Record<string, unknown>;
@@ -256,6 +276,25 @@ export function isRuntimeEffectCondition(
     typeof value["cardType"] === "string" &&
     typeof value["minimum"] === "number" &&
     Number.isSafeInteger(value["minimum"])
+  );
+}
+
+export function isRuntimeEffectCost(
+  value: unknown
+): value is RuntimeEffectCost {
+  if (!isRuntimeEffectTargetRecord(value)) {
+    return false;
+  }
+
+  if (value["costId"] === "discard_other_hand_card") {
+    return true;
+  }
+
+  return (
+    (value["costId"] === "spend_chips" || value["costId"] === "pay_life") &&
+    typeof value["amount"] === "number" &&
+    Number.isSafeInteger(value["amount"]) &&
+    value["amount"] > 0
   );
 }
 

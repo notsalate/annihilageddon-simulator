@@ -5,7 +5,11 @@ import {
 } from "./effective-values.js";
 import { recordTurnPowerChanged } from "./event-recorder.js";
 import { isPlainRecord } from "../common.js";
-import { isRuntimeEffectId, type RuntimeEffectId } from "./runtime-effect.js";
+import {
+  isRuntimeEffectId,
+  type RuntimeEffect,
+  type RuntimeEffectId,
+} from "./runtime-effect.js";
 
 import type {
   CardInstance,
@@ -2304,7 +2308,7 @@ const attackDamageHandler: EffectRuntimeHandler = {
     const costResult = payOptionalCosts(
       state,
       player,
-      effect,
+      effect as RuntimeEffect,
       source,
       services
     );
@@ -2441,7 +2445,7 @@ const attackDamageEqualToControlledCardCostHandler: EffectRuntimeHandler = {
     const costResult = payOptionalCosts(
       state,
       player,
-      effect,
+      effect as RuntimeEffect,
       source,
       services
     );
@@ -3723,32 +3727,18 @@ function validateMayhemDinglerRecoveryShape(
 function payOptionalCosts(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffect,
   source: EffectSourceContext,
   services: EffectRuntimeServices
 ): EffectExecutionResult & { skipped?: boolean } {
-  const costs = effect["costs"];
+  const { costs } = effect;
   if (costs === undefined) {
     return { ok: true };
   }
 
-  if (!Array.isArray(costs)) {
-    return { ok: false, error: "Invalid attack costs" };
-  }
-
   if (effect["optional"] === true) {
     const canPay = costs.every((cost) => {
-      if (!isEffectRecord(cost) || cost["costId"] !== "spend_chips") {
-        return false;
-      }
-
-      const amount = cost["amount"];
-      return (
-        typeof amount === "number" &&
-        Number.isSafeInteger(amount) &&
-        amount > 0 &&
-        player.chips >= amount
-      );
+      return cost.costId === "spend_chips" && player.chips >= cost.amount;
     });
     const choices: EffectChoice[] = canPay
       ? [
@@ -3777,23 +3767,14 @@ function payOptionalCosts(
   }
 
   for (const cost of costs) {
-    if (!isEffectRecord(cost) || cost["costId"] !== "spend_chips") {
+    if (cost.costId !== "spend_chips") {
       return {
         ok: false,
-        error: `Unsupported attack cost ${String(isEffectRecord(cost) ? cost["costId"] : cost)}`,
+        error: `Unsupported attack cost ${cost.costId}`,
       };
     }
 
-    const amount = cost["amount"];
-    if (
-      typeof amount !== "number" ||
-      !Number.isSafeInteger(amount) ||
-      amount <= 0
-    ) {
-      return { ok: false, error: `Invalid chip cost ${String(amount)}` };
-    }
-
-    if (player.chips < amount) {
+    if (player.chips < cost.amount) {
       if (effect["optional"] === true) {
         return { ok: true, skipped: true };
       }
@@ -3801,7 +3782,7 @@ function payOptionalCosts(
       return { ok: false, error: "Cannot pay chip cost" };
     }
 
-    player.chips -= amount;
+    player.chips -= cost.amount;
     state.eventLog.push({
       type: "effectCostPaid",
       playerId: player.playerId,
@@ -3809,7 +3790,7 @@ function payOptionalCosts(
       definitionId: source.definitionId,
       effectId: services.asString(effect["effectId"]),
       costId: "spend_chips",
-      amount,
+      amount: cost.amount,
       sourceType: source.sourceType,
     });
   }

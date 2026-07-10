@@ -7901,7 +7901,7 @@ function addFixtureDefenseCardToHand(
   player: PlayerState,
   destination: "discardSelf" | "topdeckSelf",
   options: {
-    costs?: unknown[];
+    costs?: Exclude<RuntimeEffect["costs"], undefined>;
     branchEffects?: unknown[];
   } = {}
 ): CardInstance {
@@ -7932,7 +7932,7 @@ function addFixtureDefenseCardToHand(
           effectId: "avoid_attack",
           timing: "onDefense",
           destination,
-          costs: options.costs,
+          ...(options.costs === undefined ? {} : { costs: options.costs }),
           branchEffects: options.branchEffects,
         },
       ],

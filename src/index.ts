@@ -37,6 +37,7 @@ export type {
   EffectTiming,
   RuntimeEffect,
   RuntimeEffectCondition,
+  RuntimeEffectCost,
   RuntimeEffectId,
   RuntimeEffectSelectorTarget,
   RuntimeEffectTarget,
