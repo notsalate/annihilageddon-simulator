@@ -44,12 +44,6 @@ const allowedViolations = [
     issue: "#52",
     expectedCount: 1,
   },
-  {
-    filePath: "src/engine/setup.ts",
-    source: "effects: unknown[];",
-    issues: ["#53", "#54"],
-    expectedCount: 1,
-  },
 ];
 
 const violations = collectViolations(path.join(ROOT_DIR, TARGET_DIR));

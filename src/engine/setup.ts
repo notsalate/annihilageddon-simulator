@@ -53,7 +53,7 @@ export interface TrophyLikeInstance {
   instanceId: string;
   trophyId: string;
   ownerId: PlayerId;
-  effects: unknown[];
+  effects: RuntimeEffect[];
 }
 
 export interface PlayerState {
