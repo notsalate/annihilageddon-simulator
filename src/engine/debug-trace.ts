@@ -1,4 +1,4 @@
-import type { GameEvent } from "./setup.js";
+import type { GameEventForTrace } from "./setup.js";
 import type {
   SetupCardSnapshot,
   SetupPlayerSnapshot,
@@ -132,7 +132,7 @@ function formatSetupToken(
 }
 
 function formatEvent(
-  event: GameEvent,
+  event: GameEventForTrace,
   options: FormatSingleGameDebugTraceOptions
 ): string | undefined {
   if (event.type === "setupChoiceSelected" && event.playerId !== undefined) {
@@ -319,7 +319,7 @@ function formatEvent(
   return undefined;
 }
 
-function isSetupTraceEvent(event: GameEvent): boolean {
+function isSetupTraceEvent(event: GameEventForTrace): boolean {
   return (
     event.type === "setupChoiceSelected" ||
     event.sourceType === "setup" ||
@@ -327,13 +327,13 @@ function isSetupTraceEvent(event: GameEvent): boolean {
   );
 }
 
-function getTraceGroupIdentity(event: GameEvent): string {
+function getTraceGroupIdentity(event: GameEventForTrace): string {
   return event.actionSequence === undefined
     ? `turn:${event.turnNumber ?? "?"}:${event.playerId ?? "<unknown-player>"}`
     : `action:${event.actionSequence}:turn:${event.turnNumber ?? "?"}`;
 }
 
-function formatTraceHeader(event: GameEvent): string | undefined {
+function formatTraceHeader(event: GameEventForTrace): string | undefined {
   if (isPreActionMarketFlowEvent(event)) {
     return `Turn ${event.turnNumber ?? "?"} — before ${event.playerId ?? "active player"} actions`;
   }
@@ -351,7 +351,7 @@ function formatTraceHeader(event: GameEvent): string | undefined {
   return undefined;
 }
 
-function isPreActionMarketFlowEvent(event: GameEvent): boolean {
+function isPreActionMarketFlowEvent(event: GameEventForTrace): boolean {
   return (
     event.actionIdentity === "endTurn" &&
     [
@@ -365,7 +365,7 @@ function isPreActionMarketFlowEvent(event: GameEvent): boolean {
 }
 
 function formatCard(
-  event: GameEvent,
+  event: GameEventForTrace,
   options: FormatSingleGameDebugTraceOptions
 ): string {
   const definitionId = event.definitionId ?? "<unknown-card>";
@@ -376,7 +376,7 @@ function formatCard(
 }
 
 function formatTargetCard(
-  event: GameEvent,
+  event: GameEventForTrace,
   options: FormatSingleGameDebugTraceOptions
 ): string {
   const definitionId = event.targetDefinitionId ?? "<unknown-card>";
@@ -387,7 +387,7 @@ function formatTargetCard(
 }
 
 function formatToken(
-  event: GameEvent,
+  event: GameEventForTrace,
   options: FormatSingleGameDebugTraceOptions
 ): string {
   const definitionId = event.tokenDefinitionId ?? "<unknown-token>";
@@ -399,7 +399,7 @@ function formatToken(
 
 function formatDefinitionLabel(
   definitionId: string,
-  event: GameEvent,
+  event: GameEventForTrace,
   options: FormatSingleGameDebugTraceOptions
 ): string {
   return event.setupChoiceKind === "wizardProperty"
@@ -408,7 +408,7 @@ function formatDefinitionLabel(
 }
 
 function formatTextSuffix(
-  event: GameEvent,
+  event: GameEventForTrace,
   options: FormatSingleGameDebugTraceOptions
 ): string {
   const text =
@@ -420,7 +420,7 @@ function formatTextSuffix(
 
 function formatDefinitionTextSuffix(
   definitionId: string,
-  event: GameEvent,
+  event: GameEventForTrace,
   options: FormatSingleGameDebugTraceOptions
 ): string {
   const text =
@@ -440,14 +440,14 @@ function formatTextBlock(text: string): string {
   );
 }
 
-function formatTargetLifeDelta(event: GameEvent): string {
+function formatTargetLifeDelta(event: GameEventForTrace): string {
   return event.targetLifeBefore === undefined ||
     event.targetLifeAfter === undefined
     ? ""
     : ` Life ${event.targetLifeBefore} -> ${event.targetLifeAfter}.`;
 }
 
-function formatPaymentSummary(event: GameEvent): string {
+function formatPaymentSummary(event: GameEventForTrace): string {
   const parts: string[] = [];
   if (event.powerBefore !== undefined && event.powerAfter !== undefined) {
     parts.push(
@@ -472,7 +472,7 @@ function formatPaymentSummary(event: GameEvent): string {
 }
 
 function formatTargetDefinitionList(
-  event: GameEvent,
+  event: GameEventForTrace,
   options: FormatSingleGameDebugTraceOptions
 ): string {
   const definitionIds = event.targetDefinitionIds ?? [];

@@ -174,6 +174,7 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
       },
       {
         type: "marketFlowCardAdded",
+        playerId: markPlayerId("player-1"),
         sourceType: "setup",
         destinationZone: "legendMarket",
         cardInstanceId: "card-legend",
@@ -203,6 +204,7 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
         amount: 15,
         targetLifeBefore: 4,
         targetLifeAfter: 15,
+        sourceType: "card",
       },
       {
         type: "mayhemResolved",
