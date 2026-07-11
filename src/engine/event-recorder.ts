@@ -1,8 +1,14 @@
 import type { GameAction } from "./actions.js";
 import type { EffectSourceContext } from "./effect-runtime-registry.js";
 import { beginGameAction } from "./game-events.js";
+<<<<<<< HEAD
 import type { RuntimeEffectId } from "./runtime-effect.js";
-import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import type {
+  CardInstance,
+  GameEventSourceType,
+  GameState,
+  PlayerState,
+} from "./setup.js";
 
 export function recordBotActionSelected(
   state: GameState,
@@ -91,7 +97,7 @@ export function recordCardMoved(
     ownerBefore: CardInstance["ownerId"];
     ownerAfter: CardInstance["ownerId"];
     effectId?: string;
-    sourceType?: string;
+    sourceType?: GameEventSourceType;
   }
 ): void {
   state.eventLog.push({

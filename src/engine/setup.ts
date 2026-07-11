@@ -240,6 +240,14 @@ export type GameEventType =
   | "wildMagicChoiceSkipped"
   | "wizardPropertyActivated";
 
+export type GameEventSourceType = "card" | "wizardProperty" | "setup" | "turn";
+
+export type GameEventDestination =
+  | "discard"
+  | "deckTop"
+  | "discardSelf"
+  | "topdeckSelf";
+
 interface GameEventMetadata {
   eventSequence?: number;
   turnNumber?: number;
@@ -273,15 +281,15 @@ interface GameEventPayload {
   costId?: string;
   choiceId?: string;
   choiceIds?: string[];
-  direction?: string;
+  direction?: "left" | "right";
   legalChoiceCount?: number;
   amount?: number;
-  destination?: string;
+  destination?: GameEventDestination;
   targetCardInstanceIds?: string[];
   targetDefinitionIds?: string[];
   participantPlayerIds?: PlayerId[];
   winnerPlayerIds?: PlayerId[];
-  sourceType?: string;
+  sourceType?: GameEventSourceType;
   setupChoiceKind?: "familiar" | "wizardProperty";
   policyId?: string;
   candidateDefinitionIds?: string[];
