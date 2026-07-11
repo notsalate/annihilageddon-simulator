@@ -288,7 +288,7 @@ function createCardDraft(
     });
   }
 
-  const draft: CardDraftImportModel = {
+  const draft = {
     schemaVersion: 1,
     draftKind: "cardDraft",
     cardId,
@@ -308,13 +308,10 @@ function createCardDraft(
       uncertainty: [],
     },
     notes,
-  };
-
-  if (compositionQuantity !== null) {
-    draft.composition = {
-      quantity: compositionQuantity,
-    };
-  }
+    ...(compositionQuantity === null
+      ? {}
+      : { composition: { quantity: compositionQuantity } }),
+  } satisfies CardDraftImportModel;
 
   return draft;
 }
