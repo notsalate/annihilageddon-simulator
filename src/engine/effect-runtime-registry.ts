@@ -3,7 +3,7 @@ import {
   calculateEffectiveCardCost,
   calculateEffectivePlayerMaxLife,
 } from "./effective-values.js";
-import { recordTurnPowerChanged } from "./event-recorder.js";
+import { recordGameEvent, recordTurnPowerChanged } from "./event-recorder.js";
 import { isPlainRecord } from "../common.js";
 import {
   isRuntimeEffectSelectorTarget,
@@ -459,7 +459,7 @@ const gainCardHandler: EffectRuntimeHandler = {
       return moved;
     }
 
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectCardGained",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -522,7 +522,7 @@ const discardCardHandler: EffectRuntimeHandler = {
       };
     }
 
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectCardDiscarded",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -589,7 +589,7 @@ const destroyCardHandler: EffectRuntimeHandler = {
       };
     }
 
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectCardDestroyed",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -789,7 +789,7 @@ const setLifeHandler: EffectRuntimeHandler = {
       targetResult.choice.player,
       lifeTotal
     );
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectLifeSet",
       playerId: player.playerId,
       targetPlayerId: targetResult.choice.player.playerId,
@@ -957,7 +957,7 @@ function exchangeLifeAndOrDinglerStatus(
     const playerLife = player.life.current;
     player.life.current = targetPlayer.life.current;
     targetPlayer.life.current = playerLife;
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectLifeExchanged",
       playerId: player.playerId,
       targetPlayerId: targetPlayer.playerId,
@@ -1054,7 +1054,7 @@ const attackGainStatusHandler: EffectRuntimeHandler = {
 
     const effectId = effect.effectId;
     for (const targetPlayer of targetResult.players) {
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "attackCreated",
         playerId: player.playerId,
         targetPlayerId: targetPlayer.playerId,
@@ -1064,7 +1064,7 @@ const attackGainStatusHandler: EffectRuntimeHandler = {
         sourceType: source.sourceType,
       });
       if (services.resolveDefenseWindow(state, targetPlayer)) {
-        state.eventLog.push({
+        recordGameEvent(state, {
           type: "attackAvoided",
           playerId: targetPlayer.playerId,
           targetPlayerId: targetPlayer.playerId,
@@ -1189,7 +1189,7 @@ const megaMayhemSetLifeHandler: EffectRuntimeHandler = {
 
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
       const lifeChange = services.setPlayerLife(state, targetPlayer, lifeTotal);
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "effectLifeSet",
         playerId: player.playerId,
         targetPlayerId: targetPlayer.playerId,
@@ -1250,7 +1250,7 @@ const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler = {
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
       const destroyedCard = state.common.mainDeck.shift();
       if (destroyedCard === undefined) {
-        state.eventLog.push({
+        recordGameEvent(state, {
           type: "effectDestroyTopMainDeckSkipped",
           playerId: targetPlayer.playerId,
           cardInstanceId: source.cardInstanceId,
@@ -1267,7 +1267,7 @@ const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler = {
       }
 
       destination.zone.push(destroyedCard);
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "effectTopMainDeckCardDestroyed",
         playerId: targetPlayer.playerId,
         cardInstanceId: source.cardInstanceId,
@@ -1354,7 +1354,7 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler = {
         }
       }
 
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "mayhemDiscardedTopDeckCardsDestroyed",
         playerId: targetPlayer.playerId,
         cardInstanceId: source.cardInstanceId,
@@ -1419,7 +1419,7 @@ const mayhemEachPlayerDiscardDeckDestroyHandler: EffectRuntimeHandler = {
         }
       }
 
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "mayhemDeckDiscardedThenDiscardCardDestroyed",
         playerId: targetPlayer.playerId,
         cardInstanceId: source.cardInstanceId,
@@ -1523,7 +1523,7 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
         redrawOption["drawAmount"],
         state
       );
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "mayhemHandDiscardedAndRedrawn",
         playerId: targetPlayer.playerId,
         cardInstanceId: source.cardInstanceId,
@@ -1612,7 +1612,7 @@ const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler = {
       const lifeChange = services.setPlayerLife(state, targetPlayer, lifeTotal);
       const chipsBefore = targetPlayer.chips;
       targetPlayer.chips += chipAmount;
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "effectLifeSet",
         playerId: targetPlayer.playerId,
         targetPlayerId: targetPlayer.playerId,
@@ -1711,7 +1711,7 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler = {
 
       const handCost = sumHandCost(state, targetPlayer);
       participants.push({ player: targetPlayer, handCost });
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "mayhemBattleParticipationSelected",
         playerId: targetPlayer.playerId,
         cardInstanceId: source.cardInstanceId,
@@ -1741,7 +1741,7 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler = {
       participant.player.discard.push(...participant.player.hand.splice(0));
     }
 
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "mayhemBattleResolved",
       playerId: source.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -1803,7 +1803,7 @@ const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler = {
         votedPlayer.playerId,
         (votes.get(votedPlayer.playerId) ?? 0) + 1
       );
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "mayhemVoteRecorded",
         playerId: votingPlayer.playerId,
         targetPlayerId: votedPlayer.playerId,
@@ -1822,7 +1822,7 @@ const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler = {
       services.gainDinglerStatus(state, winner, effectId, source);
     }
 
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "mayhemVoteResolved",
       playerId: source.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -1885,7 +1885,7 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler = {
       );
       if (choice?.choiceId === "pay_life") {
         targetPlayer.life.current -= lifeCost;
-        state.eventLog.push({
+        recordGameEvent(state, {
           type: "effectCostPaid",
           playerId: targetPlayer.playerId,
           cardInstanceId: source.cardInstanceId,
@@ -1901,7 +1901,7 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler = {
 
       if (choice?.choiceId === "spend_chips") {
         targetPlayer.chips -= chipCost;
-        state.eventLog.push({
+        recordGameEvent(state, {
           type: "effectCostPaid",
           playerId: targetPlayer.playerId,
           cardInstanceId: source.cardInstanceId,
@@ -1973,7 +1973,7 @@ const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler = {
         targetPlayer.playerId
       );
       services.setPlayerLife(state, targetPlayer, maxLife);
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "effectLifeSet",
         playerId: source.playerId,
         targetPlayerId: targetPlayer.playerId,
@@ -2219,7 +2219,7 @@ const fixtureAddPowerEqualToTargetCostHandler: EffectRuntimeHandler = {
     }
 
     state.turn.power += definition.engine.cost;
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectFixtureTargetCostPowerApplied",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -2673,7 +2673,7 @@ function executeAttackWithAmount(
   const effectId = effect.effectId;
 
   if (effect["targetSelector"] === "eachFoe") {
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "attackCreated",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -2735,7 +2735,7 @@ function executeAttackWithAmount(
   }
 
   const targetPlayer = targetResult.choice.player;
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "attackCreated",
     playerId: player.playerId,
     targetPlayerId: targetPlayer.playerId,
@@ -2749,7 +2749,7 @@ function executeAttackWithAmount(
     !attackProfile.unavoidable &&
     services.resolveDefenseWindow(state, targetPlayer)
   ) {
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "attackAvoided",
       playerId: targetPlayer.playerId,
       targetPlayerId: targetPlayer.playerId,
@@ -2912,7 +2912,7 @@ const drawCardsHandler: EffectRuntimeHandler = {
     }
 
     const drawnCount = drawCards(player, amount.value, state);
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectDrawCardsApplied",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -2984,7 +2984,7 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
         : [];
     const attacked = new Set<string>();
 
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "attackCreated",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -3058,7 +3058,7 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
       source
     );
     const attackAmount = amount.value + attackProfile.damageBonus;
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "attackCreated",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -3155,7 +3155,7 @@ const revealTopCardHandler: EffectRuntimeHandler = {
     const effectId = effect.effectId;
     const card = services.peekTopDeckCard(player, state);
     if (card === undefined) {
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "effectRevealSkipped",
         playerId: player.playerId,
         cardInstanceId: source.cardInstanceId,
@@ -3166,7 +3166,7 @@ const revealTopCardHandler: EffectRuntimeHandler = {
       return { ok: true };
     }
 
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectCardRevealed",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -3214,7 +3214,7 @@ const playTopCardHandler: EffectRuntimeHandler = {
     const effectId = effect.effectId;
     const card = services.drawTopDeckCard(player, state);
     if (card === undefined) {
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "effectPlayTopSkipped",
         playerId: player.playerId,
         cardInstanceId: source.cardInstanceId,
@@ -3230,7 +3230,7 @@ const playTopCardHandler: EffectRuntimeHandler = {
       return playedResult;
     }
 
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectCardPlayedFromDeck",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -3275,7 +3275,7 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
         return candidate.deck.length > 0 || candidate.discard.length > 0;
       });
     if (foe === undefined) {
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "effectPlayTopFoeDeckSkipped",
         playerId: player.playerId,
         cardInstanceId: source.cardInstanceId,
@@ -3288,7 +3288,7 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
 
     const card = services.drawTopDeckCard(foe, state);
     if (card === undefined) {
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "effectPlayTopFoeDeckSkipped",
         playerId: player.playerId,
         targetPlayerId: foe.playerId,
@@ -3308,7 +3308,7 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
       return playedResult;
     }
 
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectFoeDeckCardPlayed",
       playerId: player.playerId,
       targetPlayerId: foe.playerId,
@@ -3377,7 +3377,7 @@ const wildMagicChoiceHandler: EffectRuntimeHandler = {
         continue;
       }
 
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "wildMagicChoiceSelected",
         playerId: player.playerId,
         cardInstanceId: source.cardInstanceId,
@@ -3388,7 +3388,7 @@ const wildMagicChoiceHandler: EffectRuntimeHandler = {
       return services.executeEffect(state, player, option, source);
     }
 
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "wildMagicChoiceSkipped",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -3900,7 +3900,7 @@ function payOptionalCosts(
     }
 
     player.chips -= cost.amount;
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectCostPaid",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -3976,7 +3976,7 @@ function collectMayhemAttackDefenseDecisions(
 ): Array<{ player: PlayerState; avoided: boolean }> {
   const decisions: Array<{ player: PlayerState; avoided: boolean }> = [];
 
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "mayhemDecisionPhaseStarted",
     playerId: source.playerId,
     cardInstanceId: source.cardInstanceId,
@@ -3986,7 +3986,7 @@ function collectMayhemAttackDefenseDecisions(
   });
 
   for (const targetPlayer of targets) {
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "mayhemDecisionStarted",
       playerId: source.playerId,
       targetPlayerId: targetPlayer.playerId,
@@ -3997,7 +3997,7 @@ function collectMayhemAttackDefenseDecisions(
     });
     const avoided = services.resolveDefenseWindow(state, targetPlayer);
     if (avoided) {
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "attackAvoided",
         playerId: targetPlayer.playerId,
         targetPlayerId: targetPlayer.playerId,
@@ -4011,7 +4011,7 @@ function collectMayhemAttackDefenseDecisions(
     decisions.push({ player: targetPlayer, avoided });
   }
 
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "mayhemResolutionPhaseStarted",
     playerId: source.playerId,
     cardInstanceId: source.cardInstanceId,
@@ -4037,7 +4037,7 @@ function executeAttackBranch(
 
     const chipsBefore = player.chips;
     player.chips += amount;
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectChipsChanged",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -4063,7 +4063,7 @@ function executeAttackBranch(
       player.chips += remaining;
     }
 
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectChipsChanged",
       playerId: player.playerId,
       targetPlayerId: targetPlayer.playerId,
@@ -4107,7 +4107,7 @@ function executeAttackBranch(
       }
     }
     player.hand.push(...returned);
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectCardsReturnedToHand",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -4210,7 +4210,7 @@ function recordEffectChipsChanged(
   chipsBefore: number,
   chipsAfter: number
 ): void {
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "effectChipsGained",
     playerId: player.playerId,
     cardInstanceId: source.cardInstanceId,
@@ -4261,7 +4261,7 @@ function shuffleDiscardIntoDeckIfNeeded(
 
   player.deck.push(...player.discard.splice(0));
   shuffleInPlace(player.deck, state);
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "discardShuffledIntoDeck",
     playerId: player.playerId,
   });

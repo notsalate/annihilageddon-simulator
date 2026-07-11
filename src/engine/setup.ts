@@ -21,6 +21,7 @@ import {
   type TokenStackComposition,
   type TokenDefinition,
 } from "./data.js";
+import { recordGameEvent } from "./event-recorder.js";
 import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
@@ -698,7 +699,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     }
   }
 
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "gameInitialized",
   });
 

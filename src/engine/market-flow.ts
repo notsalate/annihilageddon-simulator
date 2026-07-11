@@ -1,5 +1,6 @@
 import type { CardDefinition } from "./data.js";
 import { executeMayhemEffects } from "./effect-runtime.js";
+import { recordGameEvent } from "./event-recorder.js";
 import type {
   CardInstance,
   GameEventType,
@@ -81,7 +82,7 @@ function fillMarket(
   while (options.market.length < options.targetSize) {
     const card = options.sourceDeck.shift();
     if (card === undefined) {
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "marketFlowFailed",
         playerId: state.activePlayerId,
         sourceType: options.mode,
@@ -92,7 +93,7 @@ function fillMarket(
 
     const definition = mustGetDefinition(state, card.definitionId);
     if (definition.engine.cardKind === options.eventKind) {
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "marketEventCardOpened",
         playerId: state.activePlayerId,
         sourceType: options.mode,
@@ -109,7 +110,7 @@ function fillMarket(
       }
 
       options.destroyedEvents.push(card);
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: options.eventLogType,
         playerId: state.activePlayerId,
         sourceType: options.mode,
@@ -121,7 +122,7 @@ function fillMarket(
     }
 
     options.market.push(card);
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "marketFlowCardAdded",
       playerId: state.activePlayerId,
       sourceType: options.mode,
@@ -154,7 +155,7 @@ function executeMayhemCard(
     return effectResult;
   }
 
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "mayhemResolved",
     playerId: activePlayer.playerId,
     cardInstanceId: card.instanceId,
@@ -180,7 +181,7 @@ function applyMarketChipMarker(
     }
 
     card.marketChips += 1;
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "marketChipAdded",
       playerId: state.activePlayerId,
       sourceType: mode,

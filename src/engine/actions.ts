@@ -10,7 +10,7 @@ import {
 import { assertNever } from "../common.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import { calculateEffectiveCardCost } from "./effective-values.js";
-import { recordCardMoved } from "./event-recorder.js";
+import { recordCardMoved, recordGameEvent } from "./event-recorder.js";
 import { runMarketFlow, type MarketFlowEndReason } from "./market-flow.js";
 import type {
   CardInstance,
@@ -168,14 +168,14 @@ function endTurn(state: GameState): ActionResult {
   state.turn.power = 0;
   state.turn.controlledPowerBonus = 0;
   state.turn.activatedCardIds = [];
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "turnEnded",
     playerId: activePlayer.playerId,
   });
 
   const drawCount = calculateEndTurnDrawCount(state, activePlayer);
   const drawResult = drawCards(activePlayer, drawCount, state);
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "handDrawn",
     playerId: activePlayer.playerId,
     amount: drawResult.requestedCount,
@@ -197,7 +197,7 @@ function endTurn(state: GameState): ActionResult {
     return marketFlowResult;
   }
   reconcileActivePlayerControlledPower(state);
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "turnStarted",
     playerId: state.activePlayerId,
   });
@@ -247,7 +247,7 @@ function activatePermanent(
   }
 
   state.turn.activatedCardIds.push(card.instanceId);
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "cardActivated",
     playerId: activePlayer.playerId,
     cardInstanceId: card.instanceId,
@@ -306,7 +306,7 @@ function activateWizardProperty(
   }
 
   state.turn.activatedCardIds.push(token.instanceId);
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "wizardPropertyActivated",
     playerId: activePlayer.playerId,
     tokenInstanceId: token.instanceId,
@@ -329,7 +329,7 @@ function grantBasicTrophyChipAtEndOfTurn(
   }
 
   activePlayer.chips += 1;
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "trophyChipGranted",
     playerId: activePlayer.playerId,
     effectId: "basicTrophy",
@@ -376,7 +376,7 @@ function buyMarketCard(
   if (!gainResult.ok) {
     return gainResult;
   }
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "cardBought",
     playerId: activePlayer.playerId,
     cardInstanceId: card.instanceId,
@@ -435,7 +435,7 @@ function recordEndTurnCleanup(
       continue;
     }
 
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "endTurnCleanupMoved",
       playerId: activePlayer.playerId,
       amount: group.length,
@@ -509,7 +509,7 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
 
   reconcileActivePlayerControlledPower(state);
 
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "cardPlayed",
     playerId: activePlayer.playerId,
     cardInstanceId: card.instanceId,
@@ -681,7 +681,7 @@ function drawCards(
     if (player.deck.length === 0 && player.discard.length > 0) {
       player.deck.push(...player.discard.splice(0));
       shuffleInPlace(player.deck, state);
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "discardShuffledIntoDeck",
         playerId: player.playerId,
       });

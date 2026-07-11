@@ -1,14 +1,18 @@
 import type { GameAction } from "./actions.js";
 import type { EffectSourceContext } from "./effect-runtime-registry.js";
 import { beginGameAction } from "./game-events.js";
-<<<<<<< HEAD
 import type { RuntimeEffectId } from "./runtime-effect.js";
 import type {
   CardInstance,
+  GameEvent,
   GameEventSourceType,
   GameState,
   PlayerState,
 } from "./setup.js";
+
+export function recordGameEvent(state: GameState, event: GameEvent): void {
+  state.eventLog.push(event);
+}
 
 export function recordBotActionSelected(
   state: GameState,
