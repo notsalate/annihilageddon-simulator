@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { isPlainRecord } from "../common.js";
 
-const allowedCardKinds = new Set([
+export const allowedCardKinds = [
   "starter",
   "normal",
   "legend",
@@ -12,8 +12,11 @@ const allowedCardKinds = new Set([
   "wildMagic",
   "limpWand",
   "familiar",
-]);
-const allowedCardTypes = new Set([
+] as const;
+export type AllowedCardKind = (typeof allowedCardKinds)[number];
+const allowedCardKindSet = new Set<string>(allowedCardKinds);
+
+export const allowedCardTypes = [
   "wizardCard",
   "creature",
   "spell",
@@ -21,22 +24,30 @@ const allowedCardTypes = new Set([
   "location",
   "familiar",
   "legend",
-]);
-const allowedMarkers = new Set([
+] as const;
+export type AllowedCardType = (typeof allowedCardTypes)[number];
+const allowedCardTypeSet = new Set<string>(allowedCardTypes);
+
+export const allowedMarkers = [
   "ongoing",
   "attack",
   "defense",
   "activate",
   "marketChipMarker",
-]);
-const forbiddenRuntimeFields = new Set([
+] as const;
+export type AllowedMarker = (typeof allowedMarkers)[number];
+const allowedMarkerSet = new Set<string>(allowedMarkers);
+
+export const forbiddenRuntimeFields = [
   "engine",
   "effects",
   "runtimeSchema",
   "playableInV0",
   "mappingStatus",
-]);
-const numberedImportIdCategories = new Set([
+] as const;
+export type ForbiddenRuntimeField = (typeof forbiddenRuntimeFields)[number];
+
+export const numberedImportIdCategories = [
   "main",
   "legend",
   "mega_mayhem",
@@ -44,7 +55,10 @@ const numberedImportIdCategories = new Set([
   "familiar",
   "wizard_property",
   "dead_wizard_token",
-]);
+] as const;
+export type NumberedImportIdCategory =
+  (typeof numberedImportIdCategories)[number];
+const numberedImportIdCategorySet = new Set<string>(numberedImportIdCategories);
 const singletonImportIds = new Map([
   ["esw2_dbg__wild_magic", "wild_magic"],
   ["esw2_dbg__limp_wand", "limp_wand"],
@@ -399,7 +413,7 @@ function validateVisible(
 
   validateAllowedString(
     visible["cardKind"],
-    allowedCardKinds,
+    allowedCardKindSet,
     "visible.cardKind",
     filePath,
     errors
@@ -407,14 +421,14 @@ function validateVisible(
   validateStringArray(
     visible["cardTypes"],
     "visible.cardTypes",
-    allowedCardTypes,
+    allowedCardTypeSet,
     filePath,
     errors
   );
   validateStringArray(
     visible["markers"],
     "visible.markers",
-    allowedMarkers,
+    allowedMarkerSet,
     filePath,
     errors
   );
@@ -554,7 +568,7 @@ function parseNewImportIdCategory(id: string): string | undefined {
     return undefined;
   }
 
-  return numberedImportIdCategories.has(category) ? category : undefined;
+  return numberedImportIdCategorySet.has(category) ? category : undefined;
 }
 
 function expectedCardIdCategories(visible: unknown): string[] {
