@@ -6,6 +6,15 @@ import {
   type SingleGameResult,
 } from "../src/index.js";
 import { markCardDefinitionId, markPlayerId } from "../src/domain/types.js";
+import type { GameEvent } from "../src/engine/setup.js";
+
+const knownGameEventType: GameEvent["type"] = "cardMoved";
+type HasDeclaredGameEventTypes = string extends GameEvent["type"]
+  ? false
+  : true;
+const hasDeclaredGameEventTypes: HasDeclaredGameEventTypes = true;
+void knownGameEventType;
+void hasDeclaredGameEventTypes;
 
 test("single-game debug trace summarizes card play and effect resolution in game terms", () => {
   const result: SingleGameResult = {

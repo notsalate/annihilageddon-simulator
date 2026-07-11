@@ -1,6 +1,11 @@
 import type { CardDefinition } from "./data.js";
 import { executeMayhemEffects } from "./effect-runtime.js";
-import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import type {
+  CardInstance,
+  GameEventType,
+  GameState,
+  PlayerState,
+} from "./setup.js";
 
 export type MarketFlowMode = "setup" | "turn";
 export type MarketFlowEndReason = "mainDeckExhausted" | "legendDeckExhausted";
@@ -65,7 +70,10 @@ function fillMarket(
     destroyedEvents: CardInstance[];
     targetSize: number;
     eventKind: CardDefinition["engine"]["cardKind"];
-    eventLogType: string;
+    eventLogType: Extract<
+      GameEventType,
+      "megaMayhemDestroyed" | "mayhemDestroyed"
+    >;
     endReason: MarketFlowEndReason;
     mode: MarketFlowMode;
   }

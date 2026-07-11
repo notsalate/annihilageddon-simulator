@@ -161,15 +161,96 @@ export interface GameState {
   effectChoiceStrategy?: RuntimeEffectChoiceStrategy;
 }
 
-export interface GameEvent {
-  type: string;
+export type GameEventType =
+  | "activatePermanent"
+  | "activateWizardProperty"
+  | "attackAvoided"
+  | "attackCreated"
+  | "attackTargetStarted"
+  | "botActionSelected"
+  | "buyMarketCard"
+  | "cardActivated"
+  | "cardBought"
+  | "cardMoved"
+  | "cardPlayed"
+  | "deadWizardTokenGained"
+  | "defenseCardMoved"
+  | "defenseChoiceSelected"
+  | "defenseCostPaid"
+  | "dinglerStatusGained"
+  | "dinglerStatusRemoved"
+  | "discardShuffledIntoDeck"
+  | "effectAddPowerApplied"
+  | "effectCardDestroyed"
+  | "effectCardDiscarded"
+  | "effectCardGained"
+  | "effectCardPlayedFromDeck"
+  | "effectCardRevealed"
+  | "effectCardsReturnedToHand"
+  | "effectChipsChanged"
+  | "effectChipsGained"
+  | "effectChoiceSelected"
+  | "effectChoiceSkipped"
+  | "effectCostPaid"
+  | "effectDamageDealt"
+  | "effectDestroyTopMainDeckSkipped"
+  | "effectDrawCardsApplied"
+  | "effectFixtureTargetCostPowerApplied"
+  | "effectFoeDeckCardPlayed"
+  | "effectLifeExchanged"
+  | "effectLifeHealed"
+  | "effectLifeSet"
+  | "effectPlayTopFoeDeckSkipped"
+  | "effectPlayTopSkipped"
+  | "effectRevealSkipped"
+  | "effectTopMainDeckCardDestroyed"
+  | "endTurn"
+  | "endTurnCleanupMoved"
+  | "gameInitialized"
+  | "handDrawn"
+  | "marketChipAdded"
+  | "marketChipsGained"
+  | "marketEventCardOpened"
+  | "marketFlowCardAdded"
+  | "marketFlowFailed"
+  | "mayhemBattleParticipationSelected"
+  | "mayhemBattleResolved"
+  | "mayhemDecisionPhaseStarted"
+  | "mayhemDecisionStarted"
+  | "mayhemDeckDiscardedThenDiscardCardDestroyed"
+  | "mayhemDiscardedTopDeckCardsDestroyed"
+  | "mayhemHandDiscardedAndRedrawn"
+  | "mayhemResolutionPhaseStarted"
+  | "mayhemResolved"
+  | "mayhemTargetSkipped"
+  | "mayhemVoteRecorded"
+  | "mayhemVoteResolved"
+  | "megaMayhemDestroyed"
+  | "mayhemDestroyed"
+  | "playCard"
+  | "playerDied"
+  | "playerLifeClamped"
+  | "playerResurrected"
+  | "setupChoiceSelected"
+  | "trophyChipGranted"
+  | "trophyControlChanged"
+  | "turnEnded"
+  | "turnStarted"
+  | "wildMagicChoiceSelected"
+  | "wildMagicChoiceSkipped"
+  | "wizardPropertyActivated";
+
+interface GameEventMetadata {
   eventSequence?: number;
-  playerId?: PlayerId;
-  targetPlayerId?: PlayerId;
-  targetPlayerIds?: PlayerId[];
   turnNumber?: number;
   actionSequence?: number;
   actionIdentity?: string;
+}
+
+interface GameEventPayload {
+  playerId?: PlayerId;
+  targetPlayerId?: PlayerId;
+  targetPlayerIds?: PlayerId[];
   powerBefore?: number;
   powerAfter?: number;
   chipsBefore?: number;
@@ -206,6 +287,82 @@ export interface GameEvent {
   candidateDefinitionIds?: string[];
   chosenDefinitionId?: string;
 }
+
+type SimpleGameEvent = {
+  type: Exclude<
+    GameEventType,
+    | "cardMoved"
+    | "effectAddPowerApplied"
+    | "effectChipsGained"
+    | "marketChipsGained"
+    | "setupChoiceSelected"
+  >;
+};
+
+interface CardMovedGameEvent {
+  type: "cardMoved";
+  playerId: PlayerId;
+  cardInstanceId: string;
+  definitionId: string;
+  sourceZone: string;
+  destinationZone: string;
+  ownerBefore: PlayerId | CommonOwner;
+  ownerAfter: PlayerId | CommonOwner;
+}
+
+interface EffectAddPowerGameEvent {
+  type: "effectAddPowerApplied";
+  playerId: PlayerId;
+  cardInstanceId: string;
+  definitionId: string;
+  effectId: string;
+  amount: number;
+  powerBefore: number;
+  powerAfter: number;
+  sourceType: string;
+}
+
+interface EffectChipsGainedGameEvent {
+  type: "effectChipsGained";
+  playerId: PlayerId;
+  cardInstanceId: string;
+  definitionId: string;
+  effectId: string;
+  amount: number;
+  chipsBefore: number;
+  chipsAfter: number;
+  sourceType: string;
+}
+
+interface MarketChipsGainedGameEvent {
+  type: "marketChipsGained";
+  playerId: PlayerId;
+  cardInstanceId: string;
+  definitionId: string;
+  amount: number;
+  chipsBefore: number;
+  chipsAfter: number;
+}
+
+interface SetupChoiceSelectedGameEvent {
+  type: "setupChoiceSelected";
+  playerId: PlayerId;
+  setupChoiceKind: "familiar" | "wizardProperty";
+  policyId: string;
+  candidateDefinitionIds: string[];
+  chosenDefinitionId: string;
+}
+
+export type GameEvent = GameEventMetadata &
+  GameEventPayload &
+  (
+    | SimpleGameEvent
+    | CardMovedGameEvent
+    | EffectAddPowerGameEvent
+    | EffectChipsGainedGameEvent
+    | MarketChipsGainedGameEvent
+    | SetupChoiceSelectedGameEvent
+  );
 
 interface InitializeGameBaseOptions {
   seed: number;
