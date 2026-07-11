@@ -19,8 +19,73 @@ export interface DraftImportBlocker {
 export interface DraftImportGeneratedFile {
   source: string;
   draftPath: string;
-  draft: unknown;
+  draft: DraftImportModel;
 }
+
+export interface DraftImportModelSource {
+  image: string;
+  text: string;
+}
+
+export interface DraftImportModelComposition {
+  quantity: number;
+}
+
+export interface CardDraftImportModel {
+  schemaVersion: 1;
+  draftKind: "cardDraft";
+  cardId: string;
+  source: DraftImportModelSource;
+  visible: {
+    nameRu: string;
+    cost: number | null;
+    victoryPoints: number | null;
+    typeRu: string | null;
+    cardKind: string;
+    cardTypes: string[];
+    textRu: string;
+    markers: string[];
+    uncertainty: string[];
+  };
+  notes: string[];
+  composition?: DraftImportModelComposition;
+}
+
+export interface DeadWizardTokenDraftImportModel {
+  schemaVersion: 1;
+  draftKind: "deadWizardTokenDraft";
+  tokenId: string;
+  kind: "deadWizardToken";
+  source: DraftImportModelSource;
+  visible: {
+    sourceLabel: string;
+    textRu: string;
+    victoryPoints: number | null;
+    uncertainty: string[];
+  };
+  notes: string[];
+  composition: DraftImportModelComposition;
+}
+
+export interface WizardPropertyDraftImportModel {
+  schemaVersion: 1;
+  draftKind: "wizardPropertyDraft";
+  tokenId: string;
+  kind: "wizardProperty";
+  source: DraftImportModelSource;
+  visible: {
+    sourceLabel: string;
+    textRu: string;
+    uncertainty: string[];
+  };
+  notes: string[];
+  composition: DraftImportModelComposition;
+}
+
+export type DraftImportModel =
+  | CardDraftImportModel
+  | DeadWizardTokenDraftImportModel
+  | WizardPropertyDraftImportModel;
 
 export interface DraftImportHarnessResult {
   generated: DraftImportGeneratedFile[];
@@ -142,7 +207,7 @@ function createDraft(
   sourceTextPath: string,
   markdown: ParsedMarkdown,
   blockers: DraftImportBlocker[]
-): unknown {
+): DraftImportModel {
   switch (kind) {
     case "card":
       return createCardDraft(sourceTextPath, markdown, blockers);
@@ -159,7 +224,7 @@ function createCardDraft(
   sourceTextPath: string,
   markdown: ParsedMarkdown,
   blockers: DraftImportBlocker[]
-): unknown {
+): CardDraftImportModel {
   const cardId = path.basename(sourceTextPath, ".md");
   const sourceGroup = sourceTextPath.split("/").at(-3);
   const cardKind = inferCardKind(sourceGroup, markdown);
@@ -223,7 +288,7 @@ function createCardDraft(
     });
   }
 
-  const draft: Record<string, unknown> = {
+  const draft: CardDraftImportModel = {
     schemaVersion: 1,
     draftKind: "cardDraft",
     cardId,
@@ -246,7 +311,7 @@ function createCardDraft(
   };
 
   if (compositionQuantity !== null) {
-    draft["composition"] = {
+    draft.composition = {
       quantity: compositionQuantity,
     };
   }
@@ -258,7 +323,7 @@ function createDeadWizardTokenDraft(
   sourceTextPath: string,
   markdown: ParsedMarkdown,
   blockers: DraftImportBlocker[]
-): unknown {
+): DeadWizardTokenDraftImportModel {
   const tokenId = canonicalTokenId(
     path.basename(sourceTextPath, ".md"),
     "dead_wizard_token"
@@ -327,7 +392,7 @@ function createWizardPropertyDraft(
   sourceTextPath: string,
   markdown: ParsedMarkdown,
   blockers: DraftImportBlocker[]
-): unknown {
+): WizardPropertyDraftImportModel {
   const tokenId = canonicalTokenId(
     path.basename(sourceTextPath, ".md"),
     "wizard_property"
