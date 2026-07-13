@@ -88,27 +88,25 @@ export function isRuntimeEffectTargetSelector(
   value: unknown
 ): value is RuntimeEffectTargetSelector {
   return (
-    value === "activePlayer" ||
+    isTargetSelector(value) ||
     value === "chosenFoe" ||
     value === "chosenLeftOrRightFoe" ||
     value === "chosenPlayer" ||
     value === "eachFoe" ||
     value === "eachPlayerClockwiseFromActive" ||
     value === "leftOrRightFoe" ||
-    value === "mainMarketCard" ||
     value === "sameAsPreviousAttackTarget"
   );
 }
 
 export type RuntimeEffectTargetSelector =
-  | "activePlayer"
+  | TargetSelector
   | "chosenFoe"
   | "chosenLeftOrRightFoe"
   | "chosenPlayer"
   | "eachFoe"
   | "eachPlayerClockwiseFromActive"
   | "leftOrRightFoe"
-  | "mainMarketCard"
   | "sameAsPreviousAttackTarget";
 
 export interface ControlCountEffectCondition {
@@ -234,20 +232,23 @@ const knownRuntimeEffectIds = [
 
 type KnownRuntimeEffectId = (typeof knownRuntimeEffectIds)[number];
 
-type RuntimeEffectVariant<EffectId extends KnownRuntimeEffectId> = {
+type RuntimeEffectPayloadVariant<EffectId extends KnownRuntimeEffectId> = {
   effectId: EffectId;
-  timing: EffectTiming;
   condition?: RuntimeEffectCondition;
   costs?: RuntimeEffectCost[];
   target?: RuntimeEffectTarget;
   targetSelector?: RuntimeEffectTargetSelector;
 } & Record<string, unknown>;
 
-export type RuntimeEffect = {
-  [EffectId in KnownRuntimeEffectId]: RuntimeEffectVariant<EffectId>;
+export type RuntimeEffectPayload = {
+  [EffectId in KnownRuntimeEffectId]: RuntimeEffectPayloadVariant<EffectId>;
 }[KnownRuntimeEffectId];
 
-export type RuntimeEffectId = RuntimeEffect["effectId"];
+export type RuntimeEffect = RuntimeEffectPayload & {
+  timing: EffectTiming;
+};
+
+export type RuntimeEffectId = RuntimeEffectPayload["effectId"];
 
 export function isEffectTiming(value: unknown): value is EffectTiming {
   return (

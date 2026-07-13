@@ -25,6 +25,7 @@ import {
 import {
   effectRuntimeCatalog,
   effectRuntimeCatalogSource,
+  type EffectRuntimeServices,
   getEffectRuntimeCatalogEntry,
   getEffectRuntimeHandler,
   isEffectRuntimeCatalogEntrySupportedInMode,
@@ -105,6 +106,31 @@ test("effect runtime catalog accepts only decoded runtime effect ids", () => {
     string extends CatalogLookupParameter ? false : true
   > = true;
   assert.equal(rawStringIsRejectedAtTheDecoderBoundary, true);
+});
+
+test("runtime services accept decoded effect ids", () => {
+  type AttackEffectId = Parameters<
+    EffectRuntimeServices["resolveAttackTarget"]
+  >[4];
+  const rawStringIsRejectedByRuntimeServices: Assert<
+    string extends AttackEffectId ? false : true
+  > = true;
+
+  assert.equal(rawStringIsRejectedByRuntimeServices, true);
+});
+
+test("effect runtime lookup retains the handler type for its effect id", () => {
+  const addPowerHandler = getEffectRuntimeHandler("add_power");
+  assert.ok(addPowerHandler);
+
+  type AddPowerEffect = Parameters<
+    NonNullable<typeof addPowerHandler>["execute"]
+  >[2];
+  const anotherEffectIdIsRejectedByTheAddPowerHandler: Assert<
+    "gain_chips" extends AddPowerEffect["effectId"] ? false : true
+  > = true;
+
+  assert.equal(anotherEffectIdIsRejectedByTheAddPowerHandler, true);
 });
 
 test("effect runtime lookup is derived from its typed catalog source", () => {
@@ -676,6 +702,36 @@ test("executable data-pack validation rejects invalid add-power amount", () => {
       .length,
     3
   );
+});
+
+test("executable data-pack validation rejects an add-power selector", () => {
+  const card = createFixtureCard("fixture-add-power-with-selector");
+  const dataPack = withOnlyFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 1,
+          targetSelector: "chosenFoe",
+        },
+      ],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("add_power uses unsupported target selector")
+      )
+    );
+  }
 });
 
 test("executable data-pack validation rejects invalid add-power Wild Magic option amount", () => {

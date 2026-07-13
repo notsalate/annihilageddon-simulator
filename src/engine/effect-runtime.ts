@@ -17,6 +17,8 @@ import {
 import {
   isRuntimeEffectSelectorTarget,
   type RuntimeEffect,
+  type RuntimeEffectId,
+  type RuntimeEffectPayload,
 } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
@@ -389,7 +391,7 @@ function isSupportedMayhemRuntimeEffect(effect: RuntimeEffect): boolean {
 function executeEffect(
   state: GameState,
   player: PlayerState,
-  effect: RuntimeEffect,
+  effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): EffectExecutionResult {
   const catalogEntry = getEffectRuntimeCatalogEntry(effect.effectId);
@@ -404,6 +406,16 @@ function executeEffect(
         ok: false,
         error: `Effect id ${catalogEntry.effectId} is not supported in ${source.runtimeMode} runtime mode`,
       };
+    }
+
+    if (!("timing" in effect)) {
+      const shapeErrors = catalogEntry.handler.validateShape(
+        `Effect ${catalogEntry.effectId}`,
+        effect
+      );
+      if (shapeErrors.length > 0) {
+        return { ok: false, error: shapeErrors.join("; ") };
+      }
     }
 
     return catalogEntry.handler.execute(
@@ -424,7 +436,7 @@ function executeEffect(
 function effectConditionMatches(
   state: GameState,
   player: PlayerState,
-  effect: RuntimeEffect
+  effect: RuntimeEffectPayload
 ): boolean {
   const { condition } = effect;
   if (condition === undefined) {
@@ -566,7 +578,7 @@ function resolveAttackTarget(
   attackingPlayer: PlayerState,
   targetPlayer: PlayerState,
   amount: number,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext,
   unavoidable = false
 ): DamageResult & { avoided: boolean } {
@@ -611,7 +623,7 @@ function resolveMayhemAttack(
   state: GameState,
   sourcePlayer: PlayerState,
   amount: number,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
   const targets = getPlayersInActiveOrder(state);
@@ -712,7 +724,7 @@ function isLegalWildMagicOption(
   state: GameState,
   player: PlayerState,
   option: Record<string, unknown>
-): boolean {
+): option is RuntimeEffectPayload {
   if (option["effectId"] === "add_power") {
     const amount = option["amount"];
     return (
@@ -778,7 +790,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
 function resolveStatusTargetPlayers(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): { ok: true; players: PlayerState[] } | { ok: false; error: string } {
   if (effect["targetSelector"] === "eachPlayerClockwiseFromActive") {
@@ -816,7 +828,7 @@ function resolveStatusTargetPlayers(
 function resolveTargetChoice(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): TargetChoiceResult {
   const choicesResult = buildLegalTargetChoices(state, player, effect);
@@ -875,7 +887,7 @@ function chooseEffectChoice(
   state: GameState,
   player: PlayerState,
   source: EffectSourceContext,
-  effectId: string,
+  effectId: RuntimeEffectId,
   choices: readonly EffectChoice[]
 ): EffectChoice | undefined {
   const selectedChoice = state.effectChoiceStrategy?.({
@@ -936,10 +948,14 @@ function chooseEffectChoice(
 function buildLegalTargetChoices(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): { ok: true; choices: TargetChoice[] } | { ok: false; error: string } {
-  const target = effect["target"];
-  if (!isEffectRecord(target)) {
+  const target = effect.target;
+  if (!isRuntimeEffectSelectorTarget(target)) {
+    const rawTarget: unknown = target;
+    const selector = isEffectRecord(rawTarget)
+      ? rawTarget["selector"]
+      : effect["targetSelector"];
     const targetSelector = effect["targetSelector"];
     if (targetSelector === "chosenFoe") {
       return {
@@ -965,14 +981,7 @@ function buildLegalTargetChoices(
 
     return {
       ok: false,
-      error: `Effect ${asString(effect["effectId"])} requires a target selector`,
-    };
-  }
-
-  if (!isRuntimeEffectSelectorTarget(target)) {
-    return {
-      ok: false,
-      error: `Unsupported target selector ${asString(target["selector"])}`,
+      error: `Unsupported target selector ${asString(selector)}`,
     };
   }
 
@@ -1055,7 +1064,7 @@ function chooseFirstLegalChoice(
 
 function requireCardChoice(
   choice: TargetChoice,
-  effectId: string
+  effectId: RuntimeEffectId
 ): { ok: true; card: CardInstance } | { ok: false; error: string } {
   if (choice.choiceType !== "card") {
     return {
@@ -1077,7 +1086,7 @@ function resolvePlayerDeath(
   killCredit:
     | {
         killer: PlayerState;
-        effectId: string;
+        effectId: RuntimeEffectId;
         source: EffectSourceContext;
       }
     | undefined
@@ -1173,7 +1182,7 @@ function awardBasicTrophyForKill(
   state: GameState,
   killer: PlayerState,
   defeatedPlayer: PlayerState,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
   if (
@@ -1224,7 +1233,7 @@ function awardBasicTrophyForKill(
   });
 }
 
-function givesBasicTrophyCredit(effectId: string): boolean {
+function givesBasicTrophyCredit(effectId: RuntimeEffectId): boolean {
   return (
     effectId === "attack_damage" ||
     effectId === "multi_target_attack" ||
@@ -1237,7 +1246,7 @@ function dealDamage(
   sourcePlayer: PlayerState,
   targetPlayer: PlayerState,
   amount: number,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): DamageResult {
   const previousLife = targetPlayer.life.current;
@@ -1579,7 +1588,7 @@ function healPlayer(
   sourcePlayer: PlayerState,
   targetPlayer: PlayerState,
   amount: number,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
   const effectiveMaxLife = calculateEffectivePlayerMaxLife(
@@ -1644,7 +1653,7 @@ function moveCardToPlayerZone(
   player: PlayerState,
   destination: CardInstance[],
   destinationZone: string,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): boolean {
   const sourceZone = getCardZoneName(state, card) ?? "unknown";
@@ -1689,7 +1698,7 @@ function moveCardToZonePreservingOwner(
   card: CardInstance,
   destination: CardInstance[],
   destinationZone: string,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): boolean {
   const sourceZone = getCardZoneName(state, card) ?? "unknown";
@@ -1909,7 +1918,7 @@ function hasDinglerStatus(player: PlayerState): boolean {
 function gainDinglerStatus(
   state: GameState,
   player: PlayerState,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
   if (!hasDinglerStatus(player)) {
@@ -1931,7 +1940,7 @@ function gainDinglerStatus(
 function removeDinglerStatus(
   state: GameState,
   player: PlayerState,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
   const dinglerIndex = player.statuses.findIndex(

@@ -2003,7 +2003,23 @@ function validateRuntimeEffectDefinition(
       ];
     }
 
-    return catalogEntry.handler.validateShape(subjectId, effect);
+    const shapeErrors = catalogEntry.handler.validateShape(subjectId, effect);
+    if (shapeErrors.length > 0) {
+      return shapeErrors;
+    }
+
+    const targetSelector = effect["targetSelector"];
+    if (
+      targetSelector !== undefined &&
+      (!isRuntimeEffectTargetSelector(targetSelector) ||
+        !catalogEntry.handler.allowedTargetSelectors?.includes(targetSelector))
+    ) {
+      return [
+        `${subjectId} ${effectId} uses unsupported target selector`,
+      ];
+    }
+
+    return [];
   }
 
   return [`${subjectId} uses unsupported effect id ${effectId}`];

@@ -24,6 +24,7 @@ import {
 import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
+import type { RuntimeEffectId } from "./runtime-effect.js";
 
 export type { PlayerId } from "../domain/types.js";
 export type CommonOwner = "common";
@@ -130,7 +131,7 @@ export type RuntimeEffectChoice =
 
 export interface RuntimeEffectChoiceRequest {
   player: PlayerState;
-  effectId: string;
+  effectId: RuntimeEffectId;
   sourceType: "card" | "wizardProperty";
   cardInstanceId: string;
   definitionId: string;

@@ -1,6 +1,7 @@
 import type { GameAction } from "./actions.js";
 import type { EffectSourceContext } from "./effect-runtime-registry.js";
 import { beginGameAction } from "./game-events.js";
+import type { RuntimeEffectId } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export function recordBotActionSelected(
@@ -18,7 +19,7 @@ export function recordTurnPowerChanged(
   state: GameState,
   player: PlayerState,
   source: EffectSourceContext,
-  effectId: string,
+  effectId: RuntimeEffectId,
   powerBefore: number,
   powerAfter: number
 ): void {
@@ -39,7 +40,7 @@ export function recordEffectChipsChanged(
   state: GameState,
   player: PlayerState,
   source: EffectSourceContext,
-  effectId: string,
+  effectId: RuntimeEffectId,
   chipsBefore: number,
   chipsAfter: number
 ): void {
