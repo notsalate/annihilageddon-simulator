@@ -12,6 +12,7 @@ import {
   type CardDefinition,
   type CardInstance,
   type GameState,
+  type RuntimeEffect,
   type SingleGameResult,
 } from "../src/index.js";
 import {
@@ -620,7 +621,7 @@ function createCardInstance(
 function createFixtureCardDefinition(
   cardId: string,
   cardKind: CardDefinition["engine"]["cardKind"],
-  effects: unknown[]
+  effects: RuntimeEffect[]
 ): CardDefinition {
   return {
     schemaVersion: 1,

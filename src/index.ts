@@ -33,6 +33,17 @@ export type {
   TokenStackComposition,
   WizardPropertyDefinition,
 } from "./engine/data.js";
+export type {
+  EffectTiming,
+  RuntimeEffect,
+  RuntimeEffectCondition,
+  RuntimeEffectCost,
+  RuntimeEffectId,
+  RuntimeEffectSelectorTarget,
+  RuntimeEffectTarget,
+  RuntimeEffectTargetSelector,
+  TargetSelector,
+} from "./engine/runtime-effect.js";
 export {
   decodeCurrentRuntimeDataPack,
   loadCurrentRuntimeDataPack,

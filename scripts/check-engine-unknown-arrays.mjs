@@ -8,12 +8,6 @@ const unknownArrayPattern =
 const allowedViolations = [
   {
     filePath: "src/engine/data.ts",
-    source: "effects: unknown[];",
-    issues: ["#51", "#52"],
-    expectedCount: 3,
-  },
-  {
-    filePath: "src/engine/data.ts",
     source: "needsData?: unknown[];",
     issue: "#64",
     expectedCount: 1,
@@ -28,12 +22,6 @@ const allowedViolations = [
     filePath: "src/engine/data.ts",
     source: "function isUnknownArray(value: unknown): value is unknown[] {",
     issue: "#64",
-    expectedCount: 1,
-  },
-  {
-    filePath: "src/engine/effect-runtime.ts",
-    source: "effects: readonly unknown[],",
-    issue: "#51",
     expectedCount: 1,
   },
   {

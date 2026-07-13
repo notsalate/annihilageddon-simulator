@@ -14,6 +14,7 @@ import {
   type GameState,
   type LoadedDataPack,
   type PlayerState,
+  type RuntimeEffect,
   type StatusInstance,
   type TokenDefinition,
 } from "../src/index.js";
@@ -1512,6 +1513,16 @@ test("Mayhem vote can use a non-first affected-player choice", () => {
     ).length,
     3
   );
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.effectId === "mayhem_each_player_vote_dingler"
+      )
+      .map((event) => event.targetPlayerIds),
+    [[secondPlayer.playerId], [secondPlayer.playerId], [secondPlayer.playerId]]
+  );
   assert.equal(
     activePlayer.statuses.some((status) => status.statusId === "dingler"),
     false
@@ -2363,7 +2374,7 @@ test("unsupported Mayhem effect fails during Market Flow instead of becoming a s
           effectId: "unsupported_mayhem_runtime_effect",
           timing: "onMayhemResolve",
         },
-      ],
+      ] as unknown as RuntimeEffect[],
       unsupportedMechanics: [],
     },
   };
@@ -7426,7 +7437,7 @@ function addFixtureCardToActiveHand(
   assert.ok(activePlayer);
   const definition = createFixtureCardDefinition(
     `fixture-targeted-effect-card-${activePlayer.hand.length + 1}`,
-    [effect],
+    [effect as RuntimeEffect],
     options
   );
 
@@ -7596,7 +7607,7 @@ function moveHandCardToFront(
 
 function createFixtureCardDefinition(
   cardId: string,
-  effects: unknown[],
+  effects: RuntimeEffect[],
   options: {
     isOngoing?: boolean;
     cardTypes?: string[];
@@ -7900,7 +7911,7 @@ function addFixtureDefenseCardToHand(
   player: PlayerState,
   destination: "discardSelf" | "topdeckSelf",
   options: {
-    costs?: unknown[];
+    costs?: Exclude<RuntimeEffect["costs"], undefined>;
     branchEffects?: unknown[];
   } = {}
 ): CardInstance {
@@ -7931,7 +7942,7 @@ function addFixtureDefenseCardToHand(
           effectId: "avoid_attack",
           timing: "onDefense",
           destination,
-          costs: options.costs,
+          ...(options.costs === undefined ? {} : { costs: options.costs }),
           branchEffects: options.branchEffects,
         },
       ],

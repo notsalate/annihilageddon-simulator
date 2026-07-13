@@ -7,6 +7,15 @@ import {
   isEffectRuntimeCatalogEntrySupportedInMode,
   type EffectRuntimeMode,
 } from "./effect-runtime-registry.js";
+import {
+  isEffectTiming,
+  isRuntimeEffectCondition,
+  isRuntimeEffectCost,
+  isRuntimeEffectTarget,
+  isRuntimeEffectTargetSelector,
+  isRuntimeEffectId,
+  type RuntimeEffect,
+} from "./runtime-effect.js";
 
 type RuntimeEffectSourceKind = "card" | "wizardProperty";
 type RuntimeJsonDecoder<T> = (value: unknown) => DecodeResult<T>;
@@ -61,7 +70,7 @@ export interface CardDefinition {
     victoryPoints: number;
     isOngoing: boolean;
     marketChipMarker: boolean;
-    effects: unknown[];
+    effects: RuntimeEffect[];
     unsupportedMechanics: string[];
   };
 }
@@ -92,7 +101,7 @@ interface BaseTokenDefinition {
 export interface DeadWizardTokenDefinition extends BaseTokenDefinition {
   kind: "deadWizardToken";
   victoryPoints: number;
-  effects: unknown[];
+  effects: RuntimeEffect[];
 }
 
 export interface WizardPropertyDefinition extends BaseTokenDefinition {
@@ -106,7 +115,7 @@ export interface WizardPropertyDefinition extends BaseTokenDefinition {
   engine?: {
     mappingStatus: string;
     playableInV0: boolean;
-    effects: unknown[];
+    effects: RuntimeEffect[];
     unsupportedMechanics: string[];
   };
 }
@@ -1161,7 +1170,7 @@ function decodeCardDefinition(value: unknown): DecodeResult<CardDefinition> {
       errors,
       "marketChipMarker"
     );
-    const effects = requireUnknownArrayField(
+    const effects = requireRuntimeEffectArrayField(
       engine,
       "engine.effects",
       errors,
@@ -1240,7 +1249,7 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
 
   if (kind === "deadWizardToken") {
     const victoryPoints = requireNumberField(record, "victoryPoints", errors);
-    const effects = requireUnknownArrayField(record, "effects", errors);
+    const effects = requireRuntimeEffectArrayField(record, "effects", errors);
     if (
       errors.length > 0 ||
       schemaVersion === undefined ||
@@ -1311,7 +1320,7 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
         errors,
         "playableInV0"
       );
-      const effects = requireUnknownArrayField(
+      const effects = requireRuntimeEffectArrayField(
         engine,
         "engine.effects",
         errors,
@@ -1653,6 +1662,79 @@ function requireUnknownArrayField(
   return value === undefined ? undefined : [...value];
 }
 
+function requireRuntimeEffectArrayField(
+  record: Record<string, unknown>,
+  label: string,
+  errors: string[],
+  key = label
+): RuntimeEffect[] | undefined {
+  const values = requireArrayField(record, label, errors, key);
+  if (values === undefined) {
+    return undefined;
+  }
+
+  const effects: RuntimeEffect[] = [];
+  for (const [index, value] of values.entries()) {
+    if (!isPlainRecord(value)) {
+      errors.push(`${label}[${index}] must be an object`);
+      continue;
+    }
+
+    if (!isRuntimeEffectId(value["effectId"])) {
+      errors.push(`${label}[${index}].effectId must be a supported effect id`);
+      continue;
+    }
+
+    if (!isEffectTiming(value["timing"])) {
+      errors.push(
+        `${label}[${index}].timing must be a supported effect timing`
+      );
+      continue;
+    }
+
+    if (
+      value["condition"] !== undefined &&
+      !isRuntimeEffectCondition(value["condition"])
+    ) {
+      errors.push(
+        `${label}[${index}].condition must use a supported condition shape`
+      );
+      continue;
+    }
+
+    if (
+      value["costs"] !== undefined &&
+      (!Array.isArray(value["costs"]) ||
+        !value["costs"].every(isRuntimeEffectCost))
+    ) {
+      errors.push(`${label}[${index}].costs must use supported cost shapes`);
+      continue;
+    }
+
+    if (
+      value["target"] !== undefined &&
+      !isRuntimeEffectTarget(value["target"])
+    ) {
+      errors.push(`${label}[${index}].target must use a supported selector`);
+      continue;
+    }
+
+    if (
+      value["targetSelector"] !== undefined &&
+      !isRuntimeEffectTargetSelector(value["targetSelector"])
+    ) {
+      errors.push(
+        `${label}[${index}].targetSelector must be a supported selector`
+      );
+      continue;
+    }
+
+    effects.push(value as RuntimeEffect);
+  }
+
+  return effects;
+}
+
 function optionalUnknownArrayField(
   record: Record<string, unknown>,
   label: string,
@@ -1905,7 +1987,9 @@ function validateRuntimeEffectDefinition(
     return [`${subjectId} uses token-only effect id ${effectId}`];
   }
 
-  const catalogEntry = getEffectRuntimeCatalogEntry(effectId);
+  const catalogEntry = isRuntimeEffectId(effectId)
+    ? getEffectRuntimeCatalogEntry(effectId)
+    : undefined;
   if (catalogEntry !== undefined) {
     if (!isEffectRuntimeCatalogEntrySupportedInMode(catalogEntry, mode)) {
       if (mode === "combat" && effectId.startsWith("fixture_")) {
@@ -1919,7 +2003,23 @@ function validateRuntimeEffectDefinition(
       ];
     }
 
-    return catalogEntry.handler.validateShape(subjectId, effect);
+    const shapeErrors = catalogEntry.handler.validateShape(subjectId, effect);
+    if (shapeErrors.length > 0) {
+      return shapeErrors;
+    }
+
+    const targetSelector = effect["targetSelector"];
+    if (
+      targetSelector !== undefined &&
+      (!isRuntimeEffectTargetSelector(targetSelector) ||
+        !catalogEntry.handler.allowedTargetSelectors?.includes(targetSelector))
+    ) {
+      return [
+        `${subjectId} ${effectId} uses unsupported target selector`,
+      ];
+    }
+
+    return [];
   }
 
   return [`${subjectId} uses unsupported effect id ${effectId}`];

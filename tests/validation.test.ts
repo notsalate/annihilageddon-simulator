@@ -11,10 +11,21 @@ import {
   validateExecutableDataPack,
   type CardDefinition,
   type DecodeResult,
+  type EffectTiming,
   type LoadedDataPack,
+  type RuntimeEffect,
+  type RuntimeEffectCondition,
+  type RuntimeEffectCost,
+  type RuntimeEffectId,
+  type RuntimeEffectSelectorTarget,
+  type RuntimeEffectTarget,
+  type TargetSelector,
   type TokenDefinition,
 } from "../src/index.js";
 import {
+  effectRuntimeCatalog,
+  effectRuntimeCatalogSource,
+  type EffectRuntimeServices,
   getEffectRuntimeCatalogEntry,
   getEffectRuntimeHandler,
   isEffectRuntimeCatalogEntrySupportedInMode,
@@ -36,6 +47,110 @@ test("runtime data decoder exposes a narrowed successful decoded value", () => {
     );
   }
 });
+
+test("runtime data decoder exposes typed effects after the raw JSON boundary", () => {
+  const result = decodeCurrentRuntimeDataPack(rootDir);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+
+  const effects: RuntimeEffect[] = [
+    ...result.value.cardDefinitions.values(),
+  ].flatMap((definition) => definition.engine.effects);
+
+  assert.ok(effects.length > 0);
+  assert.equal(typeof effects[0]?.effectId, "string");
+  const timing: EffectTiming | undefined = effects[0]?.timing;
+  assert.equal(typeof timing, "string");
+});
+
+test("runtime effect conditions are exposed as a typed union", () => {
+  const condition: RuntimeEffectCondition = {
+    conditionId: "control_count",
+    cardTypes: ["treasure"],
+    minimumCount: 2,
+  };
+
+  assert.equal(condition.conditionId, "control_count");
+});
+
+test("runtime effect costs are exposed as a typed union", () => {
+  const cost: RuntimeEffectCost = {
+    costId: "spend_chips",
+    amount: 2,
+  };
+
+  assert.equal(cost.costId, "spend_chips");
+});
+
+test("effect runtime catalog accepts only decoded runtime effect ids", () => {
+  const result = decodeCurrentRuntimeDataPack(rootDir);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+
+  const effect = [...result.value.cardDefinitions.values()]
+    .flatMap((definition) => definition.engine.effects)
+    .at(0);
+  assert.ok(effect);
+
+  const effectId: RuntimeEffectId = effect.effectId;
+  assert.ok(getEffectRuntimeHandler(effectId));
+
+  type CatalogLookupParameter = Parameters<typeof getEffectRuntimeHandler>[0];
+  const rawStringIsRejectedAtTheDecoderBoundary: Assert<
+    string extends CatalogLookupParameter ? false : true
+  > = true;
+  assert.equal(rawStringIsRejectedAtTheDecoderBoundary, true);
+});
+
+test("runtime services accept decoded effect ids", () => {
+  type AttackEffectId = Parameters<
+    EffectRuntimeServices["resolveAttackTarget"]
+  >[4];
+  const rawStringIsRejectedByRuntimeServices: Assert<
+    string extends AttackEffectId ? false : true
+  > = true;
+
+  assert.equal(rawStringIsRejectedByRuntimeServices, true);
+});
+
+test("effect runtime lookup retains the handler type for its effect id", () => {
+  const addPowerHandler = getEffectRuntimeHandler("add_power");
+  assert.ok(addPowerHandler);
+
+  type AddPowerEffect = Parameters<
+    NonNullable<typeof addPowerHandler>["execute"]
+  >[2];
+  const anotherEffectIdIsRejectedByTheAddPowerHandler: Assert<
+    "gain_chips" extends AddPowerEffect["effectId"] ? false : true
+  > = true;
+
+  assert.equal(anotherEffectIdIsRejectedByTheAddPowerHandler, true);
+});
+
+test("effect runtime lookup is derived from its typed catalog source", () => {
+  assert.deepEqual(
+    Array.from(effectRuntimeCatalog.keys()).sort(),
+    Object.keys(effectRuntimeCatalogSource).sort()
+  );
+});
+
+test("runtime effect target selectors are exposed as a literal union", () => {
+  const target: RuntimeEffectSelectorTarget = { selector: "opponentPlayer" };
+  const selector: TargetSelector = target.selector;
+
+  const effectTarget: RuntimeEffectTarget = target;
+
+  assert.equal(selector, "opponentPlayer");
+  assert.deepEqual(effectTarget, target);
+});
+
+type Assert<T extends true> = T;
 
 test("current runtime manifest omits manual report metadata", () => {
   const manifest = JSON.parse(
@@ -260,6 +375,41 @@ test("runtime data decoder rejects invalid card and token definition field shape
     engine: {
       ...invalidCard.engine,
       playableInV0: "yes",
+      effects: [
+        {
+          effectId: "add_power",
+          timing: "unsupported_timing",
+          amount: 1,
+        },
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 1,
+          target: {
+            selector: "unsupported_selector",
+          },
+        },
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 1,
+          targetSelector: "unsupported_selector",
+        },
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 1,
+          condition: {
+            conditionId: "unsupported_condition",
+          },
+        },
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 1,
+          costs: [{ costId: "unsupported_cost" }],
+        },
+      ],
     },
   });
   writeJsonFile(tempRoot, "tokens/bad-token.json", {
@@ -308,6 +458,37 @@ test("runtime data decoder rejects invalid card and token definition field shape
     );
     assert.ok(
       result.errors.some((error) =>
+        error.includes(
+          "engine.effects[0].timing must be a supported effect timing"
+        )
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("engine.effects[1].target must use a supported selector")
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes(
+          "engine.effects[2].targetSelector must be a supported selector"
+        )
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes(
+          "engine.effects[3].condition must use a supported condition shape"
+        )
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("engine.effects[4].costs must use supported cost shapes")
+      )
+    );
+    assert.ok(
+      result.errors.some((error) =>
         error.startsWith(
           "Runtime data tokenDefinitionPaths tokens/bad-token.json:"
         )
@@ -328,7 +509,26 @@ test("runtime data decoder rejects invalid card and token definition field shape
 
 test("runtime data decoder does not pass raw object fields through", () => {
   const tempRoot = mkdtempSync(path.join(tmpdir(), "runtime-data-raw-"));
-  const fixtureCard = createFixtureCard("runtime-card");
+  const baseFixtureCard = createFixtureCard("runtime-card");
+  const fixtureCard = {
+    ...baseFixtureCard,
+    engine: {
+      ...baseFixtureCard.engine,
+      effects: [
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 1,
+          condition: {
+            conditionId: "control_count",
+            cardTypes: ["treasure"],
+            minimumCount: 2,
+          },
+          costs: [{ costId: "spend_chips", amount: 1 }],
+        },
+      ],
+    },
+  };
   const validDeck = {
     schemaVersion: 1,
     deckId: "fixture-valid",
@@ -420,6 +620,14 @@ test("runtime data decoder does not pass raw object fields through", () => {
     assert.equal("rawOnly" in decodedCard!, false);
     assert.equal("rawOnly" in decodedCard!.visible, false);
     assert.equal("rawOnly" in decodedCard!.engine, false);
+    assert.deepEqual(decodedCard!.engine.effects[0]?.condition, {
+      conditionId: "control_count",
+      cardTypes: ["treasure"],
+      minimumCount: 2,
+    });
+    assert.deepEqual(decodedCard!.engine.effects[0]?.costs, [
+      { costId: "spend_chips", amount: 1 },
+    ]);
     assert.equal("rawOnly" in decodedToken!, false);
     assert.equal("rawOnly" in result.value.decks.starterDeck, false);
     assert.equal(
@@ -494,6 +702,36 @@ test("executable data-pack validation rejects invalid add-power amount", () => {
       .length,
     3
   );
+});
+
+test("executable data-pack validation rejects an add-power selector", () => {
+  const card = createFixtureCard("fixture-add-power-with-selector");
+  const dataPack = withOnlyFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 1,
+          targetSelector: "chosenFoe",
+        },
+      ],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack);
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("add_power uses unsupported target selector")
+      )
+    );
+  }
 });
 
 test("executable data-pack validation rejects invalid add-power Wild Magic option amount", () => {
@@ -796,7 +1034,7 @@ test("combat effects are registered and reject invalid shapes through runtime ha
     "attack_damage_equal_to_controlled_card_cost",
     "multi_target_attack",
     "mayhem_attack",
-  ];
+  ] as const satisfies readonly RuntimeEffectId[];
 
   for (const effectId of combatEffectIds) {
     const handler = getEffectRuntimeHandler(effectId);
@@ -834,7 +1072,7 @@ test("economy and draw effects are registered and reject invalid shapes through 
     "gain_chips",
     "gain_chips_per_player_with_status",
     "draw_cards",
-  ];
+  ] as const satisfies readonly RuntimeEffectId[];
 
   for (const effectId of effectIds) {
     assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
@@ -876,7 +1114,7 @@ test("top-deck and Wild Magic effects are registered and reject invalid shapes t
     "play_top_card",
     "play_top_card_from_foe_deck",
     "wild_magic_choice",
-  ];
+  ] as const satisfies readonly RuntimeEffectId[];
 
   for (const effectId of effectIds) {
     assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
@@ -933,7 +1171,7 @@ test("life and Dingler status effects are registered and reject invalid shapes t
     "remove_status",
     "toggle_status",
     "add_power_per_player_with_status",
-  ];
+  ] as const satisfies readonly RuntimeEffectId[];
 
   for (const effectId of effectIds) {
     assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
@@ -961,7 +1199,11 @@ test("life and Dingler status effects are registered and reject invalid shapes t
     }),
     []
   );
-  for (const effectId of ["gain_status", "remove_status", "toggle_status"]) {
+  for (const effectId of [
+    "gain_status",
+    "remove_status",
+    "toggle_status",
+  ] as const satisfies readonly RuntimeEffectId[]) {
     assert.notDeepEqual(
       getEffectRuntimeHandler(effectId)?.validateShape("Fixture", {
         effectId,
@@ -1004,7 +1246,7 @@ test("Mega Mayhem life and Dingler status effects are registered and reject inva
   const effectIds = [
     "mega_mayhem_set_life",
     "mega_mayhem_each_player_toggle_dingler",
-  ];
+  ] as const satisfies readonly RuntimeEffectId[];
 
   for (const effectId of effectIds) {
     assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
@@ -1283,7 +1525,7 @@ test("wizard property setup effects are registered and reject invalid shapes thr
     "force_starting_player",
     "set_starting_life_total",
     "set_resurrection_life_total",
-  ];
+  ] as const satisfies readonly RuntimeEffectId[];
 
   for (const effectId of setupEffectIds) {
     assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);
@@ -1635,7 +1877,7 @@ test("effect runtime catalog validates supported, unknown, and fixture-only effe
             selector: "mainMarketCard",
           },
         },
-      ],
+      ] as unknown as RuntimeEffect[],
     },
   });
 
@@ -1659,7 +1901,7 @@ test("fixture mode does not allow unsupported fixture effect ids", () => {
           effectId: "fixture_not_supported",
           timing: "onPlay",
         },
-      ],
+      ] as unknown as RuntimeEffect[],
     },
   });
 
@@ -1687,7 +1929,7 @@ test("executable data-pack validation rejects unsupported effect ids", () => {
           effectId: "fixture_not_supported",
           timing: "onPlay",
         },
-      ],
+      ] as unknown as RuntimeEffect[],
     },
   });
 
@@ -1863,8 +2105,10 @@ test("temporary hand-limit effect validates supported and invalid shapes", () =>
 });
 
 test("wand attack replacement effects validate supported and invalid shapes", () => {
-  const modifyDamageEffectId = "modify_owned_wand_attack_damage";
-  const preventDefenseEffectId = "prevent_defense_against_owned_wand_attacks";
+  const modifyDamageEffectId: RuntimeEffectId =
+    "modify_owned_wand_attack_damage";
+  const preventDefenseEffectId: RuntimeEffectId =
+    "prevent_defense_against_owned_wand_attacks";
 
   for (const effectId of [modifyDamageEffectId, preventDefenseEffectId]) {
     assert.equal(getEffectRuntimeCatalogEntry(effectId)?.effectId, effectId);

@@ -14,6 +14,12 @@ import {
   type TargetChoice,
   type TargetChoiceResult,
 } from "./effect-runtime-registry.js";
+import {
+  isRuntimeEffectSelectorTarget,
+  type RuntimeEffect,
+  type RuntimeEffectId,
+  type RuntimeEffectPayload,
+} from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export function executeOnPlayEffects(
@@ -80,8 +86,7 @@ export function hasExecutableWizardPropertyActivation(
 
   return definition.engine.effects.some((effect) => {
     return (
-      isEffectRecord(effect) &&
-      effect["timing"] === "activation" &&
+      effect.timing === "activation" &&
       effectConditionMatches(state, player, effect)
     );
   });
@@ -316,12 +321,12 @@ export function executeMayhemEffects(
 function executeEffects(
   state: GameState,
   player: PlayerState,
-  effects: readonly unknown[],
-  timing: string,
+  effects: readonly RuntimeEffect[],
+  timing: RuntimeEffect["timing"],
   source: EffectSourceContext
 ): EffectExecutionResult {
   for (const effect of effects) {
-    if (!isEffectRecord(effect) || effect["timing"] !== timing) {
+    if (effect.timing !== timing) {
       continue;
     }
 
@@ -379,26 +384,17 @@ function countGainedCardsMatchingEffect(
   }).length;
 }
 
-function isSupportedMayhemRuntimeEffect(
-  effect: Record<string, unknown>
-): boolean {
-  const effectId = effect["effectId"];
-  return (
-    typeof effectId === "string" &&
-    getEffectRuntimeCatalogEntry(effectId) !== undefined
-  );
+function isSupportedMayhemRuntimeEffect(effect: RuntimeEffect): boolean {
+  return getEffectRuntimeCatalogEntry(effect.effectId) !== undefined;
 }
 
 function executeEffect(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): EffectExecutionResult {
-  const catalogEntry =
-    typeof effect["effectId"] === "string"
-      ? getEffectRuntimeCatalogEntry(effect["effectId"])
-      : undefined;
+  const catalogEntry = getEffectRuntimeCatalogEntry(effect.effectId);
   if (catalogEntry !== undefined) {
     if (
       !isEffectRuntimeCatalogEntrySupportedInMode(
@@ -410,6 +406,16 @@ function executeEffect(
         ok: false,
         error: `Effect id ${catalogEntry.effectId} is not supported in ${source.runtimeMode} runtime mode`,
       };
+    }
+
+    if (!("timing" in effect)) {
+      const shapeErrors = catalogEntry.handler.validateShape(
+        `Effect ${catalogEntry.effectId}`,
+        effect
+      );
+      if (shapeErrors.length > 0) {
+        return { ok: false, error: shapeErrors.join("; ") };
+      }
     }
 
     return catalogEntry.handler.execute(
@@ -430,47 +436,31 @@ function executeEffect(
 function effectConditionMatches(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): boolean {
-  const condition = effect["condition"];
+  const { condition } = effect;
   if (condition === undefined) {
     return true;
   }
 
-  if (!isEffectRecord(condition)) {
-    return false;
-  }
-
-  if (condition["conditionId"] !== "control_count") {
-    return false;
-  }
-
-  const cardTypes = condition["cardTypes"];
-  const minimumCount = condition["minimumCount"];
-  if (
-    !Array.isArray(cardTypes) ||
-    typeof minimumCount !== "number" ||
-    !Number.isSafeInteger(minimumCount)
-  ) {
-    return false;
-  }
-
-  const matchingCount = [...player.permanents, ...player.playedThisTurn].filter(
-    (card) => {
+  if ("conditionId" in condition) {
+    const matchingCount = [
+      ...player.permanents,
+      ...player.playedThisTurn,
+    ].filter((card) => {
       const definition = state.cardDefinitions.get(card.definitionId);
       return (
         definition !== undefined &&
-        cardTypes.some((cardType) => {
-          return (
-            typeof cardType === "string" &&
-            definition.engine.cardTypes.includes(cardType)
-          );
-        })
+        condition.cardTypes.some((cardType) =>
+          definition.engine.cardTypes.includes(cardType)
+        )
       );
-    }
-  ).length;
+    }).length;
 
-  return matchingCount >= minimumCount;
+    return matchingCount >= condition.minimumCount;
+  }
+
+  return false;
 }
 
 function getWizardPropertyAttackProfile(
@@ -588,7 +578,7 @@ function resolveAttackTarget(
   attackingPlayer: PlayerState,
   targetPlayer: PlayerState,
   amount: number,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext,
   unavoidable = false
 ): DamageResult & { avoided: boolean } {
@@ -633,7 +623,7 @@ function resolveMayhemAttack(
   state: GameState,
   sourcePlayer: PlayerState,
   amount: number,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
   const targets = getPlayersInActiveOrder(state);
@@ -734,7 +724,7 @@ function isLegalWildMagicOption(
   state: GameState,
   player: PlayerState,
   option: Record<string, unknown>
-): boolean {
+): option is RuntimeEffectPayload {
   if (option["effectId"] === "add_power") {
     const amount = option["amount"];
     return (
@@ -800,7 +790,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
 function resolveStatusTargetPlayers(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): { ok: true; players: PlayerState[] } | { ok: false; error: string } {
   if (effect["targetSelector"] === "eachPlayerClockwiseFromActive") {
@@ -838,7 +828,7 @@ function resolveStatusTargetPlayers(
 function resolveTargetChoice(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): TargetChoiceResult {
   const choicesResult = buildLegalTargetChoices(state, player, effect);
@@ -897,7 +887,7 @@ function chooseEffectChoice(
   state: GameState,
   player: PlayerState,
   source: EffectSourceContext,
-  effectId: string,
+  effectId: RuntimeEffectId,
   choices: readonly EffectChoice[]
 ): EffectChoice | undefined {
   const selectedChoice = state.effectChoiceStrategy?.({
@@ -934,14 +924,22 @@ function chooseEffectChoice(
     choiceId: choice.choiceId,
     choiceIds: choices.map((candidate) => candidate.choiceId),
     legalChoiceCount: choices.length,
-    ...(choice.direction === undefined ? {} : { direction: choice.direction }),
-    ...(choice.amount === undefined ? {} : { amount: choice.amount }),
-    ...(choice.cards === undefined
-      ? {}
-      : {
+    ...(choice.choiceKind === "directionalPlayerTarget"
+      ? {
+          direction: choice.direction,
+          targetPlayerIds: choice.players.map((player) => player.playerId),
+        }
+      : {}),
+    ...(choice.choiceKind === "playerTarget"
+      ? { targetPlayerIds: choice.players.map((player) => player.playerId) }
+      : {}),
+    ...(choice.choiceKind === "cardTarget"
+      ? {
+          amount: choice.amount,
           targetCardInstanceIds: choice.cards.map((card) => card.instanceId),
           targetDefinitionIds: choice.cards.map((card) => card.definitionId),
-        }),
+        }
+      : {}),
     sourceType: source.sourceType,
   });
   return choice;
@@ -950,10 +948,14 @@ function chooseEffectChoice(
 function buildLegalTargetChoices(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): { ok: true; choices: TargetChoice[] } | { ok: false; error: string } {
-  const target = effect["target"];
-  if (!isEffectRecord(target)) {
+  const target = effect.target;
+  if (!isRuntimeEffectSelectorTarget(target)) {
+    const rawTarget: unknown = target;
+    const selector = isEffectRecord(rawTarget)
+      ? rawTarget["selector"]
+      : effect["targetSelector"];
     const targetSelector = effect["targetSelector"];
     if (targetSelector === "chosenFoe") {
       return {
@@ -979,11 +981,11 @@ function buildLegalTargetChoices(
 
     return {
       ok: false,
-      error: `Effect ${asString(effect["effectId"])} requires a target selector`,
+      error: `Unsupported target selector ${asString(selector)}`,
     };
   }
 
-  const selector = target["selector"];
+  const selector = target.selector;
   if (selector === "mainMarketCard") {
     return {
       ok: true,
@@ -1062,7 +1064,7 @@ function chooseFirstLegalChoice(
 
 function requireCardChoice(
   choice: TargetChoice,
-  effectId: string
+  effectId: RuntimeEffectId
 ): { ok: true; card: CardInstance } | { ok: false; error: string } {
   if (choice.choiceType !== "card") {
     return {
@@ -1084,7 +1086,7 @@ function resolvePlayerDeath(
   killCredit:
     | {
         killer: PlayerState;
-        effectId: string;
+        effectId: RuntimeEffectId;
         source: EffectSourceContext;
       }
     | undefined
@@ -1180,7 +1182,7 @@ function awardBasicTrophyForKill(
   state: GameState,
   killer: PlayerState,
   defeatedPlayer: PlayerState,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
   if (
@@ -1231,7 +1233,7 @@ function awardBasicTrophyForKill(
   });
 }
 
-function givesBasicTrophyCredit(effectId: string): boolean {
+function givesBasicTrophyCredit(effectId: RuntimeEffectId): boolean {
   return (
     effectId === "attack_damage" ||
     effectId === "multi_target_attack" ||
@@ -1244,7 +1246,7 @@ function dealDamage(
   sourcePlayer: PlayerState,
   targetPlayer: PlayerState,
   amount: number,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): DamageResult {
   const previousLife = targetPlayer.life.current;
@@ -1426,7 +1428,7 @@ function findFirstLegalDefense(
   | {
       card: CardInstance;
       destination: "discardSelf" | "topdeckSelf";
-      effect: Record<string, unknown>;
+      effect: RuntimeEffect;
     }
   | undefined {
   for (const card of defendingPlayer.hand) {
@@ -1435,17 +1437,14 @@ function findFirstLegalDefense(
       continue;
     }
 
-    const defenseEffect = definition.engine.effects.find(
-      (effect): effect is Record<string, unknown> => {
-        return (
-          isEffectRecord(effect) &&
-          effect["effectId"] === "avoid_attack" &&
-          effect["timing"] === "onDefense" &&
-          (effect["destination"] === "discardSelf" ||
-            effect["destination"] === "topdeckSelf")
-        );
-      }
-    );
+    const defenseEffect = definition.engine.effects.find((effect) => {
+      return (
+        effect.effectId === "avoid_attack" &&
+        effect.timing === "onDefense" &&
+        (effect["destination"] === "discardSelf" ||
+          effect["destination"] === "topdeckSelf")
+      );
+    });
     if (
       defenseEffect !== undefined &&
       canPayDefenseCosts(defendingPlayer, card, defenseEffect)
@@ -1469,60 +1468,35 @@ function findFirstLegalDefense(
 function canPayDefenseCosts(
   defendingPlayer: PlayerState,
   defenseCard: CardInstance,
-  defenseEffect: Record<string, unknown>
+  defenseEffect: RuntimeEffect
 ): boolean {
-  const costs = defenseEffect["costs"];
+  const { costs } = defenseEffect;
   if (costs === undefined) {
     return true;
   }
 
-  if (!Array.isArray(costs)) {
-    return false;
-  }
-
   for (const cost of costs) {
-    if (!isEffectRecord(cost)) {
-      return false;
+    switch (cost.costId) {
+      case "discard_other_hand_card":
+        if (
+          defendingPlayer.hand.every(
+            (card) => card.instanceId === defenseCard.instanceId
+          )
+        ) {
+          return false;
+        }
+        break;
+      case "spend_chips":
+        if (defendingPlayer.chips < cost.amount) {
+          return false;
+        }
+        break;
+      case "pay_life":
+        if (defendingPlayer.life.current - cost.amount < 1) {
+          return false;
+        }
+        break;
     }
-
-    if (cost["costId"] === "discard_other_hand_card") {
-      if (
-        defendingPlayer.hand.every(
-          (card) => card.instanceId === defenseCard.instanceId
-        )
-      ) {
-        return false;
-      }
-      continue;
-    }
-
-    if (cost["costId"] === "spend_chips") {
-      const amount = cost["amount"];
-      if (
-        typeof amount !== "number" ||
-        !Number.isSafeInteger(amount) ||
-        amount <= 0 ||
-        defendingPlayer.chips < amount
-      ) {
-        return false;
-      }
-      continue;
-    }
-
-    if (cost["costId"] === "pay_life") {
-      const amount = cost["amount"];
-      if (
-        typeof amount !== "number" ||
-        !Number.isSafeInteger(amount) ||
-        amount <= 0 ||
-        defendingPlayer.life.current - amount < 1
-      ) {
-        return false;
-      }
-      continue;
-    }
-
-    return false;
   }
 
   return true;
@@ -1532,100 +1506,78 @@ function payDefenseCosts(
   state: GameState,
   defendingPlayer: PlayerState,
   defenseCard: CardInstance,
-  defenseEffect: Record<string, unknown>
+  defenseEffect: RuntimeEffect
 ): boolean {
-  const costs = defenseEffect["costs"];
+  const { costs } = defenseEffect;
   if (costs === undefined) {
     return true;
   }
 
-  if (!Array.isArray(costs)) {
-    return false;
-  }
-
   for (const cost of costs) {
-    if (!isEffectRecord(cost)) {
-      return false;
-    }
+    switch (cost.costId) {
+      case "discard_other_hand_card": {
+        const paidCardIndex = defendingPlayer.hand.findIndex(
+          (card) => card.instanceId !== defenseCard.instanceId
+        );
+        if (paidCardIndex < 0) {
+          return false;
+        }
 
-    if (cost["costId"] === "discard_other_hand_card") {
-      const paidCardIndex = defendingPlayer.hand.findIndex(
-        (card) => card.instanceId !== defenseCard.instanceId
-      );
-      if (paidCardIndex < 0) {
-        return false;
+        const [paidCard] = defendingPlayer.hand.splice(paidCardIndex, 1);
+        if (paidCard === undefined) {
+          return false;
+        }
+
+        defendingPlayer.discard.push(paidCard);
+        state.eventLog.push({
+          type: "defenseCostPaid",
+          playerId: defendingPlayer.playerId,
+          cardInstanceId: defenseCard.instanceId,
+          definitionId: defenseCard.definitionId,
+          targetCardInstanceId: paidCard.instanceId,
+          targetDefinitionId: paidCard.definitionId,
+          effectId: cost.costId,
+        });
+        break;
       }
+      case "spend_chips": {
+        if (defendingPlayer.chips < cost.amount) {
+          return false;
+        }
 
-      const [paidCard] = defendingPlayer.hand.splice(paidCardIndex, 1);
-      if (paidCard === undefined) {
-        return false;
+        defendingPlayer.chips -= cost.amount;
+        state.eventLog.push({
+          type: "defenseCostPaid",
+          playerId: defendingPlayer.playerId,
+          cardInstanceId: defenseCard.instanceId,
+          definitionId: defenseCard.definitionId,
+          effectId: cost.costId,
+          amount: cost.amount,
+          chipsBefore: defendingPlayer.chips + cost.amount,
+          chipsAfter: defendingPlayer.chips,
+        });
+        break;
       }
+      case "pay_life": {
+        if (defendingPlayer.life.current - cost.amount < 1) {
+          return false;
+        }
 
-      defendingPlayer.discard.push(paidCard);
-      state.eventLog.push({
-        type: "defenseCostPaid",
-        playerId: defendingPlayer.playerId,
-        cardInstanceId: defenseCard.instanceId,
-        definitionId: defenseCard.definitionId,
-        targetCardInstanceId: paidCard.instanceId,
-        targetDefinitionId: paidCard.definitionId,
-        effectId: "discard_other_hand_card",
-      });
-      continue;
-    }
-
-    if (cost["costId"] === "spend_chips") {
-      const amount = cost["amount"];
-      if (
-        typeof amount !== "number" ||
-        !Number.isSafeInteger(amount) ||
-        amount <= 0 ||
-        defendingPlayer.chips < amount
-      ) {
-        return false;
+        const lifeBefore = defendingPlayer.life.current;
+        defendingPlayer.life.current -= cost.amount;
+        state.eventLog.push({
+          type: "defenseCostPaid",
+          playerId: defendingPlayer.playerId,
+          cardInstanceId: defenseCard.instanceId,
+          definitionId: defenseCard.definitionId,
+          effectId: cost.costId,
+          amount: cost.amount,
+          lifeBefore,
+          lifeAfter: defendingPlayer.life.current,
+        });
+        break;
       }
-
-      defendingPlayer.chips -= amount;
-      state.eventLog.push({
-        type: "defenseCostPaid",
-        playerId: defendingPlayer.playerId,
-        cardInstanceId: defenseCard.instanceId,
-        definitionId: defenseCard.definitionId,
-        effectId: "spend_chips",
-        amount,
-        chipsBefore: defendingPlayer.chips + amount,
-        chipsAfter: defendingPlayer.chips,
-      });
-      continue;
     }
-
-    if (cost["costId"] === "pay_life") {
-      const amount = cost["amount"];
-      if (
-        typeof amount !== "number" ||
-        !Number.isSafeInteger(amount) ||
-        amount <= 0 ||
-        defendingPlayer.life.current - amount < 1
-      ) {
-        return false;
-      }
-
-      const lifeBefore = defendingPlayer.life.current;
-      defendingPlayer.life.current -= amount;
-      state.eventLog.push({
-        type: "defenseCostPaid",
-        playerId: defendingPlayer.playerId,
-        cardInstanceId: defenseCard.instanceId,
-        definitionId: defenseCard.definitionId,
-        effectId: "pay_life",
-        amount,
-        lifeBefore,
-        lifeAfter: defendingPlayer.life.current,
-      });
-      continue;
-    }
-
-    return false;
   }
 
   return true;
@@ -1636,7 +1588,7 @@ function healPlayer(
   sourcePlayer: PlayerState,
   targetPlayer: PlayerState,
   amount: number,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
   const effectiveMaxLife = calculateEffectivePlayerMaxLife(
@@ -1701,7 +1653,7 @@ function moveCardToPlayerZone(
   player: PlayerState,
   destination: CardInstance[],
   destinationZone: string,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): boolean {
   const sourceZone = getCardZoneName(state, card) ?? "unknown";
@@ -1746,7 +1698,7 @@ function moveCardToZonePreservingOwner(
   card: CardInstance,
   destination: CardInstance[],
   destinationZone: string,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): boolean {
   const sourceZone = getCardZoneName(state, card) ?? "unknown";
@@ -1966,7 +1918,7 @@ function hasDinglerStatus(player: PlayerState): boolean {
 function gainDinglerStatus(
   state: GameState,
   player: PlayerState,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
   if (!hasDinglerStatus(player)) {
@@ -1988,7 +1940,7 @@ function gainDinglerStatus(
 function removeDinglerStatus(
   state: GameState,
   player: PlayerState,
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
   const dinglerIndex = player.statuses.findIndex(

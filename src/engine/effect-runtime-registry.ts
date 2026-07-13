@@ -5,6 +5,13 @@ import {
 } from "./effective-values.js";
 import { recordTurnPowerChanged } from "./event-recorder.js";
 import { isPlainRecord } from "../common.js";
+import {
+  isRuntimeEffectSelectorTarget,
+  isRuntimeEffectId,
+  type RuntimeEffectId,
+  type RuntimeEffectPayload,
+  type RuntimeEffectTargetSelector,
+} from "./runtime-effect.js";
 
 import type {
   CardInstance,
@@ -14,7 +21,12 @@ import type {
   TokenInstance,
 } from "./setup.js";
 
-export type EffectRuntimeMode = "combat" | "fixture";
+export const effectRuntimeModes = ["combat", "fixture"] as const;
+export type EffectRuntimeMode = (typeof effectRuntimeModes)[number];
+export type EffectRuntimeSupportedModes = readonly [
+  EffectRuntimeMode,
+  ...EffectRuntimeMode[],
+];
 
 const RUNTIME_CARD_TYPES = new Set([
   "wizardCard",
@@ -73,12 +85,12 @@ export interface EffectRuntimeServices {
   resolveTargetChoice(
     state: GameState,
     player: PlayerState,
-    effect: Record<string, unknown>,
+    effect: RuntimeEffectPayload,
     source: EffectSourceContext
   ): TargetChoiceResult;
   requireCardChoice(
     choice: TargetChoice,
-    effectId: string
+    effectId: RuntimeEffectId
   ): { ok: true; card: CardInstance } | { ok: false; error: string };
   moveGainedCardToPlayerDestination(
     state: GameState,
@@ -93,7 +105,7 @@ export interface EffectRuntimeServices {
     player: PlayerState,
     destination: CardInstance[],
     destinationZone: string,
-    effectId: string,
+    effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): boolean;
   moveCardToZonePreservingOwner(
@@ -102,7 +114,7 @@ export interface EffectRuntimeServices {
     card: CardInstance,
     destination: CardInstance[],
     destinationZone: string,
-    effectId: string,
+    effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): boolean;
   discardTopDeckCards(
@@ -130,7 +142,7 @@ export interface EffectRuntimeServices {
     state: GameState,
     player: PlayerState,
     source: EffectSourceContext,
-    effectId: string,
+    effectId: RuntimeEffectId,
     choices: readonly EffectChoice[]
   ): EffectChoice | undefined;
   dealDamage(
@@ -138,7 +150,7 @@ export interface EffectRuntimeServices {
     sourcePlayer: PlayerState,
     targetPlayer: PlayerState,
     amount: number,
-    effectId: string,
+    effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): DamageResult;
   healPlayer(
@@ -146,7 +158,7 @@ export interface EffectRuntimeServices {
     sourcePlayer: PlayerState,
     targetPlayer: PlayerState,
     amount: number,
-    effectId: string,
+    effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): void;
   setPlayerLife(
@@ -157,19 +169,19 @@ export interface EffectRuntimeServices {
   resolveStatusTargetPlayers(
     state: GameState,
     player: PlayerState,
-    effect: Record<string, unknown>,
+    effect: RuntimeEffectPayload,
     source: EffectSourceContext
   ): { ok: true; players: PlayerState[] } | { ok: false; error: string };
   gainDinglerStatus(
     state: GameState,
     player: PlayerState,
-    effectId: string,
+    effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): void;
   removeDinglerStatus(
     state: GameState,
     player: PlayerState,
-    effectId: string,
+    effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): void;
   hasDinglerStatus(player: PlayerState): boolean;
@@ -178,7 +190,7 @@ export interface EffectRuntimeServices {
     attackingPlayer: PlayerState,
     targetPlayer: PlayerState,
     amount: number,
-    effectId: string,
+    effectId: RuntimeEffectId,
     source: EffectSourceContext,
     unavoidable?: boolean
   ): DamageResult & { avoided: boolean };
@@ -187,7 +199,7 @@ export interface EffectRuntimeServices {
     state: GameState,
     sourcePlayer: PlayerState,
     amount: number,
-    effectId: string,
+    effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): void;
   resolvePlayerDeath(state: GameState, player: PlayerState): void;
@@ -212,40 +224,89 @@ export interface EffectRuntimeServices {
     state: GameState,
     player: PlayerState,
     option: Record<string, unknown>
-  ): boolean;
+  ): option is RuntimeEffectPayload;
   executeEffect(
     state: GameState,
     player: PlayerState,
-    effect: Record<string, unknown>,
+    effect: RuntimeEffectPayload,
     source: EffectSourceContext
   ): EffectExecutionResult;
   asString(value: unknown): string;
 }
 
-export interface EffectRuntimeHandler {
-  effectId: string;
+export interface EffectRuntimeHandler<
+  Effect extends RuntimeEffectPayload = RuntimeEffectPayload,
+> {
+  effectId: RuntimeEffectId;
+  unsupported?: true;
+  allowedTargetSelectors?: readonly RuntimeEffectTargetSelector[];
   validateShape(subjectId: string, effect: Record<string, unknown>): string[];
   execute(
     state: GameState,
     player: PlayerState,
-    effect: Record<string, unknown>,
+    effect: Effect,
     source: EffectSourceContext,
     services: EffectRuntimeServices
   ): EffectExecutionResult;
 }
 
-export interface EffectRuntimeCatalogEntry {
-  effectId: string;
-  handler: EffectRuntimeHandler;
-  supportedModes: readonly EffectRuntimeMode[];
+export type RuntimeEffectForId<EffectId extends RuntimeEffectId> = Extract<
+  RuntimeEffectPayload,
+  { effectId: EffectId }
+>;
+
+type PositiveAmountRuntimeEffect<EffectId extends RuntimeEffectId> =
+  RuntimeEffectForId<EffectId> & { amount: number };
+
+type AddPowerRuntimeEffect = PositiveAmountRuntimeEffect<"add_power">;
+type GainChipsRuntimeEffect = PositiveAmountRuntimeEffect<"gain_chips">;
+
+export interface EffectRuntimeCatalogEntry<
+  EffectId extends RuntimeEffectId = RuntimeEffectId,
+> {
+  effectId: EffectId;
+  handler: EffectRuntimeHandler<RuntimeEffectForId<EffectId>>;
+  supportedModes: EffectRuntimeSupportedModes;
 }
 
-const allEffectRuntimeModes: readonly EffectRuntimeMode[] = [
-  "combat",
-  "fixture",
-];
+const allEffectRuntimeModes: EffectRuntimeSupportedModes = effectRuntimeModes;
+const fixtureOnlyRuntimeEffectIds = new Set<RuntimeEffectId>([
+  "fixture_modify_effective_value",
+  "fixture_add_power_equal_to_target_cost",
+]);
 
-const addPowerHandler: EffectRuntimeHandler = {
+const opponentPlayerTargetSelectors = [
+  "opponentPlayer",
+] as const satisfies readonly RuntimeEffectTargetSelector[];
+const activePlayerTargetSelectors = [
+  "activePlayer",
+] as const satisfies readonly RuntimeEffectTargetSelector[];
+const opponentOrChosenFoeTargetSelectors = [
+  "opponentPlayer",
+  "chosenFoe",
+] as const satisfies readonly RuntimeEffectTargetSelector[];
+const attackTargetSelectors = [
+  "opponentPlayer",
+  "chosenFoe",
+  "chosenPlayer",
+  "eachFoe",
+] as const satisfies readonly RuntimeEffectTargetSelector[];
+const directionalAttackTargetSelectors = [
+  "leftOrRightFoe",
+] as const satisfies readonly RuntimeEffectTargetSelector[];
+const eachPlayerClockwiseFromActiveTargetSelectors = [
+  "eachPlayerClockwiseFromActive",
+] as const satisfies readonly RuntimeEffectTargetSelector[];
+const chosenFoeTargetSelectors = [
+  "chosenFoe",
+] as const satisfies readonly RuntimeEffectTargetSelector[];
+const dinglerStatusTargetSelectors = [
+  "activePlayer",
+  "opponentPlayer",
+  "anyPlayer",
+] as const satisfies readonly RuntimeEffectTargetSelector[];
+
+const addPowerHandler: EffectRuntimeHandler<AddPowerRuntimeEffect> = {
   effectId: "add_power",
   validateShape(subjectId, effect) {
     const amount = effect["amount"];
@@ -268,16 +329,8 @@ const addPowerHandler: EffectRuntimeHandler = {
       };
     }
 
-    const amount = effect["amount"];
-    if (typeof amount !== "number") {
-      return {
-        ok: false,
-        error: "Invalid add_power effect",
-      };
-    }
-
     const powerBefore = state.turn.power;
-    state.turn.power += amount;
+    state.turn.power += effect.amount;
     recordTurnPowerChanged(
       state,
       player,
@@ -388,7 +441,7 @@ const gainCardHandler: EffectRuntimeHandler = {
       };
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     const choice = services.requireCardChoice(targetResult.choice, effectId);
     if (!choice.ok) {
       return choice;
@@ -444,7 +497,7 @@ const discardCardHandler: EffectRuntimeHandler = {
       return { ok: true };
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     const choice = services.requireCardChoice(targetResult.choice, effectId);
     if (!choice.ok) {
       return choice;
@@ -506,7 +559,7 @@ const destroyCardHandler: EffectRuntimeHandler = {
       return { ok: true };
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     const choice = services.requireCardChoice(targetResult.choice, effectId);
     if (!choice.ok) {
       return choice;
@@ -550,12 +603,16 @@ const destroyCardHandler: EffectRuntimeHandler = {
 
 const dealDamageHandler: EffectRuntimeHandler = {
   effectId: "deal_damage",
+  allowedTargetSelectors: opponentPlayerTargetSelectors,
   validateShape(subjectId, effect) {
     return [
       ...validatePositiveIntegerAmount(subjectId, effect, "damage amount"),
-      ...validatePlayerTargetSelector(subjectId, effect, "damage", [
-        "opponentPlayer",
-      ]),
+      ...validatePlayerTargetSelector(
+        subjectId,
+        effect,
+        "damage",
+        opponentPlayerTargetSelectors
+      ),
     ];
   },
   execute(state, player, effect, source, services) {
@@ -590,7 +647,7 @@ const dealDamageHandler: EffectRuntimeHandler = {
       player,
       targetResult.choice.player,
       amount.value,
-      services.asString(effect["effectId"]),
+      effect.effectId,
       source
     );
     return { ok: true };
@@ -599,12 +656,16 @@ const dealDamageHandler: EffectRuntimeHandler = {
 
 const healHandler: EffectRuntimeHandler = {
   effectId: "heal",
+  allowedTargetSelectors: activePlayerTargetSelectors,
   validateShape(subjectId, effect) {
     return [
       ...validatePositiveIntegerAmount(subjectId, effect, "healing amount"),
-      ...validatePlayerTargetSelector(subjectId, effect, "healing", [
-        "activePlayer",
-      ]),
+      ...validatePlayerTargetSelector(
+        subjectId,
+        effect,
+        "healing",
+        activePlayerTargetSelectors
+      ),
     ];
   },
   execute(state, player, effect, source, services) {
@@ -639,7 +700,7 @@ const healHandler: EffectRuntimeHandler = {
       player,
       targetResult.choice.player,
       amount.value,
-      services.asString(effect["effectId"]),
+      effect.effectId,
       source
     );
     return { ok: true };
@@ -664,6 +725,7 @@ const healEqualDamageDealtOnOwnTurnHandler: EffectRuntimeHandler = {
 
 const setLifeHandler: EffectRuntimeHandler = {
   effectId: "set_life",
+  allowedTargetSelectors: activePlayerTargetSelectors,
   validateShape(subjectId, effect) {
     const errors: string[] = [];
     const lifeTotal = effect["lifeTotal"];
@@ -676,9 +738,12 @@ const setLifeHandler: EffectRuntimeHandler = {
     }
 
     errors.push(
-      ...validatePlayerTargetSelector(subjectId, effect, "set-life", [
-        "activePlayer",
-      ])
+      ...validatePlayerTargetSelector(
+        subjectId,
+        effect,
+        "set-life",
+        activePlayerTargetSelectors
+      )
     );
     return errors;
   },
@@ -727,7 +792,7 @@ const setLifeHandler: EffectRuntimeHandler = {
       targetPlayerId: targetResult.choice.player.playerId,
       cardInstanceId: source.cardInstanceId,
       definitionId: source.definitionId,
-      effectId: services.asString(effect["effectId"]),
+      effectId: effect.effectId,
       amount: lifeTotal,
       targetLifeBefore: lifeChange.lifeBefore,
       targetLifeAfter: lifeChange.lifeAfter,
@@ -739,12 +804,13 @@ const setLifeHandler: EffectRuntimeHandler = {
 
 const exchangeLifeAndDinglerStatusHandler: EffectRuntimeHandler = {
   effectId: "exchange_life_and_dingler_status",
+  allowedTargetSelectors: opponentOrChosenFoeTargetSelectors,
   validateShape(subjectId, effect) {
     const errors = validatePlayerTargetSelector(
       subjectId,
       effect,
       "life exchange",
-      ["opponentPlayer", "chosenFoe"]
+      opponentOrChosenFoeTargetSelectors
     );
     for (const flag of [
       "allowLifeExchange",
@@ -762,7 +828,7 @@ const exchangeLifeAndDinglerStatusHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, player, effect, source, services) {
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     const allowLifeExchange =
       effect["allowLifeExchange"] === undefined
         ? true
@@ -773,15 +839,23 @@ const exchangeLifeAndDinglerStatusHandler: EffectRuntimeHandler = {
         : effect["allowDinglerStatusExchange"] === true;
 
     if (effect["optional"] === true) {
-      const choices: EffectChoice[] = [{ choiceId: "pass" }];
+      const choices: EffectChoice[] = [
+        { choiceKind: "option", choiceId: "pass" },
+      ];
       if (allowLifeExchange) {
-        choices.push({ choiceId: "exchange_life_only" });
+        choices.push({ choiceKind: "option", choiceId: "exchange_life_only" });
       }
       if (allowDinglerStatusExchange) {
-        choices.push({ choiceId: "exchange_dingler_status_only" });
+        choices.push({
+          choiceKind: "option",
+          choiceId: "exchange_dingler_status_only",
+        });
       }
       if (allowLifeExchange && allowDinglerStatusExchange) {
-        choices.push({ choiceId: "exchange_life_and_dingler_status" });
+        choices.push({
+          choiceKind: "option",
+          choiceId: "exchange_life_and_dingler_status",
+        });
       }
       const choice = services.chooseEffectChoice(
         state,
@@ -843,7 +917,7 @@ const exchangeLifeAndDinglerStatusHandler: EffectRuntimeHandler = {
 function exchangeLifeAndOrDinglerStatus(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   source: EffectSourceContext,
   services: EffectRuntimeServices,
   exchangeLife: boolean,
@@ -853,7 +927,7 @@ function exchangeLifeAndOrDinglerStatus(
     return { ok: true };
   }
 
-  const effectId = services.asString(effect["effectId"]);
+  const effectId = effect.effectId;
   const targetResult = services.resolveTargetChoice(
     state,
     player,
@@ -909,6 +983,7 @@ function exchangeLifeAndOrDinglerStatus(
 
 const gainStatusHandler: EffectRuntimeHandler = {
   effectId: "gain_status",
+  allowedTargetSelectors: dinglerStatusTargetSelectors,
   validateShape(subjectId, effect) {
     return validateDinglerStatusEffectShape(subjectId, effect, "gain-status");
   },
@@ -935,7 +1010,7 @@ const gainStatusHandler: EffectRuntimeHandler = {
       services.gainDinglerStatus(
         state,
         targetPlayer,
-        services.asString(effect["effectId"]),
+        effect.effectId,
         source
       );
     }
@@ -946,6 +1021,7 @@ const gainStatusHandler: EffectRuntimeHandler = {
 
 const attackGainStatusHandler: EffectRuntimeHandler = {
   effectId: "attack_gain_status",
+  allowedTargetSelectors: dinglerStatusTargetSelectors,
   validateShape(subjectId, effect) {
     const errors = validateDinglerStatusEffectShape(
       subjectId,
@@ -978,7 +1054,7 @@ const attackGainStatusHandler: EffectRuntimeHandler = {
       return targetResult;
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     for (const targetPlayer of targetResult.players) {
       state.eventLog.push({
         type: "attackCreated",
@@ -1011,6 +1087,7 @@ const attackGainStatusHandler: EffectRuntimeHandler = {
 
 const removeStatusHandler: EffectRuntimeHandler = {
   effectId: "remove_status",
+  allowedTargetSelectors: dinglerStatusTargetSelectors,
   validateShape(subjectId, effect) {
     return validateDinglerStatusEffectShape(subjectId, effect, "remove-status");
   },
@@ -1037,7 +1114,7 @@ const removeStatusHandler: EffectRuntimeHandler = {
       services.removeDinglerStatus(
         state,
         targetPlayer,
-        services.asString(effect["effectId"]),
+        effect.effectId,
         source
       );
     }
@@ -1048,6 +1125,7 @@ const removeStatusHandler: EffectRuntimeHandler = {
 
 const toggleStatusHandler: EffectRuntimeHandler = {
   effectId: "toggle_status",
+  allowedTargetSelectors: dinglerStatusTargetSelectors,
   validateShape(subjectId, effect) {
     return validateDinglerStatusEffectShape(subjectId, effect, "toggle-status");
   },
@@ -1075,14 +1153,14 @@ const toggleStatusHandler: EffectRuntimeHandler = {
         services.removeDinglerStatus(
           state,
           targetPlayer,
-          services.asString(effect["effectId"]),
+          effect.effectId,
           source
         );
       } else {
         services.gainDinglerStatus(
           state,
           targetPlayer,
-          services.asString(effect["effectId"]),
+          effect.effectId,
           source
         );
       }
@@ -1094,6 +1172,7 @@ const toggleStatusHandler: EffectRuntimeHandler = {
 
 const megaMayhemSetLifeHandler: EffectRuntimeHandler = {
   effectId: "mega_mayhem_set_life",
+  allowedTargetSelectors: eachPlayerClockwiseFromActiveTargetSelectors,
   validateShape(subjectId, effect) {
     return validateMegaMayhemSetLifeEffectShape(subjectId, effect);
   },
@@ -1118,7 +1197,7 @@ const megaMayhemSetLifeHandler: EffectRuntimeHandler = {
         targetPlayerId: targetPlayer.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
-        effectId: services.asString(effect["effectId"]),
+        effectId: effect.effectId,
         amount: lifeTotal,
         targetLifeBefore: lifeChange.lifeBefore,
         targetLifeAfter: lifeChange.lifeAfter,
@@ -1132,11 +1211,12 @@ const megaMayhemSetLifeHandler: EffectRuntimeHandler = {
 
 const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler = {
   effectId: "mega_mayhem_each_player_toggle_dingler",
+  allowedTargetSelectors: eachPlayerClockwiseFromActiveTargetSelectors,
   validateShape(subjectId, effect) {
     return validateMegaMayhemEachPlayerToggleDinglerShape(subjectId, effect);
   },
   execute(state, _player, effect, source, services) {
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     const decisions = collectMayhemAttackDefenseDecisions(
       state,
       services.getPlayersInActiveOrder(state),
@@ -1163,11 +1243,12 @@ const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler = {
 
 const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler = {
   effectId: "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+  allowedTargetSelectors: eachPlayerClockwiseFromActiveTargetSelectors,
   validateShape(subjectId, effect) {
     return validateMegaMayhemEachPlayerShape(subjectId, effect);
   },
   execute(state, _player, effect, source, services) {
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
       const destroyedCard = state.common.mainDeck.shift();
       if (destroyedCard === undefined) {
@@ -1213,6 +1294,7 @@ const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler = {
 const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler = {
   effectId:
     "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
+  allowedTargetSelectors: eachPlayerClockwiseFromActiveTargetSelectors,
   validateShape(subjectId, effect) {
     const errors = validateMayhemEachPlayerShape(subjectId, effect);
     const amount = effect["amount"];
@@ -1240,7 +1322,7 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler = {
       };
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
       const discardedCards = services.discardTopDeckCards(
         state,
@@ -1291,6 +1373,7 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler = {
 
 const mayhemEachPlayerDiscardDeckDestroyHandler: EffectRuntimeHandler = {
   effectId: "mayhem_each_player_discard_deck_then_destroy_from_discard",
+  allowedTargetSelectors: eachPlayerClockwiseFromActiveTargetSelectors,
   validateShape(subjectId, effect) {
     return validateMayhemEachPlayerShape(subjectId, effect);
   },
@@ -1306,7 +1389,7 @@ const mayhemEachPlayerDiscardDeckDestroyHandler: EffectRuntimeHandler = {
       };
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
       const discardedCount = targetPlayer.deck.length;
       targetPlayer.discard.push(...targetPlayer.deck.splice(0));
@@ -1361,6 +1444,7 @@ const mayhemEachPlayerDiscardDeckDestroyHandler: EffectRuntimeHandler = {
 
 const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
   effectId: "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
+  allowedTargetSelectors: eachPlayerClockwiseFromActiveTargetSelectors,
   validateShape(subjectId, effect) {
     const errors = validateMayhemEachPlayerShape(subjectId, effect);
     if (effect["chooser"] !== "affectedPlayer") {
@@ -1384,7 +1468,7 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
       };
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     const options = effect["options"];
     if (!Array.isArray(options)) {
       return { ok: false, error: "Invalid Mayhem hand-redraw choice effect" };
@@ -1397,8 +1481,8 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
         source,
         effectId,
         [
-          { choiceId: "discard_hand_then_draw_cards" },
-          { choiceId: "take_damage" },
+          { choiceKind: "option", choiceId: "discard_hand_then_draw_cards" },
+          { choiceKind: "option", choiceId: "take_damage" },
         ]
       );
       const selectedChoiceId =
@@ -1458,6 +1542,7 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
 
 const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler = {
   effectId: "mayhem_each_player_reduce_life_to_gain_chips",
+  allowedTargetSelectors: eachPlayerClockwiseFromActiveTargetSelectors,
   validateShape(subjectId, effect) {
     const errors = validateMayhemEachPlayerShape(subjectId, effect);
     const lifeTotal = effect["lifeTotal"];
@@ -1506,7 +1591,7 @@ const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler = {
       return { ok: false, error: "Invalid Mayhem life-for-chips effect" };
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
       if (targetPlayer.life.current <= lifeTotal) {
         continue;
@@ -1517,7 +1602,10 @@ const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler = {
         targetPlayer,
         source,
         effectId,
-        [{ choiceId: "reduce_life_gain_chips" }, { choiceId: "pass" }]
+        [
+          { choiceKind: "option", choiceId: "reduce_life_gain_chips" },
+          { choiceKind: "option", choiceId: "pass" },
+        ]
       );
       if (choice?.choiceId !== "reduce_life_gain_chips") {
         continue;
@@ -1582,6 +1670,7 @@ const increaseHandLimitAtMaxLifeHandler: EffectRuntimeHandler = {
 
 const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler = {
   effectId: "mayhem_each_player_battle_highest_hand_cost",
+  allowedTargetSelectors: eachPlayerClockwiseFromActiveTargetSelectors,
   validateShape(subjectId, effect) {
     return validateMayhemBattleHighestHandCostShape(subjectId, effect);
   },
@@ -1597,7 +1686,7 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler = {
       };
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     const winnerDrawAmount = effect["winnerDrawAmount"];
     if (typeof winnerDrawAmount !== "number") {
       return {
@@ -1613,7 +1702,10 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler = {
         targetPlayer,
         source,
         effectId,
-        [{ choiceId: "participate" }, { choiceId: "pass" }]
+        [
+          { choiceKind: "option", choiceId: "participate" },
+          { choiceKind: "option", choiceId: "pass" },
+        ]
       );
       if (participationChoice?.choiceId !== "participate") {
         continue;
@@ -1671,6 +1763,7 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler = {
 
 const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler = {
   effectId: "mayhem_each_player_vote_dingler",
+  allowedTargetSelectors: eachPlayerClockwiseFromActiveTargetSelectors,
   validateShape(subjectId, effect) {
     return validateMayhemVoteDinglerShape(subjectId, effect);
   },
@@ -1686,7 +1779,7 @@ const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler = {
       };
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     const players = services.getPlayersInActiveOrder(state);
     const votes = new Map<PlayerState["playerId"], number>();
 
@@ -1697,11 +1790,13 @@ const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler = {
         source,
         effectId,
         players.map((targetPlayer) => ({
+          choiceKind: "playerTarget" as const,
           choiceId: `vote-${targetPlayer.playerId}`,
           players: [targetPlayer],
         }))
       );
-      const votedPlayer = choice?.players?.[0];
+      const votedPlayer =
+        choice?.choiceKind === "playerTarget" ? choice.players[0] : undefined;
       if (votedPlayer === undefined) {
         continue;
       }
@@ -1746,6 +1841,7 @@ const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler = {
 
 const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler = {
   effectId: "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+  allowedTargetSelectors: eachPlayerClockwiseFromActiveTargetSelectors,
   validateShape(subjectId, effect) {
     return validateMayhemDinglerRecoveryShape(subjectId, effect);
   },
@@ -1761,7 +1857,7 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler = {
       };
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     const lifeCost = effect["lifeCost"];
     const chipCost = effect["chipCost"];
     if (typeof lifeCost !== "number" || typeof chipCost !== "number") {
@@ -1775,12 +1871,12 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler = {
 
       const choices: EffectChoice[] = [];
       if (targetPlayer.life.current - lifeCost >= 1) {
-        choices.push({ choiceId: "pay_life" });
+        choices.push({ choiceKind: "option", choiceId: "pay_life" });
       }
       if (targetPlayer.chips >= chipCost) {
-        choices.push({ choiceId: "spend_chips" });
+        choices.push({ choiceKind: "option", choiceId: "spend_chips" });
       }
-      choices.push({ choiceId: "skip" });
+      choices.push({ choiceKind: "option", choiceId: "skip" });
 
       const choice = services.chooseEffectChoice(
         state,
@@ -1853,7 +1949,7 @@ const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler = {
       };
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     const lowestLife = Math.min(
       ...state.players.map((candidate) => candidate.life.current)
     );
@@ -2284,6 +2380,7 @@ const preventDefenseAgainstOwnedWandAttacksHandler: EffectRuntimeHandler = {
 
 const attackDamageHandler: EffectRuntimeHandler = {
   effectId: "attack_damage",
+  allowedTargetSelectors: attackTargetSelectors,
   validateShape(subjectId, effect) {
     return [
       ...validatePositiveIntegerAmount(
@@ -2291,12 +2388,12 @@ const attackDamageHandler: EffectRuntimeHandler = {
         effect,
         "attack damage amount"
       ),
-      ...validatePlayerTargetSelector(subjectId, effect, "attack", [
-        "opponentPlayer",
-        "chosenFoe",
-        "chosenPlayer",
-        "eachFoe",
-      ]),
+      ...validatePlayerTargetSelector(
+        subjectId,
+        effect,
+        "attack",
+        attackTargetSelectors
+      ),
     ];
   },
   execute(state, player, effect, source, services) {
@@ -2410,6 +2507,7 @@ const addPowerPerControlledObjectHandler: EffectRuntimeHandler = {
 
 const attackDamageEqualToControlledCardCostHandler: EffectRuntimeHandler = {
   effectId: "attack_damage_equal_to_controlled_card_cost",
+  allowedTargetSelectors: attackTargetSelectors,
   validateShape(subjectId, effect) {
     const errors: string[] = [];
     const costMode = effect["costMode"];
@@ -2428,12 +2526,12 @@ const attackDamageEqualToControlledCardCostHandler: EffectRuntimeHandler = {
 
     return [
       ...errors,
-      ...validatePlayerTargetSelector(subjectId, effect, "attack", [
-        "opponentPlayer",
-        "chosenFoe",
-        "chosenPlayer",
-        "eachFoe",
-      ]),
+      ...validatePlayerTargetSelector(
+        subjectId,
+        effect,
+        "attack",
+        attackTargetSelectors
+      ),
     ];
   },
   execute(state, player, effect, source, services) {
@@ -2487,7 +2585,7 @@ function countControlledObjects(player: PlayerState): number {
 function resolveControlledCardCost(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   source: EffectSourceContext,
   services: EffectRuntimeServices
 ): { ok: true; amount: number } | { ok: false; error: string } {
@@ -2509,6 +2607,7 @@ function resolveControlledCardCost(
 
   if (effect["costMode"] === "chosen") {
     const choices = cards.map(({ card, definition }) => ({
+      choiceKind: "cardTarget" as const,
       choiceId: card.instanceId,
       cards: [card],
       amount: calculateEffectiveCardCost(state, player.playerId, definition),
@@ -2521,7 +2620,10 @@ function resolveControlledCardCost(
       choices
     );
 
-    return { ok: true, amount: choice?.amount ?? 0 };
+    return {
+      ok: true,
+      amount: choice?.choiceKind === "cardTarget" ? choice.amount : 0,
+    };
   }
 
   return {
@@ -2533,7 +2635,7 @@ function resolveControlledCardCost(
 function getControlledCardsForCost(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): { card: CardInstance; definition: CardDefinition }[] {
   return [...player.permanents, ...player.playedThisTurn]
@@ -2555,7 +2657,7 @@ function getControlledCardsForCost(
 function executeAttackWithAmount(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   source: EffectSourceContext,
   services: EffectRuntimeServices,
   amount: number
@@ -2566,7 +2668,7 @@ function executeAttackWithAmount(
     source
   );
   const attackAmount = amount + attackProfile.damageBonus;
-  const effectId = services.asString(effect["effectId"]);
+  const effectId = effect.effectId;
 
   if (effect["targetSelector"] === "eachFoe") {
     state.eventLog.push({
@@ -2711,19 +2813,14 @@ const avoidAttackHandler: EffectRuntimeHandler = {
   },
 };
 
-const gainChipsHandler: EffectRuntimeHandler = {
+const gainChipsHandler: EffectRuntimeHandler<GainChipsRuntimeEffect> = {
   effectId: "gain_chips",
   validateShape(subjectId, effect) {
     return validatePositiveIntegerAmount(subjectId, effect, "chip amount");
   },
   execute(state, player, effect, source) {
-    const amount = requirePositiveIntegerAmount(effect, "chip amount");
-    if (!amount.ok) {
-      return amount;
-    }
-
     const chipsBefore = player.chips;
-    player.chips += amount.value;
+    player.chips += effect.amount;
     recordEffectChipsChanged(
       state,
       player,
@@ -2829,6 +2926,7 @@ const drawCardsHandler: EffectRuntimeHandler = {
 
 const directionalChainAttackHandler: EffectRuntimeHandler = {
   effectId: "directional_chain_attack",
+  allowedTargetSelectors: directionalAttackTargetSelectors,
   validateShape(subjectId, effect) {
     return [
       ...validatePositiveIntegerAmount(
@@ -2836,9 +2934,12 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
         effect,
         "attack damage amount"
       ),
-      ...validatePlayerTargetSelector(subjectId, effect, "directional attack", [
-        "leftOrRightFoe",
-      ]),
+      ...validatePlayerTargetSelector(
+        subjectId,
+        effect,
+        "directional attack",
+        directionalAttackTargetSelectors
+      ),
     ];
   },
   execute(state, player, effect, source, services) {
@@ -2862,18 +2963,23 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
       "directional_chain_attack",
       [
         {
+          choiceKind: "directionalPlayerTarget",
           choiceId: "left",
           direction: "left",
           players: leftFoes,
         },
         {
+          choiceKind: "directionalPlayerTarget",
           choiceId: "right",
           direction: "right",
           players: rightFoes,
         },
       ]
     );
-    const foes = directionChoice?.players ?? [];
+    const foes =
+      directionChoice?.choiceKind === "directionalPlayerTarget"
+        ? directionChoice.players
+        : [];
     const attacked = new Set<string>();
 
     state.eventLog.push({
@@ -2928,12 +3034,14 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
     ];
   },
   execute(state, player, effect, source, services) {
-    const target = effect["target"];
-    if (!isEffectRecord(target) || target["selector"] !== "opponentPlayers") {
-      const selector = isEffectRecord(target) ? target["selector"] : target;
+    const target = effect.target;
+    if (
+      !isRuntimeEffectSelectorTarget(target) ||
+      target.selector !== "opponentPlayers"
+    ) {
       return {
         ok: false,
-        error: `Unsupported multi-target attack selector ${String(selector)}`,
+        error: "Unsupported multi-target attack selector",
       };
     }
 
@@ -2992,12 +3100,14 @@ const mayhemAttackHandler: EffectRuntimeHandler = {
     ];
   },
   execute(state, player, effect, source, services) {
-    const target = effect["target"];
-    if (!isEffectRecord(target) || target["selector"] !== "allPlayers") {
-      const selector = isEffectRecord(target) ? target["selector"] : target;
+    const target = effect.target;
+    if (
+      !isRuntimeEffectSelectorTarget(target) ||
+      target.selector !== "allPlayers"
+    ) {
       return {
         ok: false,
-        error: `Unsupported Mayhem attack selector ${String(selector)}`,
+        error: "Unsupported Mayhem attack selector",
       };
     }
 
@@ -3040,7 +3150,7 @@ const revealTopCardHandler: EffectRuntimeHandler = {
       };
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     const card = services.peekTopDeckCard(player, state);
     if (card === undefined) {
       state.eventLog.push({
@@ -3099,7 +3209,7 @@ const playTopCardHandler: EffectRuntimeHandler = {
       };
     }
 
-    const effectId = services.asString(effect["effectId"]);
+    const effectId = effect.effectId;
     const card = services.drawTopDeckCard(player, state);
     if (card === undefined) {
       state.eventLog.push({
@@ -3135,6 +3245,7 @@ const playTopCardHandler: EffectRuntimeHandler = {
 
 const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
   effectId: "play_top_card_from_foe_deck",
+  allowedTargetSelectors: chosenFoeTargetSelectors,
   validateShape(subjectId, effect) {
     if (effect["targetSelector"] !== "chosenFoe") {
       return [
@@ -3167,7 +3278,7 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
         playerId: player.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
-        effectId: services.asString(effect["effectId"]),
+        effectId: effect.effectId,
         sourceType: source.sourceType,
       });
       return { ok: true };
@@ -3181,7 +3292,7 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
         targetPlayerId: foe.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
-        effectId: services.asString(effect["effectId"]),
+        effectId: effect.effectId,
         sourceType: source.sourceType,
       });
       return { ok: true };
@@ -3203,7 +3314,7 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
       definitionId: source.definitionId,
       targetCardInstanceId: card.instanceId,
       targetDefinitionId: card.definitionId,
-      effectId: services.asString(effect["effectId"]),
+      effectId: effect.effectId,
       sourceType: source.sourceType,
     });
 
@@ -3227,7 +3338,7 @@ const wildMagicChoiceHandler: EffectRuntimeHandler = {
       }
 
       const optionEffectId = option["effectId"];
-      if (typeof optionEffectId !== "string") {
+      if (!isRuntimeEffectId(optionEffectId)) {
         errors.push(
           `${subjectId} uses unsupported Wild Magic option ${String(optionEffectId)}`
         );
@@ -3528,11 +3639,12 @@ function validateDinglerStatusEffectShape(
   }
 
   errors.push(
-    ...validatePlayerTargetSelector(subjectId, effect, effectLabel, [
-      "activePlayer",
-      "opponentPlayer",
-      "anyPlayer",
-    ])
+    ...validatePlayerTargetSelector(
+      subjectId,
+      effect,
+      effectLabel,
+      dinglerStatusTargetSelectors
+    )
   );
   return errors;
 }
@@ -3722,44 +3834,33 @@ function validateMayhemDinglerRecoveryShape(
 function payOptionalCosts(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   source: EffectSourceContext,
   services: EffectRuntimeServices
 ): EffectExecutionResult & { skipped?: boolean } {
-  const costs = effect["costs"];
+  const { costs } = effect;
   if (costs === undefined) {
     return { ok: true };
   }
 
-  if (!Array.isArray(costs)) {
-    return { ok: false, error: "Invalid attack costs" };
-  }
-
   if (effect["optional"] === true) {
     const canPay = costs.every((cost) => {
-      if (!isEffectRecord(cost) || cost["costId"] !== "spend_chips") {
-        return false;
-      }
-
-      const amount = cost["amount"];
-      return (
-        typeof amount === "number" &&
-        Number.isSafeInteger(amount) &&
-        amount > 0 &&
-        player.chips >= amount
-      );
+      return cost.costId === "spend_chips" && player.chips >= cost.amount;
     });
     const choices: EffectChoice[] = canPay
       ? [
           {
+            choiceKind: "option",
             choiceId: "pay_optional_cost",
           },
           {
+            choiceKind: "option",
             choiceId: "skip_optional_cost",
           },
         ]
       : [
           {
+            choiceKind: "option",
             choiceId: "skip_optional_cost",
           },
         ];
@@ -3767,7 +3868,7 @@ function payOptionalCosts(
       state,
       player,
       source,
-      services.asString(effect["effectId"]),
+      effect.effectId,
       choices
     );
     if (choice?.choiceId !== "pay_optional_cost") {
@@ -3776,23 +3877,14 @@ function payOptionalCosts(
   }
 
   for (const cost of costs) {
-    if (!isEffectRecord(cost) || cost["costId"] !== "spend_chips") {
+    if (cost.costId !== "spend_chips") {
       return {
         ok: false,
-        error: `Unsupported attack cost ${String(isEffectRecord(cost) ? cost["costId"] : cost)}`,
+        error: `Unsupported attack cost ${cost.costId}`,
       };
     }
 
-    const amount = cost["amount"];
-    if (
-      typeof amount !== "number" ||
-      !Number.isSafeInteger(amount) ||
-      amount <= 0
-    ) {
-      return { ok: false, error: `Invalid chip cost ${String(amount)}` };
-    }
-
-    if (player.chips < amount) {
+    if (player.chips < cost.amount) {
       if (effect["optional"] === true) {
         return { ok: true, skipped: true };
       }
@@ -3800,15 +3892,15 @@ function payOptionalCosts(
       return { ok: false, error: "Cannot pay chip cost" };
     }
 
-    player.chips -= amount;
+    player.chips -= cost.amount;
     state.eventLog.push({
       type: "effectCostPaid",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
       definitionId: source.definitionId,
-      effectId: services.asString(effect["effectId"]),
+      effectId: effect.effectId,
       costId: "spend_chips",
-      amount,
+      amount: cost.amount,
       sourceType: source.sourceType,
     });
   }
@@ -3819,7 +3911,7 @@ function payOptionalCosts(
 function executeAttackBranches(
   state: GameState,
   player: PlayerState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   source: EffectSourceContext,
   targetPlayer: PlayerState,
   attackResult: DamageResult & { avoided: boolean },
@@ -3879,7 +3971,7 @@ function executeAttackBranches(
 function collectMayhemAttackDefenseDecisions(
   state: GameState,
   targets: readonly PlayerState[],
-  effectId: string,
+  effectId: RuntimeEffectId,
   source: EffectSourceContext,
   services: EffectRuntimeServices
 ): Array<{ player: PlayerState; avoided: boolean }> {
@@ -4021,7 +4113,8 @@ function executeAttackBranch(
       "return_discard_to_hand",
       buildDiscardReturnChoices(player.discard, amount)
     );
-    const returned = returnChoice?.cards ?? [];
+    const returned =
+      returnChoice?.choiceKind === "cardTarget" ? returnChoice.cards : [];
     for (const card of returned) {
       const index = player.discard.indexOf(card);
       if (index >= 0) {
@@ -4064,6 +4157,7 @@ function buildDiscardReturnChoices(
   for (let amount = cappedAmount; amount >= 1; amount -= 1) {
     for (const cards of chooseCardCombinations(discard, amount)) {
       choices.push({
+        choiceKind: "cardTarget",
         choiceId: `return_${amount}`,
         amount,
         cards,
@@ -4072,6 +4166,7 @@ function buildDiscardReturnChoices(
   }
 
   choices.push({
+    choiceKind: "cardTarget",
     choiceId: "return_0",
     amount: 0,
     cards: [],
@@ -4129,7 +4224,7 @@ function recordEffectChipsChanged(
   state: GameState,
   player: PlayerState,
   source: EffectSourceContext,
-  effectId: string,
+  effectId: RuntimeEffectId,
   chipsBefore: number,
   chipsAfter: number
 ): void {
@@ -4208,204 +4303,247 @@ function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
   return isPlainRecord(effect);
 }
 
-function setupOnlyExecutionError(effectId: string): EffectExecutionResult {
+function setupOnlyExecutionError(effectId: RuntimeEffectId): EffectExecutionResult {
   return {
     ok: false,
     error: `${effectId} is a setup-only wizard property effect`,
   };
 }
 
-export const effectRuntimeCatalog = new Map<string, EffectRuntimeCatalogEntry>([
-  [addPowerHandler.effectId, toCatalogEntry(addPowerHandler)],
-  [
-    addPowerPerPlayerWithStatusHandler.effectId,
-    toCatalogEntry(addPowerPerPlayerWithStatusHandler),
-  ],
-  [
-    addPowerIfPlayerHasStatusHandler.effectId,
-    toCatalogEntry(addPowerIfPlayerHasStatusHandler),
-  ],
-  [
-    addPowerPerControlledObjectHandler.effectId,
-    toCatalogEntry(addPowerPerControlledObjectHandler),
-  ],
-  [gainCardHandler.effectId, toCatalogEntry(gainCardHandler)],
-  [discardCardHandler.effectId, toCatalogEntry(discardCardHandler)],
-  [destroyCardHandler.effectId, toCatalogEntry(destroyCardHandler)],
-  [dealDamageHandler.effectId, toCatalogEntry(dealDamageHandler)],
-  [healHandler.effectId, toCatalogEntry(healHandler)],
-  [
-    healEqualDamageDealtOnOwnTurnHandler.effectId,
-    toCatalogEntry(healEqualDamageDealtOnOwnTurnHandler),
-  ],
-  [setLifeHandler.effectId, toCatalogEntry(setLifeHandler)],
-  [
-    exchangeLifeAndDinglerStatusHandler.effectId,
-    toCatalogEntry(exchangeLifeAndDinglerStatusHandler),
-  ],
-  [
-    attackDamageEqualToControlledCardCostHandler.effectId,
-    toCatalogEntry(attackDamageEqualToControlledCardCostHandler),
-  ],
-  [gainStatusHandler.effectId, toCatalogEntry(gainStatusHandler)],
-  [attackGainStatusHandler.effectId, toCatalogEntry(attackGainStatusHandler)],
-  [removeStatusHandler.effectId, toCatalogEntry(removeStatusHandler)],
-  [toggleStatusHandler.effectId, toCatalogEntry(toggleStatusHandler)],
-  [megaMayhemSetLifeHandler.effectId, toCatalogEntry(megaMayhemSetLifeHandler)],
-  [
-    megaMayhemEachPlayerToggleDinglerHandler.effectId,
-    toCatalogEntry(megaMayhemEachPlayerToggleDinglerHandler),
-  ],
-  [
-    megaMayhemEachPlayerDestroyTopMainDeckHandler.effectId,
-    toCatalogEntry(megaMayhemEachPlayerDestroyTopMainDeckHandler),
-  ],
-  [
-    mayhemEachPlayerDiscardTopDeckDestroyHandler.effectId,
-    toCatalogEntry(mayhemEachPlayerDiscardTopDeckDestroyHandler),
-  ],
-  [
-    mayhemEachPlayerDiscardDeckDestroyHandler.effectId,
-    toCatalogEntry(mayhemEachPlayerDiscardDeckDestroyHandler),
-  ],
-  [
-    mayhemEachPlayerHandRedrawChoiceHandler.effectId,
-    toCatalogEntry(mayhemEachPlayerHandRedrawChoiceHandler),
-  ],
-  [
-    mayhemEachPlayerReduceLifeToGainChipsHandler.effectId,
-    toCatalogEntry(mayhemEachPlayerReduceLifeToGainChipsHandler),
-  ],
-  [
-    increaseHandLimitAtMaxLifeHandler.effectId,
-    toCatalogEntry(increaseHandLimitAtMaxLifeHandler),
-  ],
-  [
-    mayhemEachPlayerBattleHighestHandCostHandler.effectId,
-    toCatalogEntry(mayhemEachPlayerBattleHighestHandCostHandler),
-  ],
-  [
-    mayhemEachPlayerVoteDinglerHandler.effectId,
-    toCatalogEntry(mayhemEachPlayerVoteDinglerHandler),
-  ],
-  [
-    mayhemEachDinglerRecoveryChoiceHandler.effectId,
-    toCatalogEntry(mayhemEachDinglerRecoveryChoiceHandler),
-  ],
-  [
-    mayhemLowestLifeDinglerMaxLifeHandler.effectId,
-    toCatalogEntry(mayhemLowestLifeDinglerMaxLifeHandler),
-  ],
-  [
-    replaceStartingCardHandler.effectId,
-    toCatalogEntry(replaceStartingCardHandler),
-  ],
-  [
-    startWithBasicTrophyHandler.effectId,
-    toCatalogEntry(startWithBasicTrophyHandler),
-  ],
-  [
-    forceStartingPlayerHandler.effectId,
-    toCatalogEntry(forceStartingPlayerHandler),
-  ],
-  [
-    setStartingLifeTotalHandler.effectId,
-    toCatalogEntry(setStartingLifeTotalHandler),
-  ],
-  [
-    setResurrectionLifeTotalHandler.effectId,
-    toCatalogEntry(setResurrectionLifeTotalHandler),
-  ],
-  [
-    modifyEffectiveValueHandler.effectId,
-    toCatalogEntry(modifyEffectiveValueHandler),
-  ],
-  [
-    fixtureModifyEffectiveValueHandler.effectId,
-    toFixtureOnlyCatalogEntry(fixtureModifyEffectiveValueHandler),
-  ],
-  [
-    fixtureAddPowerEqualToTargetCostHandler.effectId,
-    toFixtureOnlyCatalogEntry(fixtureAddPowerEqualToTargetCostHandler),
-  ],
-  [topdeckGainedCardHandler.effectId, toCatalogEntry(topdeckGainedCardHandler)],
-  [
-    temporaryHandLimitByGainedCardTypeHandler.effectId,
-    toCatalogEntry(temporaryHandLimitByGainedCardTypeHandler),
-  ],
-  [
-    modifyOwnedWandAttackDamageHandler.effectId,
-    toCatalogEntry(modifyOwnedWandAttackDamageHandler),
-  ],
-  [
-    preventDefenseAgainstOwnedWandAttacksHandler.effectId,
-    toCatalogEntry(preventDefenseAgainstOwnedWandAttacksHandler),
-  ],
-  [attackDamageHandler.effectId, toCatalogEntry(attackDamageHandler)],
-  [avoidAttackHandler.effectId, toCatalogEntry(avoidAttackHandler)],
-  [gainChipsHandler.effectId, toCatalogEntry(gainChipsHandler)],
-  [
-    gainChipsPerPlayerWithStatusHandler.effectId,
-    toCatalogEntry(gainChipsPerPlayerWithStatusHandler),
-  ],
-  [drawCardsHandler.effectId, toCatalogEntry(drawCardsHandler)],
-  [revealTopCardHandler.effectId, toCatalogEntry(revealTopCardHandler)],
-  [playTopCardHandler.effectId, toCatalogEntry(playTopCardHandler)],
-  [
-    playTopCardFromFoeDeckHandler.effectId,
-    toCatalogEntry(playTopCardFromFoeDeckHandler),
-  ],
-  [wildMagicChoiceHandler.effectId, toCatalogEntry(wildMagicChoiceHandler)],
-  [
-    directionalChainAttackHandler.effectId,
-    toCatalogEntry(directionalChainAttackHandler),
-  ],
-  [multiTargetAttackHandler.effectId, toCatalogEntry(multiTargetAttackHandler)],
-  [mayhemAttackHandler.effectId, toCatalogEntry(mayhemAttackHandler)],
-]);
+function createUnsupportedEffectHandler(
+  effectId: RuntimeEffectId
+): EffectRuntimeHandler {
+  return {
+    effectId,
+    unsupported: true,
+    validateShape(subjectId) {
+      return [`${subjectId} uses unsupported effect ${effectId}`];
+    },
+    execute() {
+      return { ok: false, error: `Unsupported effect id ${effectId}` };
+    },
+  };
+}
+export const effectRuntimeHandlerMap = {
+  add_power: addPowerHandler,
+  add_power_per_player_with_status: addPowerPerPlayerWithStatusHandler,
+  add_power_if_player_has_status: addPowerIfPlayerHasStatusHandler,
+  add_power_per_controlled_object: addPowerPerControlledObjectHandler,
+  gain_card: gainCardHandler,
+  discard_card: discardCardHandler,
+  destroy_card: destroyCardHandler,
+  deal_damage: dealDamageHandler,
+  heal: healHandler,
+  heal_equal_damage_dealt_on_own_turn: healEqualDamageDealtOnOwnTurnHandler,
+  set_life: setLifeHandler,
+  exchange_life_and_dingler_status: exchangeLifeAndDinglerStatusHandler,
+  attack_damage_equal_to_controlled_card_cost:
+    attackDamageEqualToControlledCardCostHandler,
+  gain_status: gainStatusHandler,
+  attack_gain_status: attackGainStatusHandler,
+  remove_status: removeStatusHandler,
+  toggle_status: toggleStatusHandler,
+  mega_mayhem_set_life: megaMayhemSetLifeHandler,
+  mega_mayhem_each_player_toggle_dingler:
+    megaMayhemEachPlayerToggleDinglerHandler,
+  mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem:
+    megaMayhemEachPlayerDestroyTopMainDeckHandler,
+  mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none:
+    mayhemEachPlayerDiscardTopDeckDestroyHandler,
+  mayhem_each_player_discard_deck_then_destroy_from_discard:
+    mayhemEachPlayerDiscardDeckDestroyHandler,
+  mayhem_each_player_choose_discard_hand_draw_or_take_damage:
+    mayhemEachPlayerHandRedrawChoiceHandler,
+  mayhem_each_player_reduce_life_to_gain_chips:
+    mayhemEachPlayerReduceLifeToGainChipsHandler,
+  increase_hand_limit_at_max_life: increaseHandLimitAtMaxLifeHandler,
+  mayhem_each_player_battle_highest_hand_cost:
+    mayhemEachPlayerBattleHighestHandCostHandler,
+  mayhem_each_player_vote_dingler: mayhemEachPlayerVoteDinglerHandler,
+  mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status:
+    mayhemEachDinglerRecoveryChoiceHandler,
+  mayhem_lowest_life_players_gain_dingler_and_set_to_max_life:
+    mayhemLowestLifeDinglerMaxLifeHandler,
+  replace_starting_card: replaceStartingCardHandler,
+  start_with_basic_trophy: startWithBasicTrophyHandler,
+  force_starting_player: forceStartingPlayerHandler,
+  set_starting_life_total: setStartingLifeTotalHandler,
+  set_resurrection_life_total: setResurrectionLifeTotalHandler,
+  modify_effective_value: modifyEffectiveValueHandler,
+  fixture_modify_effective_value: fixtureModifyEffectiveValueHandler,
+  fixture_add_power_equal_to_target_cost:
+    fixtureAddPowerEqualToTargetCostHandler,
+  topdeck_gained_card: topdeckGainedCardHandler,
+  temporary_hand_limit_by_gained_card_type:
+    temporaryHandLimitByGainedCardTypeHandler,
+  modify_owned_wand_attack_damage: modifyOwnedWandAttackDamageHandler,
+  prevent_defense_against_owned_wand_attacks:
+    preventDefenseAgainstOwnedWandAttacksHandler,
+  attack_damage: attackDamageHandler,
+  avoid_attack: avoidAttackHandler,
+  gain_chips: gainChipsHandler,
+  gain_chips_per_player_with_status: gainChipsPerPlayerWithStatusHandler,
+  draw_cards: drawCardsHandler,
+  reveal_top_card: revealTopCardHandler,
+  play_top_card: playTopCardHandler,
+  play_top_card_from_foe_deck: playTopCardFromFoeDeckHandler,
+  wild_magic_choice: wildMagicChoiceHandler,
+  directional_chain_attack: directionalChainAttackHandler,
+  multi_target_attack: multiTargetAttackHandler,
+  mayhem_attack: mayhemAttackHandler,
+  activation_destroy_self_then_destroy_own_cards:
+    createUnsupportedEffectHandler(
+      "activation_destroy_self_then_destroy_own_cards"
+    ),
+  add_power_per_controlled_permanent: createUnsupportedEffectHandler(
+    "add_power_per_controlled_permanent"
+  ),
+  attack_damage_equal_remembered_card_cost: createUnsupportedEffectHandler(
+    "attack_damage_equal_remembered_card_cost"
+  ),
+  attack_destroy_top_legend_deck_then_damage_equal_cost:
+    createUnsupportedEffectHandler(
+      "attack_destroy_top_legend_deck_then_damage_equal_cost"
+    ),
+  attack_discard_cards: createUnsupportedEffectHandler("attack_discard_cards"),
+  attack_gain_limp_wand: createUnsupportedEffectHandler(
+    "attack_gain_limp_wand"
+  ),
+  conditional_activation_attack_damage: createUnsupportedEffectHandler(
+    "conditional_activation_attack_damage"
+  ),
+  conditional_activation_destroy_own_cards: createUnsupportedEffectHandler(
+    "conditional_activation_destroy_own_cards"
+  ),
+  conditional_activation_gain_chips: createUnsupportedEffectHandler(
+    "conditional_activation_gain_chips"
+  ),
+  controls_other_card_type: createUnsupportedEffectHandler(
+    "controls_other_card_type"
+  ),
+  defense_discard_self_avoid_attack_then_optional_destroy_hand_card:
+    createUnsupportedEffectHandler(
+      "defense_discard_self_avoid_attack_then_optional_destroy_hand_card"
+    ),
+  destroy_own_cards: createUnsupportedEffectHandler("destroy_own_cards"),
+  destroy_random_legend_market_card: createUnsupportedEffectHandler(
+    "destroy_random_legend_market_card"
+  ),
+  destroyed_card_kind_is: createUnsupportedEffectHandler(
+    "destroyed_card_kind_is"
+  ),
+  discard_hand_then_draw_cards: createUnsupportedEffectHandler(
+    "discard_hand_then_draw_cards"
+  ),
+  discard_self: createUnsupportedEffectHandler("discard_self"),
+  endgame_limp_wands_score_positive: createUnsupportedEffectHandler(
+    "endgame_limp_wands_score_positive"
+  ),
+  endgame_vp_per_owned_legend: createUnsupportedEffectHandler(
+    "endgame_vp_per_owned_legend"
+  ),
+  gain_chips_equal_damage_dealt: createUnsupportedEffectHandler(
+    "gain_chips_equal_damage_dealt"
+  ),
+  heal_equal_damage_dealt: createUnsupportedEffectHandler(
+    "heal_equal_damage_dealt"
+  ),
+  on_gain_self_gain_limp_wands: createUnsupportedEffectHandler(
+    "on_gain_self_gain_limp_wands"
+  ),
+  ongoing_add_power: createUnsupportedEffectHandler("ongoing_add_power"),
+  ongoing_add_power_when_playing_limp_wand: createUnsupportedEffectHandler(
+    "ongoing_add_power_when_playing_limp_wand"
+  ),
+  ongoing_first_attack_damage_add_power: createUnsupportedEffectHandler(
+    "ongoing_first_attack_damage_add_power"
+  ),
+  ongoing_hand_refill_bonus: createUnsupportedEffectHandler(
+    "ongoing_hand_refill_bonus"
+  ),
+  ongoing_start_turn_optional_gain_limp_wand_to_hand:
+    createUnsupportedEffectHandler(
+      "ongoing_start_turn_optional_gain_limp_wand_to_hand"
+    ),
+  optional_gain_market_cards_to_hand_this_turn: createUnsupportedEffectHandler(
+    "optional_gain_market_cards_to_hand_this_turn"
+  ),
+  optional_spend_chip_attack_damage: createUnsupportedEffectHandler(
+    "optional_spend_chip_attack_damage"
+  ),
+  optional_spend_chip_destroy_own_cards: createUnsupportedEffectHandler(
+    "optional_spend_chip_destroy_own_cards"
+  ),
+  return_discard_to_hand: createUnsupportedEffectHandler(
+    "return_discard_to_hand"
+  ),
+} satisfies Record<RuntimeEffectId, EffectRuntimeHandler>;
 
-export const effectRuntimeRegistry = new Map<string, EffectRuntimeHandler>(
+export const effectRuntimeCatalogSource = createEffectRuntimeCatalogSource(
+  effectRuntimeHandlerMap
+);
+
+function createEffectRuntimeCatalogSource(
+  handlers: Record<RuntimeEffectId, EffectRuntimeHandler>
+): Partial<Record<RuntimeEffectId, EffectRuntimeCatalogEntry>> {
+  const source: Partial<Record<RuntimeEffectId, EffectRuntimeCatalogEntry>> =
+    {};
+
+  for (const handler of Object.values(handlers)) {
+    if (handler.unsupported === true) {
+      continue;
+    }
+
+    source[handler.effectId] = {
+      effectId: handler.effectId,
+      handler,
+      supportedModes: fixtureOnlyRuntimeEffectIds.has(handler.effectId)
+        ? ["fixture"]
+        : allEffectRuntimeModes,
+    };
+  }
+
+  return source;
+}
+
+export const effectRuntimeCatalog = new Map<
+  RuntimeEffectId,
+  EffectRuntimeCatalogEntry
+>(
+  Object.entries(effectRuntimeCatalogSource) as Array<
+    [RuntimeEffectId, EffectRuntimeCatalogEntry]
+  >
+);
+
+export const effectRuntimeRegistry = new Map<
+  RuntimeEffectId,
+  EffectRuntimeHandler
+>(
   [...effectRuntimeCatalog].map(([effectId, entry]) => [
     effectId,
     entry.handler,
   ])
 );
 
-export function getEffectRuntimeCatalogEntry(
-  effectId: string
-): EffectRuntimeCatalogEntry | undefined {
-  return effectRuntimeCatalog.get(effectId);
+export function getEffectRuntimeCatalogEntry<EffectId extends RuntimeEffectId>(
+  effectId: EffectId
+): EffectRuntimeCatalogEntry<EffectId> | undefined {
+  return effectRuntimeCatalog.get(effectId) as
+    | EffectRuntimeCatalogEntry<EffectId>
+    | undefined;
 }
 
-export function getEffectRuntimeHandler(
-  effectId: string
-): EffectRuntimeHandler | undefined {
+export function getEffectRuntimeHandler<EffectId extends RuntimeEffectId>(
+  effectId: EffectId
+): EffectRuntimeHandler<RuntimeEffectForId<EffectId>> | undefined {
   return getEffectRuntimeCatalogEntry(effectId)?.handler;
 }
 
-export function isEffectRuntimeCatalogEntrySupportedInMode(
-  entry: EffectRuntimeCatalogEntry,
+export function isEffectRuntimeCatalogEntrySupportedInMode<
+  EffectId extends RuntimeEffectId,
+>(
+  entry: EffectRuntimeCatalogEntry<EffectId>,
   mode: EffectRuntimeMode
 ): boolean {
   return entry.supportedModes.includes(mode);
-}
-
-function toCatalogEntry(
-  handler: EffectRuntimeHandler
-): EffectRuntimeCatalogEntry {
-  return {
-    effectId: handler.effectId,
-    handler,
-    supportedModes: allEffectRuntimeModes,
-  };
-}
-
-function toFixtureOnlyCatalogEntry(
-  handler: EffectRuntimeHandler
-): EffectRuntimeCatalogEntry {
-  return {
-    effectId: handler.effectId,
-    handler,
-    supportedModes: ["fixture"],
-  };
 }
