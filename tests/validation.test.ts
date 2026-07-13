@@ -61,9 +61,71 @@ test("runtime data decoder exposes typed effects after the raw JSON boundary", (
   ].flatMap((definition) => definition.engine.effects);
 
   assert.ok(effects.length > 0);
+  assert.ok(effects.every((effect) => !("rawOnly" in effect)));
   assert.equal(typeof effects[0]?.effectId, "string");
   const timing: EffectTiming | undefined = effects[0]?.timing;
   assert.equal(typeof timing, "string");
+});
+
+test("runtime effect decoder keeps cardKind and drops rawOnly fields", () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "runtime-effect-fields-"));
+  const effect = {
+    effectId: "modify_effective_value",
+    timing: "whileControlled",
+    valueKind: "cardCost",
+    operation: "add",
+    amount: 1,
+    cardKind: "normal",
+    rawOnly: "discard me",
+  };
+  writeJsonFile(tempRoot, "manifest.json", {
+    schemaVersion: 1,
+    packId: "fixture-effect-fields",
+    runtimeSchema: "krutagidon.dataPack.v0",
+    mappingStatus: "fixture",
+    cardDefinitionPaths: ["cards"],
+    tokenDefinitionPaths: [],
+    decks: {
+      starterDeck: "decks/starter.json",
+      mainDeck: "decks/main.json",
+      legendDeck: "decks/legend.json",
+    },
+    cardStacks: {
+      wildMagicStack: "stacks/wild.json",
+      limpWandStack: "stacks/limp.json",
+    },
+    needsData: [],
+  });
+  writeJsonFile(tempRoot, "cards/fixture-card.json", {
+    ...createFixtureCard("fixture-card"),
+    engine: { ...createFixtureCard("fixture-card").engine, effects: [effect] },
+  });
+  const emptyDeck = {
+    schemaVersion: 1,
+    deckId: "empty",
+    runtimeSchema: "krutagidon.deckComposition.v0",
+    role: "fixture",
+    mappingStatus: "fixture",
+    entries: [],
+  };
+  for (const file of [
+    "decks/starter.json",
+    "decks/main.json",
+    "decks/legend.json",
+    "stacks/wild.json",
+    "stacks/limp.json",
+  ]) {
+    writeJsonFile(tempRoot, file, emptyDeck);
+  }
+
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    const [decoded] =
+      result.value.cardDefinitions.get("fixture-card")?.engine.effects ?? [];
+    assert.equal(decoded?.cardKind, "normal");
+    assert.equal("rawOnly" in (decoded ?? {}), false);
+  }
 });
 
 test("runtime effect conditions are exposed as a typed union", () => {
@@ -1045,7 +1107,7 @@ test("combat effects are registered and reject invalid shapes through runtime ha
         timing: "onPlay",
         amount: 0,
         target: {
-          selector: "unsupported",
+          selector: "unsupported" as never,
         },
       }),
       []
@@ -1143,8 +1205,8 @@ test("top-deck and Wild Magic effects are registered and reject invalid shapes t
       {
         effectId: "play_top_card_from_foe_deck",
         timing: "onPlay",
-        targetSelector: "unsupportedFoe",
-      }
+        targetSelector: "unsupportedFoe" as never,
+      } as unknown as RuntimeEffect
     ),
     []
   );
@@ -1678,7 +1740,10 @@ test("wizard property effective-value modifier is registered and rejects invalid
       },
     },
   ]) {
-    assert.deepEqual(handler.validateShape("Token", effect), []);
+    assert.deepEqual(
+      handler.validateShape("Token", effect as unknown as RuntimeEffect),
+      []
+    );
   }
 
   for (const effect of [
@@ -1736,7 +1801,10 @@ test("wizard property effective-value modifier is registered and rejects invalid
       },
     },
   ]) {
-    assert.notDeepEqual(handler.validateShape("Token", effect), []);
+    assert.notDeepEqual(
+      handler.validateShape("Token", effect as unknown as RuntimeEffect),
+      []
+    );
   }
 });
 

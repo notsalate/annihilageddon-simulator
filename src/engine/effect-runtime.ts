@@ -21,7 +21,6 @@ import {
   type RuntimeEffectPayload,
 } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
-
 export function executeOnPlayEffects(
   state: GameState,
   player: PlayerState,
@@ -376,7 +375,7 @@ function cardTriggerMatches(
 
 function countGainedCardsMatchingEffect(
   state: GameState,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): number {
   return state.turn.gainedCardDefinitionIds.filter((definitionId) => {
     const definition = state.cardDefinitions.get(definitionId);
@@ -520,7 +519,7 @@ function getWizardPropertyAttackProfile(
 
 function effectMatchesCardDefinition(
   state: GameState,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   definitionId: string
 ): boolean {
   const cardDefinitionIds = effect["cardDefinitionIds"];
@@ -723,8 +722,11 @@ function getOpponentsInSeatingOrder(
 function isLegalWildMagicOption(
   state: GameState,
   player: PlayerState,
-  option: Record<string, unknown>
+  option: unknown
 ): option is RuntimeEffectPayload {
+  if (!isPlainRecord(option)) {
+    return false;
+  }
   if (option["effectId"] === "add_power") {
     const amount = option["amount"];
     return (

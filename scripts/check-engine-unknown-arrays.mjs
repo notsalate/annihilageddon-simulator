@@ -1,220 +1,139 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
-const ROOT_DIR = process.cwd();
-const TARGET_DIR = "src/engine";
-const unknownArrayPattern =
-  /\b(?:readonly\s+)?unknown\s*\[\]|\b(?:ReadonlyArray|Array)<\s*unknown\s*>/u;
-const allowedViolations = [
+const rootDir = path.resolve(process.argv[2] ?? process.cwd());
+const engineDir = path.join(rootDir, "src", "engine");
+
+const configuredAllowedViolations = [
   {
     filePath: "src/engine/data.ts",
-    source: "needsData?: unknown[];",
+    line: 166,
+    column: 15,
+    source: "unknown[]",
+    owner: "PropertySignature:needsData",
     issue: "#64",
-    expectedCount: 1,
-  },
-  {
-    filePath: "src/engine/data.ts",
-    source: "): unknown[] | undefined {",
-    issue: "#64",
-    expectedCount: 1,
+    reason: "raw/decode boundary",
   },
   {
     filePath: "src/engine/data.ts",
-    source: "function isUnknownArray(value: unknown): value is unknown[] {",
+    line: 1647,
+    column: 4,
+    source: "unknown[]",
+    owner: "FunctionDeclaration:requireArrayField",
     issue: "#64",
-    expectedCount: 1,
+    reason: "raw/decode boundary",
   },
   {
-    filePath: "src/engine/effective-values.ts",
-    source:
-      "function getControlledObjectEffects(view: ControlledObjectView): unknown[] {",
-    issue: "#53",
-    expectedCount: 1,
-  },
-  {
-    filePath: "src/engine/effective-values.ts",
-    source: "): unknown[] {",
-    issue: "#54",
-    expectedCount: 1,
-  },
-  {
-    filePath: "src/engine/effective-values.ts",
-    source:
-      "function getWizardPropertyEffects(definition: TokenDefinition): unknown[] {",
-    issue: "#52",
-    expectedCount: 1,
+    filePath: "src/engine/data.ts",
+    line: 1813,
+    column: 51,
+    source: "unknown[]",
+    owner: "FunctionDeclaration:isUnknownArray",
+    issue: "#64",
+    reason: "raw/decode boundary",
   },
 ];
-
-const violations = collectViolations(path.join(ROOT_DIR, TARGET_DIR));
-const allowedCounts = countAllowedViolationsByKey(allowedViolations);
-const allowedByKey = mapAllowedViolationsByKey(allowedViolations);
-const violationCounts = countByViolationKey(violations);
-const unusedAllowedViolations = collectStaleAllowedViolations(
-  allowedCounts,
-  allowedByKey,
-  violationCounts
+const allowedViolations = statSync(path.join(engineDir, "data.ts"), {
+  throwIfNoEntry: false,
+})
+  ? configuredAllowedViolations
+  : [];
+const allowedKeys = new Set(allowedViolations.map(createKey));
+const violations = collectViolations(engineDir);
+const actualKeys = new Set(violations.map(createKey));
+const stale = allowedViolations.filter(
+  (item) => !actualKeys.has(createKey(item))
 );
-const untrackedViolations = collectUntrackedViolations(
-  violations,
-  allowedCounts,
-  violationCounts
+const untracked = violations.filter(
+  (item) => !allowedKeys.has(createKey(item))
 );
 
-if (unusedAllowedViolations.length > 0) {
-  for (const violation of unusedAllowedViolations) {
-    console.error(
-      `${violation.filePath} stale unknown-array exception (${violation.count} extra) for ${violation.issues}: ${violation.source}`
-    );
-  }
-}
-
-if (untrackedViolations.length > 0) {
-  for (const violation of untrackedViolations) {
-    console.error(
-      `${violation.filePath}:${violation.lineNumber} untracked unknown-array pattern: ${violation.source}`
-    );
-  }
-}
-
-if (unusedAllowedViolations.length > 0 || untrackedViolations.length > 0) {
+for (const item of stale)
   console.error(
-    `Engine unknown-array guard failed: ${untrackedViolations.length} untracked, ${unusedAllowedViolations.length} stale exception(s)`
+    `${item.filePath}:${item.line} stale unknown-array exception (${item.issue}, ${item.reason})`
+  );
+for (const item of untracked)
+  console.error(
+    `${item.filePath}:${item.line}:${item.column} untracked unknown-array pattern: ${item.source}`
+  );
+if (stale.length || untracked.length) {
+  console.error(
+    `Engine unknown-array guard failed: ${untracked.length} untracked, ${stale.length} stale exception(s)`
   );
   process.exit(1);
 }
-
 console.log(
   `Engine unknown-array guard: ok (${violations.length} tracked exception(s))`
 );
 
-function collectViolations(absolutePath) {
-  const pathStat = statSync(absolutePath);
-  if (pathStat.isDirectory()) {
-    return readdirSync(absolutePath, { withFileTypes: true }).flatMap((entry) =>
-      collectViolations(path.join(absolutePath, entry.name))
+function collectViolations(targetPath) {
+  if (statSync(targetPath).isDirectory()) {
+    return readdirSync(targetPath, { withFileTypes: true }).flatMap((entry) =>
+      collectViolations(path.join(targetPath, entry.name))
     );
   }
-
-  if (!absolutePath.endsWith(".ts")) {
-    return [];
+  if (!targetPath.endsWith(".ts")) return [];
+  const sourceText = readFileSync(targetPath, "utf8");
+  const sourceFile = ts.createSourceFile(
+    targetPath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true
+  );
+  const filePath = path.relative(rootDir, targetPath).replaceAll("\\", "/");
+  const nodes = [];
+  function visit(node) {
+    if (ts.isArrayTypeNode(node) && isUnknown(node.elementType))
+      nodes.push(node);
+    if (
+      ts.isTypeReferenceNode(node) &&
+      ["Array", "ReadonlyArray"].includes(node.typeName.getText(sourceFile)) &&
+      node.typeArguments?.length === 1 &&
+      isUnknown(node.typeArguments[0])
+    )
+      nodes.push(node);
+    ts.forEachChild(node, visit);
   }
-
-  return findViolations(absolutePath);
-}
-
-function findViolations(absolutePath) {
-  const sourceText = readFileSync(absolutePath, "utf8");
-  const displayPath = path
-    .relative(ROOT_DIR, absolutePath)
-    .replaceAll("\\", "/");
-  const violations = [];
-
-  for (const [index, line] of sourceText.split(/\r?\n/u).entries()) {
-    const source = line.trim();
-    if (unknownArrayPattern.test(source)) {
-      violations.push({
-        filePath: displayPath,
-        lineNumber: index + 1,
-        source,
-      });
-    }
-  }
-
-  return violations;
-}
-
-function countByViolationKey(items) {
-  const counts = new Map();
-
-  for (const item of items) {
-    const key = createViolationKey(item);
-    const count = counts.get(key);
-    counts.set(key, count === undefined ? 1 : count + 1);
-  }
-
-  return counts;
-}
-
-function countAllowedViolationsByKey(allowedItems) {
-  const counts = new Map();
-
-  for (const item of allowedItems) {
-    counts.set(createViolationKey(item), item.expectedCount);
-  }
-
-  return counts;
-}
-
-function mapAllowedViolationsByKey(allowedItems) {
-  const allowedByKey = new Map();
-
-  for (const item of allowedItems) {
-    allowedByKey.set(createViolationKey(item), item);
-  }
-
-  return allowedByKey;
-}
-
-function collectStaleAllowedViolations(
-  allowedCounts,
-  allowedByKey,
-  violationCounts
-) {
-  const staleViolations = [];
-
-  for (const [key, allowedCount] of allowedCounts.entries()) {
-    const violationCount = violationCounts.get(key) ?? 0;
-    if (allowedCount <= violationCount) {
-      continue;
-    }
-
-    const allowedViolation = allowedByKey.get(key);
-    if (allowedViolation === undefined) {
-      continue;
-    }
-
-    staleViolations.push({
-      ...allowedViolation,
-      count: allowedCount - violationCount,
-      issues: collectAllowedIssues(allowedViolation).join(", "),
-    });
-  }
-
-  return staleViolations;
-}
-
-function collectUntrackedViolations(
-  violations,
-  allowedCounts,
-  violationCounts
-) {
-  const untrackedViolations = [];
-
-  for (const [key, violationCount] of violationCounts.entries()) {
-    const allowedCount = allowedCounts.get(key) ?? 0;
-    if (violationCount <= allowedCount) {
-      continue;
-    }
-
-    untrackedViolations.push(
-      ...violations
-        .filter((violation) => createViolationKey(violation) === key)
-        .slice(allowedCount)
+  visit(sourceFile);
+  return nodes.map((node) => {
+    const position = sourceFile.getLineAndCharacterOfPosition(
+      node.getStart(sourceFile)
     );
-  }
-
-  return untrackedViolations;
+    return {
+      filePath,
+      line: position.line + 1,
+      column: position.character + 1,
+      source: normalize(node.getText(sourceFile)),
+      owner: findOwner(node),
+    };
+  });
 }
 
-function collectAllowedIssues(allowedViolation) {
-  if (allowedViolation.issues !== undefined) {
-    return allowedViolation.issues;
-  }
-
-  return [allowedViolation.issue];
+function createKey(item) {
+  return `${item.filePath}:${item.line}:${item.column}:${item.source}:${item.owner}`;
 }
 
-function createViolationKey(violation) {
-  return `${violation.filePath}\0${violation.source}`;
+function findOwner(node) {
+  for (
+    let current = node.parent;
+    current !== undefined;
+    current = current.parent
+  ) {
+    if (ts.isFunctionDeclaration(current) && current.name)
+      return `FunctionDeclaration:${current.name.text}`;
+    if (ts.isPropertySignature(current) && current.name)
+      return `PropertySignature:${current.name.getText()}`;
+    if (ts.isTypeAliasDeclaration(current))
+      return `TypeAliasDeclaration:${current.name.text}`;
+  }
+  return "unknown";
+}
+
+function normalize(source) {
+  return source.replace(/\s+/gu, " ").trim();
+}
+
+function isUnknown(node) {
+  return node.kind === ts.SyntaxKind.UnknownKeyword;
 }

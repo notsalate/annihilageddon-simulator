@@ -2100,9 +2100,7 @@ test("dingler-status current runtime cards load with mapped Dingler effects", ()
     const definition = state.cardDefinitions.get(definitionId);
     assert.ok(definition, `${definitionId} should be loaded`);
     assert.deepEqual(
-      definition.engine.effects.map(
-        (effect) => (effect as Record<string, unknown>)["effectId"]
-      ),
+      definition.engine.effects.map((effect) => effect.effectId),
       effectIds
     );
   }

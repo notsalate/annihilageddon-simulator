@@ -232,13 +232,58 @@ const knownRuntimeEffectIds = [
 
 type KnownRuntimeEffectId = (typeof knownRuntimeEffectIds)[number];
 
+/** Known payload fields shared by the runtime handlers.  Deliberately no
+ * index signature: typoed effect["..."] access must be rejected by TypeScript. */
+export interface RuntimeEffectFields {
+  condition?: RuntimeEffectCondition;
+  costs?: RuntimeEffectCost[];
+  allowDinglerStatusExchange?: unknown;
+  allowLifeExchange?: unknown;
+  amount?: unknown;
+  amountPerOwnedCard?: unknown;
+  amountPerPlayer?: unknown;
+  branchEffects?: unknown;
+  cardDefinitionIds?: unknown;
+  cardKind?: unknown;
+  cardTags?: unknown;
+  cardTypes?: unknown;
+  chipAmount?: unknown;
+  chipCost?: unknown;
+  chooser?: unknown;
+  costMode?: unknown;
+  countedCardTypes?: unknown;
+  destination?: unknown;
+  emptyChoice?: unknown;
+  excludeSource?: unknown;
+  fromDefinitionId?: unknown;
+  isOngoing?: unknown;
+  lifeCost?: unknown;
+  lifeTotal?: unknown;
+  onDamageDealt?: unknown;
+  onKill?: unknown;
+  operation?: unknown;
+  optional?: unknown;
+  options?: unknown;
+  source?: unknown;
+  status?: unknown;
+  statusId?: unknown;
+  target?: RuntimeEffectTarget;
+  targetSelector?: RuntimeEffectTargetSelector;
+  timing?: EffectTiming;
+  toDefinitionId?: unknown;
+  unlessStatusId?: unknown;
+  valueKind?: unknown;
+  voteTargetSelector?: unknown;
+  winnerDrawAmount?: unknown;
+}
+
 type RuntimeEffectPayloadVariant<EffectId extends KnownRuntimeEffectId> = {
   effectId: EffectId;
   condition?: RuntimeEffectCondition;
   costs?: RuntimeEffectCost[];
   target?: RuntimeEffectTarget;
   targetSelector?: RuntimeEffectTargetSelector;
-} & Record<string, unknown>;
+} & RuntimeEffectFields;
 
 export type RuntimeEffectPayload = {
   [EffectId in KnownRuntimeEffectId]: RuntimeEffectPayloadVariant<EffectId>;

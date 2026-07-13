@@ -15,6 +15,8 @@ import {
   isRuntimeEffectTargetSelector,
   isRuntimeEffectId,
   type RuntimeEffect,
+  type RuntimeEffectFields,
+  type RuntimeEffectPayload,
 } from "./runtime-effect.js";
 
 type RuntimeEffectSourceKind = "card" | "wizardProperty";
@@ -1729,11 +1731,71 @@ function requireRuntimeEffectArrayField(
       continue;
     }
 
-    effects.push(value as RuntimeEffect);
+    const decodedEffect: Record<string, unknown> = {
+      effectId: value["effectId"],
+      timing: value["timing"],
+    };
+    for (const field of runtimeEffectPayloadFields) {
+      if (value[field] !== undefined) {
+        decodedEffect[field] = value[field];
+      }
+    }
+    effects.push(decodedEffect as unknown as RuntimeEffect);
   }
 
   return effects;
 }
+
+const runtimeEffectPayloadFields = [
+  "condition",
+  "costs",
+  "target",
+  "targetSelector",
+  "allowDinglerStatusExchange",
+  "allowLifeExchange",
+  "amount",
+  "amountPerOwnedCard",
+  "amountPerPlayer",
+  "branchEffects",
+  "cardDefinitionIds",
+  "cardKind",
+  "cardTags",
+  "cardTypes",
+  "chipAmount",
+  "chipCost",
+  "chooser",
+  "costMode",
+  "countedCardTypes",
+  "destination",
+  "emptyChoice",
+  "excludeSource",
+  "fromDefinitionId",
+  "isOngoing",
+  "lifeCost",
+  "lifeTotal",
+  "onDamageDealt",
+  "onKill",
+  "operation",
+  "optional",
+  "options",
+  "source",
+  "status",
+  "statusId",
+  "toDefinitionId",
+  "unlessStatusId",
+  "valueKind",
+  "voteTargetSelector",
+  "winnerDrawAmount",
+] as const satisfies readonly (keyof RuntimeEffectFields)[];
+
+type MissingRuntimeEffectPayloadField = Exclude<
+  keyof RuntimeEffectFields,
+  (typeof runtimeEffectPayloadFields)[number] | "timing"
+>;
+const runtimeEffectPayloadFieldsAreComplete: MissingRuntimeEffectPayloadField extends never
+  ? true
+  : never = true;
+void runtimeEffectPayloadFieldsAreComplete;
 
 function optionalUnknownArrayField(
   record: Record<string, unknown>,
@@ -2003,7 +2065,10 @@ function validateRuntimeEffectDefinition(
       ];
     }
 
-    const shapeErrors = catalogEntry.handler.validateShape(subjectId, effect);
+    const shapeErrors = catalogEntry.handler.validateShape(
+      subjectId,
+      effect as unknown as RuntimeEffectPayload
+    );
     if (shapeErrors.length > 0) {
       return shapeErrors;
     }
@@ -2014,9 +2079,7 @@ function validateRuntimeEffectDefinition(
       (!isRuntimeEffectTargetSelector(targetSelector) ||
         !catalogEntry.handler.allowedTargetSelectors?.includes(targetSelector))
     ) {
-      return [
-        `${subjectId} ${effectId} uses unsupported target selector`,
-      ];
+      return [`${subjectId} ${effectId} uses unsupported target selector`];
     }
 
     return [];

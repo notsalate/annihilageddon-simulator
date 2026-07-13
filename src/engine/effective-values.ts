@@ -8,6 +8,7 @@ import type {
   TokenInstance,
   TrophyLikeInstance,
 } from "./setup.js";
+import type { RuntimeEffect } from "./runtime-effect.js";
 
 export type EffectiveValueKind =
   | "cardCost"
@@ -250,7 +251,9 @@ export function getOwnedScoringCards(
   }));
 }
 
-function getControlledObjectEffects(view: ControlledObjectView): unknown[] {
+function getControlledObjectEffects(
+  view: ControlledObjectView
+): RuntimeEffect[] {
   return [
     ...view.cards.flatMap((object) => object.definition.engine.effects),
     ...view.tokens.flatMap((object) => {
@@ -270,10 +273,10 @@ function getScoringCardEffects(
   scoringCards: readonly ControlledCardObject[],
   target: EffectiveValueTarget,
   scoredCard: CardInstance | undefined
-): unknown[] {
+): RuntimeEffect[] {
   return scoringCards.flatMap((object) => {
     return object.definition.engine.effects.filter((effect) => {
-      if (!isRecord(effect) || effect["timing"] !== "whileScoring") {
+      if (effect.timing !== "whileScoring") {
         return false;
       }
 
@@ -291,18 +294,21 @@ function getScoringCardEffects(
 }
 
 function isSelfScoringCardEffect(
-  effect: Record<string, unknown>,
+  effect: RuntimeEffect,
   sourceDefinitionId: string
 ): boolean {
-  const target = effect["target"];
+  const target = effect.target;
   return (
-    isRecord(target) &&
-    target["targetType"] === "card" &&
-    target["definitionId"] === sourceDefinitionId
+    target !== undefined &&
+    "targetType" in target &&
+    target.targetType === "card" &&
+    target.definitionId === sourceDefinitionId
   );
 }
 
-function getWizardPropertyEffects(definition: TokenDefinition): unknown[] {
+function getWizardPropertyEffects(
+  definition: TokenDefinition
+): RuntimeEffect[] {
   if (definition.kind !== "wizardProperty" || definition.engine === undefined) {
     return [];
   }
@@ -318,26 +324,21 @@ function getWizardPropertyEffects(definition: TokenDefinition): unknown[] {
 
 function isModifierEffect(
   state: GameState,
-  effect: unknown,
+  effect: RuntimeEffect,
   valueKind: EffectiveValueKind,
   target: EffectiveValueTarget
-): effect is Record<string, unknown> {
-  if (!isRecord(effect)) {
-    return false;
-  }
-
+): effect is RuntimeEffect {
   return (
-    (effect["effectId"] === "fixture_modify_effective_value" ||
-      effect["effectId"] === "modify_effective_value") &&
-    (effect["timing"] === "whileControlled" ||
-      effect["timing"] === "whileScoring") &&
-    effect["valueKind"] === valueKind &&
+    (effect.effectId === "fixture_modify_effective_value" ||
+      effect.effectId === "modify_effective_value") &&
+    (effect.timing === "whileControlled" || effect.timing === "whileScoring") &&
+    effect.valueKind === valueKind &&
     hasModifierAmount(effect) &&
-    matchesTarget(state, effect["target"], target)
+    matchesTarget(state, effect.target, target)
   );
 }
 
-function hasModifierAmount(effect: Record<string, unknown>): boolean {
+function hasModifierAmount(effect: RuntimeEffect): boolean {
   if (effect["operation"] === "invertNegative") {
     return true;
   }
@@ -351,7 +352,7 @@ function hasModifierAmount(effect: Record<string, unknown>): boolean {
 function resolveAdditiveModifierAmount(
   state: GameState,
   playerId: PlayerId,
-  effect: Record<string, unknown>
+  effect: RuntimeEffect
 ): number {
   const amount = effect["amount"];
   if (typeof amount === "number") {
