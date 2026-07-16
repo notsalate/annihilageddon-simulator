@@ -127,42 +127,43 @@ function findOwner(node) {
 
 function collectTypeAliases(sourceFile) {
   const aliases = new Map();
-  function visit(node, namespacePath = [], namespaceScope = sourceFile) {
+  function visit(node, namespacePath = [], namespaceScopes = [sourceFile]) {
     if (ts.isTypeAliasDeclaration(node)) {
-      const name = [...namespacePath, node.name.text].join(".");
-      const entries = aliases.get(name) ?? [];
-      entries.push({
-        declaration: node,
-        scope:
-          namespacePath.length > 0 && ts.isModuleBlock(node.parent)
-            ? namespaceScope
-            : node.parent,
-        type: node.type,
-      });
-      aliases.set(name, entries);
-      if (namespacePath.length > 0) {
-        const shortEntries = aliases.get(node.name.text) ?? [];
-        shortEntries.push({
+      const names = [
+        ...Array.from({ length: namespacePath.length }, (_, index) =>
+          [...namespacePath.slice(index), node.name.text].join(".")
+        ),
+        node.name.text,
+      ];
+      names.forEach((name, index) => {
+        const entries = aliases.get(name) ?? [];
+        entries.push({
           declaration: node,
-          scope: node.parent,
+          scope:
+            namespacePath.length > 0 && ts.isModuleBlock(node.parent)
+              ? (namespaceScopes[index] ?? node.parent)
+              : node.parent,
           type: node.type,
         });
-        aliases.set(node.name.text, shortEntries);
-      }
+        aliases.set(name, entries);
+      });
     }
     if (
       ts.isModuleDeclaration(node) &&
       node.body &&
       ts.isIdentifier(node.name)
     ) {
-      const nextScope = ts.isModuleBlock(node.parent)
-        ? namespaceScope
+      const namespaceScope = ts.isModuleBlock(node.parent)
+        ? (namespaceScopes.at(-1) ?? sourceFile)
         : node.parent;
-      visit(node.body, [...namespacePath, node.name.text], nextScope);
+      const nextScopes = ts.isModuleBlock(node.parent)
+        ? [...namespaceScopes, node.body]
+        : [namespaceScope, node.body];
+      visit(node.body, [...namespacePath, node.name.text], nextScopes);
       return;
     }
     ts.forEachChild(node, (child) =>
-      visit(child, namespacePath, namespaceScope)
+      visit(child, namespacePath, namespaceScopes)
     );
   }
   visit(sourceFile);
