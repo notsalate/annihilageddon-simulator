@@ -77,6 +77,24 @@ test("typed-access guard rejects aliases declared inside their function scope", 
   assert.equal(result.stderr.match(/fixture\.ts:\d+:/gu)?.length, 1);
 });
 
+test("typed-access guard resolves same-named aliases in their own function scopes", () => {
+  const fixture = createFixture(`
+    function raw(value: unknown) {
+      type Loose = Record<string, unknown>;
+      const result: Loose = value;
+      return result;
+    }
+    function safe() {
+      type Loose = Record<string, number>;
+      const result: Loose = {};
+      return result;
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixture);
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr.match(/fixture\.ts:\d+:/gu)?.length, 1);
+});
+
 test("typed-access guard rejects record annotations and predicates", () => {
   const fixture = createFixture(`
     const value: Record<string, unknown> = {};
