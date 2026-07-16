@@ -6,6 +6,9 @@ const rootDir = path.resolve(process.argv[2] ?? process.cwd());
 const engineDir = path.join(rootDir, "src", "engine");
 const violations = [];
 const configuredAllowedViolations = [
+  ["src/engine/data.ts", 1625, 1, "expectRuntimeRecord"],
+  ["src/engine/data.ts", 1638, 1, "requireRecordField"],
+  ["src/engine/data.ts", 1653, 1, "optionalRecordField"],
   ["src/engine/data.ts", 1639, 3, "requireRecordField"],
   ["src/engine/data.ts", 1654, 3, "optionalRecordField"],
   ["src/engine/data.ts", 1673, 3, "requireArrayField"],
@@ -40,7 +43,7 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
     ts.ScriptTarget.Latest,
     true
   );
-  const aliases = collectRecordAliases(sourceFile);
+  const aliases = collectTypeAliases(sourceFile);
   function visit(node) {
     const assertedType =
       ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)
@@ -112,38 +115,29 @@ console.log(
 );
 
 function findOwner(node) {
-  for (let current = node.parent; current; current = current.parent) {
+  for (let current = node; current; current = current.parent) {
     if (ts.isFunctionDeclaration(current) && current.name)
       return current.name.text;
   }
   return "unknown";
 }
 
-function collectRecordAliases(sourceFile) {
-  const aliases = new Set();
-  let changed = true;
-  while (changed) {
-    changed = false;
-    sourceFile.forEachChild((node) => {
-      if (
-        ts.isTypeAliasDeclaration(node) &&
-        isRecordType(node.type, aliases, sourceFile) &&
-        !aliases.has(node.name.text)
-      ) {
-        aliases.add(node.name.text);
-        changed = true;
-      }
-    });
-  }
+function collectTypeAliases(sourceFile) {
+  const aliases = new Map();
+  sourceFile.forEachChild((node) => {
+    if (ts.isTypeAliasDeclaration(node)) aliases.set(node.name.text, node.type);
+  });
   return aliases;
 }
 
-function isRecordType(node, aliases, sourceFile) {
+function isRecordType(node, aliases, sourceFile, resolving = new Set()) {
   if (ts.isParenthesizedTypeNode(node)) {
-    return isRecordType(node.type, aliases, sourceFile);
+    return isRecordType(node.type, aliases, sourceFile, resolving);
   }
-  if (ts.isIntersectionTypeNode(node)) {
-    return node.types.some((type) => isRecordType(type, aliases, sourceFile));
+  if (ts.isIntersectionTypeNode(node) || ts.isUnionTypeNode(node)) {
+    return node.types.some((type) =>
+      isRecordType(type, aliases, sourceFile, resolving)
+    );
   }
   if (ts.isTypeLiteralNode(node)) {
     return node.members.some(
@@ -162,7 +156,20 @@ function isRecordType(node, aliases, sourceFile) {
       node.typeArguments[1].kind === ts.SyntaxKind.UnknownKeyword
     );
   }
-  return aliases.has(name);
+  if (
+    ["Readonly", "Partial", "Required"].includes(name) &&
+    node.typeArguments?.length === 1
+  ) {
+    return isRecordType(node.typeArguments[0], aliases, sourceFile, resolving);
+  }
+  const aliasType = aliases.get(name);
+  if (aliasType && !resolving.has(name)) {
+    resolving.add(name);
+    const result = isRecordType(aliasType, aliases, sourceFile, resolving);
+    resolving.delete(name);
+    return result;
+  }
+  return false;
 }
 
 function listTypeScriptFiles(targetPath) {

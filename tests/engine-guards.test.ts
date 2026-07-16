@@ -102,6 +102,33 @@ test("typed-access guard permits typed string maps", () => {
   assert.equal(result.status, 0);
 });
 
+test("typed-access guard rejects unions and aliases that retain unknown records", () => {
+  const fixture = createFixture(`
+    type Loose = Record<string, unknown>;
+    type Union = Loose | null;
+    type Composite = (Union & {});
+    const a: Union = value;
+    const b: Composite = value;
+  `);
+  const result = run("check-engine-typed-access.mjs", fixture);
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr.match(/fixture\.ts:\d+:/gu)?.length, 2);
+});
+
+test("typed-access guard rejects approved utility wrappers around unknown records", () => {
+  const fixture = createFixture(`
+    type Loose = Record<string, unknown>;
+    const a: Readonly<Loose> = value;
+    const b: Partial<Readonly<Record<string, unknown>>> = value;
+    const c: Required<Partial<Loose>> = value;
+    const d: Readonly<{ [key: string]: unknown }> = value;
+    const safe: Readonly<Record<string, number>> = {};
+  `);
+  const result = run("check-engine-typed-access.mjs", fixture);
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr.match(/fixture\.ts:\d+:/gu)?.length, 4);
+});
+
 test("typed-access guard rejects fixture-only raw access outside the production allowlist", () => {
   const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
   const sourceDir = path.join(fixtureRoot, "src", "engine");
