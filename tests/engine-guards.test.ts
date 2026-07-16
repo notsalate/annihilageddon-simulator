@@ -64,6 +64,19 @@ test("typed-access guard rejects multiline, angle-bracket, and aliased assertion
   assert.equal(result.stderr.match(/fixture\.ts:\d+:15/gu)?.length, 3);
 });
 
+test("typed-access guard rejects aliases declared inside their function scope", () => {
+  const fixture = createFixture(`
+    function read(value: unknown) {
+      type Loose = Record<string, unknown>;
+      const result: Loose = value;
+      return result;
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixture);
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr.match(/fixture\.ts:\d+:/gu)?.length, 1);
+});
+
 test("typed-access guard rejects record annotations and predicates", () => {
   const fixture = createFixture(`
     const value: Record<string, unknown> = {};

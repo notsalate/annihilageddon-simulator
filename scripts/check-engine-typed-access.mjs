@@ -124,9 +124,13 @@ function findOwner(node) {
 
 function collectTypeAliases(sourceFile) {
   const aliases = new Map();
-  sourceFile.forEachChild((node) => {
-    if (ts.isTypeAliasDeclaration(node)) aliases.set(node.name.text, node.type);
-  });
+  function visit(node) {
+    if (ts.isTypeAliasDeclaration(node)) {
+      aliases.set(node.name.text, node.type);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
   return aliases;
 }
 
