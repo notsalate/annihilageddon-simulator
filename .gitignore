@@ -39,6 +39,7 @@ claude_desktop_config.json
 # agent logs / local AI context
 .claude/
 .codex/
+.codex/config.toml
 .cursor/
 .windsurf/
 .gemini/
