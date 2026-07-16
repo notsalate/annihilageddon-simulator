@@ -79,6 +79,29 @@ test("typed-access guard rejects record annotations and predicates", () => {
   assert.equal(result.stderr.match(/fixture\.ts:\d+:/gu)?.length, 4);
 });
 
+test("typed-access guard rejects composite and indexed record access", () => {
+  const fixture = createFixture(`
+    const asserted = value as (Record<string, unknown> & {});
+    type Loose = Record<string, unknown> & { tag?: string };
+    const raw: Loose = value;
+    const indexed: { [key: string]: unknown } = value;
+    type Indexed = { [key: string]: unknown };
+    const indexedAlias: Indexed = value;
+  `);
+  const result = run("check-engine-typed-access.mjs", fixture);
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr.match(/fixture\.ts:\d+:/gu)?.length, 4);
+});
+
+test("typed-access guard permits typed string maps", () => {
+  const fixture = createFixture(`
+    const counts: Record<string, number> = {};
+    const labels: { [key: string]: string } = {};
+  `);
+  const result = run("check-engine-typed-access.mjs", fixture);
+  assert.equal(result.status, 0);
+});
+
 test("typed-access guard rejects fixture-only raw access outside the production allowlist", () => {
   const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
   const sourceDir = path.join(fixtureRoot, "src", "engine");

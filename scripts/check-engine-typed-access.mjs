@@ -139,6 +139,21 @@ function collectRecordAliases(sourceFile) {
 }
 
 function isRecordType(node, aliases, sourceFile) {
+  if (ts.isParenthesizedTypeNode(node)) {
+    return isRecordType(node.type, aliases, sourceFile);
+  }
+  if (ts.isIntersectionTypeNode(node)) {
+    return node.types.some((type) => isRecordType(type, aliases, sourceFile));
+  }
+  if (ts.isTypeLiteralNode(node)) {
+    return node.members.some(
+      (member) =>
+        ts.isIndexSignatureDeclaration(member) &&
+        member.parameters.length === 1 &&
+        member.parameters[0].type?.kind === ts.SyntaxKind.StringKeyword &&
+        member.type?.kind === ts.SyntaxKind.UnknownKeyword
+    );
+  }
   if (!ts.isTypeReferenceNode(node)) return false;
   const name = node.typeName.getText(sourceFile);
   if (name === "Record" && node.typeArguments?.length === 2) {
