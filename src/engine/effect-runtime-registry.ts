@@ -8,11 +8,14 @@ import { isPlainRecord } from "../common.js";
 import {
   isRuntimeEffectSelectorTarget,
   isRuntimeEffectId,
+  isWildMagicOption,
+  type AttackOutcomeBranch,
   type RuntimeEffectId,
+  type RuntimeEffectCost,
   type RuntimeEffectPayload,
   type RuntimeEffectTargetSelector,
+  type WildMagicOption,
 } from "./runtime-effect.js";
-
 import type {
   CardInstance,
   GameState,
@@ -223,8 +226,8 @@ export interface EffectRuntimeServices {
   isLegalWildMagicOption(
     state: GameState,
     player: PlayerState,
-    option: Record<string, unknown>
-  ): option is RuntimeEffectPayload;
+    option: WildMagicOption
+  ): boolean;
   executeEffect(
     state: GameState,
     player: PlayerState,
@@ -240,7 +243,7 @@ export interface EffectRuntimeHandler<
   effectId: RuntimeEffectId;
   unsupported?: true;
   allowedTargetSelectors?: readonly RuntimeEffectTargetSelector[];
-  validateShape(subjectId: string, effect: Record<string, unknown>): string[];
+  validateShape(subjectId: string, effect: RuntimeEffectPayload): string[];
   execute(
     state: GameState,
     player: PlayerState,
@@ -1007,12 +1010,7 @@ const gainStatusHandler: EffectRuntimeHandler = {
     }
 
     for (const targetPlayer of targetResult.players) {
-      services.gainDinglerStatus(
-        state,
-        targetPlayer,
-        effect.effectId,
-        source
-      );
+      services.gainDinglerStatus(state, targetPlayer, effect.effectId, source);
     }
 
     return { ok: true };
@@ -2274,7 +2272,7 @@ const topdeckGainedCardHandler: EffectRuntimeHandler = {
       );
     }
 
-    for (const filterField of ["cardDefinitionIds", "cardKind"]) {
+    for (const filterField of ["cardDefinitionIds", "cardKind"] as const) {
       if (effect[filterField] !== undefined) {
         errors.push(
           `${subjectId} uses unsupported topdeck-gained-card filter ${filterField}`
@@ -2325,7 +2323,11 @@ const temporaryHandLimitByGainedCardTypeHandler: EffectRuntimeHandler = {
       }
     }
 
-    for (const filterField of ["cardDefinitionIds", "cardKind", "isOngoing"]) {
+    for (const filterField of [
+      "cardDefinitionIds",
+      "cardKind",
+      "isOngoing",
+    ] as const) {
       if (effect[filterField] !== undefined) {
         errors.push(
           `${subjectId} uses unsupported temporary-hand-limit filter ${filterField}`
@@ -3325,19 +3327,19 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
 const wildMagicChoiceHandler: EffectRuntimeHandler = {
   effectId: "wild_magic_choice",
   validateShape(subjectId, effect) {
-    const options = effect["options"];
+    const options = effect.options;
     if (!Array.isArray(options)) {
       return [`${subjectId} uses wild_magic_choice without options`];
     }
 
     const errors: string[] = [];
     for (const option of options) {
-      if (!isEffectRecord(option)) {
+      if (!isWildMagicOption(option)) {
         errors.push(`${subjectId} uses invalid Wild Magic option`);
         continue;
       }
 
-      const optionEffectId = option["effectId"];
+      const optionEffectId = option.effectId;
       if (!isRuntimeEffectId(optionEffectId)) {
         errors.push(
           `${subjectId} uses unsupported Wild Magic option ${String(optionEffectId)}`
@@ -3359,7 +3361,7 @@ const wildMagicChoiceHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, player, effect, source, services) {
-    const options = effect["options"];
+    const options = effect.options;
     if (!Array.isArray(options)) {
       return {
         ok: false,
@@ -3369,7 +3371,7 @@ const wildMagicChoiceHandler: EffectRuntimeHandler = {
 
     for (const option of options) {
       if (
-        !isEffectRecord(option) ||
+        !isWildMagicOption(option) ||
         !services.isLegalWildMagicOption(state, player, option)
       ) {
         continue;
@@ -3380,7 +3382,7 @@ const wildMagicChoiceHandler: EffectRuntimeHandler = {
         playerId: player.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
-        effectId: services.asString(option["effectId"]),
+        effectId: option.effectId,
         sourceType: source.sourceType,
       });
       return services.executeEffect(state, player, option, source);
@@ -3400,15 +3402,16 @@ const wildMagicChoiceHandler: EffectRuntimeHandler = {
 
 function validateCardTargetSelector(
   subjectId: string,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   effectLabel: string,
   expectedSelector: string
 ): string[] {
   const target = effect["target"];
-  const selector = isPlainRecord(target) ? target["selector"] : target;
+  const selector =
+    target !== undefined && "selector" in target ? target.selector : target;
   if (selector !== expectedSelector) {
     return [
-      `${subjectId} uses unsupported ${effectLabel} target ${String(selector)}`,
+      `${subjectId} uses unsupported ${effectLabel} target ${formatUnknown(selector)}`,
     ];
   }
 
@@ -3417,21 +3420,25 @@ function validateCardTargetSelector(
 
 function validatePlayerTargetSelector(
   subjectId: string,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   effectLabel: string,
   expectedSelectors: readonly string[]
 ): string[] {
   const target = effect["target"];
   const targetSelector = effect["targetSelector"];
   if (
-    (isEffectRecord(target) &&
-      expectedSelectors.includes(String(target["selector"]))) ||
+    (target !== undefined &&
+      "selector" in target &&
+      expectedSelectors.includes(String(target.selector))) ||
     expectedSelectors.includes(String(targetSelector))
   ) {
     return [];
   }
 
-  const selector = isEffectRecord(target) ? target["selector"] : targetSelector;
+  const selector =
+    target !== undefined && "selector" in target
+      ? target.selector
+      : targetSelector;
   return [
     `${subjectId} uses unsupported ${effectLabel} target ${String(selector)}`,
   ];
@@ -3439,7 +3446,7 @@ function validatePlayerTargetSelector(
 
 function validatePositiveIntegerAmount(
   subjectId: string,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   amountLabel: string
 ): string[] {
   const amount = effect["amount"];
@@ -3456,7 +3463,7 @@ function validatePositiveIntegerAmount(
 
 function validateLifeTotal(
   subjectId: string,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): string[] {
   const lifeTotal = effect["lifeTotal"];
   if (
@@ -3472,7 +3479,7 @@ function validateLifeTotal(
 
 function validateSetupTiming(
   subjectId: string,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): string[] {
   if (effect["timing"] !== "setup") {
     return [
@@ -3485,7 +3492,7 @@ function validateSetupTiming(
 
 function validateReplacementTiming(
   subjectId: string,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): string[] {
   if (effect["timing"] !== "replacement") {
     return [
@@ -3499,12 +3506,12 @@ function validateReplacementTiming(
 function validateEffectiveValueModifierTarget(
   subjectId: string,
   valueKind: unknown,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): string[] {
   const target = effect["target"];
   if (!isEffectRecord(target)) {
     return [
-      `${subjectId} uses invalid effective-value target ${String(target)}`,
+      `${subjectId} uses invalid effective-value target ${formatUnknown(target)}`,
     ];
   }
 
@@ -3537,7 +3544,7 @@ function validateEffectiveValueModifierTarget(
     if (
       target["targetType"] === "token" &&
       (isNonEmptyString(target["definitionId"]) ||
-        target["tokenKind"] === "deadWizardToken")
+        ("tokenKind" in target && target["tokenKind"] === "deadWizardToken"))
     ) {
       return [];
     }
@@ -3562,7 +3569,7 @@ function validateEffectiveValueModifierTarget(
 
 function validateWandAttackReplacementShape(
   subjectId: string,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): string[] {
   const errors: string[] = [];
   if (effect["timing"] !== "attackReplacement") {
@@ -3607,7 +3614,7 @@ function validateWandAttackReplacementShape(
     "cardKind",
     "isOngoing",
     "destination",
-  ]) {
+  ] as const) {
     if (effect[fieldName] !== undefined) {
       errors.push(
         `${subjectId} uses unsupported wand-attack replacement field ${fieldName}`
@@ -3624,7 +3631,7 @@ function isNonEmptyString(value: unknown): value is string {
 
 function validateDinglerStatusEffectShape(
   subjectId: string,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   effectLabel: string
 ): string[] {
   const errors: string[] = [];
@@ -3651,7 +3658,7 @@ function validateDinglerStatusEffectShape(
 
 function validateMegaMayhemSetLifeEffectShape(
   subjectId: string,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): string[] {
   const errors = validateMegaMayhemEachPlayerShape(subjectId, effect);
   const lifeTotal = effect["lifeTotal"];
@@ -3667,7 +3674,7 @@ function validateMegaMayhemSetLifeEffectShape(
 
 function validateMegaMayhemEachPlayerToggleDinglerShape(
   subjectId: string,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): string[] {
   const errors = validateMegaMayhemEachPlayerShape(subjectId, effect);
   if (effect["statusId"] !== undefined) {
@@ -3684,7 +3691,7 @@ function validateMegaMayhemEachPlayerToggleDinglerShape(
 
 function validateMegaMayhemEachPlayerShape(
   subjectId: string,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): string[] {
   const errors: string[] = [];
   if (effect["timing"] !== "onMayhemResolve") {
@@ -3702,7 +3709,7 @@ function validateMegaMayhemEachPlayerShape(
 
 function validateMayhemEachPlayerShape(
   subjectId: string,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): string[] {
   const errors: string[] = [];
   if (effect["timing"] !== "onMayhemResolve") {
@@ -3720,7 +3727,7 @@ function validateMayhemEachPlayerShape(
 
 function validateMayhemHandRedrawOptions(
   subjectId: string,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): string[] {
   const options = effect["options"];
   if (!Array.isArray(options) || options.length !== 2) {
@@ -3759,7 +3766,7 @@ function validateMayhemHandRedrawOptions(
 
 function validateMayhemBattleHighestHandCostShape(
   subjectId: string,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): string[] {
   const errors = validateMayhemEachPlayerShape(subjectId, effect);
   if (effect["chooser"] !== "affectedPlayer") {
@@ -3782,7 +3789,7 @@ function validateMayhemBattleHighestHandCostShape(
 
 function validateMayhemVoteDinglerShape(
   subjectId: string,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): string[] {
   const errors = validateMayhemEachPlayerShape(subjectId, effect);
   if (effect["chooser"] !== "affectedPlayer") {
@@ -3807,7 +3814,7 @@ function validateMayhemVoteDinglerShape(
 
 function validateMayhemDinglerRecoveryShape(
   subjectId: string,
-  effect: Record<string, unknown>
+  effect: RuntimeEffectPayload
 ): string[] {
   const errors = validateMayhemEachPlayerShape(subjectId, effect);
   if (effect["chooser"] !== "affectedPlayer") {
@@ -3820,7 +3827,7 @@ function validateMayhemDinglerRecoveryShape(
       `${subjectId} uses unsupported Mayhem recovery status ${String(effect["statusId"])}`
     );
   }
-  for (const costField of ["lifeCost", "chipCost"]) {
+  for (const costField of ["lifeCost", "chipCost"] as const) {
     const cost = effect[costField];
     if (typeof cost !== "number" || !Number.isSafeInteger(cost) || cost <= 0) {
       errors.push(
@@ -3844,7 +3851,7 @@ function payOptionalCosts(
   }
 
   if (effect["optional"] === true) {
-    const canPay = costs.every((cost) => {
+    const canPay = costs.every((cost: RuntimeEffectCost) => {
       return cost.costId === "spend_chips" && player.chips >= cost.amount;
     });
     const choices: EffectChoice[] = canPay
@@ -3921,13 +3928,9 @@ function executeAttackBranches(
     return { ok: true };
   }
 
-  const onDamageDealt = effect["onDamageDealt"];
-  if (Array.isArray(onDamageDealt)) {
+  const onDamageDealt = effect.onDamageDealt;
+  if (onDamageDealt !== undefined) {
     for (const branch of onDamageDealt) {
-      if (!isEffectRecord(branch)) {
-        return { ok: false, error: "Invalid attack damage branch" };
-      }
-
       const result = executeAttackBranch(
         state,
         player,
@@ -3943,13 +3946,9 @@ function executeAttackBranches(
     }
   }
 
-  const onKill = effect["onKill"];
-  if (attackResult.killed && Array.isArray(onKill)) {
+  const onKill = effect.onKill;
+  if (attackResult.killed && onKill !== undefined) {
     for (const branch of onKill) {
-      if (!isEffectRecord(branch)) {
-        return { ok: false, error: "Invalid attack kill branch" };
-      }
-
       const result = executeAttackBranch(
         state,
         player,
@@ -4027,21 +4026,14 @@ function collectMayhemAttackDefenseDecisions(
 function executeAttackBranch(
   state: GameState,
   player: PlayerState,
-  branch: Record<string, unknown>,
+  branch: AttackOutcomeBranch,
   source: EffectSourceContext,
   targetPlayer: PlayerState,
   attackResult: DamageResult,
   services: EffectRuntimeServices
 ): EffectExecutionResult {
-  if (branch["effectId"] === "gain_chips") {
-    const amount = branch["amount"];
-    if (
-      typeof amount !== "number" ||
-      !Number.isSafeInteger(amount) ||
-      amount <= 0
-    ) {
-      return { ok: false, error: `Invalid chip gain ${String(amount)}` };
-    }
+  if (branch.effectId === "gain_chips") {
+    const amount = branch.amount;
 
     const chipsBefore = player.chips;
     player.chips += amount;
@@ -4058,7 +4050,7 @@ function executeAttackBranch(
     return { ok: true };
   }
 
-  if (branch["effectId"] === "gain_chips_equal_damage_dealt") {
+  if (branch.effectId === "gain_chips_equal_damage_dealt") {
     let remaining = attackResult.damageDealt;
     const stolen = Math.min(targetPlayer.chips, remaining);
     if (stolen > 0) {
@@ -4084,7 +4076,7 @@ function executeAttackBranch(
     return { ok: true };
   }
 
-  if (branch["effectId"] === "heal_equal_damage_dealt") {
+  if (branch.effectId === "heal_equal_damage_dealt") {
     services.healPlayer(
       state,
       player,
@@ -4096,15 +4088,8 @@ function executeAttackBranch(
     return { ok: true };
   }
 
-  if (branch["effectId"] === "return_discard_to_hand") {
-    const amount = branch["amount"];
-    if (
-      typeof amount !== "number" ||
-      !Number.isSafeInteger(amount) ||
-      amount <= 0
-    ) {
-      return { ok: false, error: `Invalid return amount ${String(amount)}` };
-    }
+  if (branch.effectId === "return_discard_to_hand") {
+    const amount = branch.amount;
 
     const returnChoice = services.chooseEffectChoice(
       state,
@@ -4134,17 +4119,14 @@ function executeAttackBranch(
     return { ok: true };
   }
 
-  if (
-    branch["effectId"] === "gain_status" &&
-    branch["statusId"] === "dingler"
-  ) {
+  if (branch.effectId === "gain_status" && branch.statusId === "dingler") {
     services.gainDinglerStatus(state, targetPlayer, "gain_status", source);
     return { ok: true };
   }
 
   return {
     ok: false,
-    error: `Unsupported attack branch ${services.asString(branch["effectId"])}`,
+    error: `Unsupported attack branch ${services.asString(branch.effectId)}`,
   };
 }
 
@@ -4199,7 +4181,7 @@ function chooseCardCombinations(
 }
 
 function requirePositiveIntegerAmount(
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload,
   amountLabel: string
 ): { ok: true; value: number } | { ok: false; error: string } {
   const amount = effect["amount"];
@@ -4303,7 +4285,13 @@ function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
   return isPlainRecord(effect);
 }
 
-function setupOnlyExecutionError(effectId: RuntimeEffectId): EffectExecutionResult {
+function formatUnknown(value: unknown): string {
+  return String(value);
+}
+
+function setupOnlyExecutionError(
+  effectId: RuntimeEffectId
+): EffectExecutionResult {
   return {
     ok: false,
     error: `${effectId} is a setup-only wizard property effect`,

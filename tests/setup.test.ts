@@ -6,6 +6,8 @@ import {
   loadCurrentRuntimeDataPack,
   type CardInstance,
   type GameState,
+  type LoadedDataPack,
+  type RuntimeEffect,
 } from "../src/index.js";
 import {
   markCardDefinitionId,
@@ -118,6 +120,105 @@ test("default setup choice policy records alwaysPickFirst", () => {
     assert.equal(event.chosenDefinitionId, candidates[0]);
   }
 });
+
+test("wizard property setup effects update cards, trophies, life, and first player", () => {
+  const state = initializeGame({
+    dataPack: createSetupEffectsDataPack(),
+    seed: 24680,
+  });
+  const firstPlayer = state.players[0];
+
+  assert.ok(firstPlayer);
+  assert.equal(state.activePlayerId, firstPlayer.playerId);
+  for (const player of state.players) {
+    const starterCards = ownedCards(state, player.playerId);
+    assert.equal(countDefinition(starterCards, "esw2_dbg__starter_001"), 5);
+    assert.equal(
+      countDefinition(starterCards, "fixture-setup-starter-replacement"),
+      1
+    );
+    assert.equal(player.life.current, 27);
+    assert.equal(player.life.max, 27);
+    assert.equal(
+      player.trophyLikeObjects.some(
+        (trophy) => trophy.trophyId === "basicTrophy"
+      ),
+      true
+    );
+  }
+});
+
+function createSetupEffectsDataPack(): LoadedDataPack {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const sourceProperty = dataPack.tokenDefinitions.get(
+    "esw2_dbg__wizard_property_001"
+  );
+  const sourceStarter = dataPack.cardDefinitions.get("esw2_dbg__starter_003");
+  const wizardPropertyStack = dataPack.tokenStacks.wizardProperties;
+  if (
+    sourceProperty?.kind !== "wizardProperty" ||
+    sourceProperty.engine === undefined ||
+    sourceStarter === undefined ||
+    wizardPropertyStack === undefined
+  ) {
+    throw new Error("Current runtime data is missing setup test fixtures");
+  }
+
+  const effects: RuntimeEffect[] = [
+    {
+      effectId: "replace_starting_card",
+      timing: "setup",
+      fromDefinitionId: "esw2_dbg__starter_001",
+      toDefinitionId: "fixture-setup-starter-replacement",
+    },
+    {
+      effectId: "start_with_basic_trophy",
+      timing: "setup",
+    },
+    {
+      effectId: "set_starting_life_total",
+      timing: "setup",
+      lifeTotal: 27,
+    },
+    {
+      effectId: "force_starting_player",
+      timing: "setup",
+    },
+  ];
+  const property = {
+    ...sourceProperty,
+    tokenId: "fixture-setup-effects-property",
+    engine: {
+      ...sourceProperty.engine,
+      mappingStatus: "fixture",
+      playableInV0: true,
+      effects,
+    },
+  };
+  const replacementStarter = {
+    ...sourceStarter,
+    cardId: "fixture-setup-starter-replacement",
+  };
+
+  return {
+    ...dataPack,
+    cardDefinitions: new Map([
+      ...dataPack.cardDefinitions,
+      [replacementStarter.cardId, replacementStarter],
+    ]),
+    tokenDefinitions: new Map([
+      ...dataPack.tokenDefinitions,
+      [property.tokenId, property],
+    ]),
+    tokenStacks: {
+      ...dataPack.tokenStacks,
+      wizardProperties: {
+        ...wizardPropertyStack,
+        entries: [{ tokenId: property.tokenId, count: 4 }],
+      },
+    },
+  };
+}
 
 function snapshot(state: GameState): unknown {
   return {

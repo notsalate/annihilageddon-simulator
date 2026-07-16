@@ -9,6 +9,7 @@ import {
   loadCurrentRuntimeDataPack,
   loadV0DataPack,
   validateExecutableDataPack,
+  type AttackOutcomeBranch,
   type CardDefinition,
   type DecodeResult,
   type EffectTiming,
@@ -61,9 +62,394 @@ test("runtime data decoder exposes typed effects after the raw JSON boundary", (
   ].flatMap((definition) => definition.engine.effects);
 
   assert.ok(effects.length > 0);
+  assert.ok(effects.every((effect) => !("rawOnly" in effect)));
   assert.equal(typeof effects[0]?.effectId, "string");
   const timing: EffectTiming | undefined = effects[0]?.timing;
   assert.equal(typeof timing, "string");
+});
+
+test("runtime effect decoder keeps cardKind and drops rawOnly fields", () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "runtime-effect-fields-"));
+  const effect = {
+    effectId: "modify_effective_value",
+    timing: "whileControlled",
+    valueKind: "cardCost",
+    operation: "add",
+    amount: 1,
+    cardKind: "normal",
+    rawOnly: "discard me",
+  };
+  writeJsonFile(tempRoot, "manifest.json", {
+    schemaVersion: 1,
+    packId: "fixture-effect-fields",
+    runtimeSchema: "krutagidon.dataPack.v0",
+    mappingStatus: "fixture",
+    cardDefinitionPaths: ["cards"],
+    tokenDefinitionPaths: [],
+    decks: {
+      starterDeck: "decks/starter.json",
+      mainDeck: "decks/main.json",
+      legendDeck: "decks/legend.json",
+    },
+    cardStacks: {
+      wildMagicStack: "stacks/wild.json",
+      limpWandStack: "stacks/limp.json",
+    },
+    needsData: [],
+  });
+  writeJsonFile(tempRoot, "cards/fixture-card.json", {
+    ...createFixtureCard("fixture-card"),
+    engine: { ...createFixtureCard("fixture-card").engine, effects: [effect] },
+  });
+  const emptyDeck = {
+    schemaVersion: 1,
+    deckId: "empty",
+    runtimeSchema: "krutagidon.deckComposition.v0",
+    role: "fixture",
+    mappingStatus: "fixture",
+    entries: [],
+  };
+  for (const file of [
+    "decks/starter.json",
+    "decks/main.json",
+    "decks/legend.json",
+    "stacks/wild.json",
+    "stacks/limp.json",
+  ]) {
+    writeJsonFile(tempRoot, file, emptyDeck);
+  }
+
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    const [decoded] =
+      result.value.cardDefinitions.get("fixture-card")?.engine.effects ?? [];
+    assert.equal(decoded?.cardKind, "normal");
+    assert.equal("rawOnly" in (decoded ?? {}), false);
+  }
+});
+
+test("runtime data boundary rejects malformed nested Wild Magic options", () => {
+  const tempRoot = mkdtempSync(
+    path.join(tmpdir(), "runtime-wild-magic-option-")
+  );
+  writeJsonFile(tempRoot, "manifest.json", {
+    schemaVersion: 1,
+    packId: "fixture-wild-magic-option",
+    runtimeSchema: "krutagidon.dataPack.v0",
+    mappingStatus: "fixture",
+    cardDefinitionPaths: ["cards"],
+    tokenDefinitionPaths: [],
+    decks: {
+      starterDeck: "decks/starter.json",
+      mainDeck: "decks/main.json",
+      legendDeck: "decks/legend.json",
+    },
+    cardStacks: {
+      wildMagicStack: "stacks/wild.json",
+      limpWandStack: "stacks/limp.json",
+    },
+  });
+  writeJsonFile(tempRoot, "cards/esw2_dbg__wild_magic.json", {
+    ...createFixtureCard("esw2_dbg__wild_magic"),
+    engine: {
+      ...createFixtureCard("esw2_dbg__wild_magic").engine,
+      cardKind: "wildMagic",
+      effects: [
+        {
+          effectId: "wild_magic_choice",
+          timing: "onPlay",
+          options: [
+            { effectId: "add_power", timing: "onPlay", amount: "oops" },
+          ],
+        } as unknown as RuntimeEffect,
+      ],
+    },
+  });
+  const emptyDeck = {
+    schemaVersion: 1,
+    deckId: "empty",
+    runtimeSchema: "krutagidon.deckComposition.v0",
+    role: "fixture",
+    mappingStatus: "fixture",
+    entries: [],
+  };
+  for (const file of [
+    "decks/starter.json",
+    "decks/main.json",
+    "decks/legend.json",
+    "stacks/wild.json",
+    "stacks/limp.json",
+  ]) {
+    writeJsonFile(tempRoot, file, emptyDeck);
+  }
+
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(result.errors.some((error) => error.includes("Wild Magic")));
+  }
+});
+
+test("runtime data boundary rejects malformed nested attack branches", () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "runtime-attack-branch-"));
+  writeJsonFile(tempRoot, "manifest.json", {
+    schemaVersion: 1,
+    packId: "fixture-attack-branch",
+    runtimeSchema: "krutagidon.dataPack.v0",
+    mappingStatus: "fixture",
+    cardDefinitionPaths: ["cards"],
+    tokenDefinitionPaths: [],
+    decks: {
+      starterDeck: "decks/starter.json",
+      mainDeck: "decks/main.json",
+      legendDeck: "decks/legend.json",
+    },
+    cardStacks: {
+      wildMagicStack: "stacks/wild.json",
+      limpWandStack: "stacks/limp.json",
+    },
+  });
+  const card = createFixtureCard("fixture-attack-branch");
+  writeJsonFile(tempRoot, "cards/card.json", {
+    ...card,
+    engine: {
+      ...card.engine,
+      effects: [
+        {
+          effectId: "attack_damage",
+          timing: "onPlay",
+          amount: 1,
+          onDamageDealt: [
+            { effectId: "gain_chips", amount: "oops" },
+            { effectId: "gain_chips", amount: 2, target: "rawOnly" },
+          ],
+        },
+      ],
+    },
+  });
+  const emptyDeck = {
+    schemaVersion: 1,
+    deckId: "empty",
+    runtimeSchema: "krutagidon.deckComposition.v0",
+    role: "fixture",
+    mappingStatus: "fixture",
+    entries: [],
+  };
+  for (const file of [
+    "decks/starter.json",
+    "decks/main.json",
+    "decks/legend.json",
+    "stacks/wild.json",
+    "stacks/limp.json",
+  ]) {
+    writeJsonFile(tempRoot, file, emptyDeck);
+  }
+
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(result.errors.some((error) => error.includes("onDamageDealt")));
+    assert.ok(
+      result.errors.some((error) => error.includes("target is not supported"))
+    );
+  }
+});
+
+test("executable validation rejects malformed nested add-power branches", () => {
+  const tempRoot = mkdtempSync(
+    path.join(tmpdir(), "runtime-attack-branch-validation-")
+  );
+  writeJsonFile(tempRoot, "manifest.json", {
+    schemaVersion: 1,
+    packId: "fixture-attack-branch-validation",
+    runtimeSchema: "krutagidon.dataPack.v0",
+    mappingStatus: "fixture",
+    cardDefinitionPaths: ["cards"],
+    tokenDefinitionPaths: [],
+    decks: {
+      starterDeck: "decks/starter.json",
+      mainDeck: "decks/main.json",
+      legendDeck: "decks/legend.json",
+    },
+    cardStacks: {
+      wildMagicStack: "stacks/wild.json",
+      limpWandStack: "stacks/limp.json",
+    },
+  });
+  const card = createFixtureCard("fixture-attack-branch-validation");
+  writeJsonFile(tempRoot, "cards/card.json", {
+    ...card,
+    engine: {
+      ...card.engine,
+      effects: [
+        {
+          effectId: "attack_damage",
+          timing: "onPlay",
+          amount: 1,
+          targetSelector: "chosenFoe",
+          onDamageDealt: [{ effectId: "add_power", amount: "oops" }],
+        },
+      ],
+    },
+  });
+  const emptyDeck = {
+    schemaVersion: 1,
+    deckId: "empty",
+    runtimeSchema: "krutagidon.deckComposition.v0",
+    role: "fixture",
+    mappingStatus: "fixture",
+    entries: [],
+  };
+  for (const file of [
+    "decks/starter.json",
+    "decks/main.json",
+    "decks/legend.json",
+    "stacks/wild.json",
+    "stacks/limp.json",
+  ])
+    writeJsonFile(tempRoot, file, emptyDeck);
+
+  const decoded = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+  assert.equal(decoded.ok, false);
+  if (!decoded.ok)
+    assert.ok(
+      decoded.errors.some((error) =>
+        error.includes("unsupported attack outcome branch add_power")
+      )
+    );
+});
+
+test("runtime data decoder strips raw-only fields from nested Wild Magic options", () => {
+  const tempRoot = mkdtempSync(
+    path.join(tmpdir(), "runtime-wild-magic-raw-only-")
+  );
+  writeJsonFile(tempRoot, "manifest.json", {
+    schemaVersion: 1,
+    packId: "fixture-wild-magic-raw-only",
+    runtimeSchema: "krutagidon.dataPack.v0",
+    mappingStatus: "fixture",
+    cardDefinitionPaths: ["cards"],
+    tokenDefinitionPaths: [],
+    decks: {
+      starterDeck: "decks/starter.json",
+      mainDeck: "decks/main.json",
+      legendDeck: "decks/legend.json",
+    },
+    cardStacks: {
+      wildMagicStack: "stacks/wild.json",
+      limpWandStack: "stacks/limp.json",
+    },
+  });
+  writeJsonFile(tempRoot, "cards/esw2_dbg__wild_magic.json", {
+    ...createFixtureCard("esw2_dbg__wild_magic"),
+    engine: {
+      ...createFixtureCard("esw2_dbg__wild_magic").engine,
+      cardKind: "wildMagic",
+      effects: [
+        {
+          effectId: "wild_magic_choice",
+          timing: "onPlay",
+          options: [
+            { effectId: "add_power", amount: 2, rawOnly: "discard me" },
+          ],
+        },
+      ],
+    },
+  });
+  const emptyDeck = {
+    schemaVersion: 1,
+    deckId: "empty",
+    runtimeSchema: "krutagidon.deckComposition.v0",
+    role: "fixture",
+    mappingStatus: "fixture",
+    entries: [],
+  };
+  for (const file of [
+    "decks/starter.json",
+    "decks/main.json",
+    "decks/legend.json",
+    "stacks/wild.json",
+    "stacks/limp.json",
+  ]) {
+    writeJsonFile(tempRoot, file, emptyDeck);
+  }
+
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    const effect = result.value.cardDefinitions.get("esw2_dbg__wild_magic")
+      ?.engine.effects[0];
+    const option =
+      effect?.effectId === "wild_magic_choice"
+        ? effect.options?.[0]
+        : undefined;
+    assert.equal(option && "rawOnly" in option, false);
+  }
+});
+
+test("runtime data decoder strips raw-only fields from nested attack branches", () => {
+  const tempRoot = mkdtempSync(
+    path.join(tmpdir(), "runtime-attack-branch-raw-only-")
+  );
+  writeJsonFile(tempRoot, "manifest.json", {
+    schemaVersion: 1,
+    packId: "fixture-attack-branch-raw-only",
+    runtimeSchema: "krutagidon.dataPack.v0",
+    mappingStatus: "fixture",
+    cardDefinitionPaths: ["cards"],
+    tokenDefinitionPaths: [],
+    decks: {
+      starterDeck: "decks/starter.json",
+      mainDeck: "decks/main.json",
+      legendDeck: "decks/legend.json",
+    },
+    cardStacks: {
+      wildMagicStack: "stacks/wild.json",
+      limpWandStack: "stacks/limp.json",
+    },
+  });
+  const card = createFixtureCard("fixture-attack-branch-raw-only");
+  writeJsonFile(tempRoot, "cards/card.json", {
+    ...card,
+    engine: {
+      ...card.engine,
+      effects: [
+        {
+          effectId: "attack_damage",
+          timing: "onPlay",
+          amount: 1,
+          onDamageDealt: [
+            { effectId: "gain_chips", amount: 2, rawOnly: "discard me" },
+          ],
+        },
+      ],
+    },
+  });
+  const emptyDeck = {
+    schemaVersion: 1,
+    deckId: "empty",
+    runtimeSchema: "krutagidon.deckComposition.v0",
+    role: "fixture",
+    mappingStatus: "fixture",
+    entries: [],
+  };
+  for (const file of [
+    "decks/starter.json",
+    "decks/main.json",
+    "decks/legend.json",
+    "stacks/wild.json",
+    "stacks/limp.json",
+  ])
+    writeJsonFile(tempRoot, file, emptyDeck);
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    const effect = result.value.cardDefinitions.get(card.cardId)?.engine
+      .effects[0];
+    const branch = effect?.onDamageDealt?.[0];
+    assert.equal(branch && "rawOnly" in branch, false);
+  }
 });
 
 test("runtime effect conditions are exposed as a typed union", () => {
@@ -752,7 +1138,7 @@ test("executable data-pack validation rejects invalid add-power Wild Magic optio
               amount: "2",
             },
           ],
-        },
+        } as unknown as RuntimeEffect,
       ],
     },
   });
@@ -761,7 +1147,7 @@ test("executable data-pack validation rejects invalid add-power Wild Magic optio
 
   assert.equal(result.ok, false);
   assert.ok(
-    result.errors.some((error) => error.includes("invalid power amount"))
+    result.errors.some((error) => error.includes("invalid Wild Magic option"))
   );
 });
 
@@ -1045,7 +1431,7 @@ test("combat effects are registered and reject invalid shapes through runtime ha
         timing: "onPlay",
         amount: 0,
         target: {
-          selector: "unsupported",
+          selector: "unsupported" as never,
         },
       }),
       []
@@ -1143,8 +1529,8 @@ test("top-deck and Wild Magic effects are registered and reject invalid shapes t
       {
         effectId: "play_top_card_from_foe_deck",
         timing: "onPlay",
-        targetSelector: "unsupportedFoe",
-      }
+        targetSelector: "unsupportedFoe" as never,
+      } as unknown as RuntimeEffect
     ),
     []
   );
@@ -1158,7 +1544,7 @@ test("top-deck and Wild Magic effects are registered and reject invalid shapes t
           amount: "2",
         },
       ],
-    }),
+    } as unknown as RuntimeEffect),
     []
   );
 });
@@ -1678,7 +2064,10 @@ test("wizard property effective-value modifier is registered and rejects invalid
       },
     },
   ]) {
-    assert.deepEqual(handler.validateShape("Token", effect), []);
+    assert.deepEqual(
+      handler.validateShape("Token", effect as unknown as RuntimeEffect),
+      []
+    );
   }
 
   for (const effect of [
@@ -1736,7 +2125,10 @@ test("wizard property effective-value modifier is registered and rejects invalid
       },
     },
   ]) {
-    assert.notDeepEqual(handler.validateShape("Token", effect), []);
+    assert.notDeepEqual(
+      handler.validateShape("Token", effect as unknown as RuntimeEffect),
+      []
+    );
   }
 });
 
@@ -1779,6 +2171,74 @@ test("executable data-pack validation rejects invalid effective-value modifier s
         error.includes("unsupported effective-value operation multiply")
       );
     })
+  );
+});
+
+test("executable data-pack validation rejects malformed dead wizard token effects", () => {
+  const dataPack = withFixtureToken({
+    schemaVersion: 1,
+    tokenId: "dead-wizard-token-invalid-effective-value",
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "deadWizardToken",
+    victoryPoints: 0,
+    effects: [
+      {
+        effectId: "modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "cardCost",
+        operation: "add",
+        amount: "oops",
+        target: {
+          targetType: "card",
+          definitionId: "fixture-card",
+        },
+      } as unknown as RuntimeEffect,
+    ],
+  });
+
+  const result = validateExecutableDataPack(dataPack);
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => {
+      return (
+        error.includes("dead-wizard-token-invalid-effective-value") &&
+        error.includes("invalid effective-value amount")
+      );
+    })
+  );
+});
+
+test("executable data-pack validation rejects unsupported attack outcome ids", () => {
+  const card = createFixtureCard("fixture-unsupported-attack-outcome");
+  const dataPack = withOnlyFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      effects: [
+        {
+          effectId: "attack_damage",
+          timing: "onPlay",
+          amount: 1,
+          target: { selector: "opponentPlayer" },
+          onDamageDealt: [
+            {
+              effectId: "add_power",
+              amount: 2,
+            } as unknown as AttackOutcomeBranch,
+          ],
+        },
+      ],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack, { mode: "fixture" });
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes("uses unsupported attack outcome branch add_power")
+    )
   );
 });
 

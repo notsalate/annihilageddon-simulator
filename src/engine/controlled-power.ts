@@ -1,4 +1,5 @@
 import type { CardDefinition } from "./data.js";
+import type { RuntimeEffect } from "./runtime-effect.js";
 import type { GameState, PlayerState } from "./setup.js";
 
 interface PassiveStatusPowerEffect {
@@ -55,18 +56,13 @@ function calculateCardPassivePowerBonus(
 }
 
 function isPassiveStatusPowerEffect(
-  effect: unknown
+  effect: RuntimeEffect
 ): effect is PassiveStatusPowerEffect {
-  if (typeof effect !== "object" || effect === null) {
-    return false;
-  }
-
-  const record = effect as Record<string, unknown>;
   return (
-    record["effectId"] === "add_power_if_player_has_status" &&
-    record["timing"] === "whileControlled" &&
-    record["statusId"] === "dingler" &&
-    typeof record["amount"] === "number"
+    effect.effectId === "add_power_if_player_has_status" &&
+    effect.timing === "whileControlled" &&
+    effect.statusId === "dingler" &&
+    typeof effect.amount === "number"
   );
 }
 

@@ -1,5 +1,4 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
-import { isPlainRecord } from "../common.js";
 import type {
   CardInstance,
   GameState,
@@ -8,6 +7,11 @@ import type {
   TokenInstance,
   TrophyLikeInstance,
 } from "./setup.js";
+import {
+  isRuntimeEffectTarget,
+  type RuntimeEffect,
+  type RuntimeEffectTarget,
+} from "./runtime-effect.js";
 
 export type EffectiveValueKind =
   | "cardCost"
@@ -250,7 +254,9 @@ export function getOwnedScoringCards(
   }));
 }
 
-function getControlledObjectEffects(view: ControlledObjectView): unknown[] {
+function getControlledObjectEffects(
+  view: ControlledObjectView
+): RuntimeEffect[] {
   return [
     ...view.cards.flatMap((object) => object.definition.engine.effects),
     ...view.tokens.flatMap((object) => {
@@ -270,10 +276,10 @@ function getScoringCardEffects(
   scoringCards: readonly ControlledCardObject[],
   target: EffectiveValueTarget,
   scoredCard: CardInstance | undefined
-): unknown[] {
+): RuntimeEffect[] {
   return scoringCards.flatMap((object) => {
     return object.definition.engine.effects.filter((effect) => {
-      if (!isRecord(effect) || effect["timing"] !== "whileScoring") {
+      if (effect.timing !== "whileScoring") {
         return false;
       }
 
@@ -291,18 +297,21 @@ function getScoringCardEffects(
 }
 
 function isSelfScoringCardEffect(
-  effect: Record<string, unknown>,
+  effect: RuntimeEffect,
   sourceDefinitionId: string
 ): boolean {
-  const target = effect["target"];
+  const target = effect.target;
   return (
-    isRecord(target) &&
-    target["targetType"] === "card" &&
-    target["definitionId"] === sourceDefinitionId
+    target !== undefined &&
+    "targetType" in target &&
+    target.targetType === "card" &&
+    target.definitionId === sourceDefinitionId
   );
 }
 
-function getWizardPropertyEffects(definition: TokenDefinition): unknown[] {
+function getWizardPropertyEffects(
+  definition: TokenDefinition
+): RuntimeEffect[] {
   if (definition.kind !== "wizardProperty" || definition.engine === undefined) {
     return [];
   }
@@ -318,26 +327,21 @@ function getWizardPropertyEffects(definition: TokenDefinition): unknown[] {
 
 function isModifierEffect(
   state: GameState,
-  effect: unknown,
+  effect: RuntimeEffect,
   valueKind: EffectiveValueKind,
   target: EffectiveValueTarget
-): effect is Record<string, unknown> {
-  if (!isRecord(effect)) {
-    return false;
-  }
-
+): effect is RuntimeEffect {
   return (
-    (effect["effectId"] === "fixture_modify_effective_value" ||
-      effect["effectId"] === "modify_effective_value") &&
-    (effect["timing"] === "whileControlled" ||
-      effect["timing"] === "whileScoring") &&
-    effect["valueKind"] === valueKind &&
+    (effect.effectId === "fixture_modify_effective_value" ||
+      effect.effectId === "modify_effective_value") &&
+    (effect.timing === "whileControlled" || effect.timing === "whileScoring") &&
+    effect.valueKind === valueKind &&
     hasModifierAmount(effect) &&
-    matchesTarget(state, effect["target"], target)
+    matchesTarget(state, effect.target, target)
   );
 }
 
-function hasModifierAmount(effect: Record<string, unknown>): boolean {
+function hasModifierAmount(effect: RuntimeEffect): boolean {
   if (effect["operation"] === "invertNegative") {
     return true;
   }
@@ -351,7 +355,7 @@ function hasModifierAmount(effect: Record<string, unknown>): boolean {
 function resolveAdditiveModifierAmount(
   state: GameState,
   playerId: PlayerId,
-  effect: Record<string, unknown>
+  effect: RuntimeEffect
 ): number {
   const amount = effect["amount"];
   if (typeof amount === "number") {
@@ -390,28 +394,33 @@ function countOwnedScoringCards(
 
 function matchesTarget(
   state: GameState,
-  effectTarget: unknown,
+  effectTarget: RuntimeEffectTarget | undefined,
   target: EffectiveValueTarget
 ): boolean {
-  if (!isRecord(effectTarget)) {
+  if (effectTarget === undefined || !isRuntimeEffectTarget(effectTarget)) {
+    return false;
+  }
+
+  if (!("targetType" in effectTarget)) {
     return false;
   }
 
   if (target.targetType === "player") {
-    return effectTarget["targetType"] === target.targetType;
+    return effectTarget.targetType === target.targetType;
   }
 
-  if (effectTarget["targetType"] !== target.targetType) {
+  if (effectTarget.targetType !== target.targetType) {
     return false;
   }
 
-  if (effectTarget["definitionId"] === target.definitionId) {
+  if (effectTarget.definitionId === target.definitionId) {
     return true;
   }
 
   if (
     target.targetType === "token" &&
-    effectTarget["tokenKind"] === "deadWizardToken"
+    effectTarget.targetType === "token" &&
+    effectTarget.tokenKind === "deadWizardToken"
   ) {
     const definition = mustGetTokenDefinition(state, target.definitionId);
     return definition.kind === "deadWizardToken";
@@ -419,10 +428,11 @@ function matchesTarget(
 
   if (
     target.targetType === "card" &&
-    Array.isArray(effectTarget["cardTypes"])
+    effectTarget.targetType === "card" &&
+    Array.isArray(effectTarget.cardTypes)
   ) {
     const definition = mustGetCardDefinition(state, target.definitionId);
-    return effectTarget["cardTypes"].some((cardType) => {
+    return effectTarget.cardTypes.some((cardType) => {
       return (
         typeof cardType === "string" &&
         definition.engine.cardTypes.includes(cardType)
@@ -455,8 +465,4 @@ function mustGetTokenDefinition(
   }
 
   return definition;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return isPlainRecord(value);
 }

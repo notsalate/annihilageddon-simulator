@@ -15,6 +15,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Preserve deterministic behavior through seeded RNG.
 - Do not add filesystem, terminal, or UI concerns to engine modules except the existing data-loading boundary in `data.ts`.
 - Keep card behavior in explicit typed runtime effects and handlers.
+- Keep `StatusInstance.effects` and `TrophyLikeInstance.effects` as decoded `RuntimeEffect[]`; do not reintroduce raw records after the data boundary.
 - Model runtime effect choices as a discriminated union; record selected typed targets in the event log.
 - Keep the typed effect-handler catalog as the source of truth; derive lookup maps from it.
 - Give effect handlers concrete typed inputs after the validation boundary; keep raw record access at that boundary.

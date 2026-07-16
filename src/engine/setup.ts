@@ -24,7 +24,7 @@ import {
 import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
-import type { RuntimeEffectId } from "./runtime-effect.js";
+import type { RuntimeEffect, RuntimeEffectId } from "./runtime-effect.js";
 
 export type { PlayerId } from "../domain/types.js";
 export type CommonOwner = "common";
@@ -46,14 +46,14 @@ export interface StatusInstance {
   instanceId: string;
   statusId: string;
   ownerId: PlayerId;
-  effects: unknown[];
+  effects: RuntimeEffect[];
 }
 
 export interface TrophyLikeInstance {
   instanceId: string;
   trophyId: string;
   ownerId: PlayerId;
-  effects: unknown[];
+  effects: RuntimeEffect[];
 }
 
 export interface PlayerState {
@@ -637,27 +637,22 @@ function applyWizardPropertySetupEffects(
   }
 }
 
-function isSetupEffect(effect: unknown): effect is Record<string, unknown> {
-  if (typeof effect !== "object" || effect === null || Array.isArray(effect)) {
-    return false;
-  }
-
-  const record = effect as Record<string, unknown>;
-  return record["timing"] === "setup";
+function isSetupEffect(effect: RuntimeEffect): boolean {
+  return effect.timing === "setup";
 }
 
 function applyWizardPropertySetupEffect(
   player: PlayerState,
   dataPack: LoadedDataPack,
   factory: InstanceFactory,
-  effect: Record<string, unknown>
+  effect: RuntimeEffect
 ): void {
-  if (effect["effectId"] === "replace_starting_card") {
+  if (effect.effectId === "replace_starting_card") {
     replaceStartingCard(player, dataPack, factory, effect);
     return;
   }
 
-  if (effect["effectId"] === "start_with_basic_trophy") {
+  if (effect.effectId === "start_with_basic_trophy") {
     if (
       !player.trophyLikeObjects.some(
         (trophy) => trophy.trophyId === "basicTrophy"
@@ -673,8 +668,8 @@ function applyWizardPropertySetupEffect(
     return;
   }
 
-  if (effect["effectId"] === "set_starting_life_total") {
-    const lifeTotal = effect["lifeTotal"];
+  if (effect.effectId === "set_starting_life_total") {
+    const lifeTotal = effect.lifeTotal;
     if (
       typeof lifeTotal !== "number" ||
       !Number.isSafeInteger(lifeTotal) ||
@@ -692,10 +687,10 @@ function replaceStartingCard(
   player: PlayerState,
   dataPack: LoadedDataPack,
   factory: InstanceFactory,
-  effect: Record<string, unknown>
+  effect: Extract<RuntimeEffect, { effectId: "replace_starting_card" }>
 ): void {
-  const fromDefinitionId = effect["fromDefinitionId"];
-  const toDefinitionId = effect["toDefinitionId"];
+  const fromDefinitionId = effect.fromDefinitionId;
+  const toDefinitionId = effect.toDefinitionId;
   if (
     typeof fromDefinitionId !== "string" ||
     typeof toDefinitionId !== "string"

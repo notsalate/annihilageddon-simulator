@@ -36,6 +36,8 @@ export interface RuntimeEffectSelectorTarget {
   selector: TargetSelector;
 }
 
+export type RuntimeEffectTokenKind = "deadWizardToken" | "wizardProperty";
+
 export type RuntimeEffectTarget =
   | RuntimeEffectSelectorTarget
   | {
@@ -46,6 +48,7 @@ export type RuntimeEffectTarget =
   | {
       targetType: "token";
       definitionId?: string;
+      tokenKind?: RuntimeEffectTokenKind;
     }
   | {
       targetType: "player";
@@ -70,7 +73,12 @@ export function isRuntimeEffectTarget(
   }
 
   if (value["targetType"] === "token") {
-    return isOptionalString(value["definitionId"]);
+    return (
+      isOptionalString(value["definitionId"]) &&
+      (value["tokenKind"] === undefined ||
+        value["tokenKind"] === "deadWizardToken" ||
+        value["tokenKind"] === "wizardProperty")
+    );
   }
 
   return value["targetType"] === "player";
@@ -232,13 +240,68 @@ const knownRuntimeEffectIds = [
 
 type KnownRuntimeEffectId = (typeof knownRuntimeEffectIds)[number];
 
+/** Known payload fields shared by the runtime handlers.  Deliberately no
+ * index signature: typoed effect["..."] access must be rejected by TypeScript. */
+export interface RuntimeEffectFields {
+  condition?: RuntimeEffectCondition;
+  costs?: RuntimeEffectCost[];
+  allowDinglerStatusExchange?: unknown;
+  allowLifeExchange?: unknown;
+  amount?: unknown;
+  amountPerOwnedCard?: unknown;
+  amountPerPlayer?: unknown;
+  branchEffects?: RuntimeEffect[];
+  cardDefinitionIds?: unknown;
+  cardKind?: unknown;
+  cardTags?: unknown;
+  cardTypes?: unknown;
+  chipAmount?: unknown;
+  chipCost?: unknown;
+  chooser?: unknown;
+  costMode?: unknown;
+  countedCardTypes?: unknown;
+  destination?: unknown;
+  emptyChoice?: unknown;
+  excludeSource?: unknown;
+  fromDefinitionId?: unknown;
+  isOngoing?: unknown;
+  lifeCost?: unknown;
+  lifeTotal?: unknown;
+  onDamageDealt?: AttackOutcomeBranch[];
+  onKill?: AttackOutcomeBranch[];
+  operation?: unknown;
+  optional?: unknown;
+  options?: unknown;
+  source?: unknown;
+  status?: unknown;
+  statusId?: unknown;
+  target?: RuntimeEffectTarget;
+  targetSelector?: RuntimeEffectTargetSelector;
+  timing?: EffectTiming;
+  toDefinitionId?: unknown;
+  unlessStatusId?: unknown;
+  valueKind?: unknown;
+  voteTargetSelector?: unknown;
+  winnerDrawAmount?: unknown;
+}
+
+export type AttackOutcomeBranch =
+  | { effectId: "gain_chips"; amount: number }
+  | { effectId: "gain_chips_equal_damage_dealt" }
+  | { effectId: "heal_equal_damage_dealt" }
+  | { effectId: "return_discard_to_hand"; amount: number }
+  | { effectId: "gain_status"; statusId: "dingler"; target?: "damagedPlayer" };
+
 type RuntimeEffectPayloadVariant<EffectId extends KnownRuntimeEffectId> = {
   effectId: EffectId;
   condition?: RuntimeEffectCondition;
   costs?: RuntimeEffectCost[];
   target?: RuntimeEffectTarget;
   targetSelector?: RuntimeEffectTargetSelector;
-} & Record<string, unknown>;
+} & RuntimeEffectFields &
+  (EffectId extends "wild_magic_choice"
+    ? { options?: WildMagicOption[] }
+    : unknown);
 
 export type RuntimeEffectPayload = {
   [EffectId in KnownRuntimeEffectId]: RuntimeEffectPayloadVariant<EffectId>;
@@ -247,6 +310,35 @@ export type RuntimeEffectPayload = {
 export type RuntimeEffect = RuntimeEffectPayload & {
   timing: EffectTiming;
 };
+
+export type WildMagicOption =
+  | (Omit<RuntimeEffectFields, "options"> & {
+      effectId: "add_power";
+      amount: number;
+    })
+  | (Omit<RuntimeEffectFields, "options"> & {
+      effectId: "play_top_card_from_foe_deck";
+      targetSelector: "chosenFoe";
+    });
+
+export function isWildMagicOption(value: unknown): value is WildMagicOption {
+  if (!isRuntimeEffectTargetRecord(value)) {
+    return false;
+  }
+
+  if (value["effectId"] === "add_power") {
+    return (
+      typeof value["amount"] === "number" &&
+      Number.isSafeInteger(value["amount"]) &&
+      value["amount"] > 0
+    );
+  }
+
+  return (
+    value["effectId"] === "play_top_card_from_foe_deck" &&
+    value["targetSelector"] === "chosenFoe"
+  );
+}
 
 export type RuntimeEffectId = RuntimeEffectPayload["effectId"];
 

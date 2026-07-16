@@ -15,6 +15,7 @@ import {
   type CardInstance,
   type CardDefinition,
   type LoadedDataPack,
+  type RuntimeEffect,
   type StatusInstance,
   type TokenDefinition,
   type TrophyLikeInstance,
@@ -671,7 +672,7 @@ function createNonExecutableMaxLifeWizardProperty(
 function createCostModifierEffect(
   definitionId: string,
   amount: number
-): unknown {
+): RuntimeEffect {
   return {
     effectId: "fixture_modify_effective_value",
     timing: "whileControlled",
