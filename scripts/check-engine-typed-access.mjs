@@ -140,13 +140,25 @@ function collectTypeAliases(sourceFile) {
         type: node.type,
       });
       aliases.set(name, entries);
+      if (namespacePath.length > 0) {
+        const shortEntries = aliases.get(node.name.text) ?? [];
+        shortEntries.push({
+          declaration: node,
+          scope: node.parent,
+          type: node.type,
+        });
+        aliases.set(node.name.text, shortEntries);
+      }
     }
     if (
       ts.isModuleDeclaration(node) &&
       node.body &&
       ts.isIdentifier(node.name)
     ) {
-      visit(node.body, [...namespacePath, node.name.text], namespaceScope);
+      const nextScope = ts.isModuleBlock(node.parent)
+        ? namespaceScope
+        : node.parent;
+      visit(node.body, [...namespacePath, node.name.text], nextScope);
       return;
     }
     ts.forEachChild(node, (child) =>

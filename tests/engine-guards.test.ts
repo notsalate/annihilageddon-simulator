@@ -107,6 +107,40 @@ test("typed-access guard rejects qualified namespace aliases", () => {
   assert.equal(result.stderr.match(/fixture\.ts:\d+:/gu)?.length, 1);
 });
 
+test("typed-access guard resolves short aliases inside their namespace", () => {
+  const fixture = createFixture(`
+    namespace Raw {
+      type Loose = Record<string, unknown>;
+      const result: Loose = value;
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixture);
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr.match(/fixture\.ts:\d+:/gu)?.length, 1);
+});
+
+test("typed-access guard keeps qualified namespace aliases scoped by function", () => {
+  const fixture = createFixture(`
+    function raw(value: unknown) {
+      namespace Raw {
+        export type Loose = Record<string, unknown>;
+      }
+      const result: Raw.Loose = value;
+      return result;
+    }
+    function safe() {
+      namespace Raw {
+        export type Loose = Record<string, number>;
+      }
+      const result: Raw.Loose = {};
+      return result;
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixture);
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr.match(/fixture\.ts:\d+:/gu)?.length, 1);
+});
+
 test("typed-access guard rejects record annotations and predicates", () => {
   const fixture = createFixture(`
     const value: Record<string, unknown> = {};
