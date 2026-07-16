@@ -95,6 +95,18 @@ test("typed-access guard resolves same-named aliases in their own function scope
   assert.equal(result.stderr.match(/fixture\.ts:\d+:/gu)?.length, 1);
 });
 
+test("typed-access guard rejects qualified namespace aliases", () => {
+  const fixture = createFixture(`
+    namespace Raw {
+      export type Loose = Record<string, unknown>;
+    }
+    const result: Raw.Loose = value;
+  `);
+  const result = run("check-engine-typed-access.mjs", fixture);
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr.match(/fixture\.ts:\d+:/gu)?.length, 1);
+});
+
 test("typed-access guard rejects record annotations and predicates", () => {
   const fixture = createFixture(`
     const value: Record<string, unknown> = {};

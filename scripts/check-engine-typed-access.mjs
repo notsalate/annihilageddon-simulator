@@ -127,13 +127,31 @@ function findOwner(node) {
 
 function collectTypeAliases(sourceFile) {
   const aliases = new Map();
-  function visit(node) {
+  function visit(node, namespacePath = [], namespaceScope = sourceFile) {
     if (ts.isTypeAliasDeclaration(node)) {
-      const entries = aliases.get(node.name.text) ?? [];
-      entries.push({ declaration: node, type: node.type });
-      aliases.set(node.name.text, entries);
+      const name = [...namespacePath, node.name.text].join(".");
+      const entries = aliases.get(name) ?? [];
+      entries.push({
+        declaration: node,
+        scope:
+          namespacePath.length > 0 && ts.isModuleBlock(node.parent)
+            ? namespaceScope
+            : node.parent,
+        type: node.type,
+      });
+      aliases.set(name, entries);
     }
-    ts.forEachChild(node, visit);
+    if (
+      ts.isModuleDeclaration(node) &&
+      node.body &&
+      ts.isIdentifier(node.name)
+    ) {
+      visit(node.body, [...namespacePath, node.name.text], namespaceScope);
+      return;
+    }
+    ts.forEachChild(node, (child) =>
+      visit(child, namespacePath, namespaceScope)
+    );
   }
   visit(sourceFile);
   return aliases;
@@ -203,9 +221,7 @@ function resolveAlias(name, aliases, usageNode) {
   const candidates = aliases.get(name);
   if (candidates === undefined) return undefined;
   for (let current = usageNode; current; current = current.parent) {
-    const match = candidates.find(
-      (candidate) => candidate.declaration.parent === current
-    );
+    const match = candidates.find((candidate) => candidate.scope === current);
     if (match !== undefined) return match;
   }
   return undefined;
