@@ -64,7 +64,22 @@ test("typed-access guard rejects multiline, angle-bracket, and aliased assertion
   assert.equal(result.stderr.match(/fixture\.ts:\d+:15/gu)?.length, 3);
 });
 
-test("typed-access guard allows the raw data boundary", () => {
+test("typed-access guard rejects record annotations and predicates", () => {
+  const fixture = createFixture(`
+    const value: Record<string, unknown> = {};
+    function read(input: Record<string, unknown>): Record<string, unknown> {
+      return input;
+    }
+    function isLoose(input: unknown): input is Record<string, unknown> {
+      return true;
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixture);
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr.match(/fixture\.ts:\d+:/gu)?.length, 4);
+});
+
+test("typed-access guard rejects fixture-only raw access outside the production allowlist", () => {
   const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
   const sourceDir = path.join(fixtureRoot, "src", "engine");
   mkdirSync(sourceDir, { recursive: true });
@@ -74,7 +89,22 @@ test("typed-access guard allows the raw data boundary", () => {
     "utf8"
   );
   const result = run("check-engine-typed-access.mjs", fixtureRoot);
-  assert.equal(result.status, 0);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /untracked Record<string, unknown> access/);
+});
+
+test("typed-access guard does not allow new record access in a raw-boundary file", () => {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
+  const sourceDir = path.join(fixtureRoot, "src", "engine");
+  mkdirSync(sourceDir, { recursive: true });
+  writeFileSync(
+    path.join(sourceDir, "effect-runtime-registry.ts"),
+    "const value: Record<string, unknown> = {};\n",
+    "utf8"
+  );
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /untracked Record<string, unknown> access/);
 });
 
 function createFixture(source: string): string {

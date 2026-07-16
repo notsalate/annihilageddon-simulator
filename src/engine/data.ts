@@ -14,12 +14,15 @@ import {
   isRuntimeEffectTarget,
   isRuntimeEffectTargetSelector,
   isRuntimeEffectId,
+  isWildMagicOption,
   type RuntimeEffect,
+  type AttackOutcomeBranch,
   type RuntimeEffectFields,
   type RuntimeEffectPayload,
+  type WildMagicOption,
 } from "./runtime-effect.js";
 
-type RuntimeEffectSourceKind = "card" | "wizardProperty";
+type RuntimeEffectSourceKind = "card" | "wizardProperty" | "deadWizardToken";
 type RuntimeJsonDecoder<T> = (value: unknown) => DecodeResult<T>;
 
 const CANONICAL_STARTER_TEMPLATE = new Map([
@@ -426,6 +429,33 @@ export function validateExecutableDataPack(
   }
 
   for (const definition of dataPack.tokenDefinitions.values()) {
+    if (definition.kind === "deadWizardToken") {
+      for (const effect of definition.effects) {
+        if (!isEffectRecord(effect)) {
+          continue;
+        }
+
+        const effectId = effect["effectId"];
+        if (typeof effectId !== "string") {
+          errors.push(
+            `Token ${definition.tokenId} uses unsupported effect id ${String(effectId)}`
+          );
+          continue;
+        }
+
+        errors.push(
+          ...validateRuntimeEffectDefinition(
+            `Token ${definition.tokenId}`,
+            effectId,
+            effect,
+            mode,
+            "deadWizardToken"
+          )
+        );
+      }
+      continue;
+    }
+
     if (
       definition.kind !== "wizardProperty" ||
       definition.engine === undefined ||
@@ -1737,13 +1767,150 @@ function requireRuntimeEffectArrayField(
     };
     for (const field of runtimeEffectPayloadFields) {
       if (value[field] !== undefined) {
-        decodedEffect[field] = value[field];
+        if (field === "options" && value["effectId"] === "wild_magic_choice") {
+          if (!Array.isArray(value[field])) {
+            errors.push(`${label}[${index}].options must be an array`);
+            continue;
+          }
+          const options: WildMagicOption[] = [];
+          for (const option of value[field]) {
+            if (!isWildMagicOption(option)) {
+              errors.push(
+                `${label}[${index}].options contains malformed Wild Magic option`
+              );
+              continue;
+            }
+            options.push(
+              option.effectId === "add_power"
+                ? { effectId: "add_power", amount: option.amount }
+                : {
+                    effectId: "play_top_card_from_foe_deck",
+                    targetSelector: "chosenFoe",
+                  }
+            );
+          }
+          decodedEffect[field] = options;
+        } else if (
+          field === "branchEffects" ||
+          field === "onDamageDealt" ||
+          field === "onKill"
+        ) {
+          const branches =
+            field === "branchEffects"
+              ? requireRuntimeEffectArrayField(
+                  { branchEffects: value[field] },
+                  `${label}[${index}].${field}`,
+                  errors,
+                  "branchEffects"
+                )
+              : decodeRuntimeEffectBranchArray(
+                  value[field],
+                  `${label}[${index}].${field}`,
+                  errors
+                );
+          if (branches !== undefined) {
+            decodedEffect[field] = branches;
+          }
+        } else {
+          decodedEffect[field] = value[field];
+        }
       }
     }
     effects.push(decodedEffect as unknown as RuntimeEffect);
   }
 
   return effects;
+}
+
+function decodeRuntimeEffectBranchArray(
+  value: unknown,
+  label: string,
+  errors: string[]
+): AttackOutcomeBranch[] | undefined {
+  if (!Array.isArray(value)) {
+    errors.push(`${label} must be an array`);
+    return undefined;
+  }
+
+  const branches: AttackOutcomeBranch[] = [];
+  for (const [index, branch] of value.entries()) {
+    const decoded = decodeAttackOutcomeBranch(
+      branch,
+      `${label}[${index}]`,
+      errors
+    );
+    if (decoded !== undefined) {
+      branches.push(decoded);
+    }
+  }
+
+  return branches;
+}
+
+function decodeAttackOutcomeBranch(
+  value: unknown,
+  label: string,
+  errors: string[]
+): AttackOutcomeBranch | undefined {
+  if (!isPlainRecord(value)) {
+    errors.push(`${label} must be an object`);
+    return undefined;
+  }
+
+  const effectId = value["effectId"];
+  if (!isAttackOutcomeEffectId(effectId)) {
+    errors.push(
+      `${label} uses unsupported attack outcome branch ${String(effectId)}`
+    );
+    return undefined;
+  }
+
+  if (effectId !== "gain_status" && value["target"] !== undefined) {
+    errors.push(`${label}.target is not supported for ${effectId}`);
+    return undefined;
+  }
+
+  if (effectId === "gain_chips" || effectId === "return_discard_to_hand") {
+    const amount = value["amount"];
+    if (
+      typeof amount !== "number" ||
+      !Number.isSafeInteger(amount) ||
+      amount <= 0
+    ) {
+      errors.push(`${label}.amount must be a positive integer`);
+      return undefined;
+    }
+    return { effectId, amount };
+  }
+
+  if (effectId === "gain_status") {
+    if (value["statusId"] !== "dingler") {
+      errors.push(`${label}.statusId must be dingler`);
+      return undefined;
+    }
+    const target = value["target"];
+    if (target !== undefined && target !== "damagedPlayer") {
+      errors.push(`${label}.target must be damagedPlayer`);
+      return undefined;
+    }
+    return target === "damagedPlayer"
+      ? { effectId, statusId: "dingler", target }
+      : { effectId, statusId: "dingler" };
+  }
+
+  return { effectId };
+}
+
+function isAttackOutcomeEffectId(
+  value: unknown
+): value is AttackOutcomeBranch["effectId"] {
+  return (
+    value === "gain_chips" ||
+    value === "gain_chips_equal_damage_dealt" ||
+    value === "heal_equal_damage_dealt" ||
+    value === "return_discard_to_hand" ||
+    value === "gain_status"
+  );
 }
 
 const runtimeEffectPayloadFields = [
@@ -2082,10 +2249,65 @@ function validateRuntimeEffectDefinition(
       return [`${subjectId} ${effectId} uses unsupported target selector`];
     }
 
-    return [];
+    return validateNestedAttackBranches(subjectId, effect, mode, sourceKind);
   }
 
   return [`${subjectId} uses unsupported effect id ${effectId}`];
+}
+
+function validateNestedAttackBranches(
+  subjectId: string,
+  effect: Record<string, unknown>,
+  mode: EffectRuntimeMode,
+  sourceKind: RuntimeEffectSourceKind
+): string[] {
+  const errors: string[] = [];
+  for (const field of ["branchEffects", "onDamageDealt", "onKill"] as const) {
+    const branches = effect[field];
+    if (branches === undefined) {
+      continue;
+    }
+    if (!Array.isArray(branches)) {
+      errors.push(`${subjectId} ${field} must be an array`);
+      continue;
+    }
+    for (const [index, branch] of branches.entries()) {
+      if (!isEffectRecord(branch)) {
+        errors.push(`${subjectId} ${field}[${index}] must be an object`);
+        continue;
+      }
+      const nestedId = branch["effectId"];
+      const nestedSubjectId = `${subjectId} ${field}[${index}]`;
+      if (field === "branchEffects") {
+        if (typeof nestedId !== "string") {
+          errors.push(
+            `${nestedSubjectId} uses unsupported effect id ${String(nestedId)}`
+          );
+          continue;
+        }
+        errors.push(
+          ...validateRuntimeEffectDefinition(
+            nestedSubjectId,
+            nestedId,
+            branch,
+            mode,
+            sourceKind
+          )
+        );
+        continue;
+      }
+
+      const outcome = decodeAttackOutcomeBranch(
+        branch,
+        nestedSubjectId,
+        errors
+      );
+      if (outcome === undefined) {
+        continue;
+      }
+    }
+  }
+  return errors;
 }
 
 function isEffectRecord(effect: unknown): effect is Record<string, unknown> {

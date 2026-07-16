@@ -36,12 +36,14 @@ export type {
 export type {
   EffectTiming,
   RuntimeEffect,
+  AttackOutcomeBranch,
   RuntimeEffectCondition,
   RuntimeEffectCost,
   RuntimeEffectId,
   RuntimeEffectSelectorTarget,
   RuntimeEffectTarget,
   RuntimeEffectTargetSelector,
+  WildMagicOption,
   TargetSelector,
 } from "./engine/runtime-effect.js";
 export {

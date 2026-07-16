@@ -36,6 +36,8 @@ export interface RuntimeEffectSelectorTarget {
   selector: TargetSelector;
 }
 
+export type RuntimeEffectTokenKind = "deadWizardToken" | "wizardProperty";
+
 export type RuntimeEffectTarget =
   | RuntimeEffectSelectorTarget
   | {
@@ -46,6 +48,7 @@ export type RuntimeEffectTarget =
   | {
       targetType: "token";
       definitionId?: string;
+      tokenKind?: RuntimeEffectTokenKind;
     }
   | {
       targetType: "player";
@@ -70,7 +73,12 @@ export function isRuntimeEffectTarget(
   }
 
   if (value["targetType"] === "token") {
-    return isOptionalString(value["definitionId"]);
+    return (
+      isOptionalString(value["definitionId"]) &&
+      (value["tokenKind"] === undefined ||
+        value["tokenKind"] === "deadWizardToken" ||
+        value["tokenKind"] === "wizardProperty")
+    );
   }
 
   return value["targetType"] === "player";
@@ -242,7 +250,7 @@ export interface RuntimeEffectFields {
   amount?: unknown;
   amountPerOwnedCard?: unknown;
   amountPerPlayer?: unknown;
-  branchEffects?: unknown;
+  branchEffects?: RuntimeEffect[];
   cardDefinitionIds?: unknown;
   cardKind?: unknown;
   cardTags?: unknown;
@@ -259,8 +267,8 @@ export interface RuntimeEffectFields {
   isOngoing?: unknown;
   lifeCost?: unknown;
   lifeTotal?: unknown;
-  onDamageDealt?: unknown;
-  onKill?: unknown;
+  onDamageDealt?: AttackOutcomeBranch[];
+  onKill?: AttackOutcomeBranch[];
   operation?: unknown;
   optional?: unknown;
   options?: unknown;
@@ -277,13 +285,23 @@ export interface RuntimeEffectFields {
   winnerDrawAmount?: unknown;
 }
 
+export type AttackOutcomeBranch =
+  | { effectId: "gain_chips"; amount: number }
+  | { effectId: "gain_chips_equal_damage_dealt" }
+  | { effectId: "heal_equal_damage_dealt" }
+  | { effectId: "return_discard_to_hand"; amount: number }
+  | { effectId: "gain_status"; statusId: "dingler"; target?: "damagedPlayer" };
+
 type RuntimeEffectPayloadVariant<EffectId extends KnownRuntimeEffectId> = {
   effectId: EffectId;
   condition?: RuntimeEffectCondition;
   costs?: RuntimeEffectCost[];
   target?: RuntimeEffectTarget;
   targetSelector?: RuntimeEffectTargetSelector;
-} & RuntimeEffectFields;
+} & RuntimeEffectFields &
+  (EffectId extends "wild_magic_choice"
+    ? { options?: WildMagicOption[] }
+    : unknown);
 
 export type RuntimeEffectPayload = {
   [EffectId in KnownRuntimeEffectId]: RuntimeEffectPayloadVariant<EffectId>;
@@ -292,6 +310,35 @@ export type RuntimeEffectPayload = {
 export type RuntimeEffect = RuntimeEffectPayload & {
   timing: EffectTiming;
 };
+
+export type WildMagicOption =
+  | (Omit<RuntimeEffectFields, "options"> & {
+      effectId: "add_power";
+      amount: number;
+    })
+  | (Omit<RuntimeEffectFields, "options"> & {
+      effectId: "play_top_card_from_foe_deck";
+      targetSelector: "chosenFoe";
+    });
+
+export function isWildMagicOption(value: unknown): value is WildMagicOption {
+  if (!isRuntimeEffectTargetRecord(value)) {
+    return false;
+  }
+
+  if (value["effectId"] === "add_power") {
+    return (
+      typeof value["amount"] === "number" &&
+      Number.isSafeInteger(value["amount"]) &&
+      value["amount"] > 0
+    );
+  }
+
+  return (
+    value["effectId"] === "play_top_card_from_foe_deck" &&
+    value["targetSelector"] === "chosenFoe"
+  );
+}
 
 export type RuntimeEffectId = RuntimeEffectPayload["effectId"];
 

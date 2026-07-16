@@ -8,9 +8,13 @@ import { isPlainRecord } from "../common.js";
 import {
   isRuntimeEffectSelectorTarget,
   isRuntimeEffectId,
+  isWildMagicOption,
+  type AttackOutcomeBranch,
   type RuntimeEffectId,
+  type RuntimeEffectCost,
   type RuntimeEffectPayload,
   type RuntimeEffectTargetSelector,
+  type WildMagicOption,
 } from "./runtime-effect.js";
 import type {
   CardInstance,
@@ -222,8 +226,8 @@ export interface EffectRuntimeServices {
   isLegalWildMagicOption(
     state: GameState,
     player: PlayerState,
-    option: unknown
-  ): option is RuntimeEffectPayload;
+    option: WildMagicOption
+  ): boolean;
   executeEffect(
     state: GameState,
     player: PlayerState,
@@ -3323,19 +3327,19 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
 const wildMagicChoiceHandler: EffectRuntimeHandler = {
   effectId: "wild_magic_choice",
   validateShape(subjectId, effect) {
-    const options = effect["options"];
+    const options = effect.options;
     if (!Array.isArray(options)) {
       return [`${subjectId} uses wild_magic_choice without options`];
     }
 
     const errors: string[] = [];
     for (const option of options) {
-      if (!isEffectRecord(option)) {
+      if (!isWildMagicOption(option)) {
         errors.push(`${subjectId} uses invalid Wild Magic option`);
         continue;
       }
 
-      const optionEffectId = option["effectId"];
+      const optionEffectId = option.effectId;
       if (!isRuntimeEffectId(optionEffectId)) {
         errors.push(
           `${subjectId} uses unsupported Wild Magic option ${String(optionEffectId)}`
@@ -3351,18 +3355,13 @@ const wildMagicChoiceHandler: EffectRuntimeHandler = {
         continue;
       }
 
-      errors.push(
-        ...catalogEntry.handler.validateShape(
-          subjectId,
-          option as unknown as RuntimeEffectPayload
-        )
-      );
+      errors.push(...catalogEntry.handler.validateShape(subjectId, option));
     }
 
     return errors;
   },
   execute(state, player, effect, source, services) {
-    const options = effect["options"];
+    const options = effect.options;
     if (!Array.isArray(options)) {
       return {
         ok: false,
@@ -3372,7 +3371,7 @@ const wildMagicChoiceHandler: EffectRuntimeHandler = {
 
     for (const option of options) {
       if (
-        !isEffectRecord(option) ||
+        !isWildMagicOption(option) ||
         !services.isLegalWildMagicOption(state, player, option)
       ) {
         continue;
@@ -3383,7 +3382,7 @@ const wildMagicChoiceHandler: EffectRuntimeHandler = {
         playerId: player.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
-        effectId: services.asString(option["effectId"]),
+        effectId: option.effectId,
         sourceType: source.sourceType,
       });
       return services.executeEffect(state, player, option, source);
@@ -3545,7 +3544,7 @@ function validateEffectiveValueModifierTarget(
     if (
       target["targetType"] === "token" &&
       (isNonEmptyString(target["definitionId"]) ||
-        ("tokenKind" in target && target.tokenKind === "deadWizardToken"))
+        ("tokenKind" in target && target["tokenKind"] === "deadWizardToken"))
     ) {
       return [];
     }
@@ -3852,7 +3851,7 @@ function payOptionalCosts(
   }
 
   if (effect["optional"] === true) {
-    const canPay = costs.every((cost) => {
+    const canPay = costs.every((cost: RuntimeEffectCost) => {
       return cost.costId === "spend_chips" && player.chips >= cost.amount;
     });
     const choices: EffectChoice[] = canPay
@@ -3929,13 +3928,9 @@ function executeAttackBranches(
     return { ok: true };
   }
 
-  const onDamageDealt = effect["onDamageDealt"];
-  if (Array.isArray(onDamageDealt)) {
+  const onDamageDealt = effect.onDamageDealt;
+  if (onDamageDealt !== undefined) {
     for (const branch of onDamageDealt) {
-      if (!isEffectRecord(branch)) {
-        return { ok: false, error: "Invalid attack damage branch" };
-      }
-
       const result = executeAttackBranch(
         state,
         player,
@@ -3951,13 +3946,9 @@ function executeAttackBranches(
     }
   }
 
-  const onKill = effect["onKill"];
-  if (attackResult.killed && Array.isArray(onKill)) {
+  const onKill = effect.onKill;
+  if (attackResult.killed && onKill !== undefined) {
     for (const branch of onKill) {
-      if (!isEffectRecord(branch)) {
-        return { ok: false, error: "Invalid attack kill branch" };
-      }
-
       const result = executeAttackBranch(
         state,
         player,
@@ -4035,21 +4026,14 @@ function collectMayhemAttackDefenseDecisions(
 function executeAttackBranch(
   state: GameState,
   player: PlayerState,
-  branch: Record<string, unknown>,
+  branch: AttackOutcomeBranch,
   source: EffectSourceContext,
   targetPlayer: PlayerState,
   attackResult: DamageResult,
   services: EffectRuntimeServices
 ): EffectExecutionResult {
-  if (branch["effectId"] === "gain_chips") {
-    const amount = branch["amount"];
-    if (
-      typeof amount !== "number" ||
-      !Number.isSafeInteger(amount) ||
-      amount <= 0
-    ) {
-      return { ok: false, error: `Invalid chip gain ${String(amount)}` };
-    }
+  if (branch.effectId === "gain_chips") {
+    const amount = branch.amount;
 
     const chipsBefore = player.chips;
     player.chips += amount;
@@ -4066,7 +4050,7 @@ function executeAttackBranch(
     return { ok: true };
   }
 
-  if (branch["effectId"] === "gain_chips_equal_damage_dealt") {
+  if (branch.effectId === "gain_chips_equal_damage_dealt") {
     let remaining = attackResult.damageDealt;
     const stolen = Math.min(targetPlayer.chips, remaining);
     if (stolen > 0) {
@@ -4092,7 +4076,7 @@ function executeAttackBranch(
     return { ok: true };
   }
 
-  if (branch["effectId"] === "heal_equal_damage_dealt") {
+  if (branch.effectId === "heal_equal_damage_dealt") {
     services.healPlayer(
       state,
       player,
@@ -4104,15 +4088,8 @@ function executeAttackBranch(
     return { ok: true };
   }
 
-  if (branch["effectId"] === "return_discard_to_hand") {
-    const amount = branch["amount"];
-    if (
-      typeof amount !== "number" ||
-      !Number.isSafeInteger(amount) ||
-      amount <= 0
-    ) {
-      return { ok: false, error: `Invalid return amount ${String(amount)}` };
-    }
+  if (branch.effectId === "return_discard_to_hand") {
+    const amount = branch.amount;
 
     const returnChoice = services.chooseEffectChoice(
       state,
@@ -4142,17 +4119,14 @@ function executeAttackBranch(
     return { ok: true };
   }
 
-  if (
-    branch["effectId"] === "gain_status" &&
-    branch["statusId"] === "dingler"
-  ) {
+  if (branch.effectId === "gain_status" && branch.statusId === "dingler") {
     services.gainDinglerStatus(state, targetPlayer, "gain_status", source);
     return { ok: true };
   }
 
   return {
     ok: false,
-    error: `Unsupported attack branch ${services.asString(branch["effectId"])}`,
+    error: `Unsupported attack branch ${services.asString(branch.effectId)}`,
   };
 }
 

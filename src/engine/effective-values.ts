@@ -1,5 +1,4 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
-import { isPlainRecord } from "../common.js";
 import type {
   CardInstance,
   GameState,
@@ -8,7 +7,11 @@ import type {
   TokenInstance,
   TrophyLikeInstance,
 } from "./setup.js";
-import type { RuntimeEffect } from "./runtime-effect.js";
+import {
+  isRuntimeEffectTarget,
+  type RuntimeEffect,
+  type RuntimeEffectTarget,
+} from "./runtime-effect.js";
 
 export type EffectiveValueKind =
   | "cardCost"
@@ -391,28 +394,33 @@ function countOwnedScoringCards(
 
 function matchesTarget(
   state: GameState,
-  effectTarget: unknown,
+  effectTarget: RuntimeEffectTarget | undefined,
   target: EffectiveValueTarget
 ): boolean {
-  if (!isRecord(effectTarget)) {
+  if (effectTarget === undefined || !isRuntimeEffectTarget(effectTarget)) {
+    return false;
+  }
+
+  if (!("targetType" in effectTarget)) {
     return false;
   }
 
   if (target.targetType === "player") {
-    return effectTarget["targetType"] === target.targetType;
+    return effectTarget.targetType === target.targetType;
   }
 
-  if (effectTarget["targetType"] !== target.targetType) {
+  if (effectTarget.targetType !== target.targetType) {
     return false;
   }
 
-  if (effectTarget["definitionId"] === target.definitionId) {
+  if (effectTarget.definitionId === target.definitionId) {
     return true;
   }
 
   if (
     target.targetType === "token" &&
-    effectTarget["tokenKind"] === "deadWizardToken"
+    effectTarget.targetType === "token" &&
+    effectTarget.tokenKind === "deadWizardToken"
   ) {
     const definition = mustGetTokenDefinition(state, target.definitionId);
     return definition.kind === "deadWizardToken";
@@ -420,10 +428,11 @@ function matchesTarget(
 
   if (
     target.targetType === "card" &&
-    Array.isArray(effectTarget["cardTypes"])
+    effectTarget.targetType === "card" &&
+    Array.isArray(effectTarget.cardTypes)
   ) {
     const definition = mustGetCardDefinition(state, target.definitionId);
-    return effectTarget["cardTypes"].some((cardType) => {
+    return effectTarget.cardTypes.some((cardType) => {
       return (
         typeof cardType === "string" &&
         definition.engine.cardTypes.includes(cardType)
@@ -456,8 +465,4 @@ function mustGetTokenDefinition(
   }
 
   return definition;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return isPlainRecord(value);
 }

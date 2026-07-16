@@ -7,7 +7,7 @@ import {
   hasExecutableWizardPropertyActivation,
   moveGainedCardToPlayerDestination,
 } from "./effect-runtime.js";
-import { assertNever, isPlainRecord } from "../common.js";
+import { assertNever } from "../common.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import { calculateEffectiveCardCost } from "./effective-values.js";
 import { recordCardMoved } from "./event-recorder.js";
@@ -554,7 +554,7 @@ function canActivatePermanent(
 
   const definition = mustGetDefinition(state, card.definitionId);
   return definition.engine.effects.some((effect) => {
-    return isEffectRecord(effect) && effect["timing"] === "activation";
+    return effect.timing === "activation";
   });
 }
 
@@ -746,8 +746,4 @@ function mustGetDefinition(state: GameState, definitionId: string) {
   }
 
   return definition;
-}
-
-function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
-  return isPlainRecord(effect);
 }

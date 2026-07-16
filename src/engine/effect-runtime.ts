@@ -1,5 +1,4 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
-import { isPlainRecord } from "../common.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
 import { recordCardMoved, recordMarketChipsGained } from "./event-recorder.js";
@@ -19,6 +18,7 @@ import {
   type RuntimeEffect,
   type RuntimeEffectId,
   type RuntimeEffectPayload,
+  type WildMagicOption,
 } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 export function executeOnPlayEffects(
@@ -172,8 +172,7 @@ export function moveGainedCardToPlayerDestination(
 
     for (const effect of tokenDefinition.engine.effects) {
       if (
-        !isEffectRecord(effect) ||
-        effect["timing"] !== "onGainCard" ||
+        effect.timing !== "onGainCard" ||
         !cardTriggerMatches(effect, definition)
       ) {
         continue;
@@ -245,10 +244,7 @@ export function calculateEndTurnDrawCount(
     }
 
     for (const effect of definition.engine.effects) {
-      if (
-        !isEffectRecord(effect) ||
-        effect["effectId"] !== "temporary_hand_limit_by_gained_card_type"
-      ) {
+      if (effect.effectId !== "temporary_hand_limit_by_gained_card_type") {
         continue;
       }
 
@@ -273,10 +269,7 @@ export function calculateEndTurnDrawCount(
     }
 
     for (const effect of definition.engine.effects) {
-      if (
-        !isEffectRecord(effect) ||
-        effect["effectId"] !== "increase_hand_limit_at_max_life"
-      ) {
+      if (effect.effectId !== "increase_hand_limit_at_max_life") {
         continue;
       }
 
@@ -353,14 +346,10 @@ function executeEffects(
 }
 
 function cardTriggerMatches(
-  effect: unknown,
+  effect: RuntimeEffectPayload,
   definition: CardDefinition
 ): boolean {
-  if (!isEffectRecord(effect)) {
-    return false;
-  }
-
-  const cardTypes = effect["cardTypes"];
+  const cardTypes = effect.cardTypes;
   const matchesType =
     Array.isArray(cardTypes) &&
     cardTypes.some(
@@ -369,7 +358,7 @@ function cardTriggerMatches(
         definition.engine.cardTypes.includes(cardType)
     );
   const matchesOngoing =
-    effect["isOngoing"] === true && definition.engine.isOngoing;
+    effect.isOngoing === true && definition.engine.isOngoing;
   return matchesType || matchesOngoing;
 }
 
@@ -450,7 +439,7 @@ function effectConditionMatches(
       const definition = state.cardDefinitions.get(card.definitionId);
       return (
         definition !== undefined &&
-        condition.cardTypes.some((cardType) =>
+        condition.cardTypes.some((cardType: string) =>
           definition.engine.cardTypes.includes(cardType)
         )
       );
@@ -494,8 +483,7 @@ function getWizardPropertyAttackProfile(
 
     for (const effect of definition.engine.effects) {
       if (
-        !isEffectRecord(effect) ||
-        effect["timing"] !== "attackReplacement" ||
+        effect.timing !== "attackReplacement" ||
         !effectMatchesCardDefinition(state, effect, source.definitionId)
       ) {
         continue;
@@ -722,19 +710,13 @@ function getOpponentsInSeatingOrder(
 function isLegalWildMagicOption(
   state: GameState,
   player: PlayerState,
-  option: unknown
-): option is RuntimeEffectPayload {
-  if (!isPlainRecord(option)) {
-    return false;
-  }
-  if (option["effectId"] === "add_power") {
-    const amount = option["amount"];
-    return (
-      typeof amount === "number" && Number.isSafeInteger(amount) && amount > 0
-    );
+  option: WildMagicOption
+): boolean {
+  if (option.effectId === "add_power") {
+    return true;
   }
 
-  if (option["effectId"] === "play_top_card_from_foe_deck") {
+  if (option.effectId === "play_top_card_from_foe_deck") {
     return getOpponentsInSeatingOrder(state, player).some(
       (foe) => foe.deck.length > 0 || foe.discard.length > 0
     );
@@ -954,11 +936,8 @@ function buildLegalTargetChoices(
 ): { ok: true; choices: TargetChoice[] } | { ok: false; error: string } {
   const target = effect.target;
   if (!isRuntimeEffectSelectorTarget(target)) {
-    const rawTarget: unknown = target;
-    const selector = isEffectRecord(rawTarget)
-      ? rawTarget["selector"]
-      : effect["targetSelector"];
-    const targetSelector = effect["targetSelector"];
+    const selector = effect.targetSelector;
+    const targetSelector = effect.targetSelector;
     if (targetSelector === "chosenFoe") {
       return {
         ok: true,
@@ -1151,9 +1130,8 @@ function getResurrectionLifeTotal(
 
     for (const effect of definition.engine.effects) {
       if (
-        !isEffectRecord(effect) ||
-        effect["effectId"] !== "set_resurrection_life_total" ||
-        effect["timing"] !== "replacement"
+        effect.effectId !== "set_resurrection_life_total" ||
+        effect.timing !== "replacement"
       ) {
         continue;
       }
@@ -1320,9 +1298,8 @@ function applyDamageDealtTriggers(
 
     for (const effect of definition.engine.effects) {
       if (
-        !isEffectRecord(effect) ||
-        effect["effectId"] !== "heal_equal_damage_dealt_on_own_turn" ||
-        effect["timing"] !== "afterDamageDealt"
+        effect.effectId !== "heal_equal_damage_dealt_on_own_turn" ||
+        effect.timing !== "afterDamageDealt"
       ) {
         continue;
       }
@@ -1364,8 +1341,8 @@ function resolveDefenseWindow(
     return false;
   }
 
-  const branchEffects = defense.effect["branchEffects"];
-  if (Array.isArray(branchEffects)) {
+  const branchEffects = defense.effect.branchEffects;
+  if (branchEffects !== undefined) {
     const branchResult = executeEffects(
       state,
       defendingPlayer,
@@ -2047,10 +2024,6 @@ function shuffleInPlace<T>(items: T[], state: GameState): void {
     items[index] = swapItem;
     items[swapIndex] = item;
   }
-}
-
-function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
-  return isPlainRecord(effect);
 }
 
 function getCardEffectRuntimeMode(definitionId: string): "combat" | "fixture" {

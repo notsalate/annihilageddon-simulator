@@ -2710,8 +2710,6 @@ test("wild magic can choose to play the top card of a foe deck when that option 
           {
             targetSelector: "chosenFoe",
             effectId: "play_top_card_from_foe_deck",
-            nonOngoingCleanupDestination: "ownerDiscard",
-            ongoingOwnership: "controller",
           },
           {
             effectId: "add_power",
@@ -2807,8 +2805,6 @@ test("wild magic foe-deck play triggers wizard property on-play effects for non-
           {
             targetSelector: "chosenFoe",
             effectId: "play_top_card_from_foe_deck",
-            nonOngoingCleanupDestination: "ownerDiscard",
-            ongoingOwnership: "controller",
           },
         ],
       },
@@ -2887,8 +2883,6 @@ test("wild magic foe-deck play takes ownership of ongoing cards and keeps them c
           {
             targetSelector: "chosenFoe",
             effectId: "play_top_card_from_foe_deck",
-            nonOngoingCleanupDestination: "ownerDiscard",
-            ongoingOwnership: "controller",
           },
         ],
       },
@@ -7137,8 +7131,9 @@ test("targeted fixture effect surfaces unsupported selectors explicitly", () => 
     effectId: "fixture_add_power_equal_to_target_cost",
     timing: "onPlay",
     target: {
-      selector: "unsupportedFixtureSelector",
+      targetType: "player",
     },
+    targetSelector: "unsupportedFixtureSelector",
   });
 
   const result = applyAction(state, {
@@ -7910,7 +7905,7 @@ function addFixtureDefenseCardToHand(
   destination: "discardSelf" | "topdeckSelf",
   options: {
     costs?: Exclude<RuntimeEffect["costs"], undefined>;
-    branchEffects?: unknown[];
+    branchEffects?: RuntimeEffect[];
   } = {}
 ): CardInstance {
   const definition: CardDefinition = {
@@ -7941,7 +7936,9 @@ function addFixtureDefenseCardToHand(
           timing: "onDefense",
           destination,
           ...(options.costs === undefined ? {} : { costs: options.costs }),
-          branchEffects: options.branchEffects,
+          ...(options.branchEffects === undefined
+            ? {}
+            : { branchEffects: options.branchEffects }),
         },
       ],
       unsupportedMechanics: [],
