@@ -5,12 +5,44 @@ import {
   enumerateTurnLines,
   enumerateImmediateActionBranches,
   initializeGame,
+  rankTurnLines,
   type CardDefinition,
+  type GameState,
   type RuntimeEffect,
 } from "../src/index.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 
 const rootDir = process.cwd();
+
+function rankingFixture(): { state: GameState; lines: ReturnType<typeof enumerateTurnLines> } {
+  const state = initializeGame({ rootDir, seed: 127 });
+  state.common.market = [];
+  state.common.legendMarket = [];
+  state.common.wildMagicStack = [];
+  state.common.mainDeck = [];
+  state.common.legendDeck = [];
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  activePlayer.hand = [];
+  activePlayer.permanents = [];
+  activePlayer.wizardProperties = [];
+  activePlayer.statuses = [];
+  activePlayer.trophyLikeObjects = [];
+  activePlayer.unboughtFamiliar = undefined;
+  activePlayer.deck = [];
+  activePlayer.discard = [];
+  addFixtureDefinitionToActiveHand(state, fixtureDefinition("fixture-analysis-simple"));
+  addFixtureDefinitionToActiveHand(state, fixtureDefinition("fixture-analysis-simple-2"));
+  return {
+    state,
+    lines: enumerateTurnLines(state, {
+      maxChoiceDepth: 32,
+      maxBranchesPerAction: 32,
+      maxActionsPerLine: 3,
+      maxTurnLines: 100,
+    }),
+  };
+}
 
 function fixtureDefinition(
   cardId: string,
@@ -177,4 +209,84 @@ test("enumerates each card target as a completed branch", () => {
   assert.equal(branches[0]?.selectedChoices[0]?.choiceKind, "cardTarget");
   assert.equal(state.effectChoiceStrategy, originalStrategy);
   assert.equal(JSON.stringify(branches[0]?.selectedChoices).includes("players"), false);
+});
+
+test("ranks turn lines by a caller-supplied policy with stable ties", () => {
+  const { state, lines } = rankingFixture();
+  const originalLines = [...lines];
+  const result = rankTurnLines(
+    state,
+    lines,
+    {
+      id: "shorter-line",
+      evaluate: ({ line, perspectivePlayerId }) => ({
+        score: -line.steps.length,
+        components: { steps: line.steps.length, perspective: perspectivePlayerId === state.activePlayerId ? 1 : 0 },
+      }),
+    },
+    state.activePlayerId
+  );
+
+  assert.equal(result.criterionId, "shorter-line");
+  assert.equal(result.perspectivePlayerId, state.activePlayerId);
+  assert.equal(result.rankedLines.length, lines.length);
+  assert.equal(result.best, result.rankedLines[0]);
+  assert.deepEqual(lines, originalLines);
+  assert.deepEqual(result.rankedLines.map((entry) => entry.rank), [1, 2, 3, 4, 5]);
+  assert.deepEqual(result.rankedLines.map((entry) => entry.enumerationIndex), [4, 1, 3, 0, 2]);
+  assert.equal(result.rankedLines[0]?.components?.["steps"], 1);
+});
+
+test("preserves negative scores and rejects non-finite evaluations", () => {
+  const { state, lines } = rankingFixture();
+  const policy = (score: number) => ({ id: `score-${score}`, evaluate: () => ({ score }) });
+  assert.equal(rankTurnLines(state, lines, policy(-1), state.activePlayerId).best?.score, -1);
+  for (const score of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+    assert.throws(
+      () => rankTurnLines(state, lines, policy(score), state.activePlayerId),
+      new RegExp(`score-${String(score)}.*enumeration index 0`)
+    );
+  }
+  assert.throws(
+    () => rankTurnLines(state, lines, {
+      id: "bad-component",
+      evaluate: () => ({ score: 0, components: { detail: Number.NaN } }),
+    }, state.activePlayerId),
+    /bad-component.*component detail.*enumeration index 0/
+  );
+});
+
+test("allows different policies to choose different winners", () => {
+  const { state, lines } = rankingFixture();
+  const shortest = rankTurnLines(state, lines, {
+    id: "shortest",
+    evaluate: ({ line }) => ({ score: -line.steps.length }),
+  }, state.activePlayerId);
+  const longest = rankTurnLines(state, lines, {
+    id: "longest",
+    evaluate: ({ line }) => ({ score: line.steps.length }),
+  }, state.activePlayerId);
+  assert.notEqual(shortest.best?.enumerationIndex, longest.best?.enumerationIndex);
+});
+
+test("returns an empty result and evaluates each line exactly once", () => {
+  const { state, lines } = rankingFixture();
+  let calls = 0;
+  const result = rankTurnLines(state, [], {
+    id: "empty",
+    evaluate: () => {
+      calls += 1;
+      return { score: 0 };
+    },
+  }, state.activePlayerId);
+  assert.deepEqual(result.rankedLines, []);
+  assert.equal(result.best, undefined);
+  rankTurnLines(state, lines, {
+    id: "count",
+    evaluate: () => {
+      calls += 1;
+      return { score: 0 };
+    },
+  }, state.activePlayerId);
+  assert.equal(calls, lines.length);
 });

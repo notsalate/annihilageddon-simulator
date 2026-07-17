@@ -43,6 +43,37 @@ export interface AnalyzedTurnLine {
   terminalState: GameState;
 }
 
+export interface TurnLineEvaluationContext {
+  readonly sourceState: Readonly<GameState>;
+  readonly line: Readonly<AnalyzedTurnLine>;
+  readonly perspectivePlayerId: GameState["activePlayerId"];
+}
+
+export interface TurnLineEvaluation {
+  readonly score: number;
+  readonly components?: Readonly<Record<string, number>>;
+}
+
+export interface TurnLineEvaluationPolicy {
+  readonly id: string;
+  readonly evaluate: (context: TurnLineEvaluationContext) => TurnLineEvaluation;
+}
+
+export interface RankedTurnLine {
+  readonly line: AnalyzedTurnLine;
+  readonly enumerationIndex: number;
+  readonly score: number;
+  readonly components?: Readonly<Record<string, number>>;
+  readonly rank: number;
+}
+
+export interface RankedTurnLinesResult {
+  readonly criterionId: string;
+  readonly perspectivePlayerId: GameState["activePlayerId"];
+  readonly rankedLines: readonly RankedTurnLine[];
+  readonly best: RankedTurnLine | undefined;
+}
+
 export class AnalysisError extends Error {
   override name = "AnalysisError";
 }
@@ -247,6 +278,52 @@ export function enumerateTurnLines(
 
   visit(source, []);
   return lines;
+}
+
+export function rankTurnLines(
+  sourceState: GameState,
+  lines: readonly AnalyzedTurnLine[],
+  policy: TurnLineEvaluationPolicy,
+  perspectivePlayerId: GameState["activePlayerId"]
+): RankedTurnLinesResult {
+  const ranked = lines.map((line, enumerationIndex) => {
+    const evaluation = policy.evaluate({ sourceState, line, perspectivePlayerId });
+    assertFiniteEvaluation(policy.id, enumerationIndex, evaluation.score, "score");
+    if (evaluation.components !== undefined) {
+      for (const [name, value] of Object.entries(evaluation.components)) {
+        assertFiniteEvaluation(policy.id, enumerationIndex, value, `component ${name}`);
+      }
+    }
+    return {
+      line,
+      enumerationIndex,
+      score: evaluation.score,
+      ...(evaluation.components === undefined ? {} : { components: evaluation.components }),
+      rank: 0,
+    } satisfies RankedTurnLine;
+  });
+
+  ranked.sort((left, right) => right.score - left.score || left.enumerationIndex - right.enumerationIndex);
+  const rankedLines = ranked.map((entry, index) => ({ ...entry, rank: index + 1 }));
+  return {
+    criterionId: policy.id,
+    perspectivePlayerId,
+    rankedLines,
+    best: rankedLines[0],
+  };
+}
+
+function assertFiniteEvaluation(
+  policyId: string,
+  enumerationIndex: number,
+  value: number,
+  label: string
+): void {
+  if (!Number.isFinite(value)) {
+    throw new AnalysisError(
+      `Evaluation policy ${policyId} returned non-finite ${label} at enumeration index ${enumerationIndex}`
+    );
+  }
 }
 
 function validateSelection(

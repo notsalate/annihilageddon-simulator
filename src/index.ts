@@ -128,6 +128,11 @@ export type {
   AnalysisChoiceSelection,
   AnalysisActionStep,
   AnalyzedTurnLine,
+  RankedTurnLine,
+  RankedTurnLinesResult,
+  TurnLineEvaluation,
+  TurnLineEvaluationContext,
+  TurnLineEvaluationPolicy,
   AnalysisError,
   AnalysisLimits,
   AnalysisLimitError,
@@ -137,6 +142,7 @@ export {
   enumerateActionBranches,
   enumerateImmediateActionBranches,
   enumerateTurnLines,
+  rankTurnLines,
 } from "./engine/best-move-analysis.js";
 export { assertGameStateInvariants } from "./engine/invariants.js";
 export type {
