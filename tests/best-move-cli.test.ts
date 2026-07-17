@@ -16,11 +16,21 @@ test("parser rejects invalid numeric values and unknown criterion", () => {
   }
   assert.throws(() => parseBestMoveArgs(["--criterion", "nope"]), /victory-points/);
   assert.throws(() => parseBestMoveArgs(["--seed"]), /requires a value/);
+  assert.throws(() => parseBestMoveArgs(["--unknown", "1"]), /Unsupported argument: --unknown/);
 });
 
-test("formatter reports best as rank one and only serializable DTO fields", () => {
-  const dto = formatBestMoveAnalysis({ seed: 1, playerCount: 2, initialPlayerId: "p1", initialTurnNumber: 1, criterionId: "victory-points", limits: { maxChoiceDepth: 1, maxBranchesPerAction: 1, maxActionsPerLine: 1, maxTurnLines: 1 }, rankedLines: [{ rank: 1, score: 2, components: { victoryPoints: 2 }, terminalReason: "endTurn", steps: [{ action: { type: "endTurn" }, selectedChoices: [] }] }] });
+test("formatter reports best separately and limits alternatives with --top", () => {
+  const rankedLines = [1, 2, 3, 4, 5].map((rank) => ({
+    rank,
+    score: 10 - rank,
+    components: { victoryPoints: 10 - rank },
+    terminalReason: "endTurn" as const,
+    steps: [{ action: { type: "endTurn" as const }, selectedChoices: [] }],
+  }));
+  const dto = formatBestMoveAnalysis({ seed: 1, playerCount: 2, initialPlayerId: "p1", initialTurnNumber: 1, criterionId: "victory-points", limits: { maxChoiceDepth: 1, maxBranchesPerAction: 1, maxActionsPerLine: 1, maxTurnLines: 1 }, top: 3, rankedLines });
   assert.equal(dto.best?.rank, 1);
-  assert.equal(dto.alternatives.length, 1);
+  assert.deepEqual(dto.alternatives.map((line) => line.rank), [2, 3, 4]);
+  assert.equal(dto.alternatives.some((line) => line.rank === dto.best?.rank), false);
+  assert.equal(dto.totalLineCount, 5);
   assert.equal(JSON.stringify(dto).includes("GameState"), false);
 });

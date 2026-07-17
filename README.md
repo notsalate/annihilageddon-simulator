@@ -141,5 +141,4 @@ assets/    карточные изображения и другие исход�
 - улучшать combat, death, DWT и Mayhem/Mega Mayhem resolution;
 - довести debug trace до более полного пошагового режима;
 - улучшать baseline bot и добавлять отдельные player strategies;
-- добавить Best-Move Analyzer как отдельный analysis API;
 - расширять runtime coverage без смешивания runtime и import-слоёв.
