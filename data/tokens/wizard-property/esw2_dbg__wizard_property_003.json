@@ -3,10 +3,10 @@
   "tokenId": "esw2_dbg__wizard_property_003",
   "runtimeSchema": "krutagidon.tokenDefinition.v0",
   "kind": "wizardProperty",
+  "source": { "image": "assets/wizard-property/wp_003.png", "text": "data/import/tokens/wizard-property/texts/esw2_dbg__wizard_property_003.md" },
   "visible": {
     "textRu": "При подготовке к игре оставь себе обоих фамильяров и выбери любого ничейного фамильяра третьим. Ты всегда можешь считать своих фамильяров ещё и легендами (например, можешь потратить на них чипсины).",
-    "sourceLabel": "Свойство 3",
-    "sourceImage": "assets/wizard-property/Свойство 3.jpg"
+    "sourceLabel": "Свойство 3"
   },
   "clarifications": [
     "Это свойство применяется при подготовке к игре.",

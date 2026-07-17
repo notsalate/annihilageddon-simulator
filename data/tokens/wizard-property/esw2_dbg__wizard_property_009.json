@@ -3,10 +3,10 @@
   "tokenId": "esw2_dbg__wizard_property_009",
   "runtimeSchema": "krutagidon.tokenDefinition.v0",
   "kind": "wizardProperty",
+  "source": { "image": "assets/wizard-property/wp_009.png", "text": "data/import/tokens/wizard-property/texts/esw2_dbg__wizard_property_009.md" },
   "visible": {
     "textRu": "Замени 1 из своих начальных карт знаков на палочку-хреналочку. Атаки твоих палочек наносят +1 урон, и их нельзя избежать.",
-    "sourceLabel": "Свойство 9",
-    "sourceImage": "assets/wizard-property/Свойство 9.jpg"
+    "sourceLabel": "Свойство 9"
   },
   "clarifications": [
     "Это свойство применяется при подготовке к игре.",

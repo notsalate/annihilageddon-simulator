@@ -106,6 +106,7 @@ interface BaseTokenDefinition {
   tokenId: string;
   runtimeSchema: "krutagidon.tokenDefinition.v0";
   kind: TokenKind;
+  source: RuntimeSourceMetadata;
 }
 
 export interface DeadWizardTokenDefinition extends BaseTokenDefinition {
@@ -119,7 +120,6 @@ export interface WizardPropertyDefinition extends BaseTokenDefinition {
   visible?: {
     textRu: string;
     sourceLabel?: string;
-    sourceImage?: string;
   };
   clarifications?: string[];
   engine?: {
@@ -1328,6 +1328,7 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
     errors
   );
   const kind = requireTokenKindField(record, "kind", errors);
+  const source = decodeRuntimeSourceMetadata(record, errors);
 
   if (kind === "deadWizardToken") {
     const victoryPoints = requireNumberField(record, "victoryPoints", errors);
@@ -1337,6 +1338,7 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
       schemaVersion === undefined ||
       tokenId === undefined ||
       runtimeSchema === undefined ||
+      source === undefined ||
       victoryPoints === undefined ||
       effects === undefined
     ) {
@@ -1348,6 +1350,7 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
       tokenId,
       runtimeSchema,
       kind,
+      source,
       victoryPoints,
       effects,
     });
@@ -1367,17 +1370,10 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
         errors,
         "sourceLabel"
       );
-      const sourceImage = optionalStringField(
-        visible,
-        "visible.sourceImage",
-        errors,
-        "sourceImage"
-      );
       if (textRu !== undefined) {
         decodedVisible = {
           textRu,
           ...(sourceLabel === undefined ? {} : { sourceLabel }),
-          ...(sourceImage === undefined ? {} : { sourceImage }),
         };
       }
     }
@@ -1433,7 +1429,8 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
       errors.length > 0 ||
       schemaVersion === undefined ||
       tokenId === undefined ||
-      runtimeSchema === undefined
+      runtimeSchema === undefined ||
+      source === undefined
     ) {
       return decodeFailure(errors);
     }
@@ -1443,6 +1440,7 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
       tokenId,
       runtimeSchema,
       kind,
+      source,
       ...(decodedVisible === undefined ? {} : { visible: decodedVisible }),
       ...(clarifications === undefined ? {} : { clarifications }),
       ...(decodedEngine === undefined ? {} : { engine: decodedEngine }),

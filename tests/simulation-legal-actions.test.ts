@@ -57,6 +57,7 @@ const fixtureWizardPropertyDefinition = {
   tokenId: "fixture-activation-wizard-property",
   runtimeSchema: "krutagidon.tokenDefinition.v0",
   kind: "wizardProperty",
+  source: { image: "assets/wizard-property/wp_fixture.png" },
   visible: {
     textRu: "☼: +1 мощь.",
     sourceLabel: "Fixture Activation Property",

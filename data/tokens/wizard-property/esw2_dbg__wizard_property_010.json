@@ -3,10 +3,10 @@
   "tokenId": "esw2_dbg__wizard_property_010",
   "runtimeSchema": "krutagidon.tokenDefinition.v0",
   "kind": "wizardProperty",
+  "source": { "image": "assets/wizard-property/wp_010.png", "text": "data/import/tokens/wizard-property/texts/esw2_dbg__wizard_property_010.md" },
   "visible": {
     "textRu": "Начни игру с главным призом. Ты ходишь первым. Если ты не лошара, начальное значение твоих жизней (даже при воскрешении) равно 25.",
-    "sourceLabel": "Свойство 10",
-    "sourceImage": "assets/wizard-property/Свойство 10.jpg"
+    "sourceLabel": "Свойство 10"
   },
   "clarifications": [
     "Это свойство применяется при подготовке к игре.",

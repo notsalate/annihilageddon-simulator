@@ -121,7 +121,7 @@ data/pools/
 
 `data/packs/full-import.json` сейчас не является активным workflow для хранения incomplete runtime definitions. Это будущая идея, а не текущий обходной manifest. Его нельзя использовать, чтобы парковать non-full runtime card JSON или обходить `fullRuntime` guardrails из card runtime cluster workflow.
 
-Каждый runtime card JSON обязан содержать `source.image` с непустым путём к существующему файлу в `assets/`. Поля `source.draft` и `source.text` необязательны, но при наличии тоже должны быть непустыми строками. Весь `source` — только metadata/traceability: эти ссылки не являются исполняемым входом движка и не читаются во время gameplay.
+Каждый runtime card и token JSON обязан содержать единственное canonical-поле картинки `source.image` с непустым путём к существующему файлу в `assets/`. Поля `source.draft` и `source.text` необязательны, но при наличии тоже должны быть непустыми строками. Весь `source` — только metadata/traceability: эти ссылки не являются исполняемым входом движка и не читаются во время gameplay. Для wizard properties устаревшее `visible.sourceImage` не поддерживается.
 
 ## ID Style
 

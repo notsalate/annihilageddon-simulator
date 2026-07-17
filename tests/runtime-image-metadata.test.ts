@@ -39,6 +39,73 @@ test("current runtime cards preserve source.image metadata", () => {
   );
 });
 
+test("current runtime tokens preserve canonical source.image metadata", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  assert.equal(dataPack.tokenDefinitions.size, 11);
+
+  for (const definition of dataPack.tokenDefinitions.values()) {
+    const source = (definition as { source?: { image?: unknown } }).source;
+    assert.equal(typeof source?.image, "string");
+    assert.ok((source?.image as string).trim().length > 0);
+    assert.ok(existsSync(path.join(rootDir, source?.image as string)));
+  }
+
+  assert.equal(
+    (dataPack.tokenDefinitions.get("esw2_dbg__dead_wizard_token_001") as
+      | { source?: { image?: string } }
+      | undefined)?.source?.image,
+    "assets/dead-wizard-token/DWT_001.png"
+  );
+  assert.equal(
+    (dataPack.tokenDefinitions.get("esw2_dbg__wizard_property_001") as
+      | { source?: { image?: string } }
+      | undefined)?.source?.image,
+    "assets/wizard-property/wp_001.png"
+  );
+
+  for (let index = 1; index <= 10; index += 1) {
+    const tokenId = `esw2_dbg__wizard_property_${String(index).padStart(3, "0")}`;
+    const runtime = dataPack.tokenDefinitions.get(tokenId);
+    assert.ok(runtime);
+    const draftPath = path.join(
+      rootDir,
+      "data/import/tokens/wizard-property/drafts",
+      `${tokenId}.json`
+    );
+    const draft = JSON.parse(readFileSync(draftPath, "utf8")) as {
+      source: { image: string };
+    };
+    assert.equal(runtime.source.image, draft.source.image);
+    assert.equal(
+      "sourceImage" in ((runtime as { visible?: object }).visible ?? {}),
+      false
+    );
+  }
+});
+
+test("token JSON without canonical source.image is rejected", () => {
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), "runtime-token-source-"));
+  writeFixturePack(tempRoot, createCard("fixture-source", { image: "ok" }));
+  const manifestPath = path.join(tempRoot, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<
+    string,
+    unknown
+  >;
+  manifest["tokenDefinitionPaths"] = ["tokens"];
+  writeFileSync(manifestPath, JSON.stringify(manifest), "utf8");
+  writeJson(tempRoot, "tokens/token.json", {
+    schemaVersion: 1,
+    tokenId: "fixture-token",
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "deadWizardToken",
+    victoryPoints: 0,
+    effects: [],
+  });
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.ok(result.errors.some((error) => error.includes("source")));
+});
+
 test("runtime source metadata validates image and keeps optional links", () => {
   const tempRoot = mkdtempSync(
     path.join(os.tmpdir(), "runtime-source-metadata-")

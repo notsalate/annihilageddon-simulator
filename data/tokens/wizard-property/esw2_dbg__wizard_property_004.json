@@ -3,10 +3,10 @@
   "tokenId": "esw2_dbg__wizard_property_004",
   "runtimeSchema": "krutagidon.tokenDefinition.v0",
   "kind": "wizardProperty",
+  "source": { "image": "assets/wizard-property/wp_004.png", "text": "data/import/tokens/wizard-property/texts/esw2_dbg__wizard_property_004.md" },
   "visible": {
     "textRu": "Ты платишь на 1 меньше при покупке сокровищ. В конце игры: каждое твоё сокровище приносит тебе +1 ПО.",
-    "sourceLabel": "Свойство 4",
-    "sourceImage": "assets/wizard-property/Свойство 4.jpg"
+    "sourceLabel": "Свойство 4"
   },
   "clarifications": [
     "Скидка применяется при покупке сокровищ.",

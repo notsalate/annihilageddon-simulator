@@ -812,6 +812,7 @@ test("runtime data decoder rejects invalid card and token definition field shape
     tokenId: "bad-token",
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "wizardProperty",
+    source: { image: "assets/dead-wizard-token/DWT_001.png" },
     visible: {
       textRu: 7,
     },
@@ -987,6 +988,7 @@ test("runtime data decoder does not pass raw object fields through", () => {
     tokenId: "dead-token",
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "deadWizardToken",
+    source: { image: "assets/dead-wizard-token/DWT_001.png" },
     victoryPoints: 0,
     effects: [],
     rawOnly: true,
@@ -2147,6 +2149,7 @@ test("executable data-pack validation rejects invalid effective-value modifier s
     tokenId: "wizard-property-fixture-invalid-effective-value",
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "wizardProperty",
+    source: { image: "assets/dead-wizard-token/DWT_001.png" },
     visible: {
       textRu: "Твоя скидка на сокровища считается неверно.",
     },
@@ -3011,12 +3014,19 @@ function withOnlyFixtureCard(card: CardDefinition): LoadedDataPack {
   };
 }
 
-function withFixtureToken(token: TokenDefinition): LoadedDataPack {
+function withFixtureToken(token: unknown): LoadedDataPack {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const fixtureToken = token as TokenDefinition & {
+    source?: TokenDefinition["source"];
+  };
+  const normalizedToken = {
+    ...fixtureToken,
+    source: fixtureToken.source ?? { image: "assets/tokens/fixture.png" },
+  } as TokenDefinition;
   return {
     ...dataPack,
     cardDefinitions: new Map(),
-    tokenDefinitions: new Map([[token.tokenId, token]]),
+    tokenDefinitions: new Map([[normalizedToken.tokenId, normalizedToken]]),
   };
 }
 
@@ -3177,6 +3187,7 @@ function writeRuntimeToken(
     tokenId,
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "wizardProperty",
+    source: { image: "assets/dead-wizard-token/DWT_001.png" },
     visible: {
       textRu: "Fixture token",
     },

@@ -7735,7 +7735,8 @@ function createChipActivationWizardProperty(
     schemaVersion: 1,
     tokenId,
     runtimeSchema: "krutagidon.tokenDefinition.v0",
-    kind: "wizardProperty",
+  kind: "wizardProperty",
+  source: { image: "assets/wizard-property/wp_fixture.png" },
     engine: {
       mappingStatus: "fixture",
       playableInV0: true,
@@ -7764,6 +7765,7 @@ function createOnPlayOngoingChipWizardProperty(
     tokenId,
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "wizardProperty",
+    source: { image: "assets/wizard-property/wp_fixture.png" },
     engine: {
       mappingStatus: "fixture",
       playableInV0: true,
@@ -7789,6 +7791,7 @@ function createOnPlayTypeChipWizardProperty(
     tokenId,
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "wizardProperty",
+    source: { image: "assets/wizard-property/wp_fixture.png" },
     engine: {
       mappingStatus: "fixture",
       playableInV0: true,
@@ -7814,6 +7817,7 @@ function createTopdeckOnGainWizardProperty(
     tokenId,
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "wizardProperty",
+    source: { image: "assets/wizard-property/wp_fixture.png" },
     engine: {
       mappingStatus: "fixture",
       playableInV0: true,
@@ -7840,6 +7844,7 @@ function createTemporaryHandLimitWizardProperty(
     tokenId,
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "wizardProperty",
+    source: { image: "assets/wizard-property/wp_fixture.png" },
     engine: {
       mappingStatus: "fixture",
       playableInV0: true,

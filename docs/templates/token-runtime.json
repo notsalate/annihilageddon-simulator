@@ -5,7 +5,7 @@
   "kind": "deadWizardToken",
   "source": {
     "draft": "data/import/tokens/dead-wizard-token/drafts/esw2_dbg__dead_wizard_token_001.json",
-    "image": "assets/dead-wizard-token/esw2_dbg__dead_wizard_token_001.png",
+    "image": "assets/dead-wizard-token/DWT_001.png",
     "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_001.md"
   },
   "visible": {

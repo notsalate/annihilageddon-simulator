@@ -17,7 +17,7 @@ This folder contains runtime data consumed by the simulator and source import da
 - Keep runtime mappings separate from import drafts and extracted text.
 - Runtime card and token behavior must point at explicit typed handlers/effects, not natural-language parsing.
 - Update deck, stack, pool, and pack composition when a runtime object must become playable.
-- Every runtime card definition must include `source.image`, a non-empty path to an existing asset under `assets/`.
+- Every runtime card, dead wizard token, and wizard property definition must include `source.image`, a non-empty path to an existing asset under `assets/`. Token image metadata is canonical only in `source.image`; `visible.sourceImage` is forbidden.
 
 ## Work Guidance
 

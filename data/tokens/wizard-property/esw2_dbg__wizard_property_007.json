@@ -3,10 +3,10 @@
   "tokenId": "esw2_dbg__wizard_property_007",
   "runtimeSchema": "krutagidon.tokenDefinition.v0",
   "kind": "wizardProperty",
+  "source": { "image": "assets/wizard-property/wp_007.png", "text": "data/import/tokens/wizard-property/texts/esw2_dbg__wizard_property_007.md" },
   "visible": {
     "textRu": "В конце твоего хода за каждое полученное в этот ход заклинание получи +1 к пределу руки.",
-    "sourceLabel": "Свойство 7",
-    "sourceImage": "assets/wizard-property/Свойство 7.jpg"
+    "sourceLabel": "Свойство 7"
   },
   "clarifications": [
     "Свойство проверяется в конце хода игрока.",
