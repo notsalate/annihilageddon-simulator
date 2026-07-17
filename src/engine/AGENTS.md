@@ -46,6 +46,8 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - `best-move-analysis.ts` получает действия только через публичный `listLegalActions`, создаёт `forkGameState` на каждую ветку и не зависит от `BotStrategy`.
 - `best-move-analysis.ts` воспроизводит каждый путь выбора через новый fork исходного состояния; порядок action/choice стабилен, а `AnalysisLimits` завершают переполненный поиск типизированной ошибкой без частичного результата.
 - Первый Analyzer scope заканчивается на текущем `endTurn`: переход к следующему игроку не анализируется; game-end от обычного действия также завершает линию.
+- `enumerateTurnLines` захватывает `activePlayerId` и `turn.number` исходного состояния до обхода; каждый обычный action обязан сохранить их до terminal line.
+- Обход — детерминированный DFS: сначала точный порядок `listLegalActions`, затем точный порядок ветвей `enumerateActionBranches`; terminal line добавляется сразу при `endTurn` или `gameEndReason`.
 
 ## Verification
 

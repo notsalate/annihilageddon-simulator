@@ -7,6 +7,7 @@ import {
   initializeGame,
   rankTurnLines,
   type CardDefinition,
+  type AnalysisLimits,
   type GameState,
   type RuntimeEffect,
 } from "../src/index.js";
@@ -14,6 +15,16 @@ import { victoryPointsPolicy } from "../src/engine/best-move-policies.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 
 const rootDir = process.cwd();
+
+function analysisLimits(overrides: Partial<AnalysisLimits> = {}) {
+  return {
+    maxChoiceDepth: 32,
+    maxBranchesPerAction: 32,
+    maxActionsPerLine: 8,
+    maxTurnLines: 100,
+    ...overrides,
+  };
+}
 
 function rankingFixture(): { state: GameState; lines: ReturnType<typeof enumerateTurnLines> } {
   const state = initializeGame({ rootDir, seed: 127 });
@@ -167,6 +178,177 @@ test("enumerates every current-turn action history through endTurn", () => {
   ]);
   assert.ok(lines.every((line) => line.terminalReason === "endTurn"));
   assert.ok(lines.every((line) => line.steps.every((step) => step.action.type !== "endTurn" || step === line.steps.at(-1))));
+});
+
+test("continues every choice branch to its own endTurn line", () => {
+  const state = initializeGame({ rootDir, seed: 128 });
+  state.common.market = state.common.market.slice(0, 2);
+  state.common.legendMarket = [];
+  state.common.wildMagicStack = [];
+  state.common.mainDeck = [];
+  state.common.legendDeck = [];
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  activePlayer.hand = [];
+  const card = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-line-choice", [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 1,
+        targetSelector: "chosenPlayer",
+      },
+    ])
+  );
+
+  const lines = enumerateTurnLines(
+    state,
+    analysisLimits({ maxActionsPerLine: 2 })
+  );
+  const choiceLines = lines.filter(
+    (line) =>
+      line.steps[0]?.action.type === "playCard" &&
+      line.steps[0].action.cardInstanceId === card.instanceId
+  );
+
+  assert.deepEqual(
+    choiceLines.map((line) =>
+      line.steps[0]?.selectedChoices.map((choice) => choice.choiceIndex)
+    ),
+    [[0], [1]]
+  );
+  assert.ok(choiceLines.every((line) => line.terminalReason === "endTurn"));
+  assert.ok(
+    choiceLines.every((line) => line.steps.at(-1)?.action.type === "endTurn")
+  );
+});
+
+test("preserves the root player and turn while exposing endTurn game-end metadata", () => {
+  const state = initializeGame({ rootDir, seed: 129 });
+  state.common.market = [];
+  state.common.legendMarket = [];
+  state.common.mainDeck = [];
+  state.common.legendDeck = [];
+  state.common.wildMagicStack = [];
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  activePlayer.hand = [];
+  const initialPlayerId = state.activePlayerId;
+  const initialTurnNumber = state.turn.number;
+
+  const lines = enumerateTurnLines(
+    state,
+    analysisLimits({ maxActionsPerLine: 1 })
+  );
+
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0]?.terminalReason, "endTurn");
+  assert.equal(lines[0]?.gameEndReason, "legendDeckExhausted");
+  assert.equal(lines[0]?.initialPlayerId, initialPlayerId);
+  assert.equal(lines[0]?.initialTurnNumber, initialTurnNumber);
+  assert.notEqual(lines[0]?.terminalState.activePlayerId, initialPlayerId);
+  assert.equal(lines[0]?.terminalState.turn.number, initialTurnNumber + 1);
+  assert.equal(state.activePlayerId, initialPlayerId);
+  assert.equal(state.turn.number, initialTurnNumber);
+});
+
+test("keeps sibling turn lines isolated and replays RNG from the same fork", () => {
+  const state = initializeGame({ rootDir, seed: 130 });
+  state.common.market = [];
+  state.common.legendMarket = [];
+  state.common.wildMagicStack = [];
+  state.common.mainDeck = [];
+  state.common.legendDeck = [];
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  activePlayer.hand = [];
+  activePlayer.deck = [];
+  activePlayer.discard = [];
+  const drawDefinition = fixtureDefinition("fixture-analysis-random", [
+    { effectId: "draw_cards", timing: "onPlay", amount: 1 },
+  ]);
+  const first = addFixtureDefinitionToActiveHand(state, drawDefinition);
+  const second = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-random-2", [
+      { effectId: "draw_cards", timing: "onPlay", amount: 1 },
+    ])
+  );
+  const drawn = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-random-drawn")
+  );
+  const otherDrawn = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-random-drawn-2")
+  );
+  activePlayer.hand = [first, second];
+  activePlayer.discard = [drawn, otherDrawn];
+
+  const lines = enumerateTurnLines(
+    state,
+    analysisLimits({ maxActionsPerLine: 8, maxTurnLines: 10_000 })
+  );
+  const firstOnly = lines.find(
+    (line) =>
+      line.steps
+        .map((step) =>
+          step.action.type === "playCard"
+            ? step.action.cardInstanceId
+            : step.action.type
+        )
+        .join(">") === `${first.instanceId}>endTurn`
+  );
+  const secondOnly = lines.find(
+    (line) =>
+      line.steps
+        .map((step) =>
+          step.action.type === "playCard"
+            ? step.action.cardInstanceId
+            : step.action.type
+        )
+        .join(">") === `${second.instanceId}>endTurn`
+  );
+  assert.ok(firstOnly);
+  assert.ok(secondOnly);
+  const firstProbe = firstOnly.terminalState.rng.nextInt(1_000);
+  const secondProbe = secondOnly.terminalState.rng.nextInt(1_000);
+  assert.equal(firstProbe, secondProbe);
+  assert.notEqual(firstOnly.terminalState, secondOnly.terminalState);
+  firstOnly.terminalState.turn.activatedCardIds.push("mutated-sibling");
+  assert.equal(
+    secondOnly.terminalState.turn.activatedCardIds.includes("mutated-sibling"),
+    false
+  );
+  assert.deepEqual(
+    activePlayer.discard.map((card) => card.instanceId),
+    [drawn.instanceId, otherDrawn.instanceId]
+  );
+});
+
+test("fails without a partial result when action or line limits are reached", () => {
+  const state = rankingFixture().state;
+  assert.throws(
+    () => enumerateTurnLines(state, analysisLimits({ maxActionsPerLine: 1 })),
+    (error: unknown) =>
+      error instanceof Error &&
+      error.name === "AnalysisLimitError" &&
+      /action limit exceeded 1/.test(error.message)
+  );
+  assert.throws(
+    () => enumerateTurnLines(state, analysisLimits({ maxTurnLines: 1 })),
+    (error: unknown) =>
+      error instanceof Error &&
+      error.name === "AnalysisLimitError" &&
+      /turn-line limit exceeded 1/.test(error.message)
+  );
 });
 
 test("enumerates each card target as a completed branch", () => {
