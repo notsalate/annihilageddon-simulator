@@ -106,6 +106,103 @@ test("token JSON without canonical source.image is rejected", () => {
   if (!result.ok) assert.ok(result.errors.some((error) => error.includes("source")));
 });
 
+test("token JSON with legacy visible.sourceImage is rejected", () => {
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), "runtime-token-legacy-"));
+  writeTokenFixturePack(tempRoot, {
+    schemaVersion: 1,
+    tokenId: "fixture-token",
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    source: { image: "assets/tokens/fixture.png" },
+    visible: {
+      textRu: "Свойство",
+      sourceImage: "assets/wizard-property/Свойство 1.jpg",
+    },
+  });
+
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.ok(
+      result.errors.some((error) => error.includes("visible.sourceImage"))
+    );
+  }
+});
+
+test("token source is validated before token kind dispatch", () => {
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), "runtime-token-order-"));
+  writeTokenFixturePack(tempRoot, {
+    schemaVersion: 1,
+    tokenId: "fixture-token",
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "unsupportedTokenKind",
+    source: { image: "" },
+  });
+
+  const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.match(result.errors[0] ?? "", /source\.image/);
+  }
+});
+
+test("malformed token source fields are rejected", () => {
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), "runtime-token-source-"));
+  const malformedSources: unknown[] = [
+    undefined,
+    {},
+    { image: "" },
+    { image: "   " },
+    { image: 42 },
+    { image: "assets/tokens/fixture.png", draft: "   " },
+    { image: "assets/tokens/fixture.png", text: 42 },
+    { image: "tokens/fixture.png" },
+  ];
+
+  for (const source of malformedSources) {
+    const token: Record<string, unknown> = {
+      schemaVersion: 1,
+      tokenId: "fixture-token",
+      runtimeSchema: "krutagidon.tokenDefinition.v0",
+      kind: "deadWizardToken",
+      victoryPoints: 0,
+      effects: [],
+    };
+    if (source !== undefined) token["source"] = source;
+    writeTokenFixturePack(tempRoot, token);
+
+    const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.ok(result.errors.some((error) => error.includes("source")));
+    }
+  }
+});
+
+test("token decoding is deterministic without reading image files", () => {
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), "runtime-token-determinism-"));
+  writeTokenFixturePack(tempRoot, {
+    schemaVersion: 1,
+    tokenId: "fixture-token",
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "deadWizardToken",
+    source: { image: "assets/tokens/image-file-is-not-read.png" },
+    victoryPoints: 0,
+    effects: [],
+  });
+
+  const first = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+  const second = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, true);
+  if (first.ok && second.ok) {
+    assert.deepEqual(
+      [...first.value.tokenDefinitions],
+      [...second.value.tokenDefinitions]
+    );
+  }
+});
+
 test("runtime source metadata validates image and keeps optional links", () => {
   const tempRoot = mkdtempSync(
     path.join(os.tmpdir(), "runtime-source-metadata-")
@@ -258,6 +355,24 @@ function writeFixturePack(root: string, card: Record<string, unknown>): void {
     "stacks/limp.json",
   ])
     writeJson(root, file, composition);
+}
+
+function writeTokenFixturePack(
+  root: string,
+  token: Record<string, unknown>
+): void {
+  writeFixturePack(
+    root,
+    createCard("fixture-source", { image: "assets/cards/fixture.png" })
+  );
+  const manifestPath = path.join(root, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<
+    string,
+    unknown
+  >;
+  manifest["tokenDefinitionPaths"] = ["tokens"];
+  writeFileSync(manifestPath, JSON.stringify(manifest), "utf8");
+  writeJson(root, "tokens/token.json", token);
 }
 
 function writeJson(root: string, relativePath: string, value: unknown): void {

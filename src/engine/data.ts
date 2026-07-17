@@ -1327,8 +1327,8 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
     "krutagidon.tokenDefinition.v0",
     errors
   );
-  const kind = requireTokenKindField(record, "kind", errors);
   const source = decodeRuntimeSourceMetadata(record, errors);
+  const kind = requireTokenKindField(record, "kind", errors);
 
   if (kind === "deadWizardToken") {
     const victoryPoints = requireNumberField(record, "victoryPoints", errors);
@@ -1358,6 +1358,11 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
     const visible = optionalRecordField(record, "visible", errors);
     let decodedVisible: WizardPropertyDefinition["visible"];
     if (visible !== undefined) {
+      if (Object.prototype.hasOwnProperty.call(visible, "sourceImage")) {
+        errors.push(
+          "visible.sourceImage is not supported; use source.image instead"
+        );
+      }
       const textRu = requireStringField(
         visible,
         "visible.textRu",

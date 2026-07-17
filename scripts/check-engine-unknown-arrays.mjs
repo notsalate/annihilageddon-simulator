@@ -17,7 +17,7 @@ const configuredAllowedViolations = [
   },
   {
     filePath: "src/engine/data.ts",
-    line: 1725,
+    line: 1730,
     column: 4,
     source: "unknown[]",
     owner: "FunctionDeclaration:requireArrayField",
@@ -26,7 +26,7 @@ const configuredAllowedViolations = [
   },
   {
     filePath: "src/engine/data.ts",
-    line: 2028,
+    line: 2033,
     column: 51,
     source: "unknown[]",
     owner: "FunctionDeclaration:isUnknownArray",
