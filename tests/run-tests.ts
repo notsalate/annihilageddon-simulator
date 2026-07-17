@@ -1,24 +1,44 @@
-import "./common.test.js";
-import "./id-types.test.js";
-import "./json-parse-assertions.test.js";
-import "./rng.test.js";
-import "./game-state-fork.test.js";
-import "./setup.test.js";
-import "./action-loop.test.js";
-import "./effective-values.test.js";
-import "./simulation.test.js";
-import "./simulation-legal-actions.test.js";
-import "./debug-trace.test.js";
-import "./invariants.test.js";
-import "./simulation-menu.test.js";
-import "./runtime-regression.test.js";
-import "./validation.test.js";
-import "./draft-validation.test.js";
-import "./draft-generator.test.js";
-import "./import-completeness.test.js";
-import "./runtime-coverage-inventory.test.js";
-import "./runtime-image-metadata.test.js";
-import "./card-runtime-clusters.test.js";
-import "./engine-guards.test.js";
-import "./effect-choice-routing.test.js";
-import "./best-move-analysis.test.js";
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+
+const testSuites = [
+  "common.test.js",
+  "id-types.test.js",
+  "json-parse-assertions.test.js",
+  "rng.test.js",
+  "game-state-fork.test.js",
+  "setup.test.js",
+  "action-loop.test.js",
+  "effective-values.test.js",
+  "simulation.test.js",
+  "simulation-legal-actions.test.js",
+  "debug-trace.test.js",
+  "invariants.test.js",
+  "simulation-menu.test.js",
+  "runtime-regression.test.js",
+  "validation.test.js",
+  "draft-validation.test.js",
+  "draft-generator.test.js",
+  "import-completeness.test.js",
+  "runtime-coverage-inventory.test.js",
+  "runtime-image-metadata.test.js",
+  "card-runtime-clusters.test.js",
+  "engine-guards.test.js",
+  "effect-choice-routing.test.js",
+  "best-move-analysis.test.js",
+  "effect-runtime-applicability.test.js",
+];
+
+for (const suite of testSuites) {
+  const result = spawnSync(
+    process.execPath,
+    ["--test", path.join(process.cwd(), "dist", "tests", suite)],
+    { stdio: "inherit" }
+  );
+  if (result.error !== undefined) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+}

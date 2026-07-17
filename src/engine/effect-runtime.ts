@@ -9,11 +9,10 @@ import {
 import {
   type DamageResult,
   type EffectChoice,
-  getEffectRuntimeCatalogEntry,
   type EffectExecutionResult,
   type EffectRuntimeServices,
   type EffectSourceContext,
-  isEffectRuntimeCatalogEntrySupportedInMode,
+  resolveEffectRuntimeCatalogEntry,
   type TargetChoice,
   type TargetChoiceResult,
 } from "./effect-runtime-registry.js";
@@ -327,16 +326,6 @@ function executeEffects(
       continue;
     }
 
-    if (
-      timing === "onMayhemResolve" &&
-      !isSupportedMayhemRuntimeEffect(effect)
-    ) {
-      return {
-        ok: false,
-        error: `Unsupported Mayhem effect id ${asString(effect["effectId"])}`,
-      };
-    }
-
     if (!effectConditionMatches(state, player, effect)) {
       continue;
     }
@@ -377,53 +366,31 @@ function countGainedCardsMatchingEffect(
   }).length;
 }
 
-function isSupportedMayhemRuntimeEffect(effect: RuntimeEffect): boolean {
-  return getEffectRuntimeCatalogEntry(effect.effectId) !== undefined;
-}
-
-function executeEffect(
+export function executeEffect(
   state: GameState,
   player: PlayerState,
   effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): EffectExecutionResult {
-  const catalogEntry = getEffectRuntimeCatalogEntry(effect.effectId);
-  if (catalogEntry !== undefined) {
-    if (
-      !isEffectRuntimeCatalogEntrySupportedInMode(
-        catalogEntry,
-        source.runtimeMode
-      )
-    ) {
-      return {
-        ok: false,
-        error: `Effect id ${catalogEntry.effectId} is not supported in ${source.runtimeMode} runtime mode`,
-      };
-    }
-
-    if (!("timing" in effect)) {
-      const shapeErrors = catalogEntry.handler.validateShape(
-        `Effect ${catalogEntry.effectId}`,
-        effect
-      );
-      if (shapeErrors.length > 0) {
-        return { ok: false, error: shapeErrors.join("; ") };
-      }
-    }
-
-    return catalogEntry.handler.execute(
-      state,
-      player,
-      effect,
-      source,
-      effectRuntimeServices
-    );
+  const resolution = resolveEffectRuntimeCatalogEntry(
+    `Effect ${asString(effect["effectId"])}`,
+    asString(effect["effectId"]),
+    effect,
+    source.runtimeMode,
+    source.sourceType,
+    !("timing" in effect)
+  );
+  if (!resolution.ok) {
+    return { ok: false, error: resolution.errors[0] ?? "Unsupported effect" };
   }
 
-  return {
-    ok: false,
-    error: `Unsupported effect id ${asString(effect["effectId"])}`,
-  };
+  return resolution.entry.handler.execute(
+    state,
+    player,
+    effect,
+    source,
+    effectRuntimeServices
+  );
 }
 
 function effectConditionMatches(

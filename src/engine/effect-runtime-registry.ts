@@ -4556,9 +4556,10 @@ export type EffectRuntimeCatalogResolution =
 export function resolveEffectRuntimeCatalogEntry(
   subjectId: string,
   rawEffectId: string,
-  effect: Record<string, unknown>,
+  effect: RuntimeEffectPayload | Record<string, unknown>,
   mode: EffectRuntimeMode,
-  sourceKind: EffectRuntimeSourceKind
+  sourceKind: EffectRuntimeSourceKind,
+  validateShape = true
 ): EffectRuntimeCatalogResolution {
   const entry = isRuntimeEffectId(rawEffectId)
     ? getEffectRuntimeCatalogEntry(rawEffectId)
@@ -4594,9 +4595,13 @@ export function resolveEffectRuntimeCatalogEntry(
     };
   }
 
+  if (!validateShape) {
+    return { ok: true, entry };
+  }
+
   const shapeErrors = entry.handler.validateShape(
     subjectId,
-    effect as unknown as RuntimeEffectPayload
+    effect as RuntimeEffectPayload
   );
   return shapeErrors.length > 0
     ? { ok: false, errors: shapeErrors }

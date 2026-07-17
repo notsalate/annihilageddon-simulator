@@ -2401,7 +2401,7 @@ test("unsupported Mayhem effect fails during Market Flow instead of becoming a s
   assert.equal(result.ok, false);
   assert.match(
     result.error,
-    /Unsupported Mayhem effect id unsupported_mayhem_runtime_effect/
+    /Effect unsupported_mayhem_runtime_effect uses unsupported effect id/
   );
   assert.equal(state.common.destroyedMayhem.includes(unsupportedMayhem), false);
 });
@@ -7168,7 +7168,7 @@ test("runtime execution rejects unsupported effect ids explicitly", () => {
   assert.equal(result.ok, false);
   assert.match(
     result.error,
-    /Unsupported effect id fixture_runtime_effect_not_in_catalog/
+    /Effect fixture_runtime_effect_not_in_catalog uses unsupported effect id/
   );
 });
 
@@ -7206,7 +7206,7 @@ test("runtime execution rejects fixture-only effects in combat mode", () => {
   assert.equal(result.ok, false);
   assert.equal(
     result.error,
-    "Effect id fixture_add_power_equal_to_target_cost is not supported in combat runtime mode"
+    "Effect fixture_add_power_equal_to_target_cost uses fixture effect id fixture_add_power_equal_to_target_cost in combat data"
   );
 });
 
