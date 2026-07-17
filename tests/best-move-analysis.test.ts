@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  enumerateTurnLines,
   enumerateImmediateActionBranches,
   initializeGame,
   type CardDefinition,
@@ -92,6 +93,47 @@ test("enumerates simple actions into independent completed branches", () => {
   assert.equal(result[2]?.legalAction.type, "endTurn");
   assert.equal(result[2]?.resultingState.turn.number, sourceTurn + 1);
   assert.equal(state.turn.number, sourceTurn);
+});
+
+test("enumerates every current-turn action history through endTurn", () => {
+  const state = initializeGame({ rootDir, seed: 127 });
+  state.common.market = [];
+  state.common.legendMarket = [];
+  state.common.wildMagicStack = [];
+  state.common.mainDeck = [];
+  state.common.legendDeck = [];
+  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  assert.ok(activePlayer);
+  activePlayer.hand = [];
+  activePlayer.permanents = [];
+  activePlayer.wizardProperties = [];
+  activePlayer.statuses = [];
+  activePlayer.trophyLikeObjects = [];
+  activePlayer.unboughtFamiliar = undefined;
+  activePlayer.deck = [];
+  activePlayer.discard = [];
+  addFixtureDefinitionToActiveHand(state, fixtureDefinition("fixture-analysis-simple"));
+  addFixtureDefinitionToActiveHand(state, fixtureDefinition("fixture-analysis-simple-2"));
+
+  const lines = enumerateTurnLines(state, {
+    maxChoiceDepth: 32,
+    maxBranchesPerAction: 32,
+    maxActionsPerLine: 3,
+    maxTurnLines: 100,
+  });
+  const histories = lines.map((line) => line.steps.map((step) => step.action.type === "playCard"
+    ? step.action.cardInstanceId.replace("-instance-", "-")
+    : step.action.type).join(">"));
+
+  assert.deepEqual(histories, [
+    "fixture-analysis-simple-1>fixture-analysis-simple-2-2>endTurn",
+    "fixture-analysis-simple-1>endTurn",
+    "fixture-analysis-simple-2-2>fixture-analysis-simple-1>endTurn",
+    "fixture-analysis-simple-2-2>endTurn",
+    "endTurn",
+  ]);
+  assert.ok(lines.every((line) => line.terminalReason === "endTurn"));
+  assert.ok(lines.every((line) => line.steps.every((step) => step.action.type !== "endTurn" || step === line.steps.at(-1))));
 });
 
 test("enumerates each card target as a completed branch", () => {

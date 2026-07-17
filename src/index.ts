@@ -126,6 +126,8 @@ export { initializeGame } from "./engine/setup.js";
 export { forkGameState } from "./engine/game-state-fork.js";
 export type {
   AnalysisChoiceSelection,
+  AnalysisActionStep,
+  AnalyzedTurnLine,
   AnalysisError,
   AnalysisLimits,
   AnalysisLimitError,
@@ -134,6 +136,7 @@ export type {
 export {
   enumerateActionBranches,
   enumerateImmediateActionBranches,
+  enumerateTurnLines,
 } from "./engine/best-move-analysis.js";
 export { assertGameStateInvariants } from "./engine/invariants.js";
 export type {

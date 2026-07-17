@@ -5,6 +5,8 @@ import type { GameState, RuntimeEffectChoiceRequest } from "./setup.js";
 export interface AnalysisLimits {
   maxChoiceDepth: number;
   maxBranchesPerAction: number;
+  maxActionsPerLine: number;
+  maxTurnLines: number;
 }
 
 export interface AnalysisChoiceSelection {
@@ -24,6 +26,21 @@ export interface CompletedActionBranch {
   selectedChoices: AnalysisChoiceSelection[];
   result: Extract<ActionResult, { ok: true }>;
   resultingState: GameState;
+}
+
+export interface AnalysisActionStep {
+  legalActionIndex: number;
+  action: LegalAction;
+  selectedChoices: AnalysisChoiceSelection[];
+}
+
+export interface AnalyzedTurnLine {
+  initialPlayerId: GameState["activePlayerId"];
+  initialTurnNumber: number;
+  steps: AnalysisActionStep[];
+  terminalReason: "endTurn" | "gameEnd";
+  gameEndReason?: Extract<ActionResult, { ok: true }>["gameEndReason"];
+  terminalState: GameState;
 }
 
 export class AnalysisError extends Error {
@@ -50,6 +67,8 @@ class ExpandChoicePath extends Error {
 const DEFAULT_ANALYSIS_LIMITS: AnalysisLimits = {
   maxChoiceDepth: 32,
   maxBranchesPerAction: 4096,
+  maxActionsPerLine: 128,
+  maxTurnLines: 100_000,
 };
 
 /** Enumerates paths with depth-first replay; choices and actions retain source order. */
@@ -161,6 +180,75 @@ export function enumerateImmediateActionBranches(
   );
 }
 
+/** Enumerates the current player's legal histories until endTurn or game end. */
+export function enumerateTurnLines(
+  source: GameState,
+  limits: AnalysisLimits = DEFAULT_ANALYSIS_LIMITS
+): AnalyzedTurnLine[] {
+  validateLimits(limits);
+  const initialPlayerId = source.activePlayerId;
+  const initialTurnNumber = source.turn.number;
+  const lines: AnalyzedTurnLine[] = [];
+
+  const visit = (state: GameState, steps: AnalysisActionStep[]): void => {
+    for (const [legalActionIndex, action] of listLegalActions(state).entries()) {
+      if (steps.length + 1 > limits.maxActionsPerLine) {
+        throw new AnalysisLimitError(
+          `Analysis action limit exceeded ${limits.maxActionsPerLine} after ${steps.length} steps; last action ${describeAction(action)}`
+        );
+      }
+      const branches = enumerateActionBranches(state, action, legalActionIndex, limits);
+      for (const branch of branches) {
+        const nextSteps = [
+          ...steps,
+          {
+            legalActionIndex: branch.legalActionIndex,
+            action: branch.legalAction,
+            selectedChoices: branch.selectedChoices,
+          },
+        ];
+        if (
+          action.type !== "endTurn" &&
+          (branch.resultingState.activePlayerId !== initialPlayerId ||
+            branch.resultingState.turn.number !== initialTurnNumber)
+        ) {
+          throw new AnalysisError(
+            `Analysis engine contract violated after action ${describeAction(action)}: active player or turn changed`
+          );
+        }
+        const terminalReason = action.type === "endTurn"
+          ? "endTurn"
+          : branch.result.gameEndReason !== undefined
+            ? "gameEnd"
+            : undefined;
+        if (terminalReason !== undefined) {
+          if (lines.length >= limits.maxTurnLines) {
+            throw new AnalysisLimitError(
+              `Analysis turn-line limit exceeded ${limits.maxTurnLines}; last action ${describeAction(action)}`
+            );
+          }
+          lines.push({
+            initialPlayerId,
+            initialTurnNumber,
+            steps: nextSteps,
+            terminalReason,
+            ...(branch.result.gameEndReason === undefined
+              ? {}
+              : { gameEndReason: branch.result.gameEndReason }),
+            terminalState: branch.resultingState,
+          });
+          continue;
+        }
+
+        visit(branch.resultingState, nextSteps);
+      }
+    }
+  };
+
+  visit(source, []);
+  return lines;
+}
+
 function validateSelection(
   selection: AnalysisChoiceSelection,
   request: RuntimeEffectChoiceRequest,
@@ -191,7 +279,11 @@ function validateLimits(limits: AnalysisLimits): void {
     !Number.isSafeInteger(limits.maxChoiceDepth) ||
     limits.maxChoiceDepth < 0 ||
     !Number.isSafeInteger(limits.maxBranchesPerAction) ||
-    limits.maxBranchesPerAction < 1
+    limits.maxBranchesPerAction < 1 ||
+    !Number.isSafeInteger(limits.maxActionsPerLine) ||
+    limits.maxActionsPerLine < 1 ||
+    !Number.isSafeInteger(limits.maxTurnLines) ||
+    limits.maxTurnLines < 1
   ) {
     throw new AnalysisLimitError("Analysis limits must be safe positive integers");
   }
