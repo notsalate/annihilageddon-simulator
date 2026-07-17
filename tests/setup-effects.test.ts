@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
 import test from "node:test";
 
 import {
@@ -13,9 +14,11 @@ import {
 import type { PlayerState } from "../src/engine/setup.js";
 import {
   initializeGame,
-  loadCurrentRuntimeDataPack,
+  type CardDefinition,
+  type DeckComposition,
   type LoadedDataPack,
   type RuntimeEffect,
+  type TokenDefinition,
 } from "../src/index.js";
 
 function services(
@@ -50,6 +53,15 @@ function player(): PlayerState {
     chips: 0,
     life: { current: 20, max: 25 },
   };
+}
+
+class CountingTokenDefinitions extends Map<string, TokenDefinition> {
+  getCalls = 0;
+
+  override get(key: string): TokenDefinition | undefined {
+    this.getCalls += 1;
+    return super.get(key);
+  }
 }
 
 const source: SetupEffectSourceContext = {
@@ -145,6 +157,34 @@ test("forced setup consumes the same random-player draw as unforced setup", () =
     seed: 119,
   });
   assert.equal(forced.rng.nextInt(1000), unforced.rng.nextInt(1000));
+});
+
+test("setup fixture does not depend on the current working directory", () => {
+  const originalCwd = process.cwd();
+  try {
+    process.chdir(tmpdir());
+    const state = initializeGame({
+      dataPack: setupDataPack(false),
+      seed: 119,
+    });
+    assert.deepEqual(
+      state.players.map((subject) => subject.life.current),
+      [27, 27]
+    );
+  } finally {
+    process.chdir(originalCwd);
+  }
+});
+
+test("initializeGame does not rescan token definitions after setup effects", () => {
+  const tokenDefinitions = new CountingTokenDefinitions();
+  const state = initializeGame({
+    dataPack: setupDataPack(true, "fixture", tokenDefinitions),
+    seed: 119,
+  });
+
+  assert.equal(state.activePlayerId, state.players[0]?.playerId);
+  assert.equal(tokenDefinitions.getCalls, 7);
 });
 
 test("initializeGame executes setup effects in combat runtime mode", () => {
@@ -464,23 +504,34 @@ test("setup executor accepts fixture runtime mode explicitly", () => {
 
 function setupDataPack(
   includeForce: boolean,
-  manifestMappingStatus?: "supported" | "fixture"
+  manifestMappingStatus?: "supported" | "fixture",
+  tokenDefinitions?: CountingTokenDefinitions
 ): LoadedDataPack {
-  const dataPack = loadCurrentRuntimeDataPack(process.cwd());
   const effectiveMappingStatus =
-    manifestMappingStatus ?? dataPack.manifest.mappingStatus;
-  const sourceProperty = dataPack.tokenDefinitions.get(
-    "esw2_dbg__wizard_property_001"
+    manifestMappingStatus ?? "incomplete-full-only";
+  const starterDefinitions = [
+    cardDefinition("esw2_dbg__starter_001", "starter", effectiveMappingStatus),
+    cardDefinition("esw2_dbg__starter_002", "starter", effectiveMappingStatus),
+    cardDefinition("esw2_dbg__starter_003", "starter", effectiveMappingStatus),
+  ];
+  const mainDefinition = cardDefinition(
+    "fixture-main-card",
+    "normal",
+    effectiveMappingStatus
   );
-  const wizardPropertyStack = dataPack.tokenStacks.wizardProperties;
-  if (
-    sourceProperty?.kind !== "wizardProperty" ||
-    sourceProperty.engine === undefined ||
-    wizardPropertyStack === undefined
-  ) {
-    throw new Error("Current runtime data is missing setup test fixtures");
-  }
-
+  const legendDefinition = cardDefinition(
+    "fixture-legend-card",
+    "legend",
+    effectiveMappingStatus
+  );
+  const familiarDefinitions = [
+    "fixture-familiar-001",
+    "fixture-familiar-002",
+    "fixture-familiar-003",
+    "fixture-familiar-004",
+  ].map((cardId) =>
+    cardDefinition(cardId, "familiar", effectiveMappingStatus)
+  );
   const effects: RuntimeEffect[] = [
     { effectId: "set_starting_life_total", timing: "setup", lifeTotal: 27 },
     ...(includeForce
@@ -489,40 +540,85 @@ function setupDataPack(
         ] as RuntimeEffect[])
       : []),
   ];
-  const property = {
-    ...sourceProperty,
+  const property: TokenDefinition = {
+    schemaVersion: 1,
     tokenId: includeForce
       ? "fixture-force-property"
       : "fixture-unforced-property",
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    source: { image: "fixture/setup-property.png" },
+    visible: { textRu: "Тестовое свойство" },
     engine: {
-      ...sourceProperty.engine,
       mappingStatus: effectiveMappingStatus,
       playableInV0: true,
       effects,
+      unsupportedMechanics: [],
     },
   };
-  const result: LoadedDataPack = {
-    ...dataPack,
+  const definitions = tokenDefinitions ?? new CountingTokenDefinitions();
+  definitions.set(property.tokenId, property);
+
+  return {
     manifest: {
-      ...dataPack.manifest,
+      schemaVersion: 1,
+      packId: "fixture-setup-effects",
+      runtimeSchema: "krutagidon.dataPack.v0",
       mappingStatus: effectiveMappingStatus,
+      cardDefinitionPaths: [],
+      tokenDefinitionPaths: [],
     },
-    tokenDefinitions: new Map([
-      ...dataPack.tokenDefinitions,
-      [property.tokenId, property],
+    cardDefinitions: new Map([
+      ...starterDefinitions.map((definition) => [
+        definition.cardId,
+        definition,
+      ] as const),
+      [mainDefinition.cardId, mainDefinition],
+      [legendDefinition.cardId, legendDefinition],
+      ...familiarDefinitions.map((definition) => [
+        definition.cardId,
+        definition,
+      ] as const),
     ]),
+    tokenDefinitions: definitions,
+    decks: {
+      starterDeck: deck("fixture-starter", "starterDeck", [
+        { cardId: "esw2_dbg__starter_001", count: 6 },
+        { cardId: "esw2_dbg__starter_002", count: 3 },
+        { cardId: "esw2_dbg__starter_003", count: 1 },
+      ]),
+      mainDeck: deck("fixture-main", "mainDeck", [
+        { cardId: mainDefinition.cardId, count: 5 },
+      ]),
+      legendDeck: deck("fixture-legend", "legendDeck", [
+        { cardId: legendDefinition.cardId, count: 3 },
+      ]),
+      wildMagicStack: deck("fixture-wild-magic", "wildMagicStack", []),
+      limpWandStack: deck("fixture-limp-wand", "limpWandStack", []),
+      familiarPool:
+        effectiveMappingStatus === "incomplete-full-only"
+          ? undefined
+          : deck(
+              "fixture-familiar-pool",
+              "familiarPool",
+              familiarDefinitions.map((definition) => ({
+                cardId: definition.cardId,
+                count: 1,
+              }))
+            ),
+    },
     tokenStacks: {
-      ...dataPack.tokenStacks,
+      deadWizardTokens: undefined,
       wizardProperties: {
-        ...wizardPropertyStack,
+        schemaVersion: 1,
+        stackId: "fixture-wizard-properties",
+        runtimeSchema: "krutagidon.tokenStack.v0",
+        role: "wizardProperties",
+        mappingStatus: effectiveMappingStatus,
         entries: [{ tokenId: property.tokenId, count: 4 }],
       },
     },
   };
-
-  return manifestMappingStatus === undefined
-    ? result
-    : addFamiliarSetupPool(result);
 }
 
 function setupDataPackWithCatalogHandlers(
@@ -572,53 +668,58 @@ function setupDataPackWithCatalogHandlers(
 
   return {
     ...dataPack,
-    tokenDefinitions: new Map([
-      ...dataPack.tokenDefinitions,
-      [property.tokenId, property],
-    ]),
+    tokenDefinitions: new Map(dataPack.tokenDefinitions).set(
+      property.tokenId,
+      property
+    ),
   };
 }
 
-function addFamiliarSetupPool(dataPack: LoadedDataPack): LoadedDataPack {
-  const source = [...dataPack.cardDefinitions.values()].find(
-    (definition) => definition.engine.cardKind === "starter"
-  );
-  if (source === undefined) {
-    throw new Error("Setup test fixture has no starter card definition");
-  }
-
-  const familiarIds = [
-    "setup-familiar-001",
-    "setup-familiar-002",
-    "setup-familiar-003",
-    "setup-familiar-004",
-  ];
-  const familiarDefinitions = familiarIds.map((cardId) => ({
-    ...source,
-    cardId,
-    visible: { ...source.visible, cardKind: "familiar" as const },
-    engine: { ...source.engine, cardKind: "familiar" as const },
-  }));
-
+function cardDefinition(
+  cardId: string,
+  cardKind: CardDefinition["engine"]["cardKind"],
+  mappingStatus: string
+): CardDefinition {
   return {
-    ...dataPack,
-    cardDefinitions: new Map([
-      ...dataPack.cardDefinitions,
-      ...familiarDefinitions.map((definition) => [
-        definition.cardId,
-        definition,
-      ] as const),
-    ]),
-    decks: {
-      ...dataPack.decks,
-      familiarPool: {
-        schemaVersion: 1,
-        deckId: "setup-familiar-pool",
-        runtimeSchema: "krutagidon.deckComposition.v0",
-        role: "familiarPool",
-        mappingStatus: dataPack.manifest.mappingStatus,
-        entries: familiarIds.map((cardId) => ({ cardId, count: 1 })),
-      },
+    schemaVersion: 1,
+    cardId,
+    source: { image: `fixture/${cardId}.png` },
+    visible: {
+      nameRu: cardId,
+      cost: 0,
+      victoryPoints: 0,
+      typeRu: null,
+      cardKind,
+      cardTypes: [],
+      markers: [],
     },
+    engine: {
+      runtimeSchema: "krutagidon.cardDefinition.v0",
+      mappingStatus,
+      playableInV0: true,
+      cardKind,
+      cardTypes: [],
+      cost: 0,
+      victoryPoints: 0,
+      isOngoing: false,
+      marketChipMarker: false,
+      effects: [],
+      unsupportedMechanics: [],
+    },
+  };
+}
+
+function deck(
+  deckId: string,
+  role: string,
+  entries: DeckComposition["entries"]
+): DeckComposition {
+  return {
+    schemaVersion: 1,
+    deckId,
+    runtimeSchema: "krutagidon.deckComposition.v0",
+    role,
+    mappingStatus: "fixture",
+    entries,
   };
 }
