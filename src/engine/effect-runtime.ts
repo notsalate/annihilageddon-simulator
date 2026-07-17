@@ -1,7 +1,11 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
-import { recordCardMoved, recordMarketChipsGained } from "./event-recorder.js";
+import {
+  recordCardMoved,
+  recordGameEvent,
+  recordMarketChipsGained,
+} from "./event-recorder.js";
 import {
   type DamageResult,
   type EffectChoice,
@@ -180,13 +184,14 @@ export function moveGainedCardToPlayerDestination(
 
       if (effect["effectId"] === "topdeck_gained_card") {
         destination = "deckTop";
-        state.eventLog.push({
+        recordGameEvent(state, {
           type: "effectChoiceSelected",
           playerId: player.playerId,
           cardInstanceId: token.instanceId,
           definitionId: token.definitionId,
           tokenInstanceId: token.instanceId,
           tokenDefinitionId: token.definitionId,
+          choiceKind: "cardTarget",
           targetCardInstanceId: card.instanceId,
           targetDefinitionId: card.definitionId,
           effectId: "topdeck_gained_card",
@@ -569,7 +574,7 @@ function resolveAttackTarget(
   source: EffectSourceContext,
   unavoidable = false
 ): DamageResult & { avoided: boolean } {
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "attackTargetStarted",
     playerId: attackingPlayer.playerId,
     targetPlayerId: targetPlayer.playerId,
@@ -581,7 +586,7 @@ function resolveAttackTarget(
   });
 
   if (!unavoidable && resolveDefenseWindow(state, targetPlayer)) {
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "attackAvoided",
       playerId: targetPlayer.playerId,
       targetPlayerId: targetPlayer.playerId,
@@ -616,7 +621,7 @@ function resolveMayhemAttack(
   const targets = getPlayersInActiveOrder(state);
   const decisions: Array<{ player: PlayerState; avoided: boolean }> = [];
 
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "mayhemDecisionPhaseStarted",
     playerId: sourcePlayer.playerId,
     cardInstanceId: source.cardInstanceId,
@@ -627,7 +632,7 @@ function resolveMayhemAttack(
   });
 
   for (const targetPlayer of targets) {
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "mayhemDecisionStarted",
       playerId: sourcePlayer.playerId,
       targetPlayerId: targetPlayer.playerId,
@@ -639,7 +644,7 @@ function resolveMayhemAttack(
     });
     const avoided = resolveDefenseWindow(state, targetPlayer);
     if (avoided) {
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "attackAvoided",
         playerId: targetPlayer.playerId,
         targetPlayerId: targetPlayer.playerId,
@@ -653,7 +658,7 @@ function resolveMayhemAttack(
     decisions.push({ player: targetPlayer, avoided });
   }
 
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "mayhemResolutionPhaseStarted",
     playerId: sourcePlayer.playerId,
     cardInstanceId: source.cardInstanceId,
@@ -665,7 +670,7 @@ function resolveMayhemAttack(
 
   for (const decision of decisions) {
     if (decision.avoided) {
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "mayhemTargetSkipped",
         playerId: sourcePlayer.playerId,
         targetPlayerId: decision.player.playerId,
@@ -677,7 +682,7 @@ function resolveMayhemAttack(
       continue;
     }
 
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "attackTargetStarted",
       playerId: sourcePlayer.playerId,
       targetPlayerId: decision.player.playerId,
@@ -822,7 +827,7 @@ function resolveTargetChoice(
 
   const choice = chooseFirstLegalChoice(choicesResult.choices);
   if (choice === undefined) {
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectChoiceSkipped",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -844,17 +849,19 @@ function resolveTargetChoice(
     };
   }
 
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "effectChoiceSelected",
     playerId: player.playerId,
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
     ...(choice.choiceType === "card"
       ? {
+          choiceKind: "cardTarget" as const,
           targetCardInstanceId: choice.card.instanceId,
           targetDefinitionId: choice.card.definitionId,
         }
       : {
+          choiceKind: "playerTarget" as const,
           targetPlayerId: choice.player.playerId,
         }),
     effectId: asString(effect["effectId"]),
@@ -887,7 +894,7 @@ function chooseEffectChoice(
       ? selectedChoice
       : choices[0];
   if (choice === undefined) {
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "effectChoiceSkipped",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
@@ -899,31 +906,50 @@ function chooseEffectChoice(
     return undefined;
   }
 
-  state.eventLog.push({
+  const choicePayloadBase = {
+    choiceId: choice.choiceId,
+    choiceIds: choices.map((candidate) => candidate.choiceId),
+    legalChoiceCount: choices.length,
+  };
+  const choicePayload =
+    choice.choiceKind === "option"
+      ? { ...choicePayloadBase, choiceKind: "option" as const }
+      : choice.choiceKind === "playerTarget"
+        ? {
+            ...choicePayloadBase,
+            choiceKind: "playerTarget" as const,
+            targetPlayerIds: choice.players.map(
+              (candidate) => candidate.playerId
+            ),
+          }
+        : choice.choiceKind === "cardTarget"
+          ? {
+              ...choicePayloadBase,
+              choiceKind: "cardTarget" as const,
+              amount: choice.amount,
+              targetCardInstanceIds: choice.cards.map(
+                (candidate) => candidate.instanceId
+              ),
+              targetDefinitionIds: choice.cards.map(
+                (candidate) => candidate.definitionId
+              ),
+            }
+          : {
+              ...choicePayloadBase,
+              choiceKind: "directionalPlayerTarget" as const,
+              direction: choice.direction,
+              targetPlayerIds: choice.players.map(
+                (candidate) => candidate.playerId
+              ),
+            };
+
+  recordGameEvent(state, {
     type: "effectChoiceSelected",
     playerId: player.playerId,
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
     effectId,
-    choiceId: choice.choiceId,
-    choiceIds: choices.map((candidate) => candidate.choiceId),
-    legalChoiceCount: choices.length,
-    ...(choice.choiceKind === "directionalPlayerTarget"
-      ? {
-          direction: choice.direction,
-          targetPlayerIds: choice.players.map((player) => player.playerId),
-        }
-      : {}),
-    ...(choice.choiceKind === "playerTarget"
-      ? { targetPlayerIds: choice.players.map((player) => player.playerId) }
-      : {}),
-    ...(choice.choiceKind === "cardTarget"
-      ? {
-          amount: choice.amount,
-          targetCardInstanceIds: choice.cards.map((card) => card.instanceId),
-          targetDefinitionIds: choice.cards.map((card) => card.definitionId),
-        }
-      : {}),
+    ...choicePayload,
     sourceType: source.sourceType,
   });
   return choice;
@@ -1072,7 +1098,7 @@ function resolvePlayerDeath(
       }
     | undefined
 ): void {
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "playerDied",
     playerId: player.playerId,
     lifeAfter: lifeAfterDamage,
@@ -1093,7 +1119,7 @@ function resolvePlayerDeath(
     if (token !== undefined) {
       token.ownerId = player.playerId;
       player.deadWizardTokens.push(token);
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "deadWizardTokenGained",
         playerId: player.playerId,
         tokenInstanceId: token.instanceId,
@@ -1105,7 +1131,7 @@ function resolvePlayerDeath(
   const resurrectionLifeTotal = getResurrectionLifeTotal(state, player);
   const lifeBeforeResurrection = player.life.current;
   player.life.current = resurrectionLifeTotal;
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "playerResurrected",
     playerId: player.playerId,
     amount: resurrectionLifeTotal,
@@ -1183,7 +1209,7 @@ function awardBasicTrophyForKill(
         killer.trophyLikeObjects.push(trophy);
       }
 
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "trophyControlChanged",
         playerId: killer.playerId,
         targetPlayerId: defeatedPlayer.playerId,
@@ -1202,7 +1228,7 @@ function awardBasicTrophyForKill(
     ownerId: killer.playerId,
     effects: [],
   });
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "trophyControlChanged",
     playerId: killer.playerId,
     targetPlayerId: defeatedPlayer.playerId,
@@ -1232,7 +1258,7 @@ function dealDamage(
   const previousLife = targetPlayer.life.current;
   targetPlayer.life.current -= amount;
   const damageDealt = Math.max(0, Math.min(previousLife, amount));
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "effectDamageDealt",
     playerId: sourcePlayer.playerId,
     targetPlayerId: targetPlayer.playerId,
@@ -1329,7 +1355,7 @@ function resolveDefenseWindow(
     return false;
   }
 
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "defenseChoiceSelected",
     playerId: defendingPlayer.playerId,
     cardInstanceId: defense.card.instanceId,
@@ -1375,7 +1401,7 @@ function resolveDefenseWindow(
 
   if (defense.destination === "discardSelf") {
     defendingPlayer.discard.push(card);
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "defenseCardMoved",
       playerId: defendingPlayer.playerId,
       cardInstanceId: card.instanceId,
@@ -1387,7 +1413,7 @@ function resolveDefenseWindow(
 
   if (defense.destination === "topdeckSelf") {
     defendingPlayer.deck.unshift(card);
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "defenseCardMoved",
       playerId: defendingPlayer.playerId,
       cardInstanceId: card.instanceId,
@@ -1508,7 +1534,7 @@ function payDefenseCosts(
         }
 
         defendingPlayer.discard.push(paidCard);
-        state.eventLog.push({
+        recordGameEvent(state, {
           type: "defenseCostPaid",
           playerId: defendingPlayer.playerId,
           cardInstanceId: defenseCard.instanceId,
@@ -1525,7 +1551,7 @@ function payDefenseCosts(
         }
 
         defendingPlayer.chips -= cost.amount;
-        state.eventLog.push({
+        recordGameEvent(state, {
           type: "defenseCostPaid",
           playerId: defendingPlayer.playerId,
           cardInstanceId: defenseCard.instanceId,
@@ -1544,7 +1570,7 @@ function payDefenseCosts(
 
         const lifeBefore = defendingPlayer.life.current;
         defendingPlayer.life.current -= cost.amount;
-        state.eventLog.push({
+        recordGameEvent(state, {
           type: "defenseCostPaid",
           playerId: defendingPlayer.playerId,
           cardInstanceId: defenseCard.instanceId,
@@ -1579,7 +1605,7 @@ function healPlayer(
   targetPlayer.life.current = Math.min(unclampedLife, effectiveMaxLife);
   const healedAmount = Math.max(0, targetPlayer.life.current - previousLife);
 
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "effectLifeHealed",
     playerId: sourcePlayer.playerId,
     targetPlayerId: targetPlayer.playerId,
@@ -1593,7 +1619,7 @@ function healPlayer(
   });
 
   if (unclampedLife > effectiveMaxLife) {
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "playerLifeClamped",
       playerId: targetPlayer.playerId,
       amount: effectiveMaxLife,
@@ -1613,7 +1639,7 @@ function setPlayerLife(
   player.life.current = effectiveLifeTotal;
 
   if (effectiveLifeTotal < lifeTotal) {
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "playerLifeClamped",
       playerId: player.playerId,
       amount: effectiveLifeTotal,
@@ -1905,7 +1931,7 @@ function gainDinglerStatus(
   }
 
   player.life.current = Math.min(player.life.current, 15);
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "dinglerStatusGained",
     playerId: player.playerId,
     cardInstanceId: source.cardInstanceId,
@@ -1930,7 +1956,7 @@ function removeDinglerStatus(
   }
 
   player.statuses.splice(dinglerIndex, 1);
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "dinglerStatusRemoved",
     playerId: player.playerId,
     cardInstanceId: source.cardInstanceId,
@@ -2006,7 +2032,7 @@ function shuffleDiscardIntoDeckIfNeeded(
 
   player.deck.push(...player.discard.splice(0));
   shuffleInPlace(player.deck, state);
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "discardShuffledIntoDeck",
     playerId: player.playerId,
   });

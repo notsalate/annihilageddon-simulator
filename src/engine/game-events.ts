@@ -1,5 +1,5 @@
 import type { GameAction } from "./actions.js";
-import type { GameEvent, GameState } from "./setup.js";
+import type { GameEvent, GameEventDraft, GameState } from "./setup.js";
 
 interface ActionContext {
   identity: string;
@@ -20,12 +20,6 @@ export function installGameEventLog(state: GameState): void {
     nextEventSequence: 1,
   };
   eventContexts.set(state, context);
-
-  const eventLog = state.eventLog;
-  eventLog.push = (...events: GameEvent[]): number => {
-    const enrichedEvents = events.map((event) => enrichGameEvent(state, event));
-    return Array.prototype.push.apply(eventLog, enrichedEvents);
-  };
 }
 
 export function beginGameAction(state: GameState, action: GameAction): void {
@@ -37,7 +31,10 @@ export function beginGameAction(state: GameState, action: GameAction): void {
   context.nextActionSequence += 1;
 }
 
-function enrichGameEvent(state: GameState, event: GameEvent): GameEvent {
+export function enrichGameEvent(
+  state: GameState,
+  event: GameEventDraft
+): GameEvent {
   const context = mustGetEventContext(state);
   const enrichedEvent: GameEvent = {
     ...event,

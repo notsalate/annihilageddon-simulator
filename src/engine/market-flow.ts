@@ -1,6 +1,12 @@
 import type { CardDefinition } from "./data.js";
 import { executeMayhemEffects } from "./effect-runtime.js";
-import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import { recordGameEvent } from "./event-recorder.js";
+import type {
+  CardInstance,
+  GameEventType,
+  GameState,
+  PlayerState,
+} from "./setup.js";
 
 export type MarketFlowMode = "setup" | "turn";
 export type MarketFlowEndReason = "mainDeckExhausted" | "legendDeckExhausted";
@@ -65,7 +71,10 @@ function fillMarket(
     destroyedEvents: CardInstance[];
     targetSize: number;
     eventKind: CardDefinition["engine"]["cardKind"];
-    eventLogType: string;
+    eventLogType: Extract<
+      GameEventType,
+      "megaMayhemDestroyed" | "mayhemDestroyed"
+    >;
     endReason: MarketFlowEndReason;
     mode: MarketFlowMode;
   }
@@ -73,7 +82,7 @@ function fillMarket(
   while (options.market.length < options.targetSize) {
     const card = options.sourceDeck.shift();
     if (card === undefined) {
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "marketFlowFailed",
         playerId: state.activePlayerId,
         sourceType: options.mode,
@@ -84,7 +93,7 @@ function fillMarket(
 
     const definition = mustGetDefinition(state, card.definitionId);
     if (definition.engine.cardKind === options.eventKind) {
-      state.eventLog.push({
+      recordGameEvent(state, {
         type: "marketEventCardOpened",
         playerId: state.activePlayerId,
         sourceType: options.mode,
@@ -101,19 +110,29 @@ function fillMarket(
       }
 
       options.destroyedEvents.push(card);
-      state.eventLog.push({
-        type: options.eventLogType,
+      const destructionEvent = {
         playerId: state.activePlayerId,
         sourceType: options.mode,
         destinationZone: options.marketName,
         cardInstanceId: card.instanceId,
         definitionId: card.definitionId,
-      });
+      };
+      if (options.eventLogType === "mayhemDestroyed") {
+        recordGameEvent(state, {
+          type: "mayhemDestroyed",
+          ...destructionEvent,
+        });
+      } else {
+        recordGameEvent(state, {
+          type: "megaMayhemDestroyed",
+          ...destructionEvent,
+        });
+      }
       continue;
     }
 
     options.market.push(card);
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "marketFlowCardAdded",
       playerId: state.activePlayerId,
       sourceType: options.mode,
@@ -146,7 +165,7 @@ function executeMayhemCard(
     return effectResult;
   }
 
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "mayhemResolved",
     playerId: activePlayer.playerId,
     cardInstanceId: card.instanceId,
@@ -172,7 +191,7 @@ function applyMarketChipMarker(
     }
 
     card.marketChips += 1;
-    state.eventLog.push({
+    recordGameEvent(state, {
       type: "marketChipAdded",
       playerId: state.activePlayerId,
       sourceType: mode,

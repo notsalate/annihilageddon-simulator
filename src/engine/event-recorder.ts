@@ -1,15 +1,34 @@
 import type { GameAction } from "./actions.js";
 import type { EffectSourceContext } from "./effect-runtime-registry.js";
-import { beginGameAction } from "./game-events.js";
+import { beginGameAction, enrichGameEvent } from "./game-events.js";
 import type { RuntimeEffectId } from "./runtime-effect.js";
-import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import type {
+  CardInstance,
+  GameEvent,
+  GameEventDraft,
+  GameEventDraftFor,
+  GameEventSourceType,
+  GameState,
+  PlayerState,
+} from "./setup.js";
+
+export function recordGameEvent(state: GameState, event: GameEventDraft): void {
+  state.eventLog.push(enrichGameEvent(state, event));
+}
+
+export function recordSetupChoiceSelected(
+  eventLog: GameEvent[],
+  event: GameEventDraftFor<"setupChoiceSelected">
+): void {
+  eventLog.push(event);
+}
 
 export function recordBotActionSelected(
   state: GameState,
   action: GameAction
 ): void {
   beginGameAction(state, action);
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "botActionSelected",
     playerId: state.activePlayerId,
   });
@@ -23,7 +42,7 @@ export function recordTurnPowerChanged(
   powerBefore: number,
   powerAfter: number
 ): void {
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "effectAddPowerApplied",
     playerId: player.playerId,
     cardInstanceId: source.cardInstanceId,
@@ -44,7 +63,7 @@ export function recordEffectChipsChanged(
   chipsBefore: number,
   chipsAfter: number
 ): void {
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "effectChipsGained",
     playerId: player.playerId,
     cardInstanceId: source.cardInstanceId,
@@ -70,7 +89,7 @@ export function recordMarketChipsGained(
   chipsBefore: number,
   chipsAfter: number
 ): void {
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "marketChipsGained",
     playerId: player.playerId,
     cardInstanceId: card.instanceId,
@@ -91,10 +110,10 @@ export function recordCardMoved(
     ownerBefore: CardInstance["ownerId"];
     ownerAfter: CardInstance["ownerId"];
     effectId?: string;
-    sourceType?: string;
+    sourceType?: GameEventSourceType;
   }
 ): void {
-  state.eventLog.push({
+  recordGameEvent(state, {
     type: "cardMoved",
     playerId: player.playerId,
     cardInstanceId: card.instanceId,

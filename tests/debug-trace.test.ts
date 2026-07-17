@@ -6,6 +6,190 @@ import {
   type SingleGameResult,
 } from "../src/index.js";
 import { markCardDefinitionId, markPlayerId } from "../src/domain/types.js";
+import { initializeGame } from "../src/engine/setup.js";
+import type {
+  GameEvent,
+  GameEventDestination,
+  GameEventSourceType,
+  GameEventDraft,
+} from "../src/engine/setup.js";
+import { recordGameEvent } from "../src/engine/event-recorder.js";
+
+test("recordGameEvent enriches a closed event draft", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 90117 });
+  const player = state.players[0];
+  assert.ok(player);
+  recordGameEvent(state, {
+    type: "turnStarted",
+    playerId: player.playerId,
+  });
+  const event = state.eventLog.at(-1);
+  assert.ok(event);
+  assert.equal(event.type, "turnStarted");
+  assert.equal(event.playerId, player.playerId);
+  assert.equal(event.turnNumber, state.turn.number);
+  assert.ok(event.eventSequence !== undefined);
+});
+
+const knownGameEventType: GameEvent["type"] = "cardMoved";
+type HasDeclaredGameEventTypes = string extends GameEvent["type"]
+  ? false
+  : true;
+const hasDeclaredGameEventTypes: HasDeclaredGameEventTypes = true;
+const knownEventSourceType: GameEventSourceType = "wizardProperty";
+const knownEventDestination: GameEventDestination = "deckTop";
+type IsAssignable<From, To> = [From] extends [To] ? true : false;
+type AssertTrue<T extends true> = T;
+type AssertFalse<T extends false> = T;
+type InvalidTurnStartedDraft = {
+  type: "turnStarted";
+  playerId: ReturnType<typeof markPlayerId>;
+  eventSequence: number;
+};
+type TurnStartedDraftRejectsMetadata = AssertFalse<
+  IsAssignable<InvalidTurnStartedDraft, GameEventDraft>
+>;
+type IncompleteDamageEvent = {
+  type: "effectDamageDealt";
+  playerId: ReturnType<typeof markPlayerId>;
+  cardInstanceId: "card-1";
+  definitionId: ReturnType<typeof markCardDefinitionId>;
+  effectId: "deal_damage";
+  sourceType: "card";
+};
+type CompleteDamageEvent = IncompleteDamageEvent & {
+  targetPlayerId: ReturnType<typeof markPlayerId>;
+  amount: number;
+};
+type IncompleteFoeDeckPlayedEvent = {
+  type: "effectFoeDeckCardPlayed";
+  playerId: ReturnType<typeof markPlayerId>;
+  cardInstanceId: "card-1";
+  definitionId: ReturnType<typeof markCardDefinitionId>;
+  targetCardInstanceId: "card-2";
+  targetDefinitionId: ReturnType<typeof markCardDefinitionId>;
+  effectId: "play_top_foe_deck_card";
+  sourceType: "card";
+};
+type InitializedEventWithForeignPayload = {
+  type: "gameInitialized";
+  targetPlayerId: ReturnType<typeof markPlayerId>;
+  amount: number;
+};
+type IncompleteDamageIsRejected = AssertFalse<
+  IsAssignable<IncompleteDamageEvent, GameEvent>
+>;
+type CompleteDamageIsAccepted = AssertTrue<
+  IsAssignable<CompleteDamageEvent, GameEvent>
+>;
+type IncompleteFoeDeckPlayedIsRejected = AssertFalse<
+  IsAssignable<IncompleteFoeDeckPlayedEvent, GameEvent>
+>;
+type InitializedEventRejectsForeignPayload = AssertFalse<
+  IsAssignable<InitializedEventWithForeignPayload, GameEvent>
+>;
+type SetupChoiceWithUnknownPolicy = {
+  type: "setupChoiceSelected";
+  playerId: ReturnType<typeof markPlayerId>;
+  setupChoiceKind: "wizardProperty";
+  policyId: "random";
+  candidateDefinitionIds: string[];
+  chosenDefinitionId: string;
+};
+type SetupChoiceRejectsUnknownPolicy = AssertFalse<
+  IsAssignable<SetupChoiceWithUnknownPolicy, GameEvent>
+>;
+
+type IncompleteEffectChoiceEvent = {
+  type: "effectChoiceSelected";
+  playerId: ReturnType<typeof markPlayerId>;
+  cardInstanceId: string;
+  definitionId: ReturnType<typeof markCardDefinitionId>;
+  effectId: string;
+  sourceType: "card";
+};
+type IncompleteEffectChoiceRejected = AssertFalse<
+  IsAssignable<IncompleteEffectChoiceEvent, GameEvent>
+>;
+
+type CardEffectChoiceWithoutKind = {
+  type: "effectChoiceSelected";
+  playerId: ReturnType<typeof markPlayerId>;
+  cardInstanceId: string;
+  definitionId: ReturnType<typeof markCardDefinitionId>;
+  effectId: string;
+  sourceType: "card";
+  targetCardInstanceId: string;
+  targetDefinitionId: string;
+};
+type CardEffectChoiceWithoutKindRejected = AssertFalse<
+  IsAssignable<CardEffectChoiceWithoutKind, GameEvent>
+>;
+type SelectedCardEffectChoiceEvent = CardEffectChoiceWithoutKind & {
+  choiceKind: "cardTarget";
+};
+type SelectedCardEffectChoiceAccepted = AssertTrue<
+  IsAssignable<SelectedCardEffectChoiceEvent, GameEvent>
+>;
+type CardEffectChoiceWithForeignPlayerTarget = SelectedCardEffectChoiceEvent & {
+  targetPlayerId: ReturnType<typeof markPlayerId>;
+};
+type CardEffectChoiceRejectsForeignPlayerTarget = AssertFalse<
+  IsAssignable<CardEffectChoiceWithForeignPlayerTarget, GameEvent>
+>;
+type OptionEffectChoiceWithForeignCardTarget = {
+  type: "effectChoiceSelected";
+  playerId: ReturnType<typeof markPlayerId>;
+  cardInstanceId: string;
+  definitionId: ReturnType<typeof markCardDefinitionId>;
+  effectId: string;
+  sourceType: "card";
+  choiceKind: "option";
+  choiceId: string;
+  choiceIds: string[];
+  legalChoiceCount: number;
+  targetCardInstanceId: string;
+};
+type OptionEffectChoiceRejectsForeignCardTarget = AssertFalse<
+  IsAssignable<OptionEffectChoiceWithForeignCardTarget, GameEvent>
+>;
+type ValidOptionEffectChoice = Omit<
+  OptionEffectChoiceWithForeignCardTarget,
+  "targetCardInstanceId"
+>;
+type ValidOptionEffectChoiceAccepted = AssertTrue<
+  IsAssignable<ValidOptionEffectChoice, GameEvent>
+>;
+test("event payload types reject incomplete choices", () => {
+  assert.equal(knownGameEventType, "cardMoved");
+  assert.equal(hasDeclaredGameEventTypes, true);
+  assert.equal(knownEventSourceType, "wizardProperty");
+  assert.equal(knownEventDestination, "deckTop");
+  const turnStartedDraftRejectsMetadata: TurnStartedDraftRejectsMetadata = false;
+  const incompleteDamageIsRejected: IncompleteDamageIsRejected = false;
+  const completeDamageIsAccepted: CompleteDamageIsAccepted = true;
+  const incompleteFoeDeckPlayedIsRejected: IncompleteFoeDeckPlayedIsRejected = false;
+  const initializedEventRejectsForeignPayload: InitializedEventRejectsForeignPayload = false;
+  const setupChoiceRejectsUnknownPolicy: SetupChoiceRejectsUnknownPolicy = false;
+  const incompleteEffectChoiceRejected: IncompleteEffectChoiceRejected = false;
+  const cardEffectChoiceWithoutKindRejected: CardEffectChoiceWithoutKindRejected = false;
+  const selectedCardEffectChoiceAccepted: SelectedCardEffectChoiceAccepted = true;
+  const cardEffectChoiceRejectsForeignPlayerTarget: CardEffectChoiceRejectsForeignPlayerTarget = false;
+  const optionEffectChoiceRejectsForeignCardTarget: OptionEffectChoiceRejectsForeignCardTarget = false;
+  const validOptionEffectChoiceAccepted: ValidOptionEffectChoiceAccepted = true;
+  assert.equal(turnStartedDraftRejectsMetadata, false);
+  assert.equal(incompleteDamageIsRejected, false);
+  assert.equal(completeDamageIsAccepted, true);
+  assert.equal(incompleteFoeDeckPlayedIsRejected, false);
+  assert.equal(initializedEventRejectsForeignPayload, false);
+  assert.equal(setupChoiceRejectsUnknownPolicy, false);
+  assert.equal(incompleteEffectChoiceRejected, false);
+  assert.equal(cardEffectChoiceWithoutKindRejected, false);
+  assert.equal(selectedCardEffectChoiceAccepted, true);
+  assert.equal(cardEffectChoiceRejectsForeignPlayerTarget, false);
+  assert.equal(optionEffectChoiceRejectsForeignCardTarget, false);
+  assert.equal(validOptionEffectChoiceAccepted, true);
+});
 
 test("single-game debug trace summarizes card play and effect resolution in game terms", () => {
   const result: SingleGameResult = {
