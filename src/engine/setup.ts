@@ -28,6 +28,7 @@ import {
 import {
   tryExecuteSetupEffect,
   type EffectRuntimeSetupServices,
+  type SetupDirective,
   type SetupEffectSourceContext,
 } from "./effect-runtime-registry.js";
 import { installGameEventLog } from "./game-events.js";
@@ -818,7 +819,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     rng,
     setupEvents
   );
-  applyWizardPropertySetupEffects(
+  const forcedStartingPlayerId = applyWizardPropertySetupEffects(
     players,
     dataPack,
     dataPack.manifest.mappingStatus === "fixture" ? "fixture" : "combat",
@@ -877,7 +878,14 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     throw new Error("Cannot select active player from an empty player list");
   }
   const activePlayer =
-    getForcedStartingPlayer(players, dataPack) ?? randomActivePlayer;
+    forcedStartingPlayerId === undefined
+      ? randomActivePlayer
+      : players.find((player) => player.playerId === forcedStartingPlayerId);
+  if (activePlayer === undefined) {
+    throw new Error(
+      `Forced starting player ${String(forcedStartingPlayerId)} is missing from players`
+    );
+  }
 
   const state: GameState = {
     seed: options.seed,
@@ -1156,7 +1164,8 @@ function applyWizardPropertySetupEffects(
   dataPack: LoadedDataPack,
   runtimeMode: "combat" | "fixture",
   services: EffectRuntimeSetupServices
-): void {
+): PlayerId | undefined {
+  let forcedStartingPlayer: PlayerId | undefined;
   for (const player of players) {
     for (const property of player.wizardProperties) {
       const definition = dataPack.tokenDefinitions.get(property.definitionId);
@@ -1182,46 +1191,27 @@ function applyWizardPropertySetupEffects(
         };
         const execution = tryExecuteSetupEffect(player, effect, source, services);
         if (execution.status === "executed") {
+          const directive: SetupDirective | undefined = execution.directive;
+          if (
+            forcedStartingPlayer === undefined &&
+            directive?.kind === "forceStartingPlayer"
+          ) {
+            forcedStartingPlayer = directive.playerId;
+          }
           continue;
         }
         if (execution.status === "error") {
           throw new Error(execution.error);
         }
-        if (execution.status === "notImplemented" && effect.effectId !== "force_starting_player") {
-          throw new Error(`Setup effect executor missing for ${effect.effectId}`);
-        }
+        throw new Error(`Unexpected setup effect execution status`);
       }
     }
   }
+  return forcedStartingPlayer;
 }
 
 function isSetupEffect(effect: RuntimeEffect): boolean {
   return effect.timing === "setup";
-}
-
-function getForcedStartingPlayer(
-  players: PlayerState[],
-  dataPack: LoadedDataPack
-): PlayerState | undefined {
-  return players.find((player) => {
-    return player.wizardProperties.some((property) => {
-      const definition = dataPack.tokenDefinitions.get(property.definitionId);
-      if (
-        definition?.kind !== "wizardProperty" ||
-        definition.engine === undefined ||
-        !definition.engine.playableInV0
-      ) {
-        return false;
-      }
-
-      return definition.engine.effects.some((effect) => {
-        return (
-          isSetupEffect(effect) &&
-          effect["effectId"] === "force_starting_player"
-        );
-      });
-    });
-  });
 }
 
 function createPlayers(

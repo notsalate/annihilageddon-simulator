@@ -63,10 +63,18 @@ export type EffectExecutionResult =
       error: string;
     };
 
+export type SetupDirective = {
+  kind: "forceStartingPlayer";
+  playerId: PlayerState["playerId"];
+};
+
 export type SetupEffectExecutionResult =
-  | { status: "executed" }
-  | { status: "notImplemented" }
+  | { status: "executed"; directive?: SetupDirective }
   | { status: "error"; error: string };
+
+type SetupEffectHandlerResult =
+  | { ok: true; directive?: SetupDirective }
+  | { ok: false; error: string };
 
 export interface SetupEffectSourceContext {
   sourceType: "wizardProperty";
@@ -281,7 +289,7 @@ export interface EffectRuntimeHandler<
     effect: Effect,
     source: SetupEffectSourceContext,
     services: EffectRuntimeSetupServices
-  ): EffectExecutionResult;
+  ): SetupEffectHandlerResult;
 }
 
 export type RuntimeEffectForId<EffectId extends RuntimeEffectId> = Extract<
@@ -2106,6 +2114,12 @@ const forceStartingPlayerHandler: EffectRuntimeHandler = {
   },
   execute() {
     return setupOnlyExecutionError("force_starting_player");
+  },
+  executeSetup(_player, _effect, source) {
+    return {
+      ok: true,
+      directive: { kind: "forceStartingPlayer", playerId: source.playerId },
+    };
   },
 };
 
@@ -4700,9 +4714,14 @@ export function tryExecuteSetupEffect(
 
   const executeSetup = resolution.entry.handler.executeSetup;
   if (executeSetup === undefined) {
-    return { status: "notImplemented" };
+    return {
+      status: "error",
+      error: `Setup effect executor missing for ${String(effect["effectId"])}`,
+    };
   }
 
   const result = executeSetup(player, effect, source, services);
-  return result.ok ? { status: "executed" } : { status: "error", error: result.error };
+  return result.ok
+    ? { status: "executed", ...(result.directive === undefined ? {} : { directive: result.directive }) }
+    : { status: "error", error: result.error };
 }
