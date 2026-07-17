@@ -148,6 +148,32 @@ test("runtime source metadata validates image and keeps optional links", () => {
   }
 });
 
+test("runtime source image accepts only canonical asset paths", () => {
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), "runtime-source-path-"));
+  const canonical = createCard("fixture-source", {
+    image: "assets/cards/fixture.png",
+  });
+  writeFixturePack(tempRoot, canonical);
+
+  const valid = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+  assert.equal(valid.ok, true);
+
+  for (const image of [
+    "fixture.png",
+    "data/import/cards/fixture.png",
+    "../assets/cards/fixture.png",
+    "assets/../outside.png",
+    "/assets/cards/fixture.png",
+  ]) {
+    writeFixturePack(tempRoot, createCard("fixture-source", { image }));
+    const decoded = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
+    assert.equal(decoded.ok, false);
+    if (!decoded.ok) {
+      assert.ok(decoded.errors.some((error) => error.includes("source.image")));
+    }
+  }
+});
+
 function createCard(
   cardId: string,
   source: Record<string, unknown>

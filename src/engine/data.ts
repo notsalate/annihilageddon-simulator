@@ -2070,7 +2070,7 @@ function requireNonEmptyStringField(
   key = label
 ): string | undefined {
   const value = record[key];
-  if (typeof value !== "string" || value.trim().length === 0) {
+  if (typeof value !== "string" || value.trim().length === 0 || (key === "image" && !isCanonicalAssetPath(value))) {
     errors.push(`${label} must be a non-empty string`);
     return undefined;
   }
@@ -2365,4 +2365,15 @@ function validateNestedAttackBranches(
 
 function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
   return isPlainRecord(effect);
+}
+
+function isCanonicalAssetPath(value: string): boolean {
+  return (
+    value.trim() === value &&
+    value.startsWith("assets/") &&
+    !value.endsWith("/") &&
+    !value.includes("\\") &&
+    path.posix.normalize(value) === value &&
+    !path.posix.isAbsolute(value)
+  );
 }
