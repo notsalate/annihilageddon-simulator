@@ -1,6 +1,7 @@
 export interface RandomSource {
   next(): number;
   nextInt(maxExclusive: number): number;
+  fork(): RandomSource;
 }
 
 export function createSeededRng(seed: number): RandomSource {
@@ -28,5 +29,9 @@ class Mulberry32 implements RandomSource {
     }
 
     return Math.floor(this.next() * maxExclusive);
+  }
+
+  fork(): RandomSource {
+    return new Mulberry32(this.state);
   }
 }

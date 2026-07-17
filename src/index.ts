@@ -123,6 +123,7 @@ export type {
   TrophyLikeInstance,
 } from "./engine/setup.js";
 export { initializeGame } from "./engine/setup.js";
+export { forkGameState } from "./engine/game-state-fork.js";
 export { assertGameStateInvariants } from "./engine/invariants.js";
 export type {
   ActionResult,

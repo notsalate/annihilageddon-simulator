@@ -27,6 +27,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Do not use localized display names as primary identifiers.
 - Preserve existing tested behavior unless the issue explicitly requires a rules change.
 - Thread execution/validation mode explicitly instead of adding hidden global assumptions.
+- Analysis forks use `forkGameState` to copy mutable state and the current RNG position via `RandomSource.fork()`; immutable definition maps may be shared by reference, while the fork keeps its own event context and continues event/action sequences.
 - Runtime decoder сохраняет `CardDefinition.source.image` как presentation metadata для API; gameplay logic не ветвится по path и не читает image files.
 
 ## Work Guidance

@@ -2,6 +2,7 @@ import "./common.test.js";
 import "./id-types.test.js";
 import "./json-parse-assertions.test.js";
 import "./rng.test.js";
+import "./game-state-fork.test.js";
 import "./setup.test.js";
 import "./action-loop.test.js";
 import "./effective-values.test.js";
