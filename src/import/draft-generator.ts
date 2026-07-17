@@ -36,7 +36,11 @@ export interface DraftImportModelComposition {
   quantity: number;
 }
 
-export interface CardDraftImportModel {
+interface CardDraftImportModelBase<
+  CardKind extends string,
+  CardType extends string,
+  Marker extends string,
+> {
   schemaVersion: 1;
   draftKind: "cardDraft";
   cardId: string;
@@ -46,15 +50,28 @@ export interface CardDraftImportModel {
     cost: number | null;
     victoryPoints: number | null;
     typeRu: string | null;
-    cardKind: AllowedCardKind;
-    cardTypes: AllowedCardType[];
+    cardKind: CardKind;
+    cardTypes: CardType[];
     textRu: string;
-    markers: AllowedMarker[];
+    markers: Marker[];
     uncertainty: string[];
   };
   notes: string[];
   composition?: DraftImportModelComposition;
 }
+
+/** Card draft after its visible enum fields have passed draft validation. */
+export type CardDraftImportModel = CardDraftImportModelBase<
+  AllowedCardKind,
+  AllowedCardType,
+  AllowedMarker
+>;
+
+interface UnvalidatedCardDraftImportModel extends CardDraftImportModelBase<
+  string,
+  string,
+  string
+> {}
 
 export interface DeadWizardTokenDraftImportModel {
   schemaVersion: 1;
@@ -88,7 +105,7 @@ export interface WizardPropertyDraftImportModel {
 }
 
 export type DraftImportModel =
-  | CardDraftImportModel
+  | UnvalidatedCardDraftImportModel
   | DeadWizardTokenDraftImportModel
   | WizardPropertyDraftImportModel;
 
@@ -229,7 +246,7 @@ function createCardDraft(
   sourceTextPath: string,
   markdown: ParsedMarkdown,
   blockers: DraftImportBlocker[]
-): CardDraftImportModel {
+): UnvalidatedCardDraftImportModel {
   const cardId = path.basename(sourceTextPath, ".md");
   const sourceGroup = sourceTextPath.split("/").at(-3);
   const cardKind = inferCardKind(sourceGroup, markdown);
@@ -264,13 +281,10 @@ function createCardDraft(
     "visible.victoryPoints"
   );
   const cardTypes =
-    (readStringListField(markdown, "visible card types") as
-      | AllowedCardType[]
-      | undefined) ?? inferCardTypes(typeRu, cardKind);
+    readStringListField(markdown, "visible card types") ??
+    inferCardTypes(typeRu, cardKind);
   const markers =
-    (readStringListField(markdown, "visible markers") as
-      | AllowedMarker[]
-      | undefined) ?? inferMarkers(textRu);
+    readStringListField(markdown, "visible markers") ?? inferMarkers(textRu);
   const notes = collectNotes(markdown);
   const compositionQuantity = readOptionalIntegerField(
     sourceTextPath,
@@ -319,7 +333,7 @@ function createCardDraft(
     ...(compositionQuantity === null
       ? {}
       : { composition: { quantity: compositionQuantity } }),
-  } satisfies CardDraftImportModel;
+  } satisfies UnvalidatedCardDraftImportModel;
 
   return draft;
 }
@@ -626,11 +640,11 @@ function readOptionalIntegerField(
 function inferCardKind(
   sourceGroup: string | undefined,
   markdown: ParsedMarkdown
-): AllowedCardKind | undefined {
+): string | undefined {
   const explicitKind =
     readField(markdown, "visible card kind") ?? readField(markdown, "cardKind");
   if (explicitKind !== undefined) {
-    return explicitKind as AllowedCardKind;
+    return explicitKind;
   }
 
   const typeRu = readField(markdown, "visible type")?.toLowerCase();
@@ -654,8 +668,8 @@ function inferCardKind(
 
 function inferCardTypes(
   typeRu: string | undefined,
-  cardKind: AllowedCardKind | undefined
-): AllowedCardType[] {
+  cardKind: string | undefined
+): string[] {
   if (
     cardKind === "wildMagic" ||
     cardKind === "limpWand" ||
@@ -677,12 +691,12 @@ function inferCardTypes(
   return cardType === undefined ? [] : [cardType];
 }
 
-function inferMarkers(textRu: string | undefined): AllowedMarker[] {
+function inferMarkers(textRu: string | undefined): string[] {
   if (textRu === undefined) {
     return [];
   }
 
-  const markers: AllowedMarker[] = [];
+  const markers: string[] = [];
   const lowerText = textRu.toLowerCase();
   if (lowerText.includes("атака:")) {
     markers.push("attack");
