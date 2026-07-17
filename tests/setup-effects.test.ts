@@ -232,6 +232,40 @@ test("setup resolver rejects invalid life totals before execution", () => {
   }
 });
 
+test("replace_starting_card rejects blank or untrimmed definition IDs", () => {
+  const invalidEffects = [
+    { fromDefinitionId: "", toDefinitionId: "target" },
+    { fromDefinitionId: "source", toDefinitionId: "" },
+    { fromDefinitionId: " ", toDefinitionId: "target" },
+    { fromDefinitionId: "source", toDefinitionId: "target " },
+    { fromDefinitionId: " source", toDefinitionId: "target" },
+  ];
+  for (const { fromDefinitionId, toDefinitionId } of invalidEffects) {
+    const subject = player();
+    subject.hand.push({
+      instanceId: "hand-a" as never,
+      definitionId: "source" as never,
+      ownerId: subject.playerId,
+      marketChips: 0,
+    });
+
+    const result = tryExecuteSetupEffect(
+      subject,
+      {
+        effectId: "replace_starting_card",
+        timing: "setup",
+        fromDefinitionId,
+        toDefinitionId,
+      },
+      source,
+      { ...services(), allowsMissingData: true }
+    );
+
+    assert.equal(result.status, "error");
+    assert.equal(subject.hand[0]?.definitionId, "source");
+  }
+});
+
 test("replace_starting_card replaces first matching card in zone order", () => {
   const subject = player();
   subject.hand.push({
@@ -262,6 +296,70 @@ test("replace_starting_card replaces first matching card in zone order", () => {
   assert.equal(subject.hand[0]?.definitionId, "target");
   assert.equal(subject.hand[0]?.instanceId, "factory-1");
   assert.equal(subject.deck[0]?.instanceId, "deck-a");
+});
+
+test("replace_starting_card preserves the matching card owner", () => {
+  const subject = player();
+  const opponentId = "player-2" as PlayerState["playerId"];
+  subject.hand.push({
+    instanceId: "opponent-source" as never,
+    definitionId: "source" as never,
+    ownerId: opponentId,
+    marketChips: 0,
+  });
+  subject.deck.push({
+    instanceId: "player-source" as never,
+    definitionId: "source" as never,
+    ownerId: subject.playerId,
+    marketChips: 0,
+  });
+
+  const result = tryExecuteSetupEffect(
+    subject,
+    {
+      effectId: "replace_starting_card",
+      timing: "setup",
+      fromDefinitionId: "source",
+      toDefinitionId: "target",
+    },
+    source,
+    services()
+  );
+
+  assert.deepEqual(result, { status: "executed" });
+  assert.equal(subject.hand[0]?.instanceId, "opponent-source");
+  assert.equal(subject.hand[0]?.ownerId, opponentId);
+  assert.equal(subject.deck[0]?.instanceId, "factory-1");
+  assert.equal(subject.deck[0]?.definitionId, "target");
+  assert.equal(subject.deck[0]?.ownerId, subject.playerId);
+});
+
+test("replace_starting_card reports a missing source card for full packs", () => {
+  const subject = player();
+  const effect = {
+    effectId: "replace_starting_card",
+    timing: "setup",
+    fromDefinitionId: "source",
+    toDefinitionId: "target",
+  } as const;
+
+  const full = tryExecuteSetupEffect(subject, effect, source, services());
+  assert.equal(full.status, "error");
+  if (full.status === "error") {
+    assert.match(full.error, /missing starting card source/);
+  }
+  assert.equal(subject.hand.length, 0);
+  assert.equal(subject.deck.length, 0);
+
+  const incomplete = tryExecuteSetupEffect(
+    subject,
+    effect,
+    source,
+    { ...services(), allowsMissingData: true }
+  );
+  assert.deepEqual(incomplete, { status: "executed" });
+  assert.equal(subject.hand.length, 0);
+  assert.equal(subject.deck.length, 0);
 });
 
 test("replace_starting_card missing data is tolerated only by incomplete pack", () => {
@@ -316,6 +414,41 @@ test("start_with_basic_trophy is idempotent", () => {
     subject.trophyLikeObjects[0]?.instanceId,
     "setup-basic-trophy-player-1"
   );
+});
+
+test("start_with_basic_trophy preserves other trophy-like objects", () => {
+  const subject = player();
+  subject.trophyLikeObjects.push({
+    instanceId: "other-trophy",
+    trophyId: "otherTrophy",
+    ownerId: subject.playerId,
+    effects: [],
+  });
+  const effect = {
+    effectId: "start_with_basic_trophy",
+    timing: "setup",
+  } as const;
+
+  assert.deepEqual(tryExecuteSetupEffect(subject, effect, source, services()), {
+    status: "executed",
+  });
+  assert.deepEqual(tryExecuteSetupEffect(subject, effect, source, services()), {
+    status: "executed",
+  });
+  assert.deepEqual(subject.trophyLikeObjects, [
+    {
+      instanceId: "other-trophy",
+      trophyId: "otherTrophy",
+      ownerId: subject.playerId,
+      effects: [],
+    },
+    {
+      instanceId: "setup-basic-trophy-player-1",
+      trophyId: "basicTrophy",
+      ownerId: subject.playerId,
+      effects: [],
+    },
+  ]);
 });
 
 test("setup executor accepts fixture runtime mode explicitly", () => {

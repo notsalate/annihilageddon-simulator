@@ -2046,14 +2046,14 @@ const replaceStartingCardHandler: EffectRuntimeHandler = {
   validateShape(subjectId, effect) {
     const errors = validateSetupTiming(subjectId, effect);
     const fromDefinitionId = effect["fromDefinitionId"];
-    if (!isNonEmptyString(fromDefinitionId)) {
+    if (!isStableDefinitionId(fromDefinitionId)) {
       errors.push(
         `${subjectId} uses invalid replacement source card ${String(fromDefinitionId)}`
       );
     }
 
     const toDefinitionId = effect["toDefinitionId"];
-    if (!isNonEmptyString(toDefinitionId)) {
+    if (!isStableDefinitionId(toDefinitionId)) {
       errors.push(
         `${subjectId} uses invalid replacement target card ${String(toDefinitionId)}`
       );
@@ -2068,8 +2068,8 @@ const replaceStartingCardHandler: EffectRuntimeHandler = {
     const rawFromDefinitionId = effect["fromDefinitionId"];
     const rawToDefinitionId = effect["toDefinitionId"];
     if (
-      !isNonEmptyString(rawFromDefinitionId) ||
-      !isNonEmptyString(rawToDefinitionId)
+      !isStableDefinitionId(rawFromDefinitionId) ||
+      !isStableDefinitionId(rawToDefinitionId)
     ) {
       return { ok: false, error: "replace_starting_card requires stable fromDefinitionId and toDefinitionId" };
     }
@@ -3738,6 +3738,10 @@ function validateWandAttackReplacementShape(
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
+}
+
+function isStableDefinitionId(value: unknown): value is string {
+  return isNonEmptyString(value) && value.trim() === value;
 }
 
 function validateDinglerStatusEffectShape(
