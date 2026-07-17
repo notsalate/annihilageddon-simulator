@@ -125,12 +125,16 @@ export type {
 export { initializeGame } from "./engine/setup.js";
 export { forkGameState } from "./engine/game-state-fork.js";
 export type {
+  AnalysisChoiceSelection,
+  AnalysisError,
+  AnalysisLimits,
+  AnalysisLimitError,
   CompletedActionBranch,
-  DeferredActionBranch,
-  ImmediateActionBranches,
-  RuntimeEffectChoiceSummary,
 } from "./engine/best-move-analysis.js";
-export { enumerateImmediateActionBranches } from "./engine/best-move-analysis.js";
+export {
+  enumerateActionBranches,
+  enumerateImmediateActionBranches,
+} from "./engine/best-move-analysis.js";
 export { assertGameStateInvariants } from "./engine/invariants.js";
 export type {
   ActionResult,

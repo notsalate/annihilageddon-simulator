@@ -39,6 +39,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Keep event/debug instrumentation additive and stable enough for tests.
 - При изменении runtime source metadata проверять, что decoder сохраняет image path без чтения файлов и без ветвления правил по нему.
 - `best-move-analysis.ts` получает действия только через публичный `listLegalActions`, создаёт `forkGameState` на каждую ветку и не зависит от `BotStrategy`.
+- `best-move-analysis.ts` воспроизводит каждый путь выбора через новый fork исходного состояния; порядок action/choice стабилен, а `AnalysisLimits` завершают переполненный поиск типизированной ошибкой без частичного результата.
 
 ## Verification
 

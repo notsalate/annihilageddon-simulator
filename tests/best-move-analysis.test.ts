@@ -69,11 +69,9 @@ test("enumerates simple actions into independent completed branches", () => {
 
   const result = enumerateImmediateActionBranches(state);
 
-  assert.equal(result.completed.length + result.deferred.length, 3);
-  assert.equal(result.completed.length, 3);
-  assert.equal(result.deferred.length, 0);
-  assert.equal(result.completed[0]?.legalAction.type, "playCard");
-  const firstBranchPlayer = result.completed[0]?.resultingState.players.find(
+  assert.equal(result.length, 3);
+  assert.equal(result[0]?.legalAction.type, "playCard");
+  const firstBranchPlayer = result[0]?.resultingState.players.find(
     (player) => player.playerId === state.activePlayerId
   );
   assert.ok(firstBranchPlayer);
@@ -83,7 +81,7 @@ test("enumerates simple actions into independent completed branches", () => {
   assert.equal(firstBranchPlayer.hand.some(
     (candidate) => candidate.instanceId === secondCard.instanceId
   ), true);
-  const secondBranchPlayer = result.completed[1]?.resultingState.players.find(
+  const secondBranchPlayer = result[1]?.resultingState.players.find(
     (player) => player.playerId === state.activePlayerId
   );
   assert.ok(secondBranchPlayer);
@@ -91,16 +89,18 @@ test("enumerates simple actions into independent completed branches", () => {
     firstBranchPlayer,
     secondBranchPlayer
   );
-  assert.equal(result.completed[2]?.legalAction.type, "endTurn");
-  assert.equal(result.completed[2]?.resultingState.turn.number, sourceTurn + 1);
+  assert.equal(result[2]?.legalAction.type, "endTurn");
+  assert.equal(result[2]?.resultingState.turn.number, sourceTurn + 1);
   assert.equal(state.turn.number, sourceTurn);
 });
 
-test("defers a choice action with a serializable first request summary", () => {
+test("enumerates each card target as a completed branch", () => {
   const state = initializeGame({ rootDir, seed: 126 });
   const target = state.common.market[0];
+  const secondTarget = state.common.mainDeck[0];
   assert.ok(target);
-  state.common.market = [target];
+  assert.ok(secondTarget);
+  state.common.market = [target, secondTarget];
   state.common.legendMarket = [];
   state.common.wildMagicStack = [];
   state.turn.power = 0;
@@ -121,17 +121,18 @@ test("defers a choice action with a serializable first request summary", () => {
   );
   const originalStrategy = state.effectChoiceStrategy;
   const result = enumerateImmediateActionBranches(state);
-  const deferred = result.deferred.find(
+  const branches = result.filter(
     (branch) => branch.legalAction.type === "playCard"
   );
-  assert.ok(deferred);
-  assert.equal(deferred.choiceRequest.effectId, "fixture_add_power_equal_to_target_cost");
-  assert.equal(deferred.choiceRequest.sourceType, "card");
-  assert.equal(deferred.choiceRequest.cardInstanceId, source.instanceId);
-  assert.equal(deferred.choiceRequest.choices[0]?.choiceIndex, 0);
-  assert.equal(deferred.choiceRequest.choices[0]?.choiceId, target.instanceId);
-  assert.equal(deferred.choiceRequest.choices[0]?.choiceKind, "cardTarget");
+  assert.equal(branches.length, 2);
+  assert.equal(branches[0]?.selectedChoices[0]?.effectId, "fixture_add_power_equal_to_target_cost");
+  assert.equal(branches[0]?.selectedChoices[0]?.sourceType, "card");
+  assert.equal(branches[0]?.selectedChoices[0]?.cardInstanceId, source.instanceId);
+  assert.equal(branches[0]?.selectedChoices[0]?.choiceIndex, 0);
+  assert.equal(branches[0]?.selectedChoices[0]?.choiceId, target.instanceId);
+  assert.equal(branches[1]?.selectedChoices[0]?.choiceIndex, 1);
+  assert.equal(branches[1]?.selectedChoices[0]?.choiceId, secondTarget.instanceId);
+  assert.equal(branches[0]?.selectedChoices[0]?.choiceKind, "cardTarget");
   assert.equal(state.effectChoiceStrategy, originalStrategy);
-  assert.equal(JSON.stringify(deferred.choiceRequest).includes("players"), false);
-  assert.equal(result.completed.some((branch) => branch.legalAction === deferred.legalAction), false);
+  assert.equal(JSON.stringify(branches[0]?.selectedChoices).includes("players"), false);
 });
