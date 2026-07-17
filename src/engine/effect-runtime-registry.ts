@@ -1,5 +1,11 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import {
+  markCardDefinitionId,
+  type CardDefinitionId,
+  type TokenDefinitionId,
+  type TokenInstanceId,
+} from "../domain/types.js";
+import {
   calculateEffectiveCardCost,
   calculateEffectivePlayerMaxLife,
 } from "./effective-values.js";
@@ -80,13 +86,16 @@ export interface SetupEffectSourceContext {
   sourceType: "wizardProperty";
   runtimeMode: EffectRuntimeMode;
   playerId: PlayerState["playerId"];
-  tokenInstanceId: string;
-  tokenDefinitionId: string;
+  tokenInstanceId: TokenInstanceId;
+  tokenDefinitionId: TokenDefinitionId;
 }
 
 export interface EffectRuntimeSetupServices {
-  hasCardDefinition(definitionId: string): boolean;
-  createCardInstance(definitionId: string, ownerId: PlayerState["playerId"]): CardInstance;
+  hasCardDefinition(definitionId: CardDefinitionId): boolean;
+  createCardInstance(
+    definitionId: CardDefinitionId,
+    ownerId: PlayerState["playerId"]
+  ): CardInstance;
   allowsMissingData: boolean;
 }
 
@@ -2055,11 +2064,16 @@ const replaceStartingCardHandler: EffectRuntimeHandler = {
     return setupOnlyExecutionError("replace_starting_card");
   },
   executeSetup(player, effect, _source, services) {
-    const fromDefinitionId = effect["fromDefinitionId"];
-    const toDefinitionId = effect["toDefinitionId"];
-    if (!isNonEmptyString(fromDefinitionId) || !isNonEmptyString(toDefinitionId)) {
+    const rawFromDefinitionId = effect["fromDefinitionId"];
+    const rawToDefinitionId = effect["toDefinitionId"];
+    if (
+      !isNonEmptyString(rawFromDefinitionId) ||
+      !isNonEmptyString(rawToDefinitionId)
+    ) {
       return { ok: false, error: "replace_starting_card requires stable fromDefinitionId and toDefinitionId" };
     }
+    const fromDefinitionId = markCardDefinitionId(rawFromDefinitionId);
+    const toDefinitionId = markCardDefinitionId(rawToDefinitionId);
     if (!services.hasCardDefinition(toDefinitionId)) {
       if (services.allowsMissingData) return { ok: true };
       return { ok: false, error: `Cannot replace with missing target card ${toDefinitionId}` };

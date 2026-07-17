@@ -35,6 +35,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Runtime decoder сохраняет `CardDefinition.source.image` как presentation metadata для API; gameplay logic не ветвится по path и не читает image files.
 - Семантика setup-only effects принадлежит `executeSetup` в каталоге runtime-эффектов; `setup.ts` только задаёт порядок, передаёт контекст и собирает типизированные directives.
 - Успешный setup executor может вернуть только типизированную directive с устойчивым идентификатором; отсутствие executor для валидного setup effect является ошибкой конфигурации.
+- Контексты setup execution передают `TokenInstanceId`, `TokenDefinitionId` и `CardDefinitionId`; не ослаблять их до обычных строк.
 
 ## Work Guidance
 

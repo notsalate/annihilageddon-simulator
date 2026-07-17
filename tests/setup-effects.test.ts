@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  markTokenDefinitionId,
+  markTokenInstanceId,
+} from "../src/domain/types.js";
+import {
   tryExecuteSetupEffect,
   type EffectRuntimeSetupServices,
   type SetupEffectSourceContext,
@@ -22,7 +26,7 @@ function services(
     hasCardDefinition: (definitionId) => definitions.includes(definitionId),
     createCardInstance: (definitionId, ownerId) => ({
       instanceId: `factory-${nextId++}` as never,
-      definitionId: definitionId as never,
+      definitionId,
       ownerId,
       marketChips: 0,
     }),
@@ -52,8 +56,8 @@ const source: SetupEffectSourceContext = {
   sourceType: "wizardProperty",
   runtimeMode: "combat",
   playerId: "player-1" as PlayerState["playerId"],
-  tokenInstanceId: "token-1",
-  tokenDefinitionId: "property-1",
+  tokenInstanceId: markTokenInstanceId("token-1"),
+  tokenDefinitionId: markTokenDefinitionId("property-1"),
 };
 
 test("setup catalog executor sets starting life total", () => {
@@ -141,6 +145,50 @@ test("forced setup consumes the same random-player draw as unforced setup", () =
     seed: 119,
   });
   assert.equal(forced.rng.nextInt(1000), unforced.rng.nextInt(1000));
+});
+
+test("initializeGame executes setup effects in combat runtime mode", () => {
+  const state = initializeGame({
+    dataPack: setupDataPack(false, "supported"),
+    seed: 119,
+  });
+
+  assert.deepEqual(
+    state.players.map((subject) => subject.life.current),
+    [27, 27]
+  );
+});
+
+test("initializeGame executes setup effects in fixture runtime mode", () => {
+  const state = initializeGame({
+    dataPack: setupDataPack(false, "fixture"),
+    seed: 119,
+  });
+
+  assert.deepEqual(
+    state.players.map((subject) => subject.life.current),
+    [27, 27]
+  );
+});
+
+test("initializeGame orchestrates catalog setup handlers without legacy fallback", () => {
+  const state = initializeGame({
+    dataPack: setupDataPackWithCatalogHandlers("supported"),
+    seed: 119,
+  });
+
+  assert.equal(
+    state.players.every((subject) => subject.life.current === 27),
+    true
+  );
+  assert.equal(
+    state.players.every(
+      (subject) =>
+        subject.trophyLikeObjects.length === 1 &&
+        subject.trophyLikeObjects[0]?.trophyId === "basicTrophy"
+    ),
+    true
+  );
 });
 
 test("two forced properties choose the first player in players order", () => {
@@ -281,8 +329,13 @@ test("setup executor accepts fixture runtime mode explicitly", () => {
   assert.deepEqual(result, { status: "executed" });
 });
 
-function setupDataPack(includeForce: boolean): LoadedDataPack {
+function setupDataPack(
+  includeForce: boolean,
+  manifestMappingStatus?: "supported" | "fixture"
+): LoadedDataPack {
   const dataPack = loadCurrentRuntimeDataPack(process.cwd());
+  const effectiveMappingStatus =
+    manifestMappingStatus ?? dataPack.manifest.mappingStatus;
   const sourceProperty = dataPack.tokenDefinitions.get(
     "esw2_dbg__wizard_property_001"
   );
@@ -310,13 +363,17 @@ function setupDataPack(includeForce: boolean): LoadedDataPack {
       : "fixture-unforced-property",
     engine: {
       ...sourceProperty.engine,
-      mappingStatus: "fixture" as const,
+      mappingStatus: effectiveMappingStatus,
       playableInV0: true,
       effects,
     },
   };
-  return {
+  const result: LoadedDataPack = {
     ...dataPack,
+    manifest: {
+      ...dataPack.manifest,
+      mappingStatus: effectiveMappingStatus,
+    },
     tokenDefinitions: new Map([
       ...dataPack.tokenDefinitions,
       [property.tokenId, property],
@@ -326,6 +383,108 @@ function setupDataPack(includeForce: boolean): LoadedDataPack {
       wizardProperties: {
         ...wizardPropertyStack,
         entries: [{ tokenId: property.tokenId, count: 4 }],
+      },
+    },
+  };
+
+  return manifestMappingStatus === undefined
+    ? result
+    : addFamiliarSetupPool(result);
+}
+
+function setupDataPackWithCatalogHandlers(
+  mappingStatus: "supported" | "fixture"
+): LoadedDataPack {
+  const dataPack = setupDataPack(false, mappingStatus);
+  const sourceProperty = dataPack.tokenDefinitions.get(
+    "fixture-unforced-property"
+  );
+  if (
+    sourceProperty?.kind !== "wizardProperty" ||
+    sourceProperty.engine === undefined
+  ) {
+    throw new Error("Setup test fixture property is missing");
+  }
+
+  const sourceCard = dataPack.decks.starterDeck.entries[0]?.cardId;
+  const targetCard = dataPack.decks.starterDeck.entries[1]?.cardId;
+  if (sourceCard === undefined || targetCard === undefined) {
+    throw new Error("Setup test fixture starter deck has too few cards");
+  }
+
+  const property = {
+    ...sourceProperty,
+    engine: {
+      ...sourceProperty.engine,
+      effects: [
+        {
+          effectId: "set_starting_life_total",
+          timing: "setup",
+          lifeTotal: 27,
+        },
+        {
+          effectId: "start_with_basic_trophy",
+          timing: "setup",
+        },
+        {
+          effectId: "replace_starting_card",
+          timing: "setup",
+          fromDefinitionId: sourceCard,
+          toDefinitionId: targetCard,
+        },
+        { effectId: "force_starting_player", timing: "setup" },
+      ] as RuntimeEffect[],
+    },
+  };
+
+  return {
+    ...dataPack,
+    tokenDefinitions: new Map([
+      ...dataPack.tokenDefinitions,
+      [property.tokenId, property],
+    ]),
+  };
+}
+
+function addFamiliarSetupPool(dataPack: LoadedDataPack): LoadedDataPack {
+  const source = [...dataPack.cardDefinitions.values()].find(
+    (definition) => definition.engine.cardKind === "starter"
+  );
+  if (source === undefined) {
+    throw new Error("Setup test fixture has no starter card definition");
+  }
+
+  const familiarIds = [
+    "setup-familiar-001",
+    "setup-familiar-002",
+    "setup-familiar-003",
+    "setup-familiar-004",
+  ];
+  const familiarDefinitions = familiarIds.map((cardId) => ({
+    ...source,
+    cardId,
+    visible: { ...source.visible, cardKind: "familiar" as const },
+    engine: { ...source.engine, cardKind: "familiar" as const },
+  }));
+
+  return {
+    ...dataPack,
+    cardDefinitions: new Map([
+      ...dataPack.cardDefinitions,
+      ...familiarDefinitions.map((definition) => [
+        definition.cardId,
+        definition,
+      ] as const),
+    ]),
+    decks: {
+      ...dataPack.decks,
+      familiarPool: {
+        schemaVersion: 1,
+        deckId: "setup-familiar-pool",
+        runtimeSchema: "krutagidon.deckComposition.v0",
+        role: "familiarPool",
+        mappingStatus: dataPack.manifest.mappingStatus,
+        entries: familiarIds.map((cardId) => ({ cardId, count: 1 })),
       },
     },
   };
