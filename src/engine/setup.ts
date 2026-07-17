@@ -27,6 +27,7 @@ import {
 } from "./event-recorder.js";
 import {
   tryExecuteSetupEffect,
+  type EffectRuntimeSetupServices,
   type SetupEffectSourceContext,
 } from "./effect-runtime-registry.js";
 import { installGameEventLog } from "./game-events.js";
@@ -820,8 +821,13 @@ export function initializeGame(options: InitializeGameOptions): GameState {
   applyWizardPropertySetupEffects(
     players,
     dataPack,
-    factory,
-    dataPack.manifest.mappingStatus === "fixture" ? "fixture" : "combat"
+    dataPack.manifest.mappingStatus === "fixture" ? "fixture" : "combat",
+    {
+      hasCardDefinition: (definitionId) => dataPack.cardDefinitions.has(definitionId),
+      createCardInstance: (definitionId, ownerId) =>
+        factory.create(markCardDefinitionId(definitionId), ownerId),
+      allowsMissingData: isIncompleteFullOnlyDataPack(dataPack),
+    }
   );
   const mainDeck = instantiateDeck(
     dataPack.decks.mainDeck,
@@ -1148,8 +1154,8 @@ function assertSetupPoolSize(
 function applyWizardPropertySetupEffects(
   players: PlayerState[],
   dataPack: LoadedDataPack,
-  factory: InstanceFactory,
-  runtimeMode: "combat" | "fixture"
+  runtimeMode: "combat" | "fixture",
+  services: EffectRuntimeSetupServices
 ): void {
   for (const player of players) {
     for (const property of player.wizardProperties) {
@@ -1174,14 +1180,16 @@ function applyWizardPropertySetupEffects(
           tokenInstanceId: property.instanceId,
           tokenDefinitionId: property.definitionId,
         };
-        const execution = tryExecuteSetupEffect(player, effect, source);
+        const execution = tryExecuteSetupEffect(player, effect, source, services);
         if (execution.status === "executed") {
           continue;
         }
         if (execution.status === "error") {
           throw new Error(execution.error);
         }
-        applyWizardPropertySetupEffect(player, dataPack, factory, effect);
+        if (execution.status === "notImplemented" && effect.effectId !== "force_starting_player") {
+          throw new Error(`Setup effect executor missing for ${effect.effectId}`);
+        }
       }
     }
   }
@@ -1189,93 +1197,6 @@ function applyWizardPropertySetupEffects(
 
 function isSetupEffect(effect: RuntimeEffect): boolean {
   return effect.timing === "setup";
-}
-
-function applyWizardPropertySetupEffect(
-  player: PlayerState,
-  dataPack: LoadedDataPack,
-  factory: InstanceFactory,
-  effect: RuntimeEffect
-): void {
-  if (effect.effectId === "replace_starting_card") {
-    replaceStartingCard(player, dataPack, factory, effect);
-    return;
-  }
-
-  if (effect.effectId === "start_with_basic_trophy") {
-    if (
-      !player.trophyLikeObjects.some(
-        (trophy) => trophy.trophyId === "basicTrophy"
-      )
-    ) {
-      player.trophyLikeObjects.push({
-        instanceId: `setup-basic-trophy-${player.playerId}`,
-        trophyId: "basicTrophy",
-        ownerId: player.playerId,
-        effects: [],
-      });
-    }
-    return;
-  }
-
-}
-
-function replaceStartingCard(
-  player: PlayerState,
-  dataPack: LoadedDataPack,
-  factory: InstanceFactory,
-  effect: Extract<RuntimeEffect, { effectId: "replace_starting_card" }>
-): void {
-  const fromDefinitionId = effect.fromDefinitionId;
-  const toDefinitionId = effect.toDefinitionId;
-  if (
-    typeof fromDefinitionId !== "string" ||
-    typeof toDefinitionId !== "string"
-  ) {
-    throw new Error(
-      "replace_starting_card requires stable fromDefinitionId and toDefinitionId"
-    );
-  }
-
-  if (!dataPack.cardDefinitions.has(toDefinitionId)) {
-    if (isIncompleteFullOnlyDataPack(dataPack)) {
-      return;
-    }
-    mustGetDefinition(dataPack, toDefinitionId);
-  }
-
-  const zones = [
-    player.hand,
-    player.deck,
-    player.discard,
-    player.playedThisTurn,
-    player.permanents,
-  ];
-  for (const zone of zones) {
-    const cardIndex = zone.findIndex(
-      (card) =>
-        card.ownerId === player.playerId &&
-        card.definitionId === fromDefinitionId
-    );
-    if (cardIndex < 0) {
-      continue;
-    }
-
-    zone.splice(
-      cardIndex,
-      1,
-      factory.create(markCardDefinitionId(toDefinitionId), player.playerId)
-    );
-    return;
-  }
-
-  if (isIncompleteFullOnlyDataPack(dataPack)) {
-    return;
-  }
-
-  throw new Error(
-    `Cannot replace missing starting card ${fromDefinitionId} for ${player.playerId}`
-  );
 }
 
 function getForcedStartingPlayer(

@@ -76,6 +76,12 @@ export interface SetupEffectSourceContext {
   tokenDefinitionId: string;
 }
 
+export interface EffectRuntimeSetupServices {
+  hasCardDefinition(definitionId: string): boolean;
+  createCardInstance(definitionId: string, ownerId: PlayerState["playerId"]): CardInstance;
+  allowsMissingData: boolean;
+}
+
 export type TargetChoice =
   | {
       choiceType: "card";
@@ -273,7 +279,8 @@ export interface EffectRuntimeHandler<
   executeSetup?(
     player: PlayerState,
     effect: Effect,
-    source: SetupEffectSourceContext
+    source: SetupEffectSourceContext,
+    services: EffectRuntimeSetupServices
   ): EffectExecutionResult;
 }
 
@@ -2039,6 +2046,26 @@ const replaceStartingCardHandler: EffectRuntimeHandler = {
   execute() {
     return setupOnlyExecutionError("replace_starting_card");
   },
+  executeSetup(player, effect, _source, services) {
+    const fromDefinitionId = effect["fromDefinitionId"];
+    const toDefinitionId = effect["toDefinitionId"];
+    if (!isNonEmptyString(fromDefinitionId) || !isNonEmptyString(toDefinitionId)) {
+      return { ok: false, error: "replace_starting_card requires stable fromDefinitionId and toDefinitionId" };
+    }
+    if (!services.hasCardDefinition(toDefinitionId)) {
+      if (services.allowsMissingData) return { ok: true };
+      return { ok: false, error: `Cannot replace with missing target card ${toDefinitionId}` };
+    }
+    const zones = [player.hand, player.deck, player.discard, player.playedThisTurn, player.permanents];
+    for (const zone of zones) {
+      const cardIndex = zone.findIndex((card) => card.ownerId === player.playerId && card.definitionId === fromDefinitionId);
+      if (cardIndex < 0) continue;
+      zone.splice(cardIndex, 1, services.createCardInstance(toDefinitionId, player.playerId));
+      return { ok: true };
+    }
+    if (services.allowsMissingData) return { ok: true };
+    return { ok: false, error: `Cannot replace missing starting card ${fromDefinitionId} for ${player.playerId}` };
+  },
 };
 
 const startWithBasicTrophyHandler: EffectRuntimeHandler = {
@@ -2048,6 +2075,17 @@ const startWithBasicTrophyHandler: EffectRuntimeHandler = {
   },
   execute() {
     return setupOnlyExecutionError("start_with_basic_trophy");
+  },
+  executeSetup(player) {
+    if (!player.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy")) {
+      player.trophyLikeObjects.push({
+        instanceId: `setup-basic-trophy-${player.playerId}`,
+        trophyId: "basicTrophy",
+        ownerId: player.playerId,
+        effects: [],
+      });
+    }
+    return { ok: true };
   },
 };
 
@@ -4646,7 +4684,8 @@ export function resolveEffectRuntimeCatalogEntry(
 export function tryExecuteSetupEffect(
   player: PlayerState,
   effect: RuntimeEffectPayload,
-  source: SetupEffectSourceContext
+  source: SetupEffectSourceContext,
+  services: EffectRuntimeSetupServices
 ): SetupEffectExecutionResult {
   const resolution = resolveEffectRuntimeCatalogEntry(
     `Setup effect ${String(effect["effectId"])}`,
@@ -4664,6 +4703,6 @@ export function tryExecuteSetupEffect(
     return { status: "notImplemented" };
   }
 
-  const result = executeSetup(player, effect, source);
+  const result = executeSetup(player, effect, source, services);
   return result.ok ? { status: "executed" } : { status: "error", error: result.error };
 }
