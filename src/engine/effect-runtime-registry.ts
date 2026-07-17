@@ -30,6 +30,12 @@ export type EffectRuntimeSupportedModes = readonly [
   EffectRuntimeMode,
   ...EffectRuntimeMode[],
 ];
+export const effectRuntimeSourceKinds = ["card", "wizardProperty"] as const;
+export type EffectRuntimeSourceKind = (typeof effectRuntimeSourceKinds)[number];
+export type EffectRuntimeSupportedSourceKinds = readonly [
+  EffectRuntimeSourceKind,
+  ...EffectRuntimeSourceKind[],
+];
 
 const RUNTIME_CARD_TYPES = new Set([
   "wizardCard",
@@ -270,9 +276,12 @@ export interface EffectRuntimeCatalogEntry<
   effectId: EffectId;
   handler: EffectRuntimeHandler<RuntimeEffectForId<EffectId>>;
   supportedModes: EffectRuntimeSupportedModes;
+  supportedSourceKinds: EffectRuntimeSupportedSourceKinds;
 }
 
 const allEffectRuntimeModes: EffectRuntimeSupportedModes = effectRuntimeModes;
+const allEffectRuntimeSourceKinds: EffectRuntimeSupportedSourceKinds =
+  effectRuntimeSourceKinds;
 const fixtureOnlyRuntimeEffectIds = new Set<RuntimeEffectId>([
   "fixture_modify_effective_value",
   "fixture_add_power_equal_to_target_cost",
@@ -4488,6 +4497,10 @@ function createEffectRuntimeCatalogSource(
       supportedModes: fixtureOnlyRuntimeEffectIds.has(handler.effectId)
         ? ["fixture"]
         : allEffectRuntimeModes,
+      supportedSourceKinds:
+        handler.effectId === "temporary_hand_limit_by_gained_card_type"
+          ? ["wizardProperty"]
+          : allEffectRuntimeSourceKinds,
     };
   }
 
@@ -4534,4 +4547,58 @@ export function isEffectRuntimeCatalogEntrySupportedInMode<
   mode: EffectRuntimeMode
 ): boolean {
   return entry.supportedModes.includes(mode);
+}
+
+export type EffectRuntimeCatalogResolution =
+  | { ok: true; entry: EffectRuntimeCatalogEntry }
+  | { ok: false; errors: string[] };
+
+export function resolveEffectRuntimeCatalogEntry(
+  subjectId: string,
+  rawEffectId: string,
+  effect: Record<string, unknown>,
+  mode: EffectRuntimeMode,
+  sourceKind: EffectRuntimeSourceKind
+): EffectRuntimeCatalogResolution {
+  const entry = isRuntimeEffectId(rawEffectId)
+    ? getEffectRuntimeCatalogEntry(rawEffectId)
+    : undefined;
+  if (entry === undefined) {
+    return {
+      ok: false,
+      errors: [`${subjectId} uses unsupported effect id ${rawEffectId}`],
+    };
+  }
+
+  if (!entry.supportedSourceKinds.includes(sourceKind)) {
+    return {
+      ok: false,
+      errors: [`${subjectId} uses token-only effect id ${rawEffectId}`],
+    };
+  }
+
+  if (!isEffectRuntimeCatalogEntrySupportedInMode(entry, mode)) {
+    if (mode === "combat" && rawEffectId.startsWith("fixture_")) {
+      return {
+        ok: false,
+        errors: [
+          `${subjectId} uses fixture effect id ${rawEffectId} in combat data`,
+        ],
+      };
+    }
+    return {
+      ok: false,
+      errors: [
+        `${subjectId} uses effect id ${rawEffectId} outside supported ${mode} mode`,
+      ],
+    };
+  }
+
+  const shapeErrors = entry.handler.validateShape(
+    subjectId,
+    effect as unknown as RuntimeEffectPayload
+  );
+  return shapeErrors.length > 0
+    ? { ok: false, errors: shapeErrors }
+    : { ok: true, entry };
 }

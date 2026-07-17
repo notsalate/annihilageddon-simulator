@@ -19,6 +19,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Model runtime effect choices as a discriminated union; record selected typed targets in the event log.
 - Send closed `GameEventDraft` objects through `event-recorder`; direct `eventLog.push` is confined to that module.
 - Keep the typed effect-handler catalog as the source of truth; derive lookup maps from it.
+- The effect runtime catalog owns effect ID, source kind, runtime mode, and handler-shape validation at the executable-data boundary.
 - Give effect handlers concrete typed inputs after the validation boundary; keep raw record access at that boundary.
 - Declare each catalog entry's supported runtime modes as a non-empty typed set.
 - Add runtime effect IDs only through `effect-runtime-registry.ts`; executable data must not reference IDs outside the Effect Runtime Catalog.

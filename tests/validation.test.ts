@@ -524,6 +524,15 @@ test("effect runtime lookup is derived from its typed catalog source", () => {
     Array.from(effectRuntimeCatalog.keys()).sort(),
     Object.keys(effectRuntimeCatalogSource).sort()
   );
+  assert.deepEqual(
+    getEffectRuntimeCatalogEntry("add_power")?.supportedSourceKinds,
+    ["card", "wizardProperty"]
+  );
+  assert.deepEqual(
+    getEffectRuntimeCatalogEntry("temporary_hand_limit_by_gained_card_type")
+      ?.supportedSourceKinds,
+    ["wizardProperty"]
+  );
 });
 
 test("runtime effect target selectors are exposed as a literal union", () => {

@@ -3,9 +3,9 @@ import path from "node:path";
 
 import { isPlainRecord } from "../common.js";
 import {
-  getEffectRuntimeCatalogEntry,
-  isEffectRuntimeCatalogEntrySupportedInMode,
+  resolveEffectRuntimeCatalogEntry,
   type EffectRuntimeMode,
+  type EffectRuntimeSourceKind,
 } from "./effect-runtime-registry.js";
 import {
   isEffectTiming,
@@ -18,11 +18,9 @@ import {
   type RuntimeEffect,
   type AttackOutcomeBranch,
   type RuntimeEffectFields,
-  type RuntimeEffectPayload,
   type WildMagicOption,
 } from "./runtime-effect.js";
 
-type RuntimeEffectSourceKind = "card" | "wizardProperty" | "deadWizardToken";
 type RuntimeJsonDecoder<T> = (value: unknown) => DecodeResult<T>;
 
 const CANONICAL_STARTER_TEMPLATE = new Map([
@@ -449,7 +447,7 @@ export function validateExecutableDataPack(
             effectId,
             effect,
             mode,
-            "deadWizardToken"
+            "wizardProperty"
           )
         );
       }
@@ -2207,59 +2205,38 @@ function validateRuntimeEffectDefinition(
   effectId: string,
   effect: Record<string, unknown>,
   mode: EffectRuntimeMode,
-  sourceKind: RuntimeEffectSourceKind
+  sourceKind: EffectRuntimeSourceKind
 ): string[] {
+  const resolution = resolveEffectRuntimeCatalogEntry(
+    subjectId,
+    effectId,
+    effect,
+    mode,
+    sourceKind
+  );
+  if (!resolution.ok) {
+    return resolution.errors;
+  }
+
+  const catalogEntry = resolution.entry;
+
+  const targetSelector = effect["targetSelector"];
   if (
-    sourceKind === "card" &&
-    effectId === "temporary_hand_limit_by_gained_card_type"
+    targetSelector !== undefined &&
+    (!isRuntimeEffectTargetSelector(targetSelector) ||
+      !catalogEntry.handler.allowedTargetSelectors?.includes(targetSelector))
   ) {
-    return [`${subjectId} uses token-only effect id ${effectId}`];
+    return [`${subjectId} ${effectId} uses unsupported target selector`];
   }
 
-  const catalogEntry = isRuntimeEffectId(effectId)
-    ? getEffectRuntimeCatalogEntry(effectId)
-    : undefined;
-  if (catalogEntry !== undefined) {
-    if (!isEffectRuntimeCatalogEntrySupportedInMode(catalogEntry, mode)) {
-      if (mode === "combat" && effectId.startsWith("fixture_")) {
-        return [
-          `${subjectId} uses fixture effect id ${effectId} in combat data`,
-        ];
-      }
-
-      return [
-        `${subjectId} uses effect id ${effectId} outside supported ${mode} mode`,
-      ];
-    }
-
-    const shapeErrors = catalogEntry.handler.validateShape(
-      subjectId,
-      effect as unknown as RuntimeEffectPayload
-    );
-    if (shapeErrors.length > 0) {
-      return shapeErrors;
-    }
-
-    const targetSelector = effect["targetSelector"];
-    if (
-      targetSelector !== undefined &&
-      (!isRuntimeEffectTargetSelector(targetSelector) ||
-        !catalogEntry.handler.allowedTargetSelectors?.includes(targetSelector))
-    ) {
-      return [`${subjectId} ${effectId} uses unsupported target selector`];
-    }
-
-    return validateNestedAttackBranches(subjectId, effect, mode, sourceKind);
-  }
-
-  return [`${subjectId} uses unsupported effect id ${effectId}`];
+  return validateNestedAttackBranches(subjectId, effect, mode, sourceKind);
 }
 
 function validateNestedAttackBranches(
   subjectId: string,
   effect: Record<string, unknown>,
   mode: EffectRuntimeMode,
-  sourceKind: RuntimeEffectSourceKind
+  sourceKind: EffectRuntimeSourceKind
 ): string[] {
   const errors: string[] = [];
   for (const field of ["branchEffects", "onDamageDealt", "onKill"] as const) {
