@@ -27,6 +27,7 @@ const testSuites = [
   "engine-guards.test.js",
   "effect-choice-routing.test.js",
   "best-move-analysis.test.js",
+  "best-move-cli.test.js",
   "effect-runtime-applicability.test.js",
 ];
 

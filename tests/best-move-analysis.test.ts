@@ -10,6 +10,7 @@ import {
   type GameState,
   type RuntimeEffect,
 } from "../src/index.js";
+import { victoryPointsPolicy } from "../src/engine/best-move-policies.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 
 const rootDir = process.cwd();
@@ -289,4 +290,12 @@ test("returns an empty result and evaluates each line exactly once", () => {
     },
   }, state.activePlayerId);
   assert.equal(calls, lines.length);
+});
+
+test("victory-points policy evaluates the perspective player in terminal state", () => {
+  const { state, lines } = rankingFixture();
+  const result = rankTurnLines(state, lines, victoryPointsPolicy, state.activePlayerId);
+  assert.equal(result.criterionId, "victory-points");
+  assert.equal(result.best?.components?.["victoryPoints"], result.best?.score);
+  assert.equal(result.perspectivePlayerId, state.activePlayerId);
 });
