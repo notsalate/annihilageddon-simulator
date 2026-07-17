@@ -15,6 +15,8 @@ import {
   type RuntimeEffect,
   type SingleGameResult,
 } from "../src/index.js";
+import { executeOnPlayEffects } from "../src/engine/effect-runtime.js";
+import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -22,6 +24,51 @@ import {
 } from "../src/domain/types.js";
 
 const rootDir = process.cwd();
+
+test("optional effect records a typed option choice payload", () => {
+  const state = initializeGame({ rootDir, seed: 99117, playerCount: 2 });
+  const player = state.players[0];
+  assert.ok(player);
+  const definition = createFixtureCardDefinition(
+    "fixture-optional-choice",
+    "normal",
+    [
+      {
+        effectId: "exchange_life_and_dingler_status",
+        timing: "onPlay",
+        targetSelector: "opponentPlayer",
+        optional: true,
+      },
+    ]
+  );
+  state.effectChoiceStrategy = (request) =>
+    request.choices.find(
+      (choice) => choice.choiceKind === "option" && choice.choiceId === "pass"
+    );
+  const source: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: "fixture",
+    playerId: player.playerId,
+    cardInstanceId: "fixture-source",
+    definitionId: definition.cardId,
+  };
+
+  const result = executeOnPlayEffects(state, player, definition, source);
+  assert.equal(result.ok, true);
+  const event = state.eventLog.find(
+    (candidate) => candidate.type === "effectChoiceSelected"
+  );
+  assert.ok(event);
+  assert.equal(event.choiceKind, "option");
+  assert.equal(event.choiceId, "pass");
+  assert.deepEqual(event.choiceIds, [
+    "pass",
+    "exchange_life_only",
+    "exchange_dingler_status_only",
+    "exchange_life_and_dingler_status",
+  ]);
+  assert.equal(event.legalChoiceCount, 4);
+});
 
 test("current runtime setup uses the canonical 10-card starter template", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);

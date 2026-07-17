@@ -191,6 +191,7 @@ export function moveGainedCardToPlayerDestination(
           definitionId: token.definitionId,
           tokenInstanceId: token.instanceId,
           tokenDefinitionId: token.definitionId,
+          choiceKind: "cardTarget",
           targetCardInstanceId: card.instanceId,
           targetDefinitionId: card.definitionId,
           effectId: "topdeck_gained_card",
@@ -855,10 +856,12 @@ function resolveTargetChoice(
     definitionId: source.definitionId,
     ...(choice.choiceType === "card"
       ? {
+          choiceKind: "cardTarget" as const,
           targetCardInstanceId: choice.card.instanceId,
           targetDefinitionId: choice.card.definitionId,
         }
       : {
+          choiceKind: "playerTarget" as const,
           targetPlayerId: choice.player.playerId,
         }),
     effectId: asString(effect["effectId"]),
@@ -903,31 +906,50 @@ function chooseEffectChoice(
     return undefined;
   }
 
+  const choicePayloadBase = {
+    choiceId: choice.choiceId,
+    choiceIds: choices.map((candidate) => candidate.choiceId),
+    legalChoiceCount: choices.length,
+  };
+  const choicePayload =
+    choice.choiceKind === "option"
+      ? { ...choicePayloadBase, choiceKind: "option" as const }
+      : choice.choiceKind === "playerTarget"
+        ? {
+            ...choicePayloadBase,
+            choiceKind: "playerTarget" as const,
+            targetPlayerIds: choice.players.map(
+              (candidate) => candidate.playerId
+            ),
+          }
+        : choice.choiceKind === "cardTarget"
+          ? {
+              ...choicePayloadBase,
+              choiceKind: "cardTarget" as const,
+              amount: choice.amount,
+              targetCardInstanceIds: choice.cards.map(
+                (candidate) => candidate.instanceId
+              ),
+              targetDefinitionIds: choice.cards.map(
+                (candidate) => candidate.definitionId
+              ),
+            }
+          : {
+              ...choicePayloadBase,
+              choiceKind: "directionalPlayerTarget" as const,
+              direction: choice.direction,
+              targetPlayerIds: choice.players.map(
+                (candidate) => candidate.playerId
+              ),
+            };
+
   recordGameEvent(state, {
     type: "effectChoiceSelected",
     playerId: player.playerId,
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
     effectId,
-    choiceId: choice.choiceId,
-    choiceIds: choices.map((candidate) => candidate.choiceId),
-    legalChoiceCount: choices.length,
-    ...(choice.choiceKind === "directionalPlayerTarget"
-      ? {
-          direction: choice.direction,
-          targetPlayerIds: choice.players.map((player) => player.playerId),
-        }
-      : {}),
-    ...(choice.choiceKind === "playerTarget"
-      ? { targetPlayerIds: choice.players.map((player) => player.playerId) }
-      : {}),
-    ...(choice.choiceKind === "cardTarget"
-      ? {
-          amount: choice.amount,
-          targetCardInstanceIds: choice.cards.map((card) => card.instanceId),
-          targetDefinitionIds: choice.cards.map((card) => card.definitionId),
-        }
-      : {}),
+    ...choicePayload,
     sourceType: source.sourceType,
   });
   return choice;

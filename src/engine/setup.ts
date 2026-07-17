@@ -21,7 +21,10 @@ import {
   type TokenStackComposition,
   type TokenDefinition,
 } from "./data.js";
-import { recordGameEvent } from "./event-recorder.js";
+import {
+  recordGameEvent,
+  recordSetupChoiceSelected,
+} from "./event-recorder.js";
 import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
@@ -249,7 +252,7 @@ export type GameEventDestination =
   | "discardSelf"
   | "topdeckSelf";
 
-interface GameEventMetadata {
+export interface GameEventMetadata {
   eventSequence?: number;
   turnNumber?: number;
   actionSequence?: number;
@@ -281,6 +284,7 @@ interface GameEventPayload {
   effectId?: string;
   costId?: string;
   choiceId?: string;
+  choiceKind?: RuntimeEffectChoice["choiceKind"];
   choiceIds?: string[];
   direction?: "left" | "right";
   legalChoiceCount?: number;
@@ -297,70 +301,225 @@ interface GameEventPayload {
   chosenDefinitionId?: string;
 }
 
-type GameEventOf<
-  TType extends GameEventType,
-  TFields extends keyof GameEventPayload = never,
-> = GameEventMetadata & { type: TType } & Required<
-    Pick<GameEventPayload, TFields>
-  >;
-
-type CardEffectEvent = GameEventOf<
-  | "attackAvoided"
+type GameEventOptionalFields<TType extends GameEventType> = TType extends
   | "attackCreated"
   | "attackTargetStarted"
+  ? "targetPlayerId" | "amount"
+  : TType extends "cardBought"
+    ?
+        | "sourceZone"
+        | "powerBefore"
+        | "powerAfter"
+        | "chipsBefore"
+        | "chipsAfter"
+        | "amount"
+    : TType extends "cardMoved"
+      ? "effectId" | "sourceType"
+      : TType extends "defenseCostPaid"
+        ?
+            | "targetCardInstanceId"
+            | "targetDefinitionId"
+            | "amount"
+            | "chipsBefore"
+            | "chipsAfter"
+            | "lifeBefore"
+            | "lifeAfter"
+        : TType extends "effectAddPowerApplied"
+          ? "powerBefore" | "powerAfter"
+          : TType extends "effectCardGained"
+            ? "destination"
+            : TType extends "effectChipsChanged"
+              ? "targetPlayerId" | "amount" | "chipsBefore" | "chipsAfter"
+              : TType extends "effectChipsGained"
+                ?
+                    | "tokenInstanceId"
+                    | "tokenDefinitionId"
+                    | "amount"
+                    | "chipsBefore"
+                    | "chipsAfter"
+                : TType extends "effectChoiceSkipped"
+                  ? "legalChoiceCount"
+                  : TType extends "effectCostPaid"
+                    ? "costId" | "amount"
+                    : TType extends "effectFoeDeckCardPlayed"
+                      ? "targetPlayerId"
+                      : TType extends
+                            | "effectLifeSet"
+                            | "effectLifeHealed"
+                            | "effectDamageDealt"
+                        ? "targetLifeBefore" | "targetLifeAfter"
+                        : TType extends "effectPlayTopFoeDeckSkipped"
+                          ? "targetPlayerId"
+                          : TType extends "mayhemBattleParticipationSelected"
+                            ? "participantPlayerIds"
+                            : TType extends "mayhemBattleResolved"
+                              ? "participantPlayerIds" | "winnerPlayerIds"
+                              : TType extends "mayhemDecisionPhaseStarted"
+                                ? "choiceKind" | "amount"
+                                : TType extends "mayhemDecisionStarted"
+                                  ? "targetPlayerId" | "amount"
+                                  : TType extends "mayhemResolutionPhaseStarted"
+                                    ? "amount"
+                                    : TType extends "mayhemVoteResolved"
+                                      ? "winnerPlayerIds"
+                                      : TType extends "mayhemDeckDiscardedThenDiscardCardDestroyed"
+                                        ?
+                                            | "targetCardInstanceId"
+                                            | "targetDefinitionId"
+                                        : never;
+
+type GameEventShape<
+  TType extends GameEventType,
+  TRequiredFields extends keyof GameEventPayload = never,
+  TOptionalFields extends keyof GameEventPayload = never,
+> = GameEventMetadata & { type: TType } & Required<
+    Pick<GameEventPayload, TRequiredFields>
+  > &
+  Partial<Pick<GameEventPayload, TOptionalFields>> & {
+    [K in Exclude<
+      keyof GameEventPayload,
+      TRequiredFields | TOptionalFields
+    >]?: never;
+  };
+
+type GameEventOf<
+  TType extends GameEventType,
+  TRequiredFields extends keyof GameEventPayload = never,
+> = TType extends GameEventType
+  ? GameEventShape<TType, TRequiredFields, GameEventOptionalFields<TType>>
+  : never;
+
+type CardEffectEvent = GameEventOf<
   | "dinglerStatusGained"
   | "dinglerStatusRemoved"
-  | "effectAddPowerApplied"
-  | "effectCardDestroyed"
-  | "effectCardDiscarded"
-  | "effectCardGained"
-  | "effectCardPlayedFromDeck"
-  | "effectCardRevealed"
-  | "effectCardsReturnedToHand"
+  | "attackCreated"
+  | "attackTargetStarted"
   | "effectChipsChanged"
   | "effectChipsGained"
-  | "effectChoiceSelected"
   | "effectChoiceSkipped"
   | "effectCostPaid"
-  | "effectDamageDealt"
   | "effectDestroyTopMainDeckSkipped"
-  | "effectDrawCardsApplied"
-  | "effectFixtureTargetCostPowerApplied"
-  | "effectFoeDeckCardPlayed"
-  | "effectLifeExchanged"
-  | "effectLifeHealed"
-  | "effectLifeSet"
   | "effectPlayTopFoeDeckSkipped"
   | "effectPlayTopSkipped"
   | "effectRevealSkipped"
-  | "effectTopMainDeckCardDestroyed"
-  | "mayhemBattleParticipationSelected"
-  | "mayhemBattleResolved"
   | "mayhemDecisionPhaseStarted"
   | "mayhemDecisionStarted"
-  | "mayhemDeckDiscardedThenDiscardCardDestroyed"
-  | "mayhemDiscardedTopDeckCardsDestroyed"
-  | "mayhemHandDiscardedAndRedrawn"
   | "mayhemResolutionPhaseStarted"
-  | "mayhemTargetSkipped"
-  | "mayhemVoteRecorded"
   | "mayhemVoteResolved"
-  | "trophyControlChanged"
   | "wildMagicChoiceSelected"
   | "wildMagicChoiceSkipped",
   "playerId" | "cardInstanceId" | "definitionId" | "effectId" | "sourceType"
 >;
 
+type EffectChoiceSelectedTarget =
+  | {
+      choiceKind: "playerTarget";
+      targetPlayerId: PlayerId;
+      choiceId?: never;
+      choiceIds?: never;
+      legalChoiceCount?: never;
+      targetPlayerIds?: never;
+      targetCardInstanceId?: never;
+      targetDefinitionId?: never;
+      targetCardInstanceIds?: never;
+      targetDefinitionIds?: never;
+      amount?: never;
+      direction?: never;
+    }
+  | {
+      choiceKind: "cardTarget";
+      targetCardInstanceId: string;
+      targetDefinitionId: string;
+      choiceId?: never;
+      choiceIds?: never;
+      legalChoiceCount?: never;
+      targetPlayerId?: never;
+      targetPlayerIds?: never;
+      targetCardInstanceIds?: never;
+      targetDefinitionIds?: never;
+      amount?: never;
+      direction?: never;
+    }
+  | {
+      choiceKind: "option";
+      choiceId: string;
+      choiceIds: string[];
+      legalChoiceCount: number;
+      targetPlayerId?: never;
+      targetPlayerIds?: never;
+      targetCardInstanceId?: never;
+      targetDefinitionId?: never;
+      targetCardInstanceIds?: never;
+      targetDefinitionIds?: never;
+      amount?: never;
+      direction?: never;
+    }
+  | {
+      choiceKind: "playerTarget";
+      choiceId: string;
+      choiceIds: string[];
+      legalChoiceCount: number;
+      targetPlayerIds: PlayerId[];
+      targetPlayerId?: never;
+      targetCardInstanceId?: never;
+      targetDefinitionId?: never;
+      targetCardInstanceIds?: never;
+      targetDefinitionIds?: never;
+      amount?: never;
+      direction?: never;
+    }
+  | {
+      choiceKind: "cardTarget";
+      choiceId: string;
+      choiceIds: string[];
+      legalChoiceCount: number;
+      targetCardInstanceIds: string[];
+      targetDefinitionIds: string[];
+      amount: number;
+      targetPlayerId?: never;
+      targetPlayerIds?: never;
+      targetCardInstanceId?: never;
+      targetDefinitionId?: never;
+      direction?: never;
+    }
+  | {
+      choiceKind: "directionalPlayerTarget";
+      choiceId: string;
+      choiceIds: string[];
+      legalChoiceCount: number;
+      direction: "left" | "right";
+      targetPlayerIds: PlayerId[];
+      targetPlayerId?: never;
+      targetCardInstanceId?: never;
+      targetDefinitionId?: never;
+      targetCardInstanceIds?: never;
+      targetDefinitionIds?: never;
+      amount?: never;
+    };
+
+type EffectChoiceSelectedEvent = GameEventShape<
+  "effectChoiceSelected",
+  "playerId" | "cardInstanceId" | "definitionId" | "effectId" | "sourceType",
+  | "targetPlayerId"
+  | "targetCardInstanceId"
+  | "targetDefinitionId"
+  | "choiceKind"
+  | "choiceId"
+  | "choiceIds"
+  | "legalChoiceCount"
+  | "targetPlayerIds"
+  | "targetCardInstanceIds"
+  | "targetDefinitionIds"
+  | "amount"
+  | "direction"
+  | "tokenInstanceId"
+  | "tokenDefinitionId"
+> &
+  EffectChoiceSelectedTarget;
+
 type TargetedCardEffectEvent = GameEventOf<
   | "attackAvoided"
-  | "attackCreated"
-  | "attackTargetStarted"
-  | "effectDamageDealt"
-  | "effectFoeDeckCardPlayed"
   | "effectLifeExchanged"
-  | "effectLifeHealed"
-  | "effectLifeSet"
-  | "mayhemDecisionStarted"
   | "mayhemTargetSkipped"
   | "mayhemVoteRecorded"
   | "trophyControlChanged",
@@ -372,13 +531,23 @@ type TargetedCardEffectEvent = GameEventOf<
   | "sourceType"
 >;
 
+type TargetedAmountCardEffectEvent = GameEventOf<
+  "effectDamageDealt" | "effectLifeHealed" | "effectLifeSet",
+  | "playerId"
+  | "targetPlayerId"
+  | "cardInstanceId"
+  | "definitionId"
+  | "effectId"
+  | "amount"
+  | "sourceType"
+>;
+
 type CardTargetEffectEvent = GameEventOf<
   | "effectCardDestroyed"
   | "effectCardDiscarded"
   | "effectCardGained"
   | "effectCardPlayedFromDeck"
   | "effectCardRevealed"
-  | "effectFixtureTargetCostPowerApplied"
   | "effectFoeDeckCardPlayed"
   | "effectTopMainDeckCardDestroyed",
   | "playerId"
@@ -390,24 +559,27 @@ type CardTargetEffectEvent = GameEventOf<
   | "sourceType"
 >;
 
+type CardTargetAmountEffectEvent = GameEventOf<
+  "effectFixtureTargetCostPowerApplied",
+  | "playerId"
+  | "cardInstanceId"
+  | "definitionId"
+  | "targetCardInstanceId"
+  | "targetDefinitionId"
+  | "effectId"
+  | "amount"
+  | "sourceType"
+>;
+
 type AmountCardEffectEvent = GameEventOf<
-  | "attackCreated"
-  | "attackTargetStarted"
   | "effectAddPowerApplied"
   | "effectCardsReturnedToHand"
   | "effectDrawCardsApplied"
-  | "effectFixtureTargetCostPowerApplied"
-  | "effectDamageDealt"
-  | "effectLifeHealed"
-  | "effectLifeSet"
   | "mayhemBattleParticipationSelected"
   | "mayhemBattleResolved"
-  | "mayhemDecisionPhaseStarted"
-  | "mayhemDecisionStarted"
   | "mayhemDeckDiscardedThenDiscardCardDestroyed"
   | "mayhemDiscardedTopDeckCardsDestroyed"
   | "mayhemHandDiscardedAndRedrawn"
-  | "mayhemResolutionPhaseStarted"
   | "mayhemVoteResolved",
   | "playerId"
   | "cardInstanceId"
@@ -525,16 +697,32 @@ type GameEventPayloadUnion =
     >
   | GameEventOf<"trophyChipGranted", "playerId" | "effectId" | "amount">
   | CardEffectEvent
+  | EffectChoiceSelectedEvent
   | TargetedCardEffectEvent
   | CardTargetEffectEvent
   | AmountCardEffectEvent
+  | TargetedAmountCardEffectEvent
+  | CardTargetAmountEffectEvent
   | GameEventOf<"activatePermanent", "playerId" | "cardInstanceId">
   | GameEventOf<"activateWizardProperty", "playerId" | "tokenInstanceId">
   | GameEventOf<"buyMarketCard", "playerId" | "cardInstanceId" | "sourceZone">
   | GameEventOf<"endTurn" | "playCard", "playerId">;
 
-export type GameEvent = GameEventPayloadUnion & GameEventPayload;
-export type GameEventForTrace = GameEvent & Partial<GameEventPayload>;
+export type GameEvent = GameEventPayloadUnion;
+export type GameEventForTrace = GameEvent;
+
+type WithoutGameEventMetadata<TEvent extends GameEvent> =
+  TEvent extends GameEvent
+    ? Omit<TEvent, keyof GameEventMetadata> & {
+        [TKey in keyof GameEventMetadata]?: never;
+      }
+    : never;
+
+export type GameEventDraft = WithoutGameEventMetadata<GameEvent>;
+export type GameEventDraftFor<TType extends GameEventType> = Extract<
+  GameEventDraft,
+  { type: TType }
+>;
 
 interface InitializeGameBaseOptions {
   seed: number;
@@ -699,9 +887,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     }
   }
 
-  recordGameEvent(state, {
-    type: "gameInitialized",
-  });
+  recordGameEvent(state, { type: "gameInitialized" });
 
   return state;
 }
@@ -913,7 +1099,7 @@ function alwaysPickFirstSetupChoice<TCandidate extends SetupCandidate<string>>(
   eventLog: GameEvent[]
 ): TCandidate {
   const chosenCandidate = candidates[0];
-  eventLog.push({
+  recordSetupChoiceSelected(eventLog, {
     type: "setupChoiceSelected",
     playerId: player.playerId,
     setupChoiceKind,

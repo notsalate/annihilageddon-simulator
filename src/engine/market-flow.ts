@@ -110,14 +110,24 @@ function fillMarket(
       }
 
       options.destroyedEvents.push(card);
-      recordGameEvent(state, {
-        type: options.eventLogType,
+      const destructionEvent = {
         playerId: state.activePlayerId,
         sourceType: options.mode,
         destinationZone: options.marketName,
         cardInstanceId: card.instanceId,
         definitionId: card.definitionId,
-      });
+      };
+      if (options.eventLogType === "mayhemDestroyed") {
+        recordGameEvent(state, {
+          type: "mayhemDestroyed",
+          ...destructionEvent,
+        });
+      } else {
+        recordGameEvent(state, {
+          type: "megaMayhemDestroyed",
+          ...destructionEvent,
+        });
+      }
       continue;
     }
 

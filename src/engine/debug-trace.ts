@@ -167,9 +167,7 @@ function formatEvent(
   }
 
   if (event.type === "marketChipsGained" && event.playerId !== undefined) {
-    return event.chipsBefore !== undefined && event.chipsAfter !== undefined
-      ? `- Market chips from ${formatCard(event, options)}: ${event.playerId} chips ${event.chipsBefore} -> ${event.chipsAfter}.`
-      : `- Market chips from ${formatCard(event, options)}: ${event.playerId} gains +${event.amount ?? 0} chips.`;
+    return `- Market chips from ${formatCard(event, options)}: ${event.playerId} chips ${event.chipsBefore} -> ${event.chipsAfter}.`;
   }
 
   if (event.type === "cardMoved") {
@@ -247,9 +245,7 @@ function formatEvent(
   }
 
   if (event.type === "playerResurrected" && event.playerId !== undefined) {
-    return event.lifeBefore !== undefined && event.lifeAfter !== undefined
-      ? `- Resurrection: ${event.playerId} life ${event.lifeBefore} -> ${event.lifeAfter}.`
-      : `- Resurrection: ${event.playerId} returns at ${event.amount ?? 0} life.`;
+    return `- Resurrection: ${event.playerId} life ${event.lifeBefore} -> ${event.lifeAfter}.`;
   }
 
   if (event.type === "defenseCostPaid" && event.playerId !== undefined) {
