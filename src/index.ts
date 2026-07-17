@@ -124,6 +124,13 @@ export type {
 } from "./engine/setup.js";
 export { initializeGame } from "./engine/setup.js";
 export { forkGameState } from "./engine/game-state-fork.js";
+export type {
+  CompletedActionBranch,
+  DeferredActionBranch,
+  ImmediateActionBranches,
+  RuntimeEffectChoiceSummary,
+} from "./engine/best-move-analysis.js";
+export { enumerateImmediateActionBranches } from "./engine/best-move-analysis.js";
 export { assertGameStateInvariants } from "./engine/invariants.js";
 export type {
   ActionResult,

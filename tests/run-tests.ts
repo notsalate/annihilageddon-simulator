@@ -21,3 +21,4 @@ import "./runtime-image-metadata.test.js";
 import "./card-runtime-clusters.test.js";
 import "./engine-guards.test.js";
 import "./effect-choice-routing.test.js";
+import "./best-move-analysis.test.js";
