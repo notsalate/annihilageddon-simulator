@@ -825,52 +825,73 @@ function resolveTargetChoice(
     return choicesResult;
   }
 
-  const choice = chooseFirstLegalChoice(choicesResult.choices);
-  if (choice === undefined) {
-    recordGameEvent(state, {
-      type: "effectChoiceSkipped",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: asString(effect["effectId"]),
-      sourceType: source.sourceType,
-    });
-
-    if (effect["emptyChoice"] === "fail") {
-      return {
-        ok: false,
-        error: `No legal choices for effect ${asString(effect["effectId"])}`,
-      };
-    }
-
-    return {
-      ok: true,
-      choice: undefined,
-    };
-  }
-
-  recordGameEvent(state, {
-    type: "effectChoiceSelected",
-    playerId: player.playerId,
-    cardInstanceId: source.cardInstanceId,
-    definitionId: source.definitionId,
-    ...(choice.choiceType === "card"
+  const effectId = effect["effectId"];
+  const runtimeChoices: EffectChoice[] = choicesResult.choices.map((choice) =>
+    choice.choiceType === "card"
       ? {
           choiceKind: "cardTarget" as const,
-          targetCardInstanceId: choice.card.instanceId,
-          targetDefinitionId: choice.card.definitionId,
+          choiceId: choice.card.instanceId,
+          cards: [choice.card],
+          amount: 1,
         }
       : {
           choiceKind: "playerTarget" as const,
-          targetPlayerId: choice.player.playerId,
-        }),
-    effectId: asString(effect["effectId"]),
-    sourceType: source.sourceType,
-  });
+          choiceId: choice.player.playerId,
+          players: [choice.player],
+        }
+  );
+  const selected = chooseEffectChoice(
+    state,
+    player,
+    source,
+    effectId,
+    runtimeChoices
+  );
+  if (selected === undefined) {
+    if (effect["emptyChoice"] === "fail") {
+      return {
+        ok: false,
+        error: `No legal choices for effect ${asString(effectId)}`,
+      };
+    }
+    return { ok: true, choice: undefined };
+  }
 
+  if (selected.choiceKind === "cardTarget") {
+    if (selected.cards.length !== 1) {
+      return {
+        ok: false,
+        error: `Card target choice must contain exactly one card`,
+      };
+    }
+    const card = selected.cards[0];
+    if (card === undefined) {
+      return {
+        ok: false,
+        error: `Card target choice must contain exactly one card`,
+      };
+    }
+    return { ok: true, choice: { choiceType: "card", card } };
+  }
+  if (selected.choiceKind === "playerTarget") {
+    if (selected.players.length !== 1) {
+      return {
+        ok: false,
+        error: `Player target choice must contain exactly one player`,
+      };
+    }
+    const targetPlayer = selected.players[0];
+    if (targetPlayer === undefined) {
+      return {
+        ok: false,
+        error: `Player target choice must contain exactly one player`,
+      };
+    }
+    return { ok: true, choice: { choiceType: "player", player: targetPlayer } };
+  }
   return {
-    ok: true,
-    choice,
+    ok: false,
+    error: `Unsupported target choice kind ${selected.choiceKind}`,
   };
 }
 
@@ -921,6 +942,9 @@ function chooseEffectChoice(
             targetPlayerIds: choice.players.map(
               (candidate) => candidate.playerId
             ),
+            ...(choice.players.length === 1
+              ? { targetPlayerId: choice.players[0]!.playerId }
+              : {}),
           }
         : choice.choiceKind === "cardTarget"
           ? {
@@ -933,6 +957,12 @@ function chooseEffectChoice(
               targetDefinitionIds: choice.cards.map(
                 (candidate) => candidate.definitionId
               ),
+              ...(choice.cards.length === 1
+                ? {
+                    targetCardInstanceId: choice.cards[0]!.instanceId,
+                    targetDefinitionId: choice.cards[0]!.definitionId,
+                  }
+                : {}),
             }
           : {
               ...choicePayloadBase,
@@ -1061,12 +1091,6 @@ function buildLegalTargetChoices(
     ok: false,
     error: `Unsupported target selector ${asString(selector)}`,
   };
-}
-
-function chooseFirstLegalChoice(
-  choices: readonly TargetChoice[]
-): TargetChoice | undefined {
-  return choices[0];
 }
 
 function requireCardChoice(

@@ -459,7 +459,7 @@ type EffectChoiceSelectedTarget =
       choiceIds: string[];
       legalChoiceCount: number;
       targetPlayerIds: PlayerId[];
-      targetPlayerId?: never;
+      targetPlayerId?: PlayerId;
       targetCardInstanceId?: never;
       targetDefinitionId?: never;
       targetCardInstanceIds?: never;
@@ -477,8 +477,8 @@ type EffectChoiceSelectedTarget =
       amount: number;
       targetPlayerId?: never;
       targetPlayerIds?: never;
-      targetCardInstanceId?: never;
-      targetDefinitionId?: never;
+      targetCardInstanceId?: string;
+      targetDefinitionId?: string;
       direction?: never;
     }
   | {

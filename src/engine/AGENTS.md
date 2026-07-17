@@ -17,6 +17,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Keep card behavior in explicit typed runtime effects and handlers.
 - Keep `StatusInstance.effects` and `TrophyLikeInstance.effects` as decoded `RuntimeEffect[]`; do not reintroduce raw records after the data boundary.
 - Model runtime effect choices as a discriminated union; record selected typed targets in the event log.
+- Route all legal runtime effect choices, including card/player targets, through one typed choice hook; preserve stable order, identity validation, and event compatibility.
 - Send closed `GameEventDraft` objects through `event-recorder`; direct `eventLog.push` is confined to that module.
 - Keep the typed effect-handler catalog as the source of truth; derive lookup maps from it.
 - The effect runtime catalog owns effect ID, source kind, runtime mode, and handler-shape validation at the executable-data boundary.
