@@ -18,6 +18,8 @@ import {
   type StatusInstance,
   type TokenDefinition,
 } from "../src/index.js";
+import { executeMayhemEffects } from "../src/engine/effect-runtime.js";
+import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 import { replacePostSetupWizardPropertyFixture } from "./helpers/fixture-tokens.js";
 import {
@@ -6780,16 +6782,32 @@ test("unowned Mega Mayhem death does not move Basic Trophy", () => {
     marketChips: 0,
   };
   state.common.mainDeck.unshift(mayhemCard);
-  const fixtureCardId = addFixtureCardToActiveHand(state, {
-    effectId: "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
-    timing: "onPlay",
-    targetSelector: "eachPlayerClockwiseFromActive",
-  });
-
-  const result = applyAction(state, {
-    type: "playCard",
-    cardInstanceId: fixtureCardId,
-  });
+  const source: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: "combat",
+    playerId: activePlayer.playerId,
+    cardInstanceId: "fixture-unowned-mega-mayhem",
+    definitionId: mayhemDefinition.cardId,
+  };
+  const result = executeMayhemEffects(
+    state,
+    activePlayer,
+    {
+      ...mayhemDefinition,
+      engine: {
+        ...mayhemDefinition.engine,
+        effects: [
+          {
+            effectId:
+              "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+            timing: "onMayhemResolve",
+            targetSelector: "eachPlayerClockwiseFromActive",
+          },
+        ],
+      },
+    },
+    source
+  );
 
   assert.equal(result.ok, true);
   assert.ok(
@@ -7145,7 +7163,7 @@ test("targeted fixture effect surfaces unsupported selectors explicitly", () => 
   assert.equal(result.ok, false);
   assert.match(
     result.error,
-    /Unsupported target selector unsupportedFixtureSelector/
+    /uses unsupported fixture target-cost power target/
   );
 });
 

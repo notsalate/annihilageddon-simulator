@@ -329,8 +329,8 @@ const fixtureOnlyRuntimeEffectIds = new Set<RuntimeEffectId>([
   "fixture_add_power_equal_to_target_cost",
 ]);
 
-const opponentPlayerTargetSelectors = [
-  "opponentPlayer",
+const damageTargetSelectors = [
+  "opponentPlayer", "activePlayer",
 ] as const satisfies readonly RuntimeEffectTargetSelector[];
 const activePlayerTargetSelectors = [
   "activePlayer",
@@ -358,6 +358,7 @@ const dinglerStatusTargetSelectors = [
   "activePlayer",
   "opponentPlayer",
   "anyPlayer",
+  "eachPlayerClockwiseFromActive",
 ] as const satisfies readonly RuntimeEffectTargetSelector[];
 
 const addPowerHandler: EffectRuntimeHandler<AddPowerRuntimeEffect> = {
@@ -657,7 +658,7 @@ const destroyCardHandler: EffectRuntimeHandler = {
 
 const dealDamageHandler: EffectRuntimeHandler = {
   effectId: "deal_damage",
-  allowedTargetSelectors: opponentPlayerTargetSelectors,
+  allowedTargetSelectors: damageTargetSelectors,
   validateShape(subjectId, effect) {
     return [
       ...validatePositiveIntegerAmount(subjectId, effect, "damage amount"),
@@ -665,7 +666,7 @@ const dealDamageHandler: EffectRuntimeHandler = {
         subjectId,
         effect,
         "damage",
-        opponentPlayerTargetSelectors
+        damageTargetSelectors
       ),
     ];
   },
@@ -4390,11 +4391,9 @@ function shuffleInPlace<T>(items: T[], state: GameState): void {
     items[swapIndex] = item;
   }
 }
-
 function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
   return isPlainRecord(effect);
 }
-
 function formatUnknown(value: unknown): string {
   return String(value);
 }
@@ -4654,13 +4653,13 @@ export type EffectRuntimeCatalogResolution =
   | { ok: true; entry: EffectRuntimeCatalogEntry }
   | { ok: false; errors: string[] };
 
+
 export function resolveEffectRuntimeCatalogEntry(
   subjectId: string,
   rawEffectId: string,
   effect: RuntimeEffectPayload | Record<string, unknown>,
   mode: EffectRuntimeMode,
-  sourceKind: EffectRuntimeSourceKind,
-  validateShape = true
+  sourceKind: EffectRuntimeSourceKind
 ): EffectRuntimeCatalogResolution {
   const entry = isRuntimeEffectId(rawEffectId)
     ? getEffectRuntimeCatalogEntry(rawEffectId)
@@ -4694,10 +4693,6 @@ export function resolveEffectRuntimeCatalogEntry(
         `${subjectId} uses effect id ${rawEffectId} outside supported ${mode} mode`,
       ],
     };
-  }
-
-  if (!validateShape) {
-    return { ok: true, entry };
   }
 
   const shapeErrors = entry.handler.validateShape(

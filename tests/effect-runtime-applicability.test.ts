@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { initializeGame } from "../src/index.js";
-import { executeEffect } from "../src/engine/effect-runtime.js";
+import {
+  executeEffect,
+  executeMayhemEffects,
+} from "../src/engine/effect-runtime.js";
+import type { CardDefinition } from "../src/engine/data.js";
 import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
 import type { RuntimeEffectPayload } from "../src/engine/runtime-effect.js";
 
@@ -105,4 +109,71 @@ test("known effect with invalid shape is rejected before execution", () => {
   assert.equal(result.ok, false);
   assert.match(result.error, /invalid power amount/);
   assert.equal(state.turn.power, 0);
+});
+
+test("timed effect with invalid shape is rejected before its handler", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11606 });
+  const player = state.players[0];
+  assert.ok(player);
+  const result = executeEffect(
+    state,
+    player,
+    {
+      effectId: "fixture_modify_effective_value",
+      timing: "onPlay",
+      valueKind: "unknown",
+      operation: "add",
+      amount: "invalid",
+      target: { targetType: "player" },
+    } as unknown as RuntimeEffectPayload,
+    fixtureSource(player.playerId, "fixture")
+  );
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /unsupported effective-value timing/);
+});
+
+test("public Mayhem execution resolves a timed effect deterministically", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11607 });
+  const player = state.players[0];
+  assert.ok(player);
+  const definition: CardDefinition = {
+    schemaVersion: 1,
+    cardId: "fixture-mayhem-runtime",
+    source: { image: "assets/cards/fixtures/fixture-mayhem-runtime.png" },
+    visible: {
+      nameRu: "Fixture Mayhem",
+      cost: 0,
+      victoryPoints: 0,
+      typeRu: null,
+      cardKind: "mayhem",
+      cardTypes: [],
+      markers: [],
+    },
+    engine: {
+      runtimeSchema: "krutagidon.cardDefinition.v0",
+      mappingStatus: "fixture",
+      playableInV0: true,
+      cardKind: "mayhem",
+      cardTypes: [],
+      cost: 0,
+      victoryPoints: 0,
+      isOngoing: false,
+      marketChipMarker: false,
+      effects: [
+        { effectId: "add_power", timing: "onMayhemResolve", amount: 2 },
+      ],
+      unsupportedMechanics: [],
+    },
+  };
+
+  const result = executeMayhemEffects(
+    state,
+    player,
+    definition,
+    fixtureSource(player.playerId, "combat")
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(state.turn.power, 2);
 });

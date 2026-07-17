@@ -377,11 +377,11 @@ export function executeEffect(
     asString(effect["effectId"]),
     effect,
     source.runtimeMode,
-    source.sourceType,
-    !("timing" in effect)
+    source.sourceType
   );
   if (!resolution.ok) {
-    return { ok: false, error: resolution.errors[0] ?? "Unsupported effect" };
+    const error = resolution.errors[0];
+    return { ok: false, error: error ?? "Unsupported effect" };
   }
 
   return resolution.entry.handler.execute(
