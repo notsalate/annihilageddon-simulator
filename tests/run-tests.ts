@@ -8,6 +8,7 @@ const testSuites = [
   "rng.test.js",
   "game-state-fork.test.js",
   "setup.test.js",
+  "setup-effects.test.js",
   "action-loop.test.js",
   "effective-values.test.js",
   "simulation.test.js",

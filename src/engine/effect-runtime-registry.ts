@@ -63,6 +63,19 @@ export type EffectExecutionResult =
       error: string;
     };
 
+export type SetupEffectExecutionResult =
+  | { status: "executed" }
+  | { status: "notImplemented" }
+  | { status: "error"; error: string };
+
+export interface SetupEffectSourceContext {
+  sourceType: "wizardProperty";
+  runtimeMode: EffectRuntimeMode;
+  playerId: PlayerState["playerId"];
+  tokenInstanceId: string;
+  tokenDefinitionId: string;
+}
+
 export type TargetChoice =
   | {
       choiceType: "card";
@@ -256,6 +269,11 @@ export interface EffectRuntimeHandler<
     effect: Effect,
     source: EffectSourceContext,
     services: EffectRuntimeServices
+  ): EffectExecutionResult;
+  executeSetup?(
+    player: PlayerState,
+    effect: Effect,
+    source: SetupEffectSourceContext
   ): EffectExecutionResult;
 }
 
@@ -2063,6 +2081,23 @@ const setStartingLifeTotalHandler: EffectRuntimeHandler = {
   },
   execute() {
     return setupOnlyExecutionError("set_starting_life_total");
+  },
+  executeSetup(player, effect) {
+    const errors = setStartingLifeTotalHandler.validateShape(
+      "Setup effect set_starting_life_total",
+      effect
+    );
+    if (errors.length > 0) {
+      return { ok: false, error: errors[0] ?? "Invalid setup life total" };
+    }
+
+    const lifeTotal = effect.lifeTotal;
+    if (typeof lifeTotal !== "number") {
+      return { ok: false, error: "Invalid setup life total" };
+    }
+    player.life.current = lifeTotal;
+    player.life.max = Math.max(player.life.max, lifeTotal);
+    return { ok: true };
   },
 };
 
@@ -4606,4 +4641,29 @@ export function resolveEffectRuntimeCatalogEntry(
   return shapeErrors.length > 0
     ? { ok: false, errors: shapeErrors }
     : { ok: true, entry };
+}
+
+export function tryExecuteSetupEffect(
+  player: PlayerState,
+  effect: RuntimeEffectPayload,
+  source: SetupEffectSourceContext
+): SetupEffectExecutionResult {
+  const resolution = resolveEffectRuntimeCatalogEntry(
+    `Setup effect ${String(effect["effectId"])}`,
+    String(effect["effectId"]),
+    effect,
+    source.runtimeMode,
+    "wizardProperty"
+  );
+  if (!resolution.ok) {
+    return { status: "error", error: resolution.errors[0] ?? "Invalid setup effect" };
+  }
+
+  const executeSetup = resolution.entry.handler.executeSetup;
+  if (executeSetup === undefined) {
+    return { status: "notImplemented" };
+  }
+
+  const result = executeSetup(player, effect, source);
+  return result.ok ? { status: "executed" } : { status: "error", error: result.error };
 }

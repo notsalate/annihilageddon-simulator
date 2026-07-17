@@ -35,10 +35,10 @@ const configuredAllowedViolations = [
   ["src/engine/data.ts", 2313, 3, "validateNestedAttackBranches"],
   ["src/engine/data.ts", 2366, 43, "isEffectRecord"],
   ["src/engine/runtime-effect.ts", 408, 4, "isRuntimeEffectTargetRecord"],
-  ["src/engine/effect-runtime-registry.ts", 4293, 43, "isEffectRecord"],
+  ["src/engine/effect-runtime-registry.ts", 4328, 43, "isEffectRecord"],
   [
     "src/engine/effect-runtime-registry.ts",
-    4559,
+    4594,
     3,
     "resolveEffectRuntimeCatalogEntry",
   ],

@@ -31,6 +31,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Thread execution/validation mode explicitly instead of adding hidden global assumptions.
 - Analysis forks use `forkGameState` to copy mutable state and the current RNG position via `RandomSource.fork()`; immutable definition maps may be shared by reference, while the fork keeps its own event context and continues event/action sequences.
 - Runtime decoder сохраняет `CardDefinition.source.image` как presentation metadata для API; gameplay logic не ветвится по path и не читает image files.
+- Семантика setup-only effects принадлежит `executeSetup` в каталоге runtime-эффектов; `setup.ts` только задаёт порядок и передаёт контекст выполнения.
 
 ## Work Guidance
 

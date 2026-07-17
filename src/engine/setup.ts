@@ -25,6 +25,10 @@ import {
   recordGameEvent,
   recordSetupChoiceSelected,
 } from "./event-recorder.js";
+import {
+  tryExecuteSetupEffect,
+  type SetupEffectSourceContext,
+} from "./effect-runtime-registry.js";
 import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
@@ -813,7 +817,12 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     rng,
     setupEvents
   );
-  applyWizardPropertySetupEffects(players, dataPack, factory);
+  applyWizardPropertySetupEffects(
+    players,
+    dataPack,
+    factory,
+    dataPack.manifest.mappingStatus === "fixture" ? "fixture" : "combat"
+  );
   const mainDeck = instantiateDeck(
     dataPack.decks.mainDeck,
     dataPack,
@@ -1139,7 +1148,8 @@ function assertSetupPoolSize(
 function applyWizardPropertySetupEffects(
   players: PlayerState[],
   dataPack: LoadedDataPack,
-  factory: InstanceFactory
+  factory: InstanceFactory,
+  runtimeMode: "combat" | "fixture"
 ): void {
   for (const player of players) {
     for (const property of player.wizardProperties) {
@@ -1157,6 +1167,20 @@ function applyWizardPropertySetupEffects(
           continue;
         }
 
+        const source: SetupEffectSourceContext = {
+          sourceType: "wizardProperty",
+          runtimeMode,
+          playerId: player.playerId,
+          tokenInstanceId: property.instanceId,
+          tokenDefinitionId: property.definitionId,
+        };
+        const execution = tryExecuteSetupEffect(player, effect, source);
+        if (execution.status === "executed") {
+          continue;
+        }
+        if (execution.status === "error") {
+          throw new Error(execution.error);
+        }
         applyWizardPropertySetupEffect(player, dataPack, factory, effect);
       }
     }
@@ -1194,19 +1218,6 @@ function applyWizardPropertySetupEffect(
     return;
   }
 
-  if (effect.effectId === "set_starting_life_total") {
-    const lifeTotal = effect.lifeTotal;
-    if (
-      typeof lifeTotal !== "number" ||
-      !Number.isSafeInteger(lifeTotal) ||
-      lifeTotal < 1
-    ) {
-      throw new Error(`Invalid setup life total ${String(lifeTotal)}`);
-    }
-
-    player.life.current = lifeTotal;
-    player.life.max = Math.max(player.life.max, lifeTotal);
-  }
 }
 
 function replaceStartingCard(
