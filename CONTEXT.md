@@ -161,20 +161,20 @@ A read-only helper view that gathers separately stored controlled cards, tokens,
 _Avoid_: unified controlled objects zone
 
 **Choice Policy**:
-The deterministic decision hook used when an effect or rule requires a legal choice. The early baseline policy is a temporary stub that chooses the first legal option and is not intended to model strong player strategy or search for a strong line.
-_Avoid_: hidden handler choice, random default choice
+The deterministic decision hook used when an effect or rule requires a legal choice. The early `baselineBot` policy is a temporary stub that chooses the first legal option; it is not a strong player strategy and never searches for a strong line.
+_Avoid_: hidden handler choice, random default choice, Analyzer
 
 **Strategy**:
-The player decision model used during a simulated game. A strategy is separate from the player's starting build and from seating position.
-_Avoid_: starting build, player identity, seed
+The player decision model used during a simulated game. A strategy chooses legal actions for one participant, may be aggressive, defensive, or another player goal, and must not read future RNG outcomes or hidden opponent information. A strategy is separate from the player's starting build, seating position, and analysis tooling.
+_Avoid_: starting build, player identity, seed, Analyzer, analysis policy
 
 **Full Comparison Mode**:
-A user-facing analysis mode that compares strategies or starting builds across many simulated games. Full comparison modes require implemented strategies, starting builds, and a result surface for comparison; simple baseline simulation runs are not full comparison modes.
+A user-facing mode that compares implemented player strategies or starting builds across many simulated games. It is distinct from per-turn line analysis; a full comparison mode requires strategies, starting builds, and a result surface for comparison. Simple baseline simulation runs are not full comparison modes.
 _Avoid_: smoke simulation, baseline run, single mass summary
 
-**Best-Move Strategy**:
-A separate strategy that evaluates the legal options available during a player's turn and chooses the best available line according to its configured evaluation policy. It is distinct from the temporary `first legal choice` stub used by the baseline choice policy.
-_Avoid_: starting build analysis, first move analysis
+**Best-Move Analyzer** (short: **Analyzer**):
+An analysis component outside `BotStrategy` that receives complete engine state, including hidden information, and may fork seeded RNG to replay future branches reproducibly. It enumerates legal lines and ranks them only with an evaluation policy supplied by its caller; it does not act as a player, choose a universal definition of “best”, or alter effect resolution. The first implementation slice covers complete lines of the current turn through `endTurn`; multi-turn lookahead is a future extension.
+_Avoid_: Best-Move Strategy, BestStrategy, BestBot, starting build analysis, first move analysis
 
 **Starting Build**:
 The initial combination of wizard properties and familiar assigned to a player before the game begins. Starting builds are compared separately from strategies.
