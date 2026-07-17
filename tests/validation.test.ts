@@ -24,8 +24,6 @@ import {
   type TokenDefinition,
 } from "../src/index.js";
 import {
-  effectRuntimeCatalog,
-  effectRuntimeCatalogSource,
   type EffectRuntimeServices,
   getEffectRuntimeCatalogEntry,
   getEffectRuntimeHandler,
@@ -519,20 +517,50 @@ test("effect runtime lookup retains the handler type for its effect id", () => {
   assert.equal(anotherEffectIdIsRejectedByTheAddPowerHandler, true);
 });
 
-test("effect runtime lookup is derived from its typed catalog source", () => {
-  assert.deepEqual(
-    Array.from(effectRuntimeCatalog.keys()).sort(),
-    Object.keys(effectRuntimeCatalogSource).sort()
+test("executable validation applies catalog source kinds", () => {
+  const effectId = "temporary_hand_limit_by_gained_card_type";
+  const effect = {
+    effectId,
+    timing: "endTurn",
+    amount: 1,
+    cardTypes: ["spell"],
+  };
+
+  const wizardPropertyResult = validateExecutableDataPack(
+    withFixtureToken({
+      schemaVersion: 1,
+      tokenId: "wizard-property-fixture-source-kind-validation",
+      runtimeSchema: "krutagidon.tokenDefinition.v0",
+      kind: "wizardProperty",
+      visible: {
+        textRu: "За полученное заклинание добери на 1 карту больше.",
+      },
+      engine: {
+        mappingStatus: "fixture",
+        playableInV0: true,
+        effects: [effect],
+        unsupportedMechanics: [],
+      },
+    })
   );
-  assert.deepEqual(
-    getEffectRuntimeCatalogEntry("add_power")?.supportedSourceKinds,
-    ["card", "wizardProperty"]
+  assert.deepEqual(wizardPropertyResult, { ok: true });
+
+  const deadWizardTokenResult = validateExecutableDataPack(
+    withFixtureToken({
+      schemaVersion: 1,
+      tokenId: "dead-wizard-token-fixture-source-kind-validation",
+      runtimeSchema: "krutagidon.tokenDefinition.v0",
+      kind: "deadWizardToken",
+      victoryPoints: 0,
+      effects: [effect],
+    })
   );
-  assert.deepEqual(
-    getEffectRuntimeCatalogEntry("temporary_hand_limit_by_gained_card_type")
-      ?.supportedSourceKinds,
-    ["wizardProperty"]
-  );
+  assert.deepEqual(deadWizardTokenResult, {
+    ok: false,
+    errors: [
+      "Token dead-wizard-token-fixture-source-kind-validation uses token-only effect id temporary_hand_limit_by_gained_card_type",
+    ],
+  });
 });
 
 test("runtime effect target selectors are exposed as a literal union", () => {

@@ -30,7 +30,7 @@ export type EffectRuntimeSupportedModes = readonly [
   EffectRuntimeMode,
   ...EffectRuntimeMode[],
 ];
-export const effectRuntimeSourceKinds = ["card", "wizardProperty"] as const;
+export const effectRuntimeSourceKinds = ["card", "wizardProperty", "deadWizardToken"] as const;
 export type EffectRuntimeSourceKind = (typeof effectRuntimeSourceKinds)[number];
 export type EffectRuntimeSupportedSourceKinds = readonly [
   EffectRuntimeSourceKind,

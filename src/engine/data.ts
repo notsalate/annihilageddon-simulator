@@ -454,7 +454,7 @@ export function validateExecutableDataPack(
             effectId,
             effect,
             mode,
-            "wizardProperty"
+            definition.kind
           )
         );
       }

@@ -21,6 +21,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Send closed `GameEventDraft` objects through `event-recorder`; direct `eventLog.push` is confined to that module.
 - Keep the typed effect-handler catalog as the source of truth; derive lookup maps from it.
 - The effect runtime catalog owns effect ID, source kind, runtime mode, and handler-shape validation at the executable-data boundary.
+- Preserve the executable source kind at that boundary: card, wizardProperty, and deadWizardToken are distinct catalog inputs.
 - Effect execution resolves every effect through the Effect Runtime Catalog before invoking its handler; Mayhem execution does not use a separate catalog lookup.
 - Keep `Best-Move Analyzer` modules outside `BotStrategy`: analysis may receive complete `GameState`, inspect hidden information, fork seeded RNG, and enumerate current-turn legal lines through `endTurn` using a caller-supplied evaluation policy; simulation strategies must not depend on the analysis API or future RNG/hidden opponent state.
 - The analyzer has no hidden default score: a line becomes “best” only after the caller supplies a named evaluation policy.
