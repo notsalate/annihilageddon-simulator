@@ -112,11 +112,10 @@ export function enumerateActionBranches(
   validateLimits(limits);
   const pending: ChoicePrefix[] = [{ selections: [] }];
   const completed: CompletedActionBranch[] = [];
-  let frontier = 1;
+  let generatedBranches = 0;
 
   while (pending.length > 0) {
     const prefix = pending.pop()!;
-    frontier -= 1;
     const fork = forkGameState(source);
     const consumed = new Set<number>();
     let requestIndex = 0;
@@ -188,8 +187,8 @@ export function enumerateActionBranches(
           },
         ],
       }));
-      frontier += next.length;
-      if (frontier > limits.maxBranchesPerAction) {
+      generatedBranches += next.length;
+      if (generatedBranches > limits.maxBranchesPerAction) {
         throw new AnalysisLimitError(
           `Analysis branch limit exceeded ${limits.maxBranchesPerAction} for action ${describeAction(action)}`
         );

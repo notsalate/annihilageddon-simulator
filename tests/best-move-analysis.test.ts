@@ -212,6 +212,187 @@ test("enumerates each card target as a completed branch", () => {
   assert.equal(JSON.stringify(branches[0]?.selectedChoices).includes("players"), false);
 });
 
+test("limits the total generated branches across sequential choices", () => {
+  const state = initializeGame({ rootDir, seed: 126 });
+  const target = state.common.market[0];
+  const secondTarget = state.common.mainDeck[0];
+  assert.ok(target);
+  assert.ok(secondTarget);
+  state.common.market = [target, secondTarget];
+  state.common.legendMarket = [];
+  state.common.wildMagicStack = [];
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  activePlayer.hand = [];
+  const card = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-sequential-choice", [
+      {
+        effectId: "fixture_add_power_equal_to_target_cost",
+        timing: "onPlay",
+        target: { selector: "mainMarketCard" },
+      },
+      {
+        effectId: "fixture_add_power_equal_to_target_cost",
+        timing: "onPlay",
+        target: { selector: "mainMarketCard" },
+      },
+    ])
+  );
+
+  assert.throws(
+    () => enumerateImmediateActionBranches(state, {
+      maxChoiceDepth: 32,
+      maxBranchesPerAction: 3,
+      maxActionsPerLine: 128,
+      maxTurnLines: 100_000,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.name, "AnalysisLimitError");
+      assert.match(error.message, /branch limit exceeded 3/);
+      assert.match(error.message, new RegExp(card.instanceId));
+      return true;
+    }
+  );
+});
+
+test("enumerates the Cartesian product of sequential choices", () => {
+  const state = initializeGame({ rootDir, seed: 126 });
+  const target = state.common.market[0];
+  const secondTarget = state.common.mainDeck[0];
+  assert.ok(target);
+  assert.ok(secondTarget);
+  state.common.market = [target, secondTarget];
+  state.common.legendMarket = [];
+  state.common.wildMagicStack = [];
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  activePlayer.hand = [];
+  addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-cartesian-choice", [
+      {
+        effectId: "fixture_add_power_equal_to_target_cost",
+        timing: "onPlay",
+        target: { selector: "mainMarketCard" },
+      },
+      {
+        effectId: "fixture_add_power_equal_to_target_cost",
+        timing: "onPlay",
+        target: { selector: "mainMarketCard" },
+      },
+    ])
+  );
+
+  const branches = enumerateImmediateActionBranches(state).filter(
+    (branch) => branch.legalAction.type === "playCard"
+  );
+  assert.equal(branches.length, 4);
+  assert.deepEqual(
+    branches.map((branch) => branch.selectedChoices.map((choice) => choice.choiceIndex)),
+    [[0, 0], [0, 1], [1, 0], [1, 1]]
+  );
+});
+
+test("replays duplicate choice IDs by index and preserves target combinations", () => {
+  const state = initializeGame({ rootDir, seed: 126 });
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.hand = [];
+  activePlayer.discard = [];
+  activePlayer.wizardProperties = [];
+  targetPlayer.hand = [];
+  targetPlayer.wizardProperties = [];
+  targetPlayer.life.current = 1;
+  const firstDiscard = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-return-first")
+  );
+  const secondDiscard = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-return-second")
+  );
+  activePlayer.hand = [];
+  activePlayer.discard.push(firstDiscard, secondDiscard);
+  const attackCard = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-duplicate-choice", [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 1,
+        targetSelector: "chosenPlayer",
+        onKill: [{ effectId: "return_discard_to_hand", amount: 1 }],
+      },
+    ])
+  );
+
+  const branches = enumerateImmediateActionBranches(state).filter(
+    (branch) => branch.legalAction.type === "playCard" &&
+      branch.legalAction.cardInstanceId === attackCard.instanceId
+  );
+  assert.equal(branches.length, 4);
+  const duplicateBranches = branches.filter(
+    (branch) => branch.selectedChoices[1]?.choiceId === "return_1"
+  );
+  assert.equal(duplicateBranches.length, 2);
+  assert.deepEqual(
+    duplicateBranches.map((branch) => branch.selectedChoices[1]?.choiceIndex),
+    [0, 1]
+  );
+  assert.deepEqual(
+    duplicateBranches.map((branch) => [...branch.resultingState.eventLog].reverse().find(
+      (event) => event.type === "effectChoiceSelected" && event.effectId === "return_discard_to_hand"
+    )?.targetCardInstanceIds),
+    [[firstDiscard.instanceId], [secondDiscard.instanceId]]
+  );
+});
+
+test("fails explicitly when replay choice metadata drifts", () => {
+  const state = initializeGame({ rootDir, seed: 126 });
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  activePlayer.hand = [];
+  activePlayer.wizardProperties = [];
+  let targetSelectorReads = 0;
+  const driftingEffect: RuntimeEffect = {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 1,
+    get targetSelector() {
+      targetSelectorReads += 1;
+      return targetSelectorReads <= 4 ? "chosenPlayer" : "chosenFoe";
+    },
+  };
+  addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-replay-drift", [driftingEffect])
+  );
+
+  assert.throws(
+    () => enumerateImmediateActionBranches(state),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /Analysis replay failed/);
+      assert.match(error.message, /choice (metadata changed|index .*out of range)/);
+      return true;
+    }
+  );
+});
+
 test("ranks turn lines by a caller-supplied policy with stable ties", () => {
   const { state, lines } = rankingFixture();
   const originalLines = [...lines];
