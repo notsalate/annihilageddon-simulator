@@ -61,6 +61,16 @@ type CompleteDamageEvent = IncompleteDamageEvent & {
   targetPlayerId: ReturnType<typeof markPlayerId>;
   amount: number;
 };
+type IncompleteFoeDeckPlayedEvent = {
+  type: "effectFoeDeckCardPlayed";
+  playerId: ReturnType<typeof markPlayerId>;
+  cardInstanceId: "card-1";
+  definitionId: ReturnType<typeof markCardDefinitionId>;
+  targetCardInstanceId: "card-2";
+  targetDefinitionId: ReturnType<typeof markCardDefinitionId>;
+  effectId: "play_top_foe_deck_card";
+  sourceType: "card";
+};
 type InitializedEventWithForeignPayload = {
   type: "gameInitialized";
   targetPlayerId: ReturnType<typeof markPlayerId>;
@@ -72,8 +82,22 @@ type IncompleteDamageIsRejected = AssertFalse<
 type CompleteDamageIsAccepted = AssertTrue<
   IsAssignable<CompleteDamageEvent, GameEvent>
 >;
+type IncompleteFoeDeckPlayedIsRejected = AssertFalse<
+  IsAssignable<IncompleteFoeDeckPlayedEvent, GameEvent>
+>;
 type InitializedEventRejectsForeignPayload = AssertFalse<
   IsAssignable<InitializedEventWithForeignPayload, GameEvent>
+>;
+type SetupChoiceWithUnknownPolicy = {
+  type: "setupChoiceSelected";
+  playerId: ReturnType<typeof markPlayerId>;
+  setupChoiceKind: "wizardProperty";
+  policyId: "random";
+  candidateDefinitionIds: string[];
+  chosenDefinitionId: string;
+};
+type SetupChoiceRejectsUnknownPolicy = AssertFalse<
+  IsAssignable<SetupChoiceWithUnknownPolicy, GameEvent>
 >;
 
 type IncompleteEffectChoiceEvent = {
@@ -144,7 +168,9 @@ test("event payload types reject incomplete choices", () => {
   const turnStartedDraftRejectsMetadata: TurnStartedDraftRejectsMetadata = false;
   const incompleteDamageIsRejected: IncompleteDamageIsRejected = false;
   const completeDamageIsAccepted: CompleteDamageIsAccepted = true;
+  const incompleteFoeDeckPlayedIsRejected: IncompleteFoeDeckPlayedIsRejected = false;
   const initializedEventRejectsForeignPayload: InitializedEventRejectsForeignPayload = false;
+  const setupChoiceRejectsUnknownPolicy: SetupChoiceRejectsUnknownPolicy = false;
   const incompleteEffectChoiceRejected: IncompleteEffectChoiceRejected = false;
   const cardEffectChoiceWithoutKindRejected: CardEffectChoiceWithoutKindRejected = false;
   const selectedCardEffectChoiceAccepted: SelectedCardEffectChoiceAccepted = true;
@@ -154,7 +180,9 @@ test("event payload types reject incomplete choices", () => {
   assert.equal(turnStartedDraftRejectsMetadata, false);
   assert.equal(incompleteDamageIsRejected, false);
   assert.equal(completeDamageIsAccepted, true);
+  assert.equal(incompleteFoeDeckPlayedIsRejected, false);
   assert.equal(initializedEventRejectsForeignPayload, false);
+  assert.equal(setupChoiceRejectsUnknownPolicy, false);
   assert.equal(incompleteEffectChoiceRejected, false);
   assert.equal(cardEffectChoiceWithoutKindRejected, false);
   assert.equal(selectedCardEffectChoiceAccepted, true);

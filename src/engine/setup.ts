@@ -251,6 +251,7 @@ export type GameEventDestination =
   | "deckTop"
   | "discardSelf"
   | "topdeckSelf";
+export type SetupChoicePolicyId = "alwaysPickFirst";
 
 export interface GameEventMetadata {
   eventSequence?: number;
@@ -296,7 +297,7 @@ interface GameEventPayload {
   winnerPlayerIds?: PlayerId[];
   sourceType?: GameEventSourceType;
   setupChoiceKind?: "familiar" | "wizardProperty";
-  policyId?: string;
+  policyId?: SetupChoicePolicyId;
   candidateDefinitionIds?: string[];
   chosenDefinitionId?: string;
 }
@@ -341,32 +342,30 @@ type GameEventOptionalFields<TType extends GameEventType> = TType extends
                   ? "legalChoiceCount"
                   : TType extends "effectCostPaid"
                     ? "costId" | "amount"
-                    : TType extends "effectFoeDeckCardPlayed"
-                      ? "targetPlayerId"
-                      : TType extends
-                            | "effectLifeSet"
-                            | "effectLifeHealed"
-                            | "effectDamageDealt"
-                        ? "targetLifeBefore" | "targetLifeAfter"
-                        : TType extends "effectPlayTopFoeDeckSkipped"
-                          ? "targetPlayerId"
-                          : TType extends "mayhemBattleParticipationSelected"
-                            ? "participantPlayerIds"
-                            : TType extends "mayhemBattleResolved"
-                              ? "participantPlayerIds" | "winnerPlayerIds"
-                              : TType extends "mayhemDecisionPhaseStarted"
-                                ? "choiceKind" | "amount"
-                                : TType extends "mayhemDecisionStarted"
-                                  ? "targetPlayerId" | "amount"
-                                  : TType extends "mayhemResolutionPhaseStarted"
-                                    ? "amount"
-                                    : TType extends "mayhemVoteResolved"
-                                      ? "winnerPlayerIds"
-                                      : TType extends "mayhemDeckDiscardedThenDiscardCardDestroyed"
-                                        ?
-                                            | "targetCardInstanceId"
-                                            | "targetDefinitionId"
-                                        : never;
+                    : TType extends
+                          | "effectLifeSet"
+                          | "effectLifeHealed"
+                          | "effectDamageDealt"
+                      ? "targetLifeBefore" | "targetLifeAfter"
+                      : TType extends "effectPlayTopFoeDeckSkipped"
+                        ? "targetPlayerId"
+                        : TType extends "mayhemBattleParticipationSelected"
+                          ? "participantPlayerIds"
+                          : TType extends "mayhemBattleResolved"
+                            ? "participantPlayerIds" | "winnerPlayerIds"
+                            : TType extends "mayhemDecisionPhaseStarted"
+                              ? "choiceKind" | "amount"
+                              : TType extends "mayhemDecisionStarted"
+                                ? "targetPlayerId" | "amount"
+                                : TType extends "mayhemResolutionPhaseStarted"
+                                  ? "amount"
+                                  : TType extends "mayhemVoteResolved"
+                                    ? "winnerPlayerIds"
+                                    : TType extends "mayhemDeckDiscardedThenDiscardCardDestroyed"
+                                      ?
+                                          | "targetCardInstanceId"
+                                          | "targetDefinitionId"
+                                      : never;
 
 type GameEventShape<
   TType extends GameEventType,
@@ -548,9 +547,20 @@ type CardTargetEffectEvent = GameEventOf<
   | "effectCardGained"
   | "effectCardPlayedFromDeck"
   | "effectCardRevealed"
-  | "effectFoeDeckCardPlayed"
   | "effectTopMainDeckCardDestroyed",
   | "playerId"
+  | "cardInstanceId"
+  | "definitionId"
+  | "targetCardInstanceId"
+  | "targetDefinitionId"
+  | "effectId"
+  | "sourceType"
+>;
+
+type FoeDeckCardPlayedEffectEvent = GameEventOf<
+  "effectFoeDeckCardPlayed",
+  | "playerId"
+  | "targetPlayerId"
   | "cardInstanceId"
   | "definitionId"
   | "targetCardInstanceId"
@@ -700,6 +710,7 @@ type GameEventPayloadUnion =
   | EffectChoiceSelectedEvent
   | TargetedCardEffectEvent
   | CardTargetEffectEvent
+  | FoeDeckCardPlayedEffectEvent
   | AmountCardEffectEvent
   | TargetedAmountCardEffectEvent
   | CardTargetAmountEffectEvent
