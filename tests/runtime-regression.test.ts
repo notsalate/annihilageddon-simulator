@@ -675,6 +675,7 @@ function createFixtureCardDefinition(
   return {
     schemaVersion: 1,
     cardId,
+    source: { image: `assets/cards/fixtures/${cardId}.png` },
     visible: {
       nameRu: cardId,
       cost: 0,

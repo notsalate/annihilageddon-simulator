@@ -16,5 +16,6 @@ import "./draft-validation.test.js";
 import "./draft-generator.test.js";
 import "./import-completeness.test.js";
 import "./runtime-coverage-inventory.test.js";
+import "./runtime-image-metadata.test.js";
 import "./card-runtime-clusters.test.js";
 import "./engine-guards.test.js";

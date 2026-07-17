@@ -50,9 +50,16 @@ export type CardKind =
   | "limpWand"
   | "familiar";
 
+export interface RuntimeSourceMetadata {
+  image: string;
+  draft?: string;
+  text?: string;
+}
+
 export interface CardDefinition {
   schemaVersion: number;
   cardId: string;
+  source: RuntimeSourceMetadata;
   visible: {
     nameRu: string;
     cost: number | null;
@@ -1069,6 +1076,7 @@ function decodeCardDefinition(value: unknown): DecodeResult<CardDefinition> {
 
   const schemaVersion = requireNumberField(record, "schemaVersion", errors);
   const cardId = requireStringField(record, "cardId", errors);
+  const source = decodeRuntimeSourceMetadata(record, errors);
 
   const visible = requireRecordField(record, "visible", errors);
   let decodedVisible: CardDefinition["visible"] | undefined;
@@ -1246,6 +1254,7 @@ function decodeCardDefinition(value: unknown): DecodeResult<CardDefinition> {
     errors.length > 0 ||
     schemaVersion === undefined ||
     cardId === undefined ||
+    source === undefined ||
     decodedVisible === undefined ||
     decodedEngine === undefined
   ) {
@@ -1255,9 +1264,52 @@ function decodeCardDefinition(value: unknown): DecodeResult<CardDefinition> {
   return decodeSuccess({
     schemaVersion,
     cardId,
+    source,
     visible: decodedVisible,
     engine: decodedEngine,
   });
+}
+
+function decodeRuntimeSourceMetadata(
+  record: Record<string, unknown>,
+  errors: string[]
+): RuntimeSourceMetadata | undefined {
+  const source = requireRecordField(record, "source", errors);
+  if (source === undefined) {
+    return undefined;
+  }
+
+  const image = requireNonEmptyStringField(
+    source,
+    "source.image",
+    errors,
+    "image"
+  );
+  const draft = optionalNonEmptyStringField(
+    source,
+    "source.draft",
+    errors,
+    "draft"
+  );
+  const text = optionalNonEmptyStringField(
+    source,
+    "source.text",
+    errors,
+    "text"
+  );
+  if (
+    image === undefined ||
+    (source["draft"] !== undefined && draft === undefined) ||
+    (source["text"] !== undefined && text === undefined)
+  ) {
+    return undefined;
+  }
+
+  return {
+    image,
+    ...(draft === undefined ? {} : { draft }),
+    ...(text === undefined ? {} : { text }),
+  };
 }
 
 function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
@@ -2011,6 +2063,32 @@ function optionalStringField(
   }
 
   return value;
+}
+
+function requireNonEmptyStringField(
+  record: Record<string, unknown>,
+  label: string,
+  errors: string[],
+  key = label
+): string | undefined {
+  const value = record[key];
+  if (typeof value !== "string" || value.trim().length === 0) {
+    errors.push(`${label} must be a non-empty string`);
+    return undefined;
+  }
+  return value;
+}
+
+function optionalNonEmptyStringField(
+  record: Record<string, unknown>,
+  label: string,
+  errors: string[],
+  key = label
+): string | undefined {
+  if (record[key] === undefined) {
+    return undefined;
+  }
+  return requireNonEmptyStringField(record, label, errors, key);
 }
 
 function requireStringOrNullField(

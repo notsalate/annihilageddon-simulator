@@ -27,12 +27,14 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Do not use localized display names as primary identifiers.
 - Preserve existing tested behavior unless the issue explicitly requires a rules change.
 - Thread execution/validation mode explicitly instead of adding hidden global assumptions.
+- Runtime decoder сохраняет `CardDefinition.source.image` как presentation metadata для API; gameplay logic не ветвится по path и не читает image files.
 
 ## Work Guidance
 
 - Start mechanics bugs from the narrow module named by the behavior: `actions.ts`, `effect-runtime.ts`, `effect-runtime-registry.ts`, `market-flow.ts`, `setup.ts`, or `data.ts`.
 - Prefer deterministic fixtures over broad random simulation for tests.
 - Keep event/debug instrumentation additive and stable enough for tests.
+- При изменении runtime source metadata проверять, что decoder сохраняет image path без чтения файлов и без ветвления правил по нему.
 
 ## Verification
 

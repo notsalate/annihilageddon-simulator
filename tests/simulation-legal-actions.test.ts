@@ -21,6 +21,7 @@ const playableRuntimeDataPackPath =
 const fixturePermanentDefinition = {
   schemaVersion: 1,
   cardId: "fixture-activation-permanent",
+  source: { image: "assets/cards/fixtures/fixture-activation-permanent.png" },
   visible: {
     nameRu: "Fixture Activation Permanent",
     cost: 0,

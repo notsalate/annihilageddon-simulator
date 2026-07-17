@@ -615,6 +615,7 @@ function createTypedFixtureCardDefinition(
   return {
     schemaVersion: 1,
     cardId,
+    source: { image: `assets/cards/fixtures/${cardId}.png` },
     visible: {
       nameRu: cardId,
       cost,
@@ -711,6 +712,7 @@ function addFixtureStatusCardToActiveHand(
   const definition: CardDefinition = {
     schemaVersion: 1,
     cardId,
+    source: { image: `assets/cards/fixtures/${cardId}.png` },
     visible: {
       nameRu: cardId,
       cost: 0,

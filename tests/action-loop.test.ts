@@ -2348,6 +2348,7 @@ test("unsupported Mayhem effect fails during Market Flow instead of becoming a s
   const unsupportedMayhemDefinition: CardDefinition = {
     schemaVersion: 1,
     cardId: "fixture-unsupported-mayhem",
+    source: { image: "assets/cards/fixtures/fixture-unsupported-mayhem.png" },
     visible: {
       nameRu: "Unsupported Mayhem",
       cost: 0,
@@ -7611,6 +7612,7 @@ function createFixtureCardDefinition(
   return {
     schemaVersion: 1,
     cardId,
+    source: { image: `assets/cards/fixtures/${cardId}.png` },
     visible: {
       nameRu: cardId,
       cost: 0,
@@ -7911,6 +7913,7 @@ function addFixtureDefenseCardToHand(
   const definition: CardDefinition = {
     schemaVersion: 1,
     cardId: `fixture-defense-${destination}-${player.hand.length + 1}`,
+    source: { image: "assets/cards/fixtures/fixture-defense.png" },
     visible: {
       nameRu: `Fixture defense ${destination}`,
       cost: 0,
