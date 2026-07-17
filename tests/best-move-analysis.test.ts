@@ -10,6 +10,7 @@ import {
   type AnalysisLimits,
   type GameState,
   type RuntimeEffect,
+  type TurnLineEvaluationContext,
 } from "../src/index.js";
 import { victoryPointsPolicy } from "../src/engine/best-move-policies.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
@@ -661,4 +662,53 @@ test("victory-points policy evaluates the perspective player in terminal state",
   assert.equal(result.criterionId, "victory-points");
   assert.equal(result.best?.components?.["victoryPoints"], result.best?.score);
   assert.equal(result.perspectivePlayerId, state.activePlayerId);
+});
+
+test("isolates policy mutations from source state and analyzed lines", () => {
+  const { state, lines } = rankingFixture();
+  const sourceBefore = {
+    turn: structuredClone(state.turn),
+    playerLives: state.players.map((player) => ({ ...player.life })),
+  };
+  const linesBefore = lines.map((line) => ({
+    steps: structuredClone(line.steps),
+    terminalTurn: structuredClone(line.terminalState.turn),
+    terminalPlayerLives: line.terminalState.players.map((player) => ({ ...player.life })),
+  }));
+  const mutatingPolicy = {
+    id: "mutating-policy",
+    evaluate: ({ sourceState, line }: TurnLineEvaluationContext) => {
+      sourceState.turn.activatedCardIds.push("policy-source-mutation");
+      const sourcePlayer = sourceState.players[0];
+      if (sourcePlayer !== undefined) {
+        sourcePlayer.life.current = -999;
+      }
+      line.steps.push({
+        legalActionIndex: -1,
+        action: { type: "endTurn" },
+        selectedChoices: [],
+      });
+      line.terminalState.turn.activatedCardIds.push("policy-line-mutation");
+      const terminalPlayer = line.terminalState.players[0];
+      if (terminalPlayer !== undefined) {
+        terminalPlayer.life.current = -999;
+      }
+      return { score: line.steps.length };
+    },
+  };
+
+  const first = rankTurnLines(state, lines, mutatingPolicy, state.activePlayerId);
+  const second = rankTurnLines(state, lines, mutatingPolicy, state.activePlayerId);
+
+  assert.deepEqual(first.rankedLines.map(({ enumerationIndex, score, rank }) => ({ enumerationIndex, score, rank })),
+    second.rankedLines.map(({ enumerationIndex, score, rank }) => ({ enumerationIndex, score, rank })));
+  assert.deepEqual({
+    turn: state.turn,
+    playerLives: state.players.map((player) => ({ ...player.life })),
+  }, sourceBefore);
+  assert.deepEqual(lines.map((line) => ({
+    steps: line.steps,
+    terminalTurn: line.terminalState.turn,
+    terminalPlayerLives: line.terminalState.players.map((player) => ({ ...player.life })),
+  })), linesBefore);
 });

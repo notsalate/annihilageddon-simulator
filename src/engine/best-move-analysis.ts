@@ -286,7 +286,11 @@ export function rankTurnLines(
   perspectivePlayerId: GameState["activePlayerId"]
 ): RankedTurnLinesResult {
   const ranked = lines.map((line, enumerationIndex) => {
-    const evaluation = policy.evaluate({ sourceState, line, perspectivePlayerId });
+    const evaluation = policy.evaluate({
+      sourceState: forkGameState(sourceState),
+      line: cloneAnalyzedTurnLine(line),
+      perspectivePlayerId,
+    });
     assertFiniteEvaluation(policy.id, enumerationIndex, evaluation.score, "score");
     if (evaluation.components !== undefined) {
       for (const [name, value] of Object.entries(evaluation.components)) {
@@ -309,6 +313,21 @@ export function rankTurnLines(
     perspectivePlayerId,
     rankedLines,
     best: rankedLines[0],
+  };
+}
+
+function cloneAnalyzedTurnLine(line: AnalyzedTurnLine): AnalyzedTurnLine {
+  return {
+    initialPlayerId: line.initialPlayerId,
+    initialTurnNumber: line.initialTurnNumber,
+    steps: line.steps.map((step) => ({
+      legalActionIndex: step.legalActionIndex,
+      action: { ...step.action },
+      selectedChoices: step.selectedChoices.map((choice) => ({ ...choice })),
+    })),
+    terminalReason: line.terminalReason,
+    ...(line.gameEndReason === undefined ? {} : { gameEndReason: line.gameEndReason }),
+    terminalState: forkGameState(line.terminalState),
   };
 }
 
