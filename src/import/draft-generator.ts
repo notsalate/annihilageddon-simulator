@@ -2,6 +2,11 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { assertNever } from "../common.js";
+import type {
+  AllowedCardKind,
+  AllowedCardType,
+  AllowedMarker,
+} from "./draft-validation.js";
 
 export type DraftImportKind = "card" | "deadWizardToken" | "wizardProperty";
 
@@ -41,10 +46,10 @@ export interface CardDraftImportModel {
     cost: number | null;
     victoryPoints: number | null;
     typeRu: string | null;
-    cardKind: string;
-    cardTypes: string[];
+    cardKind: AllowedCardKind;
+    cardTypes: AllowedCardType[];
     textRu: string;
-    markers: string[];
+    markers: AllowedMarker[];
     uncertainty: string[];
   };
   notes: string[];
@@ -105,7 +110,7 @@ interface ParsedMarkdown {
   notes: string[];
 }
 
-const cardTypeByVisibleType = new Map([
+const cardTypeByVisibleType = new Map<string, AllowedCardType>([
   ["волшебник", "wizardCard"],
   ["тварь", "creature"],
   ["заклинание", "spell"],
@@ -115,7 +120,7 @@ const cardTypeByVisibleType = new Map([
   ["легенда", "legend"],
 ]);
 
-const cardKindBySourceGroup = new Map([
+const cardKindBySourceGroup = new Map<string, AllowedCardKind>([
   ["main", "normal"],
   ["legend", "legend"],
   ["starter", "starter"],
@@ -259,10 +264,13 @@ function createCardDraft(
     "visible.victoryPoints"
   );
   const cardTypes =
-    readStringListField(markdown, "visible card types") ??
-    inferCardTypes(typeRu, cardKind);
+    (readStringListField(markdown, "visible card types") as
+      | AllowedCardType[]
+      | undefined) ?? inferCardTypes(typeRu, cardKind);
   const markers =
-    readStringListField(markdown, "visible markers") ?? inferMarkers(textRu);
+    (readStringListField(markdown, "visible markers") as
+      | AllowedMarker[]
+      | undefined) ?? inferMarkers(textRu);
   const notes = collectNotes(markdown);
   const compositionQuantity = readOptionalIntegerField(
     sourceTextPath,
@@ -618,11 +626,11 @@ function readOptionalIntegerField(
 function inferCardKind(
   sourceGroup: string | undefined,
   markdown: ParsedMarkdown
-): string | undefined {
+): AllowedCardKind | undefined {
   const explicitKind =
     readField(markdown, "visible card kind") ?? readField(markdown, "cardKind");
   if (explicitKind !== undefined) {
-    return explicitKind;
+    return explicitKind as AllowedCardKind;
   }
 
   const typeRu = readField(markdown, "visible type")?.toLowerCase();
@@ -646,8 +654,8 @@ function inferCardKind(
 
 function inferCardTypes(
   typeRu: string | undefined,
-  cardKind: string | undefined
-): string[] {
+  cardKind: AllowedCardKind | undefined
+): AllowedCardType[] {
   if (
     cardKind === "wildMagic" ||
     cardKind === "limpWand" ||
@@ -669,12 +677,12 @@ function inferCardTypes(
   return cardType === undefined ? [] : [cardType];
 }
 
-function inferMarkers(textRu: string | undefined): string[] {
+function inferMarkers(textRu: string | undefined): AllowedMarker[] {
   if (textRu === undefined) {
     return [];
   }
 
-  const markers: string[] = [];
+  const markers: AllowedMarker[] = [];
   const lowerText = textRu.toLowerCase();
   if (lowerText.includes("атака:")) {
     markers.push("attack");
