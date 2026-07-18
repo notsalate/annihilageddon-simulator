@@ -3,7 +3,7 @@
   "draftKind": "cardDraft",
   "cardId": "esw2_dbg__familiar_003",
   "source": {
-    "image": "assets/cards/raw/familiar/Фамильяр. Сальный шут.png",
+    "image": "assets/cards/familiar/Фамильяр. Сальный шут.png",
     "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_003.md"
   },
   "visible": {

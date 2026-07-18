@@ -3,7 +3,7 @@
   "draftKind": "cardDraft",
   "cardId": "esw2_dbg__familiar_007",
   "source": {
-    "image": "assets/cards/raw/familiar/Фамильяр. Мыжсемья.png",
+    "image": "assets/cards/familiar/Фамильяр. Мыжсемья.png",
     "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_007.md"
   },
   "visible": {

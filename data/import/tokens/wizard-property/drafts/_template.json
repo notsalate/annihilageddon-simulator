@@ -4,7 +4,7 @@
   "tokenId": "esw2_dbg__wizard_property_001",
   "kind": "wizardProperty",
   "source": {
-    "image": "assets/wizard-property/esw2_dbg__wizard_property_001.png",
+    "image": "assets/wizard-property/wp_001.png",
     "text": "data/import/tokens/wizard-property/texts/esw2_dbg__wizard_property_001.md"
   },
   "visible": {
