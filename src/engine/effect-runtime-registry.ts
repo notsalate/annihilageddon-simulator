@@ -2062,14 +2062,6 @@ const setStartingLifeTotalHandler: EffectRuntimeHandler = {
     return setupOnlyExecutionError("set_starting_life_total");
   },
   executeSetup(player, effect) {
-    const errors = setStartingLifeTotalHandler.validateShape(
-      "Setup effect set_starting_life_total",
-      effect
-    );
-    if (errors.length > 0) {
-      return { ok: false, error: errors[0] ?? "Invalid setup life total" };
-    }
-
     const lifeTotal = effect.lifeTotal;
     if (typeof lifeTotal !== "number") {
       return { ok: false, error: "Invalid setup life total" };

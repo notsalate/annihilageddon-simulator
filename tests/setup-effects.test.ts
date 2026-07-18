@@ -7,6 +7,7 @@ import {
   markTokenInstanceId,
 } from "../src/domain/types.js";
 import {
+  effectRuntimeCatalog,
   tryExecuteSetupEffect,
   type EffectRuntimeSetupServices,
   type SetupEffectSourceContext,
@@ -76,6 +77,32 @@ test("setup catalog executor sets starting life total", () => {
   assert.deepEqual(result, { status: "executed" });
   assert.equal(subject.life.current, 30);
   assert.equal(subject.life.max, 30);
+});
+
+test("setup catalog validates starting-life effect exactly once before its executor", () => {
+  const entry = effectRuntimeCatalog.get("set_starting_life_total");
+  assert.ok(entry);
+  const originalValidateShape = entry.handler.validateShape;
+  let validationCount = 0;
+  entry.handler.validateShape = (subjectId, effect) => {
+    validationCount += 1;
+    return originalValidateShape(subjectId, effect);
+  };
+
+  try {
+    const result = tryExecuteSetupEffect(
+      player(),
+      { effectId: "set_starting_life_total", timing: "setup", lifeTotal: 30 },
+      source,
+      services()
+    );
+
+    assert.deepEqual(result, { status: "executed" });
+  } finally {
+    entry.handler.validateShape = originalValidateShape;
+  }
+
+  assert.equal(validationCount, 1);
 });
 
 test("force starting player returns a typed setup directive", () => {
