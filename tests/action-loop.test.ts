@@ -5352,6 +5352,137 @@ test("2H grants one chip to each non-Dingler in active-player order", () => {
   assert.equal(state.common.destroyedMayhem.includes(mayhem), true);
 });
 
+test("2M grants every player two chips before attacking for their current chips", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = markPlayerId("player-2");
+  const [activePlayer, defendedPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(defendedPlayer);
+  assert.ok(thirdPlayer);
+  activePlayer.chips = 1;
+  defendedPlayer.chips = 3;
+  thirdPlayer.chips = 0;
+  activePlayer.life.current = 10;
+  defendedPlayer.life.current = 10;
+  thirdPlayer.life.current = 10;
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    defendedPlayer,
+    "discardSelf"
+  );
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_062");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    [activePlayer.chips, defendedPlayer.chips, thirdPlayer.chips],
+    [3, 5, 2]
+  );
+  assert.deepEqual(
+    [
+      activePlayer.life.current,
+      defendedPlayer.life.current,
+      thirdPlayer.life.current,
+    ],
+    [7, 10, 8]
+  );
+  assert.equal(defendedPlayer.discard.includes(defenseCard), true);
+
+  const cardEvents = state.eventLog.filter(
+    (event) => event.definitionId === "esw2_dbg__main_062"
+  );
+  const chipEvents = cardEvents.filter(
+    (event) => event.type === "effectChipsGained"
+  );
+  const attackEvents = cardEvents.filter(
+    (event) => event.type === "attackTargetStarted"
+  );
+  const decisionEvents = cardEvents.filter(
+    (event) => event.type === "mayhemDecisionStarted"
+  );
+  const damageEvents = cardEvents.filter(
+    (event) => event.type === "effectDamageDealt"
+  );
+  assert.deepEqual(
+    chipEvents.map((event) => event.playerId),
+    [activePlayer.playerId, defendedPlayer.playerId, thirdPlayer.playerId]
+  );
+  assert.deepEqual(
+    attackEvents.map((event) => [event.targetPlayerId, event.amount]),
+    [
+      [activePlayer.playerId, 3],
+      [thirdPlayer.playerId, 2],
+    ]
+  );
+  assert.deepEqual(
+    decisionEvents.map((event) => [event.targetPlayerId, event.amount]),
+    [
+      [activePlayer.playerId, 3],
+      [defendedPlayer.playerId, 5],
+      [thirdPlayer.playerId, 2],
+    ]
+  );
+  assert.deepEqual(
+    damageEvents.map((event) => [event.targetPlayerId, event.amount]),
+    [
+      [activePlayer.playerId, 3],
+      [thirdPlayer.playerId, 2],
+    ]
+  );
+  const decisionPhaseEvent = cardEvents.find(
+    (event) => event.type === "mayhemDecisionPhaseStarted"
+  );
+  const resolutionPhaseEvent = cardEvents.find(
+    (event) => event.type === "mayhemResolutionPhaseStarted"
+  );
+  assert.ok(decisionPhaseEvent);
+  assert.ok(resolutionPhaseEvent);
+  assert.equal(decisionPhaseEvent.amount, undefined);
+  assert.equal(resolutionPhaseEvent.amount, undefined);
+  assertEventOrder(state, [
+    (event) =>
+      event.type === "mayhemDecisionPhaseStarted" &&
+      event.definitionId === "esw2_dbg__main_062",
+    (event) =>
+      event.type === "mayhemDecisionStarted" &&
+      event.definitionId === "esw2_dbg__main_062" &&
+      event.targetPlayerId === activePlayer.playerId,
+    (event) =>
+      event.type === "mayhemDecisionStarted" &&
+      event.definitionId === "esw2_dbg__main_062" &&
+      event.targetPlayerId === defendedPlayer.playerId,
+    (event) =>
+      event.type === "defenseChoiceSelected" &&
+      event.playerId === defendedPlayer.playerId,
+    (event) =>
+      event.type === "attackAvoided" &&
+      event.definitionId === "esw2_dbg__main_062" &&
+      event.targetPlayerId === defendedPlayer.playerId,
+    (event) =>
+      event.type === "mayhemDecisionStarted" &&
+      event.definitionId === "esw2_dbg__main_062" &&
+      event.targetPlayerId === thirdPlayer.playerId,
+    (event) =>
+      event.type === "mayhemResolutionPhaseStarted" &&
+      event.definitionId === "esw2_dbg__main_062",
+    (event) =>
+      event.type === "effectDamageDealt" &&
+      event.definitionId === "esw2_dbg__main_062" &&
+      event.targetPlayerId === activePlayer.playerId,
+  ]);
+  assert.ok(chipEvents.length > 0);
+  assert.ok(attackEvents.length > 0);
+  assert.ok(
+    state.eventLog.indexOf(chipEvents[chipEvents.length - 1]!) <
+      state.eventLog.indexOf(attackEvents[0]!)
+  );
+  assert.equal(state.common.destroyedMayhem.includes(mayhem), true);
+});
+
 test("2D lets each player choose a foe who gains one chip in active-player order", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
   state.activePlayerId = markPlayerId("player-2");

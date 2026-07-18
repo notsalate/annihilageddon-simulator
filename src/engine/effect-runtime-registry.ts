@@ -77,6 +77,11 @@ export type EffectExecutionResult =
       error: string;
     };
 
+export interface MayhemAttackPlanTarget {
+  targetPlayer: PlayerState;
+  amount: number;
+}
+
 export type SetupDirective = {
   kind: "forceStartingPlayer";
   playerId: PlayerState["playerId"];
@@ -255,6 +260,13 @@ export interface EffectRuntimeServices {
     effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): void;
+  resolveMayhemAttackPlan(
+    state: GameState,
+    sourcePlayer: PlayerState,
+    targets: readonly MayhemAttackPlanTarget[],
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext
+  ): void;
   resolvePlayerDeath(state: GameState, player: PlayerState): void;
   peekTopDeckCard(
     player: PlayerState,
@@ -321,6 +333,11 @@ type AddPowerRuntimeEffect = PositiveAmountRuntimeEffect<"add_power">;
 type GainChipsRuntimeEffect = PositiveAmountRuntimeEffect<"gain_chips">;
 type MayhemEachNonDinglerGainChipsRuntimeEffect =
   RuntimeEffectForId<"mayhem_each_non_dingler_gain_chips"> & {
+    chipAmount: number;
+    targetSelector: "eachPlayerClockwiseFromActive";
+  };
+type MayhemEachPlayerGainChipsThenAttackRuntimeEffect =
+  RuntimeEffectForId<"mayhem_each_player_gain_chips_then_attack_for_current_chips"> & {
     chipAmount: number;
     targetSelector: "eachPlayerClockwiseFromActive";
   };
@@ -1700,6 +1717,55 @@ const mayhemEachNonDinglerGainChipsHandler: EffectRuntimeHandler<MayhemEachNonDi
           targetPlayer.chips
         );
       }
+
+      return { ok: true };
+    },
+  };
+
+const mayhemEachPlayerGainChipsThenAttackHandler: EffectRuntimeHandler<MayhemEachPlayerGainChipsThenAttackRuntimeEffect> =
+  {
+    effectId: "mayhem_each_player_gain_chips_then_attack_for_current_chips",
+    allowedTargetSelectors: eachPlayerClockwiseFromActiveTargetSelectors,
+    validateShape(subjectId, effect) {
+      const errors = validateMayhemEachPlayerShape(subjectId, effect);
+      const chipAmount = effect["chipAmount"];
+      if (
+        typeof chipAmount !== "number" ||
+        !Number.isSafeInteger(chipAmount) ||
+        chipAmount < 1
+      ) {
+        errors.push(
+          `${subjectId} uses invalid chip amount ${String(chipAmount)}`
+        );
+      }
+      return errors;
+    },
+    execute(state, player, effect, source, services) {
+      const targetPlayers = services.getPlayersInActiveOrder(state);
+
+      for (const targetPlayer of targetPlayers) {
+        const chipsBefore = targetPlayer.chips;
+        targetPlayer.chips += effect.chipAmount;
+        recordEffectChipsChanged(
+          state,
+          targetPlayer,
+          source,
+          effect.effectId,
+          chipsBefore,
+          targetPlayer.chips
+        );
+      }
+
+      services.resolveMayhemAttackPlan(
+        state,
+        player,
+        targetPlayers.map((targetPlayer) => ({
+          targetPlayer,
+          amount: targetPlayer.chips,
+        })),
+        effect.effectId,
+        source
+      );
 
       return { ok: true };
     },
@@ -4496,6 +4562,8 @@ export const effectRuntimeHandlerMap = {
   mayhem_each_player_reduce_life_to_gain_chips:
     mayhemEachPlayerReduceLifeToGainChipsHandler,
   mayhem_each_non_dingler_gain_chips: mayhemEachNonDinglerGainChipsHandler,
+  mayhem_each_player_gain_chips_then_attack_for_current_chips:
+    mayhemEachPlayerGainChipsThenAttackHandler,
   mayhem_each_player_choose_foe_gain_chips:
     mayhemEachPlayerChooseFoeGainChipsHandler,
   increase_hand_limit_at_max_life: increaseHandLimitAtMaxLifeHandler,
