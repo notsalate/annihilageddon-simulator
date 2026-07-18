@@ -143,15 +143,46 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
     markTokenDefinitionId("fixture-token")
   );
   assert.equal(sourcePlayer.statuses[0]!.effects[0]!.timing, "onPlay");
-  assert.equal(
-    sourcePlayer.trophyLikeObjects[0]!.effects[0]!.timing,
-    "onPlay"
-  );
+  assert.equal(sourcePlayer.trophyLikeObjects[0]!.effects[0]!.timing, "onPlay");
   assert.deepEqual(source.eventLog[0]!.targetCardInstanceIds, ["hand-card"]);
   assert.equal(fork.cardDefinitions, source.cardDefinitions);
   assert.equal(fork.tokenDefinitions, source.tokenDefinitions);
   assert.equal(fork.effectChoiceStrategy, source.effectChoiceStrategy);
   assert.notEqual(fork.eventLog, source.eventLog);
+});
+
+test("fork isolates source mutations and sibling mutable collections", () => {
+  const source = createFixture();
+  const first = forkGameState(source);
+  const second = forkGameState(source);
+  const sourcePlayer = source.players[0]!;
+  const firstPlayer = first.players[0]!;
+  const secondPlayer = second.players[0]!;
+
+  source.turn.gainedCardDefinitionIds.push("source-gained-card");
+  sourcePlayer.statuses[0]!.effects[0]!.timing = "endTurn";
+  sourcePlayer.trophyLikeObjects[0]!.effects[0]!.timing = "endTurn";
+
+  assert.deepEqual(first.turn.gainedCardDefinitionIds, ["gained-card"]);
+  assert.equal(firstPlayer.statuses[0]!.effects[0]!.timing, "onPlay");
+  assert.equal(firstPlayer.trophyLikeObjects[0]!.effects[0]!.timing, "onPlay");
+
+  first.turn.gainedCardDefinitionIds.push("first-gained-card");
+  firstPlayer.statuses[0]!.effects[0]!.timing = "whileControlled";
+  firstPlayer.trophyLikeObjects[0]!.effects[0]!.timing = "whileControlled";
+
+  assert.deepEqual(second.turn.gainedCardDefinitionIds, ["gained-card"]);
+  assert.equal(secondPlayer.statuses[0]!.effects[0]!.timing, "onPlay");
+  assert.equal(secondPlayer.trophyLikeObjects[0]!.effects[0]!.timing, "onPlay");
+  assert.deepEqual(source.turn.gainedCardDefinitionIds, [
+    "gained-card",
+    "source-gained-card",
+  ]);
+  assert.equal(sourcePlayer.statuses[0]!.effects[0]!.timing, "endTurn");
+  assert.equal(
+    sourcePlayer.trophyLikeObjects[0]!.effects[0]!.timing,
+    "endTurn"
+  );
 });
 
 test("fork isolates turn power, zones, statuses, and trophies", () => {
