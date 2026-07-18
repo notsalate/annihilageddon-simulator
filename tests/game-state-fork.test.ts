@@ -61,7 +61,7 @@ function createFixture(): GameState {
             instanceId: "status-instance",
             statusId: "status-id",
             ownerId: playerId,
-            effects: [],
+            effects: [{ effectId: "add_power", timing: "onPlay", amount: 1 }],
           },
         ],
         trophyLikeObjects: [
@@ -69,7 +69,7 @@ function createFixture(): GameState {
             instanceId: "trophy-instance",
             trophyId: "trophy-id",
             ownerId: playerId,
-            effects: [],
+            effects: [{ effectId: "add_power", timing: "onPlay", amount: 1 }],
           },
         ],
         chips: 2,
@@ -121,15 +121,19 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
   assert.ok(forkPlayer);
 
   fork.turn.activatedCardIds.push("fork-only");
+  fork.turn.gainedCardDefinitionIds.push("fork-gained-card");
   forkPlayer.chips += 3;
   forkPlayer.life.current -= 1;
   forkPlayer.hand[0]!.marketChips = 2;
   fork.common.market[0]!.marketChips = 1;
   fork.common.deadWizardTokens.drawStack[0]!.definitionId =
     markTokenDefinitionId("fork-token");
+  forkPlayer.statuses[0]!.effects[0]!.timing = "endTurn";
+  forkPlayer.trophyLikeObjects[0]!.effects[0]!.timing = "endTurn";
   fork.eventLog[0]!.targetCardInstanceIds!.push("fork-event");
 
   assert.equal(source.turn.activatedCardIds.includes("fork-only"), false);
+  assert.deepEqual(source.turn.gainedCardDefinitionIds, ["gained-card"]);
   assert.equal(sourcePlayer.chips, 2);
   assert.equal(sourcePlayer.life.current, 5);
   assert.equal(sourcePlayer.hand[0]!.marketChips, 0);
@@ -137,6 +141,11 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
   assert.equal(
     source.common.deadWizardTokens.drawStack[0]!.definitionId,
     markTokenDefinitionId("fixture-token")
+  );
+  assert.equal(sourcePlayer.statuses[0]!.effects[0]!.timing, "onPlay");
+  assert.equal(
+    sourcePlayer.trophyLikeObjects[0]!.effects[0]!.timing,
+    "onPlay"
   );
   assert.deepEqual(source.eventLog[0]!.targetCardInstanceIds, ["hand-card"]);
   assert.equal(fork.cardDefinitions, source.cardDefinitions);
