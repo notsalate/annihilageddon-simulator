@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
@@ -19,30 +27,71 @@ const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
 
-test("single-game simulation is reproducible without reading source image files", () => {
-  const decoded = decodeCurrentRuntimeDataPack(
-    rootDir,
-    playableRuntimeDataPackPath
-  );
-  assert.equal(decoded.ok, true);
-  if (!decoded.ok) return;
+type TestRuntimeManifest = {
+  cardDefinitionPaths: string[];
+  tokenDefinitionPaths: string[];
+  decks: Record<string, string>;
+  cardStacks: Record<string, string>;
+  tokenStacks: Record<string, string>;
+  pools: Record<string, string>;
+};
 
-  const sourceImage = decoded.value.cardDefinitions.get(
+test("single-game simulation ignores differing source.image metadata", () => {
+  const firstRootDir = createRuntimePackWithStarterImage(
+    "assets/cards/starter/esw2_dbg__starter_001.png"
+  );
+  const secondRootDir = createRuntimePackWithStarterImage(
+    "assets/cards/starter/presentation-only-alternate.png"
+  );
+  const firstDataPack = decodeCurrentRuntimeDataPack(
+    firstRootDir,
+    "manifest.json"
+  );
+  const secondDataPack = decodeCurrentRuntimeDataPack(
+    secondRootDir,
+    "manifest.json"
+  );
+  assert.equal(firstDataPack.ok, true);
+  assert.equal(secondDataPack.ok, true);
+  if (!firstDataPack.ok || !secondDataPack.ok) return;
+
+  const firstImage = firstDataPack.value.cardDefinitions.get(
     "esw2_dbg__starter_001"
   )?.source.image;
-  assert.equal(sourceImage, "assets/cards/starter/esw2_dbg__starter_001.png");
-  assert.equal(existsSync(path.join(rootDir, sourceImage)), false);
+  const secondImage = secondDataPack.value.cardDefinitions.get(
+    "esw2_dbg__starter_001"
+  )?.source.image;
+  assert.notEqual(firstImage, secondImage);
+  assert.equal(existsSync(path.join(firstRootDir, firstImage ?? "")), false);
+  assert.equal(existsSync(path.join(secondRootDir, secondImage ?? "")), false);
 
-  const options = {
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 80809,
-    maxTurns: 8,
+  const options = { seed: 80809, maxTurns: 8, dataPackPath: "manifest.json" };
+  const first = runSingleGame({ ...options, rootDir: firstRootDir });
+  const second = runSingleGame({ ...options, rootDir: secondRootDir });
+
+  const expected = {
+    endReason: "maxTurnsReached",
+    isGameEnd: false,
+    turnsElapsed: 8,
+    winnerIds: ["player-1", "player-2"],
+    players: [
+      {
+        playerId: "player-1",
+        victoryPoints: 4,
+        legendCount: 0,
+        deadWizardTokenCount: 0,
+      },
+      {
+        playerId: "player-2",
+        victoryPoints: 4,
+        legendCount: 0,
+        deadWizardTokenCount: 0,
+      },
+    ],
   };
-  const first = runSingleGame(options);
-  const second = runSingleGame(options);
 
-  assert.deepEqual(first, second);
+  assert.deepEqual(projectGameResult(first), expected);
+  assert.deepEqual(projectGameResult(second), expected);
 });
 
 test("single-game simulation can stop at maxTurns as a non-game termination", () => {
@@ -504,4 +553,92 @@ function projectMeaningfulEventLog(
       Object.entries(projected).filter(([, value]) => value !== undefined)
     ) as Record<string, string | number>;
   });
+}
+
+function createRuntimePackWithStarterImage(sourceImage: string): string {
+  const packRoot = mkdtempSync(path.join(os.tmpdir(), "simulation-image-"));
+  const starterPath = path.join(
+    packRoot,
+    "starter",
+    "esw2_dbg__starter_001.json"
+  );
+  const starter = JSON.parse(
+    readFileSync(
+      path.join(
+        rootDir,
+        "tests/fixtures/runtime-cards/starter/esw2_dbg__starter_001.json"
+      ),
+      "utf8"
+    )
+  ) as {
+    source: { image: string };
+  };
+  starter.source.image = sourceImage;
+  mkdirSync(path.dirname(starterPath), { recursive: true });
+  writeFileSync(starterPath, JSON.stringify(starter), "utf8");
+  for (const cardId of ["esw2_dbg__starter_002", "esw2_dbg__starter_003"]) {
+    copyFileSync(
+      path.join(
+        rootDir,
+        "tests/fixtures/runtime-cards/starter",
+        `${cardId}.json`
+      ),
+      path.join(packRoot, "starter", `${cardId}.json`)
+    );
+  }
+  const manifest = JSON.parse(
+    readFileSync(path.join(rootDir, playableRuntimeDataPackPath), "utf8")
+  ) as TestRuntimeManifest;
+  manifest.cardDefinitionPaths = manifest.cardDefinitionPaths.map((entry) =>
+    entry.endsWith("/starter")
+      ? path.join(packRoot, "starter")
+      : path.join(rootDir, entry)
+  );
+  manifest.tokenDefinitionPaths = manifest.tokenDefinitionPaths.map((entry) =>
+    path.join(rootDir, entry)
+  );
+  for (const section of [
+    manifest.decks,
+    manifest.cardStacks,
+    manifest.tokenStacks,
+    manifest.pools,
+  ]) {
+    for (const [name, entry] of Object.entries(section)) {
+      section[name] = path.join(rootDir, entry);
+    }
+  }
+  writeFileSync(
+    path.join(packRoot, "manifest.json"),
+    JSON.stringify(manifest),
+    "utf8"
+  );
+  return packRoot;
+}
+
+function projectGameResult(result: ReturnType<typeof runSingleGame>): {
+  endReason: string;
+  isGameEnd: boolean;
+  turnsElapsed: number;
+  winnerIds: string[];
+  players: Array<{
+    playerId: string;
+    victoryPoints: number;
+    legendCount: number;
+    deadWizardTokenCount: number;
+  }>;
+} {
+  return {
+    endReason: result.endReason,
+    isGameEnd: result.isGameEnd,
+    turnsElapsed: result.turnsElapsed,
+    winnerIds: result.winnerIds,
+    players: result.players.map(
+      ({ playerId, victoryPoints, legendCount, deadWizardTokenCount }) => ({
+        playerId,
+        victoryPoints,
+        legendCount,
+        deadWizardTokenCount,
+      })
+    ),
+  };
 }

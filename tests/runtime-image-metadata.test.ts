@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -48,15 +49,19 @@ test("current runtime tokens preserve canonical source.image metadata", () => {
   }
 
   assert.equal(
-    (dataPack.tokenDefinitions.get("esw2_dbg__dead_wizard_token_001") as
-      | { source?: { image?: string } }
-      | undefined)?.source?.image,
+    (
+      dataPack.tokenDefinitions.get("esw2_dbg__dead_wizard_token_001") as
+        | { source?: { image?: string } }
+        | undefined
+    )?.source?.image,
     "assets/dead-wizard-token/DWT_001.png"
   );
   assert.equal(
-    (dataPack.tokenDefinitions.get("esw2_dbg__wizard_property_001") as
-      | { source?: { image?: string } }
-      | undefined)?.source?.image,
+    (
+      dataPack.tokenDefinitions.get("esw2_dbg__wizard_property_001") as
+        | { source?: { image?: string } }
+        | undefined
+    )?.source?.image,
     "assets/wizard-property/wp_001.png"
   );
 
@@ -76,6 +81,23 @@ test("current runtime tokens preserve canonical source.image metadata", () => {
     assert.equal(
       "sourceImage" in ((runtime as { visible?: object }).visible ?? {}),
       false
+    );
+  }
+});
+
+test("every current runtime source.image points to an existing asset", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const definitions = [
+    ...dataPack.cardDefinitions.values(),
+    ...dataPack.tokenDefinitions.values(),
+  ];
+
+  for (const definition of definitions) {
+    assert.ok(
+      existsSync(path.join(rootDir, definition.source.image)),
+      `Missing runtime source image for ${
+        "cardId" in definition ? definition.cardId : definition.tokenId
+      }: ${definition.source.image}`
     );
   }
 });
@@ -100,7 +122,8 @@ test("token JSON without canonical source.image is rejected", () => {
   });
   const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
   assert.equal(result.ok, false);
-  if (!result.ok) assert.ok(result.errors.some((error) => error.includes("source")));
+  if (!result.ok)
+    assert.ok(result.errors.some((error) => error.includes("source")));
 });
 
 test("token JSON with legacy visible.sourceImage is rejected", () => {
@@ -177,7 +200,9 @@ test("malformed token source fields are rejected", () => {
 });
 
 test("token decoding is deterministic without reading image files", () => {
-  const tempRoot = mkdtempSync(path.join(os.tmpdir(), "runtime-token-determinism-"));
+  const tempRoot = mkdtempSync(
+    path.join(os.tmpdir(), "runtime-token-determinism-")
+  );
   writeTokenFixturePack(tempRoot, {
     schemaVersion: 1,
     tokenId: "fixture-token",
