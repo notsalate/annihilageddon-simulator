@@ -1934,8 +1934,20 @@ test("Avada Loshavra attack-marked Dingler assignment can be avoided by defense"
     (player) => player.playerId !== activePlayer.playerId
   );
   assert.ok(targetPlayer);
-  activePlayer.wizardProperties = [];
-  targetPlayer.wizardProperties = [];
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+  }
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId !== "attack_gain_status") {
+      return undefined;
+    }
+    return choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === targetPlayer.playerId
+    );
+  });
   const defenseCard = addFixtureDefenseCardToHand(
     state,
     targetPlayer,
@@ -1974,8 +1986,20 @@ test("Avada Loshavra makes an undefended target Dingler and counts it for power"
     (player) => player.playerId !== activePlayer.playerId
   );
   assert.ok(targetPlayer);
-  activePlayer.wizardProperties = [];
-  targetPlayer.wizardProperties = [];
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+  }
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId !== "attack_gain_status") {
+      return undefined;
+    }
+    return choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === targetPlayer.playerId
+    );
+  });
   const card = addRuntimeCardToHand(
     state,
     activePlayer,
@@ -5324,6 +5348,142 @@ test("2H grants one chip to each non-Dingler in active-player order", () => {
       )
       .map((event) => event.playerId),
     [activePlayer.playerId, thirdPlayer.playerId]
+  );
+  assert.equal(state.common.destroyedMayhem.includes(mayhem), true);
+});
+
+test("2D lets each player choose a foe who gains one chip in active-player order", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = markPlayerId("player-2");
+  const [activePlayer, secondPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  const targetsByPlayer = new Map([
+    [activePlayer.playerId, secondPlayer.playerId],
+    [secondPlayer.playerId, thirdPlayer.playerId],
+    [thirdPlayer.playerId, secondPlayer.playerId],
+  ]);
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (String(effectId) !== "mayhem_each_player_choose_foe_gain_chips") {
+      return undefined;
+    }
+    const targetPlayerId = targetsByPlayer.get(player.playerId);
+    return choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === targetPlayerId
+    );
+  });
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_075");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 0);
+  assert.equal(secondPlayer.chips, 2);
+  assert.equal(thirdPlayer.chips, 1);
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          String(event.effectId) === "mayhem_each_player_choose_foe_gain_chips"
+      )
+      .map((event) => ({
+        playerId: event.playerId,
+        targetPlayerId: event.targetPlayerId,
+      })),
+    [
+      {
+        playerId: activePlayer.playerId,
+        targetPlayerId: secondPlayer.playerId,
+      },
+      {
+        playerId: secondPlayer.playerId,
+        targetPlayerId: thirdPlayer.playerId,
+      },
+      {
+        playerId: thirdPlayer.playerId,
+        targetPlayerId: secondPlayer.playerId,
+      },
+    ]
+  );
+  assert.equal(state.common.destroyedMayhem.includes(mayhem), true);
+});
+
+test("2D excludes self and falls back to the first foe in seating order", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = markPlayerId("player-2");
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  const chooserOrder: string[] = [];
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (String(effectId) !== "mayhem_each_player_choose_foe_gain_chips") {
+      return undefined;
+    }
+    chooserOrder.push(player.playerId);
+    assert.equal(
+      choices.some(
+        (choice) =>
+          choice.choiceKind === "playerTarget" &&
+          choice.players.some(
+            (candidate) => candidate.playerId === player.playerId
+          )
+      ),
+      false
+    );
+    return undefined;
+  });
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_075");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    chooserOrder,
+    orderedPlayers.map((player) => player.playerId)
+  );
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(secondPlayer.chips, 1);
+  assert.equal(thirdPlayer.chips, 1);
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          String(event.effectId) === "mayhem_each_player_choose_foe_gain_chips"
+      )
+      .map((event) => ({
+        playerId: event.playerId,
+        targetPlayerId: event.targetPlayerId,
+        includesSelf: event.choiceIds?.includes(event.playerId) ?? false,
+      })),
+    [
+      {
+        playerId: activePlayer.playerId,
+        targetPlayerId: secondPlayer.playerId,
+        includesSelf: false,
+      },
+      {
+        playerId: secondPlayer.playerId,
+        targetPlayerId: thirdPlayer.playerId,
+        includesSelf: false,
+      },
+      {
+        playerId: thirdPlayer.playerId,
+        targetPlayerId: activePlayer.playerId,
+        includesSelf: false,
+      },
+    ]
   );
   assert.equal(state.common.destroyedMayhem.includes(mayhem), true);
 });

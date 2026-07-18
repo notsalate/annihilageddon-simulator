@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_075",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_075.json",
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2D.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_075.md"
+  },
+  "visible": {
+    "nameRu": "2D",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун выбирает одного врага.\nЭтот враг получает 1 чипсину.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_each_player_choose_foe_gain_chips",
+        "timing": "onMayhemResolve",
+        "targetSelector": "eachPlayerClockwiseFromActive",
+        "chipAmount": 1
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}
