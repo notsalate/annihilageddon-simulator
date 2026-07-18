@@ -16,6 +16,10 @@ import {
   type TurnLineEvaluationContext,
 } from "../src/index.js";
 import { victoryPointsPolicy } from "../src/engine/best-move-policies.js";
+import {
+  enumerateTurnLinesWithActionAdapter,
+} from "../src/engine/best-move-analysis.js";
+import { forkGameState } from "../src/engine/game-state-fork.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 
 const rootDir = process.cwd();
@@ -426,6 +430,148 @@ test("enumerates every current-turn action history through endTurn", () => {
         (step) => step.action.type !== "endTurn" || step === line.steps.at(-1)
       )
     )
+  );
+});
+
+test("enumerates current-turn lines in stable depth-first order", () => {
+  const state = analysisFixtureState(127);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  activePlayer.hand = [];
+  addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-stable-order-a")
+  );
+  addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-stable-order-b")
+  );
+
+  const enumerateHistories = () =>
+    enumerateTurnLines(state, analysisLimits({ maxActionsPerLine: 3 })).map(
+      (line) =>
+        line.steps
+          .map((step) =>
+            step.action.type === "playCard"
+              ? step.action.cardInstanceId
+              : step.action.type
+          )
+          .join(">")
+    );
+
+  assert.deepEqual(enumerateHistories(), [
+    "fixture-analysis-stable-order-a-instance-1>fixture-analysis-stable-order-b-instance-2>endTurn",
+    "fixture-analysis-stable-order-a-instance-1>endTurn",
+    "fixture-analysis-stable-order-b-instance-2>fixture-analysis-stable-order-a-instance-1>endTurn",
+    "fixture-analysis-stable-order-b-instance-2>endTurn",
+    "endTurn",
+  ]);
+  assert.deepEqual(enumerateHistories(), enumerateHistories());
+});
+
+test("keeps sibling game-ending ordinary actions and stops each winning line", () => {
+  const state = analysisFixtureState(128);
+  const lowerScoreAction = {
+    type: "playCard" as const,
+    cardInstanceId: "fixture-game-ending-action-low",
+  };
+  const higherScoreAction = {
+    type: "playCard" as const,
+    cardInstanceId: "fixture-game-ending-action-high",
+  };
+  let legalActionCalls = 0;
+
+  const lines = enumerateTurnLinesWithActionAdapter(state, analysisLimits(), {
+    listLegalActions() {
+      legalActionCalls += 1;
+      return [lowerScoreAction, higherScoreAction];
+    },
+    enumerateActionBranches(source, legalAction, legalActionIndex) {
+      return [
+        {
+          legalAction,
+          legalActionIndex,
+          selectedChoices: [],
+          result: { ok: true, gameEndReason: "mainDeckExhausted" },
+          resultingState: forkGameState(source),
+        },
+      ];
+    },
+  });
+
+  assert.equal(legalActionCalls, 1);
+  assert.equal(lines.length, 2);
+  assert.ok(lines.every((line) => line.terminalReason === "gameEnd"));
+  assert.ok(lines.every((line) => line.gameEndReason === "mainDeckExhausted"));
+  assert.ok(lines.every((line) => line.steps.length === 1));
+  assert.deepEqual(
+    lines.map((line) => line.steps[0]?.action),
+    [lowerScoreAction, higherScoreAction]
+  );
+
+  const ranking = rankTurnLines(
+    state,
+    lines,
+    {
+      id: "fixture-game-end-score",
+      evaluate({ line }) {
+        return {
+          score:
+            line.steps[0]?.action.type === "playCard" &&
+            line.steps[0].action.cardInstanceId ===
+              higherScoreAction.cardInstanceId
+              ? 10
+              : 1,
+        };
+      },
+    },
+    state.activePlayerId
+  );
+  assert.equal(
+    ranking.best?.line.steps[0]?.action.type === "playCard"
+      ? ranking.best.line.steps[0].action.cardInstanceId
+      : undefined,
+    higherScoreAction.cardInstanceId
+  );
+});
+
+test("rejects an ordinary action that changes the root player and turn", () => {
+  const state = analysisFixtureState(129);
+  const action = {
+    type: "playCard" as const,
+    cardInstanceId: "fixture-invalid-turn-transition",
+  };
+
+  assert.throws(
+    () => enumerateTurnLinesWithActionAdapter(state, analysisLimits(), {
+      listLegalActions() {
+        return [action];
+      },
+      enumerateActionBranches(source, legalAction, legalActionIndex) {
+        const resultingState = forkGameState(source);
+        const nextPlayer = resultingState.players.find(
+          (player) => player.playerId !== source.activePlayerId
+        );
+        assert.ok(nextPlayer);
+        resultingState.activePlayerId = nextPlayer.playerId;
+        resultingState.turn.number += 1;
+        return [
+          {
+            legalAction,
+            legalActionIndex,
+            selectedChoices: [],
+            result: { ok: true },
+            resultingState,
+          },
+        ];
+      },
+    }),
+    (error: unknown) =>
+      error instanceof Error &&
+      error.name === "AnalysisError" &&
+      /active player or turn changed/.test(error.message)
   );
 });
 

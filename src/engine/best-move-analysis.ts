@@ -43,6 +43,17 @@ export interface AnalyzedTurnLine {
   terminalState: GameState;
 }
 
+/** Internal action boundary shared by the production walk and fixture tests. */
+export interface TurnLineActionAdapter {
+  listLegalActions(state: GameState): readonly LegalAction[];
+  enumerateActionBranches(
+    state: GameState,
+    action: LegalAction,
+    legalActionIndex: number,
+    limits: AnalysisLimits
+  ): CompletedActionBranch[];
+}
+
 export interface TurnLineEvaluationContext {
   readonly sourceState: Readonly<GameState>;
   readonly line: Readonly<AnalyzedTurnLine>;
@@ -100,6 +111,11 @@ const DEFAULT_ANALYSIS_LIMITS: AnalysisLimits = {
   maxBranchesPerAction: 4096,
   maxActionsPerLine: 128,
   maxTurnLines: 100_000,
+};
+
+const engineTurnLineActionAdapter: TurnLineActionAdapter = {
+  listLegalActions,
+  enumerateActionBranches,
 };
 
 /** Enumerates paths with depth-first replay; choices and actions retain source order. */
@@ -215,19 +231,39 @@ export function enumerateTurnLines(
   source: GameState,
   limits: AnalysisLimits = DEFAULT_ANALYSIS_LIMITS
 ): AnalyzedTurnLine[] {
+  return enumerateTurnLinesWithActionAdapter(
+    source,
+    limits,
+    engineTurnLineActionAdapter
+  );
+}
+
+/** Runs the same turn-line walk against an explicit action boundary. */
+export function enumerateTurnLinesWithActionAdapter(
+  source: GameState,
+  limits: AnalysisLimits,
+  actionAdapter: TurnLineActionAdapter
+): AnalyzedTurnLine[] {
   validateLimits(limits);
   const initialPlayerId = source.activePlayerId;
   const initialTurnNumber = source.turn.number;
   const lines: AnalyzedTurnLine[] = [];
 
   const visit = (state: GameState, steps: AnalysisActionStep[]): void => {
-    for (const [legalActionIndex, action] of listLegalActions(state).entries()) {
+    for (const [legalActionIndex, action] of actionAdapter
+      .listLegalActions(state)
+      .entries()) {
       if (steps.length + 1 > limits.maxActionsPerLine) {
         throw new AnalysisLimitError(
           `Analysis action limit exceeded ${limits.maxActionsPerLine} after ${steps.length} steps; last action ${describeAction(action)}`
         );
       }
-      const branches = enumerateActionBranches(state, action, legalActionIndex, limits);
+      const branches = actionAdapter.enumerateActionBranches(
+        state,
+        action,
+        legalActionIndex,
+        limits
+      );
       for (const branch of branches) {
         const nextSteps = [
           ...steps,
