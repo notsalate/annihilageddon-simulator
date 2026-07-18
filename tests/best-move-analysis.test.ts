@@ -8,8 +8,11 @@ import {
   rankTurnLines,
   type CardDefinition,
   type AnalysisLimits,
+  type DeckComposition,
   type GameState,
+  type LoadedDataPack,
   type RuntimeEffect,
+  type TokenDefinition,
   type TurnLineEvaluationContext,
 } from "../src/index.js";
 import { victoryPointsPolicy } from "../src/engine/best-move-policies.js";
@@ -90,14 +93,121 @@ function fixtureDefinition(
   };
 }
 
-test("enumerates simple actions into independent completed branches", () => {
-  const state = initializeGame({ rootDir, seed: 125 });
+function analysisFixtureDataPack(): LoadedDataPack {
+  const starter = fixtureDefinition("fixture-analysis-starter");
+  const main = cardDefinitionWithKind("fixture-analysis-main", "normal");
+  const legend = cardDefinitionWithKind("fixture-analysis-legend", "legend");
+  const familiar = cardDefinitionWithKind("fixture-analysis-familiar", "familiar");
+  const property = tokenDefinition("fixture-analysis-property");
+  return {
+    manifest: {
+      schemaVersion: 1,
+      packId: "fixture-analysis",
+      runtimeSchema: "krutagidon.dataPack.v0",
+      mappingStatus: "fixture",
+      cardDefinitionPaths: [],
+      tokenDefinitionPaths: [],
+    },
+    cardDefinitions: new Map([
+      [starter.cardId, starter],
+      [main.cardId, main],
+      [legend.cardId, legend],
+      [familiar.cardId, familiar],
+    ]),
+    tokenDefinitions: new Map([[property.tokenId, property]]),
+    decks: {
+      starterDeck: fixtureDeck("fixture-analysis-starter-deck", "starterDeck", [
+        { cardId: starter.cardId, count: 10 },
+      ]),
+      mainDeck: fixtureDeck("fixture-analysis-main-deck", "mainDeck", [
+        { cardId: main.cardId, count: 5 },
+      ]),
+      legendDeck: fixtureDeck("fixture-analysis-legend-deck", "legendDeck", [
+        { cardId: legend.cardId, count: 3 },
+      ]),
+      wildMagicStack: fixtureDeck("fixture-analysis-wild-magic", "wildMagicStack", []),
+      limpWandStack: fixtureDeck("fixture-analysis-limp-wand", "limpWandStack", []),
+      familiarPool: fixtureDeck("fixture-analysis-familiar-pool", "familiarPool", [
+        { cardId: familiar.cardId, count: 4 },
+      ]),
+    },
+    tokenStacks: {
+      deadWizardTokens: undefined,
+      wizardProperties: {
+        schemaVersion: 1,
+        stackId: "fixture-analysis-properties",
+        runtimeSchema: "krutagidon.tokenStack.v0",
+        role: "wizardProperties",
+        mappingStatus: "fixture",
+        entries: [{ tokenId: property.tokenId, count: 4 }],
+      },
+    },
+  };
+}
+
+function cardDefinitionWithKind(
+  cardId: string,
+  cardKind: CardDefinition["engine"]["cardKind"]
+): CardDefinition {
+  const definition = fixtureDefinition(cardId);
+  return {
+    ...definition,
+    visible: { ...definition.visible, cardKind },
+    engine: { ...definition.engine, cardKind },
+  };
+}
+
+function tokenDefinition(tokenId: string): TokenDefinition {
+  return {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    source: { image: `fixture/${tokenId}.png` },
+    visible: { textRu: tokenId },
+    engine: {
+      mappingStatus: "fixture",
+      playableInV0: true,
+      effects: [],
+      unsupportedMechanics: [],
+    },
+  };
+}
+
+function fixtureDeck(
+  deckId: string,
+  role: DeckComposition["role"],
+  entries: DeckComposition["entries"]
+): DeckComposition {
+  return {
+    schemaVersion: 1,
+    deckId,
+    runtimeSchema: "krutagidon.deckComposition.v0",
+    role,
+    mappingStatus: "fixture",
+    entries,
+  };
+}
+
+function analysisFixtureState(seed: number): GameState {
+  const state = initializeGame({ dataPack: analysisFixtureDataPack(), seed });
   state.common.market = [];
   state.common.legendMarket = [];
+  state.common.mainDeck = [];
+  state.common.legendDeck = [];
   state.common.wildMagicStack = [];
-  state.common.mainDeck = state.common.mainDeck.filter((candidate) => {
-    return state.cardDefinitions.get(candidate.definitionId)?.engine.cardKind === "normal";
-  });
+  state.common.limpWandStack = [];
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  if (activePlayer !== undefined) {
+    activePlayer.unboughtFamiliar = undefined;
+  }
+  return state;
+}
+
+test("enumerates simple actions into independent completed branches", () => {
+  const state = analysisFixtureState(125);
   const activePlayer = state.players.find(
     (player) => player.playerId === state.activePlayerId
   );
@@ -112,8 +222,22 @@ test("enumerates simple actions into independent completed branches", () => {
     fixtureDefinition("fixture-analysis-simple-2")
   );
   const sourceTurn = state.turn.number;
+  const sourceStrategy = () => undefined;
+  state.effectChoiceStrategy = sourceStrategy;
+  const sourceSnapshot = structuredClone({
+    activePlayerId: state.activePlayerId,
+    turn: state.turn,
+    players: state.players,
+    common: state.common,
+    cardDefinitions: [...state.cardDefinitions.entries()],
+    tokenDefinitions: [...state.tokenDefinitions.entries()],
+    eventLog: state.eventLog,
+  });
+  const sourceRngProbe = state.rng.fork();
+  const expectedSourceRngValue = sourceRngProbe.nextInt(1_000);
 
   const result = enumerateImmediateActionBranches(state);
+  const repeatedResult = enumerateImmediateActionBranches(state);
 
   assert.equal(result.length, 3);
   assert.equal(result[0]?.legalAction.type, "playCard");
@@ -138,6 +262,69 @@ test("enumerates simple actions into independent completed branches", () => {
   assert.equal(result[2]?.legalAction.type, "endTurn");
   assert.equal(result[2]?.resultingState.turn.number, sourceTurn + 1);
   assert.equal(state.turn.number, sourceTurn);
+  assert.deepEqual(
+    result.map(({ legalAction, legalActionIndex, selectedChoices, result: actionResult }) => ({
+      legalAction,
+      legalActionIndex,
+      selectedChoices,
+      actionResult,
+    })),
+    repeatedResult.map(({ legalAction, legalActionIndex, selectedChoices, result: actionResult }) => ({
+      legalAction,
+      legalActionIndex,
+      selectedChoices,
+      actionResult,
+    }))
+  );
+  assert.deepEqual(
+    structuredClone({
+      activePlayerId: state.activePlayerId,
+      turn: state.turn,
+      players: state.players,
+      common: state.common,
+      cardDefinitions: [...state.cardDefinitions.entries()],
+      tokenDefinitions: [...state.tokenDefinitions.entries()],
+      eventLog: state.eventLog,
+    }),
+    sourceSnapshot
+  );
+  assert.equal(state.rng.fork().nextInt(1_000), expectedSourceRngValue);
+  assert.equal(state.effectChoiceStrategy, sourceStrategy);
+});
+
+test("raises an analysis error when a legal action cannot be applied", () => {
+  const state = analysisFixtureState(131);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  const card = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-mismatch")
+  );
+  let handMapCalls = 0;
+  const sourceHand = [card];
+  activePlayer.hand = new Proxy(sourceHand, {
+    get(target, property, receiver) {
+      if (property === "map") {
+        handMapCalls += 1;
+        return handMapCalls === 1 ? target.map.bind(target) : () => [];
+      }
+      return Reflect.get(target, property, receiver) as never;
+    },
+  });
+
+  assert.throws(
+    () => enumerateImmediateActionBranches(state),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.name, "AnalysisError");
+      assert.match(error.message, /Analysis failed for action/);
+      assert.match(error.message, /playCard/);
+      assert.match(error.message, /Card is not in the active player's hand/);
+      return true;
+    }
+  );
 });
 
 test("enumerates every current-turn action history through endTurn", () => {
