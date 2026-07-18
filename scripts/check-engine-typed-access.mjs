@@ -35,13 +35,6 @@ const configuredAllowedViolations = [
   ["src/engine/data.ts", 2318, 3, "validateNestedAttackBranches"],
   ["src/engine/data.ts", 2371, 43, "isEffectRecord"],
   ["src/engine/runtime-effect.ts", 408, 4, "isRuntimeEffectTargetRecord"],
-  ["src/engine/effect-runtime-registry.ts", 4398, 43, "isEffectRecord"],
-  [
-    "src/engine/effect-runtime-registry.ts",
-    4664,
-    3,
-    "resolveEffectRuntimeCatalogEntry",
-  ],
 ];
 
 for (const filePath of listTypeScriptFiles(engineDir)) {

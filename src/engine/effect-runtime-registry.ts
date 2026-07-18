@@ -4244,7 +4244,17 @@ function shuffleInPlace<T>(items: T[], state: GameState): void {
     items[swapIndex] = item;
   }
 }
-function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
+interface EffectRecord {
+  amount?: unknown;
+  cardTypes?: unknown;
+  definitionId?: unknown;
+  drawAmount?: unknown;
+  effectId?: unknown;
+  targetType?: unknown;
+  tokenKind?: unknown;
+}
+
+function isEffectRecord(effect: unknown): effect is EffectRecord {
   return isPlainRecord(effect);
 }
 function formatUnknown(value: unknown): string {
@@ -4510,7 +4520,7 @@ export type EffectRuntimeCatalogResolution =
 export function resolveEffectRuntimeCatalogEntry(
   subjectId: string,
   rawEffectId: string,
-  effect: RuntimeEffectPayload | Record<string, unknown>,
+  effect: RuntimeEffectPayload | object,
   mode: EffectRuntimeMode,
   sourceKind: EffectRuntimeSourceKind
 ): EffectRuntimeCatalogResolution {
