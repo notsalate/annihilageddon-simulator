@@ -4,7 +4,7 @@
   "entries": [
     {
       "cardId": "esw2_dbg__familiar_001",
-      "sourceImagePath": "assets/cards/raw/familiar/Фамильяр. Поехавший нотариус.png",
+      "sourceImagePath": "assets/cards/familiar/Фамильяр. Поехавший нотариус.png",
       "extractionFile": "data/import/cards/familiar/texts/esw2_dbg__familiar_001.md",
       "status": "processed",
       "cardKind": "familiar",
@@ -12,7 +12,7 @@
     },
     {
       "cardId": "esw2_dbg__familiar_002",
-      "sourceImagePath": "assets/cards/raw/familiar/Фамильяр. Зожложники.png",
+      "sourceImagePath": "assets/cards/familiar/Фамильяр. Зожложники.png",
       "extractionFile": "data/import/cards/familiar/texts/esw2_dbg__familiar_002.md",
       "status": "processed",
       "cardKind": "familiar",
@@ -20,7 +20,7 @@
     },
     {
       "cardId": "esw2_dbg__familiar_003",
-      "sourceImagePath": "assets/cards/raw/familiar/Фамильяр. Сальный шут.png",
+      "sourceImagePath": "assets/cards/familiar/Фамильяр. Сальный шут.png",
       "extractionFile": "data/import/cards/familiar/texts/esw2_dbg__familiar_003.md",
       "status": "processed",
       "cardKind": "familiar",
@@ -28,7 +28,7 @@
     },
     {
       "cardId": "esw2_dbg__familiar_004",
-      "sourceImagePath": "assets/cards/raw/familiar/Фамильяр. Бензопила Дружок.png",
+      "sourceImagePath": "assets/cards/familiar/Фамильяр. Бензопила Дружок.png",
       "extractionFile": "data/import/cards/familiar/texts/esw2_dbg__familiar_004.md",
       "status": "processed",
       "cardKind": "familiar",
@@ -36,7 +36,7 @@
     },
     {
       "cardId": "esw2_dbg__familiar_005",
-      "sourceImagePath": "assets/cards/raw/familiar/Фамильяр. Кондуктор Жми-На-Тормоза.png",
+      "sourceImagePath": "assets/cards/familiar/Фамильяр. Кондуктор Жми-На-Тормоза.png",
       "extractionFile": "data/import/cards/familiar/texts/esw2_dbg__familiar_005.md",
       "status": "processed",
       "cardKind": "familiar",
@@ -44,7 +44,7 @@
     },
     {
       "cardId": "esw2_dbg__familiar_006",
-      "sourceImagePath": "assets/cards/raw/familiar/Фамильяр. Никчемухажёры.png",
+      "sourceImagePath": "assets/cards/familiar/Фамильяр. Никчемухажёры.png",
       "extractionFile": "data/import/cards/familiar/texts/esw2_dbg__familiar_006.md",
       "status": "processed",
       "cardKind": "familiar",
@@ -52,7 +52,7 @@
     },
     {
       "cardId": "esw2_dbg__familiar_007",
-      "sourceImagePath": "assets/cards/raw/familiar/Фамильяр. Мыжсемья.png",
+      "sourceImagePath": "assets/cards/familiar/Фамильяр. Мыжсемья.png",
       "extractionFile": "data/import/cards/familiar/texts/esw2_dbg__familiar_007.md",
       "status": "processed",
       "cardKind": "familiar",
@@ -60,7 +60,7 @@
     },
     {
       "cardId": "esw2_dbg__familiar_008",
-      "sourceImagePath": "assets/cards/raw/familiar/Фамильяр. Мальчий, который выжрал.png",
+      "sourceImagePath": "assets/cards/familiar/Фамильяр. Мальчий, который выжрал.png",
       "extractionFile": "data/import/cards/familiar/texts/esw2_dbg__familiar_008.md",
       "status": "processed",
       "cardKind": "familiar",
@@ -68,7 +68,7 @@
     },
     {
       "cardId": "esw2_dbg__familiar_009",
-      "sourceImagePath": "assets/cards/raw/familiar/Месаклито, книжный червь.png",
+      "sourceImagePath": "assets/cards/familiar/Месаклито, книжный червь.png",
       "extractionFile": "data/import/cards/familiar/texts/esw2_dbg__familiar_009.md",
       "status": "processed",
       "cardKind": "familiar",
@@ -76,7 +76,7 @@
     },
     {
       "cardId": "esw2_dbg__familiar_010",
-      "sourceImagePath": "assets/cards/raw/familiar/Фамильяр. Счастливый Виабу.png",
+      "sourceImagePath": "assets/cards/familiar/Фамильяр. Счастливый Виабу.png",
       "extractionFile": "data/import/cards/familiar/texts/esw2_dbg__familiar_010.md",
       "status": "processed",
       "cardKind": "familiar",

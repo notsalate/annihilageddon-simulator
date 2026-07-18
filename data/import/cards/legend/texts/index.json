@@ -25,7 +25,7 @@
     },
     {
       "cardId": "esw2_dbg__legend_004",
-      "sourceImagePath": "assets/cards/legend/creature/Легенда-Тварь. Гусын, королева-мать.png",
+      "sourceImagePath": "assets/cards/legend/creature/Легенда-Тварь. Гусыня, королева-мать.png",
       "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_004.md",
       "cardKind": "legend",
       "cardTypes": ["legend", "creature"]
@@ -116,7 +116,7 @@
     },
     {
       "cardId": "esw2_dbg__legend_017",
-      "sourceImagePath": "assets/cards/legend/spell/Легенда-Заклинание. Мальчишник в Р'льехе.png",
+      "sourceImagePath": "assets/cards/legend/spell/Легенда-Заклинание. Мальчишник в Р'льехе..png",
       "extractionFile": "data/import/cards/legends/texts/esw2_dbg__legend_017.md",
       "cardKind": "legend",
       "cardTypes": ["legend", "spell"]

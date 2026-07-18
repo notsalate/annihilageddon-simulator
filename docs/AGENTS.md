@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This folder contains durable project documentation for rules, runtime layout, import flow, mechanics coverage, debug traces, repo safety, process docs, and JSON templates.
+This folder contains durable project documentation for rules, runtime layout, import flow, mechanics coverage, debug traces, process docs, and JSON templates.
 
 ## Ownership
 

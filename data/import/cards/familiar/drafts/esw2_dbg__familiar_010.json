@@ -3,7 +3,7 @@
   "draftKind": "cardDraft",
   "cardId": "esw2_dbg__familiar_010",
   "source": {
-    "image": "assets/cards/raw/familiar/Фамильяр. Счастливый Виабу.png",
+    "image": "assets/cards/familiar/Фамильяр. Счастливый Виабу.png",
     "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_010.md"
   },
   "visible": {

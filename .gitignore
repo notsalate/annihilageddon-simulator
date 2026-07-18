@@ -4,16 +4,14 @@ dist/
 .scratch/tmp_*
 .scratch/runs/
 .claude/worktrees/
-.env
-.env.*
 *.log
 *.db
 *.sqlite
 *.sqlite3
 coverage/
 *.tsbuildinfo
-# >>> AI REPO SAFETY >>>
-# secrets and credentials
+
+# Local credentials
 .env
 .env.*
 !.env.example
@@ -32,14 +30,15 @@ tokens.json
 secrets.json
 *.ovpn
 
-# MCP / agent local configs that often contain tokens
+# Local tool configuration
 .mcp.json
 claude_desktop_config.json
 
-# agent logs / local AI context
+# Local AI context
 .claude/
 .codex/
-.codex/config.toml
+.agents/
+.opencode/
 .cursor/
 .windsurf/
 .gemini/
@@ -54,10 +53,13 @@ Thumbs.db
 .idea/
 .vscode/
 
-# logs / temp
-*.log
+# Local logs and caches
 logs/
 tmp/
 temp/
 .cache/
-# <<< AI REPO SAFETY <<<
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/

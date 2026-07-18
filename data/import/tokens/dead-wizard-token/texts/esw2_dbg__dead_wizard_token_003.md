@@ -2,7 +2,7 @@
 
 sourceImages:
 
-- assets/dead-wizard-token/DWT_003.png
+- assets/dead-wizard-token/DWT_003-004.png
 
 sourceLabel: В КОНЦЕ ИГРЫ. Если у любого колдуна есть второй жетон дохлого колдуна с таким же текстом, уничтожь оба жетона. -5
 

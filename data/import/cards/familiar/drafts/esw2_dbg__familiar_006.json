@@ -3,7 +3,7 @@
   "draftKind": "cardDraft",
   "cardId": "esw2_dbg__familiar_006",
   "source": {
-    "image": "assets/cards/raw/familiar/Фамильяр. Никчемухажёры.png",
+    "image": "assets/cards/familiar/Фамильяр. Никчемухажёры.png",
     "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_006.md"
   },
   "visible": {
