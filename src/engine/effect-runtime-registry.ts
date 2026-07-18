@@ -319,6 +319,15 @@ type PositiveAmountRuntimeEffect<EffectId extends RuntimeEffectId> =
 
 type AddPowerRuntimeEffect = PositiveAmountRuntimeEffect<"add_power">;
 type GainChipsRuntimeEffect = PositiveAmountRuntimeEffect<"gain_chips">;
+type AttackDamageRuntimeEffect = PositiveAmountRuntimeEffect<"attack_damage">;
+type OptionalSpendChipAttackDamageRuntimeEffect =
+  PositiveAmountRuntimeEffect<"optional_spend_chip_attack_damage"> & {
+    chipCost: number;
+    targetSelector: "chosenPlayer";
+  };
+type ExecutableAttackDamageRuntimeEffect =
+  | AttackDamageRuntimeEffect
+  | OptionalSpendChipAttackDamageRuntimeEffect;
 
 export interface EffectRuntimeCatalogEntry<
   EffectId extends RuntimeEffectId = RuntimeEffectId,
@@ -2395,7 +2404,35 @@ const preventDefenseAgainstOwnedWandAttacksHandler: EffectRuntimeHandler = {
   },
 };
 
-const attackDamageHandler: EffectRuntimeHandler = {
+function executeAttackDamage(
+  state: GameState,
+  player: PlayerState,
+  effect: ExecutableAttackDamageRuntimeEffect,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): EffectExecutionResult {
+  const costResult = payOptionalCosts(
+    state,
+    player,
+    effect,
+    source,
+    services
+  );
+  if (!costResult.ok || costResult.skipped) {
+    return costResult.ok ? { ok: true } : costResult;
+  }
+
+  return executeAttackWithAmount(
+    state,
+    player,
+    effect,
+    source,
+    services,
+    effect.amount
+  );
+}
+
+const attackDamageHandler: EffectRuntimeHandler<AttackDamageRuntimeEffect> = {
   effectId: "attack_damage",
   allowedTargetSelectors: attackTargetSelectors,
   validateShape(subjectId, effect) {
@@ -2414,28 +2451,53 @@ const attackDamageHandler: EffectRuntimeHandler = {
     ];
   },
   execute(state, player, effect, source, services) {
-    const costResult = payOptionalCosts(
+    return executeAttackDamage(state, player, effect, source, services);
+  },
+};
+
+const optionalSpendChipAttackDamageHandler: EffectRuntimeHandler<
+  OptionalSpendChipAttackDamageRuntimeEffect
+> = {
+  effectId: "optional_spend_chip_attack_damage",
+  allowedTargetSelectors: ["chosenPlayer"],
+  validateShape(subjectId, effect) {
+    const errors = [
+      ...validatePositiveIntegerAmount(
+        subjectId,
+        effect,
+        "optional chip attack damage amount"
+      ),
+      ...validatePlayerTargetSelector(
+        subjectId,
+        effect,
+        "optional chip attack",
+        ["chosenPlayer"]
+      ),
+    ];
+    const chipCost = effect["chipCost"];
+    if (
+      typeof chipCost !== "number" ||
+      !Number.isSafeInteger(chipCost) ||
+      chipCost <= 0
+    ) {
+      errors.push(
+        `${subjectId} uses invalid optional chip attack cost ${String(chipCost)}`
+      );
+    }
+    return errors;
+  },
+  execute(state, player, effect, source, services) {
+    const attackEffect: OptionalSpendChipAttackDamageRuntimeEffect = {
+      ...effect,
+      optional: true,
+      costs: [{ costId: "spend_chips", amount: effect.chipCost }],
+    };
+    return executeAttackDamage(
       state,
       player,
-      effect,
+      attackEffect,
       source,
       services
-    );
-    if (!costResult.ok || costResult.skipped) {
-      return costResult.ok ? { ok: true } : costResult;
-    }
-
-    const amount = requirePositiveIntegerAmount(effect, "attack damage amount");
-    if (!amount.ok) {
-      return amount;
-    }
-    return executeAttackWithAmount(
-      state,
-      player,
-      effect,
-      source,
-      services,
-      amount.value
     );
   },
 };
@@ -4440,9 +4502,7 @@ export const effectRuntimeHandlerMap = {
   optional_gain_market_cards_to_hand_this_turn: createUnsupportedEffectHandler(
     "optional_gain_market_cards_to_hand_this_turn"
   ),
-  optional_spend_chip_attack_damage: createUnsupportedEffectHandler(
-    "optional_spend_chip_attack_damage"
-  ),
+  optional_spend_chip_attack_damage: optionalSpendChipAttackDamageHandler,
   optional_spend_chip_destroy_own_cards: createUnsupportedEffectHandler(
     "optional_spend_chip_destroy_own_cards"
   ),

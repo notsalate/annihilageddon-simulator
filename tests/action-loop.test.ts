@@ -4998,19 +4998,23 @@ test("Losharocka Wand can self-target and makes the killed target a Dingler", ()
   );
 });
 
-test("Chipsalocka Wand spends one chip before its optional chosen-player attack", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
-  });
+test("Palochka-Chipsalocka can spend one chip to attack its controller", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
-  const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
   state.activePlayerId = activePlayer.playerId;
   activePlayer.wizardProperties = [];
-  targetPlayer.wizardProperties = [];
   activePlayer.chips = 1;
-  targetPlayer.life.current = 20;
+  activePlayer.life.current = 20;
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId !== "optional_spend_chip_attack_damage") {
+      return undefined;
+    }
+    return choices.find(
+      (choice) =>
+        choice.choiceId === "pay_optional_cost" ||
+        choice.choiceId === activePlayer.playerId
+    );
+  });
   const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_041");
 
   const result = applyAction(state, {
@@ -5021,26 +5025,54 @@ test("Chipsalocka Wand spends one chip before its optional chosen-player attack"
   assert.equal(result.ok, true);
   assert.equal(state.turn.power, 2);
   assert.equal(activePlayer.chips, 0);
-  assert.equal(targetPlayer.life.current, 10);
+  assert.equal(activePlayer.life.current, 10);
   assert.ok(
     state.eventLog.some((event) => {
       return (
-        event.type === "effectChoiceSelected" &&
-        event.effectId === "attack_damage" &&
-        event.choiceId === "pay_optional_cost" &&
-        event.choiceIds?.includes("skip_optional_cost") === true &&
-        event.legalChoiceCount === 2
+        event.type === "attackCreated" &&
+        event.cardInstanceId === wand.instanceId &&
+        event.effectId === "optional_spend_chip_attack_damage" &&
+        event.targetPlayerId === activePlayer.playerId &&
+        event.amount === 10
       );
     })
   );
 });
 
-test("Chipsalocka Wand can skip its optional attack when the chip cost is unavailable", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
+test("Palochka-Chipsalocka can decline its optional attack", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  activePlayer.chips = 1;
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId !== "optional_spend_chip_attack_damage") {
+      return undefined;
+    }
+    return choices.find((choice) => choice.choiceId === "skip_optional_cost");
   });
+  const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_041");
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.cardInstanceId === wand.instanceId
+    ),
+    false
+  );
+});
+
+test("Palochka-Chipsalocka cannot attack without a chip", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
   const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
   state.activePlayerId = activePlayer.playerId;
@@ -5063,10 +5095,18 @@ test("Chipsalocka Wand can skip its optional attack when the chip cost is unavai
     state.eventLog.some((event) => {
       return (
         event.type === "effectChoiceSelected" &&
-        event.effectId === "attack_damage" &&
+        event.effectId === "optional_spend_chip_attack_damage" &&
         event.choiceId === "skip_optional_cost"
       );
     })
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.cardInstanceId === wand.instanceId
+    ),
+    false
   );
 });
 
