@@ -5022,6 +5022,195 @@ test("Losharocka Wand can self-target and makes the killed target a Dingler", ()
   );
 });
 
+test("Palochka-Shlepalocka steals chips equal to actual damage from a chosen non-first foe", () => {
+  const { state, activePlayer, targetPlayer, wand } = setupShlepalockaTestState(
+    { playerCount: 3 }
+  );
+  const firstFoe = mustGetPlayer(state, markPlayerId("player-3"));
+  activePlayer.chips = 1;
+  targetPlayer.chips = 5;
+  targetPlayer.life.current = 20;
+  firstFoe.life.current = 20;
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId !== "attack_damage") {
+      return undefined;
+    }
+    return choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === targetPlayer.playerId
+    );
+  });
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(firstFoe.life.current, 20);
+  assert.equal(targetPlayer.life.current, 18);
+  assert.equal(activePlayer.chips, 3);
+  assert.equal(targetPlayer.chips, 3);
+  assert.equal(
+    state.players.reduce((total, player) => total + player.chips, 0),
+    6
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "attack_damage" &&
+        event.targetPlayerId === targetPlayer.playerId
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.effectId === "attack_damage" &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 2
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChipsChanged" &&
+        event.effectId === "gain_chips_equal_damage_dealt" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 2
+    )
+  );
+});
+
+test("Palochka-Shlepalocka gains no chips when its attack is defended", () => {
+  const { state, activePlayer, targetPlayer, wand } =
+    setupShlepalockaTestState();
+  activePlayer.chips = 1;
+  targetPlayer.chips = 5;
+  targetPlayer.life.current = 20;
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(targetPlayer.life.current, 20);
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(targetPlayer.chips, 5);
+  assert.equal(targetPlayer.discard.includes(defenseCard), true);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackAvoided" &&
+        event.definitionId === "esw2_dbg__main_015" &&
+        event.targetPlayerId === targetPlayer.playerId
+    )
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChipsChanged" &&
+        event.effectId === "gain_chips_equal_damage_dealt" &&
+        event.cardInstanceId === wand.instanceId
+    ),
+    false
+  );
+});
+
+test("Palochka-Shlepalocka uses life-limited actual damage for its chip transfer", () => {
+  const { state, activePlayer, targetPlayer, wand } =
+    setupShlepalockaTestState();
+  targetPlayer.life.current = 1;
+  targetPlayer.chips = 5;
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(targetPlayer.chips, 4);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.definitionId === "esw2_dbg__main_015" &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 1
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChipsChanged" &&
+        event.effectId === "gain_chips_equal_damage_dealt" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 1
+    )
+  );
+});
+
+test("Palochka-Shlepalocka attack bonus scales chips and fills target shortfall from supply", () => {
+  const { state, activePlayer, targetPlayer, wand } = setupShlepalockaTestState(
+    { preserveActiveWizardProperty: true }
+  );
+  replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    state.tokenDefinitions.get(
+      "esw2_dbg__wizard_property_009"
+    ) as TokenDefinition
+  );
+  targetPlayer.life.current = 20;
+  targetPlayer.chips = 1;
+  const playerChipsBefore = state.players.reduce(
+    (total, player) => total + player.chips,
+    0
+  );
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 17);
+  assert.equal(activePlayer.chips, 3);
+  assert.equal(targetPlayer.chips, 0);
+  assert.equal(
+    state.players.reduce((total, player) => total + player.chips, 0),
+    playerChipsBefore + 2
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.definitionId === "esw2_dbg__main_015" &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 3
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChipsChanged" &&
+        event.effectId === "gain_chips_equal_damage_dealt" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 3
+    )
+  );
+});
+
 test("Palochka-Chipsalocka can spend one chip to attack its controller", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
@@ -7951,6 +8140,42 @@ function mustGetPlayer(
   );
   assert.ok(player);
   return player;
+}
+
+function setupShlepalockaTestState(
+  options: {
+    playerCount?: number;
+    preserveActiveWizardProperty?: boolean;
+  } = {}
+): {
+  state: GameState;
+  activePlayer: PlayerState;
+  targetPlayer: PlayerState;
+  wand: CardInstance;
+} {
+  const state = initializeGame({
+    rootDir,
+    seed: 60615,
+    ...(options.playerCount === undefined
+      ? {}
+      : { playerCount: options.playerCount }),
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    if (
+      options.preserveActiveWizardProperty !== true ||
+      player.playerId !== activePlayer.playerId
+    ) {
+      player.wizardProperties = [];
+    }
+    player.statuses = [];
+    player.chips = 0;
+    player.hand = [];
+  }
+  const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_015");
+  return { state, activePlayer, targetPlayer, wand };
 }
 
 function addRuntimeCardToHand(
