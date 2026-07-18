@@ -90,7 +90,7 @@ These are project decisions for places where the rulebook requires a legal choic
    - The first implementation scope is one current turn through `endTurn`; multi-turn lookahead remains future work.
 3. Same-window ordering owned by one player:
    - If the rulebook does not specify an order, baseline resolution uses the first legal ordering in stable engine order.
-   - `Best-Move Analyzer` may explore alternative legal orderings separately, without rewriting the canonical resolution order; a `Strategy` still returns a legal player decision through its own observation contract.
+   - `Best-Move Analyzer` may explore alternative legal orderings separately, without rewriting the canonical resolution order. A future player-observation contract will constrain the information available to a `Strategy`; it is not implemented yet.
 
 ## Player Zones and Ownership
 

@@ -161,7 +161,7 @@ A read-only helper view that gathers separately stored controlled cards, tokens,
 _Avoid_: unified controlled objects zone
 
 **Choice Policy**:
-The deterministic decision hook used when an effect or rule requires a legal choice. The early `baselineBot` policy is a temporary stub that chooses the first legal option; it is not a strong player strategy and never searches for a strong line.
+The deterministic decision hook used when an effect or rule requires a legal choice. The current fallback chooses the first legal option; it is not a strong player strategy and never searches for a strong line. `baselineBot` is a separate `BotStrategy` with its own action priority.
 _Avoid_: hidden handler choice, random default choice, Analyzer
 
 **Strategy**:
