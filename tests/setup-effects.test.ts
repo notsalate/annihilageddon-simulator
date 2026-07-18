@@ -55,15 +55,6 @@ function player(): PlayerState {
   };
 }
 
-class CountingTokenDefinitions extends Map<string, TokenDefinition> {
-  getCalls = 0;
-
-  override get(key: string): TokenDefinition | undefined {
-    this.getCalls += 1;
-    return super.get(key);
-  }
-}
-
 const source: SetupEffectSourceContext = {
   sourceType: "wizardProperty",
   runtimeMode: "combat",
@@ -176,15 +167,15 @@ test("setup fixture does not depend on the current working directory", () => {
   }
 });
 
-test("initializeGame does not rescan token definitions after setup effects", () => {
-  const tokenDefinitions = new CountingTokenDefinitions();
+test("initializeGame reads each wizard property effect list once during setup", () => {
+  const effectListReads = { value: 0 };
   const state = initializeGame({
-    dataPack: setupDataPack(true, "fixture", tokenDefinitions),
+    dataPack: setupDataPack(true, "fixture", undefined, effectListReads),
     seed: 119,
   });
 
   assert.equal(state.activePlayerId, state.players[0]?.playerId);
-  assert.equal(tokenDefinitions.getCalls, 7);
+  assert.equal(effectListReads.value, state.players.length);
 });
 
 test("initializeGame executes setup effects in combat runtime mode", () => {
@@ -527,7 +518,8 @@ test("setup executor accepts fixture runtime mode explicitly", () => {
 function setupDataPack(
   includeForce: boolean,
   manifestMappingStatus?: "supported" | "fixture",
-  tokenDefinitions?: CountingTokenDefinitions
+  tokenDefinitions?: Map<string, TokenDefinition>,
+  effectListReads?: { value: number }
 ): LoadedDataPack {
   const effectiveMappingStatus =
     manifestMappingStatus ?? "incomplete-full-only";
@@ -562,6 +554,21 @@ function setupDataPack(
         ] as RuntimeEffect[])
       : []),
   ];
+  const engine = {
+    mappingStatus: effectiveMappingStatus,
+    playableInV0: true,
+    effects,
+    unsupportedMechanics: [],
+  };
+  if (effectListReads !== undefined) {
+    Object.defineProperty(engine, "effects", {
+      enumerable: true,
+      get: () => {
+        effectListReads.value += 1;
+        return effects;
+      },
+    });
+  }
   const property: TokenDefinition = {
     schemaVersion: 1,
     tokenId: includeForce
@@ -571,14 +578,9 @@ function setupDataPack(
     kind: "wizardProperty",
     source: { image: "fixture/setup-property.png" },
     visible: { textRu: "Тестовое свойство" },
-    engine: {
-      mappingStatus: effectiveMappingStatus,
-      playableInV0: true,
-      effects,
-      unsupportedMechanics: [],
-    },
+    engine,
   };
-  const definitions = tokenDefinitions ?? new CountingTokenDefinitions();
+  const definitions = tokenDefinitions ?? new Map<string, TokenDefinition>();
   definitions.set(property.tokenId, property);
 
   return {
