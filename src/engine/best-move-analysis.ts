@@ -49,17 +49,6 @@ export interface AnalyzedTurnLine {
   terminalState: GameState;
 }
 
-/** Internal action boundary shared by the production walk and fixture tests. */
-export interface TurnLineActionAdapter {
-  listLegalActions(state: GameState): readonly LegalAction[];
-  enumerateActionBranches(
-    state: GameState,
-    action: LegalAction,
-    legalActionIndex: number,
-    limits: AnalysisLimits
-  ): CompletedActionBranch[];
-}
-
 export interface TurnLineEvaluationContext {
   readonly sourceState: Readonly<GameState>;
   readonly line: Readonly<AnalyzedTurnLine>;
@@ -68,8 +57,6 @@ export interface TurnLineEvaluationContext {
 
 export interface TurnLineEvaluation {
   readonly score: number;
-  /** Orders outcomes before score; higher values win. */
-  readonly rankPriority?: number;
   readonly components?: Readonly<Record<string, number>>;
 }
 
@@ -92,10 +79,6 @@ export interface RankedTurnLinesResult {
   readonly rankedLines: readonly RankedTurnLine[];
   readonly best: RankedTurnLine | undefined;
 }
-
-type PendingRankedTurnLine = RankedTurnLine & {
-  readonly rankPriority: number;
-};
 
 export class AnalysisError extends Error {
   override name = "AnalysisError";
@@ -123,11 +106,6 @@ const DEFAULT_ANALYSIS_LIMITS: AnalysisLimits = {
   maxBranchesPerAction: 4096,
   maxActionsPerLine: 128,
   maxTurnLines: 100_000,
-};
-
-const engineTurnLineActionAdapter: TurnLineActionAdapter = {
-  listLegalActions,
-  enumerateActionBranches,
 };
 
 /** Enumerates paths with depth-first replay; choices and actions retain source order. */
@@ -249,34 +227,21 @@ export function enumerateTurnLines(
   source: GameState,
   limits: AnalysisLimits = DEFAULT_ANALYSIS_LIMITS
 ): AnalyzedTurnLine[] {
-  return enumerateTurnLinesWithActionAdapter(
-    source,
-    limits,
-    engineTurnLineActionAdapter
-  );
-}
-
-/** Runs the same turn-line walk against an explicit action boundary. */
-export function enumerateTurnLinesWithActionAdapter(
-  source: GameState,
-  limits: AnalysisLimits,
-  actionAdapter: TurnLineActionAdapter
-): AnalyzedTurnLine[] {
   validateLimits(limits);
   const initialPlayerId = source.activePlayerId;
   const initialTurnNumber = source.turn.number;
   const lines: AnalyzedTurnLine[] = [];
 
   const visit = (state: GameState, steps: AnalysisActionStep[]): void => {
-    for (const [legalActionIndex, action] of actionAdapter
-      .listLegalActions(state)
-      .entries()) {
+    for (const [legalActionIndex, action] of listLegalActions(
+      state
+    ).entries()) {
       if (steps.length + 1 > limits.maxActionsPerLine) {
         throw new AnalysisLimitError(
           `Analysis action limit exceeded ${limits.maxActionsPerLine} after ${steps.length} steps; last action ${describeAction(action)}`
         );
       }
-      const branches = actionAdapter.enumerateActionBranches(
+      const branches = enumerateActionBranches(
         state,
         action,
         legalActionIndex,
@@ -355,13 +320,6 @@ export function rankTurnLines(
       evaluation.score,
       "score"
     );
-    const rankPriority = evaluation.rankPriority ?? 0;
-    assertFiniteEvaluation(
-      policy.id,
-      enumerationIndex,
-      rankPriority,
-      "rank priority"
-    );
     if (evaluation.components !== undefined) {
       for (const [name, value] of Object.entries(evaluation.components)) {
         assertFiniteEvaluation(
@@ -375,27 +333,22 @@ export function rankTurnLines(
     return {
       line,
       enumerationIndex,
-      rankPriority,
       score: evaluation.score,
       ...(evaluation.components === undefined
         ? {}
         : { components: evaluation.components }),
       rank: 0,
-    } satisfies PendingRankedTurnLine;
+    } satisfies RankedTurnLine;
   });
 
   ranked.sort(
     (left, right) =>
-      right.rankPriority - left.rankPriority ||
-      right.score - left.score ||
-      left.enumerationIndex - right.enumerationIndex
+      right.score - left.score || left.enumerationIndex - right.enumerationIndex
   );
-  const rankedLines = ranked.map(
-    ({ rankPriority: _rankPriority, ...entry }, index) => ({
-      ...entry,
-      rank: index + 1,
-    })
-  );
+  const rankedLines = ranked.map((entry, index) => ({
+    ...entry,
+    rank: index + 1,
+  }));
   return {
     criterionId: policy.id,
     perspectivePlayerId,

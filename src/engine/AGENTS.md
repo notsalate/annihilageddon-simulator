@@ -26,7 +26,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - A successful effect may return a typed `playerDefeated` game end with its winner; regular card and activation actions propagate it without adding a card-specific shortcut.
 - Keep `Best-Move Analyzer` modules outside `BotStrategy`: analysis may receive complete `GameState`, inspect hidden information, fork seeded RNG, and enumerate current-turn legal lines through `endTurn` using a caller-supplied evaluation policy; simulation strategies must not depend on the analysis API or future RNG/hidden opponent state.
 - The analyzer has no hidden default score: a line becomes “best” only after the caller supplies a named evaluation policy.
-- Evaluation policies may set a finite `rankPriority` before score; `victoryPointsPolicy` uses it to prefer a terminal line won by the perspective player while still comparing that player's actual victory points within the same outcome priority.
+- Evaluation policies return a finite `score` and optional finite components; `rankTurnLines` orders strictly by descending score, then stable enumeration order. Terminal `winnerPlayerId` remains metadata and does not affect ranking.
 - Give effect handlers concrete typed inputs after the validation boundary; keep raw record access at that boundary.
 - Declare each catalog entry's supported runtime modes as a non-empty typed set.
 - Add runtime effect IDs only through `effect-runtime-registry.ts`; executable data must not reference IDs outside the Effect Runtime Catalog.

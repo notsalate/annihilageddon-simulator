@@ -16,9 +16,8 @@ import {
   type TurnLineEvaluationContext,
 } from "../src/index.js";
 import { victoryPointsPolicy } from "../src/engine/best-move-policies.js";
-import { enumerateTurnLinesWithActionAdapter } from "../src/engine/best-move-analysis.js";
-import { forkGameState } from "../src/engine/game-state-fork.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
+import { withTemporaryEffectRuntimeHandler } from "./helpers/with-temporary-effect-runtime-handler.js";
 
 const rootDir = process.cwd();
 
@@ -483,42 +482,52 @@ test("enumerates current-turn lines in stable depth-first order", () => {
 
 test("keeps sibling game-ending ordinary actions and stops each winning line", () => {
   const state = analysisFixtureState(128);
-  const lowerScoreAction = {
-    type: "playCard" as const,
-    cardInstanceId: "fixture-game-ending-action-low",
-  };
-  const higherScoreAction = {
-    type: "playCard" as const,
-    cardInstanceId: "fixture-game-ending-action-high",
-  };
-  let legalActionCalls = 0;
-
-  const lines = enumerateTurnLinesWithActionAdapter(state, analysisLimits(), {
-    listLegalActions() {
-      legalActionCalls += 1;
-      return [lowerScoreAction, higherScoreAction];
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  activePlayer.hand = [];
+  const lowerScoreCard = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-game-ending-action-low", [
+      { effectId: "fixture_add_power_equal_to_target_cost", timing: "onPlay" },
+    ])
+  );
+  const higherScoreCard = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-game-ending-action-high", [
+      { effectId: "fixture_add_power_equal_to_target_cost", timing: "onPlay" },
+    ])
+  );
+  const lines = withTemporaryEffectRuntimeHandler(
+    "fixture_add_power_equal_to_target_cost",
+    {
+      effectId: "fixture_add_power_equal_to_target_cost",
+      validateShape() {
+        return [];
+      },
+      execute(_state, player) {
+        return {
+          ok: true,
+          gameEnd: {
+            reason: "playerDefeated",
+            winnerPlayerId: player.playerId,
+          },
+        };
+      },
     },
-    enumerateActionBranches(source, legalAction, legalActionIndex) {
-      return [
-        {
-          legalAction,
-          legalActionIndex,
-          selectedChoices: [],
-          result: { ok: true, gameEndReason: "mainDeckExhausted" },
-          resultingState: forkGameState(source),
-        },
-      ];
-    },
-  });
+    () => enumerateTurnLines(state, analysisLimits())
+  ).filter((line) => line.terminalReason === "gameEnd");
 
-  assert.equal(legalActionCalls, 1);
   assert.equal(lines.length, 2);
-  assert.ok(lines.every((line) => line.terminalReason === "gameEnd"));
-  assert.ok(lines.every((line) => line.gameEndReason === "mainDeckExhausted"));
+  assert.ok(lines.every((line) => line.gameEndReason === "playerDefeated"));
   assert.ok(lines.every((line) => line.steps.length === 1));
   assert.deepEqual(
     lines.map((line) => line.steps[0]?.action),
-    [lowerScoreAction, higherScoreAction]
+    [
+      { type: "playCard", cardInstanceId: lowerScoreCard.instanceId },
+      { type: "playCard", cardInstanceId: higherScoreCard.instanceId },
+    ]
   );
 
   const ranking = rankTurnLines(
@@ -530,8 +539,7 @@ test("keeps sibling game-ending ordinary actions and stops each winning line", (
         return {
           score:
             line.steps[0]?.action.type === "playCard" &&
-            line.steps[0].action.cardInstanceId ===
-              higherScoreAction.cardInstanceId
+            line.steps[0].action.cardInstanceId === higherScoreCard.instanceId
               ? 10
               : 1,
         };
@@ -543,88 +551,76 @@ test("keeps sibling game-ending ordinary actions and stops each winning line", (
     ranking.best?.line.steps[0]?.action.type === "playCard"
       ? ranking.best.line.steps[0].action.cardInstanceId
       : undefined,
-    higherScoreAction.cardInstanceId
+    higherScoreCard.instanceId
   );
 });
 
-test("victory-points policy prioritizes a winning ordinary action", () => {
-  const state = analysisFixtureState(131);
-  const winningLowScoreAction = {
-    type: "playCard" as const,
-    cardInstanceId: "fixture-winning-low-score-action",
-  };
-  const nonWinningHighScoreAction = {
-    type: "playCard" as const,
-    cardInstanceId: "fixture-non-winning-high-score-action",
-  };
-  const winningHighScoreAction = {
-    type: "playCard" as const,
-    cardInstanceId: "fixture-winning-high-score-action",
-  };
-
-  const lines = enumerateTurnLinesWithActionAdapter(state, analysisLimits(), {
-    listLegalActions() {
-      return [
-        winningLowScoreAction,
-        nonWinningHighScoreAction,
-        winningHighScoreAction,
-      ];
-    },
-    enumerateActionBranches(source, legalAction, legalActionIndex) {
-      assert.equal(legalAction.type, "playCard");
-      const terminalState = forkGameState(source);
-      const victoryPoints =
-        legalAction === nonWinningHighScoreAction
-          ? 100
-          : legalAction === winningHighScoreAction
-            ? 2
-            : 1;
-      addFixtureDefinitionToActiveHand(
-        terminalState,
-        fixtureDefinitionWithVictoryPoints(
-          `${legalAction.cardInstanceId}-score`,
-          victoryPoints
-        )
-      );
-      return [
+test("victory-points policy ranks by score even when a lower-scoring line has a winner", () => {
+  const state = analysisFixtureState(133);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  activePlayer.hand = [];
+  const winningDefinition = fixtureDefinitionWithVictoryPoints(
+    "fixture-winning-low-score",
+    1
+  );
+  addFixtureDefinitionToActiveHand(state, {
+    ...winningDefinition,
+    engine: {
+      ...winningDefinition.engine,
+      effects: [
         {
-          legalAction,
-          legalActionIndex,
-          selectedChoices: [],
-          result: {
-            ok: true,
-            gameEndReason: "mainDeckExhausted",
-            ...(legalAction === nonWinningHighScoreAction
-              ? {}
-              : { winnerPlayerId: source.activePlayerId }),
-          },
-          resultingState: terminalState,
+          effectId: "fixture_add_power_equal_to_target_cost",
+          timing: "onPlay",
         },
-      ];
+      ],
     },
   });
+  const bonusCard = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinitionWithVictoryPoints("fixture-non-winning-high-score", 100)
+  );
+  state.common.mainDeck = [];
+  state.common.legendDeck = [];
+  state.common.wildMagicStack = [];
 
-  assert.equal(lines.length, 3);
-  assert.equal(lines[0]?.winnerPlayerId, state.activePlayerId);
-  assert.equal(lines[1]?.winnerPlayerId, undefined);
-  assert.equal(lines[2]?.winnerPlayerId, state.activePlayerId);
-
+  const lines = withTemporaryEffectRuntimeHandler(
+    "fixture_add_power_equal_to_target_cost",
+    {
+      effectId: "fixture_add_power_equal_to_target_cost",
+      validateShape() {
+        return [];
+      },
+      execute(_state, player) {
+        player.hand = player.hand.filter(
+          (card) => card.instanceId !== bonusCard.instanceId
+        );
+        return {
+          ok: true,
+          gameEnd: {
+            reason: "playerDefeated",
+            winnerPlayerId: player.playerId,
+          },
+        };
+      },
+    },
+    () => enumerateTurnLines(state, analysisLimits({ maxActionsPerLine: 2 }))
+  );
+  const oneStepLines = lines.filter((line) => line.steps.length === 1);
   const ranking = rankTurnLines(
     state,
-    lines,
+    oneStepLines,
     victoryPointsPolicy,
     state.activePlayerId
   );
-  assert.equal(
-    ranking.best?.line.steps[0]?.action.type === "playCard"
-      ? ranking.best.line.steps[0].action.cardInstanceId
-      : undefined,
-    winningHighScoreAction.cardInstanceId
+
+  assert.ok(
+    oneStepLines.some((line) => line.winnerPlayerId === state.activePlayerId)
   );
-  assert.deepEqual(
-    ranking.rankedLines.map((entry) => entry.line.steps[0]?.action),
-    [winningHighScoreAction, winningLowScoreAction, nonWinningHighScoreAction]
-  );
+  assert.equal(ranking.best?.line.winnerPlayerId, undefined);
+  assert.equal(ranking.best?.score, 101);
 });
 
 test("does not treat endTurn deck exhaustion as a perspective win", () => {
@@ -661,42 +657,45 @@ test("does not treat endTurn deck exhaustion as a perspective win", () => {
   );
 });
 
-test("rejects an ordinary action that changes the root player and turn", () => {
+test("rejects a non-end action that changes the root player and turn", () => {
   const state = analysisFixtureState(129);
-  const action = {
-    type: "playCard" as const,
-    cardInstanceId: "fixture-invalid-turn-transition",
-  };
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  activePlayer.hand = [];
+  addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-invalid-turn-transition", [
+      { effectId: "fixture_add_power_equal_to_target_cost", timing: "onPlay" },
+    ])
+  );
 
-  assert.throws(
+  withTemporaryEffectRuntimeHandler(
+    "fixture_add_power_equal_to_target_cost",
+    {
+      effectId: "fixture_add_power_equal_to_target_cost",
+      validateShape() {
+        return [];
+      },
+      execute(mutatedState, player) {
+        const nextPlayer = mutatedState.players.find(
+          (candidate) => candidate.playerId !== player.playerId
+        );
+        assert.ok(nextPlayer);
+        mutatedState.activePlayerId = nextPlayer.playerId;
+        mutatedState.turn.number += 1;
+        return { ok: true };
+      },
+    },
     () =>
-      enumerateTurnLinesWithActionAdapter(state, analysisLimits(), {
-        listLegalActions() {
-          return [action];
-        },
-        enumerateActionBranches(source, legalAction, legalActionIndex) {
-          const resultingState = forkGameState(source);
-          const nextPlayer = resultingState.players.find(
-            (player) => player.playerId !== source.activePlayerId
-          );
-          assert.ok(nextPlayer);
-          resultingState.activePlayerId = nextPlayer.playerId;
-          resultingState.turn.number += 1;
-          return [
-            {
-              legalAction,
-              legalActionIndex,
-              selectedChoices: [],
-              result: { ok: true },
-              resultingState,
-            },
-          ];
-        },
-      }),
-    (error: unknown) =>
-      error instanceof Error &&
-      error.name === "AnalysisError" &&
-      /active player or turn changed/.test(error.message)
+      assert.throws(
+        () => enumerateTurnLines(state, analysisLimits()),
+        (error: unknown) =>
+          error instanceof Error &&
+          error.name === "AnalysisError" &&
+          /active player or turn changed/.test(error.message)
+      )
   );
 });
 

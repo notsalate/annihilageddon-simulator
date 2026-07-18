@@ -12,7 +12,6 @@ export const victoryPointsPolicy: TurnLineEvaluationPolicy = {
       throw new Error(`Missing perspective player ${perspectivePlayerId}`);
     return {
       score: player.victoryPoints,
-      rankPriority: line.winnerPlayerId === perspectivePlayerId ? 1 : 0,
       components: { victoryPoints: player.victoryPoints },
     };
   },
