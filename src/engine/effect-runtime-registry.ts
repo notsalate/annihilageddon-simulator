@@ -3205,7 +3205,7 @@ const playTopCardHandler: EffectRuntimeHandler = {
     }
 
     const playedResult = services.playResolvedCard(state, player, card);
-    if (!playedResult.ok) {
+    if (!playedResult.ok || playedResult.gameEnd !== undefined) {
       return playedResult;
     }
 
@@ -3272,7 +3272,7 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
       nonOngoingOwnerId: card.ownerId,
       ongoingOwnerId: player.playerId,
     });
-    if (!playedResult.ok) {
+    if (!playedResult.ok || playedResult.gameEnd !== undefined) {
       return playedResult;
     }
 

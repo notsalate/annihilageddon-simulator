@@ -2009,7 +2009,7 @@ function playResolvedCard(
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
   });
-  if (!effectResult.ok) {
+  if (!effectResult.ok || effectResult.gameEnd !== undefined) {
     return effectResult;
   }
 

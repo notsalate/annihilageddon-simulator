@@ -76,6 +76,74 @@ test("playCard propagates a fixture effect's player-defeat game end", () => {
   }
 });
 
+test("play_top_card propagates game end from the nested card", () => {
+  const state = initializeGame({ rootDir, seed: 99119 });
+  const activePlayer = mustGetActivePlayer(state);
+  const effectId = "fixture_add_power_equal_to_target_cost";
+  const originalEntry = effectRuntimeCatalog.get(effectId);
+  assert.ok(originalEntry);
+  const handler: EffectRuntimeHandler = {
+    effectId,
+    validateShape() {
+      return [];
+    },
+    execute(_state, player) {
+      return {
+        ok: true,
+        gameEnd: {
+          reason: "playerDefeated",
+          winnerPlayerId: player.playerId,
+        },
+      };
+    },
+  };
+  effectRuntimeCatalog.set(effectId, { ...originalEntry, handler });
+
+  try {
+    const nestedDefinition = createFixtureCardDefinition(
+      "fixture-nested-player-defeat",
+      "normal",
+      [{ effectId, timing: "onPlay" }]
+    );
+    state.cardDefinitions = new Map([
+      ...state.cardDefinitions,
+      [nestedDefinition.cardId, nestedDefinition],
+    ]);
+    activePlayer.deck.unshift(
+      createCardInstance(
+        "fixture-nested-player-defeat-instance",
+        nestedDefinition.cardId,
+        activePlayer.playerId
+      )
+    );
+    const outerCard = addFixtureCardToActiveHand(
+      state,
+      createFixtureCardDefinition("fixture-play-top-player-defeat", "normal", [
+        {
+          effectId: "play_top_card",
+          timing: "onPlay",
+          source: "activePlayerDeck",
+          destination: "play",
+        },
+      ])
+    );
+
+    const result = applyAction(state, {
+      type: "playCard",
+      cardInstanceId: outerCard.instanceId,
+    });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      return;
+    }
+    assert.equal(result.gameEndReason, "playerDefeated");
+    assert.equal(result.winnerPlayerId, activePlayer.playerId);
+  } finally {
+    effectRuntimeCatalog.set(effectId, originalEntry);
+  }
+});
+
 test("optional effect records a typed option choice payload", () => {
   const state = initializeGame({ rootDir, seed: 99117, playerCount: 2 });
   const player = state.players[0];
