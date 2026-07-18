@@ -62,6 +62,8 @@ export type ActionResult =
   | {
       ok: true;
       gameEndReason?: MarketFlowEndReason;
+      /** Present only when the action itself established a winner. */
+      winnerPlayerId?: PlayerState["playerId"];
     }
   | {
       ok: false;

@@ -106,6 +106,18 @@ function fixtureDefinition(
   };
 }
 
+function fixtureDefinitionWithVictoryPoints(
+  cardId: string,
+  victoryPoints: number
+): CardDefinition {
+  const definition = fixtureDefinition(cardId);
+  return {
+    ...definition,
+    visible: { ...definition.visible, victoryPoints },
+    engine: { ...definition.engine, victoryPoints },
+  };
+}
+
 function analysisFixtureDataPack(): LoadedDataPack {
   const starter = fixtureDefinition("fixture-analysis-starter");
   const main = cardDefinitionWithKind("fixture-analysis-main", "normal");
@@ -532,6 +544,120 @@ test("keeps sibling game-ending ordinary actions and stops each winning line", (
       ? ranking.best.line.steps[0].action.cardInstanceId
       : undefined,
     higherScoreAction.cardInstanceId
+  );
+});
+
+test("victory-points policy prioritizes a winning ordinary action", () => {
+  const state = analysisFixtureState(131);
+  const winningLowScoreAction = {
+    type: "playCard" as const,
+    cardInstanceId: "fixture-winning-low-score-action",
+  };
+  const nonWinningHighScoreAction = {
+    type: "playCard" as const,
+    cardInstanceId: "fixture-non-winning-high-score-action",
+  };
+  const winningHighScoreAction = {
+    type: "playCard" as const,
+    cardInstanceId: "fixture-winning-high-score-action",
+  };
+
+  const lines = enumerateTurnLinesWithActionAdapter(state, analysisLimits(), {
+    listLegalActions() {
+      return [
+        winningLowScoreAction,
+        nonWinningHighScoreAction,
+        winningHighScoreAction,
+      ];
+    },
+    enumerateActionBranches(source, legalAction, legalActionIndex) {
+      assert.equal(legalAction.type, "playCard");
+      const terminalState = forkGameState(source);
+      const victoryPoints =
+        legalAction === nonWinningHighScoreAction
+          ? 100
+          : legalAction === winningHighScoreAction
+            ? 2
+            : 1;
+      addFixtureDefinitionToActiveHand(
+        terminalState,
+        fixtureDefinitionWithVictoryPoints(
+          `${legalAction.cardInstanceId}-score`,
+          victoryPoints
+        )
+      );
+      return [
+        {
+          legalAction,
+          legalActionIndex,
+          selectedChoices: [],
+          result: {
+            ok: true,
+            gameEndReason: "mainDeckExhausted",
+            ...(legalAction === nonWinningHighScoreAction
+              ? {}
+              : { winnerPlayerId: source.activePlayerId }),
+          },
+          resultingState: terminalState,
+        },
+      ];
+    },
+  });
+
+  assert.equal(lines.length, 3);
+  assert.equal(lines[0]?.winnerPlayerId, state.activePlayerId);
+  assert.equal(lines[1]?.winnerPlayerId, undefined);
+  assert.equal(lines[2]?.winnerPlayerId, state.activePlayerId);
+
+  const ranking = rankTurnLines(
+    state,
+    lines,
+    victoryPointsPolicy,
+    state.activePlayerId
+  );
+  assert.equal(
+    ranking.best?.line.steps[0]?.action.type === "playCard"
+      ? ranking.best.line.steps[0].action.cardInstanceId
+      : undefined,
+    winningHighScoreAction.cardInstanceId
+  );
+  assert.deepEqual(
+    ranking.rankedLines.map((entry) => entry.line.steps[0]?.action),
+    [winningHighScoreAction, winningLowScoreAction, nonWinningHighScoreAction]
+  );
+});
+
+test("does not treat endTurn deck exhaustion as a perspective win", () => {
+  const state = analysisFixtureState(132);
+  state.common.market = [];
+  state.common.legendMarket = [];
+  state.common.mainDeck = [];
+  state.common.legendDeck = [];
+  state.common.wildMagicStack = [];
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  activePlayer.hand = [];
+
+  const lines = enumerateTurnLines(
+    state,
+    analysisLimits({ maxActionsPerLine: 1 })
+  );
+  const ranking = rankTurnLines(
+    state,
+    lines,
+    victoryPointsPolicy,
+    state.activePlayerId
+  );
+
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0]?.terminalReason, "endTurn");
+  assert.equal(lines[0]?.gameEndReason, "legendDeckExhausted");
+  assert.equal(lines[0]?.winnerPlayerId, undefined);
+  assert.equal(
+    ranking.best?.components?.["victoryPoints"],
+    ranking.best?.score
   );
 });
 

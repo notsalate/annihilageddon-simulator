@@ -25,6 +25,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Effect execution resolves every effect through the Effect Runtime Catalog before invoking its handler; Mayhem execution does not use a separate catalog lookup.
 - Keep `Best-Move Analyzer` modules outside `BotStrategy`: analysis may receive complete `GameState`, inspect hidden information, fork seeded RNG, and enumerate current-turn legal lines through `endTurn` using a caller-supplied evaluation policy; simulation strategies must not depend on the analysis API or future RNG/hidden opponent state.
 - The analyzer has no hidden default score: a line becomes “best” only after the caller supplies a named evaluation policy.
+- Evaluation policies may set a finite `rankPriority` before score; `victoryPointsPolicy` uses it to prefer a terminal line won by the perspective player while still comparing that player's actual victory points within the same outcome priority.
 - Give effect handlers concrete typed inputs after the validation boundary; keep raw record access at that boundary.
 - Declare each catalog entry's supported runtime modes as a non-empty typed set.
 - Add runtime effect IDs only through `effect-runtime-registry.ts`; executable data must not reference IDs outside the Effect Runtime Catalog.

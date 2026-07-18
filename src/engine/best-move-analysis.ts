@@ -40,6 +40,7 @@ export interface AnalyzedTurnLine {
   steps: AnalysisActionStep[];
   terminalReason: "endTurn" | "gameEnd";
   gameEndReason?: Extract<ActionResult, { ok: true }>["gameEndReason"];
+  winnerPlayerId?: Extract<ActionResult, { ok: true }>["winnerPlayerId"];
   terminalState: GameState;
 }
 
@@ -62,6 +63,8 @@ export interface TurnLineEvaluationContext {
 
 export interface TurnLineEvaluation {
   readonly score: number;
+  /** Orders outcomes before score; higher values win. */
+  readonly rankPriority?: number;
   readonly components?: Readonly<Record<string, number>>;
 }
 
@@ -84,6 +87,10 @@ export interface RankedTurnLinesResult {
   readonly rankedLines: readonly RankedTurnLine[];
   readonly best: RankedTurnLine | undefined;
 }
+
+type PendingRankedTurnLine = RankedTurnLine & {
+  readonly rankPriority: number;
+};
 
 export class AnalysisError extends Error {
   override name = "AnalysisError";
@@ -301,6 +308,9 @@ export function enumerateTurnLinesWithActionAdapter(
             ...(branch.result.gameEndReason === undefined
               ? {}
               : { gameEndReason: branch.result.gameEndReason }),
+            ...(branch.result.winnerPlayerId === undefined
+              ? {}
+              : { winnerPlayerId: branch.result.winnerPlayerId }),
             terminalState: branch.resultingState,
           });
           continue;
@@ -328,6 +338,13 @@ export function rankTurnLines(
       perspectivePlayerId,
     });
     assertFiniteEvaluation(policy.id, enumerationIndex, evaluation.score, "score");
+    const rankPriority = evaluation.rankPriority ?? 0;
+    assertFiniteEvaluation(
+      policy.id,
+      enumerationIndex,
+      rankPriority,
+      "rank priority"
+    );
     if (evaluation.components !== undefined) {
       for (const [name, value] of Object.entries(evaluation.components)) {
         assertFiniteEvaluation(policy.id, enumerationIndex, value, `component ${name}`);
@@ -336,14 +353,23 @@ export function rankTurnLines(
     return {
       line,
       enumerationIndex,
+      rankPriority,
       score: evaluation.score,
       ...(evaluation.components === undefined ? {} : { components: evaluation.components }),
       rank: 0,
-    } satisfies RankedTurnLine;
+    } satisfies PendingRankedTurnLine;
   });
 
-  ranked.sort((left, right) => right.score - left.score || left.enumerationIndex - right.enumerationIndex);
-  const rankedLines = ranked.map((entry, index) => ({ ...entry, rank: index + 1 }));
+  ranked.sort(
+    (left, right) =>
+      right.rankPriority - left.rankPriority ||
+      right.score - left.score ||
+      left.enumerationIndex - right.enumerationIndex
+  );
+  const rankedLines = ranked.map(({ rankPriority: _rankPriority, ...entry }, index) => ({
+    ...entry,
+    rank: index + 1,
+  }));
   return {
     criterionId: policy.id,
     perspectivePlayerId,
@@ -363,6 +389,9 @@ function cloneAnalyzedTurnLine(line: AnalyzedTurnLine): AnalyzedTurnLine {
     })),
     terminalReason: line.terminalReason,
     ...(line.gameEndReason === undefined ? {} : { gameEndReason: line.gameEndReason }),
+    ...(line.winnerPlayerId === undefined
+      ? {}
+      : { winnerPlayerId: line.winnerPlayerId }),
     terminalState: forkGameState(line.terminalState),
   };
 }
