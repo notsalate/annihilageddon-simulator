@@ -126,7 +126,7 @@ export function executeWizardPropertyOnPlayCardEffects(
         tokenDefinitionId: token.definitionId,
       }
     );
-    if (!result.ok) {
+    if (!result.ok || result.gameEnd !== undefined) {
       return result;
     }
   }
@@ -331,7 +331,7 @@ function executeEffects(
     }
 
     const result = executeEffect(state, player, effect, source);
-    if (!result.ok) {
+    if (!result.ok || result.gameEnd !== undefined) {
       return result;
     }
   }

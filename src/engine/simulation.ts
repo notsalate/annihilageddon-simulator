@@ -30,6 +30,7 @@ export type GameEndReason =
   | "deadWizardTokensExhausted"
   | "mainDeckExhausted"
   | "legendDeckExhausted"
+  | "playerDefeated"
   | "maxTurnsReached";
 
 export interface RunSingleGameOptions {
@@ -182,7 +183,13 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       assertGameStateInvariants(state);
     }
     if (result.gameEndReason !== undefined) {
-      return summarizeGame(state, result.gameEndReason, true, setupState);
+      return summarizeGame(
+        state,
+        result.gameEndReason,
+        true,
+        setupState,
+        result.winnerPlayerId
+      );
     }
     actionsApplied += 1;
   }
@@ -233,10 +240,14 @@ function summarizeGame(
   state: GameState,
   endReason: GameEndReason,
   isGameEnd: boolean,
-  setupState: SetupStateSnapshot
+  setupState: SetupStateSnapshot,
+  winnerPlayerId?: PlayerId
 ): SingleGameResult {
   const players = scoreGame(state);
-  const winnerIds = determineWinnerIds(players);
+  const winnerIds =
+    winnerPlayerId === undefined
+      ? determineWinnerIds(players)
+      : [winnerPlayerId];
 
   return {
     seed: state.seed,

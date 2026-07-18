@@ -60,9 +60,17 @@ export interface EffectSourceContext {
   tokenDefinitionId?: TokenDefinition["tokenId"];
 }
 
+export interface PlayerDefeatGameEnd {
+  reason: "playerDefeated";
+  winnerPlayerId: PlayerState["playerId"];
+}
+
+export type EffectGameEnd = PlayerDefeatGameEnd;
+
 export type EffectExecutionResult =
   | {
       ok: true;
+      gameEnd?: EffectGameEnd;
     }
   | {
       ok: false;

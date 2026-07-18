@@ -16,7 +16,11 @@ import {
   type SingleGameResult,
 } from "../src/index.js";
 import { executeOnPlayEffects } from "../src/engine/effect-runtime.js";
-import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
+import {
+  effectRuntimeCatalog,
+  type EffectRuntimeHandler,
+  type EffectSourceContext,
+} from "../src/engine/effect-runtime-registry.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -24,6 +28,53 @@ import {
 } from "../src/domain/types.js";
 
 const rootDir = process.cwd();
+
+test("playCard propagates a fixture effect's player-defeat game end", () => {
+  const state = initializeGame({ rootDir, seed: 99118 });
+  const activePlayer = mustGetActivePlayer(state);
+  const effectId = "fixture_add_power_equal_to_target_cost";
+  const originalEntry = effectRuntimeCatalog.get(effectId);
+  assert.ok(originalEntry);
+  const handler: EffectRuntimeHandler = {
+    effectId,
+    validateShape() {
+      return [];
+    },
+    execute(_state, player) {
+      return {
+        ok: true,
+        gameEnd: {
+          reason: "playerDefeated",
+          winnerPlayerId: player.playerId,
+        },
+      };
+    },
+  };
+  effectRuntimeCatalog.set(effectId, { ...originalEntry, handler });
+
+  try {
+    const card = addFixtureCardToActiveHand(
+      state,
+      createFixtureCardDefinition("fixture-player-defeat", "normal", [
+        { effectId, timing: "onPlay" },
+      ])
+    );
+
+    const result = applyAction(state, {
+      type: "playCard",
+      cardInstanceId: card.instanceId,
+    });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      return;
+    }
+    assert.equal(result.gameEndReason, "playerDefeated");
+    assert.equal(result.winnerPlayerId, activePlayer.playerId);
+  } finally {
+    effectRuntimeCatalog.set(effectId, originalEntry);
+  }
+});
 
 test("optional effect records a typed option choice payload", () => {
   const state = initializeGame({ rootDir, seed: 99117, playerCount: 2 });

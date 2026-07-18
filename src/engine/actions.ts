@@ -7,6 +7,7 @@ import {
   hasExecutableWizardPropertyActivation,
   moveGainedCardToPlayerDestination,
 } from "./effect-runtime.js";
+import type { EffectGameEnd } from "./effect-runtime-registry.js";
 import { assertNever } from "../common.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import { calculateEffectiveCardCost } from "./effective-values.js";
@@ -61,7 +62,7 @@ export interface EndTurnAction {
 export type ActionResult =
   | {
       ok: true;
-      gameEndReason?: MarketFlowEndReason;
+      gameEndReason?: MarketFlowEndReason | EffectGameEnd["reason"];
       /** Present only when the action itself established a winner. */
       winnerPlayerId?: PlayerState["playerId"];
     }
@@ -247,6 +248,9 @@ function activatePermanent(
   if (!effectResult.ok) {
     return effectResult;
   }
+  if (effectResult.gameEnd !== undefined) {
+    return gameEndActionResult(effectResult.gameEnd);
+  }
 
   state.turn.activatedCardIds.push(card.instanceId);
   recordGameEvent(state, {
@@ -305,6 +309,9 @@ function activateWizardProperty(
   );
   if (!effectResult.ok) {
     return effectResult;
+  }
+  if (effectResult.gameEnd !== undefined) {
+    return gameEndActionResult(effectResult.gameEnd);
   }
 
   state.turn.activatedCardIds.push(token.instanceId);
@@ -499,6 +506,9 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
   if (!effectResult.ok) {
     return effectResult;
   }
+  if (effectResult.gameEnd !== undefined) {
+    return gameEndActionResult(effectResult.gameEnd);
+  }
 
   const wizardPropertyResult = executeWizardPropertyOnPlayCardEffects(
     state,
@@ -507,6 +517,9 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
   );
   if (!wizardPropertyResult.ok) {
     return wizardPropertyResult;
+  }
+  if (wizardPropertyResult.gameEnd !== undefined) {
+    return gameEndActionResult(wizardPropertyResult.gameEnd);
   }
 
   reconcileActivePlayerControlledPower(state);
@@ -519,6 +532,14 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
   });
 
   return { ok: true };
+}
+
+function gameEndActionResult(gameEnd: EffectGameEnd): ActionResult {
+  return {
+    ok: true,
+    gameEndReason: gameEnd.reason,
+    winnerPlayerId: gameEnd.winnerPlayerId,
+  };
 }
 
 function canAfford(

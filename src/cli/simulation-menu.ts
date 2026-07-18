@@ -188,6 +188,8 @@ export function formatEndReason(reason: GameEndReason): string {
       return "закончилась основная колода";
     case "legendDeckExhausted":
       return "закончилась колода Легенд";
+    case "playerDefeated":
+      return "игрок побеждён";
     case "maxTurnsReached":
       return "достигнут технический лимит ходов";
   }
