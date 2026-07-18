@@ -3329,23 +3329,35 @@ const wildMagicChoiceHandler: EffectRuntimeHandler = {
       };
     }
 
-    for (const option of options) {
-      if (
-        !isWildMagicOption(option) ||
-        !services.isLegalWildMagicOption(state, player, option)
-      ) {
-        continue;
-      }
+    const legalOptions = options.filter(
+      (option): option is WildMagicOption =>
+        isWildMagicOption(option) &&
+        services.isLegalWildMagicOption(state, player, option)
+    );
+    const choices: EffectChoice[] = legalOptions.map((_, index) => ({
+      choiceKind: "option",
+      choiceId: `wild_magic_option_${index}`,
+    }));
+    const choice = services.chooseEffectChoice(
+      state,
+      player,
+      source,
+      effect.effectId,
+      choices
+    );
+    const selectedOption = legalOptions[choices.indexOf(choice!)];
+
+    if (selectedOption !== undefined) {
 
       recordGameEvent(state, {
         type: "wildMagicChoiceSelected",
         playerId: player.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
-        effectId: option.effectId,
+        effectId: selectedOption.effectId,
         sourceType: source.sourceType,
       });
-      return services.executeEffect(state, player, option, source);
+      return services.executeEffect(state, player, selectedOption, source);
     }
 
     recordGameEvent(state, {

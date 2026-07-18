@@ -2679,6 +2679,62 @@ test("playing wild magic uses the first legal choice and gains 2 power", () => {
   );
 });
 
+test("Wild Magic lets the typed choice strategy play a foe's top card", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  const foe = state.players.find(
+    (player) => player.playerId !== state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  assert.ok(foe);
+  const foeTopCard = foe.deck[0];
+  assert.ok(foeTopCard);
+  const wildMagic = state.common.wildMagicStack.shift();
+  assert.ok(wildMagic);
+  wildMagic.ownerId = activePlayer.playerId;
+  activePlayer.hand.push(wildMagic);
+  chooseEffectChoice(state, ({ definitionId, effectId, choices }) => {
+    if (
+      definitionId !== "esw2_dbg__wild_magic" ||
+      effectId !== "wild_magic_choice"
+    ) {
+      return undefined;
+    }
+    return choices.at(-1);
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wildMagic.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 1);
+  assert.equal(foe.deck.includes(foeTopCard), false);
+  assert.equal(activePlayer.playedThisTurn.includes(foeTopCard), true);
+  assert.equal(foeTopCard.ownerId, foe.playerId);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "wildMagicChoiceSelected" &&
+        event.cardInstanceId === wildMagic.instanceId &&
+        event.effectId === "play_top_card_from_foe_deck"
+    )
+  );
+
+  const endTurnResult = applyAction(state, { type: "endTurn" });
+
+  assert.equal(endTurnResult.ok, true);
+  assert.equal(activePlayer.discard.includes(foeTopCard), false);
+  assert.equal(foe.discard.includes(foeTopCard), true);
+});
+
 test("wild magic can choose to play the top card of a foe deck when that option is first legal", () => {
   const state = initializeGame({
     rootDir,
