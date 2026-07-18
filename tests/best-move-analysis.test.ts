@@ -30,14 +30,19 @@ function analysisLimits(overrides: Partial<AnalysisLimits> = {}) {
   };
 }
 
-function rankingFixture(): { state: GameState; lines: ReturnType<typeof enumerateTurnLines> } {
+function rankingFixture(): {
+  state: GameState;
+  lines: ReturnType<typeof enumerateTurnLines>;
+} {
   const state = initializeGame({ rootDir, seed: 127 });
   state.common.market = [];
   state.common.legendMarket = [];
   state.common.wildMagicStack = [];
   state.common.mainDeck = [];
   state.common.legendDeck = [];
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   activePlayer.hand = [];
   activePlayer.permanents = [];
@@ -47,8 +52,14 @@ function rankingFixture(): { state: GameState; lines: ReturnType<typeof enumerat
   activePlayer.unboughtFamiliar = undefined;
   activePlayer.deck = [];
   activePlayer.discard = [];
-  addFixtureDefinitionToActiveHand(state, fixtureDefinition("fixture-analysis-simple"));
-  addFixtureDefinitionToActiveHand(state, fixtureDefinition("fixture-analysis-simple-2"));
+  addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-simple")
+  );
+  addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-simple-2")
+  );
   return {
     state,
     lines: enumerateTurnLines(state, {
@@ -97,7 +108,10 @@ function analysisFixtureDataPack(): LoadedDataPack {
   const starter = fixtureDefinition("fixture-analysis-starter");
   const main = cardDefinitionWithKind("fixture-analysis-main", "normal");
   const legend = cardDefinitionWithKind("fixture-analysis-legend", "legend");
-  const familiar = cardDefinitionWithKind("fixture-analysis-familiar", "familiar");
+  const familiar = cardDefinitionWithKind(
+    "fixture-analysis-familiar",
+    "familiar"
+  );
   const property = tokenDefinition("fixture-analysis-property");
   return {
     manifest: {
@@ -125,11 +139,21 @@ function analysisFixtureDataPack(): LoadedDataPack {
       legendDeck: fixtureDeck("fixture-analysis-legend-deck", "legendDeck", [
         { cardId: legend.cardId, count: 3 },
       ]),
-      wildMagicStack: fixtureDeck("fixture-analysis-wild-magic", "wildMagicStack", []),
-      limpWandStack: fixtureDeck("fixture-analysis-limp-wand", "limpWandStack", []),
-      familiarPool: fixtureDeck("fixture-analysis-familiar-pool", "familiarPool", [
-        { cardId: familiar.cardId, count: 4 },
-      ]),
+      wildMagicStack: fixtureDeck(
+        "fixture-analysis-wild-magic",
+        "wildMagicStack",
+        []
+      ),
+      limpWandStack: fixtureDeck(
+        "fixture-analysis-limp-wand",
+        "limpWandStack",
+        []
+      ),
+      familiarPool: fixtureDeck(
+        "fixture-analysis-familiar-pool",
+        "familiarPool",
+        [{ cardId: familiar.cardId, count: 4 }]
+      ),
     },
     tokenStacks: {
       deadWizardTokens: undefined,
@@ -245,36 +269,53 @@ test("enumerates simple actions into independent completed branches", () => {
     (player) => player.playerId === state.activePlayerId
   );
   assert.ok(firstBranchPlayer);
-  assert.equal(firstBranchPlayer.hand.some(
-    (candidate) => candidate.instanceId === card.instanceId
-  ), false);
-  assert.equal(firstBranchPlayer.hand.some(
-    (candidate) => candidate.instanceId === secondCard.instanceId
-  ), true);
+  assert.equal(
+    firstBranchPlayer.hand.some(
+      (candidate) => candidate.instanceId === card.instanceId
+    ),
+    false
+  );
+  assert.equal(
+    firstBranchPlayer.hand.some(
+      (candidate) => candidate.instanceId === secondCard.instanceId
+    ),
+    true
+  );
   const secondBranchPlayer = result[1]?.resultingState.players.find(
     (player) => player.playerId === state.activePlayerId
   );
   assert.ok(secondBranchPlayer);
-  assert.notEqual(
-    firstBranchPlayer,
-    secondBranchPlayer
-  );
+  assert.notEqual(firstBranchPlayer, secondBranchPlayer);
   assert.equal(result[2]?.legalAction.type, "endTurn");
   assert.equal(result[2]?.resultingState.turn.number, sourceTurn + 1);
   assert.equal(state.turn.number, sourceTurn);
   assert.deepEqual(
-    result.map(({ legalAction, legalActionIndex, selectedChoices, result: actionResult }) => ({
-      legalAction,
-      legalActionIndex,
-      selectedChoices,
-      actionResult,
-    })),
-    repeatedResult.map(({ legalAction, legalActionIndex, selectedChoices, result: actionResult }) => ({
-      legalAction,
-      legalActionIndex,
-      selectedChoices,
-      actionResult,
-    }))
+    result.map(
+      ({
+        legalAction,
+        legalActionIndex,
+        selectedChoices,
+        result: actionResult,
+      }) => ({
+        legalAction,
+        legalActionIndex,
+        selectedChoices,
+        actionResult,
+      })
+    ),
+    repeatedResult.map(
+      ({
+        legalAction,
+        legalActionIndex,
+        selectedChoices,
+        result: actionResult,
+      }) => ({
+        legalAction,
+        legalActionIndex,
+        selectedChoices,
+        actionResult,
+      })
+    )
   );
   assert.deepEqual(
     structuredClone({
@@ -334,7 +375,9 @@ test("enumerates every current-turn action history through endTurn", () => {
   state.common.wildMagicStack = [];
   state.common.mainDeck = [];
   state.common.legendDeck = [];
-  const activePlayer = state.players.find((player) => player.playerId === state.activePlayerId);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
   assert.ok(activePlayer);
   activePlayer.hand = [];
   activePlayer.permanents = [];
@@ -344,8 +387,14 @@ test("enumerates every current-turn action history through endTurn", () => {
   activePlayer.unboughtFamiliar = undefined;
   activePlayer.deck = [];
   activePlayer.discard = [];
-  addFixtureDefinitionToActiveHand(state, fixtureDefinition("fixture-analysis-simple"));
-  addFixtureDefinitionToActiveHand(state, fixtureDefinition("fixture-analysis-simple-2"));
+  addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-simple")
+  );
+  addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-analysis-simple-2")
+  );
 
   const lines = enumerateTurnLines(state, {
     maxChoiceDepth: 32,
@@ -353,9 +402,15 @@ test("enumerates every current-turn action history through endTurn", () => {
     maxActionsPerLine: 3,
     maxTurnLines: 100,
   });
-  const histories = lines.map((line) => line.steps.map((step) => step.action.type === "playCard"
-    ? step.action.cardInstanceId.replace("-instance-", "-")
-    : step.action.type).join(">"));
+  const histories = lines.map((line) =>
+    line.steps
+      .map((step) =>
+        step.action.type === "playCard"
+          ? step.action.cardInstanceId.replace("-instance-", "-")
+          : step.action.type
+      )
+      .join(">")
+  );
 
   assert.deepEqual(histories, [
     "fixture-analysis-simple-1>fixture-analysis-simple-2-2>endTurn",
@@ -365,7 +420,13 @@ test("enumerates every current-turn action history through endTurn", () => {
     "endTurn",
   ]);
   assert.ok(lines.every((line) => line.terminalReason === "endTurn"));
-  assert.ok(lines.every((line) => line.steps.every((step) => step.action.type !== "endTurn" || step === line.steps.at(-1))));
+  assert.ok(
+    lines.every((line) =>
+      line.steps.every(
+        (step) => step.action.type !== "endTurn" || step === line.steps.at(-1)
+      )
+    )
+  );
 });
 
 test("continues every choice branch to its own endTurn line", () => {
@@ -570,16 +631,28 @@ test("enumerates each card target as a completed branch", () => {
     (branch) => branch.legalAction.type === "playCard"
   );
   assert.equal(branches.length, 2);
-  assert.equal(branches[0]?.selectedChoices[0]?.effectId, "fixture_add_power_equal_to_target_cost");
+  assert.equal(
+    branches[0]?.selectedChoices[0]?.effectId,
+    "fixture_add_power_equal_to_target_cost"
+  );
   assert.equal(branches[0]?.selectedChoices[0]?.sourceType, "card");
-  assert.equal(branches[0]?.selectedChoices[0]?.cardInstanceId, source.instanceId);
+  assert.equal(
+    branches[0]?.selectedChoices[0]?.cardInstanceId,
+    source.instanceId
+  );
   assert.equal(branches[0]?.selectedChoices[0]?.choiceIndex, 0);
   assert.equal(branches[0]?.selectedChoices[0]?.choiceId, target.instanceId);
   assert.equal(branches[1]?.selectedChoices[0]?.choiceIndex, 1);
-  assert.equal(branches[1]?.selectedChoices[0]?.choiceId, secondTarget.instanceId);
+  assert.equal(
+    branches[1]?.selectedChoices[0]?.choiceId,
+    secondTarget.instanceId
+  );
   assert.equal(branches[0]?.selectedChoices[0]?.choiceKind, "cardTarget");
   assert.equal(state.effectChoiceStrategy, originalStrategy);
-  assert.equal(JSON.stringify(branches[0]?.selectedChoices).includes("players"), false);
+  assert.equal(
+    JSON.stringify(branches[0]?.selectedChoices).includes("players"),
+    false
+  );
 });
 
 test("limits the total generated branches across sequential choices", () => {
@@ -613,12 +686,13 @@ test("limits the total generated branches across sequential choices", () => {
   );
 
   assert.throws(
-    () => enumerateImmediateActionBranches(state, {
-      maxChoiceDepth: 32,
-      maxBranchesPerAction: 3,
-      maxActionsPerLine: 128,
-      maxTurnLines: 100_000,
-    }),
+    () =>
+      enumerateImmediateActionBranches(state, {
+        maxChoiceDepth: 32,
+        maxBranchesPerAction: 3,
+        maxActionsPerLine: 128,
+        maxTurnLines: 100_000,
+      }),
     (error: unknown) => {
       assert.ok(error instanceof Error);
       assert.equal(error.name, "AnalysisLimitError");
@@ -664,8 +738,15 @@ test("enumerates the Cartesian product of sequential choices", () => {
   );
   assert.equal(branches.length, 4);
   assert.deepEqual(
-    branches.map((branch) => branch.selectedChoices.map((choice) => choice.choiceIndex)),
-    [[0, 0], [0, 1], [1, 0], [1, 1]]
+    branches.map((branch) =>
+      branch.selectedChoices.map((choice) => choice.choiceIndex)
+    ),
+    [
+      [0, 0],
+      [0, 1],
+      [1, 0],
+      [1, 1],
+    ]
   );
 });
 
@@ -709,7 +790,8 @@ test("replays duplicate choice IDs by index and preserves target combinations", 
   );
 
   const branches = enumerateImmediateActionBranches(state).filter(
-    (branch) => branch.legalAction.type === "playCard" &&
+    (branch) =>
+      branch.legalAction.type === "playCard" &&
       branch.legalAction.cardInstanceId === attackCard.instanceId
   );
   assert.equal(branches.length, 4);
@@ -722,9 +804,16 @@ test("replays duplicate choice IDs by index and preserves target combinations", 
     [0, 1]
   );
   assert.deepEqual(
-    duplicateBranches.map((branch) => [...branch.resultingState.eventLog].reverse().find(
-      (event) => event.type === "effectChoiceSelected" && event.effectId === "return_discard_to_hand"
-    )?.targetCardInstanceIds),
+    duplicateBranches.map(
+      (branch) =>
+        [...branch.resultingState.eventLog]
+          .reverse()
+          .find(
+            (event) =>
+              event.type === "effectChoiceSelected" &&
+              event.effectId === "return_discard_to_hand"
+          )?.targetCardInstanceIds
+    ),
     [[firstDiscard.instanceId], [secondDiscard.instanceId]]
   );
 });
@@ -757,7 +846,10 @@ test("fails explicitly when replay choice metadata drifts", () => {
     (error: unknown) => {
       assert.ok(error instanceof Error);
       assert.match(error.message, /Analysis replay failed/);
-      assert.match(error.message, /choice (metadata changed|index .*out of range)/);
+      assert.match(
+        error.message,
+        /choice (metadata changed|index .*out of range)/
+      );
       return true;
     }
   );
@@ -773,7 +865,10 @@ test("ranks turn lines by a caller-supplied policy with stable ties", () => {
       id: "shorter-line",
       evaluate: ({ line, perspectivePlayerId }) => ({
         score: -line.steps.length,
-        components: { steps: line.steps.length, perspective: perspectivePlayerId === state.activePlayerId ? 1 : 0 },
+        components: {
+          steps: line.steps.length,
+          perspective: perspectivePlayerId === state.activePlayerId ? 1 : 0,
+        },
       }),
     },
     state.activePlayerId
@@ -784,68 +879,118 @@ test("ranks turn lines by a caller-supplied policy with stable ties", () => {
   assert.equal(result.rankedLines.length, lines.length);
   assert.equal(result.best, result.rankedLines[0]);
   assert.deepEqual(lines, originalLines);
-  assert.deepEqual(result.rankedLines.map((entry) => entry.rank), [1, 2, 3, 4, 5]);
-  assert.deepEqual(result.rankedLines.map((entry) => entry.enumerationIndex), [4, 1, 3, 0, 2]);
+  assert.deepEqual(
+    result.rankedLines.map((entry) => entry.rank),
+    [1, 2, 3, 4, 5]
+  );
+  assert.deepEqual(
+    result.rankedLines.map((entry) => entry.enumerationIndex),
+    [4, 1, 3, 0, 2]
+  );
   assert.equal(result.rankedLines[0]?.components?.["steps"], 1);
 });
 
 test("preserves negative scores and rejects non-finite evaluations", () => {
   const { state, lines } = rankingFixture();
-  const policy = (score: number) => ({ id: `score-${score}`, evaluate: () => ({ score }) });
-  assert.equal(rankTurnLines(state, lines, policy(-1), state.activePlayerId).best?.score, -1);
-  for (const score of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+  const policy = (score: number) => ({
+    id: `score-${score}`,
+    evaluate: () => ({ score }),
+  });
+  assert.equal(
+    rankTurnLines(state, lines, policy(-1), state.activePlayerId).best?.score,
+    -1
+  );
+  for (const score of [
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+  ]) {
     assert.throws(
       () => rankTurnLines(state, lines, policy(score), state.activePlayerId),
       new RegExp(`score-${String(score)}.*enumeration index 0`)
     );
   }
   assert.throws(
-    () => rankTurnLines(state, lines, {
-      id: "bad-component",
-      evaluate: () => ({ score: 0, components: { detail: Number.NaN } }),
-    }, state.activePlayerId),
+    () =>
+      rankTurnLines(
+        state,
+        lines,
+        {
+          id: "bad-component",
+          evaluate: () => ({ score: 0, components: { detail: Number.NaN } }),
+        },
+        state.activePlayerId
+      ),
     /bad-component.*component detail.*enumeration index 0/
   );
 });
 
 test("allows different policies to choose different winners", () => {
   const { state, lines } = rankingFixture();
-  const shortest = rankTurnLines(state, lines, {
-    id: "shortest",
-    evaluate: ({ line }) => ({ score: -line.steps.length }),
-  }, state.activePlayerId);
-  const longest = rankTurnLines(state, lines, {
-    id: "longest",
-    evaluate: ({ line }) => ({ score: line.steps.length }),
-  }, state.activePlayerId);
-  assert.notEqual(shortest.best?.enumerationIndex, longest.best?.enumerationIndex);
+  const shortest = rankTurnLines(
+    state,
+    lines,
+    {
+      id: "shortest",
+      evaluate: ({ line }) => ({ score: -line.steps.length }),
+    },
+    state.activePlayerId
+  );
+  const longest = rankTurnLines(
+    state,
+    lines,
+    {
+      id: "longest",
+      evaluate: ({ line }) => ({ score: line.steps.length }),
+    },
+    state.activePlayerId
+  );
+  assert.notEqual(
+    shortest.best?.enumerationIndex,
+    longest.best?.enumerationIndex
+  );
 });
 
 test("returns an empty result and evaluates each line exactly once", () => {
   const { state, lines } = rankingFixture();
   let calls = 0;
-  const result = rankTurnLines(state, [], {
-    id: "empty",
-    evaluate: () => {
-      calls += 1;
-      return { score: 0 };
+  const result = rankTurnLines(
+    state,
+    [],
+    {
+      id: "empty",
+      evaluate: () => {
+        calls += 1;
+        return { score: 0 };
+      },
     },
-  }, state.activePlayerId);
+    state.activePlayerId
+  );
   assert.deepEqual(result.rankedLines, []);
   assert.equal(result.best, undefined);
-  rankTurnLines(state, lines, {
-    id: "count",
-    evaluate: () => {
-      calls += 1;
-      return { score: 0 };
+  rankTurnLines(
+    state,
+    lines,
+    {
+      id: "count",
+      evaluate: () => {
+        calls += 1;
+        return { score: 0 };
+      },
     },
-  }, state.activePlayerId);
+    state.activePlayerId
+  );
   assert.equal(calls, lines.length);
 });
 
 test("victory-points policy evaluates the perspective player in terminal state", () => {
   const { state, lines } = rankingFixture();
-  const result = rankTurnLines(state, lines, victoryPointsPolicy, state.activePlayerId);
+  const result = rankTurnLines(
+    state,
+    lines,
+    victoryPointsPolicy,
+    state.activePlayerId
+  );
   assert.equal(result.criterionId, "victory-points");
   assert.equal(result.best?.components?.["victoryPoints"], result.best?.score);
   assert.equal(result.perspectivePlayerId, state.activePlayerId);
@@ -860,7 +1005,9 @@ test("isolates policy mutations from source state and analyzed lines", () => {
   const linesBefore = lines.map((line) => ({
     steps: structuredClone(line.steps),
     terminalTurn: structuredClone(line.terminalState.turn),
-    terminalPlayerLives: line.terminalState.players.map((player) => ({ ...player.life })),
+    terminalPlayerLives: line.terminalState.players.map((player) => ({
+      ...player.life,
+    })),
   }));
   const mutatingPolicy = {
     id: "mutating-policy",
@@ -884,18 +1031,46 @@ test("isolates policy mutations from source state and analyzed lines", () => {
     },
   };
 
-  const first = rankTurnLines(state, lines, mutatingPolicy, state.activePlayerId);
-  const second = rankTurnLines(state, lines, mutatingPolicy, state.activePlayerId);
+  const first = rankTurnLines(
+    state,
+    lines,
+    mutatingPolicy,
+    state.activePlayerId
+  );
+  const second = rankTurnLines(
+    state,
+    lines,
+    mutatingPolicy,
+    state.activePlayerId
+  );
 
-  assert.deepEqual(first.rankedLines.map(({ enumerationIndex, score, rank }) => ({ enumerationIndex, score, rank })),
-    second.rankedLines.map(({ enumerationIndex, score, rank }) => ({ enumerationIndex, score, rank })));
-  assert.deepEqual({
-    turn: state.turn,
-    playerLives: state.players.map((player) => ({ ...player.life })),
-  }, sourceBefore);
-  assert.deepEqual(lines.map((line) => ({
-    steps: line.steps,
-    terminalTurn: line.terminalState.turn,
-    terminalPlayerLives: line.terminalState.players.map((player) => ({ ...player.life })),
-  })), linesBefore);
+  assert.deepEqual(
+    first.rankedLines.map(({ enumerationIndex, score, rank }) => ({
+      enumerationIndex,
+      score,
+      rank,
+    })),
+    second.rankedLines.map(({ enumerationIndex, score, rank }) => ({
+      enumerationIndex,
+      score,
+      rank,
+    }))
+  );
+  assert.deepEqual(
+    {
+      turn: state.turn,
+      playerLives: state.players.map((player) => ({ ...player.life })),
+    },
+    sourceBefore
+  );
+  assert.deepEqual(
+    lines.map((line) => ({
+      steps: line.steps,
+      terminalTurn: line.terminalState.turn,
+      terminalPlayerLives: line.terminalState.players.map((player) => ({
+        ...player.life,
+      })),
+    })),
+    linesBefore
+  );
 });
