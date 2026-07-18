@@ -17,7 +17,6 @@ import {
 } from "../src/index.js";
 import { executeOnPlayEffects } from "../src/engine/effect-runtime.js";
 import {
-  effectRuntimeCatalog,
   type EffectRuntimeHandler,
   type EffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
@@ -26,37 +25,34 @@ import {
   markCardInstanceId,
   markPlayerId,
 } from "../src/domain/types.js";
+import { withTemporaryEffectRuntimeHandler } from "./helpers/with-temporary-effect-runtime-handler.js";
 
 const rootDir = process.cwd();
+const fixturePlayerDefeatEffectId = "fixture_add_power_equal_to_target_cost";
+const fixturePlayerDefeatHandler: EffectRuntimeHandler = {
+  effectId: fixturePlayerDefeatEffectId,
+  validateShape() {
+    return [];
+  },
+  execute(_state, player) {
+    return {
+      ok: true,
+      gameEnd: {
+        reason: "playerDefeated",
+        winnerPlayerId: player.playerId,
+      },
+    };
+  },
+};
 
 test("playCard propagates a fixture effect's player-defeat game end", () => {
   const state = initializeGame({ rootDir, seed: 99118 });
   const activePlayer = mustGetActivePlayer(state);
-  const effectId = "fixture_add_power_equal_to_target_cost";
-  const originalEntry = effectRuntimeCatalog.get(effectId);
-  assert.ok(originalEntry);
-  const handler: EffectRuntimeHandler = {
-    effectId,
-    validateShape() {
-      return [];
-    },
-    execute(_state, player) {
-      return {
-        ok: true,
-        gameEnd: {
-          reason: "playerDefeated",
-          winnerPlayerId: player.playerId,
-        },
-      };
-    },
-  };
-  effectRuntimeCatalog.set(effectId, { ...originalEntry, handler });
-
-  try {
+  const runScenario = () => {
     const card = addFixtureCardToActiveHand(
       state,
       createFixtureCardDefinition("fixture-player-defeat", "normal", [
-        { effectId, timing: "onPlay" },
+        { effectId: fixturePlayerDefeatEffectId, timing: "onPlay" },
       ])
     );
 
@@ -71,39 +67,23 @@ test("playCard propagates a fixture effect's player-defeat game end", () => {
     }
     assert.equal(result.gameEndReason, "playerDefeated");
     assert.equal(result.winnerPlayerId, activePlayer.playerId);
-  } finally {
-    effectRuntimeCatalog.set(effectId, originalEntry);
-  }
+  };
+
+  withTemporaryEffectRuntimeHandler(
+    fixturePlayerDefeatEffectId,
+    fixturePlayerDefeatHandler,
+    runScenario
+  );
 });
 
 test("play_top_card propagates game end from the nested card", () => {
   const state = initializeGame({ rootDir, seed: 99119 });
   const activePlayer = mustGetActivePlayer(state);
-  const effectId = "fixture_add_power_equal_to_target_cost";
-  const originalEntry = effectRuntimeCatalog.get(effectId);
-  assert.ok(originalEntry);
-  const handler: EffectRuntimeHandler = {
-    effectId,
-    validateShape() {
-      return [];
-    },
-    execute(_state, player) {
-      return {
-        ok: true,
-        gameEnd: {
-          reason: "playerDefeated",
-          winnerPlayerId: player.playerId,
-        },
-      };
-    },
-  };
-  effectRuntimeCatalog.set(effectId, { ...originalEntry, handler });
-
-  try {
+  const runScenario = () => {
     const nestedDefinition = createFixtureCardDefinition(
       "fixture-nested-player-defeat",
       "normal",
-      [{ effectId, timing: "onPlay" }]
+      [{ effectId: fixturePlayerDefeatEffectId, timing: "onPlay" }]
     );
     state.cardDefinitions = new Map([
       ...state.cardDefinitions,
@@ -139,9 +119,13 @@ test("play_top_card propagates game end from the nested card", () => {
     }
     assert.equal(result.gameEndReason, "playerDefeated");
     assert.equal(result.winnerPlayerId, activePlayer.playerId);
-  } finally {
-    effectRuntimeCatalog.set(effectId, originalEntry);
-  }
+  };
+
+  withTemporaryEffectRuntimeHandler(
+    fixturePlayerDefeatEffectId,
+    fixturePlayerDefeatHandler,
+    runScenario
+  );
 });
 
 test("play_top_card_from_foe_deck propagates game end from the nested card", () => {
@@ -151,31 +135,11 @@ test("play_top_card_from_foe_deck propagates game end from the nested card", () 
     (candidate) => candidate.playerId !== activePlayer.playerId
   );
   assert.ok(foe);
-  const effectId = "fixture_add_power_equal_to_target_cost";
-  const originalEntry = effectRuntimeCatalog.get(effectId);
-  assert.ok(originalEntry);
-  const handler: EffectRuntimeHandler = {
-    effectId,
-    validateShape() {
-      return [];
-    },
-    execute(_state, player) {
-      return {
-        ok: true,
-        gameEnd: {
-          reason: "playerDefeated",
-          winnerPlayerId: player.playerId,
-        },
-      };
-    },
-  };
-  effectRuntimeCatalog.set(effectId, { ...originalEntry, handler });
-
-  try {
+  const runScenario = () => {
     const nestedDefinition = createFixtureCardDefinition(
       "fixture-foe-nested-player-defeat",
       "normal",
-      [{ effectId, timing: "onPlay" }]
+      [{ effectId: fixturePlayerDefeatEffectId, timing: "onPlay" }]
     );
     state.cardDefinitions = new Map([
       ...state.cardDefinitions,
@@ -214,9 +178,13 @@ test("play_top_card_from_foe_deck propagates game end from the nested card", () 
     }
     assert.equal(result.gameEndReason, "playerDefeated");
     assert.equal(result.winnerPlayerId, activePlayer.playerId);
-  } finally {
-    effectRuntimeCatalog.set(effectId, originalEntry);
-  }
+  };
+
+  withTemporaryEffectRuntimeHandler(
+    fixturePlayerDefeatEffectId,
+    fixturePlayerDefeatHandler,
+    runScenario
+  );
 });
 
 test("optional effect records a typed option choice payload", () => {
