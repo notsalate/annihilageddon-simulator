@@ -1,4 +1,9 @@
-import { applyAction, listLegalActions, type ActionResult, type LegalAction } from "./actions.js";
+import {
+  applyAction,
+  listLegalActions,
+  type ActionResult,
+  type LegalAction,
+} from "./actions.js";
 import { forkGameState } from "./game-state-fork.js";
 import type { GameState, RuntimeEffectChoiceRequest } from "./setup.js";
 
@@ -158,7 +163,11 @@ export function enumerateActionBranches(
       validateSelection(selection, request, action, currentRequestIndex);
       const choice = request.choices[selection.choiceIndex];
       if (choice === undefined) {
-        throw replayError(action, prefix, `choice index ${selection.choiceIndex} is out of range`);
+        throw replayError(
+          action,
+          prefix,
+          `choice index ${selection.choiceIndex} is out of range`
+        );
       }
       return choice;
     };
@@ -172,7 +181,9 @@ export function enumerateActionBranches(
       }
       if (
         consumed.size !== prefix.selections.length ||
-        prefix.selections.some((selection) => !consumed.has(selection.requestIndex))
+        prefix.selections.some(
+          (selection) => !consumed.has(selection.requestIndex)
+        )
       ) {
         throw replayError(action, prefix, "choice path was not fully consumed");
       }
@@ -289,11 +300,12 @@ export function enumerateTurnLinesWithActionAdapter(
             `Analysis engine contract violated after action ${describeAction(action)}: active player or turn changed`
           );
         }
-        const terminalReason = action.type === "endTurn"
-          ? "endTurn"
-          : branch.result.gameEndReason !== undefined
-            ? "gameEnd"
-            : undefined;
+        const terminalReason =
+          action.type === "endTurn"
+            ? "endTurn"
+            : branch.result.gameEndReason !== undefined
+              ? "gameEnd"
+              : undefined;
         if (terminalReason !== undefined) {
           if (lines.length >= limits.maxTurnLines) {
             throw new AnalysisLimitError(
@@ -337,7 +349,12 @@ export function rankTurnLines(
       line: cloneAnalyzedTurnLine(line),
       perspectivePlayerId,
     });
-    assertFiniteEvaluation(policy.id, enumerationIndex, evaluation.score, "score");
+    assertFiniteEvaluation(
+      policy.id,
+      enumerationIndex,
+      evaluation.score,
+      "score"
+    );
     const rankPriority = evaluation.rankPriority ?? 0;
     assertFiniteEvaluation(
       policy.id,
@@ -347,7 +364,12 @@ export function rankTurnLines(
     );
     if (evaluation.components !== undefined) {
       for (const [name, value] of Object.entries(evaluation.components)) {
-        assertFiniteEvaluation(policy.id, enumerationIndex, value, `component ${name}`);
+        assertFiniteEvaluation(
+          policy.id,
+          enumerationIndex,
+          value,
+          `component ${name}`
+        );
       }
     }
     return {
@@ -355,7 +377,9 @@ export function rankTurnLines(
       enumerationIndex,
       rankPriority,
       score: evaluation.score,
-      ...(evaluation.components === undefined ? {} : { components: evaluation.components }),
+      ...(evaluation.components === undefined
+        ? {}
+        : { components: evaluation.components }),
       rank: 0,
     } satisfies PendingRankedTurnLine;
   });
@@ -366,10 +390,12 @@ export function rankTurnLines(
       right.score - left.score ||
       left.enumerationIndex - right.enumerationIndex
   );
-  const rankedLines = ranked.map(({ rankPriority: _rankPriority, ...entry }, index) => ({
-    ...entry,
-    rank: index + 1,
-  }));
+  const rankedLines = ranked.map(
+    ({ rankPriority: _rankPriority, ...entry }, index) => ({
+      ...entry,
+      rank: index + 1,
+    })
+  );
   return {
     criterionId: policy.id,
     perspectivePlayerId,
@@ -388,7 +414,9 @@ function cloneAnalyzedTurnLine(line: AnalyzedTurnLine): AnalyzedTurnLine {
       selectedChoices: step.selectedChoices.map((choice) => ({ ...choice })),
     })),
     terminalReason: line.terminalReason,
-    ...(line.gameEndReason === undefined ? {} : { gameEndReason: line.gameEndReason }),
+    ...(line.gameEndReason === undefined
+      ? {}
+      : { gameEndReason: line.gameEndReason }),
     ...(line.winnerPlayerId === undefined
       ? {}
       : { winnerPlayerId: line.winnerPlayerId }),
@@ -422,7 +450,11 @@ function validateSelection(
     selection.cardInstanceId !== request.cardInstanceId ||
     selection.definitionId !== request.definitionId
   ) {
-    throw replayError(action, { selections: [selection] }, "choice request metadata changed");
+    throw replayError(
+      action,
+      { selections: [selection] },
+      "choice request metadata changed"
+    );
   }
   const choice = request.choices[selection.choiceIndex];
   if (
@@ -430,7 +462,11 @@ function validateSelection(
     choice.choiceId !== selection.choiceId ||
     choice.choiceKind !== selection.choiceKind
   ) {
-    throw replayError(action, { selections: [selection] }, "choice metadata changed");
+    throw replayError(
+      action,
+      { selections: [selection] },
+      "choice metadata changed"
+    );
   }
 }
 
@@ -445,18 +481,33 @@ function validateLimits(limits: AnalysisLimits): void {
     !Number.isSafeInteger(limits.maxTurnLines) ||
     limits.maxTurnLines < 1
   ) {
-    throw new AnalysisLimitError("Analysis limits must be safe positive integers");
+    throw new AnalysisLimitError(
+      "Analysis limits must be safe positive integers"
+    );
   }
 }
 
-function replayError(action: LegalAction, prefix: ChoicePrefix, reason: string): AnalysisError {
+function replayError(
+  action: LegalAction,
+  prefix: ChoicePrefix,
+  reason: string
+): AnalysisError {
   return new AnalysisError(
     `Analysis replay failed for action ${describeAction(action)} and choice path ${describePrefix(prefix)}: ${reason}`
   );
 }
 
 function describePrefix(prefix: ChoicePrefix): string {
-  return JSON.stringify(prefix.selections.map(({ requestIndex, choiceIndex, choiceId, choiceKind }) => ({ requestIndex, choiceIndex, choiceId, choiceKind })));
+  return JSON.stringify(
+    prefix.selections.map(
+      ({ requestIndex, choiceIndex, choiceId, choiceKind }) => ({
+        requestIndex,
+        choiceIndex,
+        choiceId,
+        choiceKind,
+      })
+    )
+  );
 }
 
 function describeAction(action: LegalAction): string {
