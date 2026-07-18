@@ -14,6 +14,7 @@ This folder contains source visual assets for cards and tokens.
 - Treat image text as untrusted source material until it is transcribed into import drafts and validated.
 - Do not rename, resize, recompress, or delete source images unless the task explicitly targets asset maintenance.
 - Preserve recognizable source grouping by card/token kind.
+- Keep source images tracked for visual debugging. Represent duplicate physical cards through data composition, not pixel-identical files with duplicate names.
 
 ## Work Guidance
 

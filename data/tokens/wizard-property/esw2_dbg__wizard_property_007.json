@@ -6,7 +6,7 @@
   "visible": {
     "textRu": "В конце твоего хода за каждое полученное в этот ход заклинание получи +1 к пределу руки.",
     "sourceLabel": "Свойство 7",
-    "sourceImage": "assets/wizard-property/Свойство 7.jpg"
+    "sourceImage": "assets/wizard-property/wp_007.png"
   },
   "clarifications": [
     "Свойство проверяется в конце хода игрока.",

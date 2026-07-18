@@ -6,7 +6,7 @@
   "visible": {
     "textRu": "Начни игру с главным призом. Ты ходишь первым. Если ты не лошара, начальное значение твоих жизней (даже при воскрешении) равно 25.",
     "sourceLabel": "Свойство 10",
-    "sourceImage": "assets/wizard-property/Свойство 10.jpg"
+    "sourceImage": "assets/wizard-property/wp_010.png"
   },
   "clarifications": [
     "Это свойство применяется при подготовке к игре.",

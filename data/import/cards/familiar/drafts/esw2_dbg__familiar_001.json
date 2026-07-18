@@ -3,7 +3,7 @@
   "draftKind": "cardDraft",
   "cardId": "esw2_dbg__familiar_001",
   "source": {
-    "image": "assets/cards/raw/familiar/Фамильяр. Поехавший нотариус.png",
+    "image": "assets/cards/familiar/Фамильяр. Поехавший нотариус.png",
     "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_001.md"
   },
   "visible": {

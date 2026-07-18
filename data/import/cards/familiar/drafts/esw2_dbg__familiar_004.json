@@ -3,7 +3,7 @@
   "draftKind": "cardDraft",
   "cardId": "esw2_dbg__familiar_004",
   "source": {
-    "image": "assets/cards/raw/familiar/Фамильяр. Бензопила Дружок.png",
+    "image": "assets/cards/familiar/Фамильяр. Бензопила Дружок.png",
     "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_004.md"
   },
   "visible": {

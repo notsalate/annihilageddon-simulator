@@ -3,7 +3,7 @@
   "draftKind": "cardDraft",
   "cardId": "esw2_dbg__main_020",
   "source": {
-    "image": "assets/cards/spell/Заклинание. Тапки-Донатки. Второй экземпляр.png",
+    "image": "assets/cards/spell/Заклинание. Тапки-Донатки.png",
     "text": "data/import/cards/main/texts/esw2_dbg__main_020.md"
   },
   "visible": {
