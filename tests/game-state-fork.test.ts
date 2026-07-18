@@ -7,6 +7,7 @@ import {
   forkGameState,
   type GameState,
 } from "../src/index.js";
+import { recordBotActionSelected } from "../src/engine/event-recorder.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -17,7 +18,10 @@ import {
 
 function createFixture(): GameState {
   const playerId = markPlayerId("player-1");
-  const card = (instanceId: string, ownerId: "common" | typeof playerId = playerId) => ({
+  const card = (
+    instanceId: string,
+    ownerId: "common" | typeof playerId = playerId
+  ) => ({
     instanceId: markCardInstanceId(instanceId),
     definitionId: markCardDefinitionId("fixture-card"),
     ownerId,
@@ -121,9 +125,8 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
   forkPlayer.life.current -= 1;
   forkPlayer.hand[0]!.marketChips = 2;
   fork.common.market[0]!.marketChips = 1;
-  fork.common.deadWizardTokens.drawStack[0]!.definitionId = markTokenDefinitionId(
-    "fork-token"
-  );
+  fork.common.deadWizardTokens.drawStack[0]!.definitionId =
+    markTokenDefinitionId("fork-token");
   fork.eventLog[0]!.targetCardInstanceIds!.push("fork-event");
 
   assert.equal(source.turn.activatedCardIds.includes("fork-only"), false);
@@ -140,6 +143,54 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
   assert.equal(fork.tokenDefinitions, source.tokenDefinitions);
   assert.equal(fork.effectChoiceStrategy, source.effectChoiceStrategy);
   assert.notEqual(fork.eventLog, source.eventLog);
+});
+
+test("fork isolates turn power, zones, statuses, and trophies", () => {
+  const source = createFixture();
+  const fork = forkGameState(source);
+  const sourcePlayer = source.players[0]!;
+  const forkPlayer = fork.players[0]!;
+
+  fork.turn.power = 0;
+  forkPlayer.deck.push({
+    ...forkPlayer.hand[0]!,
+    instanceId: markCardInstanceId("fork-deck"),
+  });
+  forkPlayer.hand.splice(0, 1);
+  forkPlayer.discard.splice(0, 1);
+  forkPlayer.playedThisTurn.push({
+    ...forkPlayer.permanents[0]!,
+    instanceId: markCardInstanceId("fork-played"),
+  });
+  forkPlayer.permanents.push({
+    ...forkPlayer.discard[0]!,
+    instanceId: markCardInstanceId("fork-permanent"),
+  });
+  forkPlayer.unboughtFamiliar!.marketChips = 3;
+  forkPlayer.deadWizardTokens[0]!.definitionId =
+    markTokenDefinitionId("fork-dwt");
+  forkPlayer.wizardProperties[0]!.definitionId =
+    markTokenDefinitionId("fork-property");
+  forkPlayer.statuses[0]!.statusId = "fork-status";
+  forkPlayer.trophyLikeObjects[0]!.trophyId = "fork-trophy";
+
+  assert.equal(source.turn.power, 4);
+  assert.equal(sourcePlayer.deck.length, 0);
+  assert.equal(sourcePlayer.hand.length, 1);
+  assert.equal(sourcePlayer.discard.length, 3);
+  assert.equal(sourcePlayer.playedThisTurn.length, 1);
+  assert.equal(sourcePlayer.permanents.length, 1);
+  assert.equal(sourcePlayer.unboughtFamiliar!.marketChips, 0);
+  assert.equal(
+    sourcePlayer.deadWizardTokens[0]!.definitionId,
+    markTokenDefinitionId("fixture-token")
+  );
+  assert.equal(
+    sourcePlayer.wizardProperties[0]!.definitionId,
+    markTokenDefinitionId("fixture-token")
+  );
+  assert.equal(sourcePlayer.statuses[0]!.statusId, "status-id");
+  assert.equal(sourcePlayer.trophyLikeObjects[0]!.trophyId, "trophy-id");
 });
 
 test("reassigning fork callback leaves source callback unchanged", () => {
@@ -164,6 +215,23 @@ test("fork keeps event sequences unique when applying an action", () => {
     .filter((sequence): sequence is number => sequence !== undefined);
   assert.equal(new Set(eventSequences).size, eventSequences.length);
   assert.equal(Math.max(...eventSequences), 7 + fork.eventLog.length - before);
+});
+
+test("fork continues action sequences without changing the source log", () => {
+  const source = createFixture();
+  const fork = forkGameState(source);
+
+  recordBotActionSelected(fork, { type: "endTurn" });
+  const result = applyAction(fork, { type: "endTurn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(source.eventLog.length, 1);
+  const newActionSequences = fork.eventLog
+    .slice(source.eventLog.length)
+    .map((event) => event.actionSequence)
+    .filter((sequence): sequence is number => sequence !== undefined);
+  assert.ok(newActionSequences.length > 0);
+  assert.deepEqual([...new Set(newActionSequences)], [4]);
 });
 
 test("sibling forks apply the same random action independently", () => {
