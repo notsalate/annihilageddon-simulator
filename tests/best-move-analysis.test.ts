@@ -16,9 +16,7 @@ import {
   type TurnLineEvaluationContext,
 } from "../src/index.js";
 import { victoryPointsPolicy } from "../src/engine/best-move-policies.js";
-import {
-  enumerateTurnLinesWithActionAdapter,
-} from "../src/engine/best-move-analysis.js";
+import { enumerateTurnLinesWithActionAdapter } from "../src/engine/best-move-analysis.js";
 import { forkGameState } from "../src/engine/game-state-fork.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 
@@ -545,29 +543,30 @@ test("rejects an ordinary action that changes the root player and turn", () => {
   };
 
   assert.throws(
-    () => enumerateTurnLinesWithActionAdapter(state, analysisLimits(), {
-      listLegalActions() {
-        return [action];
-      },
-      enumerateActionBranches(source, legalAction, legalActionIndex) {
-        const resultingState = forkGameState(source);
-        const nextPlayer = resultingState.players.find(
-          (player) => player.playerId !== source.activePlayerId
-        );
-        assert.ok(nextPlayer);
-        resultingState.activePlayerId = nextPlayer.playerId;
-        resultingState.turn.number += 1;
-        return [
-          {
-            legalAction,
-            legalActionIndex,
-            selectedChoices: [],
-            result: { ok: true },
-            resultingState,
-          },
-        ];
-      },
-    }),
+    () =>
+      enumerateTurnLinesWithActionAdapter(state, analysisLimits(), {
+        listLegalActions() {
+          return [action];
+        },
+        enumerateActionBranches(source, legalAction, legalActionIndex) {
+          const resultingState = forkGameState(source);
+          const nextPlayer = resultingState.players.find(
+            (player) => player.playerId !== source.activePlayerId
+          );
+          assert.ok(nextPlayer);
+          resultingState.activePlayerId = nextPlayer.playerId;
+          resultingState.turn.number += 1;
+          return [
+            {
+              legalAction,
+              legalActionIndex,
+              selectedChoices: [],
+              result: { ok: true },
+              resultingState,
+            },
+          ];
+        },
+      }),
     (error: unknown) =>
       error instanceof Error &&
       error.name === "AnalysisError" &&
