@@ -199,6 +199,7 @@ const knownRuntimeEffectIds = [
   "increase_hand_limit_at_max_life",
   "mayhem_attack",
   "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+  "mayhem_each_non_dingler_gain_chips",
   "mayhem_each_player_battle_highest_hand_cost",
   "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
   "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",

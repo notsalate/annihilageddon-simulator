@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_072",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_072.json",
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2H.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_072.md"
+  },
+  "visible": {
+    "nameRu": "2H",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Все колдуны, кроме лошар, получают по 1 чипсине.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_each_non_dingler_gain_chips",
+        "timing": "onMayhemResolve",
+        "targetSelector": "eachPlayerClockwiseFromActive",
+        "chipAmount": 1
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

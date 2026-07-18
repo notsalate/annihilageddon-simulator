@@ -5296,6 +5296,38 @@ test("Venerina Magolovka supports pass, life-only, Dingler-only, and full exchan
   }
 });
 
+test("2H grants one chip to each non-Dingler in active-player order", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = markPlayerId("player-2");
+  const [activePlayer, dinglerPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(dinglerPlayer);
+  assert.ok(thirdPlayer);
+  dinglerPlayer.statuses.push(createDinglerStatus(dinglerPlayer));
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_072");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(dinglerPlayer.chips, 0);
+  assert.equal(thirdPlayer.chips, 1);
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChipsGained" &&
+          event.definitionId === "esw2_dbg__main_072"
+      )
+      .map((event) => event.playerId),
+    [activePlayer.playerId, thirdPlayer.playerId]
+  );
+  assert.equal(state.common.destroyedMayhem.includes(mayhem), true);
+});
+
 test("2Q lets players above 10 reduce life to gain one chip", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
   state.activePlayerId = markPlayerId("player-2");
