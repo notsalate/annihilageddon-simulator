@@ -64,6 +64,29 @@ const source: SetupEffectSourceContext = {
   tokenDefinitionId: markTokenDefinitionId("property-1"),
 };
 
+class TokenDefinitionsWithoutPostSetupLookup extends Map<
+  string,
+  TokenDefinition
+> {
+  setupEffectListReads = 0;
+
+  constructor(private readonly expectedSetupEffectListReads: number) {
+    super();
+  }
+
+  recordSetupEffectListRead(): void {
+    this.setupEffectListReads += 1;
+  }
+
+  override get(key: string): TokenDefinition | undefined {
+    if (this.setupEffectListReads >= this.expectedSetupEffectListReads) {
+      throw new Error(`Unexpected post-setup token definition lookup: ${key}`);
+    }
+
+    return super.get(key);
+  }
+}
+
 test("setup catalog executor sets starting life total", () => {
   const subject = player();
 
@@ -194,15 +217,20 @@ test("setup fixture does not depend on the current working directory", () => {
   }
 });
 
-test("initializeGame reads each wizard property effect list once during setup", () => {
-  const effectListReads = { value: 0 };
+test("initializeGame does not look up a wizard property again after its setup effects", () => {
+  const tokenDefinitions = new TokenDefinitionsWithoutPostSetupLookup(2);
   const state = initializeGame({
-    dataPack: setupDataPack(true, "fixture", undefined, effectListReads),
+    dataPack: setupDataPack(
+      true,
+      "fixture",
+      tokenDefinitions,
+      () => tokenDefinitions.recordSetupEffectListRead()
+    ),
     seed: 119,
   });
 
   assert.equal(state.activePlayerId, state.players[0]?.playerId);
-  assert.equal(effectListReads.value, state.players.length);
+  assert.equal(tokenDefinitions.setupEffectListReads, state.players.length);
 });
 
 test("initializeGame executes setup effects in combat runtime mode", () => {
@@ -546,7 +574,7 @@ function setupDataPack(
   includeForce: boolean,
   manifestMappingStatus?: "supported" | "fixture",
   tokenDefinitions?: Map<string, TokenDefinition>,
-  effectListReads?: { value: number }
+  onSetupEffectListRead?: () => void
 ): LoadedDataPack {
   const effectiveMappingStatus =
     manifestMappingStatus ?? "incomplete-full-only";
@@ -587,11 +615,11 @@ function setupDataPack(
     effects,
     unsupportedMechanics: [],
   };
-  if (effectListReads !== undefined) {
+  if (onSetupEffectListRead !== undefined) {
     Object.defineProperty(engine, "effects", {
       enumerable: true,
       get: () => {
-        effectListReads.value += 1;
+        onSetupEffectListRead();
         return effects;
       },
     });
