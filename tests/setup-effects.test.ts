@@ -211,6 +211,28 @@ test("initializeGame executes setup effects in fixture runtime mode", () => {
   );
 });
 
+test("initializeGame maps fixture mappingStatus to fixture setup runtime mode", () => {
+  assert.throws(
+    () =>
+      initializeGame({
+        dataPack: setupDataPackWithFixtureOnlySetupEffect("fixture"),
+        seed: 119,
+      }),
+    /Setup effect executor missing for fixture_add_power_equal_to_target_cost/
+  );
+});
+
+test("initializeGame maps supported mappingStatus to combat setup runtime mode", () => {
+  assert.throws(
+    () =>
+      initializeGame({
+        dataPack: setupDataPackWithFixtureOnlySetupEffect("supported"),
+        seed: 119,
+      }),
+    /uses fixture effect id fixture_add_power_equal_to_target_cost in combat data/
+  );
+});
+
 test("initializeGame orchestrates catalog setup handlers without legacy fallback", () => {
   const state = initializeGame({
     dataPack: setupDataPackWithCatalogHandlers("supported"),
@@ -671,6 +693,41 @@ function setupDataPackWithCatalogHandlers(
     tokenDefinitions: new Map(dataPack.tokenDefinitions).set(
       property.tokenId,
       property
+    ),
+  };
+}
+
+function setupDataPackWithFixtureOnlySetupEffect(
+  mappingStatus: "supported" | "fixture"
+): LoadedDataPack {
+  const dataPack = setupDataPack(false, mappingStatus);
+  const sourceProperty = dataPack.tokenDefinitions.get(
+    "fixture-unforced-property"
+  );
+  if (
+    sourceProperty?.kind !== "wizardProperty" ||
+    sourceProperty.engine === undefined
+  ) {
+    throw new Error("Setup test fixture property is missing");
+  }
+
+  return {
+    ...dataPack,
+    tokenDefinitions: new Map(dataPack.tokenDefinitions).set(
+      sourceProperty.tokenId,
+      {
+        ...sourceProperty,
+        engine: {
+          ...sourceProperty.engine,
+          effects: [
+            {
+              effectId: "fixture_add_power_equal_to_target_cost",
+              timing: "setup",
+              target: { selector: "mainMarketCard" },
+            },
+          ],
+        },
+      }
     ),
   };
 }
