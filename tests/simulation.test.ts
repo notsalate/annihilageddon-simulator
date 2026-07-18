@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
 import {
+  decodeCurrentRuntimeDataPack,
   determineWinnerIds,
   formatSingleGameDebugTrace,
   getGameEndReason,
@@ -15,6 +18,32 @@ import { markPlayerId } from "../src/domain/types.js";
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
+
+test("single-game simulation is reproducible without reading source image files", () => {
+  const decoded = decodeCurrentRuntimeDataPack(
+    rootDir,
+    playableRuntimeDataPackPath
+  );
+  assert.equal(decoded.ok, true);
+  if (!decoded.ok) return;
+
+  const sourceImage = decoded.value.cardDefinitions.get(
+    "esw2_dbg__starter_001"
+  )?.source.image;
+  assert.equal(sourceImage, "assets/cards/starter/esw2_dbg__starter_001.png");
+  assert.equal(existsSync(path.join(rootDir, sourceImage)), false);
+
+  const options = {
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 80809,
+    maxTurns: 8,
+  };
+  const first = runSingleGame(options);
+  const second = runSingleGame(options);
+
+  assert.deepEqual(first, second);
+});
 
 test("single-game simulation can stop at maxTurns as a non-game termination", () => {
   const result = runSingleGame({

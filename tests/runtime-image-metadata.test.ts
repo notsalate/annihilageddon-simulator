@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -30,7 +29,6 @@ test("current runtime cards preserve source.image metadata", () => {
       source: { image: string };
     };
     assert.equal(definition.source.image, json.source.image);
-    assert.ok(existsSync(path.join(rootDir, definition.source.image)));
   }
 
   assert.equal(
@@ -47,7 +45,6 @@ test("current runtime tokens preserve canonical source.image metadata", () => {
     const source = (definition as { source?: { image?: unknown } }).source;
     assert.equal(typeof source?.image, "string");
     assert.ok((source?.image as string).trim().length > 0);
-    assert.ok(existsSync(path.join(rootDir, source?.image as string)));
   }
 
   assert.equal(
@@ -113,7 +110,7 @@ test("token JSON with legacy visible.sourceImage is rejected", () => {
     tokenId: "fixture-token",
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "wizardProperty",
-    source: { image: "assets/tokens/fixture.png" },
+    source: { image: "assets/dead-wizard-token/DWT_001.png" },
     visible: {
       textRu: "Свойство",
       sourceImage: "assets/wizard-property/Свойство 1.jpg",
@@ -154,8 +151,8 @@ test("malformed token source fields are rejected", () => {
     { image: "" },
     { image: "   " },
     { image: 42 },
-    { image: "assets/tokens/fixture.png", draft: "   " },
-    { image: "assets/tokens/fixture.png", text: 42 },
+    { image: "assets/dead-wizard-token/DWT_001.png", draft: "   " },
+    { image: "assets/dead-wizard-token/DWT_001.png", text: 42 },
     { image: "tokens/fixture.png" },
   ];
 
