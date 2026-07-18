@@ -233,16 +233,38 @@ test("initializeGame does not look up a wizard property again after its setup ef
   assert.equal(tokenDefinitions.setupEffectListReads, state.players.length);
 });
 
-test("initializeGame executes setup effects in combat runtime mode", () => {
-  const state = initializeGame({
-    dataPack: setupDataPack(false, "supported"),
-    seed: 119,
+test("initializeGame passes combat runtime mode to the setup executor", () => {
+  const effectId = "set_starting_life_total";
+  const originalEntry = effectRuntimeCatalog.get(effectId);
+  assert.ok(originalEntry);
+  const originalExecutor = originalEntry.handler.executeSetup;
+  assert.ok(originalExecutor);
+  let observedRuntimeMode: SetupEffectSourceContext["runtimeMode"] | undefined;
+  effectRuntimeCatalog.set(effectId, {
+    ...originalEntry,
+    handler: {
+      ...originalEntry.handler,
+      executeSetup(player, effect, source, services) {
+        observedRuntimeMode = source.runtimeMode;
+        return originalExecutor(player, effect, source, services);
+      },
+    },
   });
 
-  assert.deepEqual(
-    state.players.map((subject) => subject.life.current),
-    [27, 27]
-  );
+  try {
+    const state = initializeGame({
+      dataPack: setupDataPack(false, "supported"),
+      seed: 119,
+    });
+
+    assert.deepEqual(
+      state.players.map((subject) => subject.life.current),
+      [27, 27]
+    );
+    assert.equal(observedRuntimeMode, "combat");
+  } finally {
+    effectRuntimeCatalog.set(effectId, originalEntry);
+  }
 });
 
 test("initializeGame executes setup effects in fixture runtime mode", () => {
