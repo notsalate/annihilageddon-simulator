@@ -30,6 +30,36 @@ const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
 
+test("current runtime keeps fifteen effectless Limp Wands worth minus one VP", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({ dataPack, seed: 60615 });
+  const player = state.players[0];
+  assert.ok(player);
+  const scoreBefore = scoreGame(state).find(
+    (score) => score.playerId === player.playerId
+  );
+  assert.ok(scoreBefore);
+  const limpWand = dataPack.cardDefinitions.get("esw2_dbg__limp_wand");
+
+  assert.deepEqual(dataPack.decks.limpWandStack.entries, [
+    { cardId: "esw2_dbg__limp_wand", count: 15 },
+  ]);
+  assert.equal(limpWand?.engine.effects.length, 0);
+  player.discard.push(
+    createCardInstance(
+      "fixture-limp-wand",
+      "esw2_dbg__limp_wand",
+      player.playerId
+    )
+  );
+
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === player.playerId)
+      ?.victoryPoints,
+    scoreBefore.victoryPoints - 1
+  );
+});
+
 test("a controlled fixture object can modify a card's effective cost without mutating base data", () => {
   const state = initializeGame({
     rootDir,
