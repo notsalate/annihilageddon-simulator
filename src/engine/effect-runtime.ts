@@ -380,8 +380,7 @@ export function executeEffect(
     source.sourceType
   );
   if (!resolution.ok) {
-    const error = resolution.errors[0];
-    return { ok: false, error: error ?? "Unsupported effect" };
+    return { ok: false, error: getEffectExecutionError(resolution.errors) };
   }
 
   return resolution.entry.handler.execute(
@@ -391,6 +390,10 @@ export function executeEffect(
     source,
     effectRuntimeServices
   );
+}
+
+export function getEffectExecutionError(errors: readonly string[]): string {
+  return errors[0] ?? "Effect resolution failed without diagnostic";
 }
 
 function effectConditionMatches(

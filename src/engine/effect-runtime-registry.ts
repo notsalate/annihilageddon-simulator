@@ -376,14 +376,6 @@ const addPowerHandler: EffectRuntimeHandler<AddPowerRuntimeEffect> = {
     return [];
   },
   execute(state, player, effect, source) {
-    const errors = addPowerHandler.validateShape("Effect add_power", effect);
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid add_power effect",
-      };
-    }
-
     const powerBefore = state.turn.power;
     state.turn.power += effect.amount;
     recordTurnPowerChanged(
@@ -421,17 +413,6 @@ const addPowerPerPlayerWithStatusHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, player, effect, source, services) {
-    const errors = addPowerPerPlayerWithStatusHandler.validateShape(
-      "Effect add_power_per_player_with_status",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid add_power_per_player_with_status effect",
-      };
-    }
-
     const amountPerPlayer = effect["amountPerPlayer"];
     if (typeof amountPerPlayer !== "number") {
       return {
@@ -1428,17 +1409,6 @@ const mayhemEachPlayerDiscardDeckDestroyHandler: EffectRuntimeHandler = {
     return validateMayhemEachPlayerShape(subjectId, effect);
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemEachPlayerDiscardDeckDestroyHandler.validateShape(
-      "Effect mayhem_each_player_discard_deck_then_destroy_from_discard",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem discard-deck destroy effect",
-      };
-    }
-
     const effectId = effect.effectId;
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
       const discardedCount = targetPlayer.deck.length;
@@ -1507,17 +1477,6 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemEachPlayerHandRedrawChoiceHandler.validateShape(
-      "Effect mayhem_each_player_choose_discard_hand_draw_or_take_damage",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem hand-redraw choice effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const options = effect["options"];
     if (!Array.isArray(options)) {
@@ -1624,17 +1583,6 @@ const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemEachPlayerReduceLifeToGainChipsHandler.validateShape(
-      "Effect mayhem_each_player_reduce_life_to_gain_chips",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem life-for-chips effect",
-      };
-    }
-
     const lifeTotal = effect["lifeTotal"];
     const chipAmount = effect["chipAmount"];
     if (typeof lifeTotal !== "number" || typeof chipAmount !== "number") {
@@ -1725,17 +1673,6 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler = {
     return validateMayhemBattleHighestHandCostShape(subjectId, effect);
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemEachPlayerBattleHighestHandCostHandler.validateShape(
-      "Effect mayhem_each_player_battle_highest_hand_cost",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem battle effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const winnerDrawAmount = effect["winnerDrawAmount"];
     if (typeof winnerDrawAmount !== "number") {
@@ -1818,17 +1755,6 @@ const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler = {
     return validateMayhemVoteDinglerShape(subjectId, effect);
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemEachPlayerVoteDinglerHandler.validateShape(
-      "Effect mayhem_each_player_vote_dingler",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem vote effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const players = services.getPlayersInActiveOrder(state);
     const votes = new Map<PlayerState["playerId"], number>();
@@ -1896,17 +1822,6 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler = {
     return validateMayhemDinglerRecoveryShape(subjectId, effect);
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemEachDinglerRecoveryChoiceHandler.validateShape(
-      "Effect mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem Dingler recovery effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const lifeCost = effect["lifeCost"];
     const chipCost = effect["chipCost"];
@@ -1988,17 +1903,6 @@ const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemLowestLifeDinglerMaxLifeHandler.validateShape(
-      "Effect mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem lowest-life Dingler effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const lowestLife = Math.min(
       ...state.players.map((candidate) => candidate.life.current)
@@ -2910,18 +2814,7 @@ const avoidAttackHandler: EffectRuntimeHandler = {
 
     return errors;
   },
-  execute(_state, _player, effect) {
-    const errors = avoidAttackHandler.validateShape(
-      "Effect avoid_attack",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid avoid_attack effect",
-      };
-    }
-
+  execute(_state, _player, _effect) {
     return { ok: true };
   },
 };
@@ -2971,17 +2864,6 @@ const gainChipsPerPlayerWithStatusHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, player, effect, source) {
-    const errors = gainChipsPerPlayerWithStatusHandler.validateShape(
-      "Effect gain_chips_per_player_with_status",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid gain_chips_per_player_with_status effect",
-      };
-    }
-
     const amountPerPlayer = effect["amountPerPlayer"];
     if (typeof amountPerPlayer !== "number" || effect["status"] !== "dingler") {
       return {
@@ -3252,17 +3134,6 @@ const revealTopCardHandler: EffectRuntimeHandler = {
     return [];
   },
   execute(state, player, effect, source, services) {
-    const errors = revealTopCardHandler.validateShape(
-      "Effect reveal_top_card",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid reveal_top_card effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const card = services.peekTopDeckCard(player, state);
     if (card === undefined) {
@@ -3311,17 +3182,6 @@ const playTopCardHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, player, effect, source, services) {
-    const errors = playTopCardHandler.validateShape(
-      "Effect play_top_card",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid play_top_card effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const card = services.drawTopDeckCard(player, state);
     if (card === undefined) {
@@ -3369,17 +3229,6 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
     return [];
   },
   execute(state, player, effect, source, services) {
-    const errors = playTopCardFromFoeDeckHandler.validateShape(
-      "Effect play_top_card_from_foe_deck",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid play_top_card_from_foe_deck effect",
-      };
-    }
-
     const foe = services
       .getOpponentsInSeatingOrder(state, player)
       .find((candidate) => {

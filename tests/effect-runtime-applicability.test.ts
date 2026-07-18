@@ -5,8 +5,12 @@ import { initializeGame } from "../src/index.js";
 import {
   executeEffect,
   executeMayhemEffects,
+  getEffectExecutionError,
 } from "../src/engine/effect-runtime.js";
 import type { CardDefinition } from "../src/engine/data.js";
+import {
+  getEffectRuntimeCatalogEntry,
+} from "../src/engine/effect-runtime-registry.js";
 import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
 import type { RuntimeEffectPayload } from "../src/engine/runtime-effect.js";
 
@@ -27,6 +31,41 @@ test("executeEffect applies add_power through the catalog resolver", () => {
 
   assert.deepEqual(result, { ok: true });
   assert.equal(state.turn.power, 2);
+});
+
+test("empty catalog diagnostics use the explicit execution error", () => {
+  assert.equal(
+    getEffectExecutionError([]),
+    "Effect resolution failed without diagnostic"
+  );
+});
+
+test("executeEffect validates a payload once before invoking its handler", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11608 });
+  const player = state.players[0];
+  assert.ok(player);
+  const entry = getEffectRuntimeCatalogEntry("add_power");
+  assert.ok(entry);
+  const originalValidateShape = entry.handler.validateShape;
+  let validationCount = 0;
+  entry.handler.validateShape = (subjectId, effect) => {
+    validationCount += 1;
+    return originalValidateShape(subjectId, effect);
+  };
+
+  try {
+    const result = executeEffect(
+      state,
+      player,
+      { effectId: "add_power", amount: 2 },
+      fixtureSource(player.playerId, "combat")
+    );
+
+    assert.deepEqual(result, { ok: true });
+    assert.equal(validationCount, 1);
+  } finally {
+    entry.handler.validateShape = originalValidateShape;
+  }
 });
 
 function fixtureSource(
@@ -115,22 +154,36 @@ test("timed effect with invalid shape is rejected before its handler", () => {
   const state = initializeGame({ rootDir: process.cwd(), seed: 11606 });
   const player = state.players[0];
   assert.ok(player);
-  const result = executeEffect(
-    state,
-    player,
-    {
-      effectId: "fixture_modify_effective_value",
-      timing: "onPlay",
-      valueKind: "unknown",
-      operation: "add",
-      amount: "invalid",
-      target: { targetType: "player" },
-    } as unknown as RuntimeEffectPayload,
-    fixtureSource(player.playerId, "fixture")
-  );
+  const entry = getEffectRuntimeCatalogEntry("fixture_modify_effective_value");
+  assert.ok(entry);
+  const originalExecute = entry.handler.execute;
+  let handlerCalled = false;
+  entry.handler.execute = (...args) => {
+    handlerCalled = true;
+    return originalExecute(...args);
+  };
 
-  assert.equal(result.ok, false);
-  assert.match(result.error, /unsupported effective-value timing/);
+  try {
+    const result = executeEffect(
+      state,
+      player,
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "onPlay",
+        valueKind: "unknown",
+        operation: "add",
+        amount: "invalid",
+        target: { targetType: "player" },
+      } as unknown as RuntimeEffectPayload,
+      fixtureSource(player.playerId, "fixture")
+    );
+
+    assert.equal(result.ok, false);
+    assert.match(result.error, /unsupported effective-value timing/);
+    assert.equal(handlerCalled, false);
+  } finally {
+    entry.handler.execute = originalExecute;
+  }
 });
 
 test("public Mayhem execution resolves a timed effect deterministically", () => {
