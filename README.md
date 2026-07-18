@@ -86,6 +86,12 @@ npm run
 - human-readable debug trace одной партии;
 - валидация runtime-данных и draft JSON импорта.
 
+### Стратегии и анализ ходов
+
+`baselineBot` — временная простая `BotStrategy`: он разыгрывает первую допустимую карту, иначе покупает самую дорогую допустимую карту рынка, иначе завершает ход. Он не оптимизирует линию. Будущие aggressive/defensive стратегии будут моделировать решения игрока с ограниченным наблюдением.
+
+`Best-Move Analyzer` — отдельный инструмент анализа текущего хода. Запуск: `npm run analyze:best-move -- --seed 60615 --criterion victory-points --top 3`. Он перебирает линии до `endTurn` и печатает JSON; `victory-points` — один исследовательский критерий эффективных победных очков root-игрока, а не универсальное определение лучшего хода. Ограничения `--maxChoiceDepth`, `--maxBranchesPerAction`, `--maxActionsPerLine`, `--maxTurnLines` защищают от combinatorial роста. Analyzer не является стратегией игрока и не заменяет `simulate:single`.
+
 ## Структура проекта
 
 ```text
@@ -134,5 +140,5 @@ assets/    карточные изображения и другие исход�
 - расширять typed effect handlers;
 - улучшать combat, death, DWT и Mayhem/Mega Mayhem resolution;
 - довести debug trace до более полного пошагового режима;
-- улучшать baseline bot и добавлять более сильные стратегии;
+- улучшать baseline bot и добавлять отдельные player strategies;
 - расширять runtime coverage без смешивания runtime и import-слоёв.

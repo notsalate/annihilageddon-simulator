@@ -79,17 +79,18 @@ Source: pp. 4, 6, 8.
 
 ## Deterministic Choice and Ordering Policy
 
-These are project decisions for places where the rulebook requires a legal choice but does not define a smart strategy:
+These are project decisions for places where the rulebook requires a legal choice but does not define a smart player decision:
 
 1. Baseline deterministic fallback:
    - Use the first legal option in stable engine order.
-   - This applies to setup picks, target ties, and similar required choices unless a test or strategy explicitly injects another chooser.
-2. Best-move or exhaustive branching:
-   - This is a separate strategy/analysis mode, not the baseline engine rule.
-   - It may evaluate multiple legal lines, but it must not redefine the canon of how effects resolve.
+   - This applies to setup picks, target ties, and similar required choices unless a `Strategy` or `Choice Policy` explicitly injects another chooser.
+2. Best-move/exhaustive branching is analysis-only:
+   - The `Best-Move Analyzer` is outside `BotStrategy`; it may receive complete/hidden state, fork seeded RNG, and enumerate reproducible legal outcomes.
+   - The caller supplies the evaluation policy. Analysis enumerates legal outcomes but never changes `listLegalActions`, effect choices, or the canon of effect resolution.
+   - The first implementation scope is one current turn through `endTurn`; multi-turn lookahead remains future work.
 3. Same-window ordering owned by one player:
    - If the rulebook does not specify an order, baseline resolution uses the first legal ordering in stable engine order.
-   - Analysis or strategy layers may explore alternative legal orderings separately.
+   - `Best-Move Analyzer` may explore alternative legal orderings separately, without rewriting the canonical resolution order. A future player-observation contract will constrain the information available to a `Strategy`; it is not implemented yet.
 
 ## Player Zones and Ownership
 

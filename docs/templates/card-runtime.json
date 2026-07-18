@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "cardId": "esw2_dbg__main_001",
   "source": {
-    "draft": "data/import/cards/main/drafts/esw2_dbg__main_001.json",
     "image": "assets/cards/main/esw2_dbg__main_001.png",
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_001.json",
     "text": "data/import/cards/main/texts/esw2_dbg__main_001.md"
   },
   "visible": {

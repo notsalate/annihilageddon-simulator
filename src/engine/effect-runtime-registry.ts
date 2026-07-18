@@ -1,5 +1,11 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import {
+  markCardDefinitionId,
+  type CardDefinitionId,
+  type TokenDefinitionId,
+  type TokenInstanceId,
+} from "../domain/types.js";
+import {
   calculateEffectiveCardCost,
   calculateEffectivePlayerMaxLife,
 } from "./effective-values.js";
@@ -30,6 +36,12 @@ export type EffectRuntimeSupportedModes = readonly [
   EffectRuntimeMode,
   ...EffectRuntimeMode[],
 ];
+export const effectRuntimeSourceKinds = ["card", "wizardProperty", "deadWizardToken"] as const;
+export type EffectRuntimeSourceKind = (typeof effectRuntimeSourceKinds)[number];
+export type EffectRuntimeSupportedSourceKinds = readonly [
+  EffectRuntimeSourceKind,
+  ...EffectRuntimeSourceKind[],
+];
 
 const RUNTIME_CARD_TYPES = new Set([
   "wizardCard",
@@ -48,14 +60,52 @@ export interface EffectSourceContext {
   tokenDefinitionId?: TokenDefinition["tokenId"];
 }
 
+export interface PlayerDefeatGameEnd {
+  reason: "playerDefeated";
+  winnerPlayerId: PlayerState["playerId"];
+}
+
+export type EffectGameEnd = PlayerDefeatGameEnd;
+
 export type EffectExecutionResult =
   | {
       ok: true;
+      gameEnd?: EffectGameEnd;
     }
   | {
       ok: false;
       error: string;
     };
+
+export type SetupDirective = {
+  kind: "forceStartingPlayer";
+  playerId: PlayerState["playerId"];
+};
+
+export type SetupEffectExecutionResult =
+  | { status: "executed"; directive?: SetupDirective }
+  | { status: "error"; error: string };
+
+type SetupEffectHandlerResult =
+  | { ok: true; directive?: SetupDirective }
+  | { ok: false; error: string };
+
+export interface SetupEffectSourceContext {
+  sourceType: "wizardProperty";
+  runtimeMode: EffectRuntimeMode;
+  playerId: PlayerState["playerId"];
+  tokenInstanceId: TokenInstanceId;
+  tokenDefinitionId: TokenDefinitionId;
+}
+
+export interface EffectRuntimeSetupServices {
+  hasCardDefinition(definitionId: CardDefinitionId): boolean;
+  createCardInstance(
+    definitionId: CardDefinitionId,
+    ownerId: PlayerState["playerId"]
+  ): CardInstance;
+  allowsMissingData: boolean;
+}
 
 export type TargetChoice =
   | {
@@ -251,6 +301,12 @@ export interface EffectRuntimeHandler<
     source: EffectSourceContext,
     services: EffectRuntimeServices
   ): EffectExecutionResult;
+  executeSetup?(
+    player: PlayerState,
+    effect: Effect,
+    source: SetupEffectSourceContext,
+    services: EffectRuntimeSetupServices
+  ): SetupEffectHandlerResult;
 }
 
 export type RuntimeEffectForId<EffectId extends RuntimeEffectId> = Extract<
@@ -270,16 +326,19 @@ export interface EffectRuntimeCatalogEntry<
   effectId: EffectId;
   handler: EffectRuntimeHandler<RuntimeEffectForId<EffectId>>;
   supportedModes: EffectRuntimeSupportedModes;
+  supportedSourceKinds: EffectRuntimeSupportedSourceKinds;
 }
 
 const allEffectRuntimeModes: EffectRuntimeSupportedModes = effectRuntimeModes;
+const allEffectRuntimeSourceKinds: EffectRuntimeSupportedSourceKinds =
+  effectRuntimeSourceKinds;
 const fixtureOnlyRuntimeEffectIds = new Set<RuntimeEffectId>([
   "fixture_modify_effective_value",
   "fixture_add_power_equal_to_target_cost",
 ]);
 
-const opponentPlayerTargetSelectors = [
-  "opponentPlayer",
+const damageTargetSelectors = [
+  "opponentPlayer", "activePlayer",
 ] as const satisfies readonly RuntimeEffectTargetSelector[];
 const activePlayerTargetSelectors = [
   "activePlayer",
@@ -307,6 +366,7 @@ const dinglerStatusTargetSelectors = [
   "activePlayer",
   "opponentPlayer",
   "anyPlayer",
+  "eachPlayerClockwiseFromActive",
 ] as const satisfies readonly RuntimeEffectTargetSelector[];
 
 const addPowerHandler: EffectRuntimeHandler<AddPowerRuntimeEffect> = {
@@ -324,14 +384,6 @@ const addPowerHandler: EffectRuntimeHandler<AddPowerRuntimeEffect> = {
     return [];
   },
   execute(state, player, effect, source) {
-    const errors = addPowerHandler.validateShape("Effect add_power", effect);
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid add_power effect",
-      };
-    }
-
     const powerBefore = state.turn.power;
     state.turn.power += effect.amount;
     recordTurnPowerChanged(
@@ -369,17 +421,6 @@ const addPowerPerPlayerWithStatusHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, player, effect, source, services) {
-    const errors = addPowerPerPlayerWithStatusHandler.validateShape(
-      "Effect add_power_per_player_with_status",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid add_power_per_player_with_status effect",
-      };
-    }
-
     const amountPerPlayer = effect["amountPerPlayer"];
     if (typeof amountPerPlayer !== "number") {
       return {
@@ -606,7 +647,7 @@ const destroyCardHandler: EffectRuntimeHandler = {
 
 const dealDamageHandler: EffectRuntimeHandler = {
   effectId: "deal_damage",
-  allowedTargetSelectors: opponentPlayerTargetSelectors,
+  allowedTargetSelectors: damageTargetSelectors,
   validateShape(subjectId, effect) {
     return [
       ...validatePositiveIntegerAmount(subjectId, effect, "damage amount"),
@@ -614,7 +655,7 @@ const dealDamageHandler: EffectRuntimeHandler = {
         subjectId,
         effect,
         "damage",
-        opponentPlayerTargetSelectors
+        damageTargetSelectors
       ),
     ];
   },
@@ -1376,17 +1417,6 @@ const mayhemEachPlayerDiscardDeckDestroyHandler: EffectRuntimeHandler = {
     return validateMayhemEachPlayerShape(subjectId, effect);
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemEachPlayerDiscardDeckDestroyHandler.validateShape(
-      "Effect mayhem_each_player_discard_deck_then_destroy_from_discard",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem discard-deck destroy effect",
-      };
-    }
-
     const effectId = effect.effectId;
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
       const discardedCount = targetPlayer.deck.length;
@@ -1455,17 +1485,6 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemEachPlayerHandRedrawChoiceHandler.validateShape(
-      "Effect mayhem_each_player_choose_discard_hand_draw_or_take_damage",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem hand-redraw choice effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const options = effect["options"];
     if (!Array.isArray(options)) {
@@ -1572,17 +1591,6 @@ const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemEachPlayerReduceLifeToGainChipsHandler.validateShape(
-      "Effect mayhem_each_player_reduce_life_to_gain_chips",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem life-for-chips effect",
-      };
-    }
-
     const lifeTotal = effect["lifeTotal"];
     const chipAmount = effect["chipAmount"];
     if (typeof lifeTotal !== "number" || typeof chipAmount !== "number") {
@@ -1673,17 +1681,6 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler = {
     return validateMayhemBattleHighestHandCostShape(subjectId, effect);
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemEachPlayerBattleHighestHandCostHandler.validateShape(
-      "Effect mayhem_each_player_battle_highest_hand_cost",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem battle effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const winnerDrawAmount = effect["winnerDrawAmount"];
     if (typeof winnerDrawAmount !== "number") {
@@ -1766,17 +1763,6 @@ const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler = {
     return validateMayhemVoteDinglerShape(subjectId, effect);
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemEachPlayerVoteDinglerHandler.validateShape(
-      "Effect mayhem_each_player_vote_dingler",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem vote effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const players = services.getPlayersInActiveOrder(state);
     const votes = new Map<PlayerState["playerId"], number>();
@@ -1844,17 +1830,6 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler = {
     return validateMayhemDinglerRecoveryShape(subjectId, effect);
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemEachDinglerRecoveryChoiceHandler.validateShape(
-      "Effect mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem Dingler recovery effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const lifeCost = effect["lifeCost"];
     const chipCost = effect["chipCost"];
@@ -1936,17 +1911,6 @@ const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, _player, effect, source, services) {
-    const errors = mayhemLowestLifeDinglerMaxLifeHandler.validateShape(
-      "Effect mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid Mayhem lowest-life Dingler effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const lowestLife = Math.min(
       ...state.players.map((candidate) => candidate.life.current)
@@ -1994,14 +1958,14 @@ const replaceStartingCardHandler: EffectRuntimeHandler = {
   validateShape(subjectId, effect) {
     const errors = validateSetupTiming(subjectId, effect);
     const fromDefinitionId = effect["fromDefinitionId"];
-    if (!isNonEmptyString(fromDefinitionId)) {
+    if (!isStableDefinitionId(fromDefinitionId)) {
       errors.push(
         `${subjectId} uses invalid replacement source card ${String(fromDefinitionId)}`
       );
     }
 
     const toDefinitionId = effect["toDefinitionId"];
-    if (!isNonEmptyString(toDefinitionId)) {
+    if (!isStableDefinitionId(toDefinitionId)) {
       errors.push(
         `${subjectId} uses invalid replacement target card ${String(toDefinitionId)}`
       );
@@ -2012,6 +1976,31 @@ const replaceStartingCardHandler: EffectRuntimeHandler = {
   execute() {
     return setupOnlyExecutionError("replace_starting_card");
   },
+  executeSetup(player, effect, _source, services) {
+    const rawFromDefinitionId = effect["fromDefinitionId"];
+    const rawToDefinitionId = effect["toDefinitionId"];
+    if (
+      !isStableDefinitionId(rawFromDefinitionId) ||
+      !isStableDefinitionId(rawToDefinitionId)
+    ) {
+      return { ok: false, error: "replace_starting_card requires stable fromDefinitionId and toDefinitionId" };
+    }
+    const fromDefinitionId = markCardDefinitionId(rawFromDefinitionId);
+    const toDefinitionId = markCardDefinitionId(rawToDefinitionId);
+    if (!services.hasCardDefinition(toDefinitionId)) {
+      if (services.allowsMissingData) return { ok: true };
+      return { ok: false, error: `Cannot replace with missing target card ${toDefinitionId}` };
+    }
+    const zones = [player.hand, player.deck, player.discard, player.playedThisTurn, player.permanents];
+    for (const zone of zones) {
+      const cardIndex = zone.findIndex((card) => card.ownerId === player.playerId && card.definitionId === fromDefinitionId);
+      if (cardIndex < 0) continue;
+      zone.splice(cardIndex, 1, services.createCardInstance(toDefinitionId, player.playerId));
+      return { ok: true };
+    }
+    if (services.allowsMissingData) return { ok: true };
+    return { ok: false, error: `Cannot replace missing starting card ${fromDefinitionId} for ${player.playerId}` };
+  },
 };
 
 const startWithBasicTrophyHandler: EffectRuntimeHandler = {
@@ -2021,6 +2010,17 @@ const startWithBasicTrophyHandler: EffectRuntimeHandler = {
   },
   execute() {
     return setupOnlyExecutionError("start_with_basic_trophy");
+  },
+  executeSetup(player) {
+    if (!player.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy")) {
+      player.trophyLikeObjects.push({
+        instanceId: `setup-basic-trophy-${player.playerId}`,
+        trophyId: "basicTrophy",
+        ownerId: player.playerId,
+        effects: [],
+      });
+    }
+    return { ok: true };
   },
 };
 
@@ -2042,6 +2042,12 @@ const forceStartingPlayerHandler: EffectRuntimeHandler = {
   execute() {
     return setupOnlyExecutionError("force_starting_player");
   },
+  executeSetup(_player, _effect, source) {
+    return {
+      ok: true,
+      directive: { kind: "forceStartingPlayer", playerId: source.playerId },
+    };
+  },
 };
 
 const setStartingLifeTotalHandler: EffectRuntimeHandler = {
@@ -2054,6 +2060,15 @@ const setStartingLifeTotalHandler: EffectRuntimeHandler = {
   },
   execute() {
     return setupOnlyExecutionError("set_starting_life_total");
+  },
+  executeSetup(player, effect) {
+    const lifeTotal = effect.lifeTotal;
+    if (typeof lifeTotal !== "number") {
+      return { ok: false, error: "Invalid setup life total" };
+    }
+    player.life.current = lifeTotal;
+    player.life.max = Math.max(player.life.max, lifeTotal);
+    return { ok: true };
   },
 };
 
@@ -2799,18 +2814,7 @@ const avoidAttackHandler: EffectRuntimeHandler = {
 
     return errors;
   },
-  execute(_state, _player, effect) {
-    const errors = avoidAttackHandler.validateShape(
-      "Effect avoid_attack",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid avoid_attack effect",
-      };
-    }
-
+  execute(_state, _player, _effect) {
     return { ok: true };
   },
 };
@@ -2860,17 +2864,6 @@ const gainChipsPerPlayerWithStatusHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, player, effect, source) {
-    const errors = gainChipsPerPlayerWithStatusHandler.validateShape(
-      "Effect gain_chips_per_player_with_status",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid gain_chips_per_player_with_status effect",
-      };
-    }
-
     const amountPerPlayer = effect["amountPerPlayer"];
     if (typeof amountPerPlayer !== "number" || effect["status"] !== "dingler") {
       return {
@@ -3141,17 +3134,6 @@ const revealTopCardHandler: EffectRuntimeHandler = {
     return [];
   },
   execute(state, player, effect, source, services) {
-    const errors = revealTopCardHandler.validateShape(
-      "Effect reveal_top_card",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid reveal_top_card effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const card = services.peekTopDeckCard(player, state);
     if (card === undefined) {
@@ -3200,17 +3182,6 @@ const playTopCardHandler: EffectRuntimeHandler = {
     return errors;
   },
   execute(state, player, effect, source, services) {
-    const errors = playTopCardHandler.validateShape(
-      "Effect play_top_card",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid play_top_card effect",
-      };
-    }
-
     const effectId = effect.effectId;
     const card = services.drawTopDeckCard(player, state);
     if (card === undefined) {
@@ -3226,7 +3197,7 @@ const playTopCardHandler: EffectRuntimeHandler = {
     }
 
     const playedResult = services.playResolvedCard(state, player, card);
-    if (!playedResult.ok) {
+    if (!playedResult.ok || playedResult.gameEnd !== undefined) {
       return playedResult;
     }
 
@@ -3258,17 +3229,6 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
     return [];
   },
   execute(state, player, effect, source, services) {
-    const errors = playTopCardFromFoeDeckHandler.validateShape(
-      "Effect play_top_card_from_foe_deck",
-      effect
-    );
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        error: errors[0] ?? "Invalid play_top_card_from_foe_deck effect",
-      };
-    }
-
     const foe = services
       .getOpponentsInSeatingOrder(state, player)
       .find((candidate) => {
@@ -3304,7 +3264,7 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
       nonOngoingOwnerId: card.ownerId,
       ongoingOwnerId: player.playerId,
     });
-    if (!playedResult.ok) {
+    if (!playedResult.ok || playedResult.gameEnd !== undefined) {
       return playedResult;
     }
 
@@ -3627,6 +3587,10 @@ function validateWandAttackReplacementShape(
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
+}
+
+function isStableDefinitionId(value: unknown): value is string {
+  return isNonEmptyString(value) && value.trim() === value;
 }
 
 function validateDinglerStatusEffectShape(
@@ -4280,11 +4244,19 @@ function shuffleInPlace<T>(items: T[], state: GameState): void {
     items[swapIndex] = item;
   }
 }
-
-function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
-  return isPlainRecord(effect);
+interface EffectRecord {
+  amount?: unknown;
+  cardTypes?: unknown;
+  definitionId?: unknown;
+  drawAmount?: unknown;
+  effectId?: unknown;
+  targetType?: unknown;
+  tokenKind?: unknown;
 }
 
+function isEffectRecord(effect: unknown): effect is EffectRecord {
+  return isPlainRecord(effect);
+}
 function formatUnknown(value: unknown): string {
   return String(value);
 }
@@ -4488,6 +4460,10 @@ function createEffectRuntimeCatalogSource(
       supportedModes: fixtureOnlyRuntimeEffectIds.has(handler.effectId)
         ? ["fixture"]
         : allEffectRuntimeModes,
+      supportedSourceKinds:
+        handler.effectId === "temporary_hand_limit_by_gained_card_type"
+          ? ["wizardProperty"]
+          : allEffectRuntimeSourceKinds,
     };
   }
 
@@ -4534,4 +4510,90 @@ export function isEffectRuntimeCatalogEntrySupportedInMode<
   mode: EffectRuntimeMode
 ): boolean {
   return entry.supportedModes.includes(mode);
+}
+
+export type EffectRuntimeCatalogResolution =
+  | { ok: true; entry: EffectRuntimeCatalogEntry }
+  | { ok: false; errors: string[] };
+
+
+export function resolveEffectRuntimeCatalogEntry(
+  subjectId: string,
+  rawEffectId: string,
+  effect: RuntimeEffectPayload | object,
+  mode: EffectRuntimeMode,
+  sourceKind: EffectRuntimeSourceKind
+): EffectRuntimeCatalogResolution {
+  const entry = isRuntimeEffectId(rawEffectId)
+    ? getEffectRuntimeCatalogEntry(rawEffectId)
+    : undefined;
+  if (entry === undefined) {
+    return {
+      ok: false,
+      errors: [`${subjectId} uses unsupported effect id ${rawEffectId}`],
+    };
+  }
+
+  if (!entry.supportedSourceKinds.includes(sourceKind)) {
+    return {
+      ok: false,
+      errors: [`${subjectId} uses token-only effect id ${rawEffectId}`],
+    };
+  }
+
+  if (!isEffectRuntimeCatalogEntrySupportedInMode(entry, mode)) {
+    if (mode === "combat" && rawEffectId.startsWith("fixture_")) {
+      return {
+        ok: false,
+        errors: [
+          `${subjectId} uses fixture effect id ${rawEffectId} in combat data`,
+        ],
+      };
+    }
+    return {
+      ok: false,
+      errors: [
+        `${subjectId} uses effect id ${rawEffectId} outside supported ${mode} mode`,
+      ],
+    };
+  }
+
+  const shapeErrors = entry.handler.validateShape(
+    subjectId,
+    effect as RuntimeEffectPayload
+  );
+  return shapeErrors.length > 0
+    ? { ok: false, errors: shapeErrors }
+    : { ok: true, entry };
+}
+
+export function tryExecuteSetupEffect(
+  player: PlayerState,
+  effect: RuntimeEffectPayload,
+  source: SetupEffectSourceContext,
+  services: EffectRuntimeSetupServices
+): SetupEffectExecutionResult {
+  const resolution = resolveEffectRuntimeCatalogEntry(
+    `Setup effect ${String(effect["effectId"])}`,
+    String(effect["effectId"]),
+    effect,
+    source.runtimeMode,
+    "wizardProperty"
+  );
+  if (!resolution.ok) {
+    return { status: "error", error: resolution.errors[0] ?? "Invalid setup effect" };
+  }
+
+  const executeSetup = resolution.entry.handler.executeSetup;
+  if (executeSetup === undefined) {
+    return {
+      status: "error",
+      error: `Setup effect executor missing for ${String(effect["effectId"])}`,
+    };
+  }
+
+  const result = executeSetup(player, effect, source, services);
+  return result.ok
+    ? { status: "executed", ...(result.directive === undefined ? {} : { directive: result.directive }) }
+    : { status: "error", error: result.error };
 }

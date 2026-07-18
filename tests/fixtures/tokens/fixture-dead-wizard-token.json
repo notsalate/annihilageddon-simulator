@@ -3,6 +3,7 @@
   "tokenId": "fixture-dead-wizard-token",
   "runtimeSchema": "krutagidon.tokenDefinition.v0",
   "kind": "deadWizardToken",
+  "source": { "image": "assets/dead-wizard-token/DWT_001.png" },
   "victoryPoints": -5,
   "effects": []
 }

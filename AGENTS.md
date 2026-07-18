@@ -203,6 +203,7 @@ Preserve the repository's core modeling rules:
 - keep engine logic deterministic and reproducible through seeded RNG;
 - do not use localized display names as primary identifiers;
 - use stable IDs for cards, effects, actions, strategies, and events;
+- keep `Best-Move Analyzer` outside `BotStrategy`: analysis may inspect complete/hidden state and fork seeded RNG, while player strategies model legal decisions without future RNG outcomes or hidden opponent information;
 - keep card behavior in explicit typed handlers, not runtime natural-language parsing;
 - keep game-domain logic out of UI and route-level code;
 - keep runtime data separate from import sources.

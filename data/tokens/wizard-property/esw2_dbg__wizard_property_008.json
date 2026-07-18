@@ -3,10 +3,10 @@
   "tokenId": "esw2_dbg__wizard_property_008",
   "runtimeSchema": "krutagidon.tokenDefinition.v0",
   "kind": "wizardProperty",
+  "source": { "image": "assets/wizard-property/wp_008.png", "text": "data/import/tokens/wizard-property/texts/esw2_dbg__wizard_property_008.md" },
   "visible": {
     "textRu": "Каждый раз, когда ты играешь карту-постоянку, получай 1 чипсину. Каждый раз, когда ты получаешь карту-постоянку, можешь класть её на верх своей колоды.",
-    "sourceLabel": "Свойство 8",
-    "sourceImage": "assets/wizard-property/wp_008.png"
+    "sourceLabel": "Свойство 8"
   },
   "clarifications": [
     "Первая часть срабатывает каждый раз, когда игрок играет карту-постоянку.",

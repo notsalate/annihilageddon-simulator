@@ -1,0 +1,232 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { initializeGame } from "../src/index.js";
+import {
+  executeEffect,
+  executeMayhemEffects,
+  getEffectExecutionError,
+} from "../src/engine/effect-runtime.js";
+import type { CardDefinition } from "../src/engine/data.js";
+import {
+  getEffectRuntimeCatalogEntry,
+} from "../src/engine/effect-runtime-registry.js";
+import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
+import type { RuntimeEffectPayload } from "../src/engine/runtime-effect.js";
+
+test("executeEffect applies add_power through the catalog resolver", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11601 });
+  const player = state.players[0];
+  assert.ok(player);
+  const effect = { effectId: "add_power", amount: 2 } as RuntimeEffectPayload;
+  const source: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: "combat",
+    playerId: player.playerId,
+    cardInstanceId: "fixture-source",
+    definitionId: "fixture-source",
+  };
+
+  const result = executeEffect(state, player, effect, source);
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(state.turn.power, 2);
+});
+
+test("empty catalog diagnostics use the explicit execution error", () => {
+  assert.equal(
+    getEffectExecutionError([]),
+    "Effect resolution failed without diagnostic"
+  );
+});
+
+test("executeEffect validates a payload once before invoking its handler", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11608 });
+  const player = state.players[0];
+  assert.ok(player);
+  const entry = getEffectRuntimeCatalogEntry("add_power");
+  assert.ok(entry);
+  const originalValidateShape = entry.handler.validateShape;
+  let validationCount = 0;
+  entry.handler.validateShape = (subjectId, effect) => {
+    validationCount += 1;
+    return originalValidateShape(subjectId, effect);
+  };
+
+  try {
+    const result = executeEffect(
+      state,
+      player,
+      { effectId: "add_power", amount: 2 },
+      fixtureSource(player.playerId, "combat")
+    );
+
+    assert.deepEqual(result, { ok: true });
+    assert.equal(validationCount, 1);
+  } finally {
+    entry.handler.validateShape = originalValidateShape;
+  }
+});
+
+function fixtureSource(
+  playerId: string,
+  runtimeMode: EffectSourceContext["runtimeMode"],
+  sourceType: EffectSourceContext["sourceType"] = "card"
+): EffectSourceContext {
+  return {
+    sourceType,
+    runtimeMode,
+    playerId: playerId as EffectSourceContext["playerId"],
+    cardInstanceId: "fixture-source",
+    definitionId: "fixture-source",
+  };
+}
+
+test("fixture-only effect is rejected in combat before its handler", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11602 });
+  const player = state.players[0];
+  assert.ok(player);
+  const result = executeEffect(
+    state,
+    player,
+    {
+      effectId: "fixture_add_power_equal_to_target_cost",
+      target: { selector: "mainMarketCard" },
+    } as unknown as RuntimeEffectPayload,
+    fixtureSource(player.playerId, "combat")
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.error, /fixture effect id/);
+  assert.equal(state.turn.power, 0);
+});
+
+test("fixture-only effect reaches its handler in fixture mode", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11603 });
+  const player = state.players[0];
+  assert.ok(player);
+  const result = executeEffect(
+    state,
+    player,
+    {
+      effectId: "fixture_add_power_equal_to_target_cost",
+      target: { selector: "mainMarketCard" },
+    } as unknown as RuntimeEffectPayload,
+    fixtureSource(player.playerId, "fixture")
+  );
+  assert.deepEqual(result, { ok: true });
+});
+
+test("wizard-property-only effect is rejected for a card source", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11604 });
+  const player = state.players[0];
+  assert.ok(player);
+  const result = executeEffect(
+    state,
+    player,
+    {
+      effectId: "temporary_hand_limit_by_gained_card_type",
+      timing: "endTurn",
+      amount: 1,
+      cardTypes: ["spell"],
+    },
+    fixtureSource(player.playerId, "combat", "card")
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.error, /token-only effect id/);
+});
+
+test("known effect with invalid shape is rejected before execution", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11605 });
+  const player = state.players[0];
+  assert.ok(player);
+  const result = executeEffect(
+    state,
+    player,
+    { effectId: "add_power", amount: 0 },
+    fixtureSource(player.playerId, "combat")
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.error, /invalid power amount/);
+  assert.equal(state.turn.power, 0);
+});
+
+test("timed effect with invalid shape is rejected before its handler", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11606 });
+  const player = state.players[0];
+  assert.ok(player);
+  const entry = getEffectRuntimeCatalogEntry("fixture_modify_effective_value");
+  assert.ok(entry);
+  const originalExecute = entry.handler.execute;
+  let handlerCalled = false;
+  entry.handler.execute = (...args) => {
+    handlerCalled = true;
+    return originalExecute(...args);
+  };
+
+  try {
+    const result = executeEffect(
+      state,
+      player,
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "onPlay",
+        valueKind: "unknown",
+        operation: "add",
+        amount: "invalid",
+        target: { targetType: "player" },
+      } as unknown as RuntimeEffectPayload,
+      fixtureSource(player.playerId, "fixture")
+    );
+
+    assert.equal(result.ok, false);
+    assert.match(result.error, /unsupported effective-value timing/);
+    assert.equal(handlerCalled, false);
+  } finally {
+    entry.handler.execute = originalExecute;
+  }
+});
+
+test("public Mayhem execution resolves a timed effect deterministically", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11607 });
+  const player = state.players[0];
+  assert.ok(player);
+  const definition: CardDefinition = {
+    schemaVersion: 1,
+    cardId: "fixture-mayhem-runtime",
+    source: { image: "assets/cards/fixtures/fixture-mayhem-runtime.png" },
+    visible: {
+      nameRu: "Fixture Mayhem",
+      cost: 0,
+      victoryPoints: 0,
+      typeRu: null,
+      cardKind: "mayhem",
+      cardTypes: [],
+      markers: [],
+    },
+    engine: {
+      runtimeSchema: "krutagidon.cardDefinition.v0",
+      mappingStatus: "fixture",
+      playableInV0: true,
+      cardKind: "mayhem",
+      cardTypes: [],
+      cost: 0,
+      victoryPoints: 0,
+      isOngoing: false,
+      marketChipMarker: false,
+      effects: [
+        { effectId: "add_power", timing: "onMayhemResolve", amount: 2 },
+      ],
+      unsupportedMechanics: [],
+    },
+  };
+
+  const result = executeMayhemEffects(
+    state,
+    player,
+    definition,
+    fixtureSource(player.playerId, "combat")
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(state.turn.power, 2);
+});

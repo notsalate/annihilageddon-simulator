@@ -573,7 +573,8 @@ function createTreasureDiscountWizardProperty(
     schemaVersion: 1,
     tokenId,
     runtimeSchema: "krutagidon.tokenDefinition.v0",
-    kind: "wizardProperty",
+  kind: "wizardProperty",
+  source: { image: "assets/wizard-property/wp_fixture.png" },
     engine: {
       mappingStatus: "mapped",
       playableInV0: true,
@@ -615,6 +616,7 @@ function createTypedFixtureCardDefinition(
   return {
     schemaVersion: 1,
     cardId,
+    source: { image: `assets/cards/fixtures/${cardId}.png` },
     visible: {
       nameRu: cardId,
       cost,
@@ -649,6 +651,7 @@ function createNonExecutableMaxLifeWizardProperty(
     tokenId,
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "wizardProperty",
+    source: { image: "assets/wizard-property/wp_fixture.png" },
     engine: {
       mappingStatus: "draft",
       playableInV0: false,
@@ -711,6 +714,7 @@ function addFixtureStatusCardToActiveHand(
   const definition: CardDefinition = {
     schemaVersion: 1,
     cardId,
+    source: { image: `assets/cards/fixtures/${cardId}.png` },
     visible: {
       nameRu: cardId,
       cost: 0,

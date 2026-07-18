@@ -29,6 +29,7 @@ image -> source md -> draft JSON -> runtime JSON -> pack
 Source markdown нужен для ручной сверки текста и источника. Он не обязан происходить из OCR, и каноническая документация не должна называть его OCR-текстом.
 
 Draft JSON фиксирует то, что видно на карте, свойстве или жетоне: стабильный ID, источник, видимый текст, видимые числа, типы, markers и `uncertainty`. Это не исполняемый формат.
+В canonical drafts поле `source.image` обязательно и должно быть непустой строкой. Это source metadata для сверки, а не executable engine input.
 
 Runtime JSON - единственный слой, где появляются engine effects, runtime schemas, playability flags, mapping status и другие решения о поведении в симуляторе.
 
@@ -97,11 +98,11 @@ Draft-валидатор должен возвращать `errors` и `warnings
 - нет стабильного id;
 - нет видимого текста;
 - есть запрещенное runtime-поле: `engine`, `effects`, `runtimeSchema`, `playableInV0` или `mappingStatus`;
+- отсутствует непустая ссылка `source.image`;
 - значение не подходит схеме выбранного `draftKind`.
 
 `warning` означает, что draft можно читать дальше, но человеку стоит проверить сомнение:
 
-- нет ссылки на исходную картинку;
 - нет ссылки `source.text`;
 - `cost` или `victoryPoints` пустые там, где обычно ожидаются;
 - есть записи в `visible.uncertainty`;
@@ -279,7 +280,7 @@ Runtime JSON должен быть самодостаточным для engine.
 - partial/unsupported runtime card JSON не должно использоваться как промежуточное покрытие для карт, если конкретное issue явно не разрешает это;
 - non-full runtime card JSON должно блокироваться guardrails, а не накапливаться как обычный промежуточный слой.
 
-Ссылки `source.draft`, `source.text` и `source.image` в runtime JSON допустимы только как metadata/traceability для ревью и сверки. Движок не должен читать эти ссылки во время партии и не должен выводить из них поведение карты.
+Ссылки `source.draft`, `source.text` и `source.image` в runtime JSON допустимы только как metadata/traceability для ревью и сверки. Движок не должен читать эти ссылки во время партии и не должен выводить из них поведение карты. Draft JSON из `data/import/**` также не является executable engine input.
 
 После runtime mapping объект должен быть включен в нужный `deck`, `stack`, `pool` и `pack`. Шаблоны лежат в:
 

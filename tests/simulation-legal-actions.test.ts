@@ -21,6 +21,7 @@ const playableRuntimeDataPackPath =
 const fixturePermanentDefinition = {
   schemaVersion: 1,
   cardId: "fixture-activation-permanent",
+  source: { image: "assets/cards/fixtures/fixture-activation-permanent.png" },
   visible: {
     nameRu: "Fixture Activation Permanent",
     cost: 0,
@@ -56,6 +57,7 @@ const fixtureWizardPropertyDefinition = {
   tokenId: "fixture-activation-wizard-property",
   runtimeSchema: "krutagidon.tokenDefinition.v0",
   kind: "wizardProperty",
+  source: { image: "assets/wizard-property/wp_fixture.png" },
   visible: {
     textRu: "☼: +1 мощь.",
     sourceLabel: "Fixture Activation Property",

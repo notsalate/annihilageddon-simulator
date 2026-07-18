@@ -176,7 +176,7 @@ export function validateCardDraft(
     );
   }
 
-  validateSource(draft["source"], filePath, errors, warnings);
+  validateSource(draft["source"], filePath, errors);
   validateVisible(draft["visible"], filePath, errors, warnings);
 
   return result(errors, warnings);
@@ -230,7 +230,7 @@ export function validateWizardPropertyDraft(
     errors.push(message(filePath, "kind must be 'wizardProperty'"));
   }
 
-  validateSource(draft["source"], filePath, errors, warnings);
+  validateSource(draft["source"], filePath, errors);
   validateWizardPropertyVisible(draft["visible"], filePath, errors, warnings);
 
   return result(errors, warnings);
@@ -284,7 +284,7 @@ export function validateDeadWizardTokenDraft(
     errors.push(message(filePath, "kind must be 'deadWizardToken'"));
   }
 
-  validateSource(draft["source"], filePath, errors, warnings);
+  validateSource(draft["source"], filePath, errors);
   validateDeadWizardTokenVisible(draft["visible"], filePath, errors, warnings);
 
   return result(errors, warnings);
@@ -361,8 +361,7 @@ export function formatDraftValidationResult(
 function validateSource(
   source: unknown,
   filePath: string,
-  errors: DraftValidationMessage[],
-  warnings: DraftValidationMessage[]
+  errors: DraftValidationMessage[]
 ): void {
   if (!isRecord(source)) {
     errors.push(message(filePath, "source is required"));
@@ -374,7 +373,7 @@ function validateSource(
   }
 
   if (!isNonEmptyString(source["image"])) {
-    warnings.push(message(filePath, "source.image is missing"));
+    errors.push(message(filePath, "source.image is required"));
   }
 }
 

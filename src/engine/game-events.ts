@@ -15,9 +15,19 @@ interface EventContext {
 const eventContexts = new WeakMap<GameState, EventContext>();
 
 export function installGameEventLog(state: GameState): void {
+  let maxEventSequence = 0;
+  let maxActionSequence = 0;
+  for (const event of state.eventLog) {
+    if (event.eventSequence !== undefined) {
+      maxEventSequence = Math.max(maxEventSequence, event.eventSequence);
+    }
+    if (event.actionSequence !== undefined) {
+      maxActionSequence = Math.max(maxActionSequence, event.actionSequence);
+    }
+  }
   const context: EventContext = {
-    nextActionSequence: 1,
-    nextEventSequence: 1,
+    nextActionSequence: maxActionSequence + 1,
+    nextEventSequence: maxEventSequence + 1,
   };
   eventContexts.set(state, context);
 }

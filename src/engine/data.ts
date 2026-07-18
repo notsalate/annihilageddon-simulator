@@ -3,9 +3,9 @@ import path from "node:path";
 
 import { isPlainRecord } from "../common.js";
 import {
-  getEffectRuntimeCatalogEntry,
-  isEffectRuntimeCatalogEntrySupportedInMode,
+  resolveEffectRuntimeCatalogEntry,
   type EffectRuntimeMode,
+  type EffectRuntimeSourceKind,
 } from "./effect-runtime-registry.js";
 import {
   isEffectTiming,
@@ -18,11 +18,9 @@ import {
   type RuntimeEffect,
   type AttackOutcomeBranch,
   type RuntimeEffectFields,
-  type RuntimeEffectPayload,
   type WildMagicOption,
 } from "./runtime-effect.js";
 
-type RuntimeEffectSourceKind = "card" | "wizardProperty" | "deadWizardToken";
 type RuntimeJsonDecoder<T> = (value: unknown) => DecodeResult<T>;
 
 const CANONICAL_STARTER_TEMPLATE = new Map([
@@ -52,9 +50,16 @@ export type CardKind =
   | "limpWand"
   | "familiar";
 
+export interface RuntimeSourceMetadata {
+  image: string;
+  draft?: string;
+  text?: string;
+}
+
 export interface CardDefinition {
   schemaVersion: number;
   cardId: string;
+  source: RuntimeSourceMetadata;
   visible: {
     nameRu: string;
     cost: number | null;
@@ -101,6 +106,7 @@ interface BaseTokenDefinition {
   tokenId: string;
   runtimeSchema: "krutagidon.tokenDefinition.v0";
   kind: TokenKind;
+  source: RuntimeSourceMetadata;
 }
 
 export interface DeadWizardTokenDefinition extends BaseTokenDefinition {
@@ -114,7 +120,6 @@ export interface WizardPropertyDefinition extends BaseTokenDefinition {
   visible?: {
     textRu: string;
     sourceLabel?: string;
-    sourceImage?: string;
   };
   clarifications?: string[];
   engine?: {
@@ -449,7 +454,7 @@ export function validateExecutableDataPack(
             effectId,
             effect,
             mode,
-            "deadWizardToken"
+            definition.kind
           )
         );
       }
@@ -1071,6 +1076,7 @@ function decodeCardDefinition(value: unknown): DecodeResult<CardDefinition> {
 
   const schemaVersion = requireNumberField(record, "schemaVersion", errors);
   const cardId = requireStringField(record, "cardId", errors);
+  const source = decodeRuntimeSourceMetadata(record, errors);
 
   const visible = requireRecordField(record, "visible", errors);
   let decodedVisible: CardDefinition["visible"] | undefined;
@@ -1248,6 +1254,7 @@ function decodeCardDefinition(value: unknown): DecodeResult<CardDefinition> {
     errors.length > 0 ||
     schemaVersion === undefined ||
     cardId === undefined ||
+    source === undefined ||
     decodedVisible === undefined ||
     decodedEngine === undefined
   ) {
@@ -1257,9 +1264,52 @@ function decodeCardDefinition(value: unknown): DecodeResult<CardDefinition> {
   return decodeSuccess({
     schemaVersion,
     cardId,
+    source,
     visible: decodedVisible,
     engine: decodedEngine,
   });
+}
+
+function decodeRuntimeSourceMetadata(
+  record: Record<string, unknown>,
+  errors: string[]
+): RuntimeSourceMetadata | undefined {
+  const source = requireRecordField(record, "source", errors);
+  if (source === undefined) {
+    return undefined;
+  }
+
+  const image = requireNonEmptyStringField(
+    source,
+    "source.image",
+    errors,
+    "image"
+  );
+  const draft = optionalNonEmptyStringField(
+    source,
+    "source.draft",
+    errors,
+    "draft"
+  );
+  const text = optionalNonEmptyStringField(
+    source,
+    "source.text",
+    errors,
+    "text"
+  );
+  if (
+    image === undefined ||
+    (source["draft"] !== undefined && draft === undefined) ||
+    (source["text"] !== undefined && text === undefined)
+  ) {
+    return undefined;
+  }
+
+  return {
+    image,
+    ...(draft === undefined ? {} : { draft }),
+    ...(text === undefined ? {} : { text }),
+  };
 }
 
 function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
@@ -1277,6 +1327,7 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
     "krutagidon.tokenDefinition.v0",
     errors
   );
+  const source = decodeRuntimeSourceMetadata(record, errors);
   const kind = requireTokenKindField(record, "kind", errors);
 
   if (kind === "deadWizardToken") {
@@ -1287,6 +1338,7 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
       schemaVersion === undefined ||
       tokenId === undefined ||
       runtimeSchema === undefined ||
+      source === undefined ||
       victoryPoints === undefined ||
       effects === undefined
     ) {
@@ -1298,6 +1350,7 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
       tokenId,
       runtimeSchema,
       kind,
+      source,
       victoryPoints,
       effects,
     });
@@ -1305,6 +1358,11 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
     const visible = optionalRecordField(record, "visible", errors);
     let decodedVisible: WizardPropertyDefinition["visible"];
     if (visible !== undefined) {
+      if (Object.prototype.hasOwnProperty.call(visible, "sourceImage")) {
+        errors.push(
+          "visible.sourceImage is not supported; use source.image instead"
+        );
+      }
       const textRu = requireStringField(
         visible,
         "visible.textRu",
@@ -1317,17 +1375,10 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
         errors,
         "sourceLabel"
       );
-      const sourceImage = optionalStringField(
-        visible,
-        "visible.sourceImage",
-        errors,
-        "sourceImage"
-      );
       if (textRu !== undefined) {
         decodedVisible = {
           textRu,
           ...(sourceLabel === undefined ? {} : { sourceLabel }),
-          ...(sourceImage === undefined ? {} : { sourceImage }),
         };
       }
     }
@@ -1383,7 +1434,8 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
       errors.length > 0 ||
       schemaVersion === undefined ||
       tokenId === undefined ||
-      runtimeSchema === undefined
+      runtimeSchema === undefined ||
+      source === undefined
     ) {
       return decodeFailure(errors);
     }
@@ -1393,6 +1445,7 @@ function decodeTokenDefinition(value: unknown): DecodeResult<TokenDefinition> {
       tokenId,
       runtimeSchema,
       kind,
+      source,
       ...(decodedVisible === undefined ? {} : { visible: decodedVisible }),
       ...(clarifications === undefined ? {} : { clarifications }),
       ...(decodedEngine === undefined ? {} : { engine: decodedEngine }),
@@ -2015,6 +2068,32 @@ function optionalStringField(
   return value;
 }
 
+function requireNonEmptyStringField(
+  record: Record<string, unknown>,
+  label: string,
+  errors: string[],
+  key = label
+): string | undefined {
+  const value = record[key];
+  if (typeof value !== "string" || value.trim().length === 0 || (key === "image" && !isCanonicalAssetPath(value))) {
+    errors.push(`${label} must be a non-empty string`);
+    return undefined;
+  }
+  return value;
+}
+
+function optionalNonEmptyStringField(
+  record: Record<string, unknown>,
+  label: string,
+  errors: string[],
+  key = label
+): string | undefined {
+  if (record[key] === undefined) {
+    return undefined;
+  }
+  return requireNonEmptyStringField(record, label, errors, key);
+}
+
 function requireStringOrNullField(
   record: Record<string, unknown>,
   label: string,
@@ -2207,59 +2286,38 @@ function validateRuntimeEffectDefinition(
   effectId: string,
   effect: Record<string, unknown>,
   mode: EffectRuntimeMode,
-  sourceKind: RuntimeEffectSourceKind
+  sourceKind: EffectRuntimeSourceKind
 ): string[] {
+  const resolution = resolveEffectRuntimeCatalogEntry(
+    subjectId,
+    effectId,
+    effect,
+    mode,
+    sourceKind
+  );
+  if (!resolution.ok) {
+    return resolution.errors;
+  }
+
+  const catalogEntry = resolution.entry;
+
+  const targetSelector = effect["targetSelector"];
   if (
-    sourceKind === "card" &&
-    effectId === "temporary_hand_limit_by_gained_card_type"
+    targetSelector !== undefined &&
+    (!isRuntimeEffectTargetSelector(targetSelector) ||
+      !catalogEntry.handler.allowedTargetSelectors?.includes(targetSelector))
   ) {
-    return [`${subjectId} uses token-only effect id ${effectId}`];
+    return [`${subjectId} ${effectId} uses unsupported target selector`];
   }
 
-  const catalogEntry = isRuntimeEffectId(effectId)
-    ? getEffectRuntimeCatalogEntry(effectId)
-    : undefined;
-  if (catalogEntry !== undefined) {
-    if (!isEffectRuntimeCatalogEntrySupportedInMode(catalogEntry, mode)) {
-      if (mode === "combat" && effectId.startsWith("fixture_")) {
-        return [
-          `${subjectId} uses fixture effect id ${effectId} in combat data`,
-        ];
-      }
-
-      return [
-        `${subjectId} uses effect id ${effectId} outside supported ${mode} mode`,
-      ];
-    }
-
-    const shapeErrors = catalogEntry.handler.validateShape(
-      subjectId,
-      effect as unknown as RuntimeEffectPayload
-    );
-    if (shapeErrors.length > 0) {
-      return shapeErrors;
-    }
-
-    const targetSelector = effect["targetSelector"];
-    if (
-      targetSelector !== undefined &&
-      (!isRuntimeEffectTargetSelector(targetSelector) ||
-        !catalogEntry.handler.allowedTargetSelectors?.includes(targetSelector))
-    ) {
-      return [`${subjectId} ${effectId} uses unsupported target selector`];
-    }
-
-    return validateNestedAttackBranches(subjectId, effect, mode, sourceKind);
-  }
-
-  return [`${subjectId} uses unsupported effect id ${effectId}`];
+  return validateNestedAttackBranches(subjectId, effect, mode, sourceKind);
 }
 
 function validateNestedAttackBranches(
   subjectId: string,
   effect: Record<string, unknown>,
   mode: EffectRuntimeMode,
-  sourceKind: RuntimeEffectSourceKind
+  sourceKind: EffectRuntimeSourceKind
 ): string[] {
   const errors: string[] = [];
   for (const field of ["branchEffects", "onDamageDealt", "onKill"] as const) {
@@ -2312,4 +2370,15 @@ function validateNestedAttackBranches(
 
 function isEffectRecord(effect: unknown): effect is Record<string, unknown> {
   return isPlainRecord(effect);
+}
+
+function isCanonicalAssetPath(value: string): boolean {
+  return (
+    value.trim() === value &&
+    value.startsWith("assets/") &&
+    !value.endsWith("/") &&
+    !value.includes("\\") &&
+    path.posix.normalize(value) === value &&
+    !path.posix.isAbsolute(value)
+  );
 }

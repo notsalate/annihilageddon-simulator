@@ -9,11 +9,10 @@ import {
 import {
   type DamageResult,
   type EffectChoice,
-  getEffectRuntimeCatalogEntry,
   type EffectExecutionResult,
   type EffectRuntimeServices,
   type EffectSourceContext,
-  isEffectRuntimeCatalogEntrySupportedInMode,
+  resolveEffectRuntimeCatalogEntry,
   type TargetChoice,
   type TargetChoiceResult,
 } from "./effect-runtime-registry.js";
@@ -127,7 +126,7 @@ export function executeWizardPropertyOnPlayCardEffects(
         tokenDefinitionId: token.definitionId,
       }
     );
-    if (!result.ok) {
+    if (!result.ok || result.gameEnd !== undefined) {
       return result;
     }
   }
@@ -327,22 +326,12 @@ function executeEffects(
       continue;
     }
 
-    if (
-      timing === "onMayhemResolve" &&
-      !isSupportedMayhemRuntimeEffect(effect)
-    ) {
-      return {
-        ok: false,
-        error: `Unsupported Mayhem effect id ${asString(effect["effectId"])}`,
-      };
-    }
-
     if (!effectConditionMatches(state, player, effect)) {
       continue;
     }
 
     const result = executeEffect(state, player, effect, source);
-    if (!result.ok) {
+    if (!result.ok || result.gameEnd !== undefined) {
       return result;
     }
   }
@@ -377,53 +366,34 @@ function countGainedCardsMatchingEffect(
   }).length;
 }
 
-function isSupportedMayhemRuntimeEffect(effect: RuntimeEffect): boolean {
-  return getEffectRuntimeCatalogEntry(effect.effectId) !== undefined;
-}
-
-function executeEffect(
+export function executeEffect(
   state: GameState,
   player: PlayerState,
   effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): EffectExecutionResult {
-  const catalogEntry = getEffectRuntimeCatalogEntry(effect.effectId);
-  if (catalogEntry !== undefined) {
-    if (
-      !isEffectRuntimeCatalogEntrySupportedInMode(
-        catalogEntry,
-        source.runtimeMode
-      )
-    ) {
-      return {
-        ok: false,
-        error: `Effect id ${catalogEntry.effectId} is not supported in ${source.runtimeMode} runtime mode`,
-      };
-    }
-
-    if (!("timing" in effect)) {
-      const shapeErrors = catalogEntry.handler.validateShape(
-        `Effect ${catalogEntry.effectId}`,
-        effect
-      );
-      if (shapeErrors.length > 0) {
-        return { ok: false, error: shapeErrors.join("; ") };
-      }
-    }
-
-    return catalogEntry.handler.execute(
-      state,
-      player,
-      effect,
-      source,
-      effectRuntimeServices
-    );
+  const resolution = resolveEffectRuntimeCatalogEntry(
+    `Effect ${asString(effect["effectId"])}`,
+    asString(effect["effectId"]),
+    effect,
+    source.runtimeMode,
+    source.sourceType
+  );
+  if (!resolution.ok) {
+    return { ok: false, error: getEffectExecutionError(resolution.errors) };
   }
 
-  return {
-    ok: false,
-    error: `Unsupported effect id ${asString(effect["effectId"])}`,
-  };
+  return resolution.entry.handler.execute(
+    state,
+    player,
+    effect,
+    source,
+    effectRuntimeServices
+  );
+}
+
+export function getEffectExecutionError(errors: readonly string[]): string {
+  return errors[0] ?? "Effect resolution failed without diagnostic";
 }
 
 function effectConditionMatches(
@@ -825,52 +795,73 @@ function resolveTargetChoice(
     return choicesResult;
   }
 
-  const choice = chooseFirstLegalChoice(choicesResult.choices);
-  if (choice === undefined) {
-    recordGameEvent(state, {
-      type: "effectChoiceSkipped",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: asString(effect["effectId"]),
-      sourceType: source.sourceType,
-    });
-
-    if (effect["emptyChoice"] === "fail") {
-      return {
-        ok: false,
-        error: `No legal choices for effect ${asString(effect["effectId"])}`,
-      };
-    }
-
-    return {
-      ok: true,
-      choice: undefined,
-    };
-  }
-
-  recordGameEvent(state, {
-    type: "effectChoiceSelected",
-    playerId: player.playerId,
-    cardInstanceId: source.cardInstanceId,
-    definitionId: source.definitionId,
-    ...(choice.choiceType === "card"
+  const effectId = effect["effectId"];
+  const runtimeChoices: EffectChoice[] = choicesResult.choices.map((choice) =>
+    choice.choiceType === "card"
       ? {
           choiceKind: "cardTarget" as const,
-          targetCardInstanceId: choice.card.instanceId,
-          targetDefinitionId: choice.card.definitionId,
+          choiceId: choice.card.instanceId,
+          cards: [choice.card],
+          amount: 1,
         }
       : {
           choiceKind: "playerTarget" as const,
-          targetPlayerId: choice.player.playerId,
-        }),
-    effectId: asString(effect["effectId"]),
-    sourceType: source.sourceType,
-  });
+          choiceId: choice.player.playerId,
+          players: [choice.player],
+        }
+  );
+  const selected = chooseEffectChoice(
+    state,
+    player,
+    source,
+    effectId,
+    runtimeChoices
+  );
+  if (selected === undefined) {
+    if (effect["emptyChoice"] === "fail") {
+      return {
+        ok: false,
+        error: `No legal choices for effect ${asString(effectId)}`,
+      };
+    }
+    return { ok: true, choice: undefined };
+  }
 
+  if (selected.choiceKind === "cardTarget") {
+    if (selected.cards.length !== 1) {
+      return {
+        ok: false,
+        error: `Card target choice must contain exactly one card`,
+      };
+    }
+    const card = selected.cards[0];
+    if (card === undefined) {
+      return {
+        ok: false,
+        error: `Card target choice must contain exactly one card`,
+      };
+    }
+    return { ok: true, choice: { choiceType: "card", card } };
+  }
+  if (selected.choiceKind === "playerTarget") {
+    if (selected.players.length !== 1) {
+      return {
+        ok: false,
+        error: `Player target choice must contain exactly one player`,
+      };
+    }
+    const targetPlayer = selected.players[0];
+    if (targetPlayer === undefined) {
+      return {
+        ok: false,
+        error: `Player target choice must contain exactly one player`,
+      };
+    }
+    return { ok: true, choice: { choiceType: "player", player: targetPlayer } };
+  }
   return {
-    ok: true,
-    choice,
+    ok: false,
+    error: `Unsupported target choice kind ${selected.choiceKind}`,
   };
 }
 
@@ -921,6 +912,9 @@ function chooseEffectChoice(
             targetPlayerIds: choice.players.map(
               (candidate) => candidate.playerId
             ),
+            ...(choice.players.length === 1
+              ? { targetPlayerId: choice.players[0]!.playerId }
+              : {}),
           }
         : choice.choiceKind === "cardTarget"
           ? {
@@ -933,6 +927,12 @@ function chooseEffectChoice(
               targetDefinitionIds: choice.cards.map(
                 (candidate) => candidate.definitionId
               ),
+              ...(choice.cards.length === 1
+                ? {
+                    targetCardInstanceId: choice.cards[0]!.instanceId,
+                    targetDefinitionId: choice.cards[0]!.definitionId,
+                  }
+                : {}),
             }
           : {
               ...choicePayloadBase,
@@ -1061,12 +1061,6 @@ function buildLegalTargetChoices(
     ok: false,
     error: `Unsupported target selector ${asString(selector)}`,
   };
-}
-
-function chooseFirstLegalChoice(
-  choices: readonly TargetChoice[]
-): TargetChoice | undefined {
-  return choices[0];
 }
 
 function requireCardChoice(
@@ -2015,7 +2009,7 @@ function playResolvedCard(
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
   });
-  if (!effectResult.ok) {
+  if (!effectResult.ok || effectResult.gameEnd !== undefined) {
     return effectResult;
   }
 

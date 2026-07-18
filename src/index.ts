@@ -22,6 +22,7 @@ export type { RandomSource } from "./engine/rng.js";
 export { createSeededRng } from "./engine/rng.js";
 export type {
   CardDefinition,
+  RuntimeSourceMetadata,
   DecodeResult,
   DataPackValidationOptions,
   DataPackValidationResult,
@@ -122,6 +123,28 @@ export type {
   TrophyLikeInstance,
 } from "./engine/setup.js";
 export { initializeGame } from "./engine/setup.js";
+export { forkGameState } from "./engine/game-state-fork.js";
+export type {
+  AnalysisChoiceSelection,
+  AnalysisActionStep,
+  AnalyzedTurnLine,
+  RankedTurnLine,
+  RankedTurnLinesResult,
+  TurnLineEvaluation,
+  TurnLineEvaluationContext,
+  TurnLineEvaluationPolicy,
+  AnalysisError,
+  AnalysisLimits,
+  AnalysisLimitError,
+  CompletedActionBranch,
+} from "./engine/best-move-analysis.js";
+export { victoryPointsPolicy, BEST_MOVE_POLICIES, getBestMovePolicy } from "./engine/best-move-policies.js";
+export {
+  enumerateActionBranches,
+  enumerateImmediateActionBranches,
+  enumerateTurnLines,
+  rankTurnLines,
+} from "./engine/best-move-analysis.js";
 export { assertGameStateInvariants } from "./engine/invariants.js";
 export type {
   ActionResult,

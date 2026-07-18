@@ -64,6 +64,7 @@ test("cardDraft reports missing required fields", () => {
   assert.ok(hasMessage(validation.errors, "schemaVersion"));
   assert.ok(hasMessage(validation.errors, "cardId"));
   assert.ok(hasMessage(validation.errors, "source.text"));
+  assert.ok(hasMessage(validation.errors, "source.image is required"));
   assert.ok(hasMessage(validation.errors, "visible.textRu"));
   assert.ok(hasMessage(validation.errors, "visible.cardKind"));
 });
@@ -157,7 +158,7 @@ test("draft validation rejects IDs outside the new import ID style", () => {
   );
 });
 
-test("cardDraft reports uncertainty and missing source image as warnings", () => {
+test("cardDraft reports uncertainty and missing source image as errors", () => {
   const draft = createValidCardDraft();
   const validation = validateCardDraft({
     ...draft,
@@ -170,10 +171,25 @@ test("cardDraft reports uncertainty and missing source image as warnings", () =>
     },
   });
 
-  assert.equal(validation.ok, true);
-  assert.deepEqual(validation.errors, []);
-  assert.ok(hasMessage(validation.warnings, "source.image"));
+  assert.equal(validation.ok, false);
+  assert.ok(hasMessage(validation.errors, "source.image is required"));
   assert.ok(hasMessage(validation.warnings, "visible.uncertainty"));
+});
+
+test("cardDraft rejects empty and whitespace-only source image", () => {
+  for (const image of ["", "   ", "\t\n"]) {
+    const validation = validateCardDraft({
+      ...createValidCardDraft(),
+      source: { ...createValidCardDraft().source, image },
+    });
+
+    assert.equal(validation.ok, false, JSON.stringify(image));
+    assert.ok(hasMessage(validation.errors, "source.image is required"));
+    assert.match(
+      formatDraftValidationResult(validation),
+      /Not ready for runtime mapping:/
+    );
+  }
 });
 
 test("draft validation formatter reports runtime mapping readiness", () => {
@@ -214,6 +230,26 @@ test("valid deadWizardTokenDraft passes draft validation", () => {
   assert.equal(validation.ok, true);
   assert.deepEqual(validation.errors, []);
   assert.deepEqual(validation.warnings, []);
+});
+
+test("wizardPropertyDraft requires a non-empty source image", () => {
+  for (const image of [undefined, null, 42, "", "  "]) {
+    const draft = createValidWizardPropertyDraft();
+    const source = { ...draft.source } as Record<string, unknown>;
+    if (image === undefined) {
+      delete source["image"];
+    } else {
+      source["image"] = image;
+    }
+
+    const validation = validateWizardPropertyDraft({ ...draft, source });
+    assert.equal(validation.ok, false, String(image));
+    assert.ok(hasMessage(validation.errors, "source.image is required"));
+    assert.match(
+      formatDraftValidationResult(validation),
+      /Not ready for runtime mapping:/
+    );
+  }
 });
 
 test("deadWizardTokenDraft rejects runtime-only fields", () => {
@@ -261,7 +297,7 @@ test("deadWizardTokenDraft allows visible victory points as number or null", () 
   assert.equal(validateDraft(draftWithoutVictoryPoints).ok, true);
 });
 
-test("deadWizardTokenDraft reports uncertainty and missing source image as warnings", () => {
+test("deadWizardTokenDraft reports uncertainty and missing source image as errors", () => {
   const draft = createValidDeadWizardTokenDraft();
   const validation = validateDraft({
     ...draft,
@@ -274,10 +310,26 @@ test("deadWizardTokenDraft reports uncertainty and missing source image as warni
     },
   });
 
-  assert.equal(validation.ok, true);
-  assert.deepEqual(validation.errors, []);
-  assert.ok(hasMessage(validation.warnings, "source.image"));
+  assert.equal(validation.ok, false);
+  assert.ok(hasMessage(validation.errors, "source.image is required"));
   assert.ok(hasMessage(validation.warnings, "visible.uncertainty"));
+});
+
+test("deadWizardTokenDraft rejects empty and whitespace-only source image", () => {
+  for (const image of ["", "   ", "\t\n"]) {
+    const draft = createValidDeadWizardTokenDraft();
+    const validation = validateDraft({
+      ...draft,
+      source: { ...draft.source, image },
+    });
+
+    assert.equal(validation.ok, false, JSON.stringify(image));
+    assert.ok(hasMessage(validation.errors, "source.image is required"));
+    assert.match(
+      formatDraftValidationResult(validation),
+      /Not ready for runtime mapping:/
+    );
+  }
 });
 
 test("draft file validation includes dead wizard token drafts by default", () => {

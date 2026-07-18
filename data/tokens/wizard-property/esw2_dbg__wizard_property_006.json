@@ -3,10 +3,10 @@
   "tokenId": "esw2_dbg__wizard_property_006",
   "runtimeSchema": "krutagidon.tokenDefinition.v0",
   "kind": "wizardProperty",
+  "source": { "image": "assets/wizard-property/wp_006.png", "text": "data/import/tokens/wizard-property/texts/esw2_dbg__wizard_property_006.md" },
   "visible": {
     "textRu": "Когда ты получаешь тварь, можешь положить её на верх своей колоды.",
-    "sourceLabel": "Свойство 6",
-    "sourceImage": "assets/wizard-property/wp_006.png"
+    "sourceLabel": "Свойство 6"
   },
   "clarifications": [
     "Свойство срабатывает, когда игрок получает карту-тварь.",

@@ -16,14 +16,176 @@ import {
   type SingleGameResult,
 } from "../src/index.js";
 import { executeOnPlayEffects } from "../src/engine/effect-runtime.js";
-import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
+import {
+  type EffectRuntimeHandler,
+  type EffectSourceContext,
+} from "../src/engine/effect-runtime-registry.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
   markPlayerId,
 } from "../src/domain/types.js";
+import { withTemporaryEffectRuntimeHandler } from "./helpers/with-temporary-effect-runtime-handler.js";
 
 const rootDir = process.cwd();
+const fixturePlayerDefeatEffectId = "fixture_add_power_equal_to_target_cost";
+const fixturePlayerDefeatHandler: EffectRuntimeHandler = {
+  effectId: fixturePlayerDefeatEffectId,
+  validateShape() {
+    return [];
+  },
+  execute(_state, player) {
+    return {
+      ok: true,
+      gameEnd: {
+        reason: "playerDefeated",
+        winnerPlayerId: player.playerId,
+      },
+    };
+  },
+};
+
+test("playCard propagates a fixture effect's player-defeat game end", () => {
+  const state = initializeGame({ rootDir, seed: 99118 });
+  const activePlayer = mustGetActivePlayer(state);
+  const runScenario = () => {
+    const card = addFixtureCardToActiveHand(
+      state,
+      createFixtureCardDefinition("fixture-player-defeat", "normal", [
+        { effectId: fixturePlayerDefeatEffectId, timing: "onPlay" },
+      ])
+    );
+
+    const result = applyAction(state, {
+      type: "playCard",
+      cardInstanceId: card.instanceId,
+    });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      return;
+    }
+    assert.equal(result.gameEndReason, "playerDefeated");
+    assert.equal(result.winnerPlayerId, activePlayer.playerId);
+  };
+
+  withTemporaryEffectRuntimeHandler(
+    fixturePlayerDefeatEffectId,
+    fixturePlayerDefeatHandler,
+    runScenario
+  );
+});
+
+test("play_top_card propagates game end from the nested card", () => {
+  const state = initializeGame({ rootDir, seed: 99119 });
+  const activePlayer = mustGetActivePlayer(state);
+  const runScenario = () => {
+    const nestedDefinition = createFixtureCardDefinition(
+      "fixture-nested-player-defeat",
+      "normal",
+      [{ effectId: fixturePlayerDefeatEffectId, timing: "onPlay" }]
+    );
+    state.cardDefinitions = new Map([
+      ...state.cardDefinitions,
+      [nestedDefinition.cardId, nestedDefinition],
+    ]);
+    activePlayer.deck.unshift(
+      createCardInstance(
+        "fixture-nested-player-defeat-instance",
+        nestedDefinition.cardId,
+        activePlayer.playerId
+      )
+    );
+    const outerCard = addFixtureCardToActiveHand(
+      state,
+      createFixtureCardDefinition("fixture-play-top-player-defeat", "normal", [
+        {
+          effectId: "play_top_card",
+          timing: "onPlay",
+          source: "activePlayerDeck",
+          destination: "play",
+        },
+      ])
+    );
+
+    const result = applyAction(state, {
+      type: "playCard",
+      cardInstanceId: outerCard.instanceId,
+    });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      return;
+    }
+    assert.equal(result.gameEndReason, "playerDefeated");
+    assert.equal(result.winnerPlayerId, activePlayer.playerId);
+  };
+
+  withTemporaryEffectRuntimeHandler(
+    fixturePlayerDefeatEffectId,
+    fixturePlayerDefeatHandler,
+    runScenario
+  );
+});
+
+test("play_top_card_from_foe_deck propagates game end from the nested card", () => {
+  const state = initializeGame({ rootDir, seed: 99120, playerCount: 2 });
+  const activePlayer = mustGetActivePlayer(state);
+  const foe = state.players.find(
+    (candidate) => candidate.playerId !== activePlayer.playerId
+  );
+  assert.ok(foe);
+  const runScenario = () => {
+    const nestedDefinition = createFixtureCardDefinition(
+      "fixture-foe-nested-player-defeat",
+      "normal",
+      [{ effectId: fixturePlayerDefeatEffectId, timing: "onPlay" }]
+    );
+    state.cardDefinitions = new Map([
+      ...state.cardDefinitions,
+      [nestedDefinition.cardId, nestedDefinition],
+    ]);
+    foe.deck.unshift(
+      createCardInstance(
+        "fixture-foe-nested-player-defeat-instance",
+        nestedDefinition.cardId,
+        foe.playerId
+      )
+    );
+    const outerCard = addFixtureCardToActiveHand(
+      state,
+      createFixtureCardDefinition(
+        "fixture-play-foe-top-player-defeat",
+        "normal",
+        [
+          {
+            effectId: "play_top_card_from_foe_deck",
+            timing: "onPlay",
+            targetSelector: "chosenFoe",
+          },
+        ]
+      )
+    );
+
+    const result = applyAction(state, {
+      type: "playCard",
+      cardInstanceId: outerCard.instanceId,
+    });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      return;
+    }
+    assert.equal(result.gameEndReason, "playerDefeated");
+    assert.equal(result.winnerPlayerId, activePlayer.playerId);
+  };
+
+  withTemporaryEffectRuntimeHandler(
+    fixturePlayerDefeatEffectId,
+    fixturePlayerDefeatHandler,
+    runScenario
+  );
+});
 
 test("optional effect records a typed option choice payload", () => {
   const state = initializeGame({ rootDir, seed: 99117, playerCount: 2 });
@@ -675,6 +837,7 @@ function createFixtureCardDefinition(
   return {
     schemaVersion: 1,
     cardId,
+    source: { image: `assets/cards/fixtures/${cardId}.png` },
     visible: {
       nameRu: cardId,
       cost: 0,

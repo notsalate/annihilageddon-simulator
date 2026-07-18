@@ -188,6 +188,7 @@ function createZeroedEndReasonCounts(): Record<GameEndReason, number> {
     deadWizardTokensExhausted: 0,
     mainDeckExhausted: 0,
     legendDeckExhausted: 0,
+    playerDefeated: 0,
     maxTurnsReached: 0,
   };
 }

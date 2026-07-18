@@ -24,8 +24,6 @@ import {
   type TokenDefinition,
 } from "../src/index.js";
 import {
-  effectRuntimeCatalog,
-  effectRuntimeCatalogSource,
   type EffectRuntimeServices,
   getEffectRuntimeCatalogEntry,
   getEffectRuntimeHandler,
@@ -519,11 +517,50 @@ test("effect runtime lookup retains the handler type for its effect id", () => {
   assert.equal(anotherEffectIdIsRejectedByTheAddPowerHandler, true);
 });
 
-test("effect runtime lookup is derived from its typed catalog source", () => {
-  assert.deepEqual(
-    Array.from(effectRuntimeCatalog.keys()).sort(),
-    Object.keys(effectRuntimeCatalogSource).sort()
+test("executable validation applies catalog source kinds", () => {
+  const effectId = "temporary_hand_limit_by_gained_card_type";
+  const effect = {
+    effectId,
+    timing: "endTurn",
+    amount: 1,
+    cardTypes: ["spell"],
+  };
+
+  const wizardPropertyResult = validateExecutableDataPack(
+    withFixtureToken({
+      schemaVersion: 1,
+      tokenId: "wizard-property-fixture-source-kind-validation",
+      runtimeSchema: "krutagidon.tokenDefinition.v0",
+      kind: "wizardProperty",
+      visible: {
+        textRu: "За полученное заклинание добери на 1 карту больше.",
+      },
+      engine: {
+        mappingStatus: "fixture",
+        playableInV0: true,
+        effects: [effect],
+        unsupportedMechanics: [],
+      },
+    })
   );
+  assert.deepEqual(wizardPropertyResult, { ok: true });
+
+  const deadWizardTokenResult = validateExecutableDataPack(
+    withFixtureToken({
+      schemaVersion: 1,
+      tokenId: "dead-wizard-token-fixture-source-kind-validation",
+      runtimeSchema: "krutagidon.tokenDefinition.v0",
+      kind: "deadWizardToken",
+      victoryPoints: 0,
+      effects: [effect],
+    })
+  );
+  assert.deepEqual(deadWizardTokenResult, {
+    ok: false,
+    errors: [
+      "Token dead-wizard-token-fixture-source-kind-validation uses token-only effect id temporary_hand_limit_by_gained_card_type",
+    ],
+  });
 });
 
 test("runtime effect target selectors are exposed as a literal union", () => {
@@ -803,6 +840,7 @@ test("runtime data decoder rejects invalid card and token definition field shape
     tokenId: "bad-token",
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "wizardProperty",
+    source: { image: "assets/dead-wizard-token/DWT_001.png" },
     visible: {
       textRu: 7,
     },
@@ -978,6 +1016,7 @@ test("runtime data decoder does not pass raw object fields through", () => {
     tokenId: "dead-token",
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "deadWizardToken",
+    source: { image: "assets/dead-wizard-token/DWT_001.png" },
     victoryPoints: 0,
     effects: [],
     rawOnly: true,
@@ -2138,6 +2177,7 @@ test("executable data-pack validation rejects invalid effective-value modifier s
     tokenId: "wizard-property-fixture-invalid-effective-value",
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "wizardProperty",
+    source: { image: "assets/dead-wizard-token/DWT_001.png" },
     visible: {
       textRu: "Твоя скидка на сокровища считается неверно.",
     },
@@ -3002,12 +3042,19 @@ function withOnlyFixtureCard(card: CardDefinition): LoadedDataPack {
   };
 }
 
-function withFixtureToken(token: TokenDefinition): LoadedDataPack {
+function withFixtureToken(token: unknown): LoadedDataPack {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const fixtureToken = token as TokenDefinition & {
+    source?: TokenDefinition["source"];
+  };
+  const normalizedToken = {
+    ...fixtureToken,
+    source: fixtureToken.source ?? { image: "assets/tokens/fixture.png" },
+  } as TokenDefinition;
   return {
     ...dataPack,
     cardDefinitions: new Map(),
-    tokenDefinitions: new Map([[token.tokenId, token]]),
+    tokenDefinitions: new Map([[normalizedToken.tokenId, normalizedToken]]),
   };
 }
 
@@ -3080,6 +3127,7 @@ function createFixtureCard(cardId: string): CardDefinition {
   return {
     schemaVersion: 1,
     cardId,
+    source: { image: `assets/cards/fixtures/${cardId}.png` },
     visible: {
       nameRu: cardId,
       cost: 0,
@@ -3167,6 +3215,7 @@ function writeRuntimeToken(
     tokenId,
     runtimeSchema: "krutagidon.tokenDefinition.v0",
     kind: "wizardProperty",
+    source: { image: "assets/dead-wizard-token/DWT_001.png" },
     visible: {
       textRu: "Fixture token",
     },
