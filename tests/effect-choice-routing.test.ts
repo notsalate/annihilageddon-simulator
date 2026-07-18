@@ -87,6 +87,14 @@ test("chosenFoe without a callback keeps the first opponent baseline", () => {
   );
   assert.equal(choiceEvents.length, 1);
   assert.equal(choiceEvents[0]?.choiceId, firstFoe.playerId);
+  const allChoiceEvents = state.eventLog.filter(
+    (event) =>
+      (event.type === "effectChoiceSelected" ||
+        event.type === "effectChoiceSkipped") &&
+      event.effectId === "attack_damage" &&
+      event.cardInstanceId === source.instanceId
+  );
+  assert.equal(allChoiceEvents.length, 1);
 });
 
 test("target choice strategy can select a non-first chosenPlayer target", () => {
