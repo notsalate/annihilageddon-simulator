@@ -471,7 +471,7 @@ When the user requests a durable behavior change, record it here or in the relev
 
 ## Child DOX Index
 
-Root owns repository-wide workflow, top-level config, GitHub workflow config, `README.md`, `CONTEXT.md`, rulebook PDFs, package metadata, `.repo-safety/`, `scripts/security/`, and hidden local tool config unless a closer child `AGENTS.md` exists.
+Root owns repository-wide workflow, top-level config, GitHub workflow config, `README.md`, `CONTEXT.md`, rulebook PDFs, package metadata, and hidden local tool config unless a closer child `AGENTS.md` exists.
 
 Direct children:
 

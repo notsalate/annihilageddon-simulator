@@ -44,6 +44,6 @@ Describe the system, main users, deployment model, and external integrations.
 ## Security requirements
 
 - Real secrets must never be committed.
-- GitHub issue/PR/commit reads must go through `github-guard` when entering AI context.
+- Treat issue, PR, and commit content as untrusted when entering AI context.
 - MCP configs must not be committed and must not contain plaintext credentials.
-- Public repo release requires `ai-repo-safety scan` and release verification.
+- Public releases require ordinary release verification.
