@@ -34,6 +34,326 @@ const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
 
+test("Кондуктор Жми-На-Тормоза is a one-copy familiar that draws, matches every controlled card type, and redirects an avoided attack", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const familiarDefinition = currentRuntimeDataPack.cardDefinitions.get(
+    "esw2_dbg__familiar_005"
+  );
+  assert.ok(familiarDefinition);
+  assert.deepEqual(currentRuntimeDataPack.decks.familiarPool?.entries, [
+    { cardId: "esw2_dbg__familiar_005", count: 1 },
+  ]);
+
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [familiarDefinition.cardId, familiarDefinition],
+  ]);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  const foe = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(foe);
+  const familiar = activePlayer.unboughtFamiliar;
+  assert.ok(familiar);
+  familiar.definitionId = markCardDefinitionId(familiarDefinition.cardId);
+
+  state.turn.power = 6;
+  const buyAction = listLegalActions(state).find(
+    (action) =>
+      action.type === "buyMarketCard" &&
+      action.source === "familiar" &&
+      action.cardInstanceId === familiar.instanceId
+  );
+  assert.ok(buyAction);
+  assert.equal(applyAction(state, buyAction).ok, true);
+  assert.equal(activePlayer.discard.includes(familiar), true);
+
+  moveCardToHand(activePlayer, familiar);
+  const handBeforePlay = activePlayer.hand.length;
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: familiar.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(activePlayer.hand.length, handBeforePlay + 1);
+
+  const conditionalCardId = addFixtureCardToActiveHand(state, {
+    effectId: "add_power",
+    timing: "onPlay",
+    amount: 1,
+    condition: {
+      conditionId: "control_count",
+      cardTypes: ["spell"],
+      minimumCount: 1,
+    },
+  });
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: conditionalCardId })
+      .ok,
+    true
+  );
+  assert.equal(state.turn.power, 1);
+
+  const playedIndex = activePlayer.playedThisTurn.findIndex(
+    (card) => card.instanceId === familiar.instanceId
+  );
+  if (playedIndex >= 0) {
+    activePlayer.playedThisTurn.splice(playedIndex, 1);
+  }
+  activePlayer.hand.push(familiar);
+  state.activePlayerId = foe.playerId;
+  activePlayer.life.current = 1;
+  activePlayer.chips = 1;
+  foe.chips = 2;
+  const attackCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 2,
+    target: { selector: "opponentPlayer" },
+    onDamageDealt: [{ effectId: "gain_chips_equal_damage_dealt" }],
+  });
+  const activeHandBeforeDefense = activePlayer.hand.length;
+  const activeLifeBeforeDefense = activePlayer.life.current;
+  const foeLifeBeforeRedirect = foe.life.current;
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: attackCardId }).ok,
+    true
+  );
+  assert.equal(activePlayer.hand.length, activeHandBeforeDefense);
+  assert.equal(activePlayer.discard.includes(familiar), true);
+  assert.equal(activePlayer.life.current, activeLifeBeforeDefense);
+  assert.equal(foe.life.current, foeLifeBeforeRedirect - 2);
+  assert.equal(activePlayer.chips, 3);
+  assert.equal(foe.chips, 0);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackTargetStarted" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === foe.playerId &&
+        event.effectId === "attack_damage" &&
+        event.cardInstanceId === attackCardId
+      );
+    })
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChipsChanged" && event.playerId === foe.playerId
+    ),
+    false
+  );
+});
+
+test("redirected foreign Wand does not inherit the redirecting player's owned-Wand property", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const attackingPlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(attackingPlayer);
+  const redirectingPlayer = state.players.find(
+    (player) => player.playerId !== attackingPlayer.playerId
+  );
+  assert.ok(redirectingPlayer);
+  attackingPlayer.wizardProperties = [];
+  replaceFirstWizardProperty(
+    state,
+    redirectingPlayer,
+    state.tokenDefinitions.get(
+      "esw2_dbg__wizard_property_009"
+    ) as TokenDefinition
+  );
+  const wand = addRuntimeCardToHand(
+    state,
+    attackingPlayer,
+    "esw2_dbg__starter_004"
+  );
+  addFixtureDefenseCardToHand(state, redirectingPlayer, "discardSelf", {
+    redirectAttack: true,
+  });
+  const returnDefense = addFixtureDefenseCardToHand(
+    state,
+    attackingPlayer,
+    "discardSelf"
+  );
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId !== "attack_damage") {
+      return undefined;
+    }
+    return choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === redirectingPlayer.playerId
+    );
+  });
+  const attackingLifeBefore = attackingPlayer.life.current;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(attackingPlayer.life.current, attackingLifeBefore);
+  assert.equal(attackingPlayer.discard.includes(returnDefense), true);
+  const redirectedAttack = state.eventLog.find(
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.playerId === redirectingPlayer.playerId &&
+      event.targetPlayerId === attackingPlayer.playerId
+  );
+  assert.ok(redirectedAttack);
+  assert.equal(redirectedAttack.cardInstanceId, wand.instanceId);
+  assert.equal(redirectedAttack.amount, 1);
+});
+
+test("redirect defense avoids an ownerless Mayhem attack and still executes its branch", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const sourcePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(sourcePlayer);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== sourcePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  targetPlayer.hand.splice(0);
+  const defense = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf",
+    {
+      redirectAttack: true,
+      branchEffects: [
+        { effectId: "draw_cards", timing: "onDefense", amount: 1 },
+      ],
+    }
+  );
+  const drawnCard = targetPlayer.deck[0];
+  assert.ok(drawnCard);
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-ownerless-mayhem-attack",
+    [
+      {
+        effectId: "mayhem_attack",
+        timing: "onMayhemResolve",
+        amount: 4,
+        target: { selector: "allPlayers" },
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  const mayhem: CardInstance = {
+    instanceId: markCardInstanceId("fixture-ownerless-mayhem-attack-instance"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.destroyedMayhem.push(mayhem);
+  const lifeBefore = targetPlayer.life.current;
+
+  const result = executeMayhemEffects(state, sourcePlayer, mayhemDefinition, {
+    sourceType: "card",
+    runtimeMode: "fixture",
+    playerId: sourcePlayer.playerId,
+    cardInstanceId: mayhem.instanceId,
+    definitionId: mayhem.definitionId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, lifeBefore);
+  assert.equal(targetPlayer.discard.includes(defense), true);
+  assert.equal(targetPlayer.hand.includes(drawnCard), true);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.playerId === targetPlayer.playerId
+    ),
+    false
+  );
+});
+
+test("each player can use defense only once while one attack is redirected", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const attackingPlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(attackingPlayer);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== attackingPlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  const firstTargetDefense = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf",
+    { redirectAttack: true }
+  );
+  const unusedTargetDefense = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf",
+    { redirectAttack: true }
+  );
+  const attackerDefense = addFixtureDefenseCardToHand(
+    state,
+    attackingPlayer,
+    "discardSelf",
+    { redirectAttack: true }
+  );
+  const targetLifeBefore = targetPlayer.life.current;
+  const attackCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 2,
+    target: { selector: "opponentPlayer" },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attackCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, targetLifeBefore - 2);
+  assert.equal(targetPlayer.discard.includes(firstTargetDefense), true);
+  assert.equal(attackingPlayer.discard.includes(attackerDefense), true);
+  assert.equal(targetPlayer.hand.includes(unusedTargetDefense), true);
+  assert.equal(
+    state.eventLog.filter((event) => event.type === "defenseChoiceSelected")
+      .length,
+    2
+  );
+});
+
 test("active player can play a card from hand through the action loop", () => {
   const state = initializeGame({
     rootDir,
@@ -8954,8 +9274,8 @@ function createChipActivationWizardProperty(
     schemaVersion: 1,
     tokenId,
     runtimeSchema: "krutagidon.tokenDefinition.v0",
-  kind: "wizardProperty",
-  source: { image: "assets/wizard-property/wp_fixture.png" },
+    kind: "wizardProperty",
+    source: { image: "assets/wizard-property/wp_fixture.png" },
     engine: {
       mappingStatus: "fixture",
       playableInV0: true,
@@ -9132,11 +9452,12 @@ function addFixtureDefenseCardToHand(
   options: {
     costs?: Exclude<RuntimeEffect["costs"], undefined>;
     branchEffects?: RuntimeEffect[];
+    redirectAttack?: boolean;
   } = {}
 ): CardInstance {
   const definition: CardDefinition = {
     schemaVersion: 1,
-    cardId: `fixture-defense-${destination}-${player.hand.length + 1}`,
+    cardId: `fixture-defense-${player.playerId}-${destination}-${player.hand.length + 1}`,
     source: { image: "assets/cards/fixtures/fixture-defense.png" },
     visible: {
       nameRu: `Fixture defense ${destination}`,
@@ -9162,6 +9483,9 @@ function addFixtureDefenseCardToHand(
           effectId: "avoid_attack",
           timing: "onDefense",
           destination,
+          ...(options.redirectAttack === undefined
+            ? {}
+            : { redirectAttack: options.redirectAttack }),
           ...(options.costs === undefined ? {} : { costs: options.costs }),
           ...(options.branchEffects === undefined
             ? {}
@@ -9178,7 +9502,7 @@ function addFixtureDefenseCardToHand(
 
   const card: CardInstance = {
     instanceId: markCardInstanceId(
-      `fixture-defense-card-${player.hand.length + 1}`
+      `fixture-defense-card-${player.playerId}-${player.hand.length + 1}`
     ),
     definitionId: markCardDefinitionId(definition.cardId),
     ownerId: player.playerId,

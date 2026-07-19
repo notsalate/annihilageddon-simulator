@@ -1998,6 +1998,7 @@ const runtimeEffectPayloadFields = [
   "operation",
   "optional",
   "options",
+  "redirectAttack",
   "source",
   "status",
   "statusId",

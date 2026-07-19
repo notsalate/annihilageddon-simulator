@@ -14,6 +14,7 @@ import { isPlainRecord } from "../common.js";
 import {
   isRuntimeEffectSelectorTarget,
   isRuntimeEffectId,
+  type AvoidAttackRuntimeEffect,
   isWildMagicOption,
   type AttackOutcomeBranch,
   type RuntimeEffectId,
@@ -36,7 +37,11 @@ export type EffectRuntimeSupportedModes = readonly [
   EffectRuntimeMode,
   ...EffectRuntimeMode[],
 ];
-export const effectRuntimeSourceKinds = ["card", "wizardProperty", "deadWizardToken"] as const;
+export const effectRuntimeSourceKinds = [
+  "card",
+  "wizardProperty",
+  "deadWizardToken",
+] as const;
 export type EffectRuntimeSourceKind = (typeof effectRuntimeSourceKinds)[number];
 export type EffectRuntimeSupportedSourceKinds = readonly [
   EffectRuntimeSourceKind,
@@ -138,6 +143,46 @@ export interface DamageResult {
   damageDealt: number;
   killed: boolean;
 }
+
+export interface AttackAmountComponents {
+  unresolvedBaseAmount: number;
+  sourceOwnerModifierAmount: number;
+  currentAttackerTargetModifierAmount: number;
+}
+
+export interface AttackResolution extends DamageResult {
+  avoided: boolean;
+  amountComponents: AttackAmountComponents;
+  attackingPlayer: PlayerState;
+  currentAttackerId: PlayerState["playerId"];
+  targetPlayer: PlayerState;
+  source: EffectSourceContext;
+  originalSource: EffectSourceContext;
+}
+
+export interface AttackDefenseUsage {
+  defendedPlayerIds: Set<PlayerState["playerId"]>;
+  usedDefenseCardInstanceIds: Set<CardInstance["instanceId"]>;
+}
+
+export function createAttackDefenseUsage(): AttackDefenseUsage {
+  return {
+    defendedPlayerIds: new Set(),
+    usedDefenseCardInstanceIds: new Set(),
+  };
+}
+
+export type DefenseAttackContext =
+  | {
+      kind: "redirectable";
+      attackingPlayer: PlayerState;
+      amountComponents: AttackAmountComponents;
+      effectId: RuntimeEffectId;
+      source: EffectSourceContext;
+      originalSource: EffectSourceContext;
+      defenseUsage: AttackDefenseUsage;
+    }
+  | { kind: "nonredirectable"; defenseUsage: AttackDefenseUsage };
 
 export interface EffectRuntimeServices {
   resolveTargetChoice(
@@ -256,9 +301,17 @@ export interface EffectRuntimeServices {
     amount: number,
     effectId: RuntimeEffectId,
     source: EffectSourceContext,
-    unavoidable?: boolean
-  ): DamageResult & { avoided: boolean };
-  resolveDefenseWindow(state: GameState, defendingPlayer: PlayerState): boolean;
+    unavoidable?: boolean,
+    baseAmount?: number,
+    originalSource?: EffectSourceContext,
+    defenseUsage?: AttackDefenseUsage,
+    amountComponents?: AttackAmountComponents
+  ): AttackResolution;
+  resolveDefenseWindow(
+    state: GameState,
+    defendingPlayer: PlayerState,
+    attack: DefenseAttackContext
+  ): AttackResolution | undefined;
   resolveMayhemAttack(
     state: GameState,
     sourcePlayer: PlayerState,
@@ -394,7 +447,8 @@ const fixtureOnlyRuntimeEffectIds = new Set<RuntimeEffectId>([
 ]);
 
 const damageTargetSelectors = [
-  "opponentPlayer", "activePlayer",
+  "opponentPlayer",
+  "activePlayer",
 ] as const satisfies readonly RuntimeEffectTargetSelector[];
 const activePlayerTargetSelectors = [
   "activePlayer",
@@ -1160,7 +1214,12 @@ const attackGainStatusHandler: EffectRuntimeHandler = {
         effectId,
         sourceType: source.sourceType,
       });
-      if (services.resolveDefenseWindow(state, targetPlayer)) {
+      if (
+        services.resolveDefenseWindow(state, targetPlayer, {
+          kind: "nonredirectable",
+          defenseUsage: createAttackDefenseUsage(),
+        })
+      ) {
         recordGameEvent(state, {
           type: "attackAvoided",
           playerId: targetPlayer.playerId,
@@ -2205,23 +2264,47 @@ const replaceStartingCardHandler: EffectRuntimeHandler = {
       !isStableDefinitionId(rawFromDefinitionId) ||
       !isStableDefinitionId(rawToDefinitionId)
     ) {
-      return { ok: false, error: "replace_starting_card requires stable fromDefinitionId and toDefinitionId" };
+      return {
+        ok: false,
+        error:
+          "replace_starting_card requires stable fromDefinitionId and toDefinitionId",
+      };
     }
     const fromDefinitionId = markCardDefinitionId(rawFromDefinitionId);
     const toDefinitionId = markCardDefinitionId(rawToDefinitionId);
     if (!services.hasCardDefinition(toDefinitionId)) {
       if (services.allowsMissingData) return { ok: true };
-      return { ok: false, error: `Cannot replace with missing target card ${toDefinitionId}` };
+      return {
+        ok: false,
+        error: `Cannot replace with missing target card ${toDefinitionId}`,
+      };
     }
-    const zones = [player.hand, player.deck, player.discard, player.playedThisTurn, player.permanents];
+    const zones = [
+      player.hand,
+      player.deck,
+      player.discard,
+      player.playedThisTurn,
+      player.permanents,
+    ];
     for (const zone of zones) {
-      const cardIndex = zone.findIndex((card) => card.ownerId === player.playerId && card.definitionId === fromDefinitionId);
+      const cardIndex = zone.findIndex(
+        (card) =>
+          card.ownerId === player.playerId &&
+          card.definitionId === fromDefinitionId
+      );
       if (cardIndex < 0) continue;
-      zone.splice(cardIndex, 1, services.createCardInstance(toDefinitionId, player.playerId));
+      zone.splice(
+        cardIndex,
+        1,
+        services.createCardInstance(toDefinitionId, player.playerId)
+      );
       return { ok: true };
     }
     if (services.allowsMissingData) return { ok: true };
-    return { ok: false, error: `Cannot replace missing starting card ${fromDefinitionId} for ${player.playerId}` };
+    return {
+      ok: false,
+      error: `Cannot replace missing starting card ${fromDefinitionId} for ${player.playerId}`,
+    };
   },
 };
 
@@ -2234,7 +2317,11 @@ const startWithBasicTrophyHandler: EffectRuntimeHandler = {
     return setupOnlyExecutionError("start_with_basic_trophy");
   },
   executeSetup(player) {
-    if (!player.trophyLikeObjects.some((trophy) => trophy.trophyId === "basicTrophy")) {
+    if (
+      !player.trophyLikeObjects.some(
+        (trophy) => trophy.trophyId === "basicTrophy"
+      )
+    ) {
       player.trophyLikeObjects.push({
         instanceId: `setup-basic-trophy-${player.playerId}`,
         trophyId: "basicTrophy",
@@ -2624,13 +2711,7 @@ function executeAttackDamage(
   source: EffectSourceContext,
   services: EffectRuntimeServices
 ): EffectExecutionResult {
-  const costResult = payOptionalCosts(
-    state,
-    player,
-    effect,
-    source,
-    services
-  );
+  const costResult = payOptionalCosts(state, player, effect, source, services);
   if (!costResult.ok || costResult.skipped) {
     return costResult.ok ? { ok: true } : costResult;
   }
@@ -2668,52 +2749,45 @@ const attackDamageHandler: EffectRuntimeHandler<AttackDamageRuntimeEffect> = {
   },
 };
 
-const optionalSpendChipAttackDamageHandler: EffectRuntimeHandler<
-  OptionalSpendChipAttackDamageRuntimeEffect
-> = {
-  effectId: "optional_spend_chip_attack_damage",
-  allowedTargetSelectors: ["chosenPlayer"],
-  validateShape(subjectId, effect) {
-    const errors = [
-      ...validatePositiveIntegerAmount(
-        subjectId,
-        effect,
-        "optional chip attack damage amount"
-      ),
-      ...validatePlayerTargetSelector(
-        subjectId,
-        effect,
-        "optional chip attack",
-        ["chosenPlayer"]
-      ),
-    ];
-    const chipCost = effect["chipCost"];
-    if (
-      typeof chipCost !== "number" ||
-      !Number.isSafeInteger(chipCost) ||
-      chipCost <= 0
-    ) {
-      errors.push(
-        `${subjectId} uses invalid optional chip attack cost ${String(chipCost)}`
-      );
-    }
-    return errors;
-  },
-  execute(state, player, effect, source, services) {
-    const attackEffect: OptionalSpendChipAttackDamageRuntimeEffect = {
-      ...effect,
-      optional: true,
-      costs: [{ costId: "spend_chips", amount: effect.chipCost }],
-    };
-    return executeAttackDamage(
-      state,
-      player,
-      attackEffect,
-      source,
-      services
-    );
-  },
-};
+const optionalSpendChipAttackDamageHandler: EffectRuntimeHandler<OptionalSpendChipAttackDamageRuntimeEffect> =
+  {
+    effectId: "optional_spend_chip_attack_damage",
+    allowedTargetSelectors: ["chosenPlayer"],
+    validateShape(subjectId, effect) {
+      const errors = [
+        ...validatePositiveIntegerAmount(
+          subjectId,
+          effect,
+          "optional chip attack damage amount"
+        ),
+        ...validatePlayerTargetSelector(
+          subjectId,
+          effect,
+          "optional chip attack",
+          ["chosenPlayer"]
+        ),
+      ];
+      const chipCost = effect["chipCost"];
+      if (
+        typeof chipCost !== "number" ||
+        !Number.isSafeInteger(chipCost) ||
+        chipCost <= 0
+      ) {
+        errors.push(
+          `${subjectId} uses invalid optional chip attack cost ${String(chipCost)}`
+        );
+      }
+      return errors;
+    },
+    execute(state, player, effect, source, services) {
+      const attackEffect: OptionalSpendChipAttackDamageRuntimeEffect = {
+        ...effect,
+        optional: true,
+        costs: [{ costId: "spend_chips", amount: effect.chipCost }],
+      };
+      return executeAttackDamage(state, player, attackEffect, source, services);
+    },
+  };
 
 const addPowerIfPlayerHasStatusHandler: EffectRuntimeHandler = {
   effectId: "add_power_if_player_has_status",
@@ -3103,15 +3177,16 @@ function executeAttackWithAmount(
         attackAmount,
         effectId,
         source,
-        attackProfile.unavoidable
+        attackProfile.unavoidable,
+        amount
       );
       totalDamageDealt += attackResult.damageDealt;
       const branchResult = executeAttackBranches(
         state,
-        player,
+        attackResult.attackingPlayer,
         effect,
-        source,
-        targetPlayer,
+        attackResult.source,
+        attackResult.targetPlayer,
         attackResult,
         services
       );
@@ -3162,29 +3237,15 @@ function executeAttackWithAmount(
     amount: attackAmount,
     sourceType: source.sourceType,
   });
-  if (
-    !attackProfile.unavoidable &&
-    services.resolveDefenseWindow(state, targetPlayer)
-  ) {
-    recordGameEvent(state, {
-      type: "attackAvoided",
-      playerId: targetPlayer.playerId,
-      targetPlayerId: targetPlayer.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId,
-      sourceType: source.sourceType,
-    });
-    return { ok: true };
-  }
-
-  const attackResult = services.dealDamage(
+  const attackResult = services.resolveAttackTarget(
     state,
     player,
     targetPlayer,
     attackAmount,
     effectId,
-    source
+    source,
+    attackProfile.unavoidable,
+    amount
   );
   services.applyAfterPlayerAttackDamage(
     state,
@@ -3194,16 +3255,16 @@ function executeAttackWithAmount(
   );
   return executeAttackBranches(
     state,
-    player,
+    attackResult.attackingPlayer,
     effect,
-    source,
-    targetPlayer,
-    { ...attackResult, avoided: false },
+    attackResult.source,
+    attackResult.targetPlayer,
+    attackResult,
     services
   );
 }
 
-const avoidAttackHandler: EffectRuntimeHandler = {
+const avoidAttackHandler: EffectRuntimeHandler<AvoidAttackRuntimeEffect> = {
   effectId: "avoid_attack",
   validateShape(subjectId, effect) {
     const errors: string[] = [];
@@ -3218,6 +3279,13 @@ const avoidAttackHandler: EffectRuntimeHandler = {
       errors.push(
         `${subjectId} uses unsupported defense branch ${String(destination)}`
       );
+    }
+
+    if (
+      effect["redirectAttack"] !== undefined &&
+      typeof effect["redirectAttack"] !== "boolean"
+    ) {
+      errors.push(`${subjectId} uses non-boolean redirectAttack`);
     }
 
     return errors;
@@ -3409,7 +3477,8 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
         attackAmount,
         "directional_chain_attack",
         source,
-        attackProfile.unavoidable
+        attackProfile.unavoidable,
+        amount.value
       );
       totalDamageDealt += attackResult.damageDealt;
       if (!attackResult.killed) {
@@ -3490,7 +3559,8 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
         attackAmount,
         "multi_target_attack",
         source,
-        attackProfile.unavoidable
+        attackProfile.unavoidable,
+        amount.value
       );
       totalDamageDealt += attackResult.damageDealt;
     }
@@ -3774,7 +3844,6 @@ const wildMagicChoiceHandler: EffectRuntimeHandler = {
     const selectedOption = legalOptions[choices.indexOf(choice!)];
 
     if (selectedOption !== undefined) {
-
       recordGameEvent(state, {
         type: "wildMagicChoiceSelected",
         playerId: player.playerId,
@@ -4397,7 +4466,11 @@ function collectMayhemAttackDefenseDecisions(
       effectId,
       sourceType: source.sourceType,
     });
-    const avoided = services.resolveDefenseWindow(state, targetPlayer);
+    const avoided =
+      services.resolveDefenseWindow(state, targetPlayer, {
+        kind: "nonredirectable",
+        defenseUsage: createAttackDefenseUsage(),
+      }) !== undefined;
     if (avoided) {
       recordGameEvent(state, {
         type: "attackAvoided",
@@ -4958,7 +5031,6 @@ export type EffectRuntimeCatalogResolution =
   | { ok: true; entry: EffectRuntimeCatalogEntry }
   | { ok: false; errors: string[] };
 
-
 export function resolveEffectRuntimeCatalogEntry(
   subjectId: string,
   rawEffectId: string,
@@ -5023,7 +5095,10 @@ export function tryExecuteSetupEffect(
     "wizardProperty"
   );
   if (!resolution.ok) {
-    return { status: "error", error: resolution.errors[0] ?? "Invalid setup effect" };
+    return {
+      status: "error",
+      error: resolution.errors[0] ?? "Invalid setup effect",
+    };
   }
 
   const executeSetup = resolution.entry.handler.executeSetup;
@@ -5036,6 +5111,11 @@ export function tryExecuteSetupEffect(
 
   const result = executeSetup(player, effect, source, services);
   return result.ok
-    ? { status: "executed", ...(result.directive === undefined ? {} : { directive: result.directive }) }
+    ? {
+        status: "executed",
+        ...(result.directive === undefined
+          ? {}
+          : { directive: result.directive }),
+      }
     : { status: "error", error: result.error };
 }

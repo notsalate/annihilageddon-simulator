@@ -276,9 +276,9 @@ _Avoid_: paying life into death
 The rule that a redirected attack becomes an attack from the defending player who redirected it. That player receives attack credit, can receive Trophy credit for a resulting kill, and their attack modifiers can apply to the redirected attack.
 _Avoid_: redirect as target-only change
 
-**Deferred Redirect Support**:
-The decision to exclude redirect defenses from the first combat slice while keeping attack source, credit, and modifier concepts explicit enough to add redirect behavior later.
-_Avoid_: redirect in first combat slice
+**Redirect Boundaries**:
+The rule that redirect requires a current attacker. Against ownerless nonredirectable attacks, a redirect defense still pays its costs, avoids the attack, and resolves its other branches, but does not create a new attacker or target.
+_Avoid_: inventing an attacker for ownerless attacks
 
 **Basic Trophy Credit**:
 The rule that a player gains control of the Trophy when that player causes a foe to die. Self-kills, source-less deaths, DWT-caused deaths, and unowned Mayhem/Mega Mayhem deaths do not move the Trophy.

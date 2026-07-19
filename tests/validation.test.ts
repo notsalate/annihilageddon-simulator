@@ -3045,6 +3045,37 @@ test("executable data-pack validation rejects redirect defense branches", () => 
   );
 });
 
+test("executable data-pack validation rejects a non-boolean redirectAttack guard", () => {
+  const card = createFixtureCard("fixture-invalid-redirect-attack-guard");
+  const dataPack = withFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "avoid_attack",
+          timing: "onDefense",
+          destination: "discardSelf",
+          redirectAttack: "yes",
+        },
+      ],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack, { mode: "fixture" });
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => {
+      return (
+        error.includes("fixture-invalid-redirect-attack-guard") &&
+        error.includes("redirectAttack")
+      );
+    })
+  );
+});
+
 function withFixtureCard(card: CardDefinition): LoadedDataPack {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
   return {

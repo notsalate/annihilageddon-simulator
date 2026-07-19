@@ -26,7 +26,7 @@ const configuredAllowedViolations = [
   },
   {
     filePath: "src/engine/data.ts",
-    line: 2033,
+    line: 2034,
     column: 51,
     source: "unknown[]",
     owner: "FunctionDeclaration:isUnknownArray",

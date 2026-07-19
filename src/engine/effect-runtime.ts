@@ -7,7 +7,12 @@ import {
   recordMarketChipsGained,
 } from "./event-recorder.js";
 import {
+  type AttackAmountComponents,
   type DamageResult,
+  type AttackDefenseUsage,
+  type AttackResolution,
+  createAttackDefenseUsage,
+  type DefenseAttackContext,
   type EffectChoice,
   type EffectExecutionResult,
   type EffectRuntimeServices,
@@ -19,6 +24,8 @@ import {
 } from "./effect-runtime-registry.js";
 import {
   isRuntimeEffectSelectorTarget,
+  isAvoidAttackRuntimeEffect,
+  type AvoidAttackRuntimeEffect,
   type RuntimeEffect,
   type RuntimeEffectId,
   type RuntimeEffectPayload,
@@ -483,7 +490,7 @@ function effectConditionMatches(
       return (
         definition !== undefined &&
         condition.cardTypes.some((cardType: string) =>
-          definition.engine.cardTypes.includes(cardType)
+          controlledCardMatchesType(definition, cardType)
         )
       );
     }).length;
@@ -494,9 +501,19 @@ function effectConditionMatches(
   return false;
 }
 
+function controlledCardMatchesType(
+  definition: CardDefinition,
+  cardType: string
+): boolean {
+  return (
+    definition.engine.cardTypes.includes(cardType) ||
+    definition.engine.tags?.includes("counts_as_every_card_type") === true
+  );
+}
+
 function getAttackProfile(
   state: GameState,
-  player: PlayerState,
+  _player: PlayerState,
   source: EffectSourceContext
 ): { damageBonus: number; unavoidable: boolean } {
   if (source.sourceType !== "card") {
@@ -517,8 +534,7 @@ function getAttackProfile(
 
   let damageBonus = 0;
   let unavoidable = false;
-  const wizardProperties =
-    sourceCard.ownerId === player.playerId ? player.wizardProperties : [];
+  const wizardProperties = sourceOwner.wizardProperties;
   for (const token of wizardProperties) {
     const definition = state.tokenDefinitions.get(token.definitionId);
     if (
@@ -644,8 +660,24 @@ function resolveAttackTarget(
   amount: number,
   effectId: RuntimeEffectId,
   source: EffectSourceContext,
-  unavoidable = false
-): DamageResult & { avoided: boolean } {
+  unavoidable = false,
+  baseAmount = amount,
+  originalSource = source,
+  defenseUsage: AttackDefenseUsage = createAttackDefenseUsage(),
+  amountComponents: AttackAmountComponents = {
+    unresolvedBaseAmount: baseAmount,
+    sourceOwnerModifierAmount: amount - baseAmount,
+    currentAttackerTargetModifierAmount: 0,
+  }
+): AttackResolution {
+  const resolvedAmountComponents = recalculateAttackAmountComponents(
+    state,
+    attackingPlayer,
+    targetPlayer,
+    source,
+    amountComponents
+  );
+  const resolvedAmount = sumAttackAmountComponents(resolvedAmountComponents);
   recordGameEvent(state, {
     type: "attackTargetStarted",
     playerId: attackingPlayer.playerId,
@@ -653,11 +685,22 @@ function resolveAttackTarget(
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
     effectId,
-    amount,
+    amount: resolvedAmount,
     sourceType: source.sourceType,
   });
 
-  if (!unavoidable && resolveDefenseWindow(state, targetPlayer)) {
+  const defenseResolution = unavoidable
+    ? undefined
+    : resolveDefenseWindow(state, targetPlayer, {
+        kind: "redirectable",
+        attackingPlayer,
+        amountComponents: resolvedAmountComponents,
+        effectId,
+        source,
+        originalSource,
+        defenseUsage,
+      });
+  if (defenseResolution !== undefined) {
     recordGameEvent(state, {
       type: "attackAvoided",
       playerId: targetPlayer.playerId,
@@ -667,7 +710,7 @@ function resolveAttackTarget(
       effectId,
       sourceType: source.sourceType,
     });
-    return { damageDealt: 0, killed: false, avoided: true };
+    return defenseResolution;
   }
 
   return {
@@ -675,12 +718,41 @@ function resolveAttackTarget(
       state,
       attackingPlayer,
       targetPlayer,
-      amount,
+      resolvedAmount,
       effectId,
       source
     ),
     avoided: false,
+    amountComponents: resolvedAmountComponents,
+    attackingPlayer,
+    currentAttackerId: attackingPlayer.playerId,
+    targetPlayer,
+    source,
+    originalSource,
   };
+}
+
+function recalculateAttackAmountComponents(
+  _state: GameState,
+  _attackingPlayer: PlayerState,
+  _targetPlayer: PlayerState,
+  _source: EffectSourceContext,
+  amountComponents: AttackAmountComponents
+): AttackAmountComponents {
+  return {
+    ...amountComponents,
+    currentAttackerTargetModifierAmount: 0,
+  };
+}
+
+function sumAttackAmountComponents(
+  amountComponents: AttackAmountComponents
+): number {
+  return (
+    amountComponents.unresolvedBaseAmount +
+    amountComponents.sourceOwnerModifierAmount +
+    amountComponents.currentAttackerTargetModifierAmount
+  );
 }
 
 function resolveMayhemAttackPlan(
@@ -719,7 +791,11 @@ function resolveMayhemAttackPlan(
       amount: target.amount,
       sourceType: source.sourceType,
     });
-    const avoided = resolveDefenseWindow(state, target.targetPlayer);
+    const avoided =
+      resolveDefenseWindow(state, target.targetPlayer, {
+        kind: "nonredirectable",
+        defenseUsage: createAttackDefenseUsage(),
+      }) !== undefined;
     if (avoided) {
       recordGameEvent(state, {
         type: "attackAvoided",
@@ -1532,11 +1608,20 @@ function applyAfterPlayerAttackDamage(
 
 function resolveDefenseWindow(
   state: GameState,
-  defendingPlayer: PlayerState
-): boolean {
-  const defense = findFirstLegalDefense(state, defendingPlayer);
+  defendingPlayer: PlayerState,
+  attack: DefenseAttackContext
+): AttackResolution | undefined {
+  if (attack.defenseUsage.defendedPlayerIds.has(defendingPlayer.playerId)) {
+    return undefined;
+  }
+
+  const defense = findFirstLegalDefense(
+    state,
+    defendingPlayer,
+    attack.defenseUsage
+  );
   if (defense === undefined) {
-    return false;
+    return undefined;
   }
 
   recordGameEvent(state, {
@@ -1548,7 +1633,24 @@ function resolveDefenseWindow(
   });
 
   if (!payDefenseCosts(state, defendingPlayer, defense.card, defense.effect)) {
-    return false;
+    return undefined;
+  }
+
+  attack.defenseUsage.defendedPlayerIds.add(defendingPlayer.playerId);
+  attack.defenseUsage.usedDefenseCardInstanceIds.add(defense.card.instanceId);
+
+  const redirectsAttack = defense.effect.redirectAttack === true;
+
+  const defenseSource: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: getCardEffectRuntimeMode(defense.card.definitionId),
+    playerId: defendingPlayer.playerId,
+    cardInstanceId: defense.card.instanceId,
+    definitionId: defense.card.definitionId,
+  };
+
+  if (redirectsAttack && !moveDefenseCard(state, defendingPlayer, defense)) {
+    return undefined;
   }
 
   const branchEffects = defense.effect.branchEffects;
@@ -1558,19 +1660,69 @@ function resolveDefenseWindow(
       defendingPlayer,
       branchEffects,
       "onDefense",
-      {
-        sourceType: "card",
-        runtimeMode: getCardEffectRuntimeMode(defense.card.definitionId),
-        playerId: defendingPlayer.playerId,
-        cardInstanceId: defense.card.instanceId,
-        definitionId: defense.card.definitionId,
-      }
+      defenseSource
     );
     if (!branchResult.ok) {
-      return false;
+      return undefined;
     }
   }
 
+  if (redirectsAttack && attack.kind === "redirectable") {
+    return resolveAttackTarget(
+      state,
+      defendingPlayer,
+      attack.attackingPlayer,
+      attack.amountComponents.unresolvedBaseAmount +
+        attack.amountComponents.sourceOwnerModifierAmount,
+      attack.effectId,
+      {
+        ...attack.source,
+        playerId: defendingPlayer.playerId,
+      },
+      false,
+      attack.amountComponents.unresolvedBaseAmount,
+      attack.originalSource,
+      attack.defenseUsage,
+      attack.amountComponents
+    );
+  }
+
+  if (!redirectsAttack && !moveDefenseCard(state, defendingPlayer, defense)) {
+    return undefined;
+  }
+  return {
+    damageDealt: 0,
+    killed: false,
+    avoided: true,
+    amountComponents:
+      attack.kind === "redirectable"
+        ? attack.amountComponents
+        : {
+            unresolvedBaseAmount: 0,
+            sourceOwnerModifierAmount: 0,
+            currentAttackerTargetModifierAmount: 0,
+          },
+    attackingPlayer:
+      attack.kind === "redirectable" ? attack.attackingPlayer : defendingPlayer,
+    currentAttackerId:
+      attack.kind === "redirectable"
+        ? attack.attackingPlayer.playerId
+        : defendingPlayer.playerId,
+    targetPlayer: defendingPlayer,
+    source: defenseSource,
+    originalSource:
+      attack.kind === "redirectable" ? attack.originalSource : defenseSource,
+  };
+}
+
+function moveDefenseCard(
+  state: GameState,
+  defendingPlayer: PlayerState,
+  defense: {
+    card: CardInstance;
+    destination: "discardSelf" | "topdeckSelf";
+  }
+): boolean {
   const cardIndex = defendingPlayer.hand.findIndex(
     (card) => card.instanceId === defense.card.instanceId
   );
@@ -1612,40 +1764,37 @@ function resolveDefenseWindow(
 
 function findFirstLegalDefense(
   state: GameState,
-  defendingPlayer: PlayerState
+  defendingPlayer: PlayerState,
+  defenseUsage: AttackDefenseUsage
 ):
   | {
       card: CardInstance;
       destination: "discardSelf" | "topdeckSelf";
-      effect: RuntimeEffect;
+      effect: AvoidAttackRuntimeEffect;
     }
   | undefined {
   for (const card of defendingPlayer.hand) {
+    if (defenseUsage.usedDefenseCardInstanceIds.has(card.instanceId)) {
+      continue;
+    }
+
     const definition = state.cardDefinitions.get(card.definitionId);
     if (definition === undefined) {
       continue;
     }
 
-    const defenseEffect = definition.engine.effects.find((effect) => {
-      return (
-        effect.effectId === "avoid_attack" &&
-        effect.timing === "onDefense" &&
-        (effect["destination"] === "discardSelf" ||
-          effect["destination"] === "topdeckSelf")
-      );
-    });
+    const defenseEffect = definition.engine.effects.find(
+      (effect): effect is AvoidAttackRuntimeEffect => {
+        return isAvoidAttackRuntimeEffect(effect);
+      }
+    );
     if (
       defenseEffect !== undefined &&
       canPayDefenseCosts(defendingPlayer, card, defenseEffect)
     ) {
-      const destination = defenseEffect["destination"];
-      if (destination !== "discardSelf" && destination !== "topdeckSelf") {
-        continue;
-      }
-
       return {
         card,
-        destination,
+        destination: defenseEffect.destination,
         effect: defenseEffect,
       };
     }

@@ -276,6 +276,7 @@ export interface RuntimeEffectFields {
   operation?: unknown;
   optional?: unknown;
   options?: unknown;
+  redirectAttack?: unknown;
   source?: unknown;
   status?: unknown;
   statusId?: unknown;
@@ -316,6 +317,25 @@ export type RuntimeEffectPayload = {
 export type RuntimeEffect = RuntimeEffectPayload & {
   timing: EffectTiming;
 };
+
+export type AvoidAttackRuntimeEffect = RuntimeEffect & {
+  effectId: "avoid_attack";
+  timing: "onDefense";
+  destination: "discardSelf" | "topdeckSelf";
+  redirectAttack?: boolean;
+};
+
+export function isAvoidAttackRuntimeEffect(
+  effect: RuntimeEffect
+): effect is AvoidAttackRuntimeEffect {
+  return (
+    effect.effectId === "avoid_attack" &&
+    effect.timing === "onDefense" &&
+    (effect.destination === "discardSelf" || effect.destination === "topdeckSelf") &&
+    (effect.redirectAttack === undefined ||
+      typeof effect.redirectAttack === "boolean")
+  );
+}
 
 export type WildMagicOption =
   | (Omit<RuntimeEffectFields, "options"> & {

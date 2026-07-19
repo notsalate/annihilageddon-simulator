@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__familiar_005",
+  "source": {
+    "draft": "data/import/cards/familiar/drafts/esw2_dbg__familiar_005.json",
+    "image": "assets/cards/familiar/Фамильяр. Кондуктор Жми-На-Тормоза.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_005.md"
+  },
+  "visible": {
+    "nameRu": "Кондуктор Жми-На-Тормоза",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "textRu": "Пока эта карта под твоим контролем, она относится ко всем типам карт.\nВозьми 2 карты.\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, возьми 1 карту и перенаправь атаку на атакующего.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "tags": ["counts_as_every_card_type"],
+    "cost": 6,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "draw_cards",
+        "timing": "onPlay",
+        "amount": 2
+      },
+      {
+        "effectId": "avoid_attack",
+        "timing": "onDefense",
+        "destination": "discardSelf",
+        "redirectAttack": true,
+        "branchEffects": [
+          {
+            "effectId": "draw_cards",
+            "timing": "onDefense",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

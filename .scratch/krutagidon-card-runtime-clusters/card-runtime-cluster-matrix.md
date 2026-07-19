@@ -7,8 +7,8 @@ Generated from canonical card draft JSON, current runtime card JSON, current com
 ## Summary
 
 - total cards: 134
-- fullRuntime: 40
-- missingRuntime: 94
+- fullRuntime: 41
+- missingRuntime: 93
 - clustered: 134
 - needsClusterDecision: 0
 
@@ -20,7 +20,7 @@ Generated from canonical card draft JSON, current runtime card JSON, current com
 | `esw2_dbg__familiar_002` | familiar | Зожложники | +3 мощи Выбранный враг сбрасывает случайную карту. Защита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 1 карту и нанеси 6 урона атакующему. | `data/import/cards/familiar/texts/esw2_dbg__familiar_002.md` | missingRuntime | none | none | clustered | `defense-effects` | none |
 | `esw2_dbg__familiar_003` | familiar | Сальный шут | +3 мощи Атака: выбранный враг получает вялую палочку. Защита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 1 карту и перенаправь атаку на атакующего. | `data/import/cards/familiar/texts/esw2_dbg__familiar_003.md` | missingRuntime | none | none | clustered | `special-card-stack` | Главная механика — выдача Limp Wand через атаку; перенаправление в защите вторично. |
 | `esw2_dbg__familiar_004` | familiar | Бензопила «Дружок» | +3 мощи Следующей атаки, которую ты сыграешь в этот ход, нельзя избежать. Защита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 1 карту и перенаправь атаку на атакующего. | `data/import/cards/familiar/texts/esw2_dbg__familiar_004.md` | missingRuntime | none | none | clustered | `attack-effects` | Выбран attack-effects: карта задаёт модификатор следующей неизбежной атаки; перенаправление в защите вторично. |
-| `esw2_dbg__familiar_005` | familiar | Кондуктор Жми-На-Тормоза | Пока эта карта под твоим контролем, она относится ко всем типам карт. Возьми 2 карты. Защита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 1 карту и перенаправь атаку на атакующего. | `data/import/cards/familiar/texts/esw2_dbg__familiar_005.md` | missingRuntime | none | none | clustered | `ongoing-modifiers` | Главная поверхность — изменение типов контролируемой карты; добор и перенаправление в защите вторичны. |
+| `esw2_dbg__familiar_005` | familiar | Кондуктор Жми-На-Тормоза | Пока эта карта под твоим контролем, она относится ко всем типам карт. Возьми 2 карты. Защита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 1 карту и перенаправь атаку на атакующего. | `data/import/cards/familiar/texts/esw2_dbg__familiar_005.md` | fullRuntime | `pool:familiar-pool` | `tests/action-loop.test.ts` | clustered | `ongoing-modifiers` | Главная поверхность — изменение типов контролируемой карты; добор и перенаправление в защите вторичны. |
 | `esw2_dbg__familiar_006` | familiar | Никчемухажёры | +2 мощи Возьми 1 карту. Защита: можешь раскрыть эту карту и сбросить другую случайную карту с руки, чтобы избежать атаки. | `data/import/cards/familiar/texts/esw2_dbg__familiar_006.md` | missingRuntime | none | none | clustered | `defense-effects` | none |
 | `esw2_dbg__familiar_007` | familiar | Мыжсемья | Возьми 1 карту. В этот ход легенды стоят на 2 дешевле. Защита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 2 карты. | `data/import/cards/familiar/texts/esw2_dbg__familiar_007.md` | missingRuntime | none | none | clustered | `market-effects` | none |
 | `esw2_dbg__familiar_008` | familiar | Мальчик, который выжрал | +3 мощи Защита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, можешь взять все «Палочки» из своей стопки сброса на руку. | `data/import/cards/familiar/texts/esw2_dbg__familiar_008.md` | missingRuntime | none | none | clustered | `card-movement` | none |
