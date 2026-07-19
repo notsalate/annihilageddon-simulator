@@ -18,6 +18,7 @@ import {
   type AvoidAttackRuntimeEffect,
   isWildMagicOption,
   type AttackOutcomeBranch,
+  type OngoingAddPowerWhenPlayingWandRuntimeEffect,
   type OngoingAddPowerPerDeadWizardTokenRuntimeEffect,
   type RuntimeEffectId,
   type RuntimeEffectCost,
@@ -2922,52 +2923,49 @@ const ongoingFirstAttackDamageAddPowerHandler: EffectRuntimeHandler<OngoingFirst
     },
   };
 
-const ongoingAddPowerWhenPlayingWandHandler: EffectRuntimeHandler = {
-  effectId: "ongoing_add_power_when_playing_wand",
-  validateShape(subjectId, effect) {
-    const errors: string[] = [];
-    if (effect["timing"] !== "onPlayCard") {
-      errors.push(
-        `${subjectId} uses unsupported ongoing Wand power timing ${String(effect["timing"])}`
+const ongoingAddPowerWhenPlayingWandHandler: EffectRuntimeHandler<OngoingAddPowerWhenPlayingWandRuntimeEffect> =
+  {
+    effectId: "ongoing_add_power_when_playing_wand",
+    validateShape(subjectId, effect) {
+      const errors: string[] = [];
+      if (effect.timing !== "onPlayCard") {
+        errors.push(
+          `${subjectId} uses unsupported ongoing Wand power timing ${String(effect.timing)}`
+        );
+      }
+      const cardTags = effect.cardTags;
+      if (
+        !Array.isArray(cardTags) ||
+        cardTags.length !== 1 ||
+        cardTags[0] !== "wandCard"
+      ) {
+        errors.push(
+          `${subjectId} uses unsupported ongoing Wand power trigger cardTags`
+        );
+      }
+      return [
+        ...errors,
+        ...validatePositiveIntegerAmount(
+          subjectId,
+          effect,
+          "ongoing Wand power amount"
+        ),
+      ];
+    },
+    execute(state, player, effect, source) {
+      const powerBefore = state.turn.power;
+      state.turn.power += effect.amount;
+      recordTurnPowerChanged(
+        state,
+        player,
+        source,
+        "ongoing_add_power_when_playing_wand",
+        powerBefore,
+        state.turn.power
       );
-    }
-    const cardTags = effect["cardTags"];
-    if (
-      !Array.isArray(cardTags) ||
-      cardTags.length !== 1 ||
-      cardTags[0] !== "wandCard"
-    ) {
-      errors.push(
-        `${subjectId} uses unsupported ongoing Wand power trigger cardTags`
-      );
-    }
-    return [
-      ...errors,
-      ...validatePositiveIntegerAmount(
-        subjectId,
-        effect,
-        "ongoing Wand power amount"
-      ),
-    ];
-  },
-  execute(state, player, effect, source) {
-    const amount = effect["amount"];
-    if (typeof amount !== "number") {
-      return { ok: false, error: "Invalid ongoing Wand power amount" };
-    }
-    const powerBefore = state.turn.power;
-    state.turn.power += amount;
-    recordTurnPowerChanged(
-      state,
-      player,
-      source,
-      "ongoing_add_power_when_playing_wand",
-      powerBefore,
-      state.turn.power
-    );
-    return { ok: true };
-  },
-};
+      return { ok: true };
+    },
+  };
 
 const ongoingAddPowerPerDeadWizardTokenHandler: EffectRuntimeHandler<OngoingAddPowerPerDeadWizardTokenEffect> =
   {

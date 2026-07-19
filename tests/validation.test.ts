@@ -14,6 +14,7 @@ import {
   type DecodeResult,
   type EffectTiming,
   type LoadedDataPack,
+  type OngoingAddPowerWhenPlayingWandRuntimeEffect,
   type OngoingAddPowerPerDeadWizardTokenRuntimeEffect,
   type RuntimeEffect,
   type RuntimeEffectCondition,
@@ -1532,6 +1533,19 @@ test("DWT ongoing power validates its typed passive payload", () => {
     } as unknown as RuntimeEffect),
     []
   );
+});
+
+test("Wand play power validates its typed trigger payload", () => {
+  const effect: OngoingAddPowerWhenPlayingWandRuntimeEffect = {
+    effectId: "ongoing_add_power_when_playing_wand",
+    timing: "onPlayCard",
+    amount: 1,
+    cardTags: ["wandCard"],
+  };
+  const handler = getEffectRuntimeHandler(effect.effectId);
+
+  assert.ok(handler);
+  assert.deepEqual(handler.validateShape("Fixture", effect), []);
 });
 
 test("economy and draw effects are registered and reject invalid shapes through runtime handlers", () => {

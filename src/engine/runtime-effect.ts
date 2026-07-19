@@ -298,6 +298,13 @@ export interface OngoingAddPowerPerDeadWizardTokenRuntimeEffect {
   amount: number;
 }
 
+export interface OngoingAddPowerWhenPlayingWandRuntimeEffect {
+  effectId: "ongoing_add_power_when_playing_wand";
+  timing: "onPlayCard";
+  amount: number;
+  cardTags: ["wandCard"];
+}
+
 export type AttackOutcomeBranch =
   | { effectId: "gain_chips"; amount: number }
   | { effectId: "gain_chips_equal_damage_dealt" }
@@ -316,9 +323,11 @@ type RuntimeEffectPayloadVariant<EffectId extends KnownRuntimeEffectId> = {
     ? { options?: WildMagicOption[] }
     : EffectId extends "ongoing_hand_refill_bonus"
       ? { amount: number }
-      : EffectId extends "ongoing_add_power_per_dead_wizard_token"
-        ? OngoingAddPowerPerDeadWizardTokenRuntimeEffect
-        : unknown);
+      : EffectId extends "ongoing_add_power_when_playing_wand"
+        ? OngoingAddPowerWhenPlayingWandRuntimeEffect
+        : EffectId extends "ongoing_add_power_per_dead_wizard_token"
+          ? OngoingAddPowerPerDeadWizardTokenRuntimeEffect
+          : unknown);
 
 export type RuntimeEffectPayload = {
   [EffectId in KnownRuntimeEffectId]: RuntimeEffectPayloadVariant<EffectId>;
@@ -341,7 +350,8 @@ export function isAvoidAttackRuntimeEffect(
   return (
     effect.effectId === "avoid_attack" &&
     effect.timing === "onDefense" &&
-    (effect.destination === "discardSelf" || effect.destination === "topdeckSelf") &&
+    (effect.destination === "discardSelf" ||
+      effect.destination === "topdeckSelf") &&
     (effect.redirectAttack === undefined ||
       typeof effect.redirectAttack === "boolean")
   );

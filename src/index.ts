@@ -36,6 +36,7 @@ export type {
 } from "./engine/data.js";
 export type {
   EffectTiming,
+  OngoingAddPowerWhenPlayingWandRuntimeEffect,
   OngoingAddPowerPerDeadWizardTokenRuntimeEffect,
   RuntimeEffect,
   AttackOutcomeBranch,
