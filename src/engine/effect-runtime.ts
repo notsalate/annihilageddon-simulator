@@ -1330,6 +1330,7 @@ function resolvePlayerDeath(
         tokenInstanceId: token.instanceId,
         tokenDefinitionId: token.definitionId,
       });
+      reconcileActivePlayerControlledPower(state);
     }
   }
 

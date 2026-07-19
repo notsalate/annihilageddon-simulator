@@ -14,6 +14,7 @@ import {
   type DecodeResult,
   type EffectTiming,
   type LoadedDataPack,
+  type OngoingAddPowerPerDeadWizardTokenRuntimeEffect,
   type RuntimeEffect,
   type RuntimeEffectCondition,
   type RuntimeEffectCost,
@@ -1510,6 +1511,25 @@ test("ongoing controlled power validates its concrete passive shape", () => {
       timing: "onPlay",
       amount: 0,
     }),
+    []
+  );
+});
+
+test("DWT ongoing power validates its typed passive payload", () => {
+  const effect: OngoingAddPowerPerDeadWizardTokenRuntimeEffect = {
+    effectId: "ongoing_add_power_per_dead_wizard_token",
+    timing: "whileControlled",
+    amount: 1,
+  };
+  const handler = getEffectRuntimeHandler(effect.effectId);
+
+  assert.ok(handler);
+  assert.deepEqual(handler.validateShape("Fixture", effect), []);
+  assert.notDeepEqual(
+    handler.validateShape("Fixture", {
+      ...effect,
+      timing: "onPlay",
+    } as unknown as RuntimeEffect),
     []
   );
 });

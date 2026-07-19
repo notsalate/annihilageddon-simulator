@@ -2207,6 +2207,55 @@ test("Zhelatinovyi sisyak grants persistent power for each controlled copy", () 
   assert.equal(state.turn.power, 2);
 });
 
+test("Pokhotlivyi maiachok recalculates its controller power from controlled DWTs", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  assert.equal(
+    dataPack.decks.legendDeck.entries.some(
+      (entry) => entry.cardId === "esw2_dbg__legend_025" && entry.count === 1
+    ),
+    true
+  );
+  const state = initializeGame({
+    dataPack,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const beacon = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_025"
+  );
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: beacon.instanceId,
+  });
+
+  assert.equal(playResult.ok, true);
+  assert.equal(state.turn.power, 0);
+
+  for (const expectedPower of [1, 2]) {
+    activePlayer.life.current = 1;
+    const selfDamage = addFixtureCardToActiveHand(state, {
+      effectId: "deal_damage",
+      timing: "onPlay",
+      amount: 1,
+      target: {
+        selector: "activePlayer",
+      },
+    });
+
+    const damageResult = applyAction(state, {
+      type: "playCard",
+      cardInstanceId: selfDamage,
+    });
+
+    assert.equal(damageResult.ok, true);
+    assert.equal(activePlayer.deadWizardTokens.length, expectedPower);
+    assert.equal(state.turn.power, expectedPower);
+  }
+});
+
 test("Tsirk bratiev loshashnykh does not grant passive power without Dingler status", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
   const state = initializeGame({

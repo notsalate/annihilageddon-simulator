@@ -7,8 +7,8 @@ Generated from canonical card draft JSON, current runtime card JSON, current com
 ## Summary
 
 - total cards: 134
-- fullRuntime: 41
-- missingRuntime: 93
+- fullRuntime: 42
+- missingRuntime: 92
 - clustered: 134
 - needsClusterDecision: 0
 
@@ -50,7 +50,7 @@ Generated from canonical card draft JSON, current runtime card JSON, current com
 | `esw2_dbg__legend_022` | legend | Легендохранитель | Возьми 2 карты и получи 2 чипсины. Защита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 2 карты и получи 2 чипсины. | `data/import/cards/legend/texts/esw2_dbg__legend_022.md` | missingRuntime | none | none | clustered | `defense-effects` | Discard defense с повтором draw/chipsin reward — основная механика. |
 | `esw2_dbg__legend_023` | legend | Палочка-Миниганочка | Атака: нанеси 7 урона выбранному колдуну. Атака: нанеси 7 урона выбранному колдуну. Атака: нанеси 7 урона выбранному колдуну. Атака: нанеси 7 урона выбранному колдуну. +3 мощи за каждого колдуна, подохшего от этой карты. | `data/import/cards/legend/texts/esw2_dbg__legend_023.md` | missingRuntime | none | none | clustered | `attack-effects` | Четыре последовательные targeted attacks и power за смерти от единого разрешения карты — основной attack surface. При создании runtime JSON эта карта обязана получить общие tags `wandCard` и `wandAttackCard`. |
 | `esw2_dbg__legend_024` | legend | Палочка-Ушаталочка | +8 мощи Атака: нанеси 1 урон выбранному врагу. Если он от этого подох, ты побеждаешь в игре (а все остальные могут лососнуть тунца). | `data/import/cards/legend/texts/esw2_dbg__legend_024.md` | missingRuntime | none | none | clustered | `attack-effects` | Targeted lethal attack с немедленной победой — основной attack surface. При создании runtime JSON эта карта обязана получить общие tags `wandCard` и `wandAttackCard`. |
-| `esw2_dbg__legend_025` | legend | Похотливый маячок | Постоянка: +1 мощь за каждый твой жетон дохлого колдуна. | `data/import/cards/legend/texts/esw2_dbg__legend_025.md` | missingRuntime | none | none | clustered | `ongoing-modifiers` | Постоянный power modifier, масштабируемый по контролируемым DWT, главнее DWT-подсчёта. |
+| `esw2_dbg__legend_025` | legend | Похотливый маячок | Постоянка: +1 мощь за каждый твой жетон дохлого колдуна. | `data/import/cards/legend/texts/esw2_dbg__legend_025.md` | fullRuntime | `deck:legend-deck` | `tests/action-loop.test.ts` | clustered | `ongoing-modifiers` | Постоянный power modifier, масштабируемый по контролируемым DWT, главнее DWT-подсчёта. |
 | `esw2_dbg__legend_026` | legend | Сердце мага по-эпичному | Возьми 1 карту. Получи 3 чипсины. В конце игры: если эта карта в протекторе, получи +2 ПО. | `data/import/cards/legend/texts/esw2_dbg__legend_026.md` | missingRuntime | none | none | clustered | `chipsin-economy` | Draw и 3 chipsin — исполняемая часть карты. Печатный бонус протектора игнорируется при runtime mapping: victoryPoints всегда 3, исполняемое условие протектора не создаётся. |
 | `esw2_dbg__legend_027` | legend | Хахатальер Злорадник | +5 мощи Атака: выбранный враг получает 2 жетона дохлых колдунов из стопки. Эту атаку нельзя перенаправить на тебя (но её можно избежать). | `data/import/cards/legend/texts/esw2_dbg__legend_027.md` | missingRuntime | none | none | clustered | `dwt-interactions` | Выдача DWT — основная часть эффекта; запрет перенаправления остаётся примечанием к атаке. |
 | `esw2_dbg__legend_028` | legend | Братья лошашные | +3 мощи Защита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 3 карты. Если тебя атаковал лошара, перенаправь атаку на него. | `data/import/cards/legend/texts/esw2_dbg__legend_028.md` | missingRuntime | none | none | clustered | `defense-effects` | none |

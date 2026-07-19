@@ -15,6 +15,12 @@ interface PassiveFlatPowerEffect {
   amount: number;
 }
 
+interface PassiveDeadWizardTokenPowerEffect {
+  effectId: "ongoing_add_power_per_dead_wizard_token";
+  timing: "whileControlled";
+  amount: number;
+}
+
 export function reconcileActivePlayerControlledPower(state: GameState): void {
   const activePlayer = state.players.find(
     (player) => player.playerId === state.activePlayerId
@@ -57,6 +63,10 @@ function calculateCardPassivePowerBonus(
       return total + effect.amount;
     }
 
+    if (isPassiveDeadWizardTokenPowerEffect(effect)) {
+      return total + player.deadWizardTokens.length * effect.amount;
+    }
+
     if (!isPassiveStatusPowerEffect(effect)) {
       return total;
     }
@@ -82,6 +92,16 @@ function isPassiveStatusPowerEffect(
     effect.effectId === "add_power_if_player_has_status" &&
     effect.timing === "whileControlled" &&
     effect.statusId === "dingler" &&
+    typeof effect.amount === "number"
+  );
+}
+
+function isPassiveDeadWizardTokenPowerEffect(
+  effect: RuntimeEffect
+): effect is PassiveDeadWizardTokenPowerEffect {
+  return (
+    effect.effectId === "ongoing_add_power_per_dead_wizard_token" &&
+    effect.timing === "whileControlled" &&
     typeof effect.amount === "number"
   );
 }

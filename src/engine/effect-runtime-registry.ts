@@ -17,6 +17,7 @@ import {
   type AvoidAttackRuntimeEffect,
   isWildMagicOption,
   type AttackOutcomeBranch,
+  type OngoingAddPowerPerDeadWizardTokenRuntimeEffect,
   type RuntimeEffectId,
   type RuntimeEffectCost,
   type RuntimeEffectPayload,
@@ -399,6 +400,8 @@ type AddPowerRuntimeEffect = PositiveAmountRuntimeEffect<"add_power">;
 type GainChipsRuntimeEffect = PositiveAmountRuntimeEffect<"gain_chips">;
 type OngoingHandRefillBonusRuntimeEffect =
   PositiveAmountRuntimeEffect<"ongoing_hand_refill_bonus">;
+type OngoingAddPowerPerDeadWizardTokenEffect =
+  OngoingAddPowerPerDeadWizardTokenRuntimeEffect;
 type MayhemEachNonDinglerGainChipsRuntimeEffect =
   RuntimeEffectForId<"mayhem_each_non_dingler_gain_chips"> & {
     chipAmount: number;
@@ -1933,27 +1936,32 @@ const increaseHandLimitAtMaxLifeHandler: EffectRuntimeHandler = {
   },
 };
 
-const ongoingHandRefillBonusHandler: EffectRuntimeHandler<OngoingHandRefillBonusRuntimeEffect> = {
-  effectId: "ongoing_hand_refill_bonus",
-  validateShape(subjectId, effect) {
-    const errors: string[] = [];
-    if (effect["timing"] !== "endTurn") {
+const ongoingHandRefillBonusHandler: EffectRuntimeHandler<OngoingHandRefillBonusRuntimeEffect> =
+  {
+    effectId: "ongoing_hand_refill_bonus",
+    validateShape(subjectId, effect) {
+      const errors: string[] = [];
+      if (effect["timing"] !== "endTurn") {
+        errors.push(
+          `${subjectId} uses unsupported ongoing-hand-refill timing ${String(effect["timing"])}`
+        );
+      }
       errors.push(
-        `${subjectId} uses unsupported ongoing-hand-refill timing ${String(effect["timing"])}`
+        ...validatePositiveIntegerAmount(
+          subjectId,
+          effect,
+          "ongoing hand-limit amount"
+        )
       );
-    }
-    errors.push(
-      ...validatePositiveIntegerAmount(subjectId, effect, "ongoing hand-limit amount")
-    );
-    return errors;
-  },
-  execute() {
-    return {
-      ok: false,
-      error: "ongoing_hand_refill_bonus is an end-turn hand-limit effect",
-    };
-  },
-};
+      return errors;
+    },
+    execute() {
+      return {
+        ok: false,
+        error: "ongoing_hand_refill_bonus is an end-turn hand-limit effect",
+      };
+    },
+  };
 
 const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler = {
   effectId: "mayhem_each_player_battle_highest_hand_cost",
@@ -2940,6 +2948,35 @@ const ongoingAddPowerWhenPlayingWandHandler: EffectRuntimeHandler = {
     return { ok: true };
   },
 };
+
+const ongoingAddPowerPerDeadWizardTokenHandler: EffectRuntimeHandler<OngoingAddPowerPerDeadWizardTokenEffect> =
+  {
+    effectId: "ongoing_add_power_per_dead_wizard_token",
+    validateShape(subjectId, effect) {
+      return isOngoingAddPowerPerDeadWizardTokenEffect(effect)
+        ? []
+        : [`${subjectId} uses invalid DWT ongoing power effect`];
+    },
+    execute() {
+      return {
+        ok: false,
+        error:
+          "ongoing_add_power_per_dead_wizard_token is a passive controlled effect",
+      };
+    },
+  };
+
+function isOngoingAddPowerPerDeadWizardTokenEffect(
+  effect: RuntimeEffectPayload
+): effect is OngoingAddPowerPerDeadWizardTokenEffect {
+  return (
+    effect.effectId === "ongoing_add_power_per_dead_wizard_token" &&
+    effect.timing === "whileControlled" &&
+    typeof effect.amount === "number" &&
+    Number.isSafeInteger(effect.amount) &&
+    effect.amount > 0
+  );
+}
 
 const addPowerPerControlledObjectHandler: EffectRuntimeHandler = {
   effectId: "add_power_per_controlled_object",
@@ -4931,6 +4968,8 @@ export const effectRuntimeHandlerMap = {
   ongoing_add_power: ongoingAddPowerHandler,
   ongoing_add_power_when_playing_wand:
     ongoingAddPowerWhenPlayingWandHandler,
+  ongoing_add_power_per_dead_wizard_token:
+    ongoingAddPowerPerDeadWizardTokenHandler,
   ongoing_add_power_when_playing_limp_wand: createUnsupportedEffectHandler(
     "ongoing_add_power_when_playing_limp_wand"
   ),
@@ -4978,7 +5017,7 @@ function createEffectRuntimeCatalogSource(
           : handler.effectId === "ongoing_add_power" ||
               handler.effectId === "ongoing_hand_refill_bonus"
             ? ["card"]
-          : allEffectRuntimeSourceKinds,
+            : allEffectRuntimeSourceKinds,
     };
   }
 

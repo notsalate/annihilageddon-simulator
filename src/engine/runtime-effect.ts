@@ -218,6 +218,7 @@ const knownRuntimeEffectIds = [
   "on_gain_self_gain_limp_wands",
   "ongoing_add_power",
   "ongoing_add_power_when_playing_wand",
+  "ongoing_add_power_per_dead_wizard_token",
   "ongoing_add_power_when_playing_limp_wand",
   "ongoing_first_attack_damage_add_power",
   "ongoing_hand_refill_bonus",
@@ -290,6 +291,12 @@ export interface RuntimeEffectFields {
   winnerDrawAmount?: unknown;
 }
 
+export interface OngoingAddPowerPerDeadWizardTokenRuntimeEffect {
+  effectId: "ongoing_add_power_per_dead_wizard_token";
+  timing: "whileControlled";
+  amount: number;
+}
+
 export type AttackOutcomeBranch =
   | { effectId: "gain_chips"; amount: number }
   | { effectId: "gain_chips_equal_damage_dealt" }
@@ -308,7 +315,9 @@ type RuntimeEffectPayloadVariant<EffectId extends KnownRuntimeEffectId> = {
     ? { options?: WildMagicOption[] }
     : EffectId extends "ongoing_hand_refill_bonus"
       ? { amount: number }
-    : unknown);
+      : EffectId extends "ongoing_add_power_per_dead_wizard_token"
+        ? OngoingAddPowerPerDeadWizardTokenRuntimeEffect
+        : unknown);
 
 export type RuntimeEffectPayload = {
   [EffectId in KnownRuntimeEffectId]: RuntimeEffectPayloadVariant<EffectId>;

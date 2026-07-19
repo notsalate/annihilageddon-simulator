@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_025",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_025.json",
+    "image": "assets/cards/legend/treasure/Легенда-Сокровище. Похотливый маячок.jpg",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_025.md"
+  },
+  "visible": {
+    "nameRu": "Похотливый маячок",
+    "cost": 13,
+    "victoryPoints": 5,
+    "typeRu": "Легенда — Сокровище",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "textRu": "Постоянка: +1 мощь за каждый твой жетон дохлого колдуна.",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "cost": 13,
+    "victoryPoints": 5,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "ongoing_add_power_per_dead_wizard_token",
+        "timing": "whileControlled",
+        "amount": 1
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}
