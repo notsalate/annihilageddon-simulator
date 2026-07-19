@@ -1827,6 +1827,66 @@ test("Tsirk bratiev loshashnykh grants passive power to a Dingler controller", (
   assert.equal(state.turn.power, 2);
 });
 
+test("Zhelatinovyi sisyak grants persistent power for each controlled copy", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({
+    dataPack,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const sisyak = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_011"
+  );
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: sisyak.instanceId,
+  });
+
+  assert.equal(playResult.ok, true);
+  assert.equal(activePlayer.permanents.includes(sisyak), true);
+  assert.equal(state.turn.power, 1);
+
+  const neutralCard = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__starter_002"
+  );
+  const neutralPlayResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: neutralCard.instanceId,
+  });
+  assert.equal(neutralPlayResult.ok, true);
+  assert.equal(state.turn.power, 1);
+
+  const firstEndTurnResult = applyAction(state, {
+    type: "endTurn",
+  });
+  assert.equal(firstEndTurnResult.ok, true);
+  const secondEndTurnResult = applyAction(state, {
+    type: "endTurn",
+  });
+  assert.equal(secondEndTurnResult.ok, true);
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(state.turn.power, 1);
+
+  const secondSisyak = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_011"
+  );
+  const secondPlayResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: secondSisyak.instanceId,
+  });
+
+  assert.equal(secondPlayResult.ok, true);
+  assert.equal(activePlayer.permanents.includes(secondSisyak), true);
+  assert.equal(state.turn.power, 2);
+});
+
 test("Tsirk bratiev loshashnykh does not grant passive power without Dingler status", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
   const state = initializeGame({

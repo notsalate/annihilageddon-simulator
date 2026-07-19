@@ -10,6 +10,7 @@ import {
 import type { CardDefinition } from "../src/engine/data.js";
 import {
   getEffectRuntimeCatalogEntry,
+  resolveEffectRuntimeCatalogEntry,
 } from "../src/engine/effect-runtime-registry.js";
 import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
 import type { RuntimeEffectPayload } from "../src/engine/runtime-effect.js";
@@ -133,6 +134,42 @@ test("wizard-property-only effect is rejected for a card source", () => {
   );
   assert.equal(result.ok, false);
   assert.match(result.error, /token-only effect id/);
+});
+
+test("ongoing controlled power is limited to card sources", () => {
+  const effect = {
+    effectId: "ongoing_add_power",
+    timing: "whileControlled",
+    amount: 1,
+  } as const;
+
+  assert.equal(
+    resolveEffectRuntimeCatalogEntry(
+      "Fixture card",
+      effect.effectId,
+      effect,
+      "combat",
+      "card"
+    ).ok,
+    true
+  );
+
+  for (const sourceKind of [
+    "wizardProperty",
+    "deadWizardToken",
+  ] as const) {
+    const result = resolveEffectRuntimeCatalogEntry(
+      `Fixture ${sourceKind}`,
+      effect.effectId,
+      effect,
+      "combat",
+      sourceKind
+    );
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.errors[0] ?? "", /token-only effect id/);
+    }
+  }
 });
 
 test("known effect with invalid shape is rejected before execution", () => {

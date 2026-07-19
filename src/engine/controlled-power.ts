@@ -9,6 +9,12 @@ interface PassiveStatusPowerEffect {
   amount: number;
 }
 
+interface PassiveFlatPowerEffect {
+  effectId: "ongoing_add_power";
+  timing: "whileControlled";
+  amount: number;
+}
+
 export function reconcileActivePlayerControlledPower(state: GameState): void {
   const activePlayer = state.players.find(
     (player) => player.playerId === state.activePlayerId
@@ -47,12 +53,26 @@ function calculateCardPassivePowerBonus(
   player: PlayerState
 ): number {
   return definition.engine.effects.reduce<number>((total, effect) => {
+    if (isPassiveFlatPowerEffect(effect)) {
+      return total + effect.amount;
+    }
+
     if (!isPassiveStatusPowerEffect(effect)) {
       return total;
     }
 
     return hasStatus(player, effect.statusId) ? total + effect.amount : total;
   }, 0);
+}
+
+function isPassiveFlatPowerEffect(
+  effect: RuntimeEffect
+): effect is PassiveFlatPowerEffect {
+  return (
+    effect.effectId === "ongoing_add_power" &&
+    effect.timing === "whileControlled" &&
+    typeof effect.amount === "number"
+  );
 }
 
 function isPassiveStatusPowerEffect(

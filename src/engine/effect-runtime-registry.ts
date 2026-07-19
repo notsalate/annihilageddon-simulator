@@ -2707,6 +2707,32 @@ const addPowerIfPlayerHasStatusHandler: EffectRuntimeHandler = {
   },
 };
 
+const ongoingAddPowerHandler: EffectRuntimeHandler = {
+  effectId: "ongoing_add_power",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["timing"] !== "whileControlled") {
+      errors.push(
+        `${subjectId} uses unsupported ongoing power timing ${String(effect["timing"])}`
+      );
+    }
+    return [
+      ...errors,
+      ...validatePositiveIntegerAmount(
+        subjectId,
+        effect,
+        "ongoing power amount"
+      ),
+    ];
+  },
+  execute() {
+    return {
+      ok: false,
+      error: "ongoing_add_power is a passive controlled effect",
+    };
+  },
+};
+
 const addPowerPerControlledObjectHandler: EffectRuntimeHandler = {
   effectId: "add_power_per_controlled_object",
   validateShape(subjectId, effect) {
@@ -4661,7 +4687,7 @@ export const effectRuntimeHandlerMap = {
   on_gain_self_gain_limp_wands: createUnsupportedEffectHandler(
     "on_gain_self_gain_limp_wands"
   ),
-  ongoing_add_power: createUnsupportedEffectHandler("ongoing_add_power"),
+  ongoing_add_power: ongoingAddPowerHandler,
   ongoing_add_power_when_playing_limp_wand: createUnsupportedEffectHandler(
     "ongoing_add_power_when_playing_limp_wand"
   ),
@@ -4711,6 +4737,8 @@ function createEffectRuntimeCatalogSource(
       supportedSourceKinds:
         handler.effectId === "temporary_hand_limit_by_gained_card_type"
           ? ["wizardProperty"]
+          : handler.effectId === "ongoing_add_power"
+            ? ["card"]
           : allEffectRuntimeSourceKinds,
     };
   }

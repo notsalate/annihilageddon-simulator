@@ -1492,6 +1492,28 @@ test("controlled-object power effect is registered and rejects invalid shapes", 
   );
 });
 
+test("ongoing controlled power validates its concrete passive shape", () => {
+  const handler = getEffectRuntimeHandler("ongoing_add_power");
+
+  assert.ok(handler);
+  assert.deepEqual(
+    handler.validateShape("Fixture", {
+      effectId: "ongoing_add_power",
+      timing: "whileControlled",
+      amount: 1,
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    handler.validateShape("Fixture", {
+      effectId: "ongoing_add_power",
+      timing: "onPlay",
+      amount: 0,
+    }),
+    []
+  );
+});
+
 test("economy and draw effects are registered and reject invalid shapes through runtime handlers", () => {
   const effectIds = [
     "gain_chips",
