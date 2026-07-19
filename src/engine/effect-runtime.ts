@@ -515,25 +515,24 @@ function getAttackProfile(
   state: GameState,
   _attackInitiator: PlayerState,
   source: EffectSourceContext
-): { damageBonus: number; damageMultiplier: number; unavoidable: boolean } {
+): { damageBonus: number; unavoidable: boolean } {
   if (source.sourceType !== "card") {
-    return { damageBonus: 0, damageMultiplier: 1, unavoidable: false };
+    return { damageBonus: 0, unavoidable: false };
   }
 
   const sourceCard = findCardInstance(state, source.cardInstanceId);
   if (sourceCard === undefined || sourceCard.ownerId === "common") {
-    return { damageBonus: 0, damageMultiplier: 1, unavoidable: false };
+    return { damageBonus: 0, unavoidable: false };
   }
 
   const sourceOwner = state.players.find(
     (candidate) => candidate.playerId === sourceCard.ownerId
   );
   if (sourceOwner === undefined) {
-    return { damageBonus: 0, damageMultiplier: 1, unavoidable: false };
+    return { damageBonus: 0, unavoidable: false };
   }
 
   let damageBonus = 0;
-  let damageMultiplier = 1;
   let unavoidable = false;
   for (const token of sourceOwner.wizardProperties) {
     const definition = state.tokenDefinitions.get(token.definitionId);
@@ -595,7 +594,7 @@ function getAttackProfile(
     }
   }
 
-  return { damageBonus, damageMultiplier, unavoidable };
+  return { damageBonus, unavoidable };
 }
 
 function effectMatchesCardDefinition(

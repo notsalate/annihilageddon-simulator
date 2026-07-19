@@ -243,7 +243,7 @@ export interface EffectRuntimeServices {
     state: GameState,
     player: PlayerState,
     source: EffectSourceContext
-  ): { damageBonus: number; damageMultiplier: number; unavoidable: boolean };
+  ): { damageBonus: number; unavoidable: boolean };
   chooseEffectChoice(
     state: GameState,
     player: PlayerState,
