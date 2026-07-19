@@ -172,6 +172,42 @@ test("ongoing controlled power is limited to card sources", () => {
   }
 });
 
+test("ongoing hand refill bonus is limited to card sources", () => {
+  const effect = {
+    effectId: "ongoing_hand_refill_bonus",
+    timing: "endTurn",
+    amount: 1,
+  } as const;
+
+  assert.equal(
+    resolveEffectRuntimeCatalogEntry(
+      "Fixture card",
+      effect.effectId,
+      effect,
+      "combat",
+      "card"
+    ).ok,
+    true
+  );
+
+  for (const sourceKind of [
+    "wizardProperty",
+    "deadWizardToken",
+  ] as const) {
+    const result = resolveEffectRuntimeCatalogEntry(
+      `Fixture ${sourceKind}`,
+      effect.effectId,
+      effect,
+      "combat",
+      sourceKind
+    );
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.errors[0] ?? "", /token-only effect id/);
+    }
+  }
+});
+
 test("known effect with invalid shape is rejected before execution", () => {
   const state = initializeGame({ rootDir: process.cwd(), seed: 11605 });
   const player = state.players[0];

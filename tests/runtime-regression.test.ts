@@ -339,6 +339,114 @@ test("Loshashlyk gains one chip per Dingler including its owner", () => {
   assert.equal(activePlayer.chips, 2);
 });
 
+test("Creator's Hand remains controlled and raises its controller's end-turn hand limit", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  assert.ok(dataPack.cardDefinitions.has("esw2_dbg__main_047"));
+
+  const state = initializeGame({ rootDir, seed: 47001 });
+  const activePlayer = mustGetActivePlayer(state);
+  const creatorsHand = createCardInstance(
+    "runtime-creators-hand",
+    "esw2_dbg__main_047",
+    activePlayer.playerId
+  );
+  activePlayer.hand.push(creatorsHand);
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: creatorsHand.instanceId,
+  });
+  assert.equal(playResult.ok, true);
+  assert.equal(activePlayer.permanents.includes(creatorsHand), true);
+
+  const endTurnResult = applyAction(state, { type: "endTurn" });
+  assert.equal(endTurnResult.ok, true);
+  assert.equal(activePlayer.hand.length, 6);
+  assert.equal(activePlayer.permanents.includes(creatorsHand), true);
+
+  const nextPlayerEndTurn = applyAction(state, { type: "endTurn" });
+  assert.equal(nextPlayerEndTurn.ok, true);
+  const repeatedEndTurn = applyAction(state, { type: "endTurn" });
+  assert.equal(repeatedEndTurn.ok, true);
+  assert.equal(activePlayer.hand.length, 6);
+});
+
+test("Creator's Hand ignores an invalid passive hand-limit amount that bypasses data validation", () => {
+  const state = initializeGame({ rootDir, seed: 47002 });
+  const activePlayer = mustGetActivePlayer(state);
+  const definition = state.cardDefinitions.get("esw2_dbg__main_047");
+  assert.ok(definition);
+  const effect = definition.engine.effects[0];
+  assert.ok(effect);
+
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [
+      definition.cardId,
+      {
+        ...definition,
+        engine: {
+          ...definition.engine,
+          effects: [{ ...effect, amount: -1 }],
+        },
+      },
+    ],
+  ]);
+  activePlayer.permanents.push(
+    createCardInstance(
+      "runtime-creators-hand-invalid-amount",
+      definition.cardId,
+      activePlayer.playerId
+    )
+  );
+
+  const result = applyAction(state, { type: "endTurn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.hand.length, 5);
+});
+
+test("Creator's Hand combines with the maximum-life hand-limit modifier", () => {
+  const state = initializeGame({ rootDir, seed: 47003 });
+  const activePlayer = mustGetActivePlayer(state);
+  const park = createCardInstance(
+    "runtime-park-vurdalaktionov",
+    "esw2_dbg__legend_010",
+    activePlayer.playerId
+  );
+  const creatorsHand = createCardInstance(
+    "runtime-creators-hand-with-park",
+    "esw2_dbg__main_047",
+    activePlayer.playerId
+  );
+  activePlayer.hand.push(park, creatorsHand);
+  activePlayer.deck = Array.from({ length: 8 }, (_, index) =>
+    createCardInstance(
+      `runtime-hand-limit-draw-${index + 1}`,
+      "esw2_dbg__starter_001",
+      activePlayer.playerId
+    )
+  );
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: park.instanceId }).ok,
+    true
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: creatorsHand.instanceId,
+    }).ok,
+    true
+  );
+  activePlayer.life.current = 100;
+
+  const result = applyAction(state, { type: "endTurn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.hand.length, 8);
+});
+
 test("executable validation rejects non-canonical raw starter templates before setup modifiers", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
   const result = validateExecutableDataPack({

@@ -274,6 +274,16 @@ export function calculateEndTurnDrawCount(
     }
 
     for (const effect of definition.engine.effects) {
+      if (
+        effect.effectId === "ongoing_hand_refill_bonus" &&
+        effect.timing === "endTurn" &&
+        Number.isSafeInteger(effect.amount) &&
+        effect.amount > 0
+      ) {
+        drawCount += effect.amount;
+        continue;
+      }
+
       if (effect.effectId !== "increase_hand_limit_at_max_life") {
         continue;
       }

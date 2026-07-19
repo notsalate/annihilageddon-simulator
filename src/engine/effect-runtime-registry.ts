@@ -331,6 +331,8 @@ type PositiveAmountRuntimeEffect<EffectId extends RuntimeEffectId> =
 
 type AddPowerRuntimeEffect = PositiveAmountRuntimeEffect<"add_power">;
 type GainChipsRuntimeEffect = PositiveAmountRuntimeEffect<"gain_chips">;
+type OngoingHandRefillBonusRuntimeEffect =
+  PositiveAmountRuntimeEffect<"ongoing_hand_refill_bonus">;
 type MayhemEachNonDinglerGainChipsRuntimeEffect =
   RuntimeEffectForId<"mayhem_each_non_dingler_gain_chips"> & {
     chipAmount: number;
@@ -1851,6 +1853,28 @@ const increaseHandLimitAtMaxLifeHandler: EffectRuntimeHandler = {
   },
   execute() {
     return { ok: true };
+  },
+};
+
+const ongoingHandRefillBonusHandler: EffectRuntimeHandler<OngoingHandRefillBonusRuntimeEffect> = {
+  effectId: "ongoing_hand_refill_bonus",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["timing"] !== "endTurn") {
+      errors.push(
+        `${subjectId} uses unsupported ongoing-hand-refill timing ${String(effect["timing"])}`
+      );
+    }
+    errors.push(
+      ...validatePositiveIntegerAmount(subjectId, effect, "ongoing hand-limit amount")
+    );
+    return errors;
+  },
+  execute() {
+    return {
+      ok: false,
+      error: "ongoing_hand_refill_bonus is an end-turn hand-limit effect",
+    };
   },
 };
 
@@ -4593,6 +4617,7 @@ export const effectRuntimeHandlerMap = {
   mayhem_each_player_choose_foe_gain_chips:
     mayhemEachPlayerChooseFoeGainChipsHandler,
   increase_hand_limit_at_max_life: increaseHandLimitAtMaxLifeHandler,
+  ongoing_hand_refill_bonus: ongoingHandRefillBonusHandler,
   mayhem_each_player_battle_highest_hand_cost:
     mayhemEachPlayerBattleHighestHandCostHandler,
   mayhem_each_player_vote_dingler: mayhemEachPlayerVoteDinglerHandler,
@@ -4694,9 +4719,6 @@ export const effectRuntimeHandlerMap = {
   ongoing_first_attack_damage_add_power: createUnsupportedEffectHandler(
     "ongoing_first_attack_damage_add_power"
   ),
-  ongoing_hand_refill_bonus: createUnsupportedEffectHandler(
-    "ongoing_hand_refill_bonus"
-  ),
   ongoing_start_turn_optional_gain_limp_wand_to_hand:
     createUnsupportedEffectHandler(
       "ongoing_start_turn_optional_gain_limp_wand_to_hand"
@@ -4737,7 +4759,8 @@ function createEffectRuntimeCatalogSource(
       supportedSourceKinds:
         handler.effectId === "temporary_hand_limit_by_gained_card_type"
           ? ["wizardProperty"]
-          : handler.effectId === "ongoing_add_power"
+          : handler.effectId === "ongoing_add_power" ||
+              handler.effectId === "ongoing_hand_refill_bonus"
             ? ["card"]
           : allEffectRuntimeSourceKinds,
     };

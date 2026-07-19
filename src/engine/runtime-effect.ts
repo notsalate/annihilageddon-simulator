@@ -304,6 +304,8 @@ type RuntimeEffectPayloadVariant<EffectId extends KnownRuntimeEffectId> = {
 } & RuntimeEffectFields &
   (EffectId extends "wild_magic_choice"
     ? { options?: WildMagicOption[] }
+    : EffectId extends "ongoing_hand_refill_bonus"
+      ? { amount: number }
     : unknown);
 
 export type RuntimeEffectPayload = {
