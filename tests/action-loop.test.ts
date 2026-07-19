@@ -5057,6 +5057,184 @@ test("Slapalocka Wand steals or gains chips equal to actual attack damage dealt"
   assert.equal(activePlayer.chips, 2);
 });
 
+test("Ultimate Tronado adds power equal to the total actual damage from the first multi-target attack", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    playerCount: 3,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+  }
+
+  const tronadoDefinition = createFixtureCardDefinition(
+    "esw2_dbg__legend_012",
+    [
+      {
+        effectId: "ongoing_first_attack_damage_add_power",
+        timing: "afterFirstAttackDamageEachTurn",
+        amount: "totalDamageDealtByThatAttack",
+      },
+    ],
+    { isOngoing: true, cardKind: "legend", cardTypes: ["legend", "location"] }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [tronadoDefinition.cardId, tronadoDefinition],
+  ]);
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(
+      activePlayer,
+      tronadoDefinition.cardId,
+      "ultimate-tronado"
+    )
+  );
+  mustGetPlayer(state, markPlayerId("player-2")).life.current = 1;
+  mustGetPlayer(state, markPlayerId("player-3")).life.current = 4;
+  const attackId = addFixtureCardToActiveHand(state, {
+    effectId: "multi_target_attack",
+    timing: "onPlay",
+    amount: 3,
+    target: { selector: "opponentPlayers" },
+  });
+
+  const result = applyAction(state, { type: "playCard", cardInstanceId: attackId });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 4);
+});
+
+test("Ultimate Tronado ignores avoided attacks, triggers once, and resets on its owner's next turn", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    playerCount: 2,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+  }
+  const tronadoDefinition = createFixtureCardDefinition(
+    "esw2_dbg__legend_012",
+    [
+      {
+        effectId: "ongoing_first_attack_damage_add_power",
+        timing: "afterFirstAttackDamageEachTurn",
+        amount: "totalDamageDealtByThatAttack",
+      },
+    ],
+    { isOngoing: true, cardKind: "legend", cardTypes: ["legend", "location"] }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [tronadoDefinition.cardId, tronadoDefinition],
+  ]);
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(
+      activePlayer,
+      tronadoDefinition.cardId,
+      "ultimate-tronado"
+    )
+  );
+
+  addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf");
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: addFixtureCardToActiveHand(state, {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 3,
+        target: { selector: "opponentPlayer" },
+      }),
+    }).ok,
+    true
+  );
+  assert.equal(state.turn.power, 0);
+
+  for (const amount of [3, 2]) {
+    assert.equal(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: addFixtureCardToActiveHand(state, {
+          effectId: "attack_damage",
+          timing: "onPlay",
+          amount,
+          target: { selector: "opponentPlayer" },
+        }),
+      }).ok,
+      true
+    );
+  }
+  assert.equal(state.turn.power, 3);
+
+  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: addFixtureCardToActiveHand(state, {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 4,
+        target: { selector: "opponentPlayer" },
+      }),
+    }).ok,
+    true
+  );
+  assert.equal(state.turn.power, 4);
+});
+
+test("Ultimate Tronado does not treat a later attack as first after it enters play", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    playerCount: 2,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+  }
+
+  for (const amount of [2, 3]) {
+    if (amount === 3) {
+      activePlayer.permanents.push(
+        createRuntimeCardInstance(
+          activePlayer,
+          "esw2_dbg__legend_012",
+          "ultimate-tronado"
+        )
+      );
+    }
+    assert.equal(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: addFixtureCardToActiveHand(state, {
+          effectId: "attack_damage",
+          timing: "onPlay",
+          amount,
+          target: { selector: "opponentPlayer" },
+        }),
+      }).ok,
+      true
+    );
+  }
+
+  assert.equal(state.turn.power, 0);
+});
+
 test("Losharocka Wand can self-target and makes the killed target a Dingler", () => {
   const state = initializeGame({
     rootDir,
@@ -5436,6 +5614,66 @@ test("Potny's Buzzing Wand chooses left or right and chains in the chosen direct
         event.definitionId === "esw2_dbg__legend_015"
     ).length,
     2
+  );
+});
+
+test("Ultimate Tronado gains the actual total from a directional chain attack only once", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 4,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const leftFoe = mustGetPlayer(state, markPlayerId("player-2"));
+  const nextLeftFoe = mustGetPlayer(state, markPlayerId("player-3"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+  }
+  leftFoe.life.current = 1;
+  nextLeftFoe.life.current = 20;
+  const tronadoDefinition = createFixtureCardDefinition(
+    "esw2_dbg__legend_012",
+    [
+      {
+        effectId: "ongoing_first_attack_damage_add_power",
+        timing: "afterFirstAttackDamageEachTurn",
+        amount: "totalDamageDealtByThatAttack",
+      },
+    ],
+    { isOngoing: true, cardKind: "legend", cardTypes: ["legend", "location"] }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [tronadoDefinition.cardId, tronadoDefinition],
+  ]);
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(
+      activePlayer,
+      tronadoDefinition.cardId,
+      "ultimate-tronado"
+    )
+  );
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_015"
+  );
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: wand.instanceId }).ok,
+    true
+  );
+
+  assert.equal(state.turn.power, 14);
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "effectAddPowerApplied" &&
+        event.effectId === "ongoing_first_attack_damage_add_power"
+    ).length,
+    1
   );
 });
 

@@ -211,6 +211,12 @@ export interface EffectRuntimeServices {
     effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): DamageResult;
+  applyAfterPlayerAttackDamage(
+    state: GameState,
+    attackingPlayer: PlayerState,
+    totalDamageDealt: number,
+    attackSource: EffectSourceContext
+  ): void;
   healPlayer(
     state: GameState,
     sourcePlayer: PlayerState,
@@ -313,6 +319,13 @@ export interface EffectRuntimeHandler<
     source: EffectSourceContext,
     services: EffectRuntimeServices
   ): EffectExecutionResult;
+  applyAfterPlayerAttackDamage?(
+    state: GameState,
+    player: PlayerState,
+    effect: Effect,
+    source: EffectSourceContext,
+    totalDamageDealt: number
+  ): void;
   executeSetup?(
     player: PlayerState,
     effect: Effect,
@@ -357,6 +370,11 @@ type OptionalSpendChipAttackDamageRuntimeEffect =
 type ExecutableAttackDamageRuntimeEffect =
   | AttackDamageRuntimeEffect
   | OptionalSpendChipAttackDamageRuntimeEffect;
+type OngoingFirstAttackDamageAddPowerRuntimeEffect =
+  RuntimeEffectForId<"ongoing_first_attack_damage_add_power"> & {
+    timing: "afterFirstAttackDamageEachTurn";
+    amount: "totalDamageDealtByThatAttack";
+  };
 
 export interface EffectRuntimeCatalogEntry<
   EffectId extends RuntimeEffectId = RuntimeEffectId,
@@ -2757,6 +2775,51 @@ const ongoingAddPowerHandler: EffectRuntimeHandler = {
   },
 };
 
+const ongoingFirstAttackDamageAddPowerHandler: EffectRuntimeHandler<
+  OngoingFirstAttackDamageAddPowerRuntimeEffect
+> = {
+  effectId: "ongoing_first_attack_damage_add_power",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["timing"] !== "afterFirstAttackDamageEachTurn") {
+      errors.push(
+        `${subjectId} uses unsupported first-attack damage timing ${String(effect["timing"])}`
+      );
+    }
+    if (effect["amount"] !== "totalDamageDealtByThatAttack") {
+      errors.push(
+        `${subjectId} uses unsupported first-attack damage amount ${String(effect["amount"])}`
+      );
+    }
+    return errors;
+  },
+  execute() {
+    return {
+      ok: false,
+      error:
+        "ongoing_first_attack_damage_add_power is a triggered controlled effect",
+    };
+  },
+  applyAfterPlayerAttackDamage(
+    state,
+    player,
+    _effect,
+    source,
+    totalDamageDealt
+  ) {
+    const powerBefore = state.turn.power;
+    state.turn.power += totalDamageDealt;
+    recordTurnPowerChanged(
+      state,
+      player,
+      source,
+      "ongoing_first_attack_damage_add_power",
+      powerBefore,
+      state.turn.power
+    );
+  },
+};
+
 const addPowerPerControlledObjectHandler: EffectRuntimeHandler = {
   effectId: "add_power_per_controlled_object",
   validateShape(subjectId, effect) {
@@ -2981,6 +3044,7 @@ function executeAttackWithAmount(
       sourceType: source.sourceType,
     });
 
+    let totalDamageDealt = 0;
     for (const targetPlayer of services.getOpponentsInSeatingOrder(
       state,
       player
@@ -2994,6 +3058,7 @@ function executeAttackWithAmount(
         source,
         attackProfile.unavoidable
       );
+      totalDamageDealt += attackResult.damageDealt;
       const branchResult = executeAttackBranches(
         state,
         player,
@@ -3007,6 +3072,13 @@ function executeAttackWithAmount(
         return branchResult;
       }
     }
+
+    services.applyAfterPlayerAttackDamage(
+      state,
+      player,
+      totalDamageDealt,
+      source
+    );
 
     return { ok: true };
   }
@@ -3065,6 +3137,12 @@ function executeAttackWithAmount(
     targetPlayer,
     attackAmount,
     effectId,
+    source
+  );
+  services.applyAfterPlayerAttackDamage(
+    state,
+    player,
+    attackResult.damageDealt,
     source
   );
   return executeAttackBranches(
@@ -3270,6 +3348,7 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
       sourceType: source.sourceType,
     });
 
+    let totalDamageDealt = 0;
     for (const targetPlayer of foes) {
       if (attacked.has(targetPlayer.playerId)) {
         continue;
@@ -3285,10 +3364,18 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
         source,
         attackProfile.unavoidable
       );
+      totalDamageDealt += attackResult.damageDealt;
       if (!attackResult.killed) {
         break;
       }
     }
+
+    services.applyAfterPlayerAttackDamage(
+      state,
+      player,
+      totalDamageDealt,
+      source
+    );
 
     return { ok: true };
   },
@@ -3344,11 +3431,12 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
       sourceType: source.sourceType,
     });
 
+    let totalDamageDealt = 0;
     for (const targetPlayer of services.getOpponentsInSeatingOrder(
       state,
       player
     )) {
-      services.resolveAttackTarget(
+      const attackResult = services.resolveAttackTarget(
         state,
         player,
         targetPlayer,
@@ -3357,7 +3445,15 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
         source,
         attackProfile.unavoidable
       );
+      totalDamageDealt += attackResult.damageDealt;
     }
+
+    services.applyAfterPlayerAttackDamage(
+      state,
+      player,
+      totalDamageDealt,
+      source
+    );
 
     return { ok: true };
   },
@@ -4716,9 +4812,7 @@ export const effectRuntimeHandlerMap = {
   ongoing_add_power_when_playing_limp_wand: createUnsupportedEffectHandler(
     "ongoing_add_power_when_playing_limp_wand"
   ),
-  ongoing_first_attack_damage_add_power: createUnsupportedEffectHandler(
-    "ongoing_first_attack_damage_add_power"
-  ),
+  ongoing_first_attack_damage_add_power: ongoingFirstAttackDamageAddPowerHandler,
   ongoing_start_turn_optional_gain_limp_wand_to_hand:
     createUnsupportedEffectHandler(
       "ongoing_start_turn_optional_gain_limp_wand_to_hand"

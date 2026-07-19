@@ -190,6 +190,7 @@ function endTurn(state: GameState): ActionResult {
   });
 
   state.turn.gainedCardDefinitionIds = [];
+  state.turn.damagingAttackPlayerIds = [];
   state.turn.number += 1;
   state.activePlayerId = getNextPlayer(state, activePlayer).playerId;
   const marketFlowResult = runMarketFlow(state, { mode: "turn" });

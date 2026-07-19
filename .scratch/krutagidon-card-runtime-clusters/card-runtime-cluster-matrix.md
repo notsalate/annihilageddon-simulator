@@ -7,8 +7,8 @@ Generated from canonical card draft JSON, current runtime card JSON, current com
 ## Summary
 
 - total cards: 134
-- fullRuntime: 38
-- missingRuntime: 96
+- fullRuntime: 39
+- missingRuntime: 95
 - clustered: 134
 - needsClusterDecision: 0
 
@@ -37,7 +37,7 @@ Generated from canonical card draft JSON, current runtime card JSON, current com
 | `esw2_dbg__legend_009` | legend | Башня радости | Постоянка: | `data/import/cards/legend/texts/esw2_dbg__legend_009.md` | fullRuntime | `deck:legend-deck` | `tests/action-loop.test.ts`<br>`tests/effective-values.test.ts` | clustered | `simple-baseline` | none |
 | `esw2_dbg__legend_010` | legend | Парк Вурдалакционов | Постоянка: каждый раз, когда ты в свой ход наносишь врагу урон, накручивай столько жизней, сколько урона нанёс. Пока у тебя максимум жизней, +2 к пределу руки. | `data/import/cards/legend/texts/esw2_dbg__legend_010.md` | fullRuntime | `deck:legend-deck` | `tests/action-loop.test.ts`<br>`tests/runtime-regression.test.ts` | clustered | `life-total-effects` | Триггер лечения от нанесённого урона определяет карту; модификатор предела руки вторичен. |
 | `esw2_dbg__legend_011` | legend | Трондец | Постоянка: Атака: нанеси выбранному врагу столько урона, какова стоимость любой другой карты под твоим контролем. | `data/import/cards/legend/texts/esw2_dbg__legend_011.md` | fullRuntime | `deck:legend-deck` | `tests/action-loop.test.ts` | clustered | `controlled-object-conditions` | Урон считается от стоимости другой контролируемой карты; рамка атаки вторична. |
-| `esw2_dbg__legend_012` | legend | Ультимативное тронадо | Постоянка: всякий раз, когда ты впервые за свой ход наносишь урон атакой, + столько мощи, каков суммарный нанесённый урон. | `data/import/cards/legend/texts/esw2_dbg__legend_012.md` | missingRuntime | none | none | clustered | `ongoing-modifiers` | Постоянный триггер первого урона атакой и прибавка мощи важнее деталей атаки. |
+| `esw2_dbg__legend_012` | legend | Ультимативное тронадо | Постоянка: всякий раз, когда ты впервые за свой ход наносишь урон атакой, + столько мощи, каков суммарный нанесённый урон. | `data/import/cards/legend/texts/esw2_dbg__legend_012.md` | fullRuntime | `deck:legend-deck` | `tests/action-loop.test.ts` | clustered | `ongoing-modifiers` | Постоянный триггер первого урона атакой и прибавка мощи важнее деталей атаки. |
 | `esw2_dbg__legend_013` | legend | Смерть от холестерина | Если у тебя нет жетонов дохлых колдунов, +7 мощи. Если есть, можешь уничтожить 1 свой жетон дохлого колдуна. | `data/import/cards/legend/texts/esw2_dbg__legend_013.md` | missingRuntime | none | none | clustered | `dwt-interactions` | none |
 | `esw2_dbg__legend_014` | legend | Авада Лошавра | Возьми 2 карты. Атака: выбери колдуна — он становится лошарой. Затем ты получаешь +1 мощь за каждого лошару в игре. | `data/import/cards/legend/texts/esw2_dbg__legend_014.md` | fullRuntime | `deck:legend-deck` | `tests/action-loop.test.ts` | clustered | `dingler-status` | Назначение Dingler status и подсчёт лошар главные; атака в себя вторична. |
 | `esw2_dbg__legend_015` | legend | Бузящая палочка Гарика Потного | +3 мощи Атака: нанеси 10 урона левому или правому врагу. Если он от этого подох, атакуй следующего врага в том же направлении. | `data/import/cards/legend/texts/esw2_dbg__legend_015.md` | missingRuntime | none | `tests/action-loop.test.ts` | clustered | `attack-effects` | Направленная цепная атака и последовательность смертей главные; wand-классификация вторична. |

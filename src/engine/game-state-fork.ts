@@ -22,6 +22,7 @@ export function forkGameState(source: GameState): GameState {
       controlledPowerBonus: source.turn.controlledPowerBonus,
       activatedCardIds: [...source.turn.activatedCardIds],
       gainedCardDefinitionIds: [...source.turn.gainedCardDefinitionIds],
+      damagingAttackPlayerIds: [...source.turn.damagingAttackPlayerIds],
     },
     players: source.players.map(clonePlayer),
     common: cloneCommon(source.common),

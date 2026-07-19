@@ -162,6 +162,7 @@ export interface GameState {
     controlledPowerBonus: number;
     activatedCardIds: string[];
     gainedCardDefinitionIds: string[];
+    damagingAttackPlayerIds: PlayerId[];
   };
   players: PlayerState[];
   common: CommonState;
@@ -897,6 +898,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       controlledPowerBonus: 0,
       activatedCardIds: [],
       gainedCardDefinitionIds: [],
+      damagingAttackPlayerIds: [],
     },
     players,
     common,

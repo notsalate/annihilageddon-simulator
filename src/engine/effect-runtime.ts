@@ -768,6 +768,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   getWizardPropertyAttackProfile,
   chooseEffectChoice,
   dealDamage,
+  applyAfterPlayerAttackDamage,
   healPlayer,
   setPlayerLife,
   resolveStatusTargetPlayers,
@@ -1378,6 +1379,61 @@ function applyDamageDealtTriggers(
           cardInstanceId: permanent.instanceId,
           definitionId: permanent.definitionId,
         }
+      );
+    }
+  }
+}
+
+/**
+ * Shared seam for player-owned attacks after every target has resolved. The
+ * caller supplies the current attacker, so a future redirect can transfer its
+ * ledger ownership. Global Mayhem attacks deliberately do not call it: they
+ * have no permanent owner.
+ */
+function applyAfterPlayerAttackDamage(
+  state: GameState,
+  attackingPlayer: PlayerState,
+  totalDamageDealt: number,
+  attackSource: EffectSourceContext
+): void {
+  if (
+    totalDamageDealt <= 0 ||
+    state.activePlayerId !== attackingPlayer.playerId ||
+    state.turn.damagingAttackPlayerIds.includes(attackingPlayer.playerId)
+  ) {
+    return;
+  }
+
+  state.turn.damagingAttackPlayerIds.push(attackingPlayer.playerId);
+  for (const permanent of attackingPlayer.permanents) {
+    const definition = state.cardDefinitions.get(permanent.definitionId);
+    if (definition === undefined || !definition.engine.playableInV0) {
+      continue;
+    }
+
+    const source: EffectSourceContext = {
+      ...attackSource,
+      runtimeMode: getCardEffectRuntimeMode(permanent.definitionId),
+      cardInstanceId: permanent.instanceId,
+      definitionId: permanent.definitionId,
+    };
+    for (const effect of definition.engine.effects) {
+      const resolution = resolveEffectRuntimeCatalogEntry(
+        `Effect ${effect.effectId}`,
+        effect.effectId,
+        effect,
+        source.runtimeMode,
+        source.sourceType
+      );
+      if (!resolution.ok) {
+        continue;
+      }
+      resolution.entry.handler.applyAfterPlayerAttackDamage?.(
+        state,
+        attackingPlayer,
+        effect,
+        source,
+        totalDamageDealt
       );
     }
   }

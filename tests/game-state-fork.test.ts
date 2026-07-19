@@ -44,6 +44,7 @@ function createFixture(): GameState {
       controlledPowerBonus: 1,
       activatedCardIds: ["activated-card"],
       gainedCardDefinitionIds: ["gained-card"],
+      damagingAttackPlayerIds: [],
     },
     players: [
       {
@@ -168,16 +169,19 @@ test("fork isolates source mutations and sibling mutable collections", () => {
   assert.equal(firstPlayer.trophyLikeObjects[0]!.effects[0]!.timing, "onPlay");
 
   first.turn.gainedCardDefinitionIds.push("first-gained-card");
+  first.turn.damagingAttackPlayerIds.push(markPlayerId("player-1"));
   firstPlayer.statuses[0]!.effects[0]!.timing = "whileControlled";
   firstPlayer.trophyLikeObjects[0]!.effects[0]!.timing = "whileControlled";
 
   assert.deepEqual(second.turn.gainedCardDefinitionIds, ["gained-card"]);
+  assert.deepEqual(second.turn.damagingAttackPlayerIds, []);
   assert.equal(secondPlayer.statuses[0]!.effects[0]!.timing, "onPlay");
   assert.equal(secondPlayer.trophyLikeObjects[0]!.effects[0]!.timing, "onPlay");
   assert.deepEqual(source.turn.gainedCardDefinitionIds, [
     "gained-card",
     "source-gained-card",
   ]);
+  assert.deepEqual(source.turn.damagingAttackPlayerIds, []);
   assert.equal(sourcePlayer.statuses[0]!.effects[0]!.timing, "endTurn");
   assert.equal(
     sourcePlayer.trophyLikeObjects[0]!.effects[0]!.timing,
