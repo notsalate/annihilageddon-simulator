@@ -3211,7 +3211,7 @@ function executeAttackWithAmount(
       sourceType: source.sourceType,
     });
 
-    let totalDamageDealt = 0;
+    const attackResults: AttackResolution[] = [];
     for (const targetPlayer of services.getOpponentsInSeatingOrder(
       state,
       player
@@ -3226,7 +3226,7 @@ function executeAttackWithAmount(
         attackProfile.unavoidable,
         amount
       );
-      totalDamageDealt += attackResult.damageDealt;
+      attackResults.push(attackResult);
       const branchResult = executeAttackBranches(
         state,
         attackResult.attackingPlayer,
@@ -3241,12 +3241,7 @@ function executeAttackWithAmount(
       }
     }
 
-    services.applyAfterPlayerAttackDamage(
-      state,
-      player,
-      totalDamageDealt,
-      source
-    );
+    applyAfterResolvedAttackDamage(state, attackResults, services);
 
     return { ok: true };
   }
@@ -3309,6 +3304,50 @@ function executeAttackWithAmount(
     attackResult,
     services
   );
+}
+
+function applyAfterResolvedAttackDamage(
+  state: GameState,
+  attackResults: readonly AttackResolution[],
+  services: EffectRuntimeServices
+): void {
+  const damageByAttackerAndSource = new Map<
+    string,
+    {
+      attackingPlayer: PlayerState;
+      damageDealt: number;
+      source: EffectSourceContext;
+    }
+  >();
+
+  for (const attackResult of attackResults) {
+    const key = [
+      attackResult.currentAttackerId,
+      attackResult.source.sourceType,
+      attackResult.source.cardInstanceId,
+      attackResult.source.definitionId,
+    ].join("\u0000");
+    const existing = damageByAttackerAndSource.get(key);
+    if (existing === undefined) {
+      damageByAttackerAndSource.set(key, {
+        attackingPlayer: attackResult.attackingPlayer,
+        damageDealt: attackResult.damageDealt,
+        source: attackResult.source,
+      });
+      continue;
+    }
+
+    existing.damageDealt += attackResult.damageDealt;
+  }
+
+  for (const attribution of damageByAttackerAndSource.values()) {
+    services.applyAfterPlayerAttackDamage(
+      state,
+      attribution.attackingPlayer,
+      attribution.damageDealt,
+      attribution.source
+    );
+  }
 }
 
 const avoidAttackHandler: EffectRuntimeHandler<AvoidAttackRuntimeEffect> = {
@@ -3506,7 +3545,7 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
       sourceType: source.sourceType,
     });
 
-    let totalDamageDealt = 0;
+    const attackResults: AttackResolution[] = [];
     for (const targetPlayer of foes) {
       if (attacked.has(targetPlayer.playerId)) {
         continue;
@@ -3523,18 +3562,13 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
         attackProfile.unavoidable,
         amount.value
       );
-      totalDamageDealt += attackResult.damageDealt;
+      attackResults.push(attackResult);
       if (!attackResult.killed) {
         break;
       }
     }
 
-    services.applyAfterPlayerAttackDamage(
-      state,
-      player,
-      totalDamageDealt,
-      source
-    );
+    applyAfterResolvedAttackDamage(state, attackResults, services);
 
     return { ok: true };
   },
@@ -3586,7 +3620,7 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
       sourceType: source.sourceType,
     });
 
-    let totalDamageDealt = 0;
+    const attackResults: AttackResolution[] = [];
     for (const targetPlayer of services.getOpponentsInSeatingOrder(
       state,
       player
@@ -3601,15 +3635,10 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
         attackProfile.unavoidable,
         amount.value
       );
-      totalDamageDealt += attackResult.damageDealt;
+      attackResults.push(attackResult);
     }
 
-    services.applyAfterPlayerAttackDamage(
-      state,
-      player,
-      totalDamageDealt,
-      source
-    );
+    applyAfterResolvedAttackDamage(state, attackResults, services);
 
     return { ok: true };
   },
