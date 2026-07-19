@@ -1,13 +1,21 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
-import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
+import {
+  calculateEffectivePlayerMaxLife,
+  getControlledCards,
+} from "./effective-values.js";
 import {
   recordCardMoved,
   recordGameEvent,
   recordMarketChipsGained,
 } from "./event-recorder.js";
 import {
+  type AttackAmountComponents,
   type DamageResult,
+  type AttackDefenseUsage,
+  type AttackResolution,
+  createAttackDefenseUsage,
+  type DefenseAttackContext,
   type EffectChoice,
   type EffectExecutionResult,
   type EffectRuntimeServices,
@@ -19,6 +27,8 @@ import {
 } from "./effect-runtime-registry.js";
 import {
   isRuntimeEffectSelectorTarget,
+  isAvoidAttackRuntimeEffect,
+  type AvoidAttackRuntimeEffect,
   type RuntimeEffect,
   type RuntimeEffectId,
   type RuntimeEffectPayload,
@@ -125,6 +135,55 @@ export function executeWizardPropertyOnPlayCardEffects(
         definitionId: token.definitionId,
         tokenInstanceId: token.instanceId,
         tokenDefinitionId: token.definitionId,
+      }
+    );
+    if (!result.ok || result.gameEnd !== undefined) {
+      return result;
+    }
+  }
+
+  return { ok: true };
+}
+
+export function executeControlledCardOnPlayCardEffects(
+  state: GameState,
+  player: PlayerState,
+  playedCard: CardInstance
+): EffectExecutionResult {
+  const playedDefinition = state.cardDefinitions.get(playedCard.definitionId);
+  if (playedDefinition === undefined) {
+    return {
+      ok: false,
+      error: `Missing played card definition ${playedCard.definitionId}`,
+    };
+  }
+
+  for (const card of player.permanents) {
+    if (card.ownerId !== player.playerId) {
+      continue;
+    }
+    const definition = state.cardDefinitions.get(card.definitionId);
+    if (
+      definition === undefined ||
+      !definition.engine.playableInV0 ||
+      !definition.engine.isOngoing
+    ) {
+      continue;
+    }
+
+    const result = executeEffects(
+      state,
+      player,
+      definition.engine.effects.filter((effect) =>
+        cardTriggerMatches(effect, playedDefinition)
+      ),
+      "onPlayCard",
+      {
+        sourceType: "card",
+        runtimeMode: getCardEffectRuntimeMode(card.definitionId),
+        playerId: player.playerId,
+        cardInstanceId: card.instanceId,
+        definitionId: card.definitionId,
       }
     );
     if (!result.ok || result.gameEnd !== undefined) {
@@ -267,13 +326,23 @@ export function calculateEndTurnDrawCount(
     }
   }
 
-  for (const card of player.permanents) {
+  for (const card of getControlledCards(state, player)) {
     const definition = state.cardDefinitions.get(card.definitionId);
     if (definition === undefined || !definition.engine.playableInV0) {
       continue;
     }
 
     for (const effect of definition.engine.effects) {
+      if (
+        effect.effectId === "ongoing_hand_refill_bonus" &&
+        effect.timing === "endTurn" &&
+        Number.isSafeInteger(effect.amount) &&
+        effect.amount > 0
+      ) {
+        drawCount += effect.amount;
+        continue;
+      }
+
       if (effect.effectId !== "increase_hand_limit_at_max_life") {
         continue;
       }
@@ -354,7 +423,15 @@ function cardTriggerMatches(
     );
   const matchesOngoing =
     effect.isOngoing === true && definition.engine.isOngoing;
-  return matchesType || matchesOngoing;
+  const cardTags = effect.cardTags;
+  const matchesTag =
+    Array.isArray(cardTags) &&
+    cardTags.some(
+      (cardTag) =>
+        typeof cardTag === "string" &&
+        definition.engine.tags?.includes(cardTag) === true
+    );
+  return matchesType || matchesOngoing || matchesTag;
 }
 
 function countGainedCardsMatchingEffect(
@@ -408,15 +485,12 @@ function effectConditionMatches(
   }
 
   if ("conditionId" in condition) {
-    const matchingCount = [
-      ...player.permanents,
-      ...player.playedThisTurn,
-    ].filter((card) => {
+    const matchingCount = getControlledCards(state, player).filter((card) => {
       const definition = state.cardDefinitions.get(card.definitionId);
       return (
         definition !== undefined &&
         condition.cardTypes.some((cardType: string) =>
-          definition.engine.cardTypes.includes(cardType)
+          controlledCardMatchesType(definition, cardType)
         )
       );
     }).length;
@@ -427,9 +501,19 @@ function effectConditionMatches(
   return false;
 }
 
-function getWizardPropertyAttackProfile(
+function controlledCardMatchesType(
+  definition: CardDefinition,
+  cardType: string
+): boolean {
+  return (
+    definition.engine.cardTypes.includes(cardType) ||
+    definition.engine.tags?.includes("counts_as_every_card_type") === true
+  );
+}
+
+function getAttackProfile(
   state: GameState,
-  player: PlayerState,
+  _attackInitiator: PlayerState,
   source: EffectSourceContext
 ): { damageBonus: number; unavoidable: boolean } {
   if (source.sourceType !== "card") {
@@ -441,13 +525,16 @@ function getWizardPropertyAttackProfile(
     return { damageBonus: 0, unavoidable: false };
   }
 
-  if (sourceCard.ownerId !== player.playerId) {
+  const sourceOwner = state.players.find(
+    (candidate) => candidate.playerId === sourceCard.ownerId
+  );
+  if (sourceOwner === undefined) {
     return { damageBonus: 0, unavoidable: false };
   }
 
   let damageBonus = 0;
   let unavoidable = false;
-  for (const token of player.wizardProperties) {
+  for (const token of sourceOwner.wizardProperties) {
     const definition = state.tokenDefinitions.get(token.definitionId);
     if (
       definition?.kind !== "wizardProperty" ||
@@ -474,6 +561,35 @@ function getWizardPropertyAttackProfile(
 
       if (effect["effectId"] === "prevent_defense_against_owned_wand_attacks") {
         unavoidable = true;
+      }
+    }
+  }
+
+  for (const card of sourceOwner.permanents) {
+    if (card.ownerId !== sourceOwner.playerId) {
+      continue;
+    }
+    const definition = state.cardDefinitions.get(card.definitionId);
+    if (
+      definition === undefined ||
+      !definition.engine.playableInV0 ||
+      !definition.engine.isOngoing
+    ) {
+      continue;
+    }
+
+    for (const effect of definition.engine.effects) {
+      if (
+        effect.timing !== "attackReplacement" ||
+        !effectMatchesCardDefinition(state, effect, source.definitionId)
+      ) {
+        continue;
+      }
+      if (effect["effectId"] === "modify_owned_wand_attack_damage") {
+        const amount = effect["amount"];
+        if (typeof amount === "number" && Number.isSafeInteger(amount)) {
+          damageBonus += amount;
+        }
       }
     }
   }
@@ -543,8 +659,24 @@ function resolveAttackTarget(
   amount: number,
   effectId: RuntimeEffectId,
   source: EffectSourceContext,
-  unavoidable = false
-): DamageResult & { avoided: boolean } {
+  unavoidable = false,
+  baseAmount = amount,
+  originalSource = source,
+  defenseUsage: AttackDefenseUsage = createAttackDefenseUsage(),
+  amountComponents: AttackAmountComponents = {
+    unresolvedBaseAmount: baseAmount,
+    sourceOwnerModifierAmount: amount - baseAmount,
+    currentAttackerTargetModifierAmount: 0,
+  }
+): AttackResolution {
+  const resolvedAmountComponents = recalculateAttackAmountComponents(
+    state,
+    attackingPlayer,
+    targetPlayer,
+    source,
+    amountComponents
+  );
+  const resolvedAmount = sumAttackAmountComponents(resolvedAmountComponents);
   recordGameEvent(state, {
     type: "attackTargetStarted",
     playerId: attackingPlayer.playerId,
@@ -552,11 +684,22 @@ function resolveAttackTarget(
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
     effectId,
-    amount,
+    amount: resolvedAmount,
     sourceType: source.sourceType,
   });
 
-  if (!unavoidable && resolveDefenseWindow(state, targetPlayer)) {
+  const defenseResolution = unavoidable
+    ? undefined
+    : resolveDefenseWindow(state, targetPlayer, {
+        kind: "redirectable",
+        attackingPlayer,
+        amountComponents: resolvedAmountComponents,
+        effectId,
+        source,
+        originalSource,
+        defenseUsage,
+      });
+  if (defenseResolution !== undefined) {
     recordGameEvent(state, {
       type: "attackAvoided",
       playerId: targetPlayer.playerId,
@@ -566,7 +709,7 @@ function resolveAttackTarget(
       effectId,
       sourceType: source.sourceType,
     });
-    return { damageDealt: 0, killed: false, avoided: true };
+    return defenseResolution;
   }
 
   return {
@@ -574,12 +717,60 @@ function resolveAttackTarget(
       state,
       attackingPlayer,
       targetPlayer,
-      amount,
+      resolvedAmount,
       effectId,
       source
     ),
     avoided: false,
+    amountComponents: resolvedAmountComponents,
+    attackingPlayer,
+    currentAttackerId: attackingPlayer.playerId,
+    targetPlayer,
+    source,
+    originalSource,
   };
+}
+
+function recalculateAttackAmountComponents(
+  state: GameState,
+  attackingPlayer: PlayerState,
+  targetPlayer: PlayerState,
+  _source: EffectSourceContext,
+  amountComponents: AttackAmountComponents
+): AttackAmountComponents {
+  const unmodifiedAmount =
+    amountComponents.unresolvedBaseAmount +
+    amountComponents.sourceOwnerModifierAmount;
+  const doublesAgainstTarget =
+    attackingPlayer.playerId !== targetPlayer.playerId &&
+    attackingPlayer.permanents.some((permanent) => {
+      const definition = state.cardDefinitions.get(permanent.definitionId);
+      return (
+        definition?.engine.playableInV0 === true &&
+        definition.engine.effects.some(
+          (effect) =>
+            effect.timing === "attackReplacement" &&
+            effect.effectId === "double_owned_attack_damage"
+        )
+      );
+    });
+
+  return {
+    ...amountComponents,
+    currentAttackerTargetModifierAmount: doublesAgainstTarget
+      ? unmodifiedAmount
+      : 0,
+  };
+}
+
+function sumAttackAmountComponents(
+  amountComponents: AttackAmountComponents
+): number {
+  return (
+    amountComponents.unresolvedBaseAmount +
+    amountComponents.sourceOwnerModifierAmount +
+    amountComponents.currentAttackerTargetModifierAmount
+  );
 }
 
 function resolveMayhemAttackPlan(
@@ -618,7 +809,11 @@ function resolveMayhemAttackPlan(
       amount: target.amount,
       sourceType: source.sourceType,
     });
-    const avoided = resolveDefenseWindow(state, target.targetPlayer);
+    const avoided =
+      resolveDefenseWindow(state, target.targetPlayer, {
+        kind: "nonredirectable",
+        defenseUsage: createAttackDefenseUsage(),
+      }) !== undefined;
     if (avoided) {
       recordGameEvent(state, {
         type: "attackAvoided",
@@ -755,9 +950,10 @@ const effectRuntimeServices: EffectRuntimeServices = {
   getDestroyDestination,
   getOpponentsInSeatingOrder,
   getPlayersInActiveOrder,
-  getWizardPropertyAttackProfile,
+  getAttackProfile,
   chooseEffectChoice,
   dealDamage,
+  applyAfterPlayerAttackDamage,
   healPlayer,
   setPlayerLife,
   resolveStatusTargetPlayers,
@@ -1152,6 +1348,7 @@ function resolvePlayerDeath(
         tokenInstanceId: token.instanceId,
         tokenDefinitionId: token.definitionId,
       });
+      reconcileActivePlayerControlledPower(state);
     }
   }
 
@@ -1343,8 +1540,8 @@ function applyDamageDealtTriggers(
     return;
   }
 
-  for (const permanent of sourcePlayer.permanents) {
-    const definition = state.cardDefinitions.get(permanent.definitionId);
+  for (const controlledCard of getControlledCards(state, sourcePlayer)) {
+    const definition = state.cardDefinitions.get(controlledCard.definitionId);
     if (definition === undefined || !definition.engine.playableInV0) {
       continue;
     }
@@ -1365,9 +1562,64 @@ function applyDamageDealtTriggers(
         "heal_equal_damage_dealt_on_own_turn",
         {
           ...damageSource,
-          cardInstanceId: permanent.instanceId,
-          definitionId: permanent.definitionId,
+          cardInstanceId: controlledCard.instanceId,
+          definitionId: controlledCard.definitionId,
         }
+      );
+    }
+  }
+}
+
+/**
+ * Shared seam for player-owned attacks after every target has resolved. The
+ * caller supplies the current attacker, so a future redirect can transfer its
+ * ledger ownership. Global Mayhem attacks deliberately do not call it: they
+ * have no permanent owner.
+ */
+function applyAfterPlayerAttackDamage(
+  state: GameState,
+  attackingPlayer: PlayerState,
+  totalDamageDealt: number,
+  attackSource: EffectSourceContext
+): void {
+  if (
+    totalDamageDealt <= 0 ||
+    state.activePlayerId !== attackingPlayer.playerId ||
+    state.turn.damagingAttackPlayerIds.includes(attackingPlayer.playerId)
+  ) {
+    return;
+  }
+
+  state.turn.damagingAttackPlayerIds.push(attackingPlayer.playerId);
+  for (const permanent of attackingPlayer.permanents) {
+    const definition = state.cardDefinitions.get(permanent.definitionId);
+    if (definition === undefined || !definition.engine.playableInV0) {
+      continue;
+    }
+
+    const source: EffectSourceContext = {
+      ...attackSource,
+      runtimeMode: getCardEffectRuntimeMode(permanent.definitionId),
+      cardInstanceId: permanent.instanceId,
+      definitionId: permanent.definitionId,
+    };
+    for (const effect of definition.engine.effects) {
+      const resolution = resolveEffectRuntimeCatalogEntry(
+        `Effect ${effect.effectId}`,
+        effect.effectId,
+        effect,
+        source.runtimeMode,
+        source.sourceType
+      );
+      if (!resolution.ok) {
+        continue;
+      }
+      resolution.entry.handler.applyAfterPlayerAttackDamage?.(
+        state,
+        attackingPlayer,
+        effect,
+        source,
+        totalDamageDealt
       );
     }
   }
@@ -1375,11 +1627,20 @@ function applyDamageDealtTriggers(
 
 function resolveDefenseWindow(
   state: GameState,
-  defendingPlayer: PlayerState
-): boolean {
-  const defense = findFirstLegalDefense(state, defendingPlayer);
+  defendingPlayer: PlayerState,
+  attack: DefenseAttackContext
+): AttackResolution | undefined {
+  if (attack.defenseUsage.defendedPlayerIds.has(defendingPlayer.playerId)) {
+    return undefined;
+  }
+
+  const defense = findFirstLegalDefense(
+    state,
+    defendingPlayer,
+    attack.defenseUsage
+  );
   if (defense === undefined) {
-    return false;
+    return undefined;
   }
 
   recordGameEvent(state, {
@@ -1391,7 +1652,24 @@ function resolveDefenseWindow(
   });
 
   if (!payDefenseCosts(state, defendingPlayer, defense.card, defense.effect)) {
-    return false;
+    return undefined;
+  }
+
+  attack.defenseUsage.defendedPlayerIds.add(defendingPlayer.playerId);
+  attack.defenseUsage.usedDefenseCardInstanceIds.add(defense.card.instanceId);
+
+  const redirectsAttack = defense.effect.redirectAttack === true;
+
+  const defenseSource: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: getCardEffectRuntimeMode(defense.card.definitionId),
+    playerId: defendingPlayer.playerId,
+    cardInstanceId: defense.card.instanceId,
+    definitionId: defense.card.definitionId,
+  };
+
+  if (redirectsAttack && !moveDefenseCard(state, defendingPlayer, defense)) {
+    return undefined;
   }
 
   const branchEffects = defense.effect.branchEffects;
@@ -1401,19 +1679,69 @@ function resolveDefenseWindow(
       defendingPlayer,
       branchEffects,
       "onDefense",
-      {
-        sourceType: "card",
-        runtimeMode: getCardEffectRuntimeMode(defense.card.definitionId),
-        playerId: defendingPlayer.playerId,
-        cardInstanceId: defense.card.instanceId,
-        definitionId: defense.card.definitionId,
-      }
+      defenseSource
     );
     if (!branchResult.ok) {
-      return false;
+      return undefined;
     }
   }
 
+  if (redirectsAttack && attack.kind === "redirectable") {
+    return resolveAttackTarget(
+      state,
+      defendingPlayer,
+      attack.attackingPlayer,
+      attack.amountComponents.unresolvedBaseAmount +
+        attack.amountComponents.sourceOwnerModifierAmount,
+      attack.effectId,
+      {
+        ...attack.source,
+        playerId: defendingPlayer.playerId,
+      },
+      false,
+      attack.amountComponents.unresolvedBaseAmount,
+      attack.originalSource,
+      attack.defenseUsage,
+      attack.amountComponents
+    );
+  }
+
+  if (!redirectsAttack && !moveDefenseCard(state, defendingPlayer, defense)) {
+    return undefined;
+  }
+  return {
+    damageDealt: 0,
+    killed: false,
+    avoided: true,
+    amountComponents:
+      attack.kind === "redirectable"
+        ? attack.amountComponents
+        : {
+            unresolvedBaseAmount: 0,
+            sourceOwnerModifierAmount: 0,
+            currentAttackerTargetModifierAmount: 0,
+          },
+    attackingPlayer:
+      attack.kind === "redirectable" ? attack.attackingPlayer : defendingPlayer,
+    currentAttackerId:
+      attack.kind === "redirectable"
+        ? attack.attackingPlayer.playerId
+        : defendingPlayer.playerId,
+    targetPlayer: defendingPlayer,
+    source: defenseSource,
+    originalSource:
+      attack.kind === "redirectable" ? attack.originalSource : defenseSource,
+  };
+}
+
+function moveDefenseCard(
+  state: GameState,
+  defendingPlayer: PlayerState,
+  defense: {
+    card: CardInstance;
+    destination: "discardSelf" | "topdeckSelf";
+  }
+): boolean {
   const cardIndex = defendingPlayer.hand.findIndex(
     (card) => card.instanceId === defense.card.instanceId
   );
@@ -1455,40 +1783,37 @@ function resolveDefenseWindow(
 
 function findFirstLegalDefense(
   state: GameState,
-  defendingPlayer: PlayerState
+  defendingPlayer: PlayerState,
+  defenseUsage: AttackDefenseUsage
 ):
   | {
       card: CardInstance;
       destination: "discardSelf" | "topdeckSelf";
-      effect: RuntimeEffect;
+      effect: AvoidAttackRuntimeEffect;
     }
   | undefined {
   for (const card of defendingPlayer.hand) {
+    if (defenseUsage.usedDefenseCardInstanceIds.has(card.instanceId)) {
+      continue;
+    }
+
     const definition = state.cardDefinitions.get(card.definitionId);
     if (definition === undefined) {
       continue;
     }
 
-    const defenseEffect = definition.engine.effects.find((effect) => {
-      return (
-        effect.effectId === "avoid_attack" &&
-        effect.timing === "onDefense" &&
-        (effect["destination"] === "discardSelf" ||
-          effect["destination"] === "topdeckSelf")
-      );
-    });
+    const defenseEffect = definition.engine.effects.find(
+      (effect): effect is AvoidAttackRuntimeEffect => {
+        return isAvoidAttackRuntimeEffect(effect);
+      }
+    );
     if (
       defenseEffect !== undefined &&
       canPayDefenseCosts(defendingPlayer, card, defenseEffect)
     ) {
-      const destination = defenseEffect["destination"];
-      if (destination !== "discardSelf" && destination !== "topdeckSelf") {
-        continue;
-      }
-
       return {
         card,
-        destination,
+        destination: defenseEffect.destination,
         effect: defenseEffect,
       };
     }
@@ -2015,7 +2340,10 @@ function playResolvedCard(
   player: PlayerState,
   card: CardInstance,
   ownership: {
-    nonOngoingOwnerId?: PlayerState["playerId"] | "common";
+    nonOngoingDestination?: {
+      zone: "ownerDiscardAfterResolution";
+      ownerId: PlayerState["playerId"];
+    };
     ongoingOwnerId?: PlayerState["playerId"] | "common";
   } = {}
 ): EffectExecutionResult {
@@ -2031,8 +2359,11 @@ function playResolvedCard(
     card.ownerId = ownership.ongoingOwnerId ?? player.playerId;
     player.permanents.push(card);
   } else {
-    card.ownerId = ownership.nonOngoingOwnerId ?? player.playerId;
     player.playedThisTurn.push(card);
+    state.turn.temporaryCardControls.push({
+      cardInstanceId: card.instanceId,
+      controllerId: player.playerId,
+    });
   }
 
   const effectResult = executeOnPlayEffects(state, player, definition, {
@@ -2042,11 +2373,106 @@ function playResolvedCard(
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
   });
-  if (!effectResult.ok || effectResult.gameEnd !== undefined) {
+  if (!effectResult.ok) {
     return effectResult;
   }
+  if (effectResult.gameEnd !== undefined) {
+    const movementResult = moveResolvedNonOngoingCardToDestination(
+      state,
+      player,
+      card,
+      definition.engine.isOngoing,
+      ownership.nonOngoingDestination
+    );
+    return movementResult.ok ? effectResult : movementResult;
+  }
 
-  return executeWizardPropertyOnPlayCardEffects(state, player, definition);
+  const wizardPropertyResult = executeWizardPropertyOnPlayCardEffects(
+    state,
+    player,
+    definition
+  );
+  if (!wizardPropertyResult.ok) {
+    return wizardPropertyResult;
+  }
+
+  if (wizardPropertyResult.gameEnd === undefined) {
+    const controlledCardResult = executeControlledCardOnPlayCardEffects(
+      state,
+      player,
+      card
+    );
+    if (!controlledCardResult.ok) {
+      return controlledCardResult;
+    }
+    if (controlledCardResult.gameEnd !== undefined) {
+      const movementResult = moveResolvedNonOngoingCardToDestination(
+        state,
+        player,
+        card,
+        definition.engine.isOngoing,
+        ownership.nonOngoingDestination
+      );
+      return movementResult.ok ? controlledCardResult : movementResult;
+    }
+  }
+
+  const movementResult = moveResolvedNonOngoingCardToDestination(
+    state,
+    player,
+    card,
+    definition.engine.isOngoing,
+    ownership.nonOngoingDestination
+  );
+  return movementResult.ok ? wizardPropertyResult : movementResult;
+}
+
+function moveResolvedNonOngoingCardToDestination(
+  state: GameState,
+  controller: PlayerState,
+  card: CardInstance,
+  isOngoing: boolean,
+  destination:
+    | {
+        zone: "ownerDiscardAfterResolution";
+        ownerId: PlayerState["playerId"];
+      }
+    | undefined
+): EffectExecutionResult {
+  if (isOngoing || destination === undefined) {
+    return { ok: true };
+  }
+  if (card.ownerId !== destination.ownerId) {
+    return {
+      ok: false,
+      error: `Cannot move ${card.instanceId} to a discard that does not belong to its owner`,
+    };
+  }
+  const cardIndex = controller.playedThisTurn.findIndex(
+    (candidate) => candidate.instanceId === card.instanceId
+  );
+  if (cardIndex < 0) {
+    return { ok: true };
+  }
+  const owner = state.players.find(
+    (candidate) => candidate.playerId === destination.ownerId
+  );
+  if (owner === undefined) {
+    return {
+      ok: false,
+      error: `Missing card owner ${destination.ownerId}`,
+    };
+  }
+
+  controller.playedThisTurn.splice(cardIndex, 1);
+  owner.discard.push(card);
+  recordCardMoved(state, controller, card, {
+    sourceZone: `${controller.playerId}.playedThisTurn`,
+    destinationZone: `${owner.playerId}.discard`,
+    ownerBefore: card.ownerId,
+    ownerAfter: card.ownerId,
+  });
+  return { ok: true };
 }
 
 function shuffleDiscardIntoDeckIfNeeded(

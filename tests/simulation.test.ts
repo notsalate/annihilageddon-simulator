@@ -73,11 +73,11 @@ test("single-game simulation ignores differing source.image metadata", () => {
     endReason: "maxTurnsReached",
     isGameEnd: false,
     turnsElapsed: 8,
-    winnerIds: ["player-1", "player-2"],
+    winnerIds: ["player-1"],
     players: [
       {
         playerId: "player-1",
-        victoryPoints: 4,
+        victoryPoints: 5,
         legendCount: 0,
         deadWizardTokenCount: 0,
       },

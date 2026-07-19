@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_023",
+  "source": {
+    "image": "assets/cards/legend/treasure/Легенда-Сокровище. Палочка-Миниганочка.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_023.md"
+  },
+  "visible": {
+    "nameRu": "Палочка-Миниганочка",
+    "cost": 15,
+    "victoryPoints": 5,
+    "typeRu": "Легенда — Сокровище",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "textRu": "Атака: нанеси 7 урона выбранному колдуну.\nАтака: нанеси 7 урона выбранному колдуну.\nАтака: нанеси 7 урона выбранному колдуну.\nАтака: нанеси 7 урона выбранному колдуну.\n+3 мощи за каждого колдуна, подохшего от этой карты.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": [
+    "Палочка-Миниганочка агрегирует смерти по единому разрешению карты; redirect меняет current attacker/trophy credit, но смерть original attacker от redirected instance всё равно считается результатом карты и даёт original card controller +3 power; три смерти => +9.",
+    "При создании runtime JSON эта карта обязана получить общие tags `wandCard` и `wandAttackCard`."
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

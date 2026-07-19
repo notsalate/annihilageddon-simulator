@@ -44,6 +44,13 @@ function createFixture(): GameState {
       controlledPowerBonus: 1,
       activatedCardIds: ["activated-card"],
       gainedCardDefinitionIds: ["gained-card"],
+      damagingAttackPlayerIds: [],
+      temporaryCardControls: [
+        {
+          cardInstanceId: markCardInstanceId("played-card"),
+          controllerId: playerId,
+        },
+      ],
     },
     players: [
       {
@@ -122,6 +129,11 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
 
   fork.turn.activatedCardIds.push("fork-only");
   fork.turn.gainedCardDefinitionIds.push("fork-gained-card");
+  fork.turn.temporaryCardControls[0]!.controllerId = markPlayerId("player-2");
+  fork.turn.temporaryCardControls.push({
+    cardInstanceId: markCardInstanceId("fork-controlled-card"),
+    controllerId: markPlayerId("player-2"),
+  });
   forkPlayer.chips += 3;
   forkPlayer.life.current -= 1;
   forkPlayer.hand[0]!.marketChips = 2;
@@ -134,6 +146,12 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
 
   assert.equal(source.turn.activatedCardIds.includes("fork-only"), false);
   assert.deepEqual(source.turn.gainedCardDefinitionIds, ["gained-card"]);
+  assert.deepEqual(source.turn.temporaryCardControls, [
+    {
+      cardInstanceId: markCardInstanceId("played-card"),
+      controllerId: markPlayerId("player-1"),
+    },
+  ]);
   assert.equal(sourcePlayer.chips, 2);
   assert.equal(sourcePlayer.life.current, 5);
   assert.equal(sourcePlayer.hand[0]!.marketChips, 0);
@@ -168,16 +186,19 @@ test("fork isolates source mutations and sibling mutable collections", () => {
   assert.equal(firstPlayer.trophyLikeObjects[0]!.effects[0]!.timing, "onPlay");
 
   first.turn.gainedCardDefinitionIds.push("first-gained-card");
+  first.turn.damagingAttackPlayerIds.push(markPlayerId("player-1"));
   firstPlayer.statuses[0]!.effects[0]!.timing = "whileControlled";
   firstPlayer.trophyLikeObjects[0]!.effects[0]!.timing = "whileControlled";
 
   assert.deepEqual(second.turn.gainedCardDefinitionIds, ["gained-card"]);
+  assert.deepEqual(second.turn.damagingAttackPlayerIds, []);
   assert.equal(secondPlayer.statuses[0]!.effects[0]!.timing, "onPlay");
   assert.equal(secondPlayer.trophyLikeObjects[0]!.effects[0]!.timing, "onPlay");
   assert.deepEqual(source.turn.gainedCardDefinitionIds, [
     "gained-card",
     "source-gained-card",
   ]);
+  assert.deepEqual(source.turn.damagingAttackPlayerIds, []);
   assert.equal(sourcePlayer.statuses[0]!.effects[0]!.timing, "endTurn");
   assert.equal(
     sourcePlayer.trophyLikeObjects[0]!.effects[0]!.timing,

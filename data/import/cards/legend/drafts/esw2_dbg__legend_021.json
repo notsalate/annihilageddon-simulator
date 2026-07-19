@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_021",
+  "source": {
+    "image": "assets/cards/legend/treasure/Легенда-Сокровище. ТА САМАЯ Вялая Палочка.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_021.md"
+  },
+  "visible": {
+    "nameRu": "ТА САМАЯ Вялая Палочка",
+    "cost": 11,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Сокровище",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "textRu": "+4 мощи\nАтака: Нанеси 7 урона выбранному колдуну. Если он от этого подох, можешь дать ему 3 или меньше вялых палочек с руки, или из твоей стопки сброса, или из колоды вялых палочек.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": [
+    "При создании runtime JSON эта карта обязана получить общие tags `wandCard` и `wandAttackCard`."
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

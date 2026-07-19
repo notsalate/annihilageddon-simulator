@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_024",
+  "source": {
+    "image": "assets/cards/legend/treasure/Легенда-Сокровище. Палочка-Ушаталочка.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_024.md"
+  },
+  "visible": {
+    "nameRu": "Палочка-Ушаталочка",
+    "cost": 20,
+    "victoryPoints": 7,
+    "typeRu": "Легенда — Сокровище",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "textRu": "+8 мощи\nАтака: нанеси 1 урон выбранному врагу. Если он от этого подох, ты побеждаешь в игре (а все остальные могут лососнуть тунца).",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "notes": [
+    "При создании runtime JSON эта карта обязана получить общие tags `wandCard` и `wandAttackCard`."
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

@@ -14,6 +14,10 @@
       "count": 1
     },
     {
+      "cardId": "esw2_dbg__legend_008",
+      "count": 1
+    },
+    {
       "cardId": "esw2_dbg__legend_009",
       "count": 1
     },
@@ -26,7 +30,15 @@
       "count": 1
     },
     {
+      "cardId": "esw2_dbg__legend_012",
+      "count": 1
+    },
+    {
       "cardId": "esw2_dbg__legend_014",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__legend_025",
       "count": 1
     },
     {
@@ -39,6 +51,6 @@
     }
   ],
   "notes": [
-    "Current runtime legend deck includes the simple-baseline, controlled-object-conditions, dingler-status, and life-total-effects Block D slices."
+    "Current runtime legend deck includes the simple-baseline, controlled-object-conditions, ongoing-modifiers, dingler-status, and life-total-effects Block D slices."
   ]
 }

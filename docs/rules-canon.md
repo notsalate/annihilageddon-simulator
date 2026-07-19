@@ -292,10 +292,22 @@ Terminology:
 5. Avoiding an attack instance does not cancel non-attack effects on the attacking card, such as power, and does not automatically avoid other attack instances from the same card.
 6. Defense effects that target the attacker do not work against беспредел/мегабеспредел because there is no attacker.
 7. Some defenses deal separate non-attack damage to the attacker. This is not redirecting the attack, but it is still damage caused by the defending player; if it kills the attacker, the defending player gains the trophy.
-8. Some фамильяр defenses redirect attacks to the attacker. This is a card-data effect:
-   - The original attacker becomes the target even if the normal target rule would not make them legal.
-   - Redirect only the amount/effect that would have hit the defender.
-   - The attacker may defend against the redirected attack if a legal defense is available.
+
+### Redirected Attacks
+
+Redirect is a general data-driven familiar defense, not card-specific combat code. When a legal defense redirects an attack instance:
+
+1. The defending player becomes the current attack owner and attacker; the original attacker becomes the new target even when normally illegal.
+2. Carry the unresolved base amount and full attack effect forward. Keep modifiers already established by the source card's ownership, and recalculate only modifiers whose conditions depend on the current attack owner. For example, redirecting another player's Wand does not inherit the redirector's `prevent_defense_against_owned_wand_attacks`; an attack that was already unavoidable never opened the defense window needed for redirect. The original target's life and chips do not cap this attempt.
+3. Resolve success/on-damage branches once from the new owner against actual damage to the new target. The original attacker does not execute those branches.
+4. The new target may use one legal defense for this redirected instance unless that player already defended against the same instance. Track both defending players and used defense cards per instance so the attack cannot bounce indefinitely; a multi-attack card still opens independent windows per instance.
+5. A hand defense is neither played nor controlled unless its mapped branch says so. Ownerless Mayhem and Mega Mayhem use a nonredirectable context: a defense with redirect still pays its costs, avoids the attack, and resolves its other branch effects, but it does not create a new attacker or target.
+
+The redirect changes the current attack owner but does not change `activePlayerId`; therefore current-owner effects such as Чипсихоз-Арена apply even outside the redirector's turn.
+
+### Card-Resolution Identity
+
+Every attack instance retains the source card and effect identity of the card resolution that created it, separately from its current attacker. Redirect changes only the current attack owner and target. Trophy and kill credit use that current owner, while future card-level aggregate effects count every death caused by instances of the original card resolution, including a redirected instance that kills the original attacker. For example, a card that awards +3 power per such death receives +9 power from three deaths, regardless of redirects.
 
 ### Resolution Order
 
@@ -356,9 +368,12 @@ Play algorithm:
    - If foe deck is empty, shuffle that foe's discard into their deck if possible.
    - If no card is available, the option produces no played card.
    - Reveal/play the top card by moving it into the acting player's `playedThisTurn` if non-Ongoing or `permanents` if Ongoing.
+   - The controller is the player currently resolving the play, not the owner of the шальная магия card. This remains true when a чужая шальная магия is itself played by an effect.
    - The played card keeps its original owner while it is non-Ongoing, but its current controller is the acting player.
    - Resolve it as played by the acting player.
+   - Resolve the before-activation / `onPlay` part immediately. Its activation remains available to that controller through the end of the current turn, even if the non-Ongoing card has already moved to its owner's discard.
    - If the played card is non-Ongoing, its default destination after resolution is its owner's discard unless mapped data changes the destination.
+   - Temporary control is cleared at end of turn; the card then stays in its owner's discard and cannot be activated through that play.
    - If the played card is Ongoing, the acting player becomes its new owner and it moves to that player's `permanents` as if played from hand.
 
 ## Вялая Палочка
@@ -411,7 +426,7 @@ Activations:
 
 1. When a card with mapped activation is played, immediately resolve its `onPlay` / before-activation part.
 2. The mapped activation effect can be used once per turn while the player controls that card.
-3. If the card was played this turn, its activation can be used later in that same turn as long as the card is still controlled.
+3. If the card was played this turn, its activation can be used later in that same turn while that temporary control lasts, including after a non-Ongoing card moved to its owner's discard.
 4. Activation can be used any time in the active player's main action loop while the card is controlled, has not been activated this turn, and costs can be paid.
 5. Track activation use per controlled card per turn. At the end of the turn, unused activation rights expire and are not carried forward.
 
@@ -519,7 +534,7 @@ Known global score modifiers:
 | `activate`                  | активация                   | Mapped activation: the before-activation part resolves on play; the activation effect can be used once per turn while the card is controlled.                          | `executable`                                     | pp. 8, 16  |
 | `attack`                    | атака                       | Attack instance that affected players may avoid with defense. One card may define several attack instances through card mapping.                                       | `executable`                                     | pp. 10-11  |
 | `defense`                   | защита                      | Hand card/effect that avoids one attack instance for the defending player only. Mapped defense branch data controls whether the same card can defend later attacks.    | `executable`                                     | pp. 10-11  |
-| `redirect_attack`           | перенаправить атаку         | Defense effect can redirect attack to attacker even if attacker was not a legal original target.                                                                       | `data-required`                                  | p. 17      |
+| `redirect_attack`           | перенаправить атаку         | Defense effect can redirect attack to attacker even if attacker was not a legal original target.                                                                       | `executable`                                     | p. 17      |
 | `destroy`                   | уничтожить                  | Move card out of game to destroyed area; шальная магия and вялая палочка move to their stacks.                                                                         | `executable`                                     | pp. 12-13  |
 | `gain`                      | получить карту              | Take a specified/eligible card without paying and move it to discard unless mapped effect data changes the destination.                                                | `executable`                                     | p. 12      |
 | `discard`                   | сбросить карту              | Default source is hand unless another source is specified; deck-discard also counts as discard.                                                                        | `executable`                                     | p. 11      |

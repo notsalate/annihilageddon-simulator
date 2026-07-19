@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_026",
+  "source": {
+    "image": "assets/cards/legend/treasure/Легенда-Сокровище. Сердце мага по-эпичному.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_026.md"
+  },
+  "visible": {
+    "nameRu": "Сердце мага по-эпичному",
+    "cost": 9,
+    "victoryPoints": 3,
+    "typeRu": "Легенда — Сокровище",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "textRu": "Возьми 1 карту.\nПолучи 3 чипсины.\nВ конце игры: если эта карта в протекторе, получи +2 ПО.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "notes": [
+    "Печатный бонус протектора игнорируется при runtime mapping: victoryPoints всегда 3, исполняемое условие протектора не создаётся."
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

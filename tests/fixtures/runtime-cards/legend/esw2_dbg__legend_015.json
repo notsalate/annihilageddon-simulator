@@ -24,7 +24,7 @@
     "needsEffectMapping": false,
     "cardKind": "legend",
     "cardTypes": ["legend", "spell"],
-    "tags": ["wandAttackCard"],
+    "tags": ["wandCard", "wandAttackCard"],
     "cost": 9,
     "victoryPoints": 3,
     "isOngoing": false,

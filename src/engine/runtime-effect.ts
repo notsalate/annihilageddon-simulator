@@ -172,6 +172,7 @@ const knownRuntimeEffectIds = [
   "conditional_activation_gain_chips",
   "controls_other_card_type",
   "deal_damage",
+  "double_owned_attack_damage",
   "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
   "destroy_card",
   "destroy_own_cards",
@@ -217,6 +218,8 @@ const knownRuntimeEffectIds = [
   "multi_target_attack",
   "on_gain_self_gain_limp_wands",
   "ongoing_add_power",
+  "ongoing_add_power_when_playing_wand",
+  "ongoing_add_power_per_dead_wizard_token",
   "ongoing_add_power_when_playing_limp_wand",
   "ongoing_first_attack_damage_add_power",
   "ongoing_hand_refill_bonus",
@@ -275,6 +278,7 @@ export interface RuntimeEffectFields {
   operation?: unknown;
   optional?: unknown;
   options?: unknown;
+  redirectAttack?: unknown;
   source?: unknown;
   status?: unknown;
   statusId?: unknown;
@@ -286,6 +290,19 @@ export interface RuntimeEffectFields {
   valueKind?: unknown;
   voteTargetSelector?: unknown;
   winnerDrawAmount?: unknown;
+}
+
+export interface OngoingAddPowerPerDeadWizardTokenRuntimeEffect {
+  effectId: "ongoing_add_power_per_dead_wizard_token";
+  timing: "whileControlled";
+  amount: number;
+}
+
+export interface OngoingAddPowerWhenPlayingWandRuntimeEffect {
+  effectId: "ongoing_add_power_when_playing_wand";
+  timing: "onPlayCard";
+  amount: number;
+  cardTags: ["wandCard"];
 }
 
 export type AttackOutcomeBranch =
@@ -304,7 +321,13 @@ type RuntimeEffectPayloadVariant<EffectId extends KnownRuntimeEffectId> = {
 } & RuntimeEffectFields &
   (EffectId extends "wild_magic_choice"
     ? { options?: WildMagicOption[] }
-    : unknown);
+    : EffectId extends "ongoing_hand_refill_bonus"
+      ? { amount: number }
+      : EffectId extends "ongoing_add_power_when_playing_wand"
+        ? OngoingAddPowerWhenPlayingWandRuntimeEffect
+        : EffectId extends "ongoing_add_power_per_dead_wizard_token"
+          ? OngoingAddPowerPerDeadWizardTokenRuntimeEffect
+          : unknown);
 
 export type RuntimeEffectPayload = {
   [EffectId in KnownRuntimeEffectId]: RuntimeEffectPayloadVariant<EffectId>;
@@ -313,6 +336,26 @@ export type RuntimeEffectPayload = {
 export type RuntimeEffect = RuntimeEffectPayload & {
   timing: EffectTiming;
 };
+
+export type AvoidAttackRuntimeEffect = RuntimeEffect & {
+  effectId: "avoid_attack";
+  timing: "onDefense";
+  destination: "discardSelf" | "topdeckSelf";
+  redirectAttack?: boolean;
+};
+
+export function isAvoidAttackRuntimeEffect(
+  effect: RuntimeEffect
+): effect is AvoidAttackRuntimeEffect {
+  return (
+    effect.effectId === "avoid_attack" &&
+    effect.timing === "onDefense" &&
+    (effect.destination === "discardSelf" ||
+      effect.destination === "topdeckSelf") &&
+    (effect.redirectAttack === undefined ||
+      typeof effect.redirectAttack === "boolean")
+  );
+}
 
 export type WildMagicOption =
   | (Omit<RuntimeEffectFields, "options"> & {

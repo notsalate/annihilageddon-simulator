@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   applyAction,
+  buildControlledObjectView,
   calculateEffectivePlayerMaxLife,
   initializeGame,
   listLegalActions,
@@ -33,6 +34,570 @@ import {
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
+
+test("Кондуктор Жми-На-Тормоза is a one-copy familiar that draws, matches every controlled card type, and redirects an avoided attack", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const familiarDefinition = currentRuntimeDataPack.cardDefinitions.get(
+    "esw2_dbg__familiar_005"
+  );
+  assert.ok(familiarDefinition);
+  assert.deepEqual(currentRuntimeDataPack.decks.familiarPool?.entries, [
+    { cardId: "esw2_dbg__familiar_005", count: 1 },
+  ]);
+
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [familiarDefinition.cardId, familiarDefinition],
+  ]);
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  const foe = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(foe);
+  const familiar = activePlayer.unboughtFamiliar;
+  assert.ok(familiar);
+  familiar.definitionId = markCardDefinitionId(familiarDefinition.cardId);
+
+  state.turn.power = 6;
+  const buyAction = listLegalActions(state).find(
+    (action) =>
+      action.type === "buyMarketCard" &&
+      action.source === "familiar" &&
+      action.cardInstanceId === familiar.instanceId
+  );
+  assert.ok(buyAction);
+  assert.equal(applyAction(state, buyAction).ok, true);
+  assert.equal(activePlayer.discard.includes(familiar), true);
+
+  moveCardToHand(activePlayer, familiar);
+  const handBeforePlay = activePlayer.hand.length;
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: familiar.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(activePlayer.hand.length, handBeforePlay + 1);
+
+  const conditionalCardId = addFixtureCardToActiveHand(state, {
+    effectId: "add_power",
+    timing: "onPlay",
+    amount: 1,
+    condition: {
+      conditionId: "control_count",
+      cardTypes: ["spell"],
+      minimumCount: 1,
+    },
+  });
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: conditionalCardId })
+      .ok,
+    true
+  );
+  assert.equal(state.turn.power, 1);
+
+  const playedIndex = activePlayer.playedThisTurn.findIndex(
+    (card) => card.instanceId === familiar.instanceId
+  );
+  if (playedIndex >= 0) {
+    activePlayer.playedThisTurn.splice(playedIndex, 1);
+  }
+  activePlayer.hand.push(familiar);
+  state.activePlayerId = foe.playerId;
+  activePlayer.life.current = 1;
+  activePlayer.chips = 1;
+  foe.chips = 2;
+  const attackCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 2,
+    target: { selector: "opponentPlayer" },
+    onDamageDealt: [{ effectId: "gain_chips_equal_damage_dealt" }],
+  });
+  const activeHandBeforeDefense = activePlayer.hand.length;
+  const activeLifeBeforeDefense = activePlayer.life.current;
+  const foeLifeBeforeRedirect = foe.life.current;
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: attackCardId }).ok,
+    true
+  );
+  assert.equal(activePlayer.hand.length, activeHandBeforeDefense);
+  assert.equal(activePlayer.discard.includes(familiar), true);
+  assert.equal(activePlayer.life.current, activeLifeBeforeDefense);
+  assert.equal(foe.life.current, foeLifeBeforeRedirect - 2);
+  assert.equal(activePlayer.chips, 3);
+  assert.equal(foe.chips, 0);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackTargetStarted" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === foe.playerId &&
+        event.effectId === "attack_damage" &&
+        event.cardInstanceId === attackCardId
+      );
+    })
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChipsChanged" && event.playerId === foe.playerId
+    ),
+    false
+  );
+});
+
+test("redirected foreign Wand does not inherit the redirecting player's wizard property", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const attackingPlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(attackingPlayer);
+  const redirectingPlayer = state.players.find(
+    (player) => player.playerId !== attackingPlayer.playerId
+  );
+  assert.ok(redirectingPlayer);
+  attackingPlayer.wizardProperties = [];
+  replaceFirstWizardProperty(
+    state,
+    redirectingPlayer,
+    state.tokenDefinitions.get(
+      "esw2_dbg__wizard_property_009"
+    ) as TokenDefinition
+  );
+  const wand = addRuntimeCardToHand(
+    state,
+    attackingPlayer,
+    "esw2_dbg__starter_004"
+  );
+  addFixtureDefenseCardToHand(state, redirectingPlayer, "discardSelf", {
+    redirectAttack: true,
+  });
+  const returnDefense = addFixtureDefenseCardToHand(
+    state,
+    attackingPlayer,
+    "discardSelf"
+  );
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId !== "attack_damage") {
+      return undefined;
+    }
+    return choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === redirectingPlayer.playerId
+    );
+  });
+  const attackingLifeBefore = attackingPlayer.life.current;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(attackingPlayer.life.current, attackingLifeBefore);
+  assert.equal(attackingPlayer.discard.includes(returnDefense), true);
+  const redirectedAttack = state.eventLog.find(
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.playerId === redirectingPlayer.playerId &&
+      event.targetPlayerId === attackingPlayer.playerId
+  );
+  assert.ok(redirectedAttack);
+  assert.equal(redirectedAttack.cardInstanceId, wand.instanceId);
+  assert.equal(redirectedAttack.amount, 1);
+});
+
+test("Chipsychosis Arena doubles a redirected attack for the redirecting attacker", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  const originalAttacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const redirector = mustGetPlayer(state, markPlayerId("player-2"));
+  for (const player of state.players) {
+    player.wizardProperties = [];
+  }
+  state.activePlayerId = redirector.playerId;
+  const arena = addRuntimeCardToHand(state, redirector, "esw2_dbg__legend_008");
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: arena.instanceId })
+      .ok,
+    true
+  );
+  addFixtureDefenseCardToHand(state, redirector, "discardSelf", {
+    redirectAttack: true,
+  });
+  state.activePlayerId = originalAttacker.playerId;
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === redirector.playerId)
+      : undefined
+  );
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 2,
+    targetSelector: "chosenFoe",
+  });
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }).ok,
+    true
+  );
+  assert.equal(redirector.life.current, 20);
+  assert.equal(originalAttacker.life.current, 16);
+});
+
+test("Chipsychosis Arena of the original attacker does not double a redirected leg", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  const originalAttacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const redirector = mustGetPlayer(state, markPlayerId("player-2"));
+  for (const player of state.players) {
+    player.wizardProperties = [];
+  }
+  state.activePlayerId = originalAttacker.playerId;
+  const arena = addRuntimeCardToHand(
+    state,
+    originalAttacker,
+    "esw2_dbg__legend_008"
+  );
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: arena.instanceId })
+      .ok,
+    true
+  );
+  addFixtureDefenseCardToHand(state, redirector, "discardSelf", {
+    redirectAttack: true,
+  });
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === redirector.playerId)
+      : undefined
+  );
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 2,
+    targetSelector: "chosenFoe",
+  });
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }).ok,
+    true
+  );
+  assert.equal(redirector.life.current, 20);
+  assert.equal(originalAttacker.life.current, 18);
+});
+
+test("Chipsychosis Arena doubles source-owner Wand modifiers only against foes", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const attacker = mustGetPlayer(state, markPlayerId("player-2"));
+  const foe = mustGetPlayer(state, markPlayerId("player-1"));
+  attacker.wizardProperties = [];
+  foe.wizardProperties = [];
+  state.activePlayerId = attacker.playerId;
+  const modifier = addRuntimeCardToHand(state, attacker, "esw2_dbg__main_009");
+  const arena = addRuntimeCardToHand(state, attacker, "esw2_dbg__legend_008");
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: modifier.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: arena.instanceId })
+      .ok,
+    true
+  );
+  const wand = addRuntimeCardToHand(state, attacker, "esw2_dbg__starter_003");
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: wand.instanceId })
+      .ok,
+    true
+  );
+  assert.equal(foe.life.current, 14);
+});
+
+test("Chipsychosis Arena does not double a self-targeted attack", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const attacker = mustGetPlayer(state, markPlayerId("player-2"));
+  attacker.wizardProperties = [];
+  state.activePlayerId = attacker.playerId;
+  const arena = addRuntimeCardToHand(state, attacker, "esw2_dbg__legend_008");
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: arena.instanceId })
+      .ok,
+    true
+  );
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === attacker.playerId)
+      : undefined
+  );
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 2,
+    targetSelector: "chosenPlayer",
+  });
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }).ok,
+    true
+  );
+  assert.equal(attacker.life.current, 18);
+});
+
+test("Chipsychosis Arena follows the current controller of a foreign attack card", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  const owner = mustGetPlayer(state, markPlayerId("player-1"));
+  const controller = mustGetPlayer(state, markPlayerId("player-2"));
+  const target = mustGetPlayer(state, markPlayerId("player-3"));
+  for (const player of state.players) {
+    player.wizardProperties = [];
+  }
+  state.activePlayerId = controller.playerId;
+  const arena = addRuntimeCardToHand(state, controller, "esw2_dbg__legend_008");
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: arena.instanceId })
+      .ok,
+    true
+  );
+  const foreignAttack = addFixtureDefinitionToActiveHand(
+    state,
+    createFixtureCardDefinition("fixture-foreign-arena-attack", [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 2,
+        targetSelector: "chosenFoe",
+      },
+    ])
+  );
+  foreignAttack.ownerId = owner.playerId;
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === target.playerId)
+      : undefined
+  );
+
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: foreignAttack.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(target.life.current, 16);
+
+  const ownerArena = addRuntimeCardToHand(state, owner, "esw2_dbg__legend_008");
+  state.activePlayerId = owner.playerId;
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: ownerArena.instanceId,
+    }).ok,
+    true
+  );
+  state.activePlayerId = target.playerId;
+  const ownerAttack = addFixtureDefinitionToActiveHand(
+    state,
+    createFixtureCardDefinition("fixture-owner-arena-attack", [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 2,
+        targetSelector: "chosenFoe",
+      },
+    ])
+  );
+  ownerAttack.ownerId = owner.playerId;
+  controller.life.current = 20;
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === controller.playerId)
+      : undefined
+  );
+
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: ownerAttack.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(controller.life.current, 18);
+});
+
+test("redirect defense avoids an ownerless Mayhem attack and still executes its branch", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const sourcePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(sourcePlayer);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== sourcePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  targetPlayer.hand.splice(0);
+  const defense = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf",
+    {
+      redirectAttack: true,
+      branchEffects: [
+        { effectId: "draw_cards", timing: "onDefense", amount: 1 },
+      ],
+    }
+  );
+  const drawnCard = targetPlayer.deck[0];
+  assert.ok(drawnCard);
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-ownerless-mayhem-attack",
+    [
+      {
+        effectId: "mayhem_attack",
+        timing: "onMayhemResolve",
+        amount: 4,
+        target: { selector: "allPlayers" },
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  const mayhem: CardInstance = {
+    instanceId: markCardInstanceId("fixture-ownerless-mayhem-attack-instance"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.destroyedMayhem.push(mayhem);
+  const lifeBefore = targetPlayer.life.current;
+
+  const result = executeMayhemEffects(state, sourcePlayer, mayhemDefinition, {
+    sourceType: "card",
+    runtimeMode: "fixture",
+    playerId: sourcePlayer.playerId,
+    cardInstanceId: mayhem.instanceId,
+    definitionId: mayhem.definitionId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, lifeBefore);
+  assert.equal(targetPlayer.discard.includes(defense), true);
+  assert.equal(targetPlayer.hand.includes(drawnCard), true);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.playerId === targetPlayer.playerId
+    ),
+    false
+  );
+});
+
+test("each player can use defense only once while one attack is redirected", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const attackingPlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(attackingPlayer);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== attackingPlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  const firstTargetDefense = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf",
+    { redirectAttack: true }
+  );
+  const unusedTargetDefense = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf",
+    { redirectAttack: true }
+  );
+  const attackerDefense = addFixtureDefenseCardToHand(
+    state,
+    attackingPlayer,
+    "discardSelf",
+    { redirectAttack: true }
+  );
+  const targetLifeBefore = targetPlayer.life.current;
+  const attackCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 2,
+    target: { selector: "opponentPlayer" },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attackCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, targetLifeBefore - 2);
+  assert.equal(targetPlayer.discard.includes(firstTargetDefense), true);
+  assert.equal(attackingPlayer.discard.includes(attackerDefense), true);
+  assert.equal(targetPlayer.hand.includes(unusedTargetDefense), true);
+  assert.equal(
+    state.eventLog.filter((event) => event.type === "defenseChoiceSelected")
+      .length,
+    2
+  );
+});
 
 test("active player can play a card from hand through the action loop", () => {
   const state = initializeGame({
@@ -281,7 +846,7 @@ test("controlled-object current runtime cards resolve printed power behavior", (
   });
 
   assert.equal(result.ok, true);
-  assert.equal(state.turn.power, 5);
+  assert.equal(state.turn.power, 8);
   assert.equal(activePlayer.hand.length, 1);
 });
 
@@ -1827,6 +2392,115 @@ test("Tsirk bratiev loshashnykh grants passive power to a Dingler controller", (
   assert.equal(state.turn.power, 2);
 });
 
+test("Zhelatinovyi sisyak grants persistent power for each controlled copy", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({
+    dataPack,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const sisyak = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_011"
+  );
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: sisyak.instanceId,
+  });
+
+  assert.equal(playResult.ok, true);
+  assert.equal(activePlayer.permanents.includes(sisyak), true);
+  assert.equal(state.turn.power, 1);
+
+  const neutralCard = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__starter_002"
+  );
+  const neutralPlayResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: neutralCard.instanceId,
+  });
+  assert.equal(neutralPlayResult.ok, true);
+  assert.equal(state.turn.power, 1);
+
+  const firstEndTurnResult = applyAction(state, {
+    type: "endTurn",
+  });
+  assert.equal(firstEndTurnResult.ok, true);
+  const secondEndTurnResult = applyAction(state, {
+    type: "endTurn",
+  });
+  assert.equal(secondEndTurnResult.ok, true);
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(state.turn.power, 1);
+
+  const secondSisyak = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_011"
+  );
+  const secondPlayResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: secondSisyak.instanceId,
+  });
+
+  assert.equal(secondPlayResult.ok, true);
+  assert.equal(activePlayer.permanents.includes(secondSisyak), true);
+  assert.equal(state.turn.power, 2);
+});
+
+test("Pokhotlivyi maiachok recalculates its controller power from controlled DWTs", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  assert.equal(
+    dataPack.decks.legendDeck.entries.some(
+      (entry) => entry.cardId === "esw2_dbg__legend_025" && entry.count === 1
+    ),
+    true
+  );
+  const state = initializeGame({
+    dataPack,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const beacon = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_025"
+  );
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: beacon.instanceId,
+  });
+
+  assert.equal(playResult.ok, true);
+  assert.equal(state.turn.power, 0);
+
+  for (const expectedPower of [1, 2]) {
+    activePlayer.life.current = 1;
+    const selfDamage = addFixtureCardToActiveHand(state, {
+      effectId: "deal_damage",
+      timing: "onPlay",
+      amount: 1,
+      target: {
+        selector: "activePlayer",
+      },
+    });
+
+    const damageResult = applyAction(state, {
+      type: "playCard",
+      cardInstanceId: selfDamage,
+    });
+
+    assert.equal(damageResult.ok, true);
+    assert.equal(activePlayer.deadWizardTokens.length, expectedPower);
+    assert.equal(state.turn.power, expectedPower);
+  }
+});
+
 test("Tsirk bratiev loshashnykh does not grant passive power without Dingler status", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
   const state = initializeGame({
@@ -2741,7 +3415,8 @@ test("Wild Magic lets the typed choice strategy play a foe's top card", () => {
   assert.equal(result.ok, true);
   assert.equal(state.turn.power, 1);
   assert.equal(foe.deck.includes(foeTopCard), false);
-  assert.equal(activePlayer.playedThisTurn.includes(foeTopCard), true);
+  assert.equal(activePlayer.playedThisTurn.includes(foeTopCard), false);
+  assert.equal(foe.discard.includes(foeTopCard), true);
   assert.equal(foeTopCard.ownerId, foe.playerId);
   assert.ok(
     state.eventLog.some(
@@ -2830,7 +3505,8 @@ test("wild magic can choose to play the top card of a foe deck when that option 
   assert.equal(result.ok, true);
   assert.equal(state.turn.power, 1);
   assert.equal(foe.deck.includes(foeTopCard), false);
-  assert.equal(activePlayer.playedThisTurn.includes(foeTopCard), true);
+  assert.equal(activePlayer.playedThisTurn.includes(foeTopCard), false);
+  assert.equal(foe.discard.includes(foeTopCard), true);
   assert.equal(foeTopCard.ownerId, foe.playerId);
   assert.ok(
     state.eventLog.some((event) => {
@@ -2921,7 +3597,8 @@ test("wild magic foe-deck play triggers wizard property on-play effects for non-
   assert.equal(result.ok, true);
   assert.equal(state.turn.power, 1);
   assert.equal(activePlayer.chips, 1);
-  assert.equal(activePlayer.playedThisTurn.includes(foeTopCard), true);
+  assert.equal(activePlayer.playedThisTurn.includes(foeTopCard), false);
+  assert.equal(foe.discard.includes(foeTopCard), true);
   assert.equal(foeTopCard.ownerId, foe.playerId);
 
   const endTurnResult = applyAction(state, {
@@ -3013,6 +3690,238 @@ test("wild magic foe-deck play takes ownership of ongoing cards and keeps them c
   assert.equal(activePlayer.permanents.includes(foeTopCard), true);
   assert.equal(activePlayer.discard.includes(foeTopCard), false);
   assert.equal(foe.discard.includes(foeTopCard), false);
+});
+
+test("nested foreign Wild Magic keeps the acting player in control through activation from the owner's discard", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  const foe = state.players.find(
+    (player) => player.playerId !== state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  assert.ok(foe);
+  const controlCountProperty = replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    createChipActivationWizardProperty(
+      "fixture-temporary-control-count-property",
+      ["spell"],
+      1
+    )
+  );
+  const ordinaryPermanent = addControlledFixturePermanentWithCost(
+    state,
+    activePlayer,
+    "fixture-ordinary-controlled-permanent",
+    ["creature"],
+    1
+  );
+
+  const foreignWildMagicDefinition = createFixtureCardDefinition(
+    "fixture-nested-foreign-wild-magic",
+    [
+      {
+        effectId: "wild_magic_choice",
+        timing: "onPlay",
+        options: [
+          {
+            targetSelector: "chosenFoe",
+            effectId: "play_top_card_from_foe_deck",
+          },
+        ],
+      },
+    ]
+  );
+  const activatedTopCardDefinition = createFixtureCardDefinition(
+    "fixture-foreign-activated-top-card",
+    [
+      { effectId: "add_power", timing: "onPlay", amount: 2 },
+      {
+        effectId: "add_power",
+        timing: "activation",
+        amount: 3,
+      },
+      {
+        effectId: "attack_damage_equal_to_controlled_card_cost",
+        timing: "activation",
+        costMode: "highest",
+        target: { selector: "opponentPlayer" },
+      },
+      {
+        effectId: "increase_hand_limit_at_max_life",
+        timing: "endTurn",
+        amount: 2,
+      },
+    ],
+    { cardTypes: ["spell"] }
+  );
+  activatedTopCardDefinition.engine.cost = 4;
+  activatedTopCardDefinition.visible.cost = 4;
+  const drivingWildMagicDefinition = createFixtureCardDefinition(
+    "fixture-driving-wild-magic",
+    [
+      {
+        effectId: "wild_magic_choice",
+        timing: "onPlay",
+        options: [
+          {
+            targetSelector: "chosenFoe",
+            effectId: "play_top_card_from_foe_deck",
+          },
+        ],
+      },
+    ]
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [foreignWildMagicDefinition.cardId, foreignWildMagicDefinition],
+    [activatedTopCardDefinition.cardId, activatedTopCardDefinition],
+    [drivingWildMagicDefinition.cardId, drivingWildMagicDefinition],
+  ]);
+  const drivingWildMagic: CardInstance = {
+    instanceId: markCardInstanceId("fixture-driving-wild-magic-card"),
+    definitionId: markCardDefinitionId(drivingWildMagicDefinition.cardId),
+    ownerId: activePlayer.playerId,
+    marketChips: 0,
+  };
+  const foreignWildMagic: CardInstance = {
+    instanceId: markCardInstanceId("fixture-nested-foreign-wild-magic-card"),
+    definitionId: markCardDefinitionId(foreignWildMagicDefinition.cardId),
+    ownerId: foe.playerId,
+    marketChips: 0,
+  };
+  const activatedTopCard: CardInstance = {
+    instanceId: markCardInstanceId("fixture-foreign-activated-top-card"),
+    definitionId: markCardDefinitionId(activatedTopCardDefinition.cardId),
+    ownerId: foe.playerId,
+    marketChips: 0,
+  };
+  activePlayer.hand.push(drivingWildMagic);
+  foe.hand = [];
+  foe.deck = [foreignWildMagic, activatedTopCard];
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "wild_magic_choice" ? choices[0] : undefined
+  );
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: drivingWildMagic.instanceId,
+  });
+
+  assert.equal(playResult.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(foreignWildMagic.ownerId, foe.playerId);
+  assert.equal(activatedTopCard.ownerId, foe.playerId);
+  assert.equal(activePlayer.playedThisTurn.includes(foreignWildMagic), false);
+  assert.equal(activePlayer.playedThisTurn.includes(activatedTopCard), false);
+  assert.equal(foe.discard.includes(foreignWildMagic), true);
+  assert.equal(foe.discard.includes(activatedTopCard), true);
+  assert.ok(
+    buildControlledObjectView(state, activePlayer.playerId).cards.some(
+      ({ card }) => card.instanceId === foreignWildMagic.instanceId
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "cardMoved" &&
+        event.cardInstanceId === activatedTopCard.instanceId &&
+        event.sourceZone === `${activePlayer.playerId}.playedThisTurn` &&
+        event.destinationZone === `${foe.playerId}.discard` &&
+        event.ownerBefore === foe.playerId &&
+        event.ownerAfter === foe.playerId
+    )
+  );
+
+  const activation = listLegalActions(state).find(
+    (action) =>
+      action.type === "activatePermanent" &&
+      action.cardInstanceId === activatedTopCard.instanceId
+  );
+  assert.ok(activation);
+  assert.ok(
+    buildControlledObjectView(state, activePlayer.playerId).cards.some(
+      ({ card }) => card.instanceId === activatedTopCard.instanceId
+    )
+  );
+  for (const card of [ordinaryPermanent, drivingWildMagic, activatedTopCard]) {
+    assert.equal(
+      buildControlledObjectView(state, activePlayer.playerId).cards.filter(
+        (object) => object.card.instanceId === card.instanceId
+      ).length,
+      1
+    );
+  }
+  assert.ok(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "activateWizardProperty" &&
+        action.tokenInstanceId === controlCountProperty.instanceId
+    )
+  );
+
+  const activationResult = applyAction(state, activation);
+  assert.equal(activationResult.ok, true);
+  assert.equal(state.turn.power, 5);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.effectId === "attack_damage_equal_to_controlled_card_cost" &&
+        event.amount === 4
+    )
+  );
+
+  activePlayer.life.current = calculateEffectivePlayerMaxLife(
+    state,
+    activePlayer.playerId
+  );
+  const endTurnResult = applyAction(state, { type: "endTurn" });
+  assert.equal(endTurnResult.ok, true);
+  const activePlayerHandDrawn = state.eventLog.find(
+    (event) =>
+      event.type === "handDrawn" && event.playerId === activePlayer.playerId
+  );
+  assert.ok(activePlayerHandDrawn?.type === "handDrawn");
+  assert.equal(activePlayerHandDrawn.amount, 7);
+  assert.equal(foe.discard.includes(activatedTopCard), true);
+  assert.equal(
+    buildControlledObjectView(state, activePlayer.playerId).cards.some(
+      ({ card }) => card.instanceId === activatedTopCard.instanceId
+    ),
+    false
+  );
+  assert.equal(
+    buildControlledObjectView(state, foe.playerId).cards.some(
+      ({ card }) => card.instanceId === activatedTopCard.instanceId
+    ),
+    false
+  );
+  assert.equal(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "activatePermanent" &&
+        action.cardInstanceId === activatedTopCard.instanceId
+    ),
+    false
+  );
+  const foeEndTurnResult = applyAction(state, { type: "endTurn" });
+  assert.equal(foeEndTurnResult.ok, true);
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "activateWizardProperty" &&
+        action.tokenInstanceId === controlCountProperty.instanceId
+    ),
+    false
+  );
 });
 
 test("ending a turn cleans up non-permanents, draws a new hand, and advances active player", () => {
@@ -4771,7 +5680,7 @@ test("wizard property owned wand attacks gain damage and cannot be avoided", () 
   );
 });
 
-test("wizard property does not affect borrowed wands or non-wand attacks", () => {
+test("wizard property applies to its owner's Wand through foreign control but not to unrelated attacks", () => {
   const dataPack = createWizardPropertySetupEntriesDataPack(
     createExpandedDeadWizardTokenSetupDataPack(
       loadCurrentRuntimeDataPack(rootDir, playableRuntimeDataPackPath),
@@ -4875,11 +5784,272 @@ test("wizard property does not affect borrowed wands or non-wand attacks", () =>
   });
 
   assert.equal(ownerPropertyWandResult.ok, true);
-  assert.equal(ownerPropertyWandTarget.life.current, 20);
+  assert.equal(ownerPropertyWandTarget.life.current, 18);
   assert.equal(
-    ownerPropertyWandTarget.discard.includes(ownerPropertyWandDefense),
+    ownerPropertyWandTarget.hand.includes(ownerPropertyWandDefense),
     true
   );
+});
+
+test("Lubricating Dirty Stick permanently buffs each owned Wand attack and gains power once per Wand play", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  targetPlayer.life.current = 20;
+
+  const firstModifier = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_009"
+  );
+  const secondModifier = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_009"
+  );
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__starter_003"
+  );
+
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: firstModifier.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: secondModifier.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(activePlayer.permanents.length, 2);
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 15);
+  assert.equal(state.turn.power, 3);
+});
+
+test("Lubricating Dirty Stick does not affect a foe's Wand attack", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const modifierOwner = mustGetPlayer(state, markPlayerId("player-2"));
+  const foe = mustGetPlayer(state, markPlayerId("player-1"));
+  modifierOwner.wizardProperties = [];
+  foe.wizardProperties = [];
+  const modifier = addRuntimeCardToHand(
+    state,
+    modifierOwner,
+    "esw2_dbg__main_009"
+  );
+  state.activePlayerId = modifierOwner.playerId;
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: modifier.instanceId,
+    }).ok,
+    true
+  );
+
+  state.activePlayerId = foe.playerId;
+  state.turn.power = 0;
+  modifierOwner.life.current = 20;
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (effectId !== "attack_damage" || player.playerId !== foe.playerId) {
+      return undefined;
+    }
+    return choices.find((choice) => choice.choiceId === modifierOwner.playerId);
+  });
+  const foeWand = addRuntimeCardToHand(state, foe, "esw2_dbg__starter_003");
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: foeWand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(modifierOwner.life.current, 19);
+  assert.equal(state.turn.power, 1);
+});
+
+test("Lubricating Dirty Stick gains power when its owner plays a non-attacking Wand", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+
+  const modifier = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_009"
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: modifier.instanceId,
+    }).ok,
+    true
+  );
+
+  const nonAttackingWand = createFixtureCardDefinition(
+    "fixture-non-attacking-wand",
+    [],
+    { tags: ["wandCard"] }
+  );
+  const wand = addFixtureDefinitionToActiveHand(state, nonAttackingWand);
+  state.turn.power = 0;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 1);
+});
+
+test("Lubricating Dirty Stick gains power when its owner plays a foe's Wand", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const foe = mustGetPlayer(state, markPlayerId("player-1"));
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  foe.wizardProperties = [];
+
+  const modifier = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_009"
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: modifier.instanceId,
+    }).ok,
+    true
+  );
+
+  const foreignWand = createRuntimeCardInstance(
+    foe,
+    "esw2_dbg__starter_003",
+    "foreign-wand"
+  );
+  foe.deck.splice(0, foe.deck.length, foreignWand);
+  const wildMagic = state.common.wildMagicStack.shift();
+  assert.ok(wildMagic);
+  wildMagic.ownerId = activePlayer.playerId;
+  activePlayer.hand.push(wildMagic);
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    return effectId === "wild_magic_choice" ? choices.at(-1) : undefined;
+  });
+  state.turn.power = 0;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wildMagic.instanceId,
+  });
+
+  assert.equal(result.ok, true, result.ok ? undefined : result.error);
+  assert.equal(activePlayer.playedThisTurn.includes(foreignWand), false);
+  assert.equal(foe.discard.includes(foreignWand), true);
+  assert.equal(
+    buildControlledObjectView(state, activePlayer.playerId).cards.some(
+      ({ card }) => card.instanceId === foreignWand.instanceId
+    ),
+    true
+  );
+  assert.equal(foreignWand.ownerId, foe.playerId);
+  assert.equal(state.turn.power, 2);
+});
+
+test("Lubricating Dirty Stick buffs its owner's Wand played through Wild Magic", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const wandOwner = mustGetPlayer(state, markPlayerId("player-1"));
+  const playController = mustGetPlayer(state, markPlayerId("player-2"));
+  wandOwner.wizardProperties = [];
+  playController.wizardProperties = [];
+  state.activePlayerId = wandOwner.playerId;
+
+  const modifier = addRuntimeCardToHand(state, wandOwner, "esw2_dbg__main_009");
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: modifier.instanceId,
+    }).ok,
+    true
+  );
+
+  const foreignWand = createRuntimeCardInstance(
+    wandOwner,
+    "esw2_dbg__starter_003",
+    "owner-wand-played-by-foe"
+  );
+  wandOwner.deck.splice(0, wandOwner.deck.length, foreignWand);
+  const wildMagic = state.common.wildMagicStack.shift();
+  assert.ok(wildMagic);
+  wildMagic.ownerId = playController.playerId;
+  playController.hand.push(wildMagic);
+  state.activePlayerId = playController.playerId;
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId === "wild_magic_choice") {
+      return choices.at(-1);
+    }
+    if (effectId === "attack_damage") {
+      return choices.find(
+        (choice) =>
+          choice.choiceKind === "playerTarget" &&
+          choice.choiceId === wandOwner.playerId
+      );
+    }
+    return undefined;
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wildMagic.instanceId,
+  });
+
+  assert.equal(result.ok, true, result.ok ? undefined : result.error);
+  assert.equal(playController.playedThisTurn.includes(foreignWand), false);
+  assert.equal(wandOwner.discard.includes(foreignWand), true);
+  assert.equal(
+    buildControlledObjectView(state, playController.playerId).cards.some(
+      ({ card }) => card.instanceId === foreignWand.instanceId
+    ),
+    true
+  );
+  assert.equal(foreignWand.ownerId, wandOwner.playerId);
+  assert.equal(wandOwner.life.current, 17);
 });
 
 test("Cheese Wand gains power, attacks a chosen player, and gains chips on kill", () => {
@@ -4995,6 +6165,285 @@ test("Slapalocka Wand steals or gains chips equal to actual attack damage dealt"
   assert.equal(targetPlayer.life.current, 18);
   assert.equal(targetPlayer.chips, 0);
   assert.equal(activePlayer.chips, 2);
+});
+
+test("Ultimate Tronado adds power equal to the total actual damage from the first multi-target attack", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    playerCount: 3,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+  }
+
+  const tronadoDefinition = createFixtureCardDefinition(
+    "esw2_dbg__legend_012",
+    [
+      {
+        effectId: "ongoing_first_attack_damage_add_power",
+        timing: "afterFirstAttackDamageEachTurn",
+        amount: "totalDamageDealtByThatAttack",
+      },
+    ],
+    { isOngoing: true, cardKind: "legend", cardTypes: ["legend", "location"] }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [tronadoDefinition.cardId, tronadoDefinition],
+  ]);
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(
+      activePlayer,
+      tronadoDefinition.cardId,
+      "ultimate-tronado"
+    )
+  );
+  mustGetPlayer(state, markPlayerId("player-2")).life.current = 1;
+  mustGetPlayer(state, markPlayerId("player-3")).life.current = 4;
+  const attackId = addFixtureCardToActiveHand(state, {
+    effectId: "multi_target_attack",
+    timing: "onPlay",
+    amount: 3,
+    target: { selector: "opponentPlayers" },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attackId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 4);
+});
+
+test("current runtime Ultimate Tronado adds power after its controller's first damaging attack", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+  }
+  const runtimeDefinition = loadCurrentRuntimeDataPack(
+    rootDir
+  ).cardDefinitions.get("esw2_dbg__legend_012");
+  assert.ok(runtimeDefinition);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [runtimeDefinition.cardId, runtimeDefinition],
+  ]);
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(
+      activePlayer,
+      runtimeDefinition.cardId,
+      "current-runtime-ultimate-tronado"
+    )
+  );
+  targetPlayer.life.current = 20;
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 3,
+    target: { selector: "opponentPlayer" },
+  });
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }).ok,
+    true
+  );
+  assert.equal(targetPlayer.life.current, 17);
+  assert.equal(state.turn.power, 3);
+});
+
+test("Ultimate Tronado does not credit redirected damage to the original attacker", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const originalAttacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const redirector = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = originalAttacker.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+  }
+  const tronadoDefinition = createFixtureCardDefinition(
+    "fixture-redirected-ultimate-tronado",
+    [
+      {
+        effectId: "ongoing_first_attack_damage_add_power",
+        timing: "afterFirstAttackDamageEachTurn",
+        amount: "totalDamageDealtByThatAttack",
+      },
+    ],
+    { isOngoing: true, cardKind: "legend", cardTypes: ["legend", "location"] }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [tronadoDefinition.cardId, tronadoDefinition],
+  ]);
+  originalAttacker.permanents.push(
+    createRuntimeCardInstance(
+      originalAttacker,
+      tronadoDefinition.cardId,
+      "redirected-ultimate-tronado"
+    )
+  );
+  addFixtureDefenseCardToHand(state, redirector, "discardSelf", {
+    redirectAttack: true,
+  });
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 2,
+    target: { selector: "opponentPlayer" },
+  });
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }).ok,
+    true
+  );
+  assert.equal(originalAttacker.life.current, 18);
+  assert.equal(state.turn.power, 0);
+  assert.deepEqual(state.turn.damagingAttackPlayerIds, []);
+});
+
+test("Ultimate Tronado ignores avoided attacks, triggers once, and resets on its owner's next turn", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    playerCount: 2,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+  }
+  const tronadoDefinition = createFixtureCardDefinition(
+    "esw2_dbg__legend_012",
+    [
+      {
+        effectId: "ongoing_first_attack_damage_add_power",
+        timing: "afterFirstAttackDamageEachTurn",
+        amount: "totalDamageDealtByThatAttack",
+      },
+    ],
+    { isOngoing: true, cardKind: "legend", cardTypes: ["legend", "location"] }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [tronadoDefinition.cardId, tronadoDefinition],
+  ]);
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(
+      activePlayer,
+      tronadoDefinition.cardId,
+      "ultimate-tronado"
+    )
+  );
+
+  addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf");
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: addFixtureCardToActiveHand(state, {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 3,
+        target: { selector: "opponentPlayer" },
+      }),
+    }).ok,
+    true
+  );
+  assert.equal(state.turn.power, 0);
+
+  for (const amount of [3, 2]) {
+    assert.equal(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: addFixtureCardToActiveHand(state, {
+          effectId: "attack_damage",
+          timing: "onPlay",
+          amount,
+          target: { selector: "opponentPlayer" },
+        }),
+      }).ok,
+      true
+    );
+  }
+  assert.equal(state.turn.power, 3);
+
+  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: addFixtureCardToActiveHand(state, {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 4,
+        target: { selector: "opponentPlayer" },
+      }),
+    }).ok,
+    true
+  );
+  assert.equal(state.turn.power, 4);
+});
+
+test("Ultimate Tronado does not treat a later attack as first after it enters play", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    playerCount: 2,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+  }
+
+  for (const amount of [2, 3]) {
+    if (amount === 3) {
+      activePlayer.permanents.push(
+        createRuntimeCardInstance(
+          activePlayer,
+          "esw2_dbg__legend_012",
+          "ultimate-tronado"
+        )
+      );
+    }
+    assert.equal(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: addFixtureCardToActiveHand(state, {
+          effectId: "attack_damage",
+          timing: "onPlay",
+          amount,
+          target: { selector: "opponentPlayer" },
+        }),
+      }).ok,
+      true
+    );
+  }
+
+  assert.equal(state.turn.power, 0);
 });
 
 test("Losharocka Wand can self-target and makes the killed target a Dingler", () => {
@@ -5376,6 +6825,67 @@ test("Potny's Buzzing Wand chooses left or right and chains in the chosen direct
         event.definitionId === "esw2_dbg__legend_015"
     ).length,
     2
+  );
+});
+
+test("Ultimate Tronado gains the actual total from a directional chain attack only once", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 4,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const leftFoe = mustGetPlayer(state, markPlayerId("player-2"));
+  const nextLeftFoe = mustGetPlayer(state, markPlayerId("player-3"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+  }
+  leftFoe.life.current = 1;
+  nextLeftFoe.life.current = 20;
+  const tronadoDefinition = createFixtureCardDefinition(
+    "esw2_dbg__legend_012",
+    [
+      {
+        effectId: "ongoing_first_attack_damage_add_power",
+        timing: "afterFirstAttackDamageEachTurn",
+        amount: "totalDamageDealtByThatAttack",
+      },
+    ],
+    { isOngoing: true, cardKind: "legend", cardTypes: ["legend", "location"] }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [tronadoDefinition.cardId, tronadoDefinition],
+  ]);
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(
+      activePlayer,
+      tronadoDefinition.cardId,
+      "ultimate-tronado"
+    )
+  );
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_015"
+  );
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: wand.instanceId })
+      .ok,
+    true
+  );
+
+  assert.equal(state.turn.power, 14);
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "effectAddPowerApplied" &&
+        event.effectId === "ongoing_first_attack_damage_add_power"
+    ).length,
+    1
   );
 });
 
@@ -8049,6 +9559,7 @@ function addFixtureCardToActiveHand(
     isOngoing?: boolean;
     cardTypes?: string[];
     cardKind?: CardDefinition["engine"]["cardKind"];
+    tags?: string[];
   } = {}
 ): string {
   const activePlayer = state.players.find(
@@ -8268,6 +9779,7 @@ function createFixtureCardDefinition(
     isOngoing?: boolean;
     cardTypes?: string[];
     cardKind?: CardDefinition["engine"]["cardKind"];
+    tags?: string[];
   } = {}
 ): CardDefinition {
   const cardKind = options.cardKind ?? "normal";
@@ -8290,6 +9802,7 @@ function createFixtureCardDefinition(
       playableInV0: true,
       cardKind,
       cardTypes: options.cardTypes ?? [],
+      ...(options.tags === undefined ? {} : { tags: options.tags }),
       cost: 0,
       victoryPoints: 0,
       isOngoing: options.isOngoing ?? false,
@@ -8397,8 +9910,8 @@ function createChipActivationWizardProperty(
     schemaVersion: 1,
     tokenId,
     runtimeSchema: "krutagidon.tokenDefinition.v0",
-  kind: "wizardProperty",
-  source: { image: "assets/wizard-property/wp_fixture.png" },
+    kind: "wizardProperty",
+    source: { image: "assets/wizard-property/wp_fixture.png" },
     engine: {
       mappingStatus: "fixture",
       playableInV0: true,
@@ -8575,11 +10088,12 @@ function addFixtureDefenseCardToHand(
   options: {
     costs?: Exclude<RuntimeEffect["costs"], undefined>;
     branchEffects?: RuntimeEffect[];
+    redirectAttack?: boolean;
   } = {}
 ): CardInstance {
   const definition: CardDefinition = {
     schemaVersion: 1,
-    cardId: `fixture-defense-${destination}-${player.hand.length + 1}`,
+    cardId: `fixture-defense-${player.playerId}-${destination}-${player.hand.length + 1}`,
     source: { image: "assets/cards/fixtures/fixture-defense.png" },
     visible: {
       nameRu: `Fixture defense ${destination}`,
@@ -8605,6 +10119,9 @@ function addFixtureDefenseCardToHand(
           effectId: "avoid_attack",
           timing: "onDefense",
           destination,
+          ...(options.redirectAttack === undefined
+            ? {}
+            : { redirectAttack: options.redirectAttack }),
           ...(options.costs === undefined ? {} : { costs: options.costs }),
           ...(options.branchEffects === undefined
             ? {}
@@ -8621,7 +10138,7 @@ function addFixtureDefenseCardToHand(
 
   const card: CardInstance = {
     instanceId: markCardInstanceId(
-      `fixture-defense-card-${player.hand.length + 1}`
+      `fixture-defense-card-${player.playerId}-${player.hand.length + 1}`
     ),
     definitionId: markCardDefinitionId(definition.cardId),
     ownerId: player.playerId,

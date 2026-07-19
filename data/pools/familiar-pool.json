@@ -4,5 +4,10 @@
   "runtimeSchema": "krutagidon.deckComposition.v0",
   "role": "familiarPool",
   "mappingStatus": "incomplete-full-only",
-  "entries": []
+  "entries": [
+    {
+      "cardId": "esw2_dbg__familiar_005",
+      "count": 1
+    }
+  ]
 }

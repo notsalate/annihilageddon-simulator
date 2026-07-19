@@ -14,6 +14,8 @@ import {
   type DecodeResult,
   type EffectTiming,
   type LoadedDataPack,
+  type OngoingAddPowerWhenPlayingWandRuntimeEffect,
+  type OngoingAddPowerPerDeadWizardTokenRuntimeEffect,
   type RuntimeEffect,
   type RuntimeEffectCondition,
   type RuntimeEffectCost,
@@ -1490,6 +1492,60 @@ test("controlled-object power effect is registered and rejects invalid shapes", 
     }),
     []
   );
+});
+
+test("ongoing controlled power validates its concrete passive shape", () => {
+  const handler = getEffectRuntimeHandler("ongoing_add_power");
+
+  assert.ok(handler);
+  assert.deepEqual(
+    handler.validateShape("Fixture", {
+      effectId: "ongoing_add_power",
+      timing: "whileControlled",
+      amount: 1,
+    }),
+    []
+  );
+  assert.notDeepEqual(
+    handler.validateShape("Fixture", {
+      effectId: "ongoing_add_power",
+      timing: "onPlay",
+      amount: 0,
+    }),
+    []
+  );
+});
+
+test("DWT ongoing power validates its typed passive payload", () => {
+  const effect: OngoingAddPowerPerDeadWizardTokenRuntimeEffect = {
+    effectId: "ongoing_add_power_per_dead_wizard_token",
+    timing: "whileControlled",
+    amount: 1,
+  };
+  const handler = getEffectRuntimeHandler(effect.effectId);
+
+  assert.ok(handler);
+  assert.deepEqual(handler.validateShape("Fixture", effect), []);
+  assert.notDeepEqual(
+    handler.validateShape("Fixture", {
+      ...effect,
+      timing: "onPlay",
+    } as unknown as RuntimeEffect),
+    []
+  );
+});
+
+test("Wand play power validates its typed trigger payload", () => {
+  const effect: OngoingAddPowerWhenPlayingWandRuntimeEffect = {
+    effectId: "ongoing_add_power_when_playing_wand",
+    timing: "onPlayCard",
+    amount: 1,
+    cardTags: ["wandCard"],
+  };
+  const handler = getEffectRuntimeHandler(effect.effectId);
+
+  assert.ok(handler);
+  assert.deepEqual(handler.validateShape("Fixture", effect), []);
 });
 
 test("economy and draw effects are registered and reject invalid shapes through runtime handlers", () => {
@@ -3018,6 +3074,37 @@ test("executable data-pack validation rejects redirect defense branches", () => 
       return (
         error.includes("fixture-unsupported-redirect-defense") &&
         error.includes("redirectTarget")
+      );
+    })
+  );
+});
+
+test("executable data-pack validation rejects a non-boolean redirectAttack guard", () => {
+  const card = createFixtureCard("fixture-invalid-redirect-attack-guard");
+  const dataPack = withFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "avoid_attack",
+          timing: "onDefense",
+          destination: "discardSelf",
+          redirectAttack: "yes",
+        },
+      ],
+    },
+  });
+
+  const result = validateExecutableDataPack(dataPack, { mode: "fixture" });
+
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((error) => {
+      return (
+        error.includes("fixture-invalid-redirect-attack-guard") &&
+        error.includes("redirectAttack")
       );
     })
   );

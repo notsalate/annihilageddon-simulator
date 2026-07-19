@@ -101,6 +101,7 @@ Implement as 1 issue:
 - `esw2_dbg__main_015`
 - `esw2_dbg__main_036`
 - `esw2_dbg__main_041`
+- `esw2_dbg__legend_026`
 - `esw2_dbg__main_062`
 - `esw2_dbg__main_072`
 - `esw2_dbg__main_075`
@@ -112,6 +113,7 @@ Implement as 1 issue:
 - `esw2_dbg__familiar_005`
 - `esw2_dbg__legend_008`
 - `esw2_dbg__legend_012`
+- `esw2_dbg__legend_025`
 - `esw2_dbg__main_009`
 - `esw2_dbg__main_011`
 - `esw2_dbg__main_047`
@@ -140,6 +142,7 @@ Split the remaining cards into 2 issues:
 
 1. `special-card-stack/limp-wand-gain`
    - `esw2_dbg__legend_001`
+   - `esw2_dbg__legend_021`
    - `esw2_dbg__main_005`
    - `esw2_dbg__main_026`
    - `esw2_dbg__mega_mayhem_002`
@@ -180,6 +183,7 @@ Split into 3 issues:
    - `esw2_dbg__main_045`
 2. `defense-effects/reward-and-cost-defense`
    - `esw2_dbg__familiar_002`
+   - `esw2_dbg__legend_022`
    - `esw2_dbg__legend_028`
    - `esw2_dbg__main_054`
 3. `defense-effects/counter-damage-and-prize`
@@ -242,6 +246,7 @@ Split into 4 issues:
 1. `attack-effects/simple-targeted-attacks`
    - `esw2_dbg__legend_003`
    - `esw2_dbg__legend_019`
+   - `esw2_dbg__legend_024`
    - `esw2_dbg__main_018`
    - `esw2_dbg__main_021`
    - `esw2_dbg__main_023`
@@ -260,6 +265,7 @@ Split into 4 issues:
    - `esw2_dbg__main_025`
 4. `attack-effects/variable-and-sequenced-attacks`
    - `esw2_dbg__legend_015`
+   - `esw2_dbg__legend_023`
    - `esw2_dbg__main_024`
    - `esw2_dbg__main_078`
 

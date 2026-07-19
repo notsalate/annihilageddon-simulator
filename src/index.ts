@@ -36,6 +36,8 @@ export type {
 } from "./engine/data.js";
 export type {
   EffectTiming,
+  OngoingAddPowerWhenPlayingWandRuntimeEffect,
+  OngoingAddPowerPerDeadWizardTokenRuntimeEffect,
   RuntimeEffect,
   AttackOutcomeBranch,
   RuntimeEffectCondition,
@@ -138,7 +140,11 @@ export type {
   AnalysisLimitError,
   CompletedActionBranch,
 } from "./engine/best-move-analysis.js";
-export { victoryPointsPolicy, BEST_MOVE_POLICIES, getBestMovePolicy } from "./engine/best-move-policies.js";
+export {
+  victoryPointsPolicy,
+  BEST_MOVE_POLICIES,
+  getBestMovePolicy,
+} from "./engine/best-move-policies.js";
 export {
   enumerateActionBranches,
   enumerateImmediateActionBranches,

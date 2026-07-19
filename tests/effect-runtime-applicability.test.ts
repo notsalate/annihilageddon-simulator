@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { initializeGame } from "../src/index.js";
+import { initializeGame, type CardInstance } from "../src/index.js";
 import {
   executeEffect,
   executeMayhemEffects,
@@ -10,9 +10,14 @@ import {
 import type { CardDefinition } from "../src/engine/data.js";
 import {
   getEffectRuntimeCatalogEntry,
+  resolveEffectRuntimeCatalogEntry,
 } from "../src/engine/effect-runtime-registry.js";
 import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
 import type { RuntimeEffectPayload } from "../src/engine/runtime-effect.js";
+import {
+  markCardDefinitionId,
+  markCardInstanceId,
+} from "../src/domain/types.js";
 
 test("executeEffect applies add_power through the catalog resolver", () => {
   const state = initializeGame({ rootDir: process.cwd(), seed: 11601 });
@@ -31,6 +36,65 @@ test("executeEffect applies add_power through the catalog resolver", () => {
 
   assert.deepEqual(result, { ok: true });
   assert.equal(state.turn.power, 2);
+});
+
+test("attack profile uses its initiator instead of the active player or source owner", () => {
+  const state = initializeGame({
+    rootDir: process.cwd(),
+    seed: 11609,
+    playerCount: 3,
+  });
+  const inactiveInitiator = state.players[1];
+  const sourceOwner = state.players[2];
+  const activePlayer = state.players[0];
+  assert.ok(inactiveInitiator);
+  assert.ok(sourceOwner);
+  assert.ok(activePlayer);
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.hand = [];
+    player.wizardProperties = [];
+  }
+  const arena: CardInstance = {
+    instanceId: markCardInstanceId("fixture-inactive-initiator-arena"),
+    definitionId: markCardDefinitionId("esw2_dbg__legend_008"),
+    ownerId: inactiveInitiator.playerId,
+    marketChips: 0,
+  };
+  const foreignSourceCard: CardInstance = {
+    instanceId: markCardInstanceId("fixture-foreign-attack-source"),
+    definitionId: markCardDefinitionId("esw2_dbg__starter_001"),
+    ownerId: sourceOwner.playerId,
+    marketChips: 0,
+  };
+  inactiveInitiator.permanents.push(arena);
+  sourceOwner.deck.push(foreignSourceCard);
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId !== "attack_damage") {
+      return undefined;
+    }
+    return choices.find((choice) => choice.choiceId === sourceOwner.playerId);
+  };
+
+  const result = executeEffect(
+    state,
+    inactiveInitiator,
+    {
+      effectId: "attack_damage",
+      amount: 2,
+      targetSelector: "chosenFoe",
+    },
+    {
+      sourceType: "card",
+      runtimeMode: "combat",
+      playerId: inactiveInitiator.playerId,
+      cardInstanceId: foreignSourceCard.instanceId,
+      definitionId: foreignSourceCard.definitionId,
+    }
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(sourceOwner.life.current, 16);
 });
 
 test("empty catalog diagnostics use the explicit execution error", () => {
@@ -133,6 +197,105 @@ test("wizard-property-only effect is rejected for a card source", () => {
   );
   assert.equal(result.ok, false);
   assert.match(result.error, /token-only effect id/);
+});
+
+test("ongoing controlled power is limited to card sources", () => {
+  const effect = {
+    effectId: "ongoing_add_power",
+    timing: "whileControlled",
+    amount: 1,
+  } as const;
+
+  assert.equal(
+    resolveEffectRuntimeCatalogEntry(
+      "Fixture card",
+      effect.effectId,
+      effect,
+      "combat",
+      "card"
+    ).ok,
+    true
+  );
+
+  for (const sourceKind of ["wizardProperty", "deadWizardToken"] as const) {
+    const result = resolveEffectRuntimeCatalogEntry(
+      `Fixture ${sourceKind}`,
+      effect.effectId,
+      effect,
+      "combat",
+      sourceKind
+    );
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.errors[0] ?? "", /token-only effect id/);
+    }
+  }
+});
+
+test("DWT-count ongoing power is limited to card sources", () => {
+  const effect = {
+    effectId: "ongoing_add_power_per_dead_wizard_token",
+    timing: "whileControlled",
+    amount: 1,
+  } as const;
+
+  assert.equal(
+    resolveEffectRuntimeCatalogEntry(
+      "Fixture card",
+      effect.effectId,
+      effect,
+      "combat",
+      "card"
+    ).ok,
+    true
+  );
+
+  for (const sourceKind of ["wizardProperty", "deadWizardToken"] as const) {
+    const result = resolveEffectRuntimeCatalogEntry(
+      `Fixture ${sourceKind}`,
+      effect.effectId,
+      effect,
+      "combat",
+      sourceKind
+    );
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.errors[0] ?? "", /token-only effect id/);
+    }
+  }
+});
+
+test("ongoing hand refill bonus is limited to card sources", () => {
+  const effect = {
+    effectId: "ongoing_hand_refill_bonus",
+    timing: "endTurn",
+    amount: 1,
+  } as const;
+
+  assert.equal(
+    resolveEffectRuntimeCatalogEntry(
+      "Fixture card",
+      effect.effectId,
+      effect,
+      "combat",
+      "card"
+    ).ok,
+    true
+  );
+
+  for (const sourceKind of ["wizardProperty", "deadWizardToken"] as const) {
+    const result = resolveEffectRuntimeCatalogEntry(
+      `Fixture ${sourceKind}`,
+      effect.effectId,
+      effect,
+      "combat",
+      sourceKind
+    );
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.errors[0] ?? "", /token-only effect id/);
+    }
+  }
 });
 
 test("known effect with invalid shape is rejected before execution", () => {

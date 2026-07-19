@@ -3,6 +3,7 @@ import type {
   CardInstance,
   GameState,
   PlayerId,
+  PlayerState,
   StatusInstance,
   TokenInstance,
   TrophyLikeInstance,
@@ -67,7 +68,7 @@ export function buildControlledObjectView(
 
   return {
     playerId,
-    cards: player.permanents.map((card) => ({
+    cards: getControlledCards(state, player).map((card) => ({
       sourceType: "controlledCard" as const,
       card,
       definition: mustGetCardDefinition(state, card.definitionId),
@@ -85,6 +86,40 @@ export function buildControlledObjectView(
     statuses: [...player.statuses],
     trophyLikeObjects: [...player.trophyLikeObjects],
   };
+}
+
+export function getControlledCards(
+  state: GameState,
+  player: PlayerState
+): CardInstance[] {
+  const permanentIds = new Set(
+    player.permanents.map((card) => card.instanceId)
+  );
+  const temporarilyControlled = state.turn.temporaryCardControls
+    .filter((control) => control.controllerId === player.playerId)
+    .map((control) => findCardInstance(state, control.cardInstanceId))
+    .filter((card): card is CardInstance => card !== undefined)
+    .filter((card) => !permanentIds.has(card.instanceId));
+  return [...player.permanents, ...temporarilyControlled];
+}
+
+function findCardInstance(
+  state: GameState,
+  cardInstanceId: CardInstance["instanceId"]
+): CardInstance | undefined {
+  for (const player of state.players) {
+    const card = [
+      ...player.deck,
+      ...player.hand,
+      ...player.discard,
+      ...player.playedThisTurn,
+      ...player.permanents,
+    ].find((candidate) => candidate.instanceId === cardInstanceId);
+    if (card !== undefined) {
+      return card;
+    }
+  }
+  return undefined;
 }
 
 export function calculateEffectiveCardCost(

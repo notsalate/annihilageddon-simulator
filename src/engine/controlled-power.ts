@@ -1,11 +1,24 @@
 import type { CardDefinition } from "./data.js";
 import type { RuntimeEffect } from "./runtime-effect.js";
 import type { GameState, PlayerState } from "./setup.js";
+import { getControlledCards } from "./effective-values.js";
 
 interface PassiveStatusPowerEffect {
   effectId: "add_power_if_player_has_status";
   timing: "whileControlled";
   statusId: "dingler";
+  amount: number;
+}
+
+interface PassiveFlatPowerEffect {
+  effectId: "ongoing_add_power";
+  timing: "whileControlled";
+  amount: number;
+}
+
+interface PassiveDeadWizardTokenPowerEffect {
+  effectId: "ongoing_add_power_per_dead_wizard_token";
+  timing: "whileControlled";
   amount: number;
 }
 
@@ -32,7 +45,7 @@ function calculateControlledPowerBonus(
   state: GameState,
   player: PlayerState
 ): number {
-  return player.permanents.reduce<number>((total, card) => {
+  return getControlledCards(state, player).reduce<number>((total, card) => {
     const definition = state.cardDefinitions.get(card.definitionId);
     if (definition === undefined) {
       return total;
@@ -47,12 +60,30 @@ function calculateCardPassivePowerBonus(
   player: PlayerState
 ): number {
   return definition.engine.effects.reduce<number>((total, effect) => {
+    if (isPassiveFlatPowerEffect(effect)) {
+      return total + effect.amount;
+    }
+
+    if (isPassiveDeadWizardTokenPowerEffect(effect)) {
+      return total + player.deadWizardTokens.length * effect.amount;
+    }
+
     if (!isPassiveStatusPowerEffect(effect)) {
       return total;
     }
 
     return hasStatus(player, effect.statusId) ? total + effect.amount : total;
   }, 0);
+}
+
+function isPassiveFlatPowerEffect(
+  effect: RuntimeEffect
+): effect is PassiveFlatPowerEffect {
+  return (
+    effect.effectId === "ongoing_add_power" &&
+    effect.timing === "whileControlled" &&
+    typeof effect.amount === "number"
+  );
 }
 
 function isPassiveStatusPowerEffect(
@@ -62,6 +93,16 @@ function isPassiveStatusPowerEffect(
     effect.effectId === "add_power_if_player_has_status" &&
     effect.timing === "whileControlled" &&
     effect.statusId === "dingler" &&
+    typeof effect.amount === "number"
+  );
+}
+
+function isPassiveDeadWizardTokenPowerEffect(
+  effect: RuntimeEffect
+): effect is PassiveDeadWizardTokenPowerEffect {
+  return (
+    effect.effectId === "ongoing_add_power_per_dead_wizard_token" &&
+    effect.timing === "whileControlled" &&
     typeof effect.amount === "number"
   );
 }
