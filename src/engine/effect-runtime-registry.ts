@@ -3298,9 +3298,9 @@ function executeAttackWithAmount(
   );
   services.applyAfterPlayerAttackDamage(
     state,
-    player,
+    attackResult.attackingPlayer,
     attackResult.damageDealt,
-    source
+    attackResult.source
   );
   return executeAttackBranches(
     state,

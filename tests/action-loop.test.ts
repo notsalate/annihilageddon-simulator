@@ -6221,6 +6221,60 @@ test("Ultimate Tronado adds power equal to the total actual damage from the firs
   assert.equal(state.turn.power, 4);
 });
 
+test("Ultimate Tronado does not credit redirected damage to the original attacker", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const originalAttacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const redirector = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = originalAttacker.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+  }
+  const tronadoDefinition = createFixtureCardDefinition(
+    "fixture-redirected-ultimate-tronado",
+    [
+      {
+        effectId: "ongoing_first_attack_damage_add_power",
+        timing: "afterFirstAttackDamageEachTurn",
+        amount: "totalDamageDealtByThatAttack",
+      },
+    ],
+    { isOngoing: true, cardKind: "legend", cardTypes: ["legend", "location"] }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [tronadoDefinition.cardId, tronadoDefinition],
+  ]);
+  originalAttacker.permanents.push(
+    createRuntimeCardInstance(
+      originalAttacker,
+      tronadoDefinition.cardId,
+      "redirected-ultimate-tronado"
+    )
+  );
+  addFixtureDefenseCardToHand(state, redirector, "discardSelf", {
+    redirectAttack: true,
+  });
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 2,
+    target: { selector: "opponentPlayer" },
+  });
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }).ok,
+    true
+  );
+  assert.equal(originalAttacker.life.current, 18);
+  assert.equal(state.turn.power, 0);
+  assert.deepEqual(state.turn.damagingAttackPlayerIds, []);
+});
+
 test("Ultimate Tronado ignores avoided attacks, triggers once, and resets on its owner's next turn", () => {
   const state = initializeGame({
     rootDir,
