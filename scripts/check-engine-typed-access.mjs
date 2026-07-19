@@ -34,7 +34,7 @@ const configuredAllowedViolations = [
   ["src/engine/data.ts", 2288, 3, "validateRuntimeEffectDefinition"],
   ["src/engine/data.ts", 2319, 3, "validateNestedAttackBranches"],
   ["src/engine/data.ts", 2372, 43, "isEffectRecord"],
-  ["src/engine/runtime-effect.ts", 444, 4, "isRuntimeEffectTargetRecord"],
+  ["src/engine/runtime-effect.ts", 454, 4, "isRuntimeEffectTargetRecord"],
 ];
 
 for (const filePath of listTypeScriptFiles(engineDir)) {
