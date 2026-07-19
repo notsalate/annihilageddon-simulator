@@ -217,6 +217,7 @@ const knownRuntimeEffectIds = [
   "multi_target_attack",
   "on_gain_self_gain_limp_wands",
   "ongoing_add_power",
+  "ongoing_add_power_when_playing_wand",
   "ongoing_add_power_when_playing_limp_wand",
   "ongoing_first_attack_damage_add_power",
   "ongoing_hand_refill_bonus",

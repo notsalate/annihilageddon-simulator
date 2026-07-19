@@ -1,5 +1,6 @@
 import {
   executeActivationEffects,
+  executeControlledCardOnPlayCardEffects,
   executeOnPlayEffects,
   executeWizardPropertyOnPlayCardEffects,
   executeWizardPropertyActivationEffects,
@@ -521,6 +522,18 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
   }
   if (wizardPropertyResult.gameEnd !== undefined) {
     return gameEndActionResult(wizardPropertyResult.gameEnd);
+  }
+
+  const controlledCardResult = executeControlledCardOnPlayCardEffects(
+    state,
+    activePlayer,
+    card
+  );
+  if (!controlledCardResult.ok) {
+    return controlledCardResult;
+  }
+  if (controlledCardResult.gameEnd !== undefined) {
+    return gameEndActionResult(controlledCardResult.gameEnd);
   }
 
   reconcileActivePlayerControlledPower(state);

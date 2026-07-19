@@ -24,7 +24,7 @@
     "needsEffectMapping": true,
     "cardKind": "starter",
     "cardTypes": ["wand"],
-    "tags": ["wandAttackCard"],
+    "tags": ["wandCard", "wandAttackCard"],
     "cost": 0,
     "victoryPoints": 0,
     "isOngoing": false,

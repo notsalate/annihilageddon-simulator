@@ -7,8 +7,8 @@ Generated from canonical card draft JSON, current runtime card JSON, current com
 ## Summary
 
 - total cards: 134
-- fullRuntime: 39
-- missingRuntime: 95
+- fullRuntime: 40
+- missingRuntime: 94
 - clustered: 134
 - needsClusterDecision: 0
 
@@ -68,7 +68,7 @@ Generated from canonical card draft JSON, current runtime card JSON, current com
 | `esw2_dbg__main_006` | main | Мармеладный архимаг | Постоянка: [символ активации]: уничтожь эту карту: если ты лошара, можешь стать нормальным. Затем накрути 7 жизней. | `data/import/cards/main/texts/esw2_dbg__main_006.md` | missingRuntime | none | `tests/action-loop.test.ts` | clustered | `activation-effects` | none |
 | `esw2_dbg__main_007` | main | Пушка-Блевушка | +1 мощь Раскрой верхнюю карту своей колоды. Уничтожь её или проведи атаку: нанеси выбранному врагу столько урона какова еë стоимость. | `data/import/cards/main/texts/esw2_dbg__main_007.md` | missingRuntime | none | none | clustered | `card-movement` | Раскрытие и возможное уничтожение верхней карты ведут механику; переменная атака — альтернативная часть эффекта. |
 | `esw2_dbg__main_008` | main | Сувернирный ларёк в зале легенд | ПОСТОЯНКА: Получив легенду, можешь положить ее на верх своей колоды. | `data/import/cards/main/texts/esw2_dbg__main_008.md` | missingRuntime | none | `tests/action-loop.test.ts` | clustered | `market-effects` | Изменение места для полученной легенды относится к market-gain replacement; type override вторичен. |
-| `esw2_dbg__main_009` | main | Смазочная "грязная палка" | Постоянка: Все ТВОИ «Палочки», наносящие урон, получают +2 к урону. Каждый раз, когда ты разыгрываешь «Палочку», + 1 мощь. | `data/import/cards/main/texts/esw2_dbg__main_009.md` | missingRuntime | none | none | clustered | `ongoing-modifiers` | Постоянный модификатор урона wand-карт и триггер мощи от их розыгрыша являются ongoing-механиками. |
+| `esw2_dbg__main_009` | main | Смазочная "грязная палка" | Постоянка: Все ТВОИ «Палочки», наносящие урон, получают +2 к урону. Каждый раз, когда ты разыгрываешь «Палочку», + 1 мощь. | `data/import/cards/main/texts/esw2_dbg__main_009.md` | fullRuntime | `deck:main-deck` | `tests/action-loop.test.ts` | clustered | `ongoing-modifiers` | Постоянный модификатор урона wand-карт и триггер мощи от их розыгрыша являются ongoing-механиками. |
 | `esw2_dbg__main_010` | main | Сурковый агент | +3 мощи Уничтожь 3 верхние карты основной колоды. Если среди них были беспределы, можешь сыграть 1 из них и получить +3 мощи. | `data/import/cards/main/texts/esw2_dbg__main_010.md` | missingRuntime | none | none | clustered | `card-movement` | Уничтожение карт основной колоды и возможный розыгрыш найденного Mayhem определяют карту. |
 | `esw2_dbg__main_011` | main | Желатиновый сисяк | Постоянка: +1 мощь | `data/import/cards/main/texts/esw2_dbg__main_011.md` | fullRuntime | `deck:main-deck` | `tests/action-loop.test.ts` | clustered | `ongoing-modifiers` | none |
 | `esw2_dbg__main_012` | main | Пейотка | +2 мощи [символ активации]: если под твоим контролем есть еще хотя бы 1 тварь, получи 1 чипсину | `data/import/cards/main/texts/esw2_dbg__main_012.md` | missingRuntime | none | `tests/action-loop.test.ts` | clustered | `activation-effects` | none |

@@ -4942,6 +4942,262 @@ test("wizard property does not affect borrowed wands or non-wand attacks", () =>
   );
 });
 
+test("Lubricating Dirty Stick permanently buffs each owned Wand attack and gains power once per Wand play", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  targetPlayer.life.current = 20;
+
+  const firstModifier = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_009"
+  );
+  const secondModifier = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_009"
+  );
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__starter_003"
+  );
+
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: firstModifier.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: secondModifier.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(activePlayer.permanents.length, 2);
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 15);
+  assert.equal(state.turn.power, 3);
+});
+
+test("Lubricating Dirty Stick does not affect a foe's Wand attack", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const modifierOwner = mustGetPlayer(state, markPlayerId("player-2"));
+  const foe = mustGetPlayer(state, markPlayerId("player-1"));
+  modifierOwner.wizardProperties = [];
+  foe.wizardProperties = [];
+  const modifier = addRuntimeCardToHand(
+    state,
+    modifierOwner,
+    "esw2_dbg__main_009"
+  );
+  state.activePlayerId = modifierOwner.playerId;
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: modifier.instanceId,
+    }).ok,
+    true
+  );
+
+  state.activePlayerId = foe.playerId;
+  state.turn.power = 0;
+  modifierOwner.life.current = 20;
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (
+      effectId !== "attack_damage" ||
+      player.playerId !== foe.playerId
+    ) {
+      return undefined;
+    }
+    return choices.find(
+      (choice) => choice.choiceId === modifierOwner.playerId
+    );
+  });
+  const foeWand = addRuntimeCardToHand(state, foe, "esw2_dbg__starter_003");
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: foeWand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(modifierOwner.life.current, 19);
+  assert.equal(state.turn.power, 1);
+});
+
+test("Lubricating Dirty Stick gains power when its owner plays a non-attacking Wand", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+
+  const modifier = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_009"
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: modifier.instanceId,
+    }).ok,
+    true
+  );
+
+  const nonAttackingWand = createFixtureCardDefinition(
+    "fixture-non-attacking-wand",
+    [],
+    { tags: ["wandCard"] }
+  );
+  const wand = addFixtureDefinitionToActiveHand(state, nonAttackingWand);
+  state.turn.power = 0;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 1);
+});
+
+test("Lubricating Dirty Stick gains power when its owner plays a foe's Wand", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const foe = mustGetPlayer(state, markPlayerId("player-1"));
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  foe.wizardProperties = [];
+
+  const modifier = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_009"
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: modifier.instanceId,
+    }).ok,
+    true
+  );
+
+  const foreignWand = createRuntimeCardInstance(
+    foe,
+    "esw2_dbg__starter_003",
+    "foreign-wand"
+  );
+  foe.deck.splice(0, foe.deck.length, foreignWand);
+  const wildMagic = state.common.wildMagicStack.shift();
+  assert.ok(wildMagic);
+  wildMagic.ownerId = activePlayer.playerId;
+  activePlayer.hand.push(wildMagic);
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    return effectId === "wild_magic_choice" ? choices.at(-1) : undefined;
+  });
+  state.turn.power = 0;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wildMagic.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.playedThisTurn.includes(foreignWand), true);
+  assert.equal(foreignWand.ownerId, foe.playerId);
+  assert.equal(state.turn.power, 2);
+});
+
+test("Lubricating Dirty Stick buffs its owner's Wand played through Wild Magic", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const wandOwner = mustGetPlayer(state, markPlayerId("player-1"));
+  const playController = mustGetPlayer(state, markPlayerId("player-2"));
+  wandOwner.wizardProperties = [];
+  playController.wizardProperties = [];
+  state.activePlayerId = wandOwner.playerId;
+
+  const modifier = addRuntimeCardToHand(
+    state,
+    wandOwner,
+    "esw2_dbg__main_009"
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: modifier.instanceId,
+    }).ok,
+    true
+  );
+
+  const foreignWand = createRuntimeCardInstance(
+    wandOwner,
+    "esw2_dbg__starter_003",
+    "owner-wand-played-by-foe"
+  );
+  wandOwner.deck.splice(0, wandOwner.deck.length, foreignWand);
+  const wildMagic = state.common.wildMagicStack.shift();
+  assert.ok(wildMagic);
+  wildMagic.ownerId = playController.playerId;
+  playController.hand.push(wildMagic);
+  state.activePlayerId = playController.playerId;
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId === "wild_magic_choice") {
+      return choices.at(-1);
+    }
+    if (effectId === "attack_damage") {
+      return choices.find(
+        (choice) =>
+          choice.choiceKind === "playerTarget" &&
+          choice.choiceId === wandOwner.playerId
+      );
+    }
+    return undefined;
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wildMagic.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(playController.playedThisTurn.includes(foreignWand), true);
+  assert.equal(foreignWand.ownerId, wandOwner.playerId);
+  assert.equal(wandOwner.life.current, 17);
+});
+
 test("Cheese Wand gains power, attacks a chosen player, and gains chips on kill", () => {
   const state = initializeGame({
     rootDir,
@@ -8347,6 +8603,7 @@ function addFixtureCardToActiveHand(
     isOngoing?: boolean;
     cardTypes?: string[];
     cardKind?: CardDefinition["engine"]["cardKind"];
+    tags?: string[];
   } = {}
 ): string {
   const activePlayer = state.players.find(
@@ -8566,6 +8823,7 @@ function createFixtureCardDefinition(
     isOngoing?: boolean;
     cardTypes?: string[];
     cardKind?: CardDefinition["engine"]["cardKind"];
+    tags?: string[];
   } = {}
 ): CardDefinition {
   const cardKind = options.cardKind ?? "normal";
@@ -8588,6 +8846,7 @@ function createFixtureCardDefinition(
       playableInV0: true,
       cardKind,
       cardTypes: options.cardTypes ?? [],
+      ...(options.tags === undefined ? {} : { tags: options.tags }),
       cost: 0,
       victoryPoints: 0,
       isOngoing: options.isOngoing ?? false,

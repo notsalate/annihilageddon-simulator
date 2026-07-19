@@ -24,7 +24,7 @@
     "needsEffectMapping": false,
     "cardKind": "normal",
     "cardTypes": ["treasure"],
-    "tags": ["wandAttackCard"],
+    "tags": ["wandCard", "wandAttackCard"],
     "cost": 6,
     "victoryPoints": 2,
     "isOngoing": false,

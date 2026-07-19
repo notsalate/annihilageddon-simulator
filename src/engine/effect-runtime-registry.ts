@@ -191,7 +191,7 @@ export interface EffectRuntimeServices {
     player: PlayerState
   ): PlayerState[];
   getPlayersInActiveOrder(state: GameState): PlayerState[];
-  getWizardPropertyAttackProfile(
+  getAttackProfile(
     state: GameState,
     player: PlayerState,
     source: EffectSourceContext
@@ -2820,6 +2820,53 @@ const ongoingFirstAttackDamageAddPowerHandler: EffectRuntimeHandler<
   },
 };
 
+const ongoingAddPowerWhenPlayingWandHandler: EffectRuntimeHandler = {
+  effectId: "ongoing_add_power_when_playing_wand",
+  validateShape(subjectId, effect) {
+    const errors: string[] = [];
+    if (effect["timing"] !== "onPlayCard") {
+      errors.push(
+        `${subjectId} uses unsupported ongoing Wand power timing ${String(effect["timing"])}`
+      );
+    }
+    const cardTags = effect["cardTags"];
+    if (
+      !Array.isArray(cardTags) ||
+      cardTags.length !== 1 ||
+      cardTags[0] !== "wandCard"
+    ) {
+      errors.push(
+        `${subjectId} uses unsupported ongoing Wand power trigger cardTags`
+      );
+    }
+    return [
+      ...errors,
+      ...validatePositiveIntegerAmount(
+        subjectId,
+        effect,
+        "ongoing Wand power amount"
+      ),
+    ];
+  },
+  execute(state, player, effect, source) {
+    const amount = effect["amount"];
+    if (typeof amount !== "number") {
+      return { ok: false, error: "Invalid ongoing Wand power amount" };
+    }
+    const powerBefore = state.turn.power;
+    state.turn.power += amount;
+    recordTurnPowerChanged(
+      state,
+      player,
+      source,
+      "ongoing_add_power_when_playing_wand",
+      powerBefore,
+      state.turn.power
+    );
+    return { ok: true };
+  },
+};
+
 const addPowerPerControlledObjectHandler: EffectRuntimeHandler = {
   effectId: "add_power_per_controlled_object",
   validateShape(subjectId, effect) {
@@ -3025,7 +3072,7 @@ function executeAttackWithAmount(
   services: EffectRuntimeServices,
   amount: number
 ): EffectExecutionResult {
-  const attackProfile = services.getWizardPropertyAttackProfile(
+  const attackProfile = services.getAttackProfile(
     state,
     player,
     source
@@ -3304,7 +3351,7 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
       return amount;
     }
 
-    const attackProfile = services.getWizardPropertyAttackProfile(
+    const attackProfile = services.getAttackProfile(
       state,
       player,
       source
@@ -3415,7 +3462,7 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
       return amount;
     }
 
-    const attackProfile = services.getWizardPropertyAttackProfile(
+    const attackProfile = services.getAttackProfile(
       state,
       player,
       source
@@ -4809,6 +4856,8 @@ export const effectRuntimeHandlerMap = {
     "on_gain_self_gain_limp_wands"
   ),
   ongoing_add_power: ongoingAddPowerHandler,
+  ongoing_add_power_when_playing_wand:
+    ongoingAddPowerWhenPlayingWandHandler,
   ongoing_add_power_when_playing_limp_wand: createUnsupportedEffectHandler(
     "ongoing_add_power_when_playing_limp_wand"
   ),

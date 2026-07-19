@@ -135,6 +135,55 @@ export function executeWizardPropertyOnPlayCardEffects(
   return { ok: true };
 }
 
+export function executeControlledCardOnPlayCardEffects(
+  state: GameState,
+  player: PlayerState,
+  playedCard: CardInstance
+): EffectExecutionResult {
+  const playedDefinition = state.cardDefinitions.get(playedCard.definitionId);
+  if (playedDefinition === undefined) {
+    return {
+      ok: false,
+      error: `Missing played card definition ${playedCard.definitionId}`,
+    };
+  }
+
+  for (const card of player.permanents) {
+    if (card.ownerId !== player.playerId) {
+      continue;
+    }
+    const definition = state.cardDefinitions.get(card.definitionId);
+    if (
+      definition === undefined ||
+      !definition.engine.playableInV0 ||
+      !definition.engine.isOngoing
+    ) {
+      continue;
+    }
+
+    const result = executeEffects(
+      state,
+      player,
+      definition.engine.effects.filter((effect) =>
+        cardTriggerMatches(effect, playedDefinition)
+      ),
+      "onPlayCard",
+      {
+        sourceType: "card",
+        runtimeMode: getCardEffectRuntimeMode(card.definitionId),
+        playerId: player.playerId,
+        cardInstanceId: card.instanceId,
+        definitionId: card.definitionId,
+      }
+    );
+    if (!result.ok || result.gameEnd !== undefined) {
+      return result;
+    }
+  }
+
+  return { ok: true };
+}
+
 export function moveGainedCardToPlayerDestination(
   state: GameState,
   player: PlayerState,
@@ -364,7 +413,15 @@ function cardTriggerMatches(
     );
   const matchesOngoing =
     effect.isOngoing === true && definition.engine.isOngoing;
-  return matchesType || matchesOngoing;
+  const cardTags = effect.cardTags;
+  const matchesTag =
+    Array.isArray(cardTags) &&
+    cardTags.some(
+      (cardTag) =>
+        typeof cardTag === "string" &&
+        definition.engine.tags?.includes(cardTag) === true
+    );
+  return matchesType || matchesOngoing || matchesTag;
 }
 
 function countGainedCardsMatchingEffect(
@@ -437,7 +494,7 @@ function effectConditionMatches(
   return false;
 }
 
-function getWizardPropertyAttackProfile(
+function getAttackProfile(
   state: GameState,
   player: PlayerState,
   source: EffectSourceContext
@@ -451,13 +508,18 @@ function getWizardPropertyAttackProfile(
     return { damageBonus: 0, unavoidable: false };
   }
 
-  if (sourceCard.ownerId !== player.playerId) {
+  const sourceOwner = state.players.find(
+    (candidate) => candidate.playerId === sourceCard.ownerId
+  );
+  if (sourceOwner === undefined) {
     return { damageBonus: 0, unavoidable: false };
   }
 
   let damageBonus = 0;
   let unavoidable = false;
-  for (const token of player.wizardProperties) {
+  const wizardProperties =
+    sourceCard.ownerId === player.playerId ? player.wizardProperties : [];
+  for (const token of wizardProperties) {
     const definition = state.tokenDefinitions.get(token.definitionId);
     if (
       definition?.kind !== "wizardProperty" ||
@@ -484,6 +546,35 @@ function getWizardPropertyAttackProfile(
 
       if (effect["effectId"] === "prevent_defense_against_owned_wand_attacks") {
         unavoidable = true;
+      }
+    }
+  }
+
+  for (const card of sourceOwner.permanents) {
+    if (card.ownerId !== sourceOwner.playerId) {
+      continue;
+    }
+    const definition = state.cardDefinitions.get(card.definitionId);
+    if (
+      definition === undefined ||
+      !definition.engine.playableInV0 ||
+      !definition.engine.isOngoing
+    ) {
+      continue;
+    }
+
+    for (const effect of definition.engine.effects) {
+      if (
+        effect.timing !== "attackReplacement" ||
+        !effectMatchesCardDefinition(state, effect, source.definitionId)
+      ) {
+        continue;
+      }
+      if (effect["effectId"] === "modify_owned_wand_attack_damage") {
+        const amount = effect["amount"];
+        if (typeof amount === "number" && Number.isSafeInteger(amount)) {
+          damageBonus += amount;
+        }
       }
     }
   }
@@ -765,7 +856,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   getDestroyDestination,
   getOpponentsInSeatingOrder,
   getPlayersInActiveOrder,
-  getWizardPropertyAttackProfile,
+  getAttackProfile,
   chooseEffectChoice,
   dealDamage,
   applyAfterPlayerAttackDamage,
@@ -2112,7 +2203,16 @@ function playResolvedCard(
     return effectResult;
   }
 
-  return executeWizardPropertyOnPlayCardEffects(state, player, definition);
+  const wizardPropertyResult = executeWizardPropertyOnPlayCardEffects(
+    state,
+    player,
+    definition
+  );
+  if (!wizardPropertyResult.ok || wizardPropertyResult.gameEnd !== undefined) {
+    return wizardPropertyResult;
+  }
+
+  return executeControlledCardOnPlayCardEffects(state, player, card);
 }
 
 function shuffleDiscardIntoDeckIfNeeded(
