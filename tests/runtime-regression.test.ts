@@ -279,6 +279,66 @@ test("current runtime setup uses the canonical 10-card starter template", () => 
   }
 });
 
+test("Loshashlyk grants three power and no chips without Dinglers", () => {
+  const state = initializeGame({ rootDir, seed: 36001 });
+  const activePlayer = mustGetActivePlayer(state);
+  const loshashlyk = createCardInstance(
+    "runtime-loshashlyk-no-dinglers",
+    "esw2_dbg__main_036",
+    activePlayer.playerId
+  );
+  activePlayer.hand.push(loshashlyk);
+  activePlayer.chips = 0;
+  state.turn.power = 0;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: loshashlyk.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 3);
+  assert.equal(activePlayer.chips, 0);
+});
+
+test("Loshashlyk gains one chip per Dingler including its owner", () => {
+  const state = initializeGame({ rootDir, seed: 36002, playerCount: 3 });
+  const activePlayer = mustGetActivePlayer(state);
+  const dinglerFoe = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(dinglerFoe);
+  activePlayer.statuses.push({
+    instanceId: markCardInstanceId("runtime-active-dingler"),
+    statusId: "dingler",
+    ownerId: activePlayer.playerId,
+    effects: [],
+  });
+  dinglerFoe.statuses.push({
+    instanceId: markCardInstanceId("runtime-foe-dingler"),
+    statusId: "dingler",
+    ownerId: dinglerFoe.playerId,
+    effects: [],
+  });
+  const loshashlyk = createCardInstance(
+    "runtime-loshashlyk-two-dinglers",
+    "esw2_dbg__main_036",
+    activePlayer.playerId
+  );
+  activePlayer.hand.push(loshashlyk);
+  activePlayer.chips = 0;
+  state.turn.power = 0;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: loshashlyk.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 3);
+  assert.equal(activePlayer.chips, 2);
+});
+
 test("executable validation rejects non-canonical raw starter templates before setup modifiers", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
   const result = validateExecutableDataPack({

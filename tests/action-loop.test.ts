@@ -1934,8 +1934,20 @@ test("Avada Loshavra attack-marked Dingler assignment can be avoided by defense"
     (player) => player.playerId !== activePlayer.playerId
   );
   assert.ok(targetPlayer);
-  activePlayer.wizardProperties = [];
-  targetPlayer.wizardProperties = [];
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+  }
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId !== "attack_gain_status") {
+      return undefined;
+    }
+    return choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === targetPlayer.playerId
+    );
+  });
   const defenseCard = addFixtureDefenseCardToHand(
     state,
     targetPlayer,
@@ -1974,8 +1986,20 @@ test("Avada Loshavra makes an undefended target Dingler and counts it for power"
     (player) => player.playerId !== activePlayer.playerId
   );
   assert.ok(targetPlayer);
-  activePlayer.wizardProperties = [];
-  targetPlayer.wizardProperties = [];
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+  }
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId !== "attack_gain_status") {
+      return undefined;
+    }
+    return choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === targetPlayer.playerId
+    );
+  });
   const card = addRuntimeCardToHand(
     state,
     activePlayer,
@@ -4998,19 +5022,212 @@ test("Losharocka Wand can self-target and makes the killed target a Dingler", ()
   );
 });
 
-test("Chipsalocka Wand spends one chip before its optional chosen-player attack", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
+test("Palochka-Shlepalocka steals chips equal to actual damage from a chosen non-first foe", () => {
+  const { state, activePlayer, targetPlayer, wand } = setupShlepalockaTestState(
+    { playerCount: 3 }
+  );
+  const firstFoe = mustGetPlayer(state, markPlayerId("player-3"));
+  activePlayer.chips = 1;
+  targetPlayer.chips = 5;
+  targetPlayer.life.current = 20;
+  firstFoe.life.current = 20;
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId !== "attack_damage") {
+      return undefined;
+    }
+    return choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === targetPlayer.playerId
+    );
   });
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(firstFoe.life.current, 20);
+  assert.equal(targetPlayer.life.current, 18);
+  assert.equal(activePlayer.chips, 3);
+  assert.equal(targetPlayer.chips, 3);
+  assert.equal(
+    state.players.reduce((total, player) => total + player.chips, 0),
+    6
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "attack_damage" &&
+        event.targetPlayerId === targetPlayer.playerId
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.effectId === "attack_damage" &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 2
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChipsChanged" &&
+        event.effectId === "gain_chips_equal_damage_dealt" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 2
+    )
+  );
+});
+
+test("Palochka-Shlepalocka gains no chips when its attack is defended", () => {
+  const { state, activePlayer, targetPlayer, wand } =
+    setupShlepalockaTestState();
+  activePlayer.chips = 1;
+  targetPlayer.chips = 5;
+  targetPlayer.life.current = 20;
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(targetPlayer.life.current, 20);
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(targetPlayer.chips, 5);
+  assert.equal(targetPlayer.discard.includes(defenseCard), true);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackAvoided" &&
+        event.definitionId === "esw2_dbg__main_015" &&
+        event.targetPlayerId === targetPlayer.playerId
+    )
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChipsChanged" &&
+        event.effectId === "gain_chips_equal_damage_dealt" &&
+        event.cardInstanceId === wand.instanceId
+    ),
+    false
+  );
+});
+
+test("Palochka-Shlepalocka uses life-limited actual damage for its chip transfer", () => {
+  const { state, activePlayer, targetPlayer, wand } =
+    setupShlepalockaTestState();
+  targetPlayer.life.current = 1;
+  targetPlayer.chips = 5;
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(targetPlayer.chips, 4);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.definitionId === "esw2_dbg__main_015" &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 1
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChipsChanged" &&
+        event.effectId === "gain_chips_equal_damage_dealt" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 1
+    )
+  );
+});
+
+test("Palochka-Shlepalocka attack bonus scales chips and fills target shortfall from supply", () => {
+  const { state, activePlayer, targetPlayer, wand } = setupShlepalockaTestState(
+    { preserveActiveWizardProperty: true }
+  );
+  replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    state.tokenDefinitions.get(
+      "esw2_dbg__wizard_property_009"
+    ) as TokenDefinition
+  );
+  targetPlayer.life.current = 20;
+  targetPlayer.chips = 1;
+  const playerChipsBefore = state.players.reduce(
+    (total, player) => total + player.chips,
+    0
+  );
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 17);
+  assert.equal(activePlayer.chips, 3);
+  assert.equal(targetPlayer.chips, 0);
+  assert.equal(
+    state.players.reduce((total, player) => total + player.chips, 0),
+    playerChipsBefore + 2
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.definitionId === "esw2_dbg__main_015" &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 3
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChipsChanged" &&
+        event.effectId === "gain_chips_equal_damage_dealt" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.amount === 3
+    )
+  );
+});
+
+test("Palochka-Chipsalocka can spend one chip to attack its controller", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
-  const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
   state.activePlayerId = activePlayer.playerId;
   activePlayer.wizardProperties = [];
-  targetPlayer.wizardProperties = [];
   activePlayer.chips = 1;
-  targetPlayer.life.current = 20;
+  activePlayer.life.current = 20;
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId !== "optional_spend_chip_attack_damage") {
+      return undefined;
+    }
+    return choices.find(
+      (choice) =>
+        choice.choiceId === "pay_optional_cost" ||
+        choice.choiceId === activePlayer.playerId
+    );
+  });
   const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_041");
 
   const result = applyAction(state, {
@@ -5021,26 +5238,54 @@ test("Chipsalocka Wand spends one chip before its optional chosen-player attack"
   assert.equal(result.ok, true);
   assert.equal(state.turn.power, 2);
   assert.equal(activePlayer.chips, 0);
-  assert.equal(targetPlayer.life.current, 10);
+  assert.equal(activePlayer.life.current, 10);
   assert.ok(
     state.eventLog.some((event) => {
       return (
-        event.type === "effectChoiceSelected" &&
-        event.effectId === "attack_damage" &&
-        event.choiceId === "pay_optional_cost" &&
-        event.choiceIds?.includes("skip_optional_cost") === true &&
-        event.legalChoiceCount === 2
+        event.type === "attackCreated" &&
+        event.cardInstanceId === wand.instanceId &&
+        event.effectId === "optional_spend_chip_attack_damage" &&
+        event.targetPlayerId === activePlayer.playerId &&
+        event.amount === 10
       );
     })
   );
 });
 
-test("Chipsalocka Wand can skip its optional attack when the chip cost is unavailable", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
+test("Palochka-Chipsalocka can decline its optional attack", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  activePlayer.chips = 1;
+  chooseEffectChoice(state, ({ effectId, choices }) => {
+    if (effectId !== "optional_spend_chip_attack_damage") {
+      return undefined;
+    }
+    return choices.find((choice) => choice.choiceId === "skip_optional_cost");
   });
+  const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_041");
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.cardInstanceId === wand.instanceId
+    ),
+    false
+  );
+});
+
+test("Palochka-Chipsalocka cannot attack without a chip", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
   const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
   state.activePlayerId = activePlayer.playerId;
@@ -5063,10 +5308,18 @@ test("Chipsalocka Wand can skip its optional attack when the chip cost is unavai
     state.eventLog.some((event) => {
       return (
         event.type === "effectChoiceSelected" &&
-        event.effectId === "attack_damage" &&
+        event.effectId === "optional_spend_chip_attack_damage" &&
         event.choiceId === "skip_optional_cost"
       );
     })
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.cardInstanceId === wand.instanceId
+    ),
+    false
   );
 });
 
@@ -5254,6 +5507,305 @@ test("Venerina Magolovka supports pass, life-only, Dingler-only, and full exchan
       })
     );
   }
+});
+
+test("2H grants one chip to each non-Dingler in active-player order", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = markPlayerId("player-2");
+  const [activePlayer, dinglerPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(dinglerPlayer);
+  assert.ok(thirdPlayer);
+  dinglerPlayer.statuses.push(createDinglerStatus(dinglerPlayer));
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_072");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(dinglerPlayer.chips, 0);
+  assert.equal(thirdPlayer.chips, 1);
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChipsGained" &&
+          event.definitionId === "esw2_dbg__main_072"
+      )
+      .map((event) => event.playerId),
+    [activePlayer.playerId, thirdPlayer.playerId]
+  );
+  assert.equal(state.common.destroyedMayhem.includes(mayhem), true);
+});
+
+test("2M grants every player two chips before attacking for their current chips", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = markPlayerId("player-2");
+  const [activePlayer, defendedPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(defendedPlayer);
+  assert.ok(thirdPlayer);
+  activePlayer.chips = 1;
+  defendedPlayer.chips = 3;
+  thirdPlayer.chips = 0;
+  activePlayer.life.current = 10;
+  defendedPlayer.life.current = 10;
+  thirdPlayer.life.current = 10;
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    defendedPlayer,
+    "discardSelf"
+  );
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_062");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    [activePlayer.chips, defendedPlayer.chips, thirdPlayer.chips],
+    [3, 5, 2]
+  );
+  assert.deepEqual(
+    [
+      activePlayer.life.current,
+      defendedPlayer.life.current,
+      thirdPlayer.life.current,
+    ],
+    [7, 10, 8]
+  );
+  assert.equal(defendedPlayer.discard.includes(defenseCard), true);
+
+  const cardEvents = state.eventLog.filter(
+    (event) => event.definitionId === "esw2_dbg__main_062"
+  );
+  const chipEvents = cardEvents.filter(
+    (event) => event.type === "effectChipsGained"
+  );
+  const attackEvents = cardEvents.filter(
+    (event) => event.type === "attackTargetStarted"
+  );
+  const decisionEvents = cardEvents.filter(
+    (event) => event.type === "mayhemDecisionStarted"
+  );
+  const damageEvents = cardEvents.filter(
+    (event) => event.type === "effectDamageDealt"
+  );
+  assert.deepEqual(
+    chipEvents.map((event) => event.playerId),
+    [activePlayer.playerId, defendedPlayer.playerId, thirdPlayer.playerId]
+  );
+  assert.deepEqual(
+    attackEvents.map((event) => [event.targetPlayerId, event.amount]),
+    [
+      [activePlayer.playerId, 3],
+      [thirdPlayer.playerId, 2],
+    ]
+  );
+  assert.deepEqual(
+    decisionEvents.map((event) => [event.targetPlayerId, event.amount]),
+    [
+      [activePlayer.playerId, 3],
+      [defendedPlayer.playerId, 5],
+      [thirdPlayer.playerId, 2],
+    ]
+  );
+  assert.deepEqual(
+    damageEvents.map((event) => [event.targetPlayerId, event.amount]),
+    [
+      [activePlayer.playerId, 3],
+      [thirdPlayer.playerId, 2],
+    ]
+  );
+  const decisionPhaseEvent = cardEvents.find(
+    (event) => event.type === "mayhemDecisionPhaseStarted"
+  );
+  const resolutionPhaseEvent = cardEvents.find(
+    (event) => event.type === "mayhemResolutionPhaseStarted"
+  );
+  assert.ok(decisionPhaseEvent);
+  assert.ok(resolutionPhaseEvent);
+  assert.equal(decisionPhaseEvent.amount, undefined);
+  assert.equal(resolutionPhaseEvent.amount, undefined);
+  assertEventOrder(state, [
+    (event) =>
+      event.type === "mayhemDecisionPhaseStarted" &&
+      event.definitionId === "esw2_dbg__main_062",
+    (event) =>
+      event.type === "mayhemDecisionStarted" &&
+      event.definitionId === "esw2_dbg__main_062" &&
+      event.targetPlayerId === activePlayer.playerId,
+    (event) =>
+      event.type === "mayhemDecisionStarted" &&
+      event.definitionId === "esw2_dbg__main_062" &&
+      event.targetPlayerId === defendedPlayer.playerId,
+    (event) =>
+      event.type === "defenseChoiceSelected" &&
+      event.playerId === defendedPlayer.playerId,
+    (event) =>
+      event.type === "attackAvoided" &&
+      event.definitionId === "esw2_dbg__main_062" &&
+      event.targetPlayerId === defendedPlayer.playerId,
+    (event) =>
+      event.type === "mayhemDecisionStarted" &&
+      event.definitionId === "esw2_dbg__main_062" &&
+      event.targetPlayerId === thirdPlayer.playerId,
+    (event) =>
+      event.type === "mayhemResolutionPhaseStarted" &&
+      event.definitionId === "esw2_dbg__main_062",
+    (event) =>
+      event.type === "effectDamageDealt" &&
+      event.definitionId === "esw2_dbg__main_062" &&
+      event.targetPlayerId === activePlayer.playerId,
+  ]);
+  assert.ok(chipEvents.length > 0);
+  assert.ok(attackEvents.length > 0);
+  assert.ok(
+    state.eventLog.indexOf(chipEvents[chipEvents.length - 1]!) <
+      state.eventLog.indexOf(attackEvents[0]!)
+  );
+  assert.equal(state.common.destroyedMayhem.includes(mayhem), true);
+});
+
+test("2D lets each player choose a foe who gains one chip in active-player order", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = markPlayerId("player-2");
+  const [activePlayer, secondPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  const targetsByPlayer = new Map([
+    [activePlayer.playerId, secondPlayer.playerId],
+    [secondPlayer.playerId, thirdPlayer.playerId],
+    [thirdPlayer.playerId, secondPlayer.playerId],
+  ]);
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (String(effectId) !== "mayhem_each_player_choose_foe_gain_chips") {
+      return undefined;
+    }
+    const targetPlayerId = targetsByPlayer.get(player.playerId);
+    return choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === targetPlayerId
+    );
+  });
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_075");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 0);
+  assert.equal(secondPlayer.chips, 2);
+  assert.equal(thirdPlayer.chips, 1);
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          String(event.effectId) === "mayhem_each_player_choose_foe_gain_chips"
+      )
+      .map((event) => ({
+        playerId: event.playerId,
+        targetPlayerId: event.targetPlayerId,
+      })),
+    [
+      {
+        playerId: activePlayer.playerId,
+        targetPlayerId: secondPlayer.playerId,
+      },
+      {
+        playerId: secondPlayer.playerId,
+        targetPlayerId: thirdPlayer.playerId,
+      },
+      {
+        playerId: thirdPlayer.playerId,
+        targetPlayerId: secondPlayer.playerId,
+      },
+    ]
+  );
+  assert.equal(state.common.destroyedMayhem.includes(mayhem), true);
+});
+
+test("2D excludes self and falls back to the first foe in seating order", () => {
+  const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
+  state.activePlayerId = markPlayerId("player-2");
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  const chooserOrder: string[] = [];
+  chooseEffectChoice(state, ({ effectId, player, choices }) => {
+    if (String(effectId) !== "mayhem_each_player_choose_foe_gain_chips") {
+      return undefined;
+    }
+    chooserOrder.push(player.playerId);
+    assert.equal(
+      choices.some(
+        (choice) =>
+          choice.choiceKind === "playerTarget" &&
+          choice.players.some(
+            (candidate) => candidate.playerId === player.playerId
+          )
+      ),
+      false
+    );
+    return undefined;
+  });
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_075");
+  state.common.market.splice(0, state.common.market.length);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    chooserOrder,
+    orderedPlayers.map((player) => player.playerId)
+  );
+  assert.equal(activePlayer.chips, 1);
+  assert.equal(secondPlayer.chips, 1);
+  assert.equal(thirdPlayer.chips, 1);
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          String(event.effectId) === "mayhem_each_player_choose_foe_gain_chips"
+      )
+      .map((event) => ({
+        playerId: event.playerId,
+        targetPlayerId: event.targetPlayerId,
+        includesSelf: event.choiceIds?.includes(event.playerId) ?? false,
+      })),
+    [
+      {
+        playerId: activePlayer.playerId,
+        targetPlayerId: secondPlayer.playerId,
+        includesSelf: false,
+      },
+      {
+        playerId: secondPlayer.playerId,
+        targetPlayerId: thirdPlayer.playerId,
+        includesSelf: false,
+      },
+      {
+        playerId: thirdPlayer.playerId,
+        targetPlayerId: activePlayer.playerId,
+        includesSelf: false,
+      },
+    ]
+  );
+  assert.equal(state.common.destroyedMayhem.includes(mayhem), true);
 });
 
 test("2Q lets players above 10 reduce life to gain one chip", () => {
@@ -7588,6 +8140,42 @@ function mustGetPlayer(
   );
   assert.ok(player);
   return player;
+}
+
+function setupShlepalockaTestState(
+  options: {
+    playerCount?: number;
+    preserveActiveWizardProperty?: boolean;
+  } = {}
+): {
+  state: GameState;
+  activePlayer: PlayerState;
+  targetPlayer: PlayerState;
+  wand: CardInstance;
+} {
+  const state = initializeGame({
+    rootDir,
+    seed: 60615,
+    ...(options.playerCount === undefined
+      ? {}
+      : { playerCount: options.playerCount }),
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    if (
+      options.preserveActiveWizardProperty !== true ||
+      player.playerId !== activePlayer.playerId
+    ) {
+      player.wizardProperties = [];
+    }
+    player.statuses = [];
+    player.chips = 0;
+    player.hand = [];
+  }
+  const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_015");
+  return { state, activePlayer, targetPlayer, wand };
 }
 
 function addRuntimeCardToHand(

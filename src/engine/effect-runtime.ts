@@ -12,6 +12,7 @@ import {
   type EffectExecutionResult,
   type EffectRuntimeServices,
   type EffectSourceContext,
+  type MayhemAttackPlanTarget,
   resolveEffectRuntimeCatalogEntry,
   type TargetChoice,
   type TargetChoiceResult,
@@ -581,15 +582,20 @@ function resolveAttackTarget(
   };
 }
 
-function resolveMayhemAttack(
+function resolveMayhemAttackPlan(
   state: GameState,
   sourcePlayer: PlayerState,
-  amount: number,
+  targets: readonly MayhemAttackPlanTarget[],
   effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
-  const targets = getPlayersInActiveOrder(state);
-  const decisions: Array<{ player: PlayerState; avoided: boolean }> = [];
+  const decisions: Array<MayhemAttackPlanTarget & { avoided: boolean }> = [];
+  const firstAmount = targets[0]?.amount;
+  const phaseAmount =
+    firstAmount !== undefined &&
+    targets.every((target) => target.amount === firstAmount)
+      ? { amount: firstAmount }
+      : {};
 
   recordGameEvent(state, {
     type: "mayhemDecisionPhaseStarted",
@@ -597,27 +603,27 @@ function resolveMayhemAttack(
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
     effectId,
-    amount,
+    ...phaseAmount,
     sourceType: source.sourceType,
   });
 
-  for (const targetPlayer of targets) {
+  for (const target of targets) {
     recordGameEvent(state, {
       type: "mayhemDecisionStarted",
       playerId: sourcePlayer.playerId,
-      targetPlayerId: targetPlayer.playerId,
+      targetPlayerId: target.targetPlayer.playerId,
       cardInstanceId: source.cardInstanceId,
       definitionId: source.definitionId,
       effectId,
-      amount,
+      amount: target.amount,
       sourceType: source.sourceType,
     });
-    const avoided = resolveDefenseWindow(state, targetPlayer);
+    const avoided = resolveDefenseWindow(state, target.targetPlayer);
     if (avoided) {
       recordGameEvent(state, {
         type: "attackAvoided",
-        playerId: targetPlayer.playerId,
-        targetPlayerId: targetPlayer.playerId,
+        playerId: target.targetPlayer.playerId,
+        targetPlayerId: target.targetPlayer.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
         effectId,
@@ -625,7 +631,7 @@ function resolveMayhemAttack(
       });
     }
 
-    decisions.push({ player: targetPlayer, avoided });
+    decisions.push({ ...target, avoided });
   }
 
   recordGameEvent(state, {
@@ -634,7 +640,7 @@ function resolveMayhemAttack(
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
     effectId,
-    amount,
+    ...phaseAmount,
     sourceType: source.sourceType,
   });
 
@@ -643,7 +649,7 @@ function resolveMayhemAttack(
       recordGameEvent(state, {
         type: "mayhemTargetSkipped",
         playerId: sourcePlayer.playerId,
-        targetPlayerId: decision.player.playerId,
+        targetPlayerId: decision.targetPlayer.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
         effectId,
@@ -655,15 +661,41 @@ function resolveMayhemAttack(
     recordGameEvent(state, {
       type: "attackTargetStarted",
       playerId: sourcePlayer.playerId,
-      targetPlayerId: decision.player.playerId,
+      targetPlayerId: decision.targetPlayer.playerId,
       cardInstanceId: source.cardInstanceId,
       definitionId: source.definitionId,
       effectId,
-      amount,
+      amount: decision.amount,
       sourceType: source.sourceType,
     });
-    dealDamage(state, sourcePlayer, decision.player, amount, effectId, source);
+    dealDamage(
+      state,
+      sourcePlayer,
+      decision.targetPlayer,
+      decision.amount,
+      effectId,
+      source
+    );
   }
+}
+
+function resolveMayhemAttack(
+  state: GameState,
+  sourcePlayer: PlayerState,
+  amount: number,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext
+): void {
+  resolveMayhemAttackPlan(
+    state,
+    sourcePlayer,
+    getPlayersInActiveOrder(state).map((targetPlayer) => ({
+      targetPlayer,
+      amount,
+    })),
+    effectId,
+    source
+  );
 }
 
 function getOpponentsInSeatingOrder(
@@ -735,6 +767,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   resolveAttackTarget,
   resolveDefenseWindow,
   resolveMayhemAttack,
+  resolveMayhemAttackPlan,
   resolvePlayerDeath(state, player) {
     resolvePlayerDeath(state, player, player.life.current, undefined);
   },

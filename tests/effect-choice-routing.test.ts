@@ -106,6 +106,7 @@ test("target choice strategy can select a non-first chosenPlayer target", () => 
     (candidate) => candidate.playerId === state.activePlayerId
   );
   assert.ok(activePlayer);
+  activePlayer.wizardProperties = [];
   const definition = state.cardDefinitions.get("esw2_dbg__main_030");
   assert.ok(definition);
   const card = {
