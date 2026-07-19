@@ -217,10 +217,40 @@ test("ongoing controlled power is limited to card sources", () => {
     true
   );
 
-  for (const sourceKind of [
-    "wizardProperty",
-    "deadWizardToken",
-  ] as const) {
+  for (const sourceKind of ["wizardProperty", "deadWizardToken"] as const) {
+    const result = resolveEffectRuntimeCatalogEntry(
+      `Fixture ${sourceKind}`,
+      effect.effectId,
+      effect,
+      "combat",
+      sourceKind
+    );
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.errors[0] ?? "", /token-only effect id/);
+    }
+  }
+});
+
+test("DWT-count ongoing power is limited to card sources", () => {
+  const effect = {
+    effectId: "ongoing_add_power_per_dead_wizard_token",
+    timing: "whileControlled",
+    amount: 1,
+  } as const;
+
+  assert.equal(
+    resolveEffectRuntimeCatalogEntry(
+      "Fixture card",
+      effect.effectId,
+      effect,
+      "combat",
+      "card"
+    ).ok,
+    true
+  );
+
+  for (const sourceKind of ["wizardProperty", "deadWizardToken"] as const) {
     const result = resolveEffectRuntimeCatalogEntry(
       `Fixture ${sourceKind}`,
       effect.effectId,
@@ -253,10 +283,7 @@ test("ongoing hand refill bonus is limited to card sources", () => {
     true
   );
 
-  for (const sourceKind of [
-    "wizardProperty",
-    "deadWizardToken",
-  ] as const) {
+  for (const sourceKind of ["wizardProperty", "deadWizardToken"] as const) {
     const result = resolveEffectRuntimeCatalogEntry(
       `Fixture ${sourceKind}`,
       effect.effectId,

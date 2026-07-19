@@ -5021,7 +5021,8 @@ function createEffectRuntimeCatalogSource(
         handler.effectId === "temporary_hand_limit_by_gained_card_type"
           ? ["wizardProperty"]
           : handler.effectId === "ongoing_add_power" ||
-              handler.effectId === "ongoing_hand_refill_bonus"
+              handler.effectId === "ongoing_hand_refill_bonus" ||
+              handler.effectId === "ongoing_add_power_per_dead_wizard_token"
             ? ["card"]
             : allEffectRuntimeSourceKinds,
     };
