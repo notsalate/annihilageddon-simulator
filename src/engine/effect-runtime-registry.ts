@@ -242,7 +242,7 @@ export interface EffectRuntimeServices {
     state: GameState,
     player: PlayerState,
     source: EffectSourceContext
-  ): { damageBonus: number; unavoidable: boolean };
+  ): { damageBonus: number; damageMultiplier: number; unavoidable: boolean };
   chooseEffectChoice(
     state: GameState,
     player: PlayerState,
@@ -2702,6 +2702,23 @@ const modifyOwnedWandAttackDamageHandler: EffectRuntimeHandler = {
   },
 };
 
+const doubleOwnedAttackDamageHandler: EffectRuntimeHandler = {
+  effectId: "double_owned_attack_damage",
+  validateShape(subjectId, effect) {
+    return effect.timing === "attackReplacement"
+      ? []
+      : [
+          `${subjectId} uses double_owned_attack_damage outside attack replacement timing`,
+        ];
+  },
+  execute() {
+    return {
+      ok: false,
+      error: "double_owned_attack_damage is an attack replacement effect",
+    };
+  },
+};
+
 const preventDefenseAgainstOwnedWandAttacksHandler: EffectRuntimeHandler = {
   effectId: "prevent_defense_against_owned_wand_attacks",
   validateShape(subjectId, effect) {
@@ -2861,50 +2878,49 @@ const ongoingAddPowerHandler: EffectRuntimeHandler = {
   },
 };
 
-const ongoingFirstAttackDamageAddPowerHandler: EffectRuntimeHandler<
-  OngoingFirstAttackDamageAddPowerRuntimeEffect
-> = {
-  effectId: "ongoing_first_attack_damage_add_power",
-  validateShape(subjectId, effect) {
-    const errors: string[] = [];
-    if (effect["timing"] !== "afterFirstAttackDamageEachTurn") {
-      errors.push(
-        `${subjectId} uses unsupported first-attack damage timing ${String(effect["timing"])}`
-      );
-    }
-    if (effect["amount"] !== "totalDamageDealtByThatAttack") {
-      errors.push(
-        `${subjectId} uses unsupported first-attack damage amount ${String(effect["amount"])}`
-      );
-    }
-    return errors;
-  },
-  execute() {
-    return {
-      ok: false,
-      error:
-        "ongoing_first_attack_damage_add_power is a triggered controlled effect",
-    };
-  },
-  applyAfterPlayerAttackDamage(
-    state,
-    player,
-    _effect,
-    source,
-    totalDamageDealt
-  ) {
-    const powerBefore = state.turn.power;
-    state.turn.power += totalDamageDealt;
-    recordTurnPowerChanged(
+const ongoingFirstAttackDamageAddPowerHandler: EffectRuntimeHandler<OngoingFirstAttackDamageAddPowerRuntimeEffect> =
+  {
+    effectId: "ongoing_first_attack_damage_add_power",
+    validateShape(subjectId, effect) {
+      const errors: string[] = [];
+      if (effect["timing"] !== "afterFirstAttackDamageEachTurn") {
+        errors.push(
+          `${subjectId} uses unsupported first-attack damage timing ${String(effect["timing"])}`
+        );
+      }
+      if (effect["amount"] !== "totalDamageDealtByThatAttack") {
+        errors.push(
+          `${subjectId} uses unsupported first-attack damage amount ${String(effect["amount"])}`
+        );
+      }
+      return errors;
+    },
+    execute() {
+      return {
+        ok: false,
+        error:
+          "ongoing_first_attack_damage_add_power is a triggered controlled effect",
+      };
+    },
+    applyAfterPlayerAttackDamage(
       state,
       player,
+      _effect,
       source,
-      "ongoing_first_attack_damage_add_power",
-      powerBefore,
-      state.turn.power
-    );
-  },
-};
+      totalDamageDealt
+    ) {
+      const powerBefore = state.turn.power;
+      state.turn.power += totalDamageDealt;
+      recordTurnPowerChanged(
+        state,
+        player,
+        source,
+        "ongoing_first_attack_damage_add_power",
+        powerBefore,
+        state.turn.power
+      );
+    },
+  };
 
 const ongoingAddPowerWhenPlayingWandHandler: EffectRuntimeHandler = {
   effectId: "ongoing_add_power_when_playing_wand",
@@ -3182,11 +3198,7 @@ function executeAttackWithAmount(
   services: EffectRuntimeServices,
   amount: number
 ): EffectExecutionResult {
-  const attackProfile = services.getAttackProfile(
-    state,
-    player,
-    source
-  );
+  const attackProfile = services.getAttackProfile(state, player, source);
   const attackAmount = amount + attackProfile.damageBonus;
   const effectId = effect.effectId;
 
@@ -3263,6 +3275,7 @@ function executeAttackWithAmount(
   }
 
   const targetPlayer = targetResult.choice.player;
+  const targetAttackAmount = attackAmount;
   recordGameEvent(state, {
     type: "attackCreated",
     playerId: player.playerId,
@@ -3270,14 +3283,14 @@ function executeAttackWithAmount(
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
     effectId,
-    amount: attackAmount,
+    amount: targetAttackAmount,
     sourceType: source.sourceType,
   });
   const attackResult = services.resolveAttackTarget(
     state,
     player,
     targetPlayer,
-    attackAmount,
+    targetAttackAmount,
     effectId,
     source,
     attackProfile.unavoidable,
@@ -3455,11 +3468,7 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
       return amount;
     }
 
-    const attackProfile = services.getAttackProfile(
-      state,
-      player,
-      source
-    );
+    const attackProfile = services.getAttackProfile(state, player, source);
     const attackAmount = amount.value + attackProfile.damageBonus;
     const leftFoes = services.getOpponentsInSeatingOrder(state, player);
     const rightFoes = [...leftFoes].reverse();
@@ -3567,11 +3576,7 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
       return amount;
     }
 
-    const attackProfile = services.getAttackProfile(
-      state,
-      player,
-      source
-    );
+    const attackProfile = services.getAttackProfile(state, player, source);
     const attackAmount = amount.value + attackProfile.damageBonus;
     recordGameEvent(state, {
       type: "attackCreated",
@@ -4893,6 +4898,7 @@ export const effectRuntimeHandlerMap = {
   temporary_hand_limit_by_gained_card_type:
     temporaryHandLimitByGainedCardTypeHandler,
   modify_owned_wand_attack_damage: modifyOwnedWandAttackDamageHandler,
+  double_owned_attack_damage: doubleOwnedAttackDamageHandler,
   prevent_defense_against_owned_wand_attacks:
     preventDefenseAgainstOwnedWandAttacksHandler,
   attack_damage: attackDamageHandler,
@@ -4968,14 +4974,14 @@ export const effectRuntimeHandlerMap = {
     "on_gain_self_gain_limp_wands"
   ),
   ongoing_add_power: ongoingAddPowerHandler,
-  ongoing_add_power_when_playing_wand:
-    ongoingAddPowerWhenPlayingWandHandler,
+  ongoing_add_power_when_playing_wand: ongoingAddPowerWhenPlayingWandHandler,
   ongoing_add_power_per_dead_wizard_token:
     ongoingAddPowerPerDeadWizardTokenHandler,
   ongoing_add_power_when_playing_limp_wand: createUnsupportedEffectHandler(
     "ongoing_add_power_when_playing_limp_wand"
   ),
-  ongoing_first_attack_damage_add_power: ongoingFirstAttackDamageAddPowerHandler,
+  ongoing_first_attack_damage_add_power:
+    ongoingFirstAttackDamageAddPowerHandler,
   ongoing_start_turn_optional_gain_limp_wand_to_hand:
     createUnsupportedEffectHandler(
       "ongoing_start_turn_optional_gain_limp_wand_to_hand"

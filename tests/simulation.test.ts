@@ -83,7 +83,7 @@ test("single-game simulation ignores differing source.image metadata", () => {
       },
       {
         playerId: "player-2",
-        victoryPoints: 2,
+        victoryPoints: 4,
         legendCount: 0,
         deadWizardTokenCount: 0,
       },
@@ -128,15 +128,15 @@ test("bot action selection records turn number and safe action identity for debu
     (candidate) => candidate.type === "botActionSelected"
   );
   assert.ok(event);
-  assert.equal(event.playerId, markPlayerId("player-2"));
+  assert.equal(event.playerId, markPlayerId("player-1"));
   assert.equal(event.turnNumber, 1);
   assert.equal(event.actionIdentity, "endTurn");
   assert.equal(event.actionSequence, 1);
 
   const trace = formatSingleGameDebugTrace(result);
-  assert.match(trace, /Turn 1, Action 1 - player-2 \(endTurn\)/);
+  assert.match(trace, /Turn 1, Action 1 - player-1 \(endTurn\)/);
   assert.match(trace, /- Bot selected endTurn\./);
-  assert.doesNotMatch(trace, /Turn \? - player-2/);
+  assert.doesNotMatch(trace, /Turn \? - player-1/);
 });
 
 test("game end reason is dead wizard token exhaustion when the DWT stack is empty", () => {

@@ -157,7 +157,7 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
   );
 });
 
-test("redirected foreign Wand does not inherit the redirecting player's owned-Wand property", () => {
+test("redirected foreign Wand does not inherit the redirecting player's wizard property", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -221,6 +221,250 @@ test("redirected foreign Wand does not inherit the redirecting player's owned-Wa
   assert.ok(redirectedAttack);
   assert.equal(redirectedAttack.cardInstanceId, wand.instanceId);
   assert.equal(redirectedAttack.amount, 1);
+});
+
+test("Chipsychosis Arena doubles a redirected attack for the redirecting attacker", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  const originalAttacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const redirector = mustGetPlayer(state, markPlayerId("player-2"));
+  for (const player of state.players) {
+    player.wizardProperties = [];
+  }
+  state.activePlayerId = redirector.playerId;
+  const arena = addRuntimeCardToHand(state, redirector, "esw2_dbg__legend_008");
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: arena.instanceId })
+      .ok,
+    true
+  );
+  addFixtureDefenseCardToHand(state, redirector, "discardSelf", {
+    redirectAttack: true,
+  });
+  state.activePlayerId = originalAttacker.playerId;
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === redirector.playerId)
+      : undefined
+  );
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 2,
+    targetSelector: "chosenFoe",
+  });
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }).ok,
+    true
+  );
+  assert.equal(redirector.life.current, 20);
+  assert.equal(originalAttacker.life.current, 16);
+});
+
+test("Chipsychosis Arena of the original attacker does not double a redirected leg", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  const originalAttacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const redirector = mustGetPlayer(state, markPlayerId("player-2"));
+  for (const player of state.players) {
+    player.wizardProperties = [];
+  }
+  state.activePlayerId = originalAttacker.playerId;
+  const arena = addRuntimeCardToHand(
+    state,
+    originalAttacker,
+    "esw2_dbg__legend_008"
+  );
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: arena.instanceId })
+      .ok,
+    true
+  );
+  addFixtureDefenseCardToHand(state, redirector, "discardSelf", {
+    redirectAttack: true,
+  });
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === redirector.playerId)
+      : undefined
+  );
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 2,
+    targetSelector: "chosenFoe",
+  });
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }).ok,
+    true
+  );
+  assert.equal(redirector.life.current, 20);
+  assert.equal(originalAttacker.life.current, 18);
+});
+
+test("Chipsychosis Arena doubles source-owner Wand modifiers only against foes", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const attacker = mustGetPlayer(state, markPlayerId("player-2"));
+  const foe = mustGetPlayer(state, markPlayerId("player-1"));
+  attacker.wizardProperties = [];
+  foe.wizardProperties = [];
+  state.activePlayerId = attacker.playerId;
+  const modifier = addRuntimeCardToHand(state, attacker, "esw2_dbg__main_009");
+  const arena = addRuntimeCardToHand(state, attacker, "esw2_dbg__legend_008");
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: modifier.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: arena.instanceId })
+      .ok,
+    true
+  );
+  const wand = addRuntimeCardToHand(state, attacker, "esw2_dbg__starter_003");
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: wand.instanceId })
+      .ok,
+    true
+  );
+  assert.equal(foe.life.current, 14);
+});
+
+test("Chipsychosis Arena does not double a self-targeted attack", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const attacker = mustGetPlayer(state, markPlayerId("player-2"));
+  attacker.wizardProperties = [];
+  state.activePlayerId = attacker.playerId;
+  const arena = addRuntimeCardToHand(state, attacker, "esw2_dbg__legend_008");
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: arena.instanceId })
+      .ok,
+    true
+  );
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === attacker.playerId)
+      : undefined
+  );
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 2,
+    targetSelector: "chosenPlayer",
+  });
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }).ok,
+    true
+  );
+  assert.equal(attacker.life.current, 18);
+});
+
+test("Chipsychosis Arena follows the current controller of a foreign attack card", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    playerCount: 3,
+  });
+  const owner = mustGetPlayer(state, markPlayerId("player-1"));
+  const controller = mustGetPlayer(state, markPlayerId("player-2"));
+  const target = mustGetPlayer(state, markPlayerId("player-3"));
+  for (const player of state.players) {
+    player.wizardProperties = [];
+  }
+  state.activePlayerId = controller.playerId;
+  const arena = addRuntimeCardToHand(state, controller, "esw2_dbg__legend_008");
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: arena.instanceId })
+      .ok,
+    true
+  );
+  const foreignAttack = addFixtureDefinitionToActiveHand(
+    state,
+    createFixtureCardDefinition("fixture-foreign-arena-attack", [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 2,
+        targetSelector: "chosenFoe",
+      },
+    ])
+  );
+  foreignAttack.ownerId = owner.playerId;
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === target.playerId)
+      : undefined
+  );
+
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: foreignAttack.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(target.life.current, 16);
+
+  const ownerArena = addRuntimeCardToHand(state, owner, "esw2_dbg__legend_008");
+  state.activePlayerId = owner.playerId;
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: ownerArena.instanceId,
+    }).ok,
+    true
+  );
+  state.activePlayerId = target.playerId;
+  const ownerAttack = addFixtureDefinitionToActiveHand(
+    state,
+    createFixtureCardDefinition("fixture-owner-arena-attack", [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 2,
+        targetSelector: "chosenFoe",
+      },
+    ])
+  );
+  ownerAttack.ownerId = owner.playerId;
+  controller.life.current = 20;
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === controller.playerId)
+      : undefined
+  );
+
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: ownerAttack.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(controller.life.current, 18);
 });
 
 test("redirect defense avoids an ownerless Mayhem attack and still executes its branch", () => {
@@ -5436,7 +5680,7 @@ test("wizard property owned wand attacks gain damage and cannot be avoided", () 
   );
 });
 
-test("wizard property does not affect borrowed wands or non-wand attacks", () => {
+test("wizard property applies to its owner's Wand through foreign control but not to unrelated attacks", () => {
   const dataPack = createWizardPropertySetupEntriesDataPack(
     createExpandedDeadWizardTokenSetupDataPack(
       loadCurrentRuntimeDataPack(rootDir, playableRuntimeDataPackPath),
@@ -5540,9 +5784,9 @@ test("wizard property does not affect borrowed wands or non-wand attacks", () =>
   });
 
   assert.equal(ownerPropertyWandResult.ok, true);
-  assert.equal(ownerPropertyWandTarget.life.current, 20);
+  assert.equal(ownerPropertyWandTarget.life.current, 18);
   assert.equal(
-    ownerPropertyWandTarget.discard.includes(ownerPropertyWandDefense),
+    ownerPropertyWandTarget.hand.includes(ownerPropertyWandDefense),
     true
   );
 });
@@ -5630,15 +5874,10 @@ test("Lubricating Dirty Stick does not affect a foe's Wand attack", () => {
   state.turn.power = 0;
   modifierOwner.life.current = 20;
   chooseEffectChoice(state, ({ effectId, player, choices }) => {
-    if (
-      effectId !== "attack_damage" ||
-      player.playerId !== foe.playerId
-    ) {
+    if (effectId !== "attack_damage" || player.playerId !== foe.playerId) {
       return undefined;
     }
-    return choices.find(
-      (choice) => choice.choiceId === modifierOwner.playerId
-    );
+    return choices.find((choice) => choice.choiceId === modifierOwner.playerId);
   });
   const foeWand = addRuntimeCardToHand(state, foe, "esw2_dbg__starter_003");
   const result = applyAction(state, {
@@ -5736,8 +5975,15 @@ test("Lubricating Dirty Stick gains power when its owner plays a foe's Wand", ()
     cardInstanceId: wildMagic.instanceId,
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(activePlayer.playedThisTurn.includes(foreignWand), true);
+  assert.equal(result.ok, true, result.ok ? undefined : result.error);
+  assert.equal(activePlayer.playedThisTurn.includes(foreignWand), false);
+  assert.equal(foe.discard.includes(foreignWand), true);
+  assert.equal(
+    buildControlledObjectView(state, activePlayer.playerId).cards.some(
+      ({ card }) => card.instanceId === foreignWand.instanceId
+    ),
+    true
+  );
   assert.equal(foreignWand.ownerId, foe.playerId);
   assert.equal(state.turn.power, 2);
 });
@@ -5754,11 +6000,7 @@ test("Lubricating Dirty Stick buffs its owner's Wand played through Wild Magic",
   playController.wizardProperties = [];
   state.activePlayerId = wandOwner.playerId;
 
-  const modifier = addRuntimeCardToHand(
-    state,
-    wandOwner,
-    "esw2_dbg__main_009"
-  );
+  const modifier = addRuntimeCardToHand(state, wandOwner, "esw2_dbg__main_009");
   assert.equal(
     applyAction(state, {
       type: "playCard",
@@ -5797,8 +6039,15 @@ test("Lubricating Dirty Stick buffs its owner's Wand played through Wild Magic",
     cardInstanceId: wildMagic.instanceId,
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(playController.playedThisTurn.includes(foreignWand), true);
+  assert.equal(result.ok, true, result.ok ? undefined : result.error);
+  assert.equal(playController.playedThisTurn.includes(foreignWand), false);
+  assert.equal(wandOwner.discard.includes(foreignWand), true);
+  assert.equal(
+    buildControlledObjectView(state, playController.playerId).cards.some(
+      ({ card }) => card.instanceId === foreignWand.instanceId
+    ),
+    true
+  );
   assert.equal(foreignWand.ownerId, wandOwner.playerId);
   assert.equal(wandOwner.life.current, 17);
 });
@@ -5963,7 +6212,10 @@ test("Ultimate Tronado adds power equal to the total actual damage from the firs
     target: { selector: "opponentPlayers" },
   });
 
-  const result = applyAction(state, { type: "playCard", cardInstanceId: attackId });
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attackId,
+  });
 
   assert.equal(result.ok, true);
   assert.equal(state.turn.power, 4);
@@ -6523,7 +6775,8 @@ test("Ultimate Tronado gains the actual total from a directional chain attack on
   );
 
   assert.equal(
-    applyAction(state, { type: "playCard", cardInstanceId: wand.instanceId }).ok,
+    applyAction(state, { type: "playCard", cardInstanceId: wand.instanceId })
+      .ok,
     true
   );
 

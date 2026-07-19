@@ -172,6 +172,7 @@ const knownRuntimeEffectIds = [
   "conditional_activation_gain_chips",
   "controls_other_card_type",
   "deal_damage",
+  "double_owned_attack_damage",
   "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
   "destroy_card",
   "destroy_own_cards",

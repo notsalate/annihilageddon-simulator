@@ -513,29 +513,29 @@ function controlledCardMatchesType(
 
 function getAttackProfile(
   state: GameState,
-  _player: PlayerState,
+  _attackInitiator: PlayerState,
   source: EffectSourceContext
-): { damageBonus: number; unavoidable: boolean } {
+): { damageBonus: number; damageMultiplier: number; unavoidable: boolean } {
   if (source.sourceType !== "card") {
-    return { damageBonus: 0, unavoidable: false };
+    return { damageBonus: 0, damageMultiplier: 1, unavoidable: false };
   }
 
   const sourceCard = findCardInstance(state, source.cardInstanceId);
   if (sourceCard === undefined || sourceCard.ownerId === "common") {
-    return { damageBonus: 0, unavoidable: false };
+    return { damageBonus: 0, damageMultiplier: 1, unavoidable: false };
   }
 
   const sourceOwner = state.players.find(
     (candidate) => candidate.playerId === sourceCard.ownerId
   );
   if (sourceOwner === undefined) {
-    return { damageBonus: 0, unavoidable: false };
+    return { damageBonus: 0, damageMultiplier: 1, unavoidable: false };
   }
 
   let damageBonus = 0;
+  let damageMultiplier = 1;
   let unavoidable = false;
-  const wizardProperties = sourceOwner.wizardProperties;
-  for (const token of wizardProperties) {
+  for (const token of sourceOwner.wizardProperties) {
     const definition = state.tokenDefinitions.get(token.definitionId);
     if (
       definition?.kind !== "wizardProperty" ||
@@ -595,7 +595,7 @@ function getAttackProfile(
     }
   }
 
-  return { damageBonus, unavoidable };
+  return { damageBonus, damageMultiplier, unavoidable };
 }
 
 function effectMatchesCardDefinition(
@@ -733,15 +733,34 @@ function resolveAttackTarget(
 }
 
 function recalculateAttackAmountComponents(
-  _state: GameState,
-  _attackingPlayer: PlayerState,
-  _targetPlayer: PlayerState,
+  state: GameState,
+  attackingPlayer: PlayerState,
+  targetPlayer: PlayerState,
   _source: EffectSourceContext,
   amountComponents: AttackAmountComponents
 ): AttackAmountComponents {
+  const unmodifiedAmount =
+    amountComponents.unresolvedBaseAmount +
+    amountComponents.sourceOwnerModifierAmount;
+  const doublesAgainstTarget =
+    attackingPlayer.playerId !== targetPlayer.playerId &&
+    attackingPlayer.permanents.some((permanent) => {
+      const definition = state.cardDefinitions.get(permanent.definitionId);
+      return (
+        definition?.engine.playableInV0 === true &&
+        definition.engine.effects.some(
+          (effect) =>
+            effect.timing === "attackReplacement" &&
+            effect.effectId === "double_owned_attack_damage"
+        )
+      );
+    });
+
   return {
     ...amountComponents,
-    currentAttackerTargetModifierAmount: 0,
+    currentAttackerTargetModifierAmount: doublesAgainstTarget
+      ? unmodifiedAmount
+      : 0,
   };
 }
 
