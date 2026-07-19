@@ -6221,6 +6221,50 @@ test("Ultimate Tronado adds power equal to the total actual damage from the firs
   assert.equal(state.turn.power, 4);
 });
 
+test("current runtime Ultimate Tronado adds power after its controller's first damaging attack", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+  }
+  const runtimeDefinition = loadCurrentRuntimeDataPack(
+    rootDir
+  ).cardDefinitions.get("esw2_dbg__legend_012");
+  assert.ok(runtimeDefinition);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [runtimeDefinition.cardId, runtimeDefinition],
+  ]);
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(
+      activePlayer,
+      runtimeDefinition.cardId,
+      "current-runtime-ultimate-tronado"
+    )
+  );
+  targetPlayer.life.current = 20;
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 3,
+    target: { selector: "opponentPlayer" },
+  });
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }).ok,
+    true
+  );
+  assert.equal(targetPlayer.life.current, 17);
+  assert.equal(state.turn.power, 3);
+});
+
 test("Ultimate Tronado does not credit redirected damage to the original attacker", () => {
   const state = initializeGame({
     rootDir,
