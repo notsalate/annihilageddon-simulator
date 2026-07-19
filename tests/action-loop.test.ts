@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   applyAction,
+  buildControlledObjectView,
   calculateEffectivePlayerMaxLife,
   initializeGame,
   listLegalActions,
@@ -601,7 +602,7 @@ test("controlled-object current runtime cards resolve printed power behavior", (
   });
 
   assert.equal(result.ok, true);
-  assert.equal(state.turn.power, 5);
+  assert.equal(state.turn.power, 8);
   assert.equal(activePlayer.hand.length, 1);
 });
 
@@ -3170,7 +3171,8 @@ test("Wild Magic lets the typed choice strategy play a foe's top card", () => {
   assert.equal(result.ok, true);
   assert.equal(state.turn.power, 1);
   assert.equal(foe.deck.includes(foeTopCard), false);
-  assert.equal(activePlayer.playedThisTurn.includes(foeTopCard), true);
+  assert.equal(activePlayer.playedThisTurn.includes(foeTopCard), false);
+  assert.equal(foe.discard.includes(foeTopCard), true);
   assert.equal(foeTopCard.ownerId, foe.playerId);
   assert.ok(
     state.eventLog.some(
@@ -3259,7 +3261,8 @@ test("wild magic can choose to play the top card of a foe deck when that option 
   assert.equal(result.ok, true);
   assert.equal(state.turn.power, 1);
   assert.equal(foe.deck.includes(foeTopCard), false);
-  assert.equal(activePlayer.playedThisTurn.includes(foeTopCard), true);
+  assert.equal(activePlayer.playedThisTurn.includes(foeTopCard), false);
+  assert.equal(foe.discard.includes(foeTopCard), true);
   assert.equal(foeTopCard.ownerId, foe.playerId);
   assert.ok(
     state.eventLog.some((event) => {
@@ -3350,7 +3353,8 @@ test("wild magic foe-deck play triggers wizard property on-play effects for non-
   assert.equal(result.ok, true);
   assert.equal(state.turn.power, 1);
   assert.equal(activePlayer.chips, 1);
-  assert.equal(activePlayer.playedThisTurn.includes(foeTopCard), true);
+  assert.equal(activePlayer.playedThisTurn.includes(foeTopCard), false);
+  assert.equal(foe.discard.includes(foeTopCard), true);
   assert.equal(foeTopCard.ownerId, foe.playerId);
 
   const endTurnResult = applyAction(state, {
@@ -3442,6 +3446,238 @@ test("wild magic foe-deck play takes ownership of ongoing cards and keeps them c
   assert.equal(activePlayer.permanents.includes(foeTopCard), true);
   assert.equal(activePlayer.discard.includes(foeTopCard), false);
   assert.equal(foe.discard.includes(foeTopCard), false);
+});
+
+test("nested foreign Wild Magic keeps the acting player in control through activation from the owner's discard", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  const foe = state.players.find(
+    (player) => player.playerId !== state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  assert.ok(foe);
+  const controlCountProperty = replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    createChipActivationWizardProperty(
+      "fixture-temporary-control-count-property",
+      ["spell"],
+      1
+    )
+  );
+  const ordinaryPermanent = addControlledFixturePermanentWithCost(
+    state,
+    activePlayer,
+    "fixture-ordinary-controlled-permanent",
+    ["creature"],
+    1
+  );
+
+  const foreignWildMagicDefinition = createFixtureCardDefinition(
+    "fixture-nested-foreign-wild-magic",
+    [
+      {
+        effectId: "wild_magic_choice",
+        timing: "onPlay",
+        options: [
+          {
+            targetSelector: "chosenFoe",
+            effectId: "play_top_card_from_foe_deck",
+          },
+        ],
+      },
+    ]
+  );
+  const activatedTopCardDefinition = createFixtureCardDefinition(
+    "fixture-foreign-activated-top-card",
+    [
+      { effectId: "add_power", timing: "onPlay", amount: 2 },
+      {
+        effectId: "add_power",
+        timing: "activation",
+        amount: 3,
+      },
+      {
+        effectId: "attack_damage_equal_to_controlled_card_cost",
+        timing: "activation",
+        costMode: "highest",
+        target: { selector: "opponentPlayer" },
+      },
+      {
+        effectId: "increase_hand_limit_at_max_life",
+        timing: "endTurn",
+        amount: 2,
+      },
+    ],
+    { cardTypes: ["spell"] }
+  );
+  activatedTopCardDefinition.engine.cost = 4;
+  activatedTopCardDefinition.visible.cost = 4;
+  const drivingWildMagicDefinition = createFixtureCardDefinition(
+    "fixture-driving-wild-magic",
+    [
+      {
+        effectId: "wild_magic_choice",
+        timing: "onPlay",
+        options: [
+          {
+            targetSelector: "chosenFoe",
+            effectId: "play_top_card_from_foe_deck",
+          },
+        ],
+      },
+    ]
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [foreignWildMagicDefinition.cardId, foreignWildMagicDefinition],
+    [activatedTopCardDefinition.cardId, activatedTopCardDefinition],
+    [drivingWildMagicDefinition.cardId, drivingWildMagicDefinition],
+  ]);
+  const drivingWildMagic: CardInstance = {
+    instanceId: markCardInstanceId("fixture-driving-wild-magic-card"),
+    definitionId: markCardDefinitionId(drivingWildMagicDefinition.cardId),
+    ownerId: activePlayer.playerId,
+    marketChips: 0,
+  };
+  const foreignWildMagic: CardInstance = {
+    instanceId: markCardInstanceId("fixture-nested-foreign-wild-magic-card"),
+    definitionId: markCardDefinitionId(foreignWildMagicDefinition.cardId),
+    ownerId: foe.playerId,
+    marketChips: 0,
+  };
+  const activatedTopCard: CardInstance = {
+    instanceId: markCardInstanceId("fixture-foreign-activated-top-card"),
+    definitionId: markCardDefinitionId(activatedTopCardDefinition.cardId),
+    ownerId: foe.playerId,
+    marketChips: 0,
+  };
+  activePlayer.hand.push(drivingWildMagic);
+  foe.hand = [];
+  foe.deck = [foreignWildMagic, activatedTopCard];
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "wild_magic_choice" ? choices[0] : undefined
+  );
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: drivingWildMagic.instanceId,
+  });
+
+  assert.equal(playResult.ok, true);
+  assert.equal(state.turn.power, 2);
+  assert.equal(foreignWildMagic.ownerId, foe.playerId);
+  assert.equal(activatedTopCard.ownerId, foe.playerId);
+  assert.equal(activePlayer.playedThisTurn.includes(foreignWildMagic), false);
+  assert.equal(activePlayer.playedThisTurn.includes(activatedTopCard), false);
+  assert.equal(foe.discard.includes(foreignWildMagic), true);
+  assert.equal(foe.discard.includes(activatedTopCard), true);
+  assert.ok(
+    buildControlledObjectView(state, activePlayer.playerId).cards.some(
+      ({ card }) => card.instanceId === foreignWildMagic.instanceId
+    )
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "cardMoved" &&
+        event.cardInstanceId === activatedTopCard.instanceId &&
+        event.sourceZone === `${activePlayer.playerId}.playedThisTurn` &&
+        event.destinationZone === `${foe.playerId}.discard` &&
+        event.ownerBefore === foe.playerId &&
+        event.ownerAfter === foe.playerId
+    )
+  );
+
+  const activation = listLegalActions(state).find(
+    (action) =>
+      action.type === "activatePermanent" &&
+      action.cardInstanceId === activatedTopCard.instanceId
+  );
+  assert.ok(activation);
+  assert.ok(
+    buildControlledObjectView(state, activePlayer.playerId).cards.some(
+      ({ card }) => card.instanceId === activatedTopCard.instanceId
+    )
+  );
+  for (const card of [ordinaryPermanent, drivingWildMagic, activatedTopCard]) {
+    assert.equal(
+      buildControlledObjectView(state, activePlayer.playerId).cards.filter(
+        (object) => object.card.instanceId === card.instanceId
+      ).length,
+      1
+    );
+  }
+  assert.ok(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "activateWizardProperty" &&
+        action.tokenInstanceId === controlCountProperty.instanceId
+    )
+  );
+
+  const activationResult = applyAction(state, activation);
+  assert.equal(activationResult.ok, true);
+  assert.equal(state.turn.power, 5);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.effectId === "attack_damage_equal_to_controlled_card_cost" &&
+        event.amount === 4
+    )
+  );
+
+  activePlayer.life.current = calculateEffectivePlayerMaxLife(
+    state,
+    activePlayer.playerId
+  );
+  const endTurnResult = applyAction(state, { type: "endTurn" });
+  assert.equal(endTurnResult.ok, true);
+  const activePlayerHandDrawn = state.eventLog.find(
+    (event) =>
+      event.type === "handDrawn" && event.playerId === activePlayer.playerId
+  );
+  assert.ok(activePlayerHandDrawn?.type === "handDrawn");
+  assert.equal(activePlayerHandDrawn.amount, 7);
+  assert.equal(foe.discard.includes(activatedTopCard), true);
+  assert.equal(
+    buildControlledObjectView(state, activePlayer.playerId).cards.some(
+      ({ card }) => card.instanceId === activatedTopCard.instanceId
+    ),
+    false
+  );
+  assert.equal(
+    buildControlledObjectView(state, foe.playerId).cards.some(
+      ({ card }) => card.instanceId === activatedTopCard.instanceId
+    ),
+    false
+  );
+  assert.equal(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "activatePermanent" &&
+        action.cardInstanceId === activatedTopCard.instanceId
+    ),
+    false
+  );
+  const foeEndTurnResult = applyAction(state, { type: "endTurn" });
+  assert.equal(foeEndTurnResult.ok, true);
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "activateWizardProperty" &&
+        action.tokenInstanceId === controlCountProperty.instanceId
+    ),
+    false
+  );
 });
 
 test("ending a turn cleans up non-permanents, draws a new hand, and advances active player", () => {

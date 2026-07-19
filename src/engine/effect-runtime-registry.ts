@@ -6,6 +6,7 @@ import {
   type TokenInstanceId,
 } from "../domain/types.js";
 import {
+  buildControlledObjectView,
   calculateEffectiveCardCost,
   calculateEffectivePlayerMaxLife,
 } from "./effective-values.js";
@@ -341,7 +342,10 @@ export interface EffectRuntimeServices {
     player: PlayerState,
     card: CardInstance,
     ownership?: {
-      nonOngoingOwnerId?: CardInstance["ownerId"];
+      nonOngoingDestination?: {
+        zone: "ownerDiscardAfterResolution";
+        ownerId: PlayerState["playerId"];
+      };
       ongoingOwnerId?: CardInstance["ownerId"];
     }
   ): EffectExecutionResult;
@@ -3006,7 +3010,8 @@ const addPowerPerControlledObjectHandler: EffectRuntimeHandler = {
       return amountPerObject;
     }
 
-    const amount = countControlledObjects(player) * amountPerObject.value;
+    const amount =
+      countControlledObjects(state, player) * amountPerObject.value;
     if (amount === 0) {
       return { ok: true };
     }
@@ -3093,13 +3098,14 @@ const attackDamageEqualToControlledCardCostHandler: EffectRuntimeHandler = {
   },
 };
 
-function countControlledObjects(player: PlayerState): number {
+function countControlledObjects(state: GameState, player: PlayerState): number {
+  const controlled = buildControlledObjectView(state, player.playerId);
   return (
-    player.permanents.length +
-    player.deadWizardTokens.length +
-    player.wizardProperties.length +
-    player.statuses.length +
-    player.trophyLikeObjects.length
+    controlled.cards.length +
+    controlled.tokens.length +
+    controlled.wizardProperties.length +
+    controlled.statuses.length +
+    controlled.trophyLikeObjects.length
   );
 }
 
@@ -3159,20 +3165,13 @@ function getControlledCardsForCost(
   effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): { card: CardInstance; definition: CardDefinition }[] {
-  return [...player.permanents, ...player.playedThisTurn]
-    .filter(
-      (card) =>
+  return buildControlledObjectView(state, player.playerId)
+    .cards.filter(
+      ({ card }) =>
         effect["excludeSource"] !== true ||
         card.instanceId !== source.cardInstanceId
     )
-    .map((card) => {
-      const definition = state.cardDefinitions.get(card.definitionId);
-      if (definition === undefined) {
-        throw new Error(`Missing card definition ${card.definitionId}`);
-      }
-
-      return { card, definition };
-    });
+    .map(({ card, definition }) => ({ card, definition }));
 }
 
 function executeAttackWithAmount(
@@ -3794,7 +3793,10 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler = {
     }
 
     const playedResult = services.playResolvedCard(state, player, card, {
-      nonOngoingOwnerId: card.ownerId,
+      nonOngoingDestination: {
+        zone: "ownerDiscardAfterResolution",
+        ownerId: foe.playerId,
+      },
       ongoingOwnerId: player.playerId,
     });
     if (!playedResult.ok || playedResult.gameEnd !== undefined) {

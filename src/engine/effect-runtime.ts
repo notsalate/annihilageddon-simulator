@@ -1,6 +1,9 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
-import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
+import {
+  calculateEffectivePlayerMaxLife,
+  getControlledCards,
+} from "./effective-values.js";
 import {
   recordCardMoved,
   recordGameEvent,
@@ -323,7 +326,7 @@ export function calculateEndTurnDrawCount(
     }
   }
 
-  for (const card of player.permanents) {
+  for (const card of getControlledCards(state, player)) {
     const definition = state.cardDefinitions.get(card.definitionId);
     if (definition === undefined || !definition.engine.playableInV0) {
       continue;
@@ -482,10 +485,7 @@ function effectConditionMatches(
   }
 
   if ("conditionId" in condition) {
-    const matchingCount = [
-      ...player.permanents,
-      ...player.playedThisTurn,
-    ].filter((card) => {
+    const matchingCount = getControlledCards(state, player).filter((card) => {
       const definition = state.cardDefinitions.get(card.definitionId);
       return (
         definition !== undefined &&
@@ -1522,8 +1522,8 @@ function applyDamageDealtTriggers(
     return;
   }
 
-  for (const permanent of sourcePlayer.permanents) {
-    const definition = state.cardDefinitions.get(permanent.definitionId);
+  for (const controlledCard of getControlledCards(state, sourcePlayer)) {
+    const definition = state.cardDefinitions.get(controlledCard.definitionId);
     if (definition === undefined || !definition.engine.playableInV0) {
       continue;
     }
@@ -1544,8 +1544,8 @@ function applyDamageDealtTriggers(
         "heal_equal_damage_dealt_on_own_turn",
         {
           ...damageSource,
-          cardInstanceId: permanent.instanceId,
-          definitionId: permanent.definitionId,
+          cardInstanceId: controlledCard.instanceId,
+          definitionId: controlledCard.definitionId,
         }
       );
     }
@@ -2322,7 +2322,10 @@ function playResolvedCard(
   player: PlayerState,
   card: CardInstance,
   ownership: {
-    nonOngoingOwnerId?: PlayerState["playerId"] | "common";
+    nonOngoingDestination?: {
+      zone: "ownerDiscardAfterResolution";
+      ownerId: PlayerState["playerId"];
+    };
     ongoingOwnerId?: PlayerState["playerId"] | "common";
   } = {}
 ): EffectExecutionResult {
@@ -2338,8 +2341,11 @@ function playResolvedCard(
     card.ownerId = ownership.ongoingOwnerId ?? player.playerId;
     player.permanents.push(card);
   } else {
-    card.ownerId = ownership.nonOngoingOwnerId ?? player.playerId;
     player.playedThisTurn.push(card);
+    state.turn.temporaryCardControls.push({
+      cardInstanceId: card.instanceId,
+      controllerId: player.playerId,
+    });
   }
 
   const effectResult = executeOnPlayEffects(state, player, definition, {
@@ -2349,8 +2355,18 @@ function playResolvedCard(
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
   });
-  if (!effectResult.ok || effectResult.gameEnd !== undefined) {
+  if (!effectResult.ok) {
     return effectResult;
+  }
+  if (effectResult.gameEnd !== undefined) {
+    const movementResult = moveResolvedNonOngoingCardToDestination(
+      state,
+      player,
+      card,
+      definition.engine.isOngoing,
+      ownership.nonOngoingDestination
+    );
+    return movementResult.ok ? effectResult : movementResult;
   }
 
   const wizardPropertyResult = executeWizardPropertyOnPlayCardEffects(
@@ -2358,11 +2374,87 @@ function playResolvedCard(
     player,
     definition
   );
-  if (!wizardPropertyResult.ok || wizardPropertyResult.gameEnd !== undefined) {
+  if (!wizardPropertyResult.ok) {
     return wizardPropertyResult;
   }
 
-  return executeControlledCardOnPlayCardEffects(state, player, card);
+  if (wizardPropertyResult.gameEnd === undefined) {
+    const controlledCardResult = executeControlledCardOnPlayCardEffects(
+      state,
+      player,
+      card
+    );
+    if (!controlledCardResult.ok) {
+      return controlledCardResult;
+    }
+    if (controlledCardResult.gameEnd !== undefined) {
+      const movementResult = moveResolvedNonOngoingCardToDestination(
+        state,
+        player,
+        card,
+        definition.engine.isOngoing,
+        ownership.nonOngoingDestination
+      );
+      return movementResult.ok ? controlledCardResult : movementResult;
+    }
+  }
+
+  const movementResult = moveResolvedNonOngoingCardToDestination(
+    state,
+    player,
+    card,
+    definition.engine.isOngoing,
+    ownership.nonOngoingDestination
+  );
+  return movementResult.ok ? wizardPropertyResult : movementResult;
+}
+
+function moveResolvedNonOngoingCardToDestination(
+  state: GameState,
+  controller: PlayerState,
+  card: CardInstance,
+  isOngoing: boolean,
+  destination:
+    | {
+        zone: "ownerDiscardAfterResolution";
+        ownerId: PlayerState["playerId"];
+      }
+    | undefined
+): EffectExecutionResult {
+  if (isOngoing || destination === undefined) {
+    return { ok: true };
+  }
+  if (card.ownerId !== destination.ownerId) {
+    return {
+      ok: false,
+      error: `Cannot move ${card.instanceId} to a discard that does not belong to its owner`,
+    };
+  }
+  const cardIndex = controller.playedThisTurn.findIndex(
+    (candidate) => candidate.instanceId === card.instanceId
+  );
+  if (cardIndex < 0) {
+    return { ok: true };
+  }
+  const owner = state.players.find(
+    (candidate) => candidate.playerId === destination.ownerId
+  );
+  if (owner === undefined) {
+    return {
+      ok: false,
+      error: `Missing card owner ${destination.ownerId}`,
+    };
+  }
+
+  controller.playedThisTurn.splice(cardIndex, 1);
+  owner.discard.push(card);
+  recordCardMoved(state, controller, card, {
+    sourceZone: `${controller.playerId}.playedThisTurn`,
+    destinationZone: `${owner.playerId}.discard`,
+    ownerBefore: card.ownerId,
+    ownerAfter: card.ownerId,
+  });
+  return { ok: true };
 }
 
 function shuffleDiscardIntoDeckIfNeeded(

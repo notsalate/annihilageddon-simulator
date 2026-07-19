@@ -368,9 +368,12 @@ Play algorithm:
    - If foe deck is empty, shuffle that foe's discard into their deck if possible.
    - If no card is available, the option produces no played card.
    - Reveal/play the top card by moving it into the acting player's `playedThisTurn` if non-Ongoing or `permanents` if Ongoing.
+   - The controller is the player currently resolving the play, not the owner of the шальная магия card. This remains true when a чужая шальная магия is itself played by an effect.
    - The played card keeps its original owner while it is non-Ongoing, but its current controller is the acting player.
    - Resolve it as played by the acting player.
+   - Resolve the before-activation / `onPlay` part immediately. Its activation remains available to that controller through the end of the current turn, even if the non-Ongoing card has already moved to its owner's discard.
    - If the played card is non-Ongoing, its default destination after resolution is its owner's discard unless mapped data changes the destination.
+   - Temporary control is cleared at end of turn; the card then stays in its owner's discard and cannot be activated through that play.
    - If the played card is Ongoing, the acting player becomes its new owner and it moves to that player's `permanents` as if played from hand.
 
 ## Вялая Палочка
@@ -423,7 +426,7 @@ Activations:
 
 1. When a card with mapped activation is played, immediately resolve its `onPlay` / before-activation part.
 2. The mapped activation effect can be used once per turn while the player controls that card.
-3. If the card was played this turn, its activation can be used later in that same turn as long as the card is still controlled.
+3. If the card was played this turn, its activation can be used later in that same turn while that temporary control lasts, including after a non-Ongoing card moved to its owner's discard.
 4. Activation can be used any time in the active player's main action loop while the card is controlled, has not been activated this turn, and costs can be paid.
 5. Track activation use per controlled card per turn. At the end of the turn, unused activation rights expire and are not carried forward.
 

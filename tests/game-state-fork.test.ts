@@ -45,6 +45,12 @@ function createFixture(): GameState {
       activatedCardIds: ["activated-card"],
       gainedCardDefinitionIds: ["gained-card"],
       damagingAttackPlayerIds: [],
+      temporaryCardControls: [
+        {
+          cardInstanceId: markCardInstanceId("played-card"),
+          controllerId: playerId,
+        },
+      ],
     },
     players: [
       {
@@ -123,6 +129,11 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
 
   fork.turn.activatedCardIds.push("fork-only");
   fork.turn.gainedCardDefinitionIds.push("fork-gained-card");
+  fork.turn.temporaryCardControls[0]!.controllerId = markPlayerId("player-2");
+  fork.turn.temporaryCardControls.push({
+    cardInstanceId: markCardInstanceId("fork-controlled-card"),
+    controllerId: markPlayerId("player-2"),
+  });
   forkPlayer.chips += 3;
   forkPlayer.life.current -= 1;
   forkPlayer.hand[0]!.marketChips = 2;
@@ -135,6 +146,12 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
 
   assert.equal(source.turn.activatedCardIds.includes("fork-only"), false);
   assert.deepEqual(source.turn.gainedCardDefinitionIds, ["gained-card"]);
+  assert.deepEqual(source.turn.temporaryCardControls, [
+    {
+      cardInstanceId: markCardInstanceId("played-card"),
+      controllerId: markPlayerId("player-1"),
+    },
+  ]);
   assert.equal(sourcePlayer.chips, 2);
   assert.equal(sourcePlayer.life.current, 5);
   assert.equal(sourcePlayer.hand[0]!.marketChips, 0);

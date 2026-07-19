@@ -46,6 +46,12 @@ export interface CardInstance {
   marketChips: number;
 }
 
+/** A card controlled outside permanent storage until the current turn ends. */
+export interface TemporaryCardControl {
+  cardInstanceId: CardInstanceId;
+  controllerId: PlayerId;
+}
+
 export interface TokenInstance {
   instanceId: TokenInstanceId;
   definitionId: TokenDefinitionId;
@@ -163,6 +169,7 @@ export interface GameState {
     activatedCardIds: string[];
     gainedCardDefinitionIds: string[];
     damagingAttackPlayerIds: PlayerId[];
+    temporaryCardControls: TemporaryCardControl[];
   };
   players: PlayerState[];
   common: CommonState;
@@ -825,7 +832,8 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     dataPack,
     dataPack.manifest.mappingStatus === "fixture" ? "fixture" : "combat",
     {
-      hasCardDefinition: (definitionId) => dataPack.cardDefinitions.has(definitionId),
+      hasCardDefinition: (definitionId) =>
+        dataPack.cardDefinitions.has(definitionId),
       createCardInstance: (definitionId, ownerId) =>
         factory.create(markCardDefinitionId(definitionId), ownerId),
       allowsMissingData: isIncompleteFullOnlyDataPack(dataPack),
@@ -899,6 +907,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       activatedCardIds: [],
       gainedCardDefinitionIds: [],
       damagingAttackPlayerIds: [],
+      temporaryCardControls: [],
     },
     players,
     common,
@@ -1191,7 +1200,12 @@ function applyWizardPropertySetupEffects(
           tokenInstanceId: property.instanceId,
           tokenDefinitionId: property.definitionId,
         };
-        const execution = tryExecuteSetupEffect(player, effect, source, services);
+        const execution = tryExecuteSetupEffect(
+          player,
+          effect,
+          source,
+          services
+        );
         if (execution.status === "executed") {
           const directive: SetupDirective | undefined = execution.directive;
           if (

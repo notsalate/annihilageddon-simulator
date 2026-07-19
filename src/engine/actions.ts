@@ -11,7 +11,10 @@ import {
 import type { EffectGameEnd } from "./effect-runtime-registry.js";
 import { assertNever } from "../common.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
-import { calculateEffectiveCardCost } from "./effective-values.js";
+import {
+  calculateEffectiveCardCost,
+  getControlledCards,
+} from "./effective-values.js";
 import { recordCardMoved, recordGameEvent } from "./event-recorder.js";
 import { runMarketFlow, type MarketFlowEndReason } from "./market-flow.js";
 import type {
@@ -112,7 +115,7 @@ export function listLegalActions(state: GameState): LegalAction[] {
       })),
     ...getWildMagicBuyAction(state),
     ...getFamiliarBuyAction(state, activePlayer),
-    ...activePlayer.permanents
+    ...getControlledCards(state, activePlayer)
       .filter((card) => canActivatePermanent(state, activePlayer, card))
       .map((card) => ({
         type: "activatePermanent" as const,
@@ -190,6 +193,7 @@ function endTurn(state: GameState): ActionResult {
     targetDefinitionIds: drawResult.drawnCards.map((card) => card.definitionId),
   });
 
+  state.turn.temporaryCardControls = [];
   state.turn.gainedCardDefinitionIds = [];
   state.turn.damagingAttackPlayerIds = [];
   state.turn.number += 1;
@@ -215,13 +219,13 @@ function activatePermanent(
   cardInstanceId: string
 ): ActionResult {
   const activePlayer = mustGetActivePlayer(state);
-  const card = activePlayer.permanents.find(
+  const card = getControlledCards(state, activePlayer).find(
     (card) => card.instanceId === cardInstanceId
   );
   if (card === undefined) {
     return {
       ok: false,
-      error: "Card is not a controlled permanent",
+      error: "Card is not controlled by the active player",
     };
   }
 
@@ -488,6 +492,12 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
   } else {
     activePlayer.playedThisTurn.push(card);
     destinationZone = `${activePlayer.playerId}.playedThisTurn`;
+  }
+  if (!definition.engine.isOngoing) {
+    state.turn.temporaryCardControls.push({
+      cardInstanceId: card.instanceId,
+      controllerId: activePlayer.playerId,
+    });
   }
   recordCardMoved(state, activePlayer, card, {
     sourceZone: `${activePlayer.playerId}.hand`,
