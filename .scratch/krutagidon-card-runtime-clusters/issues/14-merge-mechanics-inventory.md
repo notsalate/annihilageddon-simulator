@@ -49,3 +49,4 @@ Type: AFK
 - Следующие issue после merge должны быть финальной кластеризацией explicit cardId batches, а не реализацией runtime cards.
 - Кластер означает группу карт с общей главной механикой. Когда кластер позже берётся в реализацию, выбранные карты должны реализовываться полностью, а не только по главной механике.
 - Evidence: `.scratch/krutagidon-card-runtime-clusters/inventory/merged.md` merges `inventory/01.md` through `inventory/05.md`, keeps the existing issue 15/16 cardId split, and does not edit runtime data or `card-cluster-decisions.json`.
+- Correction (2026-07-19): упоминание 128 карт относится к историческому объёму этого issue; канонический набор после восстановления `legend_021`–`legend_026` содержит 134 карты.

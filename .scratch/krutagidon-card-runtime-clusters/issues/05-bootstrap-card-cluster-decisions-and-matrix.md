@@ -55,6 +55,7 @@ Type: AFK
 - Сгенерированы `.scratch/krutagidon-card-runtime-clusters/card-cluster-decisions.json` и `.scratch/krutagidon-card-runtime-clusters/card-runtime-cluster-matrix.md`.
 - Bootstrap на текущих данных создал `128` manual decisions со статусом `needsClusterDecision`.
 - При реализации добавлен регрессионный фильтр для `drafts/_template.json`, чтобы шаблоны не попадали в decisions/matrix.
+- Correction (2026-07-19): это исторический снимок до восстановления `legend_021`–`legend_026`; канонический набор теперь содержит 134 карты.
 
 ## Checks
 

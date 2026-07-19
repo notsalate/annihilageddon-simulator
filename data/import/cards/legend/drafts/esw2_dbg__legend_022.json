@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "cardDraft",
+  "cardId": "esw2_dbg__legend_022",
+  "source": {
+    "image": "assets/cards/legend/treasure/Легенда-Сокровище. Легендохранитель.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_022.md"
+  },
+  "visible": {
+    "nameRu": "Легендохранитель",
+    "cost": 10,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Сокровище",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "textRu": "Возьми 2 карты и получи 2 чипсины.\nЗащита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 2 карты и получи 2 чипсины.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "notes": [],
+  "composition": {
+    "quantity": 1
+  }
+}

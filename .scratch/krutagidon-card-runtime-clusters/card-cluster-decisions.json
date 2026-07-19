@@ -165,6 +165,42 @@
       "clusterId": "card-movement"
     },
     {
+      "cardId": "esw2_dbg__legend_021",
+      "status": "clustered",
+      "clusterId": "special-card-stack",
+      "notes": "Выдача вялых палочек после смертельной атаки — основной runtime surface; урон вторичен. При создании runtime JSON эта карта обязана получить общие tags `wandCard` и `wandAttackCard`."
+    },
+    {
+      "cardId": "esw2_dbg__legend_022",
+      "status": "clustered",
+      "clusterId": "defense-effects",
+      "notes": "Discard defense с повтором draw/chipsin reward — основная механика."
+    },
+    {
+      "cardId": "esw2_dbg__legend_023",
+      "status": "clustered",
+      "clusterId": "attack-effects",
+      "notes": "Четыре последовательные targeted attacks и power за смерти от единого разрешения карты — основной attack surface. При создании runtime JSON эта карта обязана получить общие tags `wandCard` и `wandAttackCard`."
+    },
+    {
+      "cardId": "esw2_dbg__legend_024",
+      "status": "clustered",
+      "clusterId": "attack-effects",
+      "notes": "Targeted lethal attack с немедленной победой — основной attack surface. При создании runtime JSON эта карта обязана получить общие tags `wandCard` и `wandAttackCard`."
+    },
+    {
+      "cardId": "esw2_dbg__legend_025",
+      "status": "clustered",
+      "clusterId": "ongoing-modifiers",
+      "notes": "Постоянный power modifier, масштабируемый по контролируемым DWT, главнее DWT-подсчёта."
+    },
+    {
+      "cardId": "esw2_dbg__legend_026",
+      "status": "clustered",
+      "clusterId": "chipsin-economy",
+      "notes": "Draw и 3 chipsin — исполняемая часть карты. Печатный бонус протектора игнорируется при runtime mapping: victoryPoints всегда 3, исполняемое условие протектора не создаётся."
+    },
+    {
       "cardId": "esw2_dbg__legend_027",
       "status": "clustered",
       "clusterId": "dwt-interactions",
