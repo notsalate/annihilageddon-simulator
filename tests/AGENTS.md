@@ -22,6 +22,7 @@ This folder contains TypeScript tests, deterministic fixtures, and test helpers.
 ## Work Guidance
 
 - Put reusable test builders in `tests/helpers/`.
+- `tests/helpers/defense-fixtures.ts` owns reusable defense-card construction and the default fixture defense selection policy.
 - Put static JSON fixtures in `tests/fixtures/`.
 - Keep issue-specific regression tests close to the existing test file for that behavior.
 
