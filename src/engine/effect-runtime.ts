@@ -1,4 +1,8 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
+import {
+  createAttackAmountState,
+  resolveAttackAmount,
+} from "./attack-resolution.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import {
   calculateEffectivePlayerMaxLife,
@@ -11,7 +15,6 @@ import {
 } from "./event-recorder.js";
 import { installGameEventLog } from "./game-events.js";
 import {
-  type AttackAmountComponents,
   type AttackIntent,
   type DamageResult,
   type AttackDefenseUsage,
@@ -664,19 +667,11 @@ function resolveAttackTarget(
   const baseAmount = intent.baseAmount ?? amount;
   const originalSource = intent.originalSource ?? source;
   const defenseUsage = intent.defenseUsage ?? createAttackDefenseUsage();
-  const amountComponents = intent.amountComponents ?? {
-    unresolvedBaseAmount: baseAmount,
-    sourceOwnerModifierAmount: amount - baseAmount,
-    currentAttackerTargetModifierAmount: 0,
-  };
-  const resolvedAmountComponents = recalculateAttackAmountComponents(
-    state,
-    attackingPlayer,
-    targetPlayer,
-    source,
-    amountComponents
-  );
-  const resolvedAmount = sumAttackAmountComponents(resolvedAmountComponents);
+  const amountComponents =
+    intent.amountComponents ??
+    createAttackAmountState(baseAmount, amount - baseAmount);
+  const { components: resolvedAmountComponents, total: resolvedAmount } =
+    resolveAttackAmount(state, attackingPlayer, targetPlayer, amountComponents);
   recordGameEvent(state, {
     type: "attackTargetStarted",
     playerId: attackingPlayer.playerId,
@@ -735,48 +730,6 @@ function resolveAttackTarget(
       originalSource,
     },
   };
-}
-
-function recalculateAttackAmountComponents(
-  state: GameState,
-  attackingPlayer: PlayerState,
-  targetPlayer: PlayerState,
-  _source: EffectSourceContext,
-  amountComponents: AttackAmountComponents
-): AttackAmountComponents {
-  const unmodifiedAmount =
-    amountComponents.unresolvedBaseAmount +
-    amountComponents.sourceOwnerModifierAmount;
-  const doublesAgainstTarget =
-    attackingPlayer.playerId !== targetPlayer.playerId &&
-    attackingPlayer.permanents.some((permanent) => {
-      const definition = state.cardDefinitions.get(permanent.definitionId);
-      return (
-        definition?.engine.playableInV0 === true &&
-        definition.engine.effects.some(
-          (effect) =>
-            effect.timing === "attackReplacement" &&
-            effect.effectId === "double_owned_attack_damage"
-        )
-      );
-    });
-
-  return {
-    ...amountComponents,
-    currentAttackerTargetModifierAmount: doublesAgainstTarget
-      ? unmodifiedAmount
-      : 0,
-  };
-}
-
-function sumAttackAmountComponents(
-  amountComponents: AttackAmountComponents
-): number {
-  return (
-    amountComponents.unresolvedBaseAmount +
-    amountComponents.sourceOwnerModifierAmount +
-    amountComponents.currentAttackerTargetModifierAmount
-  );
 }
 
 function resolveMayhemAttackPlan(

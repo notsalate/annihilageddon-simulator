@@ -1,4 +1,6 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
+import type { AttackAmountComponents } from "./attack-resolution.js";
+export type { AttackAmountComponents } from "./attack-resolution.js";
 import {
   markCardDefinitionId,
   type CardDefinitionId,
@@ -145,12 +147,6 @@ export type TargetChoiceResult =
 export interface DamageResult {
   damageDealt: number;
   killed: boolean;
-}
-
-export interface AttackAmountComponents {
-  unresolvedBaseAmount: number;
-  sourceOwnerModifierAmount: number;
-  currentAttackerTargetModifierAmount: number;
 }
 
 export interface AttackIntent {

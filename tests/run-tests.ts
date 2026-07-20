@@ -29,6 +29,7 @@ const testSuites = [
   "best-move-analysis.test.js",
   "best-move-cli.test.js",
   "effect-runtime-applicability.test.js",
+  "attack-resolution.test.js",
   "defense-choice.test.js",
 ];
 
