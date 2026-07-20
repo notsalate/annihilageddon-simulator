@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { initializeGame, type CardInstance } from "../src/index.js";
+import {
+  initializeGame,
+  type CardInstance,
+  type RuntimeEffect,
+} from "../src/index.js";
 import type { CardDefinition } from "../src/engine/data.js";
 import { executeEffect } from "../src/engine/effect-runtime.js";
 import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
@@ -15,7 +19,13 @@ const rootDir = process.cwd();
 
 test("a player can decline a legal optional defense", () => {
   const { state, attacker, defender } = createAttackScenario();
-  const defense = addDefenseCard(state, defender, "declined");
+  defender.chips = 5;
+  const defense = addDefenseCard(state, defender, "declined", {
+    costs: [
+      { costId: "spend_chips", amount: 2 },
+      { costId: "pay_life", amount: 3 },
+    ],
+  });
   state.effectChoiceStrategy = ({ effectId, choices }) => {
     if (effectId === "attack_damage") {
       return choices.find((choice) => choice.choiceId === defender.playerId);
@@ -26,6 +36,7 @@ test("a player can decline a legal optional defense", () => {
     return undefined;
   };
   const lifeBefore = defender.life.current;
+  const chipsBefore = defender.chips;
 
   const result = executeEffect(
     state,
@@ -40,10 +51,19 @@ test("a player can decline a legal optional defense", () => {
 
   assert.deepEqual(result, { ok: true });
   assert.equal(defender.life.current, lifeBefore - 2);
+  assert.equal(defender.chips, chipsBefore);
   assert.equal(defender.hand.includes(defense), true);
   assert.equal(defender.discard.includes(defense), false);
   assert.equal(
     state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
+    false
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseCostPaid"),
+    false
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseCardMoved"),
     false
   );
   assert.equal(
@@ -179,7 +199,10 @@ function attackSource(player: PlayerState): EffectSourceContext {
 function addDefenseCard(
   state: GameState,
   player: PlayerState,
-  suffix: string
+  suffix: string,
+  options: {
+    costs?: Exclude<RuntimeEffect["costs"], undefined>;
+  } = {}
 ): CardInstance {
   const cardId = `fixture-defense-choice-${suffix}`;
   const definition: CardDefinition = {
@@ -212,6 +235,7 @@ function addDefenseCard(
           effectId: "avoid_attack",
           timing: "onDefense",
           destination: "discardSelf",
+          ...(options.costs === undefined ? {} : { costs: options.costs }),
         },
       ],
       unsupportedMechanics: [],

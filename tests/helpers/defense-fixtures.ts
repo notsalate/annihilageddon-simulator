@@ -87,8 +87,5 @@ export function addFixtureDefenseCardToHand(
     marketChips: 0,
   };
   player.hand.push(card);
-  const previousStrategy = state.effectChoiceStrategy;
-  state.effectChoiceStrategy = (request) =>
-    previousStrategy?.(request) ?? selectFirstFixtureDefense(request);
   return card;
 }
