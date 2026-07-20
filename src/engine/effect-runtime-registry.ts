@@ -185,7 +185,11 @@ export type DefenseAttackContext =
       originalSource: EffectSourceContext;
       defenseUsage: AttackDefenseUsage;
     }
-  | { kind: "nonredirectable"; defenseUsage: AttackDefenseUsage };
+  | {
+      kind: "nonredirectable";
+      source: EffectSourceContext;
+      defenseUsage: AttackDefenseUsage;
+    };
 
 export interface EffectRuntimeServices {
   resolveTargetChoice(
@@ -1225,6 +1229,7 @@ const attackGainStatusHandler: EffectRuntimeHandler = {
       if (
         services.resolveDefenseWindow(state, targetPlayer, {
           kind: "nonredirectable",
+          source,
           defenseUsage: createAttackDefenseUsage(),
         })
       ) {
@@ -4540,6 +4545,7 @@ function collectMayhemAttackDefenseDecisions(
     const avoided =
       services.resolveDefenseWindow(state, targetPlayer, {
         kind: "nonredirectable",
+        source,
         defenseUsage: createAttackDefenseUsage(),
       }) !== undefined;
     if (avoided) {

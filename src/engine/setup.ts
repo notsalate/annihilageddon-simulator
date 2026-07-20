@@ -132,6 +132,12 @@ export interface RuntimeEffectChoiceCardTarget {
   amount: number;
 }
 
+export interface RuntimeEffectChoiceDefense {
+  choiceKind: "defense";
+  choiceId: string;
+  card: CardInstance | undefined;
+}
+
 export interface RuntimeEffectChoiceDirectionalPlayerTarget {
   choiceKind: "directionalPlayerTarget";
   choiceId: string;
@@ -143,6 +149,7 @@ export type RuntimeEffectChoice =
   | RuntimeEffectChoiceOption
   | RuntimeEffectChoicePlayerTarget
   | RuntimeEffectChoiceCardTarget
+  | RuntimeEffectChoiceDefense
   | RuntimeEffectChoiceDirectionalPlayerTarget;
 
 export interface RuntimeEffectChoiceRequest {
@@ -493,6 +500,20 @@ type EffectChoiceSelectedTarget =
       targetPlayerIds?: never;
       targetCardInstanceId?: string;
       targetDefinitionId?: string;
+      direction?: never;
+    }
+  | {
+      choiceKind: "defense";
+      choiceId: string;
+      choiceIds: string[];
+      legalChoiceCount: number;
+      targetCardInstanceId?: string;
+      targetDefinitionId?: string;
+      targetPlayerId?: never;
+      targetPlayerIds?: never;
+      targetCardInstanceIds?: never;
+      targetDefinitionIds?: never;
+      amount?: never;
       direction?: never;
     }
   | {

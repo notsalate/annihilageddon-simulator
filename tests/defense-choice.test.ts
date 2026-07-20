@@ -112,12 +112,12 @@ test("a forged defense choice cannot select an unapproved card identity", () => 
       const legitimate = choices.find(
         (choice) => choice.choiceId === secondDefense.instanceId
       );
-      if (legitimate?.choiceKind !== "cardTarget") {
+      if (legitimate?.choiceKind !== "defense") {
         return undefined;
       }
       return {
         ...legitimate,
-        cards: [{ ...secondDefense }],
+        card: { ...secondDefense },
       };
     }
     return undefined;
@@ -136,9 +136,14 @@ test("a forged defense choice cannot select an unapproved card identity", () => 
   );
 
   assert.deepEqual(result, { ok: true });
-  assert.equal(defender.life.current, lifeBefore);
-  assert.equal(defender.discard.includes(firstDefense), true);
+  assert.equal(defender.life.current, lifeBefore - 2);
+  assert.equal(defender.hand.includes(firstDefense), true);
   assert.equal(defender.hand.includes(secondDefense), true);
+  assert.equal(defender.discard.includes(firstDefense), false);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
+    false
+  );
 });
 
 function createAttackScenario(): {
