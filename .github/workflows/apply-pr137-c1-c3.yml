@@ -1,0 +1,68 @@
+name: apply-pr137-c1-c3
+
+on:
+  pull_request:
+    branches:
+      - agent/architecture-deepening-findings
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'agent/tmp-apply-pr137-c1-c3'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/tmp-apply-pr137-c1-c3
+          path: staging
+          fetch-depth: 1
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/architecture-deepening-findings
+          path: target
+          fetch-depth: 0
+      - name: Decode patch series
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/patches"
+          for source in staging/.github/patches/*.patch.gz.b64; do
+            name="$(basename "${source}" .gz.b64)"
+            base64 --decode "${source}" | gzip --decompress > "${RUNNER_TEMP}/patches/${name}"
+          done
+      - name: Apply commits
+        working-directory: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "OpenAI Codex"
+          git config user.email "codex@openai.com"
+          git am "${RUNNER_TEMP}/patches/0001-c1.patch" \
+                 "${RUNNER_TEMP}/patches/0002-c2.patch" \
+                 "${RUNNER_TEMP}/patches/0003-c3.patch"
+      - name: Install dependencies
+        working-directory: target
+        run: npm ci
+      - name: Verify commit series
+        working-directory: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run check
+          npm run report:card-runtime-clusters
+          git diff --check origin/master...HEAD
+      - name: Publish commits to draft PR branch
+        working-directory: target
+        shell: bash
+        env:
+          EXPECTED_REMOTE_HEAD: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git push \
+            --force-with-lease=refs/heads/agent/architecture-deepening-findings:${EXPECTED_REMOTE_HEAD} \
+            origin HEAD:refs/heads/agent/architecture-deepening-findings
