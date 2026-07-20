@@ -12,7 +12,10 @@ import {
   getEffectRuntimeCatalogEntry,
   resolveEffectRuntimeCatalogEntry,
 } from "../src/engine/effect-runtime-registry.js";
-import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
+import type {
+  AttackIntent,
+  EffectSourceContext,
+} from "../src/engine/effect-runtime-registry.js";
 import type { RuntimeEffectPayload } from "../src/engine/runtime-effect.js";
 import {
   markCardDefinitionId,
@@ -36,6 +39,27 @@ test("executeEffect applies add_power through the catalog resolver", () => {
 
   assert.deepEqual(result, { ok: true });
   assert.equal(state.turn.power, 2);
+});
+
+test("attack intent keeps lifecycle context in one typed value", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11610 });
+  const attackingPlayer = state.players[0];
+  const targetPlayer = state.players[1];
+  assert.ok(attackingPlayer);
+  assert.ok(targetPlayer);
+  const source = fixtureSource(attackingPlayer.playerId, "combat");
+
+  const intent: AttackIntent = {
+    attackingPlayer,
+    targetPlayer,
+    amount: 3,
+    effectId: "attack_damage",
+    source,
+  };
+
+  assert.equal(intent.attackingPlayer, attackingPlayer);
+  assert.equal(intent.targetPlayer, targetPlayer);
+  assert.equal(intent.amount, 3);
 });
 
 test("attack profile uses its initiator instead of the active player or source owner", () => {

@@ -153,6 +153,19 @@ export interface AttackAmountComponents {
   currentAttackerTargetModifierAmount: number;
 }
 
+export interface AttackIntent {
+  attackingPlayer: PlayerState;
+  targetPlayer: PlayerState;
+  amount: number;
+  effectId: RuntimeEffectId;
+  source: EffectSourceContext;
+  unavoidable?: boolean;
+  baseAmount?: number;
+  originalSource?: EffectSourceContext;
+  defenseUsage?: AttackDefenseUsage;
+  amountComponents?: AttackAmountComponents;
+}
+
 export interface AttackResolution extends DamageResult {
   avoided: boolean;
   amountComponents: AttackAmountComponents;
@@ -314,16 +327,7 @@ export interface EffectRuntimeServices {
   hasDinglerStatus(player: PlayerState): boolean;
   resolveAttackTarget(
     state: GameState,
-    attackingPlayer: PlayerState,
-    targetPlayer: PlayerState,
-    amount: number,
-    effectId: RuntimeEffectId,
-    source: EffectSourceContext,
-    unavoidable?: boolean,
-    baseAmount?: number,
-    originalSource?: EffectSourceContext,
-    defenseUsage?: AttackDefenseUsage,
-    amountComponents?: AttackAmountComponents
+    intent: AttackIntent
   ): AttackTargetResolutionResult;
   resolveDefenseWindow(
     state: GameState,
@@ -3238,16 +3242,15 @@ function executeAttackWithAmount(
       state,
       player
     )) {
-      const attackTargetResult = services.resolveAttackTarget(
-        state,
-        player,
+      const attackTargetResult = services.resolveAttackTarget(state, {
+        attackingPlayer: player,
         targetPlayer,
-        attackAmount,
+        amount: attackAmount,
         effectId,
         source,
-        attackProfile.unavoidable,
-        amount
-      );
+        unavoidable: attackProfile.unavoidable,
+        baseAmount: amount,
+      });
       if (!attackTargetResult.ok) {
         return attackTargetResult;
       }
@@ -3305,16 +3308,15 @@ function executeAttackWithAmount(
     amount: targetAttackAmount,
     sourceType: source.sourceType,
   });
-  const attackTargetResult = services.resolveAttackTarget(
-    state,
-    player,
+  const attackTargetResult = services.resolveAttackTarget(state, {
+    attackingPlayer: player,
     targetPlayer,
-    targetAttackAmount,
+    amount: targetAttackAmount,
     effectId,
     source,
-    attackProfile.unavoidable,
-    amount
-  );
+    unavoidable: attackProfile.unavoidable,
+    baseAmount: amount,
+  });
   if (!attackTargetResult.ok) {
     return attackTargetResult;
   }
@@ -3582,16 +3584,15 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
       }
 
       attacked.add(targetPlayer.playerId);
-      const attackTargetResult = services.resolveAttackTarget(
-        state,
-        player,
+      const attackTargetResult = services.resolveAttackTarget(state, {
+        attackingPlayer: player,
         targetPlayer,
-        attackAmount,
-        "directional_chain_attack",
+        amount: attackAmount,
+        effectId: "directional_chain_attack",
         source,
-        attackProfile.unavoidable,
-        amount.value
-      );
+        unavoidable: attackProfile.unavoidable,
+        baseAmount: amount.value,
+      });
       if (!attackTargetResult.ok) {
         return attackTargetResult;
       }
@@ -3659,16 +3660,15 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
       state,
       player
     )) {
-      const attackTargetResult = services.resolveAttackTarget(
-        state,
-        player,
+      const attackTargetResult = services.resolveAttackTarget(state, {
+        attackingPlayer: player,
         targetPlayer,
-        attackAmount,
-        "multi_target_attack",
+        amount: attackAmount,
+        effectId: "multi_target_attack",
         source,
-        attackProfile.unavoidable,
-        amount.value
-      );
+        unavoidable: attackProfile.unavoidable,
+        baseAmount: amount.value,
+      });
       if (!attackTargetResult.ok) {
         return attackTargetResult;
       }

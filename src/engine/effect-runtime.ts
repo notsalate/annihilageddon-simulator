@@ -12,6 +12,7 @@ import {
 import { installGameEventLog } from "./game-events.js";
 import {
   type AttackAmountComponents,
+  type AttackIntent,
   type DamageResult,
   type AttackDefenseUsage,
   type AttackTargetResolutionResult,
@@ -656,21 +657,18 @@ function findCardInstance(
 
 function resolveAttackTarget(
   state: GameState,
-  attackingPlayer: PlayerState,
-  targetPlayer: PlayerState,
-  amount: number,
-  effectId: RuntimeEffectId,
-  source: EffectSourceContext,
-  unavoidable = false,
-  baseAmount = amount,
-  originalSource = source,
-  defenseUsage: AttackDefenseUsage = createAttackDefenseUsage(),
-  amountComponents: AttackAmountComponents = {
+  intent: AttackIntent
+): AttackTargetResolutionResult {
+  const { attackingPlayer, targetPlayer, amount, effectId, source } = intent;
+  const unavoidable = intent.unavoidable ?? false;
+  const baseAmount = intent.baseAmount ?? amount;
+  const originalSource = intent.originalSource ?? source;
+  const defenseUsage = intent.defenseUsage ?? createAttackDefenseUsage();
+  const amountComponents = intent.amountComponents ?? {
     unresolvedBaseAmount: baseAmount,
     sourceOwnerModifierAmount: amount - baseAmount,
     currentAttackerTargetModifierAmount: 0,
-  }
-): AttackTargetResolutionResult {
+  };
   const resolvedAmountComponents = recalculateAttackAmountComponents(
     state,
     attackingPlayer,
@@ -1944,23 +1942,23 @@ function resolveDefenseWindow(
   }
 
   if (redirectsAttack && attack.kind === "redirectable") {
-    const redirectResult = resolveAttackTarget(
-      state,
-      defendingPlayer,
-      attack.attackingPlayer,
-      attack.amountComponents.unresolvedBaseAmount +
+    const redirectResult = resolveAttackTarget(state, {
+      attackingPlayer: defendingPlayer,
+      targetPlayer: attack.attackingPlayer,
+      amount:
+        attack.amountComponents.unresolvedBaseAmount +
         attack.amountComponents.sourceOwnerModifierAmount,
-      attack.effectId,
-      {
+      effectId: attack.effectId,
+      source: {
         ...attack.source,
         playerId: defendingPlayer.playerId,
       },
-      false,
-      attack.amountComponents.unresolvedBaseAmount,
-      attack.originalSource,
-      attack.defenseUsage,
-      attack.amountComponents
-    );
+      unavoidable: false,
+      baseAmount: attack.amountComponents.unresolvedBaseAmount,
+      originalSource: attack.originalSource,
+      defenseUsage: attack.defenseUsage,
+      amountComponents: attack.amountComponents,
+    });
     if (!redirectResult.ok) {
       restoreDefenseMutationSnapshot(
         state,
