@@ -1,5 +1,8 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
-import type { AttackAmountComponents } from "./attack-resolution.js";
+import {
+  summarizeAttackDamage,
+  type AttackAmountComponents,
+} from "./attack-resolution.js";
 export type { AttackAmountComponents } from "./attack-resolution.js";
 import {
   markCardDefinitionId,
@@ -3339,36 +3342,7 @@ function applyAfterResolvedAttackDamage(
   attackResults: readonly AttackResolution[],
   services: EffectRuntimeServices
 ): void {
-  const damageByAttackerAndSource = new Map<
-    string,
-    {
-      attackingPlayer: PlayerState;
-      damageDealt: number;
-      source: EffectSourceContext;
-    }
-  >();
-
-  for (const attackResult of attackResults) {
-    const key = [
-      attackResult.currentAttackerId,
-      attackResult.source.sourceType,
-      attackResult.source.cardInstanceId,
-      attackResult.source.definitionId,
-    ].join("\u0000");
-    const existing = damageByAttackerAndSource.get(key);
-    if (existing === undefined) {
-      damageByAttackerAndSource.set(key, {
-        attackingPlayer: attackResult.attackingPlayer,
-        damageDealt: attackResult.damageDealt,
-        source: attackResult.source,
-      });
-      continue;
-    }
-
-    existing.damageDealt += attackResult.damageDealt;
-  }
-
-  for (const attribution of damageByAttackerAndSource.values()) {
+  for (const attribution of summarizeAttackDamage(attackResults)) {
     services.applyAfterPlayerAttackDamage(
       state,
       attribution.attackingPlayer,

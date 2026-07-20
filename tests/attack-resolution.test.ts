@@ -5,6 +5,7 @@ import { initializeGame, type CardInstance } from "../src/index.js";
 import {
   createAttackAmountState,
   resolveAttackAmount,
+  summarizeAttackDamage,
 } from "../src/engine/attack-resolution.js";
 import {
   markCardDefinitionId,
@@ -90,6 +91,78 @@ test("redirect recalculates only the current-attacker modifier", () => {
     sourceOwnerModifierAmount: 1,
     currentAttackerTargetModifierAmount: 3,
   });
+});
+
+test("damage attribution aggregates multi-target results by current attacker and source", () => {
+  const state = initializeGame({ rootDir, seed: 42005 });
+  const attacker = mustGetPlayer(state, "player-1");
+  const source = {
+    sourceType: "card" as const,
+    runtimeMode: "fixture" as const,
+    playerId: attacker.playerId,
+    cardInstanceId: "fixture-multi-source",
+    definitionId: "fixture-multi-source",
+  };
+
+  const attributions = summarizeAttackDamage([
+    {
+      currentAttackerId: attacker.playerId,
+      attackingPlayer: attacker,
+      damageDealt: 2,
+      source,
+    },
+    {
+      currentAttackerId: attacker.playerId,
+      attackingPlayer: attacker,
+      damageDealt: 3,
+      source,
+    },
+  ]);
+
+  assert.deepEqual(attributions, [
+    { attackingPlayer: attacker, damageDealt: 5, source },
+  ]);
+});
+
+test("damage attribution keeps redirected current attackers separate", () => {
+  const state = initializeGame({ rootDir, seed: 42006 });
+  const originalAttacker = mustGetPlayer(state, "player-1");
+  const redirectingAttacker = mustGetPlayer(state, "player-2");
+  const source = {
+    sourceType: "card" as const,
+    runtimeMode: "fixture" as const,
+    playerId: originalAttacker.playerId,
+    cardInstanceId: "fixture-redirect-source",
+    definitionId: "fixture-redirect-source",
+  };
+  const redirectedSource = {
+    ...source,
+    playerId: redirectingAttacker.playerId,
+  };
+
+  const attributions = summarizeAttackDamage([
+    {
+      currentAttackerId: originalAttacker.playerId,
+      attackingPlayer: originalAttacker,
+      damageDealt: 1,
+      source,
+    },
+    {
+      currentAttackerId: redirectingAttacker.playerId,
+      attackingPlayer: redirectingAttacker,
+      damageDealt: 4,
+      source: redirectedSource,
+    },
+  ]);
+
+  assert.deepEqual(attributions, [
+    { attackingPlayer: originalAttacker, damageDealt: 1, source },
+    {
+      attackingPlayer: redirectingAttacker,
+      damageDealt: 4,
+      source: redirectedSource,
+    },
+  ]);
 });
 
 function mustGetPlayer(

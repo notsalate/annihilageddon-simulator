@@ -60,3 +60,57 @@ export function resolveAttackAmount(
       components.currentAttackerTargetModifierAmount,
   };
 }
+
+export interface AttackSourceIdentity {
+  sourceType: string;
+  cardInstanceId: string;
+  definitionId: string;
+}
+
+export interface AttributableAttackResult<
+  Source extends AttackSourceIdentity = AttackSourceIdentity,
+> {
+  currentAttackerId: PlayerState["playerId"];
+  attackingPlayer: PlayerState;
+  damageDealt: number;
+  source: Source;
+}
+
+export interface AttackDamageAttribution<
+  Source extends AttackSourceIdentity = AttackSourceIdentity,
+> {
+  attackingPlayer: PlayerState;
+  damageDealt: number;
+  source: Source;
+}
+
+export function summarizeAttackDamage<Source extends AttackSourceIdentity>(
+  attackResults: readonly AttributableAttackResult<Source>[]
+): AttackDamageAttribution<Source>[] {
+  const damageByAttackerAndSource = new Map<
+    string,
+    AttackDamageAttribution<Source>
+  >();
+
+  for (const attackResult of attackResults) {
+    const key = [
+      attackResult.currentAttackerId,
+      attackResult.source.sourceType,
+      attackResult.source.cardInstanceId,
+      attackResult.source.definitionId,
+    ].join("\u0000");
+    const existing = damageByAttackerAndSource.get(key);
+    if (existing === undefined) {
+      damageByAttackerAndSource.set(key, {
+        attackingPlayer: attackResult.attackingPlayer,
+        damageDealt: attackResult.damageDealt,
+        source: attackResult.source,
+      });
+      continue;
+    }
+
+    existing.damageDealt += attackResult.damageDealt;
+  }
+
+  return [...damageByAttackerAndSource.values()];
+}
