@@ -163,6 +163,17 @@ export interface AttackResolution extends DamageResult {
   originalSource: EffectSourceContext;
 }
 
+export type AttackTargetResolutionResult =
+  | { ok: true; resolution: AttackResolution }
+  | { ok: false; error: string };
+
+export type DefenseWindowResolutionResult =
+  | {
+      ok: true;
+      resolution: AttackResolution | undefined;
+    }
+  | { ok: false; error: string };
+
 export interface AttackDefenseUsage {
   defendedPlayerIds: Set<PlayerState["playerId"]>;
   usedDefenseCardInstanceIds: Set<CardInstance["instanceId"]>;
@@ -313,26 +324,26 @@ export interface EffectRuntimeServices {
     originalSource?: EffectSourceContext,
     defenseUsage?: AttackDefenseUsage,
     amountComponents?: AttackAmountComponents
-  ): AttackResolution;
+  ): AttackTargetResolutionResult;
   resolveDefenseWindow(
     state: GameState,
     defendingPlayer: PlayerState,
     attack: DefenseAttackContext
-  ): AttackResolution | undefined;
+  ): DefenseWindowResolutionResult;
   resolveMayhemAttack(
     state: GameState,
     sourcePlayer: PlayerState,
     amount: number,
     effectId: RuntimeEffectId,
     source: EffectSourceContext
-  ): void;
+  ): EffectExecutionResult;
   resolveMayhemAttackPlan(
     state: GameState,
     sourcePlayer: PlayerState,
     targets: readonly MayhemAttackPlanTarget[],
     effectId: RuntimeEffectId,
     source: EffectSourceContext
-  ): void;
+  ): EffectExecutionResult;
   resolvePlayerDeath(state: GameState, player: PlayerState): void;
   peekTopDeckCard(
     player: PlayerState,
@@ -1226,13 +1237,15 @@ const attackGainStatusHandler: EffectRuntimeHandler = {
         effectId,
         sourceType: source.sourceType,
       });
-      if (
-        services.resolveDefenseWindow(state, targetPlayer, {
-          kind: "nonredirectable",
-          source,
-          defenseUsage: createAttackDefenseUsage(),
-        })
-      ) {
+      const defenseResult = services.resolveDefenseWindow(state, targetPlayer, {
+        kind: "nonredirectable",
+        source,
+        defenseUsage: createAttackDefenseUsage(),
+      });
+      if (!defenseResult.ok) {
+        return defenseResult;
+      }
+      if (defenseResult.resolution !== undefined) {
         recordGameEvent(state, {
           type: "attackAvoided",
           playerId: targetPlayer.playerId,
@@ -1384,14 +1397,17 @@ const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler = {
   },
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
-    const decisions = collectMayhemAttackDefenseDecisions(
+    const decisionResult = collectMayhemAttackDefenseDecisions(
       state,
       services.getPlayersInActiveOrder(state),
       effectId,
       source,
       services
     );
-    for (const { player: targetPlayer, avoided } of decisions) {
+    if (!decisionResult.ok) {
+      return decisionResult;
+    }
+    for (const { player: targetPlayer, avoided } of decisionResult.decisions) {
       if (avoided) {
         continue;
       }
@@ -1848,7 +1864,7 @@ const mayhemEachPlayerGainChipsThenAttackHandler: EffectRuntimeHandler<MayhemEac
         );
       }
 
-      services.resolveMayhemAttackPlan(
+      return services.resolveMayhemAttackPlan(
         state,
         player,
         targetPlayers.map((targetPlayer) => ({
@@ -1858,8 +1874,6 @@ const mayhemEachPlayerGainChipsThenAttackHandler: EffectRuntimeHandler<MayhemEac
         effect.effectId,
         source
       );
-
-      return { ok: true };
     },
   };
 
@@ -2218,14 +2232,17 @@ const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler = {
       .getPlayersInActiveOrder(state)
       .filter((candidate) => candidate.life.current === lowestLife);
 
-    const decisions = collectMayhemAttackDefenseDecisions(
+    const decisionResult = collectMayhemAttackDefenseDecisions(
       state,
       targets,
       effectId,
       source,
       services
     );
-    for (const { player: targetPlayer, avoided } of decisions) {
+    if (!decisionResult.ok) {
+      return decisionResult;
+    }
+    for (const { player: targetPlayer, avoided } of decisionResult.decisions) {
       if (avoided) {
         continue;
       }
@@ -3221,7 +3238,7 @@ function executeAttackWithAmount(
       state,
       player
     )) {
-      const attackResult = services.resolveAttackTarget(
+      const attackTargetResult = services.resolveAttackTarget(
         state,
         player,
         targetPlayer,
@@ -3231,6 +3248,10 @@ function executeAttackWithAmount(
         attackProfile.unavoidable,
         amount
       );
+      if (!attackTargetResult.ok) {
+        return attackTargetResult;
+      }
+      const attackResult = attackTargetResult.resolution;
       attackResults.push(attackResult);
       const branchResult = executeAttackBranches(
         state,
@@ -3284,7 +3305,7 @@ function executeAttackWithAmount(
     amount: targetAttackAmount,
     sourceType: source.sourceType,
   });
-  const attackResult = services.resolveAttackTarget(
+  const attackTargetResult = services.resolveAttackTarget(
     state,
     player,
     targetPlayer,
@@ -3294,6 +3315,10 @@ function executeAttackWithAmount(
     attackProfile.unavoidable,
     amount
   );
+  if (!attackTargetResult.ok) {
+    return attackTargetResult;
+  }
+  const attackResult = attackTargetResult.resolution;
   services.applyAfterPlayerAttackDamage(
     state,
     attackResult.attackingPlayer,
@@ -3557,7 +3582,7 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
       }
 
       attacked.add(targetPlayer.playerId);
-      const attackResult = services.resolveAttackTarget(
+      const attackTargetResult = services.resolveAttackTarget(
         state,
         player,
         targetPlayer,
@@ -3567,6 +3592,10 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
         attackProfile.unavoidable,
         amount.value
       );
+      if (!attackTargetResult.ok) {
+        return attackTargetResult;
+      }
+      const attackResult = attackTargetResult.resolution;
       attackResults.push(attackResult);
       if (!attackResult.killed) {
         break;
@@ -3630,7 +3659,7 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
       state,
       player
     )) {
-      const attackResult = services.resolveAttackTarget(
+      const attackTargetResult = services.resolveAttackTarget(
         state,
         player,
         targetPlayer,
@@ -3640,6 +3669,10 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
         attackProfile.unavoidable,
         amount.value
       );
+      if (!attackTargetResult.ok) {
+        return attackTargetResult;
+      }
+      const attackResult = attackTargetResult.resolution;
       attackResults.push(attackResult);
     }
 
@@ -3680,14 +3713,13 @@ const mayhemAttackHandler: EffectRuntimeHandler = {
       return amount;
     }
 
-    services.resolveMayhemAttack(
+    return services.resolveMayhemAttack(
       state,
       player,
       amount.value,
       "mayhem_attack",
       source
     );
-    return { ok: true };
   },
 };
 
@@ -4520,7 +4552,12 @@ function collectMayhemAttackDefenseDecisions(
   effectId: RuntimeEffectId,
   source: EffectSourceContext,
   services: EffectRuntimeServices
-): Array<{ player: PlayerState; avoided: boolean }> {
+):
+  | {
+      ok: true;
+      decisions: Array<{ player: PlayerState; avoided: boolean }>;
+    }
+  | { ok: false; error: string } {
   const decisions: Array<{ player: PlayerState; avoided: boolean }> = [];
 
   recordGameEvent(state, {
@@ -4542,12 +4579,15 @@ function collectMayhemAttackDefenseDecisions(
       effectId,
       sourceType: source.sourceType,
     });
-    const avoided =
-      services.resolveDefenseWindow(state, targetPlayer, {
-        kind: "nonredirectable",
-        source,
-        defenseUsage: createAttackDefenseUsage(),
-      }) !== undefined;
+    const defenseResult = services.resolveDefenseWindow(state, targetPlayer, {
+      kind: "nonredirectable",
+      source,
+      defenseUsage: createAttackDefenseUsage(),
+    });
+    if (!defenseResult.ok) {
+      return defenseResult;
+    }
+    const avoided = defenseResult.resolution !== undefined;
     if (avoided) {
       recordGameEvent(state, {
         type: "attackAvoided",
@@ -4572,7 +4612,7 @@ function collectMayhemAttackDefenseDecisions(
     sourceType: source.sourceType,
   });
 
-  return decisions;
+  return { ok: true, decisions };
 }
 
 function executeAttackBranch(

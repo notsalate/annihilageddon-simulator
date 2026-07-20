@@ -9,13 +9,15 @@ import {
   recordGameEvent,
   recordMarketChipsGained,
 } from "./event-recorder.js";
+import { installGameEventLog } from "./game-events.js";
 import {
   type AttackAmountComponents,
   type DamageResult,
   type AttackDefenseUsage,
-  type AttackResolution,
+  type AttackTargetResolutionResult,
   createAttackDefenseUsage,
   type DefenseAttackContext,
+  type DefenseWindowResolutionResult,
   type EffectChoice,
   type EffectExecutionResult,
   type EffectRuntimeServices,
@@ -668,7 +670,7 @@ function resolveAttackTarget(
     sourceOwnerModifierAmount: amount - baseAmount,
     currentAttackerTargetModifierAmount: 0,
   }
-): AttackResolution {
+): AttackTargetResolutionResult {
   const resolvedAmountComponents = recalculateAttackAmountComponents(
     state,
     attackingPlayer,
@@ -688,8 +690,8 @@ function resolveAttackTarget(
     sourceType: source.sourceType,
   });
 
-  const defenseResolution = unavoidable
-    ? undefined
+  const defenseResult: DefenseWindowResolutionResult = unavoidable
+    ? { ok: true, resolution: undefined }
     : resolveDefenseWindow(state, targetPlayer, {
         kind: "redirectable",
         attackingPlayer,
@@ -699,7 +701,10 @@ function resolveAttackTarget(
         originalSource,
         defenseUsage,
       });
-  if (defenseResolution !== undefined) {
+  if (!defenseResult.ok) {
+    return defenseResult;
+  }
+  if (defenseResult.resolution !== undefined) {
     recordGameEvent(state, {
       type: "attackAvoided",
       playerId: targetPlayer.playerId,
@@ -709,25 +714,28 @@ function resolveAttackTarget(
       effectId,
       sourceType: source.sourceType,
     });
-    return defenseResolution;
+    return { ok: true, resolution: defenseResult.resolution };
   }
 
   return {
-    ...dealDamage(
-      state,
+    ok: true,
+    resolution: {
+      ...dealDamage(
+        state,
+        attackingPlayer,
+        targetPlayer,
+        resolvedAmount,
+        effectId,
+        source
+      ),
+      avoided: false,
+      amountComponents: resolvedAmountComponents,
       attackingPlayer,
+      currentAttackerId: attackingPlayer.playerId,
       targetPlayer,
-      resolvedAmount,
-      effectId,
-      source
-    ),
-    avoided: false,
-    amountComponents: resolvedAmountComponents,
-    attackingPlayer,
-    currentAttackerId: attackingPlayer.playerId,
-    targetPlayer,
-    source,
-    originalSource,
+      source,
+      originalSource,
+    },
   };
 }
 
@@ -779,7 +787,7 @@ function resolveMayhemAttackPlan(
   targets: readonly MayhemAttackPlanTarget[],
   effectId: RuntimeEffectId,
   source: EffectSourceContext
-): void {
+): EffectExecutionResult {
   const decisions: Array<MayhemAttackPlanTarget & { avoided: boolean }> = [];
   const firstAmount = targets[0]?.amount;
   const phaseAmount =
@@ -809,12 +817,15 @@ function resolveMayhemAttackPlan(
       amount: target.amount,
       sourceType: source.sourceType,
     });
-    const avoided =
-      resolveDefenseWindow(state, target.targetPlayer, {
-        kind: "nonredirectable",
-        source,
-        defenseUsage: createAttackDefenseUsage(),
-      }) !== undefined;
+    const defenseResult = resolveDefenseWindow(state, target.targetPlayer, {
+      kind: "nonredirectable",
+      source,
+      defenseUsage: createAttackDefenseUsage(),
+    });
+    if (!defenseResult.ok) {
+      return defenseResult;
+    }
+    const avoided = defenseResult.resolution !== undefined;
     if (avoided) {
       recordGameEvent(state, {
         type: "attackAvoided",
@@ -873,6 +884,8 @@ function resolveMayhemAttackPlan(
       source
     );
   }
+
+  return { ok: true };
 }
 
 function resolveMayhemAttack(
@@ -881,8 +894,8 @@ function resolveMayhemAttack(
   amount: number,
   effectId: RuntimeEffectId,
   source: EffectSourceContext
-): void {
-  resolveMayhemAttackPlan(
+): EffectExecutionResult {
+  return resolveMayhemAttackPlan(
     state,
     sourcePlayer,
     getPlayersInActiveOrder(state).map((targetPlayer) => ({
@@ -1637,13 +1650,192 @@ function applyAfterPlayerAttackDamage(
   }
 }
 
+interface DefensePlayerMutationSnapshot {
+  player: PlayerState;
+  deck: CardInstance[];
+  hand: CardInstance[];
+  discard: CardInstance[];
+  playedThisTurn: CardInstance[];
+  permanents: CardInstance[];
+  unboughtFamiliar: CardInstance | undefined;
+  deadWizardTokens: PlayerState["deadWizardTokens"];
+  wizardProperties: PlayerState["wizardProperties"];
+  statuses: PlayerState["statuses"];
+  trophyLikeObjects: PlayerState["trophyLikeObjects"];
+  chips: number;
+  life: PlayerState["life"];
+}
+
+interface DefenseObjectMutationSnapshot {
+  object: object;
+  value: object;
+}
+
+interface DefenseMutationSnapshot {
+  activePlayerId: GameState["activePlayerId"];
+  turn: GameState["turn"];
+  players: DefensePlayerMutationSnapshot[];
+  common: {
+    market: CardInstance[];
+    legendMarket: CardInstance[];
+    mainDeck: CardInstance[];
+    legendDeck: CardInstance[];
+    wildMagicStack: CardInstance[];
+    limpWandStack: CardInstance[];
+    destroyedPile: CardInstance[];
+    destroyedMayhem: CardInstance[];
+    destroyedMegaMayhem: CardInstance[];
+    deadWizardTokenStatus: GameState["common"]["deadWizardTokens"]["status"];
+    deadWizardTokenDrawStack: GameState["common"]["deadWizardTokens"]["drawStack"];
+  };
+  mutableObjects: DefenseObjectMutationSnapshot[];
+  rng: GameState["rng"];
+  eventLogLength: number;
+  defendedPlayerIds: Set<PlayerState["playerId"]>;
+  usedDefenseCardInstanceIds: Set<CardInstance["instanceId"]>;
+}
+
+function createDefenseMutationSnapshot(
+  state: GameState,
+  defenseUsage: AttackDefenseUsage
+): DefenseMutationSnapshot {
+  const mutableObjects = collectDefenseMutableObjects(state).map((object) => ({
+    object,
+    value: structuredClone(object),
+  }));
+  return {
+    activePlayerId: state.activePlayerId,
+    turn: structuredClone(state.turn),
+    players: state.players.map((player) => ({
+      player,
+      deck: [...player.deck],
+      hand: [...player.hand],
+      discard: [...player.discard],
+      playedThisTurn: [...player.playedThisTurn],
+      permanents: [...player.permanents],
+      unboughtFamiliar: player.unboughtFamiliar,
+      deadWizardTokens: [...player.deadWizardTokens],
+      wizardProperties: [...player.wizardProperties],
+      statuses: [...player.statuses],
+      trophyLikeObjects: [...player.trophyLikeObjects],
+      chips: player.chips,
+      life: { ...player.life },
+    })),
+    common: {
+      market: [...state.common.market],
+      legendMarket: [...state.common.legendMarket],
+      mainDeck: [...state.common.mainDeck],
+      legendDeck: [...state.common.legendDeck],
+      wildMagicStack: [...state.common.wildMagicStack],
+      limpWandStack: [...state.common.limpWandStack],
+      destroyedPile: [...state.common.destroyedPile],
+      destroyedMayhem: [...state.common.destroyedMayhem],
+      destroyedMegaMayhem: [...state.common.destroyedMegaMayhem],
+      deadWizardTokenStatus: state.common.deadWizardTokens.status,
+      deadWizardTokenDrawStack: [...state.common.deadWizardTokens.drawStack],
+    },
+    mutableObjects,
+    rng: state.rng.fork(),
+    eventLogLength: state.eventLog.length,
+    defendedPlayerIds: new Set(defenseUsage.defendedPlayerIds),
+    usedDefenseCardInstanceIds: new Set(
+      defenseUsage.usedDefenseCardInstanceIds
+    ),
+  };
+}
+
+function collectDefenseMutableObjects(state: GameState): object[] {
+  const objects = new Set<object>();
+  const add = (values: readonly object[]): void => {
+    for (const value of values) objects.add(value);
+  };
+  for (const player of state.players) {
+    add(player.deck);
+    add(player.hand);
+    add(player.discard);
+    add(player.playedThisTurn);
+    add(player.permanents);
+    if (player.unboughtFamiliar !== undefined)
+      objects.add(player.unboughtFamiliar);
+    add(player.deadWizardTokens);
+    add(player.wizardProperties);
+    add(player.statuses);
+    add(player.trophyLikeObjects);
+  }
+  add(state.common.market);
+  add(state.common.legendMarket);
+  add(state.common.mainDeck);
+  add(state.common.legendDeck);
+  add(state.common.wildMagicStack);
+  add(state.common.limpWandStack);
+  add(state.common.destroyedPile);
+  add(state.common.destroyedMayhem);
+  add(state.common.destroyedMegaMayhem);
+  add(state.common.deadWizardTokens.drawStack);
+  return [...objects];
+}
+
+function restoreDefenseMutationSnapshot(
+  state: GameState,
+  defenseUsage: AttackDefenseUsage,
+  snapshot: DefenseMutationSnapshot
+): void {
+  for (const mutableObject of snapshot.mutableObjects) {
+    Object.assign(mutableObject.object, structuredClone(mutableObject.value));
+  }
+  state.activePlayerId = snapshot.activePlayerId;
+  state.turn = structuredClone(snapshot.turn);
+  for (const playerSnapshot of snapshot.players) {
+    const { player } = playerSnapshot;
+    player.deck = [...playerSnapshot.deck];
+    player.hand = [...playerSnapshot.hand];
+    player.discard = [...playerSnapshot.discard];
+    player.playedThisTurn = [...playerSnapshot.playedThisTurn];
+    player.permanents = [...playerSnapshot.permanents];
+    player.unboughtFamiliar = playerSnapshot.unboughtFamiliar;
+    player.deadWizardTokens = [...playerSnapshot.deadWizardTokens];
+    player.wizardProperties = [...playerSnapshot.wizardProperties];
+    player.statuses = [...playerSnapshot.statuses];
+    player.trophyLikeObjects = [...playerSnapshot.trophyLikeObjects];
+    player.chips = playerSnapshot.chips;
+    player.life = { ...playerSnapshot.life };
+  }
+  state.common.market = [...snapshot.common.market];
+  state.common.legendMarket = [...snapshot.common.legendMarket];
+  state.common.mainDeck = [...snapshot.common.mainDeck];
+  state.common.legendDeck = [...snapshot.common.legendDeck];
+  state.common.wildMagicStack = [...snapshot.common.wildMagicStack];
+  state.common.limpWandStack = [...snapshot.common.limpWandStack];
+  state.common.destroyedPile = [...snapshot.common.destroyedPile];
+  state.common.destroyedMayhem = [...snapshot.common.destroyedMayhem];
+  state.common.destroyedMegaMayhem = [...snapshot.common.destroyedMegaMayhem];
+  state.common.deadWizardTokens =
+    snapshot.common.deadWizardTokenStatus === "notInDataPack"
+      ? { status: "notInDataPack", drawStack: [] }
+      : {
+          status: snapshot.common.deadWizardTokenStatus,
+          drawStack: [...snapshot.common.deadWizardTokenDrawStack],
+        };
+  state.rng = snapshot.rng;
+  state.eventLog.splice(snapshot.eventLogLength);
+  installGameEventLog(state);
+  defenseUsage.defendedPlayerIds.clear();
+  for (const playerId of snapshot.defendedPlayerIds) {
+    defenseUsage.defendedPlayerIds.add(playerId);
+  }
+  defenseUsage.usedDefenseCardInstanceIds.clear();
+  for (const cardInstanceId of snapshot.usedDefenseCardInstanceIds) {
+    defenseUsage.usedDefenseCardInstanceIds.add(cardInstanceId);
+  }
+}
+
 function resolveDefenseWindow(
   state: GameState,
   defendingPlayer: PlayerState,
   attack: DefenseAttackContext
-): AttackResolution | undefined {
+): DefenseWindowResolutionResult {
   if (attack.defenseUsage.defendedPlayerIds.has(defendingPlayer.playerId)) {
-    return undefined;
+    return { ok: true, resolution: undefined };
   }
 
   const legalDefenses = findLegalDefenses(
@@ -1652,9 +1844,13 @@ function resolveDefenseWindow(
     attack.defenseUsage
   );
   if (legalDefenses.length === 0) {
-    return undefined;
+    return { ok: true, resolution: undefined };
   }
 
+  const mutationSnapshot = createDefenseMutationSnapshot(
+    state,
+    attack.defenseUsage
+  );
   const choices: EffectChoice[] = [
     { choiceKind: "defense", choiceId: "decline", card: undefined },
     ...legalDefenses.map((defense) => ({
@@ -1674,13 +1870,13 @@ function resolveDefenseWindow(
     selectedChoice?.choiceKind !== "defense" ||
     selectedChoice.card === undefined
   ) {
-    return undefined;
+    return { ok: true, resolution: undefined };
   }
   const defense = legalDefenses.find(
     (candidate) => candidate.card === selectedChoice.card
   );
   if (defense === undefined) {
-    return undefined;
+    return { ok: true, resolution: undefined };
   }
 
   recordGameEvent(state, {
@@ -1692,7 +1888,15 @@ function resolveDefenseWindow(
   });
 
   if (!payDefenseCosts(state, defendingPlayer, defense.card, defense.effect)) {
-    return undefined;
+    restoreDefenseMutationSnapshot(
+      state,
+      attack.defenseUsage,
+      mutationSnapshot
+    );
+    return {
+      ok: false,
+      error: `Cannot pay defense costs for ${defense.card.instanceId}`,
+    };
   }
 
   attack.defenseUsage.defendedPlayerIds.add(defendingPlayer.playerId);
@@ -1709,7 +1913,15 @@ function resolveDefenseWindow(
   };
 
   if (redirectsAttack && !moveDefenseCard(state, defendingPlayer, defense)) {
-    return undefined;
+    restoreDefenseMutationSnapshot(
+      state,
+      attack.defenseUsage,
+      mutationSnapshot
+    );
+    return {
+      ok: false,
+      error: `Cannot move redirect defense ${defense.card.instanceId}`,
+    };
   }
 
   const branchEffects = defense.effect.branchEffects;
@@ -1722,12 +1934,17 @@ function resolveDefenseWindow(
       defenseSource
     );
     if (!branchResult.ok) {
-      return undefined;
+      restoreDefenseMutationSnapshot(
+        state,
+        attack.defenseUsage,
+        mutationSnapshot
+      );
+      return branchResult;
     }
   }
 
   if (redirectsAttack && attack.kind === "redirectable") {
-    return resolveAttackTarget(
+    const redirectResult = resolveAttackTarget(
       state,
       defendingPlayer,
       attack.attackingPlayer,
@@ -1744,33 +1961,55 @@ function resolveDefenseWindow(
       attack.defenseUsage,
       attack.amountComponents
     );
+    if (!redirectResult.ok) {
+      restoreDefenseMutationSnapshot(
+        state,
+        attack.defenseUsage,
+        mutationSnapshot
+      );
+      return redirectResult;
+    }
+    return { ok: true, resolution: redirectResult.resolution };
   }
 
   if (!redirectsAttack && !moveDefenseCard(state, defendingPlayer, defense)) {
-    return undefined;
+    restoreDefenseMutationSnapshot(
+      state,
+      attack.defenseUsage,
+      mutationSnapshot
+    );
+    return {
+      ok: false,
+      error: `Cannot move defense ${defense.card.instanceId}`,
+    };
   }
   return {
-    damageDealt: 0,
-    killed: false,
-    avoided: true,
-    amountComponents:
-      attack.kind === "redirectable"
-        ? attack.amountComponents
-        : {
-            unresolvedBaseAmount: 0,
-            sourceOwnerModifierAmount: 0,
-            currentAttackerTargetModifierAmount: 0,
-          },
-    attackingPlayer:
-      attack.kind === "redirectable" ? attack.attackingPlayer : defendingPlayer,
-    currentAttackerId:
-      attack.kind === "redirectable"
-        ? attack.attackingPlayer.playerId
-        : defendingPlayer.playerId,
-    targetPlayer: defendingPlayer,
-    source: defenseSource,
-    originalSource:
-      attack.kind === "redirectable" ? attack.originalSource : defenseSource,
+    ok: true,
+    resolution: {
+      damageDealt: 0,
+      killed: false,
+      avoided: true,
+      amountComponents:
+        attack.kind === "redirectable"
+          ? attack.amountComponents
+          : {
+              unresolvedBaseAmount: 0,
+              sourceOwnerModifierAmount: 0,
+              currentAttackerTargetModifierAmount: 0,
+            },
+      attackingPlayer:
+        attack.kind === "redirectable"
+          ? attack.attackingPlayer
+          : defendingPlayer,
+      currentAttackerId:
+        attack.kind === "redirectable"
+          ? attack.attackingPlayer.playerId
+          : defendingPlayer.playerId,
+      targetPlayer: defendingPlayer,
+      source: defenseSource,
+      originalSource:
+        attack.kind === "redirectable" ? attack.originalSource : defenseSource,
+    },
   };
 }
 

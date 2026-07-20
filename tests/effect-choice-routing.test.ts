@@ -97,6 +97,94 @@ test("chosenFoe without a callback keeps the first opponent baseline", () => {
   assert.equal(allChoiceEvents.length, 1);
 });
 
+test("failed defense branch rolls back mutations and returns its error", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const attackingPlayer = state.players.find(
+    (candidate) => candidate.playerId === state.activePlayerId
+  );
+  const defendingPlayer = state.players.find(
+    (candidate) => candidate.playerId !== state.activePlayerId
+  );
+  assert.ok(attackingPlayer);
+  assert.ok(defendingPlayer);
+  attackingPlayer.wizardProperties = [];
+  attackingPlayer.hand = [];
+  defendingPlayer.wizardProperties = [];
+  defendingPlayer.hand = [];
+  defendingPlayer.chips = 2;
+
+  const defenseDefinition = fixtureDefinition("fixture-atomic-defense", [
+    {
+      effectId: "avoid_attack",
+      timing: "onDefense",
+      destination: "discardSelf",
+      redirectAttack: true,
+      costs: [{ costId: "spend_chips", amount: 1 }],
+      branchEffects: [
+        {
+          effectId: "discard_card",
+          timing: "onDefense",
+          target: { selector: "activePlayerHandCard" },
+          emptyChoice: "fail",
+        },
+      ],
+    },
+  ]);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [defenseDefinition.cardId, defenseDefinition],
+  ]);
+  const defenseCard = {
+    instanceId: markCardInstanceId("fixture-atomic-defense-card"),
+    definitionId: markCardDefinitionId(defenseDefinition.cardId),
+    ownerId: defendingPlayer.playerId,
+    marketChips: 0,
+  };
+  defendingPlayer.hand.push(defenseCard);
+
+  const attackCard = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-atomic-defense-attack", [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 2,
+        target: { selector: "opponentPlayer" },
+      },
+    ])
+  );
+  state.effectChoiceStrategy = (request) => {
+    if (request.effectId !== "avoid_attack") return undefined;
+    return request.choices.find(
+      (choice) => choice.choiceKind === "defense" && choice.card === defenseCard
+    );
+  };
+  const lifeBefore = defendingPlayer.life.current;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attackCard.instanceId,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /No legal choices for effect discard_card/);
+  assert.equal(defendingPlayer.life.current, lifeBefore);
+  assert.equal(defendingPlayer.chips, 2);
+  assert.equal(defendingPlayer.hand.includes(defenseCard), true);
+  assert.equal(defendingPlayer.discard.includes(defenseCard), false);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "defenseChoiceSelected" ||
+        event.type === "defenseCostPaid" ||
+        event.type === "defenseCardMoved" ||
+        (event.type === "effectChoiceSelected" &&
+          event.effectId === "avoid_attack")
+    ),
+    false
+  );
+});
+
 test("target choice strategy can select a non-first chosenPlayer target", () => {
   const state = initializeGame({
     rootDir,
