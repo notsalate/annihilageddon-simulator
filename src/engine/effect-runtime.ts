@@ -812,6 +812,7 @@ function resolveMayhemAttackPlan(
     const avoided =
       resolveDefenseWindow(state, target.targetPlayer, {
         kind: "nonredirectable",
+        source,
         defenseUsage: createAttackDefenseUsage(),
       }) !== undefined;
     if (avoided) {
@@ -1163,14 +1164,25 @@ function chooseEffectChoice(
                   }
                 : {}),
             }
-          : {
-              ...choicePayloadBase,
-              choiceKind: "directionalPlayerTarget" as const,
-              direction: choice.direction,
-              targetPlayerIds: choice.players.map(
-                (candidate) => candidate.playerId
-              ),
-            };
+          : choice.choiceKind === "defense"
+            ? {
+                ...choicePayloadBase,
+                choiceKind: "defense" as const,
+                ...(choice.card === undefined
+                  ? {}
+                  : {
+                      targetCardInstanceId: choice.card.instanceId,
+                      targetDefinitionId: choice.card.definitionId,
+                    }),
+              }
+            : {
+                ...choicePayloadBase,
+                choiceKind: "directionalPlayerTarget" as const,
+                direction: choice.direction,
+                targetPlayerIds: choice.players.map(
+                  (candidate) => candidate.playerId
+                ),
+              };
 
   recordGameEvent(state, {
     type: "effectChoiceSelected",
@@ -1634,10 +1646,38 @@ function resolveDefenseWindow(
     return undefined;
   }
 
-  const defense = findFirstLegalDefense(
+  const legalDefenses = findLegalDefenses(
     state,
     defendingPlayer,
     attack.defenseUsage
+  );
+  if (legalDefenses.length === 0) {
+    return undefined;
+  }
+
+  const choices: EffectChoice[] = [
+    { choiceKind: "defense", choiceId: "decline", card: undefined },
+    ...legalDefenses.map((defense) => ({
+      choiceKind: "defense" as const,
+      choiceId: defense.card.instanceId,
+      card: defense.card,
+    })),
+  ];
+  const selectedChoice = chooseEffectChoice(
+    state,
+    defendingPlayer,
+    attack.source,
+    "avoid_attack",
+    choices
+  );
+  if (
+    selectedChoice?.choiceKind !== "defense" ||
+    selectedChoice.card === undefined
+  ) {
+    return undefined;
+  }
+  const defense = legalDefenses.find(
+    (candidate) => candidate.card === selectedChoice.card
   );
   if (defense === undefined) {
     return undefined;
@@ -1781,17 +1821,20 @@ function moveDefenseCard(
   return false;
 }
 
-function findFirstLegalDefense(
+function findLegalDefenses(
   state: GameState,
   defendingPlayer: PlayerState,
   defenseUsage: AttackDefenseUsage
-):
-  | {
-      card: CardInstance;
-      destination: "discardSelf" | "topdeckSelf";
-      effect: AvoidAttackRuntimeEffect;
-    }
-  | undefined {
+): Array<{
+  card: CardInstance;
+  destination: "discardSelf" | "topdeckSelf";
+  effect: AvoidAttackRuntimeEffect;
+}> {
+  const legalDefenses: Array<{
+    card: CardInstance;
+    destination: "discardSelf" | "topdeckSelf";
+    effect: AvoidAttackRuntimeEffect;
+  }> = [];
   for (const card of defendingPlayer.hand) {
     if (defenseUsage.usedDefenseCardInstanceIds.has(card.instanceId)) {
       continue;
@@ -1811,15 +1854,15 @@ function findFirstLegalDefense(
       defenseEffect !== undefined &&
       canPayDefenseCosts(defendingPlayer, card, defenseEffect)
     ) {
-      return {
+      legalDefenses.push({
         card,
         destination: defenseEffect.destination,
         effect: defenseEffect,
-      };
+      });
     }
   }
 
-  return undefined;
+  return legalDefenses;
 }
 
 function canPayDefenseCosts(

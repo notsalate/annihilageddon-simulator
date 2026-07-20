@@ -116,6 +116,14 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
   activePlayer.life.current = 1;
   activePlayer.chips = 1;
   foe.chips = 2;
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "avoid_attack"
+      ? choices.find(
+          (choice) =>
+            choice.choiceKind === "defense" && choice.card === familiar
+        )
+      : undefined
+  );
   const attackCardId = addFixtureCardToActiveHand(state, {
     effectId: "attack_damage",
     timing: "onPlay",
@@ -3228,6 +3236,13 @@ test("bought familiar can discard another hand card to avoid an attack", () => {
   targetPlayer.unboughtFamiliar = undefined;
   familiar.ownerId = targetPlayer.playerId;
   targetPlayer.hand.push(familiar);
+  chooseEffectChoice(state, ({ effectId, choices }) =>
+    effectId === "avoid_attack"
+      ? choices.find(
+          (choice) => choice.choiceKind === "defense" && choice.card === familiar
+        )
+      : undefined
+  );
   targetPlayer.life.current = 1;
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "attack_damage",
@@ -9549,7 +9564,19 @@ function chooseEffectChoice(
   state: GameState,
   selector: NonNullable<GameState["effectChoiceStrategy"]>
 ): void {
-  state.effectChoiceStrategy = selector;
+  state.effectChoiceStrategy = (request) =>
+    selector(request) ?? selectFirstFixtureDefense(request);
+}
+
+function selectFirstFixtureDefense(
+  request: Parameters<NonNullable<GameState["effectChoiceStrategy"]>>[0]
+): ReturnType<NonNullable<GameState["effectChoiceStrategy"]>> {
+  if (request.effectId !== "avoid_attack") {
+    return undefined;
+  }
+  return request.choices.find(
+    (choice) => choice.choiceKind === "defense" && choice.card !== undefined
+  );
 }
 
 function addFixtureCardToActiveHand(
@@ -10145,6 +10172,9 @@ function addFixtureDefenseCardToHand(
     marketChips: 0,
   };
   player.hand.push(card);
+  const previousStrategy = state.effectChoiceStrategy;
+  state.effectChoiceStrategy = (request) =>
+    previousStrategy?.(request) ?? selectFirstFixtureDefense(request);
   return card;
 }
 
