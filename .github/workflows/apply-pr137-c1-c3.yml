@@ -26,19 +26,34 @@ jobs:
           ref: agent/architecture-deepening-findings
           path: target
           fetch-depth: 0
-      - name: Decode and validate patch series
+      - name: Decode patch series
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/patches"
-          for source in staging/.github/patches/*.patch.gz.b64; do
-            name="$(basename "${source}" .gz.b64)"
-            echo "validating ${name}: $(wc -c < "${source}") base64 bytes"
-            base64 --decode "${source}" > "${RUNNER_TEMP}/${name}.gz"
-            gzip --test "${RUNNER_TEMP}/${name}.gz"
-            gzip --decompress --stdout "${RUNNER_TEMP}/${name}.gz" > "${RUNNER_TEMP}/patches/${name}"
-            git apply --check "${RUNNER_TEMP}/patches/${name}" || true
-          done
+          python - <<'PY'
+          import base64
+          import gzip
+          from pathlib import Path
+
+          source_dir = Path("staging/.github/patches")
+          target_dir = Path("${RUNNER_TEMP}/patches")
+          files = [
+              ("0001-refactor-control.patch.gz.b64", "0001-c1.patch"),
+              ("0002-refactor-control.patch.gz.b64", "0002-c2.patch"),
+              ("0003-refactor-control-consumers-Control-Ledger.patch.gz.b64", "0003-c3.patch"),
+          ]
+          for source_name, target_name in files:
+              source = source_dir / source_name
+              encoded = "".join(source.read_text(encoding="utf-8").split())
+              compressed = base64.b64decode(encoded, validate=True)
+              decoded = gzip.decompress(compressed)
+              target = target_dir / target_name
+              target.write_bytes(decoded)
+              if not decoded.startswith(b"From "):
+                  raise SystemExit(f"{source_name} is not a git format-patch")
+              print(f"decoded {source_name}: {len(decoded)} bytes")
+          PY
       - name: Apply commits
         working-directory: target
         shell: bash
