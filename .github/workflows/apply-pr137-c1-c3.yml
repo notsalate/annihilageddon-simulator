@@ -34,10 +34,11 @@ jobs:
           python - <<'PY'
           import base64
           import gzip
+          import os
           from pathlib import Path
 
           source_dir = Path("staging/.github/patches")
-          target_dir = Path("${RUNNER_TEMP}/patches")
+          target_dir = Path(os.environ["RUNNER_TEMP"]) / "patches"
           files = [
               ("0001-refactor-control.patch.gz.b64", "0001-c1.patch"),
               ("0002-refactor-control.patch.gz.b64", "0002-c2.patch"),
