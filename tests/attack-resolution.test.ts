@@ -13,6 +13,17 @@ import {
   markPlayerId,
 } from "../src/domain/types.js";
 
+import {
+  addFixtureDefenseCardToHand,
+  selectFirstFixtureDefense,
+} from "./helpers/defense-fixtures.js";
+import {
+  chooseEffect,
+  createGameScenario,
+  givenRuntimeCard,
+  play,
+} from "./helpers/game-scenario.js";
+
 const rootDir = process.cwd();
 
 test("attack amount combines base and source-owner bonus", () => {
@@ -184,3 +195,119 @@ function createArena(ownerId: CardInstance["ownerId"]): CardInstance {
     marketChips: 0,
   };
 }
+
+test("chooseEffect preserves undefined so optional defense declines", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    dataPackPath: "tests/fixtures/playable-runtime-data-pack.json",
+    seed: 60615,
+  });
+  const defender = scenario.foes[0];
+  assert.ok(defender);
+  defender.hand = [];
+  defender.discard = [];
+  const defense = addFixtureDefenseCardToHand(
+    scenario.state,
+    defender,
+    "discardSelf"
+  );
+  chooseEffect(scenario, ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === defender.playerId)
+      : undefined
+  );
+  const lifeBefore = defender.life.current;
+  const attack = givenRuntimeCard(scenario, {
+    effects: [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 4,
+        targetSelector: "chosenFoe",
+      },
+    ],
+  });
+
+  const result = play(scenario, attack);
+
+  assert.equal(result.ok, true);
+  assert.equal(defender.life.current, lifeBefore - 4);
+  assert.equal(defender.hand.includes(defense), true);
+  assert.equal(defender.discard.includes(defense), false);
+  assert.equal(
+    scenario.state.eventLog.some(
+      (event) => event.type === "defenseChoiceSelected"
+    ),
+    false
+  );
+});
+
+test("fixture defense builder does not install a global choice strategy", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    dataPackPath: "tests/fixtures/playable-runtime-data-pack.json",
+    seed: 60615,
+  });
+  const defender = scenario.foes[0];
+  assert.ok(defender);
+  delete scenario.state.effectChoiceStrategy;
+
+  addFixtureDefenseCardToHand(scenario.state, defender, "discardSelf");
+
+  assert.equal(scenario.state.effectChoiceStrategy, undefined);
+});
+
+test("each player can use defense only once while one attack is redirected", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    dataPackPath: "tests/fixtures/playable-runtime-data-pack.json",
+    seed: 60615,
+  });
+  const attackingPlayer = scenario.activePlayer;
+  const targetPlayer = scenario.foes[0];
+  assert.ok(targetPlayer);
+  const firstTargetDefense = addFixtureDefenseCardToHand(
+    scenario.state,
+    targetPlayer,
+    "discardSelf",
+    { redirectAttack: true }
+  );
+  const unusedTargetDefense = addFixtureDefenseCardToHand(
+    scenario.state,
+    targetPlayer,
+    "discardSelf",
+    { redirectAttack: true }
+  );
+  const attackerDefense = addFixtureDefenseCardToHand(
+    scenario.state,
+    attackingPlayer,
+    "discardSelf",
+    { redirectAttack: true }
+  );
+  chooseEffect(scenario, selectFirstFixtureDefense);
+  const targetLifeBefore = targetPlayer.life.current;
+  const attack = givenRuntimeCard(scenario, {
+    effects: [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 2,
+        target: { selector: "opponentPlayer" },
+      },
+    ],
+  });
+
+  const result = play(scenario, attack);
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, targetLifeBefore - 2);
+  assert.equal(targetPlayer.discard.includes(firstTargetDefense), true);
+  assert.equal(attackingPlayer.discard.includes(attackerDefense), true);
+  assert.equal(targetPlayer.hand.includes(unusedTargetDefense), true);
+  assert.equal(
+    scenario.state.eventLog.filter(
+      (event) => event.type === "defenseChoiceSelected"
+    ).length,
+    2
+  );
+});

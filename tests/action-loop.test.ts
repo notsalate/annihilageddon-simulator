@@ -555,123 +555,6 @@ test("redirect defense avoids an ownerless Mayhem attack and still executes its 
   );
 });
 
-test("chooseEffectChoice preserves undefined so optional defense declines", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
-  });
-  const attacker = mustGetPlayer(state, state.activePlayerId);
-  const defender = state.players.find(
-    (player) => player.playerId !== attacker.playerId
-  );
-  assert.ok(defender);
-  defender.hand = [];
-  defender.discard = [];
-  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf");
-  chooseEffectChoice(state, ({ effectId, choices }) =>
-    effectId === "attack_damage"
-      ? choices.find((choice) => choice.choiceId === defender.playerId)
-      : undefined
-  );
-  const lifeBefore = defender.life.current;
-  const attack = addFixtureCardToActiveHand(state, {
-    effectId: "attack_damage",
-    timing: "onPlay",
-    amount: 4,
-    targetSelector: "chosenFoe",
-  });
-
-  const result = applyAction(state, {
-    type: "playCard",
-    cardInstanceId: attack,
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(defender.life.current, lifeBefore - 4);
-  assert.equal(defender.hand.includes(defense), true);
-  assert.equal(defender.discard.includes(defense), false);
-  assert.equal(
-    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
-    false
-  );
-});
-
-test("fixture defense builder does not install a global choice strategy", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
-  });
-  const defender = state.players.find(
-    (player) => player.playerId !== state.activePlayerId
-  );
-  assert.ok(defender);
-  delete state.effectChoiceStrategy;
-
-  addFixtureDefenseCardToHand(state, defender, "discardSelf");
-
-  assert.equal(state.effectChoiceStrategy, undefined);
-});
-
-test("each player can use defense only once while one attack is redirected", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
-  });
-  const attackingPlayer = state.players.find(
-    (player) => player.playerId === state.activePlayerId
-  );
-  assert.ok(attackingPlayer);
-  const targetPlayer = state.players.find(
-    (player) => player.playerId !== attackingPlayer.playerId
-  );
-  assert.ok(targetPlayer);
-  const firstTargetDefense = addFixtureDefenseCardToHand(
-    state,
-    targetPlayer,
-    "discardSelf",
-    { redirectAttack: true }
-  );
-  const unusedTargetDefense = addFixtureDefenseCardToHand(
-    state,
-    targetPlayer,
-    "discardSelf",
-    { redirectAttack: true }
-  );
-  const attackerDefense = addFixtureDefenseCardToHand(
-    state,
-    attackingPlayer,
-    "discardSelf",
-    { redirectAttack: true }
-  );
-  chooseFirstFixtureDefense(state);
-  const targetLifeBefore = targetPlayer.life.current;
-  const attackCardId = addFixtureCardToActiveHand(state, {
-    effectId: "attack_damage",
-    timing: "onPlay",
-    amount: 2,
-    target: { selector: "opponentPlayer" },
-  });
-
-  const result = applyAction(state, {
-    type: "playCard",
-    cardInstanceId: attackCardId,
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(targetPlayer.life.current, targetLifeBefore - 2);
-  assert.equal(targetPlayer.discard.includes(firstTargetDefense), true);
-  assert.equal(attackingPlayer.discard.includes(attackerDefense), true);
-  assert.equal(targetPlayer.hand.includes(unusedTargetDefense), true);
-  assert.equal(
-    state.eventLog.filter((event) => event.type === "defenseChoiceSelected")
-      .length,
-    2
-  );
-});
-
 test("active player can play a card from hand through the action loop", () => {
   const state = initializeGame({
     rootDir,
@@ -9680,13 +9563,6 @@ function assertEventOrder(
     assert.notEqual(eventIndex, -1);
     searchFrom = eventIndex + 1;
   }
-}
-
-function chooseEffectChoice(
-  state: GameState,
-  selector: NonNullable<GameState["effectChoiceStrategy"]>
-): void {
-  state.effectChoiceStrategy = selector;
 }
 
 function chooseEffectChoiceWithFirstFixtureDefense(
