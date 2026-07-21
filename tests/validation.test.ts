@@ -25,6 +25,10 @@ import {
   type TargetSelector,
   type TokenDefinition,
 } from "../src/index.js";
+import type {
+  RuntimeEffectForId,
+  RuntimeEffectPayloadMap,
+} from "../src/engine/runtime-effect.js";
 import {
   type EffectRuntimeServices,
   getEffectRuntimeCatalogEntry,
@@ -33,6 +37,64 @@ import {
 } from "../src/engine/effect-runtime-registry.js";
 
 const rootDir = process.cwd();
+
+test("runtime effect payload map narrows touched effect contracts", () => {
+  type IsAssignable<From, To> = [From] extends [To] ? true : false;
+  type Expect<T extends true> = T;
+  type Equal<Left, Right> =
+    (<Value>() => Value extends Left ? 1 : 2) extends <
+      Value,
+    >() => Value extends Right ? 1 : 2
+      ? true
+      : false;
+
+  const assertions: [
+    Expect<
+      Equal<
+        RuntimeEffectPayloadMap["avoid_attack"],
+        RuntimeEffectForId<"avoid_attack">
+      >
+    >,
+    Expect<
+      Equal<
+        IsAssignable<
+          { effectId: "avoid_attack"; timing: "onDefense" },
+          RuntimeEffectForId<"avoid_attack">
+        >,
+        false
+      >
+    >,
+    Expect<
+      Equal<
+        IsAssignable<
+          {
+            effectId: "ongoing_first_attack_damage_add_power";
+            timing: "afterFirstAttackDamageEachTurn";
+            amount: number;
+          },
+          RuntimeEffectForId<"ongoing_first_attack_damage_add_power">
+        >,
+        false
+      >
+    >,
+    Expect<
+      Equal<
+        IsAssignable<
+          {
+            effectId: "ongoing_add_power_when_playing_wand";
+            timing: "onPlayCard";
+            amount: number;
+            cardTags: ["limpWand"];
+          },
+          RuntimeEffectForId<"ongoing_add_power_when_playing_wand">
+        >,
+        false
+      >
+    >,
+  ] = [true, true, true, true];
+
+  assert.deepEqual(assertions, [true, true, true, true]);
+});
 
 test("runtime data decoder exposes a narrowed successful decoded value", () => {
   const result: DecodeResult<LoadedDataPack> =
@@ -1511,7 +1573,7 @@ test("ongoing controlled power validates its concrete passive shape", () => {
       effectId: "ongoing_add_power",
       timing: "onPlay",
       amount: 0,
-    }),
+    } as unknown as RuntimeEffect),
     []
   );
 });
@@ -3061,7 +3123,7 @@ test("executable data-pack validation rejects redirect defense branches", () => 
           effectId: "avoid_attack",
           timing: "onDefense",
           destination: "redirectTarget",
-        },
+        } as unknown as RuntimeEffect,
       ],
     },
   });
@@ -3092,7 +3154,7 @@ test("executable data-pack validation rejects a non-boolean redirectAttack guard
           timing: "onDefense",
           destination: "discardSelf",
           redirectAttack: "yes",
-        },
+        } as unknown as RuntimeEffect,
       ],
     },
   });

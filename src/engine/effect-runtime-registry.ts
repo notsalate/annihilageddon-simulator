@@ -25,6 +25,7 @@ import {
   type AttackOutcomeBranch,
   type OngoingAddPowerWhenPlayingWandRuntimeEffect,
   type OngoingAddPowerPerDeadWizardTokenRuntimeEffect,
+  type RuntimeEffectForId,
   type RuntimeEffectId,
   type RuntimeEffectCost,
   type RuntimeEffectPayload,
@@ -410,11 +411,6 @@ export interface EffectRuntimeHandler<
     services: EffectRuntimeSetupServices
   ): SetupEffectHandlerResult;
 }
-
-export type RuntimeEffectForId<EffectId extends RuntimeEffectId> = Extract<
-  RuntimeEffectPayload,
-  { effectId: EffectId }
->;
 
 type PositiveAmountRuntimeEffect<EffectId extends RuntimeEffectId> =
   RuntimeEffectForId<EffectId> & { amount: number };

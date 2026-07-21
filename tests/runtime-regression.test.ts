@@ -387,7 +387,7 @@ test("Creator's Hand ignores an invalid passive hand-limit amount that bypasses 
         ...definition,
         engine: {
           ...definition.engine,
-          effects: [{ ...effect, amount: -1 }],
+          effects: [{ ...effect, amount: -1 } as unknown as RuntimeEffect],
         },
       },
     ],
@@ -429,7 +429,8 @@ test("Creator's Hand combines with the maximum-life hand-limit modifier", () => 
   );
 
   assert.equal(
-    applyAction(state, { type: "playCard", cardInstanceId: park.instanceId }).ok,
+    applyAction(state, { type: "playCard", cardInstanceId: park.instanceId })
+      .ok,
     true
   );
   assert.equal(

@@ -292,19 +292,6 @@ export interface RuntimeEffectFields {
   winnerDrawAmount?: unknown;
 }
 
-export interface OngoingAddPowerPerDeadWizardTokenRuntimeEffect {
-  effectId: "ongoing_add_power_per_dead_wizard_token";
-  timing: "whileControlled";
-  amount: number;
-}
-
-export interface OngoingAddPowerWhenPlayingWandRuntimeEffect {
-  effectId: "ongoing_add_power_when_playing_wand";
-  timing: "onPlayCard";
-  amount: number;
-  cardTags: ["wandCard"];
-}
-
 export type AttackOutcomeBranch =
   | { effectId: "gain_chips"; amount: number }
   | { effectId: "gain_chips_equal_damage_dealt" }
@@ -312,36 +299,145 @@ export type AttackOutcomeBranch =
   | { effectId: "return_discard_to_hand"; amount: number }
   | { effectId: "gain_status"; statusId: "dingler"; target?: "damagedPlayer" };
 
-type RuntimeEffectPayloadVariant<EffectId extends KnownRuntimeEffectId> = {
-  effectId: EffectId;
-  condition?: RuntimeEffectCondition;
-  costs?: RuntimeEffectCost[];
-  target?: RuntimeEffectTarget;
-  targetSelector?: RuntimeEffectTargetSelector;
-} & RuntimeEffectFields &
-  (EffectId extends "wild_magic_choice"
-    ? { options?: WildMagicOption[] }
-    : EffectId extends "ongoing_hand_refill_bonus"
-      ? { amount: number }
-      : EffectId extends "ongoing_add_power_when_playing_wand"
-        ? OngoingAddPowerWhenPlayingWandRuntimeEffect
-        : EffectId extends "ongoing_add_power_per_dead_wizard_token"
-          ? OngoingAddPowerPerDeadWizardTokenRuntimeEffect
-          : unknown);
+export type WildMagicOption =
+  | (Omit<RuntimeEffectFields, "options"> & {
+      effectId: "add_power";
+      amount: number;
+    })
+  | (Omit<RuntimeEffectFields, "options"> & {
+      effectId: "play_top_card_from_foe_deck";
+      targetSelector: "chosenFoe";
+    });
 
-export type RuntimeEffectPayload = {
-  [EffectId in KnownRuntimeEffectId]: RuntimeEffectPayloadVariant<EffectId>;
-}[KnownRuntimeEffectId];
+type RuntimeEffectPayloadBase<EffectId extends KnownRuntimeEffectId> =
+  RuntimeEffectFields & { effectId: EffectId };
 
-export type RuntimeEffect = RuntimeEffectPayload & {
-  timing: EffectTiming;
-};
-
-export type AvoidAttackRuntimeEffect = RuntimeEffect & {
-  effectId: "avoid_attack";
+export type AvoidAttackRuntimeEffect = Omit<
+  RuntimeEffectPayloadBase<"avoid_attack">,
+  "timing" | "destination" | "redirectAttack"
+> & {
   timing: "onDefense";
   destination: "discardSelf" | "topdeckSelf";
   redirectAttack?: boolean;
+};
+
+export type IncreaseHandLimitAtMaxLifeRuntimeEffect = Omit<
+  RuntimeEffectPayloadBase<"increase_hand_limit_at_max_life">,
+  "timing" | "amount"
+> & {
+  timing: "endTurn";
+  amount: number;
+};
+
+export type OngoingHandRefillBonusRuntimeEffect = Omit<
+  RuntimeEffectPayloadBase<"ongoing_hand_refill_bonus">,
+  "timing" | "amount"
+> & {
+  timing: "endTurn";
+  amount: number;
+};
+
+export type OngoingAddPowerRuntimeEffect = Omit<
+  RuntimeEffectPayloadBase<"ongoing_add_power">,
+  "timing" | "amount"
+> & {
+  timing: "whileControlled";
+  amount: number;
+};
+
+export type OngoingAddPowerWhenPlayingWandRuntimeEffect = Omit<
+  RuntimeEffectPayloadBase<"ongoing_add_power_when_playing_wand">,
+  "timing" | "amount" | "cardTags"
+> & {
+  timing: "onPlayCard";
+  amount: number;
+  cardTags: ["wandCard"];
+};
+
+export type OngoingAddPowerWhenPlayingLimpWandRuntimeEffect = Omit<
+  RuntimeEffectPayloadBase<"ongoing_add_power_when_playing_limp_wand">,
+  "timing" | "amount" | "cardKind"
+> & {
+  timing: "afterControllerPlaysCard";
+  amount: number;
+  cardKind: "limpWand";
+};
+
+export type OngoingAddPowerPerDeadWizardTokenRuntimeEffect = Omit<
+  RuntimeEffectPayloadBase<"ongoing_add_power_per_dead_wizard_token">,
+  "timing" | "amount"
+> & {
+  timing: "whileControlled";
+  amount: number;
+};
+
+export type OngoingFirstAttackDamageAddPowerRuntimeEffect = Omit<
+  RuntimeEffectPayloadBase<"ongoing_first_attack_damage_add_power">,
+  "timing" | "amount"
+> & {
+  timing: "afterFirstAttackDamageEachTurn";
+  amount: "totalDamageDealtByThatAttack";
+};
+
+export type ModifyOwnedWandAttackDamageRuntimeEffect = Omit<
+  RuntimeEffectPayloadBase<"modify_owned_wand_attack_damage">,
+  "timing" | "amount" | "cardDefinitionIds" | "cardTags"
+> & {
+  timing: "attackReplacement";
+  amount: number;
+  cardDefinitionIds?: string[];
+  cardTags?: string[];
+};
+
+export type DoubleOwnedAttackDamageRuntimeEffect = Omit<
+  RuntimeEffectPayloadBase<"double_owned_attack_damage">,
+  "timing"
+> & {
+  timing: "attackReplacement";
+};
+
+export type PreventDefenseAgainstOwnedWandAttacksRuntimeEffect = Omit<
+  RuntimeEffectPayloadBase<"prevent_defense_against_owned_wand_attacks">,
+  "timing" | "cardDefinitionIds" | "cardTags"
+> & {
+  timing: "attackReplacement";
+  cardDefinitionIds?: string[];
+  cardTags?: string[];
+};
+
+type RuntimeEffectPayloadOverrideMap = {
+  avoid_attack: AvoidAttackRuntimeEffect;
+  double_owned_attack_damage: DoubleOwnedAttackDamageRuntimeEffect;
+  increase_hand_limit_at_max_life: IncreaseHandLimitAtMaxLifeRuntimeEffect;
+  modify_owned_wand_attack_damage: ModifyOwnedWandAttackDamageRuntimeEffect;
+  ongoing_add_power: OngoingAddPowerRuntimeEffect;
+  ongoing_add_power_per_dead_wizard_token: OngoingAddPowerPerDeadWizardTokenRuntimeEffect;
+  ongoing_add_power_when_playing_limp_wand: OngoingAddPowerWhenPlayingLimpWandRuntimeEffect;
+  ongoing_add_power_when_playing_wand: OngoingAddPowerWhenPlayingWandRuntimeEffect;
+  ongoing_first_attack_damage_add_power: OngoingFirstAttackDamageAddPowerRuntimeEffect;
+  ongoing_hand_refill_bonus: OngoingHandRefillBonusRuntimeEffect;
+  prevent_defense_against_owned_wand_attacks: PreventDefenseAgainstOwnedWandAttacksRuntimeEffect;
+  wild_magic_choice: Omit<
+    RuntimeEffectPayloadBase<"wild_magic_choice">,
+    "options"
+  > & { options?: WildMagicOption[] };
+};
+
+export type RuntimeEffectPayloadMap = {
+  [EffectId in KnownRuntimeEffectId]: EffectId extends keyof RuntimeEffectPayloadOverrideMap
+    ? RuntimeEffectPayloadOverrideMap[EffectId]
+    : RuntimeEffectPayloadBase<EffectId>;
+};
+
+export type RuntimeEffectId = KnownRuntimeEffectId;
+
+export type RuntimeEffectForId<EffectId extends RuntimeEffectId> =
+  RuntimeEffectPayloadMap[EffectId];
+
+export type RuntimeEffectPayload = RuntimeEffectPayloadMap[RuntimeEffectId];
+
+export type RuntimeEffect = RuntimeEffectPayload & {
+  timing: EffectTiming;
 };
 
 export function isAvoidAttackRuntimeEffect(
@@ -356,16 +452,6 @@ export function isAvoidAttackRuntimeEffect(
       typeof effect.redirectAttack === "boolean")
   );
 }
-
-export type WildMagicOption =
-  | (Omit<RuntimeEffectFields, "options"> & {
-      effectId: "add_power";
-      amount: number;
-    })
-  | (Omit<RuntimeEffectFields, "options"> & {
-      effectId: "play_top_card_from_foe_deck";
-      targetSelector: "chosenFoe";
-    });
 
 export function isWildMagicOption(value: unknown): value is WildMagicOption {
   if (!isRuntimeEffectTargetRecord(value)) {
@@ -385,8 +471,6 @@ export function isWildMagicOption(value: unknown): value is WildMagicOption {
     value["targetSelector"] === "chosenFoe"
   );
 }
-
-export type RuntimeEffectId = RuntimeEffectPayload["effectId"];
 
 export function isEffectTiming(value: unknown): value is EffectTiming {
   return (
