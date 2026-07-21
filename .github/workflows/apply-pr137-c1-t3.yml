@@ -26,10 +26,10 @@ jobs:
           ref: agent/architecture-deepening-findings
           path: target
           fetch-depth: 0
-      - name: Reconstruct and validate commit series
+      - name: Reconstruct commit series
         shell: bash
         run: |
-          set -euo pipefail
+          set -u
           cat \
             staging/.github/transport/c1-t3/series.part-00 \
             staging/.github/transport/c1-t3/series.fix-01-0 \
@@ -51,8 +51,31 @@ jobs:
             staging/.github/transport/c1-t3/series.part-06 \
             staging/.github/transport/c1-t3/series.part-07 \
             > "${RUNNER_TEMP}/series.b64"
+          {
+            wc -c "${RUNNER_TEMP}/series.b64"
+            sha256sum "${RUNNER_TEMP}/series.b64"
+          } > "${RUNNER_TEMP}/diagnostics.txt"
+          base64 --decode "${RUNNER_TEMP}/series.b64" > "${RUNNER_TEMP}/series.patch" 2>> "${RUNNER_TEMP}/diagnostics.txt" || true
+          {
+            wc -c "${RUNNER_TEMP}/series.patch"
+            sha256sum "${RUNNER_TEMP}/series.patch"
+            grep -c '^From [0-9a-f]\{40\} Mon Sep 17 00:00:00 2001$' "${RUNNER_TEMP}/series.patch" || true
+          } >> "${RUNNER_TEMP}/diagnostics.txt"
+      - name: Upload transport diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: c1-t3-transport-diagnostics
+          path: |
+            ${{ runner.temp }}/diagnostics.txt
+            ${{ runner.temp }}/series.b64
+            ${{ runner.temp }}/series.patch
+          if-no-files-found: error
+          retention-days: 1
+      - name: Validate commit series
+        shell: bash
+        run: |
+          set -euo pipefail
           test "$(wc -c < "${RUNNER_TEMP}/series.b64")" -eq 93936
-          base64 --decode "${RUNNER_TEMP}/series.b64" > "${RUNNER_TEMP}/series.patch"
           test "$(wc -c < "${RUNNER_TEMP}/series.patch")" -eq 70452
           echo "f22a496ad642ccab8f74b762dea62ad7c1945f573e623905851401709f8138f7  ${RUNNER_TEMP}/series.patch" | sha256sum --check
           test "$(grep -c '^From [0-9a-f]\{40\} Mon Sep 17 00:00:00 2001$' "${RUNNER_TEMP}/series.patch")" -eq 6
