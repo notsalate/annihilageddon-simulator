@@ -11,10 +11,14 @@ import {
 } from "../src/index.js";
 import { grantTemporaryControl } from "../src/engine/control-ledger.js";
 import {
+  calculateEndTurnDrawCount,
   executeControlledCardOnPlayCardEffects,
   executeEffect,
 } from "../src/engine/effect-runtime.js";
-import { dispatchControlledCardEffects } from "../src/engine/trigger-dispatch.js";
+import {
+  dispatchControlledCardEffects,
+  listControlledCardEffects,
+} from "../src/engine/trigger-dispatch.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -207,6 +211,61 @@ test("after-attack dispatch attributes a wizard-property attack trigger to the c
   assert.equal(triggerEvent.sourceType, "card");
   assert.equal(triggerEvent.cardInstanceId, trigger.instanceId);
   assert.equal(triggerEvent.definitionId, trigger.definitionId);
+});
+
+test("end-turn discovery combines controlled refill and max-life effects", () => {
+  const state = initializeGame({ rootDir, seed: 23005 });
+  const controller = mustGetPlayer(state, 0);
+  const owner = mustGetPlayer(state, 1);
+  controller.permanents = [];
+  controller.wizardProperties = [];
+  controller.statuses = [];
+  owner.discard = [];
+  controller.life.current = controller.life.max;
+
+  const refill = addControlledEffectCard(
+    state,
+    controller,
+    controller,
+    "end-turn-refill",
+    controller.permanents,
+    [
+      {
+        effectId: "ongoing_hand_refill_bonus",
+        timing: "endTurn",
+        amount: 2,
+      },
+    ]
+  );
+  const maxLife = addControlledEffectCard(
+    state,
+    controller,
+    owner,
+    "end-turn-max-life",
+    owner.discard,
+    [
+      {
+        effectId: "increase_hand_limit_at_max_life",
+        timing: "endTurn",
+        amount: 1,
+      },
+    ]
+  );
+  grantTemporaryControl(state, maxLife.instanceId, controller.playerId);
+
+  const contexts = listControlledCardEffects({
+    state,
+    player: controller,
+    timing: "endTurn",
+  });
+  assert.deepEqual(
+    contexts.map(({ card }) => card.instanceId),
+    [refill.instanceId, maxLife.instanceId]
+  );
+  assert.equal(calculateEndTurnDrawCount(state, controller), 8);
+
+  controller.life.current -= 1;
+  assert.equal(calculateEndTurnDrawCount(state, controller), 7);
 });
 
 test("controlled trigger dispatch stops after the first execution error", () => {

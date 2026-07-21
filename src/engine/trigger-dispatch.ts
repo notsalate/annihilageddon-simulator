@@ -14,7 +14,7 @@ export interface ControlledCardEffectContext {
   source: EffectSourceContext;
 }
 
-export interface DispatchControlledCardEffectsOptions {
+export interface ListControlledCardEffectsOptions {
   state: GameState;
   player: PlayerState;
   timing: EffectTiming;
@@ -23,6 +23,9 @@ export interface DispatchControlledCardEffectsOptions {
     source: EffectSourceContext,
     context: ControlledCardEffectContext
   ) => boolean;
+}
+
+export interface DispatchControlledCardEffectsOptions extends ListControlledCardEffectsOptions {
   execute(
     effect: RuntimeEffect,
     source: EffectSourceContext,
@@ -35,9 +38,10 @@ export interface DispatchControlledCardEffectsOptions {
  * order exposed by Control Ledger. The dispatcher owns source attribution and
  * stops immediately when an effect fails or ends the game.
  */
-export function dispatchControlledCardEffects(
-  options: DispatchControlledCardEffectsOptions
-): EffectExecutionResult {
+export function listControlledCardEffects(
+  options: ListControlledCardEffectsOptions
+): ControlledCardEffectContext[] {
+  const contexts: ControlledCardEffectContext[] = [];
   for (const card of getControlledCards(options.state, options.player)) {
     const definition = options.state.cardDefinitions.get(card.definitionId);
     if (definition === undefined || !definition.engine.playableInV0) {
@@ -66,14 +70,26 @@ export function dispatchControlledCardEffects(
       if (options.predicate?.(effect, source, context) === false) {
         continue;
       }
-
-      const result = options.execute(effect, source, context);
-      if (!result.ok || result.gameEnd !== undefined) {
-        return result;
-      }
+      contexts.push(context);
     }
   }
+  return contexts;
+}
 
+/**
+ * Executes matching effects from cards controlled by one player in the stable
+ * order exposed by Control Ledger. The dispatcher owns source attribution and
+ * stops immediately when an effect fails or ends the game.
+ */
+export function dispatchControlledCardEffects(
+  options: DispatchControlledCardEffectsOptions
+): EffectExecutionResult {
+  for (const context of listControlledCardEffects(options)) {
+    const result = options.execute(context.effect, context.source, context);
+    if (!result.ok || result.gameEnd !== undefined) {
+      return result;
+    }
+  }
   return { ok: true };
 }
 

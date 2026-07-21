@@ -43,7 +43,10 @@ import {
   type WildMagicOption,
 } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
-import { dispatchControlledCardEffects } from "./trigger-dispatch.js";
+import {
+  dispatchControlledCardEffects,
+  listControlledCardEffects,
+} from "./trigger-dispatch.js";
 export function executeOnPlayEffects(
   state: GameState,
   player: PlayerState,
@@ -315,43 +318,38 @@ export function calculateEndTurnDrawCount(
     }
   }
 
-  for (const card of getControlledCards(state, player)) {
-    const definition = state.cardDefinitions.get(card.definitionId);
-    if (definition === undefined || !definition.engine.playableInV0) {
+  for (const { effect } of listControlledCardEffects({
+    state,
+    player,
+    timing: "endTurn",
+  })) {
+    if (
+      effect.effectId === "ongoing_hand_refill_bonus" &&
+      Number.isSafeInteger(effect.amount) &&
+      effect.amount > 0
+    ) {
+      drawCount += effect.amount;
       continue;
     }
 
-    for (const effect of definition.engine.effects) {
-      if (
-        effect.effectId === "ongoing_hand_refill_bonus" &&
-        effect.timing === "endTurn" &&
-        Number.isSafeInteger(effect.amount) &&
-        effect.amount > 0
-      ) {
-        drawCount += effect.amount;
-        continue;
-      }
+    if (effect.effectId !== "increase_hand_limit_at_max_life") {
+      continue;
+    }
 
-      if (effect.effectId !== "increase_hand_limit_at_max_life") {
-        continue;
-      }
+    const amount = effect["amount"];
+    if (
+      typeof amount !== "number" ||
+      !Number.isSafeInteger(amount) ||
+      amount <= 0
+    ) {
+      continue;
+    }
 
-      const amount = effect["amount"];
-      if (
-        effect["timing"] !== "endTurn" ||
-        typeof amount !== "number" ||
-        !Number.isSafeInteger(amount) ||
-        amount <= 0
-      ) {
-        continue;
-      }
-
-      if (
-        player.life.current >=
-        calculateEffectivePlayerMaxLife(state, player.playerId)
-      ) {
-        drawCount += amount;
-      }
+    if (
+      player.life.current >=
+      calculateEffectivePlayerMaxLife(state, player.playerId)
+    ) {
+      drawCount += amount;
     }
   }
 
