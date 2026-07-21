@@ -1,7 +1,7 @@
 import type { CardDefinition } from "./data.js";
 import type { RuntimeEffect } from "./runtime-effect.js";
 import type { GameState, PlayerState } from "./setup.js";
-import { getControlledCards } from "./effective-values.js";
+import { getControlledCards } from "./control-ledger.js";
 
 interface PassiveStatusPowerEffect {
   effectId: "add_power_if_player_has_status";

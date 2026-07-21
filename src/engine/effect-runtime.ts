@@ -8,11 +8,12 @@ import {
   resolveAttackAmount,
 } from "./attack-resolution.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
-import { grantTemporaryControl } from "./control-ledger.js";
 import {
-  calculateEffectivePlayerMaxLife,
+  findCardLocation,
   getControlledCards,
-} from "./effective-values.js";
+  grantTemporaryControl,
+} from "./control-ledger.js";
+import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
 import {
   recordCardMoved,
   recordGameEvent,
@@ -165,10 +166,7 @@ export function executeControlledCardOnPlayCardEffects(
     };
   }
 
-  for (const card of player.permanents) {
-    if (card.ownerId !== player.playerId) {
-      continue;
-    }
+  for (const card of getControlledCards(state, player)) {
     const definition = state.cardDefinitions.get(card.definitionId);
     if (
       definition === undefined ||
@@ -527,7 +525,7 @@ function getAttackProfile(
     return { damageBonus: 0, unavoidable: false };
   }
 
-  const sourceCard = findCardInstance(state, source.cardInstanceId);
+  const sourceCard = findCardLocation(state, source.cardInstanceId)?.card;
   if (sourceCard === undefined || sourceCard.ownerId === "common") {
     return { damageBonus: 0, unavoidable: false };
   }
@@ -572,10 +570,7 @@ function getAttackProfile(
     }
   }
 
-  for (const card of sourceOwner.permanents) {
-    if (card.ownerId !== sourceOwner.playerId) {
-      continue;
-    }
+  for (const card of getControlledCards(state, sourceOwner)) {
     const definition = state.cardDefinitions.get(card.definitionId);
     if (
       definition === undefined ||
@@ -628,35 +623,6 @@ function effectMatchesCardDefinition(
     (candidate) =>
       typeof candidate === "string" && definitionTags.includes(candidate)
   );
-}
-
-function findCardInstance(
-  state: GameState,
-  cardInstanceId: string
-): CardInstance | undefined {
-  for (const player of state.players) {
-    const card = [
-      ...player.hand,
-      ...player.deck,
-      ...player.discard,
-      ...player.playedThisTurn,
-      ...player.permanents,
-    ].find((candidate) => candidate.instanceId === cardInstanceId);
-    if (card !== undefined) {
-      return card;
-    }
-  }
-
-  return [
-    ...state.common.market,
-    ...state.common.legendMarket,
-    ...state.common.mainDeck,
-    ...state.common.legendDeck,
-    ...state.common.wildMagicStack,
-    ...state.common.limpWandStack,
-    ...state.common.destroyedMayhem,
-    ...state.common.destroyedMegaMayhem,
-  ].find((candidate) => candidate.instanceId === cardInstanceId);
 }
 
 function resolveAttackTarget(
@@ -1568,7 +1534,7 @@ function applyAfterPlayerAttackDamage(
   }
 
   state.turn.damagingAttackPlayerIds.push(attackingPlayer.playerId);
-  for (const permanent of attackingPlayer.permanents) {
+  for (const permanent of getControlledCards(state, attackingPlayer)) {
     const definition = state.cardDefinitions.get(permanent.definitionId);
     if (definition === undefined || !definition.engine.playableInV0) {
       continue;

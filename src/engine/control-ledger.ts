@@ -124,7 +124,7 @@ export function getControlledCards(
 
 export function findCardLocation(
   state: GameState,
-  cardInstanceId: CardInstance["instanceId"]
+  cardInstanceId: string
 ): CardLocation | undefined {
   for (const player of state.players) {
     if (player.unboughtFamiliar?.instanceId === cardInstanceId) {

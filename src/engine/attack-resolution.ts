@@ -1,3 +1,4 @@
+import { getControlledCards } from "./control-ledger.js";
 import type { GameState, PlayerState } from "./setup.js";
 
 export interface AttackAmountComponents {
@@ -34,7 +35,7 @@ export function resolveAttackAmount(
     amountState.unresolvedBaseAmount + amountState.sourceOwnerModifierAmount;
   const doublesAgainstTarget =
     attackingPlayer.playerId !== targetPlayer.playerId &&
-    attackingPlayer.permanents.some((permanent) => {
+    getControlledCards(state, attackingPlayer).some((permanent) => {
       const definition = state.cardDefinitions.get(permanent.definitionId);
       return (
         definition?.engine.playableInV0 === true &&

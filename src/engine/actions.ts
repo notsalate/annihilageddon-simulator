@@ -12,13 +12,11 @@ import type { EffectGameEnd } from "./effect-runtime-registry.js";
 import { assertNever } from "../common.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import {
+  getControlledCards,
   grantTemporaryControl,
   releaseTemporaryControls,
 } from "./control-ledger.js";
-import {
-  calculateEffectiveCardCost,
-  getControlledCards,
-} from "./effective-values.js";
+import { calculateEffectiveCardCost } from "./effective-values.js";
 import { recordCardMoved, recordGameEvent } from "./event-recorder.js";
 import { runMarketFlow, type MarketFlowEndReason } from "./market-flow.js";
 import type {

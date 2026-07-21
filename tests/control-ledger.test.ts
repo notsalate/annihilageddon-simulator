@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { forkGameState, initializeGame } from "../src/index.js";
+import {
+  applyAction,
+  forkGameState,
+  initializeGame,
+  listLegalActions,
+  type CardDefinition,
+  type CardInstance,
+  type GameState,
+  type PlayerState,
+} from "../src/index.js";
 import {
   buildControlledObjectView,
   cloneTemporaryControls,
@@ -10,7 +19,16 @@ import {
   grantTemporaryControl,
   releaseTemporaryControls,
 } from "../src/engine/control-ledger.js";
-import { markCardInstanceId } from "../src/domain/types.js";
+import {
+  markCardDefinitionId,
+  markCardInstanceId,
+} from "../src/domain/types.js";
+import { reconcileActivePlayerControlledPower } from "../src/engine/controlled-power.js";
+import {
+  calculateEndTurnDrawCount,
+  executeControlledCardOnPlayCardEffects,
+  executeEffect,
+} from "../src/engine/effect-runtime.js";
 
 const rootDir = process.cwd();
 
@@ -154,3 +172,274 @@ test("temporary control lifecycle is idempotent, transferable, releasable, and f
     false
   );
 });
+
+test("Control Ledger gives activation, costs, passive power, and end-turn rules one controlled-card view", () => {
+  const state = initializeGame({ rootDir, seed: 22004 });
+  const controller = state.players[0];
+  const owner = state.players[1];
+  assert.ok(controller);
+  assert.ok(owner);
+  state.activePlayerId = controller.playerId;
+  controller.permanents = [];
+  controller.wizardProperties = [];
+  owner.wizardProperties = [];
+
+  const definition: CardDefinition = {
+    schemaVersion: 1,
+    cardId: "fixture-control-ledger-consumer",
+    source: { image: "assets/cards/fixtures/control-ledger.png" },
+    visible: {
+      nameRu: "Fixture Control Ledger consumer",
+      cost: 7,
+      victoryPoints: 0,
+      typeRu: null,
+      cardKind: "normal",
+      cardTypes: ["treasure"],
+      markers: ["ongoing"],
+    },
+    engine: {
+      runtimeSchema: "krutagidon.cardDefinition.v0",
+      mappingStatus: "fixture",
+      playableInV0: true,
+      cardKind: "normal",
+      cardTypes: ["treasure"],
+      cost: 7,
+      victoryPoints: 0,
+      isOngoing: true,
+      marketChipMarker: false,
+      effects: [
+        { effectId: "ongoing_add_power", timing: "whileControlled", amount: 1 },
+        { effectId: "ongoing_hand_refill_bonus", timing: "endTurn", amount: 1 },
+        { effectId: "add_power", timing: "activation", amount: 2 },
+      ],
+      unsupportedMechanics: [],
+    },
+  };
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const controlledCard = addTemporarilyControlledCard(
+    state,
+    controller,
+    owner,
+    definition.cardId,
+    "consumer"
+  );
+
+  reconcileActivePlayerControlledPower(state);
+  assert.equal(state.turn.power, 1);
+  assert.equal(calculateEndTurnDrawCount(state, controller), 6);
+  assert.equal(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "activatePermanent" &&
+        action.cardInstanceId === controlledCard.instanceId
+    ),
+    true
+  );
+
+  const activationResult = applyAction(state, {
+    type: "activatePermanent",
+    cardInstanceId: controlledCard.instanceId,
+  });
+  assert.deepEqual(activationResult, { ok: true });
+  assert.equal(state.turn.power, 3);
+
+  const target = state.players[1];
+  assert.ok(target);
+  target.hand = [];
+  const lifeBefore = target.life.current;
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "attack_damage_equal_to_controlled_card_cost"
+      ? choices.find((choice) => choice.choiceId === target.playerId)
+      : undefined;
+  const costAttackResult = executeEffect(
+    state,
+    controller,
+    {
+      effectId: "attack_damage_equal_to_controlled_card_cost",
+      costMode: "highest",
+      targetSelector: "chosenFoe",
+    },
+    fixtureSource(controller, "fixture-controlled-cost")
+  );
+  assert.deepEqual(costAttackResult, { ok: true });
+  assert.equal(target.life.current, lifeBefore - 7);
+
+  const conditionedDefinition: CardDefinition = {
+    schemaVersion: 1,
+    cardId: "fixture-control-ledger-conditioned-play",
+    source: { image: "assets/cards/fixtures/control-ledger-conditioned.png" },
+    visible: {
+      nameRu: "Fixture controlled-card condition",
+      cost: 0,
+      victoryPoints: 0,
+      typeRu: null,
+      cardKind: "normal",
+      cardTypes: [],
+      markers: [],
+    },
+    engine: {
+      runtimeSchema: "krutagidon.cardDefinition.v0",
+      mappingStatus: "fixture",
+      playableInV0: true,
+      cardKind: "normal",
+      cardTypes: [],
+      cost: 0,
+      victoryPoints: 0,
+      isOngoing: false,
+      marketChipMarker: false,
+      effects: [
+        {
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 4,
+          condition: {
+            conditionId: "control_count",
+            cardTypes: ["treasure"],
+            minimumCount: 1,
+          },
+        },
+      ],
+      unsupportedMechanics: [],
+    },
+  };
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [conditionedDefinition.cardId, conditionedDefinition],
+  ]);
+  const conditionedCard: CardInstance = {
+    instanceId: markCardInstanceId("fixture-control-ledger-conditioned-play"),
+    definitionId: markCardDefinitionId(conditionedDefinition.cardId),
+    ownerId: controller.playerId,
+    marketChips: 0,
+  };
+  controller.hand.push(conditionedCard);
+
+  const conditionedPlay = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: conditionedCard.instanceId,
+  });
+  assert.deepEqual(conditionedPlay, { ok: true });
+  assert.equal(state.turn.power, 7);
+});
+
+test("temporarily controlled ongoing attack modifiers and triggers work outside permanents", () => {
+  const state = initializeGame({ rootDir, seed: 22005 });
+  const controller = state.players[0];
+  const owner = state.players[1];
+  assert.ok(controller);
+  assert.ok(owner);
+  state.activePlayerId = controller.playerId;
+  controller.permanents = [];
+  controller.wizardProperties = [];
+  owner.wizardProperties = [];
+  owner.hand = [];
+
+  addTemporarilyControlledCard(
+    state,
+    controller,
+    owner,
+    "esw2_dbg__main_009",
+    "greasy-stick"
+  );
+  addTemporarilyControlledCard(
+    state,
+    controller,
+    owner,
+    "esw2_dbg__legend_008",
+    "arena"
+  );
+  addTemporarilyControlledCard(
+    state,
+    controller,
+    owner,
+    "esw2_dbg__legend_012",
+    "tornado"
+  );
+  const wand = addCardToZone(
+    state,
+    controller,
+    "esw2_dbg__starter_003",
+    "wand",
+    controller.playedThisTurn
+  );
+  grantTemporaryControl(state, wand.instanceId, controller.playerId);
+
+  state.turn.power = 0;
+  const playTriggerResult = executeControlledCardOnPlayCardEffects(
+    state,
+    controller,
+    wand
+  );
+  assert.deepEqual(playTriggerResult, { ok: true });
+  assert.equal(state.turn.power, 1);
+
+  state.turn.power = 0;
+  const lifeBefore = owner.life.current;
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === owner.playerId)
+      : undefined;
+  const attackResult = executeEffect(
+    state,
+    controller,
+    {
+      effectId: "attack_damage",
+      amount: 2,
+      targetSelector: "chosenFoe",
+    },
+    {
+      sourceType: "card",
+      runtimeMode: "combat",
+      playerId: controller.playerId,
+      cardInstanceId: wand.instanceId,
+      definitionId: wand.definitionId,
+    }
+  );
+
+  assert.deepEqual(attackResult, { ok: true });
+  assert.equal(owner.life.current, lifeBefore - 8);
+  assert.equal(state.turn.power, 8);
+});
+
+function addTemporarilyControlledCard(
+  state: GameState,
+  controller: PlayerState,
+  owner: PlayerState,
+  definitionId: string,
+  suffix: string
+): CardInstance {
+  const card = addCardToZone(state, owner, definitionId, suffix, owner.discard);
+  grantTemporaryControl(state, card.instanceId, controller.playerId);
+  return card;
+}
+
+function addCardToZone(
+  state: GameState,
+  owner: PlayerState,
+  definitionId: string,
+  suffix: string,
+  zone: CardInstance[]
+): CardInstance {
+  assert.ok(state.cardDefinitions.has(definitionId));
+  const card: CardInstance = {
+    instanceId: markCardInstanceId(`fixture-control-ledger-${suffix}`),
+    definitionId: markCardDefinitionId(definitionId),
+    ownerId: owner.playerId,
+    marketChips: 0,
+  };
+  zone.push(card);
+  return card;
+}
+
+function fixtureSource(player: PlayerState, suffix: string) {
+  return {
+    sourceType: "card" as const,
+    runtimeMode: "fixture" as const,
+    playerId: player.playerId,
+    cardInstanceId: `fixture-control-ledger-source-${suffix}`,
+    definitionId: `fixture-control-ledger-source-${suffix}`,
+  };
+}

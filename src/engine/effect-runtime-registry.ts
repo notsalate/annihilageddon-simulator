@@ -10,8 +10,8 @@ import {
   type TokenDefinitionId,
   type TokenInstanceId,
 } from "../domain/types.js";
+import { buildControlledObjectView } from "./control-ledger.js";
 import {
-  buildControlledObjectView,
   calculateEffectiveCardCost,
   calculateEffectivePlayerMaxLife,
 } from "./effective-values.js";
