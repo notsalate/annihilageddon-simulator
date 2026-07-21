@@ -5114,17 +5114,26 @@ export function isEffectRuntimeCatalogEntrySupportedInMode<
   return entry.supportedModes.includes(mode);
 }
 
-export type EffectRuntimeCatalogResolution =
-  | { ok: true; entry: EffectRuntimeCatalogEntry }
+export type EffectRuntimeCatalogResolution<
+  EffectId extends RuntimeEffectId = RuntimeEffectId,
+> =
+  | {
+      ok: true;
+      entry: EffectRuntimeCatalogEntry<EffectId>;
+      effect: RuntimeEffectForId<EffectId>;
+    }
   | { ok: false; errors: string[] };
 
-export function resolveEffectRuntimeCatalogEntry(
+type ResolvedRuntimeEffectId<RawEffectId extends string> =
+  RawEffectId extends RuntimeEffectId ? RawEffectId : RuntimeEffectId;
+
+export function resolveEffectRuntimeCatalogEntry<RawEffectId extends string>(
   subjectId: string,
-  rawEffectId: string,
-  effect: RuntimeEffectPayload | object,
+  rawEffectId: RawEffectId,
+  effect: object,
   mode: EffectRuntimeMode,
   sourceKind: EffectRuntimeSourceKind
-): EffectRuntimeCatalogResolution {
+): EffectRuntimeCatalogResolution<ResolvedRuntimeEffectId<RawEffectId>> {
   const entry = isRuntimeEffectId(rawEffectId)
     ? getEffectRuntimeCatalogEntry(rawEffectId)
     : undefined;
@@ -5165,7 +5174,13 @@ export function resolveEffectRuntimeCatalogEntry(
   );
   return shapeErrors.length > 0
     ? { ok: false, errors: shapeErrors }
-    : { ok: true, entry };
+    : ({
+        ok: true,
+        entry,
+        effect: effect as RuntimeEffectPayload,
+      } as EffectRuntimeCatalogResolution<
+        ResolvedRuntimeEffectId<RawEffectId>
+      >);
 }
 
 export function tryExecuteSetupEffect(
@@ -5196,7 +5211,7 @@ export function tryExecuteSetupEffect(
     };
   }
 
-  const result = executeSetup(player, effect, source, services);
+  const result = executeSetup(player, resolution.effect, source, services);
   return result.ok
     ? {
         status: "executed",

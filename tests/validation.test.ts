@@ -34,6 +34,7 @@ import {
   getEffectRuntimeCatalogEntry,
   getEffectRuntimeHandler,
   isEffectRuntimeCatalogEntrySupportedInMode,
+  resolveEffectRuntimeCatalogEntry,
 } from "../src/engine/effect-runtime-registry.js";
 
 const rootDir = process.cwd();
@@ -94,6 +95,89 @@ test("runtime effect payload map narrows touched effect contracts", () => {
   ] = [true, true, true, true];
 
   assert.deepEqual(assertions, [true, true, true, true]);
+});
+
+test("effect runtime catalog returns the validated concrete payload", () => {
+  const rawEffect = {
+    effectId: "avoid_attack",
+    timing: "onDefense",
+    destination: "discardSelf",
+    redirectAttack: true,
+  } as const;
+  const resolution = resolveEffectRuntimeCatalogEntry(
+    "Fixture defense",
+    rawEffect.effectId,
+    rawEffect,
+    "fixture",
+    "card"
+  );
+
+  assert.equal(resolution.ok, true);
+  if (!resolution.ok) {
+    return;
+  }
+
+  const narrowed: RuntimeEffectForId<"avoid_attack"> = resolution.effect;
+  assert.equal(narrowed.destination, "discardSelf");
+  assert.equal(narrowed.redirectAttack, true);
+});
+
+test("effect runtime catalog rejects malformed touched payloads before narrowing", () => {
+  const cases: Array<{ effectId: RuntimeEffectId; effect: object }> = [
+    {
+      effectId: "avoid_attack",
+      effect: {
+        effectId: "avoid_attack",
+        timing: "onDefense",
+        destination: "redirectTarget",
+      },
+    },
+    {
+      effectId: "avoid_attack",
+      effect: {
+        effectId: "avoid_attack",
+        timing: "onDefense",
+        destination: "discardSelf",
+        redirectAttack: "yes",
+      },
+    },
+    {
+      effectId: "ongoing_add_power",
+      effect: {
+        effectId: "ongoing_add_power",
+        timing: "onPlay",
+        amount: 1,
+      },
+    },
+    {
+      effectId: "ongoing_hand_refill_bonus",
+      effect: {
+        effectId: "ongoing_hand_refill_bonus",
+        timing: "endTurn",
+        amount: 0,
+      },
+    },
+    {
+      effectId: "ongoing_add_power_when_playing_wand",
+      effect: {
+        effectId: "ongoing_add_power_when_playing_wand",
+        timing: "onPlayCard",
+        amount: 1,
+        cardTags: ["limpWand"],
+      },
+    },
+  ];
+
+  for (const [index, candidate] of cases.entries()) {
+    const resolution = resolveEffectRuntimeCatalogEntry(
+      `Malformed touched payload ${index}`,
+      candidate.effectId,
+      candidate.effect,
+      "fixture",
+      "card"
+    );
+    assert.equal(resolution.ok, false);
+  }
 });
 
 test("runtime data decoder exposes a narrowed successful decoded value", () => {

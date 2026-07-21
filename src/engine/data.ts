@@ -2076,7 +2076,11 @@ function requireNonEmptyStringField(
   key = label
 ): string | undefined {
   const value = record[key];
-  if (typeof value !== "string" || value.trim().length === 0 || (key === "image" && !isCanonicalAssetPath(value))) {
+  if (
+    typeof value !== "string" ||
+    value.trim().length === 0 ||
+    (key === "image" && !isCanonicalAssetPath(value))
+  ) {
     errors.push(`${label} must be a non-empty string`);
     return undefined;
   }
@@ -2301,8 +2305,9 @@ function validateRuntimeEffectDefinition(
   }
 
   const catalogEntry = resolution.entry;
+  const validatedEffect = resolution.effect;
 
-  const targetSelector = effect["targetSelector"];
+  const targetSelector = validatedEffect.targetSelector;
   if (
     targetSelector !== undefined &&
     (!isRuntimeEffectTargetSelector(targetSelector) ||

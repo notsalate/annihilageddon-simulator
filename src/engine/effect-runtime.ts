@@ -451,7 +451,7 @@ export function executeEffect(
   return resolution.entry.handler.execute(
     state,
     player,
-    effect,
+    resolution.effect,
     source,
     effectRuntimeServices
   );
@@ -1535,7 +1535,7 @@ function applyAfterPlayerAttackDamage(
       resolution.entry.handler.applyAfterPlayerAttackDamage?.(
         state,
         attackingPlayer,
-        effect,
+        resolution.effect,
         source,
         totalDamageDealt
       );
