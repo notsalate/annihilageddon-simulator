@@ -30,7 +30,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat staging/.github/transport/c1-t3/series.part-* > "${RUNNER_TEMP}/series.b64"
+          cat \
+            staging/.github/transport/c1-t3/series.part-00 \
+            staging/.github/transport/c1-t3/series.fix-01-0 \
+            staging/.github/transport/c1-t3/series.fix-01-1 \
+            staging/.github/transport/c1-t3/series.fix-01-2 \
+            staging/.github/transport/c1-t3/series.fix-01-3 \
+            staging/.github/transport/c1-t3/series.fix-02-0 \
+            staging/.github/transport/c1-t3/series.fix-02-1 \
+            staging/.github/transport/c1-t3/series.fix-02-2 \
+            staging/.github/transport/c1-t3/series.fix-02-3 \
+            staging/.github/transport/c1-t3/series.part-030 \
+            staging/.github/transport/c1-t3/series.part-031 \
+            staging/.github/transport/c1-t3/series.part-032 \
+            staging/.github/transport/c1-t3/series.part-0330 \
+            staging/.github/transport/c1-t3/series.part-0331 \
+            staging/.github/transport/c1-t3/series.part-0332 \
+            staging/.github/transport/c1-t3/series.part-04 \
+            staging/.github/transport/c1-t3/series.part-05 \
+            staging/.github/transport/c1-t3/series.part-06 \
+            staging/.github/transport/c1-t3/series.part-07 \
+            > "${RUNNER_TEMP}/series.b64"
           test "$(wc -c < "${RUNNER_TEMP}/series.b64")" -eq 93936
           base64 --decode "${RUNNER_TEMP}/series.b64" > "${RUNNER_TEMP}/series.patch"
           test "$(wc -c < "${RUNNER_TEMP}/series.patch")" -eq 70452
