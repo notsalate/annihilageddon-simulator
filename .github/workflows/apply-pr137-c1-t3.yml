@@ -1,0 +1,65 @@
+name: apply-pr137-c1-t3
+
+on:
+  push:
+    branches:
+      - agent/tmp-apply-pr137-c1-t3
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout transport branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/tmp-apply-pr137-c1-t3
+          path: staging
+          fetch-depth: 1
+      - name: Checkout draft PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/architecture-deepening-findings
+          path: target
+          fetch-depth: 0
+      - name: Reconstruct and validate commit series
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat staging/.github/transport/c1-t3/series.part-* > "${RUNNER_TEMP}/series.b64"
+          test "$(wc -c < "${RUNNER_TEMP}/series.b64")" -eq 93936
+          base64 --decode "${RUNNER_TEMP}/series.b64" > "${RUNNER_TEMP}/series.patch"
+          test "$(wc -c < "${RUNNER_TEMP}/series.patch")" -eq 70452
+          echo "f22a496ad642ccab8f74b762dea62ad7c1945f573e623905851401709f8138f7  ${RUNNER_TEMP}/series.patch" | sha256sum --check
+          test "$(grep -c '^From [0-9a-f]\{40\} Mon Sep 17 00:00:00 2001$' "${RUNNER_TEMP}/series.patch")" -eq 6
+      - name: Apply six RED-GREEN commits
+        working-directory: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "b2267b3111e783cb061d32e67c9a3e289cca9240"
+          git config user.name "OpenAI Codex"
+          git config user.email "codex@openai.com"
+          git am "${RUNNER_TEMP}/series.patch"
+          test "$(git rev-list --count b2267b3111e783cb061d32e67c9a3e289cca9240..HEAD)" -eq 6
+      - name: Install dependencies
+        working-directory: target
+        run: npm ci
+      - name: Verify complete series
+        working-directory: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run check
+          npm run report:card-runtime-clusters
+          git diff --check origin/master...HEAD
+      - name: Publish to draft PR branch
+        working-directory: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push \
+            --force-with-lease=refs/heads/agent/architecture-deepening-findings:b2267b3111e783cb061d32e67c9a3e289cca9240 \
+            origin HEAD:refs/heads/agent/architecture-deepening-findings
