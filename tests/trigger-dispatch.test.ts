@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   initializeGame,
+  loadCurrentRuntimeDataPack,
   type CardDefinition,
   type CardInstance,
   type GameState,
@@ -23,6 +24,12 @@ import {
   markCardDefinitionId,
   markCardInstanceId,
 } from "../src/domain/types.js";
+
+import {
+  createGameScenario,
+  givenRuntimeCard,
+  play,
+} from "./helpers/game-scenario.js";
 
 const rootDir = process.cwd();
 
@@ -420,3 +427,47 @@ function mustGetPlayer(state: GameState, index: number): PlayerState {
   assert.ok(player);
   return player;
 }
+
+test("current runtime Ultimate Tronado adds power after its controller's first damaging attack", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    dataPackPath: "tests/fixtures/playable-runtime-data-pack.json",
+    seed: 60615,
+  });
+  const activePlayer = scenario.activePlayer;
+  const targetPlayer = scenario.foes[0];
+  assert.ok(targetPlayer);
+  for (const player of scenario.state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+  }
+  const runtimeDefinition = loadCurrentRuntimeDataPack(
+    rootDir
+  ).cardDefinitions.get("esw2_dbg__legend_012");
+  assert.ok(runtimeDefinition);
+  scenario.state.cardDefinitions = new Map([
+    ...scenario.state.cardDefinitions,
+    [runtimeDefinition.cardId, runtimeDefinition],
+  ]);
+  givenRuntimeCard(scenario, {
+    player: activePlayer,
+    definitionId: runtimeDefinition.cardId,
+    zone: "permanents",
+    instanceId: "fixture-current-runtime-ultimate-tronado",
+  });
+  targetPlayer.life.current = 20;
+  const attack = givenRuntimeCard(scenario, {
+    effects: [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 3,
+        target: { selector: "opponentPlayer" },
+      },
+    ],
+  });
+
+  assert.equal(play(scenario, attack).ok, true);
+  assert.equal(targetPlayer.life.current, 17);
+  assert.equal(scenario.state.turn.power, 3);
+});
