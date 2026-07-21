@@ -43,6 +43,7 @@ import {
   type WildMagicOption,
 } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import { dispatchControlledCardEffects } from "./trigger-dispatch.js";
 export function executeOnPlayEffects(
   state: GameState,
   player: PlayerState,
@@ -166,37 +167,20 @@ export function executeControlledCardOnPlayCardEffects(
     };
   }
 
-  for (const card of getControlledCards(state, player)) {
-    const definition = state.cardDefinitions.get(card.definitionId);
-    if (
-      definition === undefined ||
-      !definition.engine.playableInV0 ||
-      !definition.engine.isOngoing
-    ) {
-      continue;
-    }
-
-    const result = executeEffects(
-      state,
-      player,
-      definition.engine.effects.filter((effect) =>
+  return dispatchControlledCardEffects({
+    state,
+    player,
+    timing: "onPlayCard",
+    predicate(effect, _source, context) {
+      return (
+        context.definition.engine.isOngoing &&
         cardTriggerMatches(effect, playedDefinition)
-      ),
-      "onPlayCard",
-      {
-        sourceType: "card",
-        runtimeMode: getCardEffectRuntimeMode(card.definitionId),
-        playerId: player.playerId,
-        cardInstanceId: card.instanceId,
-        definitionId: card.definitionId,
-      }
-    );
-    if (!result.ok || result.gameEnd !== undefined) {
-      return result;
-    }
-  }
-
-  return { ok: true };
+      );
+    },
+    execute(effect, source) {
+      return executeEffects(state, player, [effect], "onPlayCard", source);
+    },
+  });
 }
 
 export function moveGainedCardToPlayerDestination(
@@ -1523,7 +1507,7 @@ function applyAfterPlayerAttackDamage(
   state: GameState,
   attackingPlayer: PlayerState,
   totalDamageDealt: number,
-  attackSource: EffectSourceContext
+  _attackSource: EffectSourceContext
 ): void {
   if (
     totalDamageDealt <= 0 ||
@@ -1534,19 +1518,11 @@ function applyAfterPlayerAttackDamage(
   }
 
   state.turn.damagingAttackPlayerIds.push(attackingPlayer.playerId);
-  for (const permanent of getControlledCards(state, attackingPlayer)) {
-    const definition = state.cardDefinitions.get(permanent.definitionId);
-    if (definition === undefined || !definition.engine.playableInV0) {
-      continue;
-    }
-
-    const source: EffectSourceContext = {
-      ...attackSource,
-      runtimeMode: getCardEffectRuntimeMode(permanent.definitionId),
-      cardInstanceId: permanent.instanceId,
-      definitionId: permanent.definitionId,
-    };
-    for (const effect of definition.engine.effects) {
+  dispatchControlledCardEffects({
+    state,
+    player: attackingPlayer,
+    timing: "afterFirstAttackDamageEachTurn",
+    execute(effect, source) {
       const resolution = resolveEffectRuntimeCatalogEntry(
         `Effect ${effect.effectId}`,
         effect.effectId,
@@ -1555,8 +1531,9 @@ function applyAfterPlayerAttackDamage(
         source.sourceType
       );
       if (!resolution.ok) {
-        continue;
+        return { ok: true };
       }
+
       resolution.entry.handler.applyAfterPlayerAttackDamage?.(
         state,
         attackingPlayer,
@@ -1564,8 +1541,9 @@ function applyAfterPlayerAttackDamage(
         source,
         totalDamageDealt
       );
-    }
-  }
+      return { ok: true };
+    },
+  });
 }
 
 const attackDefenseServices: AttackDefenseServices = {

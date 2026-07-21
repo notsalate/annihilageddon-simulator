@@ -1,19 +1,32 @@
-import { buildControlledObjectView } from "./control-ledger.js";
+import { getControlledCards } from "./control-ledger.js";
 import type {
   EffectExecutionResult,
   EffectSourceContext,
 } from "./effect-runtime-registry.js";
+import type { CardDefinition } from "./data.js";
 import type { EffectTiming, RuntimeEffect } from "./runtime-effect.js";
-import type { GameState, PlayerState } from "./setup.js";
+import type { CardInstance, GameState, PlayerState } from "./setup.js";
+
+export interface ControlledCardEffectContext {
+  card: CardInstance;
+  definition: CardDefinition;
+  effect: RuntimeEffect;
+  source: EffectSourceContext;
+}
 
 export interface DispatchControlledCardEffectsOptions {
   state: GameState;
   player: PlayerState;
   timing: EffectTiming;
-  predicate?: (effect: RuntimeEffect, source: EffectSourceContext) => boolean;
+  predicate?: (
+    effect: RuntimeEffect,
+    source: EffectSourceContext,
+    context: ControlledCardEffectContext
+  ) => boolean;
   execute(
     effect: RuntimeEffect,
-    source: EffectSourceContext
+    source: EffectSourceContext,
+    context: ControlledCardEffectContext
   ): EffectExecutionResult;
 }
 
@@ -25,13 +38,9 @@ export interface DispatchControlledCardEffectsOptions {
 export function dispatchControlledCardEffects(
   options: DispatchControlledCardEffectsOptions
 ): EffectExecutionResult {
-  const controlled = buildControlledObjectView(
-    options.state,
-    options.player.playerId
-  );
-
-  for (const { card, definition } of controlled.cards) {
-    if (!definition.engine.playableInV0) {
+  for (const card of getControlledCards(options.state, options.player)) {
+    const definition = options.state.cardDefinitions.get(card.definitionId);
+    if (definition === undefined || !definition.engine.playableInV0) {
       continue;
     }
 
@@ -44,14 +53,21 @@ export function dispatchControlledCardEffects(
     };
 
     for (const effect of definition.engine.effects) {
-      if (
-        effect.timing !== options.timing ||
-        options.predicate?.(effect, source) === false
-      ) {
+      if (effect.timing !== options.timing) {
         continue;
       }
 
-      const result = options.execute(effect, source);
+      const context: ControlledCardEffectContext = {
+        card,
+        definition,
+        effect,
+        source,
+      };
+      if (options.predicate?.(effect, source, context) === false) {
+        continue;
+      }
+
+      const result = options.execute(effect, source, context);
       if (!result.ok || result.gameEnd !== undefined) {
         return result;
       }
