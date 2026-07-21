@@ -21,10 +21,17 @@ import {
   isRuntimeEffectSelectorTarget,
   isRuntimeEffectId,
   type AvoidAttackRuntimeEffect,
+  type DoubleOwnedAttackDamageRuntimeEffect,
+  type IncreaseHandLimitAtMaxLifeRuntimeEffect,
   isWildMagicOption,
   type AttackOutcomeBranch,
+  type ModifyOwnedWandAttackDamageRuntimeEffect,
+  type OngoingAddPowerRuntimeEffect,
   type OngoingAddPowerWhenPlayingWandRuntimeEffect,
   type OngoingAddPowerPerDeadWizardTokenRuntimeEffect,
+  type OngoingFirstAttackDamageAddPowerRuntimeEffect,
+  type OngoingHandRefillBonusRuntimeEffect,
+  type PreventDefenseAgainstOwnedWandAttacksRuntimeEffect,
   type RuntimeEffectForId,
   type RuntimeEffectId,
   type RuntimeEffectCost,
@@ -417,10 +424,6 @@ type PositiveAmountRuntimeEffect<EffectId extends RuntimeEffectId> =
 
 type AddPowerRuntimeEffect = PositiveAmountRuntimeEffect<"add_power">;
 type GainChipsRuntimeEffect = PositiveAmountRuntimeEffect<"gain_chips">;
-type OngoingHandRefillBonusRuntimeEffect =
-  PositiveAmountRuntimeEffect<"ongoing_hand_refill_bonus">;
-type OngoingAddPowerPerDeadWizardTokenEffect =
-  OngoingAddPowerPerDeadWizardTokenRuntimeEffect;
 type MayhemEachNonDinglerGainChipsRuntimeEffect =
   RuntimeEffectForId<"mayhem_each_non_dingler_gain_chips"> & {
     chipAmount: number;
@@ -445,11 +448,6 @@ type OptionalSpendChipAttackDamageRuntimeEffect =
 type ExecutableAttackDamageRuntimeEffect =
   | AttackDamageRuntimeEffect
   | OptionalSpendChipAttackDamageRuntimeEffect;
-type OngoingFirstAttackDamageAddPowerRuntimeEffect =
-  RuntimeEffectForId<"ongoing_first_attack_damage_add_power"> & {
-    timing: "afterFirstAttackDamageEachTurn";
-    amount: "totalDamageDealtByThatAttack";
-  };
 
 export interface EffectRuntimeCatalogEntry<
   EffectId extends RuntimeEffectId = RuntimeEffectId,
@@ -1931,17 +1929,17 @@ const mayhemEachPlayerChooseFoeGainChipsHandler: EffectRuntimeHandler<MayhemEach
     },
   };
 
-const increaseHandLimitAtMaxLifeHandler: EffectRuntimeHandler = {
+const increaseHandLimitAtMaxLifeHandler = {
   effectId: "increase_hand_limit_at_max_life",
   validateShape(subjectId, effect) {
     const errors: string[] = [];
-    if (effect["timing"] !== "endTurn") {
+    if (effect.timing !== "endTurn") {
       errors.push(
-        `${subjectId} uses unsupported hand-limit timing ${String(effect["timing"])}`
+        `${subjectId} uses unsupported hand-limit timing ${String(effect.timing)}`
       );
     }
 
-    const amount = effect["amount"];
+    const amount = effect.amount;
     if (
       typeof amount !== "number" ||
       !Number.isSafeInteger(amount) ||
@@ -1957,16 +1955,16 @@ const increaseHandLimitAtMaxLifeHandler: EffectRuntimeHandler = {
   execute() {
     return { ok: true };
   },
-};
+} satisfies EffectRuntimeHandler<IncreaseHandLimitAtMaxLifeRuntimeEffect>;
 
 const ongoingHandRefillBonusHandler: EffectRuntimeHandler<OngoingHandRefillBonusRuntimeEffect> =
   {
     effectId: "ongoing_hand_refill_bonus",
     validateShape(subjectId, effect) {
       const errors: string[] = [];
-      if (effect["timing"] !== "endTurn") {
+      if (effect.timing !== "endTurn") {
         errors.push(
-          `${subjectId} uses unsupported ongoing-hand-refill timing ${String(effect["timing"])}`
+          `${subjectId} uses unsupported ongoing-hand-refill timing ${String(effect.timing)}`
         );
       }
       errors.push(
@@ -2704,7 +2702,7 @@ const temporaryHandLimitByGainedCardTypeHandler: EffectRuntimeHandler = {
   },
 };
 
-const modifyOwnedWandAttackDamageHandler: EffectRuntimeHandler = {
+const modifyOwnedWandAttackDamageHandler = {
   effectId: "modify_owned_wand_attack_damage",
   validateShape(subjectId, effect) {
     return [
@@ -2722,9 +2720,9 @@ const modifyOwnedWandAttackDamageHandler: EffectRuntimeHandler = {
       error: "modify_owned_wand_attack_damage is an attack replacement effect",
     };
   },
-};
+} satisfies EffectRuntimeHandler<ModifyOwnedWandAttackDamageRuntimeEffect>;
 
-const doubleOwnedAttackDamageHandler: EffectRuntimeHandler = {
+const doubleOwnedAttackDamageHandler = {
   effectId: "double_owned_attack_damage",
   validateShape(subjectId, effect) {
     return effect.timing === "attackReplacement"
@@ -2739,9 +2737,9 @@ const doubleOwnedAttackDamageHandler: EffectRuntimeHandler = {
       error: "double_owned_attack_damage is an attack replacement effect",
     };
   },
-};
+} satisfies EffectRuntimeHandler<DoubleOwnedAttackDamageRuntimeEffect>;
 
-const preventDefenseAgainstOwnedWandAttacksHandler: EffectRuntimeHandler = {
+const preventDefenseAgainstOwnedWandAttacksHandler = {
   effectId: "prevent_defense_against_owned_wand_attacks",
   validateShape(subjectId, effect) {
     return validateWandAttackReplacementShape(subjectId, effect);
@@ -2753,7 +2751,7 @@ const preventDefenseAgainstOwnedWandAttacksHandler: EffectRuntimeHandler = {
         "prevent_defense_against_owned_wand_attacks is an attack replacement effect",
     };
   },
-};
+} satisfies EffectRuntimeHandler<PreventDefenseAgainstOwnedWandAttacksRuntimeEffect>;
 
 function executeAttackDamage(
   state: GameState,
@@ -2874,13 +2872,13 @@ const addPowerIfPlayerHasStatusHandler: EffectRuntimeHandler = {
   },
 };
 
-const ongoingAddPowerHandler: EffectRuntimeHandler = {
+const ongoingAddPowerHandler = {
   effectId: "ongoing_add_power",
   validateShape(subjectId, effect) {
     const errors: string[] = [];
-    if (effect["timing"] !== "whileControlled") {
+    if (effect.timing !== "whileControlled") {
       errors.push(
-        `${subjectId} uses unsupported ongoing power timing ${String(effect["timing"])}`
+        `${subjectId} uses unsupported ongoing power timing ${String(effect.timing)}`
       );
     }
     return [
@@ -2898,21 +2896,21 @@ const ongoingAddPowerHandler: EffectRuntimeHandler = {
       error: "ongoing_add_power is a passive controlled effect",
     };
   },
-};
+} satisfies EffectRuntimeHandler<OngoingAddPowerRuntimeEffect>;
 
 const ongoingFirstAttackDamageAddPowerHandler: EffectRuntimeHandler<OngoingFirstAttackDamageAddPowerRuntimeEffect> =
   {
     effectId: "ongoing_first_attack_damage_add_power",
     validateShape(subjectId, effect) {
       const errors: string[] = [];
-      if (effect["timing"] !== "afterFirstAttackDamageEachTurn") {
+      if (effect.timing !== "afterFirstAttackDamageEachTurn") {
         errors.push(
-          `${subjectId} uses unsupported first-attack damage timing ${String(effect["timing"])}`
+          `${subjectId} uses unsupported first-attack damage timing ${String(effect.timing)}`
         );
       }
-      if (effect["amount"] !== "totalDamageDealtByThatAttack") {
+      if (effect.amount !== "totalDamageDealtByThatAttack") {
         errors.push(
-          `${subjectId} uses unsupported first-attack damage amount ${String(effect["amount"])}`
+          `${subjectId} uses unsupported first-attack damage amount ${String(effect.amount)}`
         );
       }
       return errors;
@@ -2988,7 +2986,7 @@ const ongoingAddPowerWhenPlayingWandHandler: EffectRuntimeHandler<OngoingAddPowe
     },
   };
 
-const ongoingAddPowerPerDeadWizardTokenHandler: EffectRuntimeHandler<OngoingAddPowerPerDeadWizardTokenEffect> =
+const ongoingAddPowerPerDeadWizardTokenHandler: EffectRuntimeHandler<OngoingAddPowerPerDeadWizardTokenRuntimeEffect> =
   {
     effectId: "ongoing_add_power_per_dead_wizard_token",
     validateShape(subjectId, effect) {
@@ -3007,7 +3005,7 @@ const ongoingAddPowerPerDeadWizardTokenHandler: EffectRuntimeHandler<OngoingAddP
 
 function isOngoingAddPowerPerDeadWizardTokenEffect(
   effect: RuntimeEffectPayload
-): effect is OngoingAddPowerPerDeadWizardTokenEffect {
+): effect is OngoingAddPowerPerDeadWizardTokenRuntimeEffect {
   return (
     effect.effectId === "ongoing_add_power_per_dead_wizard_token" &&
     effect.timing === "whileControlled" &&
@@ -3352,13 +3350,13 @@ const avoidAttackHandler: EffectRuntimeHandler<AvoidAttackRuntimeEffect> = {
   effectId: "avoid_attack",
   validateShape(subjectId, effect) {
     const errors: string[] = [];
-    if (effect["timing"] !== "onDefense") {
+    if (effect.timing !== "onDefense") {
       errors.push(
-        `${subjectId} uses unsupported defense timing ${String(effect["timing"])}`
+        `${subjectId} uses unsupported defense timing ${String(effect.timing)}`
       );
     }
 
-    const destination = effect["destination"];
+    const destination = effect.destination;
     if (destination !== "discardSelf" && destination !== "topdeckSelf") {
       errors.push(
         `${subjectId} uses unsupported defense branch ${String(destination)}`
@@ -3366,8 +3364,8 @@ const avoidAttackHandler: EffectRuntimeHandler<AvoidAttackRuntimeEffect> = {
     }
 
     if (
-      effect["redirectAttack"] !== undefined &&
-      typeof effect["redirectAttack"] !== "boolean"
+      effect.redirectAttack !== undefined &&
+      typeof effect.redirectAttack !== "boolean"
     ) {
       errors.push(`${subjectId} uses non-boolean redirectAttack`);
     }
@@ -3990,7 +3988,7 @@ function validatePositiveIntegerAmount(
   effect: RuntimeEffectPayload,
   amountLabel: string
 ): string[] {
-  const amount = effect["amount"];
+  const amount = effect.amount;
   if (
     typeof amount !== "number" ||
     !Number.isSafeInteger(amount) ||
@@ -4113,14 +4111,14 @@ function validateWandAttackReplacementShape(
   effect: RuntimeEffectPayload
 ): string[] {
   const errors: string[] = [];
-  if (effect["timing"] !== "attackReplacement") {
+  if (effect.timing !== "attackReplacement") {
     errors.push(
-      `${subjectId} uses unsupported wand-attack replacement timing ${String(effect["timing"])}`
+      `${subjectId} uses unsupported wand-attack replacement timing ${String(effect.timing)}`
     );
   }
 
-  const cardDefinitionIds = effect["cardDefinitionIds"];
-  const cardTags = effect["cardTags"];
+  const cardDefinitionIds = effect.cardDefinitionIds;
+  const cardTags = effect.cardTags;
   const hasValidCardDefinitionIds =
     Array.isArray(cardDefinitionIds) &&
     cardDefinitionIds.length > 0 &&

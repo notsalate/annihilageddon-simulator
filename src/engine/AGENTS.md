@@ -7,6 +7,10 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 ## Ownership
 
 - Owns runtime behavior under `src/engine/**`.
+- `attack-resolution.ts` and `attack-defense.ts` own the player-controlled Attack lifecycle, including amount components, voluntary Defense, redirect state, rollback, and damage attribution; Mayhem and Mega Mayhem remain separate domain flows.
+- `control-ledger.ts` owns the controller-to-object relation, temporary-control lifecycle, and physical card-location queries; consumers must not reconstruct control by scanning zones independently.
+- `trigger-dispatch.ts` owns controlled-card trigger discovery, stable ordering, source attribution, and stop-on-error/game-end behavior.
+- `runtime-effect.ts` owns `RuntimeEffectPayloadMap`; `effect-runtime-registry.ts` validates raw data and returns the corresponding concrete payload before execution.
 - Runtime data comes from `data/`; import drafts under `data/import/` are outside executable engine input.
 - CLI orchestration lives in `src/cli/`.
 

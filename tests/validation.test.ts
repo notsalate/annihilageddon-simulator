@@ -14,9 +14,20 @@ import {
   type DecodeResult,
   type EffectTiming,
   type LoadedDataPack,
+  type AvoidAttackRuntimeEffect,
+  type DoubleOwnedAttackDamageRuntimeEffect,
+  type IncreaseHandLimitAtMaxLifeRuntimeEffect,
+  type ModifyOwnedWandAttackDamageRuntimeEffect,
+  type OngoingAddPowerRuntimeEffect,
+  type OngoingAddPowerWhenPlayingLimpWandRuntimeEffect,
   type OngoingAddPowerWhenPlayingWandRuntimeEffect,
   type OngoingAddPowerPerDeadWizardTokenRuntimeEffect,
+  type OngoingFirstAttackDamageAddPowerRuntimeEffect,
+  type OngoingHandRefillBonusRuntimeEffect,
+  type PreventDefenseAgainstOwnedWandAttacksRuntimeEffect,
   type RuntimeEffect,
+  type RuntimeEffectForId,
+  type RuntimeEffectPayloadMap,
   type RuntimeEffectCondition,
   type RuntimeEffectCost,
   type RuntimeEffectId,
@@ -25,10 +36,6 @@ import {
   type TargetSelector,
   type TokenDefinition,
 } from "../src/index.js";
-import type {
-  RuntimeEffectForId,
-  RuntimeEffectPayloadMap,
-} from "../src/engine/runtime-effect.js";
 import {
   type EffectRuntimeServices,
   getEffectRuntimeCatalogEntry,
@@ -92,9 +99,88 @@ test("runtime effect payload map narrows touched effect contracts", () => {
         false
       >
     >,
-  ] = [true, true, true, true];
+    Expect<
+      Equal<RuntimeEffectPayloadMap["avoid_attack"], AvoidAttackRuntimeEffect>
+    >,
+    Expect<
+      Equal<
+        RuntimeEffectPayloadMap["increase_hand_limit_at_max_life"],
+        IncreaseHandLimitAtMaxLifeRuntimeEffect
+      >
+    >,
+    Expect<
+      Equal<
+        RuntimeEffectPayloadMap["ongoing_hand_refill_bonus"],
+        OngoingHandRefillBonusRuntimeEffect
+      >
+    >,
+    Expect<
+      Equal<
+        RuntimeEffectPayloadMap["ongoing_add_power"],
+        OngoingAddPowerRuntimeEffect
+      >
+    >,
+    Expect<
+      Equal<
+        RuntimeEffectPayloadMap["ongoing_add_power_when_playing_wand"],
+        OngoingAddPowerWhenPlayingWandRuntimeEffect
+      >
+    >,
+    Expect<
+      Equal<
+        RuntimeEffectPayloadMap["ongoing_add_power_when_playing_limp_wand"],
+        OngoingAddPowerWhenPlayingLimpWandRuntimeEffect
+      >
+    >,
+    Expect<
+      Equal<
+        RuntimeEffectPayloadMap["ongoing_add_power_per_dead_wizard_token"],
+        OngoingAddPowerPerDeadWizardTokenRuntimeEffect
+      >
+    >,
+    Expect<
+      Equal<
+        RuntimeEffectPayloadMap["ongoing_first_attack_damage_add_power"],
+        OngoingFirstAttackDamageAddPowerRuntimeEffect
+      >
+    >,
+    Expect<
+      Equal<
+        RuntimeEffectPayloadMap["modify_owned_wand_attack_damage"],
+        ModifyOwnedWandAttackDamageRuntimeEffect
+      >
+    >,
+    Expect<
+      Equal<
+        RuntimeEffectPayloadMap["double_owned_attack_damage"],
+        DoubleOwnedAttackDamageRuntimeEffect
+      >
+    >,
+    Expect<
+      Equal<
+        RuntimeEffectPayloadMap["prevent_defense_against_owned_wand_attacks"],
+        PreventDefenseAgainstOwnedWandAttacksRuntimeEffect
+      >
+    >,
+  ] = [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+  ];
 
-  assert.deepEqual(assertions, [true, true, true, true]);
+  assert.equal(assertions.every(Boolean), true);
 });
 
 test("effect runtime catalog returns the validated concrete payload", () => {
