@@ -1,0 +1,39 @@
+name: export-pr137-current
+
+on:
+  pull_request:
+    branches:
+      - agent/architecture-deepening-findings
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    if: github.event.pull_request.head.ref == 'agent/tmp-export-pr137-20260720'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR 137 head
+        uses: actions/checkout@v4
+        with:
+          ref: agent/architecture-deepening-findings
+          fetch-depth: 1
+      - name: Create compact source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar \
+            --exclude=.git \
+            --exclude=assets \
+            --exclude=dist \
+            --exclude=node_modules \
+            --exclude='*.pdf' \
+            -czf "${RUNNER_TEMP}/annihilageddon-pr137-current.tar.gz" .
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: annihilageddon-pr137-current
+          path: ${{ runner.temp }}/annihilageddon-pr137-current.tar.gz
+          if-no-files-found: error
+          retention-days: 1
