@@ -23,6 +23,7 @@ This folder contains TypeScript tests, deterministic fixtures, and test helpers.
 
 - Put reusable test builders in `tests/helpers/`.
 - `tests/helpers/defense-fixtures.ts` owns reusable defense-card construction and an explicit fixture-only selector; builders must not mutate the global choice strategy.
+- `tests/helpers/game-scenario.ts` owns deterministic game setup and thin play/choice/turn adapters for focused integration suites.
 - Put static JSON fixtures in `tests/fixtures/`.
 - Keep issue-specific regression tests close to the existing test file for that behavior.
 

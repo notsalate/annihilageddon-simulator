@@ -34,6 +34,7 @@ const testSuites = [
   "attack-resolution.test.js",
   "attack-defense.test.js",
   "defense-choice.test.js",
+  "helpers/game-scenario.test.js",
 ];
 
 for (const suite of testSuites) {
