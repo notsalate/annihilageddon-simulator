@@ -12,6 +12,10 @@ import type { EffectGameEnd } from "./effect-runtime-registry.js";
 import { assertNever } from "../common.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import {
+  grantTemporaryControl,
+  releaseTemporaryControls,
+} from "./control-ledger.js";
+import {
   calculateEffectiveCardCost,
   getControlledCards,
 } from "./effective-values.js";
@@ -193,7 +197,7 @@ function endTurn(state: GameState): ActionResult {
     targetDefinitionIds: drawResult.drawnCards.map((card) => card.definitionId),
   });
 
-  state.turn.temporaryCardControls = [];
+  releaseTemporaryControls(state);
   state.turn.gainedCardDefinitionIds = [];
   state.turn.damagingAttackPlayerIds = [];
   state.turn.number += 1;
@@ -494,10 +498,7 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
     destinationZone = `${activePlayer.playerId}.playedThisTurn`;
   }
   if (!definition.engine.isOngoing) {
-    state.turn.temporaryCardControls.push({
-      cardInstanceId: card.instanceId,
-      controllerId: activePlayer.playerId,
-    });
+    grantTemporaryControl(state, card.instanceId, activePlayer.playerId);
   }
   recordCardMoved(state, activePlayer, card, {
     sourceZone: `${activePlayer.playerId}.hand`,

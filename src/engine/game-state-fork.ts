@@ -1,3 +1,4 @@
+import { cloneTemporaryControls } from "./control-ledger.js";
 import { installGameEventLog } from "./game-events.js";
 import type {
   CardInstance,
@@ -23,10 +24,8 @@ export function forkGameState(source: GameState): GameState {
       activatedCardIds: [...source.turn.activatedCardIds],
       gainedCardDefinitionIds: [...source.turn.gainedCardDefinitionIds],
       damagingAttackPlayerIds: [...source.turn.damagingAttackPlayerIds],
-      temporaryCardControls: source.turn.temporaryCardControls.map(
-        (control) => ({
-          ...control,
-        })
+      temporaryCardControls: cloneTemporaryControls(
+        source.turn.temporaryCardControls
       ),
     },
     players: source.players.map(clonePlayer),

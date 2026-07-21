@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { initializeGame } from "../src/index.js";
+import { forkGameState, initializeGame } from "../src/index.js";
 import {
   buildControlledObjectView,
+  cloneTemporaryControls,
   findCardLocation,
   getControlledCards,
+  grantTemporaryControl,
+  releaseTemporaryControls,
 } from "../src/engine/control-ledger.js";
 import { markCardInstanceId } from "../src/domain/types.js";
 
@@ -92,5 +95,62 @@ test("Control Ledger locates player singleton and common card zones", () => {
   assert.equal(
     findCardLocation(state, marketCard.instanceId)?.zoneName,
     "mainMarket"
+  );
+});
+
+test("temporary control lifecycle is idempotent, transferable, releasable, and fork-safe", () => {
+  const state = initializeGame({ rootDir, seed: 22003 });
+  const firstController = state.players[0];
+  const secondController = state.players[1];
+  assert.ok(firstController);
+  assert.ok(secondController);
+  const card = firstController.hand.shift();
+  assert.ok(card);
+  firstController.playedThisTurn.push(card);
+
+  grantTemporaryControl(state, card.instanceId, firstController.playerId);
+  grantTemporaryControl(state, card.instanceId, firstController.playerId);
+  assert.deepEqual(state.turn.temporaryCardControls, [
+    {
+      cardInstanceId: card.instanceId,
+      controllerId: firstController.playerId,
+    },
+  ]);
+
+  grantTemporaryControl(state, card.instanceId, secondController.playerId);
+  assert.deepEqual(state.turn.temporaryCardControls, [
+    {
+      cardInstanceId: card.instanceId,
+      controllerId: secondController.playerId,
+    },
+  ]);
+  assert.equal(
+    getControlledCards(state, firstController).includes(card),
+    false
+  );
+  assert.equal(
+    getControlledCards(state, secondController).includes(card),
+    true
+  );
+
+  const clonedControls = cloneTemporaryControls(
+    state.turn.temporaryCardControls
+  );
+  clonedControls[0]!.controllerId = firstController.playerId;
+  assert.equal(
+    state.turn.temporaryCardControls[0]!.controllerId,
+    secondController.playerId
+  );
+
+  const fork = forkGameState(state);
+  releaseTemporaryControls(fork);
+  assert.equal(fork.turn.temporaryCardControls.length, 0);
+  assert.equal(state.turn.temporaryCardControls.length, 1);
+
+  releaseTemporaryControls(state);
+  assert.equal(state.turn.temporaryCardControls.length, 0);
+  assert.equal(
+    getControlledCards(state, secondController).includes(card),
+    false
   );
 });

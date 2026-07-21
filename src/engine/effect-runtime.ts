@@ -8,6 +8,7 @@ import {
   resolveAttackAmount,
 } from "./attack-resolution.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
+import { grantTemporaryControl } from "./control-ledger.js";
 import {
   calculateEffectivePlayerMaxLife,
   getControlledCards,
@@ -2043,10 +2044,7 @@ function playResolvedCard(
     player.permanents.push(card);
   } else {
     player.playedThisTurn.push(card);
-    state.turn.temporaryCardControls.push({
-      cardInstanceId: card.instanceId,
-      controllerId: player.playerId,
-    });
+    grantTemporaryControl(state, card.instanceId, player.playerId);
   }
 
   const effectResult = executeOnPlayEffects(state, player, definition, {

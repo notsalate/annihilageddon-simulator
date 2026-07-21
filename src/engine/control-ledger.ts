@@ -6,6 +6,7 @@ import type {
   PlayerState,
   StatusInstance,
   TokenInstance,
+  TemporaryCardControl,
   TrophyLikeInstance,
 } from "./setup.js";
 
@@ -66,6 +67,32 @@ export function buildControlledObjectView(
     statuses: [...player.statuses],
     trophyLikeObjects: [...player.trophyLikeObjects],
   };
+}
+
+export function grantTemporaryControl(
+  state: GameState,
+  cardInstanceId: CardInstance["instanceId"],
+  controllerId: PlayerId
+): void {
+  const existing = state.turn.temporaryCardControls.find(
+    (control) => control.cardInstanceId === cardInstanceId
+  );
+  if (existing !== undefined) {
+    existing.controllerId = controllerId;
+    return;
+  }
+
+  state.turn.temporaryCardControls.push({ cardInstanceId, controllerId });
+}
+
+export function releaseTemporaryControls(state: GameState): void {
+  state.turn.temporaryCardControls = [];
+}
+
+export function cloneTemporaryControls(
+  controls: readonly TemporaryCardControl[]
+): TemporaryCardControl[] {
+  return controls.map((control) => ({ ...control }));
 }
 
 export function getControlledCards(
