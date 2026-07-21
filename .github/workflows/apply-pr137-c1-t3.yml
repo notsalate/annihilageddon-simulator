@@ -39,7 +39,9 @@ jobs:
             staging/.github/transport/c1-t3/series.fix-02-0 \
             staging/.github/transport/c1-t3/series.fix-02-1 \
             staging/.github/transport/c1-t3/series.fix-02-2 \
-            staging/.github/transport/c1-t3/series.fix-02-3 \
+            staging/.github/transport/c1-t3/series.fix-02-3-00 \
+            staging/.github/transport/c1-t3/series.fix-02-3-01 \
+            staging/.github/transport/c1-t3/series.fix-02-3-02 \
             staging/.github/transport/c1-t3/series.fix-03-00 \
             staging/.github/transport/c1-t3/series.fix-03-01 \
             staging/.github/transport/c1-t3/series.fix-03-02 \
