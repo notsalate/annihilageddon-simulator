@@ -1,13 +1,10 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
-import type {
-  CardInstance,
-  GameState,
-  PlayerId,
-  PlayerState,
-  StatusInstance,
-  TokenInstance,
-  TrophyLikeInstance,
-} from "./setup.js";
+import type { CardInstance, GameState, PlayerId } from "./setup.js";
+import {
+  buildControlledObjectView,
+  type ControlledCardObject,
+  type ControlledObjectView,
+} from "./control-ledger.js";
 import {
   isRuntimeEffectTarget,
   type RuntimeEffect,
@@ -34,93 +31,15 @@ export type EffectiveValueTarget =
       targetType: "player";
     };
 
-export interface ControlledObjectView {
-  playerId: PlayerId;
-  cards: readonly ControlledCardObject[];
-  tokens: readonly ControlledTokenObject[];
-  wizardProperties: readonly ControlledTokenObject[];
-  statuses: readonly StatusInstance[];
-  trophyLikeObjects: readonly TrophyLikeInstance[];
-}
-
-export interface ControlledCardObject {
-  sourceType: "controlledCard";
-  card: CardInstance;
-  definition: CardDefinition;
-}
-
-export interface ControlledTokenObject {
-  sourceType: "controlledToken";
-  token: TokenInstance;
-  definition: TokenDefinition;
-}
-
-export function buildControlledObjectView(
-  state: GameState,
-  playerId: PlayerId
-): ControlledObjectView {
-  const player = state.players.find(
-    (candidate) => candidate.playerId === playerId
-  );
-  if (player === undefined) {
-    throw new Error(`Missing player ${playerId}`);
-  }
-
-  return {
-    playerId,
-    cards: getControlledCards(state, player).map((card) => ({
-      sourceType: "controlledCard" as const,
-      card,
-      definition: mustGetCardDefinition(state, card.definitionId),
-    })),
-    tokens: player.deadWizardTokens.map((token) => ({
-      sourceType: "controlledToken" as const,
-      token,
-      definition: mustGetTokenDefinition(state, token.definitionId),
-    })),
-    wizardProperties: player.wizardProperties.map((token) => ({
-      sourceType: "controlledToken" as const,
-      token,
-      definition: mustGetTokenDefinition(state, token.definitionId),
-    })),
-    statuses: [...player.statuses],
-    trophyLikeObjects: [...player.trophyLikeObjects],
-  };
-}
-
-export function getControlledCards(
-  state: GameState,
-  player: PlayerState
-): CardInstance[] {
-  const permanentIds = new Set(
-    player.permanents.map((card) => card.instanceId)
-  );
-  const temporarilyControlled = state.turn.temporaryCardControls
-    .filter((control) => control.controllerId === player.playerId)
-    .map((control) => findCardInstance(state, control.cardInstanceId))
-    .filter((card): card is CardInstance => card !== undefined)
-    .filter((card) => !permanentIds.has(card.instanceId));
-  return [...player.permanents, ...temporarilyControlled];
-}
-
-function findCardInstance(
-  state: GameState,
-  cardInstanceId: CardInstance["instanceId"]
-): CardInstance | undefined {
-  for (const player of state.players) {
-    const card = [
-      ...player.deck,
-      ...player.hand,
-      ...player.discard,
-      ...player.playedThisTurn,
-      ...player.permanents,
-    ].find((candidate) => candidate.instanceId === cardInstanceId);
-    if (card !== undefined) {
-      return card;
-    }
-  }
-  return undefined;
-}
+export {
+  buildControlledObjectView,
+  getControlledCards,
+} from "./control-ledger.js";
+export type {
+  ControlledCardObject,
+  ControlledObjectView,
+  ControlledTokenObject,
+} from "./control-ledger.js";
 
 export function calculateEffectiveCardCost(
   state: GameState,

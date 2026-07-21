@@ -11,6 +11,7 @@ const testSuites = [
   "setup-effects.test.js",
   "action-loop.test.js",
   "effective-values.test.js",
+  "control-ledger.test.js",
   "simulation.test.js",
   "simulation-legal-actions.test.js",
   "debug-trace.test.js",
