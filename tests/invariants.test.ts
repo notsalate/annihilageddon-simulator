@@ -8,7 +8,10 @@ import {
   listLegalActions,
   runSingleGame,
 } from "../src/index.js";
-import { markPlayerId } from "../src/domain/types.js";
+import {
+  markCardInstanceId,
+  markPlayerId,
+} from "../src/domain/types.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -107,6 +110,68 @@ test("game state invariants reject duplicate token presence across owners and zo
   assert.throws(
     () => assertGameStateInvariants(state),
     /must be owned by common|appears in multiple zones/
+  );
+});
+
+test("game state invariants reject stale temporary-control card references", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const controller = state.players[0];
+  assert.ok(controller);
+
+  state.turn.temporaryCardControls.push({
+    cardInstanceId: markCardInstanceId("missing-controlled-card"),
+    controllerId: controller.playerId,
+  });
+
+  assert.throws(
+    () => assertGameStateInvariants(state),
+    /temporary control references missing card missing-controlled-card/
+  );
+});
+
+test("game state invariants reject temporary control by a missing player", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const card = state.players[0]?.hand[0];
+  assert.ok(card);
+
+  state.turn.temporaryCardControls.push({
+    cardInstanceId: card.instanceId,
+    controllerId: markPlayerId("player-99"),
+  });
+
+  assert.throws(
+    () => assertGameStateInvariants(state),
+    /temporary control references missing controller player-99/
+  );
+});
+
+test("game state invariants reject duplicate temporary-control entries", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const controller = state.players[0];
+  const card = controller?.hand[0];
+  assert.ok(controller);
+  assert.ok(card);
+
+  state.turn.temporaryCardControls.push(
+    { cardInstanceId: card.instanceId, controllerId: controller.playerId },
+    { cardInstanceId: card.instanceId, controllerId: controller.playerId }
+  );
+
+  assert.throws(
+    () => assertGameStateInvariants(state),
+    /duplicate temporary control for/
   );
 });
 

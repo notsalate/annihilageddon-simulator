@@ -74,6 +74,33 @@ export function assertGameStateInvariants(state: GameState): void {
 
   assertSingleZoneMembership(cardLocations, "card");
   assertSingleZoneMembership(tokenLocations, "token");
+  assertTemporaryCardControls(state, cardLocations);
+}
+
+function assertTemporaryCardControls(
+  state: GameState,
+  cardLocations: ReadonlyMap<string, readonly string[]>
+): void {
+  const playerIds = new Set(state.players.map((player) => player.playerId));
+  const controlledCardIds = new Set<string>();
+
+  for (const control of state.turn.temporaryCardControls) {
+    assertTrue(
+      playerIds.has(control.controllerId),
+      `temporary control references missing controller ${control.controllerId}`
+    );
+    assertTrue(
+      !controlledCardIds.has(control.cardInstanceId),
+      `duplicate temporary control for ${control.cardInstanceId}`
+    );
+    controlledCardIds.add(control.cardInstanceId);
+
+    const locations = cardLocations.get(control.cardInstanceId);
+    assertTrue(
+      locations !== undefined && locations.length === 1,
+      `temporary control references missing card ${control.cardInstanceId}`
+    );
+  }
 }
 
 function assertPlayerInvariants(player: PlayerState): void {
