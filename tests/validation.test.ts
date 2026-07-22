@@ -162,7 +162,25 @@ test("runtime effect payload map narrows touched effect contracts", () => {
         PreventDefenseAgainstOwnedWandAttacksRuntimeEffect
       >
     >,
+    Expect<
+      Equal<
+        "redirectAttack" extends keyof RuntimeEffectForId<"ongoing_add_power">
+          ? true
+          : false,
+        false
+      >
+    >,
+    Expect<
+      Equal<
+        "cardTags" extends keyof RuntimeEffectForId<"avoid_attack">
+          ? true
+          : false,
+        false
+      >
+    >,
   ] = [
+    true,
+    true,
     true,
     true,
     true,
@@ -181,6 +199,63 @@ test("runtime effect payload map narrows touched effect contracts", () => {
   ];
 
   assert.equal(assertions.every(Boolean), true);
+});
+
+test("effect runtime catalog rejects foreign fields on concrete payloads", () => {
+  const cases: Array<{
+    effectId: RuntimeEffectId;
+    effect: object;
+    field: string;
+  }> = [
+    {
+      effectId: "ongoing_add_power",
+      effect: {
+        effectId: "ongoing_add_power",
+        timing: "whileControlled",
+        amount: 1,
+        redirectAttack: true,
+      },
+      field: "redirectAttack",
+    },
+    {
+      effectId: "avoid_attack",
+      effect: {
+        effectId: "avoid_attack",
+        timing: "onDefense",
+        destination: "discardSelf",
+        cardTags: ["wandCard"],
+      },
+      field: "cardTags",
+    },
+    {
+      effectId: "modify_owned_wand_attack_damage",
+      effect: {
+        effectId: "modify_owned_wand_attack_damage",
+        timing: "attackReplacement",
+        amount: 1,
+        cardTags: ["wandAttackCard"],
+        destination: "discardSelf",
+      },
+      field: "destination",
+    },
+  ];
+
+  for (const candidate of cases) {
+    const resolution = resolveEffectRuntimeCatalogEntry(
+      `Foreign field ${candidate.field}`,
+      candidate.effectId,
+      candidate.effect,
+      "fixture",
+      "card"
+    );
+    assert.equal(resolution.ok, false);
+    if (!resolution.ok) {
+      assert.ok(
+        resolution.errors.some((error) => error.includes(candidate.field)),
+        resolution.errors.join("; ")
+      );
+    }
+  }
 });
 
 test("effect runtime catalog returns the validated concrete payload", () => {

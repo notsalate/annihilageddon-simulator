@@ -18,6 +18,7 @@ import {
 import { recordGameEvent, recordTurnPowerChanged } from "./event-recorder.js";
 import { isPlainRecord } from "../common.js";
 import {
+  getExactRuntimeEffectPayloadFields,
   isRuntimeEffectSelectorTarget,
   isRuntimeEffectId,
   type AvoidAttackRuntimeEffect,
@@ -5242,8 +5243,23 @@ export function resolveEffectRuntimeCatalogEntry<RawEffectId extends string>(
     subjectId,
     effect as RuntimeEffectPayload
   );
-  return shapeErrors.length > 0
-    ? { ok: false, errors: shapeErrors }
+  const exactPayloadFields = getExactRuntimeEffectPayloadFields(entry.effectId);
+  const unexpectedFieldErrors =
+    exactPayloadFields === undefined
+      ? []
+      : Object.keys(effect)
+          .filter(
+            (field) =>
+              !exactPayloadFields.includes(field) &&
+              !shapeErrors.some((error) => error.includes(field))
+          )
+          .map(
+            (field) =>
+              `${subjectId} uses unsupported ${rawEffectId} field ${field}`
+          );
+  const validationErrors = [...unexpectedFieldErrors, ...shapeErrors];
+  return validationErrors.length > 0
+    ? { ok: false, errors: validationErrors }
     : ({
         ok: true,
         entry,

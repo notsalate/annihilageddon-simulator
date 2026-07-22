@@ -32,9 +32,9 @@ const configuredAllowedViolations = [
   ["src/engine/data.ts", 2252, 3, "requireCardKindField"],
   ["src/engine/data.ts", 2267, 3, "requireTokenKindField"],
   ["src/engine/data.ts", 2292, 3, "validateRuntimeEffectDefinition"],
-  ["src/engine/data.ts", 2324, 3, "validateNestedAttackBranches"],
-  ["src/engine/data.ts", 2377, 43, "isEffectRecord"],
-  ["src/engine/runtime-effect.ts", 538, 4, "isRuntimeEffectTargetRecord"],
+  ["src/engine/data.ts", 2322, 3, "validateNestedAttackBranches"],
+  ["src/engine/data.ts", 2375, 43, "isEffectRecord"],
+  ["src/engine/runtime-effect.ts", 578, 4, "isRuntimeEffectTargetRecord"],
 ];
 
 for (const filePath of listTypeScriptFiles(engineDir)) {

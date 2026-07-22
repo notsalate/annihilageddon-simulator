@@ -2305,9 +2305,7 @@ function validateRuntimeEffectDefinition(
   }
 
   const catalogEntry = resolution.entry;
-  const validatedEffect = resolution.effect;
-
-  const targetSelector = validatedEffect.targetSelector;
+  const targetSelector = effect["targetSelector"];
   if (
     targetSelector !== undefined &&
     (!isRuntimeEffectTargetSelector(targetSelector) ||
