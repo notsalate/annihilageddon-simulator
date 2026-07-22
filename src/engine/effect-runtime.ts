@@ -21,6 +21,7 @@ import {
 } from "./event-recorder.js";
 import {
   type AttackIntent,
+  type DamageCause,
   type DamageResult,
   type AttackTargetResolutionResult,
   createAttackDefenseUsage,
@@ -668,7 +669,8 @@ function resolveAttackTarget(
         targetPlayer,
         resolvedAmount,
         effectId,
-        source
+        source,
+        { kind: "playerControlled", player: attackingPlayer }
       ),
       avoided: false,
       amountComponents: resolvedAmountComponents,
@@ -781,7 +783,8 @@ function resolveMayhemAttackPlan(
       decision.targetPlayer,
       decision.amount,
       effectId,
-      source
+      source,
+      { kind: "ownerless" }
     );
   }
 
@@ -1340,10 +1343,7 @@ function awardBasicTrophyForKill(
   effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
-  if (
-    killer.playerId === defeatedPlayer.playerId ||
-    !givesBasicTrophyCredit(effectId)
-  ) {
+  if (killer.playerId === defeatedPlayer.playerId) {
     return;
   }
 
@@ -1388,21 +1388,14 @@ function awardBasicTrophyForKill(
   });
 }
 
-function givesBasicTrophyCredit(effectId: RuntimeEffectId): boolean {
-  return (
-    effectId === "attack_damage" ||
-    effectId === "multi_target_attack" ||
-    effectId === "deal_damage"
-  );
-}
-
 function dealDamage(
   state: GameState,
   sourcePlayer: PlayerState,
   targetPlayer: PlayerState,
   amount: number,
   effectId: RuntimeEffectId,
-  source: EffectSourceContext
+  source: EffectSourceContext,
+  cause: DamageCause
 ): DamageResult {
   const previousLife = targetPlayer.life.current;
   targetPlayer.life.current -= amount;
@@ -1426,9 +1419,9 @@ function dealDamage(
       state,
       targetPlayer,
       targetPlayer.life.current,
-      givesBasicTrophyCredit(effectId)
+      cause.kind === "playerControlled"
         ? {
-            killer: sourcePlayer,
+            killer: cause.player,
             effectId,
             source,
           }

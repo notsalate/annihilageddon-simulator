@@ -160,6 +160,10 @@ export interface DamageResult {
   killed: boolean;
 }
 
+export type DamageCause =
+  | { kind: "playerControlled"; player: PlayerState }
+  | { kind: "ownerless" };
+
 export interface AttackIntent {
   attackingPlayer: PlayerState;
   targetPlayer: PlayerState;
@@ -292,7 +296,8 @@ export interface EffectRuntimeServices {
     targetPlayer: PlayerState,
     amount: number,
     effectId: RuntimeEffectId,
-    source: EffectSourceContext
+    source: EffectSourceContext,
+    cause: DamageCause
   ): DamageResult;
   applyAfterPlayerAttackDamage(
     state: GameState,
@@ -822,7 +827,8 @@ const dealDamageHandler: EffectRuntimeHandler = {
       targetResult.choice.player,
       amount.value,
       effect.effectId,
-      source
+      source,
+      { kind: "playerControlled", player }
     );
     return { ok: true };
   },
@@ -1663,7 +1669,8 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler = {
           targetPlayer,
           damageOption["amount"],
           effectId,
-          source
+          source,
+          { kind: "ownerless" }
         );
         continue;
       }

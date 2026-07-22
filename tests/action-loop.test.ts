@@ -5417,6 +5417,27 @@ test("attack_damage_equal_to_controlled_card_cost reuses attack branches when no
 
   assert.equal(result.ok, true);
   assert.equal(activePlayer.chips, 2);
+  assert.equal(
+    activePlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    true
+  );
+  assert.equal(
+    targetPlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    false
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "trophyControlChanged" &&
+        event.playerId === activePlayer.playerId &&
+        event.targetPlayerId === targetPlayer.playerId &&
+        event.effectId === "attack_damage_equal_to_controlled_card_cost"
+    )
+  );
   assert.ok(
     state.eventLog.some((event) => {
       return (
