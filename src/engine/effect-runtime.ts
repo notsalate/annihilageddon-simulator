@@ -647,6 +647,9 @@ function resolveAttackTarget(
   if (!defenseResult.ok) {
     return defenseResult;
   }
+  if (defenseResult.gameEnd !== undefined) {
+    return { ok: true, gameEnd: defenseResult.gameEnd };
+  }
   if (defenseResult.avoided) {
     recordGameEvent(state, {
       type: "attackAvoided",
@@ -732,6 +735,9 @@ function resolveMayhemAttackPlan(
     });
     if (!defenseResult.ok) {
       return defenseResult;
+    }
+    if (defenseResult.gameEnd !== undefined) {
+      return { ok: true, gameEnd: defenseResult.gameEnd };
     }
     const avoided = defenseResult.avoided;
     if (avoided) {

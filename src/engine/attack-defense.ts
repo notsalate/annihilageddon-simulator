@@ -332,6 +332,23 @@ export function resolveDefenseWindow(
       );
       return branchResult;
     }
+    if (branchResult.gameEnd !== undefined) {
+      if (
+        !redirectsAttack &&
+        !moveDefenseCard(state, defendingPlayer, defense)
+      ) {
+        restoreDefenseMutationSnapshot(
+          state,
+          attack.defenseUsage,
+          mutationSnapshot
+        );
+        return {
+          ok: false,
+          error: `Cannot move defense ${defense.card.instanceId}`,
+        };
+      }
+      return { ok: true, avoided: true, gameEnd: branchResult.gameEnd };
+    }
   }
 
   if (redirectsAttack && attack.kind === "redirectable") {
@@ -359,6 +376,9 @@ export function resolveDefenseWindow(
         mutationSnapshot
       );
       return redirectResult;
+    }
+    if (redirectResult.gameEnd !== undefined) {
+      return { ok: true, avoided: true, gameEnd: redirectResult.gameEnd };
     }
     return { ok: true, avoided: true, resolution: redirectResult.resolution };
   }

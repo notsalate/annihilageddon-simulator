@@ -188,12 +188,24 @@ export interface AttackResolution extends DamageResult {
 }
 
 export type AttackTargetResolutionResult =
-  | { ok: true; resolution: AttackResolution }
+  | { ok: true; resolution: AttackResolution; gameEnd?: never }
+  | { ok: true; gameEnd: EffectGameEnd; resolution?: never }
   | { ok: false; error: string };
 
 export type DefenseWindowResolutionResult =
-  | { ok: true; avoided: false; resolution?: never }
-  | { ok: true; avoided: true; resolution?: AttackResolution }
+  | { ok: true; avoided: false; resolution?: never; gameEnd?: never }
+  | {
+      ok: true;
+      avoided: true;
+      resolution?: AttackResolution;
+      gameEnd?: never;
+    }
+  | {
+      ok: true;
+      avoided: true;
+      gameEnd: EffectGameEnd;
+      resolution?: never;
+    }
   | { ok: false; error: string };
 
 export interface AttackDefenseUsage {
@@ -1246,6 +1258,9 @@ const attackGainStatusHandler: EffectRuntimeHandler = {
       if (!defenseResult.ok) {
         return defenseResult;
       }
+      if (defenseResult.gameEnd !== undefined) {
+        return { ok: true, gameEnd: defenseResult.gameEnd };
+      }
       if (defenseResult.avoided) {
         recordGameEvent(state, {
           type: "attackAvoided",
@@ -1407,6 +1422,9 @@ const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler = {
     );
     if (!decisionResult.ok) {
       return decisionResult;
+    }
+    if (decisionResult.gameEnd !== undefined) {
+      return { ok: true, gameEnd: decisionResult.gameEnd };
     }
     for (const { player: targetPlayer, avoided } of decisionResult.decisions) {
       if (avoided) {
@@ -2243,6 +2261,9 @@ const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler = {
     );
     if (!decisionResult.ok) {
       return decisionResult;
+    }
+    if (decisionResult.gameEnd !== undefined) {
+      return { ok: true, gameEnd: decisionResult.gameEnd };
     }
     for (const { player: targetPlayer, avoided } of decisionResult.decisions) {
       if (avoided) {
@@ -3252,6 +3273,9 @@ function executeAttackWithAmount(
       if (!attackTargetResult.ok) {
         return attackTargetResult;
       }
+      if (attackTargetResult.gameEnd !== undefined) {
+        return { ok: true, gameEnd: attackTargetResult.gameEnd };
+      }
       const attackResult = attackTargetResult.resolution;
       attackResults.push(attackResult);
       const branchResult = executeAttackBranches(
@@ -3317,6 +3341,9 @@ function executeAttackWithAmount(
   });
   if (!attackTargetResult.ok) {
     return attackTargetResult;
+  }
+  if (attackTargetResult.gameEnd !== undefined) {
+    return { ok: true, gameEnd: attackTargetResult.gameEnd };
   }
   const attackResult = attackTargetResult.resolution;
   services.applyAfterPlayerAttackDamage(
@@ -3565,6 +3592,9 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
       if (!attackTargetResult.ok) {
         return attackTargetResult;
       }
+      if (attackTargetResult.gameEnd !== undefined) {
+        return { ok: true, gameEnd: attackTargetResult.gameEnd };
+      }
       const attackResult = attackTargetResult.resolution;
       attackResults.push(attackResult);
       if (!attackResult.killed) {
@@ -3640,6 +3670,9 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
       });
       if (!attackTargetResult.ok) {
         return attackTargetResult;
+      }
+      if (attackTargetResult.gameEnd !== undefined) {
+        return { ok: true, gameEnd: attackTargetResult.gameEnd };
       }
       const attackResult = attackTargetResult.resolution;
       attackResults.push(attackResult);
@@ -4525,7 +4558,9 @@ function collectMayhemAttackDefenseDecisions(
   | {
       ok: true;
       decisions: Array<{ player: PlayerState; avoided: boolean }>;
+      gameEnd?: never;
     }
+  | { ok: true; gameEnd: EffectGameEnd; decisions?: never }
   | { ok: false; error: string } {
   const decisions: Array<{ player: PlayerState; avoided: boolean }> = [];
 
@@ -4555,6 +4590,9 @@ function collectMayhemAttackDefenseDecisions(
     });
     if (!defenseResult.ok) {
       return defenseResult;
+    }
+    if (defenseResult.gameEnd !== undefined) {
+      return { ok: true, gameEnd: defenseResult.gameEnd };
     }
     const avoided = defenseResult.avoided;
     if (avoided) {

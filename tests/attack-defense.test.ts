@@ -240,6 +240,44 @@ test("defense module rolls back costs, movement, branches, events, and usage on 
   assert.deepEqual([...defenseUsage.usedDefenseCardInstanceIds], []);
 });
 
+test("defense branch game end stops redirect and propagates the terminal result", () => {
+  const { state, attacker, defender, source } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
+    redirectAttack: true,
+    branchEffects: [{ effectId: "draw_cards", timing: "onDefense", amount: 1 }],
+  });
+  const gameEnd = {
+    reason: "playerDefeated" as const,
+    winnerPlayerId: defender.playerId,
+  };
+  let redirectCalls = 0;
+  const services = createServices(
+    (choices) =>
+      choices.find((choice) => choice.choiceId === defense.instanceId),
+    {
+      executeDefenseEffects() {
+        return { ok: true, gameEnd };
+      },
+      resolveRedirectedAttack() {
+        redirectCalls += 1;
+        throw new Error("terminal defense branch must stop redirect");
+      },
+    }
+  );
+
+  const result = resolveDefenseWindow(
+    state,
+    defender,
+    redirectableAttack(attacker, source),
+    services
+  );
+
+  assert.deepEqual(result, { ok: true, avoided: true, gameEnd });
+  assert.equal(redirectCalls, 0);
+  assert.equal(defender.hand.includes(defense), false);
+  assert.equal(defender.discard.includes(defense), true);
+});
+
 test("ownerless redirect defense avoids without inventing an attacker", () => {
   const { state, defender, source } = createScenario();
   const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
