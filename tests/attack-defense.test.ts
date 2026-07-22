@@ -47,6 +47,91 @@ test("defense module preserves an explicit decline without mutations", () => {
   );
 });
 
+test("defense module excludes defenses whose cumulative chip costs are unaffordable", () => {
+  const { state, attacker, defender, source } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
+    costs: [
+      { costId: "spend_chips", amount: 3 },
+      { costId: "spend_chips", amount: 3 },
+    ],
+  });
+  defender.chips = 5;
+  let choiceCalls = 0;
+  const services = createServices((choices) => {
+    choiceCalls += 1;
+    return choices.find((choice) => choice.choiceId === defense.instanceId);
+  });
+
+  const result = resolveDefenseWindow(
+    state,
+    defender,
+    redirectableAttack(attacker, source),
+    services
+  );
+
+  assert.deepEqual(result, { ok: true, resolution: undefined });
+  assert.equal(choiceCalls, 0);
+  assert.equal(defender.chips, 5);
+  assert.equal(defender.hand.includes(defense), true);
+});
+
+test("defense module excludes defenses whose cumulative life costs are lethal", () => {
+  const { state, attacker, defender, source } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
+    costs: [
+      { costId: "pay_life", amount: 2 },
+      { costId: "pay_life", amount: 3 },
+    ],
+  });
+  defender.life.current = 5;
+  let choiceCalls = 0;
+  const services = createServices((choices) => {
+    choiceCalls += 1;
+    return choices.find((choice) => choice.choiceId === defense.instanceId);
+  });
+
+  const result = resolveDefenseWindow(
+    state,
+    defender,
+    redirectableAttack(attacker, source),
+    services
+  );
+
+  assert.deepEqual(result, { ok: true, resolution: undefined });
+  assert.equal(choiceCalls, 0);
+  assert.equal(defender.life.current, 5);
+  assert.equal(defender.hand.includes(defense), true);
+});
+
+test("defense module excludes defenses requiring more other cards than are available", () => {
+  const { state, attacker, defender, source } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
+    costs: [
+      { costId: "discard_other_hand_card" },
+      { costId: "discard_other_hand_card" },
+    ],
+  });
+  const otherCard = defender.deck.shift();
+  assert.ok(otherCard);
+  defender.hand.push(otherCard);
+  let choiceCalls = 0;
+  const services = createServices((choices) => {
+    choiceCalls += 1;
+    return choices.find((choice) => choice.choiceId === defense.instanceId);
+  });
+
+  const result = resolveDefenseWindow(
+    state,
+    defender,
+    redirectableAttack(attacker, source),
+    services
+  );
+
+  assert.deepEqual(result, { ok: true, resolution: undefined });
+  assert.equal(choiceCalls, 0);
+  assert.deepEqual(defender.hand, [defense, otherCard]);
+});
+
 test("defense module applies the exact selected defense", () => {
   const { state, attacker, defender, source } = createScenario();
   const first = addFixtureDefenseCardToHand(state, defender, "discardSelf");

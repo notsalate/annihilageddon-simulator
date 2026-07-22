@@ -505,26 +505,31 @@ function canPayDefenseCosts(
     return true;
   }
 
+  let remainingChips = defendingPlayer.chips;
+  let remainingPayableLife = defendingPlayer.life.current - 1;
+  let remainingOtherCards = defendingPlayer.hand.filter(
+    (card) => card.instanceId !== defenseCard.instanceId
+  ).length;
+
   for (const cost of costs) {
     switch (cost.costId) {
       case "discard_other_hand_card":
-        if (
-          defendingPlayer.hand.every(
-            (card) => card.instanceId === defenseCard.instanceId
-          )
-        ) {
+        if (remainingOtherCards < 1) {
           return false;
         }
+        remainingOtherCards -= 1;
         break;
       case "spend_chips":
-        if (defendingPlayer.chips < cost.amount) {
+        if (remainingChips < cost.amount) {
           return false;
         }
+        remainingChips -= cost.amount;
         break;
       case "pay_life":
-        if (defendingPlayer.life.current - cost.amount < 1) {
+        if (remainingPayableLife < cost.amount) {
           return false;
         }
+        remainingPayableLife -= cost.amount;
         break;
     }
   }
