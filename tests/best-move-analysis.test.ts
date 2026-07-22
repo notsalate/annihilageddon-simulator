@@ -872,6 +872,7 @@ test("fails without a partial result when action or line limits are reached", ()
 
 test("enumerates each card target as a completed branch", () => {
   const state = initializeGame({ rootDir, seed: 126 });
+  state.runtimeMode = "fixture";
   const target = state.common.market[0];
   const secondTarget = state.common.mainDeck[0];
   assert.ok(target);
@@ -927,6 +928,7 @@ test("enumerates each card target as a completed branch", () => {
 
 test("limits the total generated branches across sequential choices", () => {
   const state = initializeGame({ rootDir, seed: 126 });
+  state.runtimeMode = "fixture";
   const target = state.common.market[0];
   const secondTarget = state.common.mainDeck[0];
   assert.ok(target);
@@ -975,6 +977,7 @@ test("limits the total generated branches across sequential choices", () => {
 
 test("enumerates the Cartesian product of sequential choices", () => {
   const state = initializeGame({ rootDir, seed: 126 });
+  state.runtimeMode = "fixture";
   const target = state.common.market[0];
   const secondTarget = state.common.mainDeck[0];
   assert.ok(target);

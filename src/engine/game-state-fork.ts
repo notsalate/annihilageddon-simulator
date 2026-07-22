@@ -15,6 +15,7 @@ import type {
 export function forkGameState(source: GameState): GameState {
   const fork: GameState = {
     seed: source.seed,
+    runtimeMode: source.runtimeMode,
     rng: source.rng.fork(),
     activePlayerId: source.activePlayerId,
     turn: {

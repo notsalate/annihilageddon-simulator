@@ -10,7 +10,10 @@ import {
   type PlayerState,
   type RuntimeEffect,
 } from "../src/index.js";
-import { grantTemporaryControl } from "../src/engine/control-ledger.js";
+import {
+  buildControlledObjectView,
+  grantTemporaryControl,
+} from "../src/engine/control-ledger.js";
 import {
   calculateEndTurnDrawCount,
   executeControlledCardOnPlayCardEffects,
@@ -32,6 +35,72 @@ import {
 } from "./helpers/game-scenario.js";
 
 const rootDir = process.cwd();
+
+test("trigger dispatch receives runtime mode explicitly instead of inferring it from definition ids", () => {
+  const fixtureState = initializeGame({
+    rootDir,
+    dataPackPath: "tests/fixtures/playable-runtime-data-pack.json",
+    seed: 23007,
+  });
+  const fixtureController = mustGetPlayer(fixtureState, 0);
+  fixtureController.permanents = [];
+  addControlledEffectCard(
+    fixtureState,
+    fixtureController,
+    fixtureController,
+    "plain-id",
+    fixtureController.permanents,
+    [{ effectId: "add_power", timing: "onPlayCard", amount: 1 }],
+    { cardId: "plain-trigger-id" }
+  );
+
+  const fixtureModes: string[] = [];
+  const fixtureResult = dispatchControlledCardEffects({
+    controlledObjects: buildControlledObjectView(
+      fixtureState,
+      fixtureController.playerId
+    ),
+    runtimeMode: fixtureState.runtimeMode,
+    timing: "onPlayCard",
+    execute(_effect, source) {
+      fixtureModes.push(source.runtimeMode);
+      return { ok: true };
+    },
+  });
+
+  assert.deepEqual(fixtureResult, { ok: true });
+  assert.deepEqual(fixtureModes, ["fixture"]);
+
+  const combatState = initializeGame({ rootDir, seed: 23008 });
+  const combatController = mustGetPlayer(combatState, 0);
+  combatController.permanents = [];
+  addControlledEffectCard(
+    combatState,
+    combatController,
+    combatController,
+    "fixture-looking-id",
+    combatController.permanents,
+    [{ effectId: "add_power", timing: "onPlayCard", amount: 1 }],
+    { cardId: "fixture-looking-combat-trigger" }
+  );
+
+  const combatModes: string[] = [];
+  const combatResult = dispatchControlledCardEffects({
+    controlledObjects: buildControlledObjectView(
+      combatState,
+      combatController.playerId
+    ),
+    runtimeMode: combatState.runtimeMode,
+    timing: "onPlayCard",
+    execute(_effect, source) {
+      combatModes.push(source.runtimeMode);
+      return { ok: true };
+    },
+  });
+
+  assert.deepEqual(combatResult, { ok: true });
+  assert.deepEqual(combatModes, ["combat"]);
+});
 
 test("controlled trigger dispatch preserves Control Ledger order and card source attribution", () => {
   const state = initializeGame({ rootDir, seed: 23001 });
@@ -66,8 +135,8 @@ test("controlled trigger dispatch preserves Control Ledger order and card source
     runtimeMode: string;
   }> = [];
   const result = dispatchControlledCardEffects({
-    state,
-    player: controller,
+    controlledObjects: buildControlledObjectView(state, controller.playerId),
+    runtimeMode: "fixture",
     timing: "onPlayCard",
     predicate: (effect) => effect.effectId === "add_power",
     execute(effect, source) {
@@ -317,8 +386,8 @@ test("end-turn discovery combines controlled refill and max-life effects", () =>
   grantTemporaryControl(state, maxLife.instanceId, controller.playerId);
 
   const contexts = listControlledCardEffects({
-    state,
-    player: controller,
+    controlledObjects: buildControlledObjectView(state, controller.playerId),
+    runtimeMode: state.runtimeMode,
     timing: "endTurn",
   });
   assert.deepEqual(
@@ -354,8 +423,8 @@ test("controlled trigger dispatch stops after the first execution error", () => 
 
   const executedDefinitionIds: string[] = [];
   const result = dispatchControlledCardEffects({
-    state,
-    player: controller,
+    controlledObjects: buildControlledObjectView(state, controller.playerId),
+    runtimeMode: "fixture",
     timing: "onPlayCard",
     predicate: (effect) => effect.effectId === "add_power",
     execute(_effect, source) {
@@ -377,9 +446,9 @@ function addControlledEffectCard(
   suffix: string,
   zone: CardInstance[],
   effects: RuntimeEffect[],
-  options: { isOngoing?: boolean; tags?: string[] } = {}
+  options: { isOngoing?: boolean; tags?: string[]; cardId?: string } = {}
 ): CardInstance {
-  const cardId = `fixture-trigger-dispatch-${suffix}`;
+  const cardId = options.cardId ?? `fixture-trigger-dispatch-${suffix}`;
   const definition: CardDefinition = {
     schemaVersion: 1,
     cardId,

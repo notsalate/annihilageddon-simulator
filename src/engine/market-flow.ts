@@ -154,9 +154,7 @@ function executeMayhemCard(
   const activePlayer = mustGetActivePlayer(state);
   const effectResult = executeMayhemEffects(state, activePlayer, definition, {
     sourceType: "card",
-    runtimeMode: card.definitionId.startsWith("fixture-")
-      ? "fixture"
-      : "combat",
+    runtimeMode: state.runtimeMode,
     playerId: activePlayer.playerId,
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,

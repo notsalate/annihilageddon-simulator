@@ -27,6 +27,7 @@ import {
 } from "./event-recorder.js";
 import {
   tryExecuteSetupEffect,
+  type EffectRuntimeMode,
   type EffectRuntimeSetupServices,
   type SetupDirective,
   type SetupEffectSourceContext,
@@ -167,6 +168,7 @@ export type RuntimeEffectChoiceStrategy = (
 
 export interface GameState {
   seed: number;
+  runtimeMode: EffectRuntimeMode;
   rng: RandomSource;
   activePlayerId: PlayerId;
   turn: {
@@ -829,6 +831,8 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       );
     }
   }
+  const runtimeMode: EffectRuntimeMode =
+    dataPack.manifest.mappingStatus === "fixture" ? "fixture" : "combat";
   const factory = createInstanceFactory();
   const tokenFactory = createTokenInstanceFactory();
   const setupEvents: GameEvent[] = [];
@@ -851,7 +855,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
   const forcedStartingPlayerId = applyWizardPropertySetupEffects(
     players,
     dataPack,
-    dataPack.manifest.mappingStatus === "fixture" ? "fixture" : "combat",
+    runtimeMode,
     {
       hasCardDefinition: (definitionId) =>
         dataPack.cardDefinitions.has(definitionId),
@@ -919,6 +923,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
 
   const state: GameState = {
     seed: options.seed,
+    runtimeMode,
     rng,
     activePlayerId: activePlayer.playerId,
     turn: {

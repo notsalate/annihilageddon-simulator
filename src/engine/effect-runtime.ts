@@ -9,6 +9,7 @@ import {
 } from "./attack-resolution.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import {
+  buildControlledObjectView,
   findCardLocation,
   getControlledCards,
   grantTemporaryControl,
@@ -142,7 +143,7 @@ export function executeWizardPropertyOnPlayCardEffects(
       "onPlayCard",
       {
         sourceType: "wizardProperty",
-        runtimeMode: "combat",
+        runtimeMode: state.runtimeMode,
         playerId: player.playerId,
         cardInstanceId: token.instanceId,
         definitionId: token.definitionId,
@@ -172,8 +173,8 @@ export function executeControlledCardOnPlayCardEffects(
   }
 
   return dispatchControlledCardEffects({
-    state,
-    player,
+    controlledObjects: buildControlledObjectView(state, player.playerId),
+    runtimeMode: state.runtimeMode,
     timing: "onPlayCard",
     predicate(effect, _source, context) {
       return (
@@ -254,7 +255,7 @@ export function moveGainedCardToPlayerDestination(
 
       const result = executeEffect(state, player, effect, {
         sourceType: "wizardProperty",
-        runtimeMode: "combat",
+        runtimeMode: state.runtimeMode,
         playerId: player.playerId,
         cardInstanceId: token.instanceId,
         definitionId: token.definitionId,
@@ -320,8 +321,8 @@ export function calculateEndTurnDrawCount(
   }
 
   for (const { effect } of listControlledCardEffects({
-    state,
-    player,
+    controlledObjects: buildControlledObjectView(state, player.playerId),
+    runtimeMode: state.runtimeMode,
     timing: "endTurn",
   })) {
     if (
@@ -1521,8 +1522,11 @@ function applyAfterPlayerAttackDamage(
   }
 
   const dispatchResult = dispatchControlledCardEffects({
-    state,
-    player: attackingPlayer,
+    controlledObjects: buildControlledObjectView(
+      state,
+      attackingPlayer.playerId
+    ),
+    runtimeMode: state.runtimeMode,
     timing: "afterFirstAttackDamageEachTurn",
     execute(effect, source) {
       const resolution = resolveEffectRuntimeCatalogEntry(
@@ -1570,7 +1574,6 @@ const attackDefenseServices: AttackDefenseServices = {
     return executeEffects(state, player, effects, "onDefense", source);
   },
   resolveRedirectedAttack: resolveAttackTarget,
-  getCardEffectRuntimeMode,
 };
 
 function resolveDefenseWindow(
@@ -2011,7 +2014,7 @@ function playResolvedCard(
 
   const effectResult = executeOnPlayEffects(state, player, definition, {
     sourceType: "card",
-    runtimeMode: getCardEffectRuntimeMode(card.definitionId),
+    runtimeMode: state.runtimeMode,
     playerId: player.playerId,
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
@@ -2146,8 +2149,4 @@ function shuffleInPlace<T>(items: T[], state: GameState): void {
     items[index] = swapItem;
     items[swapIndex] = item;
   }
-}
-
-function getCardEffectRuntimeMode(definitionId: string): "combat" | "fixture" {
-  return definitionId.startsWith("fixture-") ? "fixture" : "combat";
 }

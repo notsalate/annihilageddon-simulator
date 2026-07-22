@@ -47,6 +47,7 @@ const fixturePlayerDefeatHandler: EffectRuntimeHandler = {
 
 test("playCard propagates a fixture effect's player-defeat game end", () => {
   const state = initializeGame({ rootDir, seed: 99118 });
+  state.runtimeMode = "fixture";
   const activePlayer = mustGetActivePlayer(state);
   const runScenario = () => {
     const card = addFixtureCardToActiveHand(
@@ -78,6 +79,7 @@ test("playCard propagates a fixture effect's player-defeat game end", () => {
 
 test("play_top_card propagates game end from the nested card", () => {
   const state = initializeGame({ rootDir, seed: 99119 });
+  state.runtimeMode = "fixture";
   const activePlayer = mustGetActivePlayer(state);
   const runScenario = () => {
     const nestedDefinition = createFixtureCardDefinition(
@@ -130,6 +132,7 @@ test("play_top_card propagates game end from the nested card", () => {
 
 test("play_top_card_from_foe_deck propagates game end from the nested card", () => {
   const state = initializeGame({ rootDir, seed: 99120, playerCount: 2 });
+  state.runtimeMode = "fixture";
   const activePlayer = mustGetActivePlayer(state);
   const foe = state.players.find(
     (candidate) => candidate.playerId !== activePlayer.playerId

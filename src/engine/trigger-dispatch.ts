@@ -1,11 +1,12 @@
-import { getControlledCards } from "./control-ledger.js";
+import type { ControlledObjectView } from "./control-ledger.js";
 import type {
   EffectExecutionResult,
+  EffectRuntimeMode,
   EffectSourceContext,
 } from "./effect-runtime-registry.js";
 import type { CardDefinition } from "./data.js";
 import type { EffectTiming, RuntimeEffect } from "./runtime-effect.js";
-import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import type { CardInstance } from "./setup.js";
 
 export interface ControlledCardEffectContext {
   card: CardInstance;
@@ -15,8 +16,8 @@ export interface ControlledCardEffectContext {
 }
 
 export interface ListControlledCardEffectsOptions {
-  state: GameState;
-  player: PlayerState;
+  controlledObjects: ControlledObjectView;
+  runtimeMode: EffectRuntimeMode;
   timing: EffectTiming;
   predicate?: (
     effect: RuntimeEffect,
@@ -42,16 +43,15 @@ export function listControlledCardEffects(
   options: ListControlledCardEffectsOptions
 ): ControlledCardEffectContext[] {
   const contexts: ControlledCardEffectContext[] = [];
-  for (const card of getControlledCards(options.state, options.player)) {
-    const definition = options.state.cardDefinitions.get(card.definitionId);
-    if (definition === undefined || !definition.engine.playableInV0) {
+  for (const { card, definition } of options.controlledObjects.cards) {
+    if (!definition.engine.playableInV0) {
       continue;
     }
 
     const source: EffectSourceContext = {
       sourceType: "card",
-      runtimeMode: getCardEffectRuntimeMode(card.definitionId),
-      playerId: options.player.playerId,
+      runtimeMode: options.runtimeMode,
+      playerId: options.controlledObjects.playerId,
       cardInstanceId: card.instanceId,
       definitionId: card.definitionId,
     };
@@ -91,10 +91,4 @@ export function dispatchControlledCardEffects(
     }
   }
   return { ok: true };
-}
-
-export function getCardEffectRuntimeMode(
-  definitionId: string
-): EffectSourceContext["runtimeMode"] {
-  return definitionId.startsWith("fixture-") ? "fixture" : "combat";
 }

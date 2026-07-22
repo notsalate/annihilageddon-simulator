@@ -384,9 +384,6 @@ function createServices(
         ),
       };
     },
-    getCardEffectRuntimeMode() {
-      return "fixture";
-    },
     ...overrides,
   };
 }

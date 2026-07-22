@@ -36,9 +36,6 @@ export interface AttackDefenseServices {
     state: GameState,
     intent: AttackIntent
   ): AttackTargetResolutionResult;
-  getCardEffectRuntimeMode(
-    definitionId: string
-  ): EffectSourceContext["runtimeMode"];
 }
 
 interface DefensePlayerMutationSnapshot {
@@ -298,7 +295,7 @@ export function resolveDefenseWindow(
 
   const defenseSource: EffectSourceContext = {
     sourceType: "card",
-    runtimeMode: services.getCardEffectRuntimeMode(defense.card.definitionId),
+    runtimeMode: state.runtimeMode,
     playerId: defendingPlayer.playerId,
     cardInstanceId: defense.card.instanceId,
     definitionId: defense.card.definitionId,

@@ -5,7 +5,9 @@ import {
   applyAction,
   createSeededRng,
   forkGameState,
+  type CardDefinition,
   type GameState,
+  type TokenDefinition,
 } from "../src/index.js";
 import { recordBotActionSelected } from "../src/engine/event-recorder.js";
 import {
@@ -33,9 +35,50 @@ function createFixture(): GameState {
     ownerId: playerId,
   });
   const choiceStrategy = () => undefined;
+  const cardDefinition: CardDefinition = {
+    schemaVersion: 1,
+    cardId: "fixture-card",
+    source: { image: "assets/cards/fixtures/fixture-card.png" },
+    visible: {
+      nameRu: "Fixture card",
+      cost: 0,
+      victoryPoints: 0,
+      typeRu: null,
+      cardKind: "normal",
+      cardTypes: [],
+      markers: [],
+    },
+    engine: {
+      runtimeSchema: "krutagidon.cardDefinition.v0",
+      mappingStatus: "fixture",
+      playableInV0: true,
+      cardKind: "normal",
+      cardTypes: [],
+      cost: 0,
+      victoryPoints: 0,
+      isOngoing: false,
+      marketChipMarker: false,
+      effects: [],
+      unsupportedMechanics: [],
+    },
+  };
+  const tokenDefinition: TokenDefinition = {
+    schemaVersion: 1,
+    tokenId: "fixture-token",
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    source: { image: "assets/wizard-property/fixture-token.png" },
+    engine: {
+      mappingStatus: "fixture",
+      playableInV0: true,
+      effects: [],
+      unsupportedMechanics: [],
+    },
+  };
 
   return {
     seed: 124,
+    runtimeMode: "fixture",
     rng: createSeededRng(124),
     activePlayerId: playerId,
     turn: {
@@ -98,8 +141,8 @@ function createFixture(): GameState {
         drawStack: [token("common-dwt")],
       },
     },
-    cardDefinitions: new Map(),
-    tokenDefinitions: new Map(),
+    cardDefinitions: new Map([[cardDefinition.cardId, cardDefinition]]),
+    tokenDefinitions: new Map([[tokenDefinition.tokenId, tokenDefinition]]),
     eventLog: [
       {
         type: "handDrawn",

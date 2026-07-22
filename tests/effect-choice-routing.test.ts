@@ -252,6 +252,7 @@ test("target choice strategy can select a non-first chosenPlayer target", () => 
 
 test("target choice strategy routes a non-first market card to its handler", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
+  state.runtimeMode = "fixture";
   const source = addFixtureDefinitionToActiveHand(
     state,
     fixtureDefinition("fixture-choice-market-source", [
@@ -332,6 +333,7 @@ test("target choice strategy routes a non-first market card to its handler", () 
 
 test("reconstructed target choice falls back to the first legal choice", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
+  state.runtimeMode = "fixture";
   const source = addFixtureDefinitionToActiveHand(
     state,
     fixtureDefinition("fixture-choice-identity-source", [
@@ -379,6 +381,7 @@ test("reconstructed target choice falls back to the first legal choice", () => {
 test("same seed without a callback keeps target choice deterministic", () => {
   const run = () => {
     const state = initializeGame({ rootDir, seed: 60615 });
+    state.runtimeMode = "fixture";
     const source = addFixtureDefinitionToActiveHand(
       state,
       fixtureDefinition("fixture-choice-deterministic-source", [

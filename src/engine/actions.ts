@@ -245,9 +245,7 @@ function activatePermanent(
     definition,
     {
       sourceType: "card",
-      runtimeMode: card.definitionId.startsWith("fixture-")
-        ? "fixture"
-        : "combat",
+      runtimeMode: state.runtimeMode,
       playerId: activePlayer.playerId,
       cardInstanceId: card.instanceId,
       definitionId: card.definitionId,
@@ -307,7 +305,7 @@ function activateWizardProperty(
     definition,
     {
       sourceType: "wizardProperty",
-      runtimeMode: "combat",
+      runtimeMode: state.runtimeMode,
       playerId: activePlayer.playerId,
       cardInstanceId: token.instanceId,
       definitionId: token.definitionId,
@@ -507,9 +505,7 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
 
   const effectResult = executeOnPlayEffects(state, activePlayer, definition, {
     sourceType: "card",
-    runtimeMode: card.definitionId.startsWith("fixture-")
-      ? "fixture"
-      : "combat",
+    runtimeMode: state.runtimeMode,
     playerId: activePlayer.playerId,
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,

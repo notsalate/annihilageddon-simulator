@@ -6323,10 +6323,18 @@ test("Ultimate Tronado does not treat a later attack as first after it enters pl
 
   for (const amount of [2, 3]) {
     if (amount === 3) {
+      const definition = loadCurrentRuntimeDataPack(
+        rootDir
+      ).cardDefinitions.get("esw2_dbg__legend_012");
+      assert.ok(definition);
+      state.cardDefinitions = new Map([
+        ...state.cardDefinitions,
+        [definition.cardId, definition],
+      ]);
       activePlayer.permanents.push(
         createRuntimeCardInstance(
           activePlayer,
-          "esw2_dbg__legend_012",
+          definition.cardId,
           "ultimate-tronado"
         )
       );
@@ -9255,6 +9263,7 @@ test("runtime execution rejects fixture-only effects in combat mode", () => {
     (player) => player.playerId === state.activePlayerId
   );
   assert.ok(activePlayer);
+  state.runtimeMode = "combat";
   const definition = createFixtureCardDefinition(
     "combat-card-with-fixture-only-effect",
     [
