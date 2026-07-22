@@ -25,6 +25,10 @@ import {
   markCardInstanceId,
   markPlayerId,
 } from "../src/domain/types.js";
+import {
+  addFixtureDefenseCardToHand,
+  selectFirstFixtureDefense,
+} from "./helpers/defense-fixtures.js";
 import { withTemporaryEffectRuntimeHandler } from "./helpers/with-temporary-effect-runtime-handler.js";
 
 const rootDir = process.cwd();
@@ -181,6 +185,101 @@ test("play_top_card_from_foe_deck propagates game end from the nested card", () 
     }
     assert.equal(result.gameEndReason, "playerDefeated");
     assert.equal(result.winnerPlayerId, activePlayer.playerId);
+  };
+
+  withTemporaryEffectRuntimeHandler(
+    fixturePlayerDefeatEffectId,
+    fixturePlayerDefeatHandler,
+    runScenario
+  );
+});
+
+test("endTurn propagates a Mayhem defense branch game end without starting the next turn", () => {
+  const state = initializeGame({ rootDir, seed: 99121, playerCount: 2 });
+  state.runtimeMode = "fixture";
+  const endingPlayer = mustGetActivePlayer(state);
+  const defendingPlayer = state.players.find(
+    (player) => player.playerId !== endingPlayer.playerId
+  );
+  assert.ok(defendingPlayer);
+
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-defense-player-defeat",
+    "mayhem",
+    [
+      {
+        effectId: "mayhem_attack",
+        timing: "onMayhemResolve",
+        amount: 1,
+        target: { selector: "allPlayers" },
+      },
+    ]
+  );
+  const normalDefinition = createFixtureCardDefinition(
+    "fixture-after-terminal-mayhem",
+    "normal",
+    []
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+    [normalDefinition.cardId, normalDefinition],
+  ]);
+  const mayhemCard = createCardInstance(
+    "fixture-mayhem-defense-player-defeat-instance",
+    mayhemDefinition.cardId
+  );
+  const normalCard = createCardInstance(
+    "fixture-after-terminal-mayhem-instance",
+    normalDefinition.cardId
+  );
+  state.common.market.splice(0, 1);
+  state.common.mainDeck.splice(
+    0,
+    state.common.mainDeck.length,
+    mayhemCard,
+    normalCard
+  );
+  addFixtureDefenseCardToHand(state, defendingPlayer, "discardSelf", {
+    branchEffects: [
+      {
+        effectId: fixturePlayerDefeatEffectId,
+        timing: "onDefense",
+      },
+    ],
+  });
+  state.effectChoiceStrategy = selectFirstFixtureDefense;
+
+  const runScenario = () => {
+    const result = applyAction(state, { type: "endTurn" });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      return;
+    }
+    assert.equal(result.gameEndReason, "playerDefeated");
+    assert.equal(result.winnerPlayerId, defendingPlayer.playerId);
+    assert.equal(
+      state.eventLog.some(
+        (event) =>
+          event.type === "mayhemResolved" &&
+          event.cardInstanceId === mayhemCard.instanceId
+      ),
+      false
+    );
+    assert.equal(
+      state.eventLog.some(
+        (event) =>
+          event.type === "mayhemDestroyed" &&
+          event.cardInstanceId === mayhemCard.instanceId
+      ),
+      false
+    );
+    assert.equal(state.common.market.includes(normalCard), false);
+    assert.equal(
+      state.eventLog.some((event) => event.type === "turnStarted"),
+      false
+    );
   };
 
   withTemporaryEffectRuntimeHandler(

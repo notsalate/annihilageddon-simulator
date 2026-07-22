@@ -204,6 +204,9 @@ function endTurn(state: GameState): ActionResult {
   if (!marketFlowResult.ok) {
     return marketFlowResult;
   }
+  if (marketFlowResult.gameEnd !== undefined) {
+    return gameEndActionResult(marketFlowResult.gameEnd);
+  }
   if (marketFlowResult.gameEndReason !== undefined) {
     return marketFlowResult;
   }

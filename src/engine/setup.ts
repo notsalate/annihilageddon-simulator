@@ -950,6 +950,11 @@ export function initializeGame(options: InitializeGameOptions): GameState {
   if (!marketFlowResult.ok) {
     throw new Error(marketFlowResult.error);
   }
+  if (marketFlowResult.gameEnd !== undefined) {
+    throw new Error(
+      `Cannot initialize game: ${marketFlowResult.gameEnd.reason}`
+    );
+  }
   if (marketFlowResult.gameEndReason !== undefined) {
     if (!isIncompleteFullOnlyDataPack(dataPack)) {
       throw new Error(

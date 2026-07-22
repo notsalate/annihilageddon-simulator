@@ -1,5 +1,6 @@
 import type { CardDefinition } from "./data.js";
 import { executeMayhemEffects } from "./effect-runtime.js";
+import type { EffectGameEnd } from "./effect-runtime-registry.js";
 import { recordGameEvent } from "./event-recorder.js";
 import type {
   CardInstance,
@@ -14,7 +15,18 @@ export type MarketFlowEndReason = "mainDeckExhausted" | "legendDeckExhausted";
 export type MarketFlowResult =
   | {
       ok: true;
-      gameEndReason?: MarketFlowEndReason;
+      gameEndReason?: undefined;
+      gameEnd?: undefined;
+    }
+  | {
+      ok: true;
+      gameEndReason: MarketFlowEndReason;
+      gameEnd?: undefined;
+    }
+  | {
+      ok: true;
+      gameEndReason?: undefined;
+      gameEnd: EffectGameEnd;
     }
   | {
       ok: false;
@@ -40,7 +52,11 @@ export function runMarketFlow(
     endReason: "legendDeckExhausted",
     mode: options.mode,
   });
-  if (!legendResult.ok || legendResult.gameEndReason !== undefined) {
+  if (
+    !legendResult.ok ||
+    legendResult.gameEndReason !== undefined ||
+    legendResult.gameEnd !== undefined
+  ) {
     return legendResult;
   }
 
@@ -55,7 +71,11 @@ export function runMarketFlow(
     endReason: "mainDeckExhausted",
     mode: options.mode,
   });
-  if (!mainResult.ok || mainResult.gameEndReason !== undefined) {
+  if (
+    !mainResult.ok ||
+    mainResult.gameEndReason !== undefined ||
+    mainResult.gameEnd !== undefined
+  ) {
     return mainResult;
   }
 
@@ -104,7 +124,7 @@ function fillMarket(
 
       if (options.mode === "turn") {
         const mayhemResult = executeMayhemCard(state, card, definition);
-        if (!mayhemResult.ok) {
+        if (!mayhemResult.ok || mayhemResult.gameEnd !== undefined) {
           return mayhemResult;
         }
       }
@@ -161,6 +181,9 @@ function executeMayhemCard(
   });
   if (!effectResult.ok) {
     return effectResult;
+  }
+  if (effectResult.gameEnd !== undefined) {
+    return { ok: true, gameEnd: effectResult.gameEnd };
   }
 
   recordGameEvent(state, {
