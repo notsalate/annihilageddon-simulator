@@ -1511,17 +1511,16 @@ function applyAfterPlayerAttackDamage(
   attackingPlayer: PlayerState,
   totalDamageDealt: number,
   _attackSource: EffectSourceContext
-): void {
+): EffectExecutionResult {
   if (
     totalDamageDealt <= 0 ||
     state.activePlayerId !== attackingPlayer.playerId ||
     state.turn.damagingAttackPlayerIds.includes(attackingPlayer.playerId)
   ) {
-    return;
+    return { ok: true };
   }
 
-  state.turn.damagingAttackPlayerIds.push(attackingPlayer.playerId);
-  dispatchControlledCardEffects({
+  const dispatchResult = dispatchControlledCardEffects({
     state,
     player: attackingPlayer,
     timing: "afterFirstAttackDamageEachTurn",
@@ -1534,19 +1533,35 @@ function applyAfterPlayerAttackDamage(
         source.sourceType
       );
       if (!resolution.ok) {
-        return { ok: true };
+        return {
+          ok: false,
+          error: getEffectExecutionError(resolution.errors),
+        };
       }
 
-      resolution.entry.handler.applyAfterPlayerAttackDamage?.(
+      const applyTrigger =
+        resolution.entry.handler.applyAfterPlayerAttackDamage;
+      if (applyTrigger === undefined) {
+        return {
+          ok: false,
+          error: `Missing after-attack executor for ${effect.effectId}`,
+        };
+      }
+      return applyTrigger(
         state,
         attackingPlayer,
         resolution.effect,
         source,
         totalDamageDealt
       );
-      return { ok: true };
     },
   });
+  if (!dispatchResult.ok || dispatchResult.gameEnd !== undefined) {
+    return dispatchResult;
+  }
+
+  state.turn.damagingAttackPlayerIds.push(attackingPlayer.playerId);
+  return { ok: true };
 }
 
 const attackDefenseServices: AttackDefenseServices = {

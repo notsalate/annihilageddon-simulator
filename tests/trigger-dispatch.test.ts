@@ -220,6 +220,62 @@ test("after-attack dispatch attributes a wizard-property attack trigger to the c
   assert.equal(triggerEvent.definitionId, trigger.definitionId);
 });
 
+test("after-attack dispatch propagates catalog errors without consuming first-attack eligibility", () => {
+  const state = initializeGame({ rootDir, seed: 23006 });
+  const controller = mustGetPlayer(state, 0);
+  const target = mustGetPlayer(state, 1);
+  state.activePlayerId = controller.playerId;
+  controller.permanents = [];
+  controller.wizardProperties = [];
+  target.hand = [];
+  target.life.current = 20;
+  state.turn.damagingAttackPlayerIds = [];
+
+  addControlledEffectCard(
+    state,
+    controller,
+    controller,
+    "invalid-first-attack-trigger",
+    controller.permanents,
+    [
+      {
+        effectId: "ongoing_first_attack_damage_add_power",
+        timing: "afterFirstAttackDamageEachTurn",
+        amount: 1,
+      } as unknown as RuntimeEffect,
+    ]
+  );
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === target.playerId)
+      : undefined;
+
+  const result = executeEffect(
+    state,
+    controller,
+    {
+      effectId: "attack_damage",
+      amount: 2,
+      targetSelector: "chosenFoe",
+    },
+    {
+      sourceType: "card",
+      runtimeMode: "fixture",
+      playerId: controller.playerId,
+      cardInstanceId: "fixture-invalid-trigger-attack",
+      definitionId: "fixture-invalid-trigger-attack",
+    }
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /unsupported first-attack damage amount/);
+  assert.equal(
+    state.turn.damagingAttackPlayerIds.includes(controller.playerId),
+    false
+  );
+});
+
 test("end-turn discovery combines controlled refill and max-life effects", () => {
   const state = initializeGame({ rootDir, seed: 23005 });
   const controller = mustGetPlayer(state, 0);

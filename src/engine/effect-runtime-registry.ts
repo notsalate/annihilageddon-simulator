@@ -314,7 +314,7 @@ export interface EffectRuntimeServices {
     attackingPlayer: PlayerState,
     totalDamageDealt: number,
     attackSource: EffectSourceContext
-  ): void;
+  ): EffectExecutionResult;
   healPlayer(
     state: GameState,
     sourcePlayer: PlayerState,
@@ -425,7 +425,7 @@ export interface EffectRuntimeHandler<
     effect: Effect,
     source: EffectSourceContext,
     totalDamageDealt: number
-  ): void;
+  ): EffectExecutionResult;
   executeSetup?(
     player: PlayerState,
     effect: Effect,
@@ -2965,6 +2965,7 @@ const ongoingFirstAttackDamageAddPowerHandler: EffectRuntimeHandler<OngoingFirst
         powerBefore,
         state.turn.power
       );
+      return { ok: true };
     },
   };
 
@@ -3292,7 +3293,14 @@ function executeAttackWithAmount(
       }
     }
 
-    applyAfterResolvedAttackDamage(state, attackResults, services);
+    const afterAttackResult = applyAfterResolvedAttackDamage(
+      state,
+      attackResults,
+      services
+    );
+    if (!afterAttackResult.ok || afterAttackResult.gameEnd !== undefined) {
+      return afterAttackResult;
+    }
 
     return { ok: true };
   }
@@ -3346,12 +3354,15 @@ function executeAttackWithAmount(
     return { ok: true, gameEnd: attackTargetResult.gameEnd };
   }
   const attackResult = attackTargetResult.resolution;
-  services.applyAfterPlayerAttackDamage(
+  const afterAttackResult = services.applyAfterPlayerAttackDamage(
     state,
     attackResult.attackingPlayer,
     attackResult.damageDealt,
     attackResult.source
   );
+  if (!afterAttackResult.ok || afterAttackResult.gameEnd !== undefined) {
+    return afterAttackResult;
+  }
   return executeAttackBranches(
     state,
     attackResult.attackingPlayer,
@@ -3367,15 +3378,19 @@ function applyAfterResolvedAttackDamage(
   state: GameState,
   attackResults: readonly AttackResolution[],
   services: EffectRuntimeServices
-): void {
+): EffectExecutionResult {
   for (const attribution of summarizeAttackDamage(attackResults)) {
-    services.applyAfterPlayerAttackDamage(
+    const result = services.applyAfterPlayerAttackDamage(
       state,
       attribution.attackingPlayer,
       attribution.damageDealt,
       attribution.source
     );
+    if (!result.ok || result.gameEnd !== undefined) {
+      return result;
+    }
   }
+  return { ok: true };
 }
 
 const avoidAttackHandler: EffectRuntimeHandler<AvoidAttackRuntimeEffect> = {
@@ -3602,7 +3617,14 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
       }
     }
 
-    applyAfterResolvedAttackDamage(state, attackResults, services);
+    const afterAttackResult = applyAfterResolvedAttackDamage(
+      state,
+      attackResults,
+      services
+    );
+    if (!afterAttackResult.ok || afterAttackResult.gameEnd !== undefined) {
+      return afterAttackResult;
+    }
 
     return { ok: true };
   },
@@ -3678,7 +3700,14 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
       attackResults.push(attackResult);
     }
 
-    applyAfterResolvedAttackDamage(state, attackResults, services);
+    const afterAttackResult = applyAfterResolvedAttackDamage(
+      state,
+      attackResults,
+      services
+    );
+    if (!afterAttackResult.ok || afterAttackResult.gameEnd !== undefined) {
+      return afterAttackResult;
+    }
 
     return { ok: true };
   },
