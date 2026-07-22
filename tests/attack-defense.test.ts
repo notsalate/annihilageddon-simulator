@@ -37,7 +37,7 @@ test("defense module preserves an explicit decline without mutations", () => {
     services
   );
 
-  assert.deepEqual(result, { ok: true, resolution: undefined });
+  assert.deepEqual(result, { ok: true, avoided: false });
   assert.equal(defender.chips, 3);
   assert.equal(defender.hand.includes(defense), true);
   assert.equal(defender.discard.includes(defense), false);
@@ -69,7 +69,7 @@ test("defense module excludes defenses whose cumulative chip costs are unafforda
     services
   );
 
-  assert.deepEqual(result, { ok: true, resolution: undefined });
+  assert.deepEqual(result, { ok: true, avoided: false });
   assert.equal(choiceCalls, 0);
   assert.equal(defender.chips, 5);
   assert.equal(defender.hand.includes(defense), true);
@@ -97,7 +97,7 @@ test("defense module excludes defenses whose cumulative life costs are lethal", 
     services
   );
 
-  assert.deepEqual(result, { ok: true, resolution: undefined });
+  assert.deepEqual(result, { ok: true, avoided: false });
   assert.equal(choiceCalls, 0);
   assert.equal(defender.life.current, 5);
   assert.equal(defender.hand.includes(defense), true);
@@ -127,7 +127,7 @@ test("defense module excludes defenses requiring more other cards than are avail
     services
   );
 
-  assert.deepEqual(result, { ok: true, resolution: undefined });
+  assert.deepEqual(result, { ok: true, avoided: false });
   assert.equal(choiceCalls, 0);
   assert.deepEqual(defender.hand, [defense, otherCard]);
 });
@@ -149,7 +149,7 @@ test("defense module applies the exact selected defense", () => {
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
-  assert.equal(result.resolution?.avoided, true);
+  assert.equal(result.avoided, true);
   assert.equal(defender.hand.includes(first), true);
   assert.equal(defender.hand.includes(second), false);
   assert.equal(defender.discard.includes(second), true);
@@ -266,8 +266,8 @@ test("ownerless redirect defense avoids without inventing an attacker", () => {
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
-  assert.equal(result.resolution?.avoided, true);
-  assert.equal(result.resolution?.attackingPlayer, defender);
+  assert.equal(result.avoided, true);
+  assert.equal(result.resolution, undefined);
   assert.equal(redirectCalls, 0);
   assert.equal(defender.discard.includes(defense), true);
 });

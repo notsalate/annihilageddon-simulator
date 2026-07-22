@@ -634,7 +634,7 @@ function resolveAttackTarget(
   });
 
   const defenseResult: DefenseWindowResolutionResult = unavoidable
-    ? { ok: true, resolution: undefined }
+    ? { ok: true, avoided: false }
     : resolveDefenseWindow(state, targetPlayer, {
         kind: "redirectable",
         attackingPlayer,
@@ -647,7 +647,7 @@ function resolveAttackTarget(
   if (!defenseResult.ok) {
     return defenseResult;
   }
-  if (defenseResult.resolution !== undefined) {
+  if (defenseResult.avoided) {
     recordGameEvent(state, {
       type: "attackAvoided",
       playerId: targetPlayer.playerId,
@@ -657,6 +657,12 @@ function resolveAttackTarget(
       effectId,
       sourceType: source.sourceType,
     });
+    if (defenseResult.resolution === undefined) {
+      return {
+        ok: false,
+        error: "Redirectable defense avoided an attack without a player attack resolution",
+      };
+    }
     return { ok: true, resolution: defenseResult.resolution };
   }
 
@@ -727,7 +733,7 @@ function resolveMayhemAttackPlan(
     if (!defenseResult.ok) {
       return defenseResult;
     }
-    const avoided = defenseResult.resolution !== undefined;
+    const avoided = defenseResult.avoided;
     if (avoided) {
       recordGameEvent(state, {
         type: "attackAvoided",

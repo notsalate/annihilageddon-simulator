@@ -227,7 +227,7 @@ export function resolveDefenseWindow(
   services: AttackDefenseServices
 ): DefenseWindowResolutionResult {
   if (attack.defenseUsage.defendedPlayerIds.has(defendingPlayer.playerId)) {
-    return { ok: true, resolution: undefined };
+    return { ok: true, avoided: false };
   }
 
   const legalDefenses = findLegalDefenses(
@@ -236,7 +236,7 @@ export function resolveDefenseWindow(
     attack.defenseUsage
   );
   if (legalDefenses.length === 0) {
-    return { ok: true, resolution: undefined };
+    return { ok: true, avoided: false };
   }
 
   const mutationSnapshot = createDefenseMutationSnapshot(
@@ -262,13 +262,13 @@ export function resolveDefenseWindow(
     selectedChoice?.choiceKind !== "defense" ||
     selectedChoice.card === undefined
   ) {
-    return { ok: true, resolution: undefined };
+    return { ok: true, avoided: false };
   }
   const defense = legalDefenses.find(
     (candidate) => candidate.card === selectedChoice.card
   );
   if (defense === undefined) {
-    return { ok: true, resolution: undefined };
+    return { ok: true, avoided: false };
   }
 
   recordGameEvent(state, {
@@ -360,7 +360,7 @@ export function resolveDefenseWindow(
       );
       return redirectResult;
     }
-    return { ok: true, resolution: redirectResult.resolution };
+    return { ok: true, avoided: true, resolution: redirectResult.resolution };
   }
 
   if (!redirectsAttack && !moveDefenseCard(state, defendingPlayer, defense)) {
@@ -374,32 +374,23 @@ export function resolveDefenseWindow(
       error: `Cannot move defense ${defense.card.instanceId}`,
     };
   }
+  if (attack.kind === "nonredirectable") {
+    return { ok: true, avoided: true };
+  }
+
   return {
     ok: true,
+    avoided: true,
     resolution: {
       damageDealt: 0,
       killed: false,
       avoided: true,
-      amountComponents:
-        attack.kind === "redirectable"
-          ? attack.amountComponents
-          : {
-              unresolvedBaseAmount: 0,
-              sourceOwnerModifierAmount: 0,
-              currentAttackerTargetModifierAmount: 0,
-            },
-      attackingPlayer:
-        attack.kind === "redirectable"
-          ? attack.attackingPlayer
-          : defendingPlayer,
-      currentAttackerId:
-        attack.kind === "redirectable"
-          ? attack.attackingPlayer.playerId
-          : defendingPlayer.playerId,
+      amountComponents: attack.amountComponents,
+      attackingPlayer: attack.attackingPlayer,
+      currentAttackerId: attack.attackingPlayer.playerId,
       targetPlayer: defendingPlayer,
       source: defenseSource,
-      originalSource:
-        attack.kind === "redirectable" ? attack.originalSource : defenseSource,
+      originalSource: attack.originalSource,
     },
   };
 }

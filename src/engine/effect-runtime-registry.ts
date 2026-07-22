@@ -192,10 +192,8 @@ export type AttackTargetResolutionResult =
   | { ok: false; error: string };
 
 export type DefenseWindowResolutionResult =
-  | {
-      ok: true;
-      resolution: AttackResolution | undefined;
-    }
+  | { ok: true; avoided: false; resolution?: never }
+  | { ok: true; avoided: true; resolution?: AttackResolution }
   | { ok: false; error: string };
 
 export interface AttackDefenseUsage {
@@ -1248,7 +1246,7 @@ const attackGainStatusHandler: EffectRuntimeHandler = {
       if (!defenseResult.ok) {
         return defenseResult;
       }
-      if (defenseResult.resolution !== undefined) {
+      if (defenseResult.avoided) {
         recordGameEvent(state, {
           type: "attackAvoided",
           playerId: targetPlayer.playerId,
@@ -4558,7 +4556,7 @@ function collectMayhemAttackDefenseDecisions(
     if (!defenseResult.ok) {
       return defenseResult;
     }
-    const avoided = defenseResult.resolution !== undefined;
+    const avoided = defenseResult.avoided;
     if (avoided) {
       recordGameEvent(state, {
         type: "attackAvoided",
