@@ -4949,7 +4949,34 @@ function createUnsupportedEffectHandler(
     },
   };
 }
-export const effectRuntimeHandlerMap = {
+type EffectRuntimeHandlerMapInput = Partial<
+  Record<RuntimeEffectId, EffectRuntimeHandler>
+>;
+
+type BoundEffectRuntimeHandlerMap<Handlers extends EffectRuntimeHandlerMapInput> = {
+  readonly [EffectId in keyof Handlers]: Exclude<
+    Handlers[EffectId],
+    undefined
+  > & { effectId: Extract<EffectId, RuntimeEffectId> };
+};
+
+export function bindEffectRuntimeHandlerMap<
+  Handlers extends EffectRuntimeHandlerMapInput,
+>(handlers: Handlers): BoundEffectRuntimeHandlerMap<Handlers> {
+  for (const [effectId, handler] of Object.entries(handlers) as Array<
+    [RuntimeEffectId, EffectRuntimeHandler]
+  >) {
+    if (handler.effectId !== effectId) {
+      throw new Error(
+        `Effect runtime handler key ${effectId} does not match handler effectId ${handler.effectId}`
+      );
+    }
+  }
+
+  return handlers as BoundEffectRuntimeHandlerMap<Handlers>;
+}
+
+export const effectRuntimeHandlerMap = bindEffectRuntimeHandlerMap({
   add_power: addPowerHandler,
   add_power_per_player_with_status: addPowerPerPlayerWithStatusHandler,
   add_power_if_player_has_status: addPowerIfPlayerHasStatusHandler,
@@ -5106,7 +5133,7 @@ export const effectRuntimeHandlerMap = {
   return_discard_to_hand: createUnsupportedEffectHandler(
     "return_discard_to_hand"
   ),
-} satisfies Record<RuntimeEffectId, EffectRuntimeHandler>;
+} satisfies Record<RuntimeEffectId, EffectRuntimeHandler>);
 
 export const effectRuntimeCatalogSource = createEffectRuntimeCatalogSource(
   effectRuntimeHandlerMap
@@ -5118,23 +5145,30 @@ function createEffectRuntimeCatalogSource(
   const source: Partial<Record<RuntimeEffectId, EffectRuntimeCatalogEntry>> =
     {};
 
-  for (const handler of Object.values(handlers)) {
+  for (const [effectId, handler] of Object.entries(handlers) as Array<
+    [RuntimeEffectId, EffectRuntimeHandler]
+  >) {
+    if (handler.effectId !== effectId) {
+      throw new Error(
+        `Effect runtime handler key ${effectId} does not match handler effectId ${handler.effectId}`
+      );
+    }
     if (handler.unsupported === true) {
       continue;
     }
 
-    source[handler.effectId] = {
-      effectId: handler.effectId,
+    source[effectId] = {
+      effectId,
       handler,
-      supportedModes: fixtureOnlyRuntimeEffectIds.has(handler.effectId)
+      supportedModes: fixtureOnlyRuntimeEffectIds.has(effectId)
         ? ["fixture"]
         : allEffectRuntimeModes,
       supportedSourceKinds:
-        handler.effectId === "temporary_hand_limit_by_gained_card_type"
+        effectId === "temporary_hand_limit_by_gained_card_type"
           ? ["wizardProperty"]
-          : handler.effectId === "ongoing_add_power" ||
-              handler.effectId === "ongoing_hand_refill_bonus" ||
-              handler.effectId === "ongoing_add_power_per_dead_wizard_token"
+          : effectId === "ongoing_add_power" ||
+              effectId === "ongoing_hand_refill_bonus" ||
+              effectId === "ongoing_add_power_per_dead_wizard_token"
             ? ["card"]
             : allEffectRuntimeSourceKinds,
     };

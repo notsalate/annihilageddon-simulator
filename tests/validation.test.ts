@@ -37,6 +37,8 @@ import {
   type TokenDefinition,
 } from "../src/index.js";
 import {
+  bindEffectRuntimeHandlerMap,
+  type EffectRuntimeHandler,
   type EffectRuntimeServices,
   getEffectRuntimeCatalogEntry,
   getEffectRuntimeHandler,
@@ -256,6 +258,40 @@ test("effect runtime catalog rejects foreign fields on concrete payloads", () =>
       );
     }
   }
+});
+
+test("runtime handler map rejects mismatched key and handler identity", () => {
+  const mismatchedHandler: EffectRuntimeHandler = {
+    effectId: "gain_chips",
+    validateShape() {
+      return [];
+    },
+    execute() {
+      return { ok: true };
+    },
+  };
+
+  assert.throws(
+    () =>
+      bindEffectRuntimeHandlerMap({
+        add_power: mismatchedHandler,
+      }),
+    /add_power.*gain_chips/
+  );
+
+  const bound = bindEffectRuntimeHandlerMap({
+    add_power: {
+      effectId: "add_power",
+      validateShape() {
+        return [];
+      },
+      execute() {
+        return { ok: true };
+      },
+    },
+  });
+  const boundEffectId: "add_power" = bound.add_power.effectId;
+  assert.equal(boundEffectId, "add_power");
 });
 
 test("effect runtime catalog returns the validated concrete payload", () => {
