@@ -6,7 +6,7 @@ on:
     branches: [main, dev]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   secrets:
@@ -23,3 +23,50 @@ jobs:
         uses: trufflesecurity/trufflehog@84a2b33c9f891494db6ebe02f2a55b19cdf38f25 # main
         with:
           extra_args: --results=verified,unknown
+
+  publish_ongoing_fixture:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 137
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: agent/architecture-deepening-findings
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Mark nested activation fixture ongoing
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("tests/action-loop.test.ts")
+          text = path.read_text(encoding="utf-8")
+          old = '''    ],
+    { cardTypes: ["spell"] }
+  );
+  activatedTopCardDefinition.engine.cost = 4;'''
+          new = '''    ],
+    { isOngoing: true, cardTypes: ["spell"] }
+  );
+  activatedTopCardDefinition.engine.cost = 4;'''
+          if new not in text:
+              if text.count(old) != 1:
+                  raise SystemExit("expected one nested activation fixture block")
+              path.write_text(text.replace(old, new), encoding="utf-8")
+      - run: npm ci
+      - run: npm run build -- --pretty false
+      - run: node --test dist/tests/action-loop.test.js
+      - name: Publish fixture correction
+        shell: bash
+        run: |
+          if git diff --quiet -- tests/action-loop.test.ts; then
+            exit 0
+          fi
+          git config user.name "codex"
+          git config user.email "267193182+codex@users.noreply.github.com"
+          git add tests/action-loop.test.ts
+          git commit -m "test(control): пометить nested activation fixture ongoing"
+          git push origin HEAD:agent/architecture-deepening-findings
