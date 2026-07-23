@@ -9,7 +9,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Owns runtime behavior under `src/engine/**`.
 - Attack Resolution is a composed subsystem: `attack-resolution.ts` owns attack amount components, current-attacker modifiers and damage attribution; `attack-defense.ts` owns voluntary Defense, payment/movement transaction, rollback and redirect chains. `effect-runtime.ts` remains the adapter from effect handlers into both modules; Mayhem and Mega Mayhem remain separate domain flows.
 - `control-ledger.ts` owns the controller-to-object relation, temporary-control lifecycle, physical card-location queries, and the distinction between all controlled cards and controlled ongoing cards; consumers must not reconstruct control by scanning zones independently.
-- `trigger-dispatch.ts` owns ongoing controlled-card trigger discovery, stable ordering, source attribution, and stop-on-error/game-end behavior.
+- `trigger-dispatch.ts` owns timing-aware controlled-card trigger discovery, stable ordering, source attribution, and stop-on-error/game-end behavior.
 - `runtime-effect.ts` owns `RuntimeEffectPayloadMap`; `effect-runtime-registry.ts` validates raw data and returns the corresponding concrete payload before execution.
 - Runtime data comes from `data/`; import drafts under `data/import/` are outside executable engine input.
 - CLI orchestration lives in `src/cli/`.
@@ -28,7 +28,8 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Preserve the executable source kind at that boundary: card, wizardProperty, and deadWizardToken are distinct catalog inputs.
 - Effect execution resolves every effect through the Effect Runtime Catalog before invoking its handler; Mayhem execution does not use a separate catalog lookup.
 - A successful effect may return a typed `playerDefeated` game end with its winner; regular card and activation actions propagate it without adding a card-specific shortcut.
-- Passive power, attack replacements, end-turn modifiers and controlled-card triggers may read only controlled ongoing cards. Use `getControlledOngoingCards` or Trigger Dispatch rather than filtering generic control ad hoc.
+- Passive power and attack replacements read only controlled ongoing cards through `getControlledOngoingCards`.
+- Trigger Dispatch requires an ongoing card for `onPlayCard` and `afterFirstAttackDamageEachTurn`; end-turn discovery preserves temporary-control semantics for cards that remain controlled through cleanup.
 - Keep `Best-Move Analyzer` modules outside `BotStrategy`: analysis may receive complete `GameState`, inspect hidden information, fork seeded RNG, and enumerate current-turn legal lines through `endTurn` using a caller-supplied evaluation policy; simulation strategies must not depend on the analysis API or future RNG/hidden opponent state.
 - The analyzer has no hidden default score: a line becomes “best” only after the caller supplies a named evaluation policy.
 - Evaluation policies return a finite `score` and optional finite components; `rankTurnLines` orders strictly by descending score, then stable enumeration order. Terminal `winnerPlayerId` remains metadata and does not affect ranking.
