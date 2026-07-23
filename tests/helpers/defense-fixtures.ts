@@ -22,6 +22,10 @@ type DefenseChoiceRequest = Parameters<
 type DefenseChoiceResult = ReturnType<
   NonNullable<GameState["effectChoiceStrategy"]>
 >;
+type FixtureDefenseChoice = Extract<
+  DefenseChoiceRequest["choices"][number],
+  { choiceKind: "defense" }
+> & { card: CardInstance };
 
 export function selectFirstFixtureDefense(
   request: DefenseChoiceRequest
@@ -113,10 +117,7 @@ export function addFixtureDefenseCardToHand(
 
 function isFixtureDefenseChoice(
   choice: DefenseChoiceRequest["choices"][number]
-): choice is Extract<
-  DefenseChoiceRequest["choices"][number],
-  { choiceKind: "defense"; card: CardInstance }
-> {
+): choice is FixtureDefenseChoice {
   return (
     choice.choiceKind === "defense" &&
     choice.card !== undefined &&
@@ -131,9 +132,7 @@ function getNextFixtureDefenseSequence(state: GameState): number {
     if (!definitionId.startsWith(prefix)) {
       continue;
     }
-    const sequenceText = definitionId
-      .slice(prefix.length)
-      .split("-", 1)[0];
+    const sequenceText = definitionId.slice(prefix.length).split("-", 1)[0];
     const sequence = Number(sequenceText);
     if (Number.isSafeInteger(sequence) && sequence >= nextSequence) {
       nextSequence = sequence + 1;
