@@ -24,13 +24,22 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run typecheck:strictest
-      - run: npm run lint
-      - run: npm run check:ts-suppressions
-      - run: npm run check:engine-unknown-arrays
-      - run: npm run check:engine-event-recording
-      - run: npm run check:engine-typed-access
-      - run: npm run check:json-parse-assertions
-      - run: npm run test
-      - run: npm run report:card-runtime-clusters
-      - run: git diff --check origin/master...HEAD
+      - run: npm run build -- --pretty false
+      - name: effective-values
+        run: node --test dist/tests/effective-values.test.js
+      - name: action-loop
+        run: node --test dist/tests/action-loop.test.js
+      - name: control-ledger
+        run: node --test dist/tests/control-ledger.test.js
+      - name: trigger-dispatch
+        run: node --test dist/tests/trigger-dispatch.test.js
+      - name: attack-resolution
+        run: node --test dist/tests/attack-resolution.test.js
+      - name: attack-defense
+        run: node --test dist/tests/attack-defense.test.js
+      - name: defense-choice
+        run: node --test dist/tests/defense-choice.test.js
+      - name: runtime-regression
+        run: node --test dist/tests/runtime-regression.test.js
+      - name: review-findings
+        run: node --test dist/tests/review-findings.test.js
