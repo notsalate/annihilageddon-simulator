@@ -67,21 +67,21 @@ Grant/release temporary control проходят только через Control
 
 ### C3. Перевести consumers
 
-Actions, conditions, activation и controlled-cost selection используют общий all-controlled query. Passive power, attack replacements, end-turn modifiers и trigger discovery используют отдельный ongoing-controlled query/seam. Ownership и control остаются разными понятиями, а `isOngoing` не восстанавливается локальными ad hoc-проверками у каждого consumer.
+Actions, conditions, activation и controlled-cost selection используют общий all-controlled query. Passive power и attack replacements используют отдельный ongoing-controlled query. Trigger discovery применяет timing-aware policy: `onPlayCard` и after-attack reactions требуют ongoing card, а end-turn discovery сохраняет временный контроль до cleanup. Ownership и control остаются разными понятиями.
 
 ## Архитектурный кандидат 3: глубокий module Trigger Dispatch
 
 ### T1. Общий controlled-card dispatcher
 
-Новый `src/engine/trigger-dispatch.ts` получает timing/context, Controlled Object View и Effect Runtime Catalog. Он стабильно фильтрует эффекты только ongoing controlled cards, строит source identity и останавливается на error/game-end.
+Новый `src/engine/trigger-dispatch.ts` получает timing/context, Controlled Object View и Effect Runtime Catalog. Он стабильно фильтрует эффекты, применяет timing-aware ongoing guard, строит source identity и останавливается на error/game-end.
 
 ### T2. Перевести on-play и after-attack triggers
 
-`onPlayCard` и `afterFirstAttackDamageEachTurn` проходят через dispatcher. Ordering и существующие event payload сохраняются; non-ongoing сыгранные карты не могут исполнять ongoing triggers.
+`onPlayCard` и `afterFirstAttackDamageEachTurn` проходят через dispatcher. Ordering и существующие event payload сохраняются; non-ongoing сыгранные карты не могут исполнять эти ongoing reactions.
 
 ### T3. Перевести end-turn controlled effects
 
-Расчёт hand refill/max-life modifiers использует общий ongoing discovery seam; арифметика effective values остаётся в owning modules.
+Расчёт hand refill/max-life modifiers использует общий discovery seam и видит карты, которые остаются под временным контролем до cleanup; арифметика effective values остаётся в owning modules.
 
 ## Архитектурный кандидат 4: глубокий test scenario module
 
