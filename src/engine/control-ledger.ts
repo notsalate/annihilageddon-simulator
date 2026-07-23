@@ -122,6 +122,19 @@ export function getControlledCards(
   return controlledCards;
 }
 
+export function getControlledOngoingCards(
+  state: GameState,
+  player: PlayerState
+): CardInstance[] {
+  return getControlledCards(state, player).filter((card) => {
+    const definition = state.cardDefinitions.get(card.definitionId);
+    return (
+      definition?.engine.playableInV0 === true &&
+      definition.engine.isOngoing
+    );
+  });
+}
+
 export function findCardLocation(
   state: GameState,
   cardInstanceId: string
