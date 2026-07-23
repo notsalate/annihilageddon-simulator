@@ -236,10 +236,6 @@ export function resolveDefenseWindow(
     return { ok: true, avoided: false };
   }
 
-  const mutationSnapshot = createDefenseMutationSnapshot(
-    state,
-    attack.defenseUsage
-  );
   const choices: EffectChoice[] = [
     { choiceKind: "defense", choiceId: "decline", card: undefined },
     ...legalDefenses.map((defense) => ({
@@ -268,6 +264,10 @@ export function resolveDefenseWindow(
     return { ok: true, avoided: false };
   }
 
+  const mutationSnapshot = createDefenseMutationSnapshot(
+    state,
+    attack.defenseUsage
+  );
   recordGameEvent(state, {
     type: "defenseChoiceSelected",
     playerId: defendingPlayer.playerId,
