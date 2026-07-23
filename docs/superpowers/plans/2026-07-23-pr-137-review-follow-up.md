@@ -77,8 +77,8 @@
 
 ### Task 6: Final gate and publication
 
-- [ ] `npm run check`.
-- [ ] `npm run report:card-runtime-clusters`.
-- [ ] `git diff --check origin/master...HEAD`.
-- [ ] Удалить временный verification workflow.
-- [ ] Обновить PR body и опубликовать отчёт о выполненных исправлениях.
+- [x] `npm run check`.
+- [x] `npm run report:card-runtime-clusters`.
+- [x] `git diff --check origin/master...HEAD`.
+- [x] Удалить временный verification workflow.
+- [x] Обновить PR body и опубликовать отчёт о выполненных исправлениях.
