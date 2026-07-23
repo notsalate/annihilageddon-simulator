@@ -24,6 +24,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run check
+      - run: npm run typecheck:strictest
+      - run: npm run lint
+      - run: npm run check:ts-suppressions
+      - run: npm run check:engine-unknown-arrays
+      - run: npm run check:engine-event-recording
+      - run: npm run check:engine-typed-access
+      - run: npm run check:json-parse-assertions
+      - run: npm run test
       - run: npm run report:card-runtime-clusters
       - run: git diff --check origin/master...HEAD
