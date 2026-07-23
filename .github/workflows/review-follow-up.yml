@@ -24,5 +24,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build -- --pretty false
-      - run: node --test dist/tests/review-findings.test.js
+      - run: npm run check
+      - run: npm run report:card-runtime-clusters
+      - run: git diff --check origin/master...HEAD
