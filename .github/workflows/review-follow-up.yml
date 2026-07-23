@@ -25,11 +25,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build -- --pretty false
-      - name: action-loop diagnostics
+      - name: Run action-loop
+        id: action_loop
+        continue-on-error: true
+        shell: bash
+        run: node --test dist/tests/action-loop.test.js > action-loop.log 2>&1
+      - name: Extract failure
+        if: always()
         shell: bash
         run: |
-          set +e
-          node --test dist/tests/action-loop.test.js > action-loop.log 2>&1
-          status=$?
-          tail -n 180 action-loop.log
-          exit $status
+          grep -n -E -A18 -B6 'not ok|AssertionError|ERR_ASSERTION|error:|expected:|actual:' action-loop.log > action-loop-failure.txt || true
+          tail -n 260 action-loop.log >> action-loop-failure.txt
+      - name: Upload failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: action-loop-failure
+          path: action-loop-failure.txt
+      - name: Fail on action-loop regression
+        if: steps.action_loop.outcome == 'failure'
+        run: exit 1
