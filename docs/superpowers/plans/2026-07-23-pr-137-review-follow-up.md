@@ -4,7 +4,7 @@
 
 **Goal:** Закрыть подтверждённые findings повторного ревью PR #137 без изменения правил карт, сохранив draft-статус PR.
 
-**Architecture:** Control Ledger предоставляет отдельный ongoing-card view для passive/replacement consumers; Trigger Dispatch применяет ongoing guard к `onPlayCard` и after-attack reactions, сохраняя временный контроль для end-turn discovery до cleanup. Defense test fixtures получают устойчивую identity и явные fixture-only selectors. Defense snapshot создаётся только после выбора реальной карты, но хранит pre-choice границу event log для полного rollback. Design/plan описывают Attack Resolution как составную подсистему из amount и defense modules.
+**Architecture:** Control Ledger предоставляет отдельный ongoing-card view для passive/replacement consumers; Trigger Dispatch применяет ongoing guard к `onPlayCard` и after-attack reactions, сохраняя временный контроль для end-turn discovery до cleanup. Defense test fixtures получают устойчивую identity и явные fixture-only selectors. Defense snapshot создаётся только после выбора реальной карты, но хранит pre-choice границу event log для полного rollback. Design и этот follow-up plan описывают Attack Resolution как составную подсистему из amount и defense modules.
 
 **Tech Stack:** TypeScript 5.8, Node.js 22, `node:test`, GitHub Actions.
 
@@ -66,7 +66,7 @@
 
 **Files:**
 - Modify: `docs/superpowers/specs/2026-07-20-engine-architecture-deepening-design.md`
-- Modify: `docs/superpowers/plans/2026-07-20-engine-architecture-deepening.md`
+- Create: `docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md`
 - Modify: `src/engine/AGENTS.md`
 - Modify: `tests/AGENTS.md`
 
