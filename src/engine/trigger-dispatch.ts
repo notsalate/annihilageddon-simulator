@@ -35,16 +35,16 @@ export interface DispatchControlledCardEffectsOptions extends ListControlledCard
 }
 
 /**
- * Executes matching effects from cards controlled by one player in the stable
- * order exposed by Control Ledger. The dispatcher owns source attribution and
- * stops immediately when an effect fails or ends the game.
+ * Executes matching effects from ongoing cards controlled by one player in the
+ * stable order exposed by Control Ledger. The dispatcher owns source
+ * attribution and stops immediately when an effect fails or ends the game.
  */
 export function listControlledCardEffects(
   options: ListControlledCardEffectsOptions
 ): ControlledCardEffectContext[] {
   const contexts: ControlledCardEffectContext[] = [];
   for (const { card, definition } of options.controlledObjects.cards) {
-    if (!definition.engine.playableInV0) {
+    if (!definition.engine.playableInV0 || !definition.engine.isOngoing) {
       continue;
     }
 
@@ -77,9 +77,9 @@ export function listControlledCardEffects(
 }
 
 /**
- * Executes matching effects from cards controlled by one player in the stable
- * order exposed by Control Ledger. The dispatcher owns source attribution and
- * stops immediately when an effect fails or ends the game.
+ * Executes matching effects from ongoing cards controlled by one player in the
+ * stable order exposed by Control Ledger. The dispatcher owns source
+ * attribution and stops immediately when an effect fails or ends the game.
  */
 export function dispatchControlledCardEffects(
   options: DispatchControlledCardEffectsOptions
