@@ -85,7 +85,8 @@ interface DefenseMutationSnapshot {
 
 function createDefenseMutationSnapshot(
   state: GameState,
-  defenseUsage: AttackDefenseUsage
+  defenseUsage: AttackDefenseUsage,
+  eventLogLength: number
 ): DefenseMutationSnapshot {
   const mutableObjects = collectDefenseMutableObjects(state).map((object) => ({
     object,
@@ -124,7 +125,7 @@ function createDefenseMutationSnapshot(
     },
     mutableObjects,
     rng: state.rng.fork(),
-    eventLogLength: state.eventLog.length,
+    eventLogLength,
     defendedPlayerIds: new Set(defenseUsage.defendedPlayerIds),
     usedDefenseCardInstanceIds: new Set(
       defenseUsage.usedDefenseCardInstanceIds
@@ -244,6 +245,7 @@ export function resolveDefenseWindow(
       card: defense.card,
     })),
   ];
+  const eventLogLengthBeforeChoice = state.eventLog.length;
   const selectedChoice = services.chooseEffectChoice(
     state,
     defendingPlayer,
@@ -266,7 +268,8 @@ export function resolveDefenseWindow(
 
   const mutationSnapshot = createDefenseMutationSnapshot(
     state,
-    attack.defenseUsage
+    attack.defenseUsage,
+    eventLogLengthBeforeChoice
   );
   recordGameEvent(state, {
     type: "defenseChoiceSelected",
