@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  patch-fixture:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -21,30 +21,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Mark nested activation fixture ongoing
-        shell: python
-        run: |
-          from pathlib import Path
-
-          path = Path("tests/action-loop.test.ts")
-          text = path.read_text(encoding="utf-8")
-          old = '''    ],
-    { cardTypes: ["spell"] }
-  );
-  activatedTopCardDefinition.engine.cost = 4;'''
-          new = '''    ],
-    { isOngoing: true, cardTypes: ["spell"] }
-  );
-  activatedTopCardDefinition.engine.cost = 4;'''
-          if new not in text:
-              if text.count(old) != 1:
-                  raise SystemExit("expected one nested activation fixture block")
-              path.write_text(text.replace(old, new), encoding="utf-8")
       - run: npm ci
       - run: npm run build -- --pretty false
       - run: node --test dist/tests/action-loop.test.js
-      - name: Upload corrected file
-        uses: actions/upload-artifact@v4
-        with:
-          name: corrected-action-loop
-          path: tests/action-loop.test.ts
+      - run: node --test dist/tests/control-ledger.test.js
+      - run: node --test dist/tests/trigger-dispatch.test.js
+      - run: node --test dist/tests/attack-resolution.test.js
+      - run: node --test dist/tests/attack-defense.test.js
+      - run: node --test dist/tests/defense-choice.test.js
+      - run: node --test dist/tests/review-findings.test.js
