@@ -35,16 +35,24 @@ export interface DispatchControlledCardEffectsOptions extends ListControlledCard
 }
 
 /**
- * Executes matching effects from ongoing cards controlled by one player in the
- * stable order exposed by Control Ledger. The dispatcher owns source
- * attribution and stops immediately when an effect fails or ends the game.
+ * Discovers matching effects from cards controlled by one player in the stable
+ * order exposed by Control Ledger. Trigger timings that represent ongoing
+ * reactions require an ongoing card; end-turn discovery preserves temporary
+ * control semantics for cards that remain controlled through cleanup.
  */
 export function listControlledCardEffects(
   options: ListControlledCardEffectsOptions
 ): ControlledCardEffectContext[] {
   const contexts: ControlledCardEffectContext[] = [];
+  const requiresOngoingCard =
+    options.timing === "onPlayCard" ||
+    options.timing === "afterFirstAttackDamageEachTurn";
+
   for (const { card, definition } of options.controlledObjects.cards) {
-    if (!definition.engine.playableInV0 || !definition.engine.isOngoing) {
+    if (
+      !definition.engine.playableInV0 ||
+      (requiresOngoingCard && !definition.engine.isOngoing)
+    ) {
       continue;
     }
 
@@ -77,9 +85,8 @@ export function listControlledCardEffects(
 }
 
 /**
- * Executes matching effects from ongoing cards controlled by one player in the
- * stable order exposed by Control Ledger. The dispatcher owns source
- * attribution and stops immediately when an effect fails or ends the game.
+ * Executes matching controlled-card effects in stable order and stops
+ * immediately when an effect fails or ends the game.
  */
 export function dispatchControlledCardEffects(
   options: DispatchControlledCardEffectsOptions
