@@ -1,4 +1,4 @@
-import { getControlledCards } from "./control-ledger.js";
+import { getControlledOngoingCards } from "./control-ledger.js";
 import type { GameState, PlayerState } from "./setup.js";
 
 export interface AttackAmountComponents {
@@ -35,16 +35,13 @@ export function resolveAttackAmount(
     amountState.unresolvedBaseAmount + amountState.sourceOwnerModifierAmount;
   const doublesAgainstTarget =
     attackingPlayer.playerId !== targetPlayer.playerId &&
-    getControlledCards(state, attackingPlayer).some((permanent) => {
+    getControlledOngoingCards(state, attackingPlayer).some((permanent) => {
       const definition = state.cardDefinitions.get(permanent.definitionId);
-      return (
-        definition?.engine.playableInV0 === true &&
-        definition.engine.effects.some(
-          (effect) =>
-            effect.timing === "attackReplacement" &&
-            effect.effectId === "double_owned_attack_damage"
-        )
-      );
+      return definition?.engine.effects.some(
+        (effect) =>
+          effect.timing === "attackReplacement" &&
+          effect.effectId === "double_owned_attack_damage"
+      ) === true;
     });
   const components: AttackAmountComponents = {
     ...amountState,
