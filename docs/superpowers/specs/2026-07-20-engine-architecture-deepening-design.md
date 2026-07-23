@@ -29,13 +29,15 @@
 
 ### F2. Разрешение защиты атомарно
 
-Defense costs, перемещение defense card и branch effects образуют одну транзакцию игрового правила. При ошибке ветки состояние не должно оставаться частично изменённым. Реализация использует предварительную проверку и локальный snapshot затрагиваемых mutable collections/values с rollback до возврата ошибки. Успешная защита по-прежнему сохраняет порядок событий и перенаправление.
+Defense costs, перемещение defense card и branch effects образуют одну транзакцию игрового правила. При ошибке ветки состояние не должно оставаться частично изменённым. Реализация использует предварительную проверку и локальный snapshot затрагиваемых mutable collections/values с rollback до возврата ошибки. Snapshot создаётся только после выбора и identity validation реальной defense card, непосредственно перед первой мутацией; `decline` не форкает RNG и не копирует состояние. Успешная защита по-прежнему сохраняет порядок событий и перенаправление.
 
 ### F3. Reusable defense fixtures принадлежат `tests/helpers/`
 
-Конфигурируемый builder защиты переносится из `tests/action-loop.test.ts` в отдельный helper с typed options. Тестовый файл использует публичный helper и больше не владеет созданием runtime definition/instance защиты.
+Конфигурируемый builder защиты переносится из `tests/action-loop.test.ts` в отдельный helper с typed options. Тестовый файл использует публичный helper и больше не владеет созданием runtime definition/instance защиты. Helper выдаёт state-wide unique fixture IDs, `selectFirstFixtureDefense` пропускает production-карты, а сценарии с конкретной defense используют selector по ожидаемому `instanceId`.
 
-## Архитектурный кандидат 1: глубокий module Attack Resolution
+## Архитектурный кандидат 1: глубокая подсистема Attack Resolution
+
+Attack Resolution является составной подсистемой из двух глубоких модулей. `attack-resolution.ts` владеет amount state, current-attacker modifiers и damage attribution; `attack-defense.ts` владеет voluntary Defense, atomic transaction, redirect chain и rollback. `effect-runtime.ts` остаётся adapter между effect handlers и этой подсистемой.
 
 ### A1. Сгруппировать lifecycle context
 
@@ -43,15 +45,15 @@ Defense costs, перемещение defense card и branch effects образ�
 
 ### A2. Вынести расчёт attack amount
 
-Новый `src/engine/attack-resolution.ts` владеет базовым уроном, source-owner modifiers и current-attacker modifiers. Callers передают attack intent, но не пересчитывают компоненты самостоятельно.
+`src/engine/attack-resolution.ts` владеет базовым уроном, source-owner modifiers, current-attacker modifiers и суммированием компонентов. Callers передают именованный `AttackAmountState`; совместимый adapter в `effect-runtime.ts` может один раз восстановить state из legacy-пары `amount`/`baseAmount`, но остальной runtime не пересчитывает компоненты самостоятельно.
 
 ### A3. Вынести defense/redirect resolution
 
-Тот же module владеет legal defense choices, atomic payment, card movement, redirect chain и защитой от циклов. `effect-runtime.ts` остаётся adapter между effect handlers и deep module.
+`src/engine/attack-defense.ts` владеет legal defense choices, cumulative preflight, atomic payment, card movement, branch execution, redirect chain, terminal outcome и защитой от циклов. `effect-runtime.ts` только передаёт services и адаптирует typed result обратно в effect path.
 
 ### A4. Централизовать результат и attribution
 
-Attack module возвращает один typed result для single- и multi-target paths. Агрегация фактического урона и current-attacker attribution выполняется через один seam; outcome branches остаются в Effect Runtime Catalog, но получают нормализованный result.
+Подсистема Attack Resolution возвращает typed result для single- и multi-target paths. Агрегация фактического урона и current-attacker attribution выполняется через `attack-resolution.ts`; outcome branches остаются в Effect Runtime Catalog, но получают нормализованный result.
 
 ## Архитектурный кандидат 2: глубокий module Control Ledger
 
@@ -65,21 +67,21 @@ Grant/release temporary control проходят только через Control
 
 ### C3. Перевести consumers
 
-Actions, controlled power, effect conditions, activation, controlled-cost selection, end-turn modifiers и trigger discovery используют один query seam. Ownership и control остаются разными понятиями.
+Actions, conditions, activation и controlled-cost selection используют общий all-controlled query. Passive power, attack replacements, end-turn modifiers и trigger discovery используют отдельный ongoing-controlled query/seam. Ownership и control остаются разными понятиями, а `isOngoing` не восстанавливается локальными ad hoc-проверками у каждого consumer.
 
 ## Архитектурный кандидат 3: глубокий module Trigger Dispatch
 
 ### T1. Общий controlled-card dispatcher
 
-Новый `src/engine/trigger-dispatch.ts` получает timing/context, Controlled Object View и Effect Runtime Catalog. Он стабильно фильтрует эффекты и строит source identity.
+Новый `src/engine/trigger-dispatch.ts` получает timing/context, Controlled Object View и Effect Runtime Catalog. Он стабильно фильтрует эффекты только ongoing controlled cards, строит source identity и останавливается на error/game-end.
 
 ### T2. Перевести on-play и after-attack triggers
 
-`onPlayCard` и `afterFirstAttackDamageEachTurn` проходят через dispatcher. Ordering и существующие event payload сохраняются.
+`onPlayCard` и `afterFirstAttackDamageEachTurn` проходят через dispatcher. Ordering и существующие event payload сохраняются; non-ongoing сыгранные карты не могут исполнять ongoing triggers.
 
 ### T3. Перевести end-turn controlled effects
 
-Расчёт hand refill/max-life modifiers использует общий discovery seam; арифметика effective values остаётся в owning modules.
+Расчёт hand refill/max-life modifiers использует общий ongoing discovery seam; арифметика effective values остаётся в owning modules.
 
 ## Архитектурный кандидат 4: глубокий test scenario module
 
@@ -112,7 +114,7 @@ Handlers для `avoid_attack`, `ongoing_add_power`, `ongoing_hand_refill_bonus`
 ## Error handling
 
 - Некорректный choice identity отклоняется и использует безопасный deterministic fallback.
-- Отказ от защиты не мутирует состояние и не пишет событие использования карты.
+- Отказ от защиты не мутирует состояние, не пишет событие использования карты и не создаёт rollback snapshot.
 - Ошибка defense branch откатывает costs, zones, usage sets и связанные turn/player values, затем возвращается вызывающему effect path.
 - Attack redirect не меняет original source identity и не создаёт attacker для ownerless Mayhem.
 - Control Ledger игнорирует stale temporary-control references при query, но debug/test guards должны обнаруживать их при валидации состояния.
