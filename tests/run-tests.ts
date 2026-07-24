@@ -19,6 +19,7 @@ const testSuites = [
   "invariants.test.js",
   "simulation-menu.test.js",
   "runtime-regression.test.js",
+  "market-flow-terminal.test.js",
   "validation.test.js",
   "draft-validation.test.js",
   "draft-generator.test.js",

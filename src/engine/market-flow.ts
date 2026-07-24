@@ -122,14 +122,20 @@ function fillMarket(
         definitionId: card.definitionId,
       });
 
+      let gameEnd: EffectGameEnd | undefined;
       if (options.mode === "turn") {
         const mayhemResult = executeMayhemCard(state, card, definition);
-        if (!mayhemResult.ok || mayhemResult.gameEnd !== undefined) {
+        if (!mayhemResult.ok) {
           return mayhemResult;
         }
+        gameEnd = mayhemResult.gameEnd;
       }
 
       options.destroyedEvents.push(card);
+      if (gameEnd !== undefined) {
+        return { ok: true, gameEnd };
+      }
+
       const destructionEvent = {
         playerId: state.activePlayerId,
         sourceType: options.mode,
