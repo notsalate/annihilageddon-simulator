@@ -35,9 +35,9 @@ Defense costs, перемещение defense card и branch effects образ�
 
 Конфигурируемый builder защиты переносится из `tests/action-loop.test.ts` в отдельный helper с typed options. Тестовый файл использует публичный helper и больше не владеет созданием runtime definition/instance защиты. Helper выдаёт state-wide unique fixture IDs, `selectFirstFixtureDefense` пропускает production-карты, а сценарии с конкретной defense используют selector по ожидаемому `instanceId`.
 
-## Архитектурный кандидат 1: глубокая подсистема Attack Resolution
+## Архитектурный кандидат 1: сфокусированные модули Attack Resolution
 
-Attack Resolution является составной подсистемой из двух глубоких модулей. `attack-resolution.ts` владеет amount state, current-attacker modifiers и damage attribution; `attack-defense.ts` владеет voluntary Defense, atomic transaction, redirect chain и rollback. `effect-runtime.ts` остаётся adapter между effect handlers и этой подсистемой.
+Attack Resolution использует два сфокусированных модуля с явным владением. `attack-resolution.ts` владеет amount state, current-attacker modifiers и damage attribution; `attack-defense.ts` владеет voluntary Defense, atomic transaction, redirect chain и rollback. `effect-runtime.ts` остаётся adapter к этим модулям и сохраняет владение per-target lifecycle, событиями атаки и финальным нанесением урона. Поэтому эти модули не объявляются полной глубокой подсистемой до переноса общего lifecycle за единый seam.
 
 ### A1. Сгруппировать lifecycle context
 
@@ -49,17 +49,17 @@ Attack Resolution является составной подсистемой и�
 
 ### A3. Вынести defense/redirect resolution
 
-`src/engine/attack-defense.ts` владеет legal defense choices, cumulative preflight, atomic payment, card movement, branch execution, redirect chain, terminal outcome и защитой от циклов. `effect-runtime.ts` только передаёт services и адаптирует typed result обратно в effect path.
+`src/engine/attack-defense.ts` владеет legal defense choices, cumulative preflight, atomic payment, card movement, branch execution, redirect chain, terminal outcome и защитой от циклов. `effect-runtime.ts` передаёт services и адаптирует typed result обратно в effect path, но по-прежнему оркестрирует lifecycle отдельной цели, события начала/уклонения и финальное нанесение урона.
 
 ### A4. Централизовать результат и attribution
 
-Подсистема Attack Resolution возвращает typed result для single- и multi-target paths. Агрегация фактического урона и current-attacker attribution выполняется через `attack-resolution.ts`; outcome branches остаются в Effect Runtime Catalog, но получают нормализованный result.
+`attack-resolution.ts` возвращает типизированное состояние суммы и агрегирует фактический урон по current attacker/source. `effect-runtime.ts` формирует итоговый `AttackResolution` для single- и multi-target paths и передаёт нормализованную attribution в outcome branches.
 
 ## Архитектурный кандидат 2: глубокий module Control Ledger
 
 ### C1. Единые queries контроля
 
-Новый `src/engine/control-ledger.ts` владеет поиском контролируемых карт и card location. `effective-values.ts` больше не сканирует зоны самостоятельно.
+Новый `src/engine/control-ledger.ts` владеет поиском контролируемых карт, физическим поиском card location и удалением карты из найденной зоны. `effective-values.ts` и Effect Runtime больше не сканируют зоны самостоятельно.
 
 ### C2. Lifecycle временного контроля
 
@@ -73,7 +73,7 @@ Actions, conditions, activation и controlled-cost selection использую�
 
 ### T1. Общий controlled-card dispatcher
 
-Новый `src/engine/trigger-dispatch.ts` получает timing/context, Controlled Object View и Effect Runtime Catalog. Он стабильно фильтрует эффекты, применяет timing-aware ongoing guard, строит source identity и останавливается на error/game-end.
+Новый `src/engine/trigger-dispatch.ts` получает timing, `ControlledObjectView`, runtime mode, optional predicate и caller-supplied executor. Он стабильно фильтрует эффекты, применяет timing-aware ongoing guard, строит source identity и останавливается на error/game-end. Effect Runtime Catalog намеренно остаётся у caller: generic executor seam позволяет on-play и after-attack paths выполнять разные catalog operations без дублирования discovery policy.
 
 ### T2. Перевести on-play и after-attack triggers
 
@@ -118,6 +118,7 @@ Handlers для `avoid_attack`, `ongoing_add_power`, `ongoing_hand_refill_bonus`
 - Ошибка defense branch откатывает costs, zones, usage sets и связанные turn/player values, затем возвращается вызывающему effect path.
 - Attack redirect не меняет original source identity и не создаёт attacker для ownerless Mayhem.
 - Control Ledger игнорирует stale temporary-control references при query, но debug/test guards должны обнаруживать их при валидации состояния.
+- Terminal Mayhem/Mega Mayhem сохраняет terminal result, но раскрытая карта до возврата переносится в соответствующую destroyed stack; terminal event log по-прежнему останавливается на game end.
 
 ## Проверка
 
