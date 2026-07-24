@@ -249,7 +249,7 @@ The rule that state changes from one resolved target of a normal player-controll
 _Avoid_: snapshotting normal attack state
 
 **Two-Phase Mayhem Attack Resolution**:
-The rule that Mayhem and Mega Mayhem attacks also use two phases: they first collect defense decisions from affected players in seating order, then resolve the attack in seating order against targets that did not avoid it. This is separate from normal player-controlled multi-target attacks even though both flows collect defenses before resolving damage.
+The rule that Mayhem and Mega Mayhem attacks use two phases: they first collect defense decisions from affected players in seating order, then resolve the attack in seating order against targets that did not avoid it. This is separate from normal player-controlled multi-target attacks, which fully resolve each target's defense and immediate consequences before moving to the next target.
 _Avoid_: defend-and-resolve-per-target for Mayhem attacks, collapsing Mayhem wording into the generic attack rule
 
 **Minimal Defense Window**:
