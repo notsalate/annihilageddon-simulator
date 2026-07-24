@@ -139,52 +139,96 @@ export function findCardLocation(
   state: GameState,
   cardInstanceId: string
 ): CardLocation | undefined {
-  for (const player of state.players) {
-    if (player.unboughtFamiliar?.instanceId === cardInstanceId) {
-      return {
-        card: player.unboughtFamiliar,
-        zoneName: `${player.playerId}.unboughtFamiliar`,
-      };
-    }
+  const location = findRemovableCardLocation(state, cardInstanceId);
+  if (location === undefined) {
+    return undefined;
+  }
+  return { card: location.card, zoneName: location.zoneName };
+}
 
-    const playerZones: Array<[string, readonly CardInstance[]]> = [
-      [`${player.playerId}.deck`, player.deck],
-      [`${player.playerId}.hand`, player.hand],
-      [`${player.playerId}.discard`, player.discard],
-      [`${player.playerId}.playedThisTurn`, player.playedThisTurn],
-      [`${player.playerId}.permanents`, player.permanents],
-    ];
-    for (const [zoneName, zone] of playerZones) {
-      const card = zone.find(
-        (candidate) => candidate.instanceId === cardInstanceId
-      );
-      if (card !== undefined) {
-        return { card, zoneName };
-      }
+export function removeCardFromLocation(
+  state: GameState,
+  cardInstanceId: string
+): CardLocation | undefined {
+  const location = findRemovableCardLocation(state, cardInstanceId);
+  if (location === undefined) {
+    return undefined;
+  }
+  location.remove();
+  return { card: location.card, zoneName: location.zoneName };
+}
+
+interface RemovableCardLocation extends CardLocation {
+  remove(): void;
+}
+
+function findRemovableCardLocation(
+  state: GameState,
+  cardInstanceId: string
+): RemovableCardLocation | undefined {
+  for (const player of state.players) {
+    const familiar = player.unboughtFamiliar;
+    if (familiar?.instanceId === cardInstanceId) {
+      return {
+        card: familiar,
+        zoneName: `${player.playerId}.unboughtFamiliar`,
+        remove() {
+          player.unboughtFamiliar = undefined;
+        },
+      };
     }
   }
 
-  const commonZones: Array<[string, readonly CardInstance[]]> = [
-    ["mainMarket", state.common.market],
-    ["legendMarket", state.common.legendMarket],
-    ["mainDeck", state.common.mainDeck],
-    ["legendDeck", state.common.legendDeck],
-    ["wildMagicStack", state.common.wildMagicStack],
-    ["limpWandStack", state.common.limpWandStack],
-    ["destroyedPile", state.common.destroyedPile],
-    ["destroyedMayhem", state.common.destroyedMayhem],
-    ["destroyedMegaMayhem", state.common.destroyedMegaMayhem],
-  ];
-  for (const [zoneName, zone] of commonZones) {
-    const card = zone.find(
+  for (const { zoneName, zone } of listPhysicalCardZones(state)) {
+    const index = zone.findIndex(
       (candidate) => candidate.instanceId === cardInstanceId
     );
-    if (card !== undefined) {
-      return { card, zoneName };
+    if (index < 0) {
+      continue;
     }
+    const card = zone[index];
+    if (card === undefined) {
+      continue;
+    }
+    return {
+      card,
+      zoneName,
+      remove() {
+        zone.splice(index, 1);
+      },
+    };
   }
 
   return undefined;
+}
+
+function listPhysicalCardZones(
+  state: GameState
+): Array<{ zoneName: string; zone: CardInstance[] }> {
+  return [
+    ...state.players.flatMap((player) => [
+      { zoneName: `${player.playerId}.deck`, zone: player.deck },
+      { zoneName: `${player.playerId}.hand`, zone: player.hand },
+      { zoneName: `${player.playerId}.discard`, zone: player.discard },
+      {
+        zoneName: `${player.playerId}.playedThisTurn`,
+        zone: player.playedThisTurn,
+      },
+      { zoneName: `${player.playerId}.permanents`, zone: player.permanents },
+    ]),
+    { zoneName: "mainMarket", zone: state.common.market },
+    { zoneName: "legendMarket", zone: state.common.legendMarket },
+    { zoneName: "mainDeck", zone: state.common.mainDeck },
+    { zoneName: "legendDeck", zone: state.common.legendDeck },
+    { zoneName: "wildMagicStack", zone: state.common.wildMagicStack },
+    { zoneName: "limpWandStack", zone: state.common.limpWandStack },
+    { zoneName: "destroyedPile", zone: state.common.destroyedPile },
+    { zoneName: "destroyedMayhem", zone: state.common.destroyedMayhem },
+    {
+      zoneName: "destroyedMegaMayhem",
+      zone: state.common.destroyedMegaMayhem,
+    },
+  ];
 }
 
 function mustGetCardDefinition(
