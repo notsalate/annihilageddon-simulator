@@ -27,6 +27,7 @@ This folder contains TypeScript tests, deterministic fixtures, and test helpers.
 - `tests/helpers/game-scenario.ts` owns deterministic game setup and thin play/choice/turn adapters for focused integration suites.
 - Put static JSON fixtures in `tests/fixtures/`.
 - Keep issue-specific regression tests close to the existing test file for that behavior.
+- Do not create cross-domain `review-findings` suites. Use behavior-named focused suites such as `trigger-dispatch-ongoing.test.ts`, `attack-replacement-ongoing.test.ts`, `control-ledger-zones.test.ts`, `market-flow-terminal.test.ts`, and `attack-defense-snapshot.test.ts`.
 
 ## Verification
 

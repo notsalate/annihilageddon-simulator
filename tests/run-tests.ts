@@ -38,8 +38,9 @@ const testSuites = [
   "attack-resolution.test.js",
   "attack-replacement-ongoing.test.js",
   "attack-defense.test.js",
+  "attack-defense-snapshot.test.js",
   "defense-choice.test.js",
-  "review-findings.test.js",
+  "defense-fixtures.test.js",
   "helpers/game-scenario.test.js",
 ];
 
