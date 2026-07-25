@@ -5,6 +5,48 @@ import ts from "typescript";
 const rootDir = path.resolve(process.argv[2] ?? process.cwd());
 const engineDir = path.join(rootDir, "src", "engine");
 const violations = [];
+const physicalCardZoneOwnershipViolations = [];
+const physicalCardZoneFields = new Set([
+  "deck",
+  "hand",
+  "discard",
+  "playedThisTurn",
+  "permanents",
+  "unboughtFamiliar",
+  "market",
+  "legendMarket",
+  "mainDeck",
+  "legendDeck",
+  "wildMagicStack",
+  "limpWandStack",
+  "destroyedPile",
+  "destroyedMayhem",
+  "destroyedMegaMayhem",
+]);
+const forbiddenPhysicalInventoryHelpers = new Set([
+  "getPlayerCardZones",
+  "getCommonCardZones",
+  "listPhysicalCardZones",
+]);
+const physicalCardZoneConsumerGuards = new Map([
+  [
+    "src/engine/attack-defense.ts",
+    {
+      requiredImports: [
+        "listPhysicalCardLocations",
+        "listPhysicalCardZoneDescriptors",
+      ],
+      maxDistinctDirectZoneFields: 3,
+    },
+  ],
+  [
+    "src/engine/invariants.ts",
+    {
+      requiredImports: ["listPhysicalCardLocations"],
+      maxDistinctDirectZoneFields: 3,
+    },
+  ],
+]);
 const configuredAllowedViolations = [
   ["src/engine/data.ts", 1274, 3, "decodeRuntimeSourceMetadata"],
   ["src/engine/data.ts", 1678, 1, "expectRuntimeRecord"],
@@ -45,6 +87,8 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
     ts.ScriptTarget.Latest,
     true
   );
+  const relativePath = path.relative(rootDir, filePath).replaceAll("\\", "/");
+  checkPhysicalCardZoneOwnership(relativePath, sourceFile);
   const aliases = collectTypeAliases(sourceFile);
   function visit(node) {
     const assertedType =
@@ -61,7 +105,7 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
         node.getStart(sourceFile)
       );
       violations.push([
-        path.relative(rootDir, filePath).replaceAll("\\", "/"),
+        relativePath,
         position.line + 1,
         position.character + 1,
         findOwner(node),
@@ -70,6 +114,72 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
+}
+
+function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
+  const guard = physicalCardZoneConsumerGuards.get(relativePath);
+  if (guard === undefined) return;
+
+  const importedNames = new Set();
+  const directZoneFields = new Set();
+  const forbiddenHelpers = new Set();
+
+  function visit(node) {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      node.moduleSpecifier.text === "./control-ledger.js" &&
+      node.importClause?.namedBindings &&
+      ts.isNamedImports(node.importClause.namedBindings)
+    ) {
+      for (const element of node.importClause.namedBindings.elements) {
+        importedNames.add(element.propertyName?.text ?? element.name.text);
+      }
+    }
+
+    if (
+      ts.isFunctionDeclaration(node) &&
+      node.name !== undefined &&
+      forbiddenPhysicalInventoryHelpers.has(node.name.text)
+    ) {
+      forbiddenHelpers.add(node.name.text);
+    }
+
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      physicalCardZoneFields.has(node.name.text)
+    ) {
+      directZoneFields.add(node.name.text);
+    }
+    if (
+      ts.isElementAccessExpression(node) &&
+      ts.isStringLiteral(node.argumentExpression) &&
+      physicalCardZoneFields.has(node.argumentExpression.text)
+    ) {
+      directZoneFields.add(node.argumentExpression.text);
+    }
+
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+
+  for (const requiredImport of guard.requiredImports) {
+    if (!importedNames.has(requiredImport)) {
+      physicalCardZoneOwnershipViolations.push(
+        `${relativePath} must import ${requiredImport} from ./control-ledger.js`
+      );
+    }
+  }
+  if (forbiddenHelpers.size > 0) {
+    physicalCardZoneOwnershipViolations.push(
+      `${relativePath} redeclares physical inventory helper(s): ${[...forbiddenHelpers].join(", ")}`
+    );
+  }
+  if (directZoneFields.size > guard.maxDistinctDirectZoneFields) {
+    physicalCardZoneOwnershipViolations.push(
+      `${relativePath} directly accesses too many physical card zone fields: ${[...directZoneFields].sort().join(", ")}`
+    );
+  }
 }
 
 function isForbiddenAnnotation(node) {
@@ -115,8 +225,13 @@ if (stale.length || untracked.length)
         ? ` (${untracked.map(([file, line, column]) => `${file}:${line}:${column} untracked Record<string, unknown> access`).join(", ")})`
         : "")
   );
+if (physicalCardZoneOwnershipViolations.length > 0) {
+  throw new Error(
+    `Physical card zone ownership violation(s): ${physicalCardZoneOwnershipViolations.join("; ")}`
+  );
+}
 console.log(
-  `Engine typed-access guard: ok (${violations.length} tracked exception(s))`
+  `Engine typed-access guard: ok (${violations.length} tracked exception(s)); physical card zone ownership: ok`
 );
 
 function findOwner(node) {
