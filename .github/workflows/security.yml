@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "agent/architecture-deepening-findings"
-          test "$(git rev-parse HEAD^)" = "7e86c33e815c909ee5569dad2dab00910ff6006f"
+          test "$(git rev-parse HEAD^)" = "69332dbdaa53bb7c2f398aaede60d61837d56554"
 
       - name: Apply verified patch
         shell: bash
@@ -107,18 +107,41 @@ jobs:
         run: npm ci
 
       - name: Verify implementation
+        id: verify
         shell: bash
         run: |
-          set -euo pipefail
-          npm run typecheck:strictest
-          npm run lint
-          npm run check:ts-suppressions
-          npm run check:engine-unknown-arrays
-          npm run check:engine-event-recording
-          npm run check:engine-typed-access
-          npm run check:json-parse-assertions
-          npm test
-          npm run report:card-runtime-clusters
+          set +e
+          log="${RUNNER_TEMP}/typed-effect-verification.log"
+          : > "$log"
+          status=0
+          run_check() {
+            echo "===== $* =====" | tee -a "$log"
+            "$@" 2>&1 | tee -a "$log"
+            command_status=${PIPESTATUS[0]}
+            echo "===== exit ${command_status}: $* =====" | tee -a "$log"
+            if [ "$command_status" -ne 0 ]; then
+              status="$command_status"
+            fi
+          }
+          run_check npm run typecheck:strictest
+          run_check npm run lint
+          run_check npm run check:ts-suppressions
+          run_check npm run check:engine-unknown-arrays
+          run_check npm run check:engine-event-recording
+          run_check npm run check:engine-typed-access
+          run_check npm run check:json-parse-assertions
+          run_check npm test
+          run_check npm run report:card-runtime-clusters
+          exit "$status"
+
+      - name: Upload verification log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr137-typed-effect-verification
+          path: ${{ runner.temp }}/typed-effect-verification.log
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Commit and push only PR 137
         shell: bash
