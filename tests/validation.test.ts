@@ -839,8 +839,8 @@ test("effect runtime catalog accepts only decoded runtime effect ids", () => {
 
 test("runtime services accept decoded effect ids", () => {
   type AttackEffectId = Parameters<
-    EffectRuntimeServices["resolveAttackTarget"]
-  >[1]["effectId"];
+    EffectRuntimeServices["resolvePlayerControlledAttack"]
+  >[0]["effectId"];
   const rawStringIsRejectedByRuntimeServices: Assert<
     string extends AttackEffectId ? false : true
   > = true;

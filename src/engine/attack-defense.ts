@@ -14,10 +14,12 @@ import {
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 import type {
   AttackDefenseUsage,
-  AttackIntent,
   AttackTargetResolutionResult,
   DefenseAttackContext,
   DefenseWindowResolutionResult,
+  RedirectedAttackIntent,
+} from "./attack-resolution.js";
+import type {
   EffectChoice,
   EffectExecutionResult,
   EffectSourceContext,
@@ -37,10 +39,6 @@ export interface AttackDefenseServices {
     effects: readonly RuntimeEffect[],
     source: EffectSourceContext
   ): EffectExecutionResult;
-  resolveRedirectedAttack(
-    state: GameState,
-    intent: AttackIntent
-  ): AttackTargetResolutionResult;
 }
 
 export type DefensePaymentStep =
@@ -254,11 +252,16 @@ function restoreDefenseMutationSnapshot(
   }
 }
 
+export type ResolveRedirectedAttack = (
+  intent: RedirectedAttackIntent
+) => AttackTargetResolutionResult;
+
 export function resolveDefenseWindow(
   state: GameState,
   defendingPlayer: PlayerState,
   attack: DefenseAttackContext,
-  services: AttackDefenseServices
+  services: AttackDefenseServices,
+  resolveRedirectedAttack?: ResolveRedirectedAttack
 ): DefenseWindowResolutionResult {
   if (attack.defenseUsage.defendedPlayerIds.has(defendingPlayer.playerId)) {
     return { ok: true, avoided: false };
@@ -391,22 +394,29 @@ export function resolveDefenseWindow(
   }
 
   if (redirectsAttack && attack.kind === "redirectable") {
-    const redirectResult = services.resolveRedirectedAttack(state, {
+    if (resolveRedirectedAttack === undefined) {
+      restoreDefenseMutationSnapshot(
+        state,
+        attack.defenseUsage,
+        mutationSnapshot
+      );
+      return {
+        ok: false,
+        error: "Redirect defense requires the Attack Resolution callback",
+      };
+    }
+    const redirectResult = resolveRedirectedAttack({
       attackingPlayer: defendingPlayer,
       targetPlayer: attack.attackingPlayer,
-      amount:
-        attack.amountComponents.unresolvedBaseAmount +
-        attack.amountComponents.sourceOwnerModifierAmount,
+      amountComponents: attack.amountComponents,
       effectId: attack.effectId,
       source: {
         ...attack.source,
         playerId: defendingPlayer.playerId,
       },
       unavoidable: false,
-      baseAmount: attack.amountComponents.unresolvedBaseAmount,
       originalSource: attack.originalSource,
       defenseUsage: attack.defenseUsage,
-      amountComponents: attack.amountComponents,
     });
     if (!redirectResult.ok) {
       restoreDefenseMutationSnapshot(

@@ -105,9 +105,6 @@ test("failed defense branch restores committed payment, events, usage, and RNG",
       player.chips += 11;
       return { ok: false, error: "fixture paid branch failure" };
     },
-    resolveRedirectedAttack() {
-      throw new Error("failed branch must not redirect");
-    },
   };
 
   const result = resolveDefenseWindow(state, defender, attack, services);
@@ -153,17 +150,17 @@ test("declining defense avoids rollback snapshot and preserves observable state 
       defenseEffectCalls += 1;
       return { ok: true };
     },
-    resolveRedirectedAttack() {
-      redirectCalls += 1;
-      throw new Error("decline must not redirect");
-    },
   };
 
   const result = resolveDefenseWindow(
     state,
     defender,
     redirectableAttack(attacker),
-    services
+    services,
+    () => {
+      redirectCalls += 1;
+      throw new Error("decline must not redirect");
+    }
   );
 
   assert.deepEqual(result, { ok: true, avoided: false });
@@ -258,9 +255,6 @@ test("failed defense branches restore membership and mutable cards in every phys
           assert.ok(latestEvent);
           branchState.eventLog.push(structuredClone(latestEvent));
           return { ok: false, error: `fixture branch failure in ${zoneName}` };
-        },
-        resolveRedirectedAttack() {
-          throw new Error("failed branch must not redirect");
         },
       };
 

@@ -6,6 +6,18 @@ const rootDir = path.resolve(process.argv[2] ?? process.cwd());
 const engineDir = path.join(rootDir, "src", "engine");
 const violations = [];
 const physicalCardZoneOwnershipViolations = [];
+const attackLifecycleOwnershipViolations = [];
+const attackResolutionOwner = "src/engine/attack-resolution.ts";
+const forbiddenNormalAttackOrchestrationSymbols = new Set([
+  "executeAttackWithAmount",
+  "executeAttackBranches",
+  "applyAfterResolvedAttackDamage",
+  "resolveAttackTarget",
+]);
+const attackResolutionOwnedSymbols = new Set(["summarizeAttackDamage"]);
+let attackResolutionOwnerPresent = false;
+let playerControlledAttackOwnerDeclarationCount = 0;
+
 const physicalCardZoneFields = new Set([
   "deck",
   "hand",
@@ -89,6 +101,10 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
   );
   const relativePath = path.relative(rootDir, filePath).replaceAll("\\", "/");
   checkPhysicalCardZoneOwnership(relativePath, sourceFile);
+  if (relativePath === attackResolutionOwner) {
+    attackResolutionOwnerPresent = true;
+  }
+  checkAttackLifecycleOwnership(relativePath, sourceFile);
   const aliases = collectTypeAliases(sourceFile);
   function visit(node) {
     const assertedType =
@@ -111,6 +127,53 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
         findOwner(node),
       ]);
     }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+}
+
+function checkAttackLifecycleOwnership(relativePath, sourceFile) {
+  function visit(node) {
+    if (
+      relativePath === attackResolutionOwner &&
+      ts.isFunctionDeclaration(node) &&
+      node.name?.text === "resolvePlayerControlledAttack"
+    ) {
+      playerControlledAttackOwnerDeclarationCount += 1;
+    }
+
+    if (relativePath !== attackResolutionOwner && ts.isIdentifier(node)) {
+      if (forbiddenNormalAttackOrchestrationSymbols.has(node.text)) {
+        attackLifecycleOwnershipViolations.push(
+          `${relativePath} reintroduces forbidden normal-attack orchestration symbol ${node.text}`
+        );
+      }
+      if (attackResolutionOwnedSymbols.has(node.text)) {
+        attackLifecycleOwnershipViolations.push(
+          `${relativePath} uses Attack Resolution-owned symbol ${node.text}`
+        );
+      }
+    }
+
+    if (relativePath !== attackResolutionOwner && ts.isObjectLiteralExpression(node)) {
+      const typeProperty = node.properties.find(
+        (property) =>
+          ts.isPropertyAssignment(property) &&
+          ((ts.isIdentifier(property.name) && property.name.text === "type") ||
+            (ts.isStringLiteral(property.name) && property.name.text === "type"))
+      );
+      if (
+        typeProperty !== undefined &&
+        ts.isPropertyAssignment(typeProperty) &&
+        ts.isStringLiteral(typeProperty.initializer) &&
+        typeProperty.initializer.text === "attackCreated"
+      ) {
+        attackLifecycleOwnershipViolations.push(
+          `${relativePath} creates attackCreated outside ${attackResolutionOwner}`
+        );
+      }
+    }
+
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
@@ -225,13 +288,26 @@ if (stale.length || untracked.length)
         ? ` (${untracked.map(([file, line, column]) => `${file}:${line}:${column} untracked Record<string, unknown> access`).join(", ")})`
         : "")
   );
+if (
+  attackResolutionOwnerPresent &&
+  playerControlledAttackOwnerDeclarationCount !== 1
+) {
+  attackLifecycleOwnershipViolations.push(
+    `${attackResolutionOwner} must declare exactly one resolvePlayerControlledAttack owner; found ${playerControlledAttackOwnerDeclarationCount}`
+  );
+}
+if (attackLifecycleOwnershipViolations.length > 0) {
+  throw new Error(
+    `Normal attack lifecycle ownership violation(s): ${[...new Set(attackLifecycleOwnershipViolations)].join("; ")}`
+  );
+}
 if (physicalCardZoneOwnershipViolations.length > 0) {
   throw new Error(
     `Physical card zone ownership violation(s): ${physicalCardZoneOwnershipViolations.join("; ")}`
   );
 }
 console.log(
-  `Engine typed-access guard: ok (${violations.length} tracked exception(s)); physical card zone ownership: ok`
+  `Engine typed-access guard: ok (${violations.length} tracked exception(s)); normal attack lifecycle ownership: ok; physical card zone ownership: ok`
 );
 
 function findOwner(node) {

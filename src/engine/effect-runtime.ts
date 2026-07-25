@@ -4,8 +4,15 @@ import {
   type AttackDefenseServices,
 } from "./attack-defense.js";
 import {
-  createAttackAmountState,
-  resolveAttackAmount,
+  createAttackDefenseUsage,
+  resolvePlayerControlledAttack as resolvePlayerControlledAttackLifecycle,
+  type AttackDamageAttribution,
+  type AttackTargetResolutionResult,
+  type DefenseAttackContext,
+  type DefenseWindowResolutionResult,
+  type PlayerControlledAttackAdapters,
+  type PlayerControlledAttackIntent,
+  type RedirectedAttackIntent,
 } from "./attack-resolution.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import {
@@ -23,18 +30,14 @@ import {
   recordMarketChipsGained,
 } from "./event-recorder.js";
 import {
-  type AttackIntent,
   type DamageCause,
   type DamageResult,
-  type AttackTargetResolutionResult,
-  createAttackDefenseUsage,
-  type DefenseAttackContext,
-  type DefenseWindowResolutionResult,
   type EffectChoice,
   type EffectExecutionResult,
   type EffectRuntimeServices,
   type EffectSourceContext,
   type MayhemAttackPlanTarget,
+  executeAttackOutcomeBranch,
   resolveEffectRuntimeCatalogEntry,
   type TargetChoice,
   type TargetChoiceResult,
@@ -605,88 +608,142 @@ function effectMatchesCardDefinition(
   );
 }
 
-function resolveAttackTarget(
-  state: GameState,
-  intent: AttackIntent
-): AttackTargetResolutionResult {
-  const { attackingPlayer, targetPlayer, amount, effectId, source } = intent;
-  const unavoidable = intent.unavoidable ?? false;
-  const baseAmount = intent.baseAmount ?? amount;
-  const originalSource = intent.originalSource ?? source;
-  const defenseUsage = intent.defenseUsage ?? createAttackDefenseUsage();
-  const amountComponents =
-    intent.amountComponents ??
-    createAttackAmountState(baseAmount, amount - baseAmount);
-  const { components: resolvedAmountComponents, total: resolvedAmount } =
-    resolveAttackAmount(state, attackingPlayer, targetPlayer, amountComponents);
-  recordGameEvent(state, {
-    type: "attackTargetStarted",
-    playerId: attackingPlayer.playerId,
-    targetPlayerId: targetPlayer.playerId,
-    cardInstanceId: source.cardInstanceId,
-    definitionId: source.definitionId,
+function resolvePlayerControlledAttackWithRuntimeAdapters(
+  intent: PlayerControlledAttackIntent
+): EffectExecutionResult {
+  return resolvePlayerControlledAttackLifecycle(
+    intent,
+    playerControlledAttackAdapters
+  );
+}
+
+const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
+  resolveTargets: resolvePlayerControlledAttackTargets,
+  resolveDefenseWindow(
+    state,
+    defendingPlayer,
+    attack,
+    resolveRedirectedAttack
+  ) {
+    return resolveDefenseWindow(
+      state,
+      defendingPlayer,
+      attack,
+      resolveRedirectedAttack
+    );
+  },
+  dealAttackDamage(
+    state,
+    attackingPlayer,
+    targetPlayer,
+    amount,
     effectId,
-    amount: resolvedAmount,
-    sourceType: source.sourceType,
-  });
-
-  const defenseResult: DefenseWindowResolutionResult = unavoidable
-    ? { ok: true, avoided: false }
-    : resolveDefenseWindow(state, targetPlayer, {
-        kind: "redirectable",
-        attackingPlayer,
-        amountComponents: resolvedAmountComponents,
-        effectId,
-        source,
-        originalSource,
-        defenseUsage,
-      });
-  if (!defenseResult.ok) {
-    return defenseResult;
-  }
-  if (defenseResult.gameEnd !== undefined) {
-    return { ok: true, gameEnd: defenseResult.gameEnd };
-  }
-  if (defenseResult.avoided) {
-    recordGameEvent(state, {
-      type: "attackAvoided",
-      playerId: targetPlayer.playerId,
-      targetPlayerId: targetPlayer.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId,
-      sourceType: source.sourceType,
-    });
-    if (defenseResult.resolution === undefined) {
-      return {
-        ok: false,
-        error: "Redirectable defense avoided an attack without a player attack resolution",
-      };
-    }
-    return { ok: true, resolution: defenseResult.resolution };
-  }
-
-  return {
-    ok: true,
-    resolution: {
-      ...dealDamage(
-        state,
-        attackingPlayer,
-        targetPlayer,
-        resolvedAmount,
-        effectId,
-        source,
-        { kind: "playerControlled", player: attackingPlayer }
-      ),
-      avoided: false,
-      amountComponents: resolvedAmountComponents,
+    source
+  ) {
+    return dealDamage(
+      state,
       attackingPlayer,
-      currentAttackerId: attackingPlayer.playerId,
       targetPlayer,
+      amount,
+      effectId,
       source,
-      originalSource,
-    },
-  };
+      { kind: "playerControlled", player: attackingPlayer }
+    );
+  },
+  executeOnHitEffect(
+    state,
+    _attackingPlayer,
+    targetPlayer,
+    effect,
+    source
+  ) {
+    if (
+      effect.effectId === "attack_gain_status" &&
+      effect["statusId"] === "dingler"
+    ) {
+      gainDinglerStatus(state, targetPlayer, "attack_gain_status", source);
+      return { ok: true };
+    }
+    return {
+      ok: false,
+      error: `Unsupported player-controlled on-hit effect ${effect.effectId}`,
+    };
+  },
+  executeOutcomeBranch(
+    state,
+    attackingPlayer,
+    targetPlayer,
+    branch,
+    context
+  ) {
+    return executeAttackOutcomeBranch(
+      state,
+      attackingPlayer,
+      branch,
+      context.source,
+      targetPlayer,
+      context,
+      effectRuntimeServices
+    );
+  },
+  applyAfterAttackDamage(
+    state,
+    attribution: AttackDamageAttribution<EffectSourceContext>
+  ) {
+    return applyAfterPlayerAttackDamage(
+      state,
+      attribution.attackingPlayer,
+      attribution.damageDealt,
+      attribution.source
+    );
+  },
+};
+
+function resolvePlayerControlledAttackTargets(
+  intent: PlayerControlledAttackIntent
+): { ok: true; players: readonly PlayerState[] } | { ok: false; error: string } {
+  if (intent.targetPlan.kind === "orderedPlayers") {
+    return { ok: true, players: intent.targetPlan.players };
+  }
+
+  const effect = intent.targetPlan.effect;
+  if (effect.effectId === "attack_gain_status") {
+    return resolveStatusTargetPlayers(
+      intent.state,
+      intent.attackingPlayer,
+      effect,
+      intent.source
+    );
+  }
+  if (effect["targetSelector"] === "eachFoe") {
+    return {
+      ok: true,
+      players: getOpponentsInSeatingOrder(
+        intent.state,
+        intent.attackingPlayer
+      ),
+    };
+  }
+
+  const targetResult = resolveTargetChoice(
+    intent.state,
+    intent.attackingPlayer,
+    effect,
+    intent.source
+  );
+  if (!targetResult.ok) {
+    return targetResult;
+  }
+  if (targetResult.choice === undefined) {
+    return { ok: true, players: [] };
+  }
+  if (targetResult.choice.choiceType !== "player") {
+    return {
+      ok: false,
+      error: "Attack effect requires a player target",
+    };
+  }
+  return { ok: true, players: [targetResult.choice.player] };
 }
 
 function resolveMayhemAttackPlan(
@@ -879,14 +936,13 @@ const effectRuntimeServices: EffectRuntimeServices = {
   getAttackProfile,
   chooseEffectChoice,
   dealDamage,
-  applyAfterPlayerAttackDamage,
   healPlayer,
   setPlayerLife,
   resolveStatusTargetPlayers,
   gainDinglerStatus,
   removeDinglerStatus,
   hasDinglerStatus,
-  resolveAttackTarget,
+  resolvePlayerControlledAttack: resolvePlayerControlledAttackWithRuntimeAdapters,
   resolveDefenseWindow,
   resolveMayhemAttack,
   resolveMayhemAttackPlan,
@@ -1569,19 +1625,22 @@ const attackDefenseServices: AttackDefenseServices = {
   executeDefenseEffects(state, player, effects, source) {
     return executeEffects(state, player, effects, "onDefense", source);
   },
-  resolveRedirectedAttack: resolveAttackTarget,
 };
 
 function resolveDefenseWindow(
   state: GameState,
   defendingPlayer: PlayerState,
-  attack: DefenseAttackContext
+  attack: DefenseAttackContext,
+  resolveRedirectedAttack?: (
+    intent: RedirectedAttackIntent
+  ) => AttackTargetResolutionResult
 ): DefenseWindowResolutionResult {
   return resolveDefenseWindowWithServices(
     state,
     defendingPlayer,
     attack,
-    attackDefenseServices
+    attackDefenseServices,
+    resolveRedirectedAttack
   );
 }
 

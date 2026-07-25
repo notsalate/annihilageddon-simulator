@@ -7,7 +7,10 @@ import {
   resolveDefenseWindow,
   type AttackDefenseServices,
 } from "../src/engine/attack-defense.js";
-import { createAttackAmountState } from "../src/engine/attack-resolution.js";
+import {
+  createAttackAmountState,
+  type RedirectedAttackIntent,
+} from "../src/engine/attack-resolution.js";
 import {
   createAttackDefenseUsage,
   type AttackResolution,
@@ -439,33 +442,28 @@ test("defense module transfers current attacker through redirect", () => {
   const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
     redirectAttack: true,
   });
-  let redirectedIntent:
-    | Parameters<AttackDefenseServices["resolveRedirectedAttack"]>[1]
-    | undefined;
-  const services = createServices(
-    (choices) =>
-      choices.find((choice) => choice.choiceId === defense.instanceId),
-    {
-      resolveRedirectedAttack(_state, intent) {
-        redirectedIntent = intent;
-        return {
-          ok: true,
-          resolution: fakeResolution(
-            intent.attackingPlayer,
-            intent.targetPlayer,
-            intent.source,
-            intent.originalSource ?? intent.source
-          ),
-        };
-      },
-    }
+  let redirectedIntent: RedirectedAttackIntent | undefined;
+  const services = createServices((choices) =>
+    choices.find((choice) => choice.choiceId === defense.instanceId)
   );
 
   const result = resolveDefenseWindow(
     state,
     defender,
     redirectableAttack(attacker, source),
-    services
+    services,
+    (intent) => {
+      redirectedIntent = intent;
+      return {
+        ok: true,
+        resolution: fakeResolution(
+          intent.attackingPlayer,
+          intent.targetPlayer,
+          intent.source,
+          intent.originalSource
+        ),
+      };
+    }
   );
 
   assert.equal(result.ok, true);
@@ -537,10 +535,6 @@ test("defense branch game end stops redirect and propagates the terminal result"
       executeDefenseEffects() {
         return { ok: true, gameEnd };
       },
-      resolveRedirectedAttack() {
-        redirectCalls += 1;
-        throw new Error("terminal defense branch must stop redirect");
-      },
     }
   );
 
@@ -548,7 +542,11 @@ test("defense branch game end stops redirect and propagates the terminal result"
     state,
     defender,
     redirectableAttack(attacker, source),
-    services
+    services,
+    () => {
+      redirectCalls += 1;
+      throw new Error("terminal defense branch must stop redirect");
+    }
   );
 
   assert.deepEqual(result, { ok: true, avoided: true, gameEnd });
@@ -563,15 +561,8 @@ test("ownerless redirect defense avoids without inventing an attacker", () => {
     redirectAttack: true,
   });
   let redirectCalls = 0;
-  const services = createServices(
-    (choices) =>
-      choices.find((choice) => choice.choiceId === defense.instanceId),
-    {
-      resolveRedirectedAttack() {
-        redirectCalls += 1;
-        throw new Error("ownerless attack must not redirect");
-      },
-    }
+  const services = createServices((choices) =>
+    choices.find((choice) => choice.choiceId === defense.instanceId)
   );
   const context: DefenseAttackContext = {
     kind: "nonredirectable",
@@ -579,7 +570,16 @@ test("ownerless redirect defense avoids without inventing an attacker", () => {
     defenseUsage: createAttackDefenseUsage(),
   };
 
-  const result = resolveDefenseWindow(state, defender, context, services);
+  const result = resolveDefenseWindow(
+    state,
+    defender,
+    context,
+    services,
+    () => {
+      redirectCalls += 1;
+      throw new Error("ownerless attack must not redirect");
+    }
+  );
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
@@ -662,17 +662,6 @@ function createServices(
     },
     executeDefenseEffects() {
       return { ok: true };
-    },
-    resolveRedirectedAttack(_state, intent) {
-      return {
-        ok: true,
-        resolution: fakeResolution(
-          intent.attackingPlayer,
-          intent.targetPlayer,
-          intent.source,
-          intent.originalSource ?? intent.source
-        ),
-      };
     },
     ...overrides,
   };

@@ -1,9 +1,20 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import {
-  summarizeAttackDamage,
-  type AttackAmountComponents,
+  createAttackDefenseUsage,
+  type DefenseAttackContext,
+  type DefenseWindowResolutionResult,
+  type PlayerControlledAttackIntent,
 } from "./attack-resolution.js";
-export type { AttackAmountComponents } from "./attack-resolution.js";
+export { createAttackDefenseUsage } from "./attack-resolution.js";
+export type {
+  AttackAmountComponents,
+  AttackDefenseUsage,
+  AttackIntent,
+  AttackResolution,
+  AttackTargetResolutionResult,
+  DefenseAttackContext,
+  DefenseWindowResolutionResult,
+} from "./attack-resolution.js";
 import {
   markCardDefinitionId,
   type CardDefinitionId,
@@ -165,78 +176,6 @@ export type DamageCause =
   | { kind: "playerControlled"; player: PlayerState }
   | { kind: "ownerless" };
 
-export interface AttackIntent {
-  attackingPlayer: PlayerState;
-  targetPlayer: PlayerState;
-  amount: number;
-  effectId: RuntimeEffectId;
-  source: EffectSourceContext;
-  unavoidable?: boolean;
-  baseAmount?: number;
-  originalSource?: EffectSourceContext;
-  defenseUsage?: AttackDefenseUsage;
-  amountComponents?: AttackAmountComponents;
-}
-
-export interface AttackResolution extends DamageResult {
-  avoided: boolean;
-  amountComponents: AttackAmountComponents;
-  attackingPlayer: PlayerState;
-  currentAttackerId: PlayerState["playerId"];
-  targetPlayer: PlayerState;
-  source: EffectSourceContext;
-  originalSource: EffectSourceContext;
-}
-
-export type AttackTargetResolutionResult =
-  | { ok: true; resolution: AttackResolution; gameEnd?: never }
-  | { ok: true; gameEnd: EffectGameEnd; resolution?: never }
-  | { ok: false; error: string };
-
-export type DefenseWindowResolutionResult =
-  | { ok: true; avoided: false; resolution?: never; gameEnd?: never }
-  | {
-      ok: true;
-      avoided: true;
-      resolution?: AttackResolution;
-      gameEnd?: never;
-    }
-  | {
-      ok: true;
-      avoided: true;
-      gameEnd: EffectGameEnd;
-      resolution?: never;
-    }
-  | { ok: false; error: string };
-
-export interface AttackDefenseUsage {
-  defendedPlayerIds: Set<PlayerState["playerId"]>;
-  usedDefenseCardInstanceIds: Set<CardInstance["instanceId"]>;
-}
-
-export function createAttackDefenseUsage(): AttackDefenseUsage {
-  return {
-    defendedPlayerIds: new Set(),
-    usedDefenseCardInstanceIds: new Set(),
-  };
-}
-
-export type DefenseAttackContext =
-  | {
-      kind: "redirectable";
-      attackingPlayer: PlayerState;
-      amountComponents: AttackAmountComponents;
-      effectId: RuntimeEffectId;
-      source: EffectSourceContext;
-      originalSource: EffectSourceContext;
-      defenseUsage: AttackDefenseUsage;
-    }
-  | {
-      kind: "nonredirectable";
-      source: EffectSourceContext;
-      defenseUsage: AttackDefenseUsage;
-    };
-
 export interface EffectRuntimeServices {
   resolveTargetChoice(
     state: GameState,
@@ -310,12 +249,6 @@ export interface EffectRuntimeServices {
     source: EffectSourceContext,
     cause: DamageCause
   ): DamageResult;
-  applyAfterPlayerAttackDamage(
-    state: GameState,
-    attackingPlayer: PlayerState,
-    totalDamageDealt: number,
-    attackSource: EffectSourceContext
-  ): EffectExecutionResult;
   healPlayer(
     state: GameState,
     sourcePlayer: PlayerState,
@@ -348,10 +281,9 @@ export interface EffectRuntimeServices {
     source: EffectSourceContext
   ): void;
   hasDinglerStatus(player: PlayerState): boolean;
-  resolveAttackTarget(
-    state: GameState,
-    intent: AttackIntent
-  ): AttackTargetResolutionResult;
+  resolvePlayerControlledAttack(
+    intent: PlayerControlledAttackIntent
+  ): EffectExecutionResult;
   resolveDefenseWindow(
     state: GameState,
     defendingPlayer: PlayerState,
@@ -1230,55 +1162,15 @@ const attackGainStatusHandler: EffectRuntimeHandler = {
       };
     }
 
-    const targetResult = services.resolveStatusTargetPlayers(
+    return services.resolvePlayerControlledAttack({
       state,
-      player,
-      effect,
-      source
-    );
-    if (!targetResult.ok) {
-      return targetResult;
-    }
-
-    const effectId = effect.effectId;
-    for (const targetPlayer of targetResult.players) {
-      recordGameEvent(state, {
-        type: "attackCreated",
-        playerId: player.playerId,
-        targetPlayerId: targetPlayer.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId,
-        sourceType: source.sourceType,
-      });
-      const defenseResult = services.resolveDefenseWindow(state, targetPlayer, {
-        kind: "nonredirectable",
-        source,
-        defenseUsage: createAttackDefenseUsage(),
-      });
-      if (!defenseResult.ok) {
-        return defenseResult;
-      }
-      if (defenseResult.gameEnd !== undefined) {
-        return { ok: true, gameEnd: defenseResult.gameEnd };
-      }
-      if (defenseResult.avoided) {
-        recordGameEvent(state, {
-          type: "attackAvoided",
-          playerId: targetPlayer.playerId,
-          targetPlayerId: targetPlayer.playerId,
-          cardInstanceId: source.cardInstanceId,
-          definitionId: source.definitionId,
-          effectId,
-          sourceType: source.sourceType,
-        });
-        continue;
-      }
-
-      services.gainDinglerStatus(state, targetPlayer, effectId, source);
-    }
-
-    return { ok: true };
+      attackingPlayer: player,
+      source,
+      effectId: effect.effectId,
+      unavoidable: false,
+      targetPlan: { kind: "runtimeSelector", effect },
+      impact: { kind: "effects", effects: [effect] },
+    });
   },
 };
 
@@ -2792,7 +2684,7 @@ function executeAttackDamage(
     return costResult.ok ? { ok: true } : costResult;
   }
 
-  return executeAttackWithAmount(
+  return resolvePlayerControlledDamageAttack(
     state,
     player,
     effect,
@@ -3148,7 +3040,7 @@ const attackDamageEqualToControlledCardCostHandler: EffectRuntimeHandler = {
       return { ok: true };
     }
 
-    return executeAttackWithAmount(
+    return resolvePlayerControlledDamageAttack(
       state,
       player,
       effect,
@@ -3235,7 +3127,7 @@ function getControlledCardsForCost(
     .map(({ card, definition }) => ({ card, definition }));
 }
 
-function executeAttackWithAmount(
+function resolvePlayerControlledDamageAttack(
   state: GameState,
   player: PlayerState,
   effect: RuntimeEffectPayload,
@@ -3244,154 +3136,21 @@ function executeAttackWithAmount(
   amount: number
 ): EffectExecutionResult {
   const attackProfile = services.getAttackProfile(state, player, source);
-  const attackAmount = amount + attackProfile.damageBonus;
-  const effectId = effect.effectId;
-
-  if (effect["targetSelector"] === "eachFoe") {
-    recordGameEvent(state, {
-      type: "attackCreated",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId,
-      amount: attackAmount,
-      sourceType: source.sourceType,
-    });
-
-    const attackResults: AttackResolution[] = [];
-    for (const targetPlayer of services.getOpponentsInSeatingOrder(
-      state,
-      player
-    )) {
-      const attackTargetResult = services.resolveAttackTarget(state, {
-        attackingPlayer: player,
-        targetPlayer,
-        amount: attackAmount,
-        effectId,
-        source,
-        unavoidable: attackProfile.unavoidable,
-        baseAmount: amount,
-      });
-      if (!attackTargetResult.ok) {
-        return attackTargetResult;
-      }
-      if (attackTargetResult.gameEnd !== undefined) {
-        return { ok: true, gameEnd: attackTargetResult.gameEnd };
-      }
-      const attackResult = attackTargetResult.resolution;
-      attackResults.push(attackResult);
-      const branchResult = executeAttackBranches(
-        state,
-        attackResult.attackingPlayer,
-        effect,
-        attackResult.source,
-        attackResult.targetPlayer,
-        attackResult,
-        services
-      );
-      if (!branchResult.ok) {
-        return branchResult;
-      }
-    }
-
-    const afterAttackResult = applyAfterResolvedAttackDamage(
-      state,
-      attackResults,
-      services
-    );
-    if (!afterAttackResult.ok || afterAttackResult.gameEnd !== undefined) {
-      return afterAttackResult;
-    }
-
-    return { ok: true };
-  }
-
-  const targetResult = services.resolveTargetChoice(
+  return services.resolvePlayerControlledAttack({
     state,
-    player,
-    effect,
-    source
-  );
-  if (!targetResult.ok) {
-    return targetResult;
-  }
-
-  if (targetResult.choice === undefined) {
-    return { ok: true };
-  }
-
-  if (targetResult.choice.choiceType !== "player") {
-    return {
-      ok: false,
-      error: "Attack effect requires a player target",
-    };
-  }
-
-  const targetPlayer = targetResult.choice.player;
-  const targetAttackAmount = attackAmount;
-  recordGameEvent(state, {
-    type: "attackCreated",
-    playerId: player.playerId,
-    targetPlayerId: targetPlayer.playerId,
-    cardInstanceId: source.cardInstanceId,
-    definitionId: source.definitionId,
-    effectId,
-    amount: targetAttackAmount,
-    sourceType: source.sourceType,
-  });
-  const attackTargetResult = services.resolveAttackTarget(state, {
     attackingPlayer: player,
-    targetPlayer,
-    amount: targetAttackAmount,
-    effectId,
     source,
+    effectId: effect.effectId,
     unavoidable: attackProfile.unavoidable,
-    baseAmount: amount,
+    targetPlan: { kind: "runtimeSelector", effect },
+    impact: {
+      kind: "damage",
+      baseAmount: amount,
+      sourceOwnerModifierAmount: attackProfile.damageBonus,
+      onDamageDealt: effect.onDamageDealt ?? [],
+      onKill: effect.onKill ?? [],
+    },
   });
-  if (!attackTargetResult.ok) {
-    return attackTargetResult;
-  }
-  if (attackTargetResult.gameEnd !== undefined) {
-    return { ok: true, gameEnd: attackTargetResult.gameEnd };
-  }
-  const attackResult = attackTargetResult.resolution;
-  const afterAttackResult = services.applyAfterPlayerAttackDamage(
-    state,
-    attackResult.attackingPlayer,
-    attackResult.damageDealt,
-    attackResult.source
-  );
-  if (!afterAttackResult.ok || afterAttackResult.gameEnd !== undefined) {
-    return afterAttackResult;
-  }
-  return executeAttackBranches(
-    state,
-    attackResult.attackingPlayer,
-    effect,
-    attackResult.source,
-    attackResult.targetPlayer,
-    attackResult,
-    services
-  );
-}
-
-function applyAfterResolvedAttackDamage(
-  state: GameState,
-  attackResults: readonly AttackResolution[],
-  services: EffectRuntimeServices
-): EffectExecutionResult {
-  for (const attribution of summarizeAttackDamage(attackResults)) {
-    const result = services.applyAfterPlayerAttackDamage(
-      state,
-      attribution.attackingPlayer,
-      attribution.damageDealt,
-      attribution.source
-    );
-    if (!result.ok || result.gameEnd !== undefined) {
-      return result;
-    }
-  }
-  return { ok: true };
 }
 
 const avoidAttackHandler: EffectRuntimeHandler<AvoidAttackRuntimeEffect> = {
@@ -3549,8 +3308,6 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
       return amount;
     }
 
-    const attackProfile = services.getAttackProfile(state, player, source);
-    const attackAmount = amount.value + attackProfile.damageBonus;
     const leftFoes = services.getOpponentsInSeatingOrder(state, player);
     const rightFoes = [...leftFoes].reverse();
     const directionChoice = services.chooseEffectChoice(
@@ -3573,61 +3330,39 @@ const directionalChainAttackHandler: EffectRuntimeHandler = {
         },
       ]
     );
-    const foes =
+    const chosenFoes =
       directionChoice?.choiceKind === "directionalPlayerTarget"
         ? directionChoice.players
         : [];
-    const attacked = new Set<string>();
-
-    recordGameEvent(state, {
-      type: "attackCreated",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: "directional_chain_attack",
-      amount: attackAmount,
-      sourceType: source.sourceType,
+    const attackedPlayerIds = new Set<PlayerState["playerId"]>();
+    const foes = chosenFoes.filter((targetPlayer) => {
+      if (attackedPlayerIds.has(targetPlayer.playerId)) {
+        return false;
+      }
+      attackedPlayerIds.add(targetPlayer.playerId);
+      return true;
     });
+    const attackProfile = services.getAttackProfile(state, player, source);
 
-    const attackResults: AttackResolution[] = [];
-    for (const targetPlayer of foes) {
-      if (attacked.has(targetPlayer.playerId)) {
-        continue;
-      }
-
-      attacked.add(targetPlayer.playerId);
-      const attackTargetResult = services.resolveAttackTarget(state, {
-        attackingPlayer: player,
-        targetPlayer,
-        amount: attackAmount,
-        effectId: "directional_chain_attack",
-        source,
-        unavoidable: attackProfile.unavoidable,
-        baseAmount: amount.value,
-      });
-      if (!attackTargetResult.ok) {
-        return attackTargetResult;
-      }
-      if (attackTargetResult.gameEnd !== undefined) {
-        return { ok: true, gameEnd: attackTargetResult.gameEnd };
-      }
-      const attackResult = attackTargetResult.resolution;
-      attackResults.push(attackResult);
-      if (!attackResult.killed) {
-        break;
-      }
-    }
-
-    const afterAttackResult = applyAfterResolvedAttackDamage(
+    return services.resolvePlayerControlledAttack({
       state,
-      attackResults,
-      services
-    );
-    if (!afterAttackResult.ok || afterAttackResult.gameEnd !== undefined) {
-      return afterAttackResult;
-    }
-
-    return { ok: true };
+      attackingPlayer: player,
+      source,
+      effectId: effect.effectId,
+      unavoidable: attackProfile.unavoidable,
+      targetPlan: {
+        kind: "orderedPlayers",
+        players: foes,
+        continueWhile: "targetKilled",
+      },
+      impact: {
+        kind: "damage",
+        baseAmount: amount.value,
+        sourceOwnerModifierAmount: attackProfile.damageBonus,
+        onDamageDealt: effect.onDamageDealt ?? [],
+        onKill: effect.onKill ?? [],
+      },
+    });
   },
 };
 
@@ -3664,53 +3399,25 @@ const multiTargetAttackHandler: EffectRuntimeHandler = {
     if (!amount.ok) {
       return amount;
     }
-
     const attackProfile = services.getAttackProfile(state, player, source);
-    const attackAmount = amount.value + attackProfile.damageBonus;
-    recordGameEvent(state, {
-      type: "attackCreated",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: "multi_target_attack",
-      amount: attackAmount,
-      sourceType: source.sourceType,
-    });
-
-    const attackResults: AttackResolution[] = [];
-    for (const targetPlayer of services.getOpponentsInSeatingOrder(
+    return services.resolvePlayerControlledAttack({
       state,
-      player
-    )) {
-      const attackTargetResult = services.resolveAttackTarget(state, {
-        attackingPlayer: player,
-        targetPlayer,
-        amount: attackAmount,
-        effectId: "multi_target_attack",
-        source,
-        unavoidable: attackProfile.unavoidable,
+      attackingPlayer: player,
+      source,
+      effectId: effect.effectId,
+      unavoidable: attackProfile.unavoidable,
+      targetPlan: {
+        kind: "orderedPlayers",
+        players: services.getOpponentsInSeatingOrder(state, player),
+      },
+      impact: {
+        kind: "damage",
         baseAmount: amount.value,
-      });
-      if (!attackTargetResult.ok) {
-        return attackTargetResult;
-      }
-      if (attackTargetResult.gameEnd !== undefined) {
-        return { ok: true, gameEnd: attackTargetResult.gameEnd };
-      }
-      const attackResult = attackTargetResult.resolution;
-      attackResults.push(attackResult);
-    }
-
-    const afterAttackResult = applyAfterResolvedAttackDamage(
-      state,
-      attackResults,
-      services
-    );
-    if (!afterAttackResult.ok || afterAttackResult.gameEnd !== undefined) {
-      return afterAttackResult;
-    }
-
-    return { ok: true };
+        sourceOwnerModifierAmount: attackProfile.damageBonus,
+        onDamageDealt: effect.onDamageDealt ?? [],
+        onKill: effect.onKill ?? [],
+      },
+    });
   },
 };
 
@@ -4526,58 +4233,6 @@ function payOptionalCosts(
   return { ok: true };
 }
 
-function executeAttackBranches(
-  state: GameState,
-  player: PlayerState,
-  effect: RuntimeEffectPayload,
-  source: EffectSourceContext,
-  targetPlayer: PlayerState,
-  attackResult: DamageResult & { avoided: boolean },
-  services: EffectRuntimeServices
-): EffectExecutionResult {
-  if (attackResult.avoided) {
-    return { ok: true };
-  }
-
-  const onDamageDealt = effect.onDamageDealt;
-  if (onDamageDealt !== undefined) {
-    for (const branch of onDamageDealt) {
-      const result = executeAttackBranch(
-        state,
-        player,
-        branch,
-        source,
-        targetPlayer,
-        attackResult,
-        services
-      );
-      if (!result.ok) {
-        return result;
-      }
-    }
-  }
-
-  const onKill = effect.onKill;
-  if (attackResult.killed && onKill !== undefined) {
-    for (const branch of onKill) {
-      const result = executeAttackBranch(
-        state,
-        player,
-        branch,
-        source,
-        targetPlayer,
-        attackResult,
-        services
-      );
-      if (!result.ok) {
-        return result;
-      }
-    }
-  }
-
-  return { ok: true };
-}
-
 function collectMayhemAttackDefenseDecisions(
   state: GameState,
   targets: readonly PlayerState[],
@@ -4652,7 +4307,7 @@ function collectMayhemAttackDefenseDecisions(
   return { ok: true, decisions };
 }
 
-function executeAttackBranch(
+export function executeAttackOutcomeBranch(
   state: GameState,
   player: PlayerState,
   branch: AttackOutcomeBranch,
