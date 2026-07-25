@@ -77,6 +77,87 @@ test("game state invariants reject the same card instance in two zones", () => {
   );
 });
 
+test("game state invariants use descriptor owner metadata for player and common zones", () => {
+  const playerState = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60616,
+  });
+  const player = playerState.players[0];
+  assert.ok(player);
+  const familiar = player.hand.shift();
+  assert.ok(familiar);
+  familiar.ownerId = "common";
+  player.unboughtFamiliar = familiar;
+
+  assert.throws(
+    () => assertGameStateInvariants(playerState),
+    new RegExp(
+      `${familiar.instanceId} in ${player.playerId}\\.unboughtFamiliar must be owned by ${player.playerId}`
+    )
+  );
+
+  const commonState = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60617,
+  });
+  const commonPlayer = commonState.players[0];
+  const mainDeckCard = commonState.common.mainDeck[0];
+  assert.ok(commonPlayer);
+  assert.ok(mainDeckCard);
+  mainDeckCard.ownerId = commonPlayer.playerId;
+
+  assert.throws(
+    () => assertGameStateInvariants(commonState),
+    new RegExp(
+      `${mainDeckCard.instanceId} in mainDeck must be owned by common`
+    )
+  );
+});
+
+test("game state invariants validate market chips in destroyed card zones", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60618,
+  });
+  const card = state.common.market.shift();
+  assert.ok(card);
+  card.marketChips = -1;
+  state.common.destroyedMayhem.push(card);
+
+  assert.throws(
+    () => assertGameStateInvariants(state),
+    new RegExp(
+      `${card.instanceId} in destroyedMayhem must have marketChips >= 0`
+    )
+  );
+});
+
+test("game state invariants detect duplicates across singleton, destroyed, and array zones", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60619,
+  });
+  const player = state.players[0];
+  const card = player?.hand[0];
+  assert.ok(player);
+  assert.ok(card);
+
+  player.unboughtFamiliar = card;
+  state.common.destroyedMegaMayhem.push(card);
+
+  assert.throws(
+    () => assertGameStateInvariants(state),
+    new RegExp(
+      `card ${card.instanceId} appears in multiple zones: ` +
+        `${player.playerId}\\.hand, ${player.playerId}\\.unboughtFamiliar, destroyedMegaMayhem`
+    )
+  );
+});
+
 test("game state invariants reject a missing active player", () => {
   const state = initializeGame({
     rootDir,
