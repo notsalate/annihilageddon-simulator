@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { initializeGame } from "../src/index.js";
 import {
+  buildDefensePaymentPlan,
   resolveDefenseWindow,
   type AttackDefenseServices,
 } from "../src/engine/attack-defense.js";
@@ -14,11 +15,150 @@ import {
   type EffectChoice,
   type EffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
-import type { GameState, PlayerState } from "../src/engine/setup.js";
+import type { CardInstance, GameState, PlayerState } from "../src/engine/setup.js";
 import { markPlayerId } from "../src/domain/types.js";
 import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 
 const rootDir = process.cwd();
+
+
+test("defense payment plan builds mixed cumulative steps in cost order", () => {
+  const { state, defender } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf");
+  const [firstCard, secondCard] = moveDeckCardsToHand(defender, 2);
+  assert.ok(firstCard);
+  assert.ok(secondCard);
+  defender.chips = 8;
+  defender.life.current = 10;
+
+  const result = buildDefensePaymentPlan(defender, defense, [
+    { costId: "spend_chips", amount: 2 },
+    { costId: "pay_life", amount: 3 },
+    { costId: "discard_other_hand_card" },
+    { costId: "spend_chips", amount: 4 },
+    { costId: "pay_life", amount: 2 },
+    { costId: "discard_other_hand_card" },
+  ]);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.plan, {
+    playerId: defender.playerId,
+    defenseCardInstanceId: defense.instanceId,
+    startingChips: 8,
+    startingLife: 10,
+    steps: [
+      { kind: "spendChips", amount: 2, chipsBefore: 8, chipsAfter: 6 },
+      { kind: "payLife", amount: 3, lifeBefore: 10, lifeAfter: 7 },
+      { kind: "discardOtherHandCard", cardInstanceId: firstCard.instanceId },
+      { kind: "spendChips", amount: 4, chipsBefore: 6, chipsAfter: 2 },
+      { kind: "payLife", amount: 2, lifeBefore: 7, lifeAfter: 5 },
+      { kind: "discardOtherHandCard", cardInstanceId: secondCard.instanceId },
+    ],
+  });
+  assert.equal(Object.isFrozen(result.plan), true);
+  assert.equal(Object.isFrozen(result.plan.steps), true);
+  assert.equal(result.plan.steps.every((step) => Object.isFrozen(step)), true);
+});
+
+test("defense payment plan reserves duplicate discard costs in hand order", () => {
+  const { state, defender } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf");
+  const [firstCard, secondCard] = moveDeckCardsToHand(defender, 2);
+  assert.ok(firstCard);
+  assert.ok(secondCard);
+
+  const result = buildDefensePaymentPlan(defender, defense, [
+    { costId: "discard_other_hand_card" },
+    { costId: "discard_other_hand_card" },
+  ]);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.plan.steps, [
+    { kind: "discardOtherHandCard", cardInstanceId: firstCard.instanceId },
+    { kind: "discardOtherHandCard", cardInstanceId: secondCard.instanceId },
+  ]);
+});
+
+test("defense payment plan rejects cumulatively insufficient chips", () => {
+  const { state, defender } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf");
+  defender.chips = 5;
+
+  const result = buildDefensePaymentPlan(defender, defense, [
+    { costId: "spend_chips", amount: 3 },
+    { costId: "spend_chips", amount: 3 },
+  ]);
+
+  assert.equal(result.ok, false);
+});
+
+test("defense payment plan rejects cumulatively lethal life payment", () => {
+  const { state, defender } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf");
+  defender.life.current = 5;
+
+  const result = buildDefensePaymentPlan(defender, defense, [
+    { costId: "pay_life", amount: 2 },
+    { costId: "pay_life", amount: 3 },
+  ]);
+
+  assert.equal(result.ok, false);
+});
+
+test("defense payment plan rejects unavailable other hand cards", () => {
+  const { state, defender } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf");
+  moveDeckCardsToHand(defender, 1);
+
+  const result = buildDefensePaymentPlan(defender, defense, [
+    { costId: "discard_other_hand_card" },
+    { costId: "discard_other_hand_card" },
+  ]);
+
+  assert.equal(result.ok, false);
+});
+
+test("defense payment preflight does not mutate state, events, or RNG", () => {
+  const { state, defender } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf");
+  moveDeckCardsToHand(defender, 1);
+  defender.chips = 4;
+  defender.life.current = 6;
+  const handBefore = [...defender.hand];
+  const discardBefore = [...defender.discard];
+  const eventLogBefore = structuredClone(state.eventLog);
+  const expectedRng = state.rng.fork();
+
+  const result = buildDefensePaymentPlan(defender, defense, [
+    { costId: "discard_other_hand_card" },
+    { costId: "spend_chips", amount: 2 },
+    { costId: "pay_life", amount: 3 },
+  ]);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(defender.hand, handBefore);
+  assert.deepEqual(defender.discard, discardBefore);
+  assert.equal(defender.chips, 4);
+  assert.equal(defender.life.current, 6);
+  assert.deepEqual(state.eventLog, eventLogBefore);
+  assert.equal(state.rng.next(), expectedRng.next());
+});
+
+test("defense payment plan treats missing and empty costs as an empty plan", () => {
+  const { state, defender } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf");
+
+  const missing = buildDefensePaymentPlan(defender, defense, undefined);
+  const empty = buildDefensePaymentPlan(defender, defense, []);
+
+  assert.equal(missing.ok, true);
+  assert.equal(empty.ok, true);
+  if (!missing.ok || !empty.ok) return;
+  assert.deepEqual(missing.plan.steps, []);
+  assert.deepEqual(empty.plan.steps, []);
+});
 
 test("defense module preserves an explicit decline without mutations", () => {
   const { state, attacker, defender, source } = createScenario();
@@ -132,6 +272,145 @@ test("defense module excludes defenses requiring more other cards than are avail
   assert.deepEqual(defender.hand, [defense, otherCard]);
 });
 
+
+
+test("defense module commits exact planned cards and costs in event order", () => {
+  const { state, attacker, defender, source } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
+    costs: [
+      { costId: "spend_chips", amount: 2 },
+      { costId: "discard_other_hand_card" },
+      { costId: "pay_life", amount: 3 },
+      { costId: "spend_chips", amount: 1 },
+      { costId: "discard_other_hand_card" },
+    ],
+  });
+  const [firstCard, secondCard, untouchedCard] = moveDeckCardsToHand(defender, 3);
+  assert.ok(firstCard);
+  assert.ok(secondCard);
+  assert.ok(untouchedCard);
+  defender.chips = 5;
+  defender.life.current = 9;
+  const services = createServices((choices) =>
+    choices.find((choice) => choice.choiceId === defense.instanceId)
+  );
+
+  const result = resolveDefenseWindow(
+    state,
+    defender,
+    redirectableAttack(attacker, source),
+    services
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(defender.chips, 2);
+  assert.equal(defender.life.current, 6);
+  assert.deepEqual(
+    defender.hand.map((card) => card.instanceId),
+    [untouchedCard.instanceId]
+  );
+  assert.deepEqual(
+    defender.discard.map((card) => card.instanceId),
+    [firstCard.instanceId, secondCard.instanceId, defense.instanceId]
+  );
+  const costEvents = state.eventLog.filter(
+    (event) => event.type === "defenseCostPaid"
+  );
+  assert.deepEqual(
+    costEvents.map((event) => event.effectId),
+    [
+      "spend_chips",
+      "discard_other_hand_card",
+      "pay_life",
+      "spend_chips",
+      "discard_other_hand_card",
+    ]
+  );
+  assert.deepEqual(
+    costEvents
+      .filter((event) => event.effectId === "discard_other_hand_card")
+      .map((event) => event.targetCardInstanceId),
+    [firstCard.instanceId, secondCard.instanceId]
+  );
+});
+
+test("defense module rejects a stale payment plan before partial commit", () => {
+  const { state, attacker, defender, source } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
+    costs: [
+      { costId: "spend_chips", amount: 2 },
+      { costId: "pay_life", amount: 2 },
+    ],
+  });
+  defender.chips = 5;
+  defender.life.current = 8;
+  const eventLogBefore = structuredClone(state.eventLog);
+  const services = createServices((choices) => {
+    defender.chips = 4;
+    return choices.find((choice) => choice.choiceId === defense.instanceId);
+  });
+
+  const result = resolveDefenseWindow(
+    state,
+    defender,
+    redirectableAttack(attacker, source),
+    services
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /expected 5 chips, found 4/);
+  assert.equal(defender.chips, 4);
+  assert.equal(defender.life.current, 8);
+  assert.equal(defender.hand.includes(defense), true);
+  assert.equal(defender.discard.includes(defense), false);
+  assert.deepEqual(state.eventLog, eventLogBefore);
+});
+
+test("terminal defense branch keeps committed payment plan", () => {
+  const { state, attacker, defender, source } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
+    costs: [
+      { costId: "spend_chips", amount: 2 },
+      { costId: "pay_life", amount: 3 },
+    ],
+    branchEffects: [{ effectId: "draw_cards", timing: "onDefense", amount: 1 }],
+  });
+  defender.chips = 5;
+  defender.life.current = 10;
+  const gameEnd = {
+    reason: "playerDefeated" as const,
+    winnerPlayerId: defender.playerId,
+  };
+  const services = createServices(
+    (choices) =>
+      choices.find((choice) => choice.choiceId === defense.instanceId),
+    {
+      executeDefenseEffects() {
+        return { ok: true, gameEnd };
+      },
+    }
+  );
+
+  const result = resolveDefenseWindow(
+    state,
+    defender,
+    redirectableAttack(attacker, source),
+    services
+  );
+
+  assert.deepEqual(result, { ok: true, avoided: true, gameEnd });
+  assert.equal(defender.chips, 3);
+  assert.equal(defender.life.current, 7);
+  assert.equal(defender.hand.includes(defense), false);
+  assert.equal(defender.discard.includes(defense), true);
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "defenseCostPaid")
+      .map((event) => event.effectId),
+    ["spend_chips", "pay_life"]
+  );
+});
 test("defense module applies the exact selected defense", () => {
   const { state, attacker, defender, source } = createScenario();
   const first = addFixtureDefenseCardToHand(state, defender, "discardSelf");
@@ -333,6 +612,17 @@ function createScenario(): {
     definitionId: "fixture-attack-source",
   };
   return { state, attacker, defender, source };
+}
+
+
+function moveDeckCardsToHand(
+  player: PlayerState,
+  count: number
+): CardInstance[] {
+  const cards = player.deck.splice(0, count);
+  assert.equal(cards.length, count);
+  player.hand.push(...cards);
+  return cards;
 }
 
 function mustGetPlayer(

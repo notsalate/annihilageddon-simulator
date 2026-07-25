@@ -49,6 +49,88 @@ const commonZoneNames = [
   "destroyedMegaMayhem",
 ] as const;
 
+
+test("failed defense branch restores committed payment, events, usage, and RNG", () => {
+  const state = initializeGame({ rootDir, seed: 47505 });
+  const attacker = mustGetPlayer(state, 0);
+  const defender = mustGetPlayer(state, 1);
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  defender.discard = [];
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    defender,
+    "discardSelf",
+    {
+      costs: [
+        { costId: "spend_chips", amount: 2 },
+        { costId: "discard_other_hand_card" },
+        { costId: "pay_life", amount: 2 },
+      ],
+      branchEffects: rollbackBranchEffects,
+    }
+  );
+  const paymentCard = defender.deck.shift();
+  assert.ok(paymentCard);
+  defender.hand.push(paymentCard);
+  defender.chips = 5;
+  defender.life.current = 8;
+  const attack = redirectableAttack(attacker);
+  const zoneMembershipBefore = snapshotZoneMembership(state);
+  const eventLogBefore = structuredClone(state.eventLog);
+  const expectedRng = state.rng.fork();
+  const defendedPlayerIdsBefore = [...attack.defenseUsage.defendedPlayerIds];
+  const usedDefenseCardInstanceIdsBefore = [
+    ...attack.defenseUsage.usedDefenseCardInstanceIds,
+  ];
+
+  const services: AttackDefenseServices = {
+    chooseEffectChoice(_state, _player, _source, _effectId, choices) {
+      return choices.find(
+        (choice) =>
+          choice.choiceKind === "defense" && choice.card === defenseCard
+      );
+    },
+    executeDefenseEffects(branchState, player) {
+      assert.equal(player.chips, 3);
+      assert.equal(player.life.current, 6);
+      assert.equal(player.discard.includes(paymentCard), true);
+      assert.equal(
+        branchState.eventLog.filter(
+          (event) => event.type === "defenseCostPaid"
+        ).length,
+        3
+      );
+      branchState.rng.next();
+      player.chips += 11;
+      return { ok: false, error: "fixture paid branch failure" };
+    },
+    resolveRedirectedAttack() {
+      throw new Error("failed branch must not redirect");
+    },
+  };
+
+  const result = resolveDefenseWindow(state, defender, attack, services);
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "fixture paid branch failure",
+  });
+  assert.equal(defender.chips, 5);
+  assert.equal(defender.life.current, 8);
+  assert.deepEqual(snapshotZoneMembership(state), zoneMembershipBefore);
+  assert.deepEqual(state.eventLog, eventLogBefore);
+  assert.equal(state.rng.next(), expectedRng.next());
+  assert.deepEqual(
+    [...attack.defenseUsage.defendedPlayerIds],
+    defendedPlayerIdsBefore
+  );
+  assert.deepEqual(
+    [...attack.defenseUsage.usedDefenseCardInstanceIds],
+    usedDefenseCardInstanceIdsBefore
+  );
+});
+
 test("declining defense avoids rollback snapshot and preserves observable state and RNG", () => {
   const state = createScenario(47500);
   const control = createScenario(47500);

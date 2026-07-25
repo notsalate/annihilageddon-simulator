@@ -8,6 +8,7 @@ import {
   isAvoidAttackRuntimeEffect,
   type AvoidAttackRuntimeEffect,
   type RuntimeEffect,
+  type RuntimeEffectCost,
   type RuntimeEffectId,
 } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
@@ -40,6 +41,43 @@ export interface AttackDefenseServices {
     state: GameState,
     intent: AttackIntent
   ): AttackTargetResolutionResult;
+}
+
+export type DefensePaymentStep =
+  | {
+      readonly kind: "discardOtherHandCard";
+      readonly cardInstanceId: CardInstance["instanceId"];
+    }
+  | {
+      readonly kind: "spendChips";
+      readonly amount: number;
+      readonly chipsBefore: number;
+      readonly chipsAfter: number;
+    }
+  | {
+      readonly kind: "payLife";
+      readonly amount: number;
+      readonly lifeBefore: number;
+      readonly lifeAfter: number;
+    };
+
+export interface DefensePaymentPlan {
+  readonly playerId: PlayerState["playerId"];
+  readonly defenseCardInstanceId: CardInstance["instanceId"];
+  readonly startingChips: number;
+  readonly startingLife: number;
+  readonly steps: readonly DefensePaymentStep[];
+}
+
+export type DefensePaymentPlanResult =
+  | { readonly ok: true; readonly plan: DefensePaymentPlan }
+  | { readonly ok: false; readonly reason: string };
+
+interface LegalDefense {
+  readonly card: CardInstance;
+  readonly destination: "discardSelf" | "topdeckSelf";
+  readonly effect: AvoidAttackRuntimeEffect;
+  readonly paymentPlan: DefensePaymentPlan;
 }
 
 interface DefensePlayerMutationSnapshot {
@@ -277,16 +315,19 @@ export function resolveDefenseWindow(
     effectId: "avoid_attack",
   });
 
-  if (!payDefenseCosts(state, defendingPlayer, defense.card, defense.effect)) {
+  const paymentResult = commitDefensePaymentPlan(
+    state,
+    defendingPlayer,
+    defense.card,
+    defense.paymentPlan
+  );
+  if (!paymentResult.ok) {
     restoreDefenseMutationSnapshot(
       state,
       attack.defenseUsage,
       mutationSnapshot
     );
-    return {
-      ok: false,
-      error: `Cannot pay defense costs for ${defense.card.instanceId}`,
-    };
+    return paymentResult;
   }
 
   attack.defenseUsage.defendedPlayerIds.add(defendingPlayer.playerId);
@@ -464,16 +505,8 @@ function findLegalDefenses(
   state: GameState,
   defendingPlayer: PlayerState,
   defenseUsage: AttackDefenseUsage
-): Array<{
-  card: CardInstance;
-  destination: "discardSelf" | "topdeckSelf";
-  effect: AvoidAttackRuntimeEffect;
-}> {
-  const legalDefenses: Array<{
-    card: CardInstance;
-    destination: "discardSelf" | "topdeckSelf";
-    effect: AvoidAttackRuntimeEffect;
-  }> = [];
+): LegalDefense[] {
+  const legalDefenses: LegalDefense[] = [];
   for (const card of defendingPlayer.hand) {
     if (defenseUsage.usedDefenseCardInstanceIds.has(card.instanceId)) {
       continue;
@@ -489,87 +522,153 @@ function findLegalDefenses(
         return isAvoidAttackRuntimeEffect(effect);
       }
     );
-    if (
-      defenseEffect !== undefined &&
-      canPayDefenseCosts(defendingPlayer, card, defenseEffect)
-    ) {
-      legalDefenses.push({
-        card,
-        destination: defenseEffect.destination,
-        effect: defenseEffect,
-      });
+    if (defenseEffect === undefined) {
+      continue;
     }
+
+    const paymentPlanResult = buildDefensePaymentPlan(
+      defendingPlayer,
+      card,
+      defenseEffect.costs
+    );
+    if (!paymentPlanResult.ok) {
+      continue;
+    }
+
+    legalDefenses.push({
+      card,
+      destination: defenseEffect.destination,
+      effect: defenseEffect,
+      paymentPlan: paymentPlanResult.plan,
+    });
   }
 
   return legalDefenses;
 }
 
-function canPayDefenseCosts(
+export function buildDefensePaymentPlan(
   defendingPlayer: PlayerState,
   defenseCard: CardInstance,
-  defenseEffect: RuntimeEffect
-): boolean {
-  const { costs } = defenseEffect;
-  if (costs === undefined) {
-    return true;
-  }
-
+  costs: readonly RuntimeEffectCost[] | undefined
+): DefensePaymentPlanResult {
   let remainingChips = defendingPlayer.chips;
-  let remainingPayableLife = defendingPlayer.life.current - 1;
-  let remainingOtherCards = defendingPlayer.hand.filter(
-    (card) => card.instanceId !== defenseCard.instanceId
-  ).length;
+  let remainingLife = defendingPlayer.life.current;
+  const reservedCardInstanceIds = new Set<CardInstance["instanceId"]>();
+  const steps: DefensePaymentStep[] = [];
 
-  for (const cost of costs) {
+  for (const cost of costs ?? []) {
     switch (cost.costId) {
-      case "discard_other_hand_card":
-        if (remainingOtherCards < 1) {
-          return false;
+      case "discard_other_hand_card": {
+        const card = defendingPlayer.hand.find(
+          (candidate) =>
+            candidate.instanceId !== defenseCard.instanceId &&
+            !reservedCardInstanceIds.has(candidate.instanceId)
+        );
+        if (card === undefined) {
+          return {
+            ok: false,
+            reason: `Player ${defendingPlayer.playerId} does not have another hand card to discard`,
+          };
         }
-        remainingOtherCards -= 1;
+
+        reservedCardInstanceIds.add(card.instanceId);
+        steps.push(
+          Object.freeze({
+            kind: "discardOtherHandCard",
+            cardInstanceId: card.instanceId,
+          })
+        );
         break;
-      case "spend_chips":
+      }
+      case "spend_chips": {
         if (remainingChips < cost.amount) {
-          return false;
+          return {
+            ok: false,
+            reason: `Player ${defendingPlayer.playerId} cannot spend ${cost.amount} chips`,
+          };
         }
+
+        const chipsBefore = remainingChips;
         remainingChips -= cost.amount;
+        steps.push(
+          Object.freeze({
+            kind: "spendChips",
+            amount: cost.amount,
+            chipsBefore,
+            chipsAfter: remainingChips,
+          })
+        );
         break;
-      case "pay_life":
-        if (remainingPayableLife < cost.amount) {
-          return false;
+      }
+      case "pay_life": {
+        if (remainingLife - cost.amount < 1) {
+          return {
+            ok: false,
+            reason: `Player ${defendingPlayer.playerId} cannot pay ${cost.amount} life`,
+          };
         }
-        remainingPayableLife -= cost.amount;
+
+        const lifeBefore = remainingLife;
+        remainingLife -= cost.amount;
+        steps.push(
+          Object.freeze({
+            kind: "payLife",
+            amount: cost.amount,
+            lifeBefore,
+            lifeAfter: remainingLife,
+          })
+        );
         break;
+      }
     }
   }
 
-  return true;
+  return {
+    ok: true,
+    plan: Object.freeze({
+      playerId: defendingPlayer.playerId,
+      defenseCardInstanceId: defenseCard.instanceId,
+      startingChips: defendingPlayer.chips,
+      startingLife: defendingPlayer.life.current,
+      steps: Object.freeze(steps),
+    }),
+  };
 }
 
-function payDefenseCosts(
+function commitDefensePaymentPlan(
   state: GameState,
   defendingPlayer: PlayerState,
   defenseCard: CardInstance,
-  defenseEffect: RuntimeEffect
-): boolean {
-  const { costs } = defenseEffect;
-  if (costs === undefined) {
-    return true;
+  plan: DefensePaymentPlan
+): { ok: true } | { ok: false; error: string } {
+  const validationError = validateDefensePaymentPlan(
+    defendingPlayer,
+    defenseCard,
+    plan
+  );
+  if (validationError !== undefined) {
+    return { ok: false, error: validationError };
   }
 
-  for (const cost of costs) {
-    switch (cost.costId) {
-      case "discard_other_hand_card": {
+  for (const step of plan.steps) {
+    switch (step.kind) {
+      case "discardOtherHandCard": {
         const paidCardIndex = defendingPlayer.hand.findIndex(
-          (card) => card.instanceId !== defenseCard.instanceId
+          (card) => card.instanceId === step.cardInstanceId
         );
         if (paidCardIndex < 0) {
-          return false;
+          return {
+            ok: false,
+            error: `Defense payment plan lost card ${step.cardInstanceId} after validation`,
+          };
         }
 
         const [paidCard] = defendingPlayer.hand.splice(paidCardIndex, 1);
         if (paidCard === undefined) {
-          return false;
+          return {
+            ok: false,
+            error: `Defense payment plan could not remove card ${step.cardInstanceId}`,
+          };
         }
 
         defendingPlayer.discard.push(paidCard);
@@ -580,49 +679,115 @@ function payDefenseCosts(
           definitionId: defenseCard.definitionId,
           targetCardInstanceId: paidCard.instanceId,
           targetDefinitionId: paidCard.definitionId,
-          effectId: cost.costId,
+          effectId: "discard_other_hand_card",
         });
         break;
       }
-      case "spend_chips": {
-        if (defendingPlayer.chips < cost.amount) {
-          return false;
-        }
-
-        defendingPlayer.chips -= cost.amount;
+      case "spendChips":
+        defendingPlayer.chips = step.chipsAfter;
         recordGameEvent(state, {
           type: "defenseCostPaid",
           playerId: defendingPlayer.playerId,
           cardInstanceId: defenseCard.instanceId,
           definitionId: defenseCard.definitionId,
-          effectId: cost.costId,
-          amount: cost.amount,
-          chipsBefore: defendingPlayer.chips + cost.amount,
-          chipsAfter: defendingPlayer.chips,
+          effectId: "spend_chips",
+          amount: step.amount,
+          chipsBefore: step.chipsBefore,
+          chipsAfter: step.chipsAfter,
         });
         break;
-      }
-      case "pay_life": {
-        if (defendingPlayer.life.current - cost.amount < 1) {
-          return false;
-        }
-
-        const lifeBefore = defendingPlayer.life.current;
-        defendingPlayer.life.current -= cost.amount;
+      case "payLife":
+        defendingPlayer.life.current = step.lifeAfter;
         recordGameEvent(state, {
           type: "defenseCostPaid",
           playerId: defendingPlayer.playerId,
           cardInstanceId: defenseCard.instanceId,
           definitionId: defenseCard.definitionId,
-          effectId: cost.costId,
-          amount: cost.amount,
-          lifeBefore,
-          lifeAfter: defendingPlayer.life.current,
+          effectId: "pay_life",
+          amount: step.amount,
+          lifeBefore: step.lifeBefore,
+          lifeAfter: step.lifeAfter,
         });
         break;
-      }
     }
   }
 
-  return true;
+  return { ok: true };
+}
+
+function validateDefensePaymentPlan(
+  defendingPlayer: PlayerState,
+  defenseCard: CardInstance,
+  plan: DefensePaymentPlan
+): string | undefined {
+  if (plan.playerId !== defendingPlayer.playerId) {
+    return `Defense payment plan belongs to player ${plan.playerId}, not ${defendingPlayer.playerId}`;
+  }
+  if (plan.defenseCardInstanceId !== defenseCard.instanceId) {
+    return `Defense payment plan belongs to card ${plan.defenseCardInstanceId}, not ${defenseCard.instanceId}`;
+  }
+  if (
+    defendingPlayer.hand.filter(
+      (card) => card.instanceId === defenseCard.instanceId
+    ).length !== 1
+  ) {
+    return `Defense card ${defenseCard.instanceId} is not uniquely present in hand`;
+  }
+  if (defendingPlayer.chips !== plan.startingChips) {
+    return `Defense payment plan expected ${plan.startingChips} chips, found ${defendingPlayer.chips}`;
+  }
+  if (defendingPlayer.life.current !== plan.startingLife) {
+    return `Defense payment plan expected ${plan.startingLife} life, found ${defendingPlayer.life.current}`;
+  }
+
+  let expectedChips = plan.startingChips;
+  let expectedLife = plan.startingLife;
+  const plannedDiscardIds = new Set<CardInstance["instanceId"]>();
+
+  for (const step of plan.steps) {
+    if (step.kind === "discardOtherHandCard") {
+      if (step.cardInstanceId === defenseCard.instanceId) {
+        return "Defense payment plan cannot discard the Defense card as a cost";
+      }
+      if (plannedDiscardIds.has(step.cardInstanceId)) {
+        return `Defense payment plan repeats discard card ${step.cardInstanceId}`;
+      }
+      plannedDiscardIds.add(step.cardInstanceId);
+      if (
+        defendingPlayer.hand.filter(
+          (card) => card.instanceId === step.cardInstanceId
+        ).length !== 1
+      ) {
+        return `Defense payment card ${step.cardInstanceId} is not uniquely present in hand`;
+      }
+      continue;
+    }
+
+    if (step.kind === "spendChips") {
+      if (
+        !Number.isSafeInteger(step.amount) ||
+        step.amount < 0 ||
+        step.chipsBefore !== expectedChips ||
+        step.chipsAfter !== step.chipsBefore - step.amount ||
+        step.chipsAfter < 0
+      ) {
+        return "Defense payment plan has an inconsistent chip step";
+      }
+      expectedChips = step.chipsAfter;
+      continue;
+    }
+
+    if (
+      !Number.isSafeInteger(step.amount) ||
+      step.amount < 0 ||
+      step.lifeBefore !== expectedLife ||
+      step.lifeAfter !== step.lifeBefore - step.amount ||
+      step.lifeAfter < 1
+    ) {
+      return "Defense payment plan has an inconsistent life step";
+    }
+    expectedLife = step.lifeAfter;
+  }
+
+  return undefined;
 }
