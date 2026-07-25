@@ -1,20 +1,53 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { initializeGame, type GameState, type PlayerState } from "../src/index.js";
+import {
+  initializeGame,
+  type CardInstance,
+  type GameState,
+  type PlayerState,
+  type RuntimeEffect,
+} from "../src/index.js";
 import {
   resolveDefenseWindow,
   type AttackDefenseServices,
 } from "../src/engine/attack-defense.js";
 import { createAttackAmountState } from "../src/engine/attack-resolution.js";
 import {
+  listPhysicalCardZoneDescriptors,
+  type PhysicalCardZoneDescriptor,
+} from "../src/engine/control-ledger.js";
+import {
   createAttackDefenseUsage,
   type DefenseAttackContext,
   type EffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
+import { markCardInstanceId } from "../src/domain/types.js";
 import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 
 const rootDir = process.cwd();
+const rollbackBranchEffects: RuntimeEffect[] = [
+  { effectId: "add_power", timing: "onDefense", amount: 1 },
+];
+const playerZoneSuffixes = [
+  "deck",
+  "hand",
+  "discard",
+  "playedThisTurn",
+  "permanents",
+  "unboughtFamiliar",
+] as const;
+const commonZoneNames = [
+  "mainMarket",
+  "legendMarket",
+  "mainDeck",
+  "legendDeck",
+  "wildMagicStack",
+  "limpWandStack",
+  "destroyedPile",
+  "destroyedMayhem",
+  "destroyedMegaMayhem",
+] as const;
 
 test("declining defense avoids rollback snapshot and preserves observable state and RNG", () => {
   const state = createScenario(47500);
@@ -64,6 +97,121 @@ test("declining defense avoids rollback snapshot and preserves observable state 
   assert.equal(state.rng.next(), control.rng.next());
 });
 
+test("failed defense branches restore membership and mutable cards in every physical zone", async (t) => {
+  const inventoryState = createRollbackScenario(47510).state;
+  const descriptors = listPhysicalCardZoneDescriptors(inventoryState);
+  const requiredZoneNames = [
+    ...inventoryState.players.flatMap((player) =>
+      playerZoneSuffixes.map((suffix) => `${player.playerId}.${suffix}`)
+    ),
+    ...commonZoneNames,
+  ];
+  const descriptorZoneNames = descriptors.map(
+    (descriptor) => descriptor.zoneName
+  );
+
+  assert.deepEqual(descriptorZoneNames, requiredZoneNames);
+  assert.equal(new Set(descriptorZoneNames).size, descriptorZoneNames.length);
+
+  for (const [index, zoneName] of descriptorZoneNames.entries()) {
+    await t.test(zoneName, () => {
+      const { state, attacker, defender, defenseCard } = createRollbackScenario(
+        47520 + index
+      );
+      const attack = redirectableAttack(attacker);
+      const preexistingUsageCardId = markCardInstanceId(
+        `fixture-preexisting-defense-usage-${index}`
+      );
+      attack.defenseUsage.defendedPlayerIds.add(attacker.playerId);
+      attack.defenseUsage.usedDefenseCardInstanceIds.add(
+        preexistingUsageCardId
+      );
+
+      const targetDescriptor = mustGetDescriptor(state, zoneName);
+      const targetCard = targetDescriptor.read()[0];
+      assert.ok(targetCard);
+      const targetCardBefore = {
+        instanceId: targetCard.instanceId,
+        definitionId: targetCard.definitionId,
+        ownerId: targetCard.ownerId,
+        marketChips: targetCard.marketChips,
+      };
+      const membershipBefore = snapshotZoneMembership(state);
+      const eventLogBefore = structuredClone(state.eventLog);
+      const expectedRng = state.rng.fork();
+      const defendedPlayerIdsBefore = [
+        ...attack.defenseUsage.defendedPlayerIds,
+      ];
+      const usedDefenseCardInstanceIdsBefore = [
+        ...attack.defenseUsage.usedDefenseCardInstanceIds,
+      ];
+
+      const services: AttackDefenseServices = {
+        chooseEffectChoice(_state, _player, _source, _effectId, choices) {
+          return choices.find(
+            (choice) =>
+              choice.choiceKind === "defense" &&
+              choice.card === defenseCard
+          );
+        },
+        executeDefenseEffects(branchState) {
+          const descriptor = mustGetDescriptor(branchState, zoneName);
+          const cards = descriptor.read();
+          const card = cards[0];
+          assert.ok(card);
+          card.ownerId = card.ownerId === "common" ? attacker.playerId : "common";
+          card.marketChips += 17;
+          descriptor.replace([
+            {
+              instanceId: markCardInstanceId(
+                `fixture-branch-replacement-${index}`
+              ),
+              definitionId: card.definitionId,
+              ownerId: descriptor.expectedOwnerId ?? attacker.playerId,
+              marketChips: 99,
+            },
+          ]);
+          branchState.rng.next();
+          const latestEvent = branchState.eventLog.at(-1);
+          assert.ok(latestEvent);
+          branchState.eventLog.push(structuredClone(latestEvent));
+          return { ok: false, error: `fixture branch failure in ${zoneName}` };
+        },
+        resolveRedirectedAttack() {
+          throw new Error("failed branch must not redirect");
+        },
+      };
+
+      const result = resolveDefenseWindow(
+        state,
+        defender,
+        attack,
+        services
+      );
+
+      assert.deepEqual(result, {
+        ok: false,
+        error: `fixture branch failure in ${zoneName}`,
+      });
+      assert.deepEqual(snapshotZoneMembership(state), membershipBefore);
+      assert.equal(targetCard.instanceId, targetCardBefore.instanceId);
+      assert.equal(targetCard.definitionId, targetCardBefore.definitionId);
+      assert.equal(targetCard.ownerId, targetCardBefore.ownerId);
+      assert.equal(targetCard.marketChips, targetCardBefore.marketChips);
+      assert.equal(state.rng.next(), expectedRng.next());
+      assert.deepEqual(state.eventLog, eventLogBefore);
+      assert.deepEqual(
+        [...attack.defenseUsage.defendedPlayerIds],
+        defendedPlayerIdsBefore
+      );
+      assert.deepEqual(
+        [...attack.defenseUsage.usedDefenseCardInstanceIds],
+        usedDefenseCardInstanceIdsBefore
+      );
+    });
+  }
+});
+
 function createScenario(seed: number): GameState {
   const state = initializeGame({ rootDir, seed });
   const attacker = mustGetPlayer(state, 0);
@@ -79,6 +227,43 @@ function createScenario(seed: number): GameState {
   });
   defender.chips = 3;
   return state;
+}
+
+function createRollbackScenario(seed: number): {
+  state: GameState;
+  attacker: PlayerState;
+  defender: PlayerState;
+  defenseCard: CardInstance;
+} {
+  const state = initializeGame({ rootDir, seed });
+  const attacker = mustGetPlayer(state, 0);
+  const defender = mustGetPlayer(state, 1);
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    defender,
+    "discardSelf",
+    { branchEffects: rollbackBranchEffects }
+  );
+
+  for (const [index, descriptor] of listPhysicalCardZoneDescriptors(
+    state
+  ).entries()) {
+    if (descriptor.read().length > 0) {
+      continue;
+    }
+    descriptor.replace([
+      {
+        instanceId: markCardInstanceId(`fixture-zone-card-${seed}-${index}`),
+        definitionId: defenseCard.definitionId,
+        ownerId: descriptor.expectedOwnerId ?? attacker.playerId,
+        marketChips: index,
+      },
+    ]);
+  }
+
+  return { state, attacker, defender, defenseCard };
 }
 
 function redirectableAttack(attacker: PlayerState): DefenseAttackContext {
@@ -102,6 +287,28 @@ function fixtureSource(player: PlayerState): EffectSourceContext {
     cardInstanceId: "fixture-decline-snapshot-source",
     definitionId: "fixture-decline-snapshot-source",
   };
+}
+
+function mustGetDescriptor(
+  state: GameState,
+  zoneName: string
+): PhysicalCardZoneDescriptor {
+  const descriptor = listPhysicalCardZoneDescriptors(state).find(
+    (candidate) => candidate.zoneName === zoneName
+  );
+  assert.ok(descriptor);
+  return descriptor;
+}
+
+function snapshotZoneMembership(
+  state: GameState
+): ReadonlyMap<string, readonly CardInstance["instanceId"][]> {
+  return new Map(
+    listPhysicalCardZoneDescriptors(state).map((descriptor) => [
+      descriptor.zoneName,
+      descriptor.read().map((card) => card.instanceId),
+    ])
+  );
 }
 
 function mustGetPlayer(state: GameState, index: number): PlayerState {
