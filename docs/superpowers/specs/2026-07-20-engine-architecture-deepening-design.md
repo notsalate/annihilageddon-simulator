@@ -35,25 +35,31 @@ Defense costs, перемещение defense card и branch effects образ�
 
 Конфигурируемый builder защиты переносится из `tests/action-loop.test.ts` в отдельный helper с typed options. Тестовый файл использует публичный helper и больше не владеет созданием runtime definition/instance защиты. Helper выдаёт state-wide unique fixture IDs, `selectFirstFixtureDefense` пропускает production-карты, а сценарии с конкретной defense используют selector по ожидаемому `instanceId`.
 
-## Архитектурный кандидат 1: сфокусированные модули Attack Resolution
+## Архитектурный кандидат 1: глубокий модуль Attack Resolution
 
-Attack Resolution использует два сфокусированных модуля с явным владением. `attack-resolution.ts` владеет amount state, current-attacker modifiers и damage attribution; `attack-defense.ts` владеет voluntary Defense, atomic transaction, redirect chain и rollback. `effect-runtime.ts` остаётся adapter к этим модулям и сохраняет владение per-target lifecycle, событиями атаки и финальным нанесением урона. Поэтому эти модули не объявляются полной глубокой подсистемой до переноса общего lifecycle за единый seam.
+`attack-resolution.ts` владеет полным lifecycle обычной player-controlled атаки через единый public seam `resolvePlayerControlledAttack(intent, adapters)`. Он создаёт общий context, получает ordered targets, полностью разрешает каждую цель, управляет Defense/redirect recursion, выбирает момент damage/death boundary, выполняет outcome branches, собирает attribution, пишет attack events и запускает after-attack hooks. Следующая цель не начинается до завершения текущей; первая ошибка или `gameEnd` останавливает оставшийся lifecycle.
 
-### A1. Сгруппировать lifecycle context
+`attack-defense.ts` остаётся transactional submodule: legality, immutable payment plan, payment/movement/branch commit, redirect callback внутри snapshot boundary и полный rollback. Redirect resolver передаётся только владельцем lifecycle — Attack Resolution.
 
-Заменить длинные позиционные параметры объектами, именованными по domain concepts: attack identity, amount state и per-instance defense usage. На этом шаге поведение не меняется.
+`effect-runtime-registry.ts` переводит concrete typed attack payload в intent и не владеет target loop, Defense, damage/death, branches, attribution или after-attack sequencing. `effect-runtime.ts` предоставляет узкие adapters к selector, generic damage/death primitive, Defense transaction, catalog branch execution и Trigger Dispatch.
 
-### A2. Вынести расчёт attack amount
+Mayhem и Mega Mayhem сохраняют отдельный двухфазный domain flow и не используют ordinary player-controlled resolver.
 
-`src/engine/attack-resolution.ts` владеет базовым уроном, source-owner modifiers, current-attacker modifiers и суммированием компонентов. Callers передают именованный `AttackAmountState`; совместимый adapter в `effect-runtime.ts` может один раз восстановить state из legacy-пары `amount`/`baseAmount`, но остальной runtime не пересчитывает компоненты самостоятельно.
+### A1. Единый lifecycle context
 
-### A3. Вынести defense/redirect resolution
+Top-level context хранит original attacker/source, общий per-attack Defense usage и завершённые target resolutions. Для каждой цели создаётся current context с current attacker/source и amount state; redirect меняет current identity, но сохраняет original source и общий usage.
 
-`src/engine/attack-defense.ts` владеет legal defense choices, cumulative preflight, atomic payment, card movement, branch execution, redirect chain, terminal outcome и защитой от циклов. `effect-runtime.ts` передаёт services и адаптирует typed result обратно в effect path, но по-прежнему оркестрирует lifecycle отдельной цели, события начала/уклонения и финальное нанесение урона.
+### A2. Последовательное разрешение целей
 
-### A4. Централизовать результат и attribution
+Attack Resolution записывает создание атаки, получает стабильный ordered target plan и полностью завершает Defense, redirect, impact, immediate death/DWT consequences и outcome branches текущей цели до `attackTargetStarted` следующей. Amount вычисляется заново из актуального state для каждой цели.
 
-`attack-resolution.ts` возвращает типизированное состояние суммы и агрегирует фактический урон по current attacker/source. `effect-runtime.ts` формирует итоговый `AttackResolution` для single- и multi-target paths и передаёт нормализованную attribution в outcome branches.
+### A3. Transactional Defense и redirect
+
+Defense module атомарно применяет payment, movement и branch effects. Redirect рекурсивно возвращается в Attack Resolution через callback, созданный владельцем lifecycle; ошибка redirected path откатывает snapshot, RNG, events и usage sets исходной Defense transaction.
+
+### A4. Attribution и after-attack boundary
+
+После всех целей Attack Resolution агрегирует только положительный фактически нанесённый damage по current attacker/source и последовательно вызывает after-attack adapters. Fully avoided, no-damage и non-damage attacks не потребляют eligibility первого damaging attack.
 
 ## Архитектурный кандидат 2: глубокий module Control Ledger
 
