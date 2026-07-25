@@ -2647,6 +2647,14 @@ test("Avada Loshavra makes an undefended target Dingler and counts it for power"
   assert.equal(result.ok, true);
   assert.equal(hasDinglerStatus(targetPlayer), true);
   assert.equal(state.turn.power, 1);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "dinglerStatusGained" &&
+        event.playerId === targetPlayer.playerId &&
+        event.effectId === "attack_gain_status"
+    )
+  );
 });
 
 test("2F skips a defended lowest-life player and still applies Dingler max-life normalization to an undefended tie", () => {

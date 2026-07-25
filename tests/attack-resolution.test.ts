@@ -311,3 +311,484 @@ test("each player can use defense only once while one attack is redirected", () 
     2
   );
 });
+
+import { recordGameEvent } from "../src/engine/event-recorder.js";
+import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
+import type {
+  AttackOutcomeBranch,
+  RuntimeEffectPayload,
+} from "../src/engine/runtime-effect.js";
+import type {
+  GameState,
+  PlayerState,
+} from "../src/engine/setup.js";
+import {
+  resolvePlayerControlledAttack,
+  type AttackDamageAttribution,
+  type PlayerControlledAttackAdapters,
+  type PlayerControlledAttackIntent,
+} from "../src/engine/attack-resolution.js";
+
+test("player-controlled attack owns the single-target lifecycle through after-attack", () => {
+  const { state, attacker, targets, source } = createAttackResolutionHarness(43001, 2);
+  const [target] = targets;
+  assert.ok(target);
+  const lifeBefore = target.life.current;
+  const afterAttack: AttackDamageAttribution<EffectSourceContext>[] = [];
+  const adapters = createAttackAdapters({
+    applyAfterAttackDamage(_state, attribution) {
+      afterAttack.push(attribution);
+      recordGameEvent(state, {
+        type: "effectAddPowerApplied",
+        playerId: attribution.attackingPlayer.playerId,
+        cardInstanceId: attribution.source.cardInstanceId,
+        definitionId: attribution.source.definitionId,
+        effectId: "add_power",
+        amount: attribution.damageDealt,
+        powerBefore: state.turn.power,
+        powerAfter: state.turn.power + attribution.damageDealt,
+        sourceType: attribution.source.sourceType,
+      });
+      state.turn.power += attribution.damageDealt;
+      return { ok: true };
+    },
+  });
+
+  const result = resolvePlayerControlledAttack(
+    damageAttackIntent(state, attacker, source, [target], 4),
+    adapters
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(target.life.current, lifeBefore - 4);
+  assert.equal(afterAttack.length, 1);
+  assert.equal(afterAttack[0]?.damageDealt, 4);
+  assert.deepEqual(attackLifecycleEventTypes(state), [
+    "attackCreated",
+    "attackTargetStarted",
+    "effectDamageDealt",
+    "effectAddPowerApplied",
+  ]);
+});
+
+test("normal multi-target attack finishes the first Defense result before starting the second target", () => {
+  const { state, attacker, targets, source } = createAttackResolutionHarness(43002, 3);
+  const [firstTarget, secondTarget] = targets;
+  assert.ok(firstTarget);
+  assert.ok(secondTarget);
+  const firstLife = firstTarget.life.current;
+  const secondLife = secondTarget.life.current;
+  const adapters = createAttackAdapters({
+    resolveDefenseWindow(_state, defendingPlayer) {
+      return defendingPlayer.playerId === firstTarget.playerId
+        ? { ok: true, avoided: true }
+        : { ok: true, avoided: false };
+    },
+  });
+
+  const result = resolvePlayerControlledAttack(
+    damageAttackIntent(state, attacker, source, [firstTarget, secondTarget], 3),
+    adapters
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(firstTarget.life.current, firstLife);
+  assert.equal(secondTarget.life.current, secondLife - 3);
+  assert.deepEqual(attackLifecycleEventTypes(state), [
+    "attackCreated",
+    "attackTargetStarted",
+    "attackAvoided",
+    "attackTargetStarted",
+    "effectDamageDealt",
+    "effectAddPowerApplied",
+  ]);
+});
+
+test("attack amount is recomputed after the previous target mutates current attacker state", () => {
+  const { state, attacker, targets, source } = createAttackResolutionHarness(43003, 3);
+  const [firstTarget, secondTarget] = targets;
+  assert.ok(firstTarget);
+  assert.ok(secondTarget);
+  firstTarget.life.current = 1;
+  const dealtAmounts: number[] = [];
+  const adapters = createAttackAdapters({
+    dealAttackDamage(
+      currentState,
+      attackingPlayer,
+      targetPlayer,
+      amount,
+      effectId,
+      attackSource
+    ) {
+      dealtAmounts.push(amount);
+      const result = dealHarnessAttackDamage(
+        currentState,
+        attackingPlayer,
+        targetPlayer,
+        amount,
+        effectId,
+        attackSource
+      );
+      if (targetPlayer.playerId === firstTarget.playerId) {
+        attackingPlayer.permanents.push(createArena(attackingPlayer.playerId));
+      }
+      return result;
+    },
+  });
+
+  const result = resolvePlayerControlledAttack(
+    damageAttackIntent(state, attacker, source, [firstTarget, secondTarget], 2),
+    adapters
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(dealtAmounts, [2, 4]);
+});
+
+test("redirect changes current attacker attribution while preserving original source identity", () => {
+  const { state, attacker, targets, source } = createAttackResolutionHarness(43004, 2);
+  const [defender] = targets;
+  assert.ok(defender);
+  const attackerLifeBefore = attacker.life.current;
+  const attributions: AttackDamageAttribution<EffectSourceContext>[] = [];
+  const adapters = createAttackAdapters({
+    resolveDefenseWindow(
+      _state,
+      defendingPlayer,
+      attack,
+      resolveRedirectedAttack
+    ) {
+      if (defendingPlayer.playerId !== defender.playerId || attack.kind !== "redirectable") {
+        return { ok: true, avoided: false };
+      }
+      const redirectedSource = {
+        ...attack.source,
+        playerId: defender.playerId,
+      };
+      const redirected = resolveRedirectedAttack({
+        attackingPlayer: defender,
+        targetPlayer: attacker,
+        amountComponents: attack.amountComponents,
+        effectId: attack.effectId,
+        source: redirectedSource,
+        originalSource: attack.originalSource,
+        defenseUsage: attack.defenseUsage,
+        unavoidable: true,
+      });
+      if (!redirected.ok) {
+        return redirected;
+      }
+      if (redirected.gameEnd !== undefined) {
+        return { ok: true, avoided: true, gameEnd: redirected.gameEnd };
+      }
+      return { ok: true, avoided: true, resolution: redirected.resolution };
+    },
+    applyAfterAttackDamage(_state, attribution) {
+      attributions.push(attribution);
+      return { ok: true };
+    },
+  });
+
+  const result = resolvePlayerControlledAttack(
+    damageAttackIntent(state, attacker, source, [defender], 3),
+    adapters
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(attacker.life.current, attackerLifeBefore - 3);
+  assert.equal(attributions.length, 1);
+  assert.equal(attributions[0]?.attackingPlayer, defender);
+  assert.equal(attributions[0]?.source.playerId, defender.playerId);
+  assert.equal(attributions[0]?.source.cardInstanceId, source.cardInstanceId);
+  assert.equal(attributions[0]?.source.definitionId, source.definitionId);
+});
+
+test("per-target outcome branches complete before the next target and after-attack runs last", () => {
+  const { state, attacker, targets, source } = createAttackResolutionHarness(43005, 3);
+  const [firstTarget, secondTarget] = targets;
+  assert.ok(firstTarget);
+  assert.ok(secondTarget);
+  const order: string[] = [];
+  const adapters = createAttackAdapters({
+    dealAttackDamage(
+      currentState,
+      attackingPlayer,
+      targetPlayer,
+      amount,
+      effectId,
+      attackSource
+    ) {
+      order.push(`damage:${targetPlayer.playerId}`);
+      return dealHarnessAttackDamage(
+        currentState,
+        attackingPlayer,
+        targetPlayer,
+        amount,
+        effectId,
+        attackSource
+      );
+    },
+    executeOutcomeBranch(_state, _attacker, targetPlayer) {
+      order.push(`branch:${targetPlayer.playerId}`);
+      return { ok: true };
+    },
+    applyAfterAttackDamage() {
+      order.push("after");
+      return { ok: true };
+    },
+  });
+  const intent = damageAttackIntent(
+    state,
+    attacker,
+    source,
+    [firstTarget, secondTarget],
+    2,
+    [{ effectId: "gain_chips", amount: 1 }]
+  );
+
+  const result = resolvePlayerControlledAttack(intent, adapters);
+
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(order, [
+    `damage:${firstTarget.playerId}`,
+    `branch:${firstTarget.playerId}`,
+    `damage:${secondTarget.playerId}`,
+    `branch:${secondTarget.playerId}`,
+    "after",
+  ]);
+});
+
+test("game end from a target branch stops later targets and after-attack hooks", () => {
+  const { state, attacker, targets, source } = createAttackResolutionHarness(43006, 3);
+  const [firstTarget, secondTarget] = targets;
+  assert.ok(firstTarget);
+  assert.ok(secondTarget);
+  const secondLife = secondTarget.life.current;
+  let afterAttackCalls = 0;
+  const gameEnd = {
+    reason: "playerDefeated" as const,
+    winnerPlayerId: attacker.playerId,
+  };
+  const adapters = createAttackAdapters({
+    executeOutcomeBranch() {
+      return { ok: true, gameEnd };
+    },
+    applyAfterAttackDamage() {
+      afterAttackCalls += 1;
+      return { ok: true };
+    },
+  });
+
+  const result = resolvePlayerControlledAttack(
+    damageAttackIntent(
+      state,
+      attacker,
+      source,
+      [firstTarget, secondTarget],
+      2,
+      [{ effectId: "gain_chips", amount: 1 }]
+    ),
+    adapters
+  );
+
+  assert.deepEqual(result, { ok: true, gameEnd });
+  assert.equal(secondTarget.life.current, secondLife);
+  assert.equal(afterAttackCalls, 0);
+  assert.equal(
+    state.eventLog.filter((event) => event.type === "attackTargetStarted").length,
+    1
+  );
+});
+
+test("non-damage player attack uses the same seam without damage attribution or first-damage eligibility", () => {
+  const { state, attacker, targets, source } = createAttackResolutionHarness(43007, 2);
+  const [target] = targets;
+  assert.ok(target);
+  let afterAttackCalls = 0;
+  const onHitEffect = {
+    effectId: "gain_status",
+    timing: "onPlay",
+    statusId: "dingler",
+  } satisfies RuntimeEffectPayload;
+  const adapters = createAttackAdapters({
+    executeOnHitEffect(_state, _attackingPlayer, targetPlayer) {
+      targetPlayer.statuses.push({
+        instanceId: `fixture-status-${targetPlayer.playerId}`,
+        statusId: "dingler",
+        ownerId: targetPlayer.playerId,
+        effects: [],
+      });
+      return { ok: true };
+    },
+    applyAfterAttackDamage() {
+      afterAttackCalls += 1;
+      return { ok: true };
+    },
+  });
+  const intent: PlayerControlledAttackIntent = {
+    state,
+    attackingPlayer: attacker,
+    source,
+    effectId: "attack_gain_status",
+    unavoidable: false,
+    targetPlan: { kind: "orderedPlayers", players: [target] },
+    impact: { kind: "effects", effects: [onHitEffect] },
+  };
+
+  const result = resolvePlayerControlledAttack(intent, adapters);
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(target.statuses.some((status) => status.statusId === "dingler"), true);
+  assert.equal(afterAttackCalls, 0);
+  assert.deepEqual(state.turn.damagingAttackPlayerIds, []);
+  assert.deepEqual(attackLifecycleEventTypes(state), [
+    "attackCreated",
+    "attackTargetStarted",
+  ]);
+});
+
+function createAttackResolutionHarness(seed: number, playerCount: number): {
+  state: GameState;
+  attacker: PlayerState;
+  targets: PlayerState[];
+  source: EffectSourceContext;
+} {
+  const state = initializeGame({ rootDir, seed, playerCount });
+  state.eventLog.length = 0;
+  state.turn.damagingAttackPlayerIds.length = 0;
+  const [attacker, ...targets] = state.players;
+  assert.ok(attacker);
+  return {
+    state,
+    attacker,
+    targets,
+    source: {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: attacker.playerId,
+      cardInstanceId: `fixture-attack-${seed}`,
+      definitionId: `fixture-attack-${seed}`,
+    },
+  };
+}
+
+function damageAttackIntent(
+  state: GameState,
+  attackingPlayer: PlayerState,
+  source: EffectSourceContext,
+  players: readonly PlayerState[],
+  baseAmount: number,
+  onDamageDealt: readonly AttackOutcomeBranch[] = []
+): PlayerControlledAttackIntent {
+  return {
+    state,
+    attackingPlayer,
+    source,
+    effectId: "attack_damage",
+    unavoidable: false,
+    targetPlan: { kind: "orderedPlayers", players },
+    impact: {
+      kind: "damage",
+      baseAmount,
+      sourceOwnerModifierAmount: 0,
+      onDamageDealt,
+      onKill: [],
+    },
+  };
+}
+
+function createAttackAdapters(
+  overrides: Partial<PlayerControlledAttackAdapters> = {}
+): PlayerControlledAttackAdapters {
+  return {
+    resolveTargets(intent) {
+      return intent.targetPlan.kind === "orderedPlayers"
+        ? { ok: true, players: intent.targetPlan.players }
+        : { ok: false, error: "runtime selector is not configured in this test" };
+    },
+    resolveDefenseWindow() {
+      return { ok: true, avoided: false };
+    },
+    dealAttackDamage(
+      currentState,
+      attackingPlayer,
+      targetPlayer,
+      amount,
+      effectId,
+      source
+    ) {
+      return dealHarnessAttackDamage(
+        currentState,
+        attackingPlayer,
+        targetPlayer,
+        amount,
+        effectId,
+        source
+      );
+    },
+    executeOnHitEffect() {
+      return { ok: true };
+    },
+    executeOutcomeBranch() {
+      return { ok: true };
+    },
+    applyAfterAttackDamage(currentState, attribution) {
+      recordGameEvent(currentState, {
+        type: "effectAddPowerApplied",
+        playerId: attribution.attackingPlayer.playerId,
+        cardInstanceId: attribution.source.cardInstanceId,
+        definitionId: attribution.source.definitionId,
+        effectId: "add_power",
+        amount: attribution.damageDealt,
+        powerBefore: currentState.turn.power,
+        powerAfter: currentState.turn.power,
+        sourceType: attribution.source.sourceType,
+      });
+      return { ok: true };
+    },
+    ...overrides,
+  };
+}
+
+function dealHarnessAttackDamage(
+  state: GameState,
+  attackingPlayer: PlayerState,
+  targetPlayer: PlayerState,
+  amount: number,
+  effectId: PlayerControlledAttackIntent["effectId"],
+  source: EffectSourceContext
+) {
+  const lifeBefore = targetPlayer.life.current;
+  targetPlayer.life.current -= amount;
+  const damageDealt = Math.max(0, Math.min(lifeBefore, amount));
+  recordGameEvent(state, {
+    type: "effectDamageDealt",
+    playerId: attackingPlayer.playerId,
+    targetPlayerId: targetPlayer.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    amount: damageDealt,
+    targetLifeBefore: lifeBefore,
+    targetLifeAfter: targetPlayer.life.current,
+    sourceType: source.sourceType,
+  });
+  return {
+    damageDealt,
+    killed: targetPlayer.life.current < 1,
+  };
+}
+
+function attackLifecycleEventTypes(state: GameState): string[] {
+  return state.eventLog
+    .map((event) => event.type)
+    .filter((type) =>
+      [
+        "attackCreated",
+        "attackTargetStarted",
+        "attackAvoided",
+        "effectDamageDealt",
+        "effectAddPowerApplied",
+      ].includes(type)
+    );
+}
