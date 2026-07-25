@@ -1,3 +1,7 @@
+import {
+  listPhysicalCardLocations,
+  listPhysicalCardZoneDescriptors,
+} from "./control-ledger.js";
 import { installGameEventLog } from "./game-events.js";
 import { recordGameEvent } from "./event-recorder.js";
 import {
@@ -40,18 +44,17 @@ export interface AttackDefenseServices {
 
 interface DefensePlayerMutationSnapshot {
   player: PlayerState;
-  deck: CardInstance[];
-  hand: CardInstance[];
-  discard: CardInstance[];
-  playedThisTurn: CardInstance[];
-  permanents: CardInstance[];
-  unboughtFamiliar: CardInstance | undefined;
   deadWizardTokens: PlayerState["deadWizardTokens"];
   wizardProperties: PlayerState["wizardProperties"];
   statuses: PlayerState["statuses"];
   trophyLikeObjects: PlayerState["trophyLikeObjects"];
   chips: number;
   life: PlayerState["life"];
+}
+
+interface DefenseCardZoneSnapshot {
+  readonly zoneName: string;
+  readonly cards: readonly CardInstance[];
 }
 
 interface DefenseObjectMutationSnapshot {
@@ -62,17 +65,9 @@ interface DefenseObjectMutationSnapshot {
 interface DefenseMutationSnapshot {
   activePlayerId: GameState["activePlayerId"];
   turn: GameState["turn"];
+  cardZones: readonly DefenseCardZoneSnapshot[];
   players: DefensePlayerMutationSnapshot[];
   common: {
-    market: CardInstance[];
-    legendMarket: CardInstance[];
-    mainDeck: CardInstance[];
-    legendDeck: CardInstance[];
-    wildMagicStack: CardInstance[];
-    limpWandStack: CardInstance[];
-    destroyedPile: CardInstance[];
-    destroyedMayhem: CardInstance[];
-    destroyedMegaMayhem: CardInstance[];
     deadWizardTokenStatus: GameState["common"]["deadWizardTokens"]["status"];
     deadWizardTokenDrawStack: GameState["common"]["deadWizardTokens"]["drawStack"];
   };
@@ -95,14 +90,12 @@ function createDefenseMutationSnapshot(
   return {
     activePlayerId: state.activePlayerId,
     turn: structuredClone(state.turn),
+    cardZones: listPhysicalCardZoneDescriptors(state).map((descriptor) => ({
+      zoneName: descriptor.zoneName,
+      cards: descriptor.read(),
+    })),
     players: state.players.map((player) => ({
       player,
-      deck: [...player.deck],
-      hand: [...player.hand],
-      discard: [...player.discard],
-      playedThisTurn: [...player.playedThisTurn],
-      permanents: [...player.permanents],
-      unboughtFamiliar: player.unboughtFamiliar,
       deadWizardTokens: [...player.deadWizardTokens],
       wizardProperties: [...player.wizardProperties],
       statuses: [...player.statuses],
@@ -111,15 +104,6 @@ function createDefenseMutationSnapshot(
       life: { ...player.life },
     })),
     common: {
-      market: [...state.common.market],
-      legendMarket: [...state.common.legendMarket],
-      mainDeck: [...state.common.mainDeck],
-      legendDeck: [...state.common.legendDeck],
-      wildMagicStack: [...state.common.wildMagicStack],
-      limpWandStack: [...state.common.limpWandStack],
-      destroyedPile: [...state.common.destroyedPile],
-      destroyedMayhem: [...state.common.destroyedMayhem],
-      destroyedMegaMayhem: [...state.common.destroyedMegaMayhem],
       deadWizardTokenStatus: state.common.deadWizardTokens.status,
       deadWizardTokenDrawStack: [...state.common.deadWizardTokens.drawStack],
     },
@@ -138,28 +122,13 @@ function collectDefenseMutableObjects(state: GameState): object[] {
   const add = (values: readonly object[]): void => {
     for (const value of values) objects.add(value);
   };
+  add(listPhysicalCardLocations(state).map((location) => location.card));
   for (const player of state.players) {
-    add(player.deck);
-    add(player.hand);
-    add(player.discard);
-    add(player.playedThisTurn);
-    add(player.permanents);
-    if (player.unboughtFamiliar !== undefined)
-      objects.add(player.unboughtFamiliar);
     add(player.deadWizardTokens);
     add(player.wizardProperties);
     add(player.statuses);
     add(player.trophyLikeObjects);
   }
-  add(state.common.market);
-  add(state.common.legendMarket);
-  add(state.common.mainDeck);
-  add(state.common.legendDeck);
-  add(state.common.wildMagicStack);
-  add(state.common.limpWandStack);
-  add(state.common.destroyedPile);
-  add(state.common.destroyedMayhem);
-  add(state.common.destroyedMegaMayhem);
   add(state.common.deadWizardTokens.drawStack);
   return [...objects];
 }
@@ -169,6 +138,41 @@ function restoreDefenseMutationSnapshot(
   defenseUsage: AttackDefenseUsage,
   snapshot: DefenseMutationSnapshot
 ): void {
+  const cardZoneDescriptors = listPhysicalCardZoneDescriptors(state);
+  const descriptorsByName = new Map(
+    cardZoneDescriptors.map((descriptor) => [descriptor.zoneName, descriptor])
+  );
+  const snapshotsByName = new Map(
+    snapshot.cardZones.map((cardZone) => [cardZone.zoneName, cardZone])
+  );
+
+  if (descriptorsByName.size !== cardZoneDescriptors.length) {
+    throw new Error("Defense rollback found duplicate physical card descriptors");
+  }
+  if (snapshotsByName.size !== snapshot.cardZones.length) {
+    throw new Error("Defense rollback snapshot contains duplicate card zones");
+  }
+  for (const descriptor of cardZoneDescriptors) {
+    if (!snapshotsByName.has(descriptor.zoneName)) {
+      throw new Error(
+        `Defense rollback found unknown physical card zone ${descriptor.zoneName}`
+      );
+    }
+  }
+  for (const cardZone of snapshot.cardZones) {
+    const descriptor = descriptorsByName.get(cardZone.zoneName);
+    if (descriptor === undefined) {
+      throw new Error(
+        `Defense rollback is missing physical card zone ${cardZone.zoneName}`
+      );
+    }
+    if (descriptor.cardinality === "zeroOrOne" && cardZone.cards.length > 1) {
+      throw new Error(
+        `Defense rollback snapshot violates singleton card zone ${cardZone.zoneName}`
+      );
+    }
+  }
+
   for (const mutableObject of snapshot.mutableObjects) {
     Object.assign(mutableObject.object, structuredClone(mutableObject.value));
   }
@@ -176,12 +180,6 @@ function restoreDefenseMutationSnapshot(
   state.turn = structuredClone(snapshot.turn);
   for (const playerSnapshot of snapshot.players) {
     const { player } = playerSnapshot;
-    player.deck = [...playerSnapshot.deck];
-    player.hand = [...playerSnapshot.hand];
-    player.discard = [...playerSnapshot.discard];
-    player.playedThisTurn = [...playerSnapshot.playedThisTurn];
-    player.permanents = [...playerSnapshot.permanents];
-    player.unboughtFamiliar = playerSnapshot.unboughtFamiliar;
     player.deadWizardTokens = [...playerSnapshot.deadWizardTokens];
     player.wizardProperties = [...playerSnapshot.wizardProperties];
     player.statuses = [...playerSnapshot.statuses];
@@ -189,15 +187,15 @@ function restoreDefenseMutationSnapshot(
     player.chips = playerSnapshot.chips;
     player.life = { ...playerSnapshot.life };
   }
-  state.common.market = [...snapshot.common.market];
-  state.common.legendMarket = [...snapshot.common.legendMarket];
-  state.common.mainDeck = [...snapshot.common.mainDeck];
-  state.common.legendDeck = [...snapshot.common.legendDeck];
-  state.common.wildMagicStack = [...snapshot.common.wildMagicStack];
-  state.common.limpWandStack = [...snapshot.common.limpWandStack];
-  state.common.destroyedPile = [...snapshot.common.destroyedPile];
-  state.common.destroyedMayhem = [...snapshot.common.destroyedMayhem];
-  state.common.destroyedMegaMayhem = [...snapshot.common.destroyedMegaMayhem];
+  for (const cardZone of snapshot.cardZones) {
+    const descriptor = descriptorsByName.get(cardZone.zoneName);
+    if (descriptor === undefined) {
+      throw new Error(
+        `Defense rollback lost physical card zone ${cardZone.zoneName} after validation`
+      );
+    }
+    descriptor.replace(cardZone.cards);
+  }
   state.common.deadWizardTokens =
     snapshot.common.deadWizardTokenStatus === "notInDataPack"
       ? { status: "notInDataPack", drawStack: [] }
