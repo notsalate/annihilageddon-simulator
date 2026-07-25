@@ -36,6 +36,23 @@ export interface CardLocation {
   zoneName: string;
 }
 
+export type PhysicalCardZoneCardinality = "many" | "zeroOrOne";
+
+export interface PhysicalCardZoneDescriptor {
+  readonly zoneName: string;
+  readonly cardinality: PhysicalCardZoneCardinality;
+  readonly expectedOwnerId?: CardInstance["ownerId"];
+  read(): readonly CardInstance[];
+  replace(cards: readonly CardInstance[]): void;
+}
+
+export interface PhysicalCardLocation {
+  readonly card: CardInstance;
+  readonly zoneName: string;
+  readonly index: number;
+  readonly expectedOwnerId?: CardInstance["ownerId"];
+}
+
 export function buildControlledObjectView(
   state: GameState,
   playerId: PlayerId
@@ -135,11 +152,154 @@ export function getControlledOngoingCards(
   });
 }
 
+export function listPhysicalCardZoneDescriptors(
+  state: GameState
+): readonly PhysicalCardZoneDescriptor[] {
+  return [
+    ...state.players.flatMap((player) => [
+      createArrayCardZoneDescriptor(
+        `${player.playerId}.deck`,
+        () => player.deck,
+        (cards) => {
+          player.deck = cards;
+        },
+        player.playerId
+      ),
+      createArrayCardZoneDescriptor(
+        `${player.playerId}.hand`,
+        () => player.hand,
+        (cards) => {
+          player.hand = cards;
+        },
+        player.playerId
+      ),
+      createArrayCardZoneDescriptor(
+        `${player.playerId}.discard`,
+        () => player.discard,
+        (cards) => {
+          player.discard = cards;
+        },
+        player.playerId
+      ),
+      createArrayCardZoneDescriptor(
+        `${player.playerId}.playedThisTurn`,
+        () => player.playedThisTurn,
+        (cards) => {
+          player.playedThisTurn = cards;
+        }
+      ),
+      createArrayCardZoneDescriptor(
+        `${player.playerId}.permanents`,
+        () => player.permanents,
+        (cards) => {
+          player.permanents = cards;
+        }
+      ),
+      createSingletonCardZoneDescriptor(
+        `${player.playerId}.unboughtFamiliar`,
+        () => player.unboughtFamiliar,
+        (card) => {
+          player.unboughtFamiliar = card;
+        },
+        player.playerId
+      ),
+    ]),
+    createArrayCardZoneDescriptor(
+      "mainMarket",
+      () => state.common.market,
+      (cards) => {
+        state.common.market = cards;
+      },
+      "common"
+    ),
+    createArrayCardZoneDescriptor(
+      "legendMarket",
+      () => state.common.legendMarket,
+      (cards) => {
+        state.common.legendMarket = cards;
+      },
+      "common"
+    ),
+    createArrayCardZoneDescriptor(
+      "mainDeck",
+      () => state.common.mainDeck,
+      (cards) => {
+        state.common.mainDeck = cards;
+      },
+      "common"
+    ),
+    createArrayCardZoneDescriptor(
+      "legendDeck",
+      () => state.common.legendDeck,
+      (cards) => {
+        state.common.legendDeck = cards;
+      },
+      "common"
+    ),
+    createArrayCardZoneDescriptor(
+      "wildMagicStack",
+      () => state.common.wildMagicStack,
+      (cards) => {
+        state.common.wildMagicStack = cards;
+      },
+      "common"
+    ),
+    createArrayCardZoneDescriptor(
+      "limpWandStack",
+      () => state.common.limpWandStack,
+      (cards) => {
+        state.common.limpWandStack = cards;
+      },
+      "common"
+    ),
+    createArrayCardZoneDescriptor(
+      "destroyedPile",
+      () => state.common.destroyedPile,
+      (cards) => {
+        state.common.destroyedPile = cards;
+      }
+    ),
+    createArrayCardZoneDescriptor(
+      "destroyedMayhem",
+      () => state.common.destroyedMayhem,
+      (cards) => {
+        state.common.destroyedMayhem = cards;
+      }
+    ),
+    createArrayCardZoneDescriptor(
+      "destroyedMegaMayhem",
+      () => state.common.destroyedMegaMayhem,
+      (cards) => {
+        state.common.destroyedMegaMayhem = cards;
+      }
+    ),
+  ];
+}
+
+export function listPhysicalCardLocations(
+  state: GameState
+): readonly PhysicalCardLocation[] {
+  return listPhysicalCardZoneDescriptors(state).flatMap((descriptor) =>
+    descriptor.read().map((card, index) =>
+      descriptor.expectedOwnerId === undefined
+        ? { card, zoneName: descriptor.zoneName, index }
+        : {
+            card,
+            zoneName: descriptor.zoneName,
+            index,
+            expectedOwnerId: descriptor.expectedOwnerId,
+          }
+    )
+  );
+}
+
 export function findCardLocation(
   state: GameState,
   cardInstanceId: string
 ): CardLocation | undefined {
-  const location = findRemovableCardLocation(state, cardInstanceId);
+  const location = listPhysicalCardLocations(state).find(
+    (candidate) => candidate.card.instanceId === cardInstanceId
+  );
   if (location === undefined) {
     return undefined;
   }
@@ -150,85 +310,67 @@ export function removeCardFromLocation(
   state: GameState,
   cardInstanceId: string
 ): CardLocation | undefined {
-  const location = findRemovableCardLocation(state, cardInstanceId);
-  if (location === undefined) {
-    return undefined;
-  }
-  location.remove();
-  return { card: location.card, zoneName: location.zoneName };
-}
-
-interface RemovableCardLocation extends CardLocation {
-  remove(): void;
-}
-
-function findRemovableCardLocation(
-  state: GameState,
-  cardInstanceId: string
-): RemovableCardLocation | undefined {
-  for (const player of state.players) {
-    const familiar = player.unboughtFamiliar;
-    if (familiar?.instanceId === cardInstanceId) {
-      return {
-        card: familiar,
-        zoneName: `${player.playerId}.unboughtFamiliar`,
-        remove() {
-          player.unboughtFamiliar = undefined;
-        },
-      };
-    }
-  }
-
-  for (const { zoneName, zone } of listPhysicalCardZones(state)) {
-    const index = zone.findIndex(
+  for (const descriptor of listPhysicalCardZoneDescriptors(state)) {
+    const cards = descriptor.read();
+    const index = cards.findIndex(
       (candidate) => candidate.instanceId === cardInstanceId
     );
     if (index < 0) {
       continue;
     }
-    const card = zone[index];
+    const card = cards[index];
     if (card === undefined) {
       continue;
     }
-    return {
-      card,
-      zoneName,
-      remove() {
-        zone.splice(index, 1);
-      },
-    };
+    descriptor.replace([...cards.slice(0, index), ...cards.slice(index + 1)]);
+    return { card, zoneName: descriptor.zoneName };
   }
 
   return undefined;
 }
 
-function listPhysicalCardZones(
-  state: GameState
-): Array<{ zoneName: string; zone: CardInstance[] }> {
-  return [
-    ...state.players.flatMap((player) => [
-      { zoneName: `${player.playerId}.deck`, zone: player.deck },
-      { zoneName: `${player.playerId}.hand`, zone: player.hand },
-      { zoneName: `${player.playerId}.discard`, zone: player.discard },
-      {
-        zoneName: `${player.playerId}.playedThisTurn`,
-        zone: player.playedThisTurn,
-      },
-      { zoneName: `${player.playerId}.permanents`, zone: player.permanents },
-    ]),
-    { zoneName: "mainMarket", zone: state.common.market },
-    { zoneName: "legendMarket", zone: state.common.legendMarket },
-    { zoneName: "mainDeck", zone: state.common.mainDeck },
-    { zoneName: "legendDeck", zone: state.common.legendDeck },
-    { zoneName: "wildMagicStack", zone: state.common.wildMagicStack },
-    { zoneName: "limpWandStack", zone: state.common.limpWandStack },
-    { zoneName: "destroyedPile", zone: state.common.destroyedPile },
-    { zoneName: "destroyedMayhem", zone: state.common.destroyedMayhem },
-    {
-      zoneName: "destroyedMegaMayhem",
-      zone: state.common.destroyedMegaMayhem,
+function createArrayCardZoneDescriptor(
+  zoneName: string,
+  readStorage: () => readonly CardInstance[],
+  replaceStorage: (cards: CardInstance[]) => void,
+  expectedOwnerId?: CardInstance["ownerId"]
+): PhysicalCardZoneDescriptor {
+  return {
+    zoneName,
+    cardinality: "many",
+    ...(expectedOwnerId === undefined ? {} : { expectedOwnerId }),
+    read() {
+      return [...readStorage()];
     },
-  ];
+    replace(cards) {
+      replaceStorage([...cards]);
+    },
+  };
+}
+
+function createSingletonCardZoneDescriptor(
+  zoneName: string,
+  readStorage: () => CardInstance | undefined,
+  replaceStorage: (card: CardInstance | undefined) => void,
+  expectedOwnerId?: CardInstance["ownerId"]
+): PhysicalCardZoneDescriptor {
+  return {
+    zoneName,
+    cardinality: "zeroOrOne",
+    ...(expectedOwnerId === undefined ? {} : { expectedOwnerId }),
+    read() {
+      const card = readStorage();
+      return card === undefined ? [] : [card];
+    },
+    replace(cards) {
+      if (cards.length > 1) {
+        throw new Error(
+          `Physical card zone ${zoneName} accepts at most one card, received ${cards.length}`
+        );
+      }
+      replaceStorage(cards[0]);
+    },
+  };
 }
 
 function mustGetCardDefinition(
