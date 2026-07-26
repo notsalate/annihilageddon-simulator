@@ -6,6 +6,7 @@ on:
     branches: [main, dev]
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -20,3 +21,30 @@ jobs:
       - run: npm ci
       - name: ESLint
         run: npm run lint
+
+  print-trigger-dispatch-diagnostic:
+    if: "${{ github.event.pull_request.head.ref == 'agent/architecture-deepening-findings' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Print failure signatures from publisher job
+        shell: bash
+        env:
+          GH_TOKEN: "${{ github.token }}"
+        run: |
+          set -euo pipefail
+          curl --location --fail --silent --show-error \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/jobs/89787790908/logs" \
+            --output "${RUNNER_TEMP}/publisher.log"
+          if file "${RUNNER_TEMP}/publisher.log" | grep -qi 'Zip archive'; then
+            unzip -p "${RUNNER_TEMP}/publisher.log" > "${RUNNER_TEMP}/publisher.txt"
+          else
+            cp "${RUNNER_TEMP}/publisher.log" "${RUNNER_TEMP}/publisher.txt"
+          fi
+          echo '=== FAILURE SIGNATURES ==='
+          grep -E 'error TS|RuntimeError|Error:|not ok|FAILED|Trigger Dispatch transport failed|npm ERR|##\[error\]|guard failed|forbidden|Expected exactly' "${RUNNER_TEMP}/publisher.txt" | tail -n 100 || true
+          echo '=== FINAL 100 LINES ==='
+          tail -n 100 "${RUNNER_TEMP}/publisher.txt"
