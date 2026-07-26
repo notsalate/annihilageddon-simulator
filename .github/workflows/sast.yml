@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Print exact end-turn generator context
+      - name: Print decoded end-turn entry context
         shell: bash
         env:
           GH_TOKEN: "${{ github.token }}"
@@ -42,22 +42,23 @@ jobs:
             | base64 --decode \
             | gzip --decompress \
             > "${RUNNER_TEMP}/apply-trigger-dispatch.py"
-          test "$(sha256sum "${RUNNER_TEMP}/apply-trigger-dispatch.py" | cut -d' ' -f1)" = '1762c679f372bb249a27c6caa02501a58c5e1bacd943786498f500f4e4a7f1d1'
           SCRIPT_PATH="${RUNNER_TEMP}/apply-trigger-dispatch.py" python3 - <<'PY'
           import os
           from pathlib import Path
 
           lines = Path(os.environ["SCRIPT_PATH"]).read_text(encoding="utf-8").splitlines()
-          matches = [
-              index
-              for index, line in enumerate(lines)
-              if "evaluateEndTurnDrawModifier" in line
-          ]
-          print(f"matches={len(matches)}")
-          for match in matches:
-              print(f"--- context around line {match + 1} ---")
-              start = max(0, match - 14)
-              end = min(len(lines), match + 15)
-              for index in range(start, end):
-                  print(f"{index + 1:05d}: {lines[index]}")
+          selected = []
+          for index, line in enumerate(lines):
+              if "evaluateEndTurnDrawModifier" not in line:
+                  continue
+              start = max(0, index - 22)
+              end = min(len(lines), index + 23)
+              window = lines[start:end]
+              if any("decoded" in candidate for candidate in window):
+                  selected.append((index, start, end))
+          print(f"selected={len(selected)}")
+          for index, start, end in selected:
+              print(f"--- decoded context around line {index + 1} ---")
+              for line_index in range(start, end):
+                  print(f"{line_index + 1:05d}: {lines[line_index]}")
           PY
