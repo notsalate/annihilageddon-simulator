@@ -24,23 +24,40 @@ jobs:
   inspect-trigger-dispatch-transport:
     if: "${{ github.event.pull_request.head.ref == 'agent/architecture-deepening-findings' }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - name: Checkout PR 137 head
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        with:
-          ref: agent/architecture-deepening-findings
-          fetch-depth: 0
-      - name: Print end-turn generator context
+      - name: Print exact end-turn generator context
         shell: bash
+        env:
+          GH_TOKEN: "${{ github.token }}"
         run: |
           set -euo pipefail
-          git show 'bf6428c65871da163d48006d77826673c7dab5cd:.scratch/agent-pr137-trigger-dispatch.py.gz.b64' \
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            'https://api.github.com/repos/notsalate/annihilageddon-simulator/contents/.scratch/agent-pr137-trigger-dispatch.py.gz.b64?ref=bf6428c65871da163d48006d77826673c7dab5cd' \
+            | jq -r '.content' \
+            | base64 --decode \
             | base64 --decode \
             | gzip --decompress \
             > "${RUNNER_TEMP}/apply-trigger-dispatch.py"
           test "$(sha256sum "${RUNNER_TEMP}/apply-trigger-dispatch.py" | cut -d' ' -f1)" = '1762c679f372bb249a27c6caa02501a58c5e1bacd943786498f500f4e4a7f1d1'
-          echo '=== evaluateEndTurnDrawModifier occurrences ==='
-          grep -n -C 18 'evaluateEndTurnDrawModifier' "${RUNNER_TEMP}/apply-trigger-dispatch.py" || true
-          echo '=== end-turn decode/error occurrences ==='
-          grep -n -C 10 -E 'evaluateEndTurn|decoded\.ok|decoded\.error|collectEndTurnDrawModifier' "${RUNNER_TEMP}/apply-trigger-dispatch.py" | tail -n 260 || true
+          SCRIPT_PATH="${RUNNER_TEMP}/apply-trigger-dispatch.py" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          lines = Path(os.environ["SCRIPT_PATH"]).read_text(encoding="utf-8").splitlines()
+          matches = [
+              index
+              for index, line in enumerate(lines)
+              if "evaluateEndTurnDrawModifier" in line
+          ]
+          print(f"matches={len(matches)}")
+          for match in matches:
+              print(f"--- context around line {match + 1} ---")
+              start = max(0, match - 14)
+              end = min(len(lines), match + 15)
+              for index in range(start, end):
+                  print(f"{index + 1:05d}: {lines[index]}")
+          PY
