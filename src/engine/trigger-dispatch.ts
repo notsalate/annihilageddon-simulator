@@ -189,6 +189,27 @@ function collectEndTurnDrawModifier(
   let drawCount = operation.currentBaseDrawCount;
   for (const { effect, source } of candidates) {
     const entry = getEffectRuntimeCatalogEntry(effect.effectId);
+    if (!entry.supportedSourceKinds.includes(source.sourceType)) {
+      return {
+        ok: false,
+        error: `Effect ${effect.effectId} uses unsupported source kind`,
+      };
+    }
+    if (!entry.supportedModes.includes(source.runtimeMode)) {
+      return {
+        ok: false,
+        error: `Effect ${effect.effectId} is unavailable in ${source.runtimeMode} mode`,
+      };
+    }
+    const validation = entry.validate(`Effect ${effect.effectId}`, effect);
+    if (!validation.ok) {
+      return {
+        ok: false,
+        error:
+          validation.errors[0] ?? "Invalid controlled-card end-turn effect",
+      };
+    }
+
     const result = entry.evaluateEndTurnDrawModifier(
       `Effect ${effect.effectId}`,
       effect,

@@ -1,8 +1,5 @@
 import { getControlledOngoingCards } from "./control-ledger.js";
-import {
-  recordGameEvent,
-  setAttackCreatedTargetPlayer,
-} from "./event-recorder.js";
+import { recordGameEvent } from "./event-recorder.js";
 import type {
   DamageResult,
   EffectExecutionResult,
@@ -313,11 +310,18 @@ export function summarizeAttackDamage<Source extends AttackSourceIdentity>(
   return [...damageByAttackerAndSource.values()];
 }
 
-
 export function resolvePlayerControlledAttack(
   intent: PlayerControlledAttackIntent,
   adapters: PlayerControlledAttackAdapters
 ): EffectExecutionResult {
+  const targetResult = adapters.resolveTargets(intent);
+  if (!targetResult.ok) {
+    return targetResult;
+  }
+  if (targetResult.players.length === 0) {
+    return { ok: true };
+  }
+
   const context: PlayerControlledAttackContext = {
     originalAttacker: intent.attackingPlayer,
     originalSource: intent.source,
@@ -328,39 +332,21 @@ export function resolvePlayerControlledAttack(
     intent.impact.kind === "damage"
       ? intent.impact.baseAmount + intent.impact.sourceOwnerModifierAmount
       : undefined;
-  const singleOrderedTarget =
-    intent.targetPlan.kind === "orderedPlayers" &&
-    intent.targetPlan.players.length === 1
-      ? intent.targetPlan.players[0]
-      : undefined;
+  const singleResolvedTarget =
+    targetResult.players.length === 1 ? targetResult.players[0] : undefined;
 
-  const attackCreatedEventIndex = recordGameEvent(intent.state, {
+  recordGameEvent(intent.state, {
     type: "attackCreated",
     playerId: intent.attackingPlayer.playerId,
-    ...(singleOrderedTarget === undefined
+    ...(singleResolvedTarget === undefined
       ? {}
-      : { targetPlayerId: singleOrderedTarget.playerId }),
+      : { targetPlayerId: singleResolvedTarget.playerId }),
     cardInstanceId: intent.source.cardInstanceId,
     definitionId: intent.source.definitionId,
     effectId: intent.effectId,
     ...(initialAmount === undefined ? {} : { amount: initialAmount }),
     sourceType: intent.source.sourceType,
   });
-
-  const targetResult = adapters.resolveTargets(intent);
-  if (!targetResult.ok) {
-    return targetResult;
-  }
-  if (singleOrderedTarget === undefined && targetResult.players.length === 1) {
-    const [singleResolvedTarget] = targetResult.players;
-    if (singleResolvedTarget !== undefined) {
-      setAttackCreatedTargetPlayer(
-        intent.state,
-        attackCreatedEventIndex,
-        singleResolvedTarget.playerId
-      );
-    }
-  }
 
   for (const targetPlayer of targetResult.players) {
     const resolutionResult = resolvePlayerControlledAttackTarget(
