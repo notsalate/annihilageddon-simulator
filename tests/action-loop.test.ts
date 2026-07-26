@@ -1279,6 +1279,11 @@ test("megaMayhem destroys top main deck cards in active-player order and kills p
           "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
         timing: "onMayhemResolve",
         targetSelector: "eachPlayerClockwiseFromActive",
+        deathCondition: {
+          effectId: "destroyed_card_kind_is",
+          cardKind: "mayhem",
+        },
+        destroyedCardSource: "mainDeck",
       },
     ],
     { cardKind: "megaMayhem" }
@@ -1406,7 +1411,10 @@ test("Mayhem discards top deck cards and destroys them in active-player order", 
           "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
         timing: "onMayhemResolve",
         targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        choice: "destroyBothOrDestroyNone",
         amount: 1,
+        sourceZone: "deck",
       },
     ],
     { cardKind: "mayhem" }
@@ -1506,6 +1514,10 @@ test("Mayhem discards each deck and destroys the first discard in active-player 
         effectId: "mayhem_each_player_discard_deck_then_destroy_from_discard",
         timing: "onMayhemResolve",
         targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        destroyAmount: 1,
+        destroySourceZone: "discard",
+        discardSourceZone: "deck",
       },
     ],
     { cardKind: "mayhem" }
@@ -3070,7 +3082,7 @@ test("unsupported Mayhem effect fails during Market Flow instead of becoming a s
   assert.equal(result.ok, false);
   assert.match(
     result.error,
-    /Effect unsupported_mayhem_runtime_effect uses unsupported effect id/
+    /Unsupported effect id unsupported_mayhem_runtime_effect/
   );
   assert.equal(state.common.destroyedMayhem.includes(unsupportedMayhem), false);
 });
@@ -8261,7 +8273,7 @@ test("avoid_attack defense with an unpayable discard-other-card cost is not lega
   assert.ok(targetPlayer);
   targetPlayer.hand.splice(0);
   addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf", {
-    costs: [{ costId: "discard_other_hand_card" }],
+    costs: [{ costId: "discard_other_hand_card", amount: 1 }],
   });
   const fixtureCardId = addFixtureCardToActiveHand(state, {
     effectId: "attack_damage",
@@ -8309,7 +8321,7 @@ test("avoid_attack defense pays discard, chip, and nonlethal life costs before a
     "discardSelf",
     {
       costs: [
-        { costId: "discard_other_hand_card" },
+        { costId: "discard_other_hand_card", amount: 1 },
         { costId: "spend_chips", amount: 2 },
         { costId: "pay_life", amount: 4 },
       ],
@@ -8873,6 +8885,11 @@ test("unowned Mega Mayhem death does not move Basic Trophy", () => {
               "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
             timing: "onMayhemResolve",
             targetSelector: "eachPlayerClockwiseFromActive",
+            deathCondition: {
+              effectId: "destroyed_card_kind_is",
+              cardKind: "mayhem",
+            },
+            destroyedCardSource: "mainDeck",
           },
         ],
       },
@@ -9234,7 +9251,7 @@ test("targeted fixture effect surfaces unsupported selectors explicitly", () => 
   assert.equal(result.ok, false);
   assert.match(
     result.error,
-    /uses unsupported fixture target-cost power target/
+    /targetSelector must be one of/
   );
 });
 
@@ -9257,7 +9274,7 @@ test("runtime execution rejects unsupported effect ids explicitly", () => {
   assert.equal(result.ok, false);
   assert.match(
     result.error,
-    /Effect fixture_runtime_effect_not_in_catalog uses unsupported effect id/
+    /Unsupported effect id fixture_runtime_effect_not_in_catalog/
   );
 });
 
@@ -9296,7 +9313,7 @@ test("runtime execution rejects fixture-only effects in combat mode", () => {
   assert.equal(result.ok, false);
   assert.equal(
     result.error,
-    "Effect fixture_add_power_equal_to_target_cost uses fixture effect id fixture_add_power_equal_to_target_cost in combat data"
+    "Effect fixture_add_power_equal_to_target_cost is unavailable in combat mode"
   );
 });
 

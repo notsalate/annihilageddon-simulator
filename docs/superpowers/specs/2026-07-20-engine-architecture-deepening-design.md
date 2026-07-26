@@ -105,17 +105,21 @@ Actions, conditions, activation и controlled-cost selection использую�
 
 ## Архитектурный кандидат 5: глубокий typed Effect Decoder/Catalog seam
 
-### D1. Карта concrete payload variants
+### D1. Исчерпывающая карта concrete payload variants
 
-`runtime-effect.ts` объявляет effect-id-to-payload map для затронутых runtime effects и выводит `RuntimeEffectForId` из неё.
+`runtime-effect.ts` объявляет explicit `RuntimeEffectPayloadMap` без index signature, conditional fallback и общего bag полей. Шесть групп payload покрывают каждый зарегистрированный `RuntimeEffectId`; `RuntimeEffectForId<Id>` и общий discriminated union выводятся только из этой карты.
 
-### D2. Narrowing на data boundary
+### D2. Exact decoder на data boundary
 
-Decoder/catalog проверяет concrete shapes для defense и ongoing modifier effects. После успешной проверки handler не читает raw `unknown` fields.
+`runtime-effect-decoder.ts` содержит concrete decoder для каждого зарегистрированного ID, включая честно unsupported effects. Каждый decoder проверяет literal `effectId`, допустимый timing, точный набор верхнеуровневых полей и concrete nested shapes для targets, conditions, costs, options и branches. Лишние поля и неверные значения отклоняются до попадания в runtime state.
 
-### D3. Typed handlers
+### D3. Typed catalog closure до handler boundary
 
-Handlers для `avoid_attack`, `ongoing_add_power`, `ongoing_hand_refill_bonus`, Wand trigger, DWT power и first-attack trigger получают concrete payload types. Остальные effects сохраняют текущий совместимый путь до отдельной миграции.
+`effect-runtime-registry.ts` связывает decoder, concrete handler, runtime modes и source kinds через generic entry factory. Публичная catalog operation принимает raw `unknown`, выполняет decode и передаёт handler-у concrete payload внутри одной closure; caller не получает расширенную пару из общего handler и общего payload и не соединяет их assertions. Setup, обычное выполнение, on-play, after-attack и end-turn modifiers используют тот же безопасный seam.
+
+### D4. Завершённая граница
+
+Registered effects не используют `RuntimeEffectFields`, payload fallback, partial exact-field map или assertions `as RuntimeEffectPayload`/`as RuntimeEffectForId` между decode и handler. Compile-time exhaustiveness, deletion tests, validation runtime suites и `check:engine-typed-access` закрепляют эту границу.
 
 ## Error handling
 

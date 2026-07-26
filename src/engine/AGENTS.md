@@ -10,7 +10,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - `attack-resolution.ts` owns the complete ordinary player-controlled attack lifecycle: attack creation, ordered target resolution, state-sensitive amount calculation, Defense/redirect recursion, damage/death boundary, per-target outcome branches, attribution, attack events, short-circuiting and after-attack dispatch. `attack-defense.ts` is the transactional submodule for voluntary Defense, immutable payment plans, payment/movement/branch commit and rollback. `effect-runtime-registry.ts` only normalizes typed attack payloads into intents, while `effect-runtime.ts` supplies narrow adapters and shared primitives. Mayhem and Mega Mayhem remain separate two-phase domain flows.
 - `control-ledger.ts` owns the controller-to-object relation, temporary-control lifecycle and the physical-card descriptor/traversal seam: array and singleton zones, owner metadata, lookup/removal and card inventory traversal for snapshots. Consumers must not reconstruct control, enumerate physical zones or define parallel inventory helpers.
 - `trigger-dispatch.ts` owns timing-aware controlled-card trigger discovery, stable ordering, source attribution, and stop-on-error/game-end behavior. Callers supply the catalog-aware executor through the generic dispatch seam.
-- `runtime-effect.ts` owns `RuntimeEffectPayloadMap`; `effect-runtime-registry.ts` validates raw data and returns the corresponding concrete payload before execution.
+- `runtime-effect.ts` owns the exhaustive `RuntimeEffectPayloadMap`; `runtime-effect-decoder.ts` owns exact decoders for every registered ID; `effect-runtime-registry.ts` binds each decoder to its concrete handler through a typed catalog closure.
 - Runtime data comes from `data/`; import drafts under `data/import/` are outside executable engine input.
 - CLI orchestration lives in `src/cli/`.
 
@@ -23,17 +23,17 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Model runtime effect choices as a discriminated union; record selected typed targets in the event log.
 - Route all legal runtime effect choices, including card/player targets, through one typed choice hook; preserve stable order, identity validation, and event compatibility.
 - Send closed `GameEventDraft` objects through `event-recorder`; direct `eventLog.push` is confined to that module.
-- Keep the typed effect-handler catalog as the source of truth; derive lookup maps from it.
-- The effect runtime catalog owns effect ID, source kind, runtime mode, and handler-shape validation at the executable-data boundary.
+- Keep the typed effect catalog as the source of truth; every registered ID has one exact decoder and one concrete handler entry, including unsupported IDs.
+- The effect runtime catalog owns effect ID, source kind, runtime mode, exact payload decoding, and concrete handler dispatch at the executable-data boundary.
 - Preserve the executable source kind at that boundary: card, wizardProperty, and deadWizardToken are distinct catalog inputs.
-- Effect execution resolves every effect through the Effect Runtime Catalog before invoking its handler; Mayhem execution does not use a separate catalog lookup.
+- Effect execution resolves every raw effect through a catalog operation that decodes and invokes its concrete handler inside one typed closure; callers must not receive or reconnect a general handler/payload pair. Mayhem execution does not use a separate catalog lookup.
 - A successful effect may return a typed `playerDefeated` game end with its winner; regular card and activation actions propagate it without adding a card-specific shortcut.
 - Passive power and attack replacements read only controlled ongoing cards through `getControlledOngoingCards`.
 - Trigger Dispatch requires an ongoing card for `onPlayCard` and `afterFirstAttackDamageEachTurn`; end-turn discovery preserves temporary-control semantics for cards that remain controlled through cleanup.
 - Keep `Best-Move Analyzer` modules outside `BotStrategy`: analysis may receive complete `GameState`, inspect hidden information, fork seeded RNG, and enumerate current-turn legal lines through `endTurn` using a caller-supplied evaluation policy; simulation strategies must not depend on the analysis API or future RNG/hidden opponent state.
 - The analyzer has no hidden default score: a line becomes “best” only after the caller supplies a named evaluation policy.
 - Evaluation policies return a finite `score` and optional finite components; `rankTurnLines` orders strictly by descending score, then stable enumeration order. Terminal `winnerPlayerId` remains metadata and does not affect ranking.
-- Give effect handlers concrete typed inputs after the validation boundary; keep raw record access at that boundary.
+- Give effect handlers concrete typed inputs after the validation boundary; keep raw record access at that boundary and never reintroduce a registered-effect fallback, optional `unknown` field bag, or handler-boundary payload assertion.
 - Declare each catalog entry's supported runtime modes as a non-empty typed set.
 - Add runtime effect IDs only through `effect-runtime-registry.ts`; executable data must not reference IDs outside the Effect Runtime Catalog.
 - Do not use localized display names as primary identifiers.

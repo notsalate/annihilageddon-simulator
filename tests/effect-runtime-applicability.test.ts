@@ -9,14 +9,14 @@ import {
 } from "../src/engine/effect-runtime.js";
 import type { CardDefinition } from "../src/engine/data.js";
 import {
-  getEffectRuntimeCatalogEntry,
+  getEffectRuntimeHandler,
+  replaceEffectRuntimeHandlerForTesting,
   resolveEffectRuntimeCatalogEntry,
 } from "../src/engine/effect-runtime-registry.js";
 import type {
   AttackIntent,
   EffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
-import type { RuntimeEffectPayload } from "../src/engine/runtime-effect.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -26,7 +26,7 @@ test("executeEffect applies add_power through the catalog resolver", () => {
   const state = initializeGame({ rootDir: process.cwd(), seed: 11601 });
   const player = state.players[0];
   assert.ok(player);
-  const effect = { effectId: "add_power", amount: 2 } as RuntimeEffectPayload;
+  const effect = { effectId: "add_power", amount: 2 } as const;
   const source: EffectSourceContext = {
     sourceType: "card",
     runtimeMode: "combat",
@@ -132,14 +132,15 @@ test("executeEffect validates a payload once before invoking its handler", () =>
   const state = initializeGame({ rootDir: process.cwd(), seed: 11608 });
   const player = state.players[0];
   assert.ok(player);
-  const entry = getEffectRuntimeCatalogEntry("add_power");
-  assert.ok(entry);
-  const originalValidateShape = entry.handler.validateShape;
+  const originalHandler = getEffectRuntimeHandler("add_power");
   let validationCount = 0;
-  entry.handler.validateShape = (subjectId, effect) => {
-    validationCount += 1;
-    return originalValidateShape(subjectId, effect);
-  };
+  const restore = replaceEffectRuntimeHandlerForTesting("add_power", {
+    ...originalHandler,
+    validateShape(subjectId, effect) {
+      validationCount += 1;
+      return originalHandler.validateShape(subjectId, effect);
+    },
+  });
 
   try {
     const result = executeEffect(
@@ -152,7 +153,7 @@ test("executeEffect validates a payload once before invoking its handler", () =>
     assert.deepEqual(result, { ok: true });
     assert.equal(validationCount, 1);
   } finally {
-    entry.handler.validateShape = originalValidateShape;
+    restore();
   }
 });
 
@@ -180,11 +181,11 @@ test("fixture-only effect is rejected in combat before its handler", () => {
     {
       effectId: "fixture_add_power_equal_to_target_cost",
       target: { selector: "mainMarketCard" },
-    } as unknown as RuntimeEffectPayload,
+    },
     fixtureSource(player.playerId, "combat")
   );
   assert.equal(result.ok, false);
-  assert.match(result.error, /fixture effect id/);
+  assert.match(result.error, /unavailable in combat mode/);
   assert.equal(state.turn.power, 0);
 });
 
@@ -198,7 +199,7 @@ test("fixture-only effect reaches its handler in fixture mode", () => {
     {
       effectId: "fixture_add_power_equal_to_target_cost",
       target: { selector: "mainMarketCard" },
-    } as unknown as RuntimeEffectPayload,
+    },
     fixtureSource(player.playerId, "fixture")
   );
   assert.deepEqual(result, { ok: true });
@@ -220,7 +221,7 @@ test("wizard-property-only effect is rejected for a card source", () => {
     fixtureSource(player.playerId, "combat", "card")
   );
   assert.equal(result.ok, false);
-  assert.match(result.error, /token-only effect id/);
+  assert.match(result.error, /unsupported source kind/);
 });
 
 test("ongoing controlled power is limited to card sources", () => {
@@ -333,7 +334,7 @@ test("known effect with invalid shape is rejected before execution", () => {
     fixtureSource(player.playerId, "combat")
   );
   assert.equal(result.ok, false);
-  assert.match(result.error, /invalid power amount/);
+  assert.match(result.error, /amount must be a positive integer/);
   assert.equal(state.turn.power, 0);
 });
 
@@ -341,14 +342,20 @@ test("timed effect with invalid shape is rejected before its handler", () => {
   const state = initializeGame({ rootDir: process.cwd(), seed: 11606 });
   const player = state.players[0];
   assert.ok(player);
-  const entry = getEffectRuntimeCatalogEntry("fixture_modify_effective_value");
-  assert.ok(entry);
-  const originalExecute = entry.handler.execute;
+  const originalHandler = getEffectRuntimeHandler(
+    "fixture_modify_effective_value"
+  );
   let handlerCalled = false;
-  entry.handler.execute = (...args) => {
-    handlerCalled = true;
-    return originalExecute(...args);
-  };
+  const restore = replaceEffectRuntimeHandlerForTesting(
+    "fixture_modify_effective_value",
+    {
+      ...originalHandler,
+      execute(...args) {
+        handlerCalled = true;
+        return originalHandler.execute(...args);
+      },
+    }
+  );
 
   try {
     const result = executeEffect(
@@ -361,15 +368,15 @@ test("timed effect with invalid shape is rejected before its handler", () => {
         operation: "add",
         amount: "invalid",
         target: { targetType: "player" },
-      } as unknown as RuntimeEffectPayload,
+      },
       fixtureSource(player.playerId, "fixture")
     );
 
     assert.equal(result.ok, false);
-    assert.match(result.error, /unsupported effective-value timing/);
+    assert.match(result.error, /timing must be one of whileControlled, whileScoring/);
     assert.equal(handlerCalled, false);
   } finally {
-    entry.handler.execute = originalExecute;
+    restore();
   }
 });
 

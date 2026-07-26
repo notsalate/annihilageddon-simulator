@@ -9,6 +9,7 @@ import {
   type RuntimeEffect,
 } from "../src/index.js";
 import type { EffectRuntimeHandler } from "../src/engine/effect-runtime-registry.js";
+import type { RuntimeEffectForId } from "../src/engine/runtime-effect.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -17,7 +18,9 @@ import { withTemporaryEffectRuntimeHandler } from "./helpers/with-temporary-effe
 
 const rootDir = process.cwd();
 const terminalEffectId = "fixture_add_power_equal_to_target_cost";
-const terminalHandler: EffectRuntimeHandler = {
+const terminalHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"fixture_add_power_equal_to_target_cost">
+> = {
   effectId: terminalEffectId,
   validateShape() {
     return [];

@@ -4,6 +4,7 @@ import type {
   GameState,
   PlayerState,
   RuntimeEffect,
+  RuntimeEffectForId,
 } from "../../src/index.js";
 import {
   markCardDefinitionId,
@@ -11,7 +12,7 @@ import {
 } from "../../src/domain/types.js";
 
 export interface FixtureDefenseOptions {
-  costs?: Exclude<RuntimeEffect["costs"], undefined>;
+  costs?: Exclude<RuntimeEffectForId<"avoid_attack">["costs"], undefined>;
   branchEffects?: RuntimeEffect[];
   redirectAttack?: boolean;
 }

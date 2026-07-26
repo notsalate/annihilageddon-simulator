@@ -20,6 +20,7 @@ import {
   type EffectRuntimeHandler,
   type EffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
+import type { RuntimeEffectForId } from "../src/engine/runtime-effect.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -33,7 +34,9 @@ import { withTemporaryEffectRuntimeHandler } from "./helpers/with-temporary-effe
 
 const rootDir = process.cwd();
 const fixturePlayerDefeatEffectId = "fixture_add_power_equal_to_target_cost";
-const fixturePlayerDefeatHandler: EffectRuntimeHandler = {
+const fixturePlayerDefeatHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"fixture_add_power_equal_to_target_cost">
+> = {
   effectId: fixturePlayerDefeatEffectId,
   validateShape() {
     return [];

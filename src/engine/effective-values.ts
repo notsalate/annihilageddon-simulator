@@ -254,9 +254,10 @@ function isSelfScoringCardEffect(
   effect: RuntimeEffect,
   sourceDefinitionId: string
 ): boolean {
-  const target = effect.target;
+  const target = "target" in effect ? effect.target : undefined;
   return (
-    target !== undefined &&
+    typeof target === "object" &&
+    target !== null &&
     "targetType" in target &&
     target.targetType === "card" &&
     target.definitionId === sourceDefinitionId
@@ -284,7 +285,10 @@ function isModifierEffect(
   effect: RuntimeEffect,
   valueKind: EffectiveValueKind,
   target: EffectiveValueTarget
-): effect is RuntimeEffect {
+): effect is Extract<
+  RuntimeEffect,
+  { effectId: "fixture_modify_effective_value" | "modify_effective_value" }
+> {
   return (
     (effect.effectId === "fixture_modify_effective_value" ||
       effect.effectId === "modify_effective_value") &&
@@ -295,7 +299,12 @@ function isModifierEffect(
   );
 }
 
-function hasModifierAmount(effect: RuntimeEffect): boolean {
+type EffectiveValueModifierEffect = Extract<
+  RuntimeEffect,
+  { effectId: "fixture_modify_effective_value" | "modify_effective_value" }
+>;
+
+function hasModifierAmount(effect: EffectiveValueModifierEffect): boolean {
   if (effect["operation"] === "invertNegative") {
     return true;
   }
@@ -309,7 +318,7 @@ function hasModifierAmount(effect: RuntimeEffect): boolean {
 function resolveAdditiveModifierAmount(
   state: GameState,
   playerId: PlayerId,
-  effect: RuntimeEffect
+  effect: EffectiveValueModifierEffect
 ): number {
   const amount = effect["amount"];
   if (typeof amount === "number") {
@@ -330,7 +339,7 @@ function resolveAdditiveModifierAmount(
 function countOwnedScoringCards(
   state: GameState,
   playerId: PlayerId,
-  countedCardTypes: unknown
+  countedCardTypes: readonly string[] | undefined
 ): number {
   if (!Array.isArray(countedCardTypes)) {
     return 0;

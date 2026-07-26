@@ -7,7 +7,8 @@ import {
   markTokenInstanceId,
 } from "../src/domain/types.js";
 import {
-  effectRuntimeCatalog,
+  getEffectRuntimeHandler,
+  replaceEffectRuntimeHandlerForTesting,
   tryExecuteSetupEffect,
   type EffectRuntimeSetupServices,
   type SetupEffectSourceContext,
@@ -103,14 +104,18 @@ test("setup catalog executor sets starting life total", () => {
 });
 
 test("setup catalog validates starting-life effect exactly once before its executor", () => {
-  const entry = effectRuntimeCatalog.get("set_starting_life_total");
-  assert.ok(entry);
-  const originalValidateShape = entry.handler.validateShape;
+  const originalHandler = getEffectRuntimeHandler("set_starting_life_total");
   let validationCount = 0;
-  entry.handler.validateShape = (subjectId, effect) => {
-    validationCount += 1;
-    return originalValidateShape(subjectId, effect);
-  };
+  const restore = replaceEffectRuntimeHandlerForTesting(
+    "set_starting_life_total",
+    {
+      ...originalHandler,
+      validateShape(subjectId, effect) {
+        validationCount += 1;
+        return originalHandler.validateShape(subjectId, effect);
+      },
+    }
+  );
 
   try {
     const result = tryExecuteSetupEffect(
@@ -122,7 +127,7 @@ test("setup catalog validates starting-life effect exactly once before its execu
 
     assert.deepEqual(result, { status: "executed" });
   } finally {
-    entry.handler.validateShape = originalValidateShape;
+    restore();
   }
 
   assert.equal(validationCount, 1);
@@ -156,7 +161,7 @@ test("force starting player rejects an invalid target selector before execution"
 
   assert.equal(result.status, "error");
   if (result.status === "error") {
-    assert.match(result.error, /unsupported force-starting-player target/);
+    assert.match(result.error, /targetSelector must be activePlayer/);
   }
 });
 
@@ -235,19 +240,15 @@ test("initializeGame does not look up a wizard property again after its setup ef
 
 test("initializeGame passes combat runtime mode to the setup executor", () => {
   const effectId = "set_starting_life_total";
-  const originalEntry = effectRuntimeCatalog.get(effectId);
-  assert.ok(originalEntry);
-  const originalExecutor = originalEntry.handler.executeSetup;
+  const originalHandler = getEffectRuntimeHandler(effectId);
+  const originalExecutor = originalHandler.executeSetup;
   assert.ok(originalExecutor);
   let observedRuntimeMode: SetupEffectSourceContext["runtimeMode"] | undefined;
-  effectRuntimeCatalog.set(effectId, {
-    ...originalEntry,
-    handler: {
-      ...originalEntry.handler,
-      executeSetup(player, effect, source, services) {
-        observedRuntimeMode = source.runtimeMode;
-        return originalExecutor(player, effect, source, services);
-      },
+  const restore = replaceEffectRuntimeHandlerForTesting(effectId, {
+    ...originalHandler,
+    executeSetup(player, effect, source, services) {
+      observedRuntimeMode = source.runtimeMode;
+      return originalExecutor(player, effect, source, services);
     },
   });
 
@@ -263,7 +264,7 @@ test("initializeGame passes combat runtime mode to the setup executor", () => {
     );
     assert.equal(observedRuntimeMode, "combat");
   } finally {
-    effectRuntimeCatalog.set(effectId, originalEntry);
+    restore();
   }
 });
 

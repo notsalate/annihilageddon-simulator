@@ -141,7 +141,7 @@ test("controlled trigger dispatch preserves Control Ledger order and card source
     predicate: (effect) => effect.effectId === "add_power",
     execute(effect, source) {
       calls.push({
-        amount: typeof effect.amount === "number" ? effect.amount : -1,
+        amount: effect.effectId === "add_power" ? effect.amount : -1,
         sourceType: source.sourceType,
         playerId: source.playerId,
         cardInstanceId: source.cardInstanceId,
@@ -338,7 +338,7 @@ test("after-attack dispatch propagates catalog errors without consuming first-at
 
   assert.equal(result.ok, false);
   if (result.ok) return;
-  assert.match(result.error, /unsupported first-attack damage amount/);
+  assert.match(result.error, /amount must be totalDamageDealtByThatAttack/);
   assert.equal(
     state.turn.damagingAttackPlayerIds.includes(controller.playerId),
     false

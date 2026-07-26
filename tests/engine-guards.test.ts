@@ -262,6 +262,54 @@ test("typed-access guard does not allow new record access in a raw-boundary file
   assert.match(result.stderr, /untracked Record<string, unknown> access/);
 });
 
+test("typed-access guard rejects runtime-effect fallbacks and payload assertions", () => {
+  const fixture = createFixture(`
+    type RuntimeEffectFields = { amount?: unknown };
+    type RuntimeEffectPayload = { effectId: string };
+    const decoded = value as RuntimeEffectPayload;
+    void decoded;
+  `);
+  const result = run("check-engine-typed-access.mjs", fixture);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /forbidden runtime-effect boundary RuntimeEffectFields/);
+  assert.match(result.stderr, /asserts a decoded runtime effect payload/);
+});
+
+test("typed-access guard permits concrete payload annotations but rejects their assertions", () => {
+  const safeFixture = createFixture(`
+    type RuntimeEffectForId<Id extends string> = { effectId: Id };
+    function execute(effect: RuntimeEffectForId<"add_power">) {
+      return effect.effectId;
+    }
+    void execute;
+  `);
+  const safeResult = run("check-engine-typed-access.mjs", safeFixture);
+  assert.equal(safeResult.status, 0);
+
+  const unsafeFixture = createFixture(`
+    type RuntimeEffectForId<Id extends string> = { effectId: Id };
+    const decoded = value as RuntimeEffectForId<"add_power">;
+    void decoded;
+  `);
+  const unsafeResult = run("check-engine-typed-access.mjs", unsafeFixture);
+  assert.equal(unsafeResult.status, 1);
+  assert.match(unsafeResult.stderr, /asserts a decoded runtime effect payload/);
+});
+
+test("typed-access guard rejects raw known payload access in the effect registry", () => {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
+  const sourceDir = path.join(fixtureRoot, "src", "engine");
+  mkdirSync(sourceDir, { recursive: true });
+  writeFileSync(
+    path.join(sourceDir, "effect-runtime-registry.ts"),
+    'const amount = effect["amount"];\nvoid amount;\n',
+    "utf8"
+  );
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /uses raw bracket access for amount/);
+});
+
 function createFixture(source: string): string {
   const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
   const sourceDir = path.join(fixtureRoot, "src", "engine");

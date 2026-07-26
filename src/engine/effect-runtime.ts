@@ -1,3 +1,4 @@
+import { isPlainRecord } from "../common.js";
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import {
   resolveDefenseWindow as resolveDefenseWindowWithServices,
@@ -38,11 +39,12 @@ import {
   type EffectSourceContext,
   type MayhemAttackPlanTarget,
   executeAttackOutcomeBranch,
-  resolveEffectRuntimeCatalogEntry,
+  getEffectRuntimeCatalogEntry,
   type TargetChoice,
   type TargetChoiceResult,
 } from "./effect-runtime-registry.js";
 import {
+  isRuntimeEffectId,
   isRuntimeEffectSelectorTarget,
   type RuntimeEffect,
   type RuntimeEffectId,
@@ -405,23 +407,19 @@ function cardTriggerMatches(
   effect: RuntimeEffectPayload,
   definition: CardDefinition
 ): boolean {
-  const cardTypes = effect.cardTypes;
+  const cardTypes = "cardTypes" in effect ? effect.cardTypes : undefined;
   const matchesType =
     Array.isArray(cardTypes) &&
-    cardTypes.some(
-      (cardType) =>
-        typeof cardType === "string" &&
-        definition.engine.cardTypes.includes(cardType)
-    );
+    cardTypes.some((cardType) => definition.engine.cardTypes.includes(cardType));
   const matchesOngoing =
-    effect.isOngoing === true && definition.engine.isOngoing;
-  const cardTags = effect.cardTags;
+    "isOngoing" in effect &&
+    effect.isOngoing === true &&
+    definition.engine.isOngoing;
+  const cardTags = "cardTags" in effect ? effect.cardTags : undefined;
   const matchesTag =
     Array.isArray(cardTags) &&
     cardTags.some(
-      (cardTag) =>
-        typeof cardTag === "string" &&
-        definition.engine.tags?.includes(cardTag) === true
+      (cardTag) => definition.engine.tags?.includes(cardTag) === true
     );
   return matchesType || matchesOngoing || matchesTag;
 }
@@ -439,24 +437,33 @@ function countGainedCardsMatchingEffect(
 export function executeEffect(
   state: GameState,
   player: PlayerState,
-  effect: RuntimeEffectPayload,
+  effect: unknown,
   source: EffectSourceContext
 ): EffectExecutionResult {
-  const resolution = resolveEffectRuntimeCatalogEntry(
-    `Effect ${asString(effect["effectId"])}`,
-    asString(effect["effectId"]),
-    effect,
-    source.runtimeMode,
-    source.sourceType
-  );
-  if (!resolution.ok) {
-    return { ok: false, error: getEffectExecutionError(resolution.errors) };
+  if (!isPlainRecord(effect) || !isRuntimeEffectId(effect["effectId"])) {
+    return {
+      ok: false,
+      error: `Unsupported effect id ${asString(
+        isPlainRecord(effect) ? effect["effectId"] : undefined
+      )}`,
+    };
   }
-
-  return resolution.entry.handler.execute(
+  const effectId = effect["effectId"];
+  const entry = getEffectRuntimeCatalogEntry(effectId);
+  if (!entry.supportedSourceKinds.includes(source.sourceType)) {
+    return { ok: false, error: `Effect ${effectId} uses unsupported source kind` };
+  }
+  if (!entry.supportedModes.includes(source.runtimeMode)) {
+    return {
+      ok: false,
+      error: `Effect ${effectId} is unavailable in ${source.runtimeMode} mode`,
+    };
+  }
+  return entry.execute(
+    `Effect ${effectId}`,
+    effect,
     state,
     player,
-    resolution.effect,
     source,
     effectRuntimeServices
   );
@@ -471,7 +478,7 @@ function effectConditionMatches(
   player: PlayerState,
   effect: RuntimeEffectPayload
 ): boolean {
-  const { condition } = effect;
+  const condition = "condition" in effect ? effect.condition : undefined;
   if (condition === undefined) {
     return true;
   }
@@ -481,7 +488,7 @@ function effectConditionMatches(
       const definition = state.cardDefinitions.get(card.definitionId);
       return (
         definition !== undefined &&
-        condition.cardTypes.some((cardType: string) =>
+        condition.cardTypes.some((cardType) =>
           controlledCardMatchesType(definition, cardType)
         )
       );
@@ -587,7 +594,8 @@ function effectMatchesCardDefinition(
   effect: RuntimeEffectPayload,
   definitionId: string
 ): boolean {
-  const cardDefinitionIds = effect["cardDefinitionIds"];
+  const cardDefinitionIds =
+    "cardDefinitionIds" in effect ? effect.cardDefinitionIds : undefined;
   if (
     Array.isArray(cardDefinitionIds) &&
     cardDefinitionIds.some((candidate) => candidate === definitionId)
@@ -595,17 +603,14 @@ function effectMatchesCardDefinition(
     return true;
   }
 
-  const cardTags = effect["cardTags"];
+  const cardTags = "cardTags" in effect ? effect.cardTags : undefined;
   if (!Array.isArray(cardTags)) {
     return false;
   }
 
   const definition = state.cardDefinitions.get(definitionId);
   const definitionTags = definition?.engine.tags ?? [];
-  return cardTags.some(
-    (candidate) =>
-      typeof candidate === "string" && definitionTags.includes(candidate)
-  );
+  return cardTags.some((candidate) => definitionTags.includes(candidate));
 }
 
 function resolvePlayerControlledAttackWithRuntimeAdapters(
@@ -715,7 +720,7 @@ function resolvePlayerControlledAttackTargets(
       intent.source
     );
   }
-  if (effect["targetSelector"] === "eachFoe") {
+  if ("targetSelector" in effect && effect.targetSelector === "eachFoe") {
     return {
       ok: true,
       players: getOpponentsInSeatingOrder(
@@ -963,7 +968,7 @@ function resolveStatusTargetPlayers(
   effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): { ok: true; players: PlayerState[] } | { ok: false; error: string } {
-  if (effect["targetSelector"] === "eachPlayerClockwiseFromActive") {
+  if ("targetSelector" in effect && effect.targetSelector === "eachPlayerClockwiseFromActive") {
     return {
       ok: true,
       players: getPlayersInActiveOrder(state),
@@ -1029,7 +1034,7 @@ function resolveTargetChoice(
     runtimeChoices
   );
   if (selected === undefined) {
-    if (effect["emptyChoice"] === "fail") {
+    if ("emptyChoice" in effect && effect.emptyChoice === "fail") {
       return {
         ok: false,
         error: `No legal choices for effect ${asString(effectId)}`,
@@ -1182,10 +1187,10 @@ function buildLegalTargetChoices(
   player: PlayerState,
   effect: RuntimeEffectPayload
 ): { ok: true; choices: TargetChoice[] } | { ok: false; error: string } {
-  const target = effect.target;
+  const target = "target" in effect ? effect.target : undefined;
   if (!isRuntimeEffectSelectorTarget(target)) {
-    const selector = effect.targetSelector;
-    const targetSelector = effect.targetSelector;
+    const targetSelector =
+      "targetSelector" in effect ? effect.targetSelector : undefined;
     if (targetSelector === "chosenFoe") {
       return {
         ok: true,
@@ -1210,7 +1215,7 @@ function buildLegalTargetChoices(
 
     return {
       ok: false,
-      error: `Unsupported target selector ${asString(selector)}`,
+      error: `Unsupported target selector ${asString(targetSelector)}`,
     };
   }
 
@@ -1581,32 +1586,21 @@ function applyAfterPlayerAttackDamage(
     runtimeMode: state.runtimeMode,
     timing: "afterFirstAttackDamageEachTurn",
     execute(effect, source) {
-      const resolution = resolveEffectRuntimeCatalogEntry(
+      const entry = getEffectRuntimeCatalogEntry(effect.effectId);
+      if (
+        !entry.supportedModes.includes(source.runtimeMode) ||
+        !entry.supportedSourceKinds.includes(source.sourceType)
+      ) {
+        return {
+          ok: false,
+          error: `Effect ${effect.effectId} is not applicable to its source`,
+        };
+      }
+      return entry.applyAfterPlayerAttackDamage(
         `Effect ${effect.effectId}`,
-        effect.effectId,
         effect,
-        source.runtimeMode,
-        source.sourceType
-      );
-      if (!resolution.ok) {
-        return {
-          ok: false,
-          error: getEffectExecutionError(resolution.errors),
-        };
-      }
-
-      const applyTrigger =
-        resolution.entry.handler.applyAfterPlayerAttackDamage;
-      if (applyTrigger === undefined) {
-        return {
-          ok: false,
-          error: `Missing after-attack executor for ${effect.effectId}`,
-        };
-      }
-      return applyTrigger(
         state,
         attackingPlayer,
-        resolution.effect,
         source,
         totalDamageDealt
       );

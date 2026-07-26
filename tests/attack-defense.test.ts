@@ -37,10 +37,10 @@ test("defense payment plan builds mixed cumulative steps in cost order", () => {
   const result = buildDefensePaymentPlan(defender, defense, [
     { costId: "spend_chips", amount: 2 },
     { costId: "pay_life", amount: 3 },
-    { costId: "discard_other_hand_card" },
+    { costId: "discard_other_hand_card", amount: 1 },
     { costId: "spend_chips", amount: 4 },
     { costId: "pay_life", amount: 2 },
-    { costId: "discard_other_hand_card" },
+    { costId: "discard_other_hand_card", amount: 1 },
   ]);
 
   assert.equal(result.ok, true);
@@ -72,8 +72,8 @@ test("defense payment plan reserves duplicate discard costs in hand order", () =
   assert.ok(secondCard);
 
   const result = buildDefensePaymentPlan(defender, defense, [
-    { costId: "discard_other_hand_card" },
-    { costId: "discard_other_hand_card" },
+    { costId: "discard_other_hand_card", amount: 1 },
+    { costId: "discard_other_hand_card", amount: 1 },
   ]);
 
   assert.equal(result.ok, true);
@@ -116,8 +116,8 @@ test("defense payment plan rejects unavailable other hand cards", () => {
   moveDeckCardsToHand(defender, 1);
 
   const result = buildDefensePaymentPlan(defender, defense, [
-    { costId: "discard_other_hand_card" },
-    { costId: "discard_other_hand_card" },
+    { costId: "discard_other_hand_card", amount: 1 },
+    { costId: "discard_other_hand_card", amount: 1 },
   ]);
 
   assert.equal(result.ok, false);
@@ -135,7 +135,7 @@ test("defense payment preflight does not mutate state, events, or RNG", () => {
   const expectedRng = state.rng.fork();
 
   const result = buildDefensePaymentPlan(defender, defense, [
-    { costId: "discard_other_hand_card" },
+    { costId: "discard_other_hand_card", amount: 1 },
     { costId: "spend_chips", amount: 2 },
     { costId: "pay_life", amount: 3 },
   ]);
@@ -250,8 +250,8 @@ test("defense module excludes defenses requiring more other cards than are avail
   const { state, attacker, defender, source } = createScenario();
   const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
     costs: [
-      { costId: "discard_other_hand_card" },
-      { costId: "discard_other_hand_card" },
+      { costId: "discard_other_hand_card", amount: 1 },
+      { costId: "discard_other_hand_card", amount: 1 },
     ],
   });
   const otherCard = defender.deck.shift();
@@ -282,10 +282,10 @@ test("defense module commits exact planned cards and costs in event order", () =
   const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
     costs: [
       { costId: "spend_chips", amount: 2 },
-      { costId: "discard_other_hand_card" },
+      { costId: "discard_other_hand_card", amount: 1 },
       { costId: "pay_life", amount: 3 },
       { costId: "spend_chips", amount: 1 },
-      { costId: "discard_other_hand_card" },
+      { costId: "discard_other_hand_card", amount: 1 },
     ],
   });
   const [firstCard, secondCard, untouchedCard] = moveDeckCardsToHand(defender, 3);

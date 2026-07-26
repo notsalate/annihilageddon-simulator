@@ -64,7 +64,7 @@ test("failed defense branch restores committed payment, events, usage, and RNG",
     {
       costs: [
         { costId: "spend_chips", amount: 2 },
-        { costId: "discard_other_hand_card" },
+        { costId: "discard_other_hand_card", amount: 1 },
         { costId: "pay_life", amount: 2 },
       ],
       branchEffects: rollbackBranchEffects,

@@ -1,23 +1,24 @@
-import assert from "node:assert/strict";
-
-import type { RuntimeEffectId } from "../../src/engine/runtime-effect.js";
+import type {
+  RuntimeEffectForId,
+  RuntimeEffectId,
+} from "../../src/engine/runtime-effect.js";
 import {
-  effectRuntimeCatalog,
+  replaceEffectRuntimeHandlerForTesting,
   type EffectRuntimeHandler,
 } from "../../src/engine/effect-runtime-registry.js";
 
-export function withTemporaryEffectRuntimeHandler<Result>(
-  effectId: RuntimeEffectId,
-  handler: EffectRuntimeHandler,
+export function withTemporaryEffectRuntimeHandler<
+  Id extends RuntimeEffectId,
+  Result,
+>(
+  effectId: Id,
+  handler: EffectRuntimeHandler<RuntimeEffectForId<Id>>,
   run: () => Result
 ): Result {
-  const originalEntry = effectRuntimeCatalog.get(effectId);
-  assert.ok(originalEntry);
-  effectRuntimeCatalog.set(effectId, { ...originalEntry, handler });
-
+  const restore = replaceEffectRuntimeHandlerForTesting(effectId, handler);
   try {
     return run();
   } finally {
-    effectRuntimeCatalog.set(effectId, originalEntry);
+    restore();
   }
 }

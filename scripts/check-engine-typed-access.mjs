@@ -60,36 +60,101 @@ const physicalCardZoneConsumerGuards = new Map([
   ],
 ]);
 const configuredAllowedViolations = [
-  ["src/engine/data.ts", 1274, 3, "decodeRuntimeSourceMetadata"],
-  ["src/engine/data.ts", 1678, 1, "expectRuntimeRecord"],
-  ["src/engine/data.ts", 1691, 1, "requireRecordField"],
-  ["src/engine/data.ts", 1706, 1, "optionalRecordField"],
-  ["src/engine/data.ts", 1692, 3, "requireRecordField"],
-  ["src/engine/data.ts", 1707, 3, "optionalRecordField"],
-  ["src/engine/data.ts", 1726, 3, "requireArrayField"],
-  ["src/engine/data.ts", 1741, 3, "requireUnknownArrayField"],
-  ["src/engine/data.ts", 1751, 3, "requireRuntimeEffectArrayField"],
-  ["src/engine/data.ts", 1817, 11, "requireRuntimeEffectArrayField"],
-  ["src/engine/data.ts", 2022, 3, "optionalUnknownArrayField"],
-  ["src/engine/data.ts", 2039, 3, "requireStringField"],
-  ["src/engine/data.ts", 2054, 3, "optionalStringField"],
-  ["src/engine/data.ts", 2073, 3, "requireNonEmptyStringField"],
-  ["src/engine/data.ts", 2091, 3, "optionalNonEmptyStringField"],
-  ["src/engine/data.ts", 2103, 3, "requireStringOrNullField"],
-  ["src/engine/data.ts", 2118, 3, "requireExactStringField"],
-  ["src/engine/data.ts", 2138, 3, "requireNumberField"],
-  ["src/engine/data.ts", 2153, 3, "requireNumberOrNullField"],
-  ["src/engine/data.ts", 2171, 3, "requireBooleanField"],
-  ["src/engine/data.ts", 2186, 3, "requireStringArrayField"],
-  ["src/engine/data.ts", 2210, 3, "requireUnsupportedMechanicsField"],
-  ["src/engine/data.ts", 2239, 3, "optionalStringArrayField"],
-  ["src/engine/data.ts", 2252, 3, "requireCardKindField"],
-  ["src/engine/data.ts", 2267, 3, "requireTokenKindField"],
-  ["src/engine/data.ts", 2292, 3, "validateRuntimeEffectDefinition"],
-  ["src/engine/data.ts", 2322, 3, "validateNestedAttackBranches"],
-  ["src/engine/data.ts", 2375, 43, "isEffectRecord"],
-  ["src/engine/runtime-effect.ts", 578, 4, "isRuntimeEffectTargetRecord"],
+  ["src/engine/data.ts", 1267, 3, "decodeRuntimeSourceMetadata"],
+  ["src/engine/data.ts", 1671, 1, "expectRuntimeRecord"],
+  ["src/engine/data.ts", 1684, 1, "requireRecordField"],
+  ["src/engine/data.ts", 1685, 3, "requireRecordField"],
+  ["src/engine/data.ts", 1699, 1, "optionalRecordField"],
+  ["src/engine/data.ts", 1700, 3, "optionalRecordField"],
+  ["src/engine/data.ts", 1719, 3, "requireArrayField"],
+  ["src/engine/data.ts", 1734, 3, "requireUnknownArrayField"],
+  ["src/engine/data.ts", 1744, 3, "requireRuntimeEffectArrayField"],
+  ["src/engine/data.ts", 1768, 3, "optionalUnknownArrayField"],
+  ["src/engine/data.ts", 1785, 3, "requireStringField"],
+  ["src/engine/data.ts", 1800, 3, "optionalStringField"],
+  ["src/engine/data.ts", 1819, 3, "requireNonEmptyStringField"],
+  ["src/engine/data.ts", 1837, 3, "optionalNonEmptyStringField"],
+  ["src/engine/data.ts", 1849, 3, "requireStringOrNullField"],
+  ["src/engine/data.ts", 1864, 3, "requireExactStringField"],
+  ["src/engine/data.ts", 1884, 3, "requireNumberField"],
+  ["src/engine/data.ts", 1899, 3, "requireNumberOrNullField"],
+  ["src/engine/data.ts", 1917, 3, "requireBooleanField"],
+  ["src/engine/data.ts", 1932, 3, "requireStringArrayField"],
+  ["src/engine/data.ts", 1956, 3, "requireUnsupportedMechanicsField"],
+  ["src/engine/data.ts", 1985, 3, "optionalStringArrayField"],
+  ["src/engine/data.ts", 1998, 3, "requireCardKindField"],
+  ["src/engine/data.ts", 2013, 3, "requireTokenKindField"],
+  ["src/engine/data.ts", 2038, 3, "validateRuntimeEffectDefinition"],
+  ["src/engine/data.ts", 2069, 43, "isEffectRecord"],
+  ["src/engine/runtime-effect-decoder.ts", 76, 9, "decodeObject"],
+  ["src/engine/runtime-effect-decoder.ts", 1292, 41, "isPlainRecord"],
+  ["src/engine/runtime-effect.ts", 1071, 4, "isRuntimeEffectTargetRecord"],
+  ["src/engine/runtime-effect.ts", 1076, 3, "hasExactKeys"],
 ];
+
+const typedEffectBoundaryViolations = [];
+const forbiddenRuntimeEffectBoundaryIdentifiers = new Set([
+  "RuntimeEffectFields",
+  "RuntimeEffectPayloadBase",
+  "exactRuntimeEffectPayloadFields",
+  "getExactRuntimeEffectPayloadFields",
+]);
+const forbiddenRuntimeEffectAssertionTypes = new Set([
+  "RuntimeEffectPayload",
+  "RuntimeEffectForId",
+]);
+const knownRuntimeEffectPayloadFields = new Set([
+  "activationLimit",
+  "allowDinglerStatusExchange",
+  "allowLifeExchange",
+  "amount",
+  "amountPerOwnedCard",
+  "amountPerPermanent",
+  "amountPerPlayer",
+  "branchEffects",
+  "cardDefinitionIds",
+  "cardKind",
+  "cardTags",
+  "cardTypes",
+  "chipAmount",
+  "chipCost",
+  "chooser",
+  "condition",
+  "conditionId",
+  "costMode",
+  "costs",
+  "countedCardTypes",
+  "deathCondition",
+  "destination",
+  "destroyedCardSource",
+  "drawAmount",
+  "emptyChoice",
+  "excludeSource",
+  "fromDefinitionId",
+  "isOngoing",
+  "lifeCost",
+  "lifeTotal",
+  "maximumCards",
+  "minimumCards",
+  "onDamageDealt",
+  "onKill",
+  "operation",
+  "optional",
+  "options",
+  "redirectAttack",
+  "source",
+  "sourceZones",
+  "status",
+  "statusId",
+  "target",
+  "targetSelector",
+  "timing",
+  "toDefinitionId",
+  "unlessStatusId",
+  "valueKind",
+  "voteTargetSelector",
+  "winnerDrawAmount",
+]);
 
 for (const filePath of listTypeScriptFiles(engineDir)) {
   const sourceText = readFileSync(filePath, "utf8");
@@ -100,6 +165,13 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
     true
   );
   const relativePath = path.relative(rootDir, filePath).replaceAll("\\", "/");
+  for (const identifier of forbiddenRuntimeEffectBoundaryIdentifiers) {
+    if (sourceText.includes(identifier)) {
+      typedEffectBoundaryViolations.push(
+        `${relativePath} reintroduces forbidden runtime-effect boundary ${identifier}`
+      );
+    }
+  }
   checkPhysicalCardZoneOwnership(relativePath, sourceFile);
   if (relativePath === attackResolutionOwner) {
     attackResolutionOwnerPresent = true;
@@ -107,15 +179,41 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
   checkAttackLifecycleOwnership(relativePath, sourceFile);
   const aliases = collectTypeAliases(sourceFile);
   function visit(node) {
-    const assertedType =
+    const assertionType =
       ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)
         ? node.type
-        : isForbiddenAnnotation(node)
-          ? node.type
-          : undefined;
+        : undefined;
+    const inspectedType =
+      assertionType ?? (isForbiddenAnnotation(node) ? node.type : undefined);
     if (
-      assertedType &&
-      isRecordType(assertedType, aliases, sourceFile, new Set(), node)
+      assertionType &&
+      referencesForbiddenRuntimeEffectAssertion(assertionType)
+    ) {
+      const position = sourceFile.getLineAndCharacterOfPosition(
+        node.getStart(sourceFile)
+      );
+      typedEffectBoundaryViolations.push(
+        `${relativePath}:${position.line + 1}:${position.character + 1} asserts a decoded runtime effect payload`
+      );
+    }
+    if (
+      relativePath === "src/engine/effect-runtime-registry.ts" &&
+      ts.isElementAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "effect" &&
+      ts.isStringLiteral(node.argumentExpression) &&
+      knownRuntimeEffectPayloadFields.has(node.argumentExpression.text)
+    ) {
+      const position = sourceFile.getLineAndCharacterOfPosition(
+        node.getStart(sourceFile)
+      );
+      typedEffectBoundaryViolations.push(
+        `${relativePath}:${position.line + 1}:${position.character + 1} uses raw bracket access for ${node.argumentExpression.text}`
+      );
+    }
+    if (
+      inspectedType &&
+      isRecordType(inspectedType, aliases, sourceFile, new Set(), node)
     ) {
       const position = sourceFile.getLineAndCharacterOfPosition(
         node.getStart(sourceFile)
@@ -288,6 +386,11 @@ if (stale.length || untracked.length)
         ? ` (${untracked.map(([file, line, column]) => `${file}:${line}:${column} untracked Record<string, unknown> access`).join(", ")})`
         : "")
   );
+if (typedEffectBoundaryViolations.length > 0) {
+  throw new Error(
+    `Typed runtime-effect boundary violation(s): ${typedEffectBoundaryViolations.join("; ")}`
+  );
+}
 if (
   attackResolutionOwnerPresent &&
   playerControlledAttackOwnerDeclarationCount !== 1
@@ -309,6 +412,23 @@ if (physicalCardZoneOwnershipViolations.length > 0) {
 console.log(
   `Engine typed-access guard: ok (${violations.length} tracked exception(s)); normal attack lifecycle ownership: ok; physical card zone ownership: ok`
 );
+
+function referencesForbiddenRuntimeEffectAssertion(typeNode) {
+  if (
+    ts.isTypeReferenceNode(typeNode) &&
+    ts.isIdentifier(typeNode.typeName) &&
+    forbiddenRuntimeEffectAssertionTypes.has(typeNode.typeName.text)
+  ) {
+    return true;
+  }
+  let found = false;
+  ts.forEachChild(typeNode, (child) => {
+    if (!found && referencesForbiddenRuntimeEffectAssertion(child)) {
+      found = true;
+    }
+  });
+  return found;
+}
 
 function findOwner(node) {
   for (let current = node; current; current = current.parent) {

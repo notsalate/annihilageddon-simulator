@@ -1106,7 +1106,7 @@ test("fails explicitly when replay choice metadata drifts", () => {
     amount: 1,
     get targetSelector() {
       targetSelectorReads += 1;
-      return targetSelectorReads <= 4 ? "chosenPlayer" : "chosenFoe";
+      return targetSelectorReads === 1 ? "chosenPlayer" : "chosenFoe";
     },
   };
   addFixtureDefinitionToActiveHand(

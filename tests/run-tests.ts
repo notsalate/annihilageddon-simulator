@@ -35,6 +35,7 @@ const testSuites = [
   "best-move-analysis.test.js",
   "best-move-cli.test.js",
   "effect-runtime-applicability.test.js",
+  "effect-runtime-catalog-types.test.js",
   "attack-resolution.test.js",
   "attack-replacement-ongoing.test.js",
   "attack-defense.test.js",
