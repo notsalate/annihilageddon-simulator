@@ -109,3 +109,5 @@
 - [x] `git diff --check origin/master...HEAD`.
 - [x] Повторное Standards/Spec review текущего head.
 - [x] Обновить PR body итоговым head и результатами проверок.
+
+**Final verification evidence (2026-07-26):** production tree `f24b44f20ef11af1357d9724cb0607f7edec8def` прошёл точечные Trigger Dispatch/runtime regression suites, `npm run check`, `npm run report:card-runtime-clusters` и `git diff --check origin/master...HEAD`. Последующие изменения затрагивают только итоговую фиксацию checklist/PR metadata; production-код, `package.json` и `package-lock.json` не менялись.
