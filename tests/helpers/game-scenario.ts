@@ -10,11 +10,13 @@ import {
   type PlayerState,
   type RuntimeEffect,
   type RuntimeEffectChoiceStrategy,
+  type RuntimeEffectId,
 } from "../../src/index.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
 } from "../../src/domain/types.js";
+import { grantTemporaryControl } from "../../src/engine/control-ledger.js";
 
 export interface CreateGameScenarioOptions {
   rootDir: string;
@@ -55,6 +57,7 @@ export type GivenRuntimeCardOptions = GivenRuntimeCardCommonOptions &
         cardKind?: never;
         cardTypes?: never;
         markers?: never;
+        tags?: never;
       }
     | {
         definitionId?: never;
@@ -65,6 +68,7 @@ export type GivenRuntimeCardOptions = GivenRuntimeCardCommonOptions &
         cardKind?: CardDefinition["visible"]["cardKind"];
         cardTypes?: string[];
         markers?: string[];
+        tags?: string[];
       }
   );
 
@@ -127,6 +131,31 @@ export function givenRuntimeCard(
   return card;
 }
 
+export function givenTemporaryControl(
+  scenario: GameScenario,
+  card: CardInstance,
+  controller: PlayerState
+): CardInstance {
+  grantTemporaryControl(
+    scenario.state,
+    card.instanceId,
+    controller.playerId
+  );
+  return card;
+}
+
+export function choosePlayerTargetForEffect(
+  scenario: GameScenario,
+  effectId: RuntimeEffectId,
+  target: PlayerState
+): void {
+  chooseEffect(scenario, ({ effectId: requestedEffectId, choices }) =>
+    requestedEffectId === effectId
+      ? choices.find((choice) => choice.choiceId === target.playerId)
+      : undefined
+  );
+}
+
 export function chooseEffect(
   scenario: GameScenario,
   selector: RuntimeEffectChoiceStrategy
@@ -177,6 +206,7 @@ function registerFixtureDefinition(
       playableInV0: true,
       cardKind: options.cardKind ?? "normal",
       cardTypes,
+      ...(options.tags === undefined ? {} : { tags: [...options.tags] }),
       cost: options.cost ?? 0,
       victoryPoints: 0,
       isOngoing,
