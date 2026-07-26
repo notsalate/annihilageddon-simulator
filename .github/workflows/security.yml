@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "agent/architecture-deepening-findings"
-          test "$(git rev-parse HEAD^)" = "239d2e41e09c0a02ec54daa5bea5df757f51ce9e"
+          test "$(git rev-parse HEAD^)" = "2d0b4dd0e776c1811e0700e00eb2d56e545bf9f1"
 
       - name: Apply verified patches
         shell: bash
@@ -124,13 +124,64 @@ jobs:
           npm test
           npm run report:card-runtime-clusters
 
-      - name: Commit and push implementation only to PR 137
+      - name: Create verified Git Data commit object
+        id: create_commit
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add --all
-          git commit -m "refactor(engine): сделать каталог эффектов исчерпывающим"
-          git diff --quiet HEAD^ HEAD -- .github/workflows
-          git push origin HEAD:agent/architecture-deepening-findings
+          parent_sha="$(git rev-parse HEAD)"
+          base_tree_sha="$(git rev-parse "${parent_sha}^{tree}")"
+          elements_file="${RUNNER_TEMP}/tree-elements.json"
+          paths_file="${RUNNER_TEMP}/changed-paths.txt"
+          echo '[]' > "${elements_file}"
+          git add --intent-to-add .
+          git diff --name-only HEAD > "${paths_file}"
+          git reset
+
+          while IFS= read -r path; do
+            if [ -e "${path}" ]; then
+              encoded="$(base64 -w0 -- "${path}")"
+              blob_sha="$(
+                jq -n --arg content "${encoded}" '{content:$content,encoding:"base64"}' \
+                  | gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input - --jq '.sha'
+              )"
+              mode="$(git ls-files -s -- "${path}" | awk 'NR == 1 { print $1 }')"
+              if [ -z "${mode}" ]; then
+                mode="100644"
+              fi
+              jq --arg path "${path}" --arg mode "${mode}" --arg sha "${blob_sha}" \
+                '. + [{path:$path,mode:$mode,type:"blob",sha:$sha}]' \
+                "${elements_file}" > "${elements_file}.next"
+            else
+              jq --arg path "${path}" \
+                '. + [{path:$path,mode:"100644",type:"blob",sha:null}]' \
+                "${elements_file}" > "${elements_file}.next"
+            fi
+            mv "${elements_file}.next" "${elements_file}"
+          done < "${paths_file}"
+
+          tree_sha="$(
+            jq -n --arg base_tree "${base_tree_sha}" --slurpfile tree "${elements_file}" \
+              '{base_tree:$base_tree,tree:$tree[0]}' \
+              | gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input - --jq '.sha'
+          )"
+          commit_sha="$(
+            jq -n \
+              --arg message 'refactor(engine): сделать каталог эффектов исчерпывающим' \
+              --arg tree "${tree_sha}" \
+              --arg parent "${parent_sha}" \
+              '{message:$message,tree:$tree,parents:[$parent]}' \
+              | gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input - --jq '.sha'
+          )"
+          printf '%s\n' "${commit_sha}" | tee "${RUNNER_TEMP}/pr137-final-commit-sha.txt"
+          echo "commit_sha=${commit_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload verified commit SHA
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr137-verified-commit-sha
+          path: ${{ runner.temp }}/pr137-final-commit-sha.txt
+          if-no-files-found: error
+          retention-days: 1
