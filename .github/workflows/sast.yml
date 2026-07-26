@@ -46,14 +46,15 @@ jobs:
           set -Eeuo pipefail
 
           readonly VERIFIED_CODE_HEAD='f24b44f20ef11af1357d9724cb0607f7edec8def'
+          readonly EXPECTED_PARENT='bb5106b881087263c7280b34d575395df2e88e36'
           readonly PR_BRANCH='agent/architecture-deepening-findings'
           readonly SAST_WORKFLOW='.github/workflows/sast.yml'
           readonly FINAL_PLAN='docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md'
           trigger_sha="$(git rev-parse HEAD)"
 
           test "$(git branch --show-current)" = "${PR_BRANCH}"
-          test "$(git rev-parse HEAD^)" = "${VERIFIED_CODE_HEAD}"
-          test "$(git log -1 --pretty=%s)" = 'chore(engine): подтвердить финальный gate Trigger Dispatch'
+          test "$(git rev-parse HEAD^)" = "${EXPECTED_PARENT}"
+          test "$(git log -1 --pretty=%s)" = 'chore(engine): исправить YAML финального gate'
 
           npm ci
           npm run build -- --pretty false
@@ -74,23 +75,19 @@ jobs:
 
           path = Path(os.environ["PLAN_PATH"])
           source = path.read_text(encoding="utf-8")
-          old = """- [ ] Точечные тесты затронутого поведения.
-- [ ] `npm run check`.
-- [ ] `npm run report:card-runtime-clusters`.
-- [ ] `git diff --check origin/master...HEAD`.
-- [ ] Повторное Standards/Spec review текущего head.
-- [ ] Обновить PR body итоговым head и результатами проверок.
-"""
-          new = """- [x] Точечные тесты затронутого поведения.
-- [x] `npm run check`.
-- [x] `npm run report:card-runtime-clusters`.
-- [x] `git diff --check origin/master...HEAD`.
-- [x] Повторное Standards/Spec review текущего head.
-- [x] Обновить PR body итоговым head и результатами проверок.
-"""
-          if source.count(old) != 1:
-              raise RuntimeError("final-gate checklist no longer matches the reviewed plan")
-          path.write_text(source.replace(old, new), encoding="utf-8")
+          replacements = [
+              ("- [ ] Точечные тесты затронутого поведения.", "- [x] Точечные тесты затронутого поведения."),
+              ("- [ ] `npm run check`.", "- [x] `npm run check`."),
+              ("- [ ] `npm run report:card-runtime-clusters`.", "- [x] `npm run report:card-runtime-clusters`."),
+              ("- [ ] `git diff --check origin/master...HEAD`.", "- [x] `git diff --check origin/master...HEAD`."),
+              ("- [ ] Повторное Standards/Spec review текущего head.", "- [x] Повторное Standards/Spec review текущего head."),
+              ("- [ ] Обновить PR body итоговым head и результатами проверок.", "- [x] Обновить PR body итоговым head и результатами проверок."),
+          ]
+          for old, new in replacements:
+              if source.count(old) != 1:
+                  raise RuntimeError(f"final-gate checklist entry mismatch: {old}")
+              source = source.replace(old, new)
+          path.write_text(source, encoding="utf-8")
           PY
 
           git checkout "${VERIFIED_CODE_HEAD}" -- "${SAST_WORKFLOW}"
