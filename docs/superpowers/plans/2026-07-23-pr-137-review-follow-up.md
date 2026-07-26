@@ -85,7 +85,7 @@
 - Create: `tests/control-ledger-zones.test.ts`
 
 - [x] Добавить `removeCardFromLocation(state, instanceId)` рядом с `findCardLocation`.
-- [x] Сделать перечень физических зон единственным внутри Control Ledger.
+- [x] Сделать единый descriptor inventory всех физических card locations, включая array- и singleton-зоны, единственным внутри Control Ledger.
 - [x] Перевести Effect Runtime move helpers на location/removal seam.
 
 ### Task 7: Align architecture documentation
@@ -98,16 +98,42 @@
 
 - [x] Зафиксировать полное владение ordinary player-controlled lifecycle в `attack-resolution.ts`, отдельный transactional submodule `attack-defense.ts` и узкие adapters в `effect-runtime.ts`.
 - [x] Зафиксировать catalog-owned Trigger Dispatch с typed operations, stop-on-error/game-end и end-turn aggregate без raw effect contexts.
-- [x] Зафиксировать физический location/removal ownership Control Ledger.
+- [x] Зафиксировать descriptor-inventory, physical location/removal и singleton-zone ownership Control Ledger.
 - [x] Зафиксировать behavior-named focused regression suites вместо общего review file.
 
-### Task 8: Final gate and publication
+### Task 8: Migrate focused scenarios to the shared helper
 
-- [x] Точечные тесты затронутого поведения.
-- [x] `npm run check`.
+**Files:**
+- Modify: `tests/helpers/game-scenario.ts`
+- Modify: `tests/helpers/game-scenario.test.ts`
+- Modify: `tests/controlled-power-ongoing.test.ts`
+- Modify: `tests/attack-replacement-ongoing.test.ts`
+- Modify: `tests/trigger-dispatch-ongoing.test.ts`
+- Modify: `tests/trigger-dispatch.test.ts`
+- Modify: `tests/AGENTS.md`
+
+- [x] Добавить `tags?: string[]` в generated-definition branch и defensive copy в `definition.engine.tags`.
+- [x] Добавить `givenTemporaryControl()` как thin adapter к production Control Ledger без перемещения карты или изменения owner.
+- [x] Добавить `choosePlayerTargetForEffect()` с exact target ID только для указанного effect ID и безопасным `undefined` fallback для остальных effects.
+- [x] Мигрировать три ongoing suites и `trigger-dispatch.test.ts` на общий scenario seam.
+- [x] Удалить локальные runtime-card builders и manual branded ID assembly из четырёх migrated suites.
+- [x] Добавить helper self-tests и structural regression; legacy `tests/action-loop.test.ts` не мигрировать массово.
+
+### Task 9: Final gate and publication
+
+- [x] `npm run build -- --pretty false` на восстановленном source snapshot.
+- [x] 19 точечных scenario/ongoing/Trigger Dispatch тестов.
+- [x] `npm run typecheck:strictest`.
+- [x] Все engine guards (`ts-suppressions`, `unknown-arrays`, `event-recording`, `typed-access`, `json-parse-assertions`).
 - [x] `npm run report:card-runtime-clusters`.
-- [x] `git diff --check origin/master...HEAD`.
-- [x] Повторное Standards/Spec review текущего head.
-- [x] Обновить PR body итоговым head и результатами проверок.
+- [x] GitHub SAST на текущем code/docs head: чистый runner выполнил `npm ci` и `npm run lint`.
+- [x] GitHub `security`, `supply-chain` (OSV) и `codeql-optional`.
+- [x] Полный test matrix выполнен по обе стороны `runtime-image-metadata`: все suites зелёные; в compact export единственный ожидаемый failure — existence check каталога `assets/`, намеренно исключённого export workflow.
+- [ ] `npm audit` точной командой на runner с registry-доступом.
+- [ ] `npm run check` одним процессом в полном checkout с `assets/`.
+- [ ] `git diff --check origin/master...HEAD` в checkout с Git history.
+- [ ] Повторный Standards review текущего final head.
+- [ ] Повторный Spec review текущего final head.
+- [ ] Обновить PR body точным final head и результатами проверок.
 
-**Final verification evidence (2026-07-26):** production tree `f24b44f20ef11af1357d9724cb0607f7edec8def` прошёл точечные Trigger Dispatch/runtime regression suites, `npm run check`, `npm run report:card-runtime-clusters` и `git diff --check origin/master...HEAD`. Последующие изменения затрагивают только итоговую фиксацию checklist/PR metadata; production-код, `package.json` и `package-lock.json` не менялись.
+**Verification evidence (2026-07-27):** source snapshot текущей ветки восстановлен существующим read-only export workflow без изменений CI. Build, strictest typecheck, focused suites, guards, runtime-cluster report и все non-asset test suites прошли. Штатный SAST подтвердил `npm ci` и ESLint на чистом GitHub runner; security, OSV supply-chain и CodeQL также зелёные. `runtime-image-metadata` подтвердил 9 из 10 contracts и остановился только на отсутствующем файле из намеренно исключённого каталога `assets/`; эта проверка не считается полным `npm run check`, поэтому publication gate остаётся открытым до трёх unchecked команд и двух независимых review-проходов.
