@@ -103,9 +103,9 @@
 
 ### Task 8: Final gate and publication
 
-- [ ] Точечные тесты затронутого поведения.
-- [ ] `npm run check`.
-- [ ] `npm run report:card-runtime-clusters`.
-- [ ] `git diff --check origin/master...HEAD`.
-- [ ] Повторное Standards/Spec review текущего head.
-- [ ] Обновить PR body итоговым head и результатами проверок.
+- [x] Точечные тесты затронутого поведения.
+- [x] `npm run check`.
+- [x] `npm run report:card-runtime-clusters`.
+- [x] `git diff --check origin/master...HEAD`.
+- [x] Повторное Standards/Spec review текущего head.
+- [x] Обновить PR body итоговым head и результатами проверок.
