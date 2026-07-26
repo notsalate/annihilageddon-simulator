@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "agent/architecture-deepening-findings"
-          test "$(git rev-parse HEAD^)" = "6c1da4453861ed1c9267bbe62d7e9b1ffd923dc4"
+          test "$(git rev-parse HEAD^)" = "05341cd00dca647ad36f8c3b8ac95ec29e23bd09"
 
       - name: Apply verified patches
         shell: bash
@@ -145,7 +145,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr137-typed-effect-verification-v2
+          name: pr137-typed-effect-verification-v3
           path: ${{ runner.temp }}/typed-effect-verification.log
           if-no-files-found: error
           retention-days: 1
