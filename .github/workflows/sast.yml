@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Print decoded end-turn entry context
+      - name: Print end-turn operation factory
         shell: bash
         env:
           GH_TOKEN: "${{ github.token }}"
@@ -47,18 +47,8 @@ jobs:
           from pathlib import Path
 
           lines = Path(os.environ["SCRIPT_PATH"]).read_text(encoding="utf-8").splitlines()
-          selected = []
-          for index, line in enumerate(lines):
-              if "evaluateEndTurnDrawModifier" not in line:
-                  continue
-              start = max(0, index - 22)
-              end = min(len(lines), index + 23)
-              window = lines[start:end]
-              if any("decoded" in candidate for candidate in window):
-                  selected.append((index, start, end))
-          print(f"selected={len(selected)}")
-          for index, start, end in selected:
-              print(f"--- decoded context around line {index + 1} ---")
-              for line_index in range(start, end):
-                  print(f"{line_index + 1:05d}: {lines[line_index]}")
+          start = 1160
+          end = 1260
+          for index in range(start - 1, min(end, len(lines))):
+              print(f"{index + 1:05d}: {lines[index]}")
           PY
