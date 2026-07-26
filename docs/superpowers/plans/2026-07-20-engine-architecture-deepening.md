@@ -173,39 +173,42 @@
 - [ ] Route activation, conditions, costs, passive power and end-turn effects through Control Ledger.
 - [ ] Commit `refactor(control): перевести consumers на Control Ledger`.
 
-### Task 11: T1 — controlled trigger dispatcher
+### Task 11: T1 — catalog-owned controlled trigger dispatcher
 
 **Files:**
 - Create: `src/engine/trigger-dispatch.ts`
 - Test: `tests/trigger-dispatch.test.ts`
 
 **Interfaces:**
-- Produces: `dispatchControlledCardEffects({ state, player, timing, predicate, execute }): EffectExecutionResult`.
+- Produces: `dispatchControlledCardOperation(state, controller, operation): ControlledCardOperationResult`.
+- Caller supplies only `GameState`, controller and a discriminated typed operation; the dispatcher owns `ControlledObjectView`, runtime mode, timing/ongoing policy, card source identity, catalog resolution and execution.
 
-- [ ] Add ordering, source attribution and stop-on-error tests.
-- [ ] Implement the minimal dispatcher over Control Ledger.
+- [ ] Add ordering, source attribution and stop-on-error/game-end tests.
+- [ ] Implement catalog-owned dispatch over Control Ledger without caller-supplied predicate/executor seams.
 - [ ] Commit `refactor(triggers): добавить dispatcher контролируемых карт`.
 
-### Task 12: T2 — on-play and after-attack dispatch
+### Task 12: T2 — on-play and after-attack operations
 
 **Files:**
 - Modify: `src/engine/effect-runtime.ts`
 - Modify: `src/engine/effect-runtime-registry.ts`
+- Modify: `src/engine/trigger-dispatch.ts`
 - Test: `tests/trigger-dispatch.test.ts`
 
-- [ ] Add regression tests for Wand on-play and first damaging attack.
-- [ ] Replace local loops with Trigger Dispatch adapters.
+- [ ] Add regression tests for Wand on-play, first damaging attack, source attribution and terminal/error short-circuit.
+- [ ] Route `onPlayCard` and `afterPlayerAttackDamage` through typed operations; keep applicability inside concrete catalog hooks.
 - [ ] Commit `refactor(triggers): перевести игровые triggers на dispatcher`.
 
-### Task 13: T3 — end-turn dispatch
+### Task 13: T3 — typed end-turn aggregate
 
 **Files:**
 - Modify: `src/engine/trigger-dispatch.ts`
 - Modify: `src/engine/effect-runtime.ts`
+- Modify: `src/engine/effect-runtime-registry.ts`
 - Test: `tests/trigger-dispatch.test.ts`
 
-- [ ] Add combined hand-refill/max-life tests.
-- [ ] Use dispatcher for controlled end-turn effect discovery.
+- [ ] Add combined hand-refill/max-life tests, including temporary control that remains active until cleanup.
+- [ ] Implement `collectEndTurnDrawModifier` through the same discovery/catalog pipeline and return typed `drawCount` rather than raw effect contexts.
 - [ ] Commit `refactor(triggers): централизовать end-turn discovery`.
 
 ### Task 14: S1 — deterministic scenario builder
@@ -216,10 +219,11 @@
 - Test: `tests/helpers/game-scenario.test.ts`
 
 **Interfaces:**
-- Produces: `createGameScenario`, `givenRuntimeCard`, `chooseEffect`, `play`, `endTurn`.
+- Produces: `createGameScenario`, `givenRuntimeCard`, `givenTemporaryControl`, `chooseEffect`, `choosePlayerTargetForEffect`, `play`, `endTurn`.
+- Generated definitions accept `tags?: string[]` and store a defensive copy in `definition.engine.tags`.
 
-- [ ] Add a self-test for deterministic setup and stable IDs.
-- [ ] Implement only helpers used by the extracted suites.
+- [ ] Add self-tests for deterministic/state-wide unique IDs, tag ordering/copying, temporary-control ownership/location and effect-scoped target choice.
+- [ ] Implement only thin arrangement helpers used by focused suites; delegate control to production Control Ledger and preserve safe choice fallback.
 - [ ] Commit `test(scenarios): добавить deterministic scenario builder`.
 
 ### Task 15: S2 — focused Attack Resolution suite
@@ -228,22 +232,28 @@
 - Create/Modify: `tests/attack-resolution.test.ts`
 - Modify: `tests/action-loop.test.ts`
 
-- [ ] Move attack/defense/redirect regressions without changing assertions.
+- [ ] Move attack/defense/redirect regressions without changing externally relevant assertions.
 - [ ] Run both suites and confirm no duplicate test registration.
 - [ ] Commit `test(attacks): выделить focused suite разрешения атак`.
 
-### Task 16: S3 — focused control/trigger suites
+### Task 16: S3 — focused scenario migration
 
 **Files:**
-- Modify: `tests/control-ledger.test.ts`
+- Modify: `tests/controlled-power-ongoing.test.ts`
+- Modify: `tests/attack-replacement-ongoing.test.ts`
+- Modify: `tests/trigger-dispatch-ongoing.test.ts`
 - Modify: `tests/trigger-dispatch.test.ts`
-- Modify: `tests/action-loop.test.ts`
+- Modify: `tests/helpers/game-scenario.test.ts`
+- Modify: `tests/AGENTS.md`
 
-- [ ] Move temporary-control and trigger lifecycle regressions.
-- [ ] Run focused suites and full test runner.
-- [ ] Commit `test(control): выделить lifecycle suites`.
+- [ ] Migrate all four suites to `createGameScenario()`, `givenRuntimeCard()`, `givenTemporaryControl()` and narrow deterministic choice adapters.
+- [ ] Delete local runtime-card definition/instance builders and manual `markCardDefinitionId`/`markCardInstanceId` assembly.
+- [ ] Add a structural regression that forbids those duplicate constructs only in the migrated focused suites.
+- [ ] Keep legacy `tests/action-loop.test.ts` outside this migration; do not create a universal scenario DSL.
+- [ ] Run the focused suites and full test runner.
+- [ ] Commit `refactor(tests): перевести focused scenarios на общий helper`.
 
-### Task 17: D1 — concrete payload map
+### Task 17: D1 — exhaustive concrete payload map
 
 **Files:**
 - Modify: `src/engine/runtime-effect.ts`
@@ -252,41 +262,46 @@
 **Interfaces:**
 - Produces: `RuntimeEffectPayloadMap` and exported `RuntimeEffectForId<Id>`.
 
-- [ ] Add type-level assignments for touched effect IDs and invalid `@ts-expect-error` cases.
-- [ ] Define concrete variants for defense and ongoing modifier effects while keeping a compatible fallback for untouched IDs.
+- [ ] Add type-level assignments for representative effect IDs and invalid `@ts-expect-error` cases.
+- [ ] Define concrete variants for every registered `RuntimeEffectId`; do not retain an index signature, conditional payload fallback or generic bag of fields.
 - [ ] Commit `refactor(effects): ввести карту concrete payload variants`.
 
-### Task 18: D2 — decoder/catalog narrowing
+### Task 18: D2 — exact decoder/catalog narrowing
 
 **Files:**
+- Create/Modify: `src/engine/runtime-effect-decoder.ts`
 - Modify: `src/engine/data.ts`
 - Modify: `src/engine/effect-runtime-registry.ts`
 - Test: `tests/validation.test.ts`
 
-- [ ] Add failing decode tests for invalid destination, redirect flag, timings, amount and card tags.
-- [ ] Make the boundary return concrete touched variants after validation.
+- [ ] Add failing decode tests for invalid destination, redirect flag, timings, amount, card tags, nested targets/costs/options/branches and extra fields.
+- [ ] Provide an exact decoder for every registered effect ID, including explicitly unsupported effects; no registered-effect fallback is allowed.
+- [ ] Keep decode and concrete handler invocation inside one generic catalog closure.
 - [ ] Commit `refactor(effects): сузить payload на границе данных`.
 
-### Task 19: D3 — typed handlers and DOX closeout
+### Task 19: D3/D4 — typed handlers and DOX closeout
 
 **Files:**
 - Modify: `src/engine/effect-runtime-registry.ts`
 - Modify: `src/engine/AGENTS.md`
 - Modify: `src/index.ts`
+- Modify: `scripts/check-engine-typed-access.mjs`
 - Test: `tests/validation.test.ts`
 
-- [ ] Replace raw indexing in touched handlers with concrete properties.
-- [ ] Export only stable public payload types.
-- [ ] Update engine DOX with Attack Resolution, Control Ledger and Trigger Dispatch ownership.
-- [ ] Run `npm run check`, `npm run report:card-runtime-clusters` and `git diff --check`.
+- [ ] Replace raw indexing with concrete properties at every registered handler boundary.
+- [ ] Export only stable public payload types and remove assertions that reconnect a generic payload to a handler.
+- [ ] Add compile-time exhaustiveness, deletion tests and typed-access guards for the complete decoder/catalog boundary.
+- [ ] Update engine DOX with full Attack Resolution lifecycle, Control Ledger descriptor inventory, catalog-owned Trigger Dispatch and exact Decoder/Catalog ownership.
+- [ ] Run `npm run check`, `npm run report:card-runtime-clusters` and both diff checks.
 - [ ] Commit `refactor(effects): завершить typed handler seam`.
 
-### Task 20: Publish and review gate
+### Task 20: Publish and independent review gate
 
 **Files:**
-- No code changes unless verification finds a defect.
+- Modify documentation and PR metadata only after the current head is verified.
 
-- [ ] Review commit order against F1–F3, A1–A4, C1–C3, T1–T3, S1–S3, D1–D3.
-- [ ] Re-run full verification from a clean checkout.
-- [ ] Update the draft PR body with exact checks and known limitations.
-- [ ] Keep PR draft; do not merge or enable auto-merge.
+- [ ] In a clean checkout run `npm ci --ignore-scripts`, `npm audit`, `npm run check`, `npm run report:card-runtime-clusters`, `git diff --check origin/master...HEAD`, `git diff --check` and `git status`.
+- [ ] Perform a Standards review for ownership, duplicate code, typed boundaries, helper contracts and shotgun-surgery seams.
+- [ ] Perform a Spec review against the original five architecture candidates and Defense payment finding, not softened follow-up wording.
+- [ ] Record the exact final head and verification evidence in the follow-up checklist and draft PR body.
+- [ ] Keep PR draft; do not merge, enable auto-merge, resolve review threads or mark ready without separate owner authorization.
