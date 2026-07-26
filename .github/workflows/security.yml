@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "agent/architecture-deepening-findings"
-          test "$(git rev-parse HEAD^)" = "2d0b4dd0e776c1811e0700e00eb2d56e545bf9f1"
+          test "$(git rev-parse HEAD^)" = "2e2664e6574a3129b61a0a651f2d39c5e64fd11e"
 
       - name: Apply verified patches
         shell: bash
@@ -125,58 +125,98 @@ jobs:
           npm run report:card-runtime-clusters
 
       - name: Create verified Git Data commit object
-        id: create_commit
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          parent_sha="$(git rev-parse HEAD)"
-          base_tree_sha="$(git rev-parse "${parent_sha}^{tree}")"
-          elements_file="${RUNNER_TEMP}/tree-elements.json"
-          paths_file="${RUNNER_TEMP}/changed-paths.txt"
-          echo '[]' > "${elements_file}"
           git add --intent-to-add .
-          git diff --name-only HEAD > "${paths_file}"
+          git diff --name-only HEAD > "${RUNNER_TEMP}/changed-paths.txt"
           git reset
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import pathlib
+          import subprocess
+          import urllib.error
+          import urllib.request
 
-          while IFS= read -r path; do
-            if [ -e "${path}" ]; then
-              encoded="$(base64 -w0 -- "${path}")"
-              blob_sha="$(
-                jq -n --arg content "${encoded}" '{content:$content,encoding:"base64"}' \
-                  | gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input - --jq '.sha'
-              )"
-              mode="$(git ls-files -s -- "${path}" | awk 'NR == 1 { print $1 }')"
-              if [ -z "${mode}" ]; then
-                mode="100644"
-              fi
-              jq --arg path "${path}" --arg mode "${mode}" --arg sha "${blob_sha}" \
-                '. + [{path:$path,mode:$mode,type:"blob",sha:$sha}]' \
-                "${elements_file}" > "${elements_file}.next"
-            else
-              jq --arg path "${path}" \
-                '. + [{path:$path,mode:"100644",type:"blob",sha:null}]' \
-                "${elements_file}" > "${elements_file}.next"
-            fi
-            mv "${elements_file}.next" "${elements_file}"
-          done < "${paths_file}"
+          repository = os.environ["GITHUB_REPOSITORY"]
+          token = os.environ["GH_TOKEN"]
+          runner_temp = pathlib.Path(os.environ["RUNNER_TEMP"])
 
-          tree_sha="$(
-            jq -n --arg base_tree "${base_tree_sha}" --slurpfile tree "${elements_file}" \
-              '{base_tree:$base_tree,tree:$tree[0]}' \
-              | gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input - --jq '.sha'
-          )"
-          commit_sha="$(
-            jq -n \
-              --arg message 'refactor(engine): сделать каталог эффектов исчерпывающим' \
-              --arg tree "${tree_sha}" \
-              --arg parent "${parent_sha}" \
-              '{message:$message,tree:$tree,parents:[$parent]}' \
-              | gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input - --jq '.sha'
-          )"
-          printf '%s\n' "${commit_sha}" | tee "${RUNNER_TEMP}/pr137-final-commit-sha.txt"
-          echo "commit_sha=${commit_sha}" >> "${GITHUB_OUTPUT}"
+          def git(*args: str) -> str:
+              return subprocess.check_output(["git", *args], text=True).strip()
+
+          def post(endpoint: str, payload: dict[str, object]) -> dict[str, object]:
+              request = urllib.request.Request(
+                  f"https://api.github.com/repos/{repository}/{endpoint}",
+                  data=json.dumps(payload).encode("utf-8"),
+                  method="POST",
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": f"Bearer {token}",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                      "User-Agent": "pr137-typed-effect-publisher",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as error:
+                  print(error.read().decode("utf-8"), flush=True)
+                  raise
+
+          parent_sha = git("rev-parse", "HEAD")
+          base_tree_sha = git("rev-parse", f"{parent_sha}^{{tree}}")
+          paths = (runner_temp / "changed-paths.txt").read_text(encoding="utf-8").splitlines()
+          tree: list[dict[str, object]] = []
+
+          for path_text in paths:
+              path = pathlib.Path(path_text)
+              if path.exists():
+                  encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+                  blob = post("git/blobs", {"content": encoded, "encoding": "base64"})
+                  mode_output = subprocess.check_output(
+                      ["git", "ls-files", "-s", "--", path_text], text=True
+                  ).strip()
+                  mode = mode_output.split(maxsplit=1)[0] if mode_output else "100644"
+                  tree.append(
+                      {
+                          "path": path_text,
+                          "mode": mode,
+                          "type": "blob",
+                          "sha": blob["sha"],
+                      }
+                  )
+                  print(f"blob {path_text} {blob['sha']}", flush=True)
+              else:
+                  tree.append(
+                      {
+                          "path": path_text,
+                          "mode": "100644",
+                          "type": "blob",
+                          "sha": None,
+                      }
+                  )
+                  print(f"delete {path_text}", flush=True)
+
+          new_tree = post("git/trees", {"base_tree": base_tree_sha, "tree": tree})
+          commit = post(
+              "git/commits",
+              {
+                  "message": "refactor(engine): сделать каталог эффектов исчерпывающим",
+                  "tree": new_tree["sha"],
+                  "parents": [parent_sha],
+              },
+          )
+          commit_sha = str(commit["sha"])
+          (runner_temp / "pr137-final-commit-sha.txt").write_text(
+              f"{commit_sha}\n", encoding="utf-8"
+          )
+          print(f"verified commit {commit_sha}", flush=True)
+          PY
 
       - name: Upload verified commit SHA
         uses: actions/upload-artifact@v4
