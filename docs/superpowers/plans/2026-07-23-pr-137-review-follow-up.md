@@ -12,7 +12,7 @@
 
 - Ветка: `agent/architecture-deepening-findings`; PR #137 остаётся draft.
 - Не включать auto-merge и не объединять с `master`.
-- Не добавлять зависимости и не менять package manager/lockfile.
+- Не добавлять новые прямые зависимости и не менять package manager; изолированный transitive lockfile security bump допускается только для устранения подтверждённой supply-chain уязвимости.
 - Mayhem/Mega Mayhem остаются отдельными domain flows.
 - Каждый behavioral fix проходит RED→GREEN, когда доступна исполняемая рабочая копия.
 
