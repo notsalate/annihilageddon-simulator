@@ -1,6 +1,6 @@
 step=decode and patch verified transport
 exit_status=1
-trigger_sha=c42e71f98f5bae0948fe54c8665d229e8fd749cd
+trigger_sha=9ba2a323dddd2bf2f969de5f4765840858dcf505
 branch=agent/architecture-deepening-findings
 
 --- tail of workflow log ---
@@ -16,7 +16,7 @@ added 120 packages, and audited 121 packages in 2s
 
 found 0 vulnerabilities
 Traceback (most recent call last):
-  File "<stdin>", line 40, in <module>
+  File "<stdin>", line 38, in <module>
 RuntimeError: expected one legacy end-turn replacement, found 0
 Trigger Dispatch transport failed in step: decode and patch verified transport (exit 1)
-HEAD is now at c42e71f chore(engine): завершить Trigger Dispatch после диагностики
+HEAD is now at 9ba2a32 chore(engine): применить подтверждённый end-turn fix
