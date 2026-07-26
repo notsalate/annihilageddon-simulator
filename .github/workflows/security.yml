@@ -39,19 +39,25 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "agent/architecture-deepening-findings"
-          test "$(git rev-parse HEAD^)" = "69332dbdaa53bb7c2f398aaede60d61837d56554"
+          test "$(git rev-parse HEAD^)" = "6c1da4453861ed1c9267bbe62d7e9b1ffd923dc4"
 
-      - name: Apply verified patch
+      - name: Apply verified patches
         shell: bash
         run: |
           set -euo pipefail
           test -f .scratch/agent-pr137-typed-effect.patch.gz.b64.part00
+          test -f .scratch/agent-pr137-lint-fix.patch.gz.b64
           cat .scratch/agent-pr137-typed-effect.patch.gz.b64.part* \
             | base64 --decode \
             | gzip --decompress \
             > "${RUNNER_TEMP}/agent-pr137-typed-effect.patch"
           patch -p1 --forward --batch < "${RUNNER_TEMP}/agent-pr137-typed-effect.patch"
+          base64 --decode .scratch/agent-pr137-lint-fix.patch.gz.b64 \
+            | gzip --decompress \
+            > "${RUNNER_TEMP}/agent-pr137-lint-fix.patch"
+          patch -p1 --forward --batch < "${RUNNER_TEMP}/agent-pr137-lint-fix.patch"
           rm -f .scratch/agent-pr137-typed-effect.patch.gz.b64.part*
+          rm -f .scratch/agent-pr137-lint-fix.patch.gz.b64
           rm -f .github/workflows/apply-pr137-typed-effect-patch.yml
           git checkout 2971f1c440ee5d1df6480c74859090dfb4140306 -- .github/workflows/security.yml
 
@@ -62,6 +68,7 @@ jobs:
           cat > "${RUNNER_TEMP}/expected-paths.txt" <<'EOF'
           .github/workflows/apply-pr137-typed-effect-patch.yml
           .github/workflows/security.yml
+          .scratch/agent-pr137-lint-fix.patch.gz.b64
           .scratch/agent-pr137-typed-effect.patch.gz.b64.part00
           .scratch/agent-pr137-typed-effect.patch.gz.b64.part01
           .scratch/agent-pr137-typed-effect.patch.gz.b64.part02
@@ -138,7 +145,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr137-typed-effect-verification
+          name: pr137-typed-effect-verification-v2
           path: ${{ runner.temp }}/typed-effect-verification.log
           if-no-files-found: error
           retention-days: 1
