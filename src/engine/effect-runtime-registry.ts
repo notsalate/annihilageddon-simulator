@@ -352,6 +352,37 @@ export interface EffectRuntimeServices {
   asString(value: unknown): string;
 }
 
+export interface EffectRuntimeOnPlayCardOperationContext {
+  readonly state: GameState;
+  readonly controller: PlayerState;
+  readonly source: EffectSourceContext;
+  readonly playedCard: CardInstance;
+  readonly playedDefinition: CardDefinition;
+}
+
+export interface EffectRuntimeAfterPlayerAttackDamageOperationContext {
+  readonly state: GameState;
+  readonly controller: PlayerState;
+  readonly source: EffectSourceContext;
+  readonly totalDamageDealt: number;
+  readonly attackSource: EffectSourceContext;
+}
+
+export interface EffectRuntimeEndTurnDrawModifierOperationContext {
+  readonly state: GameState;
+  readonly controller: PlayerState;
+  readonly source: EffectSourceContext;
+  readonly currentDrawCount: number;
+}
+
+export type EffectRuntimeHandlerOperationResult<Result> =
+  | { readonly status: "notApplicable" }
+  | { readonly status: "resolved"; readonly result: Result };
+
+export type EffectRuntimeOperationResult<Result> =
+  | EffectRuntimeHandlerOperationResult<Result>
+  | { readonly status: "error"; readonly error: string };
+
 export interface EffectRuntimeHandler<
   Effect extends RuntimeEffectPayload = RuntimeEffectPayload,
 > {
@@ -366,13 +397,18 @@ export interface EffectRuntimeHandler<
     source: EffectSourceContext,
     services: EffectRuntimeServices
   ): EffectExecutionResult;
-  applyAfterPlayerAttackDamage?(
-    state: GameState,
-    player: PlayerState,
+  executeOnPlayCard?(
     effect: Effect,
-    source: EffectSourceContext,
-    totalDamageDealt: number
-  ): EffectExecutionResult;
+    context: EffectRuntimeOnPlayCardOperationContext
+  ): EffectRuntimeHandlerOperationResult<EffectExecutionResult>;
+  applyAfterPlayerAttackDamage?(
+    effect: Effect,
+    context: EffectRuntimeAfterPlayerAttackDamageOperationContext
+  ): EffectRuntimeHandlerOperationResult<EffectExecutionResult>;
+  evaluateEndTurnDrawModifier?(
+    effect: Effect,
+    context: EffectRuntimeEndTurnDrawModifierOperationContext
+  ): EffectRuntimeHandlerOperationResult<number>;
   executeSetup?(
     player: PlayerState,
     effect: Effect,
@@ -438,11 +474,8 @@ export interface EffectRuntimeEntry<
   executeOnPlayCard(
     subjectId: string,
     rawEffect: unknown,
-    state: GameState,
-    player: PlayerState,
-    source: EffectSourceContext,
-    services: EffectRuntimeServices
-  ): EffectExecutionResult;
+    context: EffectRuntimeOnPlayCardOperationContext
+  ): EffectRuntimeOperationResult<EffectExecutionResult>;
   executeSetup(
     subjectId: string,
     rawEffect: unknown,
@@ -453,15 +486,13 @@ export interface EffectRuntimeEntry<
   applyAfterPlayerAttackDamage(
     subjectId: string,
     rawEffect: unknown,
-    state: GameState,
-    player: PlayerState,
-    source: EffectSourceContext,
-    totalDamageDealt: number
-  ): EffectExecutionResult;
+    context: EffectRuntimeAfterPlayerAttackDamageOperationContext
+  ): EffectRuntimeOperationResult<EffectExecutionResult>;
   evaluateEndTurnDrawModifier(
     subjectId: string,
-    rawEffect: unknown
-  ): DecodeResult<RuntimeEffectForId<EffectId>>;
+    rawEffect: unknown,
+    context: EffectRuntimeEndTurnDrawModifierOperationContext
+  ): EffectRuntimeOperationResult<number>;
 }
 
 export type EffectRuntimeCatalogEntry<
@@ -529,6 +560,34 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
       : { ok: false, error: decoded.errors[0] ?? "Invalid runtime effect" };
   };
 
+  const decodeControlledOperation = (
+    subjectId: string,
+    rawEffect: unknown,
+    source: EffectSourceContext
+  ):
+    | { readonly ok: true; readonly effect: RuntimeEffectForId<Id> }
+    | { readonly ok: false; readonly error: string } => {
+    if (!config.supportedSourceKinds.includes(source.sourceType)) {
+      return {
+        ok: false,
+        error: `Effect ${config.effectId} uses unsupported source kind`,
+      };
+    }
+    if (!config.supportedModes.includes(source.runtimeMode)) {
+      return {
+        ok: false,
+        error: `Effect ${config.effectId} is unavailable in ${source.runtimeMode} mode`,
+      };
+    }
+    const decoded = decodeForExecution(subjectId, rawEffect);
+    return decoded.ok
+      ? { ok: true, effect: decoded.value }
+      : {
+          ok: false,
+          error: decoded.errors[0] ?? "Invalid controlled-card effect",
+        };
+  };
+
   const entry: TestableEffectRuntimeEntry<Id> = {
     effectId: config.effectId,
     supportedModes: config.supportedModes,
@@ -540,7 +599,20 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     decode: config.decoder.decode.bind(config.decoder),
     validate: decodeValidated,
     execute,
-    executeOnPlayCard: execute,
+    executeOnPlayCard(subjectId, rawEffect, context) {
+      const executeOnPlayCard = activeHandler.executeOnPlayCard;
+      if (executeOnPlayCard === undefined) {
+        return { status: "notApplicable" };
+      }
+      const decoded = decodeControlledOperation(
+        subjectId,
+        rawEffect,
+        context.source
+      );
+      return decoded.ok
+        ? executeOnPlayCard(decoded.effect, context)
+        : { status: "error", error: decoded.error };
+    },
     executeSetup(subjectId, rawEffect, player, source, services) {
       const decoded = decodeValidated(subjectId, rawEffect);
       if (!decoded.ok) {
@@ -566,30 +638,39 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
           }
         : { status: "error", error: result.error };
     },
-    applyAfterPlayerAttackDamage(
-      subjectId,
-      rawEffect,
-      state,
-      player,
-      source,
-      totalDamageDealt
-    ) {
-      const decoded = decodeValidated(subjectId, rawEffect);
-      if (!decoded.ok) {
-        return {
-          ok: false,
-          error: decoded.errors[0] ?? "Invalid after-attack effect",
-        };
+    applyAfterPlayerAttackDamage(subjectId, rawEffect, context) {
+      const applyAfterPlayerAttackDamage =
+        activeHandler.applyAfterPlayerAttackDamage;
+      if (applyAfterPlayerAttackDamage === undefined) {
+        return { status: "notApplicable" };
       }
-      const apply = activeHandler.applyAfterPlayerAttackDamage;
-      return apply === undefined
-        ? {
-            ok: false,
-            error: `Missing after-attack executor for ${config.effectId}`,
-          }
-        : apply(state, player, decoded.value, source, totalDamageDealt);
+      const decoded = decodeControlledOperation(
+        subjectId,
+        rawEffect,
+        context.source
+      );
+      return decoded.ok
+        ? applyAfterPlayerAttackDamage(decoded.effect, context)
+        : { status: "error", error: decoded.error };
     },
-    evaluateEndTurnDrawModifier: decodeValidated,
+    evaluateEndTurnDrawModifier(subjectId, rawEffect, context) {
+      const evaluateEndTurnDrawModifier =
+        activeHandler.evaluateEndTurnDrawModifier;
+      if (evaluateEndTurnDrawModifier === undefined) {
+        return { status: "notApplicable" };
+      }
+      const decoded = decodeControlledOperation(
+        subjectId,
+        rawEffect,
+        context.source
+      );
+      if (!decoded.ok) {
+        // Preserve the established passive-modifier contract: malformed
+        // end-turn values that bypass data validation are ignored.
+        return { status: "notApplicable" };
+      }
+      return evaluateEndTurnDrawModifier(decoded.effect, context);
+    },
     [replaceEffectRuntimeHandlerSymbol](replacementHandler) {
       const originalHandler = activeHandler;
       activeHandler = replacementHandler;
@@ -2068,6 +2149,19 @@ const increaseHandLimitAtMaxLifeHandler = {
   execute() {
     return { ok: true };
   },
+  evaluateEndTurnDrawModifier(effect, context) {
+    const maxLife = calculateEffectivePlayerMaxLife(
+      context.state,
+      context.controller.playerId
+    );
+    if (context.controller.life.current < maxLife) {
+      return { status: "notApplicable" };
+    }
+    return {
+      status: "resolved",
+      result: context.currentDrawCount + effect.amount,
+    };
+  },
 } satisfies EffectRuntimeHandler<IncreaseHandLimitAtMaxLifeRuntimeEffect>;
 
 const ongoingHandRefillBonusHandler: EffectRuntimeHandler<OngoingHandRefillBonusRuntimeEffect> =
@@ -2093,6 +2187,12 @@ const ongoingHandRefillBonusHandler: EffectRuntimeHandler<OngoingHandRefillBonus
       return {
         ok: false,
         error: "ongoing_hand_refill_bonus is an end-turn hand-limit effect",
+      };
+    },
+    evaluateEndTurnDrawModifier(effect, context) {
+      return {
+        status: "resolved",
+        result: context.currentDrawCount + effect.amount,
       };
     },
   };
@@ -3035,24 +3135,19 @@ const ongoingFirstAttackDamageAddPowerHandler: EffectRuntimeHandler<OngoingFirst
           "ongoing_first_attack_damage_add_power is a triggered controlled effect",
       };
     },
-    applyAfterPlayerAttackDamage(
-      state,
-      player,
-      _effect,
-      source,
-      totalDamageDealt
-    ) {
+    applyAfterPlayerAttackDamage(_effect, context) {
+      const { state, controller, source, totalDamageDealt } = context;
       const powerBefore = state.turn.power;
       state.turn.power += totalDamageDealt;
       recordTurnPowerChanged(
         state,
-        player,
+        controller,
         source,
         "ongoing_first_attack_damage_add_power",
         powerBefore,
         state.turn.power
       );
-      return { ok: true };
+      return { status: "resolved", result: { ok: true } };
     },
   };
 
@@ -3086,19 +3181,46 @@ const ongoingAddPowerWhenPlayingWandHandler: EffectRuntimeHandler<OngoingAddPowe
       ];
     },
     execute(state, player, effect, source) {
-      const powerBefore = state.turn.power;
-      state.turn.power += effect.amount;
-      recordTurnPowerChanged(
-        state,
-        player,
-        source,
-        "ongoing_add_power_when_playing_wand",
-        powerBefore,
-        state.turn.power
+      return applyOngoingWandPower(state, player, effect, source);
+    },
+    executeOnPlayCard(effect, context) {
+      const matchesPlayedCard = effect.cardTags.some(
+        (cardTag) =>
+          context.playedDefinition.engine.tags?.includes(cardTag) === true
       );
-      return { ok: true };
+      if (!matchesPlayedCard) {
+        return { status: "notApplicable" };
+      }
+      return {
+        status: "resolved",
+        result: applyOngoingWandPower(
+          context.state,
+          context.controller,
+          effect,
+          context.source
+        ),
+      };
     },
   };
+
+function applyOngoingWandPower(
+  state: GameState,
+  player: PlayerState,
+  effect: OngoingAddPowerWhenPlayingWandRuntimeEffect,
+  source: EffectSourceContext
+): EffectExecutionResult {
+  const powerBefore = state.turn.power;
+  state.turn.power += effect.amount;
+  recordTurnPowerChanged(
+    state,
+    player,
+    source,
+    "ongoing_add_power_when_playing_wand",
+    powerBefore,
+    state.turn.power
+  );
+  return { ok: true };
+}
 
 const ongoingAddPowerPerDeadWizardTokenHandler: EffectRuntimeHandler<OngoingAddPowerPerDeadWizardTokenRuntimeEffect> =
   {

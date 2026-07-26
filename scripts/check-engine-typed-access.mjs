@@ -15,8 +15,27 @@ const forbiddenNormalAttackOrchestrationSymbols = new Set([
   "resolveAttackTarget",
 ]);
 const attackResolutionOwnedSymbols = new Set(["summarizeAttackDamage"]);
+const triggerDispatchOwner = "src/engine/trigger-dispatch.ts";
+const forbiddenLegacyTriggerDispatchSymbols = new Set([
+  "dispatchControlledCardEffects",
+  "listControlledCardEffects",
+]);
+const forbiddenTriggerDispatchOperationProperties = new Set([
+  "controlledObjects",
+  "execute",
+  "predicate",
+  "runtimeMode",
+]);
+const controlledTriggerCallerFunctions = new Set([
+  "applyAfterPlayerAttackDamage",
+  "calculateEndTurnDrawCount",
+  "executeControlledCardOnPlayCardEffects",
+]);
+const triggerDispatchOwnershipViolations = [];
 let attackResolutionOwnerPresent = false;
 let playerControlledAttackOwnerDeclarationCount = 0;
+let triggerDispatchOwnerPresent = false;
+let triggerDispatchOwnerDeclarationCount = 0;
 
 const physicalCardZoneFields = new Set([
   "deck",
@@ -177,6 +196,7 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
     attackResolutionOwnerPresent = true;
   }
   checkAttackLifecycleOwnership(relativePath, sourceFile);
+  checkTriggerDispatchOwnership(relativePath, sourceFile);
   const aliases = collectTypeAliases(sourceFile);
   function visit(node) {
     const assertionType =
@@ -269,6 +289,68 @@ function checkAttackLifecycleOwnership(relativePath, sourceFile) {
         attackLifecycleOwnershipViolations.push(
           `${relativePath} creates attackCreated outside ${attackResolutionOwner}`
         );
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+}
+
+function checkTriggerDispatchOwnership(relativePath, sourceFile) {
+  if (relativePath === triggerDispatchOwner) {
+    triggerDispatchOwnerPresent = true;
+  }
+
+  function visit(node) {
+    if (
+      relativePath === triggerDispatchOwner &&
+      ts.isFunctionDeclaration(node) &&
+      node.name?.text === "dispatchControlledCardOperation" &&
+      node.body !== undefined
+    ) {
+      triggerDispatchOwnerDeclarationCount += 1;
+    }
+
+    if (relativePath !== triggerDispatchOwner && ts.isIdentifier(node)) {
+      if (forbiddenLegacyTriggerDispatchSymbols.has(node.text)) {
+        triggerDispatchOwnershipViolations.push(
+          `${relativePath} uses legacy Trigger Dispatch symbol ${node.text}`
+        );
+      }
+      if (
+        node.text === "getEffectRuntimeCatalogEntry" &&
+        controlledTriggerCallerFunctions.has(findOwner(node))
+      ) {
+        triggerDispatchOwnershipViolations.push(
+          `${relativePath} resolves the effect catalog inside controlled-trigger caller ${findOwner(node)}`
+        );
+      }
+    }
+
+    if (
+      relativePath !== triggerDispatchOwner &&
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "dispatchControlledCardOperation"
+    ) {
+      const operation = node.arguments[2];
+      if (operation !== undefined && ts.isObjectLiteralExpression(operation)) {
+        for (const property of operation.properties) {
+          const propertyName =
+            property.name !== undefined &&
+            (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+              ? property.name.text
+              : undefined;
+          if (
+            propertyName !== undefined &&
+            forbiddenTriggerDispatchOperationProperties.has(propertyName)
+          ) {
+            triggerDispatchOwnershipViolations.push(
+              `${relativePath} passes forbidden Trigger Dispatch property ${propertyName}`
+            );
+          }
+        }
       }
     }
 
@@ -409,8 +491,21 @@ if (physicalCardZoneOwnershipViolations.length > 0) {
     `Physical card zone ownership violation(s): ${physicalCardZoneOwnershipViolations.join("; ")}`
   );
 }
+if (
+  triggerDispatchOwnerPresent &&
+  triggerDispatchOwnerDeclarationCount !== 1
+) {
+  triggerDispatchOwnershipViolations.push(
+    `${triggerDispatchOwner} must declare exactly one dispatchControlledCardOperation implementation; found ${triggerDispatchOwnerDeclarationCount}`
+  );
+}
+if (triggerDispatchOwnershipViolations.length > 0) {
+  throw new Error(
+    `Trigger Dispatch ownership violation(s): ${[...new Set(triggerDispatchOwnershipViolations)].join("; ")}`
+  );
+}
 console.log(
-  `Engine typed-access guard: ok (${violations.length} tracked exception(s)); normal attack lifecycle ownership: ok; physical card zone ownership: ok`
+  `Engine typed-access guard: ok (${violations.length} tracked exception(s)); normal attack lifecycle ownership: ok; Trigger Dispatch ownership: ok; physical card zone ownership: ok`
 );
 
 function referencesForbiddenRuntimeEffectAssertion(typeNode) {

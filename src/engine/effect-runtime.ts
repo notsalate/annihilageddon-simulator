@@ -17,7 +17,6 @@ import {
 } from "./attack-resolution.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import {
-  buildControlledObjectView,
   findCardLocation,
   getControlledCards,
   getControlledOngoingCards,
@@ -52,10 +51,7 @@ import {
   type WildMagicOption,
 } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
-import {
-  dispatchControlledCardEffects,
-  listControlledCardEffects,
-} from "./trigger-dispatch.js";
+import { dispatchControlledCardOperation } from "./trigger-dispatch.js";
 export function executeOnPlayEffects(
   state: GameState,
   player: PlayerState,
@@ -179,16 +175,10 @@ export function executeControlledCardOnPlayCardEffects(
     };
   }
 
-  return dispatchControlledCardEffects({
-    controlledObjects: buildControlledObjectView(state, player.playerId),
-    runtimeMode: state.runtimeMode,
-    timing: "onPlayCard",
-    predicate(effect) {
-      return cardTriggerMatches(effect, playedDefinition);
-    },
-    execute(effect, source) {
-      return executeEffects(state, player, [effect], "onPlayCard", source);
-    },
+  return dispatchControlledCardOperation(state, player, {
+    kind: "onPlayCard",
+    playedCard,
+    playedDefinition,
   });
 }
 
@@ -325,42 +315,15 @@ export function calculateEndTurnDrawCount(
     }
   }
 
-  for (const { effect } of listControlledCardEffects({
-    controlledObjects: buildControlledObjectView(state, player.playerId),
-    runtimeMode: state.runtimeMode,
-    timing: "endTurn",
-  })) {
-    if (
-      effect.effectId === "ongoing_hand_refill_bonus" &&
-      Number.isSafeInteger(effect.amount) &&
-      effect.amount > 0
-    ) {
-      drawCount += effect.amount;
-      continue;
-    }
-
-    if (effect.effectId !== "increase_hand_limit_at_max_life") {
-      continue;
-    }
-
-    const amount = effect["amount"];
-    if (
-      typeof amount !== "number" ||
-      !Number.isSafeInteger(amount) ||
-      amount <= 0
-    ) {
-      continue;
-    }
-
-    if (
-      player.life.current >=
-      calculateEffectivePlayerMaxLife(state, player.playerId)
-    ) {
-      drawCount += amount;
-    }
+  const controlledDrawResult = dispatchControlledCardOperation(state, player, {
+    kind: "collectEndTurnDrawModifier",
+    currentBaseDrawCount: drawCount,
+  });
+  if (!controlledDrawResult.ok) {
+    throw new Error(controlledDrawResult.error);
   }
 
-  return drawCount;
+  return controlledDrawResult.drawCount;
 }
 
 export function executeMayhemEffects(
@@ -1568,7 +1531,7 @@ function applyAfterPlayerAttackDamage(
   state: GameState,
   attackingPlayer: PlayerState,
   totalDamageDealt: number,
-  _attackSource: EffectSourceContext
+  attackSource: EffectSourceContext
 ): EffectExecutionResult {
   if (
     totalDamageDealt <= 0 ||
@@ -1578,34 +1541,15 @@ function applyAfterPlayerAttackDamage(
     return { ok: true };
   }
 
-  const dispatchResult = dispatchControlledCardEffects({
-    controlledObjects: buildControlledObjectView(
-      state,
-      attackingPlayer.playerId
-    ),
-    runtimeMode: state.runtimeMode,
-    timing: "afterFirstAttackDamageEachTurn",
-    execute(effect, source) {
-      const entry = getEffectRuntimeCatalogEntry(effect.effectId);
-      if (
-        !entry.supportedModes.includes(source.runtimeMode) ||
-        !entry.supportedSourceKinds.includes(source.sourceType)
-      ) {
-        return {
-          ok: false,
-          error: `Effect ${effect.effectId} is not applicable to its source`,
-        };
-      }
-      return entry.applyAfterPlayerAttackDamage(
-        `Effect ${effect.effectId}`,
-        effect,
-        state,
-        attackingPlayer,
-        source,
-        totalDamageDealt
-      );
-    },
-  });
+  const dispatchResult = dispatchControlledCardOperation(
+    state,
+    attackingPlayer,
+    {
+      kind: "afterPlayerAttackDamage",
+      totalDamageDealt,
+      attackSource,
+    }
+  );
   if (!dispatchResult.ok || dispatchResult.gameEnd !== undefined) {
     return dispatchResult;
   }
