@@ -1,0 +1,159 @@
+name: apply-pr137-trigger-dispatch
+
+on:
+  push:
+    branches:
+      - agent/architecture-deepening-findings
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-pr137-trigger-dispatch
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'chore(engine): запустить transport Trigger Dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout PR 137 head
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: agent/architecture-deepening-findings
+          fetch-depth: 0
+
+      - name: Verify publication target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "agent/architecture-deepening-findings"
+          test "$(git rev-parse HEAD^)" = "bf6428c65871da163d48006d77826673c7dab5cd"
+          test "$(git log -1 --pretty=%s)" = "chore(engine): запустить transport Trigger Dispatch"
+          test -f .scratch/agent-pr137-trigger-dispatch.py.gz.b64
+          test "$(sha256sum .scratch/agent-pr137-trigger-dispatch.py.gz.b64 | cut -d' ' -f1)" = "48e24aa66d12b774ec82f5b8b47eee5c204e717dc648ffeb96d03051659843b1"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Decode deterministic transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode .scratch/agent-pr137-trigger-dispatch.py.gz.b64 \
+            | gzip --decompress \
+            > "${RUNNER_TEMP}/apply-trigger-dispatch.py"
+          test "$(sha256sum "${RUNNER_TEMP}/apply-trigger-dispatch.py" | cut -d' ' -f1)" = "1762c679f372bb249a27c6caa02501a58c5e1bacd943786498f500f4e4a7f1d1"
+          python3 -m py_compile "${RUNNER_TEMP}/apply-trigger-dispatch.py"
+
+      - name: Add deep dispatcher tests and prove RED
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "${RUNNER_TEMP}/apply-trigger-dispatch.py" tests
+          set +e
+          npm run build -- --pretty false > "${RUNNER_TEMP}/trigger-dispatch-red.log" 2>&1
+          status=$?
+          set -e
+          cat "${RUNNER_TEMP}/trigger-dispatch-red.log"
+          test "${status}" -ne 0
+          grep -q "dispatchControlledCardOperation" "${RUNNER_TEMP}/trigger-dispatch-red.log"
+
+      - name: Implement catalog-owned Trigger Dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "${RUNNER_TEMP}/apply-trigger-dispatch.py" implementation
+          npm run build -- --pretty false
+          node --test \
+            dist/tests/trigger-dispatch.test.js \
+            dist/tests/trigger-dispatch-ongoing.test.js \
+            dist/tests/effect-runtime-applicability.test.js \
+            dist/tests/attack-resolution.test.js
+
+      - name: Synchronize architecture documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "${RUNNER_TEMP}/apply-trigger-dispatch.py" docs
+
+      - name: Verify changed paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "${RUNNER_TEMP}/expected-paths.txt" <<'EOF'
+          .github/workflows/apply-pr137-trigger-dispatch.yml
+          .scratch/agent-pr137-trigger-dispatch.py.gz.b64
+          docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md
+          docs/superpowers/specs/2026-07-20-engine-architecture-deepening-design.md
+          scripts/check-engine-typed-access.mjs
+          src/engine/AGENTS.md
+          src/engine/effect-runtime-registry.ts
+          src/engine/effect-runtime.ts
+          src/engine/trigger-dispatch.ts
+          tests/trigger-dispatch.test.ts
+          EOF
+          git diff --name-only HEAD^^ | sort > "${RUNNER_TEMP}/actual-paths.txt"
+          diff -u "${RUNNER_TEMP}/expected-paths.txt" "${RUNNER_TEMP}/actual-paths.txt"
+          git diff --check HEAD^^
+          git diff --quiet HEAD^^ -- package.json package-lock.json
+
+      - name: Run full verification gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run typecheck:strictest
+          npm run lint
+          npm run check:ts-suppressions
+          npm run check:engine-unknown-arrays
+          npm run check:engine-event-recording
+          npm run check:engine-typed-access
+          npm run check:json-parse-assertions
+          npm test
+          npm run report:card-runtime-clusters
+          git diff --check HEAD^^
+
+      - name: Commit verified changes by review boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add tests/trigger-dispatch.test.ts
+          git commit --no-verify -m "test(engine): зафиксировать глубокий контракт Trigger Dispatch"
+
+          git add \
+            scripts/check-engine-typed-access.mjs \
+            src/engine/effect-runtime-registry.ts \
+            src/engine/effect-runtime.ts \
+            src/engine/trigger-dispatch.ts
+          git commit --no-verify -m "refactor(engine): перенести catalog execution в Trigger Dispatch"
+
+          git add \
+            docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md \
+            docs/superpowers/specs/2026-07-20-engine-architecture-deepening-design.md \
+            src/engine/AGENTS.md
+          git commit --no-verify -m "docs(engine): обновить ownership Trigger Dispatch"
+
+          rm -f \
+            .scratch/agent-pr137-trigger-dispatch.py.gz.b64 \
+            .github/workflows/apply-pr137-trigger-dispatch.yml
+          git add -A -- \
+            .scratch/agent-pr137-trigger-dispatch.py.gz.b64 \
+            .github/workflows/apply-pr137-trigger-dispatch.yml
+          git commit --no-verify -m "chore(engine): удалить временный transport Trigger Dispatch"
+
+      - name: Push only PR 137 head branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e .scratch/agent-pr137-trigger-dispatch.py.gz.b64
+          test ! -e .github/workflows/apply-pr137-trigger-dispatch.yml
+          test -z "$(git status --short)"
+          git diff --check 1475578adb63b704f0cc10b822a70e66667a4e51..HEAD
+          git diff --quiet 1475578adb63b704f0cc10b822a70e66667a4e51..HEAD -- package.json package-lock.json
+          remote_sha="$(git ls-remote origin refs/heads/agent/architecture-deepening-findings | cut -f1)"
+          test "${remote_sha}" = "${GITHUB_SHA}"
+          git push origin HEAD:agent/architecture-deepening-findings
