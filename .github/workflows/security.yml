@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "agent/architecture-deepening-findings"
-          test "$(git rev-parse HEAD^)" = "05341cd00dca647ad36f8c3b8ac95ec29e23bd09"
+          test "$(git rev-parse HEAD^)" = "239d2e41e09c0a02ec54daa5bea5df757f51ce9e"
 
       - name: Apply verified patches
         shell: bash
@@ -58,16 +58,12 @@ jobs:
           patch -p1 --forward --batch < "${RUNNER_TEMP}/agent-pr137-lint-fix.patch"
           rm -f .scratch/agent-pr137-typed-effect.patch.gz.b64.part*
           rm -f .scratch/agent-pr137-lint-fix.patch.gz.b64
-          rm -f .github/workflows/apply-pr137-typed-effect-patch.yml
-          git checkout 2971f1c440ee5d1df6480c74859090dfb4140306 -- .github/workflows/security.yml
 
       - name: Verify changed paths
         shell: bash
         run: |
           set -euo pipefail
           cat > "${RUNNER_TEMP}/expected-paths.txt" <<'EOF'
-          .github/workflows/apply-pr137-typed-effect-patch.yml
-          .github/workflows/security.yml
           .scratch/agent-pr137-lint-fix.patch.gz.b64
           .scratch/agent-pr137-typed-effect.patch.gz.b64.part00
           .scratch/agent-pr137-typed-effect.patch.gz.b64.part01
@@ -108,49 +104,27 @@ jobs:
           diff -u "${RUNNER_TEMP}/expected-paths.txt" "${RUNNER_TEMP}/actual-paths.txt"
           git diff --check HEAD
           git diff --quiet HEAD -- package.json package-lock.json
+          git diff --quiet HEAD -- .github/workflows
           git reset
 
       - name: Install dependencies
         run: npm ci
 
       - name: Verify implementation
-        id: verify
         shell: bash
         run: |
-          set +e
-          log="${RUNNER_TEMP}/typed-effect-verification.log"
-          : > "$log"
-          status=0
-          run_check() {
-            echo "===== $* =====" | tee -a "$log"
-            "$@" 2>&1 | tee -a "$log"
-            command_status=${PIPESTATUS[0]}
-            echo "===== exit ${command_status}: $* =====" | tee -a "$log"
-            if [ "$command_status" -ne 0 ]; then
-              status="$command_status"
-            fi
-          }
-          run_check npm run typecheck:strictest
-          run_check npm run lint
-          run_check npm run check:ts-suppressions
-          run_check npm run check:engine-unknown-arrays
-          run_check npm run check:engine-event-recording
-          run_check npm run check:engine-typed-access
-          run_check npm run check:json-parse-assertions
-          run_check npm test
-          run_check npm run report:card-runtime-clusters
-          exit "$status"
+          set -euo pipefail
+          npm run typecheck:strictest
+          npm run lint
+          npm run check:ts-suppressions
+          npm run check:engine-unknown-arrays
+          npm run check:engine-event-recording
+          npm run check:engine-typed-access
+          npm run check:json-parse-assertions
+          npm test
+          npm run report:card-runtime-clusters
 
-      - name: Upload verification log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr137-typed-effect-verification-v3
-          path: ${{ runner.temp }}/typed-effect-verification.log
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Commit and push only PR 137
+      - name: Commit and push implementation only to PR 137
         shell: bash
         run: |
           set -euo pipefail
@@ -158,4 +132,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add --all
           git commit -m "refactor(engine): сделать каталог эффектов исчерпывающим"
+          git diff --quiet HEAD^ HEAD -- .github/workflows
           git push origin HEAD:agent/architecture-deepening-findings
