@@ -2,15 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  initializeGame,
   loadCurrentRuntimeDataPack,
   type CardDefinition,
   type CardInstance,
   type GameState,
-  type PlayerState,
   type RuntimeEffect,
 } from "../src/index.js";
-import { grantTemporaryControl } from "../src/engine/control-ledger.js";
 import {
   calculateEndTurnDrawCount,
   executeControlledCardOnPlayCardEffects,
@@ -18,19 +15,19 @@ import {
 } from "../src/engine/effect-runtime.js";
 import { getEffectRuntimeHandler } from "../src/engine/effect-runtime-registry.js";
 import { dispatchControlledCardOperation } from "../src/engine/trigger-dispatch.js";
-import {
-  markCardDefinitionId,
-  markCardInstanceId,
-} from "../src/domain/types.js";
 
 import {
+  choosePlayerTargetForEffect,
   createGameScenario,
   givenRuntimeCard,
+  givenTemporaryControl,
   play,
 } from "./helpers/game-scenario.js";
 import { withTemporaryEffectRuntimeHandler } from "./helpers/with-temporary-effect-runtime-handler.js";
 
 const rootDir = process.cwd();
+const playableRuntimeDataPackPath =
+  "tests/fixtures/playable-runtime-data-pack.json";
 
 test("trigger dispatch reads runtime mode from state before invoking the catalog operation", () => {
   const observedModes: string[] = [];
@@ -48,85 +45,89 @@ test("trigger dispatch reads runtime mode from state before invoking the catalog
       },
     },
     () => {
-      const fixtureState = initializeGame({
+      const fixtureScenario = createGameScenario({
         rootDir,
-        dataPackPath: "tests/fixtures/playable-runtime-data-pack.json",
+        dataPackPath: playableRuntimeDataPackPath,
         seed: 23007,
       });
-      const fixtureController = mustGetPlayer(fixtureState, 0);
+      const fixtureController = fixtureScenario.activePlayer;
       fixtureController.permanents = [];
-      addControlledEffectCard(
-        fixtureState,
-        fixtureController,
-        fixtureController,
-        "fixture-mode-trigger",
-        fixtureController.permanents,
-        [
+      givenRuntimeCard(fixtureScenario, {
+        player: fixtureController,
+        zone: "permanents",
+        cardId: "fixture-trigger-dispatch-fixture-mode-trigger",
+        isOngoing: true,
+        effects: [
           {
             effectId: "ongoing_add_power_when_playing_wand",
             timing: "onPlayCard",
             amount: 1,
             cardTags: ["wandCard"],
           },
-        ]
-      );
-      const fixturePlayedCard = addControlledEffectCard(
-        fixtureState,
-        fixtureController,
-        fixtureController,
-        "fixture-mode-played-wand",
-        fixtureController.playedThisTurn,
-        [],
-        { isOngoing: false, tags: ["wandCard"] }
-      );
+        ],
+      });
+      const fixturePlayedCard = givenRuntimeCard(fixtureScenario, {
+        player: fixtureController,
+        zone: "playedThisTurn",
+        cardId: "fixture-trigger-dispatch-fixture-mode-played-wand",
+        isOngoing: false,
+        effects: [],
+        tags: ["wandCard"],
+      });
       const fixturePlayedDefinition = mustGetDefinition(
-        fixtureState,
+        fixtureScenario.state,
         fixturePlayedCard
       );
 
-      const combatState = initializeGame({ rootDir, seed: 23008 });
-      const combatController = mustGetPlayer(combatState, 0);
+      const combatScenario = createGameScenario({ rootDir, seed: 23008 });
+      const combatController = combatScenario.activePlayer;
       combatController.permanents = [];
-      addControlledEffectCard(
-        combatState,
-        combatController,
-        combatController,
-        "combat-mode-trigger",
-        combatController.permanents,
-        [
+      givenRuntimeCard(combatScenario, {
+        player: combatController,
+        zone: "permanents",
+        cardId: "fixture-trigger-dispatch-combat-mode-trigger",
+        isOngoing: true,
+        effects: [
           {
             effectId: "ongoing_add_power_when_playing_wand",
             timing: "onPlayCard",
             amount: 1,
             cardTags: ["wandCard"],
           },
-        ]
-      );
-      const combatPlayedCard = addControlledEffectCard(
-        combatState,
-        combatController,
-        combatController,
-        "combat-mode-played-wand",
-        combatController.playedThisTurn,
-        [],
-        { isOngoing: false, tags: ["wandCard"] }
-      );
+        ],
+      });
+      const combatPlayedCard = givenRuntimeCard(combatScenario, {
+        player: combatController,
+        zone: "playedThisTurn",
+        cardId: "fixture-trigger-dispatch-combat-mode-played-wand",
+        isOngoing: false,
+        effects: [],
+        tags: ["wandCard"],
+      });
       const combatPlayedDefinition = mustGetDefinition(
-        combatState,
+        combatScenario.state,
         combatPlayedCard
       );
 
       return [
-        dispatchControlledCardOperation(fixtureState, fixtureController, {
-          kind: "onPlayCard",
-          playedCard: fixturePlayedCard,
-          playedDefinition: fixturePlayedDefinition,
-        }),
-        dispatchControlledCardOperation(combatState, combatController, {
-          kind: "onPlayCard",
-          playedCard: combatPlayedCard,
-          playedDefinition: combatPlayedDefinition,
-        }),
+        dispatchControlledCardOperation(
+          fixtureScenario.state,
+          fixtureController,
+          {
+            kind: "onPlayCard",
+            playedCard: fixturePlayedCard,
+            playedDefinition: fixturePlayedDefinition,
+          }
+        ),
+        dispatchControlledCardOperation(
+          combatScenario.state,
+          combatController,
+          {
+            kind: "onPlayCard",
+            playedCard: combatPlayedCard,
+            playedDefinition: combatPlayedDefinition,
+          }
+        ),
       ];
     }
   );
@@ -136,53 +137,52 @@ test("trigger dispatch reads runtime mode from state before invoking the catalog
 });
 
 test("controlled trigger dispatch preserves Control Ledger order and card source attribution", () => {
-  const state = initializeGame({ rootDir, seed: 23001 });
-  const controller = mustGetPlayer(state, 0);
-  const owner = mustGetPlayer(state, 1);
+  const scenario = createGameScenario({ rootDir, seed: 23001 });
+  const state = scenario.state;
+  const controller = scenario.activePlayer;
+  const owner = scenario.foes[0];
+  assert.ok(owner);
   controller.permanents = [];
   owner.discard = [];
   state.turn.power = 0;
 
-  const permanent = addControlledEffectCard(
-    state,
-    controller,
-    controller,
-    "ordered-permanent",
-    controller.permanents,
-    [
+  const permanent = givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    cardId: "fixture-trigger-dispatch-ordered-permanent",
+    isOngoing: true,
+    effects: [
       {
         effectId: "ongoing_add_power_when_playing_wand",
         timing: "onPlayCard",
         amount: 1,
         cardTags: ["wandCard"],
       },
-    ]
-  );
-  const temporary = addControlledEffectCard(
-    state,
-    controller,
-    owner,
-    "ordered-temporary",
-    owner.discard,
-    [
+    ],
+  });
+  const temporary = givenRuntimeCard(scenario, {
+    player: owner,
+    zone: "discard",
+    cardId: "fixture-trigger-dispatch-ordered-temporary",
+    isOngoing: true,
+    effects: [
       {
         effectId: "ongoing_add_power_when_playing_wand",
         timing: "onPlayCard",
         amount: 2,
         cardTags: ["wandCard"],
       },
-    ]
-  );
-  grantTemporaryControl(state, temporary.instanceId, controller.playerId);
-  const playedCard = addControlledEffectCard(
-    state,
-    controller,
-    controller,
-    "ordered-played-wand",
-    controller.playedThisTurn,
-    [],
-    { isOngoing: false, tags: ["wandCard"] }
-  );
+    ],
+  });
+  givenTemporaryControl(scenario, temporary, controller);
+  const playedCard = givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "playedThisTurn",
+    cardId: "fixture-trigger-dispatch-ordered-played-wand",
+    isOngoing: false,
+    effects: [],
+    tags: ["wandCard"],
+  });
 
   const result = dispatchControlledCardOperation(state, controller, {
     kind: "onPlayCard",
@@ -226,47 +226,45 @@ test("controlled trigger dispatch preserves Control Ledger order and card source
 });
 
 test("on-play compatibility wrapper leaves Wand applicability inside Trigger Dispatch and the catalog", () => {
-  const state = initializeGame({ rootDir, seed: 23003 });
-  const controller = mustGetPlayer(state, 0);
-  const owner = mustGetPlayer(state, 1);
+  const scenario = createGameScenario({ rootDir, seed: 23003 });
+  const state = scenario.state;
+  const controller = scenario.activePlayer;
+  const owner = scenario.foes[0];
+  assert.ok(owner);
   controller.permanents = [];
   owner.discard = [];
   state.turn.power = 0;
 
-  const trigger = addControlledEffectCard(
-    state,
-    controller,
-    owner,
-    "wand-on-play",
-    owner.discard,
-    [
+  const trigger = givenRuntimeCard(scenario, {
+    player: owner,
+    zone: "discard",
+    cardId: "fixture-trigger-dispatch-wand-on-play",
+    isOngoing: true,
+    effects: [
       {
         effectId: "ongoing_add_power_when_playing_wand",
         timing: "onPlayCard",
         amount: 1,
         cardTags: ["wandCard"],
       },
-    ]
-  );
-  grantTemporaryControl(state, trigger.instanceId, controller.playerId);
-  const nonWand = addControlledEffectCard(
-    state,
-    controller,
-    controller,
-    "played-non-wand",
-    controller.playedThisTurn,
-    [],
-    { isOngoing: false }
-  );
-  const wand = addControlledEffectCard(
-    state,
-    controller,
-    controller,
-    "played-wand",
-    controller.playedThisTurn,
-    [],
-    { isOngoing: false, tags: ["wandCard"] }
-  );
+    ],
+  });
+  givenTemporaryControl(scenario, trigger, controller);
+  const nonWand = givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "playedThisTurn",
+    cardId: "fixture-trigger-dispatch-played-non-wand",
+    isOngoing: false,
+    effects: [],
+  });
+  const wand = givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "playedThisTurn",
+    cardId: "fixture-trigger-dispatch-played-wand",
+    isOngoing: false,
+    effects: [],
+    tags: ["wandCard"],
+  });
 
   assert.deepEqual(
     executeControlledCardOnPlayCardEffects(state, controller, nonWand),
@@ -292,9 +290,11 @@ test("on-play compatibility wrapper leaves Wand applicability inside Trigger Dis
 });
 
 test("after-attack dispatch attributes a wizard-property attack trigger to the controlled card", () => {
-  const state = initializeGame({ rootDir, seed: 23004 });
-  const controller = mustGetPlayer(state, 0);
-  const target = mustGetPlayer(state, 1);
+  const scenario = createGameScenario({ rootDir, seed: 23004 });
+  const state = scenario.state;
+  const controller = scenario.activePlayer;
+  const target = scenario.foes[0];
+  assert.ok(target);
   state.activePlayerId = controller.playerId;
   controller.permanents = [];
   controller.wizardProperties = [];
@@ -303,25 +303,21 @@ test("after-attack dispatch attributes a wizard-property attack trigger to the c
   state.turn.power = 0;
   state.turn.damagingAttackPlayerIds = [];
 
-  const trigger = addControlledEffectCard(
-    state,
-    controller,
-    target,
-    "first-attack-power",
-    target.discard,
-    [
+  const trigger = givenRuntimeCard(scenario, {
+    player: target,
+    zone: "discard",
+    cardId: "fixture-trigger-dispatch-first-attack-power",
+    isOngoing: true,
+    effects: [
       {
         effectId: "ongoing_first_attack_damage_add_power",
         timing: "afterFirstAttackDamageEachTurn",
         amount: "totalDamageDealtByThatAttack",
       },
-    ]
-  );
-  grantTemporaryControl(state, trigger.instanceId, controller.playerId);
-  state.effectChoiceStrategy = ({ effectId, choices }) =>
-    effectId === "attack_damage"
-      ? choices.find((choice) => choice.choiceId === target.playerId)
-      : undefined;
+    ],
+  });
+  givenTemporaryControl(scenario, trigger, controller);
+  choosePlayerTargetForEffect(scenario, "attack_damage", target);
 
   const result = executeEffect(
     state,
@@ -355,9 +351,11 @@ test("after-attack dispatch attributes a wizard-property attack trigger to the c
 });
 
 test("after-attack dispatch propagates catalog errors without consuming first-attack eligibility", () => {
-  const state = initializeGame({ rootDir, seed: 23006 });
-  const controller = mustGetPlayer(state, 0);
-  const target = mustGetPlayer(state, 1);
+  const scenario = createGameScenario({ rootDir, seed: 23006 });
+  const state = scenario.state;
+  const controller = scenario.activePlayer;
+  const target = scenario.foes[0];
+  assert.ok(target);
   state.activePlayerId = controller.playerId;
   controller.permanents = [];
   controller.wizardProperties = [];
@@ -365,24 +363,20 @@ test("after-attack dispatch propagates catalog errors without consuming first-at
   target.life.current = 20;
   state.turn.damagingAttackPlayerIds = [];
 
-  addControlledEffectCard(
-    state,
-    controller,
-    controller,
-    "invalid-first-attack-trigger",
-    controller.permanents,
-    [
+  givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    cardId: "fixture-trigger-dispatch-invalid-first-attack-trigger",
+    isOngoing: true,
+    effects: [
       {
         effectId: "ongoing_first_attack_damage_add_power",
         timing: "afterFirstAttackDamageEachTurn",
         amount: 1,
       } as unknown as RuntimeEffect,
-    ]
-  );
-  state.effectChoiceStrategy = ({ effectId, choices }) =>
-    effectId === "attack_damage"
-      ? choices.find((choice) => choice.choiceId === target.playerId)
-      : undefined;
+    ],
+  });
+  choosePlayerTargetForEffect(scenario, "attack_damage", target);
 
   const result = executeEffect(
     state,
@@ -411,44 +405,44 @@ test("after-attack dispatch propagates catalog errors without consuming first-at
 });
 
 test("end-turn dispatch returns a typed aggregate for controlled refill and max-life effects", () => {
-  const state = initializeGame({ rootDir, seed: 23005 });
-  const controller = mustGetPlayer(state, 0);
-  const owner = mustGetPlayer(state, 1);
+  const scenario = createGameScenario({ rootDir, seed: 23005 });
+  const state = scenario.state;
+  const controller = scenario.activePlayer;
+  const owner = scenario.foes[0];
+  assert.ok(owner);
   controller.permanents = [];
   controller.wizardProperties = [];
   controller.statuses = [];
   owner.discard = [];
   controller.life.current = controller.life.max;
 
-  addControlledEffectCard(
-    state,
-    controller,
-    controller,
-    "end-turn-refill",
-    controller.permanents,
-    [
+  givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    cardId: "fixture-trigger-dispatch-end-turn-refill",
+    isOngoing: true,
+    effects: [
       {
         effectId: "ongoing_hand_refill_bonus",
         timing: "endTurn",
         amount: 2,
       },
-    ]
-  );
-  const maxLife = addControlledEffectCard(
-    state,
-    controller,
-    owner,
-    "end-turn-max-life",
-    owner.discard,
-    [
+    ],
+  });
+  const maxLife = givenRuntimeCard(scenario, {
+    player: owner,
+    zone: "discard",
+    cardId: "fixture-trigger-dispatch-end-turn-max-life",
+    isOngoing: true,
+    effects: [
       {
         effectId: "increase_hand_limit_at_max_life",
         timing: "endTurn",
         amount: 1,
       },
-    ]
-  );
-  grantTemporaryControl(state, maxLife.instanceId, controller.playerId);
+    ],
+  });
+  givenTemporaryControl(scenario, maxLife, controller);
 
   assert.deepEqual(
     dispatchControlledCardOperation(state, controller, {
@@ -471,35 +465,34 @@ test("end-turn dispatch returns a typed aggregate for controlled refill and max-
 });
 
 test("controlled trigger dispatch stops after the first catalog execution error", () => {
-  const state = initializeGame({ rootDir, seed: 23002 });
-  const controller = mustGetPlayer(state, 0);
+  const scenario = createGameScenario({ rootDir, seed: 23002 });
+  const state = scenario.state;
+  const controller = scenario.activePlayer;
   controller.permanents = [];
   for (const suffix of ["first-error", "second-skipped"] as const) {
-    addControlledEffectCard(
-      state,
-      controller,
-      controller,
-      suffix,
-      controller.permanents,
-      [
+    givenRuntimeCard(scenario, {
+      player: controller,
+      zone: "permanents",
+      cardId: `fixture-trigger-dispatch-${suffix}`,
+      isOngoing: true,
+      effects: [
         {
           effectId: "ongoing_add_power_when_playing_wand",
           timing: "onPlayCard",
           amount: 1,
           cardTags: ["wandCard"],
         },
-      ]
-    );
+      ],
+    });
   }
-  const playedCard = addControlledEffectCard(
-    state,
-    controller,
-    controller,
-    "error-played-wand",
-    controller.playedThisTurn,
-    [],
-    { isOngoing: false, tags: ["wandCard"] }
-  );
+  const playedCard = givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "playedThisTurn",
+    cardId: "fixture-trigger-dispatch-error-played-wand",
+    isOngoing: false,
+    effects: [],
+    tags: ["wandCard"],
+  });
   const executedDefinitionIds: string[] = [];
   const originalHandler = getEffectRuntimeHandler(
     "ongoing_add_power_when_playing_wand"
@@ -532,35 +525,34 @@ test("controlled trigger dispatch stops after the first catalog execution error"
 });
 
 test("controlled trigger dispatch stops after the first catalog game-end result", () => {
-  const state = initializeGame({ rootDir, seed: 23009 });
-  const controller = mustGetPlayer(state, 0);
+  const scenario = createGameScenario({ rootDir, seed: 23009 });
+  const state = scenario.state;
+  const controller = scenario.activePlayer;
   controller.permanents = [];
   for (const suffix of ["first-game-end", "second-skipped"] as const) {
-    addControlledEffectCard(
-      state,
-      controller,
-      controller,
-      suffix,
-      controller.permanents,
-      [
+    givenRuntimeCard(scenario, {
+      player: controller,
+      zone: "permanents",
+      cardId: `fixture-trigger-dispatch-${suffix}`,
+      isOngoing: true,
+      effects: [
         {
           effectId: "ongoing_add_power_when_playing_wand",
           timing: "onPlayCard",
           amount: 1,
           cardTags: ["wandCard"],
         },
-      ]
-    );
+      ],
+    });
   }
-  const playedCard = addControlledEffectCard(
-    state,
-    controller,
-    controller,
-    "game-end-played-wand",
-    controller.playedThisTurn,
-    [],
-    { isOngoing: false, tags: ["wandCard"] }
-  );
+  const playedCard = givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "playedThisTurn",
+    cardId: "fixture-trigger-dispatch-game-end-played-wand",
+    isOngoing: false,
+    effects: [],
+    tags: ["wandCard"],
+  });
   const executedDefinitionIds: string[] = [];
   const originalHandler = getEffectRuntimeHandler(
     "ongoing_add_power_when_playing_wand"
@@ -604,80 +596,10 @@ test("controlled trigger dispatch stops after the first catalog game-end result"
   ]);
 });
 
-function mustGetDefinition(
-  state: GameState,
-  card: CardInstance
-): CardDefinition {
-  const definition = state.cardDefinitions.get(card.definitionId);
-  assert.ok(definition);
-  return definition;
-}
-
-function addControlledEffectCard(
-  state: GameState,
-  controller: PlayerState,
-  owner: PlayerState,
-  suffix: string,
-  zone: CardInstance[],
-  effects: RuntimeEffect[],
-  options: { isOngoing?: boolean; tags?: string[]; cardId?: string } = {}
-): CardInstance {
-  const cardId = options.cardId ?? `fixture-trigger-dispatch-${suffix}`;
-  const definition: CardDefinition = {
-    schemaVersion: 1,
-    cardId,
-    source: { image: `assets/cards/fixtures/${cardId}.png` },
-    visible: {
-      nameRu: `Fixture trigger ${suffix}`,
-      cost: 0,
-      victoryPoints: 0,
-      typeRu: null,
-      cardKind: "normal",
-      cardTypes: [],
-      markers: options.isOngoing === false ? [] : ["ongoing"],
-    },
-    engine: {
-      runtimeSchema: "krutagidon.cardDefinition.v0",
-      mappingStatus: "fixture",
-      playableInV0: true,
-      cardKind: "normal",
-      cardTypes: [],
-      ...(options.tags === undefined ? {} : { tags: options.tags }),
-      cost: 0,
-      victoryPoints: 0,
-      isOngoing: options.isOngoing ?? true,
-      marketChipMarker: false,
-      effects,
-      unsupportedMechanics: [],
-    },
-  };
-  state.cardDefinitions = new Map([
-    ...state.cardDefinitions,
-    [definition.cardId, definition],
-  ]);
-  const card: CardInstance = {
-    instanceId: markCardInstanceId(`${cardId}-instance`),
-    definitionId: markCardDefinitionId(cardId),
-    ownerId: owner.playerId,
-    marketChips: 0,
-  };
-  zone.push(card);
-  if (owner.playerId !== controller.playerId) {
-    assert.equal(card.ownerId, owner.playerId);
-  }
-  return card;
-}
-
-function mustGetPlayer(state: GameState, index: number): PlayerState {
-  const player = state.players[index];
-  assert.ok(player);
-  return player;
-}
-
 test("current runtime Ultimate Tronado adds power after its controller's first damaging attack", () => {
   const scenario = createGameScenario({
     rootDir,
-    dataPackPath: "tests/fixtures/playable-runtime-data-pack.json",
+    dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
   });
   const activePlayer = scenario.activePlayer;
@@ -717,3 +639,12 @@ test("current runtime Ultimate Tronado adds power after its controller's first d
   assert.equal(targetPlayer.life.current, 17);
   assert.equal(scenario.state.turn.power, 3);
 });
+
+function mustGetDefinition(
+  state: GameState,
+  card: CardInstance
+): CardDefinition {
+  const definition = state.cardDefinitions.get(card.definitionId);
+  assert.ok(definition);
+  return definition;
+}
