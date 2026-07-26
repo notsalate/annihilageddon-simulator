@@ -63,9 +63,9 @@ Defense module атомарно применяет payment, movement и branch e
 
 ## Архитектурный кандидат 2: глубокий module Control Ledger
 
-### C1. Единые queries контроля
+### C1. Единые queries контроля и физический inventory
 
-Новый `src/engine/control-ledger.ts` владеет поиском контролируемых карт, физическим поиском card location и удалением карты из найденной зоны. `effective-values.ts` и Effect Runtime больше не сканируют зоны самостоятельно.
+`src/engine/control-ledger.ts` владеет controller-to-object relation и единым descriptor inventory всех физических card locations, включая array- и singleton-зоны. Lookup, inventory traversal и removal используют этот inventory; `effective-values.ts`, Effect Runtime и snapshot consumers не сканируют и не реконструируют зоны самостоятельно.
 
 ### C2. Lifecycle временного контроля
 
@@ -91,17 +91,17 @@ Actions, conditions, activation и controlled-cost selection использую�
 
 ## Архитектурный кандидат 4: глубокий test scenario module
 
-### S1. Базовый deterministic scenario builder
+### S1. Единый primitive сборки focused scenarios
 
-Создать helper, который скрывает ручную сборку игроков, runtime cards, target/option strategy и common attack arrangements.
+`tests/helpers/game-scenario.ts` владеет deterministic setup и runtime-card definition/instance assembly для новых focused integration suites. Generated-definition branch сохраняет defensive copy `engine.tags`; существующая definition branch не принимает parallel definition fields.
 
-### S2. Отдельный suite Attack Resolution
+### S2. Узкие arrangement adapters
 
-Новые и затронутые regression tests перенести в focused test file, оставляя assertions на externally relevant outcomes/events.
+`givenTemporaryControl()` делегирует только production `grantTemporaryControl()` и не скрывает owner или физическую зону. `choosePlayerTargetForEffect()` выбирает exact `choiceId === target.playerId` только для указанного `RuntimeEffectId`, возвращая `undefined` для остальных effects и сохраняя безопасный fallback.
 
-### S3. Отдельный suite Control/Trigger lifecycle
+### S3. Focused suites используют общий seam
 
-Сценарии temporary control, activation, end-turn release и trigger ordering вынести из гигантского action-loop suite.
+`controlled-power-ongoing.test.ts`, `attack-replacement-ongoing.test.ts`, `trigger-dispatch-ongoing.test.ts` и `trigger-dispatch.test.ts` не объявляют локальные runtime-card builders, manual branded IDs или параллельные definition/instance literals. Ownership, physical zone и temporary controller остаются явно видны в setup; helper не превращается в универсальный DSL и не требует массовой миграции legacy `action-loop.test.ts`.
 
 ## Архитектурный кандидат 5: глубокий typed Effect Decoder/Catalog seam
 
