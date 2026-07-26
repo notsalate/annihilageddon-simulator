@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Print end-turn operation factory
+      - name: Print exact end-turn decoder branch
         shell: bash
         env:
           GH_TOKEN: "${{ github.token }}"
@@ -47,8 +47,6 @@ jobs:
           from pathlib import Path
 
           lines = Path(os.environ["SCRIPT_PATH"]).read_text(encoding="utf-8").splitlines()
-          start = 1160
-          end = 1260
-          for index in range(start - 1, min(end, len(lines))):
+          for index in range(1217, min(1255, len(lines))):
               print(f"{index + 1:05d}: {lines[index]}")
           PY
