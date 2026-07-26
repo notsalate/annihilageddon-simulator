@@ -4,7 +4,7 @@
 
 **Goal:** Закрыть подтверждённые findings повторных ревью PR #137 без изменения правил карт, сохранив draft-статус PR.
 
-**Architecture:** `attack-resolution.ts` владеет полным lifecycle обычной player-controlled атаки: attack creation, ordered targets, state-sensitive amount, Defense/redirect recursion, damage/death boundary, immediate consequences, outcome branches, attribution, attack events и after-attack hooks. `attack-defense.ts` остаётся transactional submodule для legality, immutable payment plan, payment/movement/branch commit, redirect callback и полного rollback. `effect-runtime-registry.ts` только нормализует concrete typed attack payload в intent, а `effect-runtime.ts` предоставляет узкие adapters и shared primitives. Control Ledger предоставляет отдельный ongoing-card view для passive/replacement consumers и владеет физическим поиском/удалением карт. Trigger Dispatch применяет ongoing guard к `onPlayCard` и after-attack reactions, сохраняя generic caller-supplied executor seam; Effect Runtime Catalog остаётся у вызывающего пути. Mayhem/Mega Mayhem остаются отдельными двухфазными domain flows; terminal карты до возврата game end переходят в соответствующий destroyed stack.
+**Architecture:** `attack-resolution.ts` владеет полным lifecycle обычной player-controlled атаки: attack creation, ordered targets, state-sensitive amount, Defense/redirect recursion, damage/death boundary, immediate consequences, outcome branches, attribution, attack events и after-attack hooks. `attack-defense.ts` остаётся transactional submodule для legality, immutable payment plan, payment/movement/branch commit, redirect callback и полного rollback. `effect-runtime-registry.ts` только нормализует concrete typed attack payload в intent, а `effect-runtime.ts` предоставляет узкие adapters и shared primitives. Control Ledger предоставляет отдельный ongoing-card view для passive/replacement consumers и владеет физическим поиском/удалением карт. Trigger Dispatch владеет discovery, timing-aware ongoing policy, source identity, Effect Runtime Catalog resolution, operation-specific applicability, execution и aggregation; callers передают только state, controller и typed operation. Mayhem/Mega Mayhem остаются отдельными двухфазными domain flows; terminal карты до возврата game end переходят в соответствующий destroyed stack.
 
 **Tech Stack:** TypeScript 5.8, Node.js 22, `node:test`, GitHub Actions.
 
@@ -97,7 +97,7 @@
 - Modify: `tests/AGENTS.md`
 
 - [x] Зафиксировать полное владение ordinary player-controlled lifecycle в `attack-resolution.ts`, отдельный transactional submodule `attack-defense.ts` и узкие adapters в `effect-runtime.ts`.
-- [x] Зафиксировать generic Trigger Dispatch executor seam и catalog ownership у caller.
+- [x] Зафиксировать catalog-owned Trigger Dispatch с typed operations, stop-on-error/game-end и end-turn aggregate без raw effect contexts.
 - [x] Зафиксировать физический location/removal ownership Control Ledger.
 - [x] Зафиксировать behavior-named focused regression suites вместо общего review file.
 

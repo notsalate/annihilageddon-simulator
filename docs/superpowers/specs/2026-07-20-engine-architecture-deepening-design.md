@@ -77,17 +77,17 @@ Actions, conditions, activation и controlled-cost selection использую�
 
 ## Архитектурный кандидат 3: глубокий module Trigger Dispatch
 
-### T1. Общий controlled-card dispatcher
+### T1. Catalog-owned controlled-card dispatcher
 
-Новый `src/engine/trigger-dispatch.ts` получает timing, `ControlledObjectView`, runtime mode, optional predicate и caller-supplied executor. Он стабильно фильтрует эффекты, применяет timing-aware ongoing guard, строит source identity и останавливается на error/game-end. Effect Runtime Catalog намеренно остаётся у caller: generic executor seam позволяет on-play и after-attack paths выполнять разные catalog operations без дублирования discovery policy.
+`src/engine/trigger-dispatch.ts` принимает только `GameState`, controller и discriminated typed operation. Внутри одной границы он строит `ControlledObjectView`, читает runtime mode из state, выбирает timing, применяет ongoing policy, создаёт card source identity, разрешает Effect Runtime Catalog entry и вызывает operation-specific method. Raw effect, predicate, executor callback и готовый controlled view не выходят к caller.
 
-### T2. Перевести on-play и after-attack triggers
+### T2. On-play и after-attack operations
 
-`onPlayCard` и `afterFirstAttackDamageEachTurn` проходят через dispatcher. Ordering и существующие event payload сохраняются; non-ongoing сыгранные карты не могут исполнять эти ongoing reactions.
+`onPlayCard` и `afterPlayerAttackDamage` проходят через catalog-owned dispatcher. Applicability, включая Wand tag, принадлежит concrete catalog hook. Stable Control Ledger order и существующая source attribution сохраняются; non-ongoing definitions не исполняют эти ongoing reactions. Первая ошибка или `gameEnd` немедленно прекращает дальнейшие handlers, а eligibility первой damaging attack отмечается только после полного успешного dispatch.
 
-### T3. Перевести end-turn controlled effects
+### T3. End-turn aggregate
 
-Расчёт hand refill/max-life modifiers использует общий discovery seam и видит карты, которые остаются под временным контролем до cleanup; арифметика effective values остаётся в owning modules.
+`collectEndTurnDrawModifier` использует тот же internal discovery/catalog pipeline и видит карты, которые остаются под временным контролем до cleanup. Catalog hooks применяют refill и max-life contracts последовательно, а caller получает typed aggregate `drawCount`, не список raw effects и не catalog-specific arithmetic switch.
 
 ## Архитектурный кандидат 4: глубокий test scenario module
 
