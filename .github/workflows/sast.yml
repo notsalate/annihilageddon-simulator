@@ -7,7 +7,7 @@ on:
 
 permissions:
   actions: read
-  contents: write
+  contents: read
 
 jobs:
   typescript-sast:
@@ -22,63 +22,29 @@ jobs:
       - name: ESLint
         run: npm run lint
 
-  extract-trigger-dispatch-diagnostic:
+  print-trigger-dispatch-diagnostic:
     if: "${{ github.event.pull_request.head.ref == 'agent/architecture-deepening-findings' }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - name: Checkout PR 137 head
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        with:
-          ref: agent/architecture-deepening-findings
-          fetch-depth: 0
-
-      - name: Extract failed publisher log and clean diagnostic transport
+      - name: Print failure signatures from publisher job
         shell: bash
         env:
           GH_TOKEN: "${{ github.token }}"
         run: |
           set -euo pipefail
-
-          readonly ORIGINAL_HEAD='1475578adb63b704f0cc10b822a70e66667a4e51'
-          readonly EXPECTED_PARENT='44ac237b1739e422cde663d6adcf455fb411886a'
-          readonly PR_BRANCH='agent/architecture-deepening-findings'
-          readonly SAST_WORKFLOW='.github/workflows/sast.yml'
-          readonly DIAGNOSTIC='pr137-trigger-dispatch-diagnostic.log'
-          readonly FAILED_JOB_ID='89786804249'
-          trigger_sha="$(git rev-parse HEAD)"
-
-          test "$(git branch --show-current)" = "${PR_BRANCH}"
-          test "$(git rev-parse HEAD^)" = "${EXPECTED_PARENT}"
-          test "$(git log -1 --pretty=%s)" = 'chore(engine): извлечь диагностику Trigger Dispatch'
-
           curl --location --fail --silent --show-error \
             --header "Authorization: Bearer ${GH_TOKEN}" \
             --header 'Accept: application/vnd.github+json' \
             --header 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/jobs/${FAILED_JOB_ID}/logs" \
-            --output "${RUNNER_TEMP}/failed-job.log"
-
-          if file "${RUNNER_TEMP}/failed-job.log" | grep -qi 'Zip archive'; then
-            unzip -p "${RUNNER_TEMP}/failed-job.log" > "${RUNNER_TEMP}/failed-job.txt"
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/jobs/89786804249/logs" \
+            --output "${RUNNER_TEMP}/publisher.log"
+          if file "${RUNNER_TEMP}/publisher.log" | grep -qi 'Zip archive'; then
+            unzip -p "${RUNNER_TEMP}/publisher.log" > "${RUNNER_TEMP}/publisher.txt"
           else
-            cp "${RUNNER_TEMP}/failed-job.log" "${RUNNER_TEMP}/failed-job.txt"
+            cp "${RUNNER_TEMP}/publisher.log" "${RUNNER_TEMP}/publisher.txt"
           fi
-
-          {
-            echo "source_job_id=${FAILED_JOB_ID}"
-            echo "trigger_sha=${trigger_sha}"
-            echo
-            echo '--- tail of failed publisher log ---'
-            tail -n 1800 "${RUNNER_TEMP}/failed-job.txt"
-          } > "${DIAGNOSTIC}"
-
-          git checkout "${ORIGINAL_HEAD}" -- "${SAST_WORKFLOW}"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add "${SAST_WORKFLOW}" "${DIAGNOSTIC}"
-          git commit --no-verify -m 'chore(engine): сохранить диагностику Trigger Dispatch'
-
-          remote_sha="$(git ls-remote origin "refs/heads/${PR_BRANCH}" | cut -f1)"
-          test "${remote_sha}" = "${trigger_sha}"
-          git push origin "HEAD:${PR_BRANCH}"
+          echo '=== FAILURE SIGNATURES ==='
+          grep -E 'error TS|RuntimeError|Error:|not ok|FAILED|Trigger Dispatch transport failed|npm ERR|##\[error\]' "${RUNNER_TEMP}/publisher.txt" | tail -n 80 || true
+          echo '=== FINAL 80 LINES ==='
+          tail -n 80 "${RUNNER_TEMP}/publisher.txt"
