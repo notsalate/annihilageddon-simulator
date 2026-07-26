@@ -20,3 +20,27 @@ jobs:
       - run: npm ci
       - name: ESLint
         run: npm run lint
+
+  inspect-trigger-dispatch-transport:
+    if: "${{ github.event.pull_request.head.ref == 'agent/architecture-deepening-findings' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout PR 137 head
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: agent/architecture-deepening-findings
+          fetch-depth: 0
+      - name: Print end-turn generator context
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show 'bf6428c65871da163d48006d77826673c7dab5cd:.scratch/agent-pr137-trigger-dispatch.py.gz.b64' \
+            | base64 --decode \
+            | gzip --decompress \
+            > "${RUNNER_TEMP}/apply-trigger-dispatch.py"
+          test "$(sha256sum "${RUNNER_TEMP}/apply-trigger-dispatch.py" | cut -d' ' -f1)" = '1762c679f372bb249a27c6caa02501a58c5e1bacd943786498f500f4e4a7f1d1'
+          echo '=== evaluateEndTurnDrawModifier occurrences ==='
+          grep -n -C 18 'evaluateEndTurnDrawModifier' "${RUNNER_TEMP}/apply-trigger-dispatch.py" || true
+          echo '=== end-turn decode/error occurrences ==='
+          grep -n -C 10 -E 'evaluateEndTurn|decoded\.ok|decoded\.error|collectEndTurnDrawModifier' "${RUNNER_TEMP}/apply-trigger-dispatch.py" | tail -n 260 || true
