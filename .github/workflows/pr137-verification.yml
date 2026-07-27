@@ -9,70 +9,9 @@ permissions:
   contents: write
 
 jobs:
-  directional-chain-red:
+  publish-docs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 22
-          cache: npm
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
-      - name: Build
-        run: npm run build -- --pretty false
-      - name: Directional redirect regression
-        run: node --test dist/tests/directional-chain-redirect.test.js
-
-  catalog-end-turn-red:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 22
-          cache: npm
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
-      - name: Build
-        run: npm run build -- --pretty false
-      - name: Catalog end-turn regression
-        run: node --test dist/tests/effect-runtime-catalog-errors.test.js
-
-  workspace-archive:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 22
-          cache: npm
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
-      - name: Create workspace archive
-        run: >-
-          tar --exclude=.git --exclude=assets --exclude='*.pdf'
-          -czf /tmp/repository-with-deps.tar.gz .
-      - name: Upload workspace archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr137-workspace
-          path: /tmp/repository-with-deps.tar.gz
-          if-no-files-found: error
-          retention-days: 1
-
-  publish-fixes:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
     steps:
       - name: Checkout verification branch
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -84,45 +23,24 @@ jobs:
           ref: agent/architecture-deepening-findings
           fetch-depth: 0
           path: target
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: target/package-lock.json
-      - name: Apply verified patch
+      - name: Apply documentation patch
         working-directory: target
         run: |
           git apply --check ../verification/pr137-final-fixes.patch
           git apply ../verification/pr137-final-fixes.patch
           git diff --check
-      - name: Install dependencies
-        working-directory: target
-        run: npm ci --ignore-scripts
-      - name: Audit dependencies
-        working-directory: target
-        run: npm audit
-      - name: Full project check
-        working-directory: target
-        run: npm run check
-      - name: Runtime cluster report
-        working-directory: target
-        run: npm run report:card-runtime-clusters
-      - name: Commit verified fixes
+      - name: Commit documentation fixes
         working-directory: target
         run: |
-          git diff --check
           git add \
-            src/engine/attack-resolution.ts \
-            src/engine/effect-runtime-registry.ts \
-            src/engine/trigger-dispatch.ts \
-            tests/runtime-regression.test.ts
+            docs/superpowers/specs/2026-07-20-engine-architecture-deepening-design.md \
+            docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md
           git diff --cached --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "fix(engine): preserve redirect target semantics and catalog errors"
+          git commit -m "docs(review): align final attack and catalog contracts"
           git diff --check origin/master...HEAD
           test -z "$(git status --short)"
-      - name: Push verified fixes
+      - name: Push documentation fixes
         working-directory: target
         run: git push origin HEAD:agent/architecture-deepening-findings
