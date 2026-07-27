@@ -30,14 +30,25 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: target/package-lock.json
+      - name: Normalize transformation script
+        run: >-
+          node verification/scripts/normalize-pr137-standards-fix-script.mjs
+          verification/scripts/apply-pr137-standards-fixes.mjs
       - name: Apply minimal verified fixes
         run: |
-          node verification/scripts/normalize-pr137-standards-fix-script.mjs \
-            verification/scripts/apply-pr137-standards-fixes.mjs
+          set -o pipefail
           node verification/scripts/apply-pr137-standards-fixes.mjs \
-            target verification
+            target verification 2>&1 | tee transformation.log
           cd target
           git diff --check
+      - name: Upload transformation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr137-transformation-log
+          path: transformation.log
+          if-no-files-found: ignore
+          retention-days: 1
       - name: Install dependencies
         working-directory: target
         run: npm ci --ignore-scripts
