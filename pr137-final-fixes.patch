@@ -1,174 +1,35 @@
---- a/src/engine/attack-resolution.ts
-+++ b/src/engine/attack-resolution.ts
-@@ -67,6 +67,21 @@
-     }
-   | { ok: false; error: string };
+--- a/docs/superpowers/specs/2026-07-20-engine-architecture-deepening-design.md
++++ b/docs/superpowers/specs/2026-07-20-engine-architecture-deepening-design.md
+@@ -51,7 +51,7 @@
  
-+type PlayerControlledAttackTargetResolutionResult =
-+  | {
-+      ok: true;
-+      resolution: AttackResolution;
-+      requestedTargetKilled: boolean;
-+      gameEnd?: never;
-+    }
-+  | {
-+      ok: true;
-+      gameEnd: NonNullable<Extract<EffectExecutionResult, { ok: true }>["gameEnd"]>;
-+      resolution?: never;
-+      requestedTargetKilled?: never;
-+    }
-+  | { ok: false; error: string };
-+
- export type DefenseWindowResolutionResult =
-   | { ok: true; avoided: false; resolution?: never; gameEnd?: never }
-   | {
-@@ -378,7 +393,7 @@
-     if (
-       intent.targetPlan.kind === "orderedPlayers" &&
-       intent.targetPlan.continueWhile === "targetKilled" &&
--      !resolutionResult.resolution.killed
-+      !resolutionResult.requestedTargetKilled
-     ) {
-       break;
-     }
-@@ -407,7 +422,7 @@
-   context: PlayerControlledAttackContext,
-   adapters: PlayerControlledAttackAdapters,
-   current: CurrentAttackTargetContext
--): AttackTargetResolutionResult {
-+): PlayerControlledAttackTargetResolutionResult {
-   const impact = intent.impact;
-   if (impact.kind === "effects") {
-     return resolvePlayerControlledEffectsAttackTarget(
-@@ -473,6 +488,7 @@
-           resolvedAmount.components,
-           context.originalSource
-         ),
-+      requestedTargetKilled: false,
-     };
-   }
+ ### A2. Последовательное разрешение целей
  
-@@ -505,7 +521,11 @@
-     return branchResult;
-   }
+-Attack Resolution сначала получает стабильный ordered target plan. Ошибка или пустой target set завершаются без `attackCreated`; после успешного непустого target resolution typed choice event уже записан, и только затем создаётся `attackCreated`. Далее модуль полностью завершает Defense, redirect, impact, immediate death/DWT consequences и outcome branches текущей цели до `attackTargetStarted` следующей. Amount вычисляется заново из актуального state для каждой цели.
++Attack Resolution сначала получает стабильный ordered target plan. Ошибка или пустой target set завершаются без `attackCreated`; после успешного непустого target resolution typed choice event уже записан, и только затем создаётся `attackCreated`. Далее модуль полностью завершает Defense, redirect, impact, immediate death/DWT consequences и outcome branches текущей цели до `attackTargetStarted` следующей. Amount вычисляется заново из актуального state для каждой цели. Условие продолжения цепной атаки относится к запрошенной цели: redirect сохраняет attribution и результат перенаправленной ноги, но не считается смертью исходного защищавшегося игрока.
  
--  return { ok: true, resolution };
-+  return {
-+    ok: true,
-+    resolution,
-+    requestedTargetKilled: resolution.killed,
-+  };
- }
+ ### A3. Transactional Defense и redirect
  
- function resolvePlayerControlledEffectsAttackTarget(
-@@ -514,7 +534,7 @@
-   context: PlayerControlledAttackContext,
-   adapters: PlayerControlledAttackAdapters,
-   current: CurrentAttackTargetContext
--): AttackTargetResolutionResult {
-+): PlayerControlledAttackTargetResolutionResult {
-   recordAttackTargetStarted(
-     intent,
-     current.attackingPlayer,
-@@ -552,6 +572,7 @@
-         current.amountComponents,
-         context.originalSource
-       ),
-+      requestedTargetKilled: false,
-     };
-   }
+@@ -87,7 +87,7 @@
  
-@@ -581,6 +602,7 @@
-       source: current.source,
-       originalSource: context.originalSource,
-     },
-+    requestedTargetKilled: false,
-   };
- }
+ ### T3. End-turn aggregate
  
---- a/src/engine/effect-runtime-registry.ts
-+++ b/src/engine/effect-runtime-registry.ts
-@@ -664,12 +664,9 @@
-         rawEffect,
-         context.source
-       );
--      if (!decoded.ok) {
--        // Preserve the established passive-modifier contract: malformed
--        // end-turn values that bypass data validation are ignored.
--        return { status: "notApplicable" };
--      }
--      return evaluateEndTurnDrawModifier(decoded.effect, context);
-+      return decoded.ok
-+        ? evaluateEndTurnDrawModifier(decoded.effect, context)
-+        : { status: "error", error: decoded.error };
-     },
-     [replaceEffectRuntimeHandlerSymbol](replacementHandler) {
-       const originalHandler = activeHandler;
---- a/src/engine/trigger-dispatch.ts
-+++ b/src/engine/trigger-dispatch.ts
-@@ -189,27 +189,6 @@
-   let drawCount = operation.currentBaseDrawCount;
-   for (const { effect, source } of candidates) {
-     const entry = getEffectRuntimeCatalogEntry(effect.effectId);
--    if (!entry.supportedSourceKinds.includes(source.sourceType)) {
--      return {
--        ok: false,
--        error: `Effect ${effect.effectId} uses unsupported source kind`,
--      };
--    }
--    if (!entry.supportedModes.includes(source.runtimeMode)) {
--      return {
--        ok: false,
--        error: `Effect ${effect.effectId} is unavailable in ${source.runtimeMode} mode`,
--      };
--    }
--    const validation = entry.validate(`Effect ${effect.effectId}`, effect);
--    if (!validation.ok) {
--      return {
--        ok: false,
--        error:
--          validation.errors[0] ?? "Invalid controlled-card end-turn effect",
--      };
--    }
--
-     const result = entry.evaluateEndTurnDrawModifier(
-       `Effect ${effect.effectId}`,
-       effect,
---- a/tests/runtime-regression.test.ts
-+++ b/tests/runtime-regression.test.ts
-@@ -476,7 +476,7 @@
-   assert.equal(activePlayer.hand.length, 6);
- });
+-`collectEndTurnDrawModifier` использует тот же internal discovery/catalog pipeline и видит карты, которые остаются под временным контролем до cleanup. Catalog hooks применяют refill и max-life contracts последовательно, а caller получает typed aggregate `drawCount`, не список raw effects и не catalog-specific arithmetic switch. Ошибка exact decoder или catalog validation возвращается как typed error, не маскируется как `notApplicable` и останавливает aggregation до изменения draw count или game state.
++`collectEndTurnDrawModifier` использует тот же internal discovery/catalog pipeline и видит карты, которые остаются под временным контролем до cleanup. Catalog hooks применяют refill и max-life contracts последовательно, а caller получает typed aggregate `drawCount`, не список raw effects и не catalog-specific arithmetic switch. Сама catalog operation отвечает за source/mode checks и exact decode: ошибка decoder или catalog validation возвращается как typed error, не маскируется как `notApplicable` и останавливает aggregation до изменения draw count или game state. Trigger Dispatch не дублирует эту prevalidation.
  
--test("Creator's Hand ignores an invalid passive hand-limit amount that bypasses data validation", () => {
-+test("Creator's Hand rejects an invalid passive hand-limit amount before end-turn mutation", () => {
-   const state = initializeGame({ rootDir, seed: 47002 });
-   const activePlayer = mustGetActivePlayer(state);
-   const definition = state.cardDefinitions.get("esw2_dbg__main_047");
-@@ -504,11 +504,24 @@
-       activePlayer.playerId
-     )
-   );
-+  const activePlayerIdBefore = state.activePlayerId;
-+  const turnBefore = structuredClone(state.turn);
-+  const handBefore = structuredClone(activePlayer.hand);
-+  const discardBefore = structuredClone(activePlayer.discard);
-+  const permanentsBefore = structuredClone(activePlayer.permanents);
-+  const eventCountBefore = state.eventLog.length;
+ ### T4. Action-boundary preflight
  
-   const result = applyAction(state, { type: "endTurn" });
+--- a/docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md
++++ b/docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md
+@@ -125,9 +125,11 @@
  
--  assert.equal(result.ok, true);
--  assert.equal(activePlayer.hand.length, 5);
-+  assert.equal(result.ok, false);
-+  if (result.ok) return;
-+  assert.match(result.error, /amount must be a positive integer/);
-+  assert.equal(state.activePlayerId, activePlayerIdBefore);
-+  assert.deepEqual(state.turn, turnBefore);
-+  assert.deepEqual(activePlayer.hand, handBefore);
-+  assert.deepEqual(activePlayer.discard, discardBefore);
-+  assert.deepEqual(activePlayer.permanents, permanentsBefore);
-+  assert.equal(state.eventLog.length, eventCountBefore);
- });
- 
- test("Creator's Hand combines with the maximum-life hand-limit modifier", () => {
+ - [x] Разрешать target plan до `attackCreated`; empty/error target paths не оставляют phantom attack instrumentation.
+ - [x] Сохранить порядок typed choice event → `attackCreated` → target lifecycle.
++- [x] Останавливать directional chain по результату запрошенной цели: смерть redirected target не продолжает цепь, если исходный defender выжил.
++- [x] Делегировать malformed end-turn error semantics самой catalog operation и удалить дублирующую prevalidation из Trigger Dispatch.
+ - [x] Возвращать malformed end-turn controlled-card payload как catalog error вместо `notApplicable` и останавливать дальнейшую aggregation.
+ - [x] Выполнять end-turn modifier preflight до первой мутации; публичный `applyAction({ type: "endTurn" })` возвращает typed error и сохраняет player/common state, event log и seeded RNG position.
+-- [x] Разделить крупный `runtime-regression.test.ts` на focused behavior suites без потери покрытия.
++- [x] Оставить legacy `runtime-regression.test.ts` единым suite и обновить его устаревший malformed end-turn contract; новые regressions вынести в отдельные behavior-named suites.
+ - [x] На предыдущем полном code snapshot успешно выполнены `npm ci --ignore-scripts`, `npm audit`, `npm run check`, `npm run report:card-runtime-clusters`, `git diff --check origin/master...HEAD` и `git diff --check`; `npm run check` подтвердил 573/573 tests.
+ - [x] Для текущего final delta выполнены RED→GREEN harness атомарного `endTurn`, strict TypeScript stub-checks публичного wrapper и regression suite, а также focused `git diff --check`.
+ - [x] GitHub SAST текущего head: чистый runner выполнил `npm ci` и ESLint.
