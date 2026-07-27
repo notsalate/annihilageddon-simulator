@@ -119,21 +119,21 @@
 - [x] Удалить локальные runtime-card builders и manual branded ID assembly из четырёх migrated suites.
 - [x] Добавить helper self-tests и structural regression; legacy `tests/action-loop.test.ts` не мигрировать массово.
 
-### Task 9: Final gate and publication
+### Task 9: Close final review regressions and publication gate
 
-- [x] `npm run build -- --pretty false` на восстановленном source snapshot.
-- [x] 19 точечных scenario/ongoing/Trigger Dispatch тестов.
-- [x] `npm run typecheck:strictest`.
-- [x] Все engine guards (`ts-suppressions`, `unknown-arrays`, `event-recording`, `typed-access`, `json-parse-assertions`).
+- [x] Разрешать target plan до `attackCreated`; empty/error target paths не оставляют phantom attack instrumentation.
+- [x] Сохранить порядок typed choice event → `attackCreated` → target lifecycle.
+- [x] Возвращать malformed end-turn controlled-card payload как catalog error вместо `notApplicable` и останавливать дальнейшую aggregation.
+- [x] Выполнять end-turn modifier preflight до первой мутации; публичный `applyAction({ type: "endTurn" })` возвращает typed error и сохраняет state/event log неизменными.
+- [x] Разделить крупный `runtime-regression.test.ts` на focused behavior suites без потери покрытия.
+- [x] `npm ci --ignore-scripts` в чистом полном source checkout.
+- [x] `npm audit`: `0 vulnerabilities`.
+- [x] `npm run check` одним процессом в полном checkout с `assets/`: strictest typecheck, ESLint, все engine guards и 573/573 tests passed.
 - [x] `npm run report:card-runtime-clusters`.
-- [x] GitHub SAST на текущем code/docs head: чистый runner выполнил `npm ci` и `npm run lint`.
-- [x] GitHub `security`, `supply-chain` (OSV) и `codeql-optional`.
-- [x] Полный test matrix выполнен по обе стороны `runtime-image-metadata`: все suites зелёные; в compact export единственный ожидаемый failure — existence check каталога `assets/`, намеренно исключённого export workflow.
-- [ ] `npm audit` точной командой на runner с registry-доступом.
-- [ ] `npm run check` одним процессом в полном checkout с `assets/`.
-- [ ] `git diff --check origin/master...HEAD` в checkout с Git history.
-- [x] Повторный Standards review текущего final code: helper остаётся thin, дублирующие builders/ID assembly отсутствуют, Trigger Dispatch не возвращает caller-supplied seams, package/lock/workflows и legacy `action-loop.test.ts` не затронуты.
-- [x] Повторный Spec review текущего final code: подтверждены полный Attack lifecycle, Control Ledger inventory с singleton, catalog-owned Trigger Dispatch, scenario assembly ownership, exhaustive Decoder/Catalog и единый immutable Defense payment plan; блокирующих findings нет.
-- [x] Обновить PR body точным final head, фактическими результатами и незакрытыми exact-gate командами.
+- [x] `git diff --check origin/master...HEAD` и `git diff --check` на точных source snapshots `master@e4ed570` и final head.
+- [x] GitHub `security`, `sast`, `supply-chain` (OSV) и `codeql-optional` на final head.
+- [x] Повторный Standards review: helper остаётся thin, дублирующие builders/ID assembly отсутствуют, Trigger Dispatch не возвращает caller-supplied seams, package/lock/workflows и legacy `action-loop.test.ts` не затронуты.
+- [x] Повторный Spec review: подтверждены полный Attack lifecycle, Control Ledger inventory с singleton, catalog-owned Trigger Dispatch, scenario assembly ownership, exhaustive Decoder/Catalog, единый immutable Defense payment plan и атомарный end-turn error path.
+- [x] Обновить PR body точным final head и фактическими результатами полного gate.
 
-**Verification evidence (2026-07-27):** source snapshot текущей ветки восстановлен существующим read-only export workflow без изменений CI. Build, strictest typecheck, focused suites, guards, runtime-cluster report и все non-asset test suites прошли. Штатный SAST подтвердил `npm ci` и ESLint на чистом GitHub runner; security, OSV supply-chain и CodeQL также зелёные. `runtime-image-metadata` подтвердил 9 из 10 contracts и остановился только на отсутствующем файле из намеренно исключённого каталога `assets/`; эта проверка не считается полным `npm run check`. Отдельные Standards/Spec проходы не обнаружили блокирующих архитектурных расхождений. Publication gate остаётся открытым только для трёх явно незакрытых exact-команд выше.
+**Verification evidence (2026-07-27):** для final head восстановлен чистый полный source archive с каталогом `assets/`. Успешно выполнены `npm ci --ignore-scripts`, `npm audit`, единый `npm run check`, `npm run report:card-runtime-clusters`, `git diff --check origin/master...HEAD` и `git diff --check`. `npm run check` подтвердил strictest typecheck, ESLint, все engine guards и 573/573 теста. GitHub workflows `security`, `sast`, `supply-chain` и `codeql-optional` завершились успешно. Блокирующих Standards/Spec findings не осталось; PR сохраняет draft-статус до отдельного разрешения владельца.
