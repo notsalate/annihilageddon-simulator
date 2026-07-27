@@ -45,20 +45,27 @@ jobs:
       - name: Catalog end-turn regression
         run: node --test dist/tests/effect-runtime-catalog-errors.test.js
 
-  source-archive:
+  workspace-archive:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
-      - name: Create source archive
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Create workspace archive
         run: >-
           tar --exclude=.git --exclude=assets --exclude='*.pdf'
-          -czf /tmp/repository.tar.gz .
-      - name: Upload source archive
+          -czf /tmp/repository-with-deps.tar.gz .
+      - name: Upload workspace archive
         uses: actions/upload-artifact@v4
         with:
-          name: pr137-source-lite
-          path: /tmp/repository.tar.gz
+          name: pr137-workspace
+          path: /tmp/repository-with-deps.tar.gz
           if-no-files-found: error
           retention-days: 1
