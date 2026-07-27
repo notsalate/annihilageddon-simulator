@@ -108,7 +108,7 @@ test("npm test cleans dist before compiling", () => {
 
   assert.equal(packageJson.scripts["clean:dist"], "node scripts/clean-dist.mjs");
   assert.equal(
-    packageJson.scripts.test,
+    packageJson.scripts["test"],
     "npm run clean:dist && npm run build -- --pretty false && node dist/tests/run-tests.js"
   );
 });
