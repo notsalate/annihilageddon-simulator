@@ -4,7 +4,7 @@
 
 **Goal:** Закрыть подтверждённые findings повторных ревью PR #137 без изменения правил карт, сохранив draft-статус PR.
 
-**Architecture:** `attack-resolution.ts` владеет полным lifecycle обычной player-controlled атаки: attack creation, ordered targets, state-sensitive amount, Defense/redirect recursion, damage/death boundary, immediate consequences, outcome branches, attribution, attack events и after-attack hooks. `attack-defense.ts` остаётся transactional submodule для legality, immutable payment plan, payment/movement/branch commit, redirect callback и полного rollback. `effect-runtime-registry.ts` только нормализует concrete typed attack payload в intent, а `effect-runtime.ts` предоставляет узкие adapters и shared primitives. Control Ledger предоставляет отдельный ongoing-card view для passive/replacement consumers и владеет единым descriptor inventory всех физических card locations, включая singleton-зоны, а также lookup/removal. Trigger Dispatch владеет discovery, timing-aware ongoing policy, source identity, Effect Runtime Catalog resolution, operation-specific applicability, execution и aggregation; callers передают только state, controller и typed operation. Mayhem/Mega Mayhem остаются отдельными двухфазными domain flows; terminal карты до возврата game end переходят в соответствующий destroyed stack.
+**Architecture:** `actions.ts` остаётся публичной action boundary и выполняет read-only `endTurn` modifier preflight; `actions-core.ts` владеет mutating action lifecycle после успешного preflight. `attack-resolution.ts` владеет полным lifecycle обычной player-controlled атаки: target resolution, attack creation, ordered targets, state-sensitive amount, Defense/redirect recursion, damage/death boundary, immediate consequences, outcome branches, attribution, attack events и after-attack hooks. `attack-defense.ts` остаётся transactional submodule для legality, immutable payment plan, payment/movement/branch commit, redirect callback и полного rollback. `effect-runtime-registry.ts` только нормализует concrete typed attack payload в intent, а `effect-runtime.ts` предоставляет узкие adapters и shared primitives. Control Ledger предоставляет отдельный ongoing-card view для passive/replacement consumers и владеет единым descriptor inventory всех физических card locations, включая singleton-зоны, а также lookup/removal. Trigger Dispatch владеет discovery, timing-aware ongoing policy, source identity, Effect Runtime Catalog resolution, exact validation, operation-specific applicability, execution и aggregation; callers передают только state, controller и typed operation. Mayhem/Mega Mayhem остаются отдельными двухфазными domain flows; terminal карты до возврата game end переходят в соответствующий destroyed stack.
 
 **Tech Stack:** TypeScript 5.8, Node.js 22, `node:test`, GitHub Actions.
 
@@ -97,8 +97,10 @@
 - Modify: `tests/AGENTS.md`
 
 - [x] Зафиксировать полное владение ordinary player-controlled lifecycle в `attack-resolution.ts`, отдельный transactional submodule `attack-defense.ts` и узкие adapters в `effect-runtime.ts`.
+- [x] Зафиксировать target resolution до `attackCreated` и отсутствие phantom instrumentation для empty/error paths.
 - [x] Зафиксировать catalog-owned Trigger Dispatch с typed operations, stop-on-error/game-end и end-turn aggregate без raw effect contexts.
 - [x] Зафиксировать descriptor-inventory, physical location/removal и singleton-zone ownership Control Ledger.
+- [x] Зафиксировать публичный `actions.ts` preflight boundary и mutating `actions-core.ts` после успешной проверки.
 - [x] Зафиксировать behavior-named focused regression suites вместо общего review file.
 
 ### Task 8: Migrate focused scenarios to the shared helper
@@ -124,16 +126,16 @@
 - [x] Разрешать target plan до `attackCreated`; empty/error target paths не оставляют phantom attack instrumentation.
 - [x] Сохранить порядок typed choice event → `attackCreated` → target lifecycle.
 - [x] Возвращать malformed end-turn controlled-card payload как catalog error вместо `notApplicable` и останавливать дальнейшую aggregation.
-- [x] Выполнять end-turn modifier preflight до первой мутации; публичный `applyAction({ type: "endTurn" })` возвращает typed error и сохраняет state/event log неизменными.
+- [x] Выполнять end-turn modifier preflight до первой мутации; публичный `applyAction({ type: "endTurn" })` возвращает typed error и сохраняет player/common state, event log и seeded RNG position.
 - [x] Разделить крупный `runtime-regression.test.ts` на focused behavior suites без потери покрытия.
-- [x] `npm ci --ignore-scripts` в чистом полном source checkout.
-- [x] `npm audit`: `0 vulnerabilities`.
-- [x] `npm run check` одним процессом в полном checkout с `assets/`: strictest typecheck, ESLint, все engine guards и 573/573 tests passed.
-- [x] `npm run report:card-runtime-clusters`.
-- [x] `git diff --check origin/master...HEAD` и `git diff --check` на точных source snapshots `master@e4ed570` и final head.
-- [x] GitHub `security`, `sast`, `supply-chain` (OSV) и `codeql-optional` на final head.
-- [x] Повторный Standards review: helper остаётся thin, дублирующие builders/ID assembly отсутствуют, Trigger Dispatch не возвращает caller-supplied seams, package/lock/workflows и legacy `action-loop.test.ts` не затронуты.
-- [x] Повторный Spec review: подтверждены полный Attack lifecycle, Control Ledger inventory с singleton, catalog-owned Trigger Dispatch, scenario assembly ownership, exhaustive Decoder/Catalog, единый immutable Defense payment plan и атомарный end-turn error path.
-- [x] Обновить PR body точным final head и фактическими результатами полного gate.
+- [x] На предыдущем полном code snapshot успешно выполнены `npm ci --ignore-scripts`, `npm audit`, `npm run check`, `npm run report:card-runtime-clusters`, `git diff --check origin/master...HEAD` и `git diff --check`; `npm run check` подтвердил 573/573 tests.
+- [x] Для текущего final delta выполнены RED→GREEN harness атомарного `endTurn`, strict TypeScript stub-checks публичного wrapper и regression suite, а также focused `git diff --check`.
+- [x] GitHub SAST текущего head: чистый runner выполнил `npm ci` и ESLint.
+- [x] GitHub `security`, `supply-chain` (OSV) и `codeql-optional` текущего head завершились успешно.
+- [ ] Повторить единый `npm run check` на текущем final head в полном checkout; доступная среда не предоставляет repository archive/checkout для этой exact-команды.
+- [ ] Повторить `npm audit` и обе repository-wide `git diff --check` на текущем final head в полном checkout.
+- [x] Повторный Standards review: публичный action API сохранён, malformed operations не скрывают catalog errors, preflight не мутирует state, Trigger Dispatch не возвращает caller-supplied seams, package/lock/workflows не изменены.
+- [x] Повторный Spec review: подтверждены target-before-event Attack lifecycle, Control Ledger inventory с singleton, catalog-owned Trigger Dispatch, scenario assembly ownership, exhaustive Decoder/Catalog, immutable Defense payment plan и атомарный end-turn error path.
+- [x] Обновить PR body точным final head, фактическими результатами и явно незакрытыми exact current-head commands.
 
-**Verification evidence (2026-07-27):** для final head восстановлен чистый полный source archive с каталогом `assets/`. Успешно выполнены `npm ci --ignore-scripts`, `npm audit`, единый `npm run check`, `npm run report:card-runtime-clusters`, `git diff --check origin/master...HEAD` и `git diff --check`. `npm run check` подтвердил strictest typecheck, ESLint, все engine guards и 573/573 теста. GitHub workflows `security`, `sast`, `supply-chain` и `codeql-optional` завершились успешно. Блокирующих Standards/Spec findings не осталось; PR сохраняет draft-статус до отдельного разрешения владельца.
+**Verification evidence (2026-07-27):** кодовые regressions закрыты отдельными TDD-коммитами. На текущем delta RED→GREEN harness подтвердил, что прежний post-mutation validation повреждал state, а новый preflight возвращает typed error без мутаций; strict TypeScript stub-checks прошли для action wrapper и нового regression suite, focused whitespace check также прошёл. GitHub на текущем head успешно выполнил `npm ci` + ESLint, Gitleaks/TruffleHog, OSV и CodeQL. Исторический полный gate предыдущего code snapshot остаётся полезным доказательством широкого набора, но не подменяет повторный единый `npm run check` после последнего action-boundary delta; поэтому exact current-head commands выше оставлены открытыми, а PR сохраняет draft-статус.
