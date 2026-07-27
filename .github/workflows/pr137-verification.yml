@@ -5,6 +5,9 @@ on:
     branches:
       - agent/pr137-tdd-red
       - agent/pr137-verification
+  pull_request:
+    branches:
+      - master
 
 permissions:
   contents: read
