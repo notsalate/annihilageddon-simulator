@@ -17,7 +17,7 @@ test("invalid raw fixtures do not use unnecessary never assertions", () => {
   const setupCase = extractSection(
     setupEffects,
     'test("setup resolver rejects invalid life totals before execution"',
-    "class TokenDefinitionsWithoutPostSetupLookup"
+    'test("replace_starting_card rejects blank or untrimmed definition IDs"'
   );
   assert.doesNotMatch(setupCase, /as never/u);
 
