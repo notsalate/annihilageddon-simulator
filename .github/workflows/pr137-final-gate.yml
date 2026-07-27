@@ -6,33 +6,58 @@ on:
       - master
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  exact-final-gate:
+  verify-and-publish-plan:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Checkout
+      - name: Checkout verification branch
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
+          path: verification
+      - name: Checkout PR #137 branch
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: agent/architecture-deepening-findings
           fetch-depth: 0
+          path: target
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: target/package-lock.json
+      - name: Apply final plan sync
+        working-directory: target
+        run: |
+          git apply --check ../verification/pr137-final-plan-sync.patch
+          git apply ../verification/pr137-final-plan-sync.patch
+          git diff --check
       - name: Install dependencies
+        working-directory: target
         run: npm ci --ignore-scripts
       - name: Audit dependencies
+        working-directory: target
         run: npm audit
       - name: Full project check
+        working-directory: target
         run: npm run check
       - name: Runtime cluster report
+        working-directory: target
         run: npm run report:card-runtime-clusters
-      - name: Repository diff checks
+      - name: Commit verified plan sync
+        working-directory: target
         run: |
-          git diff --check origin/master...HEAD
           git diff --check
-      - name: Verify clean generated state
-        run: test -z "$(git status --short)"
+          git add docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "docs(review): record final catalog applicability evidence"
+          git diff --check origin/master...HEAD
+          test -z "$(git status --short)"
+      - name: Push verified plan sync
+        working-directory: target
+        run: git push origin HEAD:agent/architecture-deepening-findings
