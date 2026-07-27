@@ -125,9 +125,11 @@
 
 - [x] Разрешать target plan до `attackCreated`; empty/error target paths не оставляют phantom attack instrumentation.
 - [x] Сохранить порядок typed choice event → `attackCreated` → target lifecycle.
+- [x] Останавливать directional chain по результату запрошенной цели: смерть redirected target не продолжает цепь, если исходный defender выжил.
+- [x] Делегировать malformed end-turn error semantics самой catalog operation и удалить дублирующую prevalidation из Trigger Dispatch.
 - [x] Возвращать malformed end-turn controlled-card payload как catalog error вместо `notApplicable` и останавливать дальнейшую aggregation.
 - [x] Выполнять end-turn modifier preflight до первой мутации; публичный `applyAction({ type: "endTurn" })` возвращает typed error и сохраняет player/common state, event log и seeded RNG position.
-- [x] Разделить крупный `runtime-regression.test.ts` на focused behavior suites без потери покрытия.
+- [x] Оставить legacy `runtime-regression.test.ts` единым suite и обновить его устаревший malformed end-turn contract; новые regressions вынести в отдельные behavior-named suites.
 - [x] На предыдущем полном code snapshot успешно выполнены `npm ci --ignore-scripts`, `npm audit`, `npm run check`, `npm run report:card-runtime-clusters`, `git diff --check origin/master...HEAD` и `git diff --check`; `npm run check` подтвердил 573/573 tests.
 - [x] Для текущего final delta выполнены RED→GREEN harness атомарного `endTurn`, strict TypeScript stub-checks публичного wrapper и regression suite, а также focused `git diff --check`.
 - [x] GitHub SAST текущего head: чистый runner выполнил `npm ci` и ESLint.

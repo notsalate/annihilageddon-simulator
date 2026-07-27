@@ -51,7 +51,7 @@ Top-level context хранит original attacker/source, общий per-attack D
 
 ### A2. Последовательное разрешение целей
 
-Attack Resolution сначала получает стабильный ordered target plan. Ошибка или пустой target set завершаются без `attackCreated`; после успешного непустого target resolution typed choice event уже записан, и только затем создаётся `attackCreated`. Далее модуль полностью завершает Defense, redirect, impact, immediate death/DWT consequences и outcome branches текущей цели до `attackTargetStarted` следующей. Amount вычисляется заново из актуального state для каждой цели.
+Attack Resolution сначала получает стабильный ordered target plan. Ошибка или пустой target set завершаются без `attackCreated`; после успешного непустого target resolution typed choice event уже записан, и только затем создаётся `attackCreated`. Далее модуль полностью завершает Defense, redirect, impact, immediate death/DWT consequences и outcome branches текущей цели до `attackTargetStarted` следующей. Amount вычисляется заново из актуального state для каждой цели. Условие продолжения цепной атаки относится к запрошенной цели: redirect сохраняет attribution и результат перенаправленной ноги, но не считается смертью исходного защищавшегося игрока.
 
 ### A3. Transactional Defense и redirect
 
@@ -87,7 +87,7 @@ Actions, conditions, activation и controlled-cost selection использую�
 
 ### T3. End-turn aggregate
 
-`collectEndTurnDrawModifier` использует тот же internal discovery/catalog pipeline и видит карты, которые остаются под временным контролем до cleanup. Catalog hooks применяют refill и max-life contracts последовательно, а caller получает typed aggregate `drawCount`, не список raw effects и не catalog-specific arithmetic switch. Ошибка exact decoder или catalog validation возвращается как typed error, не маскируется как `notApplicable` и останавливает aggregation до изменения draw count или game state.
+`collectEndTurnDrawModifier` использует тот же internal discovery/catalog pipeline и видит карты, которые остаются под временным контролем до cleanup. Catalog hooks применяют refill и max-life contracts последовательно, а caller получает typed aggregate `drawCount`, не список raw effects и не catalog-specific arithmetic switch. Сама catalog operation отвечает за source/mode checks и exact decode: ошибка decoder или catalog validation возвращается как typed error, не маскируется как `notApplicable` и останавливает aggregation до изменения draw count или game state. Trigger Dispatch не дублирует эту prevalidation.
 
 ### T4. Action-boundary preflight
 
