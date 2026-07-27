@@ -1,35 +1,16 @@
---- a/docs/superpowers/specs/2026-07-20-engine-architecture-deepening-design.md
-+++ b/docs/superpowers/specs/2026-07-20-engine-architecture-deepening-design.md
-@@ -51,7 +51,7 @@
- 
- ### A2. Последовательное разрешение целей
- 
--Attack Resolution сначала получает стабильный ordered target plan. Ошибка или пустой target set завершаются без `attackCreated`; после успешного непустого target resolution typed choice event уже записан, и только затем создаётся `attackCreated`. Далее модуль полностью завершает Defense, redirect, impact, immediate death/DWT consequences и outcome branches текущей цели до `attackTargetStarted` следующей. Amount вычисляется заново из актуального state для каждой цели.
-+Attack Resolution сначала получает стабильный ordered target plan. Ошибка или пустой target set завершаются без `attackCreated`; после успешного непустого target resolution typed choice event уже записан, и только затем создаётся `attackCreated`. Далее модуль полностью завершает Defense, redirect, impact, immediate death/DWT consequences и outcome branches текущей цели до `attackTargetStarted` следующей. Amount вычисляется заново из актуального state для каждой цели. Условие продолжения цепной атаки относится к запрошенной цели: redirect сохраняет attribution и результат перенаправленной ноги, но не считается смертью исходного защищавшегося игрока.
- 
- ### A3. Transactional Defense и redirect
- 
-@@ -87,7 +87,7 @@
- 
- ### T3. End-turn aggregate
- 
--`collectEndTurnDrawModifier` использует тот же internal discovery/catalog pipeline и видит карты, которые остаются под временным контролем до cleanup. Catalog hooks применяют refill и max-life contracts последовательно, а caller получает typed aggregate `drawCount`, не список raw effects и не catalog-specific arithmetic switch. Ошибка exact decoder или catalog validation возвращается как typed error, не маскируется как `notApplicable` и останавливает aggregation до изменения draw count или game state.
-+`collectEndTurnDrawModifier` использует тот же internal discovery/catalog pipeline и видит карты, которые остаются под временным контролем до cleanup. Catalog hooks применяют refill и max-life contracts последовательно, а caller получает typed aggregate `drawCount`, не список raw effects и не catalog-specific arithmetic switch. Сама catalog operation отвечает за source/mode checks и exact decode: ошибка decoder или catalog validation возвращается как typed error, не маскируется как `notApplicable` и останавливает aggregation до изменения draw count или game state. Trigger Dispatch не дублирует эту prevalidation.
- 
- ### T4. Action-boundary preflight
- 
 --- a/docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md
 +++ b/docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md
-@@ -125,9 +125,11 @@
- 
- - [x] Разрешать target plan до `attackCreated`; empty/error target paths не оставляют phantom attack instrumentation.
- - [x] Сохранить порядок typed choice event → `attackCreated` → target lifecycle.
-+- [x] Останавливать directional chain по результату запрошенной цели: смерть redirected target не продолжает цепь, если исходный defender выжил.
-+- [x] Делегировать malformed end-turn error semantics самой catalog operation и удалить дублирующую prevalidation из Trigger Dispatch.
- - [x] Возвращать malformed end-turn controlled-card payload как catalog error вместо `notApplicable` и останавливать дальнейшую aggregation.
- - [x] Выполнять end-turn modifier preflight до первой мутации; публичный `applyAction({ type: "endTurn" })` возвращает typed error и сохраняет player/common state, event log и seeded RNG position.
--- [x] Разделить крупный `runtime-regression.test.ts` на focused behavior suites без потери покрытия.
-+- [x] Оставить legacy `runtime-regression.test.ts` единым suite и обновить его устаревший malformed end-turn contract; новые regressions вынести в отдельные behavior-named suites.
- - [x] На предыдущем полном code snapshot успешно выполнены `npm ci --ignore-scripts`, `npm audit`, `npm run check`, `npm run report:card-runtime-clusters`, `git diff --check origin/master...HEAD` и `git diff --check`; `npm run check` подтвердил 573/573 tests.
+@@ -134,10 +134,10 @@
  - [x] Для текущего final delta выполнены RED→GREEN harness атомарного `endTurn`, strict TypeScript stub-checks публичного wrapper и regression suite, а также focused `git diff --check`.
  - [x] GitHub SAST текущего head: чистый runner выполнил `npm ci` и ESLint.
+ - [x] GitHub `security`, `supply-chain` (OSV) и `codeql-optional` текущего head завершились успешно.
+-- [ ] Повторить единый `npm run check` на текущем final head в полном checkout; доступная среда не предоставляет repository archive/checkout для этой exact-команды.
+-- [ ] Повторить `npm audit` и обе repository-wide `git diff --check` на текущем final head в полном checkout.
++- [x] Выполнить единый `npm run check` на final tree в чистом полном checkout с `assets/`.
++- [x] Выполнить `npm audit`, `npm run report:card-runtime-clusters`, `git diff --check origin/master...HEAD`, `git diff --check` и проверку чистого worktree на final tree.
+ - [x] Повторный Standards review: публичный action API сохранён, malformed operations не скрывают catalog errors, preflight не мутирует state, Trigger Dispatch не возвращает caller-supplied seams, package/lock/workflows не изменены.
+ - [x] Повторный Spec review: подтверждены target-before-event Attack lifecycle, Control Ledger inventory с singleton, catalog-owned Trigger Dispatch, scenario assembly ownership, exhaustive Decoder/Catalog, immutable Defense payment plan и атомарный end-turn error path.
+ - [x] PR body синхронизирован с фактическим final head и явно незакрытыми exact current-head commands.
+ 
+-**Verification evidence (2026-07-27):** кодовые regressions закрыты отдельными TDD-коммитами. На текущем delta RED→GREEN harness подтвердил, что прежний post-mutation validation повреждал state, а новый preflight возвращает typed error без мутаций; strict TypeScript stub-checks прошли для action wrapper и нового regression suite, focused whitespace check также прошёл. GitHub на текущем head успешно выполнил `npm ci` + ESLint, Gitleaks/TruffleHog, OSV и CodeQL. Исторический полный gate предыдущего code snapshot остаётся полезным доказательством широкого набора, но не подменяет повторный единый `npm run check` после последнего action-boundary delta; поэтому exact current-head commands выше оставлены открытыми, а PR сохраняет draft-статус.
++**Verification evidence (2026-07-27):** два новых defects сначала воспроизведены отдельными RED jobs: build прошёл, а `directional-chain-redirect` и direct catalog end-turn tests упали на прежней реализации. После минимальных production fixes оба tests стали GREEN; локально прошли strictest TypeScript, ESLint, все engine guards, 44 non-asset suites и runtime-cluster report. Финальный publish gate на чистом GitHub checkout с `assets/` применяет только эту checklist-правку, затем выполняет `npm ci --ignore-scripts`, `npm audit`, единый `npm run check`, cluster report, обе `git diff --check` и проверку чистого worktree; commit создаётся и публикуется только после успешного завершения всех команд. PR сохраняет draft-статус.
