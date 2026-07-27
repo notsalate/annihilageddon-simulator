@@ -39,6 +39,8 @@ jobs:
           set -o pipefail
           node verification/scripts/apply-pr137-standards-fixes.mjs \
             target verification 2>&1 | tee transformation.log
+          node verification/scripts/apply-pr137-standards-followup.mjs target \
+            2>&1 | tee -a transformation.log
           cd target
           git diff --check
       - name: Upload transformation diagnostics
