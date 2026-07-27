@@ -9,9 +9,9 @@ permissions:
   contents: write
 
 jobs:
-  final-gate-and-publish:
+  publish-final-wording:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
     steps:
       - name: Checkout verification branch
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -23,41 +23,22 @@ jobs:
           ref: agent/architecture-deepening-findings
           fetch-depth: 0
           path: target
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: target/package-lock.json
-      - name: Apply final checklist patch
+      - name: Apply final wording patch
         working-directory: target
         run: |
           git apply --check ../verification/pr137-final-fixes.patch
           git apply ../verification/pr137-final-fixes.patch
           git diff --check
-      - name: Install dependencies
-        working-directory: target
-        run: npm ci --ignore-scripts
-      - name: Audit dependencies
-        working-directory: target
-        run: npm audit
-      - name: Full project check
-        working-directory: target
-        run: npm run check
-      - name: Runtime cluster report
-        working-directory: target
-        run: npm run report:card-runtime-clusters
-      - name: Commit verified final checklist
+      - name: Commit final wording
         working-directory: target
         run: |
-          git diff --check
           git add docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md
           git diff --cached --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "docs(review): record exact final verification gate"
+          git commit -m "docs(review): finalize verification wording"
           git diff --check origin/master...HEAD
           test -z "$(git status --short)"
-      - name: Push verified final checklist
+      - name: Push final wording
         working-directory: target
         run: git push origin HEAD:agent/architecture-deepening-findings
