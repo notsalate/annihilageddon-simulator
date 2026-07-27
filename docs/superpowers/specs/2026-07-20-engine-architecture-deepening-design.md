@@ -37,7 +37,7 @@ Defense costs, перемещение defense card и branch effects образ�
 
 ## Архитектурный кандидат 1: глубокий модуль Attack Resolution
 
-`attack-resolution.ts` владеет полным lifecycle обычной player-controlled атаки через единый public seam `resolvePlayerControlledAttack(intent, adapters)`. Он создаёт общий context, получает ordered targets, полностью разрешает каждую цель, управляет Defense/redirect recursion, выбирает момент damage/death boundary, выполняет outcome branches, собирает attribution, пишет attack events и запускает after-attack hooks. Следующая цель не начинается до завершения текущей; первая ошибка или `gameEnd` останавливает оставшийся lifecycle.
+`attack-resolution.ts` владеет полным lifecycle обычной player-controlled атаки через единый public seam `resolvePlayerControlledAttack(intent, adapters)`. Он разрешает target plan, не создавая attack instrumentation для пустого или ошибочного результата, затем создаёт общий context и `attackCreated`, полностью разрешает каждую цель, управляет Defense/redirect recursion, выбирает момент damage/death boundary, выполняет outcome branches, собирает attribution, пишет остальные attack events и запускает after-attack hooks. Следующая цель не начинается до завершения текущей; первая ошибка или `gameEnd` останавливает оставшийся lifecycle.
 
 `attack-defense.ts` остаётся transactional submodule: legality, immutable payment plan, payment/movement/branch commit, redirect callback внутри snapshot boundary и полный rollback. Redirect resolver передаётся только владельцем lifecycle — Attack Resolution.
 
@@ -51,7 +51,7 @@ Top-level context хранит original attacker/source, общий per-attack D
 
 ### A2. Последовательное разрешение целей
 
-Attack Resolution записывает создание атаки, получает стабильный ordered target plan и полностью завершает Defense, redirect, impact, immediate death/DWT consequences и outcome branches текущей цели до `attackTargetStarted` следующей. Amount вычисляется заново из актуального state для каждой цели.
+Attack Resolution сначала получает стабильный ordered target plan. Ошибка или пустой target set завершаются без `attackCreated`; после успешного непустого target resolution typed choice event уже записан, и только затем создаётся `attackCreated`. Далее модуль полностью завершает Defense, redirect, impact, immediate death/DWT consequences и outcome branches текущей цели до `attackTargetStarted` следующей. Amount вычисляется заново из актуального state для каждой цели.
 
 ### A3. Transactional Defense и redirect
 
@@ -87,7 +87,11 @@ Actions, conditions, activation и controlled-cost selection использую�
 
 ### T3. End-turn aggregate
 
-`collectEndTurnDrawModifier` использует тот же internal discovery/catalog pipeline и видит карты, которые остаются под временным контролем до cleanup. Catalog hooks применяют refill и max-life contracts последовательно, а caller получает typed aggregate `drawCount`, не список raw effects и не catalog-specific arithmetic switch.
+`collectEndTurnDrawModifier` использует тот же internal discovery/catalog pipeline и видит карты, которые остаются под временным контролем до cleanup. Catalog hooks применяют refill и max-life contracts последовательно, а caller получает typed aggregate `drawCount`, не список raw effects и не catalog-specific arithmetic switch. Ошибка exact decoder или catalog validation возвращается как typed error, не маскируется как `notApplicable` и останавливает aggregation до изменения draw count или game state.
+
+### T4. Action-boundary preflight
+
+`actions.ts` остаётся публичной action boundary и до делегирования `endTurn` выполняет read-only modifier preflight. `actions-core.ts` владеет последующей mutating-реализацией action. Если controlled modifier не проходит decoder/catalog validation, публичный `applyAction` возвращает `ActionResult` error до начисления Trophy chip, cleanup, событий, draw, RNG или смены активного игрока.
 
 ## Архитектурный кандидат 4: глубокий test scenario module
 
@@ -127,6 +131,8 @@ Registered effects не используют `RuntimeEffectFields`, payload fall
 - Отказ от защиты не мутирует состояние, не пишет событие использования карты и не создаёт rollback snapshot.
 - Ошибка defense branch откатывает costs, zones, usage sets и связанные turn/player values, затем возвращается вызывающему effect path.
 - Attack redirect не меняет original source identity и не создаёт attacker для ownerless Mayhem.
+- Ошибка target resolution обычной атаки и пустой target set не оставляют `attackCreated` или частичную attack instrumentation.
+- Malformed end-turn controlled modifier возвращает typed catalog/action error до первой мутации и сохраняет physical zones, resources, turn fields, event log и seeded RNG position.
 - Control Ledger игнорирует stale temporary-control references при query, но debug/test guards должны обнаруживать их при валидации состояния.
 - Terminal Mayhem/Mega Mayhem сохраняет terminal result, но раскрытая карта до возврата переносится в соответствующую destroyed stack; terminal event log по-прежнему останавливается на game end.
 
@@ -142,4 +148,4 @@ Registered effects не используют `RuntimeEffectFields`, payload fall
 
 ## Коммитная стратегия
 
-Порядок фиксирован: F1 → F2 → F3 → A1–A4 → C1–C3 → T1–T3 → S1–S3 → D1–D3. Коммиты не squash-ятся в ветке: история является review surface этого PR.
+Порядок фиксирован: F1 → F2 → F3 → A1–A4 → C1–C3 → T1–T4 → S1–S3 → D1–D3. Коммиты не squash-ятся в ветке: история является review surface этого PR.
