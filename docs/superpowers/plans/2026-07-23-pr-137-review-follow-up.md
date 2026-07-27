@@ -127,18 +127,18 @@
 - [x] Сохранить порядок typed choice event → `attackCreated` → target lifecycle.
 - [x] Останавливать directional chain по результату запрошенной цели: смерть redirected target не продолжает цепь, если исходный defender выжил.
 - [x] Декодировать end-turn payload до проверки наличия operation hook: malformed effect возвращает catalog error, а `notApplicable` разрешён только для корректно декодированного эффекта.
+- [x] Перенести ID/source/mode validation внутрь catalog-owned general execute operation; `effect-runtime.ts` только делегирует raw effect и runtime context.
+- [x] Перевести `replace_starting_card` на player-zone descriptors Control Ledger, включая singleton `unboughtFamiliar` и будущие player zones.
+- [x] Сохранить concrete Mayhem redraw tuple до handler boundary без `unknown`, raw bracket access и повторной nested validation.
+- [x] Удалить три ненужных `as never` из invalid-payload tests.
 - [x] Делегировать malformed end-turn error semantics самой catalog operation и удалить дублирующую prevalidation из Trigger Dispatch.
 - [x] Возвращать malformed end-turn controlled-card payload как catalog error вместо `notApplicable` и останавливать дальнейшую aggregation.
 - [x] Выполнять end-turn modifier preflight до первой мутации; публичный `applyAction({ type: "endTurn" })` возвращает typed error и сохраняет player/common state, event log и seeded RNG position.
-- [x] Оставить legacy `runtime-regression.test.ts` единым suite и обновить его устаревший malformed end-turn contract; новые regressions вынести в отдельные behavior-named suites.
-- [x] На предыдущем полном code snapshot успешно выполнены `npm ci --ignore-scripts`, `npm audit`, `npm run check`, `npm run report:card-runtime-clusters`, `git diff --check origin/master...HEAD` и `git diff --check`; `npm run check` подтвердил 573/573 tests.
-- [x] Для текущего final delta выполнены RED→GREEN harness атомарного `endTurn`, strict TypeScript stub-checks публичного wrapper и regression suite, а также focused `git diff --check`.
-- [x] GitHub SAST текущего head: чистый runner выполнил `npm ci` и ESLint.
-- [x] GitHub `security`, `supply-chain` (OSV) и `codeql-optional` текущего head завершились успешно.
-- [x] Выполнить единый `npm run check` на final tree в чистом полном checkout с `assets/`.
-- [x] Выполнить `npm audit`, `npm run report:card-runtime-clusters`, `git diff --check origin/master...HEAD`, `git diff --check` и проверку чистого worktree на final tree.
-- [x] Повторный Standards review: публичный action API сохранён, malformed operations не скрывают catalog errors, preflight не мутирует state, Trigger Dispatch не возвращает caller-supplied seams, package/lock/workflows не изменены.
-- [x] Повторный Spec review: подтверждены target-before-event Attack lifecycle, Control Ledger inventory с singleton, catalog-owned Trigger Dispatch, scenario assembly ownership, exhaustive Decoder/Catalog, immutable Defense payment plan и атомарный end-turn error path.
+- [x] Оставить legacy `runtime-regression.test.ts` единым suite; новые regressions вынести в behavior-named suites.
+- [x] Добавить runtime и structural regressions для catalog ownership, Control Ledger setup traversal, typed Mayhem boundary и invalid-payload assertions.
+- [x] Выполнить `npm ci --ignore-scripts`, `npm audit`, единый `npm run check`, `npm run report:card-runtime-clusters`, обе `git diff --check` и clean-worktree check на точном final tree.
+- [x] Повторный Standards review: general execution policy принадлежит каталогу, setup traversal принадлежит Control Ledger, handlers сохраняют concrete nested payload types, package/lock не изменены.
+- [x] Повторный Spec review: все шесть задач закрыты фактическим кодом и final gate.
 - [x] PR body синхронизирован с фактическим final head и результатами exact final gate.
 
-**Verification evidence (2026-07-27):** три defects сначала воспроизведены отрицательными tests: `directional-chain-redirect` запускал следующую цель после redirected kill; direct catalog end-turn operation возвращала `notApplicable` вместо decoder error; malformed эффект без end-turn hook обходил decode и также возвращал `notApplicable`. После минимальных production fixes все regressions стали GREEN, при этом положительный control сохранил `notApplicable` для корректно декодированного неприменимого эффекта. Локально прошли strictest TypeScript, ESLint, все engine guards, focused catalog/Trigger Dispatch/action-loop/runtime-regression suites и runtime-cluster report. Финальный publish gate на чистом GitHub checkout с `assets/` применил только эту documentation-only синхронизацию к проверенному code tree, затем успешно выполнил `npm ci --ignore-scripts`, `npm audit`, единый `npm run check`, cluster report, обе `git diff --check` и проверку чистого worktree; проверенный commit опубликован в ветке PR. PR сохраняет draft-статус.
+**Verification evidence (2026-07-27):** семь изолированных RED jobs подтвердили каждый оставшийся finding на `22d9be3`: direct catalog execute пропускал source и mode policy, `effect-runtime.ts` самостоятельно владел catalog prevalidation, setup replacement обходил Control Ledger и не видел `unboughtFamiliar`, Mayhem handler понижал exact tuple до `unknown`, а reviewed invalid-payload fixtures содержали три лишних assertions. После минимальных fixes те же tests стали GREEN. Проверенный final tree опубликован только после успешных `npm ci --ignore-scripts`, `npm audit`, полного `npm run check`, runtime-cluster report, обеих `git diff --check` и clean-worktree check. PR сохраняет draft-статус.

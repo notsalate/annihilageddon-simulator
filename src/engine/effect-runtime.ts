@@ -1,4 +1,3 @@
-import { isPlainRecord } from "../common.js";
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import {
   resolveDefenseWindow as resolveDefenseWindowWithServices,
@@ -38,12 +37,11 @@ import {
   type EffectSourceContext,
   type MayhemAttackPlanTarget,
   executeAttackOutcomeBranch,
-  getEffectRuntimeCatalogEntry,
+  executeRuntimeEffect,
   type TargetChoice,
   type TargetChoiceResult,
 } from "./effect-runtime-registry.js";
 import {
-  isRuntimeEffectId,
   isRuntimeEffectSelectorTarget,
   type RuntimeEffect,
   type RuntimeEffectId,
@@ -403,30 +401,10 @@ export function executeEffect(
   effect: unknown,
   source: EffectSourceContext
 ): EffectExecutionResult {
-  if (!isPlainRecord(effect) || !isRuntimeEffectId(effect["effectId"])) {
-    return {
-      ok: false,
-      error: `Unsupported effect id ${asString(
-        isPlainRecord(effect) ? effect["effectId"] : undefined
-      )}`,
-    };
-  }
-  const effectId = effect["effectId"];
-  const entry = getEffectRuntimeCatalogEntry(effectId);
-  if (!entry.supportedSourceKinds.includes(source.sourceType)) {
-    return { ok: false, error: `Effect ${effectId} uses unsupported source kind` };
-  }
-  if (!entry.supportedModes.includes(source.runtimeMode)) {
-    return {
-      ok: false,
-      error: `Effect ${effectId} is unavailable in ${source.runtimeMode} mode`,
-    };
-  }
-  return entry.execute(
-    `Effect ${effectId}`,
-    effect,
+  return executeRuntimeEffect(
     state,
     player,
+    effect,
     source,
     effectRuntimeServices
   );

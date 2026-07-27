@@ -2002,8 +2002,8 @@ test("top-deck and Wild Magic effects are registered and reject invalid shapes t
       {
         effectId: "play_top_card_from_foe_deck",
         timing: "onPlay",
-        targetSelector: "unsupportedFoe" as never,
-      } as never
+        targetSelector: "unsupportedFoe",
+      }
     ),
     []
   );
@@ -2017,7 +2017,7 @@ test("top-deck and Wild Magic effects are registered and reject invalid shapes t
           amount: "2",
         },
       ],
-    } as never),
+    }),
     []
   );
 });

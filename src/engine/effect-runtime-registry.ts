@@ -21,7 +21,10 @@ import {
   type TokenDefinitionId,
   type TokenInstanceId,
 } from "../domain/types.js";
-import { buildControlledObjectView } from "./control-ledger.js";
+import {
+  buildControlledObjectView,
+  replaceOwnedCardDefinitionInPlayerZones,
+} from "./control-ledger.js";
 import {
   calculateEffectiveCardCost,
   calculateEffectivePlayerMaxLife,
@@ -546,21 +549,7 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     return errors.length === 0 ? decoded : { ok: false, errors };
   };
 
-  const execute = (
-    subjectId: string,
-    rawEffect: unknown,
-    state: GameState,
-    player: PlayerState,
-    source: EffectSourceContext,
-    services: EffectRuntimeServices
-  ): EffectExecutionResult => {
-    const decoded = decodeForExecution(subjectId, rawEffect);
-    return decoded.ok
-      ? activeHandler.execute(state, player, decoded.value, source, services)
-      : { ok: false, error: decoded.errors[0] ?? "Invalid runtime effect" };
-  };
-
-  const decodeControlledOperation = (
+  const decodeExecutableOperation = (
     subjectId: string,
     rawEffect: unknown,
     source: EffectSourceContext
@@ -584,8 +573,22 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
       ? { ok: true, effect: decoded.value }
       : {
           ok: false,
-          error: decoded.errors[0] ?? "Invalid controlled-card effect",
+          error: decoded.errors[0] ?? "Invalid runtime effect",
         };
+  };
+
+  const execute = (
+    subjectId: string,
+    rawEffect: unknown,
+    state: GameState,
+    player: PlayerState,
+    source: EffectSourceContext,
+    services: EffectRuntimeServices
+  ): EffectExecutionResult => {
+    const decoded = decodeExecutableOperation(subjectId, rawEffect, source);
+    return decoded.ok
+      ? activeHandler.execute(state, player, decoded.effect, source, services)
+      : { ok: false, error: decoded.error };
   };
 
   const entry: TestableEffectRuntimeEntry<Id> = {
@@ -604,7 +607,7 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
       if (executeOnPlayCard === undefined) {
         return { status: "notApplicable" };
       }
-      const decoded = decodeControlledOperation(
+      const decoded = decodeExecutableOperation(
         subjectId,
         rawEffect,
         context.source
@@ -644,7 +647,7 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
       if (applyAfterPlayerAttackDamage === undefined) {
         return { status: "notApplicable" };
       }
-      const decoded = decodeControlledOperation(
+      const decoded = decodeExecutableOperation(
         subjectId,
         rawEffect,
         context.source
@@ -654,7 +657,7 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
         : { status: "error", error: decoded.error };
     },
     evaluateEndTurnDrawModifier(subjectId, rawEffect, context) {
-      const decoded = decodeControlledOperation(
+      const decoded = decodeExecutableOperation(
         subjectId,
         rawEffect,
         context.source
@@ -1811,16 +1814,11 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler<RuntimeEffec
         `${subjectId} uses unsupported Mayhem chooser ${String(effect.chooser)}`
       );
     }
-
-    errors.push(...validateMayhemHandRedrawOptions(subjectId, effect));
     return errors;
   },
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
-    const options = effect.options;
-    if (!Array.isArray(options)) {
-      return { ok: false, error: "Invalid Mayhem hand-redraw choice effect" };
-    }
+    const [redrawOption, damageOption] = effect.options;
 
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
       const choice = services.chooseEffectChoice(
@@ -1836,22 +1834,11 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler<RuntimeEffec
       const selectedChoiceId =
         choice?.choiceId ?? "discard_hand_then_draw_cards";
       if (selectedChoiceId === "take_damage") {
-        const damageOption: unknown = options[1];
-        if (
-          !isEffectRecord(damageOption) ||
-          typeof damageOption["amount"] !== "number"
-        ) {
-          return {
-            ok: false,
-            error: "Invalid Mayhem hand-redraw damage option",
-          };
-        }
-
         services.dealDamage(
           state,
           targetPlayer,
           targetPlayer,
-          damageOption["amount"],
+          damageOption.amount,
           effectId,
           source,
           { kind: "ownerless" }
@@ -1859,19 +1846,11 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler<RuntimeEffec
         continue;
       }
 
-      const redrawOption: unknown = options[0];
-      if (
-        !isEffectRecord(redrawOption) ||
-        typeof redrawOption["drawAmount"] !== "number"
-      ) {
-        return { ok: false, error: "Invalid Mayhem hand-redraw option" };
-      }
-
       const discardedCount = targetPlayer.hand.length;
       targetPlayer.discard.push(...targetPlayer.hand.splice(0));
       const drawnCount = drawCards(
         targetPlayer,
-        redrawOption["drawAmount"],
+        redrawOption.drawAmount,
         state
       );
       recordGameEvent(state, {
@@ -2524,25 +2503,13 @@ const replaceStartingCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"repla
         error: `Cannot replace with missing target card ${toDefinitionId}`,
       };
     }
-    const zones = [
-      player.hand,
-      player.deck,
-      player.discard,
-      player.playedThisTurn,
-      player.permanents,
-    ];
-    for (const zone of zones) {
-      const cardIndex = zone.findIndex(
-        (card) =>
-          card.ownerId === player.playerId &&
-          card.definitionId === fromDefinitionId
-      );
-      if (cardIndex < 0) continue;
-      zone.splice(
-        cardIndex,
-        1,
-        services.createCardInstance(toDefinitionId, player.playerId)
-      );
+    if (
+      replaceOwnedCardDefinitionInPlayerZones(
+        player,
+        fromDefinitionId,
+        () => services.createCardInstance(toDefinitionId, player.playerId)
+      )
+    ) {
       return { ok: true };
     }
     if (services.allowsMissingData) return { ok: true };
@@ -4358,45 +4325,6 @@ function validateMayhemEachPlayerShape(
   return errors;
 }
 
-function validateMayhemHandRedrawOptions(
-  subjectId: string,
-  effect: RuntimeEffectForId<"mayhem_each_player_choose_discard_hand_draw_or_take_damage">
-): string[] {
-  const options = effect.options;
-  if (!Array.isArray(options) || options.length !== 2) {
-    return [`${subjectId} uses unsupported Mayhem hand-redraw options`];
-  }
-
-  const redrawOption: unknown = options[0];
-  const damageOption: unknown = options[1];
-  const errors: string[] = [];
-  if (
-    !isEffectRecord(redrawOption) ||
-    redrawOption["effectId"] !== "discard_hand_then_draw_cards" ||
-    redrawOption["drawAmount"] !== 5
-  ) {
-    errors.push(
-      `${subjectId} uses unsupported Mayhem hand-redraw option ${String(
-        isEffectRecord(redrawOption) ? redrawOption["effectId"] : redrawOption
-      )}`
-    );
-  }
-
-  if (
-    !isEffectRecord(damageOption) ||
-    damageOption["effectId"] !== "take_damage" ||
-    damageOption["amount"] !== 5
-  ) {
-    errors.push(
-      `${subjectId} uses unsupported Mayhem damage option ${String(
-        isEffectRecord(damageOption) ? damageOption["effectId"] : damageOption
-      )}`
-    );
-  }
-
-  return errors;
-}
-
 function validateMayhemBattleHighestHandCostShape(
   subjectId: string,
   effect: RuntimeEffectForId<"mayhem_each_player_battle_highest_hand_cost">
@@ -5528,6 +5456,33 @@ export const effectRuntimeRegistry = new Map<
     handler,
   ])
 );
+
+export function executeRuntimeEffect(
+  state: GameState,
+  player: PlayerState,
+  effect: unknown,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): EffectExecutionResult {
+  if (!isPlainRecord(effect) || !isRuntimeEffectId(effect["effectId"])) {
+    return {
+      ok: false,
+      error: `Unsupported effect id ${String(
+        isPlainRecord(effect) ? effect["effectId"] : undefined
+      )}`,
+    };
+  }
+
+  const effectId = effect["effectId"];
+  return getEffectRuntimeCatalogEntry(effectId).execute(
+    `Effect ${effectId}`,
+    effect,
+    state,
+    player,
+    source,
+    services
+  );
+}
 
 export function getEffectRuntimeCatalogEntry<Id extends RuntimeEffectId>(
   effectId: Id

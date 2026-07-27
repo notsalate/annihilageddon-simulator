@@ -152,58 +152,104 @@ export function getControlledOngoingCards(
   });
 }
 
+export function replaceOwnedCardDefinitionInPlayerZones(
+  player: PlayerState,
+  fromDefinitionId: CardInstance["definitionId"],
+  createReplacement: () => CardInstance
+): boolean {
+  const descriptors = listPlayerPhysicalCardZoneDescriptors(player);
+  const replacementPriority = (
+    descriptor: PhysicalCardZoneDescriptor
+  ): number =>
+    descriptor.zoneName === `${player.playerId}.hand`
+      ? 0
+      : descriptor.zoneName === `${player.playerId}.deck`
+        ? 1
+        : 2;
+  const descriptorsInReplacementOrder = [...descriptors].sort(
+    (left, right) => replacementPriority(left) - replacementPriority(right)
+  );
+
+  for (const descriptor of descriptorsInReplacementOrder) {
+    const cards = descriptor.read();
+    const index = cards.findIndex(
+      (card) =>
+        card.ownerId === player.playerId &&
+        card.definitionId === fromDefinitionId
+    );
+    if (index < 0) {
+      continue;
+    }
+
+    descriptor.replace([
+      ...cards.slice(0, index),
+      createReplacement(),
+      ...cards.slice(index + 1),
+    ]);
+    return true;
+  }
+
+  return false;
+}
+
+function listPlayerPhysicalCardZoneDescriptors(
+  player: PlayerState
+): readonly PhysicalCardZoneDescriptor[] {
+  return [
+    createArrayCardZoneDescriptor(
+      `${player.playerId}.deck`,
+      () => player.deck,
+      (cards) => {
+        player.deck = cards;
+      },
+      player.playerId
+    ),
+    createArrayCardZoneDescriptor(
+      `${player.playerId}.hand`,
+      () => player.hand,
+      (cards) => {
+        player.hand = cards;
+      },
+      player.playerId
+    ),
+    createArrayCardZoneDescriptor(
+      `${player.playerId}.discard`,
+      () => player.discard,
+      (cards) => {
+        player.discard = cards;
+      },
+      player.playerId
+    ),
+    createArrayCardZoneDescriptor(
+      `${player.playerId}.playedThisTurn`,
+      () => player.playedThisTurn,
+      (cards) => {
+        player.playedThisTurn = cards;
+      }
+    ),
+    createArrayCardZoneDescriptor(
+      `${player.playerId}.permanents`,
+      () => player.permanents,
+      (cards) => {
+        player.permanents = cards;
+      }
+    ),
+    createSingletonCardZoneDescriptor(
+      `${player.playerId}.unboughtFamiliar`,
+      () => player.unboughtFamiliar,
+      (card) => {
+        player.unboughtFamiliar = card;
+      },
+      player.playerId
+    ),
+  ];
+}
+
 export function listPhysicalCardZoneDescriptors(
   state: GameState
 ): readonly PhysicalCardZoneDescriptor[] {
   return [
-    ...state.players.flatMap((player) => [
-      createArrayCardZoneDescriptor(
-        `${player.playerId}.deck`,
-        () => player.deck,
-        (cards) => {
-          player.deck = cards;
-        },
-        player.playerId
-      ),
-      createArrayCardZoneDescriptor(
-        `${player.playerId}.hand`,
-        () => player.hand,
-        (cards) => {
-          player.hand = cards;
-        },
-        player.playerId
-      ),
-      createArrayCardZoneDescriptor(
-        `${player.playerId}.discard`,
-        () => player.discard,
-        (cards) => {
-          player.discard = cards;
-        },
-        player.playerId
-      ),
-      createArrayCardZoneDescriptor(
-        `${player.playerId}.playedThisTurn`,
-        () => player.playedThisTurn,
-        (cards) => {
-          player.playedThisTurn = cards;
-        }
-      ),
-      createArrayCardZoneDescriptor(
-        `${player.playerId}.permanents`,
-        () => player.permanents,
-        (cards) => {
-          player.permanents = cards;
-        }
-      ),
-      createSingletonCardZoneDescriptor(
-        `${player.playerId}.unboughtFamiliar`,
-        () => player.unboughtFamiliar,
-        (card) => {
-          player.unboughtFamiliar = card;
-        },
-        player.playerId
-      ),
-    ]),
+    ...state.players.flatMap(listPlayerPhysicalCardZoneDescriptors),
     createArrayCardZoneDescriptor(
       "mainMarket",
       () => state.common.market,

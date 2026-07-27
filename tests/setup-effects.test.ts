@@ -352,7 +352,7 @@ test("setup resolver rejects invalid life totals before execution", () => {
         effectId: "set_starting_life_total",
         timing: "setup",
         lifeTotal,
-      } as never,
+      },
       source,
       services()
     );
