@@ -1,4 +1,4 @@
-name: pr137-standards-red
+name: pr137-standards-fixes
 
 on:
   pull_request:
@@ -6,52 +6,72 @@ on:
       - master
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  finding-red:
-    name: ${{ matrix.case }}
+  verify-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - case: lint-assertions-red
-            pattern: invalid raw fixtures do not use unnecessary never assertions
-            file: review-final-lint.test.js
-          - case: catalog-source-red
-            pattern: catalog entry execute owns source-kind validation
-            file: review-final-ownership.test.js
-          - case: catalog-mode-red
-            pattern: catalog entry execute owns runtime-mode validation
-            file: review-final-ownership.test.js
-          - case: control-ledger-runtime-red
-            pattern: replace_starting_card traverses the Control Ledger singleton zone
-            file: review-final-ownership.test.js
-          - case: catalog-caller-ownership-red
-            pattern: effect runtime delegates ID, source, and mode policy to the catalog
-            file: review-final-ownership.test.js
-          - case: control-ledger-structure-red
-            pattern: setup replacement does not enumerate physical player zones outside Control Ledger
-            file: review-final-ownership.test.js
-          - case: mayhem-typed-boundary-red
-            pattern: Mayhem redraw handler keeps its decoded tuple type
-            file: review-final-ownership.test.js
+    timeout-minutes: 60
     steps:
-      - name: Checkout
+      - name: Checkout verification branch
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: agent/pr137-standards-red
+          path: verification
+      - name: Checkout PR #137 branch
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: agent/architecture-deepening-findings
+          fetch-depth: 0
+          path: target
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: target/package-lock.json
+      - name: Apply minimal verified fixes
+        run: |
+          node verification/scripts/normalize-pr137-standards-fix-script.mjs \
+            verification/scripts/apply-pr137-standards-fixes.mjs
+          node verification/scripts/apply-pr137-standards-fixes.mjs \
+            target verification
+          cd target
+          git diff --check
       - name: Install dependencies
+        working-directory: target
         run: npm ci --ignore-scripts
-      - name: Build
-        run: npm run build -- --pretty false
-      - name: Reproduce ${{ matrix.case }}
-        run: >-
-          node --test
-          --test-name-pattern "${{ matrix.pattern }}"
-          "dist/tests/${{ matrix.file }}"
+      - name: Audit dependencies
+        working-directory: target
+        run: npm audit
+      - name: Full project check
+        working-directory: target
+        run: npm run check
+      - name: Runtime cluster report
+        working-directory: target
+        run: npm run report:card-runtime-clusters
+      - name: Commit verified fixes
+        working-directory: target
+        run: |
+          git diff --check
+          git add \
+            src/engine/control-ledger.ts \
+            src/engine/effect-runtime-registry.ts \
+            src/engine/effect-runtime.ts \
+            tests/setup-effects.test.ts \
+            tests/validation.test.ts \
+            tests/review-final-ownership.test.ts \
+            tests/review-final-lint.test.ts \
+            tests/run-tests.ts \
+            docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(engine): close catalog and physical-zone ownership findings"
+          git fetch origin master
+          git diff --check origin/master...HEAD
+          git diff --check
+          test -z "$(git status --short)"
+      - name: Push verified fixes
+        working-directory: target
+        run: git push origin HEAD:agent/architecture-deepening-findings
