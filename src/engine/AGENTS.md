@@ -7,6 +7,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 ## Ownership
 
 - Owns runtime behavior under `src/engine/**`.
+- `actions.ts` owns the public action boundary and the read-only `endTurn` modifier preflight. `actions-core.ts` owns the mutating action implementations after that preflight succeeds; callers continue to import the public API only from `actions.ts`.
 - `attack-resolution.ts` owns the complete ordinary player-controlled attack lifecycle: attack creation, ordered target resolution, state-sensitive amount calculation, Defense/redirect recursion, damage/death boundary, per-target outcome branches, attribution, attack events, short-circuiting and after-attack dispatch. `attack-defense.ts` is the transactional submodule for voluntary Defense, immutable payment plans, payment/movement/branch commit and rollback. `effect-runtime-registry.ts` only normalizes typed attack payloads into intents, while `effect-runtime.ts` supplies narrow adapters and shared primitives. Mayhem and Mega Mayhem remain separate two-phase domain flows.
 - `control-ledger.ts` owns the controller-to-object relation, temporary-control lifecycle and the physical-card descriptor/traversal seam: array and singleton zones, owner metadata, lookup/removal and card inventory traversal for snapshots. Consumers must not reconstruct control, enumerate physical zones or define parallel inventory helpers.
 - `trigger-dispatch.ts` owns controlled-card discovery, timing-aware ongoing policy, source identity, Effect Runtime Catalog resolution, operation-specific applicability, execution, aggregation, stable ordering and stop-on-error/game-end behavior. Callers pass only state, controller and a typed operation.
@@ -30,6 +31,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - A successful effect may return a typed `playerDefeated` game end with its winner; regular card and activation actions propagate it without adding a card-specific shortcut.
 - Passive power and attack replacements read only controlled ongoing cards through `getControlledOngoingCards`.
 - Trigger Dispatch exposes typed `onPlayCard`, `afterPlayerAttackDamage` and `collectEndTurnDrawModifier` operations. The first two require an ongoing controlled card; end-turn discovery preserves temporary-control semantics and returns a typed aggregate instead of raw effects.
+- `endTurn` must complete controlled modifier decoding, catalog validation and draw-count calculation before its first mutation. A malformed modifier returns an `ActionResult` error while preserving state, event log and seeded RNG position.
 - Keep `Best-Move Analyzer` modules outside `BotStrategy`: analysis may receive complete `GameState`, inspect hidden information, fork seeded RNG, and enumerate current-turn legal lines through `endTurn` using a caller-supplied evaluation policy; simulation strategies must not depend on the analysis API or future RNG/hidden opponent state.
 - The analyzer has no hidden default score: a line becomes “best” only after the caller supplies a named evaluation policy.
 - Evaluation policies return a finite `score` and optional finite components; `rankTurnLines` orders strictly by descending score, then stable enumeration order. Terminal `winnerPlayerId` remains metadata and does not affect ranking.
@@ -47,7 +49,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 
 ## Work Guidance
 
-- Start mechanics bugs from the narrow module named by the behavior: `actions.ts`, `effect-runtime.ts`, `effect-runtime-registry.ts`, `market-flow.ts`, `setup.ts`, or `data.ts`.
+- Start mechanics bugs from the narrow module named by the behavior: `actions.ts` for action-boundary validation, `actions-core.ts` for post-validation mutation, `effect-runtime.ts`, `effect-runtime-registry.ts`, `market-flow.ts`, `setup.ts`, or `data.ts`.
 - Prefer deterministic fixtures over broad random simulation for tests.
 - Keep event/debug instrumentation additive and stable enough for tests.
 - При изменении runtime source metadata проверять, что decoder сохраняет image path без чтения файлов и без ветвления правил по нему.
