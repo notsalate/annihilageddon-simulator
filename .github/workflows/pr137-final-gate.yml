@@ -1,0 +1,38 @@
+name: pr137-final-gate
+
+on:
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  exact-final-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Audit dependencies
+        run: npm audit
+      - name: Full project check
+        run: npm run check
+      - name: Runtime cluster report
+        run: npm run report:card-runtime-clusters
+      - name: Repository diff checks
+        run: |
+          git diff --check origin/master...HEAD
+          git diff --check
+      - name: Verify clean generated state
+        run: test -z "$(git status --short)"
