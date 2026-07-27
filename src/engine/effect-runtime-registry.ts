@@ -654,19 +654,19 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
         : { status: "error", error: decoded.error };
     },
     evaluateEndTurnDrawModifier(subjectId, rawEffect, context) {
-      const evaluateEndTurnDrawModifier =
-        activeHandler.evaluateEndTurnDrawModifier;
-      if (evaluateEndTurnDrawModifier === undefined) {
-        return { status: "notApplicable" };
-      }
       const decoded = decodeControlledOperation(
         subjectId,
         rawEffect,
         context.source
       );
-      return decoded.ok
-        ? evaluateEndTurnDrawModifier(decoded.effect, context)
-        : { status: "error", error: decoded.error };
+      if (!decoded.ok) {
+        return { status: "error", error: decoded.error };
+      }
+      const evaluateEndTurnDrawModifier =
+        activeHandler.evaluateEndTurnDrawModifier;
+      return evaluateEndTurnDrawModifier === undefined
+        ? { status: "notApplicable" }
+        : evaluateEndTurnDrawModifier(decoded.effect, context);
     },
     [replaceEffectRuntimeHandlerSymbol](replacementHandler) {
       const originalHandler = activeHandler;
