@@ -44,3 +44,19 @@ jobs:
         run: npm run build -- --pretty false
       - name: Catalog end-turn regression
         run: node --test dist/tests/effect-runtime-catalog-errors.test.js
+
+  source-archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+      - name: Create source archive
+        run: tar --exclude=.git -czf repository.tar.gz .
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr137-source
+          path: repository.tar.gz
+          if-no-files-found: error
+          retention-days: 1
