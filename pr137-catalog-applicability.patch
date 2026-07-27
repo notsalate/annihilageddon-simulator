@@ -1,0 +1,78 @@
+--- a/src/engine/effect-runtime-registry.ts
++++ b/src/engine/effect-runtime-registry.ts
+@@ -654,19 +654,19 @@
+         : { status: "error", error: decoded.error };
+     },
+     evaluateEndTurnDrawModifier(subjectId, rawEffect, context) {
+-      const evaluateEndTurnDrawModifier =
+-        activeHandler.evaluateEndTurnDrawModifier;
+-      if (evaluateEndTurnDrawModifier === undefined) {
+-        return { status: "notApplicable" };
+-      }
+       const decoded = decodeControlledOperation(
+         subjectId,
+         rawEffect,
+         context.source
+       );
+-      return decoded.ok
+-        ? evaluateEndTurnDrawModifier(decoded.effect, context)
+-        : { status: "error", error: decoded.error };
++      if (!decoded.ok) {
++        return { status: "error", error: decoded.error };
++      }
++      const evaluateEndTurnDrawModifier =
++        activeHandler.evaluateEndTurnDrawModifier;
++      return evaluateEndTurnDrawModifier === undefined
++        ? { status: "notApplicable" }
++        : evaluateEndTurnDrawModifier(decoded.effect, context);
+     },
+     [replaceEffectRuntimeHandlerSymbol](replacementHandler) {
+       const originalHandler = activeHandler;
+--- a/tests/effect-runtime-catalog-errors.test.ts
++++ b/tests/effect-runtime-catalog-errors.test.ts
+@@ -42,3 +42,45 @@
+   }
+   assert.match(result.error, /amount must be a positive integer/);
+ });
++
++test("catalog validates a payload before declaring an end-turn operation not applicable", () => {
++  const scenario = createGameScenario({ rootDir, seed: 23015 });
++  const controller = scenario.activePlayer;
++  const source: EffectSourceContext = {
++    sourceType: "card",
++    runtimeMode: scenario.state.runtimeMode,
++    playerId: controller.playerId,
++    cardInstanceId: "fixture-catalog-non-end-turn-error",
++    definitionId: "fixture-catalog-non-end-turn-error",
++  };
++  const entry = getEffectRuntimeCatalogEntry("add_power");
++  const context = {
++    state: scenario.state,
++    controller,
++    source,
++    currentDrawCount: 5,
++  };
++
++  const malformed = entry.evaluateEndTurnDrawModifier(
++    "Effect add_power",
++    {
++      effectId: "add_power",
++      timing: "endTurn",
++      amount: "invalid",
++    },
++    context
++  );
++  if (malformed.status !== "error") {
++    assert.fail(`Expected catalog error, received ${malformed.status}`);
++  }
++  assert.match(malformed.error, /amount must be a positive integer/);
++
++  assert.deepEqual(
++    entry.evaluateEndTurnDrawModifier(
++      "Effect add_power",
++      { effectId: "add_power", timing: "endTurn", amount: 1 },
++      context
++    ),
++    { status: "notApplicable" }
++  );
++});
