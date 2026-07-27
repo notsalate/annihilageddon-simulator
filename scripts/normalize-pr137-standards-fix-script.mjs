@@ -41,6 +41,7 @@ let normalized = source.replace(repeatedCalls, replacement);
 for (const placeholder of [
   "${player.playerId}",
   "${config.effectId}",
+  "${source.runtimeMode}",
   "${subjectId}",
   "${String(",
   "${effectId}",
