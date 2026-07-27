@@ -183,7 +183,7 @@ test("Mayhem redraw handler keeps its decoded tuple type", () => {
   const handler = extractSection(
     source,
     "const mayhemEachPlayerHandRedrawChoiceHandler",
-    "const mayhemEachPlayerDiscardTopDeckHandler"
+    "const mayhemEachPlayerReduceLifeToGainChipsHandler"
   );
 
   assert.doesNotMatch(handler, /:\s*unknown/u);
