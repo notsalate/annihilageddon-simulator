@@ -37,5 +37,15 @@ const replacement = `{
 if (!source.includes(repeatedCalls)) {
   throw new Error("Could not find repeated catalog-operation replacements");
 }
-writeFileSync(scriptPath, source.replace(repeatedCalls, replacement), "utf8");
+let normalized = source.replace(repeatedCalls, replacement);
+for (const placeholder of [
+  "${player.playerId}",
+  "${config.effectId}",
+  "${subjectId}",
+  "${String(",
+  "${effectId}",
+]) {
+  normalized = normalized.replaceAll(placeholder, `\\${placeholder}`);
+}
+writeFileSync(scriptPath, normalized, "utf8");
 console.log("Normalized PR #137 standards fix script");
