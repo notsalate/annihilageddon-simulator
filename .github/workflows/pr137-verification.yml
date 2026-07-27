@@ -52,11 +52,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
       - name: Create source archive
-        run: tar --exclude=.git -czf /tmp/repository.tar.gz .
+        run: >-
+          tar --exclude=.git --exclude=assets --exclude='*.pdf'
+          -czf /tmp/repository.tar.gz .
       - name: Upload source archive
         uses: actions/upload-artifact@v4
         with:
-          name: pr137-source
+          name: pr137-source-lite
           path: /tmp/repository.tar.gz
           if-no-files-found: error
           retention-days: 1
