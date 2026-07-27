@@ -1,15 +1,19 @@
 name: pr137-verification
 
 on:
+  push:
+    branches:
+      - agent/pr137-tdd-red
   pull_request:
     branches:
       - master
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   directional-chain-red:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -28,6 +32,7 @@ jobs:
         run: node --test dist/tests/directional-chain-redirect.test.js
 
   catalog-end-turn-red:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -46,6 +51,7 @@ jobs:
         run: node --test dist/tests/effect-runtime-catalog-errors.test.js
 
   workspace-archive:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -69,3 +75,61 @@ jobs:
           path: /tmp/repository-with-deps.tar.gz
           if-no-files-found: error
           retention-days: 1
+
+  publish-fixes:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout verification branch
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          path: verification
+      - name: Checkout PR #137 branch
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: agent/architecture-deepening-findings
+          fetch-depth: 0
+          path: target
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+      - name: Apply verified patch
+        working-directory: target
+        run: |
+          git apply --check ../verification/pr137-final-fixes.patch
+          git apply ../verification/pr137-final-fixes.patch
+          git diff --check
+      - name: Install dependencies
+        working-directory: target
+        run: npm ci --ignore-scripts
+      - name: Audit dependencies
+        working-directory: target
+        run: npm audit
+      - name: Full project check
+        working-directory: target
+        run: npm run check
+      - name: Runtime cluster report
+        working-directory: target
+        run: npm run report:card-runtime-clusters
+      - name: Commit verified fixes
+        working-directory: target
+        run: |
+          git diff --check
+          git add \
+            src/engine/attack-resolution.ts \
+            src/engine/effect-runtime-registry.ts \
+            src/engine/trigger-dispatch.ts \
+            tests/runtime-regression.test.ts
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(engine): preserve redirect target semantics and catalog errors"
+          git diff --check origin/master...HEAD
+          test -z "$(git status --short)"
+      - name: Push verified fixes
+        working-directory: target
+        run: git push origin HEAD:agent/architecture-deepening-findings
