@@ -28,7 +28,7 @@ const replacement = `{
   const occurrenceCount = current.split(before).length - 1;
   if (occurrenceCount !== 3) {
     throw new Error(
-      \`${relativePath}: expected 3 controlled-operation calls, found \${occurrenceCount}\`
+      \`\${relativePath}: expected 3 controlled-operation calls, found \${occurrenceCount}\`
     );
   }
   write(relativePath, current.replaceAll(before, after));
