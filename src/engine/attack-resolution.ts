@@ -67,6 +67,21 @@ export type AttackTargetResolutionResult =
     }
   | { ok: false; error: string };
 
+type PlayerControlledAttackTargetResolutionResult =
+  | {
+      ok: true;
+      resolution: AttackResolution;
+      requestedTargetKilled: boolean;
+      gameEnd?: never;
+    }
+  | {
+      ok: true;
+      gameEnd: NonNullable<Extract<EffectExecutionResult, { ok: true }>["gameEnd"]>;
+      resolution?: never;
+      requestedTargetKilled?: never;
+    }
+  | { ok: false; error: string };
+
 export type DefenseWindowResolutionResult =
   | { ok: true; avoided: false; resolution?: never; gameEnd?: never }
   | {
@@ -378,7 +393,7 @@ export function resolvePlayerControlledAttack(
     if (
       intent.targetPlan.kind === "orderedPlayers" &&
       intent.targetPlan.continueWhile === "targetKilled" &&
-      !resolutionResult.resolution.killed
+      !resolutionResult.requestedTargetKilled
     ) {
       break;
     }
@@ -407,7 +422,7 @@ function resolvePlayerControlledAttackTarget(
   context: PlayerControlledAttackContext,
   adapters: PlayerControlledAttackAdapters,
   current: CurrentAttackTargetContext
-): AttackTargetResolutionResult {
+): PlayerControlledAttackTargetResolutionResult {
   const impact = intent.impact;
   if (impact.kind === "effects") {
     return resolvePlayerControlledEffectsAttackTarget(
@@ -473,6 +488,7 @@ function resolvePlayerControlledAttackTarget(
           resolvedAmount.components,
           context.originalSource
         ),
+      requestedTargetKilled: false,
     };
   }
 
@@ -505,7 +521,11 @@ function resolvePlayerControlledAttackTarget(
     return branchResult;
   }
 
-  return { ok: true, resolution };
+  return {
+    ok: true,
+    resolution,
+    requestedTargetKilled: resolution.killed,
+  };
 }
 
 function resolvePlayerControlledEffectsAttackTarget(
@@ -514,7 +534,7 @@ function resolvePlayerControlledEffectsAttackTarget(
   context: PlayerControlledAttackContext,
   adapters: PlayerControlledAttackAdapters,
   current: CurrentAttackTargetContext
-): AttackTargetResolutionResult {
+): PlayerControlledAttackTargetResolutionResult {
   recordAttackTargetStarted(
     intent,
     current.attackingPlayer,
@@ -552,6 +572,7 @@ function resolvePlayerControlledEffectsAttackTarget(
         current.amountComponents,
         context.originalSource
       ),
+      requestedTargetKilled: false,
     };
   }
 
@@ -581,6 +602,7 @@ function resolvePlayerControlledEffectsAttackTarget(
       source: current.source,
       originalSource: context.originalSource,
     },
+    requestedTargetKilled: false,
   };
 }
 

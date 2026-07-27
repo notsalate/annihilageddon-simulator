@@ -476,7 +476,7 @@ test("Creator's Hand remains controlled and raises its controller's end-turn han
   assert.equal(activePlayer.hand.length, 6);
 });
 
-test("Creator's Hand ignores an invalid passive hand-limit amount that bypasses data validation", () => {
+test("Creator's Hand rejects an invalid passive hand-limit amount before end-turn mutation", () => {
   const state = initializeGame({ rootDir, seed: 47002 });
   const activePlayer = mustGetActivePlayer(state);
   const definition = state.cardDefinitions.get("esw2_dbg__main_047");
@@ -504,11 +504,24 @@ test("Creator's Hand ignores an invalid passive hand-limit amount that bypasses 
       activePlayer.playerId
     )
   );
+  const activePlayerIdBefore = state.activePlayerId;
+  const turnBefore = structuredClone(state.turn);
+  const handBefore = structuredClone(activePlayer.hand);
+  const discardBefore = structuredClone(activePlayer.discard);
+  const permanentsBefore = structuredClone(activePlayer.permanents);
+  const eventCountBefore = state.eventLog.length;
 
   const result = applyAction(state, { type: "endTurn" });
 
-  assert.equal(result.ok, true);
-  assert.equal(activePlayer.hand.length, 5);
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /amount must be a positive integer/);
+  assert.equal(state.activePlayerId, activePlayerIdBefore);
+  assert.deepEqual(state.turn, turnBefore);
+  assert.deepEqual(activePlayer.hand, handBefore);
+  assert.deepEqual(activePlayer.discard, discardBefore);
+  assert.deepEqual(activePlayer.permanents, permanentsBefore);
+  assert.equal(state.eventLog.length, eventCountBefore);
 });
 
 test("Creator's Hand combines with the maximum-life hand-limit modifier", () => {

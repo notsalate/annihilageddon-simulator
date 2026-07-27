@@ -664,12 +664,9 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
         rawEffect,
         context.source
       );
-      if (!decoded.ok) {
-        // Preserve the established passive-modifier contract: malformed
-        // end-turn values that bypass data validation are ignored.
-        return { status: "notApplicable" };
-      }
-      return evaluateEndTurnDrawModifier(decoded.effect, context);
+      return decoded.ok
+        ? evaluateEndTurnDrawModifier(decoded.effect, context)
+        : { status: "error", error: decoded.error };
     },
     [replaceEffectRuntimeHandlerSymbol](replacementHandler) {
       const originalHandler = activeHandler;
