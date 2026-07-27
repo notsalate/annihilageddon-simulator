@@ -9,9 +9,9 @@ permissions:
   contents: write
 
 jobs:
-  publish-docs:
+  final-gate-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - name: Checkout verification branch
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -23,24 +23,41 @@ jobs:
           ref: agent/architecture-deepening-findings
           fetch-depth: 0
           path: target
-      - name: Apply documentation patch
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+      - name: Apply final checklist patch
         working-directory: target
         run: |
           git apply --check ../verification/pr137-final-fixes.patch
           git apply ../verification/pr137-final-fixes.patch
           git diff --check
-      - name: Commit documentation fixes
+      - name: Install dependencies
+        working-directory: target
+        run: npm ci --ignore-scripts
+      - name: Audit dependencies
+        working-directory: target
+        run: npm audit
+      - name: Full project check
+        working-directory: target
+        run: npm run check
+      - name: Runtime cluster report
+        working-directory: target
+        run: npm run report:card-runtime-clusters
+      - name: Commit verified final checklist
         working-directory: target
         run: |
-          git add \
-            docs/superpowers/specs/2026-07-20-engine-architecture-deepening-design.md \
-            docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md
+          git diff --check
+          git add docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md
           git diff --cached --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "docs(review): align final attack and catalog contracts"
+          git commit -m "docs(review): record exact final verification gate"
           git diff --check origin/master...HEAD
           test -z "$(git status --short)"
-      - name: Push documentation fixes
+      - name: Push verified final checklist
         working-directory: target
         run: git push origin HEAD:agent/architecture-deepening-findings
