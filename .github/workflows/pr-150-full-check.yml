@@ -3,6 +3,8 @@ name: pr-150-full-check
 on:
   push:
     branches: [agent/pr-150-full-check]
+  pull_request:
+    branches: [master]
 
 permissions:
   contents: read
