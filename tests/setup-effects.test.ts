@@ -2,13 +2,12 @@ import assert from "node:assert/strict";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 import {
   markTokenDefinitionId,
   markTokenInstanceId,
 } from "../src/domain/types.js";
 import {
-  getEffectRuntimeHandler,
-  replaceEffectRuntimeHandlerForTesting,
   tryExecuteSetupEffect,
   type EffectRuntimeSetupServices,
   type SetupEffectSourceContext,
@@ -119,34 +118,35 @@ test("setup catalog decodes before runtime-mode applicability", () => {
   assert.match(result.error, /unsupported field unexpected/);
 });
 
-test("setup catalog validates starting-life effect exactly once before its executor", () => {
-  const originalHandler = getEffectRuntimeHandler("set_starting_life_total");
-  let validationCount = 0;
-  const restore = replaceEffectRuntimeHandlerForTesting(
+test("setup catalog passes a concrete starting-life payload to its executor", () => {
+  const observedLifeTotals: number[] = [];
+  const subject = player();
+
+  const result = withTemporaryEffectRuntimeOperations(
     "set_starting_life_total",
     {
-      ...originalHandler,
-      validateShape(subjectId, effect) {
-        validationCount += 1;
-        return originalHandler.validateShape(subjectId, effect);
+      executeSetup(playerState, effect) {
+        observedLifeTotals.push(effect.lifeTotal);
+        playerState.life.current = effect.lifeTotal;
+        playerState.life.max = Math.max(
+          playerState.life.max,
+          effect.lifeTotal
+        );
+        return { ok: true };
       },
-    }
+    },
+    () =>
+      tryExecuteSetupEffect(
+        subject,
+        { effectId: "set_starting_life_total", timing: "setup", lifeTotal: 30 },
+        source,
+        services()
+      )
   );
 
-  try {
-    const result = tryExecuteSetupEffect(
-      player(),
-      { effectId: "set_starting_life_total", timing: "setup", lifeTotal: 30 },
-      source,
-      services()
-    );
-
-    assert.deepEqual(result, { status: "executed" });
-  } finally {
-    restore();
-  }
-
-  assert.equal(validationCount, 1);
+  assert.deepEqual(result, { status: "executed" });
+  assert.deepEqual(observedLifeTotals, [30]);
+  assert.equal(subject.life.current, 30);
 });
 
 test("force starting player returns a typed setup directive", () => {
@@ -255,33 +255,33 @@ test("initializeGame does not look up a wizard property again after its setup ef
 });
 
 test("initializeGame passes combat runtime mode to the setup executor", () => {
-  const effectId = "set_starting_life_total";
-  const originalHandler = getEffectRuntimeHandler(effectId);
-  const originalExecutor = originalHandler.executeSetup;
-  assert.ok(originalExecutor);
   let observedRuntimeMode: SetupEffectSourceContext["runtimeMode"] | undefined;
-  const restore = replaceEffectRuntimeHandlerForTesting(effectId, {
-    ...originalHandler,
-    executeSetup(player, effect, source, services) {
-      observedRuntimeMode = source.runtimeMode;
-      return originalExecutor(player, effect, source, services);
+
+  const state = withTemporaryEffectRuntimeOperations(
+    "set_starting_life_total",
+    {
+      executeSetup(playerState, effect, setupSource) {
+        observedRuntimeMode = setupSource.runtimeMode;
+        playerState.life.current = effect.lifeTotal;
+        playerState.life.max = Math.max(
+          playerState.life.max,
+          effect.lifeTotal
+        );
+        return { ok: true };
+      },
     },
-  });
+    () =>
+      initializeGame({
+        dataPack: setupDataPack(false, "supported"),
+        seed: 119,
+      })
+  );
 
-  try {
-    const state = initializeGame({
-      dataPack: setupDataPack(false, "supported"),
-      seed: 119,
-    });
-
-    assert.deepEqual(
-      state.players.map((subject) => subject.life.current),
-      [27, 27]
-    );
-    assert.equal(observedRuntimeMode, "combat");
-  } finally {
-    restore();
-  }
+  assert.deepEqual(
+    state.players.map((subject) => subject.life.current),
+    [27, 27]
+  );
+  assert.equal(observedRuntimeMode, "combat");
 });
 
 test("initializeGame executes setup effects in fixture runtime mode", () => {

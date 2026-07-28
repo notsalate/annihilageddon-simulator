@@ -3,13 +3,12 @@ import path from "node:path";
 
 import { isPlainRecord } from "../common.js";
 import {
-  resolveEffectRuntimeCatalogEntry,
+  validateRuntimeEffectCatalogPayload,
   type EffectRuntimeMode,
   type EffectRuntimeSourceKind,
 } from "./effect-runtime-registry.js";
 import {
   isRuntimeEffectId,
-  isRuntimeEffectTargetSelector,
   type RuntimeEffect,
 } from "./runtime-effect.js";
 import { decodeTimedRuntimeEffect } from "./runtime-effect-decoder.js";
@@ -2042,7 +2041,7 @@ function validateRuntimeEffectDefinition(
   if (!isRuntimeEffectId(effectId)) {
     return [`${subjectId} uses unsupported effect id ${effectId}`];
   }
-  const resolution = resolveEffectRuntimeCatalogEntry(
+  const resolution = validateRuntimeEffectCatalogPayload(
     subjectId,
     effectId,
     effect,
@@ -2051,16 +2050,6 @@ function validateRuntimeEffectDefinition(
   );
   if (!resolution.ok) {
     return resolution.errors;
-  }
-
-  const catalogEntry = resolution.entry;
-  const targetSelector = effect["targetSelector"];
-  if (
-    targetSelector !== undefined &&
-    (!isRuntimeEffectTargetSelector(targetSelector) ||
-      !catalogEntry.allowedTargetSelectors?.includes(targetSelector))
-  ) {
-    return [`${subjectId} ${effectId} uses unsupported target selector`];
   }
 
   return [];

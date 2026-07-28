@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -10,9 +11,7 @@ import {
   markTokenInstanceId,
 } from "../src/domain/types.js";
 import {
-  getEffectRuntimeCatalogEntry,
-  getEffectRuntimeHandler,
-  replaceEffectRuntimeHandlerForTesting,
+  executeRuntimeEffect,
   tryExecuteSetupEffect,
   type EffectRuntimeServices,
   type EffectRuntimeSetupServices,
@@ -31,79 +30,67 @@ const setupSource: SetupEffectSourceContext = {
   tokenDefinitionId: markTokenDefinitionId("fixture-property-definition"),
 };
 
-test("catalog entry execute owns source-kind validation", () => {
+test("catalog execute operation owns source-kind validation", () => {
   const subject = createPlayer();
-  const originalHandler = getEffectRuntimeHandler("ongoing_hand_refill_bonus");
-  const restore = replaceEffectRuntimeHandlerForTesting(
+  let handlerCalled = false;
+
+  const result = withTemporaryEffectRuntimeOperations(
     "ongoing_hand_refill_bonus",
     {
-      ...originalHandler,
       execute() {
+        handlerCalled = true;
         return { ok: true };
       },
-    }
+    },
+    () =>
+      executeRuntimeEffect(
+        createMinimalState(subject),
+        subject,
+        {
+          effectId: "ongoing_hand_refill_bonus",
+          timing: "endTurn",
+          amount: 1,
+        },
+        effectSource(subject, "wizardProperty", "combat"),
+        throwingRuntimeServices()
+      )
   );
 
-  try {
-    const result = getEffectRuntimeCatalogEntry(
-      "ongoing_hand_refill_bonus"
-    ).execute(
-      "Effect ongoing_hand_refill_bonus",
-      {
-        effectId: "ongoing_hand_refill_bonus",
-        timing: "endTurn",
-        amount: 1,
-      },
-      createMinimalState(subject),
-      subject,
-      effectSource(subject, "wizardProperty", "combat"),
-      throwingRuntimeServices()
-    );
-
-    assert.equal(result.ok, false);
-    if (result.ok) return;
-    assert.match(result.error, /unsupported source kind/);
-  } finally {
-    restore();
-  }
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /unsupported source kind/);
+  assert.equal(handlerCalled, false);
 });
 
-test("catalog entry execute owns runtime-mode validation", () => {
+test("catalog execute operation owns runtime-mode validation", () => {
   const subject = createPlayer();
-  const originalHandler = getEffectRuntimeHandler(
-    "fixture_add_power_equal_to_target_cost"
-  );
-  const restore = replaceEffectRuntimeHandlerForTesting(
+  let handlerCalled = false;
+
+  const result = withTemporaryEffectRuntimeOperations(
     "fixture_add_power_equal_to_target_cost",
     {
-      ...originalHandler,
       execute() {
+        handlerCalled = true;
         return { ok: true };
       },
-    }
+    },
+    () =>
+      executeRuntimeEffect(
+        createMinimalState(subject),
+        subject,
+        {
+          effectId: "fixture_add_power_equal_to_target_cost",
+          target: { selector: "mainMarketCard" },
+        },
+        effectSource(subject, "card", "combat"),
+        throwingRuntimeServices()
+      )
   );
 
-  try {
-    const result = getEffectRuntimeCatalogEntry(
-      "fixture_add_power_equal_to_target_cost"
-    ).execute(
-      "Effect fixture_add_power_equal_to_target_cost",
-      {
-        effectId: "fixture_add_power_equal_to_target_cost",
-        target: { selector: "mainMarketCard" },
-      },
-      createMinimalState(subject),
-      subject,
-      effectSource(subject, "card", "combat"),
-      throwingRuntimeServices()
-    );
-
-    assert.equal(result.ok, false);
-    if (result.ok) return;
-    assert.match(result.error, /unavailable in combat mode/);
-  } finally {
-    restore();
-  }
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /unavailable in combat mode/);
+  assert.equal(handlerCalled, false);
 });
 
 test("replace_starting_card traverses the Control Ledger singleton zone", () => {
@@ -189,6 +176,64 @@ test("Mayhem redraw handler keeps its decoded tuple type", () => {
   assert.doesNotMatch(handler, /:\s*unknown/u);
   assert.doesNotMatch(handler, /(?:redraw|damage)Option\["/u);
   assert.doesNotMatch(source, /function validateMayhemHandRedrawOptions/u);
+});
+
+test("decoder is the sole owner of registered payload structure", () => {
+  const source = readFileSync(
+    `${rootDir}/src/engine/effect-runtime-registry.ts`,
+    "utf8"
+  );
+
+  assert.doesNotMatch(source, /validateShape/u);
+});
+
+test("production modules do not export Catalog bypass registries", () => {
+  const registrySource = readFileSync(
+    `${rootDir}/src/engine/effect-runtime-registry.ts`,
+    "utf8"
+  );
+  const decoderSource = readFileSync(
+    `${rootDir}/src/engine/runtime-effect-decoder.ts`,
+    "utf8"
+  );
+
+  for (const forbiddenExport of [
+    "effectRuntimeHandlerMap",
+    "effectRuntimeCatalog",
+    "effectRuntimeRegistry",
+    "getEffectRuntimeHandler",
+    "replaceEffectRuntimeHandlerForTesting",
+    "getEffectRuntimeCatalogEntry",
+    "resolveEffectRuntimeCatalogEntry",
+  ]) {
+    assert.doesNotMatch(
+      registrySource,
+      new RegExp(`export\\s+(?:const|function)\\s+${forbiddenExport}\\b`, "u")
+    );
+  }
+  for (const forbiddenType of [
+    "EffectRuntimeHandler",
+    "EffectRuntimeEntry",
+    "EffectRuntimeCatalogDefinition",
+    "EffectRuntimeCatalogResolution",
+  ]) {
+    assert.doesNotMatch(
+      registrySource,
+      new RegExp(`export\\s+(?:interface|type)\\s+${forbiddenType}\\b`, "u")
+    );
+  }
+  assert.doesNotMatch(
+    registrySource,
+    /export\s*\{\s*runtimeEffectDecoders\s*\}/u
+  );
+  assert.doesNotMatch(
+    decoderSource,
+    /export\s+const\s+runtimeEffectDecoders\b/u
+  );
+  assert.doesNotMatch(
+    decoderSource,
+    /export\s+function\s+getRuntimeEffectDecoder\b/u
+  );
 });
 
 function createPlayer(): PlayerState {

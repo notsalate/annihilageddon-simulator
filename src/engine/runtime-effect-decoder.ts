@@ -361,16 +361,163 @@ const runtimeEffectArray: ValueDecoder<RuntimeEffect[]> = (label, raw) => {
   return errors.length > 0 ? { ok: false, errors } : success(effects);
 };
 
+type DecodedPayloadValidator<Id extends RuntimeEffectId> = (
+  subjectId: string,
+  effect: RuntimeEffectForId<Id>
+) => string[];
+
 function defineDecoder<Id extends RuntimeEffectId>(
   effectId: Id,
-  fields: ObjectFields<RuntimeEffectForId<Id>>
+  fields: ObjectFields<RuntimeEffectForId<Id>>,
+  validateDecodedPayload?: DecodedPayloadValidator<Id>
 ): RuntimeEffectDecoder<Id> {
   return {
     effectId,
     decode(subjectId, raw) {
-      return decodeObject(subjectId, raw, fields);
+      const decoded = decodeObject(subjectId, raw, fields);
+      if (!decoded.ok || validateDecodedPayload === undefined) {
+        return decoded;
+      }
+      const errors = validateDecodedPayload(subjectId, decoded.value);
+      return errors.length === 0 ? decoded : { ok: false, errors };
     },
   };
+}
+
+function requireTargetSelector(
+  effectLabel: string,
+  allowedSelectors: readonly RuntimeEffectTargetSelector[]
+): DecodedPayloadValidator<RuntimeEffectId> {
+  return (subjectId, effect) => {
+    const target = "target" in effect ? effect.target : undefined;
+    const nestedSelector =
+      typeof target === "object" &&
+      target !== null &&
+      "selector" in target
+        ? target.selector
+        : undefined;
+    const directSelector =
+      "targetSelector" in effect ? effect.targetSelector : undefined;
+    const selector = nestedSelector ?? directSelector;
+    return allowedSelectors.some((allowedSelector) => allowedSelector === selector)
+      ? []
+      : [
+          `${subjectId} uses unsupported ${effectLabel} target ${String(selector)}`,
+        ];
+  };
+}
+
+function requireNestedTargetSelector(
+  effectLabel: string,
+  expectedSelector: RuntimeEffectTargetSelector
+): DecodedPayloadValidator<RuntimeEffectId> {
+  return (subjectId, effect) => {
+    const target = "target" in effect ? effect.target : undefined;
+    const selector =
+      typeof target === "object" &&
+      target !== null &&
+      "selector" in target
+        ? target.selector
+        : undefined;
+    return selector === expectedSelector
+      ? []
+      : [
+          `${subjectId} uses unsupported ${effectLabel} target ${String(selector)}`,
+        ];
+  };
+}
+
+const runtimeCardTypes = new Set([
+  "wizardCard",
+  "spell",
+  "treasure",
+  "creature",
+]);
+
+function validateTemporaryHandLimitCardTypes(
+  subjectId: string,
+  effect: RuntimeEffectForId<"temporary_hand_limit_by_gained_card_type">
+): string[] {
+  const unknownCardType = effect.cardTypes.find(
+    (cardType) => !runtimeCardTypes.has(cardType)
+  );
+  return unknownCardType === undefined
+    ? []
+    : [
+        `${subjectId} uses unknown temporary-hand-limit card type ${unknownCardType}`,
+      ];
+}
+
+function validateWandAttackReplacement(
+  subjectId: string,
+  effect:
+    | RuntimeEffectForId<"modify_owned_wand_attack_damage">
+    | RuntimeEffectForId<"prevent_defense_against_owned_wand_attacks">
+): string[] {
+  return effect.cardDefinitionIds === undefined && effect.cardTags === undefined
+    ? [
+        `${subjectId} uses unsupported wand-attack replacement filter cardDefinitionIds/cardTags`,
+      ]
+    : [];
+}
+
+function validateEffectiveValuePayload(
+  subjectId: string,
+  effect:
+    | RuntimeEffectForId<"modify_effective_value">
+    | RuntimeEffectForId<"fixture_modify_effective_value">
+): string[] {
+  const errors: string[] = [];
+  if (
+    effect.operation === "add" &&
+    effect.amount === undefined &&
+    effect.amountPerOwnedCard === undefined
+  ) {
+    errors.push(`${subjectId} uses add operation without amount`);
+  }
+  if (effect.operation === "invertNegative" && effect.amount !== undefined) {
+    errors.push(`${subjectId} uses invertNegative with amount`);
+  }
+  if (
+    effect.amountPerOwnedCard !== undefined &&
+    (effect.countedCardTypes === undefined ||
+      effect.countedCardTypes.length === 0)
+  ) {
+    errors.push(`${subjectId} uses amountPerOwnedCard without countedCardTypes`);
+  }
+
+  const target = effect.target;
+  if (!("targetType" in target)) {
+    errors.push(`${subjectId} uses invalid effective-value target`);
+    return errors;
+  }
+  if (
+    effect.valueKind === "cardCost" ||
+    effect.valueKind === "cardVictoryPoints"
+  ) {
+    if (target.targetType !== "card") {
+      errors.push(
+        `${subjectId} uses unsupported effective-value target ${target.targetType}`
+      );
+    } else if (
+      target.definitionId === undefined &&
+      (target.cardTypes === undefined || target.cardTypes.length === 0)
+    ) {
+      errors.push(`${subjectId} uses invalid effective-value card target`);
+    }
+  } else if (effect.valueKind === "tokenVictoryPoints") {
+    if (
+      target.targetType !== "token" ||
+      (target.definitionId === undefined && target.tokenKind !== "deadWizardToken")
+    ) {
+      errors.push(`${subjectId} uses unsupported effective-value target`);
+    }
+  } else if (target.targetType !== "player") {
+    errors.push(
+      `${subjectId} uses unsupported effective-value target ${target.targetType}`
+    );
+  }
+  return errors;
 }
 
 const optionalTiming = optional(effectTiming);
@@ -380,7 +527,7 @@ const optionalCondition = optional(runtimeCondition);
 const optionalCosts = optional(runtimeCosts);
 const optionalAttackBranches = optional(attackBranches);
 
-export const runtimeEffectDecoders: {
+const runtimeEffectDecoders: {
   [Id in RuntimeEffectId]: RuntimeEffectDecoder<Id>;
 } = {
   force_starting_player: defineDecoder("force_starting_player", {
@@ -426,7 +573,7 @@ export const runtimeEffectDecoders: {
     amountPerOwnedCard: optional(safeInteger),
     countedCardTypes: optional(nonEmptyStringArray),
     target: required(runtimeTarget),
-  }),
+  }, validateEffectiveValuePayload),
   fixture_modify_effective_value: defineDecoder(
     "fixture_modify_effective_value",
     {
@@ -446,7 +593,8 @@ export const runtimeEffectDecoders: {
       amountPerOwnedCard: optional(safeInteger),
       countedCardTypes: optional(nonEmptyStringArray),
       target: required(runtimeTarget),
-    }
+    },
+    validateEffectiveValuePayload
   ),
   increase_hand_limit_at_max_life: defineDecoder(
     "increase_hand_limit_at_max_life",
@@ -463,7 +611,8 @@ export const runtimeEffectDecoders: {
       timing: required(literal("endTurn")),
       amount: required(positiveInteger),
       cardTypes: required(nonEmptyStringArray),
-    }
+    },
+    validateTemporaryHandLimitCardTypes
   ),
   endgame_limp_wands_score_positive: defineDecoder(
     "endgame_limp_wands_score_positive",
@@ -570,7 +719,7 @@ export const runtimeEffectDecoders: {
     amount: required(positiveInteger),
     target: optionalTarget,
     targetSelector: optionalTargetSelector,
-  }),
+  }, requireTargetSelector("healing", ["activePlayer"])),
   heal_equal_damage_dealt: defineDecoder("heal_equal_damage_dealt", {
     effectId: required(literal("heal_equal_damage_dealt")),
     timing: optionalTiming,
@@ -588,7 +737,7 @@ export const runtimeEffectDecoders: {
     lifeTotal: required(positiveInteger),
     target: optionalTarget,
     targetSelector: optionalTargetSelector,
-  }),
+  }, requireTargetSelector("set-life", ["activePlayer"])),
   gain_status: defineDecoder("gain_status", {
     effectId: required(literal("gain_status")),
     timing: optionalTiming,
@@ -599,21 +748,36 @@ export const runtimeEffectDecoders: {
         : runtimeTarget(label, raw)
     ),
     targetSelector: optionalTargetSelector,
-  }),
+  }, requireTargetSelector("gain-status", [
+    "activePlayer",
+    "opponentPlayer",
+    "anyPlayer",
+    "eachPlayerClockwiseFromActive",
+  ])),
   remove_status: defineDecoder("remove_status", {
     effectId: required(literal("remove_status")),
     timing: optionalTiming,
     statusId: required(literal("dingler")),
     target: optionalTarget,
     targetSelector: optionalTargetSelector,
-  }),
+  }, requireTargetSelector("remove-status", [
+    "activePlayer",
+    "opponentPlayer",
+    "anyPlayer",
+    "eachPlayerClockwiseFromActive",
+  ])),
   toggle_status: defineDecoder("toggle_status", {
     effectId: required(literal("toggle_status")),
     timing: optionalTiming,
     statusId: required(literal("dingler")),
     target: optionalTarget,
     targetSelector: optionalTargetSelector,
-  }),
+  }, requireTargetSelector("toggle-status", [
+    "activePlayer",
+    "opponentPlayer",
+    "anyPlayer",
+    "eachPlayerClockwiseFromActive",
+  ])),
   exchange_life_and_dingler_status: defineDecoder(
     "exchange_life_and_dingler_status",
     {
@@ -624,7 +788,8 @@ export const runtimeEffectDecoders: {
       optional: optional(booleanValue),
       allowLifeExchange: optional(booleanValue),
       allowDinglerStatusExchange: optional(booleanValue),
-    }
+    },
+    requireTargetSelector("life exchange", ["opponentPlayer", "chosenFoe"])
   ),
   deal_damage: defineDecoder("deal_damage", {
     effectId: required(literal("deal_damage")),
@@ -632,21 +797,21 @@ export const runtimeEffectDecoders: {
     amount: required(positiveInteger),
     target: optionalTarget,
     targetSelector: optionalTargetSelector,
-  }),
+  }, requireTargetSelector("damage", ["opponentPlayer", "activePlayer"])),
   gain_card: defineDecoder("gain_card", {
     effectId: required(literal("gain_card")),
     timing: optionalTiming,
     target: optionalTarget,
     targetSelector: optionalTargetSelector,
     destination: required(literal("discard")),
-  }),
+  }, requireNestedTargetSelector("gain", "mainMarketCard")),
   discard_card: defineDecoder("discard_card", {
     effectId: required(literal("discard_card")),
     timing: optionalTiming,
     target: optionalTarget,
     targetSelector: optionalTargetSelector,
     emptyChoice: optional(literal("fail")),
-  }),
+  }, requireNestedTargetSelector("discard", "activePlayerHandCard")),
   discard_self: defineDecoder("discard_self", {
     effectId: required(literal("discard_self")),
     timing: optionalTiming,
@@ -664,7 +829,7 @@ export const runtimeEffectDecoders: {
     timing: optionalTiming,
     target: optionalTarget,
     targetSelector: optionalTargetSelector,
-  }),
+  }, requireNestedTargetSelector("destroy", "activePlayerHandCard")),
   destroy_own_cards: defineDecoder("destroy_own_cards", {
     effectId: required(literal("destroy_own_cards")),
     timing: optionalTiming,
@@ -751,7 +916,8 @@ export const runtimeEffectDecoders: {
       target: optionalTarget,
       targetSelector: optionalTargetSelector,
       emptyChoice: optional(literal("fail")),
-    }
+    },
+    requireNestedTargetSelector("fixture target-cost power", "mainMarketCard")
   ),
 
   attack_damage: defineDecoder("attack_damage", {
@@ -764,7 +930,12 @@ export const runtimeEffectDecoders: {
     optional: optional(booleanValue),
     onDamageDealt: optionalAttackBranches,
     onKill: optionalAttackBranches,
-  }),
+  }, requireTargetSelector("attack", [
+    "opponentPlayer",
+    "chosenFoe",
+    "chosenPlayer",
+    "eachFoe",
+  ])),
   attack_damage_equal_remembered_card_cost: defineDecoder(
     "attack_damage_equal_remembered_card_cost",
     {
@@ -790,7 +961,13 @@ export const runtimeEffectDecoders: {
       onKill: optionalAttackBranches,
       costMode: required(oneOf(["highest", "chosen"] as const)),
       excludeSource: optional(booleanValue),
-    }
+    },
+    requireTargetSelector("attack", [
+      "opponentPlayer",
+      "chosenFoe",
+      "chosenPlayer",
+      "eachFoe",
+    ])
   ),
   attack_destroy_top_legend_deck_then_damage_equal_cost: defineDecoder(
     "attack_destroy_top_legend_deck_then_damage_equal_cost",
@@ -830,7 +1007,12 @@ export const runtimeEffectDecoders: {
     target: optionalTarget,
     targetSelector: optionalTargetSelector,
     statusId: required(literal("dingler")),
-  }),
+  }, requireTargetSelector("attack-status", [
+    "activePlayer",
+    "opponentPlayer",
+    "anyPlayer",
+    "eachPlayerClockwiseFromActive",
+  ])),
   avoid_attack: defineDecoder("avoid_attack", {
     effectId: required(literal("avoid_attack")),
     timing: required(literal("onDefense")),
@@ -858,7 +1040,7 @@ export const runtimeEffectDecoders: {
     targetSelector: optionalTargetSelector,
     onDamageDealt: optionalAttackBranches,
     onKill: optionalAttackBranches,
-  }),
+  }, requireTargetSelector("directional attack", ["leftOrRightFoe"])),
   multi_target_attack: defineDecoder("multi_target_attack", {
     effectId: required(literal("multi_target_attack")),
     timing: optionalTiming,
@@ -867,7 +1049,7 @@ export const runtimeEffectDecoders: {
     targetSelector: optionalTargetSelector,
     onDamageDealt: optionalAttackBranches,
     onKill: optionalAttackBranches,
-  }),
+  }, requireTargetSelector("multi-target attack", ["opponentPlayers"])),
   optional_spend_chip_attack_damage: defineDecoder(
     "optional_spend_chip_attack_damage",
     {
@@ -881,7 +1063,8 @@ export const runtimeEffectDecoders: {
       chipCost: required(positiveInteger),
       costs: optionalCosts,
       optional: optional(booleanValue),
-    }
+    },
+    requireTargetSelector("optional chip attack", ["chosenPlayer"])
   ),
   defense_discard_self_avoid_attack_then_optional_destroy_hand_card:
     defineDecoder(
@@ -917,7 +1100,8 @@ export const runtimeEffectDecoders: {
       amount: required(positiveInteger),
       cardDefinitionIds: optional(nonEmptyStringArray),
       cardTags: optional(nonEmptyStringArray),
-    }
+    },
+    validateWandAttackReplacement
   ),
   double_owned_attack_damage: defineDecoder("double_owned_attack_damage", {
     effectId: required(literal("double_owned_attack_damage")),
@@ -932,7 +1116,8 @@ export const runtimeEffectDecoders: {
       timing: required(literal("attackReplacement")),
       cardDefinitionIds: optional(nonEmptyStringArray),
       cardTags: optional(nonEmptyStringArray),
-    }
+    },
+    validateWandAttackReplacement
   ),
 
   activation_destroy_self_then_destroy_own_cards: defineDecoder(
@@ -1058,7 +1243,7 @@ export const runtimeEffectDecoders: {
     amount: required(positiveInteger),
     target: optionalTarget,
     targetSelector: optionalTargetSelector,
-  }),
+  }, requireTargetSelector("Mayhem attack", ["allPlayers"])),
   mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status:
     defineDecoder(
       "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
@@ -1250,10 +1435,12 @@ export const runtimeEffectDecoders: {
   }),
 };
 
-export function getRuntimeEffectDecoder<Id extends RuntimeEffectId>(
-  effectId: Id
-): RuntimeEffectDecoder<Id> {
-  return runtimeEffectDecoders[effectId];
+export function decodeRuntimeEffectForId<Id extends RuntimeEffectId>(
+  subjectId: string,
+  effectId: Id,
+  raw: unknown
+): DecodeResult<RuntimeEffectForId<Id>> {
+  return runtimeEffectDecoders[effectId].decode(subjectId, raw);
 }
 
 export function decodeRuntimeEffect(

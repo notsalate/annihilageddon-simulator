@@ -8,23 +8,18 @@ import {
   type CardInstance,
   type RuntimeEffect,
 } from "../src/index.js";
-import type { EffectRuntimeHandler } from "../src/engine/effect-runtime-registry.js";
-import type { RuntimeEffectForId } from "../src/engine/runtime-effect.js";
+import type { EffectRuntimeCatalogOperationOverridesForTesting } from "../src/engine/effect-runtime-registry.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
 } from "../src/domain/types.js";
-import { withTemporaryEffectRuntimeHandler } from "./helpers/with-temporary-effect-runtime-handler.js";
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 
 const rootDir = process.cwd();
 const terminalEffectId = "fixture_add_power_equal_to_target_cost";
-const terminalHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"fixture_add_power_equal_to_target_cost">
+const terminalHandler: EffectRuntimeCatalogOperationOverridesForTesting<
+  "fixture_add_power_equal_to_target_cost"
 > = {
-  effectId: terminalEffectId,
-  validateShape() {
-    return [];
-  },
   execute(_state, player) {
     return {
       ok: true,
@@ -61,7 +56,13 @@ function runTerminalEventScenario(
   const eventDefinition = createFixtureDefinition(
     `fixture-terminal-${eventKind}`,
     eventKind,
-    [{ effectId: terminalEffectId, timing: "onMayhemResolve" }]
+    [
+      {
+        effectId: terminalEffectId,
+        timing: "onMayhemResolve",
+        target: { selector: "mainMarketCard" },
+      },
+    ]
   );
   const fillerDefinition = createFixtureDefinition(
     `fixture-after-terminal-${eventKind}`,
@@ -97,7 +98,7 @@ function runTerminalEventScenario(
   market.splice(0, 1);
   sourceDeck.splice(0, sourceDeck.length, eventCard, fillerCard);
 
-  const result = withTemporaryEffectRuntimeHandler(
+  const result = withTemporaryEffectRuntimeOperations(
     terminalEffectId,
     terminalHandler,
     () => runMarketFlow(state, { mode: "turn" })

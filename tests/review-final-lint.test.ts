@@ -24,7 +24,7 @@ test("invalid raw fixtures do not use unnecessary never assertions", () => {
   const validationCase = extractSection(
     validation,
     'validateRawRuntimeEffect(\n      "play_top_card_from_foe_deck"',
-    'test("life and Dingler status effects'
+    'test("catalog decoders reject invalid life and Dingler status payloads'
   );
   assert.doesNotMatch(validationCase, /as never/u);
 });

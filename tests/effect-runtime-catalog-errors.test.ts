@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  getEffectRuntimeCatalogEntry,
+  applyRuntimeEffectAfterPlayerAttackDamage,
+  evaluateRuntimeEffectAtTiming,
+  evaluateRuntimeEffectEndTurnDrawModifier,
+  executeRuntimeEffectOnPlayCard,
+  validateRuntimeEffectCatalogPayload,
   type EffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
 import {
@@ -11,6 +15,58 @@ import {
 } from "./helpers/game-scenario.js";
 
 const rootDir = process.cwd();
+
+test("catalog names executable timing constraints separately from payload decoding", () => {
+  const result = validateRuntimeEffectCatalogPayload(
+    "Controlled refill",
+    "ongoing_hand_refill_bonus",
+    {
+      effectId: "ongoing_hand_refill_bonus",
+      timing: "whileControlled",
+      amount: 1,
+    },
+    "fixture",
+    "card"
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.errors.join("\n"), /requires endTurn timing/);
+});
+
+test("catalog applies unsupported policy only after operation timing matches", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23017 });
+  const source: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: "fixture",
+    playerId: scenario.activePlayer.playerId,
+    cardInstanceId: "fixture-unsupported-activation",
+    definitionId: "fixture-unsupported-activation",
+  };
+  let evaluated = false;
+
+  const result = evaluateRuntimeEffectAtTiming(
+    {
+      effectId: "activation_destroy_self_then_destroy_own_cards",
+      timing: "activation",
+      chooser: "controller",
+      activationLimit: "oncePerTurnWhileControlled",
+      sourceZones: "hand",
+      minAmount: 0,
+      maxAmount: 2,
+      destroySelf: true,
+    },
+    source,
+    "onPlay",
+    () => {
+      evaluated = true;
+      return { status: "resolved", result: undefined };
+    }
+  );
+
+  assert.deepEqual(result, { status: "notApplicable" });
+  assert.equal(evaluated, false);
+});
 
 test("catalog end-turn operation reports decoder errors directly", () => {
   const scenario = createGameScenario({ rootDir, seed: 23014 });
@@ -23,10 +79,7 @@ test("catalog end-turn operation reports decoder errors directly", () => {
     definitionId: "fixture-catalog-end-turn-error",
   };
 
-  const result = getEffectRuntimeCatalogEntry(
-    "ongoing_hand_refill_bonus"
-  ).evaluateEndTurnDrawModifier(
-    "Effect ongoing_hand_refill_bonus",
+  const result = evaluateRuntimeEffectEndTurnDrawModifier(
     {
       effectId: "ongoing_hand_refill_bonus",
       timing: "endTurn",
@@ -56,7 +109,6 @@ test("catalog validates a payload before declaring an end-turn operation not app
     cardInstanceId: "fixture-catalog-non-end-turn-error",
     definitionId: "fixture-catalog-non-end-turn-error",
   };
-  const entry = getEffectRuntimeCatalogEntry("add_power");
   const context = {
     state: scenario.state,
     controller,
@@ -64,8 +116,7 @@ test("catalog validates a payload before declaring an end-turn operation not app
     currentDrawCount: 5,
   };
 
-  const malformed = entry.evaluateEndTurnDrawModifier(
-    "Effect add_power",
+  const malformed = evaluateRuntimeEffectEndTurnDrawModifier(
     {
       effectId: "add_power",
       timing: "endTurn",
@@ -79,8 +130,7 @@ test("catalog validates a payload before declaring an end-turn operation not app
   assert.match(malformed.error, /amount must be a positive integer/);
 
   assert.deepEqual(
-    entry.evaluateEndTurnDrawModifier(
-      "Effect add_power",
+    evaluateRuntimeEffectEndTurnDrawModifier(
       { effectId: "add_power", timing: "endTurn", amount: 1 },
       context
     ),
@@ -117,7 +167,6 @@ test("catalog validates a payload before declaring an on-play hook not applicabl
     cardInstanceId: sourceCard.instanceId,
     definitionId: sourceCard.definitionId,
   };
-  const entry = getEffectRuntimeCatalogEntry("add_power");
   const context = {
     state: scenario.state,
     controller,
@@ -127,8 +176,7 @@ test("catalog validates a payload before declaring an on-play hook not applicabl
     playedDefinition,
   };
 
-  const malformed = entry.executeOnPlayCard(
-    "Effect add_power",
+  const malformed = executeRuntimeEffectOnPlayCard(
     {
       effectId: "add_power",
       timing: "onPlayCard",
@@ -142,8 +190,7 @@ test("catalog validates a payload before declaring an on-play hook not applicabl
   assert.match(malformed.error, /amount must be a positive integer/);
 
   assert.deepEqual(
-    entry.executeOnPlayCard(
-      "Effect add_power",
+    executeRuntimeEffectOnPlayCard(
       { effectId: "add_power", timing: "onPlayCard", amount: 1 },
       context
     ),
@@ -171,7 +218,6 @@ test("catalog validates a payload before declaring an after-attack hook not appl
     cardInstanceId: sourceCard.instanceId,
     definitionId: sourceCard.definitionId,
   };
-  const entry = getEffectRuntimeCatalogEntry("add_power");
   const context = {
     state: scenario.state,
     controller,
@@ -181,8 +227,7 @@ test("catalog validates a payload before declaring an after-attack hook not appl
     attackSource: source,
   };
 
-  const malformed = entry.applyAfterPlayerAttackDamage(
-    "Effect add_power",
+  const malformed = applyRuntimeEffectAfterPlayerAttackDamage(
     {
       effectId: "add_power",
       timing: "afterFirstAttackDamageEachTurn",
@@ -196,8 +241,7 @@ test("catalog validates a payload before declaring an after-attack hook not appl
   assert.match(malformed.error, /amount must be a positive integer/);
 
   assert.deepEqual(
-    entry.applyAfterPlayerAttackDamage(
-      "Effect add_power",
+    applyRuntimeEffectAfterPlayerAttackDamage(
       {
         effectId: "add_power",
         timing: "afterFirstAttackDamageEachTurn",

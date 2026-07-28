@@ -1,7 +1,9 @@
 import type { CardDefinition } from "./data.js";
 import { buildControlledObjectView } from "./control-ledger.js";
 import {
-  getEffectRuntimeCatalogEntry,
+  applyRuntimeEffectAfterPlayerAttackDamage,
+  evaluateRuntimeEffectEndTurnDrawModifier,
+  executeRuntimeEffectOnPlayCard,
   type EffectExecutionResult,
   type EffectSourceContext,
 } from "./effect-runtime-registry.js";
@@ -129,10 +131,9 @@ function executeControlledCardOperation(
   candidates: readonly ControlledCardEffectCandidate[]
 ): EffectExecutionResult {
   for (const { effect, source, sourceDefinition } of candidates) {
-    const entry = getEffectRuntimeCatalogEntry(effect.effectId);
     const result =
       operation.kind === "onPlayCard"
-        ? entry.executeOnPlayCard(`Effect ${effect.effectId}`, effect, {
+        ? executeRuntimeEffectOnPlayCard(effect, {
             state,
             controller,
             source,
@@ -140,18 +141,14 @@ function executeControlledCardOperation(
             playedCard: operation.playedCard,
             playedDefinition: operation.playedDefinition,
           })
-        : entry.applyAfterPlayerAttackDamage(
-            `Effect ${effect.effectId}`,
-            effect,
-            {
-              state,
-              controller,
-              source,
-              sourceDefinition,
-              totalDamageDealt: operation.totalDamageDealt,
-              attackSource: operation.attackSource,
-            }
-          );
+        : applyRuntimeEffectAfterPlayerAttackDamage(effect, {
+            state,
+            controller,
+            source,
+            sourceDefinition,
+            totalDamageDealt: operation.totalDamageDealt,
+            attackSource: operation.attackSource,
+          });
 
     if (result.status === "notApplicable") {
       continue;
@@ -175,17 +172,12 @@ function collectEndTurnDrawModifier(
 ): ControlledCardDispatchResultMap["collectEndTurnDrawModifier"] {
   let drawCount = operation.currentBaseDrawCount;
   for (const { effect, source } of candidates) {
-    const entry = getEffectRuntimeCatalogEntry(effect.effectId);
-    const result = entry.evaluateEndTurnDrawModifier(
-      `Effect ${effect.effectId}`,
-      effect,
-      {
-        state,
-        controller,
-        source,
-        currentDrawCount: drawCount,
-      }
-    );
+    const result = evaluateRuntimeEffectEndTurnDrawModifier(effect, {
+      state,
+      controller,
+      source,
+      currentDrawCount: drawCount,
+    });
     if (result.status === "notApplicable") {
       continue;
     }

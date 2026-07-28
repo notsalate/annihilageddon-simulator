@@ -17,10 +17,9 @@ import {
 } from "../src/index.js";
 import { executeOnPlayEffects } from "../src/engine/effect-runtime.js";
 import {
-  type EffectRuntimeHandler,
+  type EffectRuntimeCatalogOperationOverridesForTesting,
   type EffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
-import type { RuntimeEffectForId } from "../src/engine/runtime-effect.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -30,17 +29,13 @@ import {
   addFixtureDefenseCardToHand,
   selectFirstFixtureDefense,
 } from "./helpers/defense-fixtures.js";
-import { withTemporaryEffectRuntimeHandler } from "./helpers/with-temporary-effect-runtime-handler.js";
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 
 const rootDir = process.cwd();
 const fixturePlayerDefeatEffectId = "fixture_add_power_equal_to_target_cost";
-const fixturePlayerDefeatHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"fixture_add_power_equal_to_target_cost">
+const fixturePlayerDefeatHandler: EffectRuntimeCatalogOperationOverridesForTesting<
+  "fixture_add_power_equal_to_target_cost"
 > = {
-  effectId: fixturePlayerDefeatEffectId,
-  validateShape() {
-    return [];
-  },
   execute(_state, player) {
     return {
       ok: true,
@@ -60,7 +55,11 @@ test("playCard propagates a fixture effect's player-defeat game end", () => {
     const card = addFixtureCardToActiveHand(
       state,
       createFixtureCardDefinition("fixture-player-defeat", "normal", [
-        { effectId: fixturePlayerDefeatEffectId, timing: "onPlay" },
+        {
+          effectId: fixturePlayerDefeatEffectId,
+          timing: "onPlay",
+          target: { selector: "mainMarketCard" },
+        },
       ])
     );
 
@@ -77,7 +76,7 @@ test("playCard propagates a fixture effect's player-defeat game end", () => {
     assert.equal(result.winnerPlayerId, activePlayer.playerId);
   };
 
-  withTemporaryEffectRuntimeHandler(
+  withTemporaryEffectRuntimeOperations(
     fixturePlayerDefeatEffectId,
     fixturePlayerDefeatHandler,
     runScenario
@@ -92,7 +91,11 @@ test("play_top_card propagates game end from the nested card", () => {
     const nestedDefinition = createFixtureCardDefinition(
       "fixture-nested-player-defeat",
       "normal",
-      [{ effectId: fixturePlayerDefeatEffectId, timing: "onPlay" }]
+      [{
+          effectId: fixturePlayerDefeatEffectId,
+          timing: "onPlay",
+          target: { selector: "mainMarketCard" },
+        }]
     );
     state.cardDefinitions = new Map([
       ...state.cardDefinitions,
@@ -130,7 +133,7 @@ test("play_top_card propagates game end from the nested card", () => {
     assert.equal(result.winnerPlayerId, activePlayer.playerId);
   };
 
-  withTemporaryEffectRuntimeHandler(
+  withTemporaryEffectRuntimeOperations(
     fixturePlayerDefeatEffectId,
     fixturePlayerDefeatHandler,
     runScenario
@@ -149,7 +152,11 @@ test("play_top_card_from_foe_deck propagates game end from the nested card", () 
     const nestedDefinition = createFixtureCardDefinition(
       "fixture-foe-nested-player-defeat",
       "normal",
-      [{ effectId: fixturePlayerDefeatEffectId, timing: "onPlay" }]
+      [{
+          effectId: fixturePlayerDefeatEffectId,
+          timing: "onPlay",
+          target: { selector: "mainMarketCard" },
+        }]
     );
     state.cardDefinitions = new Map([
       ...state.cardDefinitions,
@@ -190,7 +197,7 @@ test("play_top_card_from_foe_deck propagates game end from the nested card", () 
     assert.equal(result.winnerPlayerId, activePlayer.playerId);
   };
 
-  withTemporaryEffectRuntimeHandler(
+  withTemporaryEffectRuntimeOperations(
     fixturePlayerDefeatEffectId,
     fixturePlayerDefeatHandler,
     runScenario
@@ -248,6 +255,7 @@ test("endTurn propagates a Mayhem defense branch game end without starting the n
       {
         effectId: fixturePlayerDefeatEffectId,
         timing: "onDefense",
+        target: { selector: "mainMarketCard" },
       },
     ],
   });
@@ -285,7 +293,7 @@ test("endTurn propagates a Mayhem defense branch game end without starting the n
     );
   };
 
-  withTemporaryEffectRuntimeHandler(
+  withTemporaryEffectRuntimeOperations(
     fixturePlayerDefeatEffectId,
     fixturePlayerDefeatHandler,
     runScenario

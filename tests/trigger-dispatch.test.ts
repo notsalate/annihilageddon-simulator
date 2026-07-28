@@ -14,7 +14,6 @@ import {
   executeEffect,
   executeWizardPropertyOnPlayCardEffects,
 } from "../src/engine/effect-runtime.js";
-import { getEffectRuntimeHandler } from "../src/engine/effect-runtime-registry.js";
 import { dispatchControlledCardOperation } from "../src/engine/trigger-dispatch.js";
 
 import {
@@ -24,7 +23,7 @@ import {
   givenTemporaryControl,
   play,
 } from "./helpers/game-scenario.js";
-import { withTemporaryEffectRuntimeHandler } from "./helpers/with-temporary-effect-runtime-handler.js";
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -32,14 +31,10 @@ const playableRuntimeDataPackPath =
 
 test("trigger dispatch reads runtime mode from state before invoking the catalog operation", () => {
   const observedModes: string[] = [];
-  const originalHandler = getEffectRuntimeHandler(
-    "ongoing_add_power_when_playing_wand"
-  );
 
-  const results = withTemporaryEffectRuntimeHandler(
+  const results = withTemporaryEffectRuntimeOperations(
     "ongoing_add_power_when_playing_wand",
     {
-      ...originalHandler,
       executeOnPlayCard(_effect, context) {
         observedModes.push(context.source.runtimeMode);
         return { status: "resolved", result: { ok: true } };
@@ -495,14 +490,10 @@ test("controlled trigger dispatch stops after the first catalog execution error"
     tags: ["wandCard"],
   });
   const executedDefinitionIds: string[] = [];
-  const originalHandler = getEffectRuntimeHandler(
-    "ongoing_add_power_when_playing_wand"
-  );
 
-  const result = withTemporaryEffectRuntimeHandler(
+  const result = withTemporaryEffectRuntimeOperations(
     "ongoing_add_power_when_playing_wand",
     {
-      ...originalHandler,
       executeOnPlayCard(_effect, context) {
         executedDefinitionIds.push(context.source.definitionId);
         return {
@@ -555,14 +546,10 @@ test("controlled trigger dispatch stops after the first catalog game-end result"
     tags: ["wandCard"],
   });
   const executedDefinitionIds: string[] = [];
-  const originalHandler = getEffectRuntimeHandler(
-    "ongoing_add_power_when_playing_wand"
-  );
 
-  const result = withTemporaryEffectRuntimeHandler(
+  const result = withTemporaryEffectRuntimeOperations(
     "ongoing_add_power_when_playing_wand",
     {
-      ...originalHandler,
       executeOnPlayCard(_effect, context) {
         executedDefinitionIds.push(context.source.definitionId);
         return {

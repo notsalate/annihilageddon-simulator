@@ -17,7 +17,7 @@ import {
 } from "../src/index.js";
 import { victoryPointsPolicy } from "../src/engine/best-move-policies.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
-import { withTemporaryEffectRuntimeHandler } from "./helpers/with-temporary-effect-runtime-handler.js";
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 
 const rootDir = process.cwd();
 
@@ -490,22 +490,26 @@ test("keeps sibling game-ending ordinary actions and stops each winning line", (
   const lowerScoreCard = addFixtureDefinitionToActiveHand(
     state,
     fixtureDefinition("fixture-game-ending-action-low", [
-      { effectId: "fixture_add_power_equal_to_target_cost", timing: "onPlay" },
+      {
+        effectId: "fixture_add_power_equal_to_target_cost",
+        timing: "onPlay",
+        target: { selector: "mainMarketCard" },
+      },
     ])
   );
   const higherScoreCard = addFixtureDefinitionToActiveHand(
     state,
     fixtureDefinition("fixture-game-ending-action-high", [
-      { effectId: "fixture_add_power_equal_to_target_cost", timing: "onPlay" },
+      {
+        effectId: "fixture_add_power_equal_to_target_cost",
+        timing: "onPlay",
+        target: { selector: "mainMarketCard" },
+      },
     ])
   );
-  const lines = withTemporaryEffectRuntimeHandler(
+  const lines = withTemporaryEffectRuntimeOperations(
     "fixture_add_power_equal_to_target_cost",
     {
-      effectId: "fixture_add_power_equal_to_target_cost",
-      validateShape() {
-        return [];
-      },
       execute(_state, player) {
         return {
           ok: true,
@@ -574,6 +578,7 @@ test("victory-points policy ranks by score even when a lower-scoring line has a 
         {
           effectId: "fixture_add_power_equal_to_target_cost",
           timing: "onPlay",
+          target: { selector: "mainMarketCard" },
         },
       ],
     },
@@ -586,13 +591,9 @@ test("victory-points policy ranks by score even when a lower-scoring line has a 
   state.common.legendDeck = [];
   state.common.wildMagicStack = [];
 
-  const lines = withTemporaryEffectRuntimeHandler(
+  const lines = withTemporaryEffectRuntimeOperations(
     "fixture_add_power_equal_to_target_cost",
     {
-      effectId: "fixture_add_power_equal_to_target_cost",
-      validateShape() {
-        return [];
-      },
       execute(_state, player) {
         player.hand = player.hand.filter(
           (card) => card.instanceId !== bonusCard.instanceId
@@ -667,17 +668,17 @@ test("rejects a non-end action that changes the root player and turn", () => {
   addFixtureDefinitionToActiveHand(
     state,
     fixtureDefinition("fixture-invalid-turn-transition", [
-      { effectId: "fixture_add_power_equal_to_target_cost", timing: "onPlay" },
+      {
+        effectId: "fixture_add_power_equal_to_target_cost",
+        timing: "onPlay",
+        target: { selector: "mainMarketCard" },
+      },
     ])
   );
 
-  withTemporaryEffectRuntimeHandler(
+  withTemporaryEffectRuntimeOperations(
     "fixture_add_power_equal_to_target_cost",
     {
-      effectId: "fixture_add_power_equal_to_target_cost",
-      validateShape() {
-        return [];
-      },
       execute(mutatedState, player) {
         const nextPlayer = mutatedState.players.find(
           (candidate) => candidate.playerId !== player.playerId

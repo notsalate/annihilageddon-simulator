@@ -2,18 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  effectRuntimeCatalog,
-  runtimeEffectDecoders,
-  defineEffectRuntimeEntry,
-  type EffectRuntimeCatalogDefinition,
-  type EffectRuntimeHandler,
-  type RuntimeEffectDecoder,
+  validateRuntimeEffectCatalogPayload,
+  type EffectRuntimeCatalogOperationOverridesForTesting,
 } from "../src/engine/effect-runtime-registry.js";
-import {
-  knownRuntimeEffectIds,
-  type RuntimeEffectForId,
-  type RuntimeEffectId,
-} from "../src/engine/runtime-effect.js";
+import type { RuntimeEffectForId } from "../src/engine/runtime-effect.js";
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <Value>() =>
@@ -22,16 +14,14 @@ type Equal<Left, Right> =
     : false;
 type Expect<Value extends true> = Value;
 
-type CatalogIds = keyof EffectRuntimeCatalogDefinition;
-type CatalogIsExhaustive = Expect<Equal<CatalogIds, RuntimeEffectId>>;
-const catalogIsExhaustive: CatalogIsExhaustive = true;
-void catalogIsExhaustive;
+type AddPowerHasNoDefenseDestination = Expect<
+  Equal<
+    "destination" extends keyof RuntimeEffectForId<"add_power"> ? true : false,
+    false
+  >
+>;
 
-const addPowerHandler: EffectRuntimeHandler<RuntimeEffectForId<"add_power">> = {
-  effectId: "add_power",
-  validateShape() {
-    return [];
-  },
+const addPowerOperations: EffectRuntimeCatalogOperationOverridesForTesting<"add_power"> = {
   execute(_state, _player, effect) {
     const amount: number = effect.amount;
     void amount;
@@ -39,81 +29,40 @@ const addPowerHandler: EffectRuntimeHandler<RuntimeEffectForId<"add_power">> = {
   },
 };
 
-const avoidAttackHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"avoid_attack">
-> = {
-  effectId: "avoid_attack",
-  validateShape() {
-    return [];
-  },
-  execute(_state, _player, effect) {
-    const destination: "discardSelf" | "topdeckSelf" = effect.destination;
-    const costs = effect.costs;
-    void destination;
-    void costs;
-    return { ok: true };
-  },
-};
+const negativeContracts: [AddPowerHasNoDefenseDestination] = [true];
+void negativeContracts;
+void addPowerOperations;
 
-const addPowerDecoder: RuntimeEffectDecoder<"add_power"> =
-  runtimeEffectDecoders.add_power;
-const gainChipsHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"gain_chips">
-> = {
-  effectId: "gain_chips",
-  validateShape() {
-    return [];
-  },
-  execute() {
-    return { ok: true };
-  },
-};
+test("public catalog validation preserves the concrete payload variant", () => {
+  const decoded = validateRuntimeEffectCatalogPayload(
+    "Fixture add power",
+    "add_power",
+    { effectId: "add_power", timing: "onPlay", amount: 2 },
+    "combat",
+    "card"
+  );
 
-void defineEffectRuntimeEntry({
-  effectId: "add_power",
-  decoder: addPowerDecoder,
-  handler: addPowerHandler,
-  supportedModes: ["combat"],
-  supportedSourceKinds: ["card"],
+  assert.equal(decoded.ok, true);
+  if (!decoded.ok) return;
+  const amount: number = decoded.value.amount;
+  assert.equal(amount, 2);
 });
 
-type AddPowerHasNoDefenseDestination = Expect<
-  Equal<
-    "destination" extends keyof RuntimeEffectForId<"add_power"> ? true : false,
-    false
-  >
->;
-type GainChipsEntryConfig = Parameters<
-  typeof defineEffectRuntimeEntry<"gain_chips">
->[0];
-type AddPowerDecoderCannotRegisterAsGainChips = Expect<
-  Equal<
-    typeof addPowerDecoder extends GainChipsEntryConfig["decoder"]
-      ? true
-      : false,
-    false
-  >
->;
-type AddPowerHandlerCannotRegisterAsGainChips = Expect<
-  Equal<
-    typeof addPowerHandler extends GainChipsEntryConfig["handler"]
-      ? true
-      : false,
-    false
-  >
->;
+test("public catalog validation rejects fields owned by another payload", () => {
+  const decoded = validateRuntimeEffectCatalogPayload(
+    "Fixture add power",
+    "add_power",
+    {
+      effectId: "add_power",
+      timing: "onPlay",
+      amount: 2,
+      destination: "discardSelf",
+    },
+    "combat",
+    "card"
+  );
 
-const negativeContracts: [
-  AddPowerHasNoDefenseDestination,
-  AddPowerDecoderCannotRegisterAsGainChips,
-  AddPowerHandlerCannotRegisterAsGainChips,
-] = [true, true, true];
-void negativeContracts;
-void gainChipsHandler;
-void avoidAttackHandler;
-
-test("runtime effect catalog and decoder source are exhaustive", () => {
-  const expected = new Set<RuntimeEffectId>(knownRuntimeEffectIds);
-  assert.deepEqual(new Set(effectRuntimeCatalog.keys()), expected);
-  assert.deepEqual(new Set(Object.keys(runtimeEffectDecoders)), expected);
+  assert.equal(decoded.ok, false);
+  if (decoded.ok) return;
+  assert.match(decoded.errors.join("\n"), /unsupported field destination/);
 });
