@@ -52,7 +52,7 @@ test("rejects a missing test suite registration", () => {
         ["registered.test.js"],
         ["missing.test.js", "registered.test.js"]
       ),
-    /Missing registrations:\n  - missing\.test\.js/u
+    /Missing registrations:\n {2}- missing\.test\.js/u
   );
 });
 
@@ -63,7 +63,7 @@ test("rejects a duplicate test suite registration", () => {
         ["duplicate.test.js", "duplicate.test.js"],
         ["duplicate.test.js"]
       ),
-    /Duplicate registrations:\n  - duplicate\.test\.js \(2 entries\)/u
+    /Duplicate registrations:\n {2}- duplicate\.test\.js \(2 entries\)/u
   );
 });
 
@@ -74,7 +74,7 @@ test("rejects a registration without a compiled test file", () => {
         ["present.test.js", "stale.test.js"],
         ["present.test.js"]
       ),
-    /Registrations without compiled files:\n  - stale\.test\.js/u
+    /Registrations without compiled files:\n {2}- stale\.test\.js/u
   );
 });
 
