@@ -91,6 +91,16 @@ test("catalog validates a payload before declaring an end-turn operation not app
 test("catalog validates a payload before declaring an on-play hook not applicable", () => {
   const scenario = createGameScenario({ rootDir, seed: 23016 });
   const controller = scenario.activePlayer;
+  const sourceCard = givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    isOngoing: true,
+    effects: [],
+  });
+  const sourceDefinition = scenario.state.cardDefinitions.get(
+    sourceCard.definitionId
+  );
+  assert.ok(sourceDefinition);
   const playedCard = givenRuntimeCard(scenario, {
     player: controller,
     zone: "playedThisTurn",
@@ -104,15 +114,15 @@ test("catalog validates a payload before declaring an on-play hook not applicabl
     sourceType: "card",
     runtimeMode: scenario.state.runtimeMode,
     playerId: controller.playerId,
-    cardInstanceId: "fixture-catalog-on-play-no-hook",
-    definitionId: "fixture-catalog-on-play-no-hook",
+    cardInstanceId: sourceCard.instanceId,
+    definitionId: sourceCard.definitionId,
   };
   const entry = getEffectRuntimeCatalogEntry("add_power");
   const context = {
     state: scenario.state,
     controller,
     source,
-    sourceDefinition: playedDefinition,
+    sourceDefinition,
     playedCard,
     playedDefinition,
   };
@@ -144,13 +154,6 @@ test("catalog validates a payload before declaring an on-play hook not applicabl
 test("catalog validates a payload before declaring an after-attack hook not applicable", () => {
   const scenario = createGameScenario({ rootDir, seed: 23017 });
   const controller = scenario.activePlayer;
-  const source: EffectSourceContext = {
-    sourceType: "card",
-    runtimeMode: scenario.state.runtimeMode,
-    playerId: controller.playerId,
-    cardInstanceId: "fixture-catalog-after-attack-no-hook",
-    definitionId: "fixture-catalog-after-attack-no-hook",
-  };
   const sourceCard = givenRuntimeCard(scenario, {
     player: controller,
     zone: "permanents",
@@ -161,6 +164,13 @@ test("catalog validates a payload before declaring an after-attack hook not appl
     sourceCard.definitionId
   );
   assert.ok(sourceDefinition);
+  const source: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: scenario.state.runtimeMode,
+    playerId: controller.playerId,
+    cardInstanceId: sourceCard.instanceId,
+    definitionId: sourceCard.definitionId,
+  };
   const entry = getEffectRuntimeCatalogEntry("add_power");
   const context = {
     state: scenario.state,
