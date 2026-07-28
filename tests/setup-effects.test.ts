@@ -103,6 +103,22 @@ test("setup catalog executor sets starting life total", () => {
   assert.equal(subject.life.max, 30);
 });
 
+test("setup catalog decodes before runtime-mode applicability", () => {
+  const result = tryExecuteSetupEffect(
+    player(),
+    {
+      effectId: "fixture_add_power_equal_to_target_cost",
+      unexpected: true,
+    },
+    source,
+    services()
+  );
+
+  assert.equal(result.status, "error");
+  if (result.status !== "error") return;
+  assert.match(result.error, /unsupported field unexpected/);
+});
+
 test("setup catalog validates starting-life effect exactly once before its executor", () => {
   const originalHandler = getEffectRuntimeHandler("set_starting_life_total");
   let validationCount = 0;

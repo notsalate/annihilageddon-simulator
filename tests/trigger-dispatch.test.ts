@@ -12,6 +12,7 @@ import {
   calculateEndTurnDrawCount,
   executeControlledCardOnPlayCardEffects,
   executeEffect,
+  executeWizardPropertyOnPlayCardEffects,
 } from "../src/engine/effect-runtime.js";
 import { getEffectRuntimeHandler } from "../src/engine/effect-runtime-registry.js";
 import { dispatchControlledCardOperation } from "../src/engine/trigger-dispatch.js";
@@ -638,6 +639,166 @@ test("current runtime Ultimate Tronado adds power after its controller's first d
   assert.equal(play(scenario, attack).ok, true);
   assert.equal(targetPlayer.life.current, 17);
   assert.equal(scenario.state.turn.power, 3);
+});
+
+test("on-play dispatch decodes malformed timing before applicability", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23010 });
+  const state = scenario.state;
+  const controller = scenario.activePlayer;
+  controller.permanents = [];
+  state.turn.power = 0;
+
+  givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    cardId: "fixture-trigger-dispatch-malformed-on-play-timing",
+    isOngoing: false,
+    effects: [
+      {
+        effectId: "ongoing_add_power_when_playing_wand",
+        timing: "endTurn",
+        amount: 1,
+        cardTags: ["wandCard"],
+      } as unknown as RuntimeEffect,
+    ],
+  });
+  const playedCard = givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "playedThisTurn",
+    cardId: "fixture-trigger-dispatch-malformed-on-play-wand",
+    isOngoing: false,
+    effects: [],
+    tags: ["wandCard"],
+  });
+
+  const result = dispatchControlledCardOperation(state, controller, {
+    kind: "onPlayCard",
+    playedCard,
+    playedDefinition: mustGetDefinition(state, playedCard),
+  });
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /timing must be onPlayCard/);
+  assert.equal(state.turn.power, 0);
+});
+
+test("after-attack dispatch decodes malformed timing before applicability", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23011 });
+  const state = scenario.state;
+  const controller = scenario.activePlayer;
+  controller.permanents = [];
+  state.turn.power = 0;
+
+  givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    cardId: "fixture-trigger-dispatch-malformed-after-attack-timing",
+    isOngoing: false,
+    effects: [
+      {
+        effectId: "ongoing_first_attack_damage_add_power",
+        timing: "endTurn",
+        amount: "totalDamageDealtByThatAttack",
+      } as unknown as RuntimeEffect,
+    ],
+  });
+
+  const result = dispatchControlledCardOperation(state, controller, {
+    kind: "afterPlayerAttackDamage",
+    totalDamageDealt: 2,
+    attackSource: {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: controller.playerId,
+      cardInstanceId: "fixture-malformed-after-attack-source",
+      definitionId: "fixture-malformed-after-attack-source",
+    },
+  });
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /timing must be afterFirstAttackDamageEachTurn/);
+  assert.equal(state.turn.power, 0);
+});
+
+test("end-turn dispatch decodes malformed timing before applicability", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23012 });
+  const state = scenario.state;
+  const controller = scenario.activePlayer;
+  controller.permanents = [];
+
+  givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    cardId: "fixture-trigger-dispatch-malformed-end-turn-timing",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "ongoing_hand_refill_bonus",
+        timing: "onPlayCard",
+        amount: 2,
+      } as unknown as RuntimeEffect,
+    ],
+  });
+
+  const result = dispatchControlledCardOperation(state, controller, {
+    kind: "collectEndTurnDrawModifier",
+    currentBaseDrawCount: 5,
+  });
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /timing must be one of endTurn, whileControlled/);
+});
+
+test("wizard-property on-play decodes before source-specific applicability", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23013 });
+  const state = scenario.state;
+  const controller = scenario.activePlayer;
+  const token = controller.wizardProperties[0];
+  assert.ok(token);
+  const definition = state.tokenDefinitions.get(token.definitionId);
+  assert.equal(definition?.kind, "wizardProperty");
+  if (definition?.kind !== "wizardProperty") return;
+  assert.ok(definition.engine);
+
+  const tokenDefinitions = new Map(state.tokenDefinitions);
+  tokenDefinitions.set(token.definitionId, {
+    ...definition,
+    engine: {
+      ...definition.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "gain_chips",
+          timing: "onPlayCard",
+          amount: 1,
+          isOngoing: false,
+        } as unknown as RuntimeEffect,
+      ],
+    },
+  });
+  state.tokenDefinitions = tokenDefinitions;
+  const playedCard = givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "playedThisTurn",
+    cardId: "fixture-wizard-property-malformed-on-play-source",
+    isOngoing: true,
+    effects: [],
+  });
+  const chipsBefore = controller.chips;
+
+  const result = executeWizardPropertyOnPlayCardEffects(
+    state,
+    controller,
+    mustGetDefinition(state, playedCard)
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /isOngoing must be true/);
+  assert.equal(controller.chips, chipsBefore);
 });
 
 function mustGetDefinition(

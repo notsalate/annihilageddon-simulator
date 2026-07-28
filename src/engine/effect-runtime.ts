@@ -37,7 +37,9 @@ import {
   type EffectSourceContext,
   type MayhemAttackPlanTarget,
   executeAttackOutcomeBranch,
+  evaluateRuntimeEffectAtTiming,
   executeRuntimeEffect,
+  executeRuntimeEffectAtTiming,
   type TargetChoice,
   type TargetChoiceResult,
 } from "./effect-runtime-registry.js";
@@ -99,25 +101,67 @@ export function executeWizardPropertyActivationEffects(
   );
 }
 
-export function hasExecutableWizardPropertyActivation(
+export type WizardPropertyActivationAvailability =
+  | { readonly ok: true; readonly executable: boolean }
+  | { readonly ok: false; readonly error: string };
+
+export function getWizardPropertyActivationAvailability(
   state: GameState,
   player: PlayerState,
-  definition: TokenDefinition
-): boolean {
+  definition: TokenDefinition,
+  source?: EffectSourceContext
+): WizardPropertyActivationAvailability {
   if (
     definition.kind !== "wizardProperty" ||
     definition.engine === undefined ||
     !definition.engine.playableInV0
   ) {
-    return false;
+    return { ok: true, executable: false };
   }
 
-  return definition.engine.effects.some((effect) => {
-    return (
-      effect.timing === "activation" &&
-      effectConditionMatches(state, player, effect)
+  const operationSource: EffectSourceContext =
+    source ??
+    {
+      sourceType: "wizardProperty",
+      runtimeMode: state.runtimeMode,
+      playerId: player.playerId,
+      cardInstanceId: definition.tokenId,
+      definitionId: definition.tokenId,
+      tokenDefinitionId: definition.tokenId,
+    };
+  let executable = false;
+  for (const effect of definition.engine.effects) {
+    const result = evaluateRuntimeEffectAtTiming(
+      effect,
+      operationSource,
+      "activation",
+      (decodedEffect) =>
+        effectConditionMatches(state, player, decodedEffect)
+          ? { status: "resolved", result: true }
+          : { status: "notApplicable" }
     );
-  });
+    if (result.status === "error") {
+      return { ok: false, error: result.error };
+    }
+    if (result.status === "resolved") {
+      executable = true;
+    }
+  }
+
+  return { ok: true, executable };
+}
+
+export function hasExecutableWizardPropertyActivation(
+  state: GameState,
+  player: PlayerState,
+  definition: TokenDefinition
+): boolean {
+  const availability = getWizardPropertyActivationAvailability(
+    state,
+    player,
+    definition
+  );
+  return availability.ok && availability.executable;
 }
 
 export function executeWizardPropertyOnPlayCardEffects(
@@ -138,9 +182,7 @@ export function executeWizardPropertyOnPlayCardEffects(
     const result = executeEffects(
       state,
       player,
-      definition.engine.effects.filter((effect) =>
-        cardTriggerMatches(effect, playedDefinition)
-      ),
+      definition.engine.effects,
       "onPlayCard",
       {
         sourceType: "wizardProperty",
@@ -150,7 +192,8 @@ export function executeWizardPropertyOnPlayCardEffects(
         definitionId: token.definitionId,
         tokenInstanceId: token.instanceId,
         tokenDefinitionId: token.definitionId,
-      }
+      },
+      (effect) => cardTriggerMatches(effect, playedDefinition)
     );
     if (!result.ok || result.gameEnd !== undefined) {
       return result;
@@ -220,15 +263,33 @@ export function moveGainedCardToPlayerDestination(
       continue;
     }
 
+    const source: EffectSourceContext = {
+      sourceType: "wizardProperty",
+      runtimeMode: state.runtimeMode,
+      playerId: player.playerId,
+      cardInstanceId: token.instanceId,
+      definitionId: token.definitionId,
+      tokenInstanceId: token.instanceId,
+      tokenDefinitionId: token.definitionId,
+    };
     for (const effect of tokenDefinition.engine.effects) {
-      if (
-        effect.timing !== "onGainCard" ||
-        !cardTriggerMatches(effect, definition)
-      ) {
+      const applicability = evaluateRuntimeEffectAtTiming(
+        effect,
+        source,
+        "onGainCard",
+        (decodedEffect) =>
+          cardTriggerMatches(decodedEffect, definition)
+            ? { status: "resolved", result: decodedEffect.effectId }
+            : { status: "notApplicable" }
+      );
+      if (applicability.status === "error") {
+        return { ok: false, error: applicability.error };
+      }
+      if (applicability.status === "notApplicable") {
         continue;
       }
 
-      if (effect["effectId"] === "topdeck_gained_card") {
+      if (applicability.result === "topdeck_gained_card") {
         destination = "deckTop";
         recordGameEvent(state, {
           type: "effectChoiceSelected",
@@ -246,17 +307,23 @@ export function moveGainedCardToPlayerDestination(
         continue;
       }
 
-      const result = executeEffect(state, player, effect, {
-        sourceType: "wizardProperty",
-        runtimeMode: state.runtimeMode,
-        playerId: player.playerId,
-        cardInstanceId: token.instanceId,
-        definitionId: token.definitionId,
-        tokenInstanceId: token.instanceId,
-        tokenDefinitionId: token.definitionId,
-      });
-      if (!result.ok) {
-        return result;
+      const execution = executeRuntimeEffectAtTiming(
+        state,
+        player,
+        effect,
+        "onGainCard",
+        source,
+        effectRuntimeServices,
+        (decodedEffect) => cardTriggerMatches(decodedEffect, definition)
+      );
+      if (execution.status === "error") {
+        return { ok: false, error: execution.error };
+      }
+      if (execution.status === "notApplicable") {
+        continue;
+      }
+      if (!execution.result.ok) {
+        return execution.result;
       }
     }
   }
@@ -294,22 +361,38 @@ export function calculateEndTurnDrawCount(
       continue;
     }
 
+    const source: EffectSourceContext = {
+      sourceType: "wizardProperty",
+      runtimeMode: state.runtimeMode,
+      playerId: player.playerId,
+      cardInstanceId: token.instanceId,
+      definitionId: token.definitionId,
+      tokenInstanceId: token.instanceId,
+      tokenDefinitionId: token.definitionId,
+    };
     for (const effect of definition.engine.effects) {
-      if (effect.effectId !== "temporary_hand_limit_by_gained_card_type") {
-        continue;
+      const result = evaluateRuntimeEffectAtTiming(
+        effect,
+        source,
+        "endTurn",
+        (decodedEffect) =>
+          decodedEffect.effectId ===
+          "temporary_hand_limit_by_gained_card_type"
+            ? {
+                status: "resolved",
+                result:
+                  drawCount +
+                  decodedEffect.amount *
+                    countGainedCardsMatchingEffect(state, decodedEffect),
+              }
+            : { status: "notApplicable" }
+      );
+      if (result.status === "error") {
+        throw new Error(result.error);
       }
-
-      const amount = effect["amount"];
-      if (
-        effect["timing"] !== "endTurn" ||
-        typeof amount !== "number" ||
-        !Number.isSafeInteger(amount) ||
-        amount <= 0
-      ) {
-        continue;
+      if (result.status === "resolved") {
+        drawCount = result.result;
       }
-
-      drawCount += amount * countGainedCardsMatchingEffect(state, effect);
     }
   }
 
@@ -344,18 +427,29 @@ function executeEffects(
   player: PlayerState,
   effects: readonly RuntimeEffect[],
   timing: RuntimeEffect["timing"],
-  source: EffectSourceContext
+  source: EffectSourceContext,
+  isApplicable?: (effect: RuntimeEffectPayload) => boolean
 ): EffectExecutionResult {
   for (const effect of effects) {
-    if (effect.timing !== timing) {
+    const operationResult = executeRuntimeEffectAtTiming(
+      state,
+      player,
+      effect,
+      timing,
+      source,
+      effectRuntimeServices,
+      (decodedEffect) =>
+        effectConditionMatches(state, player, decodedEffect) &&
+        (isApplicable?.(decodedEffect) ?? true)
+    );
+    if (operationResult.status === "error") {
+      return { ok: false, error: operationResult.error };
+    }
+    if (operationResult.status === "notApplicable") {
       continue;
     }
 
-    if (!effectConditionMatches(state, player, effect)) {
-      continue;
-    }
-
-    const result = executeEffect(state, player, effect, source);
+    const result = operationResult.result;
     if (!result.ok || result.gameEnd !== undefined) {
       return result;
     }

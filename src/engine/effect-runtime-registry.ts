@@ -355,10 +355,20 @@ export interface EffectRuntimeServices {
   asString(value: unknown): string;
 }
 
+export interface EffectRuntimeTimedExecutionOperationContext {
+  readonly state: GameState;
+  readonly player: PlayerState;
+  readonly source: EffectSourceContext;
+  readonly services: EffectRuntimeServices;
+  readonly timing: EffectTiming;
+  readonly isApplicable?: (effect: RuntimeEffectPayload) => boolean;
+}
+
 export interface EffectRuntimeOnPlayCardOperationContext {
   readonly state: GameState;
   readonly controller: PlayerState;
   readonly source: EffectSourceContext;
+  readonly sourceDefinition: CardDefinition;
   readonly playedCard: CardInstance;
   readonly playedDefinition: CardDefinition;
 }
@@ -367,6 +377,7 @@ export interface EffectRuntimeAfterPlayerAttackDamageOperationContext {
   readonly state: GameState;
   readonly controller: PlayerState;
   readonly source: EffectSourceContext;
+  readonly sourceDefinition: CardDefinition;
   readonly totalDamageDealt: number;
   readonly attackSource: EffectSourceContext;
 }
@@ -385,6 +396,17 @@ export type EffectRuntimeHandlerOperationResult<Result> =
 export type EffectRuntimeOperationResult<Result> =
   | EffectRuntimeHandlerOperationResult<Result>
   | { readonly status: "error"; readonly error: string };
+
+export interface EffectRuntimeTimedEvaluationOperationContext<
+  Effect extends RuntimeEffectPayload,
+  Result,
+> {
+  readonly source: EffectSourceContext;
+  readonly timing: EffectTiming;
+  readonly evaluate: (
+    effect: Effect
+  ) => EffectRuntimeHandlerOperationResult<Result>;
+}
 
 export interface EffectRuntimeHandler<
   Effect extends RuntimeEffectPayload = RuntimeEffectPayload,
@@ -474,6 +496,19 @@ export interface EffectRuntimeEntry<
     source: EffectSourceContext,
     services: EffectRuntimeServices
   ): EffectExecutionResult;
+  evaluateAtTiming<Result>(
+    subjectId: string,
+    rawEffect: unknown,
+    context: EffectRuntimeTimedEvaluationOperationContext<
+      RuntimeEffectForId<EffectId>,
+      Result
+    >
+  ): EffectRuntimeOperationResult<Result>;
+  executeAtTiming(
+    subjectId: string,
+    rawEffect: unknown,
+    context: EffectRuntimeTimedExecutionOperationContext
+  ): EffectRuntimeOperationResult<EffectExecutionResult>;
   executeOnPlayCard(
     subjectId: string,
     rawEffect: unknown,
@@ -556,6 +591,13 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
   ):
     | { readonly ok: true; readonly effect: RuntimeEffectForId<Id> }
     | { readonly ok: false; readonly error: string } => {
+    const decoded = decodeForExecution(subjectId, rawEffect);
+    if (!decoded.ok) {
+      return {
+        ok: false,
+        error: decoded.errors[0] ?? "Invalid runtime effect",
+      };
+    }
     if (!config.supportedSourceKinds.includes(source.sourceType)) {
       return {
         ok: false,
@@ -568,13 +610,29 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
         error: `Effect ${config.effectId} is unavailable in ${source.runtimeMode} mode`,
       };
     }
-    const decoded = decodeForExecution(subjectId, rawEffect);
-    return decoded.ok
-      ? { ok: true, effect: decoded.value }
-      : {
-          ok: false,
-          error: decoded.errors[0] ?? "Invalid runtime effect",
-        };
+    return { ok: true, effect: decoded.value };
+  };
+
+  const evaluateAtTiming = <Result>(
+    subjectId: string,
+    rawEffect: unknown,
+    context: EffectRuntimeTimedEvaluationOperationContext<
+      RuntimeEffectForId<Id>,
+      Result
+    >
+  ): EffectRuntimeOperationResult<Result> => {
+    const decoded = decodeExecutableOperation(
+      subjectId,
+      rawEffect,
+      context.source
+    );
+    if (!decoded.ok) {
+      return { status: "error", error: decoded.error };
+    }
+    if (decoded.effect.timing !== context.timing) {
+      return { status: "notApplicable" };
+    }
+    return context.evaluate(decoded.effect);
   };
 
   const execute = (
@@ -602,19 +660,45 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     decode: config.decoder.decode.bind(config.decoder),
     validate: decodeValidated,
     execute,
+    evaluateAtTiming,
+    executeAtTiming(subjectId, rawEffect, context) {
+      return evaluateAtTiming(subjectId, rawEffect, {
+        source: context.source,
+        timing: context.timing,
+        evaluate(decodedEffect) {
+          if (
+            context.isApplicable !== undefined &&
+            !context.isApplicable(decodedEffect)
+          ) {
+            return { status: "notApplicable" };
+          }
+          return {
+            status: "resolved",
+            result: activeHandler.execute(
+              context.state,
+              context.player,
+              decodedEffect,
+              context.source,
+              context.services
+            ),
+          };
+        },
+      });
+    },
     executeOnPlayCard(subjectId, rawEffect, context) {
-      const executeOnPlayCard = activeHandler.executeOnPlayCard;
-      if (executeOnPlayCard === undefined) {
-        return { status: "notApplicable" };
-      }
-      const decoded = decodeExecutableOperation(
-        subjectId,
-        rawEffect,
-        context.source
-      );
-      return decoded.ok
-        ? executeOnPlayCard(decoded.effect, context)
-        : { status: "error", error: decoded.error };
+      return evaluateAtTiming(subjectId, rawEffect, {
+        source: context.source,
+        timing: "onPlayCard",
+        evaluate(decodedEffect) {
+          if (!context.sourceDefinition.engine.isOngoing) {
+            return { status: "notApplicable" };
+          }
+          const executeOnPlayCard = activeHandler.executeOnPlayCard;
+          return executeOnPlayCard === undefined
+            ? { status: "notApplicable" }
+            : executeOnPlayCard(decodedEffect, context);
+        },
+      });
     },
     executeSetup(subjectId, rawEffect, player, source, services) {
       const decoded = decodeValidated(subjectId, rawEffect);
@@ -622,6 +706,18 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
         return {
           status: "error",
           error: decoded.errors[0] ?? "Invalid setup effect",
+        };
+      }
+      if (!config.supportedSourceKinds.includes(source.sourceType)) {
+        return {
+          status: "error",
+          error: `Setup effect ${config.effectId} uses unsupported source kind`,
+        };
+      }
+      if (!config.supportedModes.includes(source.runtimeMode)) {
+        return {
+          status: "error",
+          error: `Setup effect ${config.effectId} is unavailable in ${source.runtimeMode} mode`,
         };
       }
       const setup = activeHandler.executeSetup;
@@ -642,34 +738,33 @@ export function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
         : { status: "error", error: result.error };
     },
     applyAfterPlayerAttackDamage(subjectId, rawEffect, context) {
-      const applyAfterPlayerAttackDamage =
-        activeHandler.applyAfterPlayerAttackDamage;
-      if (applyAfterPlayerAttackDamage === undefined) {
-        return { status: "notApplicable" };
-      }
-      const decoded = decodeExecutableOperation(
-        subjectId,
-        rawEffect,
-        context.source
-      );
-      return decoded.ok
-        ? applyAfterPlayerAttackDamage(decoded.effect, context)
-        : { status: "error", error: decoded.error };
+      return evaluateAtTiming(subjectId, rawEffect, {
+        source: context.source,
+        timing: "afterFirstAttackDamageEachTurn",
+        evaluate(decodedEffect) {
+          if (!context.sourceDefinition.engine.isOngoing) {
+            return { status: "notApplicable" };
+          }
+          const applyAfterPlayerAttackDamage =
+            activeHandler.applyAfterPlayerAttackDamage;
+          return applyAfterPlayerAttackDamage === undefined
+            ? { status: "notApplicable" }
+            : applyAfterPlayerAttackDamage(decodedEffect, context);
+        },
+      });
     },
     evaluateEndTurnDrawModifier(subjectId, rawEffect, context) {
-      const decoded = decodeExecutableOperation(
-        subjectId,
-        rawEffect,
-        context.source
-      );
-      if (!decoded.ok) {
-        return { status: "error", error: decoded.error };
-      }
-      const evaluateEndTurnDrawModifier =
-        activeHandler.evaluateEndTurnDrawModifier;
-      return evaluateEndTurnDrawModifier === undefined
-        ? { status: "notApplicable" }
-        : evaluateEndTurnDrawModifier(decoded.effect, context);
+      return evaluateAtTiming(subjectId, rawEffect, {
+        source: context.source,
+        timing: "endTurn",
+        evaluate(decodedEffect) {
+          const evaluateEndTurnDrawModifier =
+            activeHandler.evaluateEndTurnDrawModifier;
+          return evaluateEndTurnDrawModifier === undefined
+            ? { status: "notApplicable" }
+            : evaluateEndTurnDrawModifier(decodedEffect, context);
+        },
+      });
     },
     [replaceEffectRuntimeHandlerSymbol](replacementHandler) {
       const originalHandler = activeHandler;
@@ -5484,6 +5579,64 @@ export function executeRuntimeEffect(
   );
 }
 
+export function evaluateRuntimeEffectAtTiming<Result>(
+  effect: unknown,
+  source: EffectSourceContext,
+  timing: EffectTiming,
+  evaluate: (
+    effect: RuntimeEffectPayload
+  ) => EffectRuntimeHandlerOperationResult<Result>
+): EffectRuntimeOperationResult<Result> {
+  if (!isPlainRecord(effect) || !isRuntimeEffectId(effect["effectId"])) {
+    return {
+      status: "error",
+      error: `Unsupported effect id ${String(
+        isPlainRecord(effect) ? effect["effectId"] : undefined
+      )}`,
+    };
+  }
+
+  const effectId = effect["effectId"];
+  return getEffectRuntimeCatalogEntry(effectId).evaluateAtTiming(
+    `Effect ${effectId}`,
+    effect,
+    { source, timing, evaluate }
+  );
+}
+
+export function executeRuntimeEffectAtTiming(
+  state: GameState,
+  player: PlayerState,
+  effect: unknown,
+  timing: EffectTiming,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices,
+  isApplicable?: (effect: RuntimeEffectPayload) => boolean
+): EffectRuntimeOperationResult<EffectExecutionResult> {
+  if (!isPlainRecord(effect) || !isRuntimeEffectId(effect["effectId"])) {
+    return {
+      status: "error",
+      error: `Unsupported effect id ${String(
+        isPlainRecord(effect) ? effect["effectId"] : undefined
+      )}`,
+    };
+  }
+
+  const effectId = effect["effectId"];
+  return getEffectRuntimeCatalogEntry(effectId).executeAtTiming(
+    `Effect ${effectId}`,
+    effect,
+    {
+      state,
+      player,
+      source,
+      services,
+      timing,
+      ...(isApplicable === undefined ? {} : { isApplicable }),
+    }
+  );
+}
+
 export function getEffectRuntimeCatalogEntry<Id extends RuntimeEffectId>(
   effectId: Id
 ): EffectRuntimeEntry<Id> {
@@ -5520,6 +5673,10 @@ export function resolveEffectRuntimeCatalogEntry<Id extends RuntimeEffectId>(
   sourceKind: EffectRuntimeSourceKind
 ): EffectRuntimeCatalogResolution<Id> {
   const entry = getEffectRuntimeCatalogEntry(rawEffectId);
+  const decoded = entry.validate(subjectId, effect);
+  if (!decoded.ok) {
+    return { ok: false, errors: decoded.errors };
+  }
   if (!entry.supportedSourceKinds.includes(sourceKind)) {
     return {
       ok: false,
@@ -5537,10 +5694,7 @@ export function resolveEffectRuntimeCatalogEntry<Id extends RuntimeEffectId>(
             ],
     };
   }
-  const decoded = entry.validate(subjectId, effect);
-  return decoded.ok
-    ? { ok: true, entry, effect: decoded.value }
-    : { ok: false, errors: decoded.errors };
+  return { ok: true, entry, effect: decoded.value };
 }
 
 export function replaceEffectRuntimeHandlerForTesting<
@@ -5569,18 +5723,6 @@ export function tryExecuteSetupEffect(
   }
   const effectId = effect["effectId"];
   const entry = getEffectRuntimeCatalogEntry(effectId);
-  if (!entry.supportedSourceKinds.includes("wizardProperty")) {
-    return {
-      status: "error",
-      error: `Setup effect ${effectId} uses unsupported source kind`,
-    };
-  }
-  if (!entry.supportedModes.includes(source.runtimeMode)) {
-    return {
-      status: "error",
-      error: `Setup effect ${effectId} is unavailable in ${source.runtimeMode} mode`,
-    };
-  }
   return entry.executeSetup(
     `Setup effect ${effectId}`,
     effect,

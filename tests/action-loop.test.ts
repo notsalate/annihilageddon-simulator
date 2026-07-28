@@ -4100,6 +4100,47 @@ test("active player can activate a wizard property only when its control-count c
   );
 });
 
+test("wizard property activation decodes before timing applicability", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  const definition = createChipActivationWizardProperty(
+    "fixture-malformed-activation-property",
+    ["treasure"],
+    1
+  );
+  assert.equal(definition.kind, "wizardProperty");
+  if (definition.kind !== "wizardProperty") return;
+  assert.ok(definition.engine);
+  definition.engine.effects = [
+    {
+      effectId: "gain_chips",
+      timing: "onPlay",
+      amount: "invalid",
+    } as unknown as RuntimeEffect,
+  ];
+  const property = replaceFirstWizardProperty(state, activePlayer, definition);
+  const chipsBefore = activePlayer.chips;
+  const eventCountBefore = state.eventLog.length;
+
+  const result = applyAction(state, {
+    type: "activateWizardProperty",
+    tokenInstanceId: property.instanceId,
+  });
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /amount must be a positive integer/);
+  assert.equal(activePlayer.chips, chipsBefore);
+  assert.equal(state.eventLog.length, eventCountBefore);
+});
+
 test("wizard property on-play trigger grants chips only for matching ongoing cards", () => {
   const state = initializeGame({
     rootDir,
@@ -4192,6 +4233,50 @@ test("wizard property optional topdeck for gained cards runs before normal disca
   assert.equal(activePlayer.discard.includes(spell), true);
 });
 
+test("wizard property on-gain decodes before timing applicability", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  const malformedDefinition = createTopdeckOnGainWizardProperty(
+    "fixture-malformed-on-gain-property",
+    ["creature"]
+  );
+  assert.equal(malformedDefinition.kind, "wizardProperty");
+  if (malformedDefinition.kind !== "wizardProperty") return;
+  assert.ok(malformedDefinition.engine);
+  malformedDefinition.engine.effects = [
+    {
+      effectId: "topdeck_gained_card",
+      timing: "onPlayCard",
+      optional: true,
+      cardTypes: ["creature"],
+    } as unknown as RuntimeEffect,
+  ];
+  replaceFirstWizardProperty(state, activePlayer, malformedDefinition);
+  const creature = addFixtureMarketCard(
+    state,
+    "fixture-malformed-on-gain-creature",
+    ["creature"],
+    0
+  );
+
+  const result = applyAction(state, {
+    type: "buyMarketCard",
+    cardInstanceId: creature.instanceId,
+    source: "mainMarket",
+  });
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /timing must be onGainCard/);
+});
+
 test("temporary hand limit modifier counts cards gained this turn and resets after drawing", () => {
   const state = initializeGame({
     rootDir,
@@ -4272,7 +4357,7 @@ test("temporary hand limit modifier counts cards gained this turn and resets aft
   assert.deepEqual(state.turn.gainedCardDefinitionIds, []);
 });
 
-test("temporary hand limit modifier ignores invalid runtime amount", () => {
+test("temporary hand limit modifier returns a decoder error before end-turn mutation", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -4310,18 +4395,25 @@ test("temporary hand limit modifier ignores invalid runtime amount", () => {
     ["spell"],
     0
   );
+  state.turn.gainedCardDefinitionIds.push(spell.definitionId);
+  const handBefore = [...activePlayer.hand];
+  const deckBefore = [...activePlayer.deck];
+  const discardBefore = [...activePlayer.discard];
+  const turnNumberBefore = state.turn.number;
+  const activePlayerIdBefore = state.activePlayerId;
+  const eventCountBefore = state.eventLog.length;
 
-  assert.equal(
-    applyAction(state, {
-      type: "buyMarketCard",
-      cardInstanceId: spell.instanceId,
-      source: "mainMarket",
-    }).ok,
-    true
-  );
-  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+  const result = applyAction(state, { type: "endTurn" });
 
-  assert.equal(activePlayer.hand.length, 5);
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /amount must be a positive integer/);
+  assert.deepEqual(activePlayer.hand, handBefore);
+  assert.deepEqual(activePlayer.deck, deckBefore);
+  assert.deepEqual(activePlayer.discard, discardBefore);
+  assert.equal(state.turn.number, turnNumberBefore);
+  assert.equal(state.activePlayerId, activePlayerIdBefore);
+  assert.equal(state.eventLog.length, eventCountBefore);
 });
 
 test("playing a v0 draw card draws from the active player's deck", () => {
@@ -9295,7 +9387,9 @@ test("runtime execution rejects fixture-only effects in combat mode", () => {
       {
         effectId: "fixture_add_power_equal_to_target_cost",
         timing: "onPlay",
-        targetSelector: "mainMarketCard",
+        target: {
+          selector: "mainMarketCard",
+        },
       },
     ]
   );

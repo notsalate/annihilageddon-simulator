@@ -5,7 +5,7 @@ import {
   type EffectExecutionResult,
   type EffectSourceContext,
 } from "./effect-runtime-registry.js";
-import type { EffectTiming, RuntimeEffect } from "./runtime-effect.js";
+import type { RuntimeEffect } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export interface ControlledCardDispatchOperationMap {
@@ -44,13 +44,8 @@ type ControlledCardDispatchResult =
 interface ControlledCardEffectCandidate {
   readonly effect: RuntimeEffect;
   readonly source: EffectSourceContext;
+  readonly sourceDefinition: CardDefinition;
 }
-
-const controlledCardOperationTimings = {
-  onPlayCard: "onPlayCard",
-  afterPlayerAttackDamage: "afterFirstAttackDamageEachTurn",
-  collectEndTurnDrawModifier: "endTurn",
-} as const satisfies Record<ControlledCardDispatchOperation["kind"], EffectTiming>;
 
 export function dispatchControlledCardOperation(
   state: GameState,
@@ -80,7 +75,7 @@ export function dispatchControlledCardOperation(
   controller: PlayerState,
   operation: ControlledCardDispatchOperation
 ): ControlledCardDispatchResult {
-  const candidates = discoverControlledCardEffects(state, controller, operation);
+  const candidates = discoverControlledCardEffects(state, controller);
   if (operation.kind === "collectEndTurnDrawModifier") {
     return collectEndTurnDrawModifier(
       state,
@@ -99,24 +94,16 @@ export function dispatchControlledCardOperation(
 
 function discoverControlledCardEffects(
   state: GameState,
-  controller: PlayerState,
-  operation: ControlledCardDispatchOperation
+  controller: PlayerState
 ): ControlledCardEffectCandidate[] {
   const controlledObjects = buildControlledObjectView(
     state,
     controller.playerId
   );
-  const timing = controlledCardOperationTimings[operation.kind];
-  const requiresOngoingCard =
-    operation.kind === "onPlayCard" ||
-    operation.kind === "afterPlayerAttackDamage";
   const candidates: ControlledCardEffectCandidate[] = [];
 
   for (const { card, definition } of controlledObjects.cards) {
-    if (
-      !definition.engine.playableInV0 ||
-      (requiresOngoingCard && !definition.engine.isOngoing)
-    ) {
+    if (!definition.engine.playableInV0) {
       continue;
     }
 
@@ -128,9 +115,7 @@ function discoverControlledCardEffects(
       definitionId: card.definitionId,
     };
     for (const effect of definition.engine.effects) {
-      if (effect.timing === timing) {
-        candidates.push({ effect, source });
-      }
+      candidates.push({ effect, source, sourceDefinition: definition });
     }
   }
 
@@ -143,7 +128,7 @@ function executeControlledCardOperation(
   operation: ControlledCardExecutionOperation,
   candidates: readonly ControlledCardEffectCandidate[]
 ): EffectExecutionResult {
-  for (const { effect, source } of candidates) {
+  for (const { effect, source, sourceDefinition } of candidates) {
     const entry = getEffectRuntimeCatalogEntry(effect.effectId);
     const result =
       operation.kind === "onPlayCard"
@@ -151,6 +136,7 @@ function executeControlledCardOperation(
             state,
             controller,
             source,
+            sourceDefinition,
             playedCard: operation.playedCard,
             playedDefinition: operation.playedDefinition,
           })
@@ -161,6 +147,7 @@ function executeControlledCardOperation(
               state,
               controller,
               source,
+              sourceDefinition,
               totalDamageDealt: operation.totalDamageDealt,
               attackSource: operation.attackSource,
             }

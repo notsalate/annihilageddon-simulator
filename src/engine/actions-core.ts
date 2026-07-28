@@ -5,6 +5,7 @@ import {
   executeWizardPropertyOnPlayCardEffects,
   executeWizardPropertyActivationEffects,
   calculateEndTurnDrawCount,
+  getWizardPropertyActivationAvailability,
   hasExecutableWizardPropertyActivation,
   moveGainedCardToPlayerDestination,
 } from "./effect-runtime.js";
@@ -287,7 +288,7 @@ function activateWizardProperty(
     };
   }
 
-  if (!canActivateWizardProperty(state, activePlayer, token)) {
+  if (state.turn.activatedCardIds.includes(token.instanceId)) {
     return {
       ok: false,
       error: "Wizard property cannot be activated",
@@ -302,19 +303,36 @@ function activateWizardProperty(
     };
   }
 
+  const source = {
+    sourceType: "wizardProperty" as const,
+    runtimeMode: state.runtimeMode,
+    playerId: activePlayer.playerId,
+    cardInstanceId: token.instanceId,
+    definitionId: token.definitionId,
+    tokenInstanceId: token.instanceId,
+    tokenDefinitionId: token.definitionId,
+  };
+  const availability = getWizardPropertyActivationAvailability(
+    state,
+    activePlayer,
+    definition,
+    source
+  );
+  if (!availability.ok) {
+    return availability;
+  }
+  if (!availability.executable) {
+    return {
+      ok: false,
+      error: "Wizard property cannot be activated",
+    };
+  }
+
   const effectResult = executeWizardPropertyActivationEffects(
     state,
     activePlayer,
     definition,
-    {
-      sourceType: "wizardProperty",
-      runtimeMode: state.runtimeMode,
-      playerId: activePlayer.playerId,
-      cardInstanceId: token.instanceId,
-      definitionId: token.definitionId,
-      tokenInstanceId: token.instanceId,
-      tokenDefinitionId: token.definitionId,
-    }
+    source
   );
   if (!effectResult.ok) {
     return effectResult;

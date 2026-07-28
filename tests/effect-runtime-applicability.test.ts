@@ -189,6 +189,48 @@ test("fixture-only effect is rejected in combat before its handler", () => {
   assert.equal(state.turn.power, 0);
 });
 
+test("general execution decodes before runtime-mode applicability", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11611 });
+  const player = state.players[0];
+  assert.ok(player);
+
+  const result = executeEffect(
+    state,
+    player,
+    {
+      effectId: "fixture_add_power_equal_to_target_cost",
+      unexpected: true,
+    },
+    fixtureSource(player.playerId, "combat")
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /unsupported field unexpected/);
+});
+
+test("general execution decodes before source-kind applicability", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11612 });
+  const player = state.players[0];
+  assert.ok(player);
+
+  const result = executeEffect(
+    state,
+    player,
+    {
+      effectId: "temporary_hand_limit_by_gained_card_type",
+      timing: "activation",
+      amount: 1,
+      cardTypes: ["spell"],
+    },
+    fixtureSource(player.playerId, "combat", "card")
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /timing must be endTurn/);
+});
+
 test("fixture-only effect reaches its handler in fixture mode", () => {
   const state = initializeGame({ rootDir: process.cwd(), seed: 11603 });
   const player = state.players[0];
