@@ -1,4 +1,4 @@
-name: export-pr137-current
+name: verify-pr137-final-head
 
 on:
   pull_request:
@@ -10,30 +10,38 @@ permissions:
   contents: read
 
 jobs:
-  export:
+  verify:
     if: github.event.pull_request.head.ref == 'agent/tmp-export-pr137-20260720'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout PR 137 head
+      - name: Checkout exact PR 137 head
         uses: actions/checkout@v4
         with:
           ref: agent/architecture-deepening-findings
-          fetch-depth: 1
-      - name: Create compact source archive
+          fetch-depth: 0
+      - name: Verify expected final head
         shell: bash
         run: |
           set -euo pipefail
-          tar \
-            --exclude=.git \
-            --exclude=assets \
-            --exclude=dist \
-            --exclude=node_modules \
-            --exclude='*.pdf' \
-            -czf "${RUNNER_TEMP}/annihilageddon-pr137-current.tar.gz" .
-      - name: Upload source archive
-        uses: actions/upload-artifact@v4
+          test "$(git rev-parse HEAD)" = "be0cefa9bc53b17ee91466784196ba4088098e37"
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
         with:
-          name: annihilageddon-pr137-current
-          path: ${{ runner.temp }}/annihilageddon-pr137-current.tar.gz
-          if-no-files-found: error
-          retention-days: 1
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Audit dependencies
+        run: npm audit
+      - name: Run complete project gate
+        run: npm run check
+      - name: Report runtime clusters
+        run: npm run report:card-runtime-clusters
+      - name: Verify diffs and clean tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin master
+          git diff --check origin/master...HEAD
+          git diff --check
+          test -z "$(git status --porcelain)"
