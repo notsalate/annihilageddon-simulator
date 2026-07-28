@@ -70,6 +70,7 @@ Repository commands that are confirmed to exist:
 npm run
 npm run check
 npm run check:engine-unknown-arrays
+npm run clean:dist
 npm run lint
 npm run typecheck
 npm run typecheck:strictest
@@ -81,6 +82,8 @@ npm run simulate
 npm run simulate:single
 npm run simulate:mass
 ```
+
+`npm test` recursively removes the entire `dist/` directory before compilation, validates the complete test-suite registry, and then runs the registered suites sequentially.
 
 Pre-commit currently runs:
 

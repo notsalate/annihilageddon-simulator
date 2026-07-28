@@ -1,5 +1,9 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import {
+  assertTestSuiteRegistryComplete,
+  collectCompiledTestSuites,
+} from "./test-suite-registry.js";
 
 const testSuites = [
   "common.test.js",
@@ -28,6 +32,7 @@ const testSuites = [
   "draft-validation.test.js",
   "draft-generator.test.js",
   "import-completeness.test.js",
+  "import-index-integrity.test.js",
   "runtime-coverage-inventory.test.js",
   "runtime-image-metadata.test.js",
   "card-runtime-clusters.test.js",
@@ -49,12 +54,19 @@ const testSuites = [
   "defense-choice.test.js",
   "defense-fixtures.test.js",
   "helpers/game-scenario.test.js",
+  "test-suite-registry.test.js",
 ];
+
+const compiledTestsRoot = path.join(process.cwd(), "dist", "tests");
+assertTestSuiteRegistryComplete(
+  testSuites,
+  collectCompiledTestSuites(compiledTestsRoot)
+);
 
 for (const suite of testSuites) {
   const result = spawnSync(
     process.execPath,
-    ["--test", path.join(process.cwd(), "dist", "tests", suite)],
+    ["--test", path.join(compiledTestsRoot, suite)],
     { stdio: "inherit" }
   );
   if (result.error !== undefined) {
