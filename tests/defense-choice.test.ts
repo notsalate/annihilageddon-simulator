@@ -120,7 +120,7 @@ test("a player can select an exact defense instead of the first card", () => {
   );
 });
 
-test("a forged defense choice cannot select an unapproved card identity", () => {
+test("a defense choice ignores a cloned card returned by strategy", () => {
   const { state, attacker, defender } = createAttackScenario();
   const firstDefense = addFixtureDefenseCardToHand(
     state,
@@ -143,10 +143,8 @@ test("a forged defense choice cannot select an unapproved card identity", () => 
       if (legitimate?.choiceKind !== "defense") {
         return undefined;
       }
-      return {
-        ...legitimate,
-        card: { ...secondDefense },
-      };
+      legitimate.card = { ...secondDefense };
+      return legitimate;
     }
     return undefined;
   };
@@ -164,13 +162,156 @@ test("a forged defense choice cannot select an unapproved card identity", () => 
   );
 
   assert.deepEqual(result, { ok: true });
-  assert.equal(defender.life.current, lifeBefore - 2);
+  assert.equal(defender.life.current, lifeBefore);
   assert.equal(defender.hand.includes(firstDefense), true);
-  assert.equal(defender.hand.includes(secondDefense), true);
-  assert.equal(defender.discard.includes(firstDefense), false);
+  assert.equal(defender.hand.includes(secondDefense), false);
+  assert.equal(defender.discard.includes(secondDefense), true);
   assert.equal(
-    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
-    false
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "avoid_attack" &&
+        event.choiceId === secondDefense.instanceId
+    ),
+    true
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "defenseChoiceSelected" &&
+        event.cardInstanceId === secondDefense.instanceId
+    ),
+    true
+  );
+});
+
+test("a defense choice keeps its original option when strategy mutates choiceId", () => {
+  const { state, attacker, defender } = createAttackScenario();
+  const firstDefense = addFixtureDefenseCardToHand(
+    state,
+    defender,
+    "discardSelf"
+  );
+  const secondDefense = addFixtureDefenseCardToHand(
+    state,
+    defender,
+    "discardSelf"
+  );
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "attack_damage") {
+      return choices.find((choice) => choice.choiceId === defender.playerId);
+    }
+    if (effectId === "avoid_attack") {
+      const selected = choices.find(
+        (choice) => choice.choiceId === secondDefense.instanceId
+      );
+      if (selected?.choiceKind !== "defense") {
+        return undefined;
+      }
+      selected.choiceId = firstDefense.instanceId;
+      return selected;
+    }
+    return undefined;
+  };
+  const lifeBefore = defender.life.current;
+
+  const result = executeEffect(
+    state,
+    attacker,
+    {
+      effectId: "attack_damage",
+      amount: 2,
+      targetSelector: "chosenFoe",
+    },
+    attackSource(attacker)
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(defender.life.current, lifeBefore);
+  assert.equal(defender.hand.includes(firstDefense), true);
+  assert.equal(defender.hand.includes(secondDefense), false);
+  assert.equal(defender.discard.includes(secondDefense), true);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "avoid_attack" &&
+        event.choiceId === firstDefense.instanceId
+    ),
+    true
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "defenseChoiceSelected" &&
+        event.cardInstanceId === secondDefense.instanceId
+    ),
+    true
+  );
+});
+
+test("a defense choice ignores a strategy-mutated option card", () => {
+  const { state, attacker, defender } = createAttackScenario();
+  const firstDefense = addFixtureDefenseCardToHand(
+    state,
+    defender,
+    "discardSelf"
+  );
+  const secondDefense = addFixtureDefenseCardToHand(
+    state,
+    defender,
+    "discardSelf"
+  );
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "attack_damage") {
+      return choices.find((choice) => choice.choiceId === defender.playerId);
+    }
+    if (effectId === "avoid_attack") {
+      const selected = choices.find(
+        (choice) => choice.choiceId === secondDefense.instanceId
+      );
+      if (selected?.choiceKind !== "defense") {
+        return undefined;
+      }
+      selected.card = firstDefense;
+      return selected;
+    }
+    return undefined;
+  };
+  const lifeBefore = defender.life.current;
+
+  const result = executeEffect(
+    state,
+    attacker,
+    {
+      effectId: "attack_damage",
+      amount: 2,
+      targetSelector: "chosenFoe",
+    },
+    attackSource(attacker)
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(defender.life.current, lifeBefore);
+  assert.equal(defender.hand.includes(firstDefense), true);
+  assert.equal(defender.hand.includes(secondDefense), false);
+  assert.equal(defender.discard.includes(secondDefense), true);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "avoid_attack" &&
+        event.choiceId === secondDefense.instanceId
+    ),
+    true
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "defenseChoiceSelected" &&
+        event.cardInstanceId === secondDefense.instanceId
+    ),
+    true
   );
 });
 

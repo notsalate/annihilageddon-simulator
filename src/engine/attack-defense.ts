@@ -183,7 +183,9 @@ function restoreDefenseMutationSnapshot(
   );
 
   if (descriptorsByName.size !== cardZoneDescriptors.length) {
-    throw new Error("Defense rollback found duplicate physical card descriptors");
+    throw new Error(
+      "Defense rollback found duplicate physical card descriptors"
+    );
   }
   if (snapshotsByName.size !== snapshot.cardZones.length) {
     throw new Error("Defense rollback snapshot contains duplicate card zones");
@@ -284,6 +286,9 @@ export function resolveDefenseWindow(
       card: defense.card,
     })),
   ];
+  const defensesByChoice = new Map<EffectChoice, LegalDefense>(
+    legalDefenses.map((defense, index) => [choices[index + 1]!, defense])
+  );
   const eventLogLengthBeforeChoice = state.eventLog.length;
   const selectedChoice = services.chooseEffectChoice(
     state,
@@ -292,15 +297,10 @@ export function resolveDefenseWindow(
     "avoid_attack",
     choices
   );
-  if (
-    selectedChoice?.choiceKind !== "defense" ||
-    selectedChoice.card === undefined
-  ) {
-    return { ok: true, avoided: false };
-  }
-  const defense = legalDefenses.find(
-    (candidate) => candidate.card === selectedChoice.card
-  );
+  const defense =
+    selectedChoice === undefined
+      ? undefined
+      : defensesByChoice.get(selectedChoice);
   if (defense === undefined) {
     return { ok: true, avoided: false };
   }
