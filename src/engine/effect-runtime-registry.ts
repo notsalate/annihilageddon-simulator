@@ -3358,6 +3358,151 @@ function isStableDefinitionId(value: unknown): value is string {
   return isNonEmptyString(value) && value.trim() === value;
 }
 
+type AttackCostPaymentStep =
+  | { kind: "discardOtherHandCard"; cardInstanceId: CardInstance["instanceId"] }
+  | { kind: "spendChips"; amount: number; chipsAfter: number }
+  | { kind: "payLife"; amount: number; lifeAfter: number };
+
+interface AttackCostPaymentPlan {
+  startingChips: number;
+  startingLife: number;
+  steps: readonly AttackCostPaymentStep[];
+}
+
+function planAttackCosts(
+  player: PlayerState,
+  costs: readonly RuntimeEffectCost[]
+): { ok: true; value: AttackCostPaymentPlan } | { ok: false; error: string } {
+  let remainingChips = player.chips;
+  let remainingLife = player.life.current;
+  const reservedCardInstanceIds = new Set<CardInstance["instanceId"]>();
+  const steps: AttackCostPaymentStep[] = [];
+
+  for (const cost of costs) {
+    switch (cost.costId) {
+      case "discard_other_hand_card": {
+        const card = player.hand.find(
+          (candidate) => !reservedCardInstanceIds.has(candidate.instanceId)
+        );
+        if (card === undefined) {
+          return { ok: false, error: "Cannot discard another hand card" };
+        }
+        reservedCardInstanceIds.add(card.instanceId);
+        steps.push({
+          kind: "discardOtherHandCard",
+          cardInstanceId: card.instanceId,
+        });
+        break;
+      }
+      case "spend_chips":
+        if (remainingChips < cost.amount) {
+          return { ok: false, error: "Cannot pay chip cost" };
+        }
+        remainingChips -= cost.amount;
+        steps.push({
+          kind: "spendChips",
+          amount: cost.amount,
+          chipsAfter: remainingChips,
+        });
+        break;
+      case "pay_life":
+        if (remainingLife - cost.amount < 1) {
+          return { ok: false, error: "Cannot pay life cost" };
+        }
+        remainingLife -= cost.amount;
+        steps.push({
+          kind: "payLife",
+          amount: cost.amount,
+          lifeAfter: remainingLife,
+        });
+        break;
+    }
+  }
+
+  return {
+    ok: true,
+    value: {
+      startingChips: player.chips,
+      startingLife: player.life.current,
+      steps,
+    },
+  };
+}
+
+function commitAttackCostPlan(
+  state: GameState,
+  player: PlayerState,
+  effect: { effectId: RuntimeEffectId },
+  source: EffectSourceContext,
+  plan: AttackCostPaymentPlan
+): EffectExecutionResult {
+  if (
+    player.chips !== plan.startingChips ||
+    player.life.current !== plan.startingLife ||
+    plan.steps.some(
+      (step) =>
+        step.kind === "discardOtherHandCard" &&
+        !player.hand.some((card) => card.instanceId === step.cardInstanceId)
+    )
+  ) {
+    return { ok: false, error: "Attack cost plan changed before payment" };
+  }
+
+  for (const step of plan.steps) {
+    switch (step.kind) {
+      case "discardOtherHandCard": {
+        const cardIndex = player.hand.findIndex(
+          (card) => card.instanceId === step.cardInstanceId
+        );
+        const [card] = player.hand.splice(cardIndex, 1);
+        if (card === undefined) {
+          return { ok: false, error: "Attack cost plan lost discard card" };
+        }
+        player.discard.push(card);
+        recordGameEvent(state, {
+          type: "effectCostPaid",
+          playerId: player.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          effectId: effect.effectId,
+          costId: "discard_other_hand_card",
+          amount: 1,
+          sourceType: source.sourceType,
+        });
+        break;
+      }
+      case "spendChips":
+        player.chips = step.chipsAfter;
+        recordGameEvent(state, {
+          type: "effectCostPaid",
+          playerId: player.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          effectId: effect.effectId,
+          costId: "spend_chips",
+          amount: step.amount,
+          sourceType: source.sourceType,
+        });
+        break;
+      case "payLife":
+        player.life.current = step.lifeAfter;
+        recordGameEvent(state, {
+          type: "effectCostPaid",
+          playerId: player.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          effectId: effect.effectId,
+          costId: "pay_life",
+          amount: step.amount,
+          sourceType: source.sourceType,
+        });
+        break;
+    }
+  }
+
+  return { ok: true };
+}
+
 function payOptionalCosts(
   state: GameState,
   player: PlayerState,
@@ -3374,27 +3519,22 @@ function payOptionalCosts(
     return { ok: true };
   }
 
+  const plan = planAttackCosts(player, costs);
+  if (!plan.ok) {
+    if (effect.optional !== true) {
+      return plan;
+    }
+    services.chooseEffectChoice(state, player, source, effect.effectId, [
+      { choiceKind: "option", choiceId: "skip_optional_cost" },
+    ]);
+    return { ok: true, skipped: true };
+  }
+
   if (effect.optional === true) {
-    const canPay = costs.every((cost: RuntimeEffectCost) => {
-      return cost.costId === "spend_chips" && player.chips >= cost.amount;
-    });
-    const choices: EffectChoice[] = canPay
-      ? [
-          {
-            choiceKind: "option",
-            choiceId: "pay_optional_cost",
-          },
-          {
-            choiceKind: "option",
-            choiceId: "skip_optional_cost",
-          },
-        ]
-      : [
-          {
-            choiceKind: "option",
-            choiceId: "skip_optional_cost",
-          },
-        ];
+    const choices: EffectChoice[] = [
+      { choiceKind: "option", choiceId: "pay_optional_cost" },
+      { choiceKind: "option", choiceId: "skip_optional_cost" },
+    ];
     const choice = services.chooseEffectChoice(
       state,
       player,
@@ -3407,36 +3547,7 @@ function payOptionalCosts(
     }
   }
 
-  for (const cost of costs) {
-    if (cost.costId !== "spend_chips") {
-      return {
-        ok: false,
-        error: `Unsupported attack cost ${cost.costId}`,
-      };
-    }
-
-    if (player.chips < cost.amount) {
-      if (effect.optional === true) {
-        return { ok: true, skipped: true };
-      }
-
-      return { ok: false, error: "Cannot pay chip cost" };
-    }
-
-    player.chips -= cost.amount;
-    recordGameEvent(state, {
-      type: "effectCostPaid",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: effect.effectId,
-      costId: "spend_chips",
-      amount: cost.amount,
-      sourceType: source.sourceType,
-    });
-  }
-
-  return { ok: true };
+  return commitAttackCostPlan(state, player, effect, source, plan.value);
 }
 
 function collectMayhemAttackDefenseDecisions(

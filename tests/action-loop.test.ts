@@ -6879,6 +6879,118 @@ test("Palochka-Chipsalocka can decline its optional attack", () => {
   );
 });
 
+test("attack_damage pays discard, chips, and nonlethal life costs before attacking", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.chips = 2;
+  activePlayer.life.current = 5;
+  const paidDiscard = activePlayer.hand[0];
+  assert.ok(paidDiscard);
+  const attackCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 4,
+    target: { selector: "opponentPlayer" },
+    costs: [
+      { costId: "discard_other_hand_card", amount: 1 },
+      { costId: "spend_chips", amount: 2 },
+      { costId: "pay_life", amount: 4 },
+    ],
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attackCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 0);
+  assert.equal(activePlayer.life.current, 1);
+  assert.equal(activePlayer.hand.includes(paidDiscard), false);
+  assert.equal(activePlayer.discard.includes(paidDiscard), true);
+  assert.equal(targetPlayer.life.current, 16);
+});
+
+test("attack_damage leaves all costs untouched when cumulative chips are insufficient", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  activePlayer.chips = 3;
+  const attackCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 4,
+    target: { selector: "opponentPlayer" },
+    costs: [
+      { costId: "spend_chips", amount: 2 },
+      { costId: "spend_chips", amount: 2 },
+    ],
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attackCardId,
+  });
+
+  assert.deepEqual(result, { ok: false, error: "Cannot pay chip cost" });
+  assert.equal(activePlayer.chips, 3);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "effectCostPaid"),
+    false
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "attackCreated"),
+    false
+  );
+});
+
+test("optional attack offers payment for a payable life cost", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.life.current = 5;
+  chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? choices.find((choice) => choice.choiceId === "pay_optional_cost")
+      : undefined
+  );
+  const attackCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 4,
+    target: { selector: "opponentPlayer" },
+    optional: true,
+    costs: [{ costId: "pay_life", amount: 4 }],
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attackCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.life.current, 1);
+  assert.equal(targetPlayer.life.current, 16);
+});
+
 test("Palochka-Chipsalocka cannot attack without a chip", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = mustGetPlayer(state, markPlayerId("player-2"));
