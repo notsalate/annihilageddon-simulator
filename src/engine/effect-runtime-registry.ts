@@ -892,8 +892,6 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
   return entry;
 }
 const allEffectRuntimeModes: EffectRuntimeSupportedModes = effectRuntimeModes;
-const allEffectRuntimeSourceKinds: EffectRuntimeSupportedSourceKinds =
-  effectRuntimeSourceKinds;
 const fixtureOnlyRuntimeEffectIds = new Set<RuntimeEffectId>([
   "fixture_modify_effective_value",
   "fixture_add_power_equal_to_target_cost",
@@ -4092,20 +4090,118 @@ function defineRegisteredEffectRuntimeEntry<Id extends RuntimeEffectId>(
     fixtureOnlyRuntimeEffectIds.has(effectId)
       ? ["fixture"]
       : allEffectRuntimeModes;
-  const supportedSourceKinds: EffectRuntimeSupportedSourceKinds =
-    effectId === "temporary_hand_limit_by_gained_card_type"
-      ? ["wizardProperty"]
-      : effectId === "ongoing_add_power" ||
-          effectId === "ongoing_hand_refill_bonus" ||
-          effectId === "ongoing_add_power_per_dead_wizard_token"
-        ? ["card"]
-        : allEffectRuntimeSourceKinds;
+  const entry = {
+    handler,
+    supportedSourceKinds: getRegisteredEffectRuntimeSourceKinds(effectId),
+  };
+  if (entry.supportedSourceKinds === undefined) {
+    throw new Error(`Missing source-kind policy for ${effectId}`);
+  }
   return defineEffectRuntimeEntry({
     effectId,
-    handler,
+    handler: entry.handler,
     supportedModes,
-    supportedSourceKinds,
+    supportedSourceKinds: entry.supportedSourceKinds,
   });
+}
+
+function getRegisteredEffectRuntimeSourceKinds(
+  effectId: RuntimeEffectId
+): EffectRuntimeSupportedSourceKinds | undefined {
+  switch (effectId) {
+    case "temporary_hand_limit_by_gained_card_type":
+      return ["wizardProperty"];
+    case "ongoing_add_power":
+    case "ongoing_hand_refill_bonus":
+    case "ongoing_add_power_per_dead_wizard_token":
+      return ["card"];
+    case "force_starting_player":
+    case "replace_starting_card":
+    case "start_with_basic_trophy":
+    case "set_starting_life_total":
+    case "set_resurrection_life_total":
+    case "modify_effective_value":
+    case "fixture_modify_effective_value":
+    case "increase_hand_limit_at_max_life":
+    case "endgame_limp_wands_score_positive":
+    case "endgame_vp_per_owned_legend":
+    case "controls_other_card_type":
+    case "destroyed_card_kind_is":
+    case "add_power":
+    case "add_power_if_player_has_status":
+    case "add_power_per_controlled_object":
+    case "add_power_per_controlled_permanent":
+    case "add_power_per_player_with_status":
+    case "gain_chips":
+    case "gain_chips_per_player_with_status":
+    case "gain_chips_equal_damage_dealt":
+    case "draw_cards":
+    case "heal":
+    case "heal_equal_damage_dealt":
+    case "heal_equal_damage_dealt_on_own_turn":
+    case "set_life":
+    case "gain_status":
+    case "remove_status":
+    case "toggle_status":
+    case "exchange_life_and_dingler_status":
+    case "deal_damage":
+    case "gain_card":
+    case "discard_card":
+    case "discard_self":
+    case "discard_hand_then_draw_cards":
+    case "destroy_card":
+    case "destroy_own_cards":
+    case "destroy_random_legend_market_card":
+    case "return_discard_to_hand":
+    case "reveal_top_card":
+    case "play_top_card":
+    case "play_top_card_from_foe_deck":
+    case "wild_magic_choice":
+    case "topdeck_gained_card":
+    case "optional_gain_market_cards_to_hand_this_turn":
+    case "on_gain_self_gain_limp_wands":
+    case "fixture_add_power_equal_to_target_cost":
+    case "attack_damage":
+    case "attack_damage_equal_remembered_card_cost":
+    case "attack_damage_equal_to_controlled_card_cost":
+    case "attack_destroy_top_legend_deck_then_damage_equal_cost":
+    case "attack_discard_cards":
+    case "attack_gain_limp_wand":
+    case "attack_gain_status":
+    case "avoid_attack":
+    case "conditional_activation_attack_damage":
+    case "directional_chain_attack":
+    case "multi_target_attack":
+    case "optional_spend_chip_attack_damage":
+    case "defense_discard_self_avoid_attack_then_optional_destroy_hand_card":
+    case "modify_owned_wand_attack_damage":
+    case "double_owned_attack_damage":
+    case "prevent_defense_against_owned_wand_attacks":
+    case "activation_destroy_self_then_destroy_own_cards":
+    case "conditional_activation_destroy_own_cards":
+    case "conditional_activation_gain_chips":
+    case "optional_spend_chip_destroy_own_cards":
+    case "ongoing_add_power_when_playing_wand":
+    case "ongoing_add_power_when_playing_limp_wand":
+    case "ongoing_first_attack_damage_add_power":
+    case "ongoing_start_turn_optional_gain_limp_wand_to_hand":
+    case "mayhem_attack":
+    case "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status":
+    case "mayhem_each_player_choose_foe_gain_chips":
+    case "mayhem_each_non_dingler_gain_chips":
+    case "mayhem_each_player_battle_highest_hand_cost":
+    case "mayhem_each_player_choose_discard_hand_draw_or_take_damage":
+    case "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none":
+    case "mayhem_each_player_discard_deck_then_destroy_from_discard":
+    case "mayhem_each_player_gain_chips_then_attack_for_current_chips":
+    case "mayhem_each_player_reduce_life_to_gain_chips":
+    case "mayhem_each_player_vote_dingler":
+    case "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life":
+    case "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem":
+    case "mega_mayhem_each_player_toggle_dingler":
+    case "mega_mayhem_set_life":
+      return ["card", "wizardProperty", "deadWizardToken"];
+  }
 }
 
 const setupEffectEntries = {

@@ -187,6 +187,23 @@ test("decoder is the sole owner of registered payload structure", () => {
   assert.doesNotMatch(source, /validateShape/u);
 });
 
+test("registered effects require explicit source-kind policies", () => {
+  const source = readFileSync(
+    `${rootDir}/src/engine/effect-runtime-registry.ts`,
+    "utf8"
+  );
+
+  assert.doesNotMatch(source, /\ballEffectRuntimeSourceKinds\b/u);
+  const sourceKindPolicy = extractSection(
+    source,
+    "function getRegisteredEffectRuntimeSourceKinds",
+    "const setupEffectEntries"
+  );
+  assert.doesNotMatch(sourceKindPolicy, /effectRuntimeSourceKinds/u);
+  assert.doesNotMatch(sourceKindPolicy, /default:/u);
+  assert.match(source, /if \(entry\.supportedSourceKinds === undefined\) \{/u);
+});
+
 test("production modules do not export Catalog bypass registries", () => {
   const registrySource = readFileSync(
     `${rootDir}/src/engine/effect-runtime-registry.ts`,
