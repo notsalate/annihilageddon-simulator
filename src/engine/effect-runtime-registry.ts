@@ -370,6 +370,15 @@ export interface EffectRuntimeAfterPlayerAttackDamageOperationContext {
   readonly attackSource: EffectSourceContext;
 }
 
+export interface EffectRuntimeAfterDamageDealtOperationContext {
+  readonly state: GameState;
+  readonly controller: PlayerState;
+  readonly source: EffectSourceContext;
+  readonly sourceDefinition: CardDefinition;
+  readonly damageDealt: number;
+  readonly damageSource: EffectSourceContext;
+}
+
 export interface EffectRuntimeEndTurnDrawModifierOperationContext {
   readonly state: GameState;
   readonly controller: PlayerState;
@@ -416,6 +425,10 @@ interface EffectRuntimeHandler<
     effect: Effect,
     context: EffectRuntimeAfterPlayerAttackDamageOperationContext
   ): EffectRuntimeHandlerOperationResult<EffectExecutionResult>;
+  applyAfterDamageDealt?(
+    effect: Effect,
+    context: EffectRuntimeAfterDamageDealtOperationContext
+  ): EffectRuntimeHandlerOperationResult<EffectExecutionResult>;
   evaluateEndTurnDrawModifier?(
     effect: Effect,
     context: EffectRuntimeEndTurnDrawModifierOperationContext
@@ -445,6 +458,10 @@ export interface EffectRuntimeCatalogOperationOverridesForTesting<
   readonly applyAfterPlayerAttackDamage?: (
     effect: RuntimeEffectForId<Id>,
     context: EffectRuntimeAfterPlayerAttackDamageOperationContext
+  ) => EffectRuntimeHandlerOperationResult<EffectExecutionResult>;
+  readonly applyAfterDamageDealt?: (
+    effect: RuntimeEffectForId<Id>,
+    context: EffectRuntimeAfterDamageDealtOperationContext
   ) => EffectRuntimeHandlerOperationResult<EffectExecutionResult>;
   readonly evaluateEndTurnDrawModifier?: (
     effect: RuntimeEffectForId<Id>,
@@ -537,6 +554,11 @@ interface EffectRuntimeEntry<
     rawEffect: unknown,
     context: EffectRuntimeAfterPlayerAttackDamageOperationContext
   ): EffectRuntimeOperationResult<EffectExecutionResult>;
+  applyAfterDamageDealt(
+    subjectId: string,
+    rawEffect: unknown,
+    context: EffectRuntimeAfterDamageDealtOperationContext
+  ): EffectRuntimeOperationResult<EffectExecutionResult>;
   evaluateEndTurnDrawModifier(
     subjectId: string,
     rawEffect: unknown,
@@ -544,9 +566,8 @@ interface EffectRuntimeEntry<
   ): EffectRuntimeOperationResult<number>;
 }
 
-const withEffectRuntimeCatalogOperationsForTestingSymbol: unique symbol = Symbol(
-  "withEffectRuntimeCatalogOperationsForTesting"
-);
+const withEffectRuntimeCatalogOperationsForTestingSymbol: unique symbol =
+  Symbol("withEffectRuntimeCatalogOperationsForTesting");
 
 type TestableEffectRuntimeEntry<Id extends RuntimeEffectId> =
   EffectRuntimeEntry<Id> & {
@@ -571,9 +592,7 @@ function validateCatalogDomainConstraints(
     effect.effectId === "ongoing_hand_refill_bonus" &&
     effect.timing !== "endTurn"
   ) {
-    return [
-      `${subjectId} ongoing_hand_refill_bonus requires endTurn timing`,
-    ];
+    return [`${subjectId} ongoing_hand_refill_bonus requires endTurn timing`];
   }
 
   return [];
@@ -694,7 +713,8 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     services: EffectRuntimeServices
   ): EffectExecutionResult => {
     const decoded = decodeExecutableOperation(subjectId, rawEffect, source);
-    const executeOperation = operationOverrides?.execute ?? config.handler.execute;
+    const executeOperation =
+      operationOverrides?.execute ?? config.handler.execute;
     return decoded.ok
       ? executeOperation(state, player, decoded.effect, source, services)
       : { ok: false, error: decoded.error };
@@ -812,6 +832,23 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
         },
       });
     },
+    applyAfterDamageDealt(subjectId, rawEffect, context) {
+      return evaluateAtTiming(subjectId, rawEffect, {
+        source: context.source,
+        timing: "afterDamageDealt",
+        evaluate(decodedEffect) {
+          if (!context.sourceDefinition.engine.isOngoing) {
+            return { status: "notApplicable" };
+          }
+          const applyAfterDamageDealt =
+            operationOverrides?.applyAfterDamageDealt ??
+            config.handler.applyAfterDamageDealt;
+          return applyAfterDamageDealt === undefined
+            ? { status: "notApplicable" }
+            : applyAfterDamageDealt(decodedEffect, context);
+        },
+      });
+    },
     evaluateEndTurnDrawModifier(subjectId, rawEffect, context) {
       return evaluateAtTiming(subjectId, rawEffect, {
         source: context.source,
@@ -864,7 +901,9 @@ const addPowerHandler: EffectRuntimeHandler<AddPowerRuntimeEffect> = {
   },
 };
 
-const addPowerPerPlayerWithStatusHandler: EffectRuntimeHandler<RuntimeEffectForId<"add_power_per_player_with_status">> = {
+const addPowerPerPlayerWithStatusHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"add_power_per_player_with_status">
+> = {
   effectId: "add_power_per_player_with_status",
   execute(state, player, effect, source, services) {
     const amountPerPlayer = effect.amountPerPlayer;
@@ -947,7 +986,9 @@ const gainCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"gain_card">> = {
   },
 };
 
-const discardCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"discard_card">> = {
+const discardCardHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"discard_card">
+> = {
   effectId: "discard_card",
   execute(state, player, effect, source, services) {
     const targetResult = services.resolveTargetChoice(
@@ -1001,7 +1042,9 @@ const discardCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"discard_card"
   },
 };
 
-const destroyCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"destroy_card">> = {
+const destroyCardHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"destroy_card">
+> = {
   effectId: "destroy_card",
   execute(state, player, effect, source, services) {
     const targetResult = services.resolveTargetChoice(
@@ -1060,7 +1103,9 @@ const destroyCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"destroy_card"
   },
 };
 
-const dealDamageHandler: EffectRuntimeHandler<RuntimeEffectForId<"deal_damage">> = {
+const dealDamageHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"deal_damage">
+> = {
   effectId: "deal_damage",
   execute(state, player, effect, source, services) {
     const targetResult = services.resolveTargetChoice(
@@ -1143,12 +1188,63 @@ const healHandler: EffectRuntimeHandler<RuntimeEffectForId<"heal">> = {
   },
 };
 
-const healEqualDamageDealtOnOwnTurnHandler: EffectRuntimeHandler<RuntimeEffectForId<"heal_equal_damage_dealt_on_own_turn">> = {
+const healEqualDamageDealtOnOwnTurnHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"heal_equal_damage_dealt_on_own_turn">
+> = {
   effectId: "heal_equal_damage_dealt_on_own_turn",
   execute() {
     return { ok: true };
   },
+  applyAfterDamageDealt(effect, context) {
+    applyLifeChange(
+      context.state,
+      context.controller,
+      context.controller,
+      context.damageDealt,
+      effect.effectId,
+      context.source
+    );
+    return { status: "resolved", result: { ok: true } };
+  },
 };
+
+function applyLifeChange(
+  state: GameState,
+  sourcePlayer: PlayerState,
+  targetPlayer: PlayerState,
+  amount: number,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext
+): void {
+  const effectiveMaxLife = calculateEffectivePlayerMaxLife(
+    state,
+    targetPlayer.playerId
+  );
+  const targetLifeBefore = targetPlayer.life.current;
+  const unclampedLife = targetLifeBefore + amount;
+  targetPlayer.life.current = Math.min(unclampedLife, effectiveMaxLife);
+
+  recordGameEvent(state, {
+    type: "effectLifeHealed",
+    playerId: sourcePlayer.playerId,
+    targetPlayerId: targetPlayer.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    amount: Math.max(0, targetPlayer.life.current - targetLifeBefore),
+    targetLifeBefore,
+    targetLifeAfter: targetPlayer.life.current,
+    sourceType: source.sourceType,
+  });
+
+  if (unclampedLife > effectiveMaxLife) {
+    recordGameEvent(state, {
+      type: "playerLifeClamped",
+      playerId: targetPlayer.playerId,
+      amount: effectiveMaxLife,
+    });
+  }
+}
 
 const setLifeHandler: EffectRuntimeHandler<RuntimeEffectForId<"set_life">> = {
   effectId: "set_life",
@@ -1207,7 +1303,9 @@ const setLifeHandler: EffectRuntimeHandler<RuntimeEffectForId<"set_life">> = {
   },
 };
 
-const exchangeLifeAndDinglerStatusHandler: EffectRuntimeHandler<RuntimeEffectForId<"exchange_life_and_dingler_status">> = {
+const exchangeLifeAndDinglerStatusHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"exchange_life_and_dingler_status">
+> = {
   effectId: "exchange_life_and_dingler_status",
   execute(state, player, effect, source, services) {
     const effectId = effect.effectId;
@@ -1363,7 +1461,9 @@ function exchangeLifeAndOrDinglerStatus(
   return { ok: true };
 }
 
-const gainStatusHandler: EffectRuntimeHandler<RuntimeEffectForId<"gain_status">> = {
+const gainStatusHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"gain_status">
+> = {
   effectId: "gain_status",
   execute(state, player, effect, source, services) {
     const statusId = effect.statusId;
@@ -1392,7 +1492,9 @@ const gainStatusHandler: EffectRuntimeHandler<RuntimeEffectForId<"gain_status">>
   },
 };
 
-const attackGainStatusHandler: EffectRuntimeHandler<RuntimeEffectForId<"attack_gain_status">> = {
+const attackGainStatusHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"attack_gain_status">
+> = {
   effectId: "attack_gain_status",
   execute(state, player, effect, source, services) {
     const statusId = effect.statusId;
@@ -1415,7 +1517,9 @@ const attackGainStatusHandler: EffectRuntimeHandler<RuntimeEffectForId<"attack_g
   },
 };
 
-const removeStatusHandler: EffectRuntimeHandler<RuntimeEffectForId<"remove_status">> = {
+const removeStatusHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"remove_status">
+> = {
   effectId: "remove_status",
   execute(state, player, effect, source, services) {
     const statusId = effect.statusId;
@@ -1449,7 +1553,9 @@ const removeStatusHandler: EffectRuntimeHandler<RuntimeEffectForId<"remove_statu
   },
 };
 
-const toggleStatusHandler: EffectRuntimeHandler<RuntimeEffectForId<"toggle_status">> = {
+const toggleStatusHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"toggle_status">
+> = {
   effectId: "toggle_status",
   execute(state, player, effect, source, services) {
     const statusId = effect.statusId;
@@ -1492,7 +1598,9 @@ const toggleStatusHandler: EffectRuntimeHandler<RuntimeEffectForId<"toggle_statu
   },
 };
 
-const megaMayhemSetLifeHandler: EffectRuntimeHandler<RuntimeEffectForId<"mega_mayhem_set_life">> = {
+const megaMayhemSetLifeHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mega_mayhem_set_life">
+> = {
   effectId: "mega_mayhem_set_life",
   execute(state, player, effect, source, services) {
     const lifeTotal = effect.lifeTotal;
@@ -1527,7 +1635,9 @@ const megaMayhemSetLifeHandler: EffectRuntimeHandler<RuntimeEffectForId<"mega_ma
   },
 };
 
-const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler<RuntimeEffectForId<"mega_mayhem_each_player_toggle_dingler">> = {
+const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mega_mayhem_each_player_toggle_dingler">
+> = {
   effectId: "mega_mayhem_each_player_toggle_dingler",
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
@@ -1561,7 +1671,9 @@ const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler<RuntimeEffe
   },
 };
 
-const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler<RuntimeEffectForId<"mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem">> = {
+const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem">
+> = {
   effectId: "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
@@ -1674,7 +1786,9 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler<
   },
 };
 
-const mayhemEachPlayerDiscardDeckDestroyHandler: EffectRuntimeHandler<RuntimeEffectForId<"mayhem_each_player_discard_deck_then_destroy_from_discard">> = {
+const mayhemEachPlayerDiscardDeckDestroyHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_each_player_discard_deck_then_destroy_from_discard">
+> = {
   effectId: "mayhem_each_player_discard_deck_then_destroy_from_discard",
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
@@ -1730,7 +1844,9 @@ const mayhemEachPlayerDiscardDeckDestroyHandler: EffectRuntimeHandler<RuntimeEff
   },
 };
 
-const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler<RuntimeEffectForId<"mayhem_each_player_choose_discard_hand_draw_or_take_damage">> = {
+const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_each_player_choose_discard_hand_draw_or_take_damage">
+> = {
   effectId: "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
@@ -1784,7 +1900,9 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler<RuntimeEffec
   },
 };
 
-const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler<RuntimeEffectForId<"mayhem_each_player_reduce_life_to_gain_chips">> = {
+const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_each_player_reduce_life_to_gain_chips">
+> = {
   effectId: "mayhem_each_player_reduce_life_to_gain_chips",
   execute(state, _player, effect, source, services) {
     const lifeTotal = effect.lifeTotal;
@@ -1976,7 +2094,9 @@ const ongoingHandRefillBonusHandler: EffectRuntimeHandler<OngoingHandRefillBonus
     },
   };
 
-const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler<RuntimeEffectForId<"mayhem_each_player_battle_highest_hand_cost">> = {
+const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_each_player_battle_highest_hand_cost">
+> = {
   effectId: "mayhem_each_player_battle_highest_hand_cost",
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
@@ -2054,7 +2174,9 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler<Runtime
   },
 };
 
-const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler<RuntimeEffectForId<"mayhem_each_player_vote_dingler">> = {
+const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_each_player_vote_dingler">
+> = {
   effectId: "mayhem_each_player_vote_dingler",
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
@@ -2117,7 +2239,9 @@ const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler<RuntimeEffectForI
   },
 };
 
-const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler<RuntimeEffectForId<"mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status">> = {
+const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status">
+> = {
   effectId: "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
@@ -2184,7 +2308,9 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler<RuntimeEffect
   },
 };
 
-const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler<RuntimeEffectForId<"mayhem_lowest_life_players_gain_dingler_and_set_to_max_life">> = {
+const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_lowest_life_players_gain_dingler_and_set_to_max_life">
+> = {
   effectId: "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
@@ -2235,7 +2361,9 @@ const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler<RuntimeEffectF
   },
 };
 
-const replaceStartingCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"replace_starting_card">> = {
+const replaceStartingCardHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"replace_starting_card">
+> = {
   effectId: "replace_starting_card",
   execute() {
     return setupOnlyExecutionError("replace_starting_card");
@@ -2263,10 +2391,8 @@ const replaceStartingCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"repla
       };
     }
     if (
-      replaceOwnedCardDefinitionInPlayerZones(
-        player,
-        fromDefinitionId,
-        () => services.createCardInstance(toDefinitionId, player.playerId)
+      replaceOwnedCardDefinitionInPlayerZones(player, fromDefinitionId, () =>
+        services.createCardInstance(toDefinitionId, player.playerId)
       )
     ) {
       return { ok: true };
@@ -2279,7 +2405,9 @@ const replaceStartingCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"repla
   },
 };
 
-const startWithBasicTrophyHandler: EffectRuntimeHandler<RuntimeEffectForId<"start_with_basic_trophy">> = {
+const startWithBasicTrophyHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"start_with_basic_trophy">
+> = {
   effectId: "start_with_basic_trophy",
   execute() {
     return setupOnlyExecutionError("start_with_basic_trophy");
@@ -2301,7 +2429,9 @@ const startWithBasicTrophyHandler: EffectRuntimeHandler<RuntimeEffectForId<"star
   },
 };
 
-const forceStartingPlayerHandler: EffectRuntimeHandler<RuntimeEffectForId<"force_starting_player">> = {
+const forceStartingPlayerHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"force_starting_player">
+> = {
   effectId: "force_starting_player",
   execute() {
     return setupOnlyExecutionError("force_starting_player");
@@ -2314,7 +2444,9 @@ const forceStartingPlayerHandler: EffectRuntimeHandler<RuntimeEffectForId<"force
   },
 };
 
-const setStartingLifeTotalHandler: EffectRuntimeHandler<RuntimeEffectForId<"set_starting_life_total">> = {
+const setStartingLifeTotalHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"set_starting_life_total">
+> = {
   effectId: "set_starting_life_total",
   execute() {
     return setupOnlyExecutionError("set_starting_life_total");
@@ -2330,14 +2462,18 @@ const setStartingLifeTotalHandler: EffectRuntimeHandler<RuntimeEffectForId<"set_
   },
 };
 
-const setResurrectionLifeTotalHandler: EffectRuntimeHandler<RuntimeEffectForId<"set_resurrection_life_total">> = {
+const setResurrectionLifeTotalHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"set_resurrection_life_total">
+> = {
   effectId: "set_resurrection_life_total",
   execute() {
     return setupOnlyExecutionError("set_resurrection_life_total");
   },
 };
 
-const modifyEffectiveValueHandler: EffectRuntimeHandler<RuntimeEffectForId<"modify_effective_value">> = {
+const modifyEffectiveValueHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"modify_effective_value">
+> = {
   effectId: "modify_effective_value",
   execute() {
     return {
@@ -2359,7 +2495,9 @@ const fixtureModifyEffectiveValueHandler: EffectRuntimeHandler<
   },
 };
 
-const fixtureAddPowerEqualToTargetCostHandler: EffectRuntimeHandler<RuntimeEffectForId<"fixture_add_power_equal_to_target_cost">> = {
+const fixtureAddPowerEqualToTargetCostHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"fixture_add_power_equal_to_target_cost">
+> = {
   effectId: "fixture_add_power_equal_to_target_cost",
   execute(state, player, effect, source, services) {
     const targetResult = services.resolveTargetChoice(
@@ -2409,7 +2547,9 @@ const fixtureAddPowerEqualToTargetCostHandler: EffectRuntimeHandler<RuntimeEffec
   },
 };
 
-const topdeckGainedCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"topdeck_gained_card">> = {
+const topdeckGainedCardHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"topdeck_gained_card">
+> = {
   effectId: "topdeck_gained_card",
   execute() {
     return {
@@ -2419,7 +2559,9 @@ const topdeckGainedCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"topdeck
   },
 };
 
-const temporaryHandLimitByGainedCardTypeHandler: EffectRuntimeHandler<RuntimeEffectForId<"temporary_hand_limit_by_gained_card_type">> = {
+const temporaryHandLimitByGainedCardTypeHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"temporary_hand_limit_by_gained_card_type">
+> = {
   effectId: "temporary_hand_limit_by_gained_card_type",
   execute() {
     return {
@@ -2503,7 +2645,9 @@ const optionalSpendChipAttackDamageHandler: EffectRuntimeHandler<OptionalSpendCh
     },
   };
 
-const addPowerIfPlayerHasStatusHandler: EffectRuntimeHandler<RuntimeEffectForId<"add_power_if_player_has_status">> = {
+const addPowerIfPlayerHasStatusHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"add_power_if_player_has_status">
+> = {
   effectId: "add_power_if_player_has_status",
   execute() {
     return {
@@ -2606,7 +2750,9 @@ const ongoingAddPowerPerDeadWizardTokenHandler: EffectRuntimeHandler<OngoingAddP
     },
   };
 
-const addPowerPerControlledObjectHandler: EffectRuntimeHandler<RuntimeEffectForId<"add_power_per_controlled_object">> = {
+const addPowerPerControlledObjectHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"add_power_per_controlled_object">
+> = {
   effectId: "add_power_per_controlled_object",
   execute(state, player, effect, source) {
     const amountPerObject = requirePositiveIntegerAmount(
@@ -2638,7 +2784,9 @@ const addPowerPerControlledObjectHandler: EffectRuntimeHandler<RuntimeEffectForI
   },
 };
 
-const attackDamageEqualToControlledCardCostHandler: EffectRuntimeHandler<RuntimeEffectForId<"attack_damage_equal_to_controlled_card_cost">> = {
+const attackDamageEqualToControlledCardCostHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"attack_damage_equal_to_controlled_card_cost">
+> = {
   effectId: "attack_damage_equal_to_controlled_card_cost",
   execute(state, player, effect, source, services) {
     const costResult = payOptionalCosts(
@@ -2810,7 +2958,9 @@ const gainChipsHandler: EffectRuntimeHandler<GainChipsRuntimeEffect> = {
   },
 };
 
-const gainChipsPerPlayerWithStatusHandler: EffectRuntimeHandler<RuntimeEffectForId<"gain_chips_per_player_with_status">> = {
+const gainChipsPerPlayerWithStatusHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"gain_chips_per_player_with_status">
+> = {
   effectId: "gain_chips_per_player_with_status",
   execute(state, player, effect, source) {
     const amountPerPlayer = effect.amountPerPlayer;
@@ -2842,30 +2992,33 @@ const gainChipsPerPlayerWithStatusHandler: EffectRuntimeHandler<RuntimeEffectFor
   },
 };
 
-const drawCardsHandler: EffectRuntimeHandler<RuntimeEffectForId<"draw_cards">> = {
-  effectId: "draw_cards",
-  execute(state, player, effect, source) {
-    const amount = requirePositiveIntegerAmount(effect, "draw amount");
-    if (!amount.ok) {
-      return amount;
-    }
+const drawCardsHandler: EffectRuntimeHandler<RuntimeEffectForId<"draw_cards">> =
+  {
+    effectId: "draw_cards",
+    execute(state, player, effect, source) {
+      const amount = requirePositiveIntegerAmount(effect, "draw amount");
+      if (!amount.ok) {
+        return amount;
+      }
 
-    const drawnCount = drawCards(player, amount.value, state);
-    recordGameEvent(state, {
-      type: "effectDrawCardsApplied",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: "draw_cards",
-      amount: drawnCount,
-      sourceType: source.sourceType,
-    });
+      const drawnCount = drawCards(player, amount.value, state);
+      recordGameEvent(state, {
+        type: "effectDrawCardsApplied",
+        playerId: player.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId: "draw_cards",
+        amount: drawnCount,
+        sourceType: source.sourceType,
+      });
 
-    return { ok: true };
-  },
-};
+      return { ok: true };
+    },
+  };
 
-const directionalChainAttackHandler: EffectRuntimeHandler<RuntimeEffectForId<"directional_chain_attack">> = {
+const directionalChainAttackHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"directional_chain_attack">
+> = {
   effectId: "directional_chain_attack",
   execute(state, player, effect, source, services) {
     const amount = requirePositiveIntegerAmount(effect, "attack damage amount");
@@ -2931,7 +3084,9 @@ const directionalChainAttackHandler: EffectRuntimeHandler<RuntimeEffectForId<"di
   },
 };
 
-const multiTargetAttackHandler: EffectRuntimeHandler<RuntimeEffectForId<"multi_target_attack">> = {
+const multiTargetAttackHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"multi_target_attack">
+> = {
   effectId: "multi_target_attack",
   execute(state, player, effect, source, services) {
     const target = effect.target;
@@ -2971,7 +3126,9 @@ const multiTargetAttackHandler: EffectRuntimeHandler<RuntimeEffectForId<"multi_t
   },
 };
 
-const mayhemAttackHandler: EffectRuntimeHandler<RuntimeEffectForId<"mayhem_attack">> = {
+const mayhemAttackHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_attack">
+> = {
   effectId: "mayhem_attack",
   execute(state, player, effect, source, services) {
     const target = effect.target;
@@ -3000,7 +3157,9 @@ const mayhemAttackHandler: EffectRuntimeHandler<RuntimeEffectForId<"mayhem_attac
   },
 };
 
-const revealTopCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"reveal_top_card">> = {
+const revealTopCardHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"reveal_top_card">
+> = {
   effectId: "reveal_top_card",
   execute(state, player, effect, source, services) {
     const effectId = effect.effectId;
@@ -3032,7 +3191,9 @@ const revealTopCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"reveal_top_
   },
 };
 
-const playTopCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"play_top_card">> = {
+const playTopCardHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"play_top_card">
+> = {
   effectId: "play_top_card",
   execute(state, player, effect, source, services) {
     const effectId = effect.effectId;
@@ -3069,7 +3230,9 @@ const playTopCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"play_top_card
   },
 };
 
-const playTopCardFromFoeDeckHandler: EffectRuntimeHandler<RuntimeEffectForId<"play_top_card_from_foe_deck">> = {
+const playTopCardFromFoeDeckHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"play_top_card_from_foe_deck">
+> = {
   effectId: "play_top_card_from_foe_deck",
   execute(state, player, effect, source, services) {
     const foe = services
@@ -3130,7 +3293,9 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler<RuntimeEffectForId<"pl
   },
 };
 
-const wildMagicChoiceHandler: EffectRuntimeHandler<RuntimeEffectForId<"wild_magic_choice">> = {
+const wildMagicChoiceHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"wild_magic_choice">
+> = {
   effectId: "wild_magic_choice",
   execute(state, player, effect, source, services) {
     const options = effect.options;
@@ -3994,10 +4159,11 @@ const immediateEffectEntries = {
     "topdeck_gained_card",
     effectRuntimeHandlerMap.topdeck_gained_card
   ),
-  optional_gain_market_cards_to_hand_this_turn: defineRegisteredEffectRuntimeEntry(
-    "optional_gain_market_cards_to_hand_this_turn",
-    effectRuntimeHandlerMap.optional_gain_market_cards_to_hand_this_turn
-  ),
+  optional_gain_market_cards_to_hand_this_turn:
+    defineRegisteredEffectRuntimeEntry(
+      "optional_gain_market_cards_to_hand_this_turn",
+      effectRuntimeHandlerMap.optional_gain_market_cards_to_hand_this_turn
+    ),
   on_gain_self_gain_limp_wands: defineRegisteredEffectRuntimeEntry(
     "on_gain_self_gain_limp_wands",
     effectRuntimeHandlerMap.on_gain_self_gain_limp_wands
@@ -4017,14 +4183,16 @@ const playerControlledAttackEffectEntries = {
     "attack_damage_equal_remembered_card_cost",
     effectRuntimeHandlerMap.attack_damage_equal_remembered_card_cost
   ),
-  attack_damage_equal_to_controlled_card_cost: defineRegisteredEffectRuntimeEntry(
-    "attack_damage_equal_to_controlled_card_cost",
-    effectRuntimeHandlerMap.attack_damage_equal_to_controlled_card_cost
-  ),
-  attack_destroy_top_legend_deck_then_damage_equal_cost: defineRegisteredEffectRuntimeEntry(
-    "attack_destroy_top_legend_deck_then_damage_equal_cost",
-    effectRuntimeHandlerMap.attack_destroy_top_legend_deck_then_damage_equal_cost
-  ),
+  attack_damage_equal_to_controlled_card_cost:
+    defineRegisteredEffectRuntimeEntry(
+      "attack_damage_equal_to_controlled_card_cost",
+      effectRuntimeHandlerMap.attack_damage_equal_to_controlled_card_cost
+    ),
+  attack_destroy_top_legend_deck_then_damage_equal_cost:
+    defineRegisteredEffectRuntimeEntry(
+      "attack_destroy_top_legend_deck_then_damage_equal_cost",
+      effectRuntimeHandlerMap.attack_destroy_top_legend_deck_then_damage_equal_cost
+    ),
   attack_discard_cards: defineRegisteredEffectRuntimeEntry(
     "attack_discard_cards",
     effectRuntimeHandlerMap.attack_discard_cards
@@ -4057,10 +4225,11 @@ const playerControlledAttackEffectEntries = {
     "optional_spend_chip_attack_damage",
     effectRuntimeHandlerMap.optional_spend_chip_attack_damage
   ),
-  defense_discard_self_avoid_attack_then_optional_destroy_hand_card: defineRegisteredEffectRuntimeEntry(
-    "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
-    effectRuntimeHandlerMap.defense_discard_self_avoid_attack_then_optional_destroy_hand_card
-  ),
+  defense_discard_self_avoid_attack_then_optional_destroy_hand_card:
+    defineRegisteredEffectRuntimeEntry(
+      "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
+      effectRuntimeHandlerMap.defense_discard_self_avoid_attack_then_optional_destroy_hand_card
+    ),
   modify_owned_wand_attack_damage: defineRegisteredEffectRuntimeEntry(
     "modify_owned_wand_attack_damage",
     effectRuntimeHandlerMap.modify_owned_wand_attack_damage
@@ -4069,17 +4238,19 @@ const playerControlledAttackEffectEntries = {
     "double_owned_attack_damage",
     effectRuntimeHandlerMap.double_owned_attack_damage
   ),
-  prevent_defense_against_owned_wand_attacks: defineRegisteredEffectRuntimeEntry(
-    "prevent_defense_against_owned_wand_attacks",
-    effectRuntimeHandlerMap.prevent_defense_against_owned_wand_attacks
-  ),
+  prevent_defense_against_owned_wand_attacks:
+    defineRegisteredEffectRuntimeEntry(
+      "prevent_defense_against_owned_wand_attacks",
+      effectRuntimeHandlerMap.prevent_defense_against_owned_wand_attacks
+    ),
 } satisfies EffectRuntimeEntriesFor<PlayerControlledAttackEffectPayloadMap>;
 
 const activationEffectEntries = {
-  activation_destroy_self_then_destroy_own_cards: defineRegisteredEffectRuntimeEntry(
-    "activation_destroy_self_then_destroy_own_cards",
-    effectRuntimeHandlerMap.activation_destroy_self_then_destroy_own_cards
-  ),
+  activation_destroy_self_then_destroy_own_cards:
+    defineRegisteredEffectRuntimeEntry(
+      "activation_destroy_self_then_destroy_own_cards",
+      effectRuntimeHandlerMap.activation_destroy_self_then_destroy_own_cards
+    ),
   conditional_activation_destroy_own_cards: defineRegisteredEffectRuntimeEntry(
     "conditional_activation_destroy_own_cards",
     effectRuntimeHandlerMap.conditional_activation_destroy_own_cards
@@ -4119,10 +4290,11 @@ const ongoingEffectEntries = {
     "ongoing_hand_refill_bonus",
     effectRuntimeHandlerMap.ongoing_hand_refill_bonus
   ),
-  ongoing_start_turn_optional_gain_limp_wand_to_hand: defineRegisteredEffectRuntimeEntry(
-    "ongoing_start_turn_optional_gain_limp_wand_to_hand",
-    effectRuntimeHandlerMap.ongoing_start_turn_optional_gain_limp_wand_to_hand
-  ),
+  ongoing_start_turn_optional_gain_limp_wand_to_hand:
+    defineRegisteredEffectRuntimeEntry(
+      "ongoing_start_turn_optional_gain_limp_wand_to_hand",
+      effectRuntimeHandlerMap.ongoing_start_turn_optional_gain_limp_wand_to_hand
+    ),
 } satisfies EffectRuntimeEntriesFor<OngoingEffectPayloadMap>;
 
 const mayhemEffectEntries = {
@@ -4130,10 +4302,11 @@ const mayhemEffectEntries = {
     "mayhem_attack",
     effectRuntimeHandlerMap.mayhem_attack
   ),
-  mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status: defineRegisteredEffectRuntimeEntry(
-    "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
-    effectRuntimeHandlerMap.mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status
-  ),
+  mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status:
+    defineRegisteredEffectRuntimeEntry(
+      "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+      effectRuntimeHandlerMap.mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status
+    ),
   mayhem_each_player_choose_foe_gain_chips: defineRegisteredEffectRuntimeEntry(
     "mayhem_each_player_choose_foe_gain_chips",
     effectRuntimeHandlerMap.mayhem_each_player_choose_foe_gain_chips
@@ -4142,42 +4315,50 @@ const mayhemEffectEntries = {
     "mayhem_each_non_dingler_gain_chips",
     effectRuntimeHandlerMap.mayhem_each_non_dingler_gain_chips
   ),
-  mayhem_each_player_battle_highest_hand_cost: defineRegisteredEffectRuntimeEntry(
-    "mayhem_each_player_battle_highest_hand_cost",
-    effectRuntimeHandlerMap.mayhem_each_player_battle_highest_hand_cost
-  ),
-  mayhem_each_player_choose_discard_hand_draw_or_take_damage: defineRegisteredEffectRuntimeEntry(
-    "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
-    effectRuntimeHandlerMap.mayhem_each_player_choose_discard_hand_draw_or_take_damage
-  ),
-  mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none: defineRegisteredEffectRuntimeEntry(
-    "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
-    effectRuntimeHandlerMap.mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none
-  ),
-  mayhem_each_player_discard_deck_then_destroy_from_discard: defineRegisteredEffectRuntimeEntry(
-    "mayhem_each_player_discard_deck_then_destroy_from_discard",
-    effectRuntimeHandlerMap.mayhem_each_player_discard_deck_then_destroy_from_discard
-  ),
-  mayhem_each_player_gain_chips_then_attack_for_current_chips: defineRegisteredEffectRuntimeEntry(
-    "mayhem_each_player_gain_chips_then_attack_for_current_chips",
-    effectRuntimeHandlerMap.mayhem_each_player_gain_chips_then_attack_for_current_chips
-  ),
-  mayhem_each_player_reduce_life_to_gain_chips: defineRegisteredEffectRuntimeEntry(
-    "mayhem_each_player_reduce_life_to_gain_chips",
-    effectRuntimeHandlerMap.mayhem_each_player_reduce_life_to_gain_chips
-  ),
+  mayhem_each_player_battle_highest_hand_cost:
+    defineRegisteredEffectRuntimeEntry(
+      "mayhem_each_player_battle_highest_hand_cost",
+      effectRuntimeHandlerMap.mayhem_each_player_battle_highest_hand_cost
+    ),
+  mayhem_each_player_choose_discard_hand_draw_or_take_damage:
+    defineRegisteredEffectRuntimeEntry(
+      "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
+      effectRuntimeHandlerMap.mayhem_each_player_choose_discard_hand_draw_or_take_damage
+    ),
+  mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none:
+    defineRegisteredEffectRuntimeEntry(
+      "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
+      effectRuntimeHandlerMap.mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none
+    ),
+  mayhem_each_player_discard_deck_then_destroy_from_discard:
+    defineRegisteredEffectRuntimeEntry(
+      "mayhem_each_player_discard_deck_then_destroy_from_discard",
+      effectRuntimeHandlerMap.mayhem_each_player_discard_deck_then_destroy_from_discard
+    ),
+  mayhem_each_player_gain_chips_then_attack_for_current_chips:
+    defineRegisteredEffectRuntimeEntry(
+      "mayhem_each_player_gain_chips_then_attack_for_current_chips",
+      effectRuntimeHandlerMap.mayhem_each_player_gain_chips_then_attack_for_current_chips
+    ),
+  mayhem_each_player_reduce_life_to_gain_chips:
+    defineRegisteredEffectRuntimeEntry(
+      "mayhem_each_player_reduce_life_to_gain_chips",
+      effectRuntimeHandlerMap.mayhem_each_player_reduce_life_to_gain_chips
+    ),
   mayhem_each_player_vote_dingler: defineRegisteredEffectRuntimeEntry(
     "mayhem_each_player_vote_dingler",
     effectRuntimeHandlerMap.mayhem_each_player_vote_dingler
   ),
-  mayhem_lowest_life_players_gain_dingler_and_set_to_max_life: defineRegisteredEffectRuntimeEntry(
-    "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
-    effectRuntimeHandlerMap.mayhem_lowest_life_players_gain_dingler_and_set_to_max_life
-  ),
-  mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem: defineRegisteredEffectRuntimeEntry(
-    "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
-    effectRuntimeHandlerMap.mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem
-  ),
+  mayhem_lowest_life_players_gain_dingler_and_set_to_max_life:
+    defineRegisteredEffectRuntimeEntry(
+      "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
+      effectRuntimeHandlerMap.mayhem_lowest_life_players_gain_dingler_and_set_to_max_life
+    ),
+  mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem:
+    defineRegisteredEffectRuntimeEntry(
+      "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+      effectRuntimeHandlerMap.mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem
+    ),
   mega_mayhem_each_player_toggle_dingler: defineRegisteredEffectRuntimeEntry(
     "mega_mayhem_each_player_toggle_dingler",
     effectRuntimeHandlerMap.mega_mayhem_each_player_toggle_dingler
@@ -4230,9 +4411,7 @@ function readRuntimeEffectId(
   return { ok: true, effectId: effect["effectId"] };
 }
 
-export function validateRuntimeEffectCatalogPayload<
-  Id extends RuntimeEffectId,
->(
+export function validateRuntimeEffectCatalogPayload<Id extends RuntimeEffectId>(
   subjectId: string,
   effectId: Id,
   effect: unknown,
@@ -4367,6 +4546,19 @@ export function applyRuntimeEffectAfterPlayerAttackDamage(
     effect,
     context
   );
+}
+
+export function applyRuntimeEffectAfterDamageDealt(
+  effect: unknown,
+  context: EffectRuntimeAfterDamageDealtOperationContext
+): EffectRuntimeOperationResult<EffectExecutionResult> {
+  const resolvedId = readRuntimeEffectId(effect, "Unsupported effect id");
+  if (!resolvedId.ok) {
+    return { status: "error", error: resolvedId.error };
+  }
+  return getEffectRuntimeCatalogEntry(
+    resolvedId.effectId
+  ).applyAfterDamageDealt(`Effect ${resolvedId.effectId}`, effect, context);
 }
 
 export function evaluateRuntimeEffectEndTurnDrawModifier(

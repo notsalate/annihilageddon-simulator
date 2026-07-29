@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  executeControlledCardOnPlayCardEffects,
-} from "../src/engine/effect-runtime.js";
+import { executeControlledCardOnPlayCardEffects } from "../src/engine/effect-runtime.js";
 
 import {
   choosePlayerTargetForEffect,
@@ -23,6 +21,95 @@ test("onPlayCard executes only controlled ongoing card triggers", () => {
 test("after-attack dispatch executes only controlled ongoing card triggers", () => {
   assert.equal(runAfterAttackScenario(false), 0);
   assert.equal(runAfterAttackScenario(true), 2);
+});
+
+test("afterDamageDealt ignores a controlled non-ongoing trigger", () => {
+  const scenario = createGameScenario({ rootDir, seed: 47104 });
+  const state = scenario.state;
+  state.runtimeMode = "fixture";
+  const attacker = scenario.activePlayer;
+  const target = scenario.foes[0];
+  assert.ok(target);
+  attacker.permanents = [];
+  attacker.playedThisTurn = [];
+  attacker.wizardProperties = [];
+  state.turn.temporaryCardControls = [];
+  state.turn.damagingAttackPlayerIds = [];
+  attacker.life.current = 10;
+  target.life.current = 20;
+
+  const trigger = givenRuntimeCard(scenario, {
+    player: attacker,
+    zone: "playedThisTurn",
+    isOngoing: false,
+    effects: [
+      {
+        effectId: "heal_equal_damage_dealt_on_own_turn",
+        timing: "afterDamageDealt",
+      },
+    ],
+  });
+  givenTemporaryControl(scenario, trigger, attacker);
+  choosePlayerTargetForEffect(scenario, "attack_damage", target);
+  const attack = givenRuntimeCard(scenario, {
+    player: attacker,
+    effects: [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 2,
+        targetSelector: "chosenFoe",
+      },
+    ],
+  });
+
+  assert.deepEqual(play(scenario, attack), { ok: true });
+  assert.equal(target.life.current, 18);
+  assert.equal(attacker.life.current, 10);
+});
+
+test("afterDamageDealt executes a controlled ongoing trigger", () => {
+  const scenario = createGameScenario({ rootDir, seed: 47105 });
+  const state = scenario.state;
+  state.runtimeMode = "fixture";
+  const attacker = scenario.activePlayer;
+  const target = scenario.foes[0];
+  assert.ok(target);
+  attacker.permanents = [];
+  attacker.playedThisTurn = [];
+  attacker.wizardProperties = [];
+  state.turn.temporaryCardControls = [];
+  state.turn.damagingAttackPlayerIds = [];
+  attacker.life.current = 10;
+  target.life.current = 20;
+
+  givenRuntimeCard(scenario, {
+    player: attacker,
+    zone: "permanents",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "heal_equal_damage_dealt_on_own_turn",
+        timing: "afterDamageDealt",
+      },
+    ],
+  });
+  choosePlayerTargetForEffect(scenario, "attack_damage", target);
+  const attack = givenRuntimeCard(scenario, {
+    player: attacker,
+    effects: [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 2,
+        targetSelector: "chosenFoe",
+      },
+    ],
+  });
+
+  assert.deepEqual(play(scenario, attack), { ok: true });
+  assert.equal(target.life.current, 18);
+  assert.equal(attacker.life.current, 12);
 });
 
 function runOnPlayCardScenario(isOngoing: boolean): number {

@@ -86,6 +86,63 @@ test("end-turn dispatch stops on the first malformed modifier", () => {
   assert.match(result.error, /amount must be a positive integer/);
 });
 
+test("afterDamageDealt stops in Control Ledger order on a malformed ongoing trigger", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23014 });
+  const controller = scenario.activePlayer;
+  controller.permanents = [];
+  controller.life.current = 10;
+  const first = givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "heal_equal_damage_dealt_on_own_turn",
+        timing: "afterDamageDealt",
+      },
+    ],
+  });
+  givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "heal_equal_damage_dealt_on_own_turn",
+        timing: "invalid",
+      } as unknown as RuntimeEffect,
+    ],
+  });
+  givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "heal_equal_damage_dealt_on_own_turn",
+        timing: "afterDamageDealt",
+      },
+    ],
+  });
+
+  const result = dispatchControlledCardOperation(scenario.state, controller, {
+    kind: "afterDamageDealt",
+    damageDealt: 2,
+    damageSource: {
+      sourceType: "card",
+      runtimeMode: scenario.state.runtimeMode,
+      playerId: controller.playerId,
+      cardInstanceId: first.instanceId,
+      definitionId: first.definitionId,
+    },
+  });
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /timing must be afterDamageDealt/);
+  assert.equal(controller.life.current, 12);
+});
+
 test("calculateEndTurnDrawCount propagates malformed controlled modifiers", () => {
   const scenario = createGameScenario({ rootDir, seed: 23012 });
   const controller = scenario.activePlayer;

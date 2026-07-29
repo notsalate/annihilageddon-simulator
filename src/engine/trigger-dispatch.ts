@@ -1,6 +1,7 @@
 import type { CardDefinition } from "./data.js";
 import { buildControlledObjectView } from "./control-ledger.js";
 import {
+  applyRuntimeEffectAfterDamageDealt,
   applyRuntimeEffectAfterPlayerAttackDamage,
   evaluateRuntimeEffectEndTurnDrawModifier,
   executeRuntimeEffectOnPlayCard,
@@ -21,6 +22,11 @@ export interface ControlledCardDispatchOperationMap {
     readonly totalDamageDealt: number;
     readonly attackSource: EffectSourceContext;
   };
+  readonly afterDamageDealt: {
+    readonly kind: "afterDamageDealt";
+    readonly damageDealt: number;
+    readonly damageSource: EffectSourceContext;
+  };
   readonly collectEndTurnDrawModifier: {
     readonly kind: "collectEndTurnDrawModifier";
     readonly currentBaseDrawCount: number;
@@ -30,6 +36,7 @@ export interface ControlledCardDispatchOperationMap {
 export interface ControlledCardDispatchResultMap {
   readonly onPlayCard: EffectExecutionResult;
   readonly afterPlayerAttackDamage: EffectExecutionResult;
+  readonly afterDamageDealt: EffectExecutionResult;
   readonly collectEndTurnDrawModifier:
     | { readonly ok: true; readonly drawCount: number }
     | { readonly ok: false; readonly error: string };
@@ -39,7 +46,8 @@ type ControlledCardDispatchOperation =
   ControlledCardDispatchOperationMap[keyof ControlledCardDispatchOperationMap];
 type ControlledCardExecutionOperation =
   | ControlledCardDispatchOperationMap["onPlayCard"]
-  | ControlledCardDispatchOperationMap["afterPlayerAttackDamage"];
+  | ControlledCardDispatchOperationMap["afterPlayerAttackDamage"]
+  | ControlledCardDispatchOperationMap["afterDamageDealt"];
 type ControlledCardDispatchResult =
   ControlledCardDispatchResultMap[keyof ControlledCardDispatchResultMap];
 
@@ -64,6 +72,12 @@ export function dispatchControlledCardOperation(
 export function dispatchControlledCardOperation(
   state: GameState,
   controller: PlayerState,
+  operation: ControlledCardDispatchOperationMap["afterDamageDealt"]
+): ControlledCardDispatchResultMap["afterDamageDealt"];
+// eslint-disable-next-line no-redeclare -- TypeScript overload signature.
+export function dispatchControlledCardOperation(
+  state: GameState,
+  controller: PlayerState,
   operation: ControlledCardDispatchOperationMap["collectEndTurnDrawModifier"]
 ): ControlledCardDispatchResultMap["collectEndTurnDrawModifier"];
 /**
@@ -79,12 +93,7 @@ export function dispatchControlledCardOperation(
 ): ControlledCardDispatchResult {
   const candidates = discoverControlledCardEffects(state, controller);
   if (operation.kind === "collectEndTurnDrawModifier") {
-    return collectEndTurnDrawModifier(
-      state,
-      controller,
-      operation,
-      candidates
-    );
+    return collectEndTurnDrawModifier(state, controller, operation, candidates);
   }
   return executeControlledCardOperation(
     state,
@@ -141,14 +150,23 @@ function executeControlledCardOperation(
             playedCard: operation.playedCard,
             playedDefinition: operation.playedDefinition,
           })
-        : applyRuntimeEffectAfterPlayerAttackDamage(effect, {
-            state,
-            controller,
-            source,
-            sourceDefinition,
-            totalDamageDealt: operation.totalDamageDealt,
-            attackSource: operation.attackSource,
-          });
+        : operation.kind === "afterPlayerAttackDamage"
+          ? applyRuntimeEffectAfterPlayerAttackDamage(effect, {
+              state,
+              controller,
+              source,
+              sourceDefinition,
+              totalDamageDealt: operation.totalDamageDealt,
+              attackSource: operation.attackSource,
+            })
+          : applyRuntimeEffectAfterDamageDealt(effect, {
+              state,
+              controller,
+              source,
+              sourceDefinition,
+              damageDealt: operation.damageDealt,
+              damageSource: operation.damageSource,
+            });
 
     if (result.status === "notApplicable") {
       continue;

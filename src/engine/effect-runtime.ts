@@ -119,16 +119,14 @@ export function getWizardPropertyActivationAvailability(
     return { ok: true, executable: false };
   }
 
-  const operationSource: EffectSourceContext =
-    source ??
-    {
-      sourceType: "wizardProperty",
-      runtimeMode: state.runtimeMode,
-      playerId: player.playerId,
-      cardInstanceId: definition.tokenId,
-      definitionId: definition.tokenId,
-      tokenDefinitionId: definition.tokenId,
-    };
+  const operationSource: EffectSourceContext = source ?? {
+    sourceType: "wizardProperty",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: definition.tokenId,
+    definitionId: definition.tokenId,
+    tokenDefinitionId: definition.tokenId,
+  };
   let executable = false;
   for (const effect of definition.engine.effects) {
     const result = evaluateRuntimeEffectAtTiming(
@@ -376,8 +374,7 @@ export function calculateEndTurnDrawCount(
         source,
         "endTurn",
         (decodedEffect) =>
-          decodedEffect.effectId ===
-          "temporary_hand_limit_by_gained_card_type"
+          decodedEffect.effectId === "temporary_hand_limit_by_gained_card_type"
             ? {
                 status: "resolved",
                 result:
@@ -465,7 +462,9 @@ function cardTriggerMatches(
   const cardTypes = "cardTypes" in effect ? effect.cardTypes : undefined;
   const matchesType =
     Array.isArray(cardTypes) &&
-    cardTypes.some((cardType) => definition.engine.cardTypes.includes(cardType));
+    cardTypes.some((cardType) =>
+      definition.engine.cardTypes.includes(cardType)
+    );
   const matchesOngoing =
     "isOngoing" in effect &&
     effect.isOngoing === true &&
@@ -690,13 +689,7 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
       { kind: "playerControlled", player: attackingPlayer }
     );
   },
-  executeOnHitEffect(
-    state,
-    _attackingPlayer,
-    targetPlayer,
-    effect,
-    source
-  ) {
+  executeOnHitEffect(state, _attackingPlayer, targetPlayer, effect, source) {
     if (
       effect.effectId === "attack_gain_status" &&
       effect["statusId"] === "dingler"
@@ -709,13 +702,7 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
       error: `Unsupported player-controlled on-hit effect ${effect.effectId}`,
     };
   },
-  executeOutcomeBranch(
-    state,
-    attackingPlayer,
-    targetPlayer,
-    branch,
-    context
-  ) {
+  executeOutcomeBranch(state, attackingPlayer, targetPlayer, branch, context) {
     return executeAttackOutcomeBranch(
       state,
       attackingPlayer,
@@ -741,7 +728,9 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
 
 function resolvePlayerControlledAttackTargets(
   intent: PlayerControlledAttackIntent
-): { ok: true; players: readonly PlayerState[] } | { ok: false; error: string } {
+):
+  | { ok: true; players: readonly PlayerState[] }
+  | { ok: false; error: string } {
   if (intent.targetPlan.kind === "orderedPlayers") {
     return { ok: true, players: intent.targetPlan.players };
   }
@@ -758,10 +747,7 @@ function resolvePlayerControlledAttackTargets(
   if ("targetSelector" in effect && effect.targetSelector === "eachFoe") {
     return {
       ok: true,
-      players: getOpponentsInSeatingOrder(
-        intent.state,
-        intent.attackingPlayer
-      ),
+      players: getOpponentsInSeatingOrder(intent.state, intent.attackingPlayer),
     };
   }
 
@@ -982,7 +968,8 @@ const effectRuntimeServices: EffectRuntimeServices = {
   gainDinglerStatus,
   removeDinglerStatus,
   hasDinglerStatus,
-  resolvePlayerControlledAttack: resolvePlayerControlledAttackWithRuntimeAdapters,
+  resolvePlayerControlledAttack:
+    resolvePlayerControlledAttackWithRuntimeAdapters,
   resolveDefenseWindow,
   resolveMayhemAttack,
   resolveMayhemAttackPlan,
@@ -1003,7 +990,10 @@ function resolveStatusTargetPlayers(
   effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): { ok: true; players: PlayerState[] } | { ok: false; error: string } {
-  if ("targetSelector" in effect && effect.targetSelector === "eachPlayerClockwiseFromActive") {
+  if (
+    "targetSelector" in effect &&
+    effect.targetSelector === "eachPlayerClockwiseFromActive"
+  ) {
     return {
       ok: true,
       players: getPlayersInActiveOrder(state),
@@ -1563,34 +1553,11 @@ function applyDamageDealtTriggers(
     return;
   }
 
-  for (const controlledCard of getControlledCards(state, sourcePlayer)) {
-    const definition = state.cardDefinitions.get(controlledCard.definitionId);
-    if (definition === undefined || !definition.engine.playableInV0) {
-      continue;
-    }
-
-    for (const effect of definition.engine.effects) {
-      if (
-        effect.effectId !== "heal_equal_damage_dealt_on_own_turn" ||
-        effect.timing !== "afterDamageDealt"
-      ) {
-        continue;
-      }
-
-      healPlayer(
-        state,
-        sourcePlayer,
-        sourcePlayer,
-        damageDealt,
-        "heal_equal_damage_dealt_on_own_turn",
-        {
-          ...damageSource,
-          cardInstanceId: controlledCard.instanceId,
-          definitionId: controlledCard.definitionId,
-        }
-      );
-    }
-  }
+  void dispatchControlledCardOperation(state, sourcePlayer, {
+    kind: "afterDamageDealt",
+    damageDealt,
+    damageSource,
+  });
 }
 
 /**
