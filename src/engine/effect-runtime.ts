@@ -12,6 +12,7 @@ import {
   type DefenseWindowResolutionResult,
   type PlayerControlledAttackAdapters,
   type PlayerControlledAttackIntent,
+  type PlayerControlledAttackProfile,
   type RedirectedAttackIntent,
 } from "./attack-resolution.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
@@ -548,7 +549,7 @@ function getAttackProfile(
   state: GameState,
   _attackInitiator: PlayerState,
   source: EffectSourceContext
-): { damageBonus: number; unavoidable: boolean } {
+): PlayerControlledAttackProfile {
   if (source.sourceType !== "card") {
     return { damageBonus: 0, unavoidable: false };
   }

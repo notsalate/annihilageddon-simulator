@@ -2669,6 +2669,129 @@ test("Avada Loshavra makes an undefended target Dingler and counts it for power"
   );
 });
 
+test("tagged Wand status attack inherits its owner's defense prevention without dealing damage", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  for (const player of state.players) {
+    player.statuses = [];
+  }
+  replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    state.tokenDefinitions.get(
+      "esw2_dbg__wizard_property_009"
+    ) as TokenDefinition
+  );
+  const wandOfSuffering = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_009"
+  );
+  activePlayer.hand = activePlayer.hand.filter(
+    (card) => card.instanceId !== wandOfSuffering.instanceId
+  );
+  activePlayer.permanents.push(wandOfSuffering);
+  chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) => {
+    if (effectId !== "attack_gain_status") {
+      return undefined;
+    }
+    return choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === targetPlayer.playerId
+    );
+  });
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
+  targetPlayer.life.current = 10;
+  const attackCardId = addFixtureDefinitionToActiveHand(
+    state,
+    createFixtureCardDefinition(
+      "fixture-wand-status-attack",
+      [
+        {
+          effectId: "attack_gain_status",
+          timing: "onPlay",
+          statusId: "dingler",
+          target: { selector: "opponentPlayer" },
+        },
+      ],
+      { tags: ["wandAttackCard"] }
+    )
+  ).instanceId;
+  const targetLifeBefore = targetPlayer.life.current;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attackCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(hasDinglerStatus(targetPlayer), true);
+  assert.equal(targetPlayer.hand.includes(defenseCard), true);
+  assert.equal(targetPlayer.life.current, targetLifeBefore);
+});
+
+test("untagged status attack still allows defense despite its owner's Wand profile", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  for (const player of state.players) {
+    player.statuses = [];
+  }
+  replaceFirstWizardProperty(
+    state,
+    activePlayer,
+    state.tokenDefinitions.get(
+      "esw2_dbg__wizard_property_009"
+    ) as TokenDefinition
+  );
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
+  chooseFirstFixtureDefense(state);
+  const attackCardId = addFixtureDefinitionToActiveHand(
+    state,
+    createFixtureCardDefinition("fixture-untagged-status-attack", [
+      {
+        effectId: "attack_gain_status",
+        timing: "onPlay",
+        statusId: "dingler",
+        target: { selector: "opponentPlayer" },
+      },
+    ])
+  ).instanceId;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attackCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(hasDinglerStatus(targetPlayer), false);
+  assert.equal(targetPlayer.discard.includes(defenseCard), true);
+});
+
 test("2F skips a defended lowest-life player and still applies Dingler max-life normalization to an undefended tie", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
   state.activePlayerId = markPlayerId("player-2");
@@ -9341,10 +9464,7 @@ test("targeted fixture effect surfaces unsupported selectors explicitly", () => 
   });
 
   assert.equal(result.ok, false);
-  assert.match(
-    result.error,
-    /targetSelector must be one of/
-  );
+  assert.match(result.error, /targetSelector must be one of/);
 });
 
 test("runtime execution rejects unsupported effect ids explicitly", () => {

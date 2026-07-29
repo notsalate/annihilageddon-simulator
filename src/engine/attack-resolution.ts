@@ -62,7 +62,9 @@ export type AttackTargetResolutionResult =
   | { ok: true; resolution: AttackResolution; gameEnd?: never }
   | {
       ok: true;
-      gameEnd: NonNullable<Extract<EffectExecutionResult, { ok: true }>["gameEnd"]>;
+      gameEnd: NonNullable<
+        Extract<EffectExecutionResult, { ok: true }>["gameEnd"]
+      >;
       resolution?: never;
     }
   | { ok: false; error: string };
@@ -76,7 +78,9 @@ type PlayerControlledAttackTargetResolutionResult =
     }
   | {
       ok: true;
-      gameEnd: NonNullable<Extract<EffectExecutionResult, { ok: true }>["gameEnd"]>;
+      gameEnd: NonNullable<
+        Extract<EffectExecutionResult, { ok: true }>["gameEnd"]
+      >;
       resolution?: never;
       requestedTargetKilled?: never;
     }
@@ -93,7 +97,9 @@ export type DefenseWindowResolutionResult =
   | {
       ok: true;
       avoided: true;
-      gameEnd: NonNullable<Extract<EffectExecutionResult, { ok: true }>["gameEnd"]>;
+      gameEnd: NonNullable<
+        Extract<EffectExecutionResult, { ok: true }>["gameEnd"]
+      >;
       resolution?: never;
     }
   | { ok: false; error: string };
@@ -138,12 +144,18 @@ export type PlayerControlledAttackImpact =
       readonly effects: readonly RuntimeEffectPayload[];
     };
 
+export interface PlayerControlledAttackProfile {
+  readonly damageBonus: number;
+  readonly unavoidable: boolean;
+}
+
 export interface PlayerControlledAttackIntent {
   readonly state: GameState;
   readonly attackingPlayer: PlayerState;
   readonly source: EffectSourceContext;
   readonly effectId: RuntimeEffectId;
   readonly unavoidable: boolean;
+  readonly attackProfile?: PlayerControlledAttackProfile;
   readonly targetPlan: PlayerControlledAttackTargetPlan;
   readonly impact: PlayerControlledAttackImpact;
 }
@@ -160,7 +172,9 @@ export interface ResolvedAttackBranchContext {
 export interface PlayerControlledAttackAdapters {
   resolveTargets(
     intent: PlayerControlledAttackIntent
-  ): { ok: true; players: readonly PlayerState[] } | { ok: false; error: string };
+  ):
+    | { ok: true; players: readonly PlayerState[] }
+    | { ok: false; error: string };
 
   resolveDefenseWindow(
     state: GameState,
@@ -245,11 +259,13 @@ export function resolveAttackAmount(
     attackingPlayer.playerId !== targetPlayer.playerId &&
     getControlledOngoingCards(state, attackingPlayer).some((permanent) => {
       const definition = state.cardDefinitions.get(permanent.definitionId);
-      return definition?.engine.effects.some(
-        (effect) =>
-          effect.timing === "attackReplacement" &&
-          effect.effectId === "double_owned_attack_damage"
-      ) === true;
+      return (
+        definition?.engine.effects.some(
+          (effect) =>
+            effect.timing === "attackReplacement" &&
+            effect.effectId === "double_owned_attack_damage"
+        ) === true
+      );
     });
   const components: AttackAmountComponents = {
     ...amountState,
@@ -372,7 +388,7 @@ export function resolvePlayerControlledAttack(
         attackingPlayer: intent.attackingPlayer,
         targetPlayer,
         source: intent.source,
-        unavoidable: intent.unavoidable,
+        unavoidable: intent.attackProfile?.unavoidable ?? intent.unavoidable,
         amountComponents:
           intent.impact.kind === "damage"
             ? createAttackAmountState(

@@ -1505,12 +1505,14 @@ const attackGainStatusHandler: EffectRuntimeHandler<
       };
     }
 
+    const attackProfile = services.getAttackProfile(state, player, source);
     return services.resolvePlayerControlledAttack({
       state,
       attackingPlayer: player,
       source,
       effectId: effect.effectId,
-      unavoidable: false,
+      unavoidable: attackProfile.unavoidable,
+      attackProfile,
       targetPlan: { kind: "runtimeSelector", effect },
       impact: { kind: "effects", effects: [effect] },
     });
