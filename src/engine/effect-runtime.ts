@@ -290,20 +290,19 @@ export function moveGainedCardToPlayerDestination(
       }
 
       if (applicability.result === "topdeck_gained_card") {
-        destination = "deckTop";
-        recordGameEvent(state, {
-          type: "effectChoiceSelected",
-          playerId: player.playerId,
-          cardInstanceId: token.instanceId,
-          definitionId: token.definitionId,
-          tokenInstanceId: token.instanceId,
-          tokenDefinitionId: token.definitionId,
-          choiceKind: "cardTarget",
-          targetCardInstanceId: card.instanceId,
-          targetDefinitionId: card.definitionId,
-          effectId: "topdeck_gained_card",
-          sourceType: "wizardProperty",
-        });
+        const choice = chooseEffectChoice(
+          state,
+          player,
+          source,
+          "topdeck_gained_card",
+          [
+            { choiceKind: "option", choiceId: "apply" },
+            { choiceKind: "option", choiceId: "decline" },
+          ]
+        );
+        if (choice?.choiceId === "apply") {
+          destination = "deckTop";
+        }
         continue;
       }
 

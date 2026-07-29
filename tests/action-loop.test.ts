@@ -4705,6 +4705,181 @@ test("buying and gain_card share gained-card movement guarantees", () => {
   );
 });
 
+test("Wizard Property 006 lets the player decline topdecking a gained creature", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_006");
+  assert.ok(property);
+  assert.equal(property.kind, "wizardProperty");
+  replaceFirstWizardProperty(state, player, property);
+
+  const definition = createFixtureCardDefinition(
+    "fixture-declined-creature",
+    [],
+    {
+      cardTypes: ["creature"],
+    }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const card = createCommonRuntimeCard(definition.cardId);
+  state.common.market.splice(0, state.common.market.length, card);
+
+  let choiceRequested = false;
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId !== "topdeck_gained_card") {
+      return undefined;
+    }
+    choiceRequested = true;
+    assert.deepEqual(
+      choices.map((choice) => choice.choiceId),
+      ["apply", "decline"]
+    );
+    assert.equal(
+      state.eventLog.some(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.effectId === "topdeck_gained_card"
+      ),
+      false
+    );
+    return choices[1];
+  };
+
+  const result = applyAction(state, {
+    type: "buyMarketCard",
+    source: "mainMarket",
+    cardInstanceId: card.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(choiceRequested, true);
+  assert.equal(player.deck.includes(card), false);
+  assert.equal(player.discard.includes(card), true);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "topdeck_gained_card" &&
+        event.choiceId === "decline" &&
+        event.choiceIds.join(",") === "apply,decline"
+    )
+  );
+});
+
+test("Wizard Property 006 and 008 apply topdecking after the player chooses apply", () => {
+  const cases = [
+    {
+      propertyId: "esw2_dbg__wizard_property_006",
+      cardId: "fixture-applied-creature",
+      cardTypes: ["creature"],
+      isOngoing: false,
+    },
+    {
+      propertyId: "esw2_dbg__wizard_property_008",
+      cardId: "fixture-applied-permanent",
+      cardTypes: [],
+      isOngoing: true,
+    },
+  ] as const;
+
+  for (const testCase of cases) {
+    const state = initializeGame({
+      rootDir,
+      dataPackPath: playableRuntimeDataPackPath,
+      seed: 60615,
+    });
+    const player = mustGetPlayer(state, state.activePlayerId);
+    const property = state.tokenDefinitions.get(testCase.propertyId);
+    assert.ok(property);
+    assert.equal(property.kind, "wizardProperty");
+    replaceFirstWizardProperty(state, player, property);
+    const definition = createFixtureCardDefinition(testCase.cardId, [], {
+      cardTypes: [...testCase.cardTypes],
+      isOngoing: testCase.isOngoing,
+    });
+    state.cardDefinitions = new Map([
+      ...state.cardDefinitions,
+      [definition.cardId, definition],
+    ]);
+    const card = createCommonRuntimeCard(definition.cardId);
+    state.common.market.splice(0, state.common.market.length, card);
+    state.effectChoiceStrategy = ({ effectId, choices }) =>
+      effectId === "topdeck_gained_card" ? choices[0] : undefined;
+
+    const result = applyAction(state, {
+      type: "buyMarketCard",
+      source: "mainMarket",
+      cardInstanceId: card.instanceId,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(player.deck[0], card);
+    assert.ok(
+      state.eventLog.some(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.effectId === "topdeck_gained_card" &&
+          event.choiceId === "apply" &&
+          event.choiceIds.join(",") === "apply,decline"
+      )
+    );
+  }
+});
+
+test("Wizard Property 008 lets the player decline topdecking a gained permanent", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_008");
+  assert.ok(property);
+  assert.equal(property.kind, "wizardProperty");
+  replaceFirstWizardProperty(state, player, property);
+  const definition = createFixtureCardDefinition(
+    "fixture-declined-permanent",
+    [],
+    {
+      isOngoing: true,
+    }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const card = createCommonRuntimeCard(definition.cardId);
+  state.common.market.splice(0, state.common.market.length, card);
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "topdeck_gained_card" ? choices[1] : undefined;
+
+  const result = applyAction(state, {
+    type: "buyMarketCard",
+    source: "mainMarket",
+    cardInstanceId: card.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(player.deck.includes(card), false);
+  assert.equal(player.discard.includes(card), true);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "topdeck_gained_card" &&
+        event.choiceId === "decline" &&
+        event.choiceIds.join(",") === "apply,decline"
+    )
+  );
+});
+
 test("discard_card moves the first legal hand card into the active player's discard", () => {
   const state = initializeGame({
     rootDir,
@@ -9751,8 +9926,9 @@ function assertGainedMovementGuarantees(
       return (
         event.type === "effectChoiceSelected" &&
         event.playerId === player.playerId &&
-        event.targetCardInstanceId === card.instanceId &&
-        event.effectId === "topdeck_gained_card"
+        event.effectId === "topdeck_gained_card" &&
+        event.choiceId === "apply" &&
+        event.choiceIds.join(",") === "apply,decline"
       );
     })
   );
