@@ -37,6 +37,7 @@ import {
   type AvoidAttackRuntimeEffect,
   type DoubleOwnedAttackDamageRuntimeEffect,
   type IncreaseHandLimitAtMaxLifeRuntimeEffect,
+  type ModifyEffectiveValueRuntimeEffect,
   isWildMagicOption,
   type AttackOutcomeBranch,
   type EffectTiming,
@@ -51,6 +52,7 @@ import {
   type RuntimeEffectId,
   type RuntimeEffectCost,
   type RuntimeEffectPayload,
+  type RuntimeEffectTarget,
   type SetupEffectPayloadMap,
   type ImmediateEffectPayloadMap,
   type PlayerControlledAttackEffectPayloadMap,
@@ -402,6 +404,20 @@ export interface EffectRuntimeTimedEvaluationOperationContext<
   readonly timing: EffectTiming;
   readonly evaluate: (
     effect: Effect
+  ) => EffectRuntimeHandlerOperationResult<Result>;
+}
+
+export type EffectiveValueModifierOperation = (value: number) => number;
+
+export interface EffectiveValueModifierOperationContext<Result> {
+  readonly timing: "whileControlled" | "whileScoring";
+  readonly valueKind: ModifyEffectiveValueRuntimeEffect["valueKind"];
+  readonly targetMatches: (target: RuntimeEffectTarget) => boolean;
+  readonly countOwnedScoringCards: (
+    countedCardTypes: readonly string[]
+  ) => number;
+  readonly evaluate: (
+    apply: EffectiveValueModifierOperation
   ) => EffectRuntimeHandlerOperationResult<Result>;
 }
 
@@ -4599,6 +4615,52 @@ export function evaluateRuntimeEffectAtTiming<Result>(
     `Effect ${resolvedId.effectId}`,
     effect,
     { source, timing, evaluate }
+  );
+}
+
+export function applyEffectiveValueModifier<Result>(
+  effect: unknown,
+  source: EffectSourceContext,
+  context: EffectiveValueModifierOperationContext<Result>
+): EffectRuntimeOperationResult<Result> {
+  const resolvedId = readRuntimeEffectId(effect, "Unsupported effect id");
+  if (!resolvedId.ok) {
+    return { status: "error", error: resolvedId.error };
+  }
+  if (
+    resolvedId.effectId !== "modify_effective_value" &&
+    resolvedId.effectId !== "fixture_modify_effective_value"
+  ) {
+    return { status: "notApplicable" };
+  }
+
+  return getEffectRuntimeCatalogEntry(resolvedId.effectId).evaluateAtTiming(
+    `Effect ${resolvedId.effectId}`,
+    effect,
+    {
+      source,
+      timing: context.timing,
+      evaluate(decoded) {
+        if (
+          decoded.valueKind !== context.valueKind ||
+          !context.targetMatches(decoded.target)
+        ) {
+          return { status: "notApplicable" };
+        }
+
+        const apply: EffectiveValueModifierOperation =
+          decoded.operation === "invertNegative"
+            ? (value) => (value < 0 ? Math.abs(value) : value)
+            : (value) =>
+                value +
+                (decoded.amount ??
+                  (decoded.amountPerOwnedCard ?? 0) *
+                    context.countOwnedScoringCards(
+                      decoded.countedCardTypes ?? []
+                    ));
+        return context.evaluate(apply);
+      },
+    }
   );
 }
 

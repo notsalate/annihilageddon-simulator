@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 import {
   buildControlledObjectView,
@@ -21,14 +22,57 @@ import {
   type TrophyLikeInstance,
 } from "../src/index.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
+import { applyEffectiveValueModifier } from "../src/engine/effect-runtime-registry.js";
 import {
   markCardInstanceId,
   markCardDefinitionId,
+  markPlayerId,
 } from "../src/domain/types.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
+
+test("Catalog rejects a malformed effective-value modifier before evaluation", () => {
+  const result = applyEffectiveValueModifier(
+    {
+      effectId: "fixture_modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "cardCost",
+      operation: "add",
+      amount: -1,
+    },
+    {
+      sourceType: "card",
+      runtimeMode: "fixture",
+      playerId: markPlayerId("player-1"),
+      cardInstanceId: "fixture-effective-value-source",
+      definitionId: "fixture-effective-value-source",
+    },
+    {
+      timing: "whileControlled",
+      valueKind: "cardCost",
+      targetMatches: () => true,
+      countOwnedScoringCards: () => 0,
+      evaluate: (apply) => ({ status: "resolved", result: apply(5) }),
+    }
+  );
+
+  assert.deepEqual(result, {
+    status: "error",
+    error: "Effect fixture_modify_effective_value.target is required",
+  });
+});
+
+test("effective values delegate modifier fields to the Catalog operation", () => {
+  const source = readFileSync("src/engine/effective-values.ts", "utf8");
+
+  assert.doesNotMatch(
+    source,
+    /effect\["(?:amount|amountPerOwnedCard|operation)"\]/
+  );
+  assert.match(source, /applyEffectiveValueModifier/);
+});
 
 test("current runtime keeps fifteen effectless Limp Wands worth minus one VP", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
@@ -603,8 +647,8 @@ function createTreasureDiscountWizardProperty(
     schemaVersion: 1,
     tokenId,
     runtimeSchema: "krutagidon.tokenDefinition.v0",
-  kind: "wizardProperty",
-  source: { image: "assets/wizard-property/wp_fixture.png" },
+    kind: "wizardProperty",
+    source: { image: "assets/wizard-property/wp_fixture.png" },
     engine: {
       mappingStatus: "mapped",
       playableInV0: true,
