@@ -47,6 +47,7 @@ export function assertGameStateInvariants(state: GameState): void {
 
   const cardLocations = new Map<string, string[]>();
   const tokenLocations = new Map<string, string[]>();
+  const playerIds = new Set(state.players.map((player) => player.playerId));
 
   for (const player of state.players) {
     assertPlayerInvariants(player);
@@ -64,6 +65,11 @@ export function assertGameStateInvariants(state: GameState): void {
   }
 
   for (const location of listPhysicalCardLocations(state)) {
+    assertTrue(
+      location.card.ownerId === "common" ||
+        playerIds.has(location.card.ownerId),
+      `${location.card.instanceId} in ${location.zoneName} must be owned by a player or common`
+    );
     if (location.expectedOwnerId !== undefined) {
       assertTrue(
         location.card.ownerId === location.expectedOwnerId,

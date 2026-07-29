@@ -10,6 +10,7 @@ import {
   type CardInstance,
   type GameState,
   type PlayerState,
+  assertGameStateInvariants,
 } from "../src/index.js";
 import {
   buildControlledObjectView,
@@ -22,6 +23,7 @@ import {
 import {
   markCardDefinitionId,
   markCardInstanceId,
+  markPlayerId,
 } from "../src/domain/types.js";
 import { reconcileActivePlayerControlledPower } from "../src/engine/controlled-power.js";
 import {
@@ -121,6 +123,30 @@ test("Control Ledger locates player singleton and common card zones", () => {
     findCardLocation(state, marketCard.instanceId)?.zoneName,
     "mainMarket"
   );
+});
+
+test("game-state invariants reject an unknown owner in a flexible physical card zone", () => {
+  const state = initializeGame({ rootDir, seed: 22006 });
+  const card = state.players[0]?.hand.shift();
+  assert.ok(card);
+  card.ownerId = markPlayerId("player-99");
+  state.common.destroyedPile.push(card);
+
+  assert.throws(
+    () => assertGameStateInvariants(state),
+    new RegExp(
+      `${card.instanceId} in destroyedPile must be owned by a player or common`
+    )
+  );
+});
+
+test("game-state invariants allow a player-owned card in a flexible physical card zone", () => {
+  const state = initializeGame({ rootDir, seed: 22007 });
+  const card = state.players[1]?.hand.shift();
+  assert.ok(card);
+  state.common.destroyedPile.push(card);
+
+  assert.doesNotThrow(() => assertGameStateInvariants(state));
 });
 
 test("temporary control lifecycle is idempotent, transferable, releasable, and fork-safe", () => {
