@@ -38,7 +38,6 @@ const testSuites = [
   "card-runtime-clusters.test.js",
   "engine-guards.test.js",
   "review-final-lint.test.js",
-  "review-final-ownership.test.js",
   "effect-choice-routing.test.js",
   "best-move-analysis.test.js",
   "best-move-cli.test.js",

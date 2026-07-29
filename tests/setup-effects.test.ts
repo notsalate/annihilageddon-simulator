@@ -4,6 +4,8 @@ import test from "node:test";
 
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 import {
+  markCardDefinitionId,
+  markCardInstanceId,
   markTokenDefinitionId,
   markTokenInstanceId,
 } from "../src/domain/types.js";
@@ -128,10 +130,7 @@ test("setup catalog passes a concrete starting-life payload to its executor", ()
       executeSetup(playerState, effect) {
         observedLifeTotals.push(effect.lifeTotal);
         playerState.life.current = effect.lifeTotal;
-        playerState.life.max = Math.max(
-          playerState.life.max,
-          effect.lifeTotal
-        );
+        playerState.life.max = Math.max(playerState.life.max, effect.lifeTotal);
         return { ok: true };
       },
     },
@@ -241,11 +240,8 @@ test("setup fixture does not depend on the current working directory", () => {
 test("initializeGame does not look up a wizard property again after its setup effects", () => {
   const tokenDefinitions = new TokenDefinitionsWithoutPostSetupLookup(2);
   const state = initializeGame({
-    dataPack: setupDataPack(
-      true,
-      "fixture",
-      tokenDefinitions,
-      () => tokenDefinitions.recordSetupEffectListRead()
+    dataPack: setupDataPack(true, "fixture", tokenDefinitions, () =>
+      tokenDefinitions.recordSetupEffectListRead()
     ),
     seed: 119,
   });
@@ -263,10 +259,7 @@ test("initializeGame passes combat runtime mode to the setup executor", () => {
       executeSetup(playerState, effect, setupSource) {
         observedRuntimeMode = setupSource.runtimeMode;
         playerState.life.current = effect.lifeTotal;
-        playerState.life.max = Math.max(
-          playerState.life.max,
-          effect.lifeTotal
-        );
+        playerState.life.max = Math.max(playerState.life.max, effect.lifeTotal);
         return { ok: true };
       },
     },
@@ -445,6 +438,31 @@ test("replace_starting_card replaces first matching card in zone order", () => {
   assert.equal(subject.deck[0]?.instanceId, "deck-a");
 });
 
+test("replace_starting_card replaces a matching unbought familiar", () => {
+  const subject = player();
+  subject.unboughtFamiliar = {
+    instanceId: markCardInstanceId("fixture-familiar-source"),
+    definitionId: markCardDefinitionId("source"),
+    ownerId: subject.playerId,
+    marketChips: 0,
+  };
+
+  const result = tryExecuteSetupEffect(
+    subject,
+    {
+      effectId: "replace_starting_card",
+      timing: "setup",
+      fromDefinitionId: "source",
+      toDefinitionId: "target",
+    },
+    source,
+    services()
+  );
+
+  assert.deepEqual(result, { status: "executed" });
+  assert.equal(subject.unboughtFamiliar?.definitionId, "target");
+});
+
 test("replace_starting_card preserves the matching card owner", () => {
   const subject = player();
   const opponentId = "player-2" as PlayerState["playerId"];
@@ -498,12 +516,10 @@ test("replace_starting_card reports a missing source card for full packs", () =>
   assert.equal(subject.hand.length, 0);
   assert.equal(subject.deck.length, 0);
 
-  const incomplete = tryExecuteSetupEffect(
-    subject,
-    effect,
-    source,
-    { ...services(), allowsMissingData: true }
-  );
+  const incomplete = tryExecuteSetupEffect(subject, effect, source, {
+    ...services(),
+    allowsMissingData: true,
+  });
   assert.deepEqual(incomplete, { status: "executed" });
   assert.equal(subject.hand.length, 0);
   assert.equal(subject.deck.length, 0);
@@ -637,9 +653,7 @@ function setupDataPack(
     "fixture-familiar-002",
     "fixture-familiar-003",
     "fixture-familiar-004",
-  ].map((cardId) =>
-    cardDefinition(cardId, "familiar", effectiveMappingStatus)
-  );
+  ].map((cardId) => cardDefinition(cardId, "familiar", effectiveMappingStatus));
   const effects: RuntimeEffect[] = [
     { effectId: "set_starting_life_total", timing: "setup", lifeTotal: 27 },
     ...(includeForce
@@ -687,16 +701,14 @@ function setupDataPack(
       tokenDefinitionPaths: [],
     },
     cardDefinitions: new Map([
-      ...starterDefinitions.map((definition) => [
-        definition.cardId,
-        definition,
-      ] as const),
+      ...starterDefinitions.map(
+        (definition) => [definition.cardId, definition] as const
+      ),
       [mainDefinition.cardId, mainDefinition],
       [legendDefinition.cardId, legendDefinition],
-      ...familiarDefinitions.map((definition) => [
-        definition.cardId,
-        definition,
-      ] as const),
+      ...familiarDefinitions.map(
+        (definition) => [definition.cardId, definition] as const
+      ),
     ]),
     tokenDefinitions: definitions,
     decks: {

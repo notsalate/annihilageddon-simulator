@@ -2,19 +2,87 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  executeRuntimeEffect,
   applyRuntimeEffectAfterPlayerAttackDamage,
   evaluateRuntimeEffectAtTiming,
   evaluateRuntimeEffectEndTurnDrawModifier,
   executeRuntimeEffectOnPlayCard,
   validateRuntimeEffectCatalogPayload,
+  type EffectRuntimeServices,
   type EffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
 import {
   createGameScenario,
   givenRuntimeCard,
 } from "./helpers/game-scenario.js";
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 
 const rootDir = process.cwd();
+
+test("catalog execute rejects an unsupported source kind before calling its handler", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23018 });
+  const subject = scenario.activePlayer;
+  let handlerCalled = false;
+
+  const result = withTemporaryEffectRuntimeOperations(
+    "ongoing_hand_refill_bonus",
+    {
+      execute() {
+        handlerCalled = true;
+        return { ok: true };
+      },
+    },
+    () =>
+      executeRuntimeEffect(
+        scenario.state,
+        subject,
+        {
+          effectId: "ongoing_hand_refill_bonus",
+          timing: "endTurn",
+          amount: 1,
+        },
+        catalogSource(subject, "wizardProperty", "combat"),
+        throwingRuntimeServices()
+      )
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /unsupported source kind/);
+  assert.equal(handlerCalled, false);
+});
+
+test("catalog execute rejects an unavailable runtime mode before calling its handler", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23019 });
+  const subject = scenario.activePlayer;
+  let handlerCalled = false;
+
+  const result = withTemporaryEffectRuntimeOperations(
+    "fixture_add_power_equal_to_target_cost",
+    {
+      execute() {
+        handlerCalled = true;
+        return { ok: true };
+      },
+    },
+    () =>
+      executeRuntimeEffect(
+        scenario.state,
+        subject,
+        {
+          effectId: "fixture_add_power_equal_to_target_cost",
+          target: { selector: "mainMarketCard" },
+        },
+        catalogSource(subject, "card", "combat"),
+        throwingRuntimeServices()
+      )
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /unavailable in combat mode/);
+  assert.equal(handlerCalled, false);
+});
 
 test("catalog names executable timing constraints separately from payload decoding", () => {
   const result = validateRuntimeEffectCatalogPayload(
@@ -252,3 +320,25 @@ test("catalog validates a payload before declaring an after-attack hook not appl
     { status: "notApplicable" }
   );
 });
+
+function catalogSource(
+  player: { readonly playerId: EffectSourceContext["playerId"] },
+  sourceType: EffectSourceContext["sourceType"],
+  runtimeMode: EffectSourceContext["runtimeMode"]
+): EffectSourceContext {
+  return {
+    sourceType,
+    runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: "fixture-catalog-source",
+    definitionId: "fixture-catalog-source",
+  };
+}
+
+function throwingRuntimeServices(): EffectRuntimeServices {
+  return new Proxy({} as EffectRuntimeServices, {
+    get() {
+      throw new Error("Handler must not run before catalog policy validation");
+    },
+  });
+}
