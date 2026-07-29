@@ -146,8 +146,7 @@ export function getControlledOngoingCards(
   return getControlledCards(state, player).filter((card) => {
     const definition = state.cardDefinitions.get(card.definitionId);
     return (
-      definition?.engine.playableInV0 === true &&
-      definition.engine.isOngoing
+      definition?.engine.playableInV0 === true && definition.engine.isOngoing
     );
   });
 }
@@ -322,6 +321,29 @@ export function listPhysicalCardZoneDescriptors(
   ];
 }
 
+export function clonePhysicalCardZones(
+  source: GameState,
+  target: GameState,
+  cloneCard: (card: CardInstance) => CardInstance
+): void {
+  const targetDescriptors = new Map(
+    listPhysicalCardZoneDescriptors(target).map((descriptor) => [
+      descriptor.zoneName,
+      descriptor,
+    ])
+  );
+
+  for (const sourceDescriptor of listPhysicalCardZoneDescriptors(source)) {
+    const targetDescriptor = targetDescriptors.get(sourceDescriptor.zoneName);
+    if (targetDescriptor === undefined) {
+      throw new Error(
+        `Missing physical card zone ${sourceDescriptor.zoneName} in clone target`
+      );
+    }
+    targetDescriptor.replace(sourceDescriptor.read().map(cloneCard));
+  }
+}
+
 export function listPhysicalCardLocations(
   state: GameState
 ): readonly PhysicalCardLocation[] {
@@ -386,7 +408,7 @@ function createArrayCardZoneDescriptor(
     cardinality: "many",
     ...(expectedOwnerId === undefined ? {} : { expectedOwnerId }),
     read() {
-      return [...readStorage()];
+      return readStorage().map((card) => card);
     },
     replace(cards) {
       replaceStorage([...cards]);

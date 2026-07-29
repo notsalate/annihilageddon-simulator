@@ -1,4 +1,7 @@
-import { cloneTemporaryControls } from "./control-ledger.js";
+import {
+  clonePhysicalCardZones,
+  cloneTemporaryControls,
+} from "./control-ledger.js";
 import { installGameEventLog } from "./game-events.js";
 import type {
   CardInstance,
@@ -39,6 +42,7 @@ export function forkGameState(source: GameState): GameState {
       : { effectChoiceStrategy: source.effectChoiceStrategy }),
   };
 
+  clonePhysicalCardZones(source, fork, cloneCard);
   installGameEventLog(fork);
   return fork;
 }
@@ -46,15 +50,12 @@ export function forkGameState(source: GameState): GameState {
 function clonePlayer(source: PlayerState): PlayerState {
   return {
     playerId: source.playerId,
-    deck: source.deck.map(cloneCard),
-    hand: source.hand.map(cloneCard),
-    discard: source.discard.map(cloneCard),
-    playedThisTurn: source.playedThisTurn.map(cloneCard),
-    permanents: source.permanents.map(cloneCard),
-    unboughtFamiliar:
-      source.unboughtFamiliar === undefined
-        ? undefined
-        : cloneCard(source.unboughtFamiliar),
+    deck: [],
+    hand: [],
+    discard: [],
+    playedThisTurn: [],
+    permanents: [],
+    unboughtFamiliar: undefined,
     deadWizardTokens: source.deadWizardTokens.map(cloneToken),
     wizardProperties: source.wizardProperties.map(cloneToken),
     statuses: source.statuses.map(cloneStatus),
@@ -66,15 +67,15 @@ function clonePlayer(source: PlayerState): PlayerState {
 
 function cloneCommon(source: CommonState): CommonState {
   return {
-    market: source.market.map(cloneCard),
-    legendMarket: source.legendMarket.map(cloneCard),
-    mainDeck: source.mainDeck.map(cloneCard),
-    legendDeck: source.legendDeck.map(cloneCard),
-    wildMagicStack: source.wildMagicStack.map(cloneCard),
-    limpWandStack: source.limpWandStack.map(cloneCard),
-    destroyedPile: source.destroyedPile.map(cloneCard),
-    destroyedMayhem: source.destroyedMayhem.map(cloneCard),
-    destroyedMegaMayhem: source.destroyedMegaMayhem.map(cloneCard),
+    market: [],
+    legendMarket: [],
+    mainDeck: [],
+    legendDeck: [],
+    wildMagicStack: [],
+    limpWandStack: [],
+    destroyedPile: [],
+    destroyedMayhem: [],
+    destroyedMegaMayhem: [],
     deadWizardTokens: cloneDeadWizardTokens(source.deadWizardTokens),
   };
 }

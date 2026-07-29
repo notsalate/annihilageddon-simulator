@@ -5,6 +5,7 @@ import {
   applyAction,
   createSeededRng,
   forkGameState,
+  type CardInstance,
   type CardDefinition,
   type GameState,
   type TokenDefinition,
@@ -17,6 +18,7 @@ import {
   markTokenDefinitionId,
   markTokenInstanceId,
 } from "../src/domain/types.js";
+import { clonePhysicalCardZones } from "../src/engine/control-ledger.js";
 
 function createFixture(): GameState {
   const playerId = markPlayerId("player-1");
@@ -210,6 +212,26 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
   assert.equal(fork.tokenDefinitions, source.tokenDefinitions);
   assert.equal(fork.effectChoiceStrategy, source.effectChoiceStrategy);
   assert.notEqual(fork.eventLog, source.eventLog);
+});
+
+test("Ledger clones descriptor zones with isolated cards", () => {
+  const source = createFixture();
+  const target = createFixture();
+  const sourceCard = source.common.market[0]!;
+  source.common.destroyedMegaMayhem.push({
+    ...sourceCard,
+    instanceId: markCardInstanceId("destroyed-mega-mayhem-card"),
+  });
+
+  clonePhysicalCardZones(source, target, (card: CardInstance) => ({ ...card }));
+  target.common.destroyedMegaMayhem[0]!.marketChips = 3;
+
+  assert.equal(source.common.destroyedMegaMayhem.length, 1);
+  assert.equal(source.common.destroyedMegaMayhem[0]!.marketChips, 0);
+  assert.notEqual(
+    target.common.destroyedMegaMayhem[0],
+    source.common.destroyedMegaMayhem[0]
+  );
 });
 
 test("fork isolates source mutations and sibling mutable collections", () => {
