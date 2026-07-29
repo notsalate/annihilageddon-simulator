@@ -23,6 +23,8 @@ import {
 } from "../domain/types.js";
 import {
   buildControlledObjectView,
+  findCardLocation,
+  getControlledOngoingCards,
   replaceOwnedCardDefinitionInPlayerZones,
 } from "./control-ledger.js";
 import {
@@ -98,6 +100,12 @@ export interface EffectSourceContext {
   definitionId: string;
   tokenInstanceId?: TokenInstance["instanceId"];
   tokenDefinitionId?: TokenDefinition["tokenId"];
+}
+
+export interface AttackReplacementProfile {
+  readonly doublesOwnedAttackDamage: boolean;
+  readonly damageBonus: number;
+  readonly unavoidable: boolean;
 }
 
 export interface PlayerDefeatGameEnd {
@@ -4757,6 +4765,145 @@ export function applyEffectiveValueModifier<Result>(
         return context.evaluate(apply);
       },
     }
+  );
+}
+
+export function collectAttackReplacementProfile(
+  state: GameState,
+  attackingPlayer: PlayerState,
+  source: EffectSourceContext
+): EffectRuntimeOperationResult<AttackReplacementProfile> {
+  const profile = {
+    doublesOwnedAttackDamage: false,
+    damageBonus: 0,
+    unavoidable: false,
+  };
+  const applyEffects = (
+    effects: readonly RuntimeEffectPayload[],
+    effectSource: EffectSourceContext,
+    allowWandDefensePrevention: boolean
+  ): EffectRuntimeOperationResult<void> => {
+    for (const effect of effects) {
+      if (effect.timing !== "attackReplacement") continue;
+      const result = evaluateRuntimeEffectAtTiming(
+        effect,
+        effectSource,
+        "attackReplacement",
+        (decoded) => {
+          if (decoded.effectId === "double_owned_attack_damage") {
+            profile.doublesOwnedAttackDamage = true;
+            return { status: "resolved", result: undefined };
+          }
+          if (!effectMatchesAttackSource(state, decoded, source.definitionId)) {
+            return { status: "notApplicable" };
+          }
+          if (decoded.effectId === "modify_owned_wand_attack_damage") {
+            profile.damageBonus += decoded.amount;
+          }
+          if (
+            allowWandDefensePrevention &&
+            decoded.effectId === "prevent_defense_against_owned_wand_attacks"
+          ) {
+            profile.unavoidable = true;
+          }
+          return { status: "resolved", result: undefined };
+        }
+      );
+      if (result.status === "error") return result;
+    }
+    return { status: "resolved", result: undefined };
+  };
+
+  for (const card of getControlledOngoingCards(state, attackingPlayer)) {
+    const definition = state.cardDefinitions.get(card.definitionId);
+    if (definition === undefined) continue;
+    const result = applyEffects(
+      definition.engine.effects,
+      {
+        sourceType: "card",
+        runtimeMode: source.runtimeMode,
+        playerId: attackingPlayer.playerId,
+        cardInstanceId: card.instanceId,
+        definitionId: card.definitionId,
+      },
+      false
+    );
+    if (result.status === "error") return result;
+  }
+
+  if (source.sourceType !== "card")
+    return { status: "resolved", result: profile };
+  const sourceCard = findCardLocation(state, source.cardInstanceId)?.card;
+  if (sourceCard === undefined || sourceCard.ownerId === "common") {
+    return { status: "resolved", result: profile };
+  }
+  const sourceOwner = state.players.find(
+    (player) => player.playerId === sourceCard.ownerId
+  );
+  if (sourceOwner === undefined) return { status: "resolved", result: profile };
+
+  for (const token of sourceOwner.wizardProperties) {
+    const definition = state.tokenDefinitions.get(token.definitionId);
+    if (
+      definition?.kind !== "wizardProperty" ||
+      definition.engine === undefined ||
+      !definition.engine.playableInV0
+    )
+      continue;
+    const result = applyEffects(
+      definition.engine.effects,
+      {
+        sourceType: "wizardProperty",
+        runtimeMode: source.runtimeMode,
+        playerId: sourceOwner.playerId,
+        cardInstanceId: token.instanceId,
+        definitionId: token.definitionId,
+        tokenInstanceId: token.instanceId,
+        tokenDefinitionId: token.definitionId,
+      },
+      true
+    );
+    if (result.status === "error") return result;
+  }
+
+  if (sourceOwner.playerId !== attackingPlayer.playerId) {
+    for (const card of getControlledOngoingCards(state, sourceOwner)) {
+      const definition = state.cardDefinitions.get(card.definitionId);
+      if (definition === undefined) continue;
+      const result = applyEffects(
+        definition.engine.effects,
+        {
+          sourceType: "card",
+          runtimeMode: source.runtimeMode,
+          playerId: sourceOwner.playerId,
+          cardInstanceId: card.instanceId,
+          definitionId: card.definitionId,
+        },
+        false
+      );
+      if (result.status === "error") return result;
+    }
+  }
+  return { status: "resolved", result: profile };
+}
+
+function effectMatchesAttackSource(
+  state: GameState,
+  effect: RuntimeEffectPayload,
+  definitionId: string
+): boolean {
+  const cardDefinitionIds =
+    "cardDefinitionIds" in effect ? effect.cardDefinitionIds : undefined;
+  if (
+    Array.isArray(cardDefinitionIds) &&
+    cardDefinitionIds.some((candidate) => candidate === definitionId)
+  )
+    return true;
+  const cardTags = "cardTags" in effect ? effect.cardTags : undefined;
+  if (!Array.isArray(cardTags)) return false;
+  const definition = state.cardDefinitions.get(definitionId);
+  return cardTags.some((candidate) =>
+    (definition?.engine.tags ?? []).includes(candidate)
   );
 }
 

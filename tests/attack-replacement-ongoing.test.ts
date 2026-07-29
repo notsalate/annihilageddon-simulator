@@ -5,6 +5,7 @@ import {
   createAttackAmountState,
   resolveAttackAmount,
 } from "../src/engine/attack-resolution.js";
+import { collectAttackReplacementProfile } from "../src/engine/effect-runtime-registry.js";
 import { executeEffect } from "../src/engine/effect-runtime.js";
 
 import {
@@ -24,6 +25,46 @@ test("attack amount replacements use only controlled ongoing cards", () => {
 test("owned Wand attack profile modifiers use only controlled ongoing cards", () => {
   assert.equal(resolveOwnedWandAttackScenario(false), 2);
   assert.equal(resolveOwnedWandAttackScenario(true), 4);
+});
+
+test("attack replacement Catalog profile rejects malformed Wand amounts", () => {
+  const scenario = createGameScenario({ rootDir, seed: 47204 });
+  const attacker = scenario.activePlayer;
+  scenario.state.runtimeMode = "fixture";
+  const sourceCard = givenRuntimeCard(scenario, {
+    player: attacker,
+    zone: "hand",
+    effects: [],
+    isOngoing: false,
+    tags: ["wandAttackCard"],
+  });
+  givenRuntimeCard(scenario, {
+    player: attacker,
+    zone: "permanents",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "modify_owned_wand_attack_damage",
+        timing: "attackReplacement",
+        cardTags: ["wandAttackCard"],
+        amount: 0,
+      } as never,
+    ],
+  });
+
+  const result = collectAttackReplacementProfile(scenario.state, attacker, {
+    sourceType: "card",
+    runtimeMode: "fixture",
+    playerId: attacker.playerId,
+    cardInstanceId: sourceCard.instanceId,
+    definitionId: sourceCard.definitionId,
+  });
+
+  assert.deepEqual(result, {
+    status: "error",
+    error:
+      "Effect modify_owned_wand_attack_damage.amount must be a positive integer",
+  });
 });
 
 function resolveDoubleAttackScenario(isOngoing: boolean): number {

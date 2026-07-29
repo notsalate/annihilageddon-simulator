@@ -1,9 +1,9 @@
-import { getControlledOngoingCards } from "./control-ledger.js";
 import { recordGameEvent } from "./event-recorder.js";
-import type {
-  DamageResult,
-  EffectExecutionResult,
-  EffectSourceContext,
+import {
+  collectAttackReplacementProfile,
+  type DamageResult,
+  type EffectExecutionResult,
+  type EffectSourceContext,
 } from "./effect-runtime-registry.js";
 import type {
   AttackOutcomeBranch,
@@ -255,18 +255,24 @@ export function resolveAttackAmount(
 ): ResolvedAttackAmount {
   const unmodifiedAmount =
     amountState.unresolvedBaseAmount + amountState.sourceOwnerModifierAmount;
+  const attackReplacementProfile = collectAttackReplacementProfile(
+    state,
+    attackingPlayer,
+    {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: attackingPlayer.playerId,
+      cardInstanceId: "attack-resolution",
+      definitionId: "attack-resolution",
+    }
+  );
+  if (attackReplacementProfile.status === "error") {
+    throw new Error(attackReplacementProfile.error);
+  }
   const doublesAgainstTarget =
     attackingPlayer.playerId !== targetPlayer.playerId &&
-    getControlledOngoingCards(state, attackingPlayer).some((permanent) => {
-      const definition = state.cardDefinitions.get(permanent.definitionId);
-      return (
-        definition?.engine.effects.some(
-          (effect) =>
-            effect.timing === "attackReplacement" &&
-            effect.effectId === "double_owned_attack_damage"
-        ) === true
-      );
-    });
+    attackReplacementProfile.status === "resolved" &&
+    attackReplacementProfile.result.doublesOwnedAttackDamage;
   const components: AttackAmountComponents = {
     ...amountState,
     currentAttackerTargetModifierAmount: doublesAgainstTarget
