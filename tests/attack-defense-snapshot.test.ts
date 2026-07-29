@@ -49,7 +49,6 @@ const commonZoneNames = [
   "destroyedMegaMayhem",
 ] as const;
 
-
 test("failed defense branch restores committed payment, events, usage, and RNG", () => {
   const state = initializeGame({ rootDir, seed: 47505 });
   const attacker = mustGetPlayer(state, 0);
@@ -96,9 +95,8 @@ test("failed defense branch restores committed payment, events, usage, and RNG",
       assert.equal(player.life.current, 6);
       assert.equal(player.discard.includes(paymentCard), true);
       assert.equal(
-        branchState.eventLog.filter(
-          (event) => event.type === "defenseCostPaid"
-        ).length,
+        branchState.eventLog.filter((event) => event.type === "defenseCostPaid")
+          .length,
         3
       );
       branchState.rng.next();
@@ -207,7 +205,12 @@ test("failed defense branches restore membership and mutable cards in every phys
       );
 
       const targetDescriptor = mustGetDescriptor(state, zoneName);
-      const targetCard = targetDescriptor.read()[0];
+      const targetCard =
+        zoneName === `${defender.playerId}.hand`
+          ? targetDescriptor
+              .read()
+              .find((card) => card.instanceId !== defenseCard.instanceId)
+          : targetDescriptor.read()[0];
       assert.ok(targetCard);
       const targetCardBefore = {
         instanceId: targetCard.instanceId,
@@ -229,8 +232,7 @@ test("failed defense branches restore membership and mutable cards in every phys
         chooseEffectChoice(_state, _player, _source, _effectId, choices) {
           return choices.find(
             (choice) =>
-              choice.choiceKind === "defense" &&
-              choice.card === defenseCard
+              choice.choiceKind === "defense" && choice.card === defenseCard
           );
         },
         executeDefenseEffects(branchState) {
@@ -238,7 +240,8 @@ test("failed defense branches restore membership and mutable cards in every phys
           const cards = descriptor.read();
           const card = cards[0];
           assert.ok(card);
-          card.ownerId = card.ownerId === "common" ? attacker.playerId : "common";
+          card.ownerId =
+            card.ownerId === "common" ? attacker.playerId : "common";
           card.marketChips += 17;
           descriptor.replace([
             {
@@ -258,12 +261,7 @@ test("failed defense branches restore membership and mutable cards in every phys
         },
       };
 
-      const result = resolveDefenseWindow(
-        state,
-        defender,
-        attack,
-        services
-      );
+      const result = resolveDefenseWindow(state, defender, attack, services);
 
       assert.deepEqual(result, {
         ok: false,
@@ -322,6 +320,9 @@ function createRollbackScenario(seed: number): {
     "discardSelf",
     { branchEffects: rollbackBranchEffects }
   );
+  const branchHandCard = defender.deck.shift();
+  assert.ok(branchHandCard);
+  defender.hand.push(branchHandCard);
 
   for (const [index, descriptor] of listPhysicalCardZoneDescriptors(
     state

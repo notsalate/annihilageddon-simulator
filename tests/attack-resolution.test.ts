@@ -4,9 +4,15 @@ import test from "node:test";
 import { initializeGame, type CardInstance } from "../src/index.js";
 import {
   createAttackAmountState,
+  createAttackDefenseUsage,
   resolveAttackAmount,
   summarizeAttackDamage,
+  type DefenseAttackContext,
 } from "../src/engine/attack-resolution.js";
+import {
+  resolveDefenseWindow,
+  type AttackDefenseServices,
+} from "../src/engine/attack-defense.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -176,6 +182,117 @@ test("damage attribution keeps redirected current attackers separate", () => {
   ]);
 });
 
+test("обычная защита фиксирует оплату и перемещение до терминальной ветви с перемешиванием discard", () => {
+  const state = initializeGame({ rootDir, seed: 42008 });
+  const attacker = mustGetPlayer(state, "player-1");
+  const defender = mustGetPlayer(state, "player-2");
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  defender.discard = [];
+  defender.chips = 1;
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
+    costs: [{ costId: "spend_chips", amount: 1 }],
+    branchEffects: [{ effectId: "draw_cards", timing: "onDefense", amount: 1 }],
+  });
+  const source: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: "fixture",
+    playerId: attacker.playerId,
+    cardInstanceId: "fixture-attack-source-42008",
+    definitionId: "fixture-attack-source-42008",
+  };
+  const attack: DefenseAttackContext = {
+    kind: "redirectable",
+    attackingPlayer: attacker,
+    amountComponents: createAttackAmountState(2),
+    effectId: "attack_damage",
+    source,
+    originalSource: source,
+    defenseUsage: createAttackDefenseUsage(),
+  };
+  const gameEnd = {
+    reason: "playerDefeated" as const,
+    winnerPlayerId: defender.playerId,
+  };
+  const services: AttackDefenseServices = {
+    chooseEffectChoice(_state, _player, _source, _effectId, choices) {
+      return choices.find((choice) => choice.choiceId === defense.instanceId);
+    },
+    executeDefenseEffects(branchState, player) {
+      assert.equal(player.chips, 0);
+      assert.equal(player.discard.includes(defense), true);
+      player.deck.unshift(...player.discard.splice(0));
+      branchState.rng.next();
+      return { ok: true, gameEnd };
+    },
+  };
+
+  const result = resolveDefenseWindow(state, defender, attack, services);
+
+  assert.deepEqual(result, { ok: true, avoided: true, gameEnd });
+  assert.equal(defender.deck.includes(defense), true);
+  assert.equal(defender.hand.includes(defense), false);
+  assert.equal(defender.discard.includes(defense), false);
+});
+
+test("redirect-защита откатывает оплату, перемещение, события, RNG и usage после ошибки ветви", () => {
+  const state = initializeGame({ rootDir, seed: 42009 });
+  const attacker = mustGetPlayer(state, "player-1");
+  const defender = mustGetPlayer(state, "player-2");
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  defender.discard = [];
+  defender.chips = 2;
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
+    redirectAttack: true,
+    costs: [{ costId: "spend_chips", amount: 2 }],
+    branchEffects: [{ effectId: "draw_cards", timing: "onDefense", amount: 1 }],
+  });
+  const source: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: "fixture",
+    playerId: attacker.playerId,
+    cardInstanceId: "fixture-attack-source-42009",
+    definitionId: "fixture-attack-source-42009",
+  };
+  const attack: DefenseAttackContext = {
+    kind: "redirectable",
+    attackingPlayer: attacker,
+    amountComponents: createAttackAmountState(2),
+    effectId: "attack_damage",
+    source,
+    originalSource: source,
+    defenseUsage: createAttackDefenseUsage(),
+  };
+  const eventLogBefore = structuredClone(state.eventLog);
+  const expectedRng = state.rng.fork();
+  const services: AttackDefenseServices = {
+    chooseEffectChoice(_state, _player, _source, _effectId, choices) {
+      return choices.find((choice) => choice.choiceId === defense.instanceId);
+    },
+    executeDefenseEffects(branchState, player) {
+      assert.equal(player.discard.includes(defense), true);
+      branchState.rng.next();
+      player.chips += 5;
+      return { ok: false, error: "fixture redirect branch failure" };
+    },
+  };
+
+  const result = resolveDefenseWindow(state, defender, attack, services);
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "fixture redirect branch failure",
+  });
+  assert.equal(defender.chips, 2);
+  assert.equal(defender.hand.includes(defense), true);
+  assert.equal(defender.discard.includes(defense), false);
+  assert.deepEqual(state.eventLog, eventLogBefore);
+  assert.equal(state.rng.next(), expectedRng.next());
+  assert.deepEqual([...attack.defenseUsage.defendedPlayerIds], []);
+  assert.deepEqual([...attack.defenseUsage.usedDefenseCardInstanceIds], []);
+});
+
 function mustGetPlayer(
   state: ReturnType<typeof initializeGame>,
   playerId: "player-1" | "player-2"
@@ -318,10 +435,7 @@ import type {
   AttackOutcomeBranch,
   RuntimeEffectPayload,
 } from "../src/engine/runtime-effect.js";
-import type {
-  GameState,
-  PlayerState,
-} from "../src/engine/setup.js";
+import type { GameState, PlayerState } from "../src/engine/setup.js";
 import {
   resolvePlayerControlledAttack,
   type AttackDamageAttribution,
@@ -330,7 +444,10 @@ import {
 } from "../src/engine/attack-resolution.js";
 
 test("player-controlled attack owns the single-target lifecycle through after-attack", () => {
-  const { state, attacker, targets, source } = createAttackResolutionHarness(43001, 2);
+  const { state, attacker, targets, source } = createAttackResolutionHarness(
+    43001,
+    2
+  );
   const [target] = targets;
   assert.ok(target);
   const lifeBefore = target.life.current;
@@ -372,7 +489,10 @@ test("player-controlled attack owns the single-target lifecycle through after-at
 });
 
 test("normal multi-target attack finishes the first Defense result before starting the second target", () => {
-  const { state, attacker, targets, source } = createAttackResolutionHarness(43002, 3);
+  const { state, attacker, targets, source } = createAttackResolutionHarness(
+    43002,
+    3
+  );
   const [firstTarget, secondTarget] = targets;
   assert.ok(firstTarget);
   assert.ok(secondTarget);
@@ -405,7 +525,10 @@ test("normal multi-target attack finishes the first Defense result before starti
 });
 
 test("attack amount is recomputed after the previous target mutates current attacker state", () => {
-  const { state, attacker, targets, source } = createAttackResolutionHarness(43003, 3);
+  const { state, attacker, targets, source } = createAttackResolutionHarness(
+    43003,
+    3
+  );
   const [firstTarget, secondTarget] = targets;
   assert.ok(firstTarget);
   assert.ok(secondTarget);
@@ -446,7 +569,10 @@ test("attack amount is recomputed after the previous target mutates current atta
 });
 
 test("redirect changes current attacker attribution while preserving original source identity", () => {
-  const { state, attacker, targets, source } = createAttackResolutionHarness(43004, 2);
+  const { state, attacker, targets, source } = createAttackResolutionHarness(
+    43004,
+    2
+  );
   const [defender] = targets;
   assert.ok(defender);
   const attackerLifeBefore = attacker.life.current;
@@ -458,7 +584,10 @@ test("redirect changes current attacker attribution while preserving original so
       attack,
       resolveRedirectedAttack
     ) {
-      if (defendingPlayer.playerId !== defender.playerId || attack.kind !== "redirectable") {
+      if (
+        defendingPlayer.playerId !== defender.playerId ||
+        attack.kind !== "redirectable"
+      ) {
         return { ok: true, avoided: false };
       }
       const redirectedSource = {
@@ -504,7 +633,10 @@ test("redirect changes current attacker attribution while preserving original so
 });
 
 test("per-target outcome branches complete before the next target and after-attack runs last", () => {
-  const { state, attacker, targets, source } = createAttackResolutionHarness(43005, 3);
+  const { state, attacker, targets, source } = createAttackResolutionHarness(
+    43005,
+    3
+  );
   const [firstTarget, secondTarget] = targets;
   assert.ok(firstTarget);
   assert.ok(secondTarget);
@@ -559,7 +691,10 @@ test("per-target outcome branches complete before the next target and after-atta
 });
 
 test("game end from a target branch stops later targets and after-attack hooks", () => {
-  const { state, attacker, targets, source } = createAttackResolutionHarness(43006, 3);
+  const { state, attacker, targets, source } = createAttackResolutionHarness(
+    43006,
+    3
+  );
   const [firstTarget, secondTarget] = targets;
   assert.ok(firstTarget);
   assert.ok(secondTarget);
@@ -595,13 +730,17 @@ test("game end from a target branch stops later targets and after-attack hooks",
   assert.equal(secondTarget.life.current, secondLife);
   assert.equal(afterAttackCalls, 0);
   assert.equal(
-    state.eventLog.filter((event) => event.type === "attackTargetStarted").length,
+    state.eventLog.filter((event) => event.type === "attackTargetStarted")
+      .length,
     1
   );
 });
 
 test("non-damage player attack uses the same seam without damage attribution or first-damage eligibility", () => {
-  const { state, attacker, targets, source } = createAttackResolutionHarness(43007, 2);
+  const { state, attacker, targets, source } = createAttackResolutionHarness(
+    43007,
+    2
+  );
   const [target] = targets;
   assert.ok(target);
   let afterAttackCalls = 0;
@@ -638,7 +777,10 @@ test("non-damage player attack uses the same seam without damage attribution or 
   const result = resolvePlayerControlledAttack(intent, adapters);
 
   assert.deepEqual(result, { ok: true });
-  assert.equal(target.statuses.some((status) => status.statusId === "dingler"), true);
+  assert.equal(
+    target.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
   assert.equal(afterAttackCalls, 0);
   assert.deepEqual(state.turn.damagingAttackPlayerIds, []);
   assert.deepEqual(attackLifecycleEventTypes(state), [
@@ -647,7 +789,10 @@ test("non-damage player attack uses the same seam without damage attribution or 
   ]);
 });
 
-function createAttackResolutionHarness(seed: number, playerCount: number): {
+function createAttackResolutionHarness(
+  seed: number,
+  playerCount: number
+): {
   state: GameState;
   attacker: PlayerState;
   targets: PlayerState[];
@@ -704,7 +849,10 @@ function createAttackAdapters(
     resolveTargets(intent) {
       return intent.targetPlan.kind === "orderedPlayers"
         ? { ok: true, players: intent.targetPlan.players }
-        : { ok: false, error: "runtime selector is not configured in this test" };
+        : {
+            ok: false,
+            error: "runtime selector is not configured in this test",
+          };
     },
     resolveDefenseWindow() {
       return { ok: true, avoided: false };

@@ -346,7 +346,7 @@ export function resolveDefenseWindow(
     definitionId: defense.card.definitionId,
   };
 
-  if (redirectsAttack && !moveDefenseCard(state, defendingPlayer, defense)) {
+  if (!moveDefenseCard(state, defendingPlayer, defense)) {
     restoreDefenseMutationSnapshot(
       state,
       attack.defenseUsage,
@@ -354,7 +354,7 @@ export function resolveDefenseWindow(
     );
     return {
       ok: false,
-      error: `Cannot move redirect defense ${defense.card.instanceId}`,
+      error: `Cannot move defense ${defense.card.instanceId}`,
     };
   }
 
@@ -375,20 +375,6 @@ export function resolveDefenseWindow(
       return branchResult;
     }
     if (branchResult.gameEnd !== undefined) {
-      if (
-        !redirectsAttack &&
-        !moveDefenseCard(state, defendingPlayer, defense)
-      ) {
-        restoreDefenseMutationSnapshot(
-          state,
-          attack.defenseUsage,
-          mutationSnapshot
-        );
-        return {
-          ok: false,
-          error: `Cannot move defense ${defense.card.instanceId}`,
-        };
-      }
       return { ok: true, avoided: true, gameEnd: branchResult.gameEnd };
     }
   }
@@ -432,17 +418,6 @@ export function resolveDefenseWindow(
     return { ok: true, avoided: true, resolution: redirectResult.resolution };
   }
 
-  if (!redirectsAttack && !moveDefenseCard(state, defendingPlayer, defense)) {
-    restoreDefenseMutationSnapshot(
-      state,
-      attack.defenseUsage,
-      mutationSnapshot
-    );
-    return {
-      ok: false,
-      error: `Cannot move defense ${defense.card.instanceId}`,
-    };
-  }
   if (attack.kind === "nonredirectable") {
     return { ok: true, avoided: true };
   }
