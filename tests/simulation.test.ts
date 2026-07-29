@@ -73,17 +73,17 @@ test("single-game simulation ignores differing source.image metadata", () => {
     endReason: "maxTurnsReached",
     isGameEnd: false,
     turnsElapsed: 8,
-    winnerIds: ["player-1"],
+    winnerIds: ["player-1", "player-2"],
     players: [
       {
         playerId: "player-1",
-        victoryPoints: 5,
+        victoryPoints: 7,
         legendCount: 0,
         deadWizardTokenCount: 0,
       },
       {
         playerId: "player-2",
-        victoryPoints: 4,
+        victoryPoints: 7,
         legendCount: 0,
         deadWizardTokenCount: 0,
       },
@@ -235,7 +235,8 @@ test("scoring sums owned cards from scoring zones and applies DWT penalty", () =
     seed: 60615,
   });
   const player = state.players[0]!;
-  const legend = state.common.legendMarket[0]!;
+  const legend = state.common.legendMarket.shift();
+  assert.ok(legend);
   legend.ownerId = player.playerId;
   player.permanents.push(legend);
   assert.equal(state.common.deadWizardTokens.status, "available");
@@ -256,6 +257,11 @@ test("scoring sums owned cards from scoring zones and applies DWT penalty", () =
       total + state.cardDefinitions.get(card.definitionId)!.engine.victoryPoints
     );
   }, 0);
+  const unboughtFamiliarScore =
+    player.unboughtFamiliar === undefined
+      ? 0
+      : state.cardDefinitions.get(player.unboughtFamiliar.definitionId)!.engine
+          .victoryPoints;
 
   const score = scoreGame(state).find(
     (candidate) => candidate.playerId === player.playerId
@@ -264,7 +270,10 @@ test("scoring sums owned cards from scoring zones and applies DWT penalty", () =
   assert.ok(score);
   assert.equal(score.legendCount, 1);
   assert.equal(score.deadWizardTokenCount, 2);
-  assert.equal(score.victoryPoints, expectedCardScore - 6);
+  assert.equal(
+    score.victoryPoints,
+    expectedCardScore + unboughtFamiliarScore - 6
+  );
 });
 
 test("scoring applies DWT victory points from token definitions", () => {

@@ -3268,7 +3268,7 @@ test("active player can buy and play their setup familiar", () => {
   assert.equal(
     scoreGame(state).find((score) => score.playerId === activePlayer.playerId)
       ?.victoryPoints,
-    0
+    2
   );
 
   state.turn.power = 5;
@@ -5278,6 +5278,11 @@ test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affec
       total + state.cardDefinitions.get(card.definitionId)!.engine.victoryPoints
     );
   }, 0);
+  const unboughtFamiliarScore =
+    targetPlayer.unboughtFamiliar === undefined
+      ? 0
+      : state.cardDefinitions.get(targetPlayer.unboughtFamiliar.definitionId)!
+          .engine.victoryPoints;
   const neutralDwtDefinition = state.tokenDefinitions.get(
     neutralDwt.definitionId
   );
@@ -5287,7 +5292,7 @@ test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affec
   assert.equal(targetScore.deadWizardTokenCount, 1);
   assert.equal(
     targetScore.victoryPoints,
-    expectedCardScore + expectedTokenScore
+    expectedCardScore + unboughtFamiliarScore + expectedTokenScore
   );
 });
 

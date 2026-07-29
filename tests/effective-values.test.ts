@@ -21,6 +21,7 @@ import {
   type TokenDefinition,
   type TrophyLikeInstance,
 } from "../src/index.js";
+import { grantTemporaryControl } from "../src/engine/control-ledger.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 import { applyEffectiveValueModifier } from "../src/engine/effect-runtime-registry.js";
 import {
@@ -267,12 +268,20 @@ test("a controlled fixture object can modify token scoring without mutating toke
       total + state.cardDefinitions.get(card.definitionId)!.engine.victoryPoints
     );
   }, 0);
+  const unboughtFamiliarScore =
+    player.unboughtFamiliar === undefined
+      ? 0
+      : state.cardDefinitions.get(player.unboughtFamiliar.definitionId)!.engine
+          .victoryPoints;
   const score = scoreGame(state).find(
     (candidate) => candidate.playerId === player.playerId
   );
 
   assert.ok(score);
-  assert.equal(score.victoryPoints, expectedCardScore + baseVictoryPoints + 1);
+  assert.equal(
+    score.victoryPoints,
+    expectedCardScore + unboughtFamiliarScore + baseVictoryPoints + 1
+  );
   assert.equal(definition.victoryPoints, baseVictoryPoints);
 });
 
@@ -309,7 +318,7 @@ test("wizard property discount and scoring modifier apply to owned treasures", (
   assert.equal(
     scoreGame(state).find((score) => score.playerId === player.playerId)
       ?.victoryPoints,
-    3
+    5
   );
 });
 
@@ -560,6 +569,49 @@ test("scoring zones stay aligned between scoreGame and whileScoring modifiers", 
       ?.victoryPoints,
     expectedScore
   );
+});
+
+test("scoreGame counts owned cards across Ledger locations without changing temporary control", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({ dataPack, seed: 60615 });
+  const player = state.players[0];
+  const otherPlayer = state.players[1];
+  assert.ok(player);
+  assert.ok(otherPlayer);
+  const tower = state.cardDefinitions.get("esw2_dbg__legend_009");
+  assert.ok(tower);
+
+  const controlledTower = createCardInstance(
+    "fixture-controlled-tower",
+    tower.cardId,
+    player.playerId
+  );
+  otherPlayer.permanents.push(controlledTower);
+  grantTemporaryControl(
+    state,
+    controlledTower.instanceId,
+    otherPlayer.playerId
+  );
+  state.common.market.push(
+    createCardInstance("fixture-market-tower", tower.cardId, player.playerId)
+  );
+  player.unboughtFamiliar = createCardInstance(
+    "fixture-familiar-tower",
+    tower.cardId,
+    player.playerId
+  );
+
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === player.playerId)
+      ?.victoryPoints,
+    18
+  );
+  assert.deepEqual(state.turn.temporaryCardControls, [
+    {
+      cardInstanceId: controlledTower.instanceId,
+      controllerId: otherPlayer.playerId,
+    },
+  ]);
 });
 
 function createCostModifierStatus(

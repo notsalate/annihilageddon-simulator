@@ -7,6 +7,7 @@ import type {
 } from "./setup.js";
 import {
   buildControlledObjectView,
+  listPhysicalCardLocations,
   type ControlledCardObject,
   type ControlledObjectView,
 } from "./control-ledger.js";
@@ -206,17 +207,13 @@ export function getOwnedScoringCards(
     throw new Error(`Missing player ${playerId}`);
   }
 
-  return [
-    ...player.hand,
-    ...player.deck,
-    ...player.discard,
-    ...player.playedThisTurn,
-    ...player.permanents.filter((card) => card.ownerId === player.playerId),
-  ].map((card) => ({
-    sourceType: "controlledCard" as const,
-    card,
-    definition: mustGetCardDefinition(state, card.definitionId),
-  }));
+  return listPhysicalCardLocations(state)
+    .filter((location) => location.card.ownerId === playerId)
+    .map(({ card }) => ({
+      sourceType: "controlledCard" as const,
+      card,
+      definition: mustGetCardDefinition(state, card.definitionId),
+    }));
 }
 
 interface EffectiveValueEffect {
