@@ -17,6 +17,7 @@ import {
 } from "../src/index.js";
 import { executeOnPlayEffects } from "../src/engine/effect-runtime.js";
 import {
+  resolveResurrectionLifeTotal,
   type EffectRuntimeCatalogOperationOverridesForTesting,
   type EffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
@@ -24,6 +25,8 @@ import {
   markCardDefinitionId,
   markCardInstanceId,
   markPlayerId,
+  markTokenDefinitionId,
+  markTokenInstanceId,
 } from "../src/domain/types.js";
 import {
   addFixtureDefenseCardToHand,
@@ -33,19 +36,63 @@ import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-e
 
 const rootDir = process.cwd();
 const fixturePlayerDefeatEffectId = "fixture_add_power_equal_to_target_cost";
-const fixturePlayerDefeatHandler: EffectRuntimeCatalogOperationOverridesForTesting<
-  "fixture_add_power_equal_to_target_cost"
-> = {
-  execute(_state, player) {
-    return {
-      ok: true,
-      gameEnd: {
-        reason: "playerDefeated",
-        winnerPlayerId: player.playerId,
-      },
-    };
-  },
-};
+const fixturePlayerDefeatHandler: EffectRuntimeCatalogOperationOverridesForTesting<"fixture_add_power_equal_to_target_cost"> =
+  {
+    execute(_state, player) {
+      return {
+        ok: true,
+        gameEnd: {
+          reason: "playerDefeated",
+          winnerPlayerId: player.playerId,
+        },
+      };
+    },
+  };
+
+test("resurrection catalog operation reports malformed replacement instead of falling back to 20", () => {
+  const result = resolveResurrectionLifeTotal(
+    {
+      effectId: "set_resurrection_life_total",
+      timing: "replacement",
+      lifeTotal: "invalid",
+    },
+    resurrectionSource(),
+    []
+  );
+
+  assert.equal(result.status, "error");
+  if (result.status !== "error") return;
+  assert.match(result.error, /lifeTotal must be a positive integer/);
+});
+
+test("resurrection catalog operation resolves the decoded life total", () => {
+  const result = resolveResurrectionLifeTotal(
+    {
+      effectId: "set_resurrection_life_total",
+      timing: "replacement",
+      lifeTotal: 25,
+    },
+    resurrectionSource(),
+    []
+  );
+
+  assert.deepEqual(result, { status: "resolved", result: 25 });
+});
+
+test("resurrection catalog operation skips a replacement blocked by its status", () => {
+  const result = resolveResurrectionLifeTotal(
+    {
+      effectId: "set_resurrection_life_total",
+      timing: "replacement",
+      lifeTotal: 25,
+      unlessStatusId: "loser",
+    },
+    resurrectionSource(),
+    [{ statusId: "loser" }]
+  );
+
+  assert.deepEqual(result, { status: "notApplicable" });
+});
 
 test("playCard propagates a fixture effect's player-defeat game end", () => {
   const state = initializeGame({ rootDir, seed: 99118 });
@@ -91,11 +138,13 @@ test("play_top_card propagates game end from the nested card", () => {
     const nestedDefinition = createFixtureCardDefinition(
       "fixture-nested-player-defeat",
       "normal",
-      [{
+      [
+        {
           effectId: fixturePlayerDefeatEffectId,
           timing: "onPlay",
           target: { selector: "mainMarketCard" },
-        }]
+        },
+      ]
     );
     state.cardDefinitions = new Map([
       ...state.cardDefinitions,
@@ -152,11 +201,13 @@ test("play_top_card_from_foe_deck propagates game end from the nested card", () 
     const nestedDefinition = createFixtureCardDefinition(
       "fixture-foe-nested-player-defeat",
       "normal",
-      [{
+      [
+        {
           effectId: fixturePlayerDefeatEffectId,
           timing: "onPlay",
           target: { selector: "mainMarketCard" },
-        }]
+        },
+      ]
     );
     state.cardDefinitions = new Map([
       ...state.cardDefinitions,
@@ -1079,6 +1130,18 @@ function countDefinition(
   definitionId: string
 ): number {
   return cards.filter((card) => card.definitionId === definitionId).length;
+}
+
+function resurrectionSource(): EffectSourceContext {
+  return {
+    sourceType: "wizardProperty",
+    runtimeMode: "combat",
+    playerId: markPlayerId("player-1"),
+    cardInstanceId: "wizard-property-instance",
+    definitionId: "wizard-property-definition",
+    tokenInstanceId: markTokenInstanceId("wizard-property-instance"),
+    tokenDefinitionId: markTokenDefinitionId("wizard-property-definition"),
+  };
 }
 
 function assertNumber(value: unknown): asserts value is number {

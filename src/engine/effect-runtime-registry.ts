@@ -4907,6 +4907,24 @@ function effectMatchesAttackSource(
   );
 }
 
+export function resolveResurrectionLifeTotal(
+  effect: unknown,
+  source: EffectSourceContext,
+  statuses: readonly { readonly statusId: string }[]
+): EffectRuntimeOperationResult<number> {
+  return getEffectRuntimeCatalogEntry(
+    "set_resurrection_life_total"
+  ).evaluateAtTiming("Effect set_resurrection_life_total", effect, {
+    source,
+    timing: "replacement",
+    evaluate: (decoded) =>
+      decoded.unlessStatusId === undefined ||
+      !statuses.some((status) => status.statusId === decoded.unlessStatusId)
+        ? { status: "resolved", result: decoded.lifeTotal }
+        : { status: "notApplicable" },
+  });
+}
+
 export function executeRuntimeEffectAtTiming(
   state: GameState,
   player: PlayerState,

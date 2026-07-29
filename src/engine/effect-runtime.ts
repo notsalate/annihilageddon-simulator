@@ -41,6 +41,7 @@ import {
   evaluateRuntimeEffectAtTiming,
   executeRuntimeEffect,
   executeRuntimeEffectAtTiming,
+  resolveResurrectionLifeTotal,
   type TargetChoice,
   type TargetChoiceResult,
 } from "./effect-runtime-registry.js";
@@ -1410,21 +1411,24 @@ function getResurrectionLifeTotal(
         continue;
       }
 
-      const unlessStatusId = effect["unlessStatusId"];
-      if (
-        typeof unlessStatusId === "string" &&
-        player.statuses.some((status) => status.statusId === unlessStatusId)
-      ) {
-        continue;
+      const result = resolveResurrectionLifeTotal(
+        effect,
+        {
+          sourceType: "wizardProperty",
+          runtimeMode: state.runtimeMode,
+          playerId: player.playerId,
+          cardInstanceId: token.instanceId,
+          definitionId: token.definitionId,
+          tokenInstanceId: token.instanceId,
+          tokenDefinitionId: token.definitionId,
+        },
+        player.statuses
+      );
+      if (result.status === "error") {
+        throw new Error(result.error);
       }
-
-      const lifeTotal = effect["lifeTotal"];
-      if (
-        typeof lifeTotal === "number" &&
-        Number.isSafeInteger(lifeTotal) &&
-        lifeTotal > 0
-      ) {
-        return lifeTotal;
+      if (result.status === "resolved") {
+        return result.result;
       }
     }
   }
