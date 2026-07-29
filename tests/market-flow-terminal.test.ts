@@ -1,35 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  initializeGame,
-  runMarketFlow,
-  type CardDefinition,
-  type CardInstance,
-  type RuntimeEffect,
-} from "../src/index.js";
+import { initializeGame, runMarketFlow } from "../src/index.js";
 import type { EffectRuntimeCatalogOperationOverridesForTesting } from "../src/engine/effect-runtime-registry.js";
-import {
-  markCardDefinitionId,
-  markCardInstanceId,
-} from "../src/domain/types.js";
+import { createTerminalMarketEventFixture } from "./helpers/market-flow-fixtures.js";
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 
 const rootDir = process.cwd();
 const terminalEffectId = "fixture_add_power_equal_to_target_cost";
-const terminalHandler: EffectRuntimeCatalogOperationOverridesForTesting<
-  "fixture_add_power_equal_to_target_cost"
-> = {
-  execute(_state, player) {
-    return {
-      ok: true,
-      gameEnd: {
-        reason: "playerDefeated",
-        winnerPlayerId: player.playerId,
-      },
-    };
-  },
-};
+const terminalHandler: EffectRuntimeCatalogOperationOverridesForTesting<"fixture_add_power_equal_to_target_cost"> =
+  {
+    execute(_state, player) {
+      return {
+        ok: true,
+        gameEnd: {
+          reason: "playerDefeated",
+          winnerPlayerId: player.playerId,
+        },
+      };
+    },
+  };
 
 test("terminal Mayhem is destroyed before Market Flow returns game end", () => {
   runTerminalEventScenario("mayhem");
@@ -39,9 +29,42 @@ test("terminal Mega Mayhem is destroyed before Market Flow returns game end", ()
   runTerminalEventScenario("megaMayhem");
 });
 
-function runTerminalEventScenario(
-  eventKind: "mayhem" | "megaMayhem"
-): void {
+test("terminal event fixture assigns unique IDs when reused in one state", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 47702,
+    playerCount: 2,
+  });
+  const firstFixture = createTerminalMarketEventFixture({
+    state,
+    eventKind: "mayhem",
+    effects: [],
+  });
+  const secondFixture = createTerminalMarketEventFixture({
+    state,
+    eventKind: "mayhem",
+    effects: [],
+  });
+
+  assert.notEqual(
+    firstFixture.eventCard.definitionId,
+    secondFixture.eventCard.definitionId
+  );
+  assert.notEqual(
+    firstFixture.eventCard.instanceId,
+    secondFixture.eventCard.instanceId
+  );
+  assert.notEqual(
+    firstFixture.fillerCard.definitionId,
+    secondFixture.fillerCard.definitionId
+  );
+  assert.notEqual(
+    firstFixture.fillerCard.instanceId,
+    secondFixture.fillerCard.instanceId
+  );
+});
+
+function runTerminalEventScenario(eventKind: "mayhem" | "megaMayhem"): void {
   const state = initializeGame({
     rootDir,
     seed: eventKind === "mayhem" ? 47700 : 47701,
@@ -53,44 +76,22 @@ function runTerminalEventScenario(
   );
   assert.ok(activePlayer);
 
-  const eventDefinition = createFixtureDefinition(
-    `fixture-terminal-${eventKind}`,
+  const { eventCard, fillerCard } = createTerminalMarketEventFixture({
+    state,
     eventKind,
-    [
+    effects: [
       {
         effectId: terminalEffectId,
         timing: "onMayhemResolve",
         target: { selector: "mainMarketCard" },
       },
-    ]
-  );
-  const fillerDefinition = createFixtureDefinition(
-    `fixture-after-terminal-${eventKind}`,
-    "normal",
-    []
-  );
-  state.cardDefinitions = new Map([
-    ...state.cardDefinitions,
-    [eventDefinition.cardId, eventDefinition],
-    [fillerDefinition.cardId, fillerDefinition],
-  ]);
-  const eventCard = createCard(
-    `fixture-terminal-${eventKind}-instance`,
-    eventDefinition.cardId
-  );
-  const fillerCard = createCard(
-    `fixture-after-terminal-${eventKind}-instance`,
-    fillerDefinition.cardId
-  );
+    ],
+  });
 
   const sourceDeck =
-    eventKind === "mayhem"
-      ? state.common.mainDeck
-      : state.common.legendDeck;
+    eventKind === "mayhem" ? state.common.mainDeck : state.common.legendDeck;
   const market =
-    eventKind === "mayhem"
-      ? state.common.market
-      : state.common.legendMarket;
+    eventKind === "mayhem" ? state.common.market : state.common.legendMarket;
   const destroyed =
     eventKind === "mayhem"
       ? state.common.destroyedMayhem
@@ -122,47 +123,4 @@ function runTerminalEventScenario(
     ),
     false
   );
-}
-
-function createFixtureDefinition(
-  cardId: string,
-  cardKind: CardDefinition["engine"]["cardKind"],
-  effects: RuntimeEffect[]
-): CardDefinition {
-  return {
-    schemaVersion: 1,
-    cardId,
-    source: { image: `assets/cards/fixtures/${cardId}.png` },
-    visible: {
-      nameRu: cardId,
-      cost: 0,
-      victoryPoints: 0,
-      typeRu: null,
-      cardKind,
-      cardTypes: [],
-      markers: [],
-    },
-    engine: {
-      runtimeSchema: "krutagidon.cardDefinition.v0",
-      mappingStatus: "fixture",
-      playableInV0: true,
-      cardKind,
-      cardTypes: [],
-      cost: 0,
-      victoryPoints: 0,
-      isOngoing: false,
-      marketChipMarker: false,
-      effects,
-      unsupportedMechanics: [],
-    },
-  };
-}
-
-function createCard(instanceId: string, definitionId: string): CardInstance {
-  return {
-    instanceId: markCardInstanceId(instanceId),
-    definitionId: markCardDefinitionId(definitionId),
-    ownerId: "common",
-    marketChips: 0,
-  };
 }
