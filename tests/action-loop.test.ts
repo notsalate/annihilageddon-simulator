@@ -28,6 +28,13 @@ import {
 } from "./helpers/defense-fixtures.js";
 import { replacePostSetupWizardPropertyFixture } from "./helpers/fixture-tokens.js";
 import {
+  createGameScenario,
+  givenRuntimeCard,
+  play,
+} from "./helpers/game-scenario.js";
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
+import { removeCardFromLocation } from "../src/engine/control-ledger.js";
+import {
   markCardDefinitionId,
   markCardInstanceId,
   markPlayerId,
@@ -38,6 +45,195 @@ import {
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
+
+test("play reports an error when a resolved foe-deck card is absent from the Ledger", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 17101,
+  });
+  const foe = scenario.foes[0];
+  assert.ok(foe);
+  foe.deck.splice(0);
+  const resolvedCard = givenRuntimeCard(scenario, {
+    player: foe,
+    zone: "deck",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 1 }],
+  });
+  const card = givenRuntimeCard(scenario, {
+    effects: [
+      {
+        effectId: "play_top_card_from_foe_deck",
+        timing: "onPlay",
+        targetSelector: "chosenFoe",
+        nonOngoingCleanupDestination: "ownerDiscard",
+      },
+    ],
+  });
+
+  const result = withTemporaryEffectRuntimeOperations(
+    "add_power",
+    {
+      execute(state, _player, _effect, source) {
+        removeCardFromLocation(state, source.cardInstanceId);
+        return { ok: true };
+      },
+    },
+    () => play(scenario, card)
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: `Cannot move resolved card ${resolvedCard.instanceId}`,
+  });
+});
+
+test("play preserves a resolved foe-deck card moved before Ledger cleanup", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 17104,
+  });
+  const foe = scenario.foes[0];
+  assert.ok(foe);
+  foe.deck.splice(0);
+  const resolvedCard = givenRuntimeCard(scenario, {
+    player: foe,
+    zone: "deck",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 1 }],
+  });
+  const card = givenRuntimeCard(scenario, {
+    effects: [
+      {
+        effectId: "play_top_card_from_foe_deck",
+        timing: "onPlay",
+        targetSelector: "chosenFoe",
+        nonOngoingCleanupDestination: "ownerDiscard",
+      },
+    ],
+  });
+
+  const result = withTemporaryEffectRuntimeOperations(
+    "add_power",
+    {
+      execute(state, _player, _effect, source) {
+        const moved = removeCardFromLocation(state, source.cardInstanceId);
+        assert.ok(moved);
+        foe.deck.push(moved.card);
+        return { ok: true };
+      },
+    },
+    () => play(scenario, card)
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: `Cannot move resolved card ${resolvedCard.instanceId}`,
+  });
+  assert.equal(foe.deck.includes(resolvedCard), true);
+  assert.equal(foe.discard.includes(resolvedCard), false);
+});
+
+test("play moves a resolved foe-deck card to its owner discard through the Ledger", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 17102,
+  });
+  const foe = scenario.foes[0];
+  assert.ok(foe);
+  foe.deck.splice(0);
+  const resolvedCard = givenRuntimeCard(scenario, {
+    player: foe,
+    zone: "deck",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 1 }],
+  });
+  const card = givenRuntimeCard(scenario, {
+    effects: [
+      {
+        effectId: "play_top_card_from_foe_deck",
+        timing: "onPlay",
+        targetSelector: "chosenFoe",
+        nonOngoingCleanupDestination: "ownerDiscard",
+      },
+    ],
+  });
+
+  assert.deepEqual(play(scenario, card), { ok: true });
+  assert.equal(foe.discard.includes(resolvedCard), true);
+  assert.equal(
+    scenario.activePlayer.playedThisTurn.includes(resolvedCard),
+    false
+  );
+  const move = scenario.state.eventLog.find(
+    (event) =>
+      event.type === "cardMoved" &&
+      event.cardInstanceId === resolvedCard.instanceId
+  );
+  assert.ok(move?.type === "cardMoved");
+  assert.equal(move.playerId, scenario.activePlayer.playerId);
+  assert.equal(move.definitionId, resolvedCard.definitionId);
+  assert.equal(
+    move.sourceZone,
+    `${scenario.activePlayer.playerId}.playedThisTurn`
+  );
+  assert.equal(move.destinationZone, `${foe.playerId}.discard`);
+  assert.equal(move.ownerBefore, foe.playerId);
+  assert.equal(move.ownerAfter, foe.playerId);
+});
+
+test("play moves a resolved foe-deck card before returning game end", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 17103,
+  });
+  const foe = scenario.foes[0];
+  assert.ok(foe);
+  foe.deck.splice(0);
+  const resolvedCard = givenRuntimeCard(scenario, {
+    player: foe,
+    zone: "deck",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 1 }],
+  });
+  const card = givenRuntimeCard(scenario, {
+    effects: [
+      {
+        effectId: "play_top_card_from_foe_deck",
+        timing: "onPlay",
+        targetSelector: "chosenFoe",
+        nonOngoingCleanupDestination: "ownerDiscard",
+      },
+    ],
+  });
+
+  const result = withTemporaryEffectRuntimeOperations(
+    "add_power",
+    {
+      execute(_state, player) {
+        return {
+          ok: true,
+          gameEnd: {
+            reason: "playerDefeated",
+            winnerPlayerId: player.playerId,
+          },
+        };
+      },
+    },
+    () => play(scenario, card)
+  );
+
+  assert.deepEqual(result, {
+    ok: true,
+    gameEndReason: "playerDefeated",
+    winnerPlayerId: scenario.activePlayer.playerId,
+  });
+  assert.equal(foe.discard.includes(resolvedCard), true);
+  assert.equal(
+    scenario.activePlayer.playedThisTurn.includes(resolvedCard),
+    false
+  );
+});
 
 test("Кондуктор Жми-На-Тормоза is a one-copy familiar that draws, matches every controlled card type, and redirects an avoided attack", () => {
   const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);

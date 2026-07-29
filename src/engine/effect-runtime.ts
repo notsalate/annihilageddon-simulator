@@ -2050,12 +2050,6 @@ function moveResolvedNonOngoingCardToDestination(
       error: `Cannot move ${card.instanceId} to a discard that does not belong to its owner`,
     };
   }
-  const cardIndex = controller.playedThisTurn.findIndex(
-    (candidate) => candidate.instanceId === card.instanceId
-  );
-  if (cardIndex < 0) {
-    return { ok: true };
-  }
   const owner = state.players.find(
     (candidate) => candidate.playerId === destination.ownerId
   );
@@ -2066,13 +2060,29 @@ function moveResolvedNonOngoingCardToDestination(
     };
   }
 
-  controller.playedThisTurn.splice(cardIndex, 1);
-  owner.discard.push(card);
-  recordCardMoved(state, controller, card, {
-    sourceZone: `${controller.playerId}.playedThisTurn`,
+  const expectedSourceZone = `${controller.playerId}.playedThisTurn`;
+  const currentLocation = findCardLocation(state, card.instanceId);
+  if (currentLocation?.zoneName !== expectedSourceZone) {
+    return {
+      ok: false,
+      error: `Cannot move resolved card ${card.instanceId}`,
+    };
+  }
+
+  const sourceLocation = removeCardFromLocation(state, card.instanceId);
+  if (sourceLocation === undefined) {
+    return {
+      ok: false,
+      error: `Cannot move resolved card ${card.instanceId}`,
+    };
+  }
+
+  owner.discard.push(sourceLocation.card);
+  recordCardMoved(state, controller, sourceLocation.card, {
+    sourceZone: sourceLocation.zoneName,
     destinationZone: `${owner.playerId}.discard`,
-    ownerBefore: card.ownerId,
-    ownerAfter: card.ownerId,
+    ownerBefore: sourceLocation.card.ownerId,
+    ownerAfter: sourceLocation.card.ownerId,
   });
   return { ok: true };
 }
