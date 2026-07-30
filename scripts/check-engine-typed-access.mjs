@@ -52,7 +52,7 @@ const physicalCardZoneApiNames = new Set([
   "removeCardFromLocation",
 ]);
 const controlLedgerOwner = "src/engine/control-ledger.ts";
-const physicalCardZoneFields = collectPhysicalCardZoneFields();
+const physicalCardZonePaths = collectPhysicalCardZonePaths();
 const configuredAllowedViolations = [
   ["src/engine/data.ts", 1266, 3, "decodeRuntimeSourceMetadata"],
   ["src/engine/data.ts", 1670, 1, "expectRuntimeRecord"],
@@ -529,8 +529,9 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
   const importedNames = new Set();
   const calledNames = new Set();
   const forbiddenHelpers = new Set();
-  const manuallyEnumeratedZoneFields = new Set();
-  let importsControlLedger = false;
+  const manuallyEnumeratedZonePaths =
+    collectManualPhysicalZonePaths(sourceFile);
+  let usesControlLedgerSeam = false;
 
   function visit(node) {
     if (
@@ -538,13 +539,15 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
       ts.isStringLiteral(node.moduleSpecifier) &&
       node.moduleSpecifier.text === "./control-ledger.js"
     ) {
-      importsControlLedger = true;
       if (
+        !node.importClause?.isTypeOnly &&
         node.importClause?.namedBindings &&
         ts.isNamedImports(node.importClause.namedBindings)
       ) {
         for (const element of node.importClause.namedBindings.elements) {
-          importedNames.add(element.propertyName?.text ?? element.name.text);
+          if (!element.isTypeOnly) {
+            importedNames.add(element.propertyName?.text ?? element.name.text);
+          }
         }
       }
     }
@@ -561,21 +564,18 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
       calledNames.add(node.expression.text);
     }
 
-    if (ts.isArrayLiteralExpression(node)) {
-      const fields = new Set();
-      collectPhysicalCardZoneFieldsFromNode(node, fields);
-      if (fields.size > 3) {
-        fields.forEach((field) => manuallyEnumeratedZoneFields.add(field));
-      }
-    }
-
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
 
   for (const importedName of importedNames) {
-    if (!physicalCardZoneApiNames.has(importedName)) continue;
-    if (!calledNames.has(importedName)) {
+    if (calledNames.has(importedName)) {
+      usesControlLedgerSeam = true;
+    }
+    if (
+      physicalCardZoneApiNames.has(importedName) &&
+      !calledNames.has(importedName)
+    ) {
       physicalCardZoneOwnershipViolations.push(
         `${relativePath} imports Ledger physical-zone API ${importedName} without calling it`
       );
@@ -588,11 +588,11 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
   }
   if (
     relativePath !== controlLedgerOwner &&
-    !importsControlLedger &&
-    manuallyEnumeratedZoneFields.size > 3
+    !usesControlLedgerSeam &&
+    manuallyEnumeratedZonePaths.size > 0
   ) {
     physicalCardZoneOwnershipViolations.push(
-      `${relativePath} manually enumerates physical-zone inventory without Control Ledger import: ${[...manuallyEnumeratedZoneFields].join(", ")}`
+      `${relativePath} manually enumerates physical-zone inventory without calling a Control Ledger seam: ${[...manuallyEnumeratedZonePaths].join(", ")}`
     );
   }
   if (
@@ -605,7 +605,7 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
   }
 }
 
-function collectPhysicalCardZoneFields() {
+function collectPhysicalCardZonePaths() {
   const ledgerPath = path.join(engineDir, "control-ledger.ts");
   if (!statSync(ledgerPath, { throwIfNoEntry: false })) {
     return new Set();
@@ -616,7 +616,7 @@ function collectPhysicalCardZoneFields() {
     ts.ScriptTarget.Latest,
     true
   );
-  const fields = new Set();
+  const paths = new Set();
 
   function visit(node) {
     if (
@@ -627,37 +627,190 @@ function collectPhysicalCardZoneFields() {
     ) {
       const readStorage = node.arguments[1];
       if (readStorage && ts.isArrowFunction(readStorage)) {
-        collectPropertyAccessFields(readStorage.body, fields);
+        collectPropertyAccessPaths(readStorage.body, paths, ledgerSource);
       }
     }
     ts.forEachChild(node, visit);
   }
 
   visit(ledgerSource);
-  return fields;
+  return paths;
 }
 
-function collectPropertyAccessFields(node, fields) {
+function collectPropertyAccessPaths(node, paths, sourceFile) {
   if (
     ts.isPropertyAccessExpression(node) &&
     (!ts.isPropertyAccessExpression(node.parent) ||
       node.parent.expression !== node)
   ) {
-    fields.add(node.name.text);
-  }
-  ts.forEachChild(node, (child) => collectPropertyAccessFields(child, fields));
-}
-
-function collectPhysicalCardZoneFieldsFromNode(node, fields) {
-  if (
-    ts.isPropertyAccessExpression(node) &&
-    physicalCardZoneFields.has(node.name.text)
-  ) {
-    fields.add(node.name.text);
+    const path = getSemanticPropertyAccessPath(node, sourceFile);
+    if (path !== undefined) {
+      paths.add(path);
+    }
   }
   ts.forEachChild(node, (child) =>
-    collectPhysicalCardZoneFieldsFromNode(child, fields)
+    collectPropertyAccessPaths(child, paths, sourceFile)
   );
+}
+
+function collectManualPhysicalZonePaths(sourceFile) {
+  const aliases = new Map();
+  const paths = new Set();
+  const objectMapNames = collectObjectMapNames(sourceFile);
+
+  function collectExpressionPaths(node, collected) {
+    if (ts.isIdentifier(node) && aliases.has(node.text)) {
+      collected.add(aliases.get(node.text));
+      return;
+    }
+    if (ts.isPropertyAccessExpression(node)) {
+      const path = getSemanticPropertyAccessPath(node, sourceFile);
+      if (path !== undefined && physicalCardZonePaths.has(path)) {
+        collected.add(path);
+        return;
+      }
+    }
+    ts.forEachChild(node, (child) => collectExpressionPaths(child, collected));
+  }
+
+  function visit(node) {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer
+    ) {
+      const assignedPath = ts.isPropertyAccessExpression(node.initializer)
+        ? getSemanticPropertyAccessPath(node.initializer, sourceFile)
+        : undefined;
+      if (
+        assignedPath !== undefined &&
+        physicalCardZonePaths.has(assignedPath)
+      ) {
+        aliases.set(node.name.text, assignedPath);
+      }
+      if (
+        objectMapNames.has(node.name.text) &&
+        ts.isObjectLiteralExpression(node.initializer)
+      ) {
+        collectExpressionPaths(node.initializer, paths);
+      }
+    }
+    if (ts.isArrayLiteralExpression(node) && isInventoryCollectionNode(node)) {
+      collectExpressionPaths(node, paths);
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      (node.expression.name.text === "concat" ||
+        node.expression.name.text === "push")
+    ) {
+      if (node.expression.name.text === "concat") {
+        const receiverPath = ts.isPropertyAccessExpression(
+          node.expression.expression
+        )
+          ? getSemanticPropertyAccessPath(
+              node.expression.expression,
+              sourceFile,
+              true
+            )
+          : undefined;
+        if (
+          receiverPath !== undefined &&
+          physicalCardZonePaths.has(receiverPath)
+        ) {
+          paths.add(receiverPath);
+        }
+      }
+      node.arguments.forEach((argument) =>
+        collectExpressionPaths(argument, paths)
+      );
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return paths;
+}
+
+function collectObjectMapNames(sourceFile) {
+  const names = new Set();
+  function visit(node) {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === "Object" &&
+      node.expression.name.text === "values" &&
+      ts.isIdentifier(node.arguments[0])
+    ) {
+      names.add(node.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return names;
+}
+
+function isInventoryCollectionNode(node) {
+  return !(
+    ts.isPropertyAccessExpression(node.parent) &&
+    node.parent.expression === node &&
+    ["find", "some", "every", "filter", "map", "reduce"].includes(
+      node.parent.name.text
+    )
+  );
+}
+
+function getSemanticPropertyAccessPath(node, sourceFile, allowChained = false) {
+  if (
+    !allowChained &&
+    ((ts.isPropertyAccessExpression(node.parent) &&
+      node.parent.expression === node) ||
+      (ts.isElementAccessExpression(node.parent) &&
+        node.parent.expression === node))
+  ) {
+    return undefined;
+  }
+  const parts = [];
+  let current = node;
+  while (ts.isPropertyAccessExpression(current)) {
+    parts.unshift(current.name.text);
+    current = current.expression;
+  }
+  if (!ts.isIdentifier(current)) {
+    return undefined;
+  }
+  const rootType = findRootTypeName(current, sourceFile);
+  return rootType === undefined ? undefined : [rootType, ...parts].join(".");
+}
+
+function findRootTypeName(root, sourceFile) {
+  for (let current = root.parent; current; current = current.parent) {
+    if (
+      (ts.isFunctionDeclaration(current) ||
+        ts.isFunctionExpression(current) ||
+        ts.isArrowFunction(current) ||
+        ts.isMethodDeclaration(current)) &&
+      current.parameters
+    ) {
+      const parameter = current.parameters.find(
+        (candidate) =>
+          ts.isIdentifier(candidate.name) && candidate.name.text === root.text
+      );
+      if (parameter?.type === undefined) {
+        continue;
+      }
+      const typeText = parameter.type.getText(sourceFile);
+      if (typeText.includes("PlayerState")) {
+        return "PlayerState";
+      }
+      if (typeText.includes("GameState")) {
+        return "GameState";
+      }
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 function isForbiddenAnnotation(node) {
