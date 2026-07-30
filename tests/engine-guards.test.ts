@@ -271,7 +271,10 @@ test("typed-access guard rejects runtime-effect fallbacks and payload assertions
   `);
   const result = run("check-engine-typed-access.mjs", fixture);
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /forbidden runtime-effect boundary RuntimeEffectFields/);
+  assert.match(
+    result.stderr,
+    /forbidden runtime-effect boundary RuntimeEffectFields/
+  );
   assert.match(result.stderr, /asserts a decoded runtime effect payload/);
 });
 
@@ -329,7 +332,10 @@ test("typed-access guard rejects Catalog bypass exports and decoder imports", ()
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /exports Catalog bypass getEffectRuntimeHandler/);
-  assert.match(result.stderr, /imports runtime effect decoder outside an approved boundary/);
+  assert.match(
+    result.stderr,
+    /imports runtime effect decoder outside an approved boundary/
+  );
 });
 
 test("typed-access guard rejects aliased and direct Catalog bypass re-exports", () => {
@@ -350,8 +356,14 @@ test("typed-access guard rejects aliased and direct Catalog bypass re-exports", 
   const result = run("check-engine-typed-access.mjs", fixtureRoot);
 
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /re-exports Catalog bypass effectRuntimeHandlerMap/);
-  assert.match(result.stderr, /re-exports runtime effect decoder outside an approved boundary/);
+  assert.match(
+    result.stderr,
+    /re-exports Catalog bypass effectRuntimeHandlerMap/
+  );
+  assert.match(
+    result.stderr,
+    /re-exports runtime effect decoder outside an approved boundary/
+  );
 });
 
 test("typed-access guard accepts a renamed explicit source-kind policy helper", () => {
@@ -378,7 +390,8 @@ test("typed-access guard accepts unrelated interfaces but rejects executable raw
         switch (effectId) { case "fixture": return ["card"]; }
       }
     `,
-    "runtime-effect-decoder.ts": "function checkPayload(raw: unknown): string[] { return []; }\nvoid checkPayload;\n",
+    "runtime-effect-decoder.ts":
+      "function checkPayload(raw: unknown): string[] { return []; }\nvoid checkPayload;\n",
   });
   assert.equal(run("check-engine-typed-access.mjs", safe).status, 0);
 
@@ -399,6 +412,28 @@ test("typed-access guard accepts unrelated interfaces but rejects executable raw
   assert.match(result.stderr, /handler-owned payload validation/);
 });
 
+test("typed-access guard rejects a physical-zone consumer without a Ledger import", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    export function listInventory(state: {
+      players: { hand: unknown[]; deck: unknown[]; discard: unknown[]; permanents: unknown[] }[];
+    }) {
+      return state.players.flatMap((player) => [
+        player.hand,
+        player.deck,
+        player.discard,
+        player.permanents,
+      ]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /manually enumerates physical-zone inventory without Control Ledger import/
+  );
+  assert.match(result.stderr, /hand, deck, discard, permanents/);
+});
+
 function createFixture(source: string): string {
   const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
   const sourceDir = path.join(fixtureRoot, "src", "engine");
@@ -414,6 +449,41 @@ function createEngineFixture(files: Record<string, string>): string {
   for (const [fileName, source] of Object.entries(files)) {
     writeFileSync(path.join(sourceDir, fileName), source, "utf8");
   }
+  return fixtureRoot;
+}
+
+function createPhysicalZoneFixture(consumerSource: string): string {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
+  const sourceDir = path.join(fixtureRoot, "src", "engine");
+  mkdirSync(sourceDir, { recursive: true });
+  writeFileSync(
+    path.join(sourceDir, "control-ledger.ts"),
+    `
+      function createArrayCardZoneDescriptor(
+        zoneName: string,
+        readStorage: () => readonly unknown[]
+      ) {
+        return { zoneName, readStorage };
+      }
+
+      function listPlayerPhysicalCardZoneDescriptors(player: {
+        deck: unknown[];
+        hand: unknown[];
+        discard: unknown[];
+        permanents: unknown[];
+      }) {
+        return [
+          createArrayCardZoneDescriptor("deck", () => player.deck),
+          createArrayCardZoneDescriptor("hand", () => player.hand),
+          createArrayCardZoneDescriptor("discard", () => player.discard),
+          createArrayCardZoneDescriptor("permanents", () => player.permanents),
+        ];
+      }
+      void listPlayerPhysicalCardZoneDescriptors;
+    `,
+    "utf8"
+  );
+  writeFileSync(path.join(sourceDir, "fixture.ts"), consumerSource, "utf8");
   return fixtureRoot;
 }
 

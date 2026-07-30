@@ -51,6 +51,8 @@ const physicalCardZoneApiNames = new Set([
   "listPhysicalCardZoneDescriptors",
   "removeCardFromLocation",
 ]);
+const controlLedgerOwner = "src/engine/control-ledger.ts";
+const physicalCardZoneFields = collectPhysicalCardZoneFields();
 const configuredAllowedViolations = [
   ["src/engine/data.ts", 1266, 3, "decodeRuntimeSourceMetadata"],
   ["src/engine/data.ts", 1670, 1, "expectRuntimeRecord"],
@@ -265,12 +267,16 @@ function checkAttackLifecycleOwnership(relativePath, sourceFile) {
       }
     }
 
-    if (relativePath !== attackResolutionOwner && ts.isObjectLiteralExpression(node)) {
+    if (
+      relativePath !== attackResolutionOwner &&
+      ts.isObjectLiteralExpression(node)
+    ) {
       const typeProperty = node.properties.find(
         (property) =>
           ts.isPropertyAssignment(property) &&
           ((ts.isIdentifier(property.name) && property.name.text === "type") ||
-            (ts.isStringLiteral(property.name) && property.name.text === "type"))
+            (ts.isStringLiteral(property.name) &&
+              property.name.text === "type"))
       );
       if (
         typeProperty !== undefined &&
@@ -331,7 +337,8 @@ function checkTriggerDispatchOwnership(relativePath, sourceFile) {
         for (const property of operation.properties) {
           const propertyName =
             property.name !== undefined &&
-            (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+            (ts.isIdentifier(property.name) ||
+              ts.isStringLiteral(property.name))
               ? property.name.text
               : undefined;
           if (
@@ -462,22 +469,25 @@ function isHandlerOwnedPayloadValidator(node) {
   if (!ts.isMethodDeclaration(node) || !isStringArrayType(node.type)) {
     return false;
   }
-  if (!node.parameters.some(
-    (parameter) => parameter.type?.kind === ts.SyntaxKind.UnknownKeyword
-  )) return false;
+  if (
+    !node.parameters.some(
+      (parameter) => parameter.type?.kind === ts.SyntaxKind.UnknownKeyword
+    )
+  )
+    return false;
   const object = node.parent;
   return (
     ts.isObjectLiteralExpression(object) &&
     object.properties.some(
       (property) =>
-        ((ts.isMethodDeclaration(property) &&
+        (ts.isMethodDeclaration(property) &&
           ts.isIdentifier(property.name) &&
           property.name.text === "execute") ||
-          (ts.isPropertyAssignment(property) &&
-            ts.isIdentifier(property.name) &&
-            property.name.text === "execute" &&
-            (ts.isArrowFunction(property.initializer) ||
-              ts.isFunctionExpression(property.initializer))))
+        (ts.isPropertyAssignment(property) &&
+          ts.isIdentifier(property.name) &&
+          property.name.text === "execute" &&
+          (ts.isArrowFunction(property.initializer) ||
+            ts.isFunctionExpression(property.initializer)))
     )
   );
 }
@@ -508,26 +518,34 @@ function getDeclarationName(node) {
 }
 
 function hasExportModifier(node) {
-  return node.modifiers?.some(
-    (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword
-  ) ?? false;
+  return (
+    node.modifiers?.some(
+      (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword
+    ) ?? false
+  );
 }
 
 function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
   const importedNames = new Set();
   const calledNames = new Set();
   const forbiddenHelpers = new Set();
+  const manuallyEnumeratedZoneFields = new Set();
+  let importsControlLedger = false;
 
   function visit(node) {
     if (
       ts.isImportDeclaration(node) &&
       ts.isStringLiteral(node.moduleSpecifier) &&
-      node.moduleSpecifier.text === "./control-ledger.js" &&
-      node.importClause?.namedBindings &&
-      ts.isNamedImports(node.importClause.namedBindings)
+      node.moduleSpecifier.text === "./control-ledger.js"
     ) {
-      for (const element of node.importClause.namedBindings.elements) {
-        importedNames.add(element.propertyName?.text ?? element.name.text);
+      importsControlLedger = true;
+      if (
+        node.importClause?.namedBindings &&
+        ts.isNamedImports(node.importClause.namedBindings)
+      ) {
+        for (const element of node.importClause.namedBindings.elements) {
+          importedNames.add(element.propertyName?.text ?? element.name.text);
+        }
       }
     }
 
@@ -541,6 +559,14 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
 
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
       calledNames.add(node.expression.text);
+    }
+
+    if (ts.isArrayLiteralExpression(node)) {
+      const fields = new Set();
+      collectPhysicalCardZoneFieldsFromNode(node, fields);
+      if (fields.size > 3) {
+        fields.forEach((field) => manuallyEnumeratedZoneFields.add(field));
+      }
     }
 
     ts.forEachChild(node, visit);
@@ -561,6 +587,15 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
     );
   }
   if (
+    relativePath !== controlLedgerOwner &&
+    !importsControlLedger &&
+    manuallyEnumeratedZoneFields.size > 3
+  ) {
+    physicalCardZoneOwnershipViolations.push(
+      `${relativePath} manually enumerates physical-zone inventory without Control Ledger import: ${[...manuallyEnumeratedZoneFields].join(", ")}`
+    );
+  }
+  if (
     relativePath === "src/engine/game-state-fork.ts" &&
     !calledNames.has("clonePhysicalCardZoneState")
   ) {
@@ -568,6 +603,61 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
       `${relativePath} must call clonePhysicalCardZoneState from Control Ledger`
     );
   }
+}
+
+function collectPhysicalCardZoneFields() {
+  const ledgerPath = path.join(engineDir, "control-ledger.ts");
+  if (!statSync(ledgerPath, { throwIfNoEntry: false })) {
+    return new Set();
+  }
+  const ledgerSource = ts.createSourceFile(
+    ledgerPath,
+    readFileSync(ledgerPath, "utf8"),
+    ts.ScriptTarget.Latest,
+    true
+  );
+  const fields = new Set();
+
+  function visit(node) {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      (node.expression.text === "createArrayCardZoneDescriptor" ||
+        node.expression.text === "createSingletonCardZoneDescriptor")
+    ) {
+      const readStorage = node.arguments[1];
+      if (readStorage && ts.isArrowFunction(readStorage)) {
+        collectPropertyAccessFields(readStorage.body, fields);
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(ledgerSource);
+  return fields;
+}
+
+function collectPropertyAccessFields(node, fields) {
+  if (
+    ts.isPropertyAccessExpression(node) &&
+    (!ts.isPropertyAccessExpression(node.parent) ||
+      node.parent.expression !== node)
+  ) {
+    fields.add(node.name.text);
+  }
+  ts.forEachChild(node, (child) => collectPropertyAccessFields(child, fields));
+}
+
+function collectPhysicalCardZoneFieldsFromNode(node, fields) {
+  if (
+    ts.isPropertyAccessExpression(node) &&
+    physicalCardZoneFields.has(node.name.text)
+  ) {
+    fields.add(node.name.text);
+  }
+  ts.forEachChild(node, (child) =>
+    collectPhysicalCardZoneFieldsFromNode(child, fields)
+  );
 }
 
 function isForbiddenAnnotation(node) {
@@ -641,10 +731,7 @@ if (physicalCardZoneOwnershipViolations.length > 0) {
     `Physical card zone ownership violation(s): ${physicalCardZoneOwnershipViolations.join("; ")}`
   );
 }
-if (
-  triggerDispatchOwnerPresent &&
-  triggerDispatchOwnerDeclarationCount !== 1
-) {
+if (triggerDispatchOwnerPresent && triggerDispatchOwnerDeclarationCount !== 1) {
   triggerDispatchOwnershipViolations.push(
     `${triggerDispatchOwner} must declare exactly one dispatchControlledCardOperation implementation; found ${triggerDispatchOwnerDeclarationCount}`
   );
