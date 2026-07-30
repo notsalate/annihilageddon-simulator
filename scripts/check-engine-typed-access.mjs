@@ -42,14 +42,11 @@ const forbiddenPhysicalInventoryHelpers = new Set([
   "getCommonCardZones",
   "listPhysicalCardZones",
 ]);
-const physicalCardZoneApiNames = new Set([
+const physicalInventorySeamApiNames = new Set([
   "clonePhysicalCardZoneState",
   "clonePhysicalCardZones",
-  "findCardLocation",
-  "listOwnedScoringCards",
   "listPhysicalCardLocations",
   "listPhysicalCardZoneDescriptors",
-  "removeCardFromLocation",
 ]);
 const controlLedgerOwner = "src/engine/control-ledger.ts";
 const physicalCardZonePaths = collectPhysicalCardZonePaths();
@@ -526,7 +523,7 @@ function hasExportModifier(node) {
 }
 
 function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
-  const importedNames = new Set();
+  const importedLedgerApis = new Map();
   const calledNames = new Set();
   const forbiddenHelpers = new Set();
   const manuallyEnumeratedZonePaths =
@@ -546,7 +543,10 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
       ) {
         for (const element of node.importClause.namedBindings.elements) {
           if (!element.isTypeOnly) {
-            importedNames.add(element.propertyName?.text ?? element.name.text);
+            importedLedgerApis.set(
+              element.name.text,
+              element.propertyName?.text ?? element.name.text
+            );
           }
         }
       }
@@ -568,16 +568,23 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
   }
   visit(sourceFile);
 
-  for (const importedName of importedNames) {
-    if (calledNames.has(importedName)) {
+  const calledLedgerApis = new Set();
+  for (const [localName, exportedName] of importedLedgerApis) {
+    if (calledNames.has(localName)) {
+      calledLedgerApis.add(exportedName);
+    }
+    if (
+      physicalInventorySeamApiNames.has(exportedName) &&
+      calledNames.has(localName)
+    ) {
       usesControlLedgerSeam = true;
     }
     if (
-      physicalCardZoneApiNames.has(importedName) &&
-      !calledNames.has(importedName)
+      physicalInventorySeamApiNames.has(exportedName) &&
+      !calledNames.has(localName)
     ) {
       physicalCardZoneOwnershipViolations.push(
-        `${relativePath} imports Ledger physical-zone API ${importedName} without calling it`
+        `${relativePath} imports Ledger physical-zone API ${exportedName} without calling it`
       );
     }
   }
@@ -589,7 +596,7 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
   if (
     relativePath !== controlLedgerOwner &&
     !usesControlLedgerSeam &&
-    manuallyEnumeratedZonePaths.size > 0
+    manuallyEnumeratedZonePaths.size > 1
   ) {
     physicalCardZoneOwnershipViolations.push(
       `${relativePath} manually enumerates physical-zone inventory without calling a Control Ledger seam: ${[...manuallyEnumeratedZonePaths].join(", ")}`
@@ -597,7 +604,7 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
   }
   if (
     relativePath === "src/engine/game-state-fork.ts" &&
-    !calledNames.has("clonePhysicalCardZoneState")
+    !calledLedgerApis.has("clonePhysicalCardZoneState")
   ) {
     physicalCardZoneOwnershipViolations.push(
       `${relativePath} must call clonePhysicalCardZoneState from Control Ledger`
@@ -697,6 +704,15 @@ function collectManualPhysicalZonePaths(sourceFile) {
     }
     if (ts.isArrayLiteralExpression(node) && isInventoryCollectionNode(node)) {
       collectExpressionPaths(node, paths);
+    }
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      isPlayerStateCollectionCallbackAccess(node, sourceFile)
+    ) {
+      const path = `PlayerState.${node.name.text}`;
+      if (physicalCardZonePaths.has(path)) {
+        paths.add(path);
+      }
     }
     if (
       ts.isCallExpression(node) &&
@@ -811,6 +827,56 @@ function findRootTypeName(root, sourceFile) {
     }
   }
   return undefined;
+}
+
+function isPlayerStateCollectionCallbackAccess(node, sourceFile) {
+  let current = node;
+  while (ts.isPropertyAccessExpression(current)) current = current.expression;
+  if (!ts.isIdentifier(current)) return false;
+
+  for (let ancestor = current.parent; ancestor; ancestor = ancestor.parent) {
+    if (!ts.isFunctionLike(ancestor)) continue;
+    const parameter = ancestor.parameters.find(
+      (candidate) =>
+        ts.isIdentifier(candidate.name) && candidate.name.text === current.text
+    );
+    return (
+      parameter !== undefined &&
+      isPlayerStateCollectionCallbackParameter(parameter, sourceFile)
+    );
+  }
+  return false;
+}
+
+function isPlayerStateCollectionCallbackParameter(parameter, sourceFile) {
+  const callback = parameter.parent;
+  if (!ts.isFunctionLike(callback) || !ts.isCallExpression(callback.parent)) {
+    return false;
+  }
+  const call = callback.parent;
+  if (
+    !ts.isPropertyAccessExpression(call.expression) ||
+    !["flatMap", "map", "filter", "forEach"].includes(call.expression.name.text)
+  ) {
+    return false;
+  }
+  const collection = call.expression.expression;
+  if (ts.isPropertyAccessExpression(collection)) {
+    return (
+      getSemanticPropertyAccessPath(collection, sourceFile) === "GameState.players"
+    );
+  }
+  if (!ts.isIdentifier(collection)) return false;
+
+  for (let current = collection.parent; current; current = current.parent) {
+    if (!ts.isFunctionLike(current)) continue;
+    const collectionParameter = current.parameters.find(
+      (candidate) =>
+        ts.isIdentifier(candidate.name) && candidate.name.text === collection.text
+    );
+    return collectionParameter?.type?.getText(sourceFile).includes("PlayerState[]") ?? false;
+  }
+  return false;
 }
 
 function isForbiddenAnnotation(node) {

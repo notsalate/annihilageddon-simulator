@@ -475,6 +475,67 @@ test("typed-access guard rejects a bare Ledger import without a seam call", () =
   assert.match(result.stderr, /without calling a Control Ledger seam/);
 });
 
+test("typed-access guard accepts an aliased physical-zone Ledger seam", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 0);
+});
+
+test("typed-access guard does not treat non-inventory Ledger APIs as a seam", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { findCardLocation } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      findCardLocation();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /without calling a Control Ledger seam/);
+});
+
+test("typed-access guard follows GameState.players and PlayerState[] callbacks", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    interface GameState { players: PlayerState[] }
+    export function collectFromGame(state: GameState) {
+      return state.players.flatMap((player) => [player.hand, player.deck]);
+    }
+    export function mapPlayers(state: GameState) {
+      return state.players.map((player) => player.hand.concat(player.deck));
+    }
+    export function filterPlayers(state: GameState) {
+      return state.players.filter((player) => player.hand.includes(player.deck[0]));
+    }
+    export function visitPlayers(players: PlayerState[]) {
+      players.forEach((player) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /PlayerState.hand, PlayerState.deck/);
+});
+
+test("typed-access guard ignores Other.players callbacks", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    interface OtherPlayer { hand: unknown[]; deck: unknown[] }
+    interface Other { players: OtherPlayer[] }
+    export function collect(other: Other) {
+      return other.players.flatMap((player) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 0);
+});
+
 test("typed-access guard follows intermediate zone aliases pushed into an inventory", () => {
   const fixtureRoot = createPhysicalZoneFixture(`
     interface PlayerState { hand: unknown[]; deck: unknown[] }
