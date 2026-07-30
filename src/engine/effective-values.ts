@@ -166,16 +166,25 @@ export function calculateEffectiveValue(options: {
     ...getScoringCardEffects(
       options.state,
       options.playerId,
-      options.scoringCards ?? [],
-      options.target,
-      options.scoredCard
+      options.scoringCards ?? []
     ),
   ]) {
     const result = applyEffectiveValueModifier(effect, source, {
       timing,
       valueKind: options.valueKind,
-      targetMatches: (effectTarget) =>
-        matchesTarget(options.state, effectTarget, options.target),
+      targetMatches: (effectTarget) => {
+        if (!matchesTarget(options.state, effectTarget, options.target)) {
+          return false;
+        }
+        if (
+          options.target.targetType !== "card" ||
+          options.scoredCard === undefined ||
+          !isSelfScoringCardEffectTarget(effectTarget, source.definitionId)
+        ) {
+          return true;
+        }
+        return source.cardInstanceId === options.scoredCard.instanceId;
+      },
       countOwnedScoringCards: (countedCardTypes) =>
         countOwnedScoringCards(
           options.state,
@@ -282,23 +291,11 @@ function getControlledObjectEffects(
 function getScoringCardEffects(
   state: GameState,
   playerId: PlayerId,
-  scoringCards: readonly ControlledCardObject[],
-  target: EffectiveValueTarget,
-  scoredCard: CardInstance | undefined
+  scoringCards: readonly ControlledCardObject[]
 ): EffectiveValueEffect[] {
   return scoringCards.flatMap((object) => {
     return toEffectiveValueEffects(
-      object.definition.engine.effects.filter((effect) => {
-        if (
-          target.targetType === "card" &&
-          scoredCard !== undefined &&
-          isSelfScoringCardEffect(effect, object.definition.cardId)
-        ) {
-          return object.card.instanceId === scoredCard.instanceId;
-        }
-
-        return true;
-      }),
+      object.definition.engine.effects,
       cardEffectSource(
         state,
         playerId,
@@ -367,17 +364,15 @@ function deadWizardTokenEffectSource(
   };
 }
 
-function isSelfScoringCardEffect(
-  effect: RuntimeEffect,
+function isSelfScoringCardEffectTarget(
+  effectTarget: RuntimeEffectTarget | undefined,
   sourceDefinitionId: string
 ): boolean {
-  const target = "target" in effect ? effect.target : undefined;
   return (
-    typeof target === "object" &&
-    target !== null &&
-    "targetType" in target &&
-    target.targetType === "card" &&
-    target.definitionId === sourceDefinitionId
+    effectTarget !== undefined &&
+    "targetType" in effectTarget &&
+    effectTarget.targetType === "card" &&
+    effectTarget.definitionId === sourceDefinitionId
   );
 }
 

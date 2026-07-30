@@ -505,6 +505,62 @@ test("Potnyi GeekPig self-scoring applies once per physical copy", () => {
   );
 });
 
+test("scoring another card reports a malformed self-scoring modifier", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({ dataPack, seed: 60616 });
+  const player = state.players[0];
+  assert.ok(player);
+  const geekPig = state.cardDefinitions.get("esw2_dbg__main_040");
+  const target = state.cardDefinitions.get("esw2_dbg__main_035");
+  assert.ok(geekPig);
+  assert.ok(target);
+  const malformedGeekPig: CardDefinition = {
+    ...geekPig,
+    engine: {
+      ...geekPig.engine,
+      effects: [
+        {
+          effectId: "modify_effective_value",
+          timing: "whileScoring",
+          valueKind: "cardVictoryPoints",
+          operation: "add",
+          amount: "invalid",
+          target: { targetType: "card", definitionId: geekPig.cardId },
+        } as never,
+      ],
+    },
+  };
+  const geekPigCard = createCardInstance(
+    "fixture-malformed-self-scoring-geekpig",
+    geekPig.cardId,
+    player.playerId
+  );
+  const targetCard = createCardInstance(
+    "fixture-scored-target",
+    target.cardId,
+    player.playerId
+  );
+  player.discard.push(geekPigCard, targetCard);
+  const stateWithMalformedSelfScoringEffect = {
+    ...state,
+    cardDefinitions: new Map(state.cardDefinitions).set(
+      geekPig.cardId,
+      malformedGeekPig
+    ),
+  };
+
+  assert.throws(
+    () =>
+      calculateEffectiveCardVictoryPoints(
+        stateWithMalformedSelfScoringEffect,
+        player.playerId,
+        target,
+        targetCard
+      ),
+    /amount must be a safe integer/
+  );
+});
+
 test("scoring zones stay aligned between scoreGame and whileScoring modifiers", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
   const state = initializeGame({ dataPack, seed: 60615 });
