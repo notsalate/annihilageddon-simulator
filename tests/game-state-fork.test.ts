@@ -18,7 +18,11 @@ import {
   markTokenDefinitionId,
   markTokenInstanceId,
 } from "../src/domain/types.js";
-import { clonePhysicalCardZones } from "../src/engine/control-ledger.js";
+import {
+  clonePhysicalCardZones,
+  listPhysicalCardZoneDescriptors,
+  registerPhysicalCardZoneDescriptorFactory,
+} from "../src/engine/control-ledger.js";
 
 function createFixture(): GameState {
   const playerId = markPlayerId("player-1");
@@ -246,8 +250,25 @@ test("fork clones a descriptor-only card location without sharing mutable cards"
       instanceId: markCardInstanceId("descriptor-only-card"),
     },
   ];
+  registerPhysicalCardZoneDescriptorFactory(source, (state) => {
+    const zonePlayer = state.players[0] as StateWithDescriptorOnlyZone["players"][number];
+    return {
+      zoneName: "descriptorOnlyZone",
+      cardinality: "many",
+      scoringEligible: false,
+      read: () => [...zonePlayer.descriptorOnlyZone],
+      replace: (cards) => {
+        zonePlayer.descriptorOnlyZone = [...cards];
+      },
+    };
+  });
 
   const fork = forkGameState(source) as StateWithDescriptorOnlyZone;
+  assert.ok(
+    listPhysicalCardZoneDescriptors(fork).some(
+      (descriptor) => descriptor.zoneName === "descriptorOnlyZone"
+    )
+  );
   const forkCard = fork.players[0]!.descriptorOnlyZone[0]!;
   forkCard.marketChips = 4;
 

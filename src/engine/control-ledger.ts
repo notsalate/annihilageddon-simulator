@@ -47,6 +47,32 @@ export interface PhysicalCardZoneDescriptor {
   replace(cards: readonly CardInstance[]): void;
 }
 
+export type PhysicalCardZoneDescriptorFactory = (
+  state: Pick<GameState, "players" | "common">
+) => PhysicalCardZoneDescriptor;
+
+const additionalPhysicalCardZoneFactories = new WeakMap<
+  object,
+  readonly PhysicalCardZoneDescriptorFactory[]
+>();
+
+/** Registers an extension zone with the Ledger-owned physical inventory. */
+export function registerPhysicalCardZoneDescriptorFactory(
+  state: Pick<GameState, "players" | "common">,
+  factory: PhysicalCardZoneDescriptorFactory
+): void {
+  const existing = additionalPhysicalCardZoneFactories.get(state) ?? [];
+  additionalPhysicalCardZoneFactories.set(state, [...existing, factory]);
+}
+
+export function clonePhysicalCardZoneDescriptorFactories(
+  source: Pick<GameState, "players" | "common">,
+  target: Pick<GameState, "players" | "common">
+): void {
+  const factories = additionalPhysicalCardZoneFactories.get(source);
+  if (factories !== undefined) additionalPhysicalCardZoneFactories.set(target, factories);
+}
+
 export interface PhysicalCardLocation {
   readonly card: CardInstance;
   readonly zoneName: string;
@@ -326,6 +352,7 @@ export function listPhysicalCardZoneDescriptors(
         state.common.destroyedMegaMayhem = cards;
       }
     ),
+    ...(additionalPhysicalCardZoneFactories.get(state)?.map((factory) => factory(state)) ?? []),
   ];
 }
 
