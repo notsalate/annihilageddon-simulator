@@ -459,14 +459,21 @@ function isSourceKindPolicy(node) {
 }
 
 function isHandlerOwnedPayloadValidator(node) {
-  const signature = ts.isMethodSignature(node)
-    ? node
-    : ts.isPropertySignature(node) && node.type && ts.isFunctionTypeNode(node.type)
-      ? node.type
-      : undefined;
-  if (signature === undefined || !isStringArrayType(signature.type)) return false;
-  return signature.parameters.some(
+  if (!ts.isMethodDeclaration(node) || !isStringArrayType(node.type)) {
+    return false;
+  }
+  if (!node.parameters.some(
     (parameter) => parameter.type?.kind === ts.SyntaxKind.UnknownKeyword
+  )) return false;
+  const object = node.parent;
+  return (
+    ts.isObjectLiteralExpression(object) &&
+    object.properties.some(
+      (property) =>
+        ts.isMethodDeclaration(property) &&
+        ts.isIdentifier(property.name) &&
+        property.name.text === "execute"
+    )
   );
 }
 
