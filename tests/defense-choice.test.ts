@@ -185,6 +185,44 @@ test("a defense choice ignores a cloned card returned by strategy", () => {
   );
 });
 
+test("a defense choice rejects a separately forged option clone", () => {
+  const { state, attacker, defender } = createAttackScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf");
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "attack_damage") {
+      return choices.find((choice) => choice.choiceId === defender.playerId);
+    }
+    if (effectId === "avoid_attack") {
+      const legitimate = choices.find(
+        (choice) => choice.choiceId === defense.instanceId
+      );
+      return legitimate === undefined
+        ? undefined
+        : { ...legitimate, card: { ...defense } };
+    }
+    return undefined;
+  };
+
+  const result = executeEffect(
+    state,
+    attacker,
+    {
+      effectId: "attack_damage",
+      amount: 2,
+      targetSelector: "chosenFoe",
+    },
+    attackSource(attacker)
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(defender.life.current, 18);
+  assert.equal(defender.hand.includes(defense), true);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
+    false
+  );
+});
+
 test("a defense choice keeps its original option when strategy mutates choiceId", () => {
   const { state, attacker, defender } = createAttackScenario();
   const firstDefense = addFixtureDefenseCardToHand(
@@ -228,15 +266,15 @@ test("a defense choice keeps its original option when strategy mutates choiceId"
 
   assert.deepEqual(result, { ok: true });
   assert.equal(defender.life.current, lifeBefore);
-  assert.equal(defender.hand.includes(firstDefense), false);
-  assert.equal(defender.hand.includes(secondDefense), true);
-  assert.equal(defender.discard.includes(firstDefense), true);
+  assert.equal(defender.hand.includes(firstDefense), true);
+  assert.equal(defender.hand.includes(secondDefense), false);
+  assert.equal(defender.discard.includes(secondDefense), true);
   assert.equal(
     state.eventLog.some(
       (event) =>
         event.type === "effectChoiceSelected" &&
         event.effectId === "avoid_attack" &&
-        event.choiceId === firstDefense.instanceId
+        event.choiceId === secondDefense.instanceId
     ),
     true
   );
@@ -244,8 +282,8 @@ test("a defense choice keeps its original option when strategy mutates choiceId"
     state.eventLog.some(
       (event) =>
         event.type === "defenseChoiceSelected" &&
-        event.cardInstanceId === firstDefense.instanceId &&
-        event.definitionId === firstDefense.definitionId
+        event.cardInstanceId === secondDefense.instanceId &&
+        event.definitionId === secondDefense.definitionId
     ),
     true
   );

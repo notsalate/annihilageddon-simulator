@@ -156,7 +156,9 @@ test("failed defense branch rolls back mutations and returns its error", () => {
   state.effectChoiceStrategy = (request) => {
     if (request.effectId !== "avoid_attack") return undefined;
     return request.choices.find(
-      (choice) => choice.choiceKind === "defense" && choice.card === defenseCard
+      (choice) =>
+        choice.choiceKind === "defense" &&
+        choice.card?.instanceId === defenseCard.instanceId
     );
   };
   const lifeBefore = defendingPlayer.life.current;
