@@ -48,7 +48,9 @@ export interface PhysicalCardZoneDescriptor {
 }
 
 export type PhysicalCardZoneDescriptorFactory = (
-  (state: Pick<GameState, "players" | "common">) => PhysicalCardZoneDescriptor
+  (
+    state: Pick<GameState, "players" | "common">
+  ) => Omit<PhysicalCardZoneDescriptor, "zoneName">
 ) & {
   readonly identity: string;
   readonly zoneName: string;
@@ -299,7 +301,21 @@ export function listPhysicalCardZoneDescriptors(
 ): readonly PhysicalCardZoneDescriptor[] {
   return [
     ...listBuiltinPhysicalCardZoneDescriptors(state),
-    ...(additionalPhysicalCardZoneFactories.get(state)?.map((factory) => factory(state)) ?? []),
+    ...(additionalPhysicalCardZoneFactories
+      .get(state)
+      ?.map((factory) => {
+        const descriptor = factory(state);
+        return {
+          zoneName: factory.zoneName,
+          cardinality: descriptor.cardinality,
+          scoringEligible: descriptor.scoringEligible,
+          ...(descriptor.expectedOwnerId === undefined
+            ? {}
+            : { expectedOwnerId: descriptor.expectedOwnerId }),
+          read: () => descriptor.read(),
+          replace: (cards: readonly CardInstance[]) => descriptor.replace(cards),
+        };
+      }) ?? []),
   ];
 }
 

@@ -256,7 +256,6 @@ test("fork clones a descriptor-only card location without sharing mutable cards"
       (state: Pick<GameState, "players" | "common">) => {
         const zonePlayer = state.players[0] as StateWithDescriptorOnlyZone["players"][number];
         return {
-          zoneName: "descriptorOnlyZone",
           cardinality: "many" as const,
           scoringEligible: false,
           read: () => [...zonePlayer.descriptorOnlyZone],
@@ -270,16 +269,28 @@ test("fork clones a descriptor-only card location without sharing mutable cards"
   );
 
   const fork = forkGameState(source) as StateWithDescriptorOnlyZone;
-  assert.ok(
-    listPhysicalCardZoneDescriptors(fork).some(
-      (descriptor) => descriptor.zoneName === "descriptorOnlyZone"
-    )
+  const sourceDescriptor = listPhysicalCardZoneDescriptors(source).find(
+    (descriptor) => descriptor.zoneName === "descriptorOnlyZone"
   );
-  const forkCard = fork.players[0]!.descriptorOnlyZone[0]!;
-  forkCard.marketChips = 4;
+  const forkDescriptor = listPhysicalCardZoneDescriptors(fork).find(
+    (descriptor) => descriptor.zoneName === "descriptorOnlyZone"
+  );
+  assert.ok(sourceDescriptor);
+  assert.ok(forkDescriptor);
+  assert.deepEqual(forkDescriptor.read(), sourceDescriptor.read());
+  assert.notEqual(forkDescriptor.read()[0], sourceDescriptor.read()[0]);
 
-  assert.equal(source.players[0]!.descriptorOnlyZone[0]!.marketChips, 0);
-  assert.notEqual(forkCard, source.players[0]!.descriptorOnlyZone[0]);
+  forkDescriptor.replace([
+    {
+      ...forkDescriptor.read()[0]!,
+      instanceId: markCardInstanceId("descriptor-only-replacement"),
+      marketChips: 4,
+    },
+  ]);
+
+  assert.equal(sourceDescriptor.read()[0]!.marketChips, 0);
+  assert.equal(forkDescriptor.read()[0]!.marketChips, 4);
+  assert.notEqual(forkDescriptor.read()[0], sourceDescriptor.read()[0]);
 });
 
 test("fork isolates source mutations and sibling mutable collections", () => {

@@ -146,38 +146,105 @@ test("singleton physical card descriptor enforces zero-or-one storage", () => {
   assert.equal(player.unboughtFamiliar, second);
 });
 
-test("Ledger rejects a side-effectful duplicate extension descriptor before changing state", () => {
+test("Ledger rejects duplicate extension metadata before calling factories or changing its registry", () => {
   const state = initializeGame({ rootDir, seed: 47602 });
   const player = state.players[0]!;
   const cardsBefore = [...player.hand];
-  const duplicateFactory = Object.assign(
-    (candidate: Pick<typeof state, "players" | "common">) => {
-      candidate.players[0]!.hand = [];
+  let factoryCalls = 0;
+  const extensionCards: CardInstance[] = [];
+  const registeredFactory = Object.assign(
+    () => {
+      factoryCalls += 1;
       return {
-        zoneName: `${candidate.players[0]!.playerId}.hand`,
         cardinality: "many" as const,
         scoringEligible: false,
-        read: () => candidate.players[0]!.hand,
+        read: () => extensionCards,
         replace: (cards: readonly CardInstance[]) => {
-          candidate.players[0]!.hand = [...cards];
+          extensionCards.splice(0, extensionCards.length, ...cards);
         },
       };
     },
     {
-      identity: "fixture.duplicate-hand",
-      zoneName: `${player.playerId}.hand`,
+      identity: "fixture.registered-extension",
+      zoneName: "fixture.extension",
     }
+  );
+  registerPhysicalCardZoneDescriptorFactory(state, registeredFactory);
+
+  const duplicateZoneNameFactory = Object.assign(
+    () => {
+      factoryCalls += 1;
+      player.hand = [];
+      return {
+        cardinality: "many" as const,
+        scoringEligible: false,
+        read: () => [],
+        replace: () => undefined,
+      };
+    },
+    { identity: "fixture.duplicate-zone", zoneName: "fixture.extension" }
+  );
+  const duplicateIdentityFactory = Object.assign(
+    () => {
+      factoryCalls += 1;
+      player.hand = [];
+      return {
+        cardinality: "many" as const,
+        scoringEligible: false,
+        read: () => [],
+        replace: () => undefined,
+      };
+    },
+    { identity: "fixture.registered-extension", zoneName: "fixture.other-zone" }
   );
 
   assert.throws(
-    () => registerPhysicalCardZoneDescriptorFactory(state, duplicateFactory),
+    () => registerPhysicalCardZoneDescriptorFactory(state, duplicateZoneNameFactory),
     /Duplicate physical card zone descriptor/
   );
+  assert.throws(
+    () => registerPhysicalCardZoneDescriptorFactory(state, duplicateIdentityFactory),
+    /Duplicate physical card zone descriptor identity/
+  );
+  assert.equal(factoryCalls, 0);
   assert.deepEqual(player.hand, cardsBefore);
+  assert.deepEqual(
+    listPhysicalCardZoneDescriptors(state)
+      .filter((descriptor) => descriptor.zoneName.startsWith("fixture."))
+      .map((descriptor) => descriptor.zoneName),
+    ["fixture.extension"]
+  );
+});
 
-  const fork = forkGameState(state);
-  assert.deepEqual(fork.players[0]!.hand, cardsBefore);
-  assert.notEqual(fork.players[0]!.hand, player.hand);
+test("Ledger injects extension zone metadata instead of trusting a factory descriptor name", () => {
+  const state = initializeGame({ rootDir, seed: 47603 });
+  const player = state.players[0]!;
+  const extensionCards: CardInstance[] = [];
+  const factory = Object.assign(
+    () =>
+      ({
+        zoneName: "malicious.runtime-zone",
+        cardinality: "many" as const,
+        scoringEligible: false,
+        read: () => extensionCards,
+        replace: (cards: readonly CardInstance[]) => {
+          extensionCards.splice(0, extensionCards.length, ...cards);
+        },
+      }) as unknown as Omit<
+        import("../src/engine/control-ledger.js").PhysicalCardZoneDescriptor,
+        "zoneName"
+      >,
+    { identity: "fixture.malicious-name", zoneName: "fixture.safe-zone" }
+  );
+  registerPhysicalCardZoneDescriptorFactory(state, factory);
+
+  const descriptor = listPhysicalCardZoneDescriptors(state).find(
+    (candidate) => candidate.zoneName === "fixture.safe-zone"
+  );
+  assert.ok(descriptor);
+  assert.equal(descriptor.zoneName, "fixture.safe-zone");
+  descriptor.replace([createCard("safe-zone", player.playerId)]);
+  assert.deepEqual(descriptor.read(), [createCard("safe-zone", player.playerId)]);
 });
 
 function snapshotZoneMembership(
