@@ -61,6 +61,14 @@ export function registerPhysicalCardZoneDescriptorFactory(
   state: Pick<GameState, "players" | "common">,
   factory: PhysicalCardZoneDescriptorFactory
 ): void {
+  const zoneName = factory(state).zoneName;
+  if (
+    listPhysicalCardZoneDescriptors(state).some(
+      (descriptor) => descriptor.zoneName === zoneName
+    )
+  ) {
+    throw new Error(`Duplicate physical card zone descriptor ${zoneName}`);
+  }
   const existing = additionalPhysicalCardZoneFactories.get(state) ?? [];
   additionalPhysicalCardZoneFactories.set(state, [...existing, factory]);
 }

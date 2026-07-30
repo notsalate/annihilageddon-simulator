@@ -7,6 +7,7 @@ import {
   listPhysicalCardLocations,
   listPhysicalCardZoneDescriptors,
   removeCardFromLocation,
+  registerPhysicalCardZoneDescriptorFactory,
 } from "../src/engine/control-ledger.js";
 import {
   markCardDefinitionId,
@@ -139,6 +140,27 @@ test("singleton physical card descriptor enforces zero-or-one storage", () => {
   assert.equal(player.unboughtFamiliar, undefined);
   descriptor.replace([second]);
   assert.equal(player.unboughtFamiliar, second);
+});
+
+test("Ledger rejects a duplicate extension descriptor before changing state", () => {
+  const state = initializeGame({ rootDir, seed: 47602 });
+  const player = state.players[0]!;
+  const cardsBefore = [...player.hand];
+
+  assert.throws(
+    () =>
+      registerPhysicalCardZoneDescriptorFactory(state, (candidate) => ({
+        zoneName: `${candidate.players[0]!.playerId}.hand`,
+        cardinality: "many",
+        scoringEligible: false,
+        read: () => candidate.players[0]!.hand,
+        replace: (cards) => {
+          candidate.players[0]!.hand = [...cards];
+        },
+      })),
+    /Duplicate physical card zone descriptor/
+  );
+  assert.deepEqual(player.hand, cardsBefore);
 });
 
 function snapshotZoneMembership(
