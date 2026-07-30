@@ -10,6 +10,7 @@ import {
   givenTemporaryControl,
   play,
 } from "./helpers/game-scenario.js";
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 
 const rootDir = process.cwd();
 
@@ -110,6 +111,170 @@ test("afterDamageDealt executes a controlled ongoing trigger", () => {
   assert.deepEqual(play(scenario, attack), { ok: true });
   assert.equal(target.life.current, 18);
   assert.equal(attacker.life.current, 12);
+});
+
+test("attack returns an afterDamageDealt catalog error and stops later triggers", () => {
+  const scenario = createGameScenario({ rootDir, seed: 47106 });
+  const state = scenario.state;
+  state.runtimeMode = "fixture";
+  const attacker = scenario.activePlayer;
+  const target = scenario.foes[0];
+  assert.ok(target);
+  attacker.permanents = [];
+  attacker.life.current = 10;
+  target.life.current = 20;
+
+  givenRuntimeCard(scenario, {
+    player: attacker,
+    zone: "permanents",
+    cardId: "fixture-after-damage-first",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "heal_equal_damage_dealt_on_own_turn",
+        timing: "afterDamageDealt",
+      },
+    ],
+  });
+  givenRuntimeCard(scenario, {
+    player: attacker,
+    zone: "permanents",
+    cardId: "fixture-after-damage-error",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "heal_equal_damage_dealt_on_own_turn",
+        timing: "afterDamageDealt",
+      },
+    ],
+  });
+  givenRuntimeCard(scenario, {
+    player: attacker,
+    zone: "permanents",
+    cardId: "fixture-after-damage-skipped",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "heal_equal_damage_dealt_on_own_turn",
+        timing: "afterDamageDealt",
+      },
+    ],
+  });
+  choosePlayerTargetForEffect(scenario, "attack_damage", target);
+  const attack = givenRuntimeCard(scenario, {
+    player: attacker,
+    effects: [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 2,
+        targetSelector: "chosenFoe",
+      },
+    ],
+  });
+
+  const executedDefinitionIds: string[] = [];
+  const result = withTemporaryEffectRuntimeOperations(
+    "heal_equal_damage_dealt_on_own_turn",
+    {
+      applyAfterDamageDealt(_effect, context) {
+        executedDefinitionIds.push(context.source.definitionId);
+        return context.source.definitionId === "fixture-after-damage-error"
+          ? {
+              status: "resolved",
+              result: { ok: false, error: "after-damage failure" },
+            }
+          : { status: "resolved", result: { ok: true } };
+      },
+    },
+    () => play(scenario, attack)
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /after-damage failure/);
+  assert.equal(target.life.current, 18);
+  assert.deepEqual(executedDefinitionIds, [
+    "fixture-after-damage-first",
+    "fixture-after-damage-error",
+  ]);
+});
+
+test("attack returns an afterDamageDealt game end and stops later triggers", () => {
+  const scenario = createGameScenario({ rootDir, seed: 47107 });
+  const state = scenario.state;
+  state.runtimeMode = "fixture";
+  const attacker = scenario.activePlayer;
+  const target = scenario.foes[0];
+  assert.ok(target);
+  attacker.permanents = [];
+  target.life.current = 20;
+
+  for (const cardId of [
+    "fixture-after-damage-first",
+    "fixture-after-damage-game-end",
+    "fixture-after-damage-skipped",
+  ]) {
+    givenRuntimeCard(scenario, {
+      player: attacker,
+      zone: "permanents",
+      cardId,
+      isOngoing: true,
+      effects: [
+        {
+          effectId: "heal_equal_damage_dealt_on_own_turn",
+          timing: "afterDamageDealt",
+        },
+      ],
+    });
+  }
+  choosePlayerTargetForEffect(scenario, "attack_damage", target);
+  const attack = givenRuntimeCard(scenario, {
+    player: attacker,
+    effects: [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 2,
+        targetSelector: "chosenFoe",
+      },
+    ],
+  });
+
+  const executedDefinitionIds: string[] = [];
+  const result = withTemporaryEffectRuntimeOperations(
+    "heal_equal_damage_dealt_on_own_turn",
+    {
+      applyAfterDamageDealt(_effect, context) {
+        executedDefinitionIds.push(context.source.definitionId);
+        return {
+          status: "resolved",
+          result:
+            context.source.definitionId === "fixture-after-damage-game-end"
+              ? {
+                  ok: true,
+                  gameEnd: {
+                    reason: "playerDefeated",
+                    winnerPlayerId: attacker.playerId,
+                  },
+                }
+              : { ok: true },
+        };
+      },
+    },
+    () => play(scenario, attack)
+  );
+
+  assert.deepEqual(result, {
+    ok: true,
+    gameEndReason: "playerDefeated",
+    winnerPlayerId: attacker.playerId,
+  });
+  assert.equal(target.life.current, 18);
+  assert.deepEqual(executedDefinitionIds, [
+    "fixture-after-damage-first",
+    "fixture-after-damage-game-end",
+  ]);
 });
 
 function runOnPlayCardScenario(isOngoing: boolean): number {

@@ -58,6 +58,8 @@ export interface AttackResolution extends DamageResult {
   originalSource: EffectSourceContext;
 }
 
+export type DamageApplicationResult = DamageResult | EffectExecutionResult;
+
 export type AttackTargetResolutionResult =
   | { ok: true; resolution: AttackResolution; gameEnd?: never }
   | {
@@ -192,7 +194,7 @@ export interface PlayerControlledAttackAdapters {
     amount: number,
     effectId: RuntimeEffectId,
     source: EffectSourceContext
-  ): DamageResult;
+  ): DamageApplicationResult;
 
   executeOnHitEffect(
     state: GameState,
@@ -514,7 +516,7 @@ function resolvePlayerControlledAttackTarget(
     };
   }
 
-  const damage = adapters.dealAttackDamage(
+  const damageResult = adapters.dealAttackDamage(
     intent.state,
     current.attackingPlayer,
     current.targetPlayer,
@@ -522,6 +524,10 @@ function resolvePlayerControlledAttackTarget(
     intent.effectId,
     current.source
   );
+  if (!("damageDealt" in damageResult)) {
+    return damageResult;
+  }
+  const damage = damageResult;
   const resolution: AttackResolution = {
     ...damage,
     avoided: false,

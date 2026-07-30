@@ -8,6 +8,7 @@ import {
   resolvePlayerControlledAttack as resolvePlayerControlledAttackLifecycle,
   type AttackDamageAttribution,
   type AttackTargetResolutionResult,
+  type DamageApplicationResult,
   type DefenseAttackContext,
   type DefenseWindowResolutionResult,
   type PlayerControlledAttackAdapters,
@@ -767,7 +768,7 @@ function resolveMayhemAttackPlan(
       amount: decision.amount,
       sourceType: source.sourceType,
     });
-    dealDamage(
+    const damageResult = dealDamage(
       state,
       sourcePlayer,
       decision.targetPlayer,
@@ -776,6 +777,9 @@ function resolveMayhemAttackPlan(
       source,
       { kind: "ownerless" }
     );
+    if (!("damageDealt" in damageResult)) {
+      return damageResult;
+    }
   }
 
   return { ok: true };
@@ -1388,7 +1392,7 @@ function dealDamage(
   effectId: RuntimeEffectId,
   source: EffectSourceContext,
   cause: DamageCause
-): DamageResult {
+): DamageApplicationResult {
   const previousLife = targetPlayer.life.current;
   targetPlayer.life.current -= amount;
   const damageDealt = Math.max(0, Math.min(previousLife, amount));
@@ -1421,13 +1425,16 @@ function dealDamage(
     );
   }
 
-  applyDamageDealtTriggers(
+  const triggerResult = applyDamageDealtTriggers(
     state,
     sourcePlayer,
     targetPlayer,
     damageDealt,
     source
   );
+  if (!triggerResult.ok || triggerResult.gameEnd !== undefined) {
+    return triggerResult;
+  }
 
   return {
     damageDealt,
@@ -1441,16 +1448,16 @@ function applyDamageDealtTriggers(
   targetPlayer: PlayerState,
   damageDealt: number,
   damageSource: EffectSourceContext
-): void {
+): EffectExecutionResult {
   if (
     damageDealt <= 0 ||
     sourcePlayer.playerId === targetPlayer.playerId ||
     state.activePlayerId !== sourcePlayer.playerId
   ) {
-    return;
+    return { ok: true };
   }
 
-  void dispatchControlledCardOperation(state, sourcePlayer, {
+  return dispatchControlledCardOperation(state, sourcePlayer, {
     kind: "afterDamageDealt",
     damageDealt,
     damageSource,

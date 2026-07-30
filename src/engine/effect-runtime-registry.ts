@@ -3,12 +3,14 @@ import {
   createAttackDefenseUsage,
   type DefenseAttackContext,
   type DefenseWindowResolutionResult,
+  type DamageApplicationResult,
   type PlayerControlledAttackIntent,
 } from "./attack-resolution.js";
 export { createAttackDefenseUsage } from "./attack-resolution.js";
 export type {
   AttackAmountComponents,
   AttackDefenseUsage,
+  DamageApplicationResult,
   AttackIntent,
   AttackResolution,
   AttackTargetResolutionResult,
@@ -258,7 +260,7 @@ export interface EffectRuntimeServices {
     effectId: RuntimeEffectId,
     source: EffectSourceContext,
     cause: DamageCause
-  ): DamageResult;
+  ): DamageApplicationResult;
   healPlayer(
     state: GameState,
     sourcePlayer: PlayerState,
@@ -1151,7 +1153,7 @@ const dealDamageHandler: EffectRuntimeHandler<
       return amount;
     }
 
-    services.dealDamage(
+    const damageResult = services.dealDamage(
       state,
       player,
       targetResult.choice.player,
@@ -1160,6 +1162,9 @@ const dealDamageHandler: EffectRuntimeHandler<
       source,
       { kind: "playerControlled", player }
     );
+    if (!("damageDealt" in damageResult)) {
+      return damageResult;
+    }
     return { ok: true };
   },
 };
@@ -1899,7 +1904,7 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler<
       const selectedChoiceId =
         choice?.choiceId ?? "discard_hand_then_draw_cards";
       if (selectedChoiceId === "take_damage") {
-        services.dealDamage(
+        const damageResult = services.dealDamage(
           state,
           targetPlayer,
           targetPlayer,
@@ -1908,6 +1913,9 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler<
           source,
           { kind: "ownerless" }
         );
+        if (!("damageDealt" in damageResult)) {
+          return damageResult;
+        }
         continue;
       }
 
