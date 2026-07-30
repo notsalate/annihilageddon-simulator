@@ -524,7 +524,7 @@ function hasExportModifier(node) {
 
 function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
   const importedLedgerApis = new Map();
-  const calledNames = new Set();
+  const calledImportBindings = new Set();
   const forbiddenHelpers = new Set();
   const manuallyEnumeratedZonePaths =
     collectManualPhysicalZonePaths(sourceFile);
@@ -545,7 +545,10 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
           if (!element.isTypeOnly) {
             importedLedgerApis.set(
               element.name.text,
-              element.propertyName?.text ?? element.name.text
+              {
+                binding: element,
+                exportedName: element.propertyName?.text ?? element.name.text,
+              }
             );
           }
         }
@@ -560,28 +563,39 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
       forbiddenHelpers.add(node.name.text);
     }
 
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      calledNames.add(node.expression.text);
-    }
-
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
 
+  const valueBindings = collectValueBindings(sourceFile);
+  function collectCalls(node) {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      const importedApi = importedLedgerApis.get(node.expression.text);
+      if (
+        importedApi !== undefined &&
+        resolveValueBinding(node.expression, valueBindings) === importedApi.binding
+      ) {
+        calledImportBindings.add(importedApi.binding);
+      }
+    }
+    ts.forEachChild(node, collectCalls);
+  }
+  collectCalls(sourceFile);
+
   const calledLedgerApis = new Set();
-  for (const [localName, exportedName] of importedLedgerApis) {
-    if (calledNames.has(localName)) {
+  for (const { binding, exportedName } of importedLedgerApis.values()) {
+    if (calledImportBindings.has(binding)) {
       calledLedgerApis.add(exportedName);
     }
     if (
       physicalInventorySeamApiNames.has(exportedName) &&
-      calledNames.has(localName)
+      calledImportBindings.has(binding)
     ) {
       usesControlLedgerSeam = true;
     }
     if (
       physicalInventorySeamApiNames.has(exportedName) &&
-      !calledNames.has(localName)
+      !calledImportBindings.has(binding)
     ) {
       physicalCardZoneOwnershipViolations.push(
         `${relativePath} imports Ledger physical-zone API ${exportedName} without calling it`
@@ -676,6 +690,13 @@ function collectManualPhysicalZonePaths(sourceFile) {
         collected.add(path);
         return;
       }
+      if (isPlayerStateCollectionCallbackAccess(node, sourceFile)) {
+        const callbackPath = `PlayerState.${node.name.text}`;
+        if (physicalCardZonePaths.has(callbackPath)) {
+          collected.add(callbackPath);
+          return;
+        }
+      }
     }
     ts.forEachChild(node, (child) => collectExpressionPaths(child, collected));
   }
@@ -704,15 +725,6 @@ function collectManualPhysicalZonePaths(sourceFile) {
     }
     if (ts.isArrayLiteralExpression(node) && isInventoryCollectionNode(node)) {
       collectExpressionPaths(node, paths);
-    }
-    if (
-      ts.isPropertyAccessExpression(node) &&
-      isPlayerStateCollectionCallbackAccess(node, sourceFile)
-    ) {
-      const path = `PlayerState.${node.name.text}`;
-      if (physicalCardZonePaths.has(path)) {
-        paths.add(path);
-      }
     }
     if (
       ts.isCallExpression(node) &&
@@ -840,12 +852,59 @@ function isPlayerStateCollectionCallbackAccess(node, sourceFile) {
       (candidate) =>
         ts.isIdentifier(candidate.name) && candidate.name.text === current.text
     );
-    return (
-      parameter !== undefined &&
-      isPlayerStateCollectionCallbackParameter(parameter, sourceFile)
-    );
+    if (parameter !== undefined)
+      return isPlayerStateCollectionCallbackParameter(parameter, sourceFile);
   }
   return false;
+}
+
+function collectValueBindings(sourceFile) {
+  const bindings = new Map();
+
+  function add(name, binding, scope) {
+    const entries = bindings.get(name) ?? [];
+    entries.push({ binding, scope });
+    bindings.set(name, entries);
+  }
+
+  function visit(node) {
+    if (ts.isImportSpecifier(node)) {
+      add(node.name.text, node, sourceFile);
+    }
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      add(node.name.text, node, findValueScope(node));
+    }
+    if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
+      add(node.name.text, node, node.parent);
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return bindings;
+}
+
+function resolveValueBinding(identifier, bindings) {
+  const candidates = bindings.get(identifier.text);
+  if (candidates === undefined) return undefined;
+  for (let current = identifier.parent; current; current = current.parent) {
+    const match = candidates.find((candidate) => candidate.scope === current);
+    if (match !== undefined) return match.binding;
+  }
+  return undefined;
+}
+
+function findValueScope(node) {
+  for (let current = node.parent; current; current = current.parent) {
+    if (
+      ts.isBlock(current) ||
+      ts.isSourceFile(current) ||
+      ts.isFunctionLike(current)
+    ) {
+      return current;
+    }
+  }
+  return node.getSourceFile();
 }
 
 function isPlayerStateCollectionCallbackParameter(parameter, sourceFile) {
@@ -863,7 +922,8 @@ function isPlayerStateCollectionCallbackParameter(parameter, sourceFile) {
   const collection = call.expression.expression;
   if (ts.isPropertyAccessExpression(collection)) {
     return (
-      getSemanticPropertyAccessPath(collection, sourceFile) === "GameState.players"
+      getSemanticPropertyAccessPath(collection, sourceFile, true) ===
+      "GameState.players"
     );
   }
   if (!ts.isIdentifier(collection)) return false;

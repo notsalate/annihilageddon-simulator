@@ -488,6 +488,23 @@ test("typed-access guard accepts an aliased physical-zone Ledger seam", () => {
   assert.equal(result.status, 0);
 });
 
+test("typed-access guard ignores a Ledger alias shadowed by a parameter", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(
+      players: PlayerState[],
+      listLocations: () => void
+    ) {
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /without calling a Control Ledger seam/);
+});
+
 test("typed-access guard does not treat non-inventory Ledger APIs as a seam", () => {
   const fixtureRoot = createPhysicalZoneFixture(`
     import { findCardLocation } from "./control-ledger.js";
@@ -513,10 +530,26 @@ test("typed-access guard follows GameState.players and PlayerState[] callbacks",
       return state.players.map((player) => player.hand.concat(player.deck));
     }
     export function filterPlayers(state: GameState) {
-      return state.players.filter((player) => player.hand.includes(player.deck[0]));
+      return state.players.filter((player) => {
+        const inventory = [player.hand, player.deck];
+        return inventory.length > 0;
+      });
     }
     export function visitPlayers(players: PlayerState[]) {
       players.forEach((player) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /PlayerState.hand, PlayerState.deck/);
+});
+
+test("typed-access guard follows a players callback through a nested IIFE", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    interface GameState { players: PlayerState[] }
+    export function collectFromGame(state: GameState) {
+      return state.players.flatMap((player) => (() => [player.hand, player.deck])());
     }
   `);
   const result = run("check-engine-typed-access.mjs", fixtureRoot);
