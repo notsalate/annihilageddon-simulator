@@ -85,6 +85,24 @@ const configuredAllowedViolations = [
 ];
 
 const typedEffectBoundaryViolations = [];
+const effectRuntimeCatalogBoundaryViolations = [];
+const effectRuntimeCatalogBypassExports = new Set([
+  "effectRuntimeHandlerMap",
+  "effectRuntimeCatalog",
+  "effectRuntimeRegistry",
+  "getEffectRuntimeHandler",
+  "replaceEffectRuntimeHandlerForTesting",
+  "getEffectRuntimeCatalogEntry",
+  "resolveEffectRuntimeCatalogEntry",
+  "EffectRuntimeHandler",
+  "EffectRuntimeEntry",
+  "EffectRuntimeCatalogDefinition",
+  "EffectRuntimeCatalogResolution",
+]);
+const approvedRuntimeEffectDecoderImporters = new Set([
+  "src/engine/data.ts",
+  "src/engine/effect-runtime-registry.ts",
+]);
 const forbiddenRuntimeEffectBoundaryIdentifiers = new Set([
   "RuntimeEffectFields",
   "RuntimeEffectPayloadBase",
@@ -170,6 +188,7 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
   }
   checkAttackLifecycleOwnership(relativePath, sourceFile);
   checkTriggerDispatchOwnership(relativePath, sourceFile);
+  checkEffectRuntimeCatalogBoundary(relativePath, sourceFile);
   const aliases = collectTypeAliases(sourceFile);
   function visit(node) {
     const assertionType =
@@ -332,6 +351,90 @@ function checkTriggerDispatchOwnership(relativePath, sourceFile) {
   visit(sourceFile);
 }
 
+function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
+  let sourceKindPolicy;
+
+  function visit(node) {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      node.moduleSpecifier.text === "./runtime-effect-decoder.js" &&
+      !approvedRuntimeEffectDecoderImporters.has(relativePath)
+    ) {
+      effectRuntimeCatalogBoundaryViolations.push(
+        `${relativePath} imports runtime effect decoder outside an approved boundary`
+      );
+    }
+
+    if (relativePath === "src/engine/effect-runtime-registry.ts") {
+      if (isExportedCatalogBypass(node)) {
+        effectRuntimeCatalogBoundaryViolations.push(
+          `${relativePath} exports Catalog bypass ${getDeclarationName(node)}`
+        );
+      }
+      if (ts.isIdentifier(node) && node.text === "validateShape") {
+        effectRuntimeCatalogBoundaryViolations.push(
+          `${relativePath} reintroduces handler-owned payload validation`
+        );
+      }
+      if (
+        ts.isFunctionDeclaration(node) &&
+        node.name?.text === "getRegisteredEffectRuntimeSourceKinds"
+      ) {
+        sourceKindPolicy = node;
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+
+  if (relativePath !== "src/engine/effect-runtime-registry.ts") return;
+  if (sourceKindPolicy === undefined) {
+    effectRuntimeCatalogBoundaryViolations.push(
+      `${relativePath} must declare explicit registered source-kind policies`
+    );
+    return;
+  }
+  let hasDefaultPolicy = false;
+  let usesAllSourceKinds = false;
+  function inspectSourceKindPolicy(node) {
+    if (ts.isDefaultClause(node)) hasDefaultPolicy = true;
+    if (ts.isIdentifier(node) && node.text === "effectRuntimeSourceKinds") {
+      usesAllSourceKinds = true;
+    }
+    ts.forEachChild(node, inspectSourceKindPolicy);
+  }
+  inspectSourceKindPolicy(sourceKindPolicy);
+  if (hasDefaultPolicy || usesAllSourceKinds) {
+    effectRuntimeCatalogBoundaryViolations.push(
+      `${relativePath} must keep registered source-kind policies explicit`
+    );
+  }
+}
+
+function isExportedCatalogBypass(node) {
+  if (!hasExportModifier(node)) return false;
+  if (ts.isVariableStatement(node)) {
+    return node.declarationList.declarations.some((declaration) =>
+      effectRuntimeCatalogBypassExports.has(declaration.name.getText())
+    );
+  }
+  const name = getDeclarationName(node);
+  return name !== undefined && effectRuntimeCatalogBypassExports.has(name);
+}
+
+function getDeclarationName(node) {
+  return "name" in node && node.name && ts.isIdentifier(node.name)
+    ? node.name.text
+    : undefined;
+}
+
+function hasExportModifier(node) {
+  return node.modifiers?.some(
+    (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword
+  ) ?? false;
+}
+
 function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
   const importedNames = new Set();
   const calledNames = new Set();
@@ -435,6 +538,11 @@ if (stale.length || untracked.length)
 if (typedEffectBoundaryViolations.length > 0) {
   throw new Error(
     `Typed runtime-effect boundary violation(s): ${typedEffectBoundaryViolations.join("; ")}`
+  );
+}
+if (effectRuntimeCatalogBoundaryViolations.length > 0) {
+  throw new Error(
+    `Effect Runtime Catalog boundary violation(s): ${[...new Set(effectRuntimeCatalogBoundaryViolations)].join("; ")}`
   );
 }
 if (

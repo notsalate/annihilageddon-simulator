@@ -10,6 +10,7 @@ import {
   validateRuntimeEffectCatalogPayload,
   type EffectRuntimeServices,
   type EffectSourceContext,
+  type EffectRuntimeSourceKind,
 } from "../src/engine/effect-runtime-registry.js";
 import {
   createGameScenario,
@@ -126,6 +127,51 @@ test("setup effects accept only wizard-property sources", () => {
       ).ok,
       false
     );
+  }
+});
+
+test("catalog keeps card, wizard-property, and Dead Wizard Token policies distinct", () => {
+  const cases = [
+    {
+      effect: { effectId: "add_power", timing: "onPlay", amount: 1 },
+      allowed: ["card", "wizardProperty", "deadWizardToken"],
+    },
+    {
+      effect: {
+        effectId: "ongoing_hand_refill_bonus",
+        timing: "endTurn",
+        amount: 1,
+      },
+      allowed: ["card"],
+    },
+    {
+      effect: {
+        effectId: "temporary_hand_limit_by_gained_card_type",
+        timing: "endTurn",
+        amount: 1,
+        cardTypes: ["spell"],
+      },
+      allowed: ["wizardProperty"],
+    },
+  ] as const;
+
+  for (const { effect, allowed } of cases) {
+    for (const sourceKind of [
+      "card",
+      "wizardProperty",
+      "deadWizardToken",
+    ] as const) {
+      assert.equal(
+        validateRuntimeEffectCatalogPayload(
+          `${effect.effectId} from ${sourceKind}`,
+          effect.effectId,
+          effect,
+          "combat",
+          sourceKind
+        ).ok,
+        (allowed as readonly EffectRuntimeSourceKind[]).includes(sourceKind)
+      );
+    }
   }
 });
 

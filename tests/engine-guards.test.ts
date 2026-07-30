@@ -310,6 +310,28 @@ test("typed-access guard rejects raw known payload access in the effect registry
   assert.match(result.stderr, /uses raw bracket access for amount/);
 });
 
+test("typed-access guard rejects Catalog bypass exports and decoder imports", () => {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
+  const sourceDir = path.join(fixtureRoot, "src", "engine");
+  mkdirSync(sourceDir, { recursive: true });
+  writeFileSync(
+    path.join(sourceDir, "effect-runtime-registry.ts"),
+    "export function getEffectRuntimeHandler() {}\n",
+    "utf8"
+  );
+  writeFileSync(
+    path.join(sourceDir, "fixture.ts"),
+    'import { decodeRuntimeEffectForId } from "./runtime-effect-decoder.js";\nvoid decodeRuntimeEffectForId;\n',
+    "utf8"
+  );
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /exports Catalog bypass getEffectRuntimeHandler/);
+  assert.match(result.stderr, /imports runtime effect decoder outside an approved boundary/);
+});
+
 function createFixture(source: string): string {
   const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
   const sourceDir = path.join(fixtureRoot, "src", "engine");
