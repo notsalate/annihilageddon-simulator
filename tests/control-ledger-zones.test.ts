@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { initializeGame, type CardInstance } from "../src/index.js";
+import {
+  forkGameState,
+  initializeGame,
+  type CardInstance,
+} from "../src/index.js";
 import {
   findCardLocation,
   listPhysicalCardLocations,
@@ -142,25 +146,38 @@ test("singleton physical card descriptor enforces zero-or-one storage", () => {
   assert.equal(player.unboughtFamiliar, second);
 });
 
-test("Ledger rejects a duplicate extension descriptor before changing state", () => {
+test("Ledger rejects a side-effectful duplicate extension descriptor before changing state", () => {
   const state = initializeGame({ rootDir, seed: 47602 });
   const player = state.players[0]!;
   const cardsBefore = [...player.hand];
-
-  assert.throws(
-    () =>
-      registerPhysicalCardZoneDescriptorFactory(state, (candidate) => ({
+  const duplicateFactory = Object.assign(
+    (candidate: Pick<typeof state, "players" | "common">) => {
+      candidate.players[0]!.hand = [];
+      return {
         zoneName: `${candidate.players[0]!.playerId}.hand`,
-        cardinality: "many",
+        cardinality: "many" as const,
         scoringEligible: false,
         read: () => candidate.players[0]!.hand,
-        replace: (cards) => {
+        replace: (cards: readonly CardInstance[]) => {
           candidate.players[0]!.hand = [...cards];
         },
-      })),
+      };
+    },
+    {
+      identity: "fixture.duplicate-hand",
+      zoneName: `${player.playerId}.hand`,
+    }
+  );
+
+  assert.throws(
+    () => registerPhysicalCardZoneDescriptorFactory(state, duplicateFactory),
     /Duplicate physical card zone descriptor/
   );
   assert.deepEqual(player.hand, cardsBefore);
+
+  const fork = forkGameState(state);
+  assert.deepEqual(fork.players[0]!.hand, cardsBefore);
+  assert.notEqual(fork.players[0]!.hand, player.hand);
 });
 
 function snapshotZoneMembership(

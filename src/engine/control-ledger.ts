@@ -48,8 +48,11 @@ export interface PhysicalCardZoneDescriptor {
 }
 
 export type PhysicalCardZoneDescriptorFactory = (
-  state: Pick<GameState, "players" | "common">
-) => PhysicalCardZoneDescriptor;
+  (state: Pick<GameState, "players" | "common">) => PhysicalCardZoneDescriptor
+) & {
+  readonly identity: string;
+  readonly zoneName: string;
+};
 
 const additionalPhysicalCardZoneFactories = new WeakMap<
   object,
@@ -61,15 +64,20 @@ export function registerPhysicalCardZoneDescriptorFactory(
   state: Pick<GameState, "players" | "common">,
   factory: PhysicalCardZoneDescriptorFactory
 ): void {
-  const zoneName = factory(state).zoneName;
-  if (
-    listPhysicalCardZoneDescriptors(state).some(
-      (descriptor) => descriptor.zoneName === zoneName
-    )
-  ) {
-    throw new Error(`Duplicate physical card zone descriptor ${zoneName}`);
-  }
   const existing = additionalPhysicalCardZoneFactories.get(state) ?? [];
+  const hasDuplicateZoneName = listBuiltinPhysicalCardZoneDescriptors(state).some(
+    (descriptor) => descriptor.zoneName === factory.zoneName
+  ) || existing.some((candidate) => candidate.zoneName === factory.zoneName);
+  if (hasDuplicateZoneName) {
+    throw new Error(
+      `Duplicate physical card zone descriptor ${factory.zoneName}`
+    );
+  }
+  if (existing.some((candidate) => candidate.identity === factory.identity)) {
+    throw new Error(
+      `Duplicate physical card zone descriptor identity ${factory.identity}`
+    );
+  }
   additionalPhysicalCardZoneFactories.set(state, [...existing, factory]);
 }
 
@@ -290,6 +298,15 @@ export function listPhysicalCardZoneDescriptors(
   state: Pick<GameState, "players" | "common">
 ): readonly PhysicalCardZoneDescriptor[] {
   return [
+    ...listBuiltinPhysicalCardZoneDescriptors(state),
+    ...(additionalPhysicalCardZoneFactories.get(state)?.map((factory) => factory(state)) ?? []),
+  ];
+}
+
+function listBuiltinPhysicalCardZoneDescriptors(
+  state: Pick<GameState, "players" | "common">
+): readonly PhysicalCardZoneDescriptor[] {
+  return [
     ...state.players.flatMap(listPlayerPhysicalCardZoneDescriptors),
     createArrayCardZoneDescriptor(
       "mainMarket",
@@ -360,7 +377,6 @@ export function listPhysicalCardZoneDescriptors(
         state.common.destroyedMegaMayhem = cards;
       }
     ),
-    ...(additionalPhysicalCardZoneFactories.get(state)?.map((factory) => factory(state)) ?? []),
   ];
 }
 

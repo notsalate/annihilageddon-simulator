@@ -250,18 +250,24 @@ test("fork clones a descriptor-only card location without sharing mutable cards"
       instanceId: markCardInstanceId("descriptor-only-card"),
     },
   ];
-  registerPhysicalCardZoneDescriptorFactory(source, (state) => {
-    const zonePlayer = state.players[0] as StateWithDescriptorOnlyZone["players"][number];
-    return {
-      zoneName: "descriptorOnlyZone",
-      cardinality: "many",
-      scoringEligible: false,
-      read: () => [...zonePlayer.descriptorOnlyZone],
-      replace: (cards) => {
-        zonePlayer.descriptorOnlyZone = [...cards];
+  registerPhysicalCardZoneDescriptorFactory(
+    source,
+    Object.assign(
+      (state: Pick<GameState, "players" | "common">) => {
+        const zonePlayer = state.players[0] as StateWithDescriptorOnlyZone["players"][number];
+        return {
+          zoneName: "descriptorOnlyZone",
+          cardinality: "many" as const,
+          scoringEligible: false,
+          read: () => [...zonePlayer.descriptorOnlyZone],
+          replace: (cards: readonly CardInstance[]) => {
+            zonePlayer.descriptorOnlyZone = [...cards];
+          },
+        };
       },
-    };
-  });
+      { identity: "fixture.descriptor-only-zone", zoneName: "descriptorOnlyZone" }
+    )
+  );
 
   const fork = forkGameState(source) as StateWithDescriptorOnlyZone;
   assert.ok(
