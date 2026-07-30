@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { runMarketFlow } from "../src/index.js";
 import { executeControlledCardOnPlayCardEffects } from "../src/engine/effect-runtime.js";
 
 import {
@@ -275,6 +276,171 @@ test("attack returns an afterDamageDealt game end and stops later triggers", () 
     "fixture-after-damage-first",
     "fixture-after-damage-game-end",
   ]);
+});
+
+test("deal_damage returns an afterDamageDealt error and stops later triggers", () => {
+  const scenario = createGameScenario({ rootDir, seed: 47108 });
+  const state = scenario.state;
+  state.runtimeMode = "fixture";
+  const attacker = scenario.activePlayer;
+  const target = scenario.foes[0];
+  assert.ok(target);
+  attacker.permanents = [];
+  target.life.current = 20;
+
+  for (const cardId of [
+    "fixture-deal-damage-first",
+    "fixture-deal-damage-error",
+    "fixture-deal-damage-skipped",
+  ]) {
+    givenRuntimeCard(scenario, {
+      player: attacker,
+      zone: "permanents",
+      cardId,
+      isOngoing: true,
+      effects: [
+        {
+          effectId: "heal_equal_damage_dealt_on_own_turn",
+          timing: "afterDamageDealt",
+        },
+      ],
+    });
+  }
+  const damage = givenRuntimeCard(scenario, {
+    player: attacker,
+    effects: [
+      {
+        effectId: "deal_damage",
+        timing: "onPlay",
+        amount: 2,
+        target: { selector: "opponentPlayer" },
+      },
+    ],
+  });
+
+  const executedDefinitionIds: string[] = [];
+  const result = withTemporaryEffectRuntimeOperations(
+    "heal_equal_damage_dealt_on_own_turn",
+    {
+      applyAfterDamageDealt(_effect, context) {
+        executedDefinitionIds.push(context.source.definitionId);
+        return {
+          status: "resolved",
+          result:
+            context.source.definitionId === "fixture-deal-damage-error"
+              ? { ok: false, error: "deal-damage after-damage failure" }
+              : { ok: true },
+        };
+      },
+    },
+    () => play(scenario, damage)
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /deal-damage after-damage failure/);
+  assert.equal(target.life.current, 18);
+  assert.deepEqual(executedDefinitionIds, [
+    "fixture-deal-damage-first",
+    "fixture-deal-damage-error",
+  ]);
+});
+
+test("Mayhem returns an afterDamageDealt game end and stops later targets", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 47109,
+    playerCount: 3,
+  });
+  const state = scenario.state;
+  state.runtimeMode = "fixture";
+  const attacker = scenario.activePlayer;
+  const [firstFoe, secondFoe] = scenario.foes;
+  assert.ok(firstFoe);
+  assert.ok(secondFoe);
+  attacker.permanents = [];
+  firstFoe.life.current = 20;
+  secondFoe.life.current = 20;
+
+  for (const cardId of [
+    "fixture-mayhem-first",
+    "fixture-mayhem-game-end",
+    "fixture-mayhem-skipped",
+  ]) {
+    givenRuntimeCard(scenario, {
+      player: attacker,
+      zone: "permanents",
+      cardId,
+      isOngoing: true,
+      effects: [
+        {
+          effectId: "heal_equal_damage_dealt_on_own_turn",
+          timing: "afterDamageDealt",
+        },
+      ],
+    });
+  }
+  const mayhem = givenRuntimeCard(scenario, {
+    player: attacker,
+    cardKind: "mayhem",
+    effects: [
+      {
+        effectId: "mayhem_attack",
+        timing: "onMayhemResolve",
+        amount: 2,
+        target: { selector: "allPlayers" },
+      },
+    ],
+  });
+  attacker.hand.splice(attacker.hand.indexOf(mayhem), 1);
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+
+  const executedDefinitionIds: string[] = [];
+  const result = withTemporaryEffectRuntimeOperations(
+    "heal_equal_damage_dealt_on_own_turn",
+    {
+      applyAfterDamageDealt(_effect, context) {
+        executedDefinitionIds.push(context.source.definitionId);
+        return {
+          status: "resolved",
+          result:
+            context.source.definitionId === "fixture-mayhem-game-end"
+              ? {
+                  ok: true,
+                  gameEnd: {
+                    reason: "playerDefeated",
+                    winnerPlayerId: attacker.playerId,
+                  },
+                }
+              : { ok: true },
+        };
+      },
+    },
+    () => runMarketFlow(state, { mode: "turn" })
+  );
+
+  assert.deepEqual(result, {
+    ok: true,
+    gameEnd: {
+      reason: "playerDefeated",
+      winnerPlayerId: attacker.playerId,
+    },
+  });
+  assert.equal(firstFoe.life.current, 18);
+  assert.equal(secondFoe.life.current, 20);
+  assert.deepEqual(executedDefinitionIds, [
+    "fixture-mayhem-first",
+    "fixture-mayhem-game-end",
+  ]);
+  assert.equal(
+    state.eventLog.filter((event) => event.type === "effectDamageDealt").length,
+    2
+  );
 });
 
 function runOnPlayCardScenario(isOngoing: boolean): number {
