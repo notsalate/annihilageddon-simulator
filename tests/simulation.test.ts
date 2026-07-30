@@ -73,17 +73,17 @@ test("single-game simulation ignores differing source.image metadata", () => {
     endReason: "maxTurnsReached",
     isGameEnd: false,
     turnsElapsed: 8,
-    winnerIds: ["player-1", "player-2"],
+    winnerIds: ["player-1"],
     players: [
       {
         playerId: "player-1",
-        victoryPoints: 7,
+        victoryPoints: 5,
         legendCount: 0,
         deadWizardTokenCount: 0,
       },
       {
         playerId: "player-2",
-        victoryPoints: 7,
+        victoryPoints: 4,
         legendCount: 0,
         deadWizardTokenCount: 0,
       },
@@ -257,11 +257,6 @@ test("scoring sums owned cards from scoring zones and applies DWT penalty", () =
       total + state.cardDefinitions.get(card.definitionId)!.engine.victoryPoints
     );
   }, 0);
-  const unboughtFamiliarScore =
-    player.unboughtFamiliar === undefined
-      ? 0
-      : state.cardDefinitions.get(player.unboughtFamiliar.definitionId)!.engine
-          .victoryPoints;
 
   const score = scoreGame(state).find(
     (candidate) => candidate.playerId === player.playerId
@@ -272,7 +267,7 @@ test("scoring sums owned cards from scoring zones and applies DWT penalty", () =
   assert.equal(score.deadWizardTokenCount, 2);
   assert.equal(
     score.victoryPoints,
-    expectedCardScore + unboughtFamiliarScore - 6
+    expectedCardScore - 6
   );
 });
 

@@ -268,11 +268,6 @@ test("a controlled fixture object can modify token scoring without mutating toke
       total + state.cardDefinitions.get(card.definitionId)!.engine.victoryPoints
     );
   }, 0);
-  const unboughtFamiliarScore =
-    player.unboughtFamiliar === undefined
-      ? 0
-      : state.cardDefinitions.get(player.unboughtFamiliar.definitionId)!.engine
-          .victoryPoints;
   const score = scoreGame(state).find(
     (candidate) => candidate.playerId === player.playerId
   );
@@ -280,7 +275,7 @@ test("a controlled fixture object can modify token scoring without mutating toke
   assert.ok(score);
   assert.equal(
     score.victoryPoints,
-    expectedCardScore + unboughtFamiliarScore + baseVictoryPoints + 1
+    expectedCardScore + baseVictoryPoints + 1
   );
   assert.equal(definition.victoryPoints, baseVictoryPoints);
 });
@@ -318,7 +313,7 @@ test("wizard property discount and scoring modifier apply to owned treasures", (
   assert.equal(
     scoreGame(state).find((score) => score.playerId === player.playerId)
       ?.victoryPoints,
-    5
+    3
   );
 });
 
@@ -681,7 +676,7 @@ test("scoring zones stay aligned between scoreGame and whileScoring modifiers", 
   );
 });
 
-test("scoreGame counts owned cards across Ledger locations without changing temporary control", () => {
+test("scoreGame counts owned player-zone cards without scoring common locations or an unbought familiar", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
   const state = initializeGame({ dataPack, seed: 60615 });
   const player = state.players[0];
@@ -714,7 +709,7 @@ test("scoreGame counts owned cards across Ledger locations without changing temp
   assert.equal(
     scoreGame(state).find((score) => score.playerId === player.playerId)
       ?.victoryPoints,
-    18
+    6
   );
   assert.deepEqual(state.turn.temporaryCardControls, [
     {

@@ -61,6 +61,13 @@ const forbiddenPhysicalInventoryHelpers = new Set([
 ]);
 const physicalCardZoneConsumerGuards = new Map([
   [
+    "src/engine/game-state-fork.ts",
+    {
+      requiredImports: ["clonePhysicalCardZoneState"],
+      maxDistinctDirectZoneFields: 0,
+    },
+  ],
+  [
     "src/engine/attack-defense.ts",
     {
       requiredImports: [

@@ -1,6 +1,8 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import type {
   CardInstance,
+  CommonState,
+  DeadWizardTokenState,
   GameState,
   PlayerId,
   PlayerState,
@@ -41,6 +43,7 @@ export type PhysicalCardZoneCardinality = "many" | "zeroOrOne";
 export interface PhysicalCardZoneDescriptor {
   readonly zoneName: string;
   readonly cardinality: PhysicalCardZoneCardinality;
+  readonly scoringEligible: boolean;
   readonly expectedOwnerId?: CardInstance["ownerId"];
   read(): readonly CardInstance[];
   replace(cards: readonly CardInstance[]): void;
@@ -201,7 +204,8 @@ function listPlayerPhysicalCardZoneDescriptors(
       (cards) => {
         player.deck = cards;
       },
-      player.playerId
+      player.playerId,
+      true
     ),
     createArrayCardZoneDescriptor(
       `${player.playerId}.hand`,
@@ -209,7 +213,8 @@ function listPlayerPhysicalCardZoneDescriptors(
       (cards) => {
         player.hand = cards;
       },
-      player.playerId
+      player.playerId,
+      true
     ),
     createArrayCardZoneDescriptor(
       `${player.playerId}.discard`,
@@ -217,21 +222,26 @@ function listPlayerPhysicalCardZoneDescriptors(
       (cards) => {
         player.discard = cards;
       },
-      player.playerId
+      player.playerId,
+      true
     ),
     createArrayCardZoneDescriptor(
       `${player.playerId}.playedThisTurn`,
       () => player.playedThisTurn,
       (cards) => {
         player.playedThisTurn = cards;
-      }
+      },
+      undefined,
+      true
     ),
     createArrayCardZoneDescriptor(
       `${player.playerId}.permanents`,
       () => player.permanents,
       (cards) => {
         player.permanents = cards;
-      }
+      },
+      undefined,
+      true
     ),
     createSingletonCardZoneDescriptor(
       `${player.playerId}.unboughtFamiliar`,
@@ -245,7 +255,7 @@ function listPlayerPhysicalCardZoneDescriptors(
 }
 
 export function listPhysicalCardZoneDescriptors(
-  state: GameState
+  state: Pick<GameState, "players" | "common">
 ): readonly PhysicalCardZoneDescriptor[] {
   return [
     ...state.players.flatMap(listPlayerPhysicalCardZoneDescriptors),
@@ -321,9 +331,25 @@ export function listPhysicalCardZoneDescriptors(
   ];
 }
 
+/** Lists player-owned cards in zones that count toward victory scoring. */
+export function listOwnedScoringCards(
+  state: GameState,
+  playerId: PlayerId
+): ControlledCardObject[] {
+  return listPhysicalCardZoneDescriptors(state)
+    .filter((descriptor) => descriptor.scoringEligible)
+    .flatMap((descriptor) => descriptor.read())
+    .filter((card) => card.ownerId === playerId)
+    .map((card) => ({
+      sourceType: "controlledCard" as const,
+      card,
+      definition: mustGetCardDefinition(state, card.definitionId),
+    }));
+}
+
 export function clonePhysicalCardZones(
-  source: GameState,
-  target: GameState,
+  source: Pick<GameState, "players" | "common">,
+  target: Pick<GameState, "players" | "common">,
   cloneCard: (card: CardInstance) => CardInstance
 ): void {
   const targetDescriptors = new Map(
@@ -342,6 +368,62 @@ export function clonePhysicalCardZones(
     }
     targetDescriptor.replace(sourceDescriptor.read().map(cloneCard));
   }
+}
+
+/** Creates an isolated clone of all physical card storage and player-owned state. */
+export function clonePhysicalCardZoneState(
+  source: GameState
+): Pick<GameState, "players" | "common"> {
+  const target = {
+    players: source.players.map((player) => ({
+      playerId: player.playerId,
+      deck: [],
+      hand: [],
+      discard: [],
+      playedThisTurn: [],
+      permanents: [],
+      unboughtFamiliar: undefined,
+      deadWizardTokens: player.deadWizardTokens.map((token) => ({ ...token })),
+      wizardProperties: player.wizardProperties.map((token) => ({ ...token })),
+      statuses: player.statuses.map((status) => ({
+        ...status,
+        effects: structuredClone(status.effects),
+      })),
+      trophyLikeObjects: player.trophyLikeObjects.map((object) => ({
+        ...object,
+        effects: structuredClone(object.effects),
+      })),
+      chips: player.chips,
+      life: { ...player.life },
+    })),
+    common: createCommonCardZoneShell(source.common),
+  };
+
+  clonePhysicalCardZones(source, target, (card) => ({ ...card }));
+  return target;
+}
+
+function createCommonCardZoneShell(source: CommonState): CommonState {
+  return {
+    market: [],
+    legendMarket: [],
+    mainDeck: [],
+    legendDeck: [],
+    wildMagicStack: [],
+    limpWandStack: [],
+    destroyedPile: [],
+    destroyedMayhem: [],
+    destroyedMegaMayhem: [],
+    deadWizardTokens: cloneDeadWizardTokens(source.deadWizardTokens),
+  };
+}
+
+function cloneDeadWizardTokens(
+  source: DeadWizardTokenState
+): DeadWizardTokenState {
+  return source.status === "notInDataPack"
+    ? { status: source.status, drawStack: [] }
+    : { status: source.status, drawStack: source.drawStack.map((token) => ({ ...token })) };
 }
 
 export function listPhysicalCardLocations(
@@ -401,11 +483,13 @@ function createArrayCardZoneDescriptor(
   zoneName: string,
   readStorage: () => readonly CardInstance[],
   replaceStorage: (cards: CardInstance[]) => void,
-  expectedOwnerId?: CardInstance["ownerId"]
+  expectedOwnerId?: CardInstance["ownerId"],
+  scoringEligible = false
 ): PhysicalCardZoneDescriptor {
   return {
     zoneName,
     cardinality: "many",
+    scoringEligible,
     ...(expectedOwnerId === undefined ? {} : { expectedOwnerId }),
     read() {
       return readStorage().map((card) => card);
@@ -420,11 +504,13 @@ function createSingletonCardZoneDescriptor(
   zoneName: string,
   readStorage: () => CardInstance | undefined,
   replaceStorage: (card: CardInstance | undefined) => void,
-  expectedOwnerId?: CardInstance["ownerId"]
+  expectedOwnerId?: CardInstance["ownerId"],
+  scoringEligible = false
 ): PhysicalCardZoneDescriptor {
   return {
     zoneName,
     cardinality: "zeroOrOne",
+    scoringEligible,
     ...(expectedOwnerId === undefined ? {} : { expectedOwnerId }),
     read() {
       const card = readStorage();
