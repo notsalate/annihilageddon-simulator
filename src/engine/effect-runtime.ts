@@ -545,109 +545,6 @@ function controlledCardMatchesType(
   );
 }
 
-function getAttackProfile(
-  state: GameState,
-  _attackInitiator: PlayerState,
-  source: EffectSourceContext
-): PlayerControlledAttackProfile {
-  if (source.sourceType !== "card") {
-    return { damageBonus: 0, unavoidable: false };
-  }
-
-  const sourceCard = findCardLocation(state, source.cardInstanceId)?.card;
-  if (sourceCard === undefined || sourceCard.ownerId === "common") {
-    return { damageBonus: 0, unavoidable: false };
-  }
-
-  const sourceOwner = state.players.find(
-    (candidate) => candidate.playerId === sourceCard.ownerId
-  );
-  if (sourceOwner === undefined) {
-    return { damageBonus: 0, unavoidable: false };
-  }
-
-  let damageBonus = 0;
-  let unavoidable = false;
-  for (const token of sourceOwner.wizardProperties) {
-    const definition = state.tokenDefinitions.get(token.definitionId);
-    if (
-      definition?.kind !== "wizardProperty" ||
-      definition.engine === undefined ||
-      !definition.engine.playableInV0
-    ) {
-      continue;
-    }
-
-    for (const effect of definition.engine.effects) {
-      if (
-        effect.timing !== "attackReplacement" ||
-        !effectMatchesCardDefinition(state, effect, source.definitionId)
-      ) {
-        continue;
-      }
-
-      if (effect["effectId"] === "modify_owned_wand_attack_damage") {
-        const amount = effect["amount"];
-        if (typeof amount === "number" && Number.isSafeInteger(amount)) {
-          damageBonus += amount;
-        }
-      }
-
-      if (effect["effectId"] === "prevent_defense_against_owned_wand_attacks") {
-        unavoidable = true;
-      }
-    }
-  }
-
-  for (const card of getControlledOngoingCards(state, sourceOwner)) {
-    const definition = state.cardDefinitions.get(card.definitionId);
-    if (definition === undefined) {
-      continue;
-    }
-
-    for (const effect of definition.engine.effects) {
-      if (
-        effect.timing !== "attackReplacement" ||
-        !effectMatchesCardDefinition(state, effect, source.definitionId)
-      ) {
-        continue;
-      }
-      if (effect["effectId"] === "modify_owned_wand_attack_damage") {
-        const amount = effect["amount"];
-        if (typeof amount === "number" && Number.isSafeInteger(amount)) {
-          damageBonus += amount;
-        }
-      }
-    }
-  }
-
-  return { damageBonus, unavoidable };
-}
-
-function effectMatchesCardDefinition(
-  state: GameState,
-  effect: RuntimeEffectPayload,
-  definitionId: string
-): boolean {
-  const cardDefinitionIds =
-    "cardDefinitionIds" in effect ? effect.cardDefinitionIds : undefined;
-  if (
-    Array.isArray(cardDefinitionIds) &&
-    cardDefinitionIds.some((candidate) => candidate === definitionId)
-  ) {
-    return true;
-  }
-
-  const cardTags = "cardTags" in effect ? effect.cardTags : undefined;
-  if (!Array.isArray(cardTags)) {
-    return false;
-  }
-
-  const definition = state.cardDefinitions.get(definitionId);
-  const definitionTags = definition?.engine.tags ?? [];
-  return cardTags.some((candidate) => definitionTags.includes(candidate));
-}
-
 function resolvePlayerControlledAttackWithRuntimeAdapters(
   intent: PlayerControlledAttackIntent
 ): EffectExecutionResult {
@@ -960,7 +857,6 @@ const effectRuntimeServices: EffectRuntimeServices = {
   getDestroyDestination,
   getOpponentsInSeatingOrder,
   getPlayersInActiveOrder,
-  getAttackProfile,
   chooseEffectChoice,
   dealDamage,
   healPlayer,
@@ -1407,13 +1303,6 @@ function getResurrectionLifeTotal(
     }
 
     for (const effect of definition.engine.effects) {
-      if (
-        effect.effectId !== "set_resurrection_life_total" ||
-        effect.timing !== "replacement"
-      ) {
-        continue;
-      }
-
       const result = resolveResurrectionLifeTotal(
         effect,
         {

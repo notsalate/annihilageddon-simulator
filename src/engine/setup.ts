@@ -156,7 +156,7 @@ export type RuntimeEffectChoice =
 export interface RuntimeEffectChoiceRequest {
   player: PlayerState;
   effectId: RuntimeEffectId;
-  sourceType: "card" | "wizardProperty";
+  sourceType: "card" | "wizardProperty" | "deadWizardToken";
   cardInstanceId: string;
   definitionId: string;
   choices: readonly RuntimeEffectChoice[];
@@ -267,7 +267,12 @@ export type GameEventType =
   | "wildMagicChoiceSkipped"
   | "wizardPropertyActivated";
 
-export type GameEventSourceType = "card" | "wizardProperty" | "setup" | "turn";
+export type GameEventSourceType =
+  | "card"
+  | "wizardProperty"
+  | "deadWizardToken"
+  | "setup"
+  | "turn";
 
 export type GameEventDestination =
   | "discard"

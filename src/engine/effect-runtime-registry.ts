@@ -93,7 +93,7 @@ export type EffectRuntimeSupportedSourceKinds = readonly [
 ];
 
 export interface EffectSourceContext {
-  sourceType: "card" | "wizardProperty";
+  sourceType: EffectRuntimeSourceKind;
   runtimeMode: EffectRuntimeMode;
   playerId: PlayerState["playerId"];
   cardInstanceId: string;
@@ -243,11 +243,6 @@ export interface EffectRuntimeServices {
     player: PlayerState
   ): PlayerState[];
   getPlayersInActiveOrder(state: GameState): PlayerState[];
-  getAttackProfile(
-    state: GameState,
-    player: PlayerState,
-    source: EffectSourceContext
-  ): { damageBonus: number; unavoidable: boolean };
   chooseEffectChoice(
     state: GameState,
     player: PlayerState,
@@ -1527,7 +1522,21 @@ const attackGainStatusHandler: EffectRuntimeHandler<
       };
     }
 
-    const attackProfile = services.getAttackProfile(state, player, source);
+    const attackProfileResult = collectAttackReplacementProfile(
+      state,
+      player,
+      source
+    );
+    if (attackProfileResult.status !== "resolved") {
+      return {
+        ok: false,
+        error:
+          attackProfileResult.status === "error"
+            ? attackProfileResult.error
+            : "Attack replacement profile was not applicable",
+      };
+    }
+    const attackProfile = attackProfileResult.result;
     return services.resolvePlayerControlledAttack({
       state,
       attackingPlayer: player,
@@ -2939,7 +2948,21 @@ function resolvePlayerControlledDamageAttack(
   services: EffectRuntimeServices,
   amount: number
 ): EffectExecutionResult {
-  const attackProfile = services.getAttackProfile(state, player, source);
+  const attackProfileResult = collectAttackReplacementProfile(
+    state,
+    player,
+    source
+  );
+  if (attackProfileResult.status !== "resolved") {
+    return {
+      ok: false,
+      error:
+        attackProfileResult.status === "error"
+          ? attackProfileResult.error
+          : "Attack replacement profile was not applicable",
+    };
+  }
+  const attackProfile = attackProfileResult.result;
   return services.resolvePlayerControlledAttack({
     state,
     attackingPlayer: player,
@@ -3084,7 +3107,21 @@ const directionalChainAttackHandler: EffectRuntimeHandler<
       attackedPlayerIds.add(targetPlayer.playerId);
       return true;
     });
-    const attackProfile = services.getAttackProfile(state, player, source);
+    const attackProfileResult = collectAttackReplacementProfile(
+      state,
+      player,
+      source
+    );
+    if (attackProfileResult.status !== "resolved") {
+      return {
+        ok: false,
+        error:
+          attackProfileResult.status === "error"
+            ? attackProfileResult.error
+            : "Attack replacement profile was not applicable",
+      };
+    }
+    const attackProfile = attackProfileResult.result;
 
     return services.resolvePlayerControlledAttack({
       state,
@@ -3128,7 +3165,21 @@ const multiTargetAttackHandler: EffectRuntimeHandler<
     if (!amount.ok) {
       return amount;
     }
-    const attackProfile = services.getAttackProfile(state, player, source);
+    const attackProfileResult = collectAttackReplacementProfile(
+      state,
+      player,
+      source
+    );
+    if (attackProfileResult.status !== "resolved") {
+      return {
+        ok: false,
+        error:
+          attackProfileResult.status === "error"
+            ? attackProfileResult.error
+            : "Attack replacement profile was not applicable",
+      };
+    }
+    const attackProfile = attackProfileResult.result;
     return services.resolvePlayerControlledAttack({
       state,
       attackingPlayer: player,
@@ -4117,17 +4168,17 @@ function getRegisteredEffectRuntimeSourceKinds(
   effectId: RuntimeEffectId
 ): EffectRuntimeSupportedSourceKinds | undefined {
   switch (effectId) {
+    case "force_starting_player":
+    case "replace_starting_card":
+    case "start_with_basic_trophy":
+    case "set_starting_life_total":
+    case "set_resurrection_life_total":
     case "temporary_hand_limit_by_gained_card_type":
       return ["wizardProperty"];
     case "ongoing_add_power":
     case "ongoing_hand_refill_bonus":
     case "ongoing_add_power_per_dead_wizard_token":
       return ["card"];
-    case "force_starting_player":
-    case "replace_starting_card":
-    case "start_with_basic_trophy":
-    case "set_starting_life_total":
-    case "set_resurrection_life_total":
     case "modify_effective_value":
     case "fixture_modify_effective_value":
     case "increase_hand_limit_at_max_life":
@@ -4784,7 +4835,6 @@ export function collectAttackReplacementProfile(
     allowWandDefensePrevention: boolean
   ): EffectRuntimeOperationResult<void> => {
     for (const effect of effects) {
-      if (effect.timing !== "attackReplacement") continue;
       const result = evaluateRuntimeEffectAtTiming(
         effect,
         effectSource,
@@ -4912,17 +4962,27 @@ export function resolveResurrectionLifeTotal(
   source: EffectSourceContext,
   statuses: readonly { readonly statusId: string }[]
 ): EffectRuntimeOperationResult<number> {
-  return getEffectRuntimeCatalogEntry(
-    "set_resurrection_life_total"
-  ).evaluateAtTiming("Effect set_resurrection_life_total", effect, {
+  const resolvedId = readRuntimeEffectId(effect, "Unsupported effect id");
+  if (!resolvedId.ok) {
+    return { status: "error", error: resolvedId.error };
+  }
+  return getEffectRuntimeCatalogEntry(resolvedId.effectId).evaluateAtTiming(
+    `Effect ${resolvedId.effectId}`,
+    effect,
+    {
     source,
     timing: "replacement",
-    evaluate: (decoded) =>
-      decoded.unlessStatusId === undefined ||
-      !statuses.some((status) => status.statusId === decoded.unlessStatusId)
-        ? { status: "resolved", result: decoded.lifeTotal }
-        : { status: "notApplicable" },
-  });
+      evaluate: (decoded) => {
+        if (decoded.effectId !== "set_resurrection_life_total") {
+          return { status: "notApplicable" };
+        }
+        return decoded.unlessStatusId === undefined ||
+          !statuses.some((status) => status.statusId === decoded.unlessStatusId)
+          ? { status: "resolved", result: decoded.lifeTotal }
+          : { status: "notApplicable" };
+      },
+    }
+  );
 }
 
 export function executeRuntimeEffectAtTiming(

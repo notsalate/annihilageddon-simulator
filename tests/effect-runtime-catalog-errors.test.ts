@@ -102,6 +102,33 @@ test("catalog names executable timing constraints separately from payload decodi
   assert.match(result.errors.join("\n"), /requires endTurn timing/);
 });
 
+test("setup effects accept only wizard-property sources", () => {
+  const effect = { effectId: "set_starting_life_total", timing: "setup", lifeTotal: 30 } as const;
+
+  assert.equal(
+    validateRuntimeEffectCatalogPayload(
+      "Wizard property",
+      effect.effectId,
+      effect,
+      "combat",
+      "wizardProperty"
+    ).ok,
+    true
+  );
+  for (const sourceKind of ["card", "deadWizardToken"] as const) {
+    assert.equal(
+      validateRuntimeEffectCatalogPayload(
+        `Invalid ${sourceKind}`,
+        effect.effectId,
+        effect,
+        "combat",
+        sourceKind
+      ).ok,
+      false
+    );
+  }
+});
+
 test("catalog applies unsupported policy only after operation timing matches", () => {
   const scenario = createGameScenario({ rootDir, seed: 23017 });
   const source: EffectSourceContext = {

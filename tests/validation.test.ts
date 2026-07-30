@@ -54,7 +54,12 @@ function validateRawRuntimeEffect<Id extends RuntimeEffectId>(
     effectId,
     raw,
     effectId.startsWith("fixture_") ? "fixture" : "combat",
-    effectId === "temporary_hand_limit_by_gained_card_type"
+    effectId === "temporary_hand_limit_by_gained_card_type" ||
+    effectId === "force_starting_player" ||
+    effectId === "replace_starting_card" ||
+    effectId === "start_with_basic_trophy" ||
+    effectId === "set_starting_life_total" ||
+    effectId === "set_resurrection_life_total"
       ? "wizardProperty"
       : "card"
   );

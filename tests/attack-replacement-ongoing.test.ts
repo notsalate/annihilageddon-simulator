@@ -67,6 +67,45 @@ test("attack replacement Catalog profile rejects malformed Wand amounts", () => 
   });
 });
 
+test("attack replacement Catalog profile reports malformed Wand timing", () => {
+  const scenario = createGameScenario({ rootDir, seed: 47205 });
+  const attacker = scenario.activePlayer;
+  scenario.state.runtimeMode = "fixture";
+  const sourceCard = givenRuntimeCard(scenario, {
+    player: attacker,
+    zone: "hand",
+    effects: [],
+    isOngoing: false,
+    tags: ["wandAttackCard"],
+  });
+  givenRuntimeCard(scenario, {
+    player: attacker,
+    zone: "permanents",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "modify_owned_wand_attack_damage",
+        timing: "replacement",
+        cardTags: ["wandAttackCard"],
+        amount: 2,
+      } as never,
+    ],
+  });
+
+  const result = collectAttackReplacementProfile(scenario.state, attacker, {
+    sourceType: "card",
+    runtimeMode: "fixture",
+    playerId: attacker.playerId,
+    cardInstanceId: sourceCard.instanceId,
+    definitionId: sourceCard.definitionId,
+  });
+
+  assert.equal(result.status, "error");
+  if (result.status === "error") {
+    assert.match(result.error, /timing must be attackReplacement/);
+  }
+});
+
 function resolveDoubleAttackScenario(isOngoing: boolean): number {
   const scenario = createGameScenario({
     rootDir,

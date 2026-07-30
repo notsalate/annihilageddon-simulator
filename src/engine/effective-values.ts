@@ -161,7 +161,7 @@ export function calculateEffectiveValue(options: {
   let value = options.baseValue;
   const view = buildControlledObjectView(options.state, options.playerId);
 
-  for (const { effect, source } of [
+  for (const { effect, source, timing } of [
     ...getControlledObjectEffects(options.state, options.playerId, view),
     ...getScoringCardEffects(
       options.state,
@@ -172,8 +172,7 @@ export function calculateEffectiveValue(options: {
     ),
   ]) {
     const result = applyEffectiveValueModifier(effect, source, {
-      timing:
-        effect.timing === "whileScoring" ? "whileScoring" : "whileControlled",
+      timing,
       valueKind: options.valueKind,
       targetMatches: (effectTarget) =>
         matchesTarget(options.state, effectTarget, options.target),
@@ -219,6 +218,7 @@ export function getOwnedScoringCards(
 interface EffectiveValueEffect {
   readonly effect: RuntimeEffect;
   readonly source: EffectSourceContext;
+  readonly timing: "whileControlled" | "whileScoring";
 }
 
 function getControlledObjectEffects(
@@ -245,7 +245,7 @@ function getControlledObjectEffects(
           : (object.definition.engine?.effects ?? []);
       return toEffectiveValueEffects(
         effects,
-        cardEffectSource(
+        deadWizardTokenEffectSource(
           state,
           playerId,
           object.token.instanceId,
@@ -289,10 +289,6 @@ function getScoringCardEffects(
   return scoringCards.flatMap((object) => {
     return toEffectiveValueEffects(
       object.definition.engine.effects.filter((effect) => {
-        if (effect.timing !== "whileScoring") {
-          return false;
-        }
-
         if (
           target.targetType === "card" &&
           scoredCard !== undefined &&
@@ -308,16 +304,18 @@ function getScoringCardEffects(
         playerId,
         object.card.instanceId,
         object.definition.cardId
-      )
+      ),
+      "whileScoring"
     );
   });
 }
 
 function toEffectiveValueEffects(
   effects: readonly RuntimeEffect[],
-  source: EffectSourceContext
+  source: EffectSourceContext,
+  timing: "whileControlled" | "whileScoring" = "whileControlled"
 ): EffectiveValueEffect[] {
-  return effects.map((effect) => ({ effect, source }));
+  return effects.map((effect) => ({ effect, source, timing }));
 }
 
 function cardEffectSource(
@@ -343,6 +341,23 @@ function wizardPropertyEffectSource(
 ): EffectSourceContext {
   return {
     sourceType: "wizardProperty",
+    runtimeMode: state.runtimeMode,
+    playerId,
+    cardInstanceId: tokenInstanceId,
+    definitionId: tokenDefinitionId,
+    tokenInstanceId,
+    tokenDefinitionId,
+  };
+}
+
+function deadWizardTokenEffectSource(
+  state: GameState,
+  playerId: PlayerId,
+  tokenInstanceId: TokenInstance["instanceId"],
+  tokenDefinitionId: string
+): EffectSourceContext {
+  return {
+    sourceType: "deadWizardToken",
     runtimeMode: state.runtimeMode,
     playerId,
     cardInstanceId: tokenInstanceId,
