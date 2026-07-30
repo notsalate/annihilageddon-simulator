@@ -370,6 +370,30 @@ test("typed-access guard accepts a renamed explicit source-kind policy helper", 
   assert.equal(result.status, 0);
 });
 
+test("typed-access guard accepts renamed decoder validation but rejects raw handler validation", () => {
+  const safe = createEngineFixture({
+    "effect-runtime-registry.ts": `
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) { case "fixture": return ["card"]; }
+      }
+    `,
+    "runtime-effect-decoder.ts": "function checkPayload(raw: unknown): string[] { return []; }\nvoid checkPayload;\n",
+  });
+  assert.equal(run("check-engine-typed-access.mjs", safe).status, 0);
+
+  const bypass = createEngineFixture({
+    "effect-runtime-registry.ts": `
+      interface Handler { checkPayload(raw: unknown): string[]; }
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) { case "fixture": return ["card"]; }
+      }
+    `,
+  });
+  const result = run("check-engine-typed-access.mjs", bypass);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /handler-owned payload validation/);
+});
+
 function createFixture(source: string): string {
   const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
   const sourceDir = path.join(fixtureRoot, "src", "engine");

@@ -392,7 +392,7 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
           `${relativePath} exports Catalog bypass ${getDeclarationName(node)}`
         );
       }
-      if (ts.isIdentifier(node) && node.text === "validateShape") {
+      if (isHandlerOwnedPayloadValidator(node)) {
         effectRuntimeCatalogBoundaryViolations.push(
           `${relativePath} reintroduces handler-owned payload validation`
         );
@@ -456,6 +456,26 @@ function isSourceKindPolicy(node) {
   }
   visit(node.type);
   return hasSourceKindReturnType;
+}
+
+function isHandlerOwnedPayloadValidator(node) {
+  const signature = ts.isMethodSignature(node)
+    ? node
+    : ts.isPropertySignature(node) && node.type && ts.isFunctionTypeNode(node.type)
+      ? node.type
+      : undefined;
+  if (signature === undefined || !isStringArrayType(signature.type)) return false;
+  return signature.parameters.some(
+    (parameter) => parameter.type?.kind === ts.SyntaxKind.UnknownKeyword
+  );
+}
+
+function isStringArrayType(type) {
+  return (
+    type !== undefined &&
+    ts.isArrayTypeNode(type) &&
+    type.elementType.kind === ts.SyntaxKind.StringKeyword
+  );
 }
 
 function isExportedCatalogBypass(node) {
