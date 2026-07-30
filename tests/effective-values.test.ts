@@ -561,6 +561,60 @@ test("scoring another card reports a malformed self-scoring modifier", () => {
   );
 });
 
+test("whileControlled definition modifier applies from another physical copy", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({ dataPack, seed: 60617 });
+  const player = state.players[0];
+  assert.ok(player);
+  const target = state.cardDefinitions.get("esw2_dbg__main_035");
+  assert.ok(target);
+  const modifiedTarget: CardDefinition = {
+    ...target,
+    engine: {
+      ...target.engine,
+      effects: [
+        {
+          effectId: "modify_effective_value",
+          timing: "whileControlled",
+          valueKind: "cardVictoryPoints",
+          operation: "add",
+          amount: 2,
+          target: { targetType: "card", definitionId: target.cardId },
+        },
+      ],
+    },
+  };
+  const modifierCopy = createCardInstance(
+    "fixture-controlled-modifier-copy",
+    target.cardId,
+    player.playerId
+  );
+  const scoredCopy = createCardInstance(
+    "fixture-controlled-scored-copy",
+    target.cardId,
+    player.playerId
+  );
+  player.permanents.push(modifierCopy);
+  player.discard.push(scoredCopy);
+  const stateWithModifier = {
+    ...state,
+    cardDefinitions: new Map(state.cardDefinitions).set(
+      target.cardId,
+      modifiedTarget
+    ),
+  };
+
+  assert.equal(
+    calculateEffectiveCardVictoryPoints(
+      stateWithModifier,
+      player.playerId,
+      modifiedTarget,
+      scoredCopy
+    ),
+    target.engine.victoryPoints + 2
+  );
+});
+
 test("scoring zones stay aligned between scoreGame and whileScoring modifiers", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
   const state = initializeGame({ dataPack, seed: 60615 });

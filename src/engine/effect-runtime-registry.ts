@@ -415,7 +415,7 @@ export type EffectiveValueModifierOperation = (value: number) => number;
 export interface EffectiveValueModifierOperationContext<Result> {
   readonly timing: "whileControlled" | "whileScoring";
   readonly valueKind: ModifyEffectiveValueRuntimeEffect["valueKind"];
-  readonly targetMatches: (target: RuntimeEffectTarget) => boolean;
+  readonly targetMatches: (effect: ModifyEffectiveValueRuntimeEffect) => boolean;
   readonly countOwnedScoringCards: (
     countedCardTypes: readonly string[]
   ) => number;
@@ -4798,7 +4798,7 @@ export function applyEffectiveValueModifier<Result>(
       evaluate(decoded) {
         if (
           decoded.valueKind !== context.valueKind ||
-          !context.targetMatches(decoded.target)
+          !context.targetMatches(decoded)
         ) {
           return { status: "notApplicable" };
         }

@@ -172,14 +172,15 @@ export function calculateEffectiveValue(options: {
     const result = applyEffectiveValueModifier(effect, source, {
       timing,
       valueKind: options.valueKind,
-      targetMatches: (effectTarget) => {
-        if (!matchesTarget(options.state, effectTarget, options.target)) {
+      targetMatches: (effect) => {
+        if (!matchesTarget(options.state, effect.target, options.target)) {
           return false;
         }
         if (
           options.target.targetType !== "card" ||
           options.scoredCard === undefined ||
-          !isSelfScoringCardEffectTarget(effectTarget, source.definitionId)
+          effect.timing !== "whileScoring" ||
+          !isSelfScoringCardEffectTarget(effect.target, source.definitionId)
         ) {
           return true;
         }
