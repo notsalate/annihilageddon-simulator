@@ -373,19 +373,19 @@ test("typed-access guard accepts a renamed explicit source-kind policy helper", 
 test("typed-access guard accepts unrelated interfaces but rejects executable raw handler validation", () => {
   const safe = createEngineFixture({
     "effect-runtime-registry.ts": `
+      interface Unrelated { checkPayload(raw: unknown): string[]; }
       function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
         switch (effectId) { case "fixture": return ["card"]; }
       }
     `,
     "runtime-effect-decoder.ts": "function checkPayload(raw: unknown): string[] { return []; }\nvoid checkPayload;\n",
-    "fixture.ts": "interface Unrelated { checkPayload(raw: unknown): string[]; }\n",
   });
   assert.equal(run("check-engine-typed-access.mjs", safe).status, 0);
 
   const bypass = createEngineFixture({
     "effect-runtime-registry.ts": `
       const handler = {
-        execute() {},
+        execute: () => {},
         checkPayload(raw: unknown): string[] { return []; },
       };
       void handler;

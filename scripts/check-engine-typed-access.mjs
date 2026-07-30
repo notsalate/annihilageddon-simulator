@@ -470,9 +470,14 @@ function isHandlerOwnedPayloadValidator(node) {
     ts.isObjectLiteralExpression(object) &&
     object.properties.some(
       (property) =>
-        ts.isMethodDeclaration(property) &&
-        ts.isIdentifier(property.name) &&
-        property.name.text === "execute"
+        ((ts.isMethodDeclaration(property) &&
+          ts.isIdentifier(property.name) &&
+          property.name.text === "execute") ||
+          (ts.isPropertyAssignment(property) &&
+            ts.isIdentifier(property.name) &&
+            property.name.text === "execute" &&
+            (ts.isArrowFunction(property.initializer) ||
+              ts.isFunctionExpression(property.initializer))))
     )
   );
 }
