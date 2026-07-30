@@ -13,14 +13,12 @@ import {
   type DefenseWindowResolutionResult,
   type PlayerControlledAttackAdapters,
   type PlayerControlledAttackIntent,
-  type PlayerControlledAttackProfile,
   type RedirectedAttackIntent,
 } from "./attack-resolution.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import {
   findCardLocation,
   getControlledCards,
-  getControlledOngoingCards,
   grantTemporaryControl,
   removeCardFromLocation,
 } from "./control-ledger.js";
@@ -32,7 +30,6 @@ import {
 } from "./event-recorder.js";
 import {
   type DamageCause,
-  type DamageResult,
   type EffectChoice,
   type EffectExecutionResult,
   type EffectRuntimeServices,

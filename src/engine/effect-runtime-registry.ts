@@ -56,7 +56,6 @@ import {
   type RuntimeEffectId,
   type RuntimeEffectCost,
   type RuntimeEffectPayload,
-  type RuntimeEffectTarget,
   type SetupEffectPayloadMap,
   type ImmediateEffectPayloadMap,
   type PlayerControlledAttackEffectPayloadMap,
