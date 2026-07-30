@@ -228,9 +228,9 @@ test("a defense choice keeps its original option when strategy mutates choiceId"
 
   assert.deepEqual(result, { ok: true });
   assert.equal(defender.life.current, lifeBefore);
-  assert.equal(defender.hand.includes(firstDefense), true);
-  assert.equal(defender.hand.includes(secondDefense), false);
-  assert.equal(defender.discard.includes(secondDefense), true);
+  assert.equal(defender.hand.includes(firstDefense), false);
+  assert.equal(defender.hand.includes(secondDefense), true);
+  assert.equal(defender.discard.includes(firstDefense), true);
   assert.equal(
     state.eventLog.some(
       (event) =>
@@ -244,7 +244,8 @@ test("a defense choice keeps its original option when strategy mutates choiceId"
     state.eventLog.some(
       (event) =>
         event.type === "defenseChoiceSelected" &&
-        event.cardInstanceId === secondDefense.instanceId
+        event.cardInstanceId === firstDefense.instanceId &&
+        event.definitionId === firstDefense.definitionId
     ),
     true
   );

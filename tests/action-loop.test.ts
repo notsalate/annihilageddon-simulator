@@ -320,7 +320,8 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
     effectId === "avoid_attack"
       ? choices.find(
           (choice) =>
-            choice.choiceKind === "defense" && choice.card === familiar
+            choice.choiceKind === "defense" &&
+            choice.card?.instanceId === familiar.instanceId
         )
       : undefined
   );
@@ -3532,7 +3533,8 @@ test("bought familiar can discard another hand card to avoid an attack", () => {
     effectId === "avoid_attack"
       ? choices.find(
           (choice) =>
-            choice.choiceKind === "defense" && choice.card === familiar
+            choice.choiceKind === "defense" &&
+            choice.card?.instanceId === familiar.instanceId
         )
       : undefined
   );

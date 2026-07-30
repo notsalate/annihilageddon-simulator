@@ -1114,18 +1114,23 @@ function chooseEffectChoice(
   effectId: RuntimeEffectId,
   choices: readonly EffectChoice[]
 ): EffectChoice | undefined {
+  const choicesByIdentity = new Map(
+    choices.map((choice) => [`${choice.choiceKind}\u0000${choice.choiceId}`, choice])
+  );
   const selectedChoice = state.effectChoiceStrategy?.({
     player,
     effectId,
     sourceType: source.sourceType,
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
-    choices,
+    choices: structuredClone(choices),
   });
   const choice =
-    selectedChoice !== undefined && choices.includes(selectedChoice)
-      ? selectedChoice
-      : choices[0];
+    selectedChoice === undefined
+      ? choices[0]
+      : choicesByIdentity.get(
+          `${selectedChoice.choiceKind}\u0000${selectedChoice.choiceId}`
+        ) ?? choices[0]
   if (choice === undefined) {
     recordGameEvent(state, {
       type: "effectChoiceSkipped",
