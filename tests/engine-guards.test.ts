@@ -332,11 +332,59 @@ test("typed-access guard rejects Catalog bypass exports and decoder imports", ()
   assert.match(result.stderr, /imports runtime effect decoder outside an approved boundary/);
 });
 
+test("typed-access guard rejects aliased and direct Catalog bypass re-exports", () => {
+  const fixtureRoot = createEngineFixture({
+    "effect-runtime-registry.ts": `
+      const effectRuntimeHandlerMap = {};
+      export { effectRuntimeHandlerMap as unsafe };
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+    "fixture.ts":
+      'export { decodeRuntimeEffectForId } from "./runtime-effect-decoder.js";\n',
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /re-exports Catalog bypass effectRuntimeHandlerMap/);
+  assert.match(result.stderr, /re-exports runtime effect decoder outside an approved boundary/);
+});
+
+test("typed-access guard accepts a renamed explicit source-kind policy helper", () => {
+  const fixtureRoot = createEngineFixture({
+    "effect-runtime-registry.ts": `
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 0);
+});
+
 function createFixture(source: string): string {
   const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
   const sourceDir = path.join(fixtureRoot, "src", "engine");
   mkdirSync(sourceDir, { recursive: true });
   writeFileSync(path.join(sourceDir, "fixture.ts"), source, "utf8");
+  return fixtureRoot;
+}
+
+function createEngineFixture(files: Record<string, string>): string {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
+  const sourceDir = path.join(fixtureRoot, "src", "engine");
+  mkdirSync(sourceDir, { recursive: true });
+  for (const [fileName, source] of Object.entries(files)) {
+    writeFileSync(path.join(sourceDir, fileName), source, "utf8");
+  }
   return fixtureRoot;
 }
 
