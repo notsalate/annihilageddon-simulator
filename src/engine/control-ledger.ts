@@ -1,8 +1,6 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import type {
   CardInstance,
-  CommonState,
-  DeadWizardTokenState,
   GameState,
   PlayerId,
   PlayerState,
@@ -374,56 +372,19 @@ export function clonePhysicalCardZones(
 export function clonePhysicalCardZoneState(
   source: GameState
 ): Pick<GameState, "players" | "common"> {
-  const target = {
-    players: source.players.map((player) => ({
-      playerId: player.playerId,
-      deck: [],
-      hand: [],
-      discard: [],
-      playedThisTurn: [],
-      permanents: [],
-      unboughtFamiliar: undefined,
-      deadWizardTokens: player.deadWizardTokens.map((token) => ({ ...token })),
-      wizardProperties: player.wizardProperties.map((token) => ({ ...token })),
-      statuses: player.statuses.map((status) => ({
-        ...status,
-        effects: structuredClone(status.effects),
-      })),
-      trophyLikeObjects: player.trophyLikeObjects.map((object) => ({
-        ...object,
-        effects: structuredClone(object.effects),
-      })),
-      chips: player.chips,
-      life: { ...player.life },
-    })),
-    common: createCommonCardZoneShell(source.common),
-  };
-
-  clonePhysicalCardZones(source, target, (card) => ({ ...card }));
-  return target;
+  return cloneLedgerValue({ players: source.players, common: source.common });
 }
 
-function createCommonCardZoneShell(source: CommonState): CommonState {
-  return {
-    market: [],
-    legendMarket: [],
-    mainDeck: [],
-    legendDeck: [],
-    wildMagicStack: [],
-    limpWandStack: [],
-    destroyedPile: [],
-    destroyedMayhem: [],
-    destroyedMegaMayhem: [],
-    deadWizardTokens: cloneDeadWizardTokens(source.deadWizardTokens),
-  };
-}
-
-function cloneDeadWizardTokens(
-  source: DeadWizardTokenState
-): DeadWizardTokenState {
-  return source.status === "notInDataPack"
-    ? { status: source.status, drawStack: [] }
-    : { status: source.status, drawStack: source.drawStack.map((token) => ({ ...token })) };
+function cloneLedgerValue<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map(cloneLedgerValue) as T;
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [key, cloneLedgerValue(child)])
+    ) as T;
+  }
+  return value;
 }
 
 export function listPhysicalCardLocations(

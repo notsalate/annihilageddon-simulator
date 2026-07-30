@@ -21,7 +21,10 @@ import {
   type TokenDefinition,
   type TrophyLikeInstance,
 } from "../src/index.js";
-import { grantTemporaryControl } from "../src/engine/control-ledger.js";
+import {
+  grantTemporaryControl,
+  listOwnedScoringCards,
+} from "../src/engine/control-ledger.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 import { applyEffectiveValueModifier } from "../src/engine/effect-runtime-registry.js";
 import {
@@ -705,6 +708,15 @@ test("scoreGame counts owned player-zone cards without scoring common locations 
     tower.cardId,
     player.playerId
   );
+
+  const scoringCardIds = new Set(
+    listOwnedScoringCards(state, player.playerId).map(
+      (object) => object.card.instanceId
+    )
+  );
+  assert.equal(scoringCardIds.has(controlledTower.instanceId), true);
+  assert.equal(scoringCardIds.has(player.unboughtFamiliar.instanceId), false);
+  assert.equal(scoringCardIds.has(state.common.market.at(-1)!.instanceId), false);
 
   assert.equal(
     scoreGame(state).find((score) => score.playerId === player.playerId)

@@ -234,6 +234,27 @@ test("Ledger clones descriptor zones with isolated cards", () => {
   );
 });
 
+test("fork clones a descriptor-only card location without sharing mutable cards", () => {
+  type StateWithDescriptorOnlyZone = GameState & {
+    players: Array<GameState["players"][number] & { descriptorOnlyZone: CardInstance[] }>;
+  };
+  const source = createFixture() as StateWithDescriptorOnlyZone;
+  const player = source.players[0]!;
+  player.descriptorOnlyZone = [
+    {
+      ...player.hand[0]!,
+      instanceId: markCardInstanceId("descriptor-only-card"),
+    },
+  ];
+
+  const fork = forkGameState(source) as StateWithDescriptorOnlyZone;
+  const forkCard = fork.players[0]!.descriptorOnlyZone[0]!;
+  forkCard.marketChips = 4;
+
+  assert.equal(source.players[0]!.descriptorOnlyZone[0]!.marketChips, 0);
+  assert.notEqual(forkCard, source.players[0]!.descriptorOnlyZone[0]);
+});
+
 test("fork isolates source mutations and sibling mutable collections", () => {
   const source = createFixture();
   const first = forkGameState(source);

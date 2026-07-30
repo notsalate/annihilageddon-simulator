@@ -37,53 +37,19 @@ let playerControlledAttackOwnerDeclarationCount = 0;
 let triggerDispatchOwnerPresent = false;
 let triggerDispatchOwnerDeclarationCount = 0;
 
-const physicalCardZoneFields = new Set([
-  "deck",
-  "hand",
-  "discard",
-  "playedThisTurn",
-  "permanents",
-  "unboughtFamiliar",
-  "market",
-  "legendMarket",
-  "mainDeck",
-  "legendDeck",
-  "wildMagicStack",
-  "limpWandStack",
-  "destroyedPile",
-  "destroyedMayhem",
-  "destroyedMegaMayhem",
-]);
 const forbiddenPhysicalInventoryHelpers = new Set([
   "getPlayerCardZones",
   "getCommonCardZones",
   "listPhysicalCardZones",
 ]);
-const physicalCardZoneConsumerGuards = new Map([
-  [
-    "src/engine/game-state-fork.ts",
-    {
-      requiredImports: ["clonePhysicalCardZoneState"],
-      maxDistinctDirectZoneFields: 0,
-    },
-  ],
-  [
-    "src/engine/attack-defense.ts",
-    {
-      requiredImports: [
-        "listPhysicalCardLocations",
-        "listPhysicalCardZoneDescriptors",
-      ],
-      maxDistinctDirectZoneFields: 3,
-    },
-  ],
-  [
-    "src/engine/invariants.ts",
-    {
-      requiredImports: ["listPhysicalCardLocations"],
-      maxDistinctDirectZoneFields: 3,
-    },
-  ],
+const physicalCardZoneApiNames = new Set([
+  "clonePhysicalCardZoneState",
+  "clonePhysicalCardZones",
+  "findCardLocation",
+  "listOwnedScoringCards",
+  "listPhysicalCardLocations",
+  "listPhysicalCardZoneDescriptors",
+  "removeCardFromLocation",
 ]);
 const configuredAllowedViolations = [
   ["src/engine/data.ts", 1266, 3, "decodeRuntimeSourceMetadata"],
@@ -367,11 +333,8 @@ function checkTriggerDispatchOwnership(relativePath, sourceFile) {
 }
 
 function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
-  const guard = physicalCardZoneConsumerGuards.get(relativePath);
-  if (guard === undefined) return;
-
   const importedNames = new Set();
-  const directZoneFields = new Set();
+  const calledNames = new Set();
   const forbiddenHelpers = new Set();
 
   function visit(node) {
@@ -395,28 +358,19 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
       forbiddenHelpers.add(node.name.text);
     }
 
-    if (
-      ts.isPropertyAccessExpression(node) &&
-      physicalCardZoneFields.has(node.name.text)
-    ) {
-      directZoneFields.add(node.name.text);
-    }
-    if (
-      ts.isElementAccessExpression(node) &&
-      ts.isStringLiteral(node.argumentExpression) &&
-      physicalCardZoneFields.has(node.argumentExpression.text)
-    ) {
-      directZoneFields.add(node.argumentExpression.text);
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      calledNames.add(node.expression.text);
     }
 
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
 
-  for (const requiredImport of guard.requiredImports) {
-    if (!importedNames.has(requiredImport)) {
+  for (const importedName of importedNames) {
+    if (!physicalCardZoneApiNames.has(importedName)) continue;
+    if (!calledNames.has(importedName)) {
       physicalCardZoneOwnershipViolations.push(
-        `${relativePath} must import ${requiredImport} from ./control-ledger.js`
+        `${relativePath} imports Ledger physical-zone API ${importedName} without calling it`
       );
     }
   }
@@ -425,9 +379,12 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
       `${relativePath} redeclares physical inventory helper(s): ${[...forbiddenHelpers].join(", ")}`
     );
   }
-  if (directZoneFields.size > guard.maxDistinctDirectZoneFields) {
+  if (
+    relativePath === "src/engine/game-state-fork.ts" &&
+    !calledNames.has("clonePhysicalCardZoneState")
+  ) {
     physicalCardZoneOwnershipViolations.push(
-      `${relativePath} directly accesses too many physical card zone fields: ${[...directZoneFields].sort().join(", ")}`
+      `${relativePath} must call clonePhysicalCardZoneState from Control Ledger`
     );
   }
 }
