@@ -50,15 +50,23 @@ export interface PhysicalCardZoneDescriptor {
 export type PhysicalCardZoneDescriptorFactory = (
   (
     state: Pick<GameState, "players" | "common">
-  ) => Omit<PhysicalCardZoneDescriptor, "zoneName">
+  ) => Omit<PhysicalCardZoneDescriptor, "zoneName"> & {
+    readonly zoneName?: never;
+  }
 ) & {
   readonly identity: string;
   readonly zoneName: string;
 };
 
+interface RegisteredPhysicalCardZoneDescriptorFactory {
+  readonly factory: PhysicalCardZoneDescriptorFactory;
+  readonly identity: string;
+  readonly zoneName: string;
+}
+
 const additionalPhysicalCardZoneFactories = new WeakMap<
   object,
-  readonly PhysicalCardZoneDescriptorFactory[]
+  readonly RegisteredPhysicalCardZoneDescriptorFactory[]
 >();
 
 /** Registers an extension zone with the Ledger-owned physical inventory. */
@@ -67,20 +75,29 @@ export function registerPhysicalCardZoneDescriptorFactory(
   factory: PhysicalCardZoneDescriptorFactory
 ): void {
   const existing = additionalPhysicalCardZoneFactories.get(state) ?? [];
+  const registeredFactory = Object.freeze({
+    factory,
+    identity: factory.identity,
+    zoneName: factory.zoneName,
+  });
   const hasDuplicateZoneName = listBuiltinPhysicalCardZoneDescriptors(state).some(
-    (descriptor) => descriptor.zoneName === factory.zoneName
-  ) || existing.some((candidate) => candidate.zoneName === factory.zoneName);
+    (descriptor) => descriptor.zoneName === registeredFactory.zoneName
+  ) || existing.some((candidate) => candidate.zoneName === registeredFactory.zoneName);
   if (hasDuplicateZoneName) {
     throw new Error(
-      `Duplicate physical card zone descriptor ${factory.zoneName}`
+      `Duplicate physical card zone descriptor ${registeredFactory.zoneName}`
     );
   }
-  if (existing.some((candidate) => candidate.identity === factory.identity)) {
+  if (
+    existing.some(
+      (candidate) => candidate.identity === registeredFactory.identity
+    )
+  ) {
     throw new Error(
-      `Duplicate physical card zone descriptor identity ${factory.identity}`
+      `Duplicate physical card zone descriptor identity ${registeredFactory.identity}`
     );
   }
-  additionalPhysicalCardZoneFactories.set(state, [...existing, factory]);
+  additionalPhysicalCardZoneFactories.set(state, [...existing, registeredFactory]);
 }
 
 export function clonePhysicalCardZoneDescriptorFactories(
@@ -303,10 +320,10 @@ export function listPhysicalCardZoneDescriptors(
     ...listBuiltinPhysicalCardZoneDescriptors(state),
     ...(additionalPhysicalCardZoneFactories
       .get(state)
-      ?.map((factory) => {
+      ?.map(({ factory, zoneName }) => {
         const descriptor = factory(state);
         return {
-          zoneName: factory.zoneName,
+          zoneName,
           cardinality: descriptor.cardinality,
           scoringEligible: descriptor.scoringEligible,
           ...(descriptor.expectedOwnerId === undefined
