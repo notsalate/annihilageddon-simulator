@@ -240,7 +240,9 @@ test("Ledger clones descriptor zones with isolated cards", () => {
 
 test("fork clones a descriptor-only card location without sharing mutable cards", () => {
   type StateWithDescriptorOnlyZone = GameState & {
-    players: Array<GameState["players"][number] & { descriptorOnlyZone: CardInstance[] }>;
+    players: Array<
+      GameState["players"][number] & { descriptorOnlyZone: CardInstance[] }
+    >;
   };
   const source = createFixture() as StateWithDescriptorOnlyZone;
   const player = source.players[0]!;
@@ -254,7 +256,8 @@ test("fork clones a descriptor-only card location without sharing mutable cards"
     source,
     Object.assign(
       (state: Pick<GameState, "players" | "common">) => {
-        const zonePlayer = state.players[0] as StateWithDescriptorOnlyZone["players"][number];
+        const zonePlayer = state
+          .players[0] as StateWithDescriptorOnlyZone["players"][number];
         return {
           cardinality: "many" as const,
           scoringEligible: false,
@@ -264,7 +267,10 @@ test("fork clones a descriptor-only card location without sharing mutable cards"
           },
         };
       },
-      { identity: "fixture.descriptor-only-zone", zoneName: "descriptorOnlyZone" }
+      {
+        identity: "fixture.descriptor-only-zone",
+        zoneName: "descriptorOnlyZone",
+      }
     )
   );
 
@@ -291,6 +297,57 @@ test("fork clones a descriptor-only card location without sharing mutable cards"
   assert.equal(sourceDescriptor.read()[0]!.marketChips, 0);
   assert.equal(forkDescriptor.read()[0]!.marketChips, 4);
   assert.notEqual(forkDescriptor.read()[0], sourceDescriptor.read()[0]);
+});
+
+test("fork clones a descriptor zone stored outside enumerable state", () => {
+  const source = createFixture();
+  const externalZones = new WeakMap<object, readonly CardInstance[]>();
+  const sourceCard = {
+    ...source.players[0]!.hand[0]!,
+    instanceId: markCardInstanceId("external-zone-card"),
+  };
+  externalZones.set(source, [sourceCard]);
+  registerPhysicalCardZoneDescriptorFactory(
+    source,
+    Object.assign(
+      (state: Pick<GameState, "players" | "common">) => ({
+        cardinality: "zeroOrOne" as const,
+        scoringEligible: true,
+        expectedOwnerId: source.players[0]!.playerId,
+        read: () => externalZones.get(state) ?? [],
+        replace: (cards: readonly CardInstance[]) => {
+          externalZones.set(state, [...cards]);
+        },
+      }),
+      { identity: "fixture.external-zone", zoneName: "externalZone" }
+    )
+  );
+
+  const fork = forkGameState(source);
+  const sourceDescriptor = listPhysicalCardZoneDescriptors(source).find(
+    (descriptor) => descriptor.zoneName === "externalZone"
+  );
+  const forkDescriptor = listPhysicalCardZoneDescriptors(fork).find(
+    (descriptor) => descriptor.zoneName === "externalZone"
+  );
+
+  assert.ok(sourceDescriptor);
+  assert.ok(forkDescriptor);
+  assert.equal(forkDescriptor.cardinality, "zeroOrOne");
+  assert.equal(forkDescriptor.scoringEligible, true);
+  assert.equal(forkDescriptor.expectedOwnerId, source.players[0]!.playerId);
+  assert.deepEqual(forkDescriptor.read(), sourceDescriptor.read());
+  assert.notEqual(forkDescriptor.read()[0], sourceDescriptor.read()[0]);
+
+  forkDescriptor.replace([
+    {
+      ...forkDescriptor.read()[0]!,
+      marketChips: 4,
+    },
+  ]);
+
+  assert.equal(sourceDescriptor.read()[0]!.marketChips, 0);
+  assert.equal(forkDescriptor.read()[0]!.marketChips, 4);
 });
 
 test("fork isolates source mutations and sibling mutable collections", () => {

@@ -1,5 +1,6 @@
 import {
   clonePhysicalCardZoneDescriptorFactories,
+  clonePhysicalCardZones,
   clonePhysicalCardZoneState,
   cloneTemporaryControls,
 } from "./control-ledger.js";
@@ -36,6 +37,7 @@ export function forkGameState(source: GameState): GameState {
   };
 
   clonePhysicalCardZoneDescriptorFactories(source, fork);
+  clonePhysicalCardZones(source, fork, (card) => structuredClone(card));
 
   installGameEventLog(fork);
   return fork;
