@@ -11,6 +11,7 @@ import {
 } from "../src/domain/types.js";
 import {
   tryExecuteSetupEffect,
+  validateRuntimeEffectCatalogPayload,
   type EffectRuntimeSetupServices,
   type SetupEffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
@@ -118,6 +119,80 @@ test("setup catalog decodes before runtime-mode applicability", () => {
   assert.equal(result.status, "error");
   if (result.status !== "error") return;
   assert.match(result.error, /unsupported field unexpected/);
+});
+
+test("setup catalog keeps the wizard-property source matrix explicit", () => {
+  const setupEffects = [
+    { effectId: "force_starting_player", timing: "setup" },
+    {
+      effectId: "replace_starting_card",
+      timing: "setup",
+      fromDefinitionId: "esw2_dbg__starter_001",
+      toDefinitionId: "esw2_dbg__starter_004",
+    },
+    { effectId: "start_with_basic_trophy", timing: "setup" },
+    {
+      effectId: "set_starting_life_total",
+      timing: "setup",
+      lifeTotal: 25,
+    },
+    {
+      effectId: "set_resurrection_life_total",
+      timing: "replacement",
+      lifeTotal: 25,
+    },
+  ] as const;
+
+  for (const effect of setupEffects) {
+    for (const runtimeMode of ["combat", "fixture"] as const) {
+      assert.equal(
+        validateRuntimeEffectCatalogPayload(
+          `Wizard property ${effect.effectId}`,
+          effect.effectId,
+          effect,
+          runtimeMode,
+          "wizardProperty"
+        ).ok,
+        true
+      );
+    }
+
+    for (const sourceKind of ["card", "deadWizardToken"] as const) {
+      const result = validateRuntimeEffectCatalogPayload(
+        `${sourceKind} ${effect.effectId}`,
+        effect.effectId,
+        effect,
+        "combat",
+        sourceKind
+      );
+      assert.equal(result.ok, false);
+      if (!result.ok) {
+        assert.match(result.errors[0] ?? "", /token-only effect id/);
+      }
+    }
+  }
+});
+
+test("setup catalog decodes malformed payload before source-kind rejection", () => {
+  const cardSource = {
+    ...source,
+    sourceType: "card",
+  } as unknown as SetupEffectSourceContext;
+
+  const result = tryExecuteSetupEffect(
+    player(),
+    {
+      effectId: "set_starting_life_total",
+      timing: "setup",
+      lifeTotal: 0,
+    },
+    cardSource,
+    services()
+  );
+
+  assert.equal(result.status, "error");
+  if (result.status !== "error") return;
+  assert.match(result.error, /lifeTotal must be a positive integer/);
 });
 
 test("setup catalog passes a concrete starting-life payload to its executor", () => {
