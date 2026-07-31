@@ -30,6 +30,10 @@ type DirectionalPlayerTargetChoice = Extract<
 >;
 type CardTargetChoice = Extract<DecisionChoice, { choiceKind: "cardTarget" }>;
 type DefenseChoice = Extract<DecisionChoice, { choiceKind: "defense" }>;
+type BotBuyAction = Extract<
+  BotDecisionContext["legalActions"][number],
+  { type: "buyMarketCard" }
+>;
 
 type DecisionChoiceDoesNotExposeHiddenStateAssertions = [
   AssertFalse<
@@ -39,13 +43,16 @@ type DecisionChoiceDoesNotExposeHiddenStateAssertions = [
   AssertFalse<"players" extends keyof PlayerTargetChoice ? true : false>,
   AssertFalse<"cards" extends keyof CardTargetChoice ? true : false>,
   AssertFalse<"card" extends keyof DefenseChoice ? true : false>,
+  AssertFalse<
+    "targetDefinitionIds" extends keyof CardTargetChoice ? true : false
+  >,
+  Assert<"cost" extends keyof BotBuyAction ? true : false>,
 ];
 
 type DecisionChoiceReadonlyAssertions = [
   Assert<IsReadonly<PlayerTargetChoice, "targetPlayerIds">>,
   Assert<IsReadonly<DirectionalPlayerTargetChoice, "targetPlayerIds">>,
   Assert<IsReadonly<CardTargetChoice, "targetCardInstanceIds">>,
-  Assert<IsReadonly<CardTargetChoice, "targetDefinitionIds">>,
   Assert<IsReadonly<DefenseChoice, "targetCardInstanceId">>,
 ];
 

@@ -360,6 +360,12 @@ test("target choice strategy routes a non-first market card to its handler", () 
       marketCard.instanceId,
     ])
   );
+  assert.ok(
+    seenRequest.choices.every(
+      (choice) =>
+        choice.choiceKind !== "cardTarget" || !("targetDefinitionIds" in choice)
+    )
+  );
   assert.equal(state.turn.power, secondCost);
   const choiceEvents = state.eventLog.filter(
     (event) =>

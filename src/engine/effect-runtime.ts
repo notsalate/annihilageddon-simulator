@@ -53,11 +53,11 @@ import {
 import type {
   CardInstance,
   GameState,
-  PlayerDecisionView,
   PlayerState,
   RuntimeEffectDecisionChoice,
   RuntimeEffectChoiceRequest,
 } from "./setup.js";
+import { createPlayerDecisionView } from "./strategy-decision-view.js";
 import { dispatchControlledCardOperation } from "./trigger-dispatch.js";
 export function executeOnPlayEffects(
   state: GameState,
@@ -1119,11 +1119,6 @@ function chooseEffectChoice(
   return choice;
 }
 
-function createPlayerDecisionView(player: PlayerState): PlayerDecisionView {
-  const { deck: _deck, ...visiblePlayer } = player;
-  return visiblePlayer;
-}
-
 function createRuntimeEffectDecisionChoice(
   choice: EffectChoice
 ): RuntimeEffectDecisionChoice {
@@ -1142,7 +1137,6 @@ function createRuntimeEffectDecisionChoice(
       choiceKind: choice.choiceKind,
       choiceId: choice.choiceId,
       targetCardInstanceIds: choice.cards.map((card) => card.instanceId),
-      targetDefinitionIds: choice.cards.map((card) => card.definitionId),
       amount: choice.amount,
     };
   }
@@ -1194,10 +1188,6 @@ function matchesDecisionChoice(
       sameValues(
         choice.cards.map((card) => card.instanceId),
         selection.targetCardInstanceIds
-      ) &&
-      sameValues(
-        choice.cards.map((card) => card.definitionId),
-        selection.targetDefinitionIds
       )
     );
   }

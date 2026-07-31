@@ -5,8 +5,9 @@ import {
   type LegalAction,
 } from "./actions.js";
 import { assertNever } from "../common.js";
-import type { TokenDefinition } from "./data.js";
+import type { CardDefinition, TokenDefinition } from "./data.js";
 import {
+  calculateEffectiveCardCost,
   calculateEffectiveCardVictoryPoints,
   calculateEffectivePlayerVictoryPoints,
   calculateEffectiveTokenVictoryPoints,
@@ -26,6 +27,7 @@ import {
   type TokenInstance,
 } from "./setup.js";
 import { assertGameStateInvariants } from "./invariants.js";
+import { createPlayerDecisionView } from "./strategy-decision-view.js";
 
 export type GameEndReason =
   | "deadWizardTokensExhausted"
@@ -46,8 +48,14 @@ export interface RunSingleGameOptions {
 
 export interface BotDecisionContext {
   player: PlayerDecisionView;
-  legalActions: readonly LegalAction[];
+  legalActions: readonly BotDecisionAction[];
 }
+
+export type BotDecisionAction =
+  | Exclude<LegalAction, { type: "buyMarketCard" }>
+  | (Extract<LegalAction, { type: "buyMarketCard" }> & {
+      readonly cost: number;
+    });
 
 export interface BotStrategy {
   chooseAction(context: BotDecisionContext): GameAction;
@@ -119,11 +127,15 @@ export const baselineBot: BotStrategy = {
       return playAction;
     }
 
-    const buyActions = legalActions.filter(
-      (action): action is Extract<LegalAction, { type: "buyMarketCard" }> => {
-        return action.type === "buyMarketCard";
-      }
-    );
+    const buyActions = legalActions
+      .filter(
+        (
+          action
+        ): action is Extract<BotDecisionAction, { type: "buyMarketCard" }> => {
+          return action.type === "buyMarketCard";
+        }
+      )
+      .sort((left, right) => right.cost - left.cost);
     const buyAction = buyActions[0];
     if (buyAction !== undefined) {
       return buyAction;
@@ -133,11 +145,6 @@ export const baselineBot: BotStrategy = {
   },
 };
 
-function createPlayerDecisionView(player: PlayerState): PlayerDecisionView {
-  const { deck: _deck, ...visiblePlayer } = player;
-  return structuredClone(visiblePlayer);
-}
-
 function mustGetActivePlayer(state: GameState): PlayerState {
   const player = state.players.find(
     (candidate) => candidate.playerId === state.activePlayerId
@@ -146,6 +153,52 @@ function mustGetActivePlayer(state: GameState): PlayerState {
     throw new Error(`Active player ${state.activePlayerId} is missing`);
   }
   return player;
+}
+
+function createBotDecisionActions(
+  state: GameState,
+  legalActions: readonly LegalAction[]
+): BotDecisionAction[] {
+  const activePlayer = mustGetActivePlayer(state);
+  return legalActions.map((action) =>
+    action.type === "buyMarketCard"
+      ? { ...action, cost: getBuyActionCost(state, activePlayer, action) }
+      : action
+  );
+}
+
+function getBuyActionCost(
+  state: GameState,
+  activePlayer: PlayerState,
+  action: Extract<LegalAction, { type: "buyMarketCard" }>
+): number {
+  if (action.source === "wildMagicStack") {
+    return 3;
+  }
+  const card = [
+    ...state.common.market,
+    ...state.common.legendMarket,
+    activePlayer.unboughtFamiliar,
+  ].find((candidate) => candidate?.instanceId === action.cardInstanceId);
+  if (card === undefined) {
+    throw new Error(`Legal buy target ${action.cardInstanceId} is missing`);
+  }
+  return calculateEffectiveCardCost(
+    state,
+    activePlayer.playerId,
+    mustGetCardDefinition(state, card)
+  );
+}
+
+function mustGetCardDefinition(
+  state: GameState,
+  card: CardInstance
+): CardDefinition {
+  const definition = state.cardDefinitions.get(card.definitionId);
+  if (definition === undefined) {
+    throw new Error(`Missing card definition ${card.definitionId}`);
+  }
+  return definition;
 }
 
 export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
@@ -183,7 +236,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     const legalActions = listLegalActions(state);
     const selectedAction = bot.chooseAction({
       player: createPlayerDecisionView(mustGetActivePlayer(state)),
-      legalActions,
+      legalActions: createBotDecisionActions(state, legalActions),
     });
     if (!isLegalAction(selectedAction, legalActions)) {
       throw new Error(`Bot selected illegal action ${selectedAction.type}`);

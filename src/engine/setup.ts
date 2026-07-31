@@ -187,7 +187,6 @@ export interface RuntimeEffectDecisionCardTarget {
   readonly choiceKind: "cardTarget";
   readonly choiceId: string;
   readonly targetCardInstanceIds: readonly string[];
-  readonly targetDefinitionIds: readonly string[];
   readonly amount: number;
 }
 
