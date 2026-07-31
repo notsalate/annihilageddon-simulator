@@ -98,7 +98,6 @@ const effectRuntimeCatalogBypassExports = new Set([
   "EffectRuntimeCatalogDefinition",
   "EffectRuntimeCatalogResolution",
 ]);
-const runtimeEffectDecoderBypassExports = new Set(["runtimeEffectDecoders"]);
 const approvedRuntimeEffectDecoderImporters = new Set([
   "src/engine/data.ts",
   "src/engine/effect-runtime-registry.ts",
@@ -475,7 +474,8 @@ function checkClosedRuntimeEffectDecoderExportSurface(sourceFile) {
     const isAllowedFunction =
       ts.isFunctionDeclaration(statement) &&
       name !== undefined &&
-      allowedValueExports.has(name);
+      allowedValueExports.has(name) &&
+      !hasDefaultModifier(statement);
     if (!isAllowedType && !isAllowedFunction) {
       effectRuntimeCatalogBoundaryViolations.push(
         `${sourceFile.fileName} violates closed decoder export surface`
@@ -562,6 +562,14 @@ function hasExportModifier(node) {
   return (
     node.modifiers?.some(
       (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword
+    ) ?? false
+  );
+}
+
+function hasDefaultModifier(node) {
+  return (
+    node.modifiers?.some(
+      (modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword
     ) ?? false
   );
 }

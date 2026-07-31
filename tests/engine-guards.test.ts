@@ -407,7 +407,9 @@ test("typed-access guard enforces the closed decoder export surface", () => {
       export const objectWrapper = { decoderMap: runtimeEffectDecoders };
       export const arrayWrapper = [runtimeEffectDecoders];
       export const closureWrapper = () => runtimeEffectDecoders;
-      export default { decoderMap: runtimeEffectDecoders };
+      export default function decodeRuntimeEffect() {
+        return runtimeEffectDecoders;
+      }
       const unrelatedDecoderMap = {};
       export { unrelatedDecoderMap };
       export { nestedAssignmentLeak, safeArrayItem, leakedArrayItem };
