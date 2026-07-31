@@ -143,7 +143,9 @@ test("a defense choice ignores a cloned card returned by strategy", () => {
       if (legitimate?.choiceKind !== "defense") {
         return undefined;
       }
-      legitimate.card = { ...secondDefense };
+      (legitimate as unknown as { card: typeof secondDefense }).card = {
+        ...secondDefense,
+      };
       return legitimate;
     }
     return undefined;
@@ -246,7 +248,9 @@ test("a defense choice keeps its original option when strategy mutates choiceId"
       if (selected?.choiceKind !== "defense") {
         return undefined;
       }
-      selected.choiceId = firstDefense.instanceId;
+      (
+        selected as unknown as { choiceId: typeof firstDefense.instanceId }
+      ).choiceId = firstDefense.instanceId;
       return selected;
     }
     return undefined;
@@ -312,7 +316,8 @@ test("a defense choice ignores a strategy-mutated option card", () => {
       if (selected?.choiceKind !== "defense") {
         return undefined;
       }
-      selected.card = firstDefense;
+      (selected as unknown as { card: typeof firstDefense }).card =
+        firstDefense;
       return selected;
     }
     return undefined;

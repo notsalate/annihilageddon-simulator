@@ -171,6 +171,7 @@ type DecisionView<T> = T extends
         : T;
 
 export type PlayerDecisionView = DecisionView<PlayerState>;
+export type RuntimeEffectDecisionChoice = DecisionView<RuntimeEffectChoice>;
 
 export interface RuntimeEffectChoiceRequest {
   player: PlayerDecisionView;
@@ -178,12 +179,12 @@ export interface RuntimeEffectChoiceRequest {
   sourceType: "card" | "wizardProperty" | "deadWizardToken";
   cardInstanceId: string;
   definitionId: string;
-  choices: readonly RuntimeEffectChoice[];
+  choices: readonly RuntimeEffectDecisionChoice[];
 }
 
 export type RuntimeEffectChoiceStrategy = (
   request: RuntimeEffectChoiceRequest
-) => RuntimeEffectChoice | undefined;
+) => RuntimeEffectDecisionChoice | undefined;
 
 export interface GameState {
   seed: number;

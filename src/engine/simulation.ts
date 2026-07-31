@@ -20,7 +20,7 @@ import {
   type GameEvent,
   type GameState,
   type PlayerId,
-  type RuntimeEffectChoice,
+  type RuntimeEffectDecisionChoice,
   type RuntimeEffectChoiceRequest,
   type TokenInstance,
 } from "./setup.js";
@@ -52,7 +52,7 @@ export interface BotStrategy {
   chooseAction(context: BotDecisionContext): GameAction;
   chooseEffectChoice?(
     request: RuntimeEffectChoiceRequest
-  ): RuntimeEffectChoice | undefined;
+  ): RuntimeEffectDecisionChoice | undefined;
 }
 
 export interface SetupCardSnapshot {
