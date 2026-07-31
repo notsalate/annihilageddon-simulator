@@ -390,6 +390,55 @@ test("typed-access guard rejects decoder imports exported from an approved modul
   );
 });
 
+test("typed-access guard rejects namespace decoder named exports from an approved module", () => {
+  const fixtureRoot = createEngineFixture({
+    "data.ts": `
+      import * as decoder from "./runtime-effect-decoder.js";
+      export { decoder as unsafe };
+    `,
+    "effect-runtime-registry.ts": `
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /src\/engine\/data\.ts exports runtime effect decoder binding decoder/
+  );
+});
+
+test("typed-access guard rejects namespace decoder default-export aliases", () => {
+  const fixtureRoot = createEngineFixture({
+    "data.ts": `
+      import * as decoder from "./runtime-effect-decoder.js";
+      const localAlias = decoder;
+      export default localAlias;
+    `,
+    "effect-runtime-registry.ts": `
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /src\/engine\/data\.ts exports runtime effect decoder binding/
+  );
+});
+
 test("typed-access guard rejects decoder re-exports from an approved module", () => {
   const fixtureRoot = createEngineFixture({
     "data.ts": `

@@ -500,6 +500,12 @@ function collectRuntimeEffectDecoderImportBindings(sourceFile) {
         decoderImportBindings.add(element.name.text);
       }
     }
+    if (
+      importClause?.namedBindings !== undefined &&
+      ts.isNamespaceImport(importClause.namedBindings)
+    ) {
+      decoderImportBindings.add(importClause.namedBindings.name.text);
+    }
   }
   return collectTopLevelBindingAliases(sourceFile, decoderImportBindings);
 }
