@@ -521,9 +521,14 @@ type OptionalSpendChipAttackDamageRuntimeEffect =
     chipCost: number;
     targetSelector: "chosenPlayer";
   };
+type NormalizedOptionalSpendChipAttackDamageRuntimeEffect =
+  OptionalSpendChipAttackDamageRuntimeEffect & {
+    optional: true;
+    costs: [{ costId: "spend_chips"; amount: number }];
+  };
 type ExecutableAttackDamageRuntimeEffect =
   | AttackDamageRuntimeEffect
-  | OptionalSpendChipAttackDamageRuntimeEffect;
+  | NormalizedOptionalSpendChipAttackDamageRuntimeEffect;
 
 interface EffectRuntimeEntry<
   EffectId extends RuntimeEffectId = RuntimeEffectId,
@@ -2676,7 +2681,7 @@ const optionalSpendChipAttackDamageHandler: EffectRuntimeHandler<OptionalSpendCh
   {
     effectId: "optional_spend_chip_attack_damage",
     execute(state, player, effect, source, services) {
-      const attackEffect: OptionalSpendChipAttackDamageRuntimeEffect = {
+      const attackEffect: NormalizedOptionalSpendChipAttackDamageRuntimeEffect = {
         ...effect,
         optional: true,
         costs: [{ costId: "spend_chips", amount: effect.chipCost }],

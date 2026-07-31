@@ -1061,8 +1061,6 @@ const runtimeEffectDecoders: {
       onDamageDealt: optionalAttackBranches,
       onKill: optionalAttackBranches,
       chipCost: required(positiveInteger),
-      costs: optionalCosts,
-      optional: optional(booleanValue),
     },
     requireTargetSelector("optional chip attack", ["chosenPlayer"])
   ),

@@ -25,6 +25,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Route all legal runtime effect choices, including card/player targets, through one typed choice hook; preserve stable order, identity validation, and event compatibility.
 - Send closed `GameEventDraft` objects through `event-recorder`; direct `eventLog.push` is confined to that module.
 - Keep the typed effect catalog as the source of truth; every registered ID has one exact decoder and one concrete handler entry, including unsupported IDs.
+- `optional_spend_chip_attack_damage` accepts `chipCost` as its only payment field and is always optional; its decoder rejects `costs` and `optional`.
 - The effect runtime catalog owns effect ID, source kind, runtime mode, exact payload decoding, decoder diagnostics, and concrete handler dispatch at the executable-data boundary; operation consumers must not duplicate catalog prevalidation or convert decoder errors into `notApplicable`.
 - Preserve the executable source kind at that boundary: card, wizardProperty, and deadWizardToken are distinct catalog inputs.
 - Effect execution resolves every raw effect through a catalog operation that decodes and invokes its concrete handler inside one typed closure; callers must not receive or reconnect a general handler/payload pair. Mayhem execution does not use a separate catalog lookup.

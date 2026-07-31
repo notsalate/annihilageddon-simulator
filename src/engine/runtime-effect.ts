@@ -593,8 +593,6 @@ export type OptionalSpendChipAttackDamageRuntimeEffect = EffectWithOptionalTimin
   Targetable &
   AttackBranches & {
     chipCost: number;
-    costs?: RuntimeEffectCost[];
-    optional?: boolean;
   };
 export type DefenseDiscardSelfAvoidAttackThenOptionalDestroyHandCardRuntimeEffect = TimedEffect<
   "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",

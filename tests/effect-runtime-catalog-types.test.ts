@@ -68,3 +68,80 @@ test("public catalog validation rejects fields owned by another payload", () => 
   if (decoded.ok) return;
   assert.match(decoded.errors.join("\n"), /unsupported field destination/);
 });
+
+test("public catalog validation rejects a life payment for an optional chip attack", () => {
+  const decoded = validateRuntimeEffectCatalogPayload(
+    "Fixture optional chip attack",
+    "optional_spend_chip_attack_damage",
+    {
+      effectId: "optional_spend_chip_attack_damage",
+      timing: "onPlay",
+      amount: 10,
+      targetSelector: "chosenPlayer",
+      chipCost: 1,
+      costs: [{ costId: "pay_life", amount: 1 }],
+    },
+    "combat",
+    "card"
+  );
+
+  assert.equal(decoded.ok, false);
+});
+
+test("public catalog validation accepts the canonical optional chip attack payload", () => {
+  const decoded = validateRuntimeEffectCatalogPayload(
+    "Fixture optional chip attack",
+    "optional_spend_chip_attack_damage",
+    {
+      effectId: "optional_spend_chip_attack_damage",
+      timing: "onPlay",
+      amount: 10,
+      targetSelector: "chosenPlayer",
+      chipCost: 1,
+    },
+    "combat",
+    "card"
+  );
+
+  assert.equal(decoded.ok, true);
+});
+
+test("public catalog validation rejects ignored optional chip attack fields", () => {
+  const baseEffect = {
+    effectId: "optional_spend_chip_attack_damage",
+    timing: "onPlay",
+    amount: 10,
+    targetSelector: "chosenPlayer",
+    chipCost: 1,
+  } as const;
+  const unsupportedFields = [
+    {
+      fieldName: "costs",
+      fields: { costs: [{ costId: "discard_other_hand_card", amount: 1 }] },
+    },
+    {
+      fieldName: "costs",
+      fields: {
+        costs: [
+          { costId: "spend_chips", amount: 1 },
+          { costId: "pay_life", amount: 1 },
+        ],
+      },
+    },
+    { fieldName: "optional", fields: { optional: false } },
+  ];
+
+  for (const { fieldName, fields } of unsupportedFields) {
+    const decoded = validateRuntimeEffectCatalogPayload(
+      "Fixture optional chip attack",
+      "optional_spend_chip_attack_damage",
+      { ...baseEffect, ...fields },
+      "combat",
+      "card"
+    );
+
+    assert.equal(decoded.ok, false);
+    if (decoded.ok) continue;
+    assert.match(decoded.errors.join("\n"), new RegExp(`unsupported field ${fieldName}`));
+  }
+});
