@@ -5,6 +5,7 @@ import {
   validateRuntimeEffectCatalogPayload,
   type EffectRuntimeCatalogOperationOverridesForTesting,
 } from "../src/engine/effect-runtime-registry.js";
+import { decodeRuntimeEffectForId } from "../src/engine/runtime-effect-decoder.js";
 import type { RuntimeEffectForId } from "../src/engine/runtime-effect.js";
 
 type Equal<Left, Right> =
@@ -48,6 +49,22 @@ test("public catalog validation preserves the concrete payload variant", () => {
   if (!decoded.ok) return;
   const amount: number = decoded.value.amount;
   assert.equal(amount, 2);
+});
+
+test("decoder rejects an ongoing refill payload with unsupported timing", () => {
+  const decoded = decodeRuntimeEffectForId(
+    "Controlled refill",
+    "ongoing_hand_refill_bonus",
+    {
+      effectId: "ongoing_hand_refill_bonus",
+      timing: "whileControlled",
+      amount: 1,
+    }
+  );
+
+  assert.equal(decoded.ok, false);
+  if (decoded.ok) return;
+  assert.match(decoded.errors.join("\n"), /timing must be endTurn/);
 });
 
 test("public catalog validation rejects fields owned by another payload", () => {
@@ -142,6 +159,9 @@ test("public catalog validation rejects ignored optional chip attack fields", ()
 
     assert.equal(decoded.ok, false);
     if (decoded.ok) continue;
-    assert.match(decoded.errors.join("\n"), new RegExp(`unsupported field ${fieldName}`));
+    assert.match(
+      decoded.errors.join("\n"),
+      new RegExp(`unsupported field ${fieldName}`)
+    );
   }
 });

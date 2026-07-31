@@ -36,7 +36,6 @@ import {
 import { recordGameEvent, recordTurnPowerChanged } from "./event-recorder.js";
 import { isPlainRecord } from "../common.js";
 import {
-  isRuntimeEffectSelectorTarget,
   isRuntimeEffectId,
   type AvoidAttackRuntimeEffect,
   type DoubleOwnedAttackDamageRuntimeEffect,
@@ -416,7 +415,9 @@ export type EffectiveValueModifierOperation = (value: number) => number;
 export interface EffectiveValueModifierOperationContext<Result> {
   readonly timing: "whileControlled" | "whileScoring";
   readonly valueKind: ModifyEffectiveValueRuntimeEffect["valueKind"];
-  readonly targetMatches: (effect: ModifyEffectiveValueRuntimeEffect) => boolean;
+  readonly targetMatches: (
+    effect: ModifyEffectiveValueRuntimeEffect
+  ) => boolean;
   readonly countOwnedScoringCards: (
     countedCardTypes: readonly string[]
   ) => number;
@@ -609,20 +610,6 @@ interface EffectRuntimeEntryConfig<Id extends RuntimeEffectId> {
   readonly supportedSourceKinds: EffectRuntimeSupportedSourceKinds;
 }
 
-function validateCatalogDomainConstraints(
-  subjectId: string,
-  effect: RuntimeEffectPayload
-): string[] {
-  if (
-    effect.effectId === "ongoing_hand_refill_bonus" &&
-    effect.timing !== "endTurn"
-  ) {
-    return [`${subjectId} ongoing_hand_refill_bonus requires endTurn timing`];
-  }
-
-  return [];
-}
-
 function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
   config: EffectRuntimeEntryConfig<Id>
 ): EffectRuntimeEntry<Id> {
@@ -641,13 +628,7 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     if (!decoded.ok) {
       return decoded;
     }
-    const domainErrors = validateCatalogDomainConstraints(
-      subjectId,
-      decoded.value
-    );
-    return domainErrors.length === 0
-      ? decoded
-      : { ok: false, errors: domainErrors };
+    return decoded;
   };
 
   type DecodedCatalogOperation =
@@ -929,19 +910,11 @@ const addPowerPerPlayerWithStatusHandler: EffectRuntimeHandler<
 > = {
   effectId: "add_power_per_player_with_status",
   execute(state, player, effect, source, services) {
-    const amountPerPlayer = effect.amountPerPlayer;
-    if (typeof amountPerPlayer !== "number") {
-      return {
-        ok: false,
-        error: "Invalid add_power_per_player_with_status effect",
-      };
-    }
-
     const matchingPlayerCount = state.players.filter((candidate) =>
       services.hasDinglerStatus(candidate)
     ).length;
     const powerBefore = state.turn.power;
-    state.turn.power += matchingPlayerCount * amountPerPlayer;
+    state.turn.power += matchingPlayerCount * effect.amountPerPlayer;
     recordTurnPowerChanged(
       state,
       player,
@@ -969,13 +942,6 @@ const gainCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"gain_card">> = {
 
     if (targetResult.choice === undefined) {
       return { ok: true };
-    }
-
-    if (effect.destination !== "discard") {
-      return {
-        ok: false,
-        error: `Unsupported gain destination ${services.asString(effect.destination)}`,
-      };
     }
 
     const effectId = effect["effectId"];
@@ -1152,16 +1118,11 @@ const dealDamageHandler: EffectRuntimeHandler<
       };
     }
 
-    const amount = requirePositiveIntegerAmount(effect, "damage amount");
-    if (!amount.ok) {
-      return amount;
-    }
-
     const damageResult = services.dealDamage(
       state,
       player,
       targetResult.choice.player,
-      amount.value,
+      effect.amount,
       effect.effectId,
       source,
       { kind: "playerControlled", player }
@@ -1197,16 +1158,11 @@ const healHandler: EffectRuntimeHandler<RuntimeEffectForId<"heal">> = {
       };
     }
 
-    const amount = requirePositiveIntegerAmount(effect, "heal amount");
-    if (!amount.ok) {
-      return amount;
-    }
-
     services.healPlayer(
       state,
       player,
       targetResult.choice.player,
-      amount.value,
+      effect.amount,
       effect.effectId,
       source
     );
@@ -1296,22 +1252,10 @@ const setLifeHandler: EffectRuntimeHandler<RuntimeEffectForId<"set_life">> = {
       };
     }
 
-    const lifeTotal = effect.lifeTotal;
-    if (
-      typeof lifeTotal !== "number" ||
-      !Number.isSafeInteger(lifeTotal) ||
-      lifeTotal < 1
-    ) {
-      return {
-        ok: false,
-        error: `Invalid life total ${String(lifeTotal)}`,
-      };
-    }
-
     const lifeChange = services.setPlayerLife(
       state,
       targetResult.choice.player,
-      lifeTotal
+      effect.lifeTotal
     );
     recordGameEvent(state, {
       type: "effectLifeSet",
@@ -1320,7 +1264,7 @@ const setLifeHandler: EffectRuntimeHandler<RuntimeEffectForId<"set_life">> = {
       cardInstanceId: source.cardInstanceId,
       definitionId: source.definitionId,
       effectId: effect.effectId,
-      amount: lifeTotal,
+      amount: effect.lifeTotal,
       targetLifeBefore: lifeChange.lifeBefore,
       targetLifeAfter: lifeChange.lifeAfter,
       sourceType: source.sourceType,
@@ -1492,14 +1436,6 @@ const gainStatusHandler: EffectRuntimeHandler<
 > = {
   effectId: "gain_status",
   execute(state, player, effect, source, services) {
-    const statusId = effect.statusId;
-    if (statusId !== "dingler") {
-      return {
-        ok: false,
-        error: `Unsupported status ${services.asString(statusId)}`,
-      };
-    }
-
     const targetResult = services.resolveStatusTargetPlayers(
       state,
       player,
@@ -1523,14 +1459,6 @@ const attackGainStatusHandler: EffectRuntimeHandler<
 > = {
   effectId: "attack_gain_status",
   execute(state, player, effect, source, services) {
-    const statusId = effect.statusId;
-    if (statusId !== "dingler") {
-      return {
-        ok: false,
-        error: `Unsupported status ${services.asString(statusId)}`,
-      };
-    }
-
     const attackProfileResult = collectAttackReplacementProfile(
       state,
       player,
@@ -1564,14 +1492,6 @@ const removeStatusHandler: EffectRuntimeHandler<
 > = {
   effectId: "remove_status",
   execute(state, player, effect, source, services) {
-    const statusId = effect.statusId;
-    if (statusId !== "dingler") {
-      return {
-        ok: false,
-        error: `Unsupported status ${services.asString(statusId)}`,
-      };
-    }
-
     const targetResult = services.resolveStatusTargetPlayers(
       state,
       player,
@@ -1600,14 +1520,6 @@ const toggleStatusHandler: EffectRuntimeHandler<
 > = {
   effectId: "toggle_status",
   execute(state, player, effect, source, services) {
-    const statusId = effect.statusId;
-    if (statusId !== "dingler") {
-      return {
-        ok: false,
-        error: `Unsupported status ${services.asString(statusId)}`,
-      };
-    }
-
     const targetResult = services.resolveStatusTargetPlayers(
       state,
       player,
@@ -1645,20 +1557,12 @@ const megaMayhemSetLifeHandler: EffectRuntimeHandler<
 > = {
   effectId: "mega_mayhem_set_life",
   execute(state, player, effect, source, services) {
-    const lifeTotal = effect.lifeTotal;
-    if (
-      typeof lifeTotal !== "number" ||
-      !Number.isSafeInteger(lifeTotal) ||
-      lifeTotal < 1
-    ) {
-      return {
-        ok: false,
-        error: `Invalid life total ${String(lifeTotal)}`,
-      };
-    }
-
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
-      const lifeChange = services.setPlayerLife(state, targetPlayer, lifeTotal);
+      const lifeChange = services.setPlayerLife(
+        state,
+        targetPlayer,
+        effect.lifeTotal
+      );
       recordGameEvent(state, {
         type: "effectLifeSet",
         playerId: player.playerId,
@@ -1666,7 +1570,7 @@ const megaMayhemSetLifeHandler: EffectRuntimeHandler<
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
         effectId: effect.effectId,
-        amount: lifeTotal,
+        amount: effect.lifeTotal,
         targetLifeBefore: lifeChange.lifeBefore,
         targetLifeAfter: lifeChange.lifeAfter,
         sourceType: source.sourceType,
@@ -1767,24 +1671,12 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler<
   effectId:
     "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
   execute(state, _player, effect, source, services) {
-    const amount = effect.amount;
-    if (
-      typeof amount !== "number" ||
-      !Number.isSafeInteger(amount) ||
-      amount < 0
-    ) {
-      return {
-        ok: false,
-        error: `Invalid Mayhem discard amount ${String(amount)}`,
-      };
-    }
-
     const effectId = effect.effectId;
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
       const discardedCards = services.discardTopDeckCards(
         state,
         targetPlayer,
-        amount
+        effect.amount
       );
       for (const discardedCard of discardedCards) {
         const destination = services.getDestroyDestination(
@@ -1950,15 +1842,9 @@ const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler<
 > = {
   effectId: "mayhem_each_player_reduce_life_to_gain_chips",
   execute(state, _player, effect, source, services) {
-    const lifeTotal = effect.lifeTotal;
-    const chipAmount = effect.chipAmount;
-    if (typeof lifeTotal !== "number" || typeof chipAmount !== "number") {
-      return { ok: false, error: "Invalid Mayhem life-for-chips effect" };
-    }
-
     const effectId = effect.effectId;
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
-      if (targetPlayer.life.current <= lifeTotal) {
+      if (targetPlayer.life.current <= effect.lifeTotal) {
         continue;
       }
 
@@ -1976,9 +1862,13 @@ const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler<
         continue;
       }
 
-      const lifeChange = services.setPlayerLife(state, targetPlayer, lifeTotal);
+      const lifeChange = services.setPlayerLife(
+        state,
+        targetPlayer,
+        effect.lifeTotal
+      );
       const chipsBefore = targetPlayer.chips;
-      targetPlayer.chips += chipAmount;
+      targetPlayer.chips += effect.chipAmount;
       recordGameEvent(state, {
         type: "effectLifeSet",
         playerId: targetPlayer.playerId,
@@ -1986,7 +1876,7 @@ const mayhemEachPlayerReduceLifeToGainChipsHandler: EffectRuntimeHandler<
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
         effectId,
-        amount: lifeTotal,
+        amount: effect.lifeTotal,
         targetLifeBefore: lifeChange.lifeBefore,
         targetLifeAfter: lifeChange.lifeAfter,
         sourceType: source.sourceType,
@@ -2145,14 +2035,6 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler<
   effectId: "mayhem_each_player_battle_highest_hand_cost",
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
-    const winnerDrawAmount = effect.winnerDrawAmount;
-    if (typeof winnerDrawAmount !== "number") {
-      return {
-        ok: false,
-        error: "Invalid Mayhem battle winner draw amount",
-      };
-    }
-
     const participants: Array<{ player: PlayerState; handCost: number }> = [];
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
       const participationChoice = services.chooseEffectChoice(
@@ -2192,7 +2074,7 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler<
     const winnerIds = winners.map((winner) => winner.playerId);
 
     for (const winner of winners) {
-      drawCards(winner, winnerDrawAmount, state);
+      drawCards(winner, effect.winnerDrawAmount, state);
     }
     for (const participant of participants) {
       if (winnerIds.includes(participant.player.playerId)) {
@@ -2290,22 +2172,16 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler<
   effectId: "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
-    const lifeCost = effect.lifeCost;
-    const chipCost = effect.chipCost;
-    if (typeof lifeCost !== "number" || typeof chipCost !== "number") {
-      return { ok: false, error: "Invalid Mayhem Dingler recovery costs" };
-    }
-
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
       if (!services.hasDinglerStatus(targetPlayer)) {
         continue;
       }
 
       const choices: EffectChoice[] = [];
-      if (targetPlayer.life.current - lifeCost >= 1) {
+      if (targetPlayer.life.current - effect.lifeCost >= 1) {
         choices.push({ choiceKind: "option", choiceId: "pay_life" });
       }
-      if (targetPlayer.chips >= chipCost) {
+      if (targetPlayer.chips >= effect.chipCost) {
         choices.push({ choiceKind: "option", choiceId: "spend_chips" });
       }
       choices.push({ choiceKind: "option", choiceId: "skip" });
@@ -2318,7 +2194,7 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler<
         choices
       );
       if (choice?.choiceId === "pay_life") {
-        targetPlayer.life.current -= lifeCost;
+        targetPlayer.life.current -= effect.lifeCost;
         recordGameEvent(state, {
           type: "effectCostPaid",
           playerId: targetPlayer.playerId,
@@ -2326,7 +2202,7 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler<
           definitionId: source.definitionId,
           effectId,
           costId: "pay_life",
-          amount: lifeCost,
+          amount: effect.lifeCost,
           sourceType: source.sourceType,
         });
         services.removeDinglerStatus(state, targetPlayer, effectId, source);
@@ -2334,7 +2210,7 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler<
       }
 
       if (choice?.choiceId === "spend_chips") {
-        targetPlayer.chips -= chipCost;
+        targetPlayer.chips -= effect.chipCost;
         recordGameEvent(state, {
           type: "effectCostPaid",
           playerId: targetPlayer.playerId,
@@ -2342,7 +2218,7 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler<
           definitionId: source.definitionId,
           effectId,
           costId: "spend_chips",
-          amount: chipCost,
+          amount: effect.chipCost,
           sourceType: source.sourceType,
         });
         services.removeDinglerStatus(state, targetPlayer, effectId, source);
@@ -2414,20 +2290,8 @@ const replaceStartingCardHandler: EffectRuntimeHandler<
     return setupOnlyExecutionError("replace_starting_card");
   },
   executeSetup(player, effect, _source, services) {
-    const rawFromDefinitionId = effect.fromDefinitionId;
-    const rawToDefinitionId = effect.toDefinitionId;
-    if (
-      !isStableDefinitionId(rawFromDefinitionId) ||
-      !isStableDefinitionId(rawToDefinitionId)
-    ) {
-      return {
-        ok: false,
-        error:
-          "replace_starting_card requires stable fromDefinitionId and toDefinitionId",
-      };
-    }
-    const fromDefinitionId = markCardDefinitionId(rawFromDefinitionId);
-    const toDefinitionId = markCardDefinitionId(rawToDefinitionId);
+    const fromDefinitionId = markCardDefinitionId(effect.fromDefinitionId);
+    const toDefinitionId = markCardDefinitionId(effect.toDefinitionId);
     if (!services.hasCardDefinition(toDefinitionId)) {
       if (services.allowsMissingData) return { ok: true };
       return {
@@ -2497,12 +2361,8 @@ const setStartingLifeTotalHandler: EffectRuntimeHandler<
     return setupOnlyExecutionError("set_starting_life_total");
   },
   executeSetup(player, effect) {
-    const lifeTotal = effect.lifeTotal;
-    if (typeof lifeTotal !== "number") {
-      return { ok: false, error: "Invalid setup life total" };
-    }
-    player.life.current = lifeTotal;
-    player.life.max = Math.max(player.life.max, lifeTotal);
+    player.life.current = effect.lifeTotal;
+    player.life.max = Math.max(player.life.max, effect.lifeTotal);
     return { ok: true };
   },
 };
@@ -2681,11 +2541,12 @@ const optionalSpendChipAttackDamageHandler: EffectRuntimeHandler<OptionalSpendCh
   {
     effectId: "optional_spend_chip_attack_damage",
     execute(state, player, effect, source, services) {
-      const attackEffect: NormalizedOptionalSpendChipAttackDamageRuntimeEffect = {
-        ...effect,
-        optional: true,
-        costs: [{ costId: "spend_chips", amount: effect.chipCost }],
-      };
+      const attackEffect: NormalizedOptionalSpendChipAttackDamageRuntimeEffect =
+        {
+          ...effect,
+          optional: true,
+          costs: [{ costId: "spend_chips", amount: effect.chipCost }],
+        };
       return executeAttackDamage(state, player, attackEffect, source, services);
     },
   };
@@ -2800,16 +2661,7 @@ const addPowerPerControlledObjectHandler: EffectRuntimeHandler<
 > = {
   effectId: "add_power_per_controlled_object",
   execute(state, player, effect, source) {
-    const amountPerObject = requirePositiveIntegerAmount(
-      effect,
-      "controlled-object power amount"
-    );
-    if (!amountPerObject.ok) {
-      return amountPerObject;
-    }
-
-    const amount =
-      countControlledObjects(state, player) * amountPerObject.value;
+    const amount = countControlledObjects(state, player) * effect.amount;
     if (amount === 0) {
       return { ok: true };
     }
@@ -3022,20 +2874,12 @@ const gainChipsPerPlayerWithStatusHandler: EffectRuntimeHandler<
 > = {
   effectId: "gain_chips_per_player_with_status",
   execute(state, player, effect, source) {
-    const amountPerPlayer = effect.amountPerPlayer;
-    if (typeof amountPerPlayer !== "number" || effect.status !== "dingler") {
-      return {
-        ok: false,
-        error: "Invalid gain_chips_per_player_with_status effect",
-      };
-    }
-
     const matchingPlayerCount = state.players.filter((candidate) => {
       return candidate.statuses.some(
         (candidateStatus) => candidateStatus.statusId === "dingler"
       );
     }).length;
-    const amount = matchingPlayerCount * amountPerPlayer;
+    const amount = matchingPlayerCount * effect.amountPerPlayer;
     const chipsBefore = player.chips;
     player.chips += amount;
     recordEffectChipsChanged(
@@ -3055,12 +2899,7 @@ const drawCardsHandler: EffectRuntimeHandler<RuntimeEffectForId<"draw_cards">> =
   {
     effectId: "draw_cards",
     execute(state, player, effect, source) {
-      const amount = requirePositiveIntegerAmount(effect, "draw amount");
-      if (!amount.ok) {
-        return amount;
-      }
-
-      const drawnCount = drawCards(player, amount.value, state);
+      const drawnCount = drawCards(player, effect.amount, state);
       recordGameEvent(state, {
         type: "effectDrawCardsApplied",
         playerId: player.playerId,
@@ -3080,11 +2919,6 @@ const directionalChainAttackHandler: EffectRuntimeHandler<
 > = {
   effectId: "directional_chain_attack",
   execute(state, player, effect, source, services) {
-    const amount = requirePositiveIntegerAmount(effect, "attack damage amount");
-    if (!amount.ok) {
-      return amount;
-    }
-
     const leftFoes = services.getOpponentsInSeatingOrder(state, player);
     const rightFoes = [...leftFoes].reverse();
     const directionChoice = services.chooseEffectChoice(
@@ -3148,7 +2982,7 @@ const directionalChainAttackHandler: EffectRuntimeHandler<
       },
       impact: {
         kind: "damage",
-        baseAmount: amount.value,
+        baseAmount: effect.amount,
         sourceOwnerModifierAmount: attackProfile.damageBonus,
         onDamageDealt: effect.onDamageDealt ?? [],
         onKill: effect.onKill ?? [],
@@ -3162,21 +2996,6 @@ const multiTargetAttackHandler: EffectRuntimeHandler<
 > = {
   effectId: "multi_target_attack",
   execute(state, player, effect, source, services) {
-    const target = effect.target;
-    if (
-      !isRuntimeEffectSelectorTarget(target) ||
-      target.selector !== "opponentPlayers"
-    ) {
-      return {
-        ok: false,
-        error: "Unsupported multi-target attack selector",
-      };
-    }
-
-    const amount = requirePositiveIntegerAmount(effect, "attack damage amount");
-    if (!amount.ok) {
-      return amount;
-    }
     const attackProfileResult = collectAttackReplacementProfile(
       state,
       player,
@@ -3204,7 +3023,7 @@ const multiTargetAttackHandler: EffectRuntimeHandler<
       },
       impact: {
         kind: "damage",
-        baseAmount: amount.value,
+        baseAmount: effect.amount,
         sourceOwnerModifierAmount: attackProfile.damageBonus,
         onDamageDealt: effect.onDamageDealt ?? [],
         onKill: effect.onKill ?? [],
@@ -3218,26 +3037,10 @@ const mayhemAttackHandler: EffectRuntimeHandler<
 > = {
   effectId: "mayhem_attack",
   execute(state, player, effect, source, services) {
-    const target = effect.target;
-    if (
-      !isRuntimeEffectSelectorTarget(target) ||
-      target.selector !== "allPlayers"
-    ) {
-      return {
-        ok: false,
-        error: "Unsupported Mayhem attack selector",
-      };
-    }
-
-    const amount = requirePositiveIntegerAmount(effect, "attack damage amount");
-    if (!amount.ok) {
-      return amount;
-    }
-
     return services.resolveMayhemAttack(
       state,
       player,
-      amount.value,
+      effect.amount,
       "mayhem_attack",
       source
     );
@@ -3385,15 +3188,7 @@ const wildMagicChoiceHandler: EffectRuntimeHandler<
 > = {
   effectId: "wild_magic_choice",
   execute(state, player, effect, source, services) {
-    const options = effect.options;
-    if (!Array.isArray(options)) {
-      return {
-        ok: false,
-        error: "Wild Magic effect requires options",
-      };
-    }
-
-    const legalOptions = options.filter(
+    const legalOptions = effect.options.filter(
       (option): option is WildMagicOption =>
         isWildMagicOption(option) &&
         services.isLegalWildMagicOption(state, player, option)
@@ -3434,14 +3229,6 @@ const wildMagicChoiceHandler: EffectRuntimeHandler<
     return { ok: true };
   },
 };
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0;
-}
-
-function isStableDefinitionId(value: unknown): value is string {
-  return isNonEmptyString(value) && value.trim() === value;
-}
 
 type AttackCostPaymentStep =
   | { kind: "discardOtherHandCard"; cardInstanceId: CardInstance["instanceId"] }
@@ -3864,28 +3651,6 @@ function chooseCardCombinations(
   }
 
   return combinations;
-}
-
-function requirePositiveIntegerAmount(
-  effect: { amount: number },
-  amountLabel: string
-): { ok: true; value: number } | { ok: false; error: string } {
-  const amount = effect.amount;
-  if (
-    typeof amount !== "number" ||
-    !Number.isSafeInteger(amount) ||
-    amount <= 0
-  ) {
-    return {
-      ok: false,
-      error: `Invalid ${amountLabel} ${String(amount)}`,
-    };
-  }
-
-  return {
-    ok: true,
-    value: amount,
-  };
 }
 
 function recordEffectChipsChanged(
@@ -4982,8 +4747,8 @@ export function resolveResurrectionLifeTotal(
     `Effect ${resolvedId.effectId}`,
     effect,
     {
-    source,
-    timing: "replacement",
+      source,
+      timing: "replacement",
       evaluate: (decoded) => {
         if (decoded.effectId !== "set_resurrection_life_total") {
           return { status: "notApplicable" };

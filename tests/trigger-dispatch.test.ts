@@ -736,7 +736,7 @@ test("end-turn dispatch decodes malformed timing before applicability", () => {
 
   assert.equal(result.ok, false);
   if (result.ok) return;
-  assert.match(result.error, /timing must be one of endTurn, whileControlled/);
+  assert.match(result.error, /timing must be endTurn/);
 });
 
 test("wizard-property on-play decodes before source-specific applicability", () => {

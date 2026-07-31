@@ -85,26 +85,56 @@ test("catalog execute rejects an unavailable runtime mode before calling its han
   assert.equal(handlerCalled, false);
 });
 
-test("catalog names executable timing constraints separately from payload decoding", () => {
+test("catalog rejects unsupported timing at the decoder boundary before its handler", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23020 });
+  const subject = scenario.activePlayer;
+  let handlerCalled = false;
+  const effect = {
+    effectId: "ongoing_hand_refill_bonus",
+    timing: "whileControlled",
+    amount: 1,
+  } as const;
+
   const result = validateRuntimeEffectCatalogPayload(
     "Controlled refill",
-    "ongoing_hand_refill_bonus",
-    {
-      effectId: "ongoing_hand_refill_bonus",
-      timing: "whileControlled",
-      amount: 1,
-    },
+    effect.effectId,
+    effect,
     "fixture",
     "card"
   );
 
   assert.equal(result.ok, false);
   if (result.ok) return;
-  assert.match(result.errors.join("\n"), /requires endTurn timing/);
+  assert.match(result.errors.join("\n"), /timing must be endTurn/);
+
+  const execution = withTemporaryEffectRuntimeOperations(
+    effect.effectId,
+    {
+      execute() {
+        handlerCalled = true;
+        return { ok: true };
+      },
+    },
+    () =>
+      executeRuntimeEffect(
+        scenario.state,
+        subject,
+        effect,
+        catalogSource(subject, "card", "fixture"),
+        throwingRuntimeServices()
+      )
+  );
+
+  assert.equal(execution.ok, false);
+  assert.equal(handlerCalled, false);
 });
 
 test("setup effects accept only wizard-property sources", () => {
-  const effect = { effectId: "set_starting_life_total", timing: "setup", lifeTotal: 30 } as const;
+  const effect = {
+    effectId: "set_starting_life_total",
+    timing: "setup",
+    lifeTotal: 30,
+  } as const;
 
   assert.equal(
     validateRuntimeEffectCatalogPayload(
