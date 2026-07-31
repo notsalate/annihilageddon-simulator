@@ -357,17 +357,7 @@ function checkTriggerDispatchOwnership(relativePath, sourceFile) {
 }
 
 function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
-  const program = ts.createProgram([sourceFile.fileName], {
-    noLib: true,
-    target: ts.ScriptTarget.Latest,
-  });
-  const checker = program.getTypeChecker();
-  sourceFile = program.getSourceFile(sourceFile.fileName) ?? sourceFile;
   let sourceKindPolicy;
-  const runtimeEffectDecoderMapDependencies =
-    relativePath === "src/engine/runtime-effect-decoder.ts"
-      ? collectRuntimeEffectDecoderMapDependencies(sourceFile, checker)
-      : undefined;
 
   function visit(node) {
     if (
@@ -399,20 +389,6 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
           }
         }
       }
-      if (relativePath === "src/engine/runtime-effect-decoder.ts") {
-        for (const exportedName of getExportedLocalNames(node)) {
-          if (
-            hasRuntimeEffectDecoderMapDependency(
-              getSymbolAtExportSpecifier(node, exportedName, checker),
-              runtimeEffectDecoderMapDependencies
-            )
-          ) {
-            effectRuntimeCatalogBoundaryViolations.push(
-              `${relativePath} re-exports decoder-map bypass ${exportedName}`
-            );
-          }
-        }
-      }
     }
 
     if (relativePath === "src/engine/effect-runtime-registry.ts") {
@@ -430,34 +406,13 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
         sourceKindPolicy = node;
       }
     }
-    if (
-      relativePath === "src/engine/runtime-effect-decoder.ts" &&
-      isExportedRuntimeEffectDecoderBypass(
-        node,
-        runtimeEffectDecoderMapDependencies,
-        checker
-      )
-    ) {
-      effectRuntimeCatalogBoundaryViolations.push(
-        `${relativePath} exports decoder-map bypass ${getExportedDeclarationNames(node).join(", ")}`
-      );
-    }
-    if (
-      relativePath === "src/engine/runtime-effect-decoder.ts" &&
-      ts.isExportAssignment(node) &&
-      expressionDependsOnRuntimeEffectDecoderMap(
-        node.expression,
-        runtimeEffectDecoderMapDependencies,
-        checker
-      )
-    ) {
-      effectRuntimeCatalogBoundaryViolations.push(
-        `${relativePath} exports decoder-map bypass default`
-      );
-    }
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
+
+  if (relativePath === "src/engine/runtime-effect-decoder.ts") {
+    checkClosedRuntimeEffectDecoderExportSurface(sourceFile);
+  }
 
   if (relativePath !== "src/engine/effect-runtime-registry.ts") return;
   if (sourceKindPolicy === undefined) {
@@ -493,6 +448,40 @@ function getExportedLocalNames(node) {
   return node.exportClause.elements.map(
     (element) => element.propertyName?.text ?? element.name.text
   );
+}
+
+function checkClosedRuntimeEffectDecoderExportSurface(sourceFile) {
+  const allowedTypeExports = new Set(["DecodeResult", "RuntimeEffectDecoder"]);
+  const allowedValueExports = new Set([
+    "decodeRuntimeEffectForId",
+    "decodeRuntimeEffect",
+    "decodeTimedRuntimeEffect",
+  ]);
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isExportDeclaration(statement) || ts.isExportAssignment(statement)) {
+      effectRuntimeCatalogBoundaryViolations.push(
+        `${sourceFile.fileName} violates closed decoder export surface`
+      );
+      continue;
+    }
+    if (!hasExportModifier(statement)) continue;
+    const name = getDeclarationName(statement);
+    const isAllowedType =
+      (ts.isTypeAliasDeclaration(statement) ||
+        ts.isInterfaceDeclaration(statement)) &&
+      name !== undefined &&
+      allowedTypeExports.has(name);
+    const isAllowedFunction =
+      ts.isFunctionDeclaration(statement) &&
+      name !== undefined &&
+      allowedValueExports.has(name);
+    if (!isAllowedType && !isAllowedFunction) {
+      effectRuntimeCatalogBoundaryViolations.push(
+        `${sourceFile.fileName} violates closed decoder export surface`
+      );
+    }
+  }
 }
 
 function isSourceKindPolicy(node) {
@@ -551,24 +540,11 @@ function isExportedCatalogBypass(node) {
   return isExportedNamedDeclaration(node, effectRuntimeCatalogBypassExports);
 }
 
-function isExportedRuntimeEffectDecoderBypass(node, dependencies, checker) {
-  if (!hasExportModifier(node)) return false;
-  return getExportedDeclarationSymbols(node, checker).some((symbol) =>
-    hasRuntimeEffectDecoderMapDependency(symbol, dependencies)
-  );
-}
-
-function getExportedDeclarationNames(node) {
-  if (ts.isVariableStatement(node)) {
-    return node.declarationList.declarations.flatMap((declaration) =>
-      ts.isIdentifier(declaration.name) ? [declaration.name.text] : []
-    );
-  }
-  const name = getDeclarationName(node);
-  return name === undefined ? [] : [name];
-}
-
-function collectRuntimeEffectDecoderMapDependencies(sourceFile, checker) {
+/* Removed dependency tracking: the decoder module now has a closed export surface. */
+function removedCollectRuntimeEffectDecoderMapDependencies(
+  sourceFile,
+  checker
+) {
   const dependencies = new Map();
   const seed = sourceFile.statements
     .filter(ts.isVariableStatement)

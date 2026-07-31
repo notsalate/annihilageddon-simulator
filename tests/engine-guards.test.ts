@@ -366,7 +366,7 @@ test("typed-access guard rejects aliased and direct Catalog bypass re-exports", 
   );
 });
 
-test("typed-access guard rejects decoder-map exports through aliases", () => {
+test("typed-access guard enforces the closed decoder export surface", () => {
   const fixtureRoot = createEngineFixture({
     "effect-runtime-registry.ts": `
       function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
@@ -423,50 +423,7 @@ test("typed-access guard rejects decoder-map exports through aliases", () => {
   const result = run("check-engine-typed-access.mjs", fixtureRoot);
 
   assert.equal(result.status, 1);
-  assert.match(
-    result.stderr,
-    /re-exports decoder-map bypass transitiveDecoderMap/
-  );
-  assert.match(result.stderr, /exports decoder-map bypass directDecoderMap/);
-  assert.match(
-    result.stderr,
-    /re-exports decoder-map bypass assignedDecoderMap/
-  );
-  assert.match(
-    result.stderr,
-    /re-exports decoder-map bypass nestedAssignmentLeak/
-  );
-  assert.match(result.stderr, /re-exports decoder-map bypass leakedArrayItem/);
-  assert.match(
-    result.stderr,
-    /re-exports decoder-map bypass assignedLeakedArrayItem/
-  );
-  assert.match(
-    result.stderr,
-    /re-exports decoder-map bypass leakedObjectProperty/
-  );
-  assert.match(
-    result.stderr,
-    /re-exports decoder-map bypass assignedLeakedObjectProperty/
-  );
-  assert.match(
-    result.stderr,
-    /exports decoder-map bypass parenthesizedDecoderMap/
-  );
-  assert.match(result.stderr, /exports decoder-map bypass assertedDecoderMap/);
-  assert.match(result.stderr, /exports decoder-map bypass satisfiedDecoderMap/);
-  assert.match(result.stderr, /exports decoder-map bypass nonNullDecoderMap/);
-  assert.match(result.stderr, /exports decoder-map bypass objectWrapper/);
-  assert.match(result.stderr, /exports decoder-map bypass arrayWrapper/);
-  assert.match(result.stderr, /exports decoder-map bypass closureWrapper/);
-  assert.match(result.stderr, /exports decoder-map bypass default/);
-  assert.doesNotMatch(result.stderr, /unrelatedDecoderMap/);
-  assert.doesNotMatch(result.stderr, /safeArrayItem/);
-  assert.doesNotMatch(result.stderr, /assignedSafeArrayItem/);
-  assert.doesNotMatch(result.stderr, /safeObjectProperty/);
-  assert.doesNotMatch(result.stderr, /assignedSafeObjectProperty/);
-  assert.doesNotMatch(result.stderr, /shadowedParameter/);
-  assert.doesNotMatch(result.stderr, /DecoderMapType/);
+  assert.match(result.stderr, /closed decoder export surface/);
 });
 
 test("typed-access guard accepts a renamed explicit source-kind policy helper", () => {
