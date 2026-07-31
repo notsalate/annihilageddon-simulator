@@ -357,10 +357,16 @@ function checkTriggerDispatchOwnership(relativePath, sourceFile) {
 }
 
 function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
+  const program = ts.createProgram([sourceFile.fileName], {
+    noLib: true,
+    target: ts.ScriptTarget.Latest,
+  });
+  const checker = program.getTypeChecker();
+  sourceFile = program.getSourceFile(sourceFile.fileName) ?? sourceFile;
   let sourceKindPolicy;
   const runtimeEffectDecoderMapDependencies =
     relativePath === "src/engine/runtime-effect-decoder.ts"
-      ? collectRuntimeEffectDecoderMapDependencies(sourceFile)
+      ? collectRuntimeEffectDecoderMapDependencies(sourceFile, checker)
       : undefined;
 
   function visit(node) {
@@ -397,7 +403,7 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
         for (const exportedName of getExportedLocalNames(node)) {
           if (
             hasRuntimeEffectDecoderMapDependency(
-              exportedName,
+              getSymbolAtExportSpecifier(node, exportedName, checker),
               runtimeEffectDecoderMapDependencies
             )
           ) {
@@ -428,7 +434,8 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
       relativePath === "src/engine/runtime-effect-decoder.ts" &&
       isExportedRuntimeEffectDecoderBypass(
         node,
-        runtimeEffectDecoderMapDependencies
+        runtimeEffectDecoderMapDependencies,
+        checker
       )
     ) {
       effectRuntimeCatalogBoundaryViolations.push(
@@ -440,7 +447,8 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
       ts.isExportAssignment(node) &&
       expressionDependsOnRuntimeEffectDecoderMap(
         node.expression,
-        runtimeEffectDecoderMapDependencies
+        runtimeEffectDecoderMapDependencies,
+        checker
       )
     ) {
       effectRuntimeCatalogBoundaryViolations.push(
@@ -543,10 +551,10 @@ function isExportedCatalogBypass(node) {
   return isExportedNamedDeclaration(node, effectRuntimeCatalogBypassExports);
 }
 
-function isExportedRuntimeEffectDecoderBypass(node, dependencies) {
+function isExportedRuntimeEffectDecoderBypass(node, dependencies, checker) {
   if (!hasExportModifier(node)) return false;
-  return getExportedDeclarationNames(node).some((name) =>
-    hasRuntimeEffectDecoderMapDependency(name, dependencies)
+  return getExportedDeclarationSymbols(node, checker).some((symbol) =>
+    hasRuntimeEffectDecoderMapDependency(symbol, dependencies)
   );
 }
 
@@ -560,84 +568,207 @@ function getExportedDeclarationNames(node) {
   return name === undefined ? [] : [name];
 }
 
-function collectRuntimeEffectDecoderMapDependencies(sourceFile) {
-  const dependencies = new Map(
-    [...runtimeEffectDecoderBypassExports].map((name) => [name, new Set()])
-  );
-
-  for (const statement of sourceFile.statements) {
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (!ts.isIdentifier(declaration.name)) continue;
-        addRuntimeEffectDecoderMapDependencies(
-          dependencies,
-          declaration.name.text,
-          declaration.initializer
-        );
-      }
-      continue;
-    }
-    if (
-      ts.isExpressionStatement(statement) &&
-      ts.isBinaryExpression(statement.expression) &&
-      statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      ts.isIdentifier(statement.expression.left)
-    ) {
-      addRuntimeEffectDecoderMapDependencies(
-        dependencies,
-        statement.expression.left.text,
-        statement.expression.right
-      );
+function collectRuntimeEffectDecoderMapDependencies(sourceFile, checker) {
+  const dependencies = new Map();
+  const seed = sourceFile.statements
+    .filter(ts.isVariableStatement)
+    .flatMap((statement) => statement.declarationList.declarations)
+    .find(
+      (declaration) =>
+        ts.isIdentifier(declaration.name) &&
+        runtimeEffectDecoderBypassExports.has(declaration.name.text)
+    );
+  if (seed !== undefined) {
+    const seedSymbol = checker.getSymbolAtLocation(seed.name);
+    if (seedSymbol !== undefined) {
+      dependencies.seed = seedSymbol;
+      dependencies.set(seedSymbol, new Set());
     }
   }
 
+  function addTargets(target, expression) {
+    const valueDependencies = collectValueReferences(expression, checker);
+    for (const symbol of getBindingSymbols(target, checker)) {
+      const current = dependencies.get(symbol) ?? new Set();
+      for (const dependency of valueDependencies) current.add(dependency);
+      dependencies.set(symbol, current);
+    }
+  }
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && node.initializer !== undefined) {
+      addDestructuredTargets(node.name, node.initializer, addTargets, checker);
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+    ) {
+      addDestructuredTargets(node.left, node.right, addTargets, checker);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
   return dependencies;
 }
 
-function addRuntimeEffectDecoderMapDependencies(
-  dependencies,
-  name,
-  expression
-) {
-  if (expression === undefined) return;
-  const referencedNames = collectValueReferences(expression);
-  if (referencedNames.size === 0) return;
-  const current = dependencies.get(name) ?? new Set();
-  for (const referencedName of referencedNames) current.add(referencedName);
-  dependencies.set(name, current);
+function addDestructuredTargets(target, expression, addTargets, checker) {
+  if (
+    (ts.isArrayBindingPattern(target) || ts.isArrayLiteralExpression(target)) &&
+    ts.isArrayLiteralExpression(expression)
+  ) {
+    target.elements.forEach((element, index) => {
+      const targetElement = ts.isBindingElement(element)
+        ? element.name
+        : element;
+      if (
+        targetElement !== undefined &&
+        (!ts.isBindingElement(element) || !element.dotDotDotToken)
+      ) {
+        const value = expression.elements[index];
+        if (value !== undefined && !ts.isOmittedExpression(value)) {
+          addTargets(targetElement, value);
+        }
+      }
+    });
+    return;
+  }
+  if (
+    ts.isObjectBindingPattern(target) &&
+    ts.isObjectLiteralExpression(expression)
+  ) {
+    for (const element of target.elements) {
+      if (
+        element.dotDotDotToken ||
+        (element.propertyName && !ts.isIdentifier(element.propertyName))
+      ) {
+        addTargets(element.name, expression);
+        continue;
+      }
+      const propertyName = element.propertyName?.text ?? element.name.getText();
+      const property = expression.properties.find(
+        (candidate) =>
+          ts.isPropertyAssignment(candidate) &&
+          ts.isIdentifier(candidate.name) &&
+          candidate.name.text === propertyName
+      );
+      if (property !== undefined)
+        addTargets(element.name, property.initializer);
+    }
+    return;
+  }
+  if (
+    ts.isObjectLiteralExpression(target) &&
+    ts.isObjectLiteralExpression(expression)
+  ) {
+    for (const property of target.properties) {
+      if (
+        !ts.isShorthandPropertyAssignment(property) &&
+        !(
+          ts.isPropertyAssignment(property) &&
+          ts.isIdentifier(property.name) &&
+          ts.isIdentifier(property.initializer)
+        )
+      ) {
+        continue;
+      }
+      const propertyName = property.name.text;
+      const targetName = ts.isShorthandPropertyAssignment(property)
+        ? property.name
+        : property.initializer;
+      const source = expression.properties.find(
+        (candidate) =>
+          ts.isPropertyAssignment(candidate) &&
+          ts.isIdentifier(candidate.name) &&
+          candidate.name.text === propertyName
+      );
+      if (source !== undefined) addTargets(targetName, source.initializer);
+    }
+    return;
+  }
+  addTargets(target, expression);
 }
 
-function expressionDependsOnRuntimeEffectDecoderMap(expression, dependencies) {
-  return [...collectValueReferences(expression)].some((name) =>
-    hasRuntimeEffectDecoderMapDependency(name, dependencies)
+function expressionDependsOnRuntimeEffectDecoderMap(
+  expression,
+  dependencies,
+  checker
+) {
+  return [...collectValueReferences(expression, checker)].some((symbol) =>
+    hasRuntimeEffectDecoderMapDependency(symbol, dependencies)
   );
 }
 
 function hasRuntimeEffectDecoderMapDependency(
-  name,
+  symbol,
   dependencies,
   visited = new Set()
 ) {
-  if (name === undefined || dependencies === undefined) return false;
-  if (runtimeEffectDecoderBypassExports.has(name)) return true;
-  if (visited.has(name)) return false;
-  visited.add(name);
-  return [...(dependencies.get(name) ?? [])].some((dependency) =>
+  if (symbol === undefined || dependencies === undefined) return false;
+  if (symbol === dependencies.seed) return true;
+  if (!dependencies.has(symbol)) return false;
+  if (visited.has(symbol)) return false;
+  visited.add(symbol);
+  return [...dependencies.get(symbol)].some((dependency) =>
     hasRuntimeEffectDecoderMapDependency(dependency, dependencies, visited)
   );
 }
 
-function collectValueReferences(node) {
+function collectValueReferences(node, checker) {
   const references = new Set();
   function visit(current) {
     if (ts.isTypeNode(current)) return;
     if (ts.isIdentifier(current) && isValueReferenceIdentifier(current)) {
-      references.add(current.text);
+      const symbol = checker.getSymbolAtLocation(current);
+      if (symbol !== undefined) references.add(symbol);
     }
     ts.forEachChild(current, visit);
   }
   visit(node);
   return references;
+}
+
+function getBindingSymbols(node, checker) {
+  if (ts.isIdentifier(node)) {
+    const symbol = checker.getSymbolAtLocation(node);
+    return symbol === undefined ? [] : [symbol];
+  }
+  if (ts.isArrayBindingPattern(node) || ts.isObjectBindingPattern(node)) {
+    return node.elements.flatMap((element) =>
+      ts.isBindingElement(element)
+        ? getBindingSymbols(element.name, checker)
+        : []
+    );
+  }
+  return [];
+}
+
+function getExportedDeclarationSymbols(node, checker) {
+  if (ts.isVariableStatement(node)) {
+    return node.declarationList.declarations.flatMap((declaration) =>
+      getBindingSymbols(declaration.name, checker)
+    );
+  }
+  const name = getDeclarationName(node);
+  return name === undefined ? [] : getBindingSymbols(node.name, checker);
+}
+
+function getSymbolAtExportSpecifier(node, name, checker) {
+  if (!ts.isExportDeclaration(node) || !ts.isNamedExports(node.exportClause))
+    return undefined;
+  const element = node.exportClause.elements.find(
+    (candidate) =>
+      (candidate.propertyName?.text ?? candidate.name.text) === name
+  );
+  if (element === undefined) return undefined;
+  return resolveSymbol(
+    checker.getSymbolAtLocation(element.propertyName ?? element.name),
+    checker
+  );
+}
+
+function resolveSymbol(symbol, checker) {
+  return symbol !== undefined && symbol.flags & ts.SymbolFlags.Alias
+    ? checker.getAliasedSymbol(symbol)
+    : symbol;
 }
 
 function isValueReferenceIdentifier(node) {

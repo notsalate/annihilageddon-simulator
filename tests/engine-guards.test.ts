@@ -376,8 +376,25 @@ test("typed-access guard rejects decoder-map exports through aliases", () => {
       }
     `,
     "runtime-effect-decoder.ts": `
+      const runtimeEffectDecoders = {};
       let assignedDecoderMap;
       assignedDecoderMap = runtimeEffectDecoders;
+      let nestedAssignmentLeak;
+      if (true) nestedAssignmentLeak = runtimeEffectDecoders;
+      const [safeArrayItem, leakedArrayItem] = [1, runtimeEffectDecoders];
+      let assignedSafeArrayItem;
+      let assignedLeakedArrayItem;
+      [assignedSafeArrayItem, assignedLeakedArrayItem] = [1, runtimeEffectDecoders];
+      const { safe: safeObjectProperty, leak: leakedObjectProperty } = {
+        safe: 1,
+        leak: runtimeEffectDecoders,
+      };
+      let assignedSafeObjectProperty;
+      let assignedLeakedObjectProperty;
+      ({ safe: assignedSafeObjectProperty, leak: assignedLeakedObjectProperty } = {
+        safe: 1,
+        leak: runtimeEffectDecoders,
+      });
       const publicDecoderMap = runtimeEffectDecoders;
       const transitiveDecoderMap = publicDecoderMap;
       export { transitiveDecoderMap as exposedDecoderMap };
@@ -393,6 +410,11 @@ test("typed-access guard rejects decoder-map exports through aliases", () => {
       export default { decoderMap: runtimeEffectDecoders };
       const unrelatedDecoderMap = {};
       export { unrelatedDecoderMap };
+      export { nestedAssignmentLeak, safeArrayItem, leakedArrayItem };
+      export { assignedSafeArrayItem, assignedLeakedArrayItem };
+      export { safeObjectProperty, leakedObjectProperty };
+      export { assignedSafeObjectProperty, assignedLeakedObjectProperty };
+      export const shadowedParameter = (runtimeEffectDecoders: unknown) => runtimeEffectDecoders;
       type DecoderMapType = typeof runtimeEffectDecoders;
       export type { DecoderMapType };
     `,
@@ -412,6 +434,23 @@ test("typed-access guard rejects decoder-map exports through aliases", () => {
   );
   assert.match(
     result.stderr,
+    /re-exports decoder-map bypass nestedAssignmentLeak/
+  );
+  assert.match(result.stderr, /re-exports decoder-map bypass leakedArrayItem/);
+  assert.match(
+    result.stderr,
+    /re-exports decoder-map bypass assignedLeakedArrayItem/
+  );
+  assert.match(
+    result.stderr,
+    /re-exports decoder-map bypass leakedObjectProperty/
+  );
+  assert.match(
+    result.stderr,
+    /re-exports decoder-map bypass assignedLeakedObjectProperty/
+  );
+  assert.match(
+    result.stderr,
     /exports decoder-map bypass parenthesizedDecoderMap/
   );
   assert.match(result.stderr, /exports decoder-map bypass assertedDecoderMap/);
@@ -422,6 +461,11 @@ test("typed-access guard rejects decoder-map exports through aliases", () => {
   assert.match(result.stderr, /exports decoder-map bypass closureWrapper/);
   assert.match(result.stderr, /exports decoder-map bypass default/);
   assert.doesNotMatch(result.stderr, /unrelatedDecoderMap/);
+  assert.doesNotMatch(result.stderr, /safeArrayItem/);
+  assert.doesNotMatch(result.stderr, /assignedSafeArrayItem/);
+  assert.doesNotMatch(result.stderr, /safeObjectProperty/);
+  assert.doesNotMatch(result.stderr, /assignedSafeObjectProperty/);
+  assert.doesNotMatch(result.stderr, /shadowedParameter/);
   assert.doesNotMatch(result.stderr, /DecoderMapType/);
 });
 
