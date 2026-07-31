@@ -41,7 +41,6 @@ import {
   type DoubleOwnedAttackDamageRuntimeEffect,
   type IncreaseHandLimitAtMaxLifeRuntimeEffect,
   type ModifyEffectiveValueRuntimeEffect,
-  isWildMagicOption,
   type AttackOutcomeBranch,
   type EffectTiming,
   type ModifyOwnedWandAttackDamageRuntimeEffect,
@@ -3188,10 +3187,8 @@ const wildMagicChoiceHandler: EffectRuntimeHandler<
 > = {
   effectId: "wild_magic_choice",
   execute(state, player, effect, source, services) {
-    const legalOptions = effect.options.filter(
-      (option): option is WildMagicOption =>
-        isWildMagicOption(option) &&
-        services.isLegalWildMagicOption(state, player, option)
+    const legalOptions = effect.options.filter((option) =>
+      services.isLegalWildMagicOption(state, player, option)
     );
     const choices: EffectChoice[] = legalOptions.map((_, index) => ({
       choiceKind: "option",

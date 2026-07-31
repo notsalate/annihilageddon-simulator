@@ -85,6 +85,66 @@ test("catalog execute rejects an unavailable runtime mode before calling its han
   assert.equal(handlerCalled, false);
 });
 
+test("catalog decodes Wild Magic options before handing typed options to its handler", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23021 });
+  const subject = scenario.activePlayer;
+  const source = catalogSource(subject, "card", "fixture");
+  let handlerCalled = false;
+
+  const malformed = withTemporaryEffectRuntimeOperations(
+    "wild_magic_choice",
+    {
+      execute() {
+        handlerCalled = true;
+        return { ok: true };
+      },
+    },
+    () =>
+      executeRuntimeEffect(
+        scenario.state,
+        subject,
+        {
+          effectId: "wild_magic_choice",
+          timing: "onPlay",
+          options: [{ effectId: "add_power", amount: "bad" }],
+        },
+        source,
+        throwingRuntimeServices()
+      )
+  );
+
+  assert.equal(malformed.ok, false);
+  assert.equal(handlerCalled, false);
+
+  const valid = withTemporaryEffectRuntimeOperations(
+    "wild_magic_choice",
+    {
+      execute(_state, _player, effect) {
+        handlerCalled = true;
+        assert.deepEqual(effect.options, [
+          { effectId: "add_power", amount: 2 },
+        ]);
+        return { ok: true };
+      },
+    },
+    () =>
+      executeRuntimeEffect(
+        scenario.state,
+        subject,
+        {
+          effectId: "wild_magic_choice",
+          timing: "onPlay",
+          options: [{ effectId: "add_power", amount: 2 }],
+        },
+        source,
+        throwingRuntimeServices()
+      )
+  );
+
+  assert.deepEqual(valid, { ok: true });
+  assert.equal(handlerCalled, true);
+});
+
 test("catalog rejects unsupported timing at the decoder boundary before its handler", () => {
   const scenario = createGameScenario({ rootDir, seed: 23020 });
   const subject = scenario.activePlayer;
