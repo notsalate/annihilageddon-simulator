@@ -153,8 +153,27 @@ export type RuntimeEffectChoice =
   | RuntimeEffectChoiceDefense
   | RuntimeEffectChoiceDirectionalPlayerTarget;
 
+type DecisionView<T> = T extends
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined
+  ? T
+  : T extends (...args: never[]) => unknown
+    ? T
+    : T extends readonly (infer Item)[]
+      ? readonly DecisionView<Item>[]
+      : T extends object
+        ? { readonly [Property in keyof T]: DecisionView<T[Property]> }
+        : T;
+
+export type PlayerDecisionView = DecisionView<PlayerState>;
+
 export interface RuntimeEffectChoiceRequest {
-  player: PlayerState;
+  player: PlayerDecisionView;
   effectId: RuntimeEffectId;
   sourceType: "card" | "wizardProperty" | "deadWizardToken";
   cardInstanceId: string;

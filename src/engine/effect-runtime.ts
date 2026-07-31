@@ -50,7 +50,12 @@ import {
   type RuntimeEffectPayload,
   type WildMagicOption,
 } from "./runtime-effect.js";
-import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import type {
+  CardInstance,
+  GameState,
+  PlayerState,
+  RuntimeEffectChoiceRequest,
+} from "./setup.js";
 import { dispatchControlledCardOperation } from "./trigger-dispatch.js";
 export function executeOnPlayEffects(
   state: GameState,
@@ -1011,22 +1016,22 @@ function chooseEffectChoice(
   effectId: RuntimeEffectId,
   choices: readonly EffectChoice[]
 ): EffectChoice | undefined {
-  const strategyChoices = structuredClone(choices);
-  const canonicalChoicesByStrategyChoice = new Map(
-    strategyChoices.map((choice, index) => [choice, choices[index]!])
-  );
-  const selectedChoice = state.effectChoiceStrategy?.({
+  const decisionRequest: RuntimeEffectChoiceRequest = structuredClone({
     player,
     effectId,
     sourceType: source.sourceType,
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
-    choices: strategyChoices,
+    choices,
   });
+  const canonicalChoicesByStrategyChoice = new Map(
+    decisionRequest.choices.map((choice, index) => [choice, choices[index]!])
+  );
+  const selectedChoice = state.effectChoiceStrategy?.(decisionRequest);
   const choice =
     selectedChoice === undefined
       ? choices[0]
-      : canonicalChoicesByStrategyChoice.get(selectedChoice) ?? choices[0];
+      : (canonicalChoicesByStrategyChoice.get(selectedChoice) ?? choices[0]);
   if (choice === undefined) {
     recordGameEvent(state, {
       type: "effectChoiceSkipped",

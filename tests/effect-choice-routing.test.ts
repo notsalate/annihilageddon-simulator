@@ -252,6 +252,76 @@ test("target choice strategy can select a non-first chosenPlayer target", () => 
   assert.equal(choiceEvent.targetPlayerId, selectedTarget.playerId);
 });
 
+test("effect choice strategy receives isolated player decision views", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const source = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-choice-isolated-player-view", [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 5,
+        targetSelector: "chosenFoe",
+      },
+    ])
+  );
+  const activePlayer = state.players.find(
+    (candidate) => candidate.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  const targetPlayer = state.players.find(
+    (candidate) => candidate.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  const targetHandCard = targetPlayer.hand[0];
+  assert.ok(targetHandCard);
+
+  state.effectChoiceStrategy = (request) => {
+    if (request.effectId !== "attack_damage") return undefined;
+    const choice = request.choices.find(
+      (candidate) =>
+        candidate.choiceKind === "playerTarget" &&
+        candidate.choiceId === targetPlayer.playerId
+    );
+    assert.ok(choice);
+    assert.equal(choice.choiceKind, "playerTarget");
+
+    const mutablePlayerView = request.player as unknown as {
+      chips: number;
+      life: { current: number };
+      hand: Array<{ marketChips: number }>;
+    };
+    mutablePlayerView.chips = 99;
+    mutablePlayerView.life.current = 1;
+    mutablePlayerView.hand.length = 0;
+
+    const mutableTargetView = choice.players[0] as unknown as {
+      chips: number;
+      life: { current: number };
+      hand: Array<{ marketChips: number }>;
+    };
+    mutableTargetView.chips = 88;
+    mutableTargetView.life.current = 1;
+    mutableTargetView.hand[0]!.marketChips = 77;
+    mutableTargetView.hand.length = 0;
+
+    return choice;
+  };
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: source.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.chips, 0);
+  assert.equal(activePlayer.life.current, 20);
+  assert.equal(targetPlayer.chips, 0);
+  assert.equal(targetPlayer.life.current, 15);
+  assert.equal(targetPlayer.hand.includes(targetHandCard), true);
+  assert.equal(targetHandCard.marketChips, 0);
+});
+
 test("target choice strategy routes a non-first market card to its handler", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   state.runtimeMode = "fixture";
