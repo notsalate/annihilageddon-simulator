@@ -470,7 +470,8 @@ function checkClosedRuntimeEffectDecoderExportSurface(sourceFile) {
       (ts.isTypeAliasDeclaration(statement) ||
         ts.isInterfaceDeclaration(statement)) &&
       name !== undefined &&
-      allowedTypeExports.has(name);
+      allowedTypeExports.has(name) &&
+      !hasDefaultModifier(statement);
     const isAllowedFunction =
       ts.isFunctionDeclaration(statement) &&
       name !== undefined &&

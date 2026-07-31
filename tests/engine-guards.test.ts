@@ -410,6 +410,7 @@ test("typed-access guard enforces the closed decoder export surface", () => {
       export default function decodeRuntimeEffect() {
         return runtimeEffectDecoders;
       }
+      export default interface RuntimeEffectDecoder {}
       const unrelatedDecoderMap = {};
       export { unrelatedDecoderMap };
       export { nestedAssignmentLeak, safeArrayItem, leakedArrayItem };
