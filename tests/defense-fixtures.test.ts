@@ -46,19 +46,16 @@ test("fixture defense selectors skip production cards and select an exact fixtur
       choiceKind: "defense" as const,
       choiceId: productionDefense.instanceId,
       targetCardInstanceId: productionDefense.instanceId,
-      targetDefinitionId: productionDefense.definitionId,
     },
     {
       choiceKind: "defense" as const,
       choiceId: firstFixture.instanceId,
       targetCardInstanceId: firstFixture.instanceId,
-      targetDefinitionId: firstFixture.definitionId,
     },
     {
       choiceKind: "defense" as const,
       choiceId: secondFixture.instanceId,
       targetCardInstanceId: secondFixture.instanceId,
-      targetDefinitionId: secondFixture.definitionId,
     },
   ];
   const request = {

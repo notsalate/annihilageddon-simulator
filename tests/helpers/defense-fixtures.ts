@@ -121,7 +121,7 @@ function isFixtureDefenseChoice(
 ): choice is FixtureDefenseChoice {
   return (
     choice.choiceKind === "defense" &&
-    choice.targetDefinitionId?.startsWith("fixture-defense-") === true
+    choice.targetCardInstanceId?.startsWith("fixture-defense-card-") === true
   );
 }
 

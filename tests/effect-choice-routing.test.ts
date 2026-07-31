@@ -10,6 +10,7 @@ import {
 import { executeEffect } from "../src/engine/effect-runtime.js";
 import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
+import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -310,6 +311,70 @@ test("effect choice strategy receives isolated player decision views", () => {
   assert.equal(targetPlayer.life.current, 15);
   assert.equal(targetPlayer.hand.includes(targetHandCard), true);
   assert.equal(targetHandCard.marketChips, 0);
+});
+
+test("defense chooser receives opaque card identifiers and restores its selected defense", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const attackingPlayer = state.players.find(
+    (candidate) => candidate.playerId === state.activePlayerId
+  );
+  const defendingPlayer = state.players.find(
+    (candidate) => candidate.playerId !== state.activePlayerId
+  );
+  assert.ok(attackingPlayer);
+  assert.ok(defendingPlayer);
+  defendingPlayer.hand = [];
+  const firstDefense = addFixtureDefenseCardToHand(
+    state,
+    defendingPlayer,
+    "discardSelf"
+  );
+  const secondDefense = addFixtureDefenseCardToHand(
+    state,
+    defendingPlayer,
+    "discardSelf"
+  );
+  const source = addFixtureDefinitionToActiveHand(
+    state,
+    fixtureDefinition("fixture-choice-defense-source", [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 5,
+        target: { selector: "opponentPlayer" },
+      },
+    ])
+  );
+  let seenDefenseChoice = false;
+  state.effectChoiceStrategy = (request) => {
+    if (request.effectId !== "avoid_attack") return undefined;
+    const choice = request.choices[2];
+    assert.ok(choice);
+    assert.equal(choice.choiceKind, "defense");
+    assert.equal("targetDefinitionId" in choice, false);
+    seenDefenseChoice = true;
+    return { ...choice };
+  };
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: source.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(seenDefenseChoice, true);
+  assert.equal(defendingPlayer.life.current, 20);
+  assert.equal(defendingPlayer.hand.includes(firstDefense), true);
+  assert.equal(defendingPlayer.discard.includes(secondDefense), true);
+  const choiceEvent = state.eventLog.find(
+    (event) =>
+      event.type === "effectChoiceSelected" && event.effectId === "avoid_attack"
+  );
+  assert.ok(choiceEvent);
+  assert.equal(choiceEvent.choiceKind, "defense");
+  assert.equal(choiceEvent.choiceId, secondDefense.instanceId);
+  assert.equal(choiceEvent.targetCardInstanceId, secondDefense.instanceId);
+  assert.equal(choiceEvent.targetDefinitionId, secondDefense.definitionId);
 });
 
 test("target choice strategy routes a non-first market card to its handler", () => {

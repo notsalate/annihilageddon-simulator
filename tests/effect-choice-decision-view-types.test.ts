@@ -46,6 +46,7 @@ type DecisionChoiceDoesNotExposeHiddenStateAssertions = [
   AssertFalse<
     "targetDefinitionIds" extends keyof CardTargetChoice ? true : false
   >,
+  AssertFalse<"targetDefinitionId" extends keyof DefenseChoice ? true : false>,
   Assert<"cost" extends keyof BotBuyAction ? true : false>,
 ];
 

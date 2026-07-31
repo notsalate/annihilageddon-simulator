@@ -194,7 +194,6 @@ export interface RuntimeEffectDecisionDefense {
   readonly choiceKind: "defense";
   readonly choiceId: string;
   readonly targetCardInstanceId?: string;
-  readonly targetDefinitionId?: string;
 }
 
 export interface RuntimeEffectDecisionDirectionalPlayerTarget {

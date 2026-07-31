@@ -1148,7 +1148,6 @@ function createRuntimeEffectDecisionChoice(
         ? {}
         : {
             targetCardInstanceId: choice.card.instanceId,
-            targetDefinitionId: choice.card.definitionId,
           }),
     };
   }
@@ -1192,10 +1191,7 @@ function matchesDecisionChoice(
     );
   }
   if (choice.choiceKind === "defense" && selection.choiceKind === "defense") {
-    return (
-      choice.card?.instanceId === selection.targetCardInstanceId &&
-      choice.card?.definitionId === selection.targetDefinitionId
-    );
+    return choice.card?.instanceId === selection.targetCardInstanceId;
   }
   if (
     choice.choiceKind === "directionalPlayerTarget" &&
