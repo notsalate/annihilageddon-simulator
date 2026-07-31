@@ -358,8 +358,29 @@ function checkTriggerDispatchOwnership(relativePath, sourceFile) {
 
 function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
   let sourceKindPolicy;
+  const runtimeEffectDecoderMapAliases = new Set(
+    runtimeEffectDecoderBypassExports
+  );
 
   function visit(node) {
+    if (
+      relativePath === "src/engine/runtime-effect-decoder.ts" &&
+      isTopLevelRuntimeEffectDecoderMapAlias(
+        node,
+        runtimeEffectDecoderMapAliases
+      )
+    ) {
+      for (const declaration of node.declarationList.declarations) {
+        if (
+          ts.isIdentifier(declaration.name) &&
+          declaration.initializer !== undefined &&
+          ts.isIdentifier(declaration.initializer) &&
+          runtimeEffectDecoderMapAliases.has(declaration.initializer.text)
+        ) {
+          runtimeEffectDecoderMapAliases.add(declaration.name.text);
+        }
+      }
+    }
     if (
       ts.isImportDeclaration(node) &&
       ts.isStringLiteral(node.moduleSpecifier) &&
@@ -391,7 +412,7 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
       }
       if (relativePath === "src/engine/runtime-effect-decoder.ts") {
         for (const exportedName of getExportedLocalNames(node)) {
-          if (runtimeEffectDecoderBypassExports.has(exportedName)) {
+          if (runtimeEffectDecoderMapAliases.has(exportedName)) {
             effectRuntimeCatalogBoundaryViolations.push(
               `${relativePath} re-exports decoder-map bypass ${exportedName}`
             );
@@ -417,7 +438,7 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
     }
     if (
       relativePath === "src/engine/runtime-effect-decoder.ts" &&
-      isExportedRuntimeEffectDecoderBypass(node)
+      isExportedRuntimeEffectDecoderBypass(node, runtimeEffectDecoderMapAliases)
     ) {
       effectRuntimeCatalogBoundaryViolations.push(
         `${relativePath} exports decoder-map bypass runtimeEffectDecoders`
@@ -519,8 +540,22 @@ function isExportedCatalogBypass(node) {
   return isExportedNamedDeclaration(node, effectRuntimeCatalogBypassExports);
 }
 
-function isExportedRuntimeEffectDecoderBypass(node) {
-  return isExportedNamedDeclaration(node, runtimeEffectDecoderBypassExports);
+function isExportedRuntimeEffectDecoderBypass(node, aliases) {
+  return isExportedNamedDeclaration(node, aliases);
+}
+
+function isTopLevelRuntimeEffectDecoderMapAlias(node, aliases) {
+  return (
+    ts.isVariableStatement(node) &&
+    ts.isSourceFile(node.parent) &&
+    node.declarationList.declarations.some(
+      (declaration) =>
+        ts.isIdentifier(declaration.name) &&
+        declaration.initializer !== undefined &&
+        ts.isIdentifier(declaration.initializer) &&
+        aliases.has(declaration.initializer.text)
+    )
+  );
 }
 
 function isExportedNamedDeclaration(node, forbiddenNames) {

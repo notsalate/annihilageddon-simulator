@@ -366,7 +366,7 @@ test("typed-access guard rejects aliased and direct Catalog bypass re-exports", 
   );
 });
 
-test("typed-access guard rejects direct decoder-map exports", () => {
+test("typed-access guard rejects decoder-map exports through aliases", () => {
   const fixtureRoot = createEngineFixture({
     "effect-runtime-registry.ts": `
       function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
@@ -375,12 +375,23 @@ test("typed-access guard rejects direct decoder-map exports", () => {
         }
       }
     `,
-    "runtime-effect-decoder.ts": "export const runtimeEffectDecoders = {};\n",
+    "runtime-effect-decoder.ts": `
+      const publicDecoderMap = runtimeEffectDecoders;
+      const transitiveDecoderMap = publicDecoderMap;
+      export { transitiveDecoderMap as exposedDecoderMap };
+      export const directDecoderMap = runtimeEffectDecoders;
+      const unrelatedDecoderMap = {};
+      export { unrelatedDecoderMap };
+    `,
   });
 
   const result = run("check-engine-typed-access.mjs", fixtureRoot);
 
   assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /re-exports decoder-map bypass transitiveDecoderMap/
+  );
   assert.match(
     result.stderr,
     /exports decoder-map bypass runtimeEffectDecoders/
