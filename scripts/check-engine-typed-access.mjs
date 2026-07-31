@@ -98,6 +98,7 @@ const effectRuntimeCatalogBypassExports = new Set([
   "EffectRuntimeCatalogDefinition",
   "EffectRuntimeCatalogResolution",
 ]);
+const runtimeEffectDecoderBypassExports = new Set(["runtimeEffectDecoders"]);
 const approvedRuntimeEffectDecoderImporters = new Set([
   "src/engine/data.ts",
   "src/engine/effect-runtime-registry.ts",
@@ -388,6 +389,15 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
           }
         }
       }
+      if (relativePath === "src/engine/runtime-effect-decoder.ts") {
+        for (const exportedName of getExportedLocalNames(node)) {
+          if (runtimeEffectDecoderBypassExports.has(exportedName)) {
+            effectRuntimeCatalogBoundaryViolations.push(
+              `${relativePath} re-exports decoder-map bypass ${exportedName}`
+            );
+          }
+        }
+      }
     }
 
     if (relativePath === "src/engine/effect-runtime-registry.ts") {
@@ -404,6 +414,14 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
       if (ts.isFunctionDeclaration(node) && isSourceKindPolicy(node)) {
         sourceKindPolicy = node;
       }
+    }
+    if (
+      relativePath === "src/engine/runtime-effect-decoder.ts" &&
+      isExportedRuntimeEffectDecoderBypass(node)
+    ) {
+      effectRuntimeCatalogBoundaryViolations.push(
+        `${relativePath} exports decoder-map bypass runtimeEffectDecoders`
+      );
     }
     ts.forEachChild(node, visit);
   }
@@ -498,14 +516,22 @@ function isStringArrayType(type) {
 }
 
 function isExportedCatalogBypass(node) {
+  return isExportedNamedDeclaration(node, effectRuntimeCatalogBypassExports);
+}
+
+function isExportedRuntimeEffectDecoderBypass(node) {
+  return isExportedNamedDeclaration(node, runtimeEffectDecoderBypassExports);
+}
+
+function isExportedNamedDeclaration(node, forbiddenNames) {
   if (!hasExportModifier(node)) return false;
   if (ts.isVariableStatement(node)) {
     return node.declarationList.declarations.some((declaration) =>
-      effectRuntimeCatalogBypassExports.has(declaration.name.getText())
+      forbiddenNames.has(declaration.name.getText())
     );
   }
   const name = getDeclarationName(node);
-  return name !== undefined && effectRuntimeCatalogBypassExports.has(name);
+  return name !== undefined && forbiddenNames.has(name);
 }
 
 function getDeclarationName(node) {
@@ -543,13 +569,10 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
       ) {
         for (const element of node.importClause.namedBindings.elements) {
           if (!element.isTypeOnly) {
-            importedLedgerApis.set(
-              element.name.text,
-              {
-                binding: element,
-                exportedName: element.propertyName?.text ?? element.name.text,
-              }
-            );
+            importedLedgerApis.set(element.name.text, {
+              binding: element,
+              exportedName: element.propertyName?.text ?? element.name.text,
+            });
           }
         }
       }
@@ -573,7 +596,8 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
       const importedApi = importedLedgerApis.get(node.expression.text);
       if (
         importedApi !== undefined &&
-        resolveValueBinding(node.expression, valueBindings) === importedApi.binding
+        resolveValueBinding(node.expression, valueBindings) ===
+          importedApi.binding
       ) {
         calledImportBindings.add(importedApi.binding);
       }
@@ -876,9 +900,7 @@ function collectValueBindings(sourceFile) {
         add(
           name.text,
           name,
-          isVarDeclaration(node)
-            ? findVarScope(node)
-            : findLexicalScope(node)
+          isVarDeclaration(node) ? findVarScope(node) : findLexicalScope(node)
         );
       }
     }
@@ -924,7 +946,9 @@ function resolveValueBinding(identifier, bindings) {
   const candidates = bindings.get(identifier.text);
   if (candidates === undefined) return undefined;
   for (let current = identifier.parent; current; current = current.parent) {
-    const matches = candidates.filter((candidate) => candidate.scope === current);
+    const matches = candidates.filter(
+      (candidate) => candidate.scope === current
+    );
     if (matches.length === 1) return matches[0].binding;
     if (matches.length > 1) return undefined;
   }
@@ -987,9 +1011,14 @@ function isPlayerStateCollectionCallbackParameter(parameter, sourceFile) {
     if (!ts.isFunctionLike(current)) continue;
     const collectionParameter = current.parameters.find(
       (candidate) =>
-        ts.isIdentifier(candidate.name) && candidate.name.text === collection.text
+        ts.isIdentifier(candidate.name) &&
+        candidate.name.text === collection.text
     );
-    return collectionParameter?.type?.getText(sourceFile).includes("PlayerState[]") ?? false;
+    return (
+      collectionParameter?.type
+        ?.getText(sourceFile)
+        .includes("PlayerState[]") ?? false
+    );
   }
   return false;
 }

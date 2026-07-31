@@ -7,17 +7,10 @@ import {
 } from "../src/engine/effect-runtime-registry.js";
 import type { RuntimeEffectForId } from "../src/engine/runtime-effect.js";
 
-// @ts-expect-error Catalog handlers must remain internal to prevent raw-payload execution.
-import type { EffectRuntimeHandler } from "../src/engine/effect-runtime-registry.js";
-// @ts-expect-error The decoder map must remain private to its decoding module.
-import type { runtimeEffectDecoders } from "../src/engine/runtime-effect-decoder.js";
-
-void (null as unknown as EffectRuntimeHandler);
-void (null as unknown as typeof runtimeEffectDecoders);
-
 type Equal<Left, Right> =
-  (<Value>() => Value extends Left ? 1 : 2) extends <Value>() =>
-    Value extends Right ? 1 : 2
+  (<Value>() => Value extends Left ? 1 : 2) extends <
+    Value,
+  >() => Value extends Right ? 1 : 2
     ? true
     : false;
 type Expect<Value extends true> = Value;
@@ -29,13 +22,14 @@ type AddPowerHasNoDefenseDestination = Expect<
   >
 >;
 
-const addPowerOperations: EffectRuntimeCatalogOperationOverridesForTesting<"add_power"> = {
-  execute(_state, _player, effect) {
-    const amount: number = effect.amount;
-    void amount;
-    return { ok: true };
-  },
-};
+const addPowerOperations: EffectRuntimeCatalogOperationOverridesForTesting<"add_power"> =
+  {
+    execute(_state, _player, effect) {
+      const amount: number = effect.amount;
+      void amount;
+      return { ok: true };
+    },
+  };
 
 const negativeContracts: [AddPowerHasNoDefenseDestination] = [true];
 void negativeContracts;

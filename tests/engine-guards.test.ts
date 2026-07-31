@@ -366,6 +366,27 @@ test("typed-access guard rejects aliased and direct Catalog bypass re-exports", 
   );
 });
 
+test("typed-access guard rejects direct decoder-map exports", () => {
+  const fixtureRoot = createEngineFixture({
+    "effect-runtime-registry.ts": `
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+    "runtime-effect-decoder.ts": "export const runtimeEffectDecoders = {};\n",
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /exports decoder-map bypass runtimeEffectDecoders/
+  );
+});
+
 test("typed-access guard accepts a renamed explicit source-kind policy helper", () => {
   const fixtureRoot = createEngineFixture({
     "effect-runtime-registry.ts": `
@@ -558,15 +579,36 @@ test("typed-access guard sees a Ledger alias shadow inside a loop scope", () => 
 test("typed-access guard keeps Ledger aliases outside every lexical sibling scope", () => {
   const siblingScopes = [
     ["Program", ""],
-    ["FunctionLike", "function sibling() { const listLocations = () => {}; listLocations(); }"],
+    [
+      "FunctionLike",
+      "function sibling() { const listLocations = () => {}; listLocations(); }",
+    ],
     ["Block", "if (true) { const listLocations = () => {}; listLocations(); }"],
-    ["CaseBlock", "switch (0) { case 0: const listLocations = () => {}; listLocations(); break; }"],
-    ["Catch", "try {} catch { const listLocations = () => {}; listLocations(); }"],
-    ["For", "for (const listLocations = () => {}; false;) { listLocations(); }"],
+    [
+      "CaseBlock",
+      "switch (0) { case 0: const listLocations = () => {}; listLocations(); break; }",
+    ],
+    [
+      "Catch",
+      "try {} catch { const listLocations = () => {}; listLocations(); }",
+    ],
+    [
+      "For",
+      "for (const listLocations = () => {}; false;) { listLocations(); }",
+    ],
     ["ForOf", "for (const listLocations of [() => {}]) { listLocations(); }"],
-    ["ForIn", "for (const listLocations in { local: () => {} }) { void listLocations; }"],
-    ["ModuleBlock", "namespace Sibling { const listLocations = () => {}; listLocations(); }"],
-    ["ClassStaticBlock", "class Sibling { static { const listLocations = () => {}; listLocations(); } }"],
+    [
+      "ForIn",
+      "for (const listLocations in { local: () => {} }) { void listLocations; }",
+    ],
+    [
+      "ModuleBlock",
+      "namespace Sibling { const listLocations = () => {}; listLocations(); }",
+    ],
+    [
+      "ClassStaticBlock",
+      "class Sibling { static { const listLocations = () => {}; listLocations(); } }",
+    ],
   ] as const;
 
   for (const [scopeName, siblingScope] of siblingScopes) {
