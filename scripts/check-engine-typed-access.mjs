@@ -946,6 +946,8 @@ function findLexicalScope(node) {
   for (let current = node; current; current = current.parent) {
     if (
       ts.isBlock(current) ||
+      ts.isModuleBlock(current) ||
+      ts.isClassStaticBlockDeclaration(current) ||
       ts.isCaseBlock(current) ||
       ts.isForStatement(current) ||
       ts.isForOfStatement(current) ||

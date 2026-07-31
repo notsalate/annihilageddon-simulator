@@ -555,6 +555,66 @@ test("typed-access guard sees a Ledger alias shadow inside a loop scope", () => 
   assert.match(result.stderr, /without calling a Control Ledger seam/);
 });
 
+test("typed-access guard keeps Ledger aliases outside every lexical sibling scope", () => {
+  const siblingScopes = [
+    ["Program", ""],
+    ["FunctionLike", "function sibling() { const listLocations = () => {}; listLocations(); }"],
+    ["Block", "if (true) { const listLocations = () => {}; listLocations(); }"],
+    ["CaseBlock", "switch (0) { case 0: const listLocations = () => {}; listLocations(); break; }"],
+    ["Catch", "try {} catch { const listLocations = () => {}; listLocations(); }"],
+    ["For", "for (const listLocations = () => {}; false;) { listLocations(); }"],
+    ["ForOf", "for (const listLocations of [() => {}]) { listLocations(); }"],
+    ["ForIn", "for (const listLocations in { local: () => {} }) { void listLocations; }"],
+    ["ModuleBlock", "namespace Sibling { const listLocations = () => {}; listLocations(); }"],
+    ["ClassStaticBlock", "class Sibling { static { const listLocations = () => {}; listLocations(); } }"],
+  ] as const;
+
+  for (const [scopeName, siblingScope] of siblingScopes) {
+    const fixtureRoot = createPhysicalZoneFixture(`
+      import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+      interface PlayerState { hand: unknown[]; deck: unknown[] }
+      export function listInventory(players: PlayerState[]) {
+        listLocations();
+        return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+      }
+      ${siblingScope}
+    `);
+    assert.equal(
+      run("check-engine-typed-access.mjs", fixtureRoot).status,
+      0,
+      scopeName
+    );
+  }
+});
+
+test("typed-access guard sees Ledger shadows inside module and static-block scopes", () => {
+  const moduleFixture = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    namespace Unsafe {
+      export function listInventory(players: PlayerState[]) {
+        const listLocations = () => {};
+        listLocations();
+        return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+      }
+    }
+  `);
+  const staticFixture = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    const players: PlayerState[] = [];
+    class Unsafe {
+      static {
+        const listLocations = () => {};
+        listLocations();
+        void players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+      }
+    }
+  `);
+  assert.equal(run("check-engine-typed-access.mjs", moduleFixture).status, 1);
+  assert.equal(run("check-engine-typed-access.mjs", staticFixture).status, 1);
+});
+
 test("typed-access guard ignores a Ledger alias shadowed by a parameter", () => {
   const fixtureRoot = createPhysicalZoneFixture(`
     import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
