@@ -1836,6 +1836,46 @@ test("supported executable Mayhem attack passes executable effect validation", (
   assert.deepEqual(result, { ok: true });
 });
 
+test("multi-target and Mayhem attacks require one nested target representation", () => {
+  const cases = [
+    {
+      effectId: "multi_target_attack",
+      selector: "opponentPlayers",
+      conflictingSelector: "allPlayers",
+    },
+    {
+      effectId: "mayhem_attack",
+      selector: "allPlayers",
+      conflictingSelector: "opponentPlayers",
+    },
+  ] as const;
+
+  for (const { effectId, selector, conflictingSelector } of cases) {
+    const payload = {
+      effectId,
+      timing: "onPlay",
+      amount: 4,
+      target: { selector },
+    };
+
+    assert.deepEqual(validateRawRuntimeEffect(effectId, "Fixture", payload), []);
+    assert.ok(
+      validateRawRuntimeEffect(effectId, "Fixture", {
+        ...payload,
+        targetSelector: conflictingSelector,
+      }).some((error) => error.includes("unsupported field targetSelector"))
+    );
+    assert.ok(
+      validateRawRuntimeEffect(effectId, "Fixture", {
+        effectId,
+        timing: "onPlay",
+        amount: 4,
+        targetSelector: selector,
+      }).some((error) => error.includes("target is required"))
+    );
+  }
+});
+
 test("combat effect decoders reject invalid concrete payloads", () => {
   const combatEffectIds = [
     "deal_damage",

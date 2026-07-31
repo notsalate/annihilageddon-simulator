@@ -232,6 +232,22 @@ const runtimeTarget: ValueDecoder<RuntimeEffectTarget> = (label, raw) => {
   return failure(`${label}.targetType is unsupported`);
 };
 
+function selectorTarget<Selector extends RuntimeEffectTargetSelector>(
+  expectedSelector: Selector
+): ValueDecoder<{ selector: Selector }> {
+  return (label, raw) => {
+    const decoded = runtimeTarget(label, raw);
+    if (!decoded.ok) return decoded;
+    if (
+      "selector" in decoded.value &&
+      decoded.value.selector === expectedSelector
+    ) {
+      return success({ selector: expectedSelector });
+    }
+    return failure(`${label} must use selector ${expectedSelector}`);
+  };
+}
+
 const runtimeCondition: ValueDecoder<RuntimeEffectCondition> = (label, raw) => {
   if (!isPlainRecord(raw)) return failure(`${label} must be an object`);
   if (raw["conditionId"] === "control_count") {
@@ -1073,11 +1089,10 @@ const runtimeEffectDecoders: {
     effectId: required(literal("multi_target_attack")),
     timing: optionalTiming,
     amount: required(positiveInteger),
-    target: optionalTarget,
-    targetSelector: optionalTargetSelector,
+    target: required(selectorTarget("opponentPlayers")),
     onDamageDealt: optionalAttackBranches,
     onKill: optionalAttackBranches,
-  }, requireTargetSelector("multi-target attack", ["opponentPlayers"])),
+  }, requireNestedTargetSelector("multi-target attack", "opponentPlayers")),
   optional_spend_chip_attack_damage: defineDecoder(
     "optional_spend_chip_attack_damage",
     {
@@ -1267,9 +1282,8 @@ const runtimeEffectDecoders: {
     effectId: required(literal("mayhem_attack")),
     timing: optionalTiming,
     amount: required(positiveInteger),
-    target: optionalTarget,
-    targetSelector: optionalTargetSelector,
-  }, requireTargetSelector("Mayhem attack", ["allPlayers"])),
+    target: required(selectorTarget("allPlayers")),
+  }, requireNestedTargetSelector("Mayhem attack", "allPlayers")),
   mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status:
     defineDecoder(
       "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",

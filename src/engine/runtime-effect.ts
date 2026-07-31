@@ -586,8 +586,9 @@ export type DirectionalChainAttackRuntimeEffect = EffectWithOptionalTiming<"dire
   AttackBranches;
 export type MultiTargetAttackRuntimeEffect = EffectWithOptionalTiming<"multi_target_attack"> &
   PositiveAmount &
-  Targetable &
-  AttackBranches;
+  AttackBranches & {
+    target: RuntimeEffectSelectorTarget & { selector: "opponentPlayers" };
+  };
 export type OptionalSpendChipAttackDamageRuntimeEffect = EffectWithOptionalTiming<"optional_spend_chip_attack_damage"> &
   PositiveAmount &
   Targetable &
@@ -746,7 +747,9 @@ export interface OngoingEffectPayloadMap {
 
 export type MayhemAttackRuntimeEffect = EffectWithOptionalTiming<"mayhem_attack"> &
   PositiveAmount &
-  Targetable;
+  {
+    target: RuntimeEffectSelectorTarget & { selector: "allPlayers" };
+  };
 export type MayhemEachDinglerChoosePayLifeOrChipToRemoveStatusRuntimeEffect = TimedEffect<
   "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
   "onMayhemResolve"
