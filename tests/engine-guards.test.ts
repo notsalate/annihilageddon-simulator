@@ -376,12 +376,25 @@ test("typed-access guard rejects decoder-map exports through aliases", () => {
       }
     `,
     "runtime-effect-decoder.ts": `
+      let assignedDecoderMap;
+      assignedDecoderMap = runtimeEffectDecoders;
       const publicDecoderMap = runtimeEffectDecoders;
       const transitiveDecoderMap = publicDecoderMap;
       export { transitiveDecoderMap as exposedDecoderMap };
       export const directDecoderMap = runtimeEffectDecoders;
+      export { assignedDecoderMap };
+      export const parenthesizedDecoderMap = (runtimeEffectDecoders);
+      export const assertedDecoderMap = runtimeEffectDecoders as unknown;
+      export const satisfiedDecoderMap = runtimeEffectDecoders satisfies object;
+      export const nonNullDecoderMap = runtimeEffectDecoders!;
+      export const objectWrapper = { decoderMap: runtimeEffectDecoders };
+      export const arrayWrapper = [runtimeEffectDecoders];
+      export const closureWrapper = () => runtimeEffectDecoders;
+      export default { decoderMap: runtimeEffectDecoders };
       const unrelatedDecoderMap = {};
       export { unrelatedDecoderMap };
+      type DecoderMapType = typeof runtimeEffectDecoders;
+      export type { DecoderMapType };
     `,
   });
 
@@ -392,10 +405,24 @@ test("typed-access guard rejects decoder-map exports through aliases", () => {
     result.stderr,
     /re-exports decoder-map bypass transitiveDecoderMap/
   );
+  assert.match(result.stderr, /exports decoder-map bypass directDecoderMap/);
   assert.match(
     result.stderr,
-    /exports decoder-map bypass runtimeEffectDecoders/
+    /re-exports decoder-map bypass assignedDecoderMap/
   );
+  assert.match(
+    result.stderr,
+    /exports decoder-map bypass parenthesizedDecoderMap/
+  );
+  assert.match(result.stderr, /exports decoder-map bypass assertedDecoderMap/);
+  assert.match(result.stderr, /exports decoder-map bypass satisfiedDecoderMap/);
+  assert.match(result.stderr, /exports decoder-map bypass nonNullDecoderMap/);
+  assert.match(result.stderr, /exports decoder-map bypass objectWrapper/);
+  assert.match(result.stderr, /exports decoder-map bypass arrayWrapper/);
+  assert.match(result.stderr, /exports decoder-map bypass closureWrapper/);
+  assert.match(result.stderr, /exports decoder-map bypass default/);
+  assert.doesNotMatch(result.stderr, /unrelatedDecoderMap/);
+  assert.doesNotMatch(result.stderr, /DecoderMapType/);
 });
 
 test("typed-access guard accepts a renamed explicit source-kind policy helper", () => {

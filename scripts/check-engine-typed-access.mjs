@@ -358,29 +358,12 @@ function checkTriggerDispatchOwnership(relativePath, sourceFile) {
 
 function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
   let sourceKindPolicy;
-  const runtimeEffectDecoderMapAliases = new Set(
-    runtimeEffectDecoderBypassExports
-  );
+  const runtimeEffectDecoderMapDependencies =
+    relativePath === "src/engine/runtime-effect-decoder.ts"
+      ? collectRuntimeEffectDecoderMapDependencies(sourceFile)
+      : undefined;
 
   function visit(node) {
-    if (
-      relativePath === "src/engine/runtime-effect-decoder.ts" &&
-      isTopLevelRuntimeEffectDecoderMapAlias(
-        node,
-        runtimeEffectDecoderMapAliases
-      )
-    ) {
-      for (const declaration of node.declarationList.declarations) {
-        if (
-          ts.isIdentifier(declaration.name) &&
-          declaration.initializer !== undefined &&
-          ts.isIdentifier(declaration.initializer) &&
-          runtimeEffectDecoderMapAliases.has(declaration.initializer.text)
-        ) {
-          runtimeEffectDecoderMapAliases.add(declaration.name.text);
-        }
-      }
-    }
     if (
       ts.isImportDeclaration(node) &&
       ts.isStringLiteral(node.moduleSpecifier) &&
@@ -412,7 +395,12 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
       }
       if (relativePath === "src/engine/runtime-effect-decoder.ts") {
         for (const exportedName of getExportedLocalNames(node)) {
-          if (runtimeEffectDecoderMapAliases.has(exportedName)) {
+          if (
+            hasRuntimeEffectDecoderMapDependency(
+              exportedName,
+              runtimeEffectDecoderMapDependencies
+            )
+          ) {
             effectRuntimeCatalogBoundaryViolations.push(
               `${relativePath} re-exports decoder-map bypass ${exportedName}`
             );
@@ -438,10 +426,25 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
     }
     if (
       relativePath === "src/engine/runtime-effect-decoder.ts" &&
-      isExportedRuntimeEffectDecoderBypass(node, runtimeEffectDecoderMapAliases)
+      isExportedRuntimeEffectDecoderBypass(
+        node,
+        runtimeEffectDecoderMapDependencies
+      )
     ) {
       effectRuntimeCatalogBoundaryViolations.push(
-        `${relativePath} exports decoder-map bypass runtimeEffectDecoders`
+        `${relativePath} exports decoder-map bypass ${getExportedDeclarationNames(node).join(", ")}`
+      );
+    }
+    if (
+      relativePath === "src/engine/runtime-effect-decoder.ts" &&
+      ts.isExportAssignment(node) &&
+      expressionDependsOnRuntimeEffectDecoderMap(
+        node.expression,
+        runtimeEffectDecoderMapDependencies
+      )
+    ) {
+      effectRuntimeCatalogBoundaryViolations.push(
+        `${relativePath} exports decoder-map bypass default`
       );
     }
     ts.forEachChild(node, visit);
@@ -540,22 +543,112 @@ function isExportedCatalogBypass(node) {
   return isExportedNamedDeclaration(node, effectRuntimeCatalogBypassExports);
 }
 
-function isExportedRuntimeEffectDecoderBypass(node, aliases) {
-  return isExportedNamedDeclaration(node, aliases);
+function isExportedRuntimeEffectDecoderBypass(node, dependencies) {
+  if (!hasExportModifier(node)) return false;
+  return getExportedDeclarationNames(node).some((name) =>
+    hasRuntimeEffectDecoderMapDependency(name, dependencies)
+  );
 }
 
-function isTopLevelRuntimeEffectDecoderMapAlias(node, aliases) {
-  return (
-    ts.isVariableStatement(node) &&
-    ts.isSourceFile(node.parent) &&
-    node.declarationList.declarations.some(
-      (declaration) =>
-        ts.isIdentifier(declaration.name) &&
-        declaration.initializer !== undefined &&
-        ts.isIdentifier(declaration.initializer) &&
-        aliases.has(declaration.initializer.text)
-    )
+function getExportedDeclarationNames(node) {
+  if (ts.isVariableStatement(node)) {
+    return node.declarationList.declarations.flatMap((declaration) =>
+      ts.isIdentifier(declaration.name) ? [declaration.name.text] : []
+    );
+  }
+  const name = getDeclarationName(node);
+  return name === undefined ? [] : [name];
+}
+
+function collectRuntimeEffectDecoderMapDependencies(sourceFile) {
+  const dependencies = new Map(
+    [...runtimeEffectDecoderBypassExports].map((name) => [name, new Set()])
   );
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name)) continue;
+        addRuntimeEffectDecoderMapDependencies(
+          dependencies,
+          declaration.name.text,
+          declaration.initializer
+        );
+      }
+      continue;
+    }
+    if (
+      ts.isExpressionStatement(statement) &&
+      ts.isBinaryExpression(statement.expression) &&
+      statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(statement.expression.left)
+    ) {
+      addRuntimeEffectDecoderMapDependencies(
+        dependencies,
+        statement.expression.left.text,
+        statement.expression.right
+      );
+    }
+  }
+
+  return dependencies;
+}
+
+function addRuntimeEffectDecoderMapDependencies(
+  dependencies,
+  name,
+  expression
+) {
+  if (expression === undefined) return;
+  const referencedNames = collectValueReferences(expression);
+  if (referencedNames.size === 0) return;
+  const current = dependencies.get(name) ?? new Set();
+  for (const referencedName of referencedNames) current.add(referencedName);
+  dependencies.set(name, current);
+}
+
+function expressionDependsOnRuntimeEffectDecoderMap(expression, dependencies) {
+  return [...collectValueReferences(expression)].some((name) =>
+    hasRuntimeEffectDecoderMapDependency(name, dependencies)
+  );
+}
+
+function hasRuntimeEffectDecoderMapDependency(
+  name,
+  dependencies,
+  visited = new Set()
+) {
+  if (name === undefined || dependencies === undefined) return false;
+  if (runtimeEffectDecoderBypassExports.has(name)) return true;
+  if (visited.has(name)) return false;
+  visited.add(name);
+  return [...(dependencies.get(name) ?? [])].some((dependency) =>
+    hasRuntimeEffectDecoderMapDependency(dependency, dependencies, visited)
+  );
+}
+
+function collectValueReferences(node) {
+  const references = new Set();
+  function visit(current) {
+    if (ts.isTypeNode(current)) return;
+    if (ts.isIdentifier(current) && isValueReferenceIdentifier(current)) {
+      references.add(current.text);
+    }
+    ts.forEachChild(current, visit);
+  }
+  visit(node);
+  return references;
+}
+
+function isValueReferenceIdentifier(node) {
+  const parent = node.parent;
+  if (ts.isShorthandPropertyAssignment(parent)) return true;
+  if (ts.isPropertyAccessExpression(parent) && parent.name === node)
+    return false;
+  if (ts.isPropertyAssignment(parent) && parent.name === node) return false;
+  if (ts.isBindingElement(parent) && parent.name === node) return false;
+  if ("name" in parent && parent.name === node) return false;
+  return true;
 }
 
 function isExportedNamedDeclaration(node, forbiddenNames) {
