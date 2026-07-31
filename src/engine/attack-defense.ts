@@ -128,7 +128,7 @@ function createDefenseMutationSnapshot(
     turn: structuredClone(state.turn),
     cardZones: listPhysicalCardZoneDescriptors(state).map((descriptor) => ({
       zoneName: descriptor.zoneName,
-      cards: descriptor.read(),
+      cards: [...descriptor.read()],
     })),
     players: state.players.map((player) => ({
       player,

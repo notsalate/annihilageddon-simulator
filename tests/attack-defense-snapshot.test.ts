@@ -15,6 +15,7 @@ import {
 import { createAttackAmountState } from "../src/engine/attack-resolution.js";
 import {
   listPhysicalCardZoneDescriptors,
+  registerPhysicalCardZoneDescriptorFactory,
   type PhysicalCardZoneDescriptor,
 } from "../src/engine/control-ledger.js";
 import {
@@ -284,6 +285,69 @@ test("failed defense branches restore membership and mutable cards in every phys
       );
     });
   }
+});
+
+test("failed defense branch restores an extension zone whose storage mutates in place", () => {
+  const { state, attacker, defender, defenseCard } =
+    createRollbackScenario(47540);
+  const originalCard: CardInstance = {
+    instanceId: markCardInstanceId("fixture-extension-original-card"),
+    definitionId: defenseCard.definitionId,
+    ownerId: attacker.playerId,
+    marketChips: 4,
+  };
+  const replacementCard: CardInstance = {
+    instanceId: markCardInstanceId("fixture-extension-replacement-card"),
+    definitionId: defenseCard.definitionId,
+    ownerId: attacker.playerId,
+    marketChips: 9,
+  };
+  const extensionCards = [originalCard];
+  registerPhysicalCardZoneDescriptorFactory(
+    state,
+    Object.assign(
+      () => ({
+        cardinality: "many" as const,
+        scoringEligible: false,
+        read: () => extensionCards,
+        replace: (cards: readonly CardInstance[]) => {
+          extensionCards.splice(0, extensionCards.length, ...cards);
+        },
+      }),
+      {
+        identity: "fixture-defense-rollback-extension-zone",
+        zoneName: "fixture.extension-zone",
+      }
+    )
+  );
+
+  const services: AttackDefenseServices = {
+    chooseEffectChoice(_state, _player, _source, _effectId, choices) {
+      return choices.find(
+        (choice) =>
+          choice.choiceKind === "defense" && choice.card === defenseCard
+      );
+    },
+    executeDefenseEffects(branchState) {
+      mustGetDescriptor(branchState, "fixture.extension-zone").replace([
+        replacementCard,
+      ]);
+      return { ok: false, error: "fixture extension branch failure" };
+    },
+  };
+
+  const result = resolveDefenseWindow(
+    state,
+    defender,
+    redirectableAttack(attacker),
+    services
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "fixture extension branch failure",
+  });
+  assert.deepEqual(extensionCards, [originalCard]);
 });
 
 function createScenario(seed: number): GameState {
