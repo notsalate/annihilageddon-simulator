@@ -5031,6 +5031,58 @@ test("Wizard Property 006 and 008 apply topdecking after the player chooses appl
   }
 });
 
+test("mandatory topdeck replacement applies without offering a decline", () => {
+  const cases = [
+    { optional: false, suffix: "false" },
+    { optional: "omitted", suffix: "omitted" },
+  ] as const;
+  for (const { optional, suffix } of cases) {
+    const state = initializeGame({
+      rootDir,
+      dataPackPath: playableRuntimeDataPackPath,
+      seed: 60615,
+    });
+    const player = mustGetPlayer(state, state.activePlayerId);
+    replaceFirstWizardProperty(
+      state,
+      player,
+      createTopdeckOnGainWizardProperty(
+        `fixture-mandatory-topdeck-${suffix}`,
+        ["creature"],
+        optional
+      )
+    );
+    const card = addFixtureMarketCard(
+      state,
+      `fixture-mandatory-topdeck-card-${suffix}`,
+      ["creature"],
+      0
+    );
+    state.effectChoiceStrategy = ({ effectId }) => {
+      assert.notEqual(effectId, "topdeck_gained_card");
+      return undefined;
+    };
+
+    const result = applyAction(state, {
+      type: "buyMarketCard",
+      source: "mainMarket",
+      cardInstanceId: card.instanceId,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(player.deck[0], card);
+    assert.equal(player.discard.includes(card), false);
+    assert.equal(
+      state.eventLog.some(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.effectId === "topdeck_gained_card"
+      ),
+      false
+    );
+  }
+});
+
 test("Wizard Property 008 lets the player decline topdecking a gained permanent", () => {
   const state = initializeGame({
     rootDir,
@@ -10661,7 +10713,8 @@ function createOnPlayTypeChipWizardProperty(
 
 function createTopdeckOnGainWizardProperty(
   tokenId: string,
-  cardTypes: string[]
+  cardTypes: string[],
+  optional: boolean | "omitted" = true
 ): TokenDefinition {
   return {
     schemaVersion: 1,
@@ -10673,12 +10726,18 @@ function createTopdeckOnGainWizardProperty(
       mappingStatus: "fixture",
       playableInV0: true,
       effects: [
-        {
-          effectId: "topdeck_gained_card",
-          timing: "onGainCard",
-          optional: true,
-          cardTypes,
-        },
+        optional === "omitted"
+          ? {
+              effectId: "topdeck_gained_card",
+              timing: "onGainCard",
+              cardTypes,
+            }
+          : {
+              effectId: "topdeck_gained_card",
+              timing: "onGainCard",
+              optional,
+              cardTypes,
+            },
       ],
       unsupportedMechanics: [],
     },

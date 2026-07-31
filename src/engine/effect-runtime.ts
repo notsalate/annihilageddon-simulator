@@ -282,7 +282,7 @@ export function moveGainedCardToPlayerDestination(
         "onGainCard",
         (decodedEffect) =>
           cardTriggerMatches(decodedEffect, definition)
-            ? { status: "resolved", result: decodedEffect.effectId }
+            ? { status: "resolved", result: decodedEffect }
             : { status: "notApplicable" }
       );
       if (applicability.status === "error") {
@@ -292,18 +292,22 @@ export function moveGainedCardToPlayerDestination(
         continue;
       }
 
-      if (applicability.result === "topdeck_gained_card") {
-        const choice = chooseEffectChoice(
-          state,
-          player,
-          source,
-          "topdeck_gained_card",
-          [
-            { choiceKind: "option", choiceId: "apply" },
-            { choiceKind: "option", choiceId: "decline" },
-          ]
-        );
-        if (choice?.choiceId === "apply") {
+      if (applicability.result.effectId === "topdeck_gained_card") {
+        if (applicability.result.optional === true) {
+          const choice = chooseEffectChoice(
+            state,
+            player,
+            source,
+            "topdeck_gained_card",
+            [
+              { choiceKind: "option", choiceId: "apply" },
+              { choiceKind: "option", choiceId: "decline" },
+            ]
+          );
+          if (choice?.choiceId === "apply") {
+            destination = "deckTop";
+          }
+        } else {
           destination = "deckTop";
         }
         continue;

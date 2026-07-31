@@ -44,6 +44,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Thread execution/validation mode explicitly instead of adding hidden global assumptions.
 - Analysis forks use `forkGameState` to copy mutable state and the current RNG position via `RandomSource.fork()`; immutable definition maps may be shared by reference, while the fork keeps its own event context and continues event/action sequences.
 - Runtime decoder сохраняет `source.image` как presentation metadata для API и у runtime-карт, и у runtime-жетонов; gameplay logic не ветвится по path и не читает image files.
+- `topdeck_gained_card` предлагает выбор `apply`/`decline` только при `optional: true`; отсутствующий флаг и `optional: false` обязательно кладут полученную карту наверх колоды без выбора.
 - Семантика setup-only effects принадлежит `executeSetup` в каталоге runtime-эффектов; `setup.ts` только задаёт порядок, передаёт контекст и собирает типизированные directives.
 - Успешный setup executor может вернуть только типизированную directive с устойчивым идентификатором; отсутствие executor для валидного setup effect является ошибкой конфигурации.
 - Контексты setup execution передают `TokenInstanceId`, `TokenDefinitionId` и `CardDefinitionId`; не ослаблять их до обычных строк.
