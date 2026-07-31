@@ -488,6 +488,28 @@ test("typed-access guard accepts an aliased physical-zone Ledger seam", () => {
   assert.equal(result.status, 0);
 });
 
+test("typed-access guard keeps an aliased Ledger seam outside sibling bindings", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+    function unrelated() {
+      function listLocations() {}
+      listLocations();
+    }
+    if (true) {
+      const { listLocations } = { listLocations: () => {} };
+      listLocations();
+    }
+    void unrelated;
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 0);
+});
+
 test("typed-access guard ignores a Ledger alias shadowed by a parameter", () => {
   const fixtureRoot = createPhysicalZoneFixture(`
     import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";

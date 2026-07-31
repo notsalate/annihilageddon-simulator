@@ -573,11 +573,6 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
       const importedApi = importedLedgerApis.get(node.expression.text);
       if (
         importedApi !== undefined &&
-        isUnambiguousImportBinding(
-          node.expression.text,
-          importedApi.binding,
-          valueBindings
-        ) &&
         resolveValueBinding(node.expression, valueBindings) === importedApi.binding
       ) {
         calledImportBindings.add(importedApi.binding);
@@ -878,7 +873,13 @@ function collectValueBindings(sourceFile) {
     }
     if (ts.isVariableDeclaration(node)) {
       for (const name of collectBindingNames(node.name)) {
-        add(name.text, name, findValueScope(node));
+        add(
+          name.text,
+          name,
+          isVarDeclaration(node)
+            ? findVarScope(node)
+            : findLexicalScope(node)
+        );
       }
     }
     if (ts.isParameter(node)) {
@@ -888,13 +889,14 @@ function collectValueBindings(sourceFile) {
     }
     if (
       (ts.isFunctionDeclaration(node) ||
-        ts.isFunctionExpression(node) ||
         ts.isClassDeclaration(node) ||
-        ts.isClassExpression(node) ||
         ts.isEnumDeclaration(node)) &&
       node.name !== undefined
     ) {
-      add(node.name.text, node.name, findValueScope(node.parent));
+      add(node.name.text, node.name, findLexicalScope(node.parent));
+    }
+    if (ts.isFunctionExpression(node) || ts.isClassExpression(node)) {
+      if (node.name !== undefined) add(node.name.text, node.name, node);
     }
     if (ts.isCatchClause(node) && node.variableDeclaration !== undefined) {
       for (const name of collectBindingNames(node.variableDeclaration.name)) {
@@ -918,30 +920,35 @@ function collectBindingNames(node) {
   return [];
 }
 
-function isUnambiguousImportBinding(name, importBinding, bindings) {
-  const candidates = bindings.get(name);
-  return (
-    candidates !== undefined &&
-    candidates.every((candidate) => candidate.binding === importBinding)
-  );
-}
-
 function resolveValueBinding(identifier, bindings) {
   const candidates = bindings.get(identifier.text);
   if (candidates === undefined) return undefined;
   for (let current = identifier.parent; current; current = current.parent) {
-    const match = candidates.find((candidate) => candidate.scope === current);
-    if (match !== undefined) return match.binding;
+    const matches = candidates.filter((candidate) => candidate.scope === current);
+    if (matches.length === 1) return matches[0].binding;
+    if (matches.length > 1) return undefined;
   }
   return undefined;
 }
 
-function findValueScope(node) {
+function isVarDeclaration(node) {
+  return (node.parent.flags & ts.NodeFlags.BlockScoped) === 0;
+}
+
+function findVarScope(node) {
   for (let current = node.parent; current; current = current.parent) {
+    if (ts.isFunctionLike(current) || ts.isSourceFile(current)) return current;
+  }
+  return node.getSourceFile();
+}
+
+function findLexicalScope(node) {
+  for (let current = node; current; current = current.parent) {
     if (
       ts.isBlock(current) ||
       ts.isSourceFile(current) ||
-      ts.isFunctionLike(current)
+      ts.isFunctionLike(current) ||
+      ts.isCatchClause(current)
     ) {
       return current;
     }
