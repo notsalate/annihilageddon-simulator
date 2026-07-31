@@ -366,6 +366,89 @@ test("typed-access guard rejects aliased and direct Catalog bypass re-exports", 
   );
 });
 
+test("typed-access guard rejects decoder imports exported from an approved module", () => {
+  const fixtureRoot = createEngineFixture({
+    "data.ts": `
+      import { decodeRuntimeEffectForId as importedDecoder } from "./runtime-effect-decoder.js";
+      export { importedDecoder as unsafe };
+    `,
+    "effect-runtime-registry.ts": `
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /exports runtime effect decoder binding importedDecoder/
+  );
+});
+
+test("typed-access guard rejects default exports of Catalog bypass alias chains", () => {
+  const catalogBypassNames = [
+    "effectRuntimeHandlerMap",
+    "effectRuntimeCatalog",
+    "effectRuntimeRegistry",
+    "getEffectRuntimeHandler",
+    "replaceEffectRuntimeHandlerForTesting",
+    "getEffectRuntimeCatalogEntry",
+    "resolveEffectRuntimeCatalogEntry",
+    "EffectRuntimeHandler",
+    "EffectRuntimeEntry",
+    "EffectRuntimeCatalogDefinition",
+    "EffectRuntimeCatalogResolution",
+  ];
+
+  for (const catalogBypassName of catalogBypassNames) {
+    const fixtureRoot = createEngineFixture({
+      "effect-runtime-registry.ts": `
+        const ${catalogBypassName} = {};
+        const firstAlias = ${catalogBypassName};
+        let exposed = firstAlias;
+        export default exposed;
+        function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+          switch (effectId) {
+            case "fixture": return ["card"];
+          }
+        }
+      `,
+    });
+
+    const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+    assert.equal(result.status, 1, catalogBypassName);
+    assert.match(result.stderr, /exports Catalog bypass/);
+  }
+});
+
+test("typed-access guard permits unexported decoder imports in approved modules", () => {
+  const fixtureRoot = createEngineFixture({
+    "data.ts": `
+      import { decodeRuntimeEffectForId } from "./runtime-effect-decoder.js";
+      void decodeRuntimeEffectForId;
+    `,
+    "effect-runtime-registry.ts": `
+      import { decodeRuntimeEffect } from "./runtime-effect-decoder.js";
+      void decodeRuntimeEffect;
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 0);
+});
+
 test("typed-access guard enforces the closed decoder export surface", () => {
   const fixtureRoot = createEngineFixture({
     "effect-runtime-registry.ts": `

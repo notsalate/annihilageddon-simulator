@@ -357,6 +357,9 @@ function checkTriggerDispatchOwnership(relativePath, sourceFile) {
 
 function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
   let sourceKindPolicy;
+  const decoderImportBindings =
+    collectRuntimeEffectDecoderImportBindings(sourceFile);
+  const catalogBypassBindings = collectCatalogBypassBindings(sourceFile);
 
   function visit(node) {
     if (
@@ -388,10 +391,29 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
           }
         }
       }
+      for (const exportedName of getExportedLocalNames(node)) {
+        if (decoderImportBindings.has(exportedName)) {
+          effectRuntimeCatalogBoundaryViolations.push(
+            `${relativePath} exports runtime effect decoder binding ${exportedName}`
+          );
+        }
+        if (
+          relativePath === "src/engine/effect-runtime-registry.ts" &&
+          catalogBypassBindings.has(exportedName) &&
+          !effectRuntimeCatalogBypassExports.has(exportedName)
+        ) {
+          effectRuntimeCatalogBoundaryViolations.push(
+            `${relativePath} exports Catalog bypass binding ${exportedName}`
+          );
+        }
+      }
     }
 
     if (relativePath === "src/engine/effect-runtime-registry.ts") {
-      if (isExportedCatalogBypass(node)) {
+      if (
+        isExportedCatalogBypass(node) ||
+        isExportedBinding(node, catalogBypassBindings)
+      ) {
         effectRuntimeCatalogBoundaryViolations.push(
           `${relativePath} exports Catalog bypass ${getDeclarationName(node)}`
         );
@@ -404,6 +426,11 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
       if (ts.isFunctionDeclaration(node) && isSourceKindPolicy(node)) {
         sourceKindPolicy = node;
       }
+    }
+    if (isExportedBinding(node, decoderImportBindings)) {
+      effectRuntimeCatalogBoundaryViolations.push(
+        `${relativePath} exports runtime effect decoder binding`
+      );
     }
     ts.forEachChild(node, visit);
   }
@@ -435,6 +462,103 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
       `${relativePath} must keep registered source-kind policies explicit`
     );
   }
+}
+
+function collectRuntimeEffectDecoderImportBindings(sourceFile) {
+  const decoderImportBindings = new Set();
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== "./runtime-effect-decoder.js"
+    ) {
+      continue;
+    }
+    const importClause = statement.importClause;
+    if (importClause?.name !== undefined) {
+      decoderImportBindings.add(importClause.name.text);
+    }
+    if (
+      importClause?.namedBindings !== undefined &&
+      ts.isNamedImports(importClause.namedBindings)
+    ) {
+      for (const element of importClause.namedBindings.elements) {
+        decoderImportBindings.add(element.name.text);
+      }
+    }
+  }
+  return collectTopLevelBindingAliases(sourceFile, decoderImportBindings);
+}
+
+function collectCatalogBypassBindings(sourceFile) {
+  const catalogBypassBindings = new Set(effectRuntimeCatalogBypassExports);
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const namedBindings = statement.importClause?.namedBindings;
+    if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
+    for (const element of namedBindings.elements) {
+      const importedName = element.propertyName?.text ?? element.name.text;
+      if (effectRuntimeCatalogBypassExports.has(importedName)) {
+        catalogBypassBindings.add(element.name.text);
+      }
+    }
+  }
+  return collectTopLevelBindingAliases(sourceFile, catalogBypassBindings);
+}
+
+function collectTopLevelBindingAliases(sourceFile, bindings) {
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const statement of sourceFile.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      for (const declaration of statement.declarationList.declarations) {
+        if (
+          !ts.isIdentifier(declaration.name) ||
+          declaration.initializer === undefined ||
+          !isBindingAlias(declaration.initializer, bindings) ||
+          bindings.has(declaration.name.text)
+        ) {
+          continue;
+        }
+        bindings.add(declaration.name.text);
+        changed = true;
+      }
+    }
+  }
+  return bindings;
+}
+
+function isBindingAlias(expression, bindings) {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isNonNullExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return ts.isIdentifier(current) && bindings.has(current.text);
+}
+
+function isExportedBinding(node, bindings) {
+  if (ts.isExportDeclaration(node)) {
+    return getExportedLocalNames(node).some((name) => bindings.has(name));
+  }
+  if (ts.isExportAssignment(node)) {
+    return isBindingAlias(node.expression, bindings);
+  }
+  if (!hasExportModifier(node)) return false;
+  if (ts.isVariableStatement(node)) {
+    return node.declarationList.declarations.some(
+      (declaration) =>
+        ts.isIdentifier(declaration.name) && bindings.has(declaration.name.text)
+    );
+  }
+  const name = getDeclarationName(node);
+  return name !== undefined && bindings.has(name);
 }
 
 function getExportedLocalNames(node) {
