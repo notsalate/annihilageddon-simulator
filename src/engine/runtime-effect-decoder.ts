@@ -1092,7 +1092,7 @@ const runtimeEffectDecoders: {
     target: required(selectorTarget("opponentPlayers")),
     onDamageDealt: optionalAttackBranches,
     onKill: optionalAttackBranches,
-  }, requireNestedTargetSelector("multi-target attack", "opponentPlayers")),
+  }),
   optional_spend_chip_attack_damage: defineDecoder(
     "optional_spend_chip_attack_damage",
     {
@@ -1283,7 +1283,7 @@ const runtimeEffectDecoders: {
     timing: optionalTiming,
     amount: required(positiveInteger),
     target: required(selectorTarget("allPlayers")),
-  }, requireNestedTargetSelector("Mayhem attack", "allPlayers")),
+  }),
   mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status:
     defineDecoder(
       "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",

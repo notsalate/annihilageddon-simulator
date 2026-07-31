@@ -1842,15 +1842,19 @@ test("multi-target and Mayhem attacks require one nested target representation",
       effectId: "multi_target_attack",
       selector: "opponentPlayers",
       conflictingSelector: "allPlayers",
+      foreignSelector: "allPlayers",
     },
     {
       effectId: "mayhem_attack",
       selector: "allPlayers",
       conflictingSelector: "opponentPlayers",
+      foreignSelector: "opponentPlayers",
     },
   ] as const;
 
-  for (const { effectId, selector, conflictingSelector } of cases) {
+  for (
+    const { effectId, selector, conflictingSelector, foreignSelector } of cases
+  ) {
     const payload = {
       effectId,
       timing: "onPlay",
@@ -1872,6 +1876,12 @@ test("multi-target and Mayhem attacks require one nested target representation",
         amount: 4,
         targetSelector: selector,
       }).some((error) => error.includes("target is required"))
+    );
+    assert.ok(
+      validateRawRuntimeEffect(effectId, "Fixture", {
+        ...payload,
+        target: { selector: foreignSelector },
+      }).some((error) => error.includes(`must use selector ${selector}`))
     );
   }
 });

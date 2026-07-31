@@ -37,6 +37,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - The analyzer has no hidden default score: a line becomes “best” only after the caller supplies a named evaluation policy.
 - Evaluation policies return a finite `score` and optional finite components; `rankTurnLines` orders strictly by descending score, then stable enumeration order. Terminal `winnerPlayerId` remains metadata and does not affect ranking.
 - Give effect handlers concrete typed inputs after the validation boundary; keep raw record access at that boundary and never reintroduce a registered-effect fallback, optional `unknown` field bag, or handler-boundary payload assertion.
+- `multi_target_attack` accepts only `target: { selector: "opponentPlayers" }`, and `mayhem_attack` only `target: { selector: "allPlayers" }`; their decoders reject direct `targetSelector` and foreign nested selectors before handlers run.
 - Declare each catalog entry's supported runtime modes as a non-empty typed set.
 - Add runtime effect IDs only through `effect-runtime-registry.ts`; executable data must not reference IDs outside the Effect Runtime Catalog.
 - Do not use localized display names as primary identifiers.
