@@ -321,7 +321,7 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
       ? choices.find(
           (choice) =>
             choice.choiceKind === "defense" &&
-            choice.card?.instanceId === familiar.instanceId
+            choice.targetCardInstanceId === familiar.instanceId
         )
       : undefined
   );
@@ -3534,7 +3534,7 @@ test("bought familiar can discard another hand card to avoid an attack", () => {
       ? choices.find(
           (choice) =>
             choice.choiceKind === "defense" &&
-            choice.card?.instanceId === familiar.instanceId
+            choice.targetCardInstanceId === familiar.instanceId
         )
       : undefined
   );
@@ -7955,9 +7955,7 @@ test("2D excludes self and falls back to the first foe in seating order", () => 
         choices.some(
           (choice) =>
             choice.choiceKind === "playerTarget" &&
-            choice.players.some(
-              (candidate) => candidate.playerId === player.playerId
-            )
+            choice.targetPlayerIds.includes(player.playerId)
         ),
         false
       );

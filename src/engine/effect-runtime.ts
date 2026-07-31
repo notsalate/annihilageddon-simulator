@@ -53,7 +53,9 @@ import {
 import type {
   CardInstance,
   GameState,
+  PlayerDecisionView,
   PlayerState,
+  RuntimeEffectDecisionChoice,
   RuntimeEffectChoiceRequest,
 } from "./setup.js";
 import { dispatchControlledCardOperation } from "./trigger-dispatch.js";
@@ -1021,21 +1023,20 @@ function chooseEffectChoice(
   choices: readonly EffectChoice[]
 ): EffectChoice | undefined {
   const decisionRequest: RuntimeEffectChoiceRequest = structuredClone({
-    player,
+    player: createPlayerDecisionView(player),
     effectId,
     sourceType: source.sourceType,
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
-    choices,
+    choices: choices.map(createRuntimeEffectDecisionChoice),
   });
-  const canonicalChoicesByStrategyChoice = new Map(
-    decisionRequest.choices.map((choice, index) => [choice, choices[index]!])
-  );
   const selectedChoice = state.effectChoiceStrategy?.(decisionRequest);
   const choice =
     selectedChoice === undefined
       ? choices[0]
-      : (canonicalChoicesByStrategyChoice.get(selectedChoice) ?? choices[0]);
+      : (choices.find((candidate) =>
+          matchesDecisionChoice(candidate, selectedChoice)
+        ) ?? choices[0]);
   if (choice === undefined) {
     recordGameEvent(state, {
       type: "effectChoiceSkipped",
@@ -1116,6 +1117,119 @@ function chooseEffectChoice(
     sourceType: source.sourceType,
   });
   return choice;
+}
+
+function createPlayerDecisionView(player: PlayerState): PlayerDecisionView {
+  const { deck: _deck, ...visiblePlayer } = player;
+  return visiblePlayer;
+}
+
+function createRuntimeEffectDecisionChoice(
+  choice: EffectChoice
+): RuntimeEffectDecisionChoice {
+  if (choice.choiceKind === "option") {
+    return { choiceKind: choice.choiceKind, choiceId: choice.choiceId };
+  }
+  if (choice.choiceKind === "playerTarget") {
+    return {
+      choiceKind: choice.choiceKind,
+      choiceId: choice.choiceId,
+      targetPlayerIds: choice.players.map((player) => player.playerId),
+    };
+  }
+  if (choice.choiceKind === "cardTarget") {
+    return {
+      choiceKind: choice.choiceKind,
+      choiceId: choice.choiceId,
+      targetCardInstanceIds: choice.cards.map((card) => card.instanceId),
+      targetDefinitionIds: choice.cards.map((card) => card.definitionId),
+      amount: choice.amount,
+    };
+  }
+  if (choice.choiceKind === "defense") {
+    return {
+      choiceKind: choice.choiceKind,
+      choiceId: choice.choiceId,
+      ...(choice.card === undefined
+        ? {}
+        : {
+            targetCardInstanceId: choice.card.instanceId,
+            targetDefinitionId: choice.card.definitionId,
+          }),
+    };
+  }
+  return {
+    choiceKind: choice.choiceKind,
+    choiceId: choice.choiceId,
+    direction: choice.direction,
+    targetPlayerIds: choice.players.map((player) => player.playerId),
+  };
+}
+
+function matchesDecisionChoice(
+  choice: EffectChoice,
+  selection: RuntimeEffectDecisionChoice
+): boolean {
+  if (
+    choice.choiceKind !== selection.choiceKind ||
+    choice.choiceId !== selection.choiceId
+  ) {
+    return false;
+  }
+  if (
+    choice.choiceKind === "playerTarget" &&
+    selection.choiceKind === "playerTarget"
+  ) {
+    return sameValues(
+      choice.players.map((player) => player.playerId),
+      selection.targetPlayerIds
+    );
+  }
+  if (
+    choice.choiceKind === "cardTarget" &&
+    selection.choiceKind === "cardTarget"
+  ) {
+    return (
+      choice.amount === selection.amount &&
+      sameValues(
+        choice.cards.map((card) => card.instanceId),
+        selection.targetCardInstanceIds
+      ) &&
+      sameValues(
+        choice.cards.map((card) => card.definitionId),
+        selection.targetDefinitionIds
+      )
+    );
+  }
+  if (choice.choiceKind === "defense" && selection.choiceKind === "defense") {
+    return (
+      choice.card?.instanceId === selection.targetCardInstanceId &&
+      choice.card?.definitionId === selection.targetDefinitionId
+    );
+  }
+  if (
+    choice.choiceKind === "directionalPlayerTarget" &&
+    selection.choiceKind === "directionalPlayerTarget"
+  ) {
+    return (
+      choice.direction === selection.direction &&
+      sameValues(
+        choice.players.map((player) => player.playerId),
+        selection.targetPlayerIds
+      )
+    );
+  }
+  return true;
+}
+
+function sameValues(
+  left: readonly string[],
+  right: readonly string[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }
 
 function buildLegalTargetChoices(

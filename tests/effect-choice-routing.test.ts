@@ -158,7 +158,7 @@ test("failed defense branch rolls back mutations and returns its error", () => {
     return request.choices.find(
       (choice) =>
         choice.choiceKind === "defense" &&
-        choice.card?.instanceId === defenseCard.instanceId
+        choice.targetCardInstanceId === defenseCard.instanceId
     );
   };
   const lifeBefore = defendingPlayer.life.current;
@@ -295,16 +295,6 @@ test("effect choice strategy receives isolated player decision views", () => {
     mutablePlayerView.life.current = 1;
     mutablePlayerView.hand.length = 0;
 
-    const mutableTargetView = choice.players[0] as unknown as {
-      chips: number;
-      life: { current: number };
-      hand: Array<{ marketChips: number }>;
-    };
-    mutableTargetView.chips = 88;
-    mutableTargetView.life.current = 1;
-    mutableTargetView.hand[0]!.marketChips = 77;
-    mutableTargetView.hand.length = 0;
-
     return choice;
   };
 
@@ -403,7 +393,7 @@ test("target choice strategy routes a non-first market card to its handler", () 
   );
 });
 
-test("reconstructed target choice falls back to the first legal choice", () => {
+test("reconstructed target choice resolves the canonical target by stable identifier", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   state.runtimeMode = "fixture";
   const source = addFixtureDefinitionToActiveHand(
@@ -440,12 +430,12 @@ test("reconstructed target choice falls back to the first legal choice", () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal(state.turn.power, firstCost);
+  assert.equal(state.turn.power, secondCost);
   assert.ok(
     state.eventLog.some(
       (event) =>
         event.type === "effectFixtureTargetCostPowerApplied" &&
-        event.targetCardInstanceId === firstMarketCard.instanceId
+        event.targetCardInstanceId === secondMarketCard.instanceId
     )
   );
 });

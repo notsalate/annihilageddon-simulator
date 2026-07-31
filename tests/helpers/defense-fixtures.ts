@@ -26,7 +26,7 @@ type DefenseChoiceResult = ReturnType<
 type FixtureDefenseChoice = Extract<
   DefenseChoiceRequest["choices"][number],
   { choiceKind: "defense" }
-> & { card: CardInstance };
+>;
 
 export function selectFirstFixtureDefense(
   request: DefenseChoiceRequest
@@ -47,7 +47,7 @@ export function selectFixtureDefenseByInstanceId(
     return request.choices.find(
       (choice) =>
         isFixtureDefenseChoice(choice) &&
-        choice.card.instanceId === instanceId
+        choice.targetCardInstanceId === instanceId
     );
   };
 }
@@ -121,8 +121,7 @@ function isFixtureDefenseChoice(
 ): choice is FixtureDefenseChoice {
   return (
     choice.choiceKind === "defense" &&
-    choice.card !== undefined &&
-    choice.card.definitionId.startsWith("fixture-defense-")
+    choice.targetDefinitionId?.startsWith("fixture-defense-") === true
   );
 }
 

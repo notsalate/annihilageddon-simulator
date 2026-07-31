@@ -5,9 +5,8 @@ import {
   type LegalAction,
 } from "./actions.js";
 import { assertNever } from "../common.js";
-import type { CardDefinition, TokenDefinition } from "./data.js";
+import type { TokenDefinition } from "./data.js";
 import {
-  calculateEffectiveCardCost,
   calculateEffectiveCardVictoryPoints,
   calculateEffectivePlayerVictoryPoints,
   calculateEffectiveTokenVictoryPoints,
@@ -20,6 +19,8 @@ import {
   type GameEvent,
   type GameState,
   type PlayerId,
+  type PlayerDecisionView,
+  type PlayerState,
   type RuntimeEffectDecisionChoice,
   type RuntimeEffectChoiceRequest,
   type TokenInstance,
@@ -44,7 +45,7 @@ export interface RunSingleGameOptions {
 }
 
 export interface BotDecisionContext {
-  state: GameState;
+  player: PlayerDecisionView;
   legalActions: readonly LegalAction[];
 }
 
@@ -110,7 +111,7 @@ export interface PlayerScore {
 }
 
 export const baselineBot: BotStrategy = {
-  chooseAction({ state, legalActions }: BotDecisionContext): GameAction {
+  chooseAction({ legalActions }: BotDecisionContext): GameAction {
     const playAction = legalActions.find(
       (action) => action.type === "playCard"
     );
@@ -118,15 +119,11 @@ export const baselineBot: BotStrategy = {
       return playAction;
     }
 
-    const buyActions = legalActions
-      .filter(
-        (action): action is Extract<LegalAction, { type: "buyMarketCard" }> => {
-          return action.type === "buyMarketCard";
-        }
-      )
-      .sort((left, right) => {
-        return getBuyActionCost(state, right) - getBuyActionCost(state, left);
-      });
+    const buyActions = legalActions.filter(
+      (action): action is Extract<LegalAction, { type: "buyMarketCard" }> => {
+        return action.type === "buyMarketCard";
+      }
+    );
     const buyAction = buyActions[0];
     if (buyAction !== undefined) {
       return buyAction;
@@ -135,6 +132,21 @@ export const baselineBot: BotStrategy = {
     return { type: "endTurn" };
   },
 };
+
+function createPlayerDecisionView(player: PlayerState): PlayerDecisionView {
+  const { deck: _deck, ...visiblePlayer } = player;
+  return structuredClone(visiblePlayer);
+}
+
+function mustGetActivePlayer(state: GameState): PlayerState {
+  const player = state.players.find(
+    (candidate) => candidate.playerId === state.activePlayerId
+  );
+  if (player === undefined) {
+    throw new Error(`Active player ${state.activePlayerId} is missing`);
+  }
+  return player;
+}
 
 export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
   const bot = options.bot ?? baselineBot;
@@ -169,7 +181,10 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     }
 
     const legalActions = listLegalActions(state);
-    const selectedAction = bot.chooseAction({ state, legalActions });
+    const selectedAction = bot.chooseAction({
+      player: createPlayerDecisionView(mustGetActivePlayer(state)),
+      legalActions,
+    });
     if (!isLegalAction(selectedAction, legalActions)) {
       throw new Error(`Bot selected illegal action ${selectedAction.type}`);
     }
@@ -376,49 +391,6 @@ function isLegalAction(
         return assertNever(action);
     }
   });
-}
-
-function getBuyActionCost(
-  state: GameState,
-  action: Extract<LegalAction, { type: "buyMarketCard" }>
-): number {
-  if (action.source === "wildMagicStack") {
-    return 3;
-  }
-
-  const activePlayer = state.players.find(
-    (player) => player.playerId === state.activePlayerId
-  );
-  const card = [
-    ...state.common.market,
-    ...state.common.legendMarket,
-    activePlayer?.unboughtFamiliar,
-  ].find((candidate) => {
-    return (
-      candidate !== undefined && candidate.instanceId === action.cardInstanceId
-    );
-  });
-  if (card === undefined) {
-    return 0;
-  }
-
-  return calculateEffectiveCardCost(
-    state,
-    state.activePlayerId,
-    mustGetDefinition(state, card)
-  );
-}
-
-function mustGetDefinition(
-  state: GameState,
-  card: CardInstance
-): CardDefinition {
-  const definition = state.cardDefinitions.get(card.definitionId);
-  if (definition === undefined) {
-    throw new Error(`Missing card definition ${card.definitionId}`);
-  }
-
-  return definition;
 }
 
 function mustGetTokenDefinition(

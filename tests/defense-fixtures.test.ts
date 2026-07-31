@@ -7,7 +7,6 @@ import {
   type GameState,
   type PlayerState,
 } from "../src/index.js";
-import type { EffectChoice } from "../src/engine/effect-runtime-registry.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -41,22 +40,25 @@ test("fixture defense selectors skip production cards and select an exact fixtur
     defender,
     "discardSelf"
   );
-  const choices: EffectChoice[] = [
-    { choiceKind: "defense", choiceId: "decline", card: undefined },
+  const choices = [
+    { choiceKind: "defense" as const, choiceId: "decline" },
     {
-      choiceKind: "defense",
+      choiceKind: "defense" as const,
       choiceId: productionDefense.instanceId,
-      card: productionDefense,
+      targetCardInstanceId: productionDefense.instanceId,
+      targetDefinitionId: productionDefense.definitionId,
     },
     {
-      choiceKind: "defense",
+      choiceKind: "defense" as const,
       choiceId: firstFixture.instanceId,
-      card: firstFixture,
+      targetCardInstanceId: firstFixture.instanceId,
+      targetDefinitionId: firstFixture.definitionId,
     },
     {
-      choiceKind: "defense",
+      choiceKind: "defense" as const,
       choiceId: secondFixture.instanceId,
-      card: secondFixture,
+      targetCardInstanceId: secondFixture.instanceId,
+      targetDefinitionId: secondFixture.definitionId,
     },
   ];
   const request = {

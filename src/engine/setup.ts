@@ -170,8 +170,47 @@ type DecisionView<T> = T extends
         ? { readonly [Property in keyof T]: DecisionView<T[Property]> }
         : T;
 
-export type PlayerDecisionView = DecisionView<PlayerState>;
-export type RuntimeEffectDecisionChoice = DecisionView<RuntimeEffectChoice>;
+export type PlayerDecisionView = DecisionView<Omit<PlayerState, "deck">>;
+
+export interface RuntimeEffectDecisionOption {
+  readonly choiceKind: "option";
+  readonly choiceId: string;
+}
+
+export interface RuntimeEffectDecisionPlayerTarget {
+  readonly choiceKind: "playerTarget";
+  readonly choiceId: string;
+  readonly targetPlayerIds: readonly PlayerId[];
+}
+
+export interface RuntimeEffectDecisionCardTarget {
+  readonly choiceKind: "cardTarget";
+  readonly choiceId: string;
+  readonly targetCardInstanceIds: readonly string[];
+  readonly targetDefinitionIds: readonly string[];
+  readonly amount: number;
+}
+
+export interface RuntimeEffectDecisionDefense {
+  readonly choiceKind: "defense";
+  readonly choiceId: string;
+  readonly targetCardInstanceId?: string;
+  readonly targetDefinitionId?: string;
+}
+
+export interface RuntimeEffectDecisionDirectionalPlayerTarget {
+  readonly choiceKind: "directionalPlayerTarget";
+  readonly choiceId: string;
+  readonly direction: "left" | "right";
+  readonly targetPlayerIds: readonly PlayerId[];
+}
+
+export type RuntimeEffectDecisionChoice =
+  | RuntimeEffectDecisionOption
+  | RuntimeEffectDecisionPlayerTarget
+  | RuntimeEffectDecisionCardTarget
+  | RuntimeEffectDecisionDefense
+  | RuntimeEffectDecisionDirectionalPlayerTarget;
 
 export interface RuntimeEffectChoiceRequest {
   player: PlayerDecisionView;

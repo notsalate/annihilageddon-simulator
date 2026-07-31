@@ -17,6 +17,7 @@ import {
   formatSingleGameDebugTrace,
   getGameEndReason,
   initializeGame,
+  runMarketFlow,
   runMassSimulation,
   runSingleGame,
   scoreGame,
@@ -170,60 +171,40 @@ test("game end reason does not infer market exhaustion outside Market Flow", () 
   assert.equal(getGameEndReason(state), undefined);
 });
 
-test("single-game simulation uses the Market Flow main deck exhaustion reason directly", () => {
-  let prepared = false;
-  const result = runSingleGame({
+test("Market Flow reports main deck exhaustion directly", () => {
+  const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
-    maxTurns: 20,
-    bot: {
-      chooseAction({ state }) {
-        if (!prepared) {
-          state.common.market.splice(0, 1);
-          state.common.mainDeck.splice(0);
-          prepared = true;
-        }
-
-        return { type: "endTurn" };
-      },
-    },
   });
+  state.common.market.splice(0, 1);
+  state.common.mainDeck.splice(0);
+  const result = runMarketFlow(state, { mode: "setup" });
 
-  assert.equal(result.endReason, "mainDeckExhausted");
-  assert.equal(result.isGameEnd, true);
-  assert.equal(result.eventLog.at(-1)?.type, "marketFlowFailed");
+  assert.equal(result.ok, true);
+  assert.equal(result.gameEndReason, "mainDeckExhausted");
+  assert.equal(state.eventLog.at(-1)?.type, "marketFlowFailed");
   assert.equal(
-    result.eventLog.some((event) => event.type === "turnStarted"),
+    state.eventLog.some((event) => event.type === "turnStarted"),
     false
   );
 });
 
-test("single-game simulation uses the Market Flow legend deck exhaustion reason directly", () => {
-  let prepared = false;
-  const result = runSingleGame({
+test("Market Flow reports legend deck exhaustion directly", () => {
+  const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
-    maxTurns: 20,
-    bot: {
-      chooseAction({ state }) {
-        if (!prepared) {
-          state.common.legendMarket.splice(0, 1);
-          state.common.legendDeck.splice(0);
-          prepared = true;
-        }
-
-        return { type: "endTurn" };
-      },
-    },
   });
+  state.common.legendMarket.splice(0, 1);
+  state.common.legendDeck.splice(0);
+  const result = runMarketFlow(state, { mode: "setup" });
 
-  assert.equal(result.endReason, "legendDeckExhausted");
-  assert.equal(result.isGameEnd, true);
-  assert.equal(result.eventLog.at(-1)?.type, "marketFlowFailed");
+  assert.equal(result.ok, true);
+  assert.equal(result.gameEndReason, "legendDeckExhausted");
+  assert.equal(state.eventLog.at(-1)?.type, "marketFlowFailed");
   assert.equal(
-    result.eventLog.some((event) => event.type === "turnStarted"),
+    state.eventLog.some((event) => event.type === "turnStarted"),
     false
   );
 });
@@ -265,10 +246,7 @@ test("scoring sums owned cards from scoring zones and applies DWT penalty", () =
   assert.ok(score);
   assert.equal(score.legendCount, 1);
   assert.equal(score.deadWizardTokenCount, 2);
-  assert.equal(
-    score.victoryPoints,
-    expectedCardScore - 6
-  );
+  assert.equal(score.victoryPoints, expectedCardScore - 6);
 });
 
 test("scoring applies DWT victory points from token definitions", () => {

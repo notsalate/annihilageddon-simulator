@@ -53,10 +53,7 @@ test("game scenario setup and generated card identities are deterministic and st
   const stateWideInstanceIds = listPhysicalCardLocations(first.state).map(
     (location) => location.card.instanceId
   );
-  assert.equal(
-    new Set(stateWideInstanceIds).size,
-    stateWideInstanceIds.length
-  );
+  assert.equal(new Set(stateWideInstanceIds).size, stateWideInstanceIds.length);
 
   chooseEffect(first, () => undefined);
   assert.ok(first.state.effectChoiceStrategy);
@@ -120,12 +117,12 @@ test("player target choice adapter handles only the requested effect", () => {
     {
       choiceKind: "playerTarget" as const,
       choiceId: scenario.activePlayer.playerId,
-      players: [scenario.activePlayer],
+      targetPlayerIds: [scenario.activePlayer.playerId],
     },
     {
       choiceKind: "playerTarget" as const,
       choiceId: target.playerId,
-      players: [target],
+      targetPlayerIds: [target.playerId],
     },
   ];
   const request = {

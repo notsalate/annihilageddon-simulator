@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { RuntimeEffectChoiceRequest } from "../src/index.js";
+import type {
+  BotDecisionContext,
+  RuntimeEffectChoiceRequest,
+} from "../src/index.js";
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <
@@ -10,6 +13,7 @@ type Equal<Left, Right> =
     ? true
     : false;
 type Assert<Type extends true> = Type;
+type AssertFalse<Type extends false> = Type;
 type IsReadonly<Type, Key extends keyof Type> = Equal<
   Pick<Type, Key>,
   Readonly<Pick<Type, Key>>
@@ -27,20 +31,38 @@ type DirectionalPlayerTargetChoice = Extract<
 type CardTargetChoice = Extract<DecisionChoice, { choiceKind: "cardTarget" }>;
 type DefenseChoice = Extract<DecisionChoice, { choiceKind: "defense" }>;
 
+type DecisionChoiceDoesNotExposeHiddenStateAssertions = [
+  AssertFalse<
+    "deck" extends keyof RuntimeEffectChoiceRequest["player"] ? true : false
+  >,
+  AssertFalse<"state" extends keyof BotDecisionContext ? true : false>,
+  AssertFalse<"players" extends keyof PlayerTargetChoice ? true : false>,
+  AssertFalse<"cards" extends keyof CardTargetChoice ? true : false>,
+  AssertFalse<"card" extends keyof DefenseChoice ? true : false>,
+];
+
 type DecisionChoiceReadonlyAssertions = [
-  Assert<IsReadonly<PlayerTargetChoice, "players">>,
-  Assert<IsReadonly<PlayerTargetChoice["players"][number]["life"], "current">>,
-  Assert<IsReadonly<DirectionalPlayerTargetChoice, "players">>,
-  Assert<IsReadonly<CardTargetChoice, "cards">>,
-  Assert<IsReadonly<CardTargetChoice["cards"][number], "marketChips">>,
-  Assert<IsReadonly<NonNullable<DefenseChoice["card"]>, "marketChips">>,
+  Assert<IsReadonly<PlayerTargetChoice, "targetPlayerIds">>,
+  Assert<IsReadonly<DirectionalPlayerTargetChoice, "targetPlayerIds">>,
+  Assert<IsReadonly<CardTargetChoice, "targetCardInstanceIds">>,
+  Assert<IsReadonly<CardTargetChoice, "targetDefinitionIds">>,
+  Assert<IsReadonly<DefenseChoice, "targetCardInstanceId">>,
 ];
 
 function assertDecisionChoiceViewsAreReadonly(
   _assertions?: DecisionChoiceReadonlyAssertions
 ): void {}
 
+function assertDecisionChoicesDoNotExposeHiddenState(
+  _assertions?: DecisionChoiceDoesNotExposeHiddenStateAssertions
+): void {}
+
 test("decision choice views are immutable at the strategy boundary", () => {
   assertDecisionChoiceViewsAreReadonly();
+  assert.equal(true, true);
+});
+
+test("decision choices expose stable target identifiers without hidden state", () => {
+  assertDecisionChoicesDoNotExposeHiddenState();
   assert.equal(true, true);
 });

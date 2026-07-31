@@ -48,7 +48,7 @@ test("directional chain stops when the requested target redirects and survives",
       return choices.find(
         (choice) =>
           choice.choiceKind === "defense" &&
-          choice.card?.instanceId === redirectDefense.instanceId
+          choice.targetCardInstanceId === redirectDefense.instanceId
       );
     }
     return undefined;
