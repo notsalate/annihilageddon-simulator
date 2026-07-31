@@ -946,6 +946,10 @@ function findLexicalScope(node) {
   for (let current = node; current; current = current.parent) {
     if (
       ts.isBlock(current) ||
+      ts.isCaseBlock(current) ||
+      ts.isForStatement(current) ||
+      ts.isForOfStatement(current) ||
+      ts.isForInStatement(current) ||
       ts.isSourceFile(current) ||
       ts.isFunctionLike(current) ||
       ts.isCatchClause(current)

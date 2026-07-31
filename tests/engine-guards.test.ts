@@ -510,6 +510,51 @@ test("typed-access guard keeps an aliased Ledger seam outside sibling bindings",
   assert.equal(result.status, 0);
 });
 
+test("typed-access guard keeps an aliased Ledger seam after switch and loop bindings", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      switch (0) {
+        case 0:
+          const listLocations = () => {};
+          listLocations();
+          break;
+      }
+      for (const listLocations = () => {}; false;) {
+        listLocations();
+      }
+      for (const listLocations of [() => {}]) {
+        listLocations();
+      }
+      for (const listLocations in { local: () => {} }) {
+        void listLocations;
+      }
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 0);
+});
+
+test("typed-access guard sees a Ledger alias shadow inside a loop scope", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      for (const listLocations of [() => {}]) {
+        listLocations();
+        return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+      }
+      return [];
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /without calling a Control Ledger seam/);
+});
+
 test("typed-access guard ignores a Ledger alias shadowed by a parameter", () => {
   const fixtureRoot = createPhysicalZoneFixture(`
     import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
