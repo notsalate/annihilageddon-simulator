@@ -2441,6 +2441,18 @@ test("wizard property effective-value decoder accepts and rejects exact payloads
     {
       effectId: "modify_effective_value",
       timing: "whileControlled",
+      valueKind: "cardVictoryPoints",
+      operation: "add",
+      amountPerOwnedCard: 1,
+      countedCardTypes: ["treasure"],
+      target: {
+        targetType: "card",
+        cardTypes: ["treasure"],
+      },
+    },
+    {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
       valueKind: "tokenVictoryPoints",
       operation: "add",
       amount: 1,
@@ -2467,6 +2479,16 @@ test("wizard property effective-value decoder accepts and rejects exact payloads
       amount: -5,
       target: {
         targetType: "player",
+      },
+    },
+    {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "cardCost",
+      operation: "invertNegative",
+      target: {
+        targetType: "card",
+        definitionId: "fixture-card",
       },
     },
   ]) {
@@ -2536,6 +2558,66 @@ test("wizard property effective-value decoder accepts and rejects exact payloads
       []
     );
   }
+});
+
+test("effective-value decoder rejects add with both fixed and owned-card amounts", () => {
+  assert.deepEqual(
+    validateRawRuntimeEffect("modify_effective_value", "Token", {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "cardCost",
+      operation: "add",
+      amount: -1,
+      amountPerOwnedCard: -2,
+      countedCardTypes: ["treasure"],
+      target: {
+        targetType: "card",
+        definitionId: "fixture-card",
+      },
+    }),
+    ["Token uses add operation with both amount and amountPerOwnedCard"]
+  );
+});
+
+test("effective-value decoder rejects fields that do not belong to invertNegative", () => {
+  assert.deepEqual(
+    validateRawRuntimeEffect("modify_effective_value", "Token", {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "cardCost",
+      operation: "invertNegative",
+      amount: -1,
+      amountPerOwnedCard: -2,
+      countedCardTypes: ["treasure"],
+      target: {
+        targetType: "card",
+        definitionId: "fixture-card",
+      },
+    }),
+    [
+      "Token uses invertNegative with amount",
+      "Token uses invertNegative with amountPerOwnedCard",
+      "Token uses invertNegative with countedCardTypes",
+    ]
+  );
+});
+
+test("effective-value decoder rejects counted-card types without an owned-card amount", () => {
+  assert.deepEqual(
+    validateRawRuntimeEffect("modify_effective_value", "Token", {
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "cardCost",
+      operation: "add",
+      amount: -1,
+      countedCardTypes: ["treasure"],
+      target: {
+        targetType: "card",
+        definitionId: "fixture-card",
+      },
+    }),
+    ["Token uses countedCardTypes without amountPerOwnedCard"]
+  );
 });
 
 test("executable data-pack validation rejects invalid effective-value modifier shape through the catalog", () => {

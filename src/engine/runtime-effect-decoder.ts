@@ -475,8 +475,29 @@ function validateEffectiveValuePayload(
   ) {
     errors.push(`${subjectId} uses add operation without amount`);
   }
+  if (
+    effect.operation === "add" &&
+    effect.amount !== undefined &&
+    effect.amountPerOwnedCard !== undefined
+  ) {
+    errors.push(
+      `${subjectId} uses add operation with both amount and amountPerOwnedCard`
+    );
+  }
   if (effect.operation === "invertNegative" && effect.amount !== undefined) {
     errors.push(`${subjectId} uses invertNegative with amount`);
+  }
+  if (
+    effect.operation === "invertNegative" &&
+    effect.amountPerOwnedCard !== undefined
+  ) {
+    errors.push(`${subjectId} uses invertNegative with amountPerOwnedCard`);
+  }
+  if (
+    effect.operation === "invertNegative" &&
+    effect.countedCardTypes !== undefined
+  ) {
+    errors.push(`${subjectId} uses invertNegative with countedCardTypes`);
   }
   if (
     effect.amountPerOwnedCard !== undefined &&
@@ -484,6 +505,13 @@ function validateEffectiveValuePayload(
       effect.countedCardTypes.length === 0)
   ) {
     errors.push(`${subjectId} uses amountPerOwnedCard without countedCardTypes`);
+  }
+  if (
+    effect.operation === "add" &&
+    effect.amountPerOwnedCard === undefined &&
+    effect.countedCardTypes !== undefined
+  ) {
+    errors.push(`${subjectId} uses countedCardTypes without amountPerOwnedCard`);
   }
 
   const target = effect.target;

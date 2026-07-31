@@ -78,7 +78,7 @@ const configuredAllowedViolations = [
   ["src/engine/data.ts", 2037, 3, "validateRuntimeEffectDefinition"],
   ["src/engine/data.ts", 2058, 43, "isEffectRecord"],
   ["src/engine/runtime-effect-decoder.ts", 76, 9, "decodeObject"],
-  ["src/engine/runtime-effect-decoder.ts", 1479, 41, "isPlainRecord"],
+  ["src/engine/runtime-effect-decoder.ts", 1507, 41, "isPlainRecord"],
   ["src/engine/runtime-effect.ts", 1071, 4, "isRuntimeEffectTargetRecord"],
   ["src/engine/runtime-effect.ts", 1076, 3, "hasExactKeys"],
 ];
