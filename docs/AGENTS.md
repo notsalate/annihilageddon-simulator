@@ -8,6 +8,7 @@ This folder contains durable project documentation for rules, runtime layout, im
 
 - Owns Markdown docs directly under `docs/`.
 - `docs/agents/AGENTS.md` owns local agent process docs.
+- `docs/superpowers/AGENTS.md` owns durable design specifications and implementation plans.
 - `docs/templates/AGENTS.md` owns JSON templates.
 - Root `README.md`, root `CONTEXT.md`, and root `AGENTS.md` remain owned by root `AGENTS.md`.
 
@@ -33,4 +34,5 @@ This folder contains durable project documentation for rules, runtime layout, im
 ## Child DOX Index
 
 - `docs/agents/AGENTS.md` - local process and issue-tracker guidance.
+- `docs/superpowers/AGENTS.md` - design specifications and implementation plans for multi-step agent work.
 - `docs/templates/AGENTS.md` - JSON templates for draft and runtime data shapes.
