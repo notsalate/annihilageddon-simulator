@@ -505,6 +505,86 @@ test("typed-access guard ignores a Ledger alias shadowed by a parameter", () => 
   assert.match(result.stderr, /without calling a Control Ledger seam/);
 });
 
+test("typed-access guard ignores a Ledger alias shadowed by a function declaration", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      function listLocations() {}
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /without calling a Control Ledger seam/);
+});
+
+test("typed-access guard ignores a hoisted var Ledger alias shadow", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      if (true) {
+        var listLocations = () => {};
+      }
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /without calling a Control Ledger seam/);
+});
+
+test("typed-access guard ignores object and array destructuring Ledger alias shadows", () => {
+  const objectFixture = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      const { listLocations } = { listLocations: () => {} };
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const arrayFixture = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      const [listLocations] = [() => {}];
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  assert.equal(run("check-engine-typed-access.mjs", objectFixture).status, 1);
+  assert.equal(run("check-engine-typed-access.mjs", arrayFixture).status, 1);
+});
+
+test("typed-access guard ignores Ledger aliases shadowed by class and catch bindings", () => {
+  const classFixture = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      class listLocations {}
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const catchFixture = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      try {} catch ({ listLocations }) {
+        listLocations();
+        return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+      }
+      return [];
+    }
+  `);
+  assert.equal(run("check-engine-typed-access.mjs", classFixture).status, 1);
+  assert.equal(run("check-engine-typed-access.mjs", catchFixture).status, 1);
+});
+
 test("typed-access guard does not treat non-inventory Ledger APIs as a seam", () => {
   const fixtureRoot = createPhysicalZoneFixture(`
     import { findCardLocation } from "./control-ledger.js";

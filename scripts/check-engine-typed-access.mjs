@@ -573,6 +573,11 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
       const importedApi = importedLedgerApis.get(node.expression.text);
       if (
         importedApi !== undefined &&
+        isUnambiguousImportBinding(
+          node.expression.text,
+          importedApi.binding,
+          valueBindings
+        ) &&
         resolveValueBinding(node.expression, valueBindings) === importedApi.binding
       ) {
         calledImportBindings.add(importedApi.binding);
@@ -871,17 +876,54 @@ function collectValueBindings(sourceFile) {
     if (ts.isImportSpecifier(node)) {
       add(node.name.text, node, sourceFile);
     }
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      add(node.name.text, node, findValueScope(node));
+    if (ts.isVariableDeclaration(node)) {
+      for (const name of collectBindingNames(node.name)) {
+        add(name.text, name, findValueScope(node));
+      }
     }
-    if (ts.isParameter(node) && ts.isIdentifier(node.name)) {
-      add(node.name.text, node, node.parent);
+    if (ts.isParameter(node)) {
+      for (const name of collectBindingNames(node.name)) {
+        add(name.text, name, node.parent);
+      }
+    }
+    if (
+      (ts.isFunctionDeclaration(node) ||
+        ts.isFunctionExpression(node) ||
+        ts.isClassDeclaration(node) ||
+        ts.isClassExpression(node) ||
+        ts.isEnumDeclaration(node)) &&
+      node.name !== undefined
+    ) {
+      add(node.name.text, node.name, findValueScope(node.parent));
+    }
+    if (ts.isCatchClause(node) && node.variableDeclaration !== undefined) {
+      for (const name of collectBindingNames(node.variableDeclaration.name)) {
+        add(name.text, name, node);
+      }
     }
     ts.forEachChild(node, visit);
   }
 
   visit(sourceFile);
   return bindings;
+}
+
+function collectBindingNames(node) {
+  if (ts.isIdentifier(node)) return [node];
+  if (ts.isObjectBindingPattern(node) || ts.isArrayBindingPattern(node)) {
+    return node.elements.flatMap((element) =>
+      ts.isBindingElement(element) ? collectBindingNames(element.name) : []
+    );
+  }
+  return [];
+}
+
+function isUnambiguousImportBinding(name, importBinding, bindings) {
+  const candidates = bindings.get(name);
+  return (
+    candidates !== undefined &&
+    candidates.every((candidate) => candidate.binding === importBinding)
+  );
 }
 
 function resolveValueBinding(identifier, bindings) {
