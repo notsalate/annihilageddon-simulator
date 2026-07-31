@@ -378,9 +378,23 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
         ts.isStringLiteral(node.moduleSpecifier) &&
         node.moduleSpecifier.text === "./runtime-effect-decoder.js"
       ) {
-        effectRuntimeCatalogBoundaryViolations.push(
-          `${relativePath} re-exports runtime effect decoder outside an approved boundary`
-        );
+        const exportedNames = getExportedLocalNames(node);
+        if (approvedRuntimeEffectDecoderImporters.has(relativePath)) {
+          for (const exportedName of exportedNames) {
+            effectRuntimeCatalogBoundaryViolations.push(
+              `${relativePath} exports runtime effect decoder binding ${exportedName}`
+            );
+          }
+          if (exportedNames.length === 0) {
+            effectRuntimeCatalogBoundaryViolations.push(
+              `${relativePath} exports runtime effect decoder binding`
+            );
+          }
+        } else {
+          effectRuntimeCatalogBoundaryViolations.push(
+            `${relativePath} re-exports runtime effect decoder outside an approved boundary`
+          );
+        }
       }
       if (relativePath === "src/engine/effect-runtime-registry.ts") {
         for (const exportedName of getExportedLocalNames(node)) {
@@ -665,7 +679,6 @@ function isExportedCatalogBypass(node) {
   return isExportedNamedDeclaration(node, effectRuntimeCatalogBypassExports);
 }
 
-/* Removed dependency tracking: the decoder module now has a closed export surface. */
 function isExportedNamedDeclaration(node, forbiddenNames) {
   if (!hasExportModifier(node)) return false;
   if (ts.isVariableStatement(node)) {

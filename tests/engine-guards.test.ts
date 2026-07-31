@@ -390,6 +390,29 @@ test("typed-access guard rejects decoder imports exported from an approved modul
   );
 });
 
+test("typed-access guard rejects decoder re-exports from an approved module", () => {
+  const fixtureRoot = createEngineFixture({
+    "data.ts": `
+      export { decodeRuntimeEffectForId as unsafe } from "./runtime-effect-decoder.js";
+    `,
+    "effect-runtime-registry.ts": `
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /exports runtime effect decoder binding decodeRuntimeEffectForId/
+  );
+});
+
 test("typed-access guard rejects default exports of Catalog bypass alias chains", () => {
   const catalogBypassNames = [
     "effectRuntimeHandlerMap",
