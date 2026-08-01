@@ -290,7 +290,7 @@ node --test dist/tests/public-entrypoint-guard.test.js
 Expected: все fixtures проходят; отрицательные завершают guard status `1`,
 положительные — status `0`.
 
-- [ ] **Step 9: Коммит Task 1**
+- [x] **Step 9: Коммит Task 1**
 
 Stage только четыре файла Task 1 и создать AIC-коммит:
 
@@ -505,7 +505,7 @@ npm run check:engine-typed-access
 
 Expected: все команды завершаются status `0`.
 
-- [ ] **Step 8: Коммит Task 2**
+- [x] **Step 8: Коммит Task 2**
 
 ```text
 fix(architecture/runtime): закрыть decoder и Catalog в публичных точках входа
@@ -597,7 +597,7 @@ git diff -- scripts/check-engine-typed-access.mjs scripts/lib/check-protected-pu
 Отметить выполненные пункты плана. Локальный issue обновляет интегратор после
 чистого Standards/Spec review; worker не включает `.scratch/` в коммит.
 
-- [ ] **Step 5: Финальный AIC-коммит при наличии DOX-изменений**
+- [x] **Step 5: Финальный AIC-коммит при наличии DOX-изменений**
 
 Если AGENTS.md изменились, создать отдельный коммит:
 
@@ -622,3 +622,9 @@ Generated-By: coder gpt-5.6
 ```
 
 Если DOX уже актуален, не создавать пустой или искусственный коммит.
+
+Фактическая интеграция:
+
+- Task 1 и Task 2 вошли в единый логический коммит `271528e`, поскольку общий анализатор и проектная политика образуют одну защитную границу.
+- Task 3 вошёл в документационный коммит `c7e2e74`.
+- На `c7e2e74` прошли `npm run check`, отчёт кластеров, обе проверки `git diff --check`, финальные Spec и Standards ревью и GitHub secrets/SAST/OSV/CodeQL.
