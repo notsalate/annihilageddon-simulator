@@ -77,12 +77,12 @@ export function checkProtectedPublicEntrypoints(options) {}
 - В `check-protected-public-entrypoints.d.mts` объявить те же option и violation
   types без `any`, чтобы TypeScript-тесты вызывали анализатор напрямую.
 
-- [ ] **Step 1: Зарегистрировать новый набор тестов**
+- [x] **Step 1: Зарегистрировать новый набор тестов**
 
 Добавить `"public-entrypoint-guard.test.js"` сразу после
 `"engine-guards.test.js"` в `tests/run-tests.ts`.
 
-- [ ] **Step 2: Создать минимальный fixture-проект**
+- [x] **Step 2: Создать минимальный fixture-проект**
 
 В `tests/public-entrypoint-guard.test.ts` создать helper, который записывает
 минимальный `tsconfig.json`, `package.json` и переданные TypeScript-файлы:
@@ -139,7 +139,7 @@ function analyzeFixture(fixtureRoot: string) {
 }
 ```
 
-- [ ] **Step 3: Написать первые падающие тесты канонических символов**
+- [x] **Step 3: Написать первые падающие тесты канонических символов**
 
 Добавить отдельные тесты, которые ожидают status `1` и диагностику с
 entrypoint, публичным именем и origin:
@@ -178,7 +178,7 @@ test("public guard rejects direct and aliased protected exports", () => {
 - одноимённого независимого локального символа, который должен пройти;
 - type-only re-export `DecodeResult`, который должен пройти.
 
-- [ ] **Step 4: Запустить тесты и подтвердить ожидаемое падение**
+- [x] **Step 4: Запустить тесты и подтвердить ожидаемое падение**
 
 Run:
 
@@ -191,7 +191,7 @@ Expected: compilation либо новые assertions падают, потому 
 не существует. Положительные fixtures не должны задаваться как доказательство
 до появления анализатора.
 
-- [ ] **Step 5: Реализовать загрузку TypeScript Program**
+- [x] **Step 5: Реализовать загрузку TypeScript Program**
 
 В `scripts/lib/check-protected-public-entrypoints.mjs` реализовать:
 
@@ -223,7 +223,7 @@ export function checkProtectedPublicEntrypoints(options) {
 и `replaceAll("\\", "/")`. Отсутствующий entrypoint либо защищённый модуль
 должен возвращать `configuration` violation, а не молча пропускаться.
 
-- [ ] **Step 6: Реализовать разрешение alias и namespace**
+- [x] **Step 6: Реализовать разрешение alias и namespace**
 
 Использовать только публичное TypeScript API:
 
@@ -257,7 +257,7 @@ function collectExportedValues(checker, moduleSymbol, visited = new Set()) {
 символы исключать по `SymbolFlags.Value`; namespace раскрывать рекурсивно;
 циклы останавливать по identity символа.
 
-- [ ] **Step 7: Реализовать import-edge и trusted-adapter проверки**
+- [x] **Step 7: Реализовать import-edge и trusted-adapter проверки**
 
 Для каждого `ImportDeclaration` статически разрешить module symbol через
 `checker.getSymbolAtLocation(statement.moduleSpecifier)`. Для named,
@@ -278,7 +278,7 @@ if (
 только имена, перечисленные для этого адаптера. Новый локальный alias или
 wrapper получает собственный символ и потому отклоняется закрытым списком.
 
-- [ ] **Step 8: Запустить новый набор тестов**
+- [x] **Step 8: Запустить новый набор тестов**
 
 Run:
 
@@ -330,7 +330,7 @@ Generated-By: coder gpt-5.6
 - Produces: `publicEntrypointPolicy` и форматирование нарушений в существующий
   `effectRuntimeCatalogBoundaryViolations`.
 
-- [ ] **Step 1: Написать падающие тесты production-политики**
+- [x] **Step 1: Написать падающие тесты production-политики**
 
 Расширить helper до полного проектного fixture: по умолчанию он создаёт
 `runtime-effect-decoder.ts`, `data.ts`, `effect-runtime-registry.ts`,
@@ -384,7 +384,7 @@ function runTypedAccessGuard(fixtureRoot: string) {
 - низкоуровневый Catalog-символ через root и CLI падает;
 - разрешённая типизированная registry-операция проходит.
 
-- [ ] **Step 2: Подтвердить падение проектных тестов**
+- [x] **Step 2: Подтвердить падение проектных тестов**
 
 Run:
 
@@ -395,7 +395,7 @@ node --test dist/tests/public-entrypoint-guard.test.js
 
 Expected: новые fixtures падают из-за отсутствующей production-политики.
 
-- [ ] **Step 3: Задать точную политику decoder**
+- [x] **Step 3: Задать точную политику decoder**
 
 В `scripts/check-engine-typed-access.mjs` импортировать анализатор и определить:
 
@@ -418,7 +418,7 @@ const allowedDataAdapterValueExports = new Set([
 `checkClosedRuntimeEffectDecoderExportSurface` сохранить: она отдельно
 закрывает сам модуль decoder.
 
-- [ ] **Step 4: Задать точную политику registry**
+- [x] **Step 4: Задать точную политику registry**
 
 Использовать существующий `effectRuntimeCatalogBypassExports` как список
 низкоуровневых защищённых символов. Закрытый список разрешённых value-export
@@ -449,7 +449,7 @@ const allowedRegistryAdapterValueExports = new Set([
 Новый registry-origin value, достигший публичного entrypoint, должен требовать
 явного добавления в этот список.
 
-- [ ] **Step 5: Зафиксировать production entrypoints**
+- [x] **Step 5: Зафиксировать production entrypoints**
 
 Определить:
 
@@ -473,7 +473,7 @@ const publicEntrypoints = new Set([
 с политикой. Отсутствующий либо лишний production CLI должен быть
 `configuration` violation.
 
-- [ ] **Step 6: Подключить анализатор к существующему guard**
+- [x] **Step 6: Подключить анализатор к существующему guard**
 
 Вызвать `checkProtectedPublicEntrypoints` после существующего сканирования
 engine и перед финальным выводом. Каждое нарушение добавить в
@@ -492,7 +492,7 @@ for (const violation of checkProtectedPublicEntrypoints({
 }
 ```
 
-- [ ] **Step 7: Запустить точечные проверки**
+- [x] **Step 7: Запустить точечные проверки**
 
 Run:
 
@@ -546,7 +546,7 @@ Generated-By: coder gpt-5.6
 - Consumes: полностью подключённый guard из Task 2.
 - Produces: актуальный DOX-контракт и проверенный issue 08 commit range.
 
-- [ ] **Step 1: Выполнить DOX pass**
+- [x] **Step 1: Выполнить DOX pass**
 
 Проверить текущие формулировки трёх AGENTS.md. Если они обещают отслеживание
 произвольного value-flow, заменить на:
@@ -560,7 +560,7 @@ Generated-By: coder gpt-5.6
 
 Не менять AGENTS.md, если существующие контракты уже соответствуют дизайну.
 
-- [ ] **Step 2: Запустить проектные проверки один раз на финальном состоянии**
+- [x] **Step 2: Запустить проектные проверки один раз на финальном состоянии**
 
 Run:
 
@@ -575,7 +575,7 @@ Expected: status `0` у каждой команды. Если `npm run check` у
 предыдущие команды, всё равно записать только фактически выполненные команды
 и не повторять их после неизменившегося дерева.
 
-- [ ] **Step 3: Проверить diff и область изменений**
+- [x] **Step 3: Проверить diff и область изменений**
 
 Run:
 
@@ -592,7 +592,7 @@ git diff -- scripts/check-engine-typed-access.mjs scripts/lib/check-protected-pu
 - все новые production entrypoints и trusted adapters видны в одном месте;
 - тестовая матрица соответствует спецификации.
 
-- [ ] **Step 4: Отметить план и локальный issue**
+- [x] **Step 4: Отметить план и локальный issue**
 
 Отметить выполненные пункты плана. Локальный issue обновляет интегратор после
 чистого Standards/Spec review; worker не включает `.scratch/` в коммит.

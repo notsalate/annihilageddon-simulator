@@ -16,6 +16,7 @@ This folder contains command-line entrypoints and menu orchestration.
 - Do not put game-domain rules or import schema decisions in CLI wrappers.
 - Keep user-facing menu text clear and consistent with the command behavior.
 - Do not add network or dependency-install side effects to CLI commands.
+- Public-entrypoint guard follows the static TypeScript import/export graph and canonical symbols. It does not interpret arbitrary JavaScript value flow; new trusted adapters and production CLI entrypoints require an explicit policy update and paired tests.
 
 ## Work Guidance
 
