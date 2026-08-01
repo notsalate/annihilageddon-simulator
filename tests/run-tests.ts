@@ -37,6 +37,7 @@ const testSuites = [
   "runtime-image-metadata.test.js",
   "card-runtime-clusters.test.js",
   "engine-guards.test.js",
+  "public-entrypoint-guard.test.js",
   "effect-choice-decision-view-types.test.js",
   "effect-choice-routing.test.js",
   "best-move-analysis.test.js",

@@ -5,7 +5,6 @@ import {
   validateRuntimeEffectCatalogPayload,
   type EffectRuntimeCatalogOperationOverridesForTesting,
 } from "../src/engine/effect-runtime-registry.js";
-import { decodeRuntimeEffectForId } from "../src/engine/runtime-effect-decoder.js";
 import type { RuntimeEffectForId } from "../src/engine/runtime-effect.js";
 
 type Equal<Left, Right> =
@@ -51,15 +50,17 @@ test("public catalog validation preserves the concrete payload variant", () => {
   assert.equal(amount, 2);
 });
 
-test("decoder rejects an ongoing refill payload with unsupported timing", () => {
-  const decoded = decodeRuntimeEffectForId(
+test("public catalog validation rejects an ongoing refill payload with unsupported timing", () => {
+  const decoded = validateRuntimeEffectCatalogPayload(
     "Controlled refill",
     "ongoing_hand_refill_bonus",
     {
       effectId: "ongoing_hand_refill_bonus",
       timing: "whileControlled",
       amount: 1,
-    }
+    },
+    "combat",
+    "card"
   );
 
   assert.equal(decoded.ok, false);

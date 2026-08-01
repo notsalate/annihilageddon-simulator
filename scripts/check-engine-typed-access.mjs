@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import { checkProtectedPublicEntrypoints } from "./lib/check-protected-public-entrypoints.mjs";
 
 const rootDir = path.resolve(process.argv[2] ?? process.cwd());
 const engineDir = path.join(rootDir, "src", "engine");
@@ -98,10 +99,69 @@ const effectRuntimeCatalogBypassExports = new Set([
   "EffectRuntimeCatalogDefinition",
   "EffectRuntimeCatalogResolution",
 ]);
+const decoderModule = "src/engine/runtime-effect-decoder.ts";
 const approvedRuntimeEffectDecoderImporters = new Set([
   "src/engine/data.ts",
   "src/engine/effect-runtime-registry.ts",
 ]);
+const allowedDataAdapterValueExports = new Set([
+  "loadCurrentRuntimeDataPack",
+  "decodeCurrentRuntimeDataPack",
+  "loadV0DataPack",
+  "validateExecutableDataPack",
+  "isIncompleteFullOnlyDataPack",
+]);
+const allowedRegistryAdapterValueExports = new Set([
+  "createAttackDefenseUsage",
+  "effectRuntimeModes",
+  "effectRuntimeSourceKinds",
+  "executeAttackOutcomeBranch",
+  "validateRuntimeEffectCatalogPayload",
+  "executeRuntimeEffect",
+  "evaluateRuntimeEffectAtTiming",
+  "applyEffectiveValueModifier",
+  "collectAttackReplacementProfile",
+  "resolveResurrectionLifeTotal",
+  "executeRuntimeEffectAtTiming",
+  "executeRuntimeEffectOnPlayCard",
+  "applyRuntimeEffectAfterPlayerAttackDamage",
+  "applyRuntimeEffectAfterDamageDealt",
+  "evaluateRuntimeEffectEndTurnDrawModifier",
+  "withEffectRuntimeCatalogOperationsForTesting",
+  "tryExecuteSetupEffect",
+]);
+const publicEntrypoints = new Set([
+  "src/index.ts",
+  "src/cli/generate-drafts.ts",
+  "src/cli/report-card-runtime-clusters.ts",
+  "src/cli/report-import-completeness.ts",
+  "src/cli/report-runtime-coverage.ts",
+  "src/cli/run-best-move-analysis.ts",
+  "src/cli/run-mass-simulation.ts",
+  "src/cli/run-simulation-menu.ts",
+  "src/cli/run-single-game.ts",
+  "src/cli/validate-drafts.ts",
+]);
+const protectedModules = new Map([
+  [decoderModule, "*"],
+  ["src/engine/effect-runtime-registry.ts", effectRuntimeCatalogBypassExports],
+]);
+const approvedValueImporters = new Map(
+  [...approvedRuntimeEffectDecoderImporters].map((importer) => [
+    importer,
+    new Set([decoderModule]),
+  ])
+);
+const trustedAdapterValueExports = new Map([
+  ["src/engine/data.ts", allowedDataAdapterValueExports],
+  ["src/engine/effect-runtime-registry.ts", allowedRegistryAdapterValueExports],
+]);
+const publicEntrypointPolicy = {
+  entrypoints: publicEntrypoints,
+  protectedModules,
+  approvedValueImporters,
+  trustedAdapterValueExports,
+};
 const forbiddenRuntimeEffectBoundaryIdentifiers = new Set([
   "RuntimeEffectFields",
   "RuntimeEffectPayloadBase",
@@ -241,6 +301,8 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
   visit(sourceFile);
 }
 
+checkPublicEntrypointPolicy();
+
 function checkAttackLifecycleOwnership(relativePath, sourceFile) {
   function visit(node) {
     if (
@@ -366,6 +428,7 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
       ts.isImportDeclaration(node) &&
       ts.isStringLiteral(node.moduleSpecifier) &&
       node.moduleSpecifier.text === "./runtime-effect-decoder.js" &&
+      isRuntimeEffectDecoderValueImport(node) &&
       !approvedRuntimeEffectDecoderImporters.has(relativePath)
     ) {
       effectRuntimeCatalogBoundaryViolations.push(
@@ -376,7 +439,8 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
       if (
         node.moduleSpecifier !== undefined &&
         ts.isStringLiteral(node.moduleSpecifier) &&
-        node.moduleSpecifier.text === "./runtime-effect-decoder.js"
+        node.moduleSpecifier.text === "./runtime-effect-decoder.js" &&
+        isRuntimeEffectDecoderValueExport(node)
       ) {
         const exportedNames = getExportedLocalNames(node);
         if (approvedRuntimeEffectDecoderImporters.has(relativePath)) {
@@ -484,7 +548,8 @@ function collectRuntimeEffectDecoderImportBindings(sourceFile) {
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== "./runtime-effect-decoder.js"
+      statement.moduleSpecifier.text !== "./runtime-effect-decoder.js" ||
+      !isRuntimeEffectDecoderValueImport(statement)
     ) {
       continue;
     }
@@ -497,7 +562,7 @@ function collectRuntimeEffectDecoderImportBindings(sourceFile) {
       ts.isNamedImports(importClause.namedBindings)
     ) {
       for (const element of importClause.namedBindings.elements) {
-        decoderImportBindings.add(element.name.text);
+        if (!element.isTypeOnly) decoderImportBindings.add(element.name.text);
       }
     }
     if (
@@ -508,6 +573,86 @@ function collectRuntimeEffectDecoderImportBindings(sourceFile) {
     }
   }
   return collectTopLevelBindingAliases(sourceFile, decoderImportBindings);
+}
+
+function isRuntimeEffectDecoderValueImport(node) {
+  const importClause = node.importClause;
+  if (importClause === undefined || importClause.isTypeOnly) return false;
+  if (importClause.name !== undefined) return true;
+  const namedBindings = importClause.namedBindings;
+  if (namedBindings === undefined || ts.isNamespaceImport(namedBindings)) {
+    return namedBindings !== undefined;
+  }
+  return namedBindings.elements.some((element) => !element.isTypeOnly);
+}
+
+function isRuntimeEffectDecoderValueExport(node) {
+  if (node.isTypeOnly) return false;
+  if (
+    node.exportClause === undefined ||
+    ts.isNamespaceExport(node.exportClause)
+  ) {
+    return true;
+  }
+  return node.exportClause.elements.some((element) => !element.isTypeOnly);
+}
+
+function checkPublicEntrypointPolicy() {
+  const tsconfigPath = path.join(rootDir, "tsconfig.json");
+  const packageJsonPath = path.join(rootDir, "package.json");
+  if (
+    !statSync(tsconfigPath, { throwIfNoEntry: false }) ||
+    !statSync(packageJsonPath, { throwIfNoEntry: false })
+  ) {
+    return;
+  }
+  const configuredCliEntrypoints = cliEntrypoints(rootDir);
+  const expectedCliEntrypoints = new Set(
+    [...publicEntrypointPolicy.entrypoints].filter((entrypoint) =>
+      entrypoint.startsWith("src/cli/")
+    )
+  );
+
+  for (const entrypoint of configuredCliEntrypoints) {
+    if (!expectedCliEntrypoints.has(entrypoint)) {
+      effectRuntimeCatalogBoundaryViolations.push(
+        `configuration violation: unregistered production CLI ${entrypoint}`
+      );
+    }
+  }
+  for (const entrypoint of expectedCliEntrypoints) {
+    if (!configuredCliEntrypoints.has(entrypoint)) {
+      effectRuntimeCatalogBoundaryViolations.push(
+        `configuration violation: missing production CLI ${entrypoint}`
+      );
+    }
+  }
+
+  for (const violation of checkProtectedPublicEntrypoints({
+    rootDir,
+    tsconfigPath,
+    entrypoints: [...publicEntrypointPolicy.entrypoints],
+    protectedModules: publicEntrypointPolicy.protectedModules,
+    approvedValueImporters: publicEntrypointPolicy.approvedValueImporters,
+    trustedAdapterValueExports:
+      publicEntrypointPolicy.trustedAdapterValueExports,
+  })) {
+    effectRuntimeCatalogBoundaryViolations.push(violation.message);
+  }
+}
+
+function cliEntrypoints(projectRoot) {
+  const packageJson = JSON.parse(
+    readFileSync(path.join(projectRoot, "package.json"), "utf8")
+  );
+  const entrypoints = new Set();
+  for (const script of Object.values(packageJson.scripts ?? {})) {
+    if (typeof script !== "string") continue;
+    for (const match of script.matchAll(/\bdist\/src\/cli\/([\w-]+)\.js\b/gu)) {
+      entrypoints.add(`src/cli/${match[1]}.ts`);
+    }
+  }
+  return entrypoints;
 }
 
 function collectCatalogBypassBindings(sourceFile) {
