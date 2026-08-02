@@ -11,6 +11,12 @@ const frozenActiveRequirementIds = [
 const testSuitesByCommit = new Map();
 const canonicalTestSuiteRegistrySha256 =
   "124256f3248b0b2d36c6f7d1e2fa761f747076bd23957e786b038162cc5b59d3";
+const directTestSuiteExecutionDependencyNames = new Set([
+  "compiledTestsRoot",
+  "path",
+  "process",
+  "spawnSync",
+]);
 
 const manifestPath = process.argv[2];
 
@@ -527,7 +533,7 @@ function getForOfVariableName(statement) {
 
 function hasDirectTestSuiteSpawn(statement, suiteName) {
   if (
-    suiteName === "process" ||
+    directTestSuiteExecutionDependencyNames.has(suiteName) ||
     !ts.isBlock(statement) ||
     statement.statements.length === 0
   ) {

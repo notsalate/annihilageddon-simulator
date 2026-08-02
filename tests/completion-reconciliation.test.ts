@@ -529,6 +529,27 @@ test("reconciliation rejects a runner whose suite binding shadows process", (con
   );
 });
 
+test("reconciliation rejects runners whose suite binding shadows execution dependencies", (context) => {
+  const testFileName = "loop-binding-shadowing.test.ts";
+  for (const loopBinding of [
+    "path",
+    "spawnSync",
+    "compiledTestsRoot",
+  ] as const) {
+    const result = runRegistryFixture(
+      context,
+      testFileName,
+      createLoopBindingShadowingRegistrySource(loopBinding)
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.match(
+      result.stderr,
+      /test reference tests\/loop-binding-shadowing\.test\.ts must exist and be registered at manifest\.codeSha/
+    );
+  }
+});
+
 test("reconciliation rejects duplicate suite registrations", (context) => {
   const result = runRegistryFixture(
     context,
@@ -714,6 +735,35 @@ function createValidRegistrySource(testSuite: string) {
     "    process.execPath,",
     '    ["--test", path.join(compiledTestsRoot, suite)],',
     '    { stdio: "inherit" }',
+    "  );",
+    "  if (result.error !== undefined) {",
+    "    throw result.error;",
+    "  }",
+    "  if (result.status !== 0) {",
+    "    process.exit(result.status ?? 1);",
+    "  }",
+    "}",
+    "",
+  ].join("\n");
+}
+
+function createLoopBindingShadowingRegistrySource(
+  loopBinding: "path" | "spawnSync" | "compiledTestsRoot"
+) {
+  return [
+    'import { spawnSync } from "node:child_process";',
+    'import path from "node:path";',
+    'import { assertTestSuiteRegistryComplete, collectCompiledTestSuites } from "./test-suite-registry.js";',
+    'const testSuites = ["loop-binding-shadowing.test.js"];',
+    'const compiledTestsRoot = path.join(process.cwd(), "dist", "tests");',
+    "assertTestSuiteRegistryComplete(",
+    "  testSuites,",
+    "  collectCompiledTestSuites(compiledTestsRoot)",
+    ");",
+    `for (const ${loopBinding} of testSuites) {`,
+    "  const result = spawnSync(",
+    "    process.execPath,",
+    `    ["--test", path.join(compiledTestsRoot, ${loopBinding})]`,
     "  );",
     "  if (result.error !== undefined) {",
     "    throw result.error;",
