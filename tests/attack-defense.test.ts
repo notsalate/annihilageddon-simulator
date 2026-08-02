@@ -337,6 +337,65 @@ test("defense module commits exact planned cards and costs in event order", () =
   );
 });
 
+test("Defense payment moves its hand card through Ledger without direct array splice", () => {
+  const { state, attacker, defender, source } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
+    costs: [{ costId: "discard_other_hand_card", amount: 1 }],
+  });
+  const [paymentCard] = moveDeckCardsToHand(defender, 1);
+  assert.ok(paymentCard);
+  Object.defineProperty(defender.hand, "splice", {
+    value() {
+      throw new Error("Defense payment bypassed Control Ledger");
+    },
+    configurable: true,
+  });
+  const services = createServices((choices) =>
+    choices.find((choice) => choice.choiceId === defense.instanceId)
+  );
+
+  const result = resolveDefenseWindow(
+    state,
+    defender,
+    redirectableAttack(attacker, source),
+    services
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(defender.hand, []);
+  assert.deepEqual(defender.discard, [paymentCard, defense]);
+});
+
+test("Defense payment rejects a planned card moved out of hand before commit", () => {
+  const { state, attacker, defender, source } = createScenario();
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
+    costs: [{ costId: "discard_other_hand_card", amount: 1 }],
+  });
+  const [paymentCard] = moveDeckCardsToHand(defender, 1);
+  assert.ok(paymentCard);
+  const services = createServices((choices) => {
+    defender.hand = defender.hand.filter(
+      (card) => card.instanceId !== paymentCard.instanceId
+    );
+    defender.deck.unshift(paymentCard);
+    return choices.find((choice) => choice.choiceId === defense.instanceId);
+  });
+
+  const result = resolveDefenseWindow(
+    state,
+    defender,
+    redirectableAttack(attacker, source),
+    services
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /not uniquely present in hand/);
+  assert.equal(defender.deck.includes(paymentCard), true);
+  assert.equal(defender.discard.includes(paymentCard), false);
+  assert.equal(defender.hand.includes(defense), true);
+});
+
 test("defense module rejects a stale payment plan before partial commit", () => {
   const { state, attacker, defender, source } = createScenario();
   const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {

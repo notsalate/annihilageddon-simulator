@@ -645,25 +645,20 @@ function commitDefensePaymentPlan(
   for (const step of plan.steps) {
     switch (step.kind) {
       case "discardOtherHandCard": {
-        const paidCardIndex = defendingPlayer.hand.findIndex(
-          (card) => card.instanceId === step.cardInstanceId
+        const moveResult = movePhysicalCard(
+          state,
+          step.cardInstanceId,
+          `${defendingPlayer.playerId}.discard`,
+          "back",
+          `${defendingPlayer.playerId}.hand`
         );
-        if (paidCardIndex < 0) {
+        if (!moveResult.ok) {
           return {
             ok: false,
-            error: `Defense payment plan lost card ${step.cardInstanceId} after validation`,
+            error: `Defense payment plan could not move card ${step.cardInstanceId}: ${moveResult.reason}`,
           };
         }
-
-        const [paidCard] = defendingPlayer.hand.splice(paidCardIndex, 1);
-        if (paidCard === undefined) {
-          return {
-            ok: false,
-            error: `Defense payment plan could not remove card ${step.cardInstanceId}`,
-          };
-        }
-
-        defendingPlayer.discard.push(paidCard);
+        const paidCard = moveResult.move.card;
         recordGameEvent(state, {
           type: "defenseCostPaid",
           playerId: defendingPlayer.playerId,

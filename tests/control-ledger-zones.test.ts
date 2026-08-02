@@ -11,6 +11,7 @@ import {
   listDefenseCardLocations,
   listPhysicalCardLocations,
   listPhysicalCardZoneDescriptors,
+  movePhysicalCard,
   removeCardFromLocation,
   registerPhysicalCardZoneDescriptorFactory,
   type PhysicalCardZoneDescriptorFactory,
@@ -185,6 +186,69 @@ test("Ledger exposes hand and registered extension cards as Defense sources", ()
       { card: extensionCard, zoneName: "fixture.defense-source" },
     ]
   );
+});
+
+test("Ledger returns a typed failure when an extension replacement and rollback both throw", () => {
+  const state = initializeGame({ rootDir, seed: 47606 });
+  const player = state.players[0]!;
+  const extensionCard = createCard("failing-move-source", player.playerId);
+  const sourceCards = [extensionCard];
+  const destinationCards: CardInstance[] = [];
+  let sourceReplaceCalls = 0;
+  registerPhysicalCardZoneDescriptorFactory(
+    state,
+    Object.assign(
+      () => ({
+        cardinality: "many" as const,
+        scoringEligible: false,
+        expectedOwnerId: player.playerId,
+        read: () => sourceCards,
+        replace: (cards: readonly CardInstance[]) => {
+          sourceReplaceCalls += 1;
+          if (sourceReplaceCalls > 1) {
+            throw new Error("fixture source rollback failure");
+          }
+          sourceCards.splice(0, sourceCards.length, ...cards);
+        },
+      }),
+      {
+        identity: "fixture.failing-move-source",
+        zoneName: "fixture.failing-move-source",
+      }
+    )
+  );
+  registerPhysicalCardZoneDescriptorFactory(
+    state,
+    Object.assign(
+      () => ({
+        cardinality: "many" as const,
+        scoringEligible: false,
+        expectedOwnerId: player.playerId,
+        read: () => destinationCards,
+        replace: () => {
+          throw new Error("fixture destination replace failure");
+        },
+      }),
+      {
+        identity: "fixture.failing-move-destination",
+        zoneName: "fixture.failing-move-destination",
+      }
+    )
+  );
+
+  const result = movePhysicalCard(
+    state,
+    extensionCard.instanceId,
+    "fixture.failing-move-destination",
+    "back"
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    reason: "fixture destination replace failure",
+  });
+  assert.deepEqual(sourceCards, [extensionCard]);
+  assert.deepEqual(destinationCards, []);
 });
 
 test("Ledger rejects duplicate extension metadata before calling factories or changing its registry", () => {

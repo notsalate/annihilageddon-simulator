@@ -125,6 +125,12 @@ export type PhysicalCardMoveResult =
   | { readonly ok: true; readonly move: PhysicalCardMove }
   | { readonly ok: false; readonly reason: string };
 
+interface PhysicalCardZoneMoveSnapshot {
+  readonly descriptor: PhysicalCardZoneDescriptor;
+  readonly cards: readonly CardInstance[];
+  readonly recoveryStorage?: CardInstance[];
+}
+
 export function buildControlledObjectView(
   state: GameState,
   playerId: PlayerId
@@ -611,7 +617,8 @@ export function movePhysicalCard(
   state: GameState,
   cardInstanceId: CardInstance["instanceId"],
   destinationZoneName: string,
-  placement: "front" | "back"
+  placement: "front" | "back",
+  expectedSourceZoneName?: string
 ): PhysicalCardMoveResult {
   const descriptors = listPhysicalCardZoneDescriptors(state);
   const destination = descriptors.find(
@@ -621,16 +628,41 @@ export function movePhysicalCard(
     return { ok: false, reason: `Missing destination zone ${destinationZoneName}` };
   }
 
-  const source = descriptors
-    .map((descriptor) => ({
-      descriptor,
-      cards: descriptor.read(),
-    }))
-    .find(({ cards }) =>
-      cards.some((card) => card.instanceId === cardInstanceId)
-    );
+  let source:
+    | {
+        descriptor: PhysicalCardZoneDescriptor;
+        cards: readonly CardInstance[];
+      }
+    | undefined;
+  for (const descriptor of descriptors) {
+    if (
+      expectedSourceZoneName !== undefined &&
+      descriptor.zoneName !== expectedSourceZoneName
+    ) {
+      continue;
+    }
+    let cards: readonly CardInstance[];
+    try {
+      cards = descriptor.read();
+    } catch (error) {
+      return {
+        ok: false,
+        reason: describePhysicalCardMoveError(error),
+      };
+    }
+    if (cards.some((card) => card.instanceId === cardInstanceId)) {
+      source = { descriptor, cards };
+      break;
+    }
+  }
   if (source === undefined) {
-    return { ok: false, reason: `Missing card ${cardInstanceId}` };
+    return {
+      ok: false,
+      reason:
+        expectedSourceZoneName === undefined
+          ? `Missing card ${cardInstanceId}`
+          : `Missing card ${cardInstanceId} in ${expectedSourceZoneName}`,
+    };
   }
   if (source.descriptor.zoneName === destination.zoneName) {
     return {
@@ -646,7 +678,24 @@ export function movePhysicalCard(
   if (card === undefined) {
     return { ok: false, reason: `Missing card ${cardInstanceId}` };
   }
-  const destinationCards = destination.read();
+  const sourceSnapshotResult = createPhysicalCardZoneMoveSnapshot(
+    state,
+    source.descriptor,
+    source.cards
+  );
+  if (!sourceSnapshotResult.ok) {
+    return sourceSnapshotResult;
+  }
+  const destinationSnapshotResult = createPhysicalCardZoneMoveSnapshot(
+    state,
+    destination
+  );
+  if (!destinationSnapshotResult.ok) {
+    return destinationSnapshotResult;
+  }
+  const sourceSnapshot = sourceSnapshotResult.snapshot;
+  const destinationSnapshot = destinationSnapshotResult.snapshot;
+  const destinationCards = destinationSnapshot.cards;
   if (
     destination.cardinality === "zeroOrOne" &&
     destinationCards.length > 0
@@ -669,11 +718,16 @@ export function movePhysicalCard(
     source.descriptor.replace(sourceAfter);
     destination.replace(destinationAfter);
   } catch (error) {
-    source.descriptor.replace(source.cards);
-    destination.replace(destinationCards);
+    const rollbackErrors = [
+      restorePhysicalCardZoneMoveSnapshot(destinationSnapshot),
+      restorePhysicalCardZoneMoveSnapshot(sourceSnapshot),
+    ].filter((rollbackError): rollbackError is string => rollbackError !== undefined);
     return {
       ok: false,
-      reason: error instanceof Error ? error.message : "Cannot move physical card",
+      reason:
+        rollbackErrors.length === 0
+          ? describePhysicalCardMoveError(error)
+          : `${describePhysicalCardMoveError(error)}; rollback failed: ${rollbackErrors.join("; ")}`,
     };
   }
 
@@ -685,6 +739,86 @@ export function movePhysicalCard(
       destinationZoneName,
     },
   };
+}
+
+function createPhysicalCardZoneMoveSnapshot(
+  state: GameState,
+  descriptor: PhysicalCardZoneDescriptor,
+  existingCards?: readonly CardInstance[]
+):
+  | { readonly ok: true; readonly snapshot: PhysicalCardZoneMoveSnapshot }
+  | { readonly ok: false; readonly reason: string } {
+  let cards: readonly CardInstance[];
+  try {
+    cards = existingCards ?? descriptor.read();
+  } catch (error) {
+    return { ok: false, reason: describePhysicalCardMoveError(error) };
+  }
+  const isExtensionZone =
+    additionalPhysicalCardZoneFactories
+      .get(state)
+      ?.some((factory) => factory.zoneName === descriptor.zoneName) === true;
+  if (!isExtensionZone) {
+    return {
+      ok: true,
+      snapshot: { descriptor, cards: [...cards] },
+    };
+  }
+
+  let recoveryStorage: readonly CardInstance[];
+  try {
+    recoveryStorage = descriptor.read();
+  } catch (error) {
+    return { ok: false, reason: describePhysicalCardMoveError(error) };
+  }
+  if (
+    recoveryStorage !== cards ||
+    !Array.isArray(recoveryStorage) ||
+    Object.isFrozen(recoveryStorage)
+  ) {
+    return {
+      ok: false,
+      reason: `Extension zone ${descriptor.zoneName} does not expose stable recoverable storage`,
+    };
+  }
+  return {
+    ok: true,
+    snapshot: {
+      descriptor,
+      cards: [...cards],
+      recoveryStorage: recoveryStorage as CardInstance[],
+    },
+  };
+}
+
+function restorePhysicalCardZoneMoveSnapshot(
+  snapshot: PhysicalCardZoneMoveSnapshot
+): string | undefined {
+  try {
+    if (snapshot.recoveryStorage === undefined) {
+      snapshot.descriptor.replace(snapshot.cards);
+    } else {
+      snapshot.recoveryStorage.splice(
+        0,
+        snapshot.recoveryStorage.length,
+        ...snapshot.cards
+      );
+    }
+    const restoredCards = snapshot.descriptor.read();
+    if (
+      restoredCards.length !== snapshot.cards.length ||
+      restoredCards.some((card, index) => card !== snapshot.cards[index])
+    ) {
+      return `Cannot restore physical card zone ${snapshot.descriptor.zoneName}`;
+    }
+    return undefined;
+  } catch (error) {
+    return `${snapshot.descriptor.zoneName}: ${describePhysicalCardMoveError(error)}`;
+  }
+}
+
+function describePhysicalCardMoveError(error: unknown): string {
+  return error instanceof Error ? error.message : "Cannot move physical card";
 }
 
 function createArrayCardZoneDescriptor(
