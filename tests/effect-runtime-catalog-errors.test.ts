@@ -145,6 +145,69 @@ test("catalog decodes Wild Magic options before handing typed options to its han
   assert.equal(handlerCalled, true);
 });
 
+test("catalog execute rejects conflicting attack and status targets before calling handlers", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23022 });
+  const subject = scenario.activePlayer;
+  const source = catalogSource(subject, "card", "combat");
+  const cases = [
+    {
+      effectId: "attack_damage",
+      payload: {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 2,
+        target: { selector: "opponentPlayer" },
+        targetSelector: "eachFoe",
+      },
+    },
+    {
+      effectId: "gain_status",
+      payload: {
+        effectId: "gain_status",
+        timing: "onPlay",
+        statusId: "dingler",
+        target: { selector: "opponentPlayer" },
+        targetSelector: "eachPlayerClockwiseFromActive",
+      },
+    },
+  ] as const;
+  const executorCalls: Array<(typeof cases)[number]["effectId"]> = [];
+
+  const results = cases.map(({ effectId, payload }) =>
+    withTemporaryEffectRuntimeOperations(
+      effectId,
+      {
+        execute() {
+          executorCalls.push(effectId);
+          return { ok: true };
+        },
+      },
+      () =>
+        executeRuntimeEffect(
+          scenario.state,
+          subject,
+          payload,
+          source,
+          throwingRuntimeServices()
+        )
+    )
+  );
+
+  assert.deepEqual(results, [
+    {
+      ok: false,
+      error:
+        "Effect attack_damage target and targetSelector cannot both be provided",
+    },
+    {
+      ok: false,
+      error:
+        "Effect gain_status target and targetSelector cannot both be provided",
+    },
+  ]);
+  assert.deepEqual(executorCalls, []);
+});
+
 test("catalog rejects unsupported timing at the decoder boundary before its handler", () => {
   const scenario = createGameScenario({ rootDir, seed: 23020 });
   const subject = scenario.activePlayer;

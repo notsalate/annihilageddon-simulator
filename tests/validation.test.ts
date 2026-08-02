@@ -40,7 +40,6 @@ import {
   type EffectRuntimeCatalogOperationOverridesForTesting,
   type EffectRuntimeServices,
   validateRuntimeEffectCatalogPayload,
-  withEffectRuntimeCatalogOperationsForTesting,
 } from "../src/engine/effect-runtime-registry.js";
 
 const rootDir = process.cwd();
@@ -1913,7 +1912,6 @@ test("executable data-pack validation rejects conflicting attack and status targ
     },
   ] as const;
 
-  const executorCalls: RuntimeEffectId[] = [];
   const results = cases.map(({ cardId, effectId, payload }) => {
     const card = createFixtureCard(cardId);
     const dataPack = withOnlyFixtureCard({
@@ -1924,16 +1922,7 @@ test("executable data-pack validation rejects conflicting attack and status targ
       },
     });
 
-    return withEffectRuntimeCatalogOperationsForTesting(
-      effectId,
-      {
-        execute() {
-          executorCalls.push(effectId);
-          return { ok: true };
-        },
-      },
-      () => validateExecutableDataPack(dataPack)
-    );
+    return validateExecutableDataPack(dataPack);
   });
 
   assert.deepEqual(results, [
@@ -1950,7 +1939,6 @@ test("executable data-pack validation rejects conflicting attack and status targ
       ],
     },
   ]);
-  assert.deepEqual(executorCalls, []);
 });
 
 test("combat effect decoders reject invalid concrete payloads", () => {
