@@ -350,6 +350,67 @@ test("failed defense branch restores an extension zone whose storage mutates in 
   assert.deepEqual(extensionCards, [originalCard]);
 });
 
+test("Defense commits a card from an extension zone and restores that zone after a failed branch", () => {
+  const { state, attacker, defender, defenseCard } =
+    createRollbackScenario(47550);
+  defender.hand = defender.hand.filter(
+    (card) => card.instanceId !== defenseCard.instanceId
+  );
+  const extensionCards = [defenseCard];
+  registerPhysicalCardZoneDescriptorFactory(
+    state,
+    Object.assign(
+      () => ({
+        cardinality: "many" as const,
+        scoringEligible: false,
+        expectedOwnerId: defender.playerId,
+        read: () => extensionCards,
+        replace: (cards: readonly CardInstance[]) => {
+          extensionCards.splice(0, extensionCards.length, ...cards);
+        },
+      }),
+      {
+        identity: "fixture-defense-source-extension-zone",
+        zoneName: "fixture.defense-source-extension-zone",
+      }
+    )
+  );
+
+  const services: AttackDefenseServices = {
+    chooseEffectChoice(_state, _player, _source, _effectId, choices) {
+      return choices.find(
+        (choice) =>
+          choice.choiceKind === "defense" && choice.card === defenseCard
+      );
+    },
+    executeDefenseEffects(branchState, player) {
+      assert.deepEqual(extensionCards, []);
+      assert.equal(player.discard.at(-1), defenseCard);
+      assert.equal(
+        branchState.eventLog.some(
+          (event) =>
+            event.type === "defenseCardMoved" &&
+            event.cardInstanceId === defenseCard.instanceId
+        ),
+        true
+      );
+      return { ok: false, error: "fixture extension defense branch failure" };
+    },
+  };
+
+  const attack = redirectableAttack(attacker);
+  const result = resolveDefenseWindow(state, defender, attack, services);
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "fixture extension defense branch failure",
+  });
+  assert.deepEqual(extensionCards, [defenseCard]);
+  assert.equal(defender.discard.includes(defenseCard), false);
+  assert.deepEqual([...attack.defenseUsage.defendedPlayerIds], []);
+  assert.deepEqual([...attack.defenseUsage.usedDefenseCardInstanceIds], []);
+});
+
 function createScenario(seed: number): GameState {
   const state = initializeGame({ rootDir, seed });
   const attacker = mustGetPlayer(state, 0);

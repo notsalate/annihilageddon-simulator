@@ -8,6 +8,7 @@ import {
 } from "../src/index.js";
 import {
   findCardLocation,
+  listDefenseCardLocations,
   listPhysicalCardLocations,
   listPhysicalCardZoneDescriptors,
   removeCardFromLocation,
@@ -145,6 +146,45 @@ test("singleton physical card descriptor enforces zero-or-one storage", () => {
   assert.equal(player.unboughtFamiliar, undefined);
   descriptor.replace([second]);
   assert.equal(player.unboughtFamiliar, second);
+});
+
+test("Ledger exposes hand and registered extension cards as Defense sources", () => {
+  const state = initializeGame({ rootDir, seed: 47605 });
+  const player = state.players[0]!;
+  const handCard = createCard("defense-hand", player.playerId);
+  const deckCard = createCard("defense-deck", player.playerId);
+  const discardCard = createCard("defense-discard", player.playerId);
+  const extensionCard = createCard("defense-extension", player.playerId);
+  player.hand = [handCard];
+  player.deck = [deckCard];
+  player.discard = [discardCard];
+  const extensionCards = [extensionCard];
+  registerPhysicalCardZoneDescriptorFactory(
+    state,
+    Object.assign(
+      () => ({
+        cardinality: "many" as const,
+        scoringEligible: false,
+        expectedOwnerId: player.playerId,
+        read: () => extensionCards,
+        replace: (cards: readonly CardInstance[]) => {
+          extensionCards.splice(0, extensionCards.length, ...cards);
+        },
+      }),
+      {
+        identity: "fixture.defense-source",
+        zoneName: "fixture.defense-source",
+      }
+    )
+  );
+
+  assert.deepEqual(
+    listDefenseCardLocations(state, player.playerId),
+    [
+      { card: handCard, zoneName: `${player.playerId}.hand` },
+      { card: extensionCard, zoneName: "fixture.defense-source" },
+    ]
+  );
 });
 
 test("Ledger rejects duplicate extension metadata before calling factories or changing its registry", () => {

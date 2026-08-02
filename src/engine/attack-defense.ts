@@ -1,6 +1,8 @@
 import {
+  listDefenseCardLocations,
   listPhysicalCardLocations,
   listPhysicalCardZoneDescriptors,
+  movePhysicalCard,
 } from "./control-ledger.js";
 import { installGameEventLog } from "./game-events.js";
 import { recordGameEvent } from "./event-recorder.js";
@@ -447,43 +449,44 @@ function moveDefenseCard(
     destination: "discardSelf" | "topdeckSelf";
   }
 ): boolean {
-  const cardIndex = defendingPlayer.hand.findIndex(
-    (card) => card.instanceId === defense.card.instanceId
-  );
-  if (cardIndex < 0) {
+  const destinationZoneName =
+    defense.destination === "discardSelf"
+      ? `${defendingPlayer.playerId}.discard`
+      : defense.destination === "topdeckSelf"
+        ? `${defendingPlayer.playerId}.deck`
+        : undefined;
+  if (destinationZoneName === undefined) {
     return false;
   }
-
-  const [card] = defendingPlayer.hand.splice(cardIndex, 1);
-  if (card === undefined) {
+  const moveResult = movePhysicalCard(
+    state,
+    defense.card.instanceId,
+    destinationZoneName,
+    defense.destination === "discardSelf" ? "back" : "front"
+  );
+  if (!moveResult.ok) {
     return false;
   }
 
   if (defense.destination === "discardSelf") {
-    defendingPlayer.discard.push(card);
     recordGameEvent(state, {
       type: "defenseCardMoved",
       playerId: defendingPlayer.playerId,
-      cardInstanceId: card.instanceId,
-      definitionId: card.definitionId,
+      cardInstanceId: moveResult.move.card.instanceId,
+      definitionId: moveResult.move.card.definitionId,
       destination: "discard",
     });
     return true;
   }
 
-  if (defense.destination === "topdeckSelf") {
-    defendingPlayer.deck.unshift(card);
-    recordGameEvent(state, {
-      type: "defenseCardMoved",
-      playerId: defendingPlayer.playerId,
-      cardInstanceId: card.instanceId,
-      definitionId: card.definitionId,
-      destination: "deckTop",
-    });
-    return true;
-  }
-
-  return false;
+  recordGameEvent(state, {
+    type: "defenseCardMoved",
+    playerId: defendingPlayer.playerId,
+    cardInstanceId: moveResult.move.card.instanceId,
+    definitionId: moveResult.move.card.definitionId,
+    destination: "deckTop",
+  });
+  return true;
 }
 
 function findLegalDefenses(
@@ -492,7 +495,10 @@ function findLegalDefenses(
   defenseUsage: AttackDefenseUsage
 ): LegalDefense[] {
   const legalDefenses: LegalDefense[] = [];
-  for (const card of defendingPlayer.hand) {
+  for (const { card } of listDefenseCardLocations(
+    state,
+    defendingPlayer.playerId
+  )) {
     if (defenseUsage.usedDefenseCardInstanceIds.has(card.instanceId)) {
       continue;
     }
@@ -627,6 +633,7 @@ function commitDefensePaymentPlan(
   plan: DefensePaymentPlan
 ): { ok: true } | { ok: false; error: string } {
   const validationError = validateDefensePaymentPlan(
+    state,
     defendingPlayer,
     defenseCard,
     plan
@@ -701,6 +708,7 @@ function commitDefensePaymentPlan(
 }
 
 function validateDefensePaymentPlan(
+  state: GameState,
   defendingPlayer: PlayerState,
   defenseCard: CardInstance,
   plan: DefensePaymentPlan
@@ -712,11 +720,11 @@ function validateDefensePaymentPlan(
     return `Defense payment plan belongs to card ${plan.defenseCardInstanceId}, not ${defenseCard.instanceId}`;
   }
   if (
-    defendingPlayer.hand.filter(
-      (card) => card.instanceId === defenseCard.instanceId
+    listDefenseCardLocations(state, defendingPlayer.playerId).filter(
+      (location) => location.card.instanceId === defenseCard.instanceId
     ).length !== 1
   ) {
-    return `Defense card ${defenseCard.instanceId} is not uniquely present in hand`;
+    return `Defense card ${defenseCard.instanceId} is not uniquely present in a Defense source`;
   }
   if (defendingPlayer.chips !== plan.startingChips) {
     return `Defense payment plan expected ${plan.startingChips} chips, found ${defendingPlayer.chips}`;

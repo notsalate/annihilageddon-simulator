@@ -115,6 +115,16 @@ export interface PhysicalCardLocation {
   readonly expectedOwnerId?: CardInstance["ownerId"];
 }
 
+export interface PhysicalCardMove {
+  readonly card: CardInstance;
+  readonly sourceZoneName: string;
+  readonly destinationZoneName: string;
+}
+
+export type PhysicalCardMoveResult =
+  | { readonly ok: true; readonly move: PhysicalCardMove }
+  | { readonly ok: false; readonly reason: string };
+
 export function buildControlledObjectView(
   state: GameState,
   playerId: PlayerId
@@ -540,6 +550,26 @@ export function listPhysicalCardLocations(
   );
 }
 
+/** Lists locations that can supply a voluntary Defense for one player. */
+export function listDefenseCardLocations(
+  state: GameState,
+  playerId: PlayerId
+): readonly CardLocation[] {
+  const extensionZoneNames = new Set(
+    additionalPhysicalCardZoneFactories
+      .get(state)
+      ?.map((factory) => factory.zoneName) ?? []
+  );
+  return listPhysicalCardLocations(state)
+    .filter(
+      (location) =>
+        location.card.ownerId === playerId &&
+        (location.zoneName === `${playerId}.hand` ||
+          extensionZoneNames.has(location.zoneName))
+    )
+    .map(({ card, zoneName }) => ({ card, zoneName }));
+}
+
 export function findCardLocation(
   state: GameState,
   cardInstanceId: string
@@ -574,6 +604,87 @@ export function removeCardFromLocation(
   }
 
   return undefined;
+}
+
+/** Moves one physical card through descriptor-owned source and destination zones. */
+export function movePhysicalCard(
+  state: GameState,
+  cardInstanceId: CardInstance["instanceId"],
+  destinationZoneName: string,
+  placement: "front" | "back"
+): PhysicalCardMoveResult {
+  const descriptors = listPhysicalCardZoneDescriptors(state);
+  const destination = descriptors.find(
+    (descriptor) => descriptor.zoneName === destinationZoneName
+  );
+  if (destination === undefined) {
+    return { ok: false, reason: `Missing destination zone ${destinationZoneName}` };
+  }
+
+  const source = descriptors
+    .map((descriptor) => ({
+      descriptor,
+      cards: descriptor.read(),
+    }))
+    .find(({ cards }) =>
+      cards.some((card) => card.instanceId === cardInstanceId)
+    );
+  if (source === undefined) {
+    return { ok: false, reason: `Missing card ${cardInstanceId}` };
+  }
+  if (source.descriptor.zoneName === destination.zoneName) {
+    return {
+      ok: false,
+      reason: `Card ${cardInstanceId} already belongs to ${destinationZoneName}`,
+    };
+  }
+
+  const cardIndex = source.cards.findIndex(
+    (card) => card.instanceId === cardInstanceId
+  );
+  const card = source.cards[cardIndex];
+  if (card === undefined) {
+    return { ok: false, reason: `Missing card ${cardInstanceId}` };
+  }
+  const destinationCards = destination.read();
+  if (
+    destination.cardinality === "zeroOrOne" &&
+    destinationCards.length > 0
+  ) {
+    return {
+      ok: false,
+      reason: `Destination zone ${destinationZoneName} is already occupied`,
+    };
+  }
+
+  const sourceAfter = [
+    ...source.cards.slice(0, cardIndex),
+    ...source.cards.slice(cardIndex + 1),
+  ];
+  const destinationAfter =
+    placement === "front"
+      ? [card, ...destinationCards]
+      : [...destinationCards, card];
+  try {
+    source.descriptor.replace(sourceAfter);
+    destination.replace(destinationAfter);
+  } catch (error) {
+    source.descriptor.replace(source.cards);
+    destination.replace(destinationCards);
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : "Cannot move physical card",
+    };
+  }
+
+  return {
+    ok: true,
+    move: {
+      card,
+      sourceZoneName: source.descriptor.zoneName,
+      destinationZoneName,
+    },
+  };
 }
 
 function createArrayCardZoneDescriptor(
