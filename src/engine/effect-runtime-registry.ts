@@ -1726,11 +1726,6 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler<
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
-      const discardedCards = services.discardTopDeckCards(
-        state,
-        targetPlayer,
-        effect.amount
-      );
       const choice = services.chooseEffectChoice(
         state,
         targetPlayer,
@@ -1744,9 +1739,14 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler<
       if (choice === undefined) {
         return {
           ok: false,
-          error: "Mayhem destroy choice unexpectedly had no legal options",
+          error: `Invalid effect choice for ${effectId}`,
         };
       }
+      const discardedCards = services.discardTopDeckCards(
+        state,
+        targetPlayer,
+        effect.amount
+      );
       if (choice.choiceId === "destroy_none") {
         continue;
       }

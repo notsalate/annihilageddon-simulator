@@ -1034,9 +1034,12 @@ function chooseEffectChoice(
   const choice =
     selectedChoice === undefined
       ? choices[0]
-      : (choices.find((candidate) =>
+      : choices.find((candidate) =>
           matchesDecisionChoice(candidate, selectedChoice)
-        ) ?? choices[0]);
+        );
+  if (selectedChoice !== undefined && choice === undefined) {
+    return undefined;
+  }
   if (choice === undefined) {
     recordGameEvent(state, {
       type: "effectChoiceSkipped",

@@ -1784,6 +1784,115 @@ test("Mayhem preserves discarded cards when every affected player chooses destro
   );
 });
 
+test("Mayhem rejects an invalid destroy choice before moving affected cards", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60617,
+    playerCount: 2,
+  });
+  const [activePlayer, foe] = getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(foe);
+
+  const normalDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-invalid-destroy-choice-normal",
+    []
+  );
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-invalid-destroy-choice",
+    [
+      {
+        effectId:
+          "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        choice: "destroyBothOrDestroyNone",
+        amount: 1,
+        sourceZone: "deck",
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [normalDefinition.cardId, normalDefinition],
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+
+  const activeTopDeckCard: CardInstance = {
+    instanceId: markCardInstanceId(
+      "fixture-mayhem-invalid-destroy-choice-active"
+    ),
+    definitionId: markCardDefinitionId(normalDefinition.cardId),
+    ownerId: activePlayer.playerId,
+    marketChips: 0,
+  };
+  const foeTopDeckCard: CardInstance = {
+    instanceId: markCardInstanceId(
+      "fixture-mayhem-invalid-destroy-choice-foe"
+    ),
+    definitionId: markCardDefinitionId(normalDefinition.cardId),
+    ownerId: foe.playerId,
+    marketChips: 0,
+  };
+  activePlayer.deck.splice(0, activePlayer.deck.length, activeTopDeckCard);
+  activePlayer.discard.splice(0);
+  foe.deck.splice(0, foe.deck.length, foeTopDeckCard);
+  foe.discard.splice(0);
+  state.common.destroyedPile.splice(0);
+
+  const mayhem: CardInstance = {
+    instanceId: markCardInstanceId(
+      "fixture-mayhem-invalid-destroy-choice-instance"
+    ),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.effectChoiceStrategy = ({ effectId }) => {
+    if (
+      effectId !==
+      "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none"
+    ) {
+      return undefined;
+    }
+    return {
+      choiceKind: "option",
+      choiceId: "invalid_destroy_choice",
+    };
+  };
+  const eventLogBefore = structuredClone(state.eventLog);
+  const nextRandomBefore = state.rng.fork().next();
+
+  const result = executeMayhemEffects(
+    state,
+    activePlayer,
+    mayhemDefinition,
+    {
+      sourceType: "card",
+      runtimeMode: "fixture",
+      playerId: activePlayer.playerId,
+      cardInstanceId: mayhem.instanceId,
+      definitionId: mayhem.definitionId,
+    }
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) {
+    assert.fail("Expected an invalid Mayhem destroy choice error");
+  }
+  assert.match(result.error, /Invalid effect choice/);
+  assert.deepEqual(activePlayer.deck, [activeTopDeckCard]);
+  assert.deepEqual(activePlayer.discard, []);
+  assert.deepEqual(foe.deck, [foeTopDeckCard]);
+  assert.deepEqual(foe.discard, []);
+  assert.deepEqual(state.common.destroyedPile, []);
+  assert.deepEqual(state.eventLog, eventLogBefore);
+  assert.equal(state.rng.fork().next(), nextRandomBefore);
+});
+
 test("Mayhem discards each deck and destroys the first discard in active-player order", () => {
   const state = initializeGame({
     rootDir,
