@@ -137,11 +137,13 @@ function collectPublicExportViolations(sourceFile, policy, violations, seen) {
   const file = displayPath(policy.rootDir, sourceFile.fileName);
   for (const exported of collectExportedValues(policy.checker, moduleSymbol)) {
     const protectedValue = isProtectedValue(exported.origin, policy);
-    const adapterOrigin = findTrustedAdapterOrigin(
+    const adapterTrace = traceTrustedAdapterOrigin(
       policy.checker,
       exported.exportedOrigin ?? exported.origin,
       policy
     );
+    const adapterOrigin =
+      adapterTrace.status === "found" ? adapterTrace.origin : undefined;
     const originFile =
       adapterOrigin === undefined ? undefined : originSourceFile(adapterOrigin);
     const adapterExports =
@@ -155,6 +157,7 @@ function collectPublicExportViolations(sourceFile, policy, violations, seen) {
       (adapterExports?.has(originName(adapterOrigin)) ?? false);
     if (
       !protectedValue &&
+      adapterTrace.status !== "unresolved" &&
       (adapterExports === undefined || approvedAdapterExport)
     ) {
       continue;
@@ -165,7 +168,12 @@ function collectPublicExportViolations(sourceFile, policy, violations, seen) {
     addViolation(
       violations,
       seen,
-      publicExportViolation(file, exported, policy.rootDir)
+      publicExportViolation(
+        file,
+        exported,
+        policy.rootDir,
+        adapterOrigin ?? exported.origin
+      )
     );
   }
 }
@@ -270,13 +278,18 @@ function collectValuesForSymbol(checker, symbol, visited = new Set()) {
   return [];
 }
 
-function findTrustedAdapterOrigin(checker, symbol, policy, visited = new Set()) {
+function traceTrustedAdapterOrigin(
+  checker,
+  symbol,
+  policy,
+  visited = new Set()
+) {
   if (symbol === undefined) {
-    return undefined;
+    return { status: "unresolved" };
   }
   const origin = resolveAlias(checker, symbol);
   if (visited.has(origin)) {
-    return undefined;
+    return { status: "unresolved" };
   }
   visited.add(origin);
 
@@ -287,27 +300,124 @@ function findTrustedAdapterOrigin(checker, symbol, policy, visited = new Set()) 
       displayPath(policy.rootDir, originFile.fileName)
     )
   ) {
-    return origin;
+    return { status: "found", origin };
   }
 
   for (const declaration of origin.declarations ?? []) {
-    if (
-      !ts.isVariableDeclaration(declaration) ||
-      declaration.initializer === undefined
-    ) {
-      continue;
+    const staticOrigins = collectStaticOriginSymbols(checker, declaration);
+    if (staticOrigins.attempted && staticOrigins.symbols.length === 0) {
+      return { status: "unresolved" };
     }
-    const adapterOrigin = findTrustedAdapterOrigin(
-      checker,
-      staticInitializerSymbol(checker, declaration.initializer),
-      policy,
-      visited
-    );
-    if (adapterOrigin !== undefined) {
-      return adapterOrigin;
+    for (const staticOrigin of staticOrigins.symbols) {
+      const traced = traceTrustedAdapterOrigin(
+        checker,
+        staticOrigin,
+        policy,
+        visited
+      );
+      if (traced.status !== "clear") {
+        return traced;
+      }
     }
   }
-  return undefined;
+  return { status: "clear" };
+}
+
+function collectStaticOriginSymbols(checker, declaration) {
+  if (ts.isVariableDeclaration(declaration)) {
+    return staticExpressionOriginSymbols(checker, declaration.initializer);
+  }
+  if (ts.isBindingElement(declaration)) {
+    return bindingElementOriginSymbols(checker, declaration);
+  }
+  if (ts.isFunctionDeclaration(declaration)) {
+    return directWrapperOriginSymbols(checker, declaration);
+  }
+  if (ts.isPropertyAssignment(declaration)) {
+    return staticExpressionOriginSymbols(checker, declaration.initializer);
+  }
+  if (ts.isShorthandPropertyAssignment(declaration)) {
+    const valueSymbol = checker.getShorthandAssignmentValueSymbol(declaration);
+    return {
+      attempted: true,
+      symbols: valueSymbol === undefined ? [] : [valueSymbol],
+    };
+  }
+  return { attempted: false, symbols: [] };
+}
+
+function staticExpressionOriginSymbols(checker, expression) {
+  if (expression === undefined) {
+    return { attempted: false, symbols: [] };
+  }
+  const directSymbol = staticInitializerSymbol(checker, expression);
+  if (directSymbol !== undefined) {
+    return { attempted: true, symbols: [directSymbol] };
+  }
+  if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) {
+    return directWrapperOriginSymbols(checker, expression);
+  }
+  return { attempted: false, symbols: [] };
+}
+
+function bindingElementOriginSymbols(checker, declaration) {
+  if (
+    declaration.dotDotDotToken !== undefined ||
+    declaration.initializer !== undefined ||
+    !ts.isIdentifier(declaration.name) ||
+    !ts.isObjectBindingPattern(declaration.parent)
+  ) {
+    return { attempted: true, symbols: [] };
+  }
+  const variableDeclaration = declaration.parent.parent;
+  if (
+    !ts.isVariableDeclaration(variableDeclaration) ||
+    variableDeclaration.initializer === undefined
+  ) {
+    return { attempted: true, symbols: [] };
+  }
+  const propertyName = declaration.propertyName ?? declaration.name;
+  if (
+    !ts.isIdentifier(propertyName) &&
+    !ts.isStringLiteral(propertyName) &&
+    !ts.isNumericLiteral(propertyName)
+  ) {
+    return { attempted: true, symbols: [] };
+  }
+  const propertySymbol = checker.getPropertyOfType(
+    checker.getTypeAtLocation(variableDeclaration.initializer),
+    propertyName.text
+  );
+  return {
+    attempted: true,
+    symbols: propertySymbol === undefined ? [] : [propertySymbol],
+  };
+}
+
+function directWrapperOriginSymbols(checker, declaration) {
+  const body = declaration.body;
+  if (body === undefined) {
+    return { attempted: false, symbols: [] };
+  }
+  let expression;
+  if (!ts.isBlock(body)) {
+    expression = body;
+  } else if (body.statements.length === 1) {
+    const statement = body.statements[0];
+    if (ts.isReturnStatement(statement)) {
+      expression = statement.expression;
+    } else if (ts.isExpressionStatement(statement)) {
+      expression = statement.expression;
+    }
+  }
+  if (expression === undefined || !ts.isCallExpression(expression)) {
+    return { attempted: false, symbols: [] };
+  }
+  const calleeSymbol = staticInitializerSymbol(checker, expression.expression);
+  return {
+    attempted: true,
+    symbols: calleeSymbol === undefined ? [] : [calleeSymbol],
+  };
 }
 
 function staticInitializerSymbol(checker, initializer) {
@@ -402,13 +512,13 @@ function importEdgeViolation(file, origin, rootDir) {
   };
 }
 
-function publicExportViolation(file, exported, rootDir) {
-  const originFile = originSourceFile(exported.origin);
+function publicExportViolation(file, exported, rootDir, violationOrigin) {
+  const originFile = originSourceFile(violationOrigin);
   const originPath =
     originFile === undefined
       ? "<unknown>"
       : displayPath(rootDir, originFile.fileName);
-  const name = originName(exported.origin);
+  const name = originName(violationOrigin);
   return {
     kind: "public-export",
     file,
