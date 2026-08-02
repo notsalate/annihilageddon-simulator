@@ -147,66 +147,30 @@ test("reconciliation requires every frozen active requirement", () => {
 });
 
 test("reconciliation ignores test names that appear only in registry comments", (context) => {
-  const fixtureRepository = mkdtempSync(
-    path.join(os.tmpdir(), "completion-registry-comment-")
-  );
-  context.after(() =>
-    rmSync(fixtureRepository, { force: true, recursive: true })
-  );
-  mkdirSync(path.join(fixtureRepository, "tests"), { recursive: true });
-  writeFileSync(
-    path.join(fixtureRepository, "tests", "comment-only.test.ts"),
-    "export {};\n"
-  );
-  writeFileSync(
-    path.join(fixtureRepository, "tests", "run-tests.ts"),
+  const result = runRegistryFixture(
+    context,
+    "comment-only.test.ts",
     'const testSuites: string[] = [];\n// "comment-only.test.js"\n'
   );
-  runFixtureGit(fixtureRepository, ["init"]);
-  runFixtureGit(fixtureRepository, [
-    "config",
-    "user.email",
-    "fixture@example.invalid",
-  ]);
-  runFixtureGit(fixtureRepository, ["config", "user.name", "Fixture"]);
-  runFixtureGit(fixtureRepository, ["add", "tests"]);
-  runFixtureGit(fixtureRepository, ["commit", "-m", "fixture"]);
-  const codeSha = runFixtureGit(fixtureRepository, [
-    "rev-parse",
-    "HEAD",
-  ]).stdout.trim();
-  const manifestPath = path.join(fixtureRepository, "manifest.json");
-  const requirements = ["REQ-176-AC01", "REQ-R3-09-AC02", "REQ-R3-09-AC03"].map(
-    (id) => ({
-      id,
-      active: true,
-      status: "unresolved",
-      findings: ["COMMENT-ONLY"],
-      fixCommits: [],
-      tests: ["tests/comment-only.test.ts"],
-      codeSha,
-    })
-  );
-  writeFileSync(
-    manifestPath,
-    `${JSON.stringify(
-      {
-        rangeStart: codeSha,
-        codeSha,
-        overallVerdict: "есть открытые требования",
-        requirements,
-      },
-      null,
-      2
-    )}\n`
-  );
-
-  const result = runReconciliation(manifestPath, fixtureRepository);
 
   assert.notEqual(result.status, 0);
   assert.match(
     result.stderr,
     /test reference tests\/comment-only\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
+test("reconciliation rejects a syntactically invalid test registry", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "syntax-error.test.ts",
+    'const testSuites = ["syntax-error.test.js"];\nconst broken = ;\n'
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/syntax-error\.test\.ts must exist and be registered at manifest\.codeSha/
   );
 });
 
@@ -241,4 +205,66 @@ function runFixtureGit(repository: string, args: readonly string[]) {
   });
   assert.equal(result.status, 0, result.stderr);
   return result;
+}
+
+function runRegistryFixture(
+  context: test.TestContext,
+  testFileName: string,
+  registrySource: string
+) {
+  const fixtureRepository = mkdtempSync(
+    path.join(os.tmpdir(), "completion-registry-")
+  );
+  context.after(() =>
+    rmSync(fixtureRepository, { force: true, recursive: true })
+  );
+  mkdirSync(path.join(fixtureRepository, "tests"), { recursive: true });
+  writeFileSync(
+    path.join(fixtureRepository, "tests", testFileName),
+    "export {};\n"
+  );
+  writeFileSync(
+    path.join(fixtureRepository, "tests", "run-tests.ts"),
+    registrySource
+  );
+  runFixtureGit(fixtureRepository, ["init"]);
+  runFixtureGit(fixtureRepository, [
+    "config",
+    "user.email",
+    "fixture@example.invalid",
+  ]);
+  runFixtureGit(fixtureRepository, ["config", "user.name", "Fixture"]);
+  runFixtureGit(fixtureRepository, ["add", "tests"]);
+  runFixtureGit(fixtureRepository, ["commit", "-m", "fixture"]);
+  const codeSha = runFixtureGit(fixtureRepository, [
+    "rev-parse",
+    "HEAD",
+  ]).stdout.trim();
+  const manifestPath = path.join(fixtureRepository, "manifest.json");
+  const requirements = ["REQ-176-AC01", "REQ-R3-09-AC02", "REQ-R3-09-AC03"].map(
+    (id) => ({
+      id,
+      active: true,
+      status: "unresolved",
+      findings: ["INVALID-REGISTRY"],
+      fixCommits: [],
+      tests: [`tests/${testFileName}`],
+      codeSha,
+    })
+  );
+  writeFileSync(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        rangeStart: codeSha,
+        codeSha,
+        overallVerdict: "есть открытые требования",
+        requirements,
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  return runReconciliation(manifestPath, fixtureRepository);
 }

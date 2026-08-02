@@ -263,6 +263,9 @@ function parseTestSuiteRegistry(sourceText) {
     true,
     ts.ScriptKind.TS
   );
+  if (sourceFile.parseDiagnostics.length > 0) {
+    return undefined;
+  }
   const declarations = sourceFile.statements.flatMap((statement) =>
     ts.isVariableStatement(statement)
       ? statement.declarationList.declarations.filter(
