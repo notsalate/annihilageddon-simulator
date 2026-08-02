@@ -1,11 +1,19 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
+import { readFileSync } from "node:fs";
+
+const frozenActiveRequirementIds = [
+  "REQ-176-AC01",
+  "REQ-R3-09-AC02",
+  "REQ-R3-09-AC03",
+];
+const testRegistryByCommit = new Map();
 
 const manifestPath = process.argv[2];
 
 if (manifestPath === undefined) {
-  console.error("usage: node scripts/check-completion-reconciliation.mjs <manifest.json>");
+  console.error(
+    "usage: node scripts/check-completion-reconciliation.mjs <manifest.json>"
+  );
   process.exitCode = 1;
 } else {
   let manifest;
@@ -42,6 +50,7 @@ function validateManifest(manifest) {
   if (!Array.isArray(manifest.requirements)) {
     return [...errors, "manifest.requirements must be an array"];
   }
+  validateFrozenActiveRequirements(manifest.requirements, errors);
 
   const codeCommit = resolveCommit(
     manifest.codeSha,
@@ -76,7 +85,7 @@ function validateManifest(manifest) {
     if (requirement.codeSha !== manifest.codeSha) {
       errors.push(`${requirement.id}: codeSha must match manifest.codeSha`);
     }
-    validateTestReferences(requirement, errors);
+    validateTestReferences(requirement, codeCommit, errors);
     validateFixCommits(requirement, rangeStart, codeCommit, errors);
     if (requirement.status === "unresolved") {
       if (manifest.overallVerdict !== "есть открытые требования") {
@@ -87,17 +96,44 @@ function validateManifest(manifest) {
       continue;
     }
     if (requirement.status !== "resolved") {
-      errors.push(`${requirement.id}: active requirement needs resolved or unresolved status`);
+      errors.push(
+        `${requirement.id}: active requirement needs resolved or unresolved status`
+      );
       continue;
     }
     for (const fieldName of ["findings", "fixCommits", "tests"]) {
       if (!hasEntries(requirement[fieldName])) {
-        errors.push(`${requirement.id}: resolved requirement needs ${fieldName}`);
+        errors.push(
+          `${requirement.id}: resolved requirement needs ${fieldName}`
+        );
       }
     }
   }
 
   return errors;
+}
+
+function validateFrozenActiveRequirements(requirements, errors) {
+  const activeRequirementIds = requirements
+    .filter(
+      (requirement) =>
+        isRecord(requirement) &&
+        requirement.active === true &&
+        typeof requirement.id === "string"
+    )
+    .map((requirement) => requirement.id)
+    .sort();
+  const expectedRequirementIds = [...frozenActiveRequirementIds].sort();
+  if (
+    activeRequirementIds.length !== expectedRequirementIds.length ||
+    activeRequirementIds.some(
+      (requirementId, index) => requirementId !== expectedRequirementIds[index]
+    )
+  ) {
+    errors.push(
+      `manifest.requirements must contain exactly the frozen active requirements: ${frozenActiveRequirementIds.join(", ")}`
+    );
+  }
 }
 
 function isRecord(value) {
@@ -133,14 +169,14 @@ function isAncestor(ancestor, descendant) {
   );
 }
 
-function validateTestReferences(requirement, errors) {
-  if (!Array.isArray(requirement.tests)) {
+function validateTestReferences(requirement, codeCommit, errors) {
+  if (!Array.isArray(requirement.tests) || codeCommit === undefined) {
     return;
   }
   for (const testReference of requirement.tests) {
-    if (!isRegisteredTestReference(testReference)) {
+    if (!isRegisteredTestReference(testReference, codeCommit)) {
       errors.push(
-        `${requirement.id}: test reference ${String(testReference)} must exist and be registered`
+        `${requirement.id}: test reference ${String(testReference)} must exist and be registered at manifest.codeSha`
       );
     }
   }
@@ -177,28 +213,48 @@ function validateFixCommits(requirement, rangeStart, codeCommit, errors) {
   }
 }
 
-function isRegisteredTestReference(testReference) {
+function isRegisteredTestReference(testReference, codeCommit) {
   if (
     typeof testReference !== "string" ||
     !testReference.startsWith("tests/") ||
-    !testReference.endsWith(".test.ts")
+    !testReference.endsWith(".test.ts") ||
+    testReference.includes("\\") ||
+    testReference
+      .split("/")
+      .some((segment) => segment === "." || segment === "..")
   ) {
     return false;
   }
-  const repositoryRoot = process.cwd();
-  const absoluteTestPath = path.resolve(repositoryRoot, testReference);
-  const testsRoot = path.join(repositoryRoot, "tests");
-  if (
-    !absoluteTestPath.startsWith(`${testsRoot}${path.sep}`) ||
-    !existsSync(absoluteTestPath)
-  ) {
+  const testObject = spawnSync(
+    "git",
+    ["cat-file", "-e", `${codeCommit}:${testReference}`],
+    { cwd: process.cwd() }
+  );
+  if (testObject.status !== 0) {
     return false;
   }
   const compiledTestPath = testReference
     .slice("tests/".length)
     .replace(/\.ts$/, ".js");
-  const registry = readFileSync(path.join(testsRoot, "run-tests.ts"), "utf8");
+  const registry = getTestRegistry(codeCommit);
+  if (registry === undefined) {
+    return false;
+  }
   return registry.includes(`"${compiledTestPath}"`);
+}
+
+function getTestRegistry(codeCommit) {
+  if (testRegistryByCommit.has(codeCommit)) {
+    return testRegistryByCommit.get(codeCommit);
+  }
+  const result = spawnSync(
+    "git",
+    ["show", `${codeCommit}:tests/run-tests.ts`],
+    { cwd: process.cwd(), encoding: "utf8" }
+  );
+  const registry = result.status === 0 ? result.stdout : undefined;
+  testRegistryByCommit.set(codeCommit, registry);
+  return registry;
 }
 
 function hasEntries(value) {

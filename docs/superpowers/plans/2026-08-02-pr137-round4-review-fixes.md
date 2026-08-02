@@ -178,6 +178,8 @@
 - Add: `tests/fixtures/completion-reconciliation-unresolved.json`
 - Add: `tests/fixtures/completion-reconciliation-closing-claim.json`
 - Add: `tests/fixtures/completion-reconciliation-invalid-*.json`
+- Add: `tests/fixtures/completion-reconciliation-test-after-code-sha.json`
+- Add: `tests/fixtures/completion-reconciliation-missing-active-requirements.json`
 - Update: PR #137 body after push
 
 - [x] Add an evidence reconciliation table mapping active requirements, counterexamples, fixes, tests, reviews, and exact code SHA.
@@ -186,25 +188,27 @@
 - [x] Leave `REQ-R3-09-AC03` unresolved and remove conflicting closing claims.
 - [x] Run final Spec and Standards review over `62777c389c014ea87b35d0facc7bcaa093795e30...ffe1580fbae94558251c9a585de507e9cbf2c7b5`: обе оси без замечаний.
 - [x] На `ffe1580fbae94558251c9a585de507e9cbf2c7b5` прошли `npm run check`, `git diff --check` и `git diff --check 62777c389c014ea87b35d0facc7bcaa093795e30...HEAD`.
-- [ ] Commit documentation separately, push with the user's standing authorization, wait for all GitHub checks, and synchronize the PR body.
-- [ ] Mark issue 12 and the round4 queue complete only when all evidence names the exact remote HEAD.
+- [x] Commit documentation separately, push `2d2356231440e388adbbd9402db13b37108253c2`, wait for its GitHub checks, and synchronize the PR body.
+- [ ] Mark issue 12 and the round4 queue complete only after the round5 checker bypasses are fixed and both review axes approve the new remote HEAD.
 
 ## Task 7: reconciliation evidence
 
 `scripts/check-completion-reconciliation.mjs` проверяет machine-visible
 свидетельства: CODE SHA и fix commits должны быть Git commits в заданном
-диапазоне, а test references — существующими suite из `tests/run-tests.ts`.
+диапазоне, а test references — существующими suite из `tests/run-tests.ts`
+именно в дереве CODE SHA. Checker требует точный frozen-набор active REQ:
+`REQ-176-AC01`, `REQ-R3-09-AC02`, `REQ-R3-09-AC03`.
 Manifest находится в `tests/fixtures/pr137-round4-completion-reconciliation.json`.
 An `unresolved` REQ разрешён только при verdict «есть открытые требования».
 
 Spec и Standards остаются external attestation: manifest содержит их запись,
 но validator не проверяет содержание ручного review.
 
-| Active REQ | Контрпример / finding | Исправления в интеграции | Тесты | Spec / Standards | CODE SHA | Статус |
-| --- | --- | --- | --- | --- | --- | --- |
-| `REQ-176-AC01` | `FIND-009`: `FIND-003/004/006/007` опровергали закрытие | `c117414`, `9381b4a`, `81a5408`, `c3559e9` и их регрессии | `validation`, `effect-runtime-applicability`, `game-state-fork`, `public-entrypoint-guard` | Spec APPROVED, 0; Standards APPROVED, 0 | `ffe1580fbae94558251c9a585de507e9cbf2c7b5` | resolved |
-| `REQ-R3-09-AC02` | те же `FIND-003/004/006/007` | те же интеграционные commits | те же точечные suites и final gate | Spec APPROVED, 0; Standards APPROVED, 0 | `ffe1580fbae94558251c9a585de507e9cbf2c7b5` | resolved |
-| `REQ-R3-09-AC03` | старые docs claims ссылаются на более ранний код | этот documentation commit; PR body — только после push | `completion-reconciliation.test.ts`, final diff checks | Spec APPROVED, 0; Standards APPROVED, 0; push/checks/PR body pending | `ffe1580fbae94558251c9a585de507e9cbf2c7b5` | unresolved |
+| Active REQ       | Контрпример / finding                                                     | Исправления в интеграции                                  | Тесты                                                                                      | Spec / Standards                        | CODE SHA                                   | Статус     |
+| ---------------- | ------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------- | ------------------------------------------ | ---------- |
+| `REQ-176-AC01`   | `FIND-009`: `FIND-003/004/006/007` опровергали закрытие                   | `c117414`, `9381b4a`, `81a5408`, `c3559e9` и их регрессии | `validation`, `effect-runtime-applicability`, `game-state-fork`, `public-entrypoint-guard` | round4 APPROVED; round5 REQUEST CHANGES | `2d2356231440e388adbbd9402db13b37108253c2` | resolved   |
+| `REQ-R3-09-AC02` | те же `FIND-003/004/006/007`                                              | те же интеграционные commits                              | те же точечные suites и final gate                                                         | round4 APPROVED; round5 REQUEST CHANGES | `2d2356231440e388adbbd9402db13b37108253c2` | resolved   |
+| `REQ-R3-09-AC03` | checker принимал тесты из текущего checkout и позволял удалить active REQ | round5 checker fixes; новый PR body — после push          | `completion-reconciliation.test.ts`, final diff checks                                     | round5 review pending                   | `2d2356231440e388adbbd9402db13b37108253c2` | unresolved |
 
 Пока любая строка unresolved, общий verdict — «есть открытые требования»;
 формулировка «без замечаний» запрещена.

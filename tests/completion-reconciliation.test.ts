@@ -36,6 +36,18 @@ const invalidTestReferenceFixture = path.join(
   "fixtures",
   "completion-reconciliation-invalid-test-reference.json"
 );
+const testAfterCodeShaFixture = path.join(
+  repositoryRoot,
+  "tests",
+  "fixtures",
+  "completion-reconciliation-test-after-code-sha.json"
+);
+const missingActiveRequirementsFixture = path.join(
+  repositoryRoot,
+  "tests",
+  "fixtures",
+  "completion-reconciliation-missing-active-requirements.json"
+);
 const evidenceManifest = path.join(
   repositoryRoot,
   "tests",
@@ -47,7 +59,11 @@ test("reconciliation rejects a clean overall verdict when an active requirement 
   const result = spawnSync(
     process.execPath,
     [
-      path.join(repositoryRoot, "scripts", "check-completion-reconciliation.mjs"),
+      path.join(
+        repositoryRoot,
+        "scripts",
+        "check-completion-reconciliation.mjs"
+      ),
       unresolvedFixture,
     ],
     { encoding: "utf8" }
@@ -64,7 +80,11 @@ test("reconciliation rejects every closing verdict when an active requirement is
   const result = spawnSync(
     process.execPath,
     [
-      path.join(repositoryRoot, "scripts", "check-completion-reconciliation.mjs"),
+      path.join(
+        repositoryRoot,
+        "scripts",
+        "check-completion-reconciliation.mjs"
+      ),
       closingClaimFixture,
     ],
     { encoding: "utf8" }
@@ -104,6 +124,26 @@ test("reconciliation rejects an unregistered test reference", () => {
   );
 });
 
+test("reconciliation checks test evidence in the code SHA tree", () => {
+  const result = runReconciliation(testAfterCodeShaFixture);
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /REQ-R3-09-AC03: test reference tests\/completion-reconciliation\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
+test("reconciliation requires every frozen active requirement", () => {
+  const result = runReconciliation(missingActiveRequirementsFixture);
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /manifest\.requirements must contain exactly the frozen active requirements: REQ-176-AC01, REQ-R3-09-AC02, REQ-R3-09-AC03/
+  );
+});
+
 test("current reconciliation manifest passes Git and test-reference checks", () => {
   const result = runReconciliation(evidenceManifest);
 
@@ -114,7 +154,11 @@ function runReconciliation(fixturePath: string) {
   return spawnSync(
     process.execPath,
     [
-      path.join(repositoryRoot, "scripts", "check-completion-reconciliation.mjs"),
+      path.join(
+        repositoryRoot,
+        "scripts",
+        "check-completion-reconciliation.mjs"
+      ),
       fixturePath,
     ],
     { encoding: "utf8" }

@@ -1,6 +1,6 @@
 {
   "rangeStart": "62777c389c014ea87b35d0facc7bcaa093795e30",
-  "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5",
+  "codeSha": "2d2356231440e388adbbd9402db13b37108253c2",
   "overallVerdict": "есть открытые требования",
   "externalAttestation": {
     "spec": {
@@ -27,7 +27,7 @@
         "tests/game-state-fork.test.ts",
         "tests/public-entrypoint-guard.test.ts"
       ],
-      "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
+      "codeSha": "2d2356231440e388adbbd9402db13b37108253c2"
     },
     {
       "id": "REQ-R3-09-AC02",
@@ -41,7 +41,7 @@
         "tests/game-state-fork.test.ts",
         "tests/public-entrypoint-guard.test.ts"
       ],
-      "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
+      "codeSha": "2d2356231440e388adbbd9402db13b37108253c2"
     },
     {
       "id": "REQ-R3-09-AC03",
@@ -50,7 +50,7 @@
       "findings": ["FIND-009"],
       "fixCommits": [],
       "tests": ["tests/completion-reconciliation.test.ts"],
-      "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
+      "codeSha": "2d2356231440e388adbbd9402db13b37108253c2"
     }
   ]
 }

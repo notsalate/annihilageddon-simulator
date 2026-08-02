@@ -1,0 +1,34 @@
+{
+  "rangeStart": "62777c389c014ea87b35d0facc7bcaa093795e30",
+  "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5",
+  "overallVerdict": "есть открытые требования",
+  "requirements": [
+    {
+      "id": "REQ-176-AC01",
+      "active": true,
+      "status": "resolved",
+      "findings": ["FIND-009"],
+      "fixCommits": ["c117414"],
+      "tests": ["tests/validation.test.ts"],
+      "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
+    },
+    {
+      "id": "REQ-R3-09-AC02",
+      "active": true,
+      "status": "resolved",
+      "findings": ["FIND-003"],
+      "fixCommits": ["c117414"],
+      "tests": ["tests/validation.test.ts"],
+      "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
+    },
+    {
+      "id": "REQ-R3-09-AC03",
+      "active": true,
+      "status": "unresolved",
+      "findings": ["FIND-009"],
+      "fixCommits": [],
+      "tests": ["tests/completion-reconciliation.test.ts"],
+      "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
+    }
+  ]
+}
