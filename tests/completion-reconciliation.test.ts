@@ -455,6 +455,43 @@ test("reconciliation rejects spawn options that can replace test execution", (co
   );
 });
 
+test("reconciliation rejects a runner whose result binding shadows process", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "process-shadowing.test.ts",
+    [
+      'import { spawnSync } from "node:child_process";',
+      'import path from "node:path";',
+      'import { assertTestSuiteRegistryComplete, collectCompiledTestSuites } from "./test-suite-registry.js";',
+      'const testSuites = ["process-shadowing.test.js"];',
+      'const compiledTestsRoot = path.join(process.cwd(), "dist", "tests");',
+      "assertTestSuiteRegistryComplete(",
+      "  testSuites,",
+      "  collectCompiledTestSuites(compiledTestsRoot)",
+      ");",
+      "for (const suite of testSuites) {",
+      "  const process = spawnSync(",
+      "    process.execPath,",
+      '    ["--test", path.join(compiledTestsRoot, suite)]',
+      "  );",
+      "  if (process.error !== undefined) {",
+      "    throw process.error;",
+      "  }",
+      "  if (process.status !== 0) {",
+      "    process.exit(process.status ?? 1);",
+      "  }",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/process-shadowing\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
 test("reconciliation rejects a test runner with a side-effect registry helper", (context) => {
   const result = runRegistryFixture(
     context,

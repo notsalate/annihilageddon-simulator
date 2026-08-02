@@ -545,6 +545,9 @@ function hasDirectTestSuiteSpawn(statement, suiteName) {
     return false;
   }
   const resultName = resultDeclaration.name.text;
+  if (hasIdentifierReference(resultDeclaration.initializer, resultName)) {
+    return false;
+  }
   const spawnArguments = resultDeclaration.initializer.arguments;
   const commandArguments = spawnArguments[1];
   if (
@@ -576,6 +579,19 @@ function hasDirectTestSuiteSpawn(statement, suiteName) {
   return (
     launchesCurrentSuite && hasDirectSpawnFailureHandling(statement, resultName)
   );
+}
+
+function hasIdentifierReference(node, identifierName) {
+  let found = false;
+  function visit(child) {
+    if (ts.isIdentifier(child) && child.text === identifierName) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(child, visit);
+  }
+  visit(node);
+  return found;
 }
 
 function hasSafeSpawnOptions(spawnArguments) {
