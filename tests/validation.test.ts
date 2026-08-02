@@ -40,6 +40,7 @@ import {
   type EffectRuntimeCatalogOperationOverridesForTesting,
   type EffectRuntimeServices,
   validateRuntimeEffectCatalogPayload,
+  withEffectRuntimeCatalogOperationsForTesting,
 } from "../src/engine/effect-runtime-registry.js";
 
 const rootDir = process.cwd();
@@ -1886,38 +1887,70 @@ test("multi-target and Mayhem attacks require one nested target representation",
   }
 });
 
-test("attack and status decoders reject simultaneous nested and direct targets", () => {
+test("executable data-pack validation rejects conflicting attack and status targets before execution", () => {
   const cases = [
     {
+      cardId: "fixture-conflicting-attack-targets",
       effectId: "attack_damage",
       payload: {
         effectId: "attack_damage",
         timing: "onPlay",
         amount: 2,
         target: { selector: "opponentPlayer" },
-        targetSelector: "allPlayers",
+        targetSelector: "eachFoe",
       },
     },
     {
+      cardId: "fixture-conflicting-status-targets",
       effectId: "gain_status",
       payload: {
         effectId: "gain_status",
         timing: "onPlay",
         statusId: "dingler",
         target: { selector: "opponentPlayer" },
-        targetSelector: "allPlayers",
+        targetSelector: "eachPlayerClockwiseFromActive",
       },
     },
   ] as const;
 
-  for (const { effectId, payload } of cases) {
-    const errors = validateRawRuntimeEffect(effectId, "Fixture", payload);
-    assert.ok(
-      errors.some((error) =>
-        error.includes("target and targetSelector cannot both be provided")
-      )
+  const executorCalls: RuntimeEffectId[] = [];
+  const results = cases.map(({ cardId, effectId, payload }) => {
+    const card = createFixtureCard(cardId);
+    const dataPack = withOnlyFixtureCard({
+      ...card,
+      engine: {
+        ...card.engine,
+        effects: [asMalformedRuntimeEffect(payload)],
+      },
+    });
+
+    return withEffectRuntimeCatalogOperationsForTesting(
+      effectId,
+      {
+        execute() {
+          executorCalls.push(effectId);
+          return { ok: true };
+        },
+      },
+      () => validateExecutableDataPack(dataPack)
     );
-  }
+  });
+
+  assert.deepEqual(results, [
+    {
+      ok: false,
+      errors: [
+        "Card fixture-conflicting-attack-targets target and targetSelector cannot both be provided",
+      ],
+    },
+    {
+      ok: false,
+      errors: [
+        "Card fixture-conflicting-status-targets target and targetSelector cannot both be provided",
+      ],
+    },
+  ]);
+  assert.deepEqual(executorCalls, []);
 });
 
 test("combat effect decoders reject invalid concrete payloads", () => {
