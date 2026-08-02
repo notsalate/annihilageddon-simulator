@@ -456,19 +456,7 @@ export function clonePhysicalCardZones(
 export function clonePhysicalCardZoneState(
   source: GameState
 ): Pick<GameState, "players" | "common"> {
-  return cloneLedgerValue({ players: source.players, common: source.common });
-}
-
-function cloneLedgerValue<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map(cloneLedgerValue) as T;
-  }
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, child]) => [key, cloneLedgerValue(child)])
-    ) as T;
-  }
-  return value;
+  return structuredClone({ players: source.players, common: source.common });
 }
 
 export function listPhysicalCardLocations(
