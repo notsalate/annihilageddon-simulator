@@ -13,7 +13,6 @@ import {
   resolveDefenseWindow,
   type AttackDefenseServices,
 } from "../src/engine/attack-defense.js";
-import { executeEffect } from "../src/engine/effect-runtime.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -183,20 +182,17 @@ test("damage attribution keeps redirected current attackers separate", () => {
   ]);
 });
 
-test("обычная защита выполняет настоящий draw_cards с перемешиванием discard до терминальной ветви", () => {
+test("обычная защита фиксирует оплату и перемещение до терминальной ветви", () => {
   const state = initializeGame({ rootDir, seed: 42008 });
   const attacker = mustGetPlayer(state, "player-1");
   const defender = mustGetPlayer(state, "player-2");
   state.activePlayerId = attacker.playerId;
   defender.hand = [];
   defender.discard = [];
-  const shuffledCards = defender.deck.splice(0);
-  assert.equal(shuffledCards.length, 5);
-  defender.discard.push(...shuffledCards);
   defender.chips = 1;
   const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
     costs: [{ costId: "spend_chips", amount: 1 }],
-    branchEffects: [{ effectId: "draw_cards", timing: "onDefense", amount: 1 }],
+    branchEffects: [{ effectId: "add_power", timing: "onDefense", amount: 1 }],
   });
   const source: EffectSourceContext = {
     sourceType: "card",
@@ -218,30 +214,13 @@ test("обычная защита выполняет настоящий draw_car
     reason: "playerDefeated" as const,
     winnerPlayerId: defender.playerId,
   };
-  const expectedRng = state.rng.fork();
-  expectedRng.nextInt(6);
-  expectedRng.nextInt(5);
-  expectedRng.nextInt(4);
-  expectedRng.nextInt(3);
-  expectedRng.nextInt(2);
   const services: AttackDefenseServices = {
     chooseEffectChoice(_state, _player, _source, _effectId, choices) {
       return choices.find((choice) => choice.choiceId === defense.instanceId);
     },
-    executeDefenseEffects(branchState, player, effects, branchSource) {
+    executeDefenseEffects(_branchState, player) {
       assert.equal(player.chips, 0);
       assert.equal(player.discard.includes(defense), true);
-      for (const effect of effects) {
-        const execution = executeEffect(
-          branchState,
-          player,
-          effect,
-          branchSource
-        );
-        if (!execution.ok || execution.gameEnd !== undefined) {
-          return execution;
-        }
-      }
       return { ok: true, gameEnd };
     },
   };
@@ -249,32 +228,8 @@ test("обычная защита выполняет настоящий draw_car
   const result = resolveDefenseWindow(state, defender, attack, services);
 
   assert.deepEqual(result, { ok: true, avoided: true, gameEnd });
-  assert.equal(defender.hand.length, 1);
-  assert.equal(defender.deck.length, 5);
-  assert.deepEqual(defender.discard, []);
-  assert.deepEqual(
-    [...defender.hand, ...defender.deck].map((card) => card.instanceId).sort(),
-    [...shuffledCards, defense].map((card) => card.instanceId).sort()
-  );
-  assert.equal(
-    state.eventLog.some((event) => event.type === "discardShuffledIntoDeck"),
-    true
-  );
-  assert.equal(
-    state.eventLog.some(
-      (event) => event.type === "effectDrawCardsApplied" && event.amount === 1
-    ),
-    true
-  );
-  assert.equal(state.rng.next(), expectedRng.next());
-  assert.deepEqual(
-    [...attack.defenseUsage.defendedPlayerIds],
-    [defender.playerId]
-  );
-  assert.deepEqual(
-    [...attack.defenseUsage.usedDefenseCardInstanceIds],
-    [defense.instanceId]
-  );
+  assert.equal(defender.discard.includes(defense), true);
+  assert.equal(defender.hand.includes(defense), false);
 });
 
 test("redirect-защита откатывает оплату, перемещение, события, RNG и usage после ошибки ветви", () => {
@@ -416,7 +371,7 @@ test("fixture defense builder does not install a global choice strategy", () => 
   assert.equal(scenario.state.effectChoiceStrategy, undefined);
 });
 
-test("each player can use defense only once while one attack is redirected", () => {
+test("Defense executes onDefense draw and discard shuffle through a terminating redirect chain", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: "tests/fixtures/playable-runtime-data-pack.json",
@@ -425,11 +380,25 @@ test("each player can use defense only once while one attack is redirected", () 
   const attackingPlayer = scenario.activePlayer;
   const targetPlayer = scenario.foes[0];
   assert.ok(targetPlayer);
+  targetPlayer.hand = [];
+  targetPlayer.discard = [];
+  const shuffledCards = targetPlayer.deck.splice(0);
+  assert.equal(shuffledCards.length, 5);
+  targetPlayer.discard.push(...shuffledCards);
   const firstTargetDefense = addFixtureDefenseCardToHand(
     scenario.state,
     targetPlayer,
     "discardSelf",
-    { redirectAttack: true }
+    {
+      redirectAttack: true,
+      branchEffects: [
+        {
+          effectId: "draw_cards",
+          timing: "onDefense",
+          amount: 1,
+        },
+      ],
+    }
   );
   const unusedTargetDefense = addFixtureDefenseCardToHand(
     scenario.state,
@@ -445,6 +414,12 @@ test("each player can use defense only once while one attack is redirected", () 
   );
   chooseEffect(scenario, selectFirstFixtureDefense);
   const targetLifeBefore = targetPlayer.life.current;
+  const expectedRng = scenario.state.rng.fork();
+  expectedRng.nextInt(6);
+  expectedRng.nextInt(5);
+  expectedRng.nextInt(4);
+  expectedRng.nextInt(3);
+  expectedRng.nextInt(2);
   const attack = givenRuntimeCard(scenario, {
     effects: [
       {
@@ -460,15 +435,51 @@ test("each player can use defense only once while one attack is redirected", () 
 
   assert.equal(result.ok, true);
   assert.equal(targetPlayer.life.current, targetLifeBefore - 2);
-  assert.equal(targetPlayer.discard.includes(firstTargetDefense), true);
+  assert.equal(targetPlayer.hand.length, 2);
+  assert.equal(targetPlayer.deck.length, 5);
+  assert.deepEqual(targetPlayer.discard, []);
+  assert.deepEqual(
+    [
+      ...targetPlayer.hand,
+      ...targetPlayer.deck,
+      ...targetPlayer.discard,
+    ]
+      .map((card) => card.instanceId)
+      .sort(),
+    [...shuffledCards, firstTargetDefense, unusedTargetDefense]
+      .map((card) => card.instanceId)
+      .sort()
+  );
   assert.equal(attackingPlayer.discard.includes(attackerDefense), true);
   assert.equal(targetPlayer.hand.includes(unusedTargetDefense), true);
-  assert.equal(
-    scenario.state.eventLog.filter(
-      (event) => event.type === "defenseChoiceSelected"
-    ).length,
-    2
+  assert.equal(scenario.state.rng.next(), expectedRng.next());
+  const defenseChoiceEvents = scenario.state.eventLog.filter(
+    (event) => event.type === "defenseChoiceSelected"
   );
+  assert.deepEqual(
+    defenseChoiceEvents.map((event) => event.cardInstanceId),
+    [firstTargetDefense.instanceId, attackerDefense.instanceId]
+  );
+  const targetDefenseMovedIndex = scenario.state.eventLog.findIndex(
+    (event) =>
+      event.type === "defenseCardMoved" &&
+      event.cardInstanceId === firstTargetDefense.instanceId
+  );
+  const shuffleIndex = scenario.state.eventLog.findIndex(
+    (event) =>
+      event.type === "discardShuffledIntoDeck" &&
+      event.playerId === targetPlayer.playerId
+  );
+  const drawIndex = scenario.state.eventLog.findIndex(
+    (event) =>
+      event.type === "effectDrawCardsApplied" &&
+      event.playerId === targetPlayer.playerId &&
+      event.cardInstanceId === firstTargetDefense.instanceId &&
+      event.amount === 1
+  );
+  assert.ok(targetDefenseMovedIndex >= 0);
+  assert.ok(shuffleIndex > targetDefenseMovedIndex);
+  assert.ok(drawIndex > shuffleIndex);
 });
 
 import { recordGameEvent } from "../src/engine/event-recorder.js";
