@@ -212,11 +212,7 @@ function mustGetCardDefinition(
 
 export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
   const { bot, botFactory, ...initializeGameOptions } = options;
-  if (
-    botFactory === undefined &&
-    bot !== undefined &&
-    bot !== baselineBot
-  ) {
+  if (bot !== undefined && bot !== baselineBot) {
     throw new Error("Custom multiplayer bot must use botFactory");
   }
   const strategyFactory =

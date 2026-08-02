@@ -149,7 +149,6 @@ test("bot action selection records turn number and safe action identity for debu
 });
 
 test("single-game simulation gives each player an isolated stateful bot lifecycle", () => {
-  let retainedView: PlayerDecisionView | undefined;
   const factoryCalls: PlayerId[] = [];
 
   const options: Parameters<typeof runSingleGame>[0] & {
@@ -159,21 +158,6 @@ test("single-game simulation gives each player an isolated stateful bot lifecycl
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
     maxTurns: 2,
-    bot: {
-      chooseAction({ player }) {
-        if (
-          retainedView !== undefined &&
-          retainedView.playerId !== player.playerId
-        ) {
-          const leakedHand = retainedView.hand;
-          assert.fail(
-            `Shared BotStrategy retained ${retainedView.playerId}'s private hand (${leakedHand.length} cards) while choosing for ${player.playerId}`
-          );
-        }
-        retainedView = player;
-        return { type: "endTurn" };
-      },
-    },
     botFactory(playerId) {
       factoryCalls.push(playerId);
       let playerView: PlayerDecisionView | undefined;
@@ -265,8 +249,35 @@ test("explicit baseline bot preserves implicit baseline results", () => {
   assert.deepEqual(explicitBaselineResult, implicitBaselineResult);
 });
 
-test("multiplayer custom legacy bot fails before strategy execution", () => {
+test("explicit baseline bot defers to botFactory when both are provided", () => {
+  const options = {
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    maxTurns: 2,
+  };
+  const createEndTurnBot = (): BotStrategy => ({
+    chooseAction() {
+      return { type: "endTurn" };
+    },
+  });
+
+  const factoryOnlyResult = runSingleGame({
+    ...options,
+    botFactory: createEndTurnBot,
+  });
+  const explicitBaselineResult = runSingleGame({
+    ...options,
+    bot: baselineBot,
+    botFactory: createEndTurnBot,
+  });
+
+  assert.deepEqual(explicitBaselineResult, factoryOnlyResult);
+});
+
+test("custom legacy bot fails before botFactory and strategy execution", () => {
   let chooseActionCalled = false;
+  let botFactoryCalled = false;
 
   assert.throws(
     () =>
@@ -282,10 +293,23 @@ test("multiplayer custom legacy bot fails before strategy execution", () => {
             return { type: "endTurn" };
           },
         },
+        botFactory() {
+          botFactoryCalled = true;
+          return {
+            chooseAction() {
+              return { type: "endTurn" };
+            },
+          };
+        },
       }),
-    /Custom multiplayer bot must use botFactory/
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message, "Custom multiplayer bot must use botFactory");
+      return true;
+    }
   );
   assert.equal(chooseActionCalled, false);
+  assert.equal(botFactoryCalled, false);
 });
 
 test("game end reason is dead wizard token exhaustion when the DWT stack is empty", () => {
