@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 
@@ -8,6 +9,8 @@ const frozenActiveRequirementIds = [
   "REQ-R3-09-AC03",
 ];
 const testSuitesByCommit = new Map();
+const canonicalTestSuiteRegistrySha256 =
+  "124256f3248b0b2d36c6f7d1e2fa761f747076bd23957e786b038162cc5b59d3";
 
 const manifestPath = process.argv[2];
 
@@ -244,13 +247,23 @@ function getRegisteredTestSuites(codeCommit) {
   if (testSuitesByCommit.has(codeCommit)) {
     return testSuitesByCommit.get(codeCommit);
   }
-  const result = spawnSync(
+  const runnerResult = spawnSync(
     "git",
     ["show", `${codeCommit}:tests/run-tests.ts`],
     { cwd: process.cwd(), encoding: "utf8" }
   );
+  const helperResult = spawnSync(
+    "git",
+    ["show", `${codeCommit}:tests/test-suite-registry.ts`],
+    { cwd: process.cwd(), encoding: "utf8" }
+  );
   const testSuites =
-    result.status === 0 ? parseTestSuiteRegistry(result.stdout) : undefined;
+    runnerResult.status === 0 &&
+    helperResult.status === 0 &&
+    createHash("sha256").update(helperResult.stdout).digest("hex") ===
+      canonicalTestSuiteRegistrySha256
+      ? parseTestSuiteRegistry(runnerResult.stdout)
+      : undefined;
   testSuitesByCommit.set(codeCommit, testSuites);
   return testSuites;
 }

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -55,6 +61,10 @@ const evidenceManifest = path.join(
   "tests",
   "fixtures",
   "pr137-round4-completion-reconciliation.json"
+);
+const canonicalTestSuiteRegistrySource = readFileSync(
+  path.join(repositoryRoot, "tests", "test-suite-registry.ts"),
+  "utf8"
 );
 
 test("reconciliation rejects a clean overall verdict when an active requirement is unresolved", () => {
@@ -445,6 +455,36 @@ test("reconciliation rejects spawn options that can replace test execution", (co
   );
 });
 
+test("reconciliation rejects a test runner with a side-effect registry helper", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "helper-side-effect.test.ts",
+    createValidRegistrySource("helper-side-effect.test.js"),
+    `${canonicalTestSuiteRegistrySource}\nprocess.exit(0);\n`
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/helper-side-effect\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
+test("reconciliation rejects a test runner without its registry helper", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "missing-helper.test.ts",
+    createValidRegistrySource("missing-helper.test.js"),
+    null
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/missing-helper\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
 test("current reconciliation manifest passes Git and test-reference checks", () => {
   const result = runReconciliation(evidenceManifest);
 
@@ -481,7 +521,8 @@ function runFixtureGit(repository: string, args: readonly string[]) {
 function runRegistryFixture(
   context: test.TestContext,
   testFileName: string,
-  registrySource: string
+  registrySource: string,
+  registryHelperSource: string | null = canonicalTestSuiteRegistrySource
 ) {
   const fixtureRepository = mkdtempSync(
     path.join(os.tmpdir(), "completion-registry-")
@@ -498,6 +539,12 @@ function runRegistryFixture(
     path.join(fixtureRepository, "tests", "run-tests.ts"),
     registrySource
   );
+  if (registryHelperSource !== null) {
+    writeFileSync(
+      path.join(fixtureRepository, "tests", "test-suite-registry.ts"),
+      registryHelperSource
+    );
+  }
   runFixtureGit(fixtureRepository, ["init"]);
   runFixtureGit(fixtureRepository, [
     "config",
@@ -538,4 +585,32 @@ function runRegistryFixture(
   );
 
   return runReconciliation(manifestPath, fixtureRepository);
+}
+
+function createValidRegistrySource(testSuite: string) {
+  return [
+    'import { spawnSync } from "node:child_process";',
+    'import path from "node:path";',
+    'import { assertTestSuiteRegistryComplete, collectCompiledTestSuites } from "./test-suite-registry.js";',
+    `const testSuites = [${JSON.stringify(testSuite)}];`,
+    'const compiledTestsRoot = path.join(process.cwd(), "dist", "tests");',
+    "assertTestSuiteRegistryComplete(",
+    "  testSuites,",
+    "  collectCompiledTestSuites(compiledTestsRoot)",
+    ");",
+    "for (const suite of testSuites) {",
+    "  const result = spawnSync(",
+    "    process.execPath,",
+    '    ["--test", path.join(compiledTestsRoot, suite)],',
+    '    { stdio: "inherit" }',
+    "  );",
+    "  if (result.error !== undefined) {",
+    "    throw result.error;",
+    "  }",
+    "  if (result.status !== 0) {",
+    "    process.exit(result.status ?? 1);",
+    "  }",
+    "}",
+    "",
+  ].join("\n");
 }
