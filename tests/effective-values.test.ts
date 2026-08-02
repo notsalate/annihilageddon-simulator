@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 
 import {
   buildControlledObjectView,
@@ -8,6 +7,7 @@ import {
   calculateEffectiveCardVictoryPoints,
   calculateEffectivePlayerMaxLife,
   calculateEffectivePlayerVictoryPoints,
+  calculateEffectiveTokenVictoryPoints,
   initializeGame,
   applyAction,
   listLegalActions,
@@ -26,12 +26,18 @@ import {
   listOwnedScoringCards,
 } from "../src/engine/control-ledger.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
-import { applyEffectiveValueModifier } from "../src/engine/effect-runtime-registry.js";
+import {
+  applyEffectiveValueModifier,
+  type EffectRuntimeCatalogOperationOverridesForTesting,
+  type EffectRuntimeHandlerOperationResult,
+  type EffectiveValueModifierOperationContext,
+} from "../src/engine/effect-runtime-registry.js";
 import {
   markCardInstanceId,
   markCardDefinitionId,
   markPlayerId,
 } from "../src/domain/types.js";
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -68,15 +74,105 @@ test("Catalog rejects a malformed effective-value modifier before evaluation", (
   });
 });
 
-test("effective values delegate modifier fields to the Catalog operation", () => {
-  const source = readFileSync("src/engine/effective-values.ts", "utf8");
+test("effective-value entrypoints observe the Catalog modifier operation result", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60618,
+  });
+  const player = state.players[0];
+  const card = state.common.market[0];
+  const token = state.common.deadWizardTokens.drawStack[0];
+  assert.ok(player);
+  assert.ok(card);
+  assert.ok(token);
+  const cardDefinition = state.cardDefinitions.get(card.definitionId);
+  const tokenDefinition = state.tokenDefinitions.get(token.definitionId);
+  assert.ok(cardDefinition);
+  assert.equal(tokenDefinition?.kind, "deadWizardToken");
+  player.statuses.push({
+    instanceId: markCardInstanceId("fixture-catalog-operation-status"),
+    statusId: "fixture-catalog-operation-status",
+    ownerId: player.playerId,
+    effects: [
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "cardCost",
+        operation: "add",
+        amount: 1,
+        target: { targetType: "card", definitionId: cardDefinition.cardId },
+      },
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "cardVictoryPoints",
+        operation: "add",
+        amount: 1,
+        target: { targetType: "card", definitionId: cardDefinition.cardId },
+      },
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "tokenVictoryPoints",
+        operation: "add",
+        amount: 1,
+        target: { targetType: "token", definitionId: tokenDefinition.tokenId },
+      },
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "playerVictoryPoints",
+        operation: "add",
+        amount: 1,
+        target: { targetType: "player" },
+      },
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "playerMaxLife",
+        operation: "add",
+        amount: 1,
+        target: { targetType: "player" },
+      },
+    ],
+  });
 
-  assert.doesNotMatch(
-    source,
-    /effect\["(?:amount|amountPerOwnedCard|operation)"\]/
+  const values = withTemporaryEffectRuntimeOperations(
+    "fixture_modify_effective_value",
+    effectiveValueCatalogOperationOverride,
+    () => [
+      calculateEffectiveCardCost(state, player.playerId, cardDefinition),
+      calculateEffectiveCardVictoryPoints(
+        state,
+        player.playerId,
+        cardDefinition,
+        card
+      ),
+      calculateEffectiveTokenVictoryPoints(
+        state,
+        player.playerId,
+        tokenDefinition
+      ),
+      calculateEffectivePlayerVictoryPoints(state, player.playerId, 0),
+      calculateEffectivePlayerMaxLife(state, player.playerId),
+    ]
   );
-  assert.match(source, /applyEffectiveValueModifier/);
+
+  assert.deepEqual(values, [701, 701, 701, 701, 701]);
 });
+
+const effectiveValueCatalogOperationOverride = {
+  applyEffectiveValueModifier<Result>(
+    _effect: Extract<
+      RuntimeEffect,
+      { effectId: "fixture_modify_effective_value" }
+    >,
+    context: EffectiveValueModifierOperationContext<Result>
+  ): EffectRuntimeHandlerOperationResult<Result> {
+    return context.evaluate(() => 701);
+  },
+} satisfies EffectRuntimeCatalogOperationOverridesForTesting<"fixture_modify_effective_value">;
 
 test("current runtime keeps fifteen effectless Limp Wands worth minus one VP", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);

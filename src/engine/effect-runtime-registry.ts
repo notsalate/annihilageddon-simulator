@@ -411,6 +411,15 @@ export interface EffectRuntimeTimedEvaluationOperationContext<
 
 export type EffectiveValueModifierOperation = (value: number) => number;
 
+function isModifyEffectiveValueRuntimeEffect(
+  effect: RuntimeEffectPayload
+): effect is ModifyEffectiveValueRuntimeEffect {
+  return (
+    effect.effectId === "modify_effective_value" ||
+    effect.effectId === "fixture_modify_effective_value"
+  );
+}
+
 export interface EffectiveValueModifierOperationContext<Result> {
   readonly timing: "whileControlled" | "whileScoring";
   readonly valueKind: ModifyEffectiveValueRuntimeEffect["valueKind"];
@@ -464,6 +473,10 @@ interface EffectRuntimeHandler<
 export interface EffectRuntimeCatalogOperationOverridesForTesting<
   Id extends RuntimeEffectId,
 > {
+  readonly applyEffectiveValueModifier?: <Result>(
+    effect: RuntimeEffectForId<Id>,
+    context: EffectiveValueModifierOperationContext<Result>
+  ) => EffectRuntimeHandlerOperationResult<Result>;
   readonly execute?: (
     state: GameState,
     player: PlayerState,
@@ -556,6 +569,12 @@ interface EffectRuntimeEntry<
       RuntimeEffectForId<EffectId>,
       Result
     >
+  ): EffectRuntimeOperationResult<Result>;
+  applyEffectiveValueModifier<Result>(
+    subjectId: string,
+    rawEffect: unknown,
+    source: EffectSourceContext,
+    context: EffectiveValueModifierOperationContext<Result>
   ): EffectRuntimeOperationResult<Result>;
   executeAtTiming(
     subjectId: string,
@@ -733,6 +752,41 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     decode,
     execute,
     evaluateAtTiming,
+    applyEffectiveValueModifier(subjectId, rawEffect, source, context) {
+      return evaluateAtTiming(subjectId, rawEffect, {
+        source,
+        timing: context.timing,
+        evaluate(decodedEffect) {
+          if (!isModifyEffectiveValueRuntimeEffect(decodedEffect)) {
+            return { status: "notApplicable" };
+          }
+          if (
+            decodedEffect.valueKind !== context.valueKind ||
+            !context.targetMatches(decodedEffect)
+          ) {
+            return { status: "notApplicable" };
+          }
+
+          const applyEffectiveValueModifier =
+            operationOverrides?.applyEffectiveValueModifier;
+          if (applyEffectiveValueModifier !== undefined) {
+            return applyEffectiveValueModifier(decodedEffect, context);
+          }
+
+          const apply: EffectiveValueModifierOperation =
+            decodedEffect.operation === "invertNegative"
+              ? (value) => (value < 0 ? Math.abs(value) : value)
+              : (value) =>
+                  value +
+                  (decodedEffect.amount ??
+                    (decodedEffect.amountPerOwnedCard ?? 0) *
+                      context.countOwnedScoringCards(
+                        decodedEffect.countedCardTypes ?? []
+                      ));
+          return context.evaluate(apply);
+        },
+      });
+    },
     executeAtTiming(subjectId, rawEffect, context) {
       return evaluateAtTiming(subjectId, rawEffect, {
         source: context.source,
@@ -4568,33 +4622,13 @@ export function applyEffectiveValueModifier<Result>(
     return { status: "notApplicable" };
   }
 
-  return getEffectRuntimeCatalogEntry(resolvedId.effectId).evaluateAtTiming(
+  return getEffectRuntimeCatalogEntry(
+    resolvedId.effectId
+  ).applyEffectiveValueModifier(
     `Effect ${resolvedId.effectId}`,
     effect,
-    {
-      source,
-      timing: context.timing,
-      evaluate(decoded) {
-        if (
-          decoded.valueKind !== context.valueKind ||
-          !context.targetMatches(decoded)
-        ) {
-          return { status: "notApplicable" };
-        }
-
-        const apply: EffectiveValueModifierOperation =
-          decoded.operation === "invertNegative"
-            ? (value) => (value < 0 ? Math.abs(value) : value)
-            : (value) =>
-                value +
-                (decoded.amount ??
-                  (decoded.amountPerOwnedCard ?? 0) *
-                    context.countOwnedScoringCards(
-                      decoded.countedCardTypes ?? []
-                    ));
-        return context.evaluate(apply);
-      },
-    }
+    source,
+    context
   );
 }
 
