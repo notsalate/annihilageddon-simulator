@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import test from "node:test";
@@ -144,13 +146,80 @@ test("reconciliation requires every frozen active requirement", () => {
   );
 });
 
+test("reconciliation ignores test names that appear only in registry comments", (context) => {
+  const fixtureRepository = mkdtempSync(
+    path.join(os.tmpdir(), "completion-registry-comment-")
+  );
+  context.after(() =>
+    rmSync(fixtureRepository, { force: true, recursive: true })
+  );
+  mkdirSync(path.join(fixtureRepository, "tests"), { recursive: true });
+  writeFileSync(
+    path.join(fixtureRepository, "tests", "comment-only.test.ts"),
+    "export {};\n"
+  );
+  writeFileSync(
+    path.join(fixtureRepository, "tests", "run-tests.ts"),
+    'const testSuites: string[] = [];\n// "comment-only.test.js"\n'
+  );
+  runFixtureGit(fixtureRepository, ["init"]);
+  runFixtureGit(fixtureRepository, [
+    "config",
+    "user.email",
+    "fixture@example.invalid",
+  ]);
+  runFixtureGit(fixtureRepository, ["config", "user.name", "Fixture"]);
+  runFixtureGit(fixtureRepository, ["add", "tests"]);
+  runFixtureGit(fixtureRepository, ["commit", "-m", "fixture"]);
+  const codeSha = runFixtureGit(fixtureRepository, [
+    "rev-parse",
+    "HEAD",
+  ]).stdout.trim();
+  const manifestPath = path.join(fixtureRepository, "manifest.json");
+  const requirements = ["REQ-176-AC01", "REQ-R3-09-AC02", "REQ-R3-09-AC03"].map(
+    (id) => ({
+      id,
+      active: true,
+      status: "unresolved",
+      findings: ["COMMENT-ONLY"],
+      fixCommits: [],
+      tests: ["tests/comment-only.test.ts"],
+      codeSha,
+    })
+  );
+  writeFileSync(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        rangeStart: codeSha,
+        codeSha,
+        overallVerdict: "есть открытые требования",
+        requirements,
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  const result = runReconciliation(manifestPath, fixtureRepository);
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/comment-only\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
 test("current reconciliation manifest passes Git and test-reference checks", () => {
   const result = runReconciliation(evidenceManifest);
 
   assert.equal(result.status, 0, result.stderr);
 });
 
-function runReconciliation(fixturePath: string) {
+function runReconciliation(
+  fixturePath: string,
+  workingDirectory = repositoryRoot
+) {
   return spawnSync(
     process.execPath,
     [
@@ -161,6 +230,15 @@ function runReconciliation(fixturePath: string) {
       ),
       fixturePath,
     ],
-    { encoding: "utf8" }
+    { cwd: workingDirectory, encoding: "utf8" }
   );
+}
+
+function runFixtureGit(repository: string, args: readonly string[]) {
+  const result = spawnSync("git", args, {
+    cwd: repository,
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  return result;
 }

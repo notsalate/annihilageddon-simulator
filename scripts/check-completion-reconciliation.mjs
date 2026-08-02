@@ -1,12 +1,13 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import ts from "typescript";
 
 const frozenActiveRequirementIds = [
   "REQ-176-AC01",
   "REQ-R3-09-AC02",
   "REQ-R3-09-AC03",
 ];
-const testRegistryByCommit = new Map();
+const testSuitesByCommit = new Map();
 
 const manifestPath = process.argv[2];
 
@@ -236,25 +237,69 @@ function isRegisteredTestReference(testReference, codeCommit) {
   const compiledTestPath = testReference
     .slice("tests/".length)
     .replace(/\.ts$/, ".js");
-  const registry = getTestRegistry(codeCommit);
-  if (registry === undefined) {
-    return false;
-  }
-  return registry.includes(`"${compiledTestPath}"`);
+  return getRegisteredTestSuites(codeCommit)?.has(compiledTestPath) === true;
 }
 
-function getTestRegistry(codeCommit) {
-  if (testRegistryByCommit.has(codeCommit)) {
-    return testRegistryByCommit.get(codeCommit);
+function getRegisteredTestSuites(codeCommit) {
+  if (testSuitesByCommit.has(codeCommit)) {
+    return testSuitesByCommit.get(codeCommit);
   }
   const result = spawnSync(
     "git",
     ["show", `${codeCommit}:tests/run-tests.ts`],
     { cwd: process.cwd(), encoding: "utf8" }
   );
-  const registry = result.status === 0 ? result.stdout : undefined;
-  testRegistryByCommit.set(codeCommit, registry);
-  return registry;
+  const testSuites =
+    result.status === 0 ? parseTestSuiteRegistry(result.stdout) : undefined;
+  testSuitesByCommit.set(codeCommit, testSuites);
+  return testSuites;
+}
+
+function parseTestSuiteRegistry(sourceText) {
+  const sourceFile = ts.createSourceFile(
+    "tests/run-tests.ts",
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS
+  );
+  const declarations = sourceFile.statements.flatMap((statement) =>
+    ts.isVariableStatement(statement)
+      ? statement.declarationList.declarations.filter(
+          (declaration) =>
+            ts.isIdentifier(declaration.name) &&
+            declaration.name.text === "testSuites"
+        )
+      : []
+  );
+  if (declarations.length !== 1) {
+    return undefined;
+  }
+  const initializer = unwrapRegistryInitializer(declarations[0].initializer);
+  if (initializer === undefined || !ts.isArrayLiteralExpression(initializer)) {
+    return undefined;
+  }
+  const testSuites = new Set();
+  for (const element of initializer.elements) {
+    if (!ts.isStringLiteralLike(element)) {
+      return undefined;
+    }
+    testSuites.add(element.text);
+  }
+  return testSuites;
+}
+
+function unwrapRegistryInitializer(expression) {
+  let current = expression;
+  while (
+    current !== undefined &&
+    (ts.isAsExpression(current) ||
+      ts.isSatisfiesExpression(current) ||
+      ts.isParenthesizedExpression(current))
+  ) {
+    current = current.expression;
+  }
+  return current;
 }
 
 function hasEntries(value) {
