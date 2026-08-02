@@ -137,8 +137,13 @@ function collectPublicExportViolations(sourceFile, policy, violations, seen) {
   const file = displayPath(policy.rootDir, sourceFile.fileName);
   for (const exported of collectExportedValues(policy.checker, moduleSymbol)) {
     const protectedValue = isProtectedValue(exported.origin, policy);
-    const adapterOrigin = exported.exportedOrigin ?? exported.origin;
-    const originFile = originSourceFile(adapterOrigin);
+    const adapterOrigin = findTrustedAdapterOrigin(
+      policy.checker,
+      exported.exportedOrigin ?? exported.origin,
+      policy
+    );
+    const originFile =
+      adapterOrigin === undefined ? undefined : originSourceFile(adapterOrigin);
     const adapterExports =
       originFile === undefined
         ? undefined
@@ -146,7 +151,8 @@ function collectPublicExportViolations(sourceFile, policy, violations, seen) {
             displayPath(policy.rootDir, originFile.fileName)
           );
     const approvedAdapterExport =
-      adapterExports?.has(originName(adapterOrigin)) ?? false;
+      adapterOrigin !== undefined &&
+      (adapterExports?.has(originName(adapterOrigin)) ?? false);
     if (
       !protectedValue &&
       (adapterExports === undefined || approvedAdapterExport)
@@ -262,6 +268,46 @@ function collectValuesForSymbol(checker, symbol, visited = new Set()) {
     return initializerOrigins.length > 0 ? initializerOrigins : [origin];
   }
   return [];
+}
+
+function findTrustedAdapterOrigin(checker, symbol, policy, visited = new Set()) {
+  if (symbol === undefined) {
+    return undefined;
+  }
+  const origin = resolveAlias(checker, symbol);
+  if (visited.has(origin)) {
+    return undefined;
+  }
+  visited.add(origin);
+
+  const originFile = originSourceFile(origin);
+  if (
+    originFile !== undefined &&
+    policy.trustedAdapterValueExports.has(
+      displayPath(policy.rootDir, originFile.fileName)
+    )
+  ) {
+    return origin;
+  }
+
+  for (const declaration of origin.declarations ?? []) {
+    if (
+      !ts.isVariableDeclaration(declaration) ||
+      declaration.initializer === undefined
+    ) {
+      continue;
+    }
+    const adapterOrigin = findTrustedAdapterOrigin(
+      checker,
+      staticInitializerSymbol(checker, declaration.initializer),
+      policy,
+      visited
+    );
+    if (adapterOrigin !== undefined) {
+      return adapterOrigin;
+    }
+  }
+  return undefined;
 }
 
 function staticInitializerSymbol(checker, initializer) {
