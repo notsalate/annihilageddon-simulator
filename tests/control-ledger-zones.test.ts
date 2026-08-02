@@ -179,13 +179,10 @@ test("Ledger exposes hand and registered extension cards as Defense sources", ()
     )
   );
 
-  assert.deepEqual(
-    listDefenseCardLocations(state, player.playerId),
-    [
-      { card: handCard, zoneName: `${player.playerId}.hand` },
-      { card: extensionCard, zoneName: "fixture.defense-source" },
-    ]
-  );
+  assert.deepEqual(listDefenseCardLocations(state, player.playerId), [
+    { card: handCard, zoneName: `${player.playerId}.hand` },
+    { card: extensionCard, zoneName: "fixture.defense-source" },
+  ]);
 });
 
 test("Ledger returns a typed failure when an extension replacement and rollback both throw", () => {
@@ -251,6 +248,69 @@ test("Ledger returns a typed failure when an extension replacement and rollback 
   assert.deepEqual(destinationCards, []);
 });
 
+test("Ledger rolls back through the descriptor recreated after destination failure", () => {
+  const state = initializeGame({ rootDir, seed: 47607 });
+  const player = state.players[0]!;
+  const extensionCard = createCard("recreated-move-source", player.playerId);
+  let sourceCards = [extensionCard];
+  const destinationCards: CardInstance[] = [];
+
+  registerPhysicalCardZoneDescriptorFactory(
+    state,
+    Object.assign(
+      () => {
+        const descriptorStorage = sourceCards;
+        return {
+          cardinality: "many" as const,
+          scoringEligible: false,
+          expectedOwnerId: player.playerId,
+          read: () => descriptorStorage,
+          replace: (cards: readonly CardInstance[]) => {
+            descriptorStorage.splice(0, descriptorStorage.length, ...cards);
+          },
+        };
+      },
+      {
+        identity: "fixture.recreated-move-source",
+        zoneName: "fixture.recreated-move-source",
+      }
+    )
+  );
+  registerPhysicalCardZoneDescriptorFactory(
+    state,
+    Object.assign(
+      () => ({
+        cardinality: "many" as const,
+        scoringEligible: false,
+        expectedOwnerId: player.playerId,
+        read: () => destinationCards,
+        replace: () => {
+          sourceCards = [];
+          throw new Error("fixture destination replace failure");
+        },
+      }),
+      {
+        identity: "fixture.recreated-move-destination",
+        zoneName: "fixture.recreated-move-destination",
+      }
+    )
+  );
+
+  const result = movePhysicalCard(
+    state,
+    extensionCard.instanceId,
+    "fixture.recreated-move-destination",
+    "back"
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    reason: "fixture destination replace failure",
+  });
+  assert.deepEqual(sourceCards, [extensionCard]);
+  assert.deepEqual(destinationCards, []);
+});
+
 test("Ledger rejects duplicate extension metadata before calling factories or changing its registry", () => {
   const state = initializeGame({ rootDir, seed: 47602 });
   const player = state.players[0]!;
@@ -304,11 +364,19 @@ test("Ledger rejects duplicate extension metadata before calling factories or ch
   );
 
   assert.throws(
-    () => registerPhysicalCardZoneDescriptorFactory(state, duplicateZoneNameFactory),
+    () =>
+      registerPhysicalCardZoneDescriptorFactory(
+        state,
+        duplicateZoneNameFactory
+      ),
     /Duplicate physical card zone descriptor/
   );
   assert.throws(
-    () => registerPhysicalCardZoneDescriptorFactory(state, duplicateIdentityFactory),
+    () =>
+      registerPhysicalCardZoneDescriptorFactory(
+        state,
+        duplicateIdentityFactory
+      ),
     /Duplicate physical card zone descriptor identity/
   );
   assert.equal(factoryCalls, 0);
@@ -350,7 +418,9 @@ test("Ledger injects extension zone metadata instead of trusting a factory descr
   assert.ok(descriptor);
   assert.equal(descriptor.zoneName, "fixture.safe-zone");
   descriptor.replace([createCard("safe-zone", player.playerId)]);
-  assert.deepEqual(descriptor.read(), [createCard("safe-zone", player.playerId)]);
+  assert.deepEqual(descriptor.read(), [
+    createCard("safe-zone", player.playerId),
+  ]);
 });
 
 test("Ledger keeps registered extension metadata after factory properties change", () => {
@@ -373,15 +443,16 @@ test("Ledger keeps registered extension metadata after factory properties change
     zoneName: "fixture.changed-zone",
   });
 
-  const duplicateIdentityFactory: PhysicalCardZoneDescriptorFactory = Object.assign(
-    () => ({
-      cardinality: "many" as const,
-      scoringEligible: false,
-      read: () => [],
-      replace: () => undefined,
-    }),
-    { identity: "fixture.original-identity", zoneName: "fixture.other-zone" }
-  );
+  const duplicateIdentityFactory: PhysicalCardZoneDescriptorFactory =
+    Object.assign(
+      () => ({
+        cardinality: "many" as const,
+        scoringEligible: false,
+        read: () => [],
+        replace: () => undefined,
+      }),
+      { identity: "fixture.original-identity", zoneName: "fixture.other-zone" }
+    );
   const duplicateZoneFactory: PhysicalCardZoneDescriptorFactory = Object.assign(
     () => ({
       cardinality: "many" as const,
@@ -393,11 +464,16 @@ test("Ledger keeps registered extension metadata after factory properties change
   );
 
   assert.throws(
-    () => registerPhysicalCardZoneDescriptorFactory(state, duplicateIdentityFactory),
+    () =>
+      registerPhysicalCardZoneDescriptorFactory(
+        state,
+        duplicateIdentityFactory
+      ),
     /Duplicate physical card zone descriptor identity fixture.original-identity/
   );
   assert.throws(
-    () => registerPhysicalCardZoneDescriptorFactory(state, duplicateZoneFactory),
+    () =>
+      registerPhysicalCardZoneDescriptorFactory(state, duplicateZoneFactory),
     /Duplicate physical card zone descriptor fixture.original-zone/
   );
   assert.deepEqual(

@@ -769,12 +769,10 @@ export function movePhysicalCard(
     source.descriptor.replace(sourceAfter);
     destination.replace(destinationAfter);
   } catch (error) {
-    const rollbackErrors = [
-      restorePhysicalCardZoneMoveSnapshot(destinationSnapshot),
-      restorePhysicalCardZoneMoveSnapshot(sourceSnapshot),
-    ].filter(
-      (rollbackError): rollbackError is string => rollbackError !== undefined
-    );
+    const rollbackErrors = restorePhysicalCardZoneMoveSnapshots(state, [
+      destinationSnapshot,
+      sourceSnapshot,
+    ]);
     return {
       ok: false,
       reason:
@@ -898,6 +896,43 @@ export function restorePhysicalCardZoneState(
   return errors.length === 0
     ? { ok: true }
     : { ok: false, reason: errors.join("; ") };
+}
+
+function restorePhysicalCardZoneMoveSnapshots(
+  state: GameState,
+  snapshots: readonly PhysicalCardZoneMoveSnapshot[]
+): string[] {
+  const errors: string[] = [];
+  for (const snapshot of snapshots) {
+    let descriptors: readonly PhysicalCardZoneDescriptor[];
+    try {
+      descriptors = listPhysicalCardZoneDescriptors(state);
+    } catch (error) {
+      errors.push(
+        `Cannot list physical card zones for rollback: ${describePhysicalCardMoveError(error)}`
+      );
+      continue;
+    }
+    const descriptorsByName = new Map(
+      descriptors.map((descriptor) => [descriptor.zoneName, descriptor])
+    );
+    if (descriptorsByName.size !== descriptors.length) {
+      errors.push("Physical card zone rollback found duplicate descriptors");
+      continue;
+    }
+    const descriptor = descriptorsByName.get(snapshot.descriptor.zoneName);
+    if (descriptor === undefined) {
+      errors.push(
+        `Physical card zone rollback is missing zone ${snapshot.descriptor.zoneName}`
+      );
+      continue;
+    }
+    const error = restorePhysicalCardZoneMoveSnapshot(snapshot, descriptor);
+    if (error !== undefined) {
+      errors.push(error);
+    }
+  }
+  return errors;
 }
 
 function createPhysicalCardZoneMoveSnapshot(
