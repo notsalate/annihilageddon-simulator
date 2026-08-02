@@ -411,6 +411,76 @@ test("Defense commits a card from an extension zone and restores that zone after
   assert.deepEqual([...attack.defenseUsage.usedDefenseCardInstanceIds], []);
 });
 
+test("Defense rollback restores every snapshot field when extension replace rejects recovery", () => {
+  const { state, attacker, defender, defenseCard } =
+    createRollbackScenario(47560);
+  defender.hand = defender.hand.filter(
+    (card) => card.instanceId !== defenseCard.instanceId
+  );
+  const extensionCards = [defenseCard];
+  let sourceReplaceCalls = 0;
+  registerPhysicalCardZoneDescriptorFactory(
+    state,
+    Object.assign(
+      () => ({
+        cardinality: "many" as const,
+        scoringEligible: false,
+        expectedOwnerId: defender.playerId,
+        read: () => extensionCards,
+        replace: (cards: readonly CardInstance[]) => {
+          sourceReplaceCalls += 1;
+          if (sourceReplaceCalls > 1) {
+            throw new Error("fixture Defense rollback replace failure");
+          }
+          extensionCards.splice(0, extensionCards.length, ...cards);
+        },
+      }),
+      {
+        identity: "fixture-defense-failing-rollback-zone",
+        zoneName: "fixture.defense-failing-rollback-zone",
+      }
+    )
+  );
+  defender.chips = 4;
+  const eventLogBefore = structuredClone(state.eventLog);
+  const turnBefore = structuredClone(state.turn);
+  const expectedRng = state.rng.fork();
+  const attack = redirectableAttack(attacker);
+  const services: AttackDefenseServices = {
+    chooseEffectChoice(_state, _player, _source, _effectId, choices) {
+      return choices.find(
+        (choice) =>
+          choice.choiceKind === "defense" && choice.card === defenseCard
+      );
+    },
+    executeDefenseEffects(branchState, player) {
+      player.chips = 99;
+      branchState.turn.power = 42;
+      branchState.rng.next();
+      const latestEvent = branchState.eventLog.at(-1);
+      assert.ok(latestEvent);
+      branchState.eventLog.push(structuredClone(latestEvent));
+      return { ok: false, error: "fixture Defense branch failure" };
+    },
+  };
+
+  const result = resolveDefenseWindow(state, defender, attack, services);
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "fixture Defense branch failure",
+  });
+  assert.equal(sourceReplaceCalls, 1);
+  assert.deepEqual(extensionCards, [defenseCard]);
+  assert.equal(defender.discard.includes(defenseCard), false);
+  assert.equal(defender.chips, 4);
+  assert.deepEqual(state.turn, turnBefore);
+  assert.deepEqual(state.eventLog, eventLogBefore);
+  assert.equal(state.rng.next(), expectedRng.next());
+  assert.deepEqual([...attack.defenseUsage.defendedPlayerIds], []);
+  assert.deepEqual([...attack.defenseUsage.usedDefenseCardInstanceIds], []);
+});
+
 function createScenario(seed: number): GameState {
   const state = initializeGame({ rootDir, seed });
   const attacker = mustGetPlayer(state, 0);

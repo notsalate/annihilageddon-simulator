@@ -1,8 +1,10 @@
 import {
+  capturePhysicalCardZoneState,
   listDefenseCardLocations,
   listPhysicalCardLocations,
-  listPhysicalCardZoneDescriptors,
   movePhysicalCard,
+  restorePhysicalCardZoneState,
+  type PhysicalCardZoneStateSnapshot,
 } from "./control-ledger.js";
 import { installGameEventLog } from "./game-events.js";
 import { recordGameEvent } from "./event-recorder.js";
@@ -90,11 +92,6 @@ interface DefensePlayerMutationSnapshot {
   life: PlayerState["life"];
 }
 
-interface DefenseCardZoneSnapshot {
-  readonly zoneName: string;
-  readonly cards: readonly CardInstance[];
-}
-
 interface DefenseObjectMutationSnapshot {
   object: object;
   value: object;
@@ -103,7 +100,7 @@ interface DefenseObjectMutationSnapshot {
 interface DefenseMutationSnapshot {
   activePlayerId: GameState["activePlayerId"];
   turn: GameState["turn"];
-  cardZones: readonly DefenseCardZoneSnapshot[];
+  physicalCardZones: PhysicalCardZoneStateSnapshot;
   players: DefensePlayerMutationSnapshot[];
   common: {
     deadWizardTokenStatus: GameState["common"]["deadWizardTokens"]["status"];
@@ -120,38 +117,47 @@ function createDefenseMutationSnapshot(
   state: GameState,
   defenseUsage: AttackDefenseUsage,
   eventLogLength: number
-): DefenseMutationSnapshot {
+):
+  | { readonly ok: true; readonly snapshot: DefenseMutationSnapshot }
+  | { readonly ok: false; readonly error: string } {
+  const physicalCardZoneResult = capturePhysicalCardZoneState(state);
+  if (!physicalCardZoneResult.ok) {
+    return {
+      ok: false,
+      error: `Cannot snapshot Defense card zones: ${physicalCardZoneResult.reason}`,
+    };
+  }
   const mutableObjects = collectDefenseMutableObjects(state).map((object) => ({
     object,
     value: structuredClone(object),
   }));
   return {
-    activePlayerId: state.activePlayerId,
-    turn: structuredClone(state.turn),
-    cardZones: listPhysicalCardZoneDescriptors(state).map((descriptor) => ({
-      zoneName: descriptor.zoneName,
-      cards: [...descriptor.read()],
-    })),
-    players: state.players.map((player) => ({
-      player,
-      deadWizardTokens: [...player.deadWizardTokens],
-      wizardProperties: [...player.wizardProperties],
-      statuses: [...player.statuses],
-      trophyLikeObjects: [...player.trophyLikeObjects],
-      chips: player.chips,
-      life: { ...player.life },
-    })),
-    common: {
-      deadWizardTokenStatus: state.common.deadWizardTokens.status,
-      deadWizardTokenDrawStack: [...state.common.deadWizardTokens.drawStack],
+    ok: true,
+    snapshot: {
+      activePlayerId: state.activePlayerId,
+      turn: structuredClone(state.turn),
+      physicalCardZones: physicalCardZoneResult.snapshot,
+      players: state.players.map((player) => ({
+        player,
+        deadWizardTokens: [...player.deadWizardTokens],
+        wizardProperties: [...player.wizardProperties],
+        statuses: [...player.statuses],
+        trophyLikeObjects: [...player.trophyLikeObjects],
+        chips: player.chips,
+        life: { ...player.life },
+      })),
+      common: {
+        deadWizardTokenStatus: state.common.deadWizardTokens.status,
+        deadWizardTokenDrawStack: [...state.common.deadWizardTokens.drawStack],
+      },
+      mutableObjects,
+      rng: state.rng.fork(),
+      eventLogLength,
+      defendedPlayerIds: new Set(defenseUsage.defendedPlayerIds),
+      usedDefenseCardInstanceIds: new Set(
+        defenseUsage.usedDefenseCardInstanceIds
+      ),
     },
-    mutableObjects,
-    rng: state.rng.fork(),
-    eventLogLength,
-    defendedPlayerIds: new Set(defenseUsage.defendedPlayerIds),
-    usedDefenseCardInstanceIds: new Set(
-      defenseUsage.usedDefenseCardInstanceIds
-    ),
   };
 }
 
@@ -175,44 +181,7 @@ function restoreDefenseMutationSnapshot(
   state: GameState,
   defenseUsage: AttackDefenseUsage,
   snapshot: DefenseMutationSnapshot
-): void {
-  const cardZoneDescriptors = listPhysicalCardZoneDescriptors(state);
-  const descriptorsByName = new Map(
-    cardZoneDescriptors.map((descriptor) => [descriptor.zoneName, descriptor])
-  );
-  const snapshotsByName = new Map(
-    snapshot.cardZones.map((cardZone) => [cardZone.zoneName, cardZone])
-  );
-
-  if (descriptorsByName.size !== cardZoneDescriptors.length) {
-    throw new Error(
-      "Defense rollback found duplicate physical card descriptors"
-    );
-  }
-  if (snapshotsByName.size !== snapshot.cardZones.length) {
-    throw new Error("Defense rollback snapshot contains duplicate card zones");
-  }
-  for (const descriptor of cardZoneDescriptors) {
-    if (!snapshotsByName.has(descriptor.zoneName)) {
-      throw new Error(
-        `Defense rollback found unknown physical card zone ${descriptor.zoneName}`
-      );
-    }
-  }
-  for (const cardZone of snapshot.cardZones) {
-    const descriptor = descriptorsByName.get(cardZone.zoneName);
-    if (descriptor === undefined) {
-      throw new Error(
-        `Defense rollback is missing physical card zone ${cardZone.zoneName}`
-      );
-    }
-    if (descriptor.cardinality === "zeroOrOne" && cardZone.cards.length > 1) {
-      throw new Error(
-        `Defense rollback snapshot violates singleton card zone ${cardZone.zoneName}`
-      );
-    }
-  }
-
+): { readonly ok: true } | { readonly ok: false; readonly error: string } {
   for (const mutableObject of snapshot.mutableObjects) {
     Object.assign(mutableObject.object, structuredClone(mutableObject.value));
   }
@@ -227,15 +196,10 @@ function restoreDefenseMutationSnapshot(
     player.chips = playerSnapshot.chips;
     player.life = { ...playerSnapshot.life };
   }
-  for (const cardZone of snapshot.cardZones) {
-    const descriptor = descriptorsByName.get(cardZone.zoneName);
-    if (descriptor === undefined) {
-      throw new Error(
-        `Defense rollback lost physical card zone ${cardZone.zoneName} after validation`
-      );
-    }
-    descriptor.replace(cardZone.cards);
-  }
+  const physicalCardZoneResult = restorePhysicalCardZoneState(
+    state,
+    snapshot.physicalCardZones
+  );
   state.common.deadWizardTokens =
     snapshot.common.deadWizardTokenStatus === "notInDataPack"
       ? { status: "notInDataPack", drawStack: [] }
@@ -254,6 +218,26 @@ function restoreDefenseMutationSnapshot(
   for (const cardInstanceId of snapshot.usedDefenseCardInstanceIds) {
     defenseUsage.usedDefenseCardInstanceIds.add(cardInstanceId);
   }
+  return physicalCardZoneResult.ok
+    ? { ok: true }
+    : {
+        ok: false,
+        error: `Defense card-zone rollback failed: ${physicalCardZoneResult.reason}`,
+      };
+}
+
+function rollbackDefenseFailure(
+  state: GameState,
+  defenseUsage: AttackDefenseUsage,
+  snapshot: DefenseMutationSnapshot,
+  failure: { readonly ok: false; readonly error: string }
+): { readonly ok: false; readonly error: string } {
+  const rollbackResult = restoreDefenseMutationSnapshot(
+    state,
+    defenseUsage,
+    snapshot
+  );
+  return rollbackResult.ok ? failure : rollbackResult;
 }
 
 export type ResolveRedirectedAttack = (
@@ -307,11 +291,17 @@ export function resolveDefenseWindow(
     return { ok: true, avoided: false };
   }
 
-  const mutationSnapshot = createDefenseMutationSnapshot(
+  const mutationSnapshotResult = createDefenseMutationSnapshot(
     state,
     attack.defenseUsage,
     eventLogLengthBeforeChoice
   );
+  if (!mutationSnapshotResult.ok) {
+    state.eventLog.splice(eventLogLengthBeforeChoice);
+    installGameEventLog(state);
+    return mutationSnapshotResult;
+  }
+  const mutationSnapshot = mutationSnapshotResult.snapshot;
   recordGameEvent(state, {
     type: "defenseChoiceSelected",
     playerId: defendingPlayer.playerId,
@@ -327,12 +317,12 @@ export function resolveDefenseWindow(
     defense.paymentPlan
   );
   if (!paymentResult.ok) {
-    restoreDefenseMutationSnapshot(
+    return rollbackDefenseFailure(
       state,
       attack.defenseUsage,
-      mutationSnapshot
+      mutationSnapshot,
+      paymentResult
     );
-    return paymentResult;
   }
 
   attack.defenseUsage.defendedPlayerIds.add(defendingPlayer.playerId);
@@ -349,15 +339,15 @@ export function resolveDefenseWindow(
   };
 
   if (!moveDefenseCard(state, defendingPlayer, defense)) {
-    restoreDefenseMutationSnapshot(
+    return rollbackDefenseFailure(
       state,
       attack.defenseUsage,
-      mutationSnapshot
+      mutationSnapshot,
+      {
+        ok: false,
+        error: `Cannot move defense ${defense.card.instanceId}`,
+      }
     );
-    return {
-      ok: false,
-      error: `Cannot move defense ${defense.card.instanceId}`,
-    };
   }
 
   const branchEffects = defense.effect.branchEffects;
@@ -369,12 +359,12 @@ export function resolveDefenseWindow(
       defenseSource
     );
     if (!branchResult.ok) {
-      restoreDefenseMutationSnapshot(
+      return rollbackDefenseFailure(
         state,
         attack.defenseUsage,
-        mutationSnapshot
+        mutationSnapshot,
+        branchResult
       );
-      return branchResult;
     }
     if (branchResult.gameEnd !== undefined) {
       return { ok: true, avoided: true, gameEnd: branchResult.gameEnd };
@@ -383,15 +373,15 @@ export function resolveDefenseWindow(
 
   if (redirectsAttack && attack.kind === "redirectable") {
     if (resolveRedirectedAttack === undefined) {
-      restoreDefenseMutationSnapshot(
+      return rollbackDefenseFailure(
         state,
         attack.defenseUsage,
-        mutationSnapshot
+        mutationSnapshot,
+        {
+          ok: false,
+          error: "Redirect defense requires the Attack Resolution callback",
+        }
       );
-      return {
-        ok: false,
-        error: "Redirect defense requires the Attack Resolution callback",
-      };
     }
     const redirectResult = resolveRedirectedAttack({
       attackingPlayer: defendingPlayer,
@@ -407,12 +397,12 @@ export function resolveDefenseWindow(
       defenseUsage: attack.defenseUsage,
     });
     if (!redirectResult.ok) {
-      restoreDefenseMutationSnapshot(
+      return rollbackDefenseFailure(
         state,
         attack.defenseUsage,
-        mutationSnapshot
+        mutationSnapshot,
+        redirectResult
       );
-      return redirectResult;
     }
     if (redirectResult.gameEnd !== undefined) {
       return { ok: true, avoided: true, gameEnd: redirectResult.gameEnd };

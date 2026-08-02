@@ -131,6 +131,18 @@ interface PhysicalCardZoneMoveSnapshot {
   readonly recoveryStorage?: CardInstance[];
 }
 
+export interface PhysicalCardZoneStateSnapshot {
+  readonly zones: readonly PhysicalCardZoneMoveSnapshot[];
+}
+
+export type PhysicalCardZoneStateSnapshotResult =
+  | { readonly ok: true; readonly snapshot: PhysicalCardZoneStateSnapshot }
+  | { readonly ok: false; readonly reason: string };
+
+export type PhysicalCardZoneStateRestoreResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: string };
+
 export function buildControlledObjectView(
   state: GameState,
   playerId: PlayerId
@@ -739,6 +751,101 @@ export function movePhysicalCard(
       destinationZoneName,
     },
   };
+}
+
+/** Captures every physical zone with Ledger-owned recovery metadata. */
+export function capturePhysicalCardZoneState(
+  state: GameState
+): PhysicalCardZoneStateSnapshotResult {
+  let descriptors: readonly PhysicalCardZoneDescriptor[];
+  try {
+    descriptors = listPhysicalCardZoneDescriptors(state);
+  } catch (error) {
+    return { ok: false, reason: describePhysicalCardMoveError(error) };
+  }
+  if (
+    new Set(descriptors.map((descriptor) => descriptor.zoneName)).size !==
+    descriptors.length
+  ) {
+    return {
+      ok: false,
+      reason: "Physical card zone snapshot found duplicate descriptors",
+    };
+  }
+
+  const zones: PhysicalCardZoneMoveSnapshot[] = [];
+  for (const descriptor of descriptors) {
+    const snapshotResult = createPhysicalCardZoneMoveSnapshot(
+      state,
+      descriptor
+    );
+    if (!snapshotResult.ok) {
+      return snapshotResult;
+    }
+    zones.push(snapshotResult.snapshot);
+  }
+  return { ok: true, snapshot: { zones } };
+}
+
+/** Restores every captured physical zone and reports failures without throwing. */
+export function restorePhysicalCardZoneState(
+  state: GameState,
+  snapshot: PhysicalCardZoneStateSnapshot
+): PhysicalCardZoneStateRestoreResult {
+  let descriptors: readonly PhysicalCardZoneDescriptor[];
+  try {
+    descriptors = listPhysicalCardZoneDescriptors(state);
+  } catch (error) {
+    return { ok: false, reason: describePhysicalCardMoveError(error) };
+  }
+  const descriptorsByName = new Map(
+    descriptors.map((descriptor) => [descriptor.zoneName, descriptor])
+  );
+  const snapshotsByName = new Map(
+    snapshot.zones.map((zone) => [zone.descriptor.zoneName, zone])
+  );
+  if (descriptorsByName.size !== descriptors.length) {
+    return {
+      ok: false,
+      reason: "Physical card zone restore found duplicate descriptors",
+    };
+  }
+  if (snapshotsByName.size !== snapshot.zones.length) {
+    return {
+      ok: false,
+      reason: "Physical card zone restore found duplicate snapshots",
+    };
+  }
+  for (const descriptor of descriptors) {
+    if (!snapshotsByName.has(descriptor.zoneName)) {
+      return {
+        ok: false,
+        reason: `Physical card zone restore found unknown zone ${descriptor.zoneName}`,
+      };
+    }
+  }
+  for (const zone of snapshot.zones) {
+    const descriptor = descriptorsByName.get(zone.descriptor.zoneName);
+    if (descriptor === undefined) {
+      return {
+        ok: false,
+        reason: `Physical card zone restore is missing zone ${zone.descriptor.zoneName}`,
+      };
+    }
+    if (descriptor.cardinality === "zeroOrOne" && zone.cards.length > 1) {
+      return {
+        ok: false,
+        reason: `Physical card zone restore violates singleton zone ${descriptor.zoneName}`,
+      };
+    }
+  }
+
+  const errors = snapshot.zones
+    .map(restorePhysicalCardZoneMoveSnapshot)
+    .filter((error): error is string => error !== undefined);
+  return errors.length === 0
+    ? { ok: true }
+    : { ok: false, reason: errors.join("; ") };
 }
 
 function createPhysicalCardZoneMoveSnapshot(
