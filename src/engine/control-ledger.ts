@@ -881,9 +881,20 @@ export function restorePhysicalCardZoneState(
     }
   }
 
-  const errors = snapshot.zones
-    .map(restorePhysicalCardZoneMoveSnapshot)
-    .filter((error): error is string => error !== undefined);
+  const errors: string[] = [];
+  for (const zone of snapshot.zones) {
+    const descriptor = descriptorsByName.get(zone.descriptor.zoneName);
+    if (descriptor === undefined) {
+      return {
+        ok: false,
+        reason: `Physical card zone restore is missing zone ${zone.descriptor.zoneName}`,
+      };
+    }
+    const error = restorePhysicalCardZoneMoveSnapshot(zone, descriptor);
+    if (error !== undefined) {
+      errors.push(error);
+    }
+  }
   return errors.length === 0
     ? { ok: true }
     : { ok: false, reason: errors.join("; ") };
@@ -928,13 +939,17 @@ function createPhysicalCardZoneMoveSnapshot(
 }
 
 function restorePhysicalCardZoneMoveSnapshot(
-  snapshot: PhysicalCardZoneMoveSnapshot
+  snapshot: PhysicalCardZoneMoveSnapshot,
+  descriptor = snapshot.descriptor
 ): string | undefined {
   try {
     try {
-      snapshot.descriptor.replace(snapshot.cards);
+      descriptor.replace(snapshot.cards);
     } catch (error) {
-      if (snapshot.recoveryStorage === undefined) {
+      if (
+        snapshot.recoveryStorage === undefined ||
+        descriptor.read() !== snapshot.recoveryStorage
+      ) {
         throw error;
       }
       snapshot.recoveryStorage.splice(
@@ -943,16 +958,16 @@ function restorePhysicalCardZoneMoveSnapshot(
         ...snapshot.cards
       );
     }
-    const restoredCards = snapshot.descriptor.read();
+    const restoredCards = descriptor.read();
     if (
       restoredCards.length !== snapshot.cards.length ||
       restoredCards.some((card, index) => card !== snapshot.cards[index])
     ) {
-      return `Cannot restore physical card zone ${snapshot.descriptor.zoneName}`;
+      return `Cannot restore physical card zone ${descriptor.zoneName}`;
     }
     return undefined;
   } catch (error) {
-    return `${snapshot.descriptor.zoneName}: ${describePhysicalCardMoveError(error)}`;
+    return `${descriptor.zoneName}: ${describePhysicalCardMoveError(error)}`;
   }
 }
 

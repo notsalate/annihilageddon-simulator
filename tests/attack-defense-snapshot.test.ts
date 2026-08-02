@@ -468,6 +468,64 @@ test("Defense restores a fresh-copy extension descriptor after replace swaps sto
   assert.equal(defender.discard.includes(defenseCard), false);
 });
 
+test("Defense restores the currently registered descriptor after extension storage is recreated", () => {
+  const { state, attacker, defender, defenseCard } =
+    createRollbackScenario(47557);
+  defender.hand = defender.hand.filter(
+    (card) => card.instanceId !== defenseCard.instanceId
+  );
+  let currentExtensionCards = [defenseCard];
+  registerPhysicalCardZoneDescriptorFactory(
+    state,
+    Object.assign(
+      () => {
+        const descriptorStorage = currentExtensionCards;
+        return {
+          cardinality: "many" as const,
+          scoringEligible: false,
+          expectedOwnerId: defender.playerId,
+          read: () => [...descriptorStorage],
+          replace: (cards: readonly CardInstance[]) => {
+            descriptorStorage.splice(0, descriptorStorage.length, ...cards);
+          },
+        };
+      },
+      {
+        identity: "fixture-defense-recreated-extension-zone",
+        zoneName: "fixture.defense-recreated-extension-zone",
+      }
+    )
+  );
+
+  const services: AttackDefenseServices = {
+    chooseEffectChoice(_state, _player, _source, _effectId, choices) {
+      return choices.find(
+        (choice) =>
+          choice.choiceKind === "defense" && choice.card === defenseCard
+      );
+    },
+    executeDefenseEffects() {
+      assert.deepEqual(currentExtensionCards, []);
+      currentExtensionCards = [];
+      return { ok: false, error: "fixture recreated-storage branch failure" };
+    },
+  };
+
+  const result = resolveDefenseWindow(
+    state,
+    defender,
+    redirectableAttack(attacker),
+    services
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "fixture recreated-storage branch failure",
+  });
+  assert.deepEqual(currentExtensionCards, [defenseCard]);
+  assert.equal(defender.discard.includes(defenseCard), false);
+});
+
 test("Defense rollback restores every snapshot field when extension replace rejects recovery", () => {
   const { state, attacker, defender, defenseCard } =
     createRollbackScenario(47560);
