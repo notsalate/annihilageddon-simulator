@@ -22,7 +22,12 @@ import {
   runSingleGame,
   scoreGame,
 } from "../src/index.js";
-import { markPlayerId } from "../src/domain/types.js";
+import {
+  markPlayerId,
+  type PlayerId,
+} from "../src/domain/types.js";
+import type { BotStrategy } from "../src/engine/simulation.js";
+import type { PlayerDecisionView } from "../src/engine/setup.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -138,6 +143,51 @@ test("bot action selection records turn number and safe action identity for debu
   assert.match(trace, /Turn 1, Action 1 - player-1 \(endTurn\)/);
   assert.match(trace, /- Bot selected endTurn\./);
   assert.doesNotMatch(trace, /Turn \? - player-1/);
+});
+
+test("single-game simulation gives each player an isolated stateful bot lifecycle", () => {
+  let retainedView: PlayerDecisionView | undefined;
+  const factoryCalls: PlayerId[] = [];
+
+  const options: Parameters<typeof runSingleGame>[0] & {
+    botFactory: (playerId: PlayerId) => BotStrategy;
+  } = {
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    maxTurns: 2,
+    bot: {
+      chooseAction({ player }) {
+        if (
+          retainedView !== undefined &&
+          retainedView.playerId !== player.playerId
+        ) {
+          const leakedHand = retainedView.hand;
+          assert.fail(
+            `Shared BotStrategy retained ${retainedView.playerId}'s private hand (${leakedHand.length} cards) while choosing for ${player.playerId}`
+          );
+        }
+        retainedView = player;
+        return { type: "endTurn" };
+      },
+    },
+    botFactory(playerId) {
+      factoryCalls.push(playerId);
+      let playerView: PlayerDecisionView | undefined;
+      return {
+        chooseAction({ player }) {
+          assert.equal(player.playerId, playerId);
+          assert.equal(playerView?.playerId ?? playerId, playerId);
+          playerView = player;
+          return { type: "endTurn" };
+        },
+      };
+    },
+  };
+
+  runSingleGame(options);
+
+  assert.deepEqual(factoryCalls, [markPlayerId("player-1"), markPlayerId("player-2")]);
 });
 
 test("game end reason is dead wizard token exhaustion when the DWT stack is empty", () => {

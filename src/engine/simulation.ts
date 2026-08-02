@@ -43,6 +43,7 @@ export interface RunSingleGameOptions {
   playerCount?: number;
   dataPackPath?: string;
   bot?: BotStrategy;
+  botFactory?: (playerId: PlayerId) => BotStrategy;
   validateInvariants?: boolean;
 }
 
@@ -202,12 +203,39 @@ function mustGetCardDefinition(
 }
 
 export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
-  const bot = options.bot ?? baselineBot;
+  const { bot, botFactory, ...initializeGameOptions } = options;
+  const strategyFactory =
+    botFactory ??
+    (bot === undefined
+      ? () => ({ chooseAction: baselineBot.chooseAction })
+      : () => bot);
+  const strategiesByPlayerId = new Map<PlayerId, BotStrategy>();
+  const playerIdByStrategy = new Map<BotStrategy, PlayerId>();
+
+  function getStrategyForPlayer(playerId: PlayerId): BotStrategy {
+    const existingStrategy = strategiesByPlayerId.get(playerId);
+    if (existingStrategy !== undefined) {
+      return existingStrategy;
+    }
+
+    const strategy = strategyFactory(playerId);
+    const assignedPlayerId = playerIdByStrategy.get(strategy);
+    if (assignedPlayerId !== undefined && assignedPlayerId !== playerId) {
+      throw new Error(
+        `BotStrategy instance is already assigned to ${assignedPlayerId}; create a separate strategy for ${playerId}`
+      );
+    }
+    strategiesByPlayerId.set(playerId, strategy);
+    playerIdByStrategy.set(strategy, playerId);
+    return strategy;
+  }
+
   const state = initializeGame({
-    ...options,
-    ...(bot.chooseEffectChoice === undefined
-      ? {}
-      : { effectChoiceStrategy: bot.chooseEffectChoice }),
+    ...initializeGameOptions,
+    effectChoiceStrategy: (request) =>
+      getStrategyForPlayer(request.player.playerId).chooseEffectChoice?.(
+        request
+      ),
   });
   const setupState = snapshotSetupState(state);
   if (options.validateInvariants) {
@@ -233,9 +261,10 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       throw new Error(`Bot exceeded ${actionLimit} actions before maxTurns`);
     }
 
+    const activePlayer = mustGetActivePlayer(state);
     const legalActions = listLegalActions(state);
-    const selectedAction = bot.chooseAction({
-      player: createPlayerDecisionView(mustGetActivePlayer(state)),
+    const selectedAction = getStrategyForPlayer(activePlayer.playerId).chooseAction({
+      player: createPlayerDecisionView(activePlayer),
       legalActions: createBotDecisionActions(state, legalActions),
     });
     if (!isLegalAction(selectedAction, legalActions)) {
