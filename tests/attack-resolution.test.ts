@@ -477,9 +477,29 @@ test("Defense executes onDefense draw and discard shuffle through a terminating 
       event.cardInstanceId === firstTargetDefense.instanceId &&
       event.amount === 1
   );
+  const redirectDefenseChoiceIndex = scenario.state.eventLog.findIndex(
+    (event) =>
+      event.type === "defenseChoiceSelected" &&
+      event.cardInstanceId === attackerDefense.instanceId
+  );
+  const redirectDefenseMovedIndex = scenario.state.eventLog.findIndex(
+    (event) =>
+      event.type === "defenseCardMoved" &&
+      event.cardInstanceId === attackerDefense.instanceId
+  );
+  const terminalDamageIndex = scenario.state.eventLog.findIndex(
+    (event) =>
+      event.type === "effectDamageDealt" &&
+      event.effectId === "attack_damage" &&
+      event.targetPlayerId === targetPlayer.playerId &&
+      event.amount === 2
+  );
   assert.ok(targetDefenseMovedIndex >= 0);
   assert.ok(shuffleIndex > targetDefenseMovedIndex);
   assert.ok(drawIndex > shuffleIndex);
+  assert.ok(redirectDefenseChoiceIndex > drawIndex);
+  assert.ok(redirectDefenseMovedIndex > redirectDefenseChoiceIndex);
+  assert.ok(terminalDamageIndex > redirectDefenseMovedIndex);
 });
 
 import { recordGameEvent } from "../src/engine/event-recorder.js";
