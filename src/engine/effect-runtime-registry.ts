@@ -3955,6 +3955,7 @@ function getRegisteredEffectRuntimeSourceKinds(
       return ["card"];
     case "modify_effective_value":
     case "fixture_modify_effective_value":
+      return ["card", "wizardProperty", "deadWizardToken"];
     case "increase_hand_limit_at_max_life":
     case "endgame_limp_wands_score_positive":
     case "endgame_vp_per_owned_legend":
@@ -4033,7 +4034,7 @@ function getRegisteredEffectRuntimeSourceKinds(
     case "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem":
     case "mega_mayhem_each_player_toggle_dingler":
     case "mega_mayhem_set_life":
-      return ["card", "wizardProperty", "deadWizardToken"];
+      return ["card", "wizardProperty"];
   }
 }
 
@@ -4490,7 +4491,11 @@ export function validateRuntimeEffectCatalogPayload<Id extends RuntimeEffectId>(
   if (!entry.supportedSourceKinds.includes(sourceKind)) {
     return {
       ok: false,
-      errors: [`${subjectId} uses token-only effect id ${effectId}`],
+      errors: [
+        sourceKind === "deadWizardToken"
+          ? `${subjectId} deadWizardToken does not support effect id ${effectId}`
+          : `${subjectId} uses token-only effect id ${effectId}`,
+      ],
     };
   }
   if (!entry.supportedModes.includes(mode)) {

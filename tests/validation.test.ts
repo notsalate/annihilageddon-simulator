@@ -918,7 +918,7 @@ test("executable validation applies catalog source kinds", () => {
   assert.deepEqual(deadWizardTokenResult, {
     ok: false,
     errors: [
-      "Token dead-wizard-token-fixture-source-kind-validation uses token-only effect id temporary_hand_limit_by_gained_card_type",
+      "Token dead-wizard-token-fixture-source-kind-validation deadWizardToken does not support effect id temporary_hand_limit_by_gained_card_type",
     ],
   });
 });

@@ -291,7 +291,12 @@ test("ongoing controlled power is limited to card sources", () => {
     );
     assert.equal(result.ok, false);
     if (!result.ok) {
-      assert.match(result.errors[0] ?? "", /token-only effect id/);
+      assert.match(
+        result.errors[0] ?? "",
+        sourceKind === "deadWizardToken"
+          ? /deadWizardToken does not support effect id/
+          : /token-only effect id/
+      );
     }
   }
 });
@@ -324,8 +329,36 @@ test("DWT-count ongoing power is limited to card sources", () => {
     );
     assert.equal(result.ok, false);
     if (!result.ok) {
-      assert.match(result.errors[0] ?? "", /token-only effect id/);
+      assert.match(
+        result.errors[0] ?? "",
+        sourceKind === "deadWizardToken"
+          ? /deadWizardToken does not support effect id/
+          : /token-only effect id/
+      );
     }
+  }
+});
+
+test("dead wizard token validation rejects attack replacement effects without a consumer", () => {
+  const effect = {
+    effectId: "double_owned_attack_damage",
+    timing: "attackReplacement",
+  } as const;
+
+  const result = validateRuntimeEffectCatalogPayload(
+    "Fixture dead wizard token",
+    effect.effectId,
+    effect,
+    "combat",
+    "deadWizardToken"
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.match(
+      result.errors[0] ?? "",
+      /deadWizardToken does not support effect id double_owned_attack_damage/
+    );
   }
 });
 
@@ -357,7 +390,12 @@ test("ongoing hand refill bonus is limited to card sources", () => {
     );
     assert.equal(result.ok, false);
     if (!result.ok) {
-      assert.match(result.errors[0] ?? "", /token-only effect id/);
+      assert.match(
+        result.errors[0] ?? "",
+        sourceKind === "deadWizardToken"
+          ? /deadWizardToken does not support effect id/
+          : /token-only effect id/
+      );
     }
   }
 });
