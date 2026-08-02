@@ -174,6 +174,33 @@ test("reconciliation rejects a syntactically invalid test registry", (context) =
   );
 });
 
+test("reconciliation rejects a test registry mutated before execution", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "mutated-registry.test.ts",
+    [
+      'const testSuites = ["mutated-registry.test.js"];',
+      'const compiledTestsRoot = "dist/tests";',
+      "assertTestSuiteRegistryComplete(testSuites, []);",
+      "testSuites.length = 0;",
+      "for (const suite of testSuites) {",
+      "  const result = spawnSync(",
+      "    process.execPath,",
+      '    ["--test", path.join(compiledTestsRoot, suite)]',
+      "  );",
+      "  void result;",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/mutated-registry\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
 test("current reconciliation manifest passes Git and test-reference checks", () => {
   const result = runReconciliation(evidenceManifest);
 

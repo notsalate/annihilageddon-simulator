@@ -278,7 +278,11 @@ function parseTestSuiteRegistry(sourceText) {
   if (declarations.length !== 1) {
     return undefined;
   }
-  const initializer = unwrapRegistryInitializer(declarations[0].initializer);
+  const declaration = declarations[0];
+  if (!hasUnambiguousTestSuiteExecution(sourceFile, declaration)) {
+    return undefined;
+  }
+  const initializer = unwrapRegistryInitializer(declaration.initializer);
   if (initializer === undefined || !ts.isArrayLiteralExpression(initializer)) {
     return undefined;
   }
@@ -290,6 +294,130 @@ function parseTestSuiteRegistry(sourceText) {
     testSuites.add(element.text);
   }
   return testSuites;
+}
+
+function hasUnambiguousTestSuiteExecution(sourceFile, declaration) {
+  if (
+    !ts.isVariableDeclarationList(declaration.parent) ||
+    (declaration.parent.flags & ts.NodeFlags.Const) === 0
+  ) {
+    return false;
+  }
+  const completenessCalls = sourceFile.statements.flatMap((statement) => {
+    if (
+      !ts.isExpressionStatement(statement) ||
+      !ts.isCallExpression(statement.expression) ||
+      !ts.isIdentifier(statement.expression.expression) ||
+      statement.expression.expression.text !== "assertTestSuiteRegistryComplete"
+    ) {
+      return [];
+    }
+    return [statement.expression];
+  });
+  const executionLoops = sourceFile.statements.filter(ts.isForOfStatement);
+  if (completenessCalls.length !== 1 || executionLoops.length !== 1) {
+    return false;
+  }
+  const completenessReference = completenessCalls[0].arguments[0];
+  const executionLoop = executionLoops[0];
+  if (
+    completenessReference === undefined ||
+    !ts.isIdentifier(completenessReference) ||
+    completenessReference.text !== "testSuites" ||
+    !ts.isIdentifier(executionLoop.expression) ||
+    executionLoop.expression.text !== "testSuites"
+  ) {
+    return false;
+  }
+  const suiteName = getForOfVariableName(executionLoop);
+  if (
+    suiteName === undefined ||
+    !hasDirectTestSuiteSpawn(executionLoop.statement, suiteName)
+  ) {
+    return false;
+  }
+
+  const allowedReferences = new Set([
+    declaration.name,
+    completenessReference,
+    executionLoop.expression,
+  ]);
+  let referencesAreClosed = true;
+  function visit(node) {
+    if (
+      ts.isIdentifier(node) &&
+      node.text === "testSuites" &&
+      !allowedReferences.has(node)
+    ) {
+      referencesAreClosed = false;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return referencesAreClosed;
+}
+
+function getForOfVariableName(statement) {
+  const initializer = statement.initializer;
+  if (
+    !ts.isVariableDeclarationList(initializer) ||
+    (initializer.flags & ts.NodeFlags.Const) === 0 ||
+    initializer.declarations.length !== 1
+  ) {
+    return undefined;
+  }
+  const declaration = initializer.declarations[0];
+  return ts.isIdentifier(declaration.name) ? declaration.name.text : undefined;
+}
+
+function hasDirectTestSuiteSpawn(statement, suiteName) {
+  if (!ts.isBlock(statement)) {
+    return false;
+  }
+  const spawnCalls = statement.statements.flatMap((child) => {
+    if (!ts.isVariableStatement(child)) {
+      return [];
+    }
+    return child.declarationList.declarations.flatMap((declaration) =>
+      declaration.initializer !== undefined &&
+      ts.isCallExpression(declaration.initializer) &&
+      ts.isIdentifier(declaration.initializer.expression) &&
+      declaration.initializer.expression.text === "spawnSync"
+        ? [declaration.initializer]
+        : []
+    );
+  });
+  if (spawnCalls.length !== 1) {
+    return false;
+  }
+  const spawnArguments = spawnCalls[0].arguments;
+  const commandArguments = spawnArguments[1];
+  if (
+    spawnArguments.length < 2 ||
+    !ts.isPropertyAccessExpression(spawnArguments[0]) ||
+    !ts.isIdentifier(spawnArguments[0].expression) ||
+    spawnArguments[0].expression.text !== "process" ||
+    spawnArguments[0].name.text !== "execPath" ||
+    commandArguments === undefined ||
+    !ts.isArrayLiteralExpression(commandArguments) ||
+    commandArguments.elements.length !== 2 ||
+    !ts.isStringLiteral(commandArguments.elements[0]) ||
+    commandArguments.elements[0].text !== "--test"
+  ) {
+    return false;
+  }
+  const testPath = commandArguments.elements[1];
+  return (
+    ts.isCallExpression(testPath) &&
+    ts.isPropertyAccessExpression(testPath.expression) &&
+    ts.isIdentifier(testPath.expression.expression) &&
+    testPath.expression.expression.text === "path" &&
+    testPath.expression.name.text === "join" &&
+    testPath.arguments.length === 2 &&
+    ts.isIdentifier(testPath.arguments[1]) &&
+    testPath.arguments[1].text === suiteName
+  );
 }
 
 function unwrapRegistryInitializer(expression) {
