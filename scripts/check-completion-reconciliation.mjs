@@ -304,6 +304,9 @@ function parseTestSuiteRegistry(sourceText) {
     if (!ts.isStringLiteralLike(element)) {
       return undefined;
     }
+    if (testSuites.has(element.text)) {
+      return undefined;
+    }
     testSuites.add(element.text);
   }
   return testSuites;
