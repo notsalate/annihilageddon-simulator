@@ -495,10 +495,46 @@ export function clonePhysicalCardZoneState(
   );
 }
 
-function cloneLedgerValue<T>(
+type LedgerCloneValue =
+  | object
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined;
+
+interface LedgerCloneObject {
+  [key: string]: LedgerCloneValue;
+}
+
+function isLedgerCloneArray(
+  value: object
+): value is LedgerCloneValue[] {
+  return Array.isArray(value);
+}
+
+function isLedgerCloneMap(
+  value: object
+): value is Map<LedgerCloneValue, LedgerCloneValue> {
+  return value instanceof Map;
+}
+
+function isLedgerCloneSet(
+  value: object
+): value is Set<LedgerCloneValue> {
+  return value instanceof Set;
+}
+
+function isLedgerCloneObject(value: object): value is LedgerCloneObject {
+  return Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function cloneLedgerValue<T extends LedgerCloneValue>(
   value: T,
   physicalCards: ReadonlySet<object>,
-  clones = new Map<object, unknown>()
+  clones = new Map<object, object>()
 ): T {
   if (value === null || typeof value !== "object") {
     return value;
@@ -510,16 +546,16 @@ function cloneLedgerValue<T>(
   if (existing !== undefined) {
     return existing as T;
   }
-  if (Array.isArray(value)) {
-    const clone: unknown[] = [];
+  if (isLedgerCloneArray(value)) {
+    const clone: LedgerCloneValue[] = [];
     clones.set(value, clone);
     for (const child of value) {
       clone.push(cloneLedgerValue(child, physicalCards, clones));
     }
     return clone as T;
   }
-  if (value instanceof Map) {
-    const clone = new Map<unknown, unknown>();
+  if (isLedgerCloneMap(value)) {
+    const clone = new Map<LedgerCloneValue, LedgerCloneValue>();
     clones.set(value, clone);
     for (const [key, child] of value) {
       clone.set(
@@ -529,21 +565,21 @@ function cloneLedgerValue<T>(
     }
     return clone as T;
   }
-  if (value instanceof Set) {
-    const clone = new Set<unknown>();
+  if (isLedgerCloneSet(value)) {
+    const clone = new Set<LedgerCloneValue>();
     clones.set(value, clone);
     for (const child of value) {
       clone.add(cloneLedgerValue(child, physicalCards, clones));
     }
     return clone as T;
   }
-  if (Object.getPrototypeOf(value) !== Object.prototype) {
+  if (!isLedgerCloneObject(value)) {
     const clone = structuredClone(value);
     clones.set(value, clone);
     return clone;
   }
 
-  const clone: Record<string, unknown> = {};
+  const clone: LedgerCloneObject = {};
   clones.set(value, clone);
   for (const [key, child] of Object.entries(value)) {
     clone[key] = cloneLedgerValue(child, physicalCards, clones);
