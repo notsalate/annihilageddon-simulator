@@ -13,6 +13,7 @@ import {
   resolveDefenseWindow,
   type AttackDefenseServices,
 } from "../src/engine/attack-defense.js";
+import { executeEffect } from "../src/engine/effect-runtime.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -182,13 +183,16 @@ test("damage attribution keeps redirected current attackers separate", () => {
   ]);
 });
 
-test("обычная защита фиксирует оплату и перемещение до терминальной ветви с перемешиванием discard", () => {
+test("обычная защита выполняет настоящий draw_cards с перемешиванием discard до терминальной ветви", () => {
   const state = initializeGame({ rootDir, seed: 42008 });
   const attacker = mustGetPlayer(state, "player-1");
   const defender = mustGetPlayer(state, "player-2");
   state.activePlayerId = attacker.playerId;
   defender.hand = [];
   defender.discard = [];
+  const shuffledCards = defender.deck.splice(0);
+  assert.equal(shuffledCards.length, 5);
+  defender.discard.push(...shuffledCards);
   defender.chips = 1;
   const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
     costs: [{ costId: "spend_chips", amount: 1 }],
@@ -214,15 +218,30 @@ test("обычная защита фиксирует оплату и перем�
     reason: "playerDefeated" as const,
     winnerPlayerId: defender.playerId,
   };
+  const expectedRng = state.rng.fork();
+  expectedRng.nextInt(6);
+  expectedRng.nextInt(5);
+  expectedRng.nextInt(4);
+  expectedRng.nextInt(3);
+  expectedRng.nextInt(2);
   const services: AttackDefenseServices = {
     chooseEffectChoice(_state, _player, _source, _effectId, choices) {
       return choices.find((choice) => choice.choiceId === defense.instanceId);
     },
-    executeDefenseEffects(branchState, player) {
+    executeDefenseEffects(branchState, player, effects, branchSource) {
       assert.equal(player.chips, 0);
       assert.equal(player.discard.includes(defense), true);
-      player.deck.unshift(...player.discard.splice(0));
-      branchState.rng.next();
+      for (const effect of effects) {
+        const execution = executeEffect(
+          branchState,
+          player,
+          effect,
+          branchSource
+        );
+        if (!execution.ok || execution.gameEnd !== undefined) {
+          return execution;
+        }
+      }
       return { ok: true, gameEnd };
     },
   };
@@ -230,9 +249,32 @@ test("обычная защита фиксирует оплату и перем�
   const result = resolveDefenseWindow(state, defender, attack, services);
 
   assert.deepEqual(result, { ok: true, avoided: true, gameEnd });
-  assert.equal(defender.deck.includes(defense), true);
-  assert.equal(defender.hand.includes(defense), false);
-  assert.equal(defender.discard.includes(defense), false);
+  assert.equal(defender.hand.length, 1);
+  assert.equal(defender.deck.length, 5);
+  assert.deepEqual(defender.discard, []);
+  assert.deepEqual(
+    [...defender.hand, ...defender.deck].map((card) => card.instanceId).sort(),
+    [...shuffledCards, defense].map((card) => card.instanceId).sort()
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "discardShuffledIntoDeck"),
+    true
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) => event.type === "effectDrawCardsApplied" && event.amount === 1
+    ),
+    true
+  );
+  assert.equal(state.rng.next(), expectedRng.next());
+  assert.deepEqual(
+    [...attack.defenseUsage.defendedPlayerIds],
+    [defender.playerId]
+  );
+  assert.deepEqual(
+    [...attack.defenseUsage.usedDefenseCardInstanceIds],
+    [defense.instanceId]
+  );
 });
 
 test("redirect-защита откатывает оплату, перемещение, события, RNG и usage после ошибки ветви", () => {
