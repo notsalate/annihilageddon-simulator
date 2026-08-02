@@ -171,6 +171,11 @@ export type TargetChoice =
 
 export type EffectChoice = RuntimeEffectChoice;
 
+export type StrictEffectChoiceResolution =
+  | { status: "selected"; choice: EffectChoice }
+  | { status: "empty" }
+  | { status: "invalid" };
+
 export type TargetChoiceResult =
   | {
       ok: true;
@@ -242,6 +247,21 @@ export interface EffectRuntimeServices {
     player: PlayerState
   ): PlayerState[];
   getPlayersInActiveOrder(state: GameState): PlayerState[];
+  prepareStrictEffectChoice(
+    state: GameState,
+    player: PlayerState,
+    source: EffectSourceContext,
+    effectId: RuntimeEffectId,
+    choices: readonly EffectChoice[]
+  ): StrictEffectChoiceResolution;
+  recordEffectChoiceSelected(
+    state: GameState,
+    player: PlayerState,
+    source: EffectSourceContext,
+    effectId: RuntimeEffectId,
+    choices: readonly EffectChoice[],
+    choice: EffectChoice
+  ): void;
   chooseEffectChoice(
     state: GameState,
     player: PlayerState,
@@ -1725,23 +1745,41 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler<
     "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
   execute(state, _player, effect, source, services) {
     const effectId = effect.effectId;
+    const choices: readonly EffectChoice[] = [
+      { choiceKind: "option", choiceId: "destroy_both" },
+      { choiceKind: "option", choiceId: "destroy_none" },
+    ];
+    const decisions: Array<{
+      targetPlayer: PlayerState;
+      choice: EffectChoice;
+    }> = [];
+
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
-      const choice = services.chooseEffectChoice(
+      const resolution = services.prepareStrictEffectChoice(
         state,
         targetPlayer,
         source,
         effectId,
-        [
-          { choiceKind: "option", choiceId: "destroy_both" },
-          { choiceKind: "option", choiceId: "destroy_none" },
-        ]
+        choices
       );
-      if (choice === undefined) {
+      if (resolution.status !== "selected") {
         return {
           ok: false,
           error: `Invalid effect choice for ${effectId}`,
         };
       }
+      decisions.push({ targetPlayer, choice: resolution.choice });
+    }
+
+    for (const { targetPlayer, choice } of decisions) {
+      services.recordEffectChoiceSelected(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        choices,
+        choice
+      );
       const discardedCards = services.discardTopDeckCards(
         state,
         targetPlayer,

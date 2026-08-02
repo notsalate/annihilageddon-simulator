@@ -1784,7 +1784,7 @@ test("Mayhem preserves discarded cards when every affected player chooses destro
   );
 });
 
-test("Mayhem rejects an invalid destroy choice before moving affected cards", () => {
+test("Mayhem rejects the second invalid destroy choice before moving any affected cards", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -1851,12 +1851,15 @@ test("Mayhem rejects an invalid destroy choice before moving affected cards", ()
     ownerId: "common",
     marketChips: 0,
   };
-  state.effectChoiceStrategy = ({ effectId }) => {
+  state.effectChoiceStrategy = ({ effectId, player, choices }) => {
     if (
       effectId !==
       "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none"
     ) {
       return undefined;
+    }
+    if (player.playerId === activePlayer.playerId) {
+      return choices.find((choice) => choice.choiceId === "destroy_both");
     }
     return {
       choiceKind: "option",
@@ -8142,7 +8145,7 @@ test("2D lets each player choose a foe who gains one chip in active-player order
   assert.equal(state.common.destroyedMayhem.includes(mayhem), true);
 });
 
-test("2D excludes self and falls back to the first foe in seating order", () => {
+test("2D excludes self and falls back to the first foe for invalid choices", () => {
   const state = initializeGame({ rootDir, seed: 60615, playerCount: 3 });
   state.activePlayerId = markPlayerId("player-2");
   const orderedPlayers = getPlayersInActiveOrder(state);
@@ -8166,7 +8169,11 @@ test("2D excludes self and falls back to the first foe in seating order", () => 
         ),
         false
       );
-      return undefined;
+      return {
+        choiceKind: "playerTarget",
+        choiceId: "invalid_foe_choice",
+        targetPlayerIds: [],
+      };
     }
   );
   const mayhem = createCommonRuntimeCard("esw2_dbg__main_075");

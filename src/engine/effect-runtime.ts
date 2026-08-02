@@ -35,6 +35,7 @@ import {
   type EffectRuntimeServices,
   type EffectSourceContext,
   type MayhemAttackPlanTarget,
+  type StrictEffectChoiceResolution,
   executeAttackOutcomeBranch,
   evaluateRuntimeEffectAtTiming,
   executeRuntimeEffect,
@@ -869,6 +870,8 @@ const effectRuntimeServices: EffectRuntimeServices = {
   getDestroyDestination,
   getOpponentsInSeatingOrder,
   getPlayersInActiveOrder,
+  prepareStrictEffectChoice,
+  recordEffectChoiceSelected,
   chooseEffectChoice,
   dealDamage,
   healPlayer,
@@ -1022,25 +1025,15 @@ function chooseEffectChoice(
   effectId: RuntimeEffectId,
   choices: readonly EffectChoice[]
 ): EffectChoice | undefined {
-  const decisionRequest: RuntimeEffectChoiceRequest = structuredClone({
-    player: createPlayerDecisionView(player),
+  const resolution = resolveEffectChoice(
+    state,
+    player,
+    source,
     effectId,
-    sourceType: source.sourceType,
-    cardInstanceId: source.cardInstanceId,
-    definitionId: source.definitionId,
-    choices: choices.map(createRuntimeEffectDecisionChoice),
-  });
-  const selectedChoice = state.effectChoiceStrategy?.(decisionRequest);
-  const choice =
-    selectedChoice === undefined
-      ? choices[0]
-      : choices.find((candidate) =>
-          matchesDecisionChoice(candidate, selectedChoice)
-        );
-  if (selectedChoice !== undefined && choice === undefined) {
-    return undefined;
-  }
-  if (choice === undefined) {
+    choices,
+    "fallback"
+  );
+  if (resolution.status !== "selected") {
     recordGameEvent(state, {
       type: "effectChoiceSkipped",
       playerId: player.playerId,
@@ -1053,6 +1046,83 @@ function chooseEffectChoice(
     return undefined;
   }
 
+  recordEffectChoiceSelected(
+    state,
+    player,
+    source,
+    effectId,
+    choices,
+    resolution.choice
+  );
+  return resolution.choice;
+}
+
+function prepareStrictEffectChoice(
+  state: GameState,
+  player: PlayerState,
+  source: EffectSourceContext,
+  effectId: RuntimeEffectId,
+  choices: readonly EffectChoice[]
+): StrictEffectChoiceResolution {
+  return resolveEffectChoice(
+    state,
+    player,
+    source,
+    effectId,
+    choices,
+    "reject"
+  );
+}
+
+function resolveEffectChoice(
+  state: GameState,
+  player: PlayerState,
+  source: EffectSourceContext,
+  effectId: RuntimeEffectId,
+  choices: readonly EffectChoice[],
+  invalidSelectionPolicy: "fallback" | "reject"
+): StrictEffectChoiceResolution {
+  const decisionRequest: RuntimeEffectChoiceRequest = structuredClone({
+    player: createPlayerDecisionView(player),
+    effectId,
+    sourceType: source.sourceType,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    choices: choices.map(createRuntimeEffectDecisionChoice),
+  });
+  const selectedChoice = state.effectChoiceStrategy?.(decisionRequest);
+  if (selectedChoice === undefined) {
+    const defaultChoice = choices[0];
+    return defaultChoice === undefined
+      ? { status: "empty" }
+      : { status: "selected", choice: defaultChoice };
+  }
+
+  const matchedChoice = choices.find((candidate) =>
+    matchesDecisionChoice(candidate, selectedChoice)
+  );
+  if (matchedChoice !== undefined) {
+    return { status: "selected", choice: matchedChoice };
+  }
+
+  if (invalidSelectionPolicy === "reject") {
+    return { status: "invalid" };
+  }
+
+  const fallbackChoice = choices[0];
+  return fallbackChoice === undefined
+    ? { status: "empty" }
+    : { status: "selected", choice: fallbackChoice };
+}
+
+function recordEffectChoiceSelected(
+  state: GameState,
+  player: PlayerState,
+  source: EffectSourceContext,
+  effectId: RuntimeEffectId,
+  choices: readonly EffectChoice[],
+  choice: EffectChoice
+): void {
   const choicePayloadBase = {
     choiceId: choice.choiceId,
     choiceIds: choices.map((candidate) => candidate.choiceId),
@@ -1119,7 +1189,6 @@ function chooseEffectChoice(
     ...choicePayload,
     sourceType: source.sourceType,
   });
-  return choice;
 }
 
 function createRuntimeEffectDecisionChoice(

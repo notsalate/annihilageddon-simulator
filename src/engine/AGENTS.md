@@ -24,7 +24,8 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - Keep `StatusInstance.effects` and `TrophyLikeInstance.effects` as decoded `RuntimeEffect[]`; do not reintroduce raw records after the data boundary.
 - Model runtime effect choices as a discriminated union; record selected typed targets in the event log.
 - Route all legal runtime effect choices, including card/player targets, through one typed choice hook; preserve stable order, identity validation, and event compatibility.
-- `mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none` resolves each affected player's non-empty typed choice before discarding cards. An absent selection keeps the deterministic first-option policy; an invalid returned identity fails before engine card, event-log, or RNG mutation.
+- General runtime effect choices preserve the deterministic first-option fallback for an absent or invalid strategy selection.
+- `mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none` is stricter: resolve every affected player's non-empty typed choice before recording events or moving cards. An absent selection keeps the deterministic first-option policy; any invalid returned identity fails before engine card, event-log, or RNG mutation.
 - Send closed `GameEventDraft` objects through `event-recorder`; direct `eventLog.push` is confined to that module.
 - Keep the typed effect catalog as the source of truth; every registered ID has one exact decoder and one concrete handler entry, including unsupported IDs.
 - `optional_spend_chip_attack_damage` accepts `chipCost` as its only payment field and is always optional; its decoder rejects `costs` and `optional`.
