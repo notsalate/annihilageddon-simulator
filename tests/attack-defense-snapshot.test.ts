@@ -411,6 +411,63 @@ test("Defense commits a card from an extension zone and restores that zone after
   assert.deepEqual([...attack.defenseUsage.usedDefenseCardInstanceIds], []);
 });
 
+test("Defense restores a fresh-copy extension descriptor after replace swaps storage", () => {
+  const { state, attacker, defender, defenseCard } =
+    createRollbackScenario(47555);
+  defender.hand = defender.hand.filter(
+    (card) => card.instanceId !== defenseCard.instanceId
+  );
+  let extensionCards = [defenseCard];
+  let sourceReplaceCalls = 0;
+  registerPhysicalCardZoneDescriptorFactory(
+    state,
+    Object.assign(
+      () => ({
+        cardinality: "many" as const,
+        scoringEligible: false,
+        expectedOwnerId: defender.playerId,
+        read: () => [...extensionCards],
+        replace: (cards: readonly CardInstance[]) => {
+          sourceReplaceCalls += 1;
+          extensionCards = [...cards];
+        },
+      }),
+      {
+        identity: "fixture-defense-fresh-copy-extension-zone",
+        zoneName: "fixture.defense-fresh-copy-extension-zone",
+      }
+    )
+  );
+
+  const services: AttackDefenseServices = {
+    chooseEffectChoice(_state, _player, _source, _effectId, choices) {
+      return choices.find(
+        (choice) =>
+          choice.choiceKind === "defense" && choice.card === defenseCard
+      );
+    },
+    executeDefenseEffects() {
+      assert.deepEqual(extensionCards, []);
+      return { ok: false, error: "fixture fresh-copy branch failure" };
+    },
+  };
+
+  const result = resolveDefenseWindow(
+    state,
+    defender,
+    redirectableAttack(attacker),
+    services
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "fixture fresh-copy branch failure",
+  });
+  assert.equal(sourceReplaceCalls, 2);
+  assert.deepEqual(extensionCards, [defenseCard]);
+  assert.equal(defender.discard.includes(defenseCard), false);
+});
+
 test("Defense rollback restores every snapshot field when extension replace rejects recovery", () => {
   const { state, attacker, defender, defenseCard } =
     createRollbackScenario(47560);
@@ -470,7 +527,7 @@ test("Defense rollback restores every snapshot field when extension replace reje
     ok: false,
     error: "fixture Defense branch failure",
   });
-  assert.equal(sourceReplaceCalls, 1);
+  assert.equal(sourceReplaceCalls, 2);
   assert.deepEqual(extensionCards, [defenseCard]);
   assert.equal(defender.discard.includes(defenseCard), false);
   assert.equal(defender.chips, 4);
