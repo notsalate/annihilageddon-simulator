@@ -534,6 +534,63 @@ test("public guard rejects an unlisted adapter through a direct function wrapper
   assert.equal(violations[0]?.originName, "unlistedAdapter");
 });
 
+test("public guard rejects an unlisted adapter through a wrapper-local const alias", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export const allowedAdapter = () => ({});
+      export const unlistedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      import { unlistedAdapter } from "./engine/data.js";
+      function wrapper() {
+        const local = unlistedAdapter;
+        return local();
+      }
+      export { wrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0]?.kind, "public-export");
+  assert.equal(violations[0]?.file, "src/index.ts");
+  assert.equal(violations[0]?.exportedName, "wrapper");
+  assert.equal(violations[0]?.originFile, "src/engine/data.ts");
+  assert.equal(violations[0]?.originName, "unlistedAdapter");
+});
+
+test("public guard rejects an unlisted adapter returned by an expression-body wrapper", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export const allowedAdapter = () => ({});
+      export const unlistedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      import { unlistedAdapter } from "./engine/data.js";
+      const wrapper = () => unlistedAdapter;
+      export { wrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0]?.kind, "public-export");
+  assert.equal(violations[0]?.file, "src/index.ts");
+  assert.equal(violations[0]?.exportedName, "wrapper");
+  assert.equal(violations[0]?.originFile, "src/engine/data.ts");
+  assert.equal(violations[0]?.originName, "unlistedAdapter");
+});
+
 test("public guard rejects an unregistered production CLI", () => {
   const fixture = createPublicEntrypointFixture(
     {

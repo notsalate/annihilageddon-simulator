@@ -315,6 +315,9 @@ function traceTrustedAdapterOrigin(
         policy,
         visited
       );
+      if (staticOrigins.failClosed && traced.status === "found") {
+        return { status: "unresolved" };
+      }
       if (traced.status !== "clear") {
         return traced;
       }
@@ -325,7 +328,15 @@ function traceTrustedAdapterOrigin(
 
 function collectStaticOriginSymbols(checker, declaration) {
   if (ts.isVariableDeclaration(declaration)) {
-    return staticExpressionOriginSymbols(checker, declaration.initializer);
+    const staticOrigins = staticExpressionOriginSymbols(
+      checker,
+      declaration.initializer
+    );
+    return {
+      ...staticOrigins,
+      failClosed:
+        staticOrigins.attempted && !isConstVariableDeclaration(declaration),
+    };
   }
   if (ts.isBindingElement(declaration)) {
     return bindingElementOriginSymbols(checker, declaration);
@@ -399,25 +410,44 @@ function directWrapperOriginSymbols(checker, declaration) {
   if (body === undefined) {
     return { attempted: false, symbols: [] };
   }
-  let expression;
   if (!ts.isBlock(body)) {
-    expression = body;
-  } else if (body.statements.length === 1) {
-    const statement = body.statements[0];
-    if (ts.isReturnStatement(statement)) {
-      expression = statement.expression;
-    } else if (ts.isExpressionStatement(statement)) {
-      expression = statement.expression;
-    }
+    return directWrapperReturnOriginSymbols(checker, body);
   }
-  if (expression === undefined || !ts.isCallExpression(expression)) {
+
+  const terminalStatement = body.statements.at(-1);
+  const expression =
+    terminalStatement !== undefined &&
+    (ts.isReturnStatement(terminalStatement) ||
+      ts.isExpressionStatement(terminalStatement))
+      ? terminalStatement.expression
+      : undefined;
+  const returnedOrigin = directWrapperReturnOriginSymbols(checker, expression);
+  return returnedOrigin;
+}
+
+function directWrapperReturnOriginSymbols(checker, expression) {
+  if (expression === undefined) {
     return { attempted: false, symbols: [] };
   }
-  const calleeSymbol = staticInitializerSymbol(checker, expression.expression);
-  return {
-    attempted: true,
-    symbols: calleeSymbol === undefined ? [] : [calleeSymbol],
-  };
+  const originExpression = ts.isCallExpression(expression)
+    ? expression.expression
+    : expression;
+  const originSymbol = staticInitializerSymbol(checker, originExpression);
+  if (originSymbol === undefined) {
+    return {
+      attempted:
+        ts.isCallExpression(expression) ||
+        ts.isIdentifier(expression) ||
+        ts.isPropertyAccessExpression(expression) ||
+        ts.isElementAccessExpression(expression),
+      symbols: [],
+    };
+  }
+  return { attempted: true, symbols: [originSymbol] };
+}
+
+function isConstVariableDeclaration(declaration) {
+  return (declaration.parent.flags & ts.NodeFlags.Const) !== 0;
 }
 
 function staticInitializerSymbol(checker, initializer) {
