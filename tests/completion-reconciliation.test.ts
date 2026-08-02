@@ -179,9 +179,15 @@ test("reconciliation rejects a test registry mutated before execution", (context
     context,
     "mutated-registry.test.ts",
     [
+      'import { spawnSync } from "node:child_process";',
+      'import path from "node:path";',
+      'import { assertTestSuiteRegistryComplete, collectCompiledTestSuites } from "./test-suite-registry.js";',
       'const testSuites = ["mutated-registry.test.js"];',
-      'const compiledTestsRoot = "dist/tests";',
-      "assertTestSuiteRegistryComplete(testSuites, []);",
+      'const compiledTestsRoot = path.join(process.cwd(), "dist", "tests");',
+      "assertTestSuiteRegistryComplete(",
+      "  testSuites,",
+      "  collectCompiledTestSuites(compiledTestsRoot)",
+      ");",
       "testSuites.length = 0;",
       "for (const suite of testSuites) {",
       "  const result = spawnSync(",
@@ -198,6 +204,137 @@ test("reconciliation rejects a test registry mutated before execution", (context
   assert.match(
     result.stderr,
     /test reference tests\/mutated-registry\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
+test("reconciliation rejects an unreachable test runner", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "unreachable-runner.test.ts",
+    [
+      'import { spawnSync } from "node:child_process";',
+      'import path from "node:path";',
+      'import { assertTestSuiteRegistryComplete, collectCompiledTestSuites } from "./test-suite-registry.js";',
+      'const testSuites = ["unreachable-runner.test.js"];',
+      'const compiledTestsRoot = path.join(process.cwd(), "dist", "tests");',
+      "assertTestSuiteRegistryComplete(",
+      "  testSuites,",
+      "  collectCompiledTestSuites(compiledTestsRoot)",
+      ");",
+      "for (const suite of testSuites) {",
+      "  continue;",
+      "  const result = spawnSync(",
+      "    process.execPath,",
+      '    ["--test", path.join(compiledTestsRoot, suite)]',
+      "  );",
+      "  void result;",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/unreachable-runner\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
+test("reconciliation rejects an early exit before test execution", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "early-exit.test.ts",
+    [
+      'import { spawnSync } from "node:child_process";',
+      'import path from "node:path";',
+      'import { assertTestSuiteRegistryComplete, collectCompiledTestSuites } from "./test-suite-registry.js";',
+      'const testSuites = ["early-exit.test.js"];',
+      'const compiledTestsRoot = path.join(process.cwd(), "dist", "tests");',
+      "assertTestSuiteRegistryComplete(",
+      "  testSuites,",
+      "  collectCompiledTestSuites(compiledTestsRoot)",
+      ");",
+      "process.exit(0);",
+      "for (const suite of testSuites) {",
+      "  const result = spawnSync(",
+      "    process.execPath,",
+      '    ["--test", path.join(compiledTestsRoot, suite)]',
+      "  );",
+      "  void result;",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/early-exit\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
+test("reconciliation rejects executable compiled-root initialization", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "root-initializer-exit.test.ts",
+    [
+      'import { spawnSync } from "node:child_process";',
+      'import path from "node:path";',
+      'import { assertTestSuiteRegistryComplete, collectCompiledTestSuites } from "./test-suite-registry.js";',
+      'const testSuites = ["root-initializer-exit.test.js"];',
+      'const compiledTestsRoot = (process.exit(0), "dist/tests");',
+      "assertTestSuiteRegistryComplete(",
+      "  testSuites,",
+      "  collectCompiledTestSuites(compiledTestsRoot)",
+      ");",
+      "for (const suite of testSuites) {",
+      "  const result = spawnSync(",
+      "    process.execPath,",
+      '    ["--test", path.join(compiledTestsRoot, suite)]',
+      "  );",
+      "  void result;",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/root-initializer-exit\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
+test("reconciliation rejects additional side-effect imports", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "side-effect-import.test.ts",
+    [
+      'import { spawnSync } from "node:child_process";',
+      'import path from "node:path";',
+      'import { assertTestSuiteRegistryComplete, collectCompiledTestSuites } from "./test-suite-registry.js";',
+      'import "./exit-before-run.js";',
+      'const testSuites = ["side-effect-import.test.js"];',
+      'const compiledTestsRoot = path.join(process.cwd(), "dist", "tests");',
+      "assertTestSuiteRegistryComplete(",
+      "  testSuites,",
+      "  collectCompiledTestSuites(compiledTestsRoot)",
+      ");",
+      "for (const suite of testSuites) {",
+      "  const result = spawnSync(",
+      "    process.execPath,",
+      '    ["--test", path.join(compiledTestsRoot, suite)]',
+      "  );",
+      "  void result;",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/side-effect-import\.test\.ts must exist and be registered at manifest\.codeSha/
   );
 });
 

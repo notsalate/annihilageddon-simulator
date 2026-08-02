@@ -17,7 +17,7 @@ This folder contains TypeScript tests, deterministic fixtures, and test helpers.
 - When behavior changes, test the externally relevant result, not only implementation internals.
 - Use stable IDs in test data and assertions.
 - Register every compiled test suite exactly once in `tests/run-tests.ts`; `npm test` clears `dist` before compilation, then the runner validates the recursive `dist/tests/**/*.test.js` inventory before execution.
-- Keep `tests/run-tests.ts` as a closed executable registry: `testSuites` is one top-level `const` string-literal array used only by the direct completeness call and one top-level `for...of` whose body directly launches each suite through `spawnSync`. Do not alias, mutate or conditionally replace that registry.
+- Keep `tests/run-tests.ts` as a closed executable registry: imports are followed only by the top-level `testSuites` and `compiledTestsRoot` declarations, the direct completeness call, and one top-level `for...of`. Its first body statement must launch the current suite through the standard `spawnSync` import. Do not alias, mutate, conditionally replace, skip, or precede execution of that registry.
 - When `current-runtime` is intentionally incomplete, keep broad behavior suites on explicit test-only runtime packs under `tests/fixtures/` instead of silently depending on the live baseline.
 - Test-only runtime packs that include fixture or partial card definitions must use manifest `mappingStatus: "fixture"`, not `supported`.
 

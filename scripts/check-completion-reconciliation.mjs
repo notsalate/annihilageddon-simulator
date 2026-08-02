@@ -299,10 +299,35 @@ function parseTestSuiteRegistry(sourceText) {
 function hasUnambiguousTestSuiteExecution(sourceFile, declaration) {
   if (
     !ts.isVariableDeclarationList(declaration.parent) ||
-    (declaration.parent.flags & ts.NodeFlags.Const) === 0
+    (declaration.parent.flags & ts.NodeFlags.Const) === 0 ||
+    declaration.parent.declarations.length !== 1 ||
+    !ts.isVariableStatement(declaration.parent.parent) ||
+    !hasNamedImport(sourceFile, "node:child_process", "spawnSync") ||
+    !hasDefaultImport(sourceFile, "node:path", "path") ||
+    !hasNamedImport(
+      sourceFile,
+      "./test-suite-registry.js",
+      "assertTestSuiteRegistryComplete"
+    ) ||
+    !hasNamedImport(
+      sourceFile,
+      "./test-suite-registry.js",
+      "collectCompiledTestSuites"
+    ) ||
+    sourceFile.statements.filter(ts.isImportDeclaration).length !== 3
   ) {
     return false;
   }
+  const registryStatement = declaration.parent.parent;
+  const compiledRootStatements = sourceFile.statements.filter(
+    (statement) =>
+      ts.isVariableStatement(statement) &&
+      statement.declarationList.declarations.some(
+        (candidate) =>
+          ts.isIdentifier(candidate.name) &&
+          candidate.name.text === "compiledTestsRoot"
+      )
+  );
   const completenessCalls = sourceFile.statements.flatMap((statement) => {
     if (
       !ts.isExpressionStatement(statement) ||
@@ -315,17 +340,54 @@ function hasUnambiguousTestSuiteExecution(sourceFile, declaration) {
     return [statement.expression];
   });
   const executionLoops = sourceFile.statements.filter(ts.isForOfStatement);
-  if (completenessCalls.length !== 1 || executionLoops.length !== 1) {
+  if (
+    compiledRootStatements.length !== 1 ||
+    completenessCalls.length !== 1 ||
+    executionLoops.length !== 1
+  ) {
+    return false;
+  }
+  const compiledRootStatement = compiledRootStatements[0];
+  if (
+    (compiledRootStatement.declarationList.flags & ts.NodeFlags.Const) === 0 ||
+    compiledRootStatement.declarationList.declarations.length !== 1 ||
+    !hasDirectCompiledTestsRoot(
+      compiledRootStatement.declarationList.declarations[0]
+    )
+  ) {
     return false;
   }
   const completenessReference = completenessCalls[0].arguments[0];
+  const completenessStatement = completenessCalls[0].parent;
   const executionLoop = executionLoops[0];
   if (
     completenessReference === undefined ||
     !ts.isIdentifier(completenessReference) ||
     completenessReference.text !== "testSuites" ||
+    !hasDirectCompletenessInventory(completenessCalls[0]) ||
+    !ts.isExpressionStatement(completenessStatement) ||
     !ts.isIdentifier(executionLoop.expression) ||
     executionLoop.expression.text !== "testSuites"
+  ) {
+    return false;
+  }
+  const allowedStatements = new Set([
+    registryStatement,
+    compiledRootStatement,
+    completenessStatement,
+    executionLoop,
+  ]);
+  if (
+    sourceFile.statements.some(
+      (statement) =>
+        !ts.isImportDeclaration(statement) && !allowedStatements.has(statement)
+    ) ||
+    sourceFile.statements.indexOf(registryStatement) >=
+      sourceFile.statements.indexOf(compiledRootStatement) ||
+    sourceFile.statements.indexOf(compiledRootStatement) >=
+      sourceFile.statements.indexOf(completenessStatement) ||
+    sourceFile.statements.indexOf(completenessStatement) >=
+      sourceFile.statements.indexOf(executionLoop)
   ) {
     return false;
   }
@@ -358,6 +420,79 @@ function hasUnambiguousTestSuiteExecution(sourceFile, declaration) {
   return referencesAreClosed;
 }
 
+function hasNamedImport(sourceFile, moduleName, importedName) {
+  return sourceFile.statements.some((statement) => {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== moduleName ||
+      statement.importClause?.namedBindings === undefined ||
+      !ts.isNamedImports(statement.importClause.namedBindings)
+    ) {
+      return false;
+    }
+    return statement.importClause.namedBindings.elements.some(
+      (element) =>
+        (element.propertyName?.text ?? element.name.text) === importedName &&
+        element.name.text === importedName
+    );
+  });
+}
+
+function hasDefaultImport(sourceFile, moduleName, localName) {
+  return sourceFile.statements.some(
+    (statement) =>
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text === moduleName &&
+      statement.importClause?.name?.text === localName
+  );
+}
+
+function hasDirectCompletenessInventory(call) {
+  const inventory = call.arguments[1];
+  return (
+    call.arguments.length === 2 &&
+    inventory !== undefined &&
+    ts.isCallExpression(inventory) &&
+    ts.isIdentifier(inventory.expression) &&
+    inventory.expression.text === "collectCompiledTestSuites" &&
+    inventory.arguments.length === 1 &&
+    ts.isIdentifier(inventory.arguments[0]) &&
+    inventory.arguments[0].text === "compiledTestsRoot"
+  );
+}
+
+function hasDirectCompiledTestsRoot(declaration) {
+  const initializer = declaration.initializer;
+  if (
+    !ts.isIdentifier(declaration.name) ||
+    declaration.name.text !== "compiledTestsRoot" ||
+    initializer === undefined ||
+    !ts.isCallExpression(initializer) ||
+    !ts.isPropertyAccessExpression(initializer.expression) ||
+    !ts.isIdentifier(initializer.expression.expression) ||
+    initializer.expression.expression.text !== "path" ||
+    initializer.expression.name.text !== "join" ||
+    initializer.arguments.length !== 3
+  ) {
+    return false;
+  }
+  const workingDirectory = initializer.arguments[0];
+  return (
+    ts.isCallExpression(workingDirectory) &&
+    ts.isPropertyAccessExpression(workingDirectory.expression) &&
+    ts.isIdentifier(workingDirectory.expression.expression) &&
+    workingDirectory.expression.expression.text === "process" &&
+    workingDirectory.expression.name.text === "cwd" &&
+    workingDirectory.arguments.length === 0 &&
+    ts.isStringLiteral(initializer.arguments[1]) &&
+    initializer.arguments[1].text === "dist" &&
+    ts.isStringLiteral(initializer.arguments[2]) &&
+    initializer.arguments[2].text === "tests"
+  );
+}
+
 function getForOfVariableName(statement) {
   const initializer = statement.initializer;
   if (
@@ -372,26 +507,27 @@ function getForOfVariableName(statement) {
 }
 
 function hasDirectTestSuiteSpawn(statement, suiteName) {
-  if (!ts.isBlock(statement)) {
+  if (!ts.isBlock(statement) || statement.statements.length === 0) {
     return false;
   }
-  const spawnCalls = statement.statements.flatMap((child) => {
-    if (!ts.isVariableStatement(child)) {
-      return [];
-    }
-    return child.declarationList.declarations.flatMap((declaration) =>
-      declaration.initializer !== undefined &&
-      ts.isCallExpression(declaration.initializer) &&
-      ts.isIdentifier(declaration.initializer.expression) &&
-      declaration.initializer.expression.text === "spawnSync"
-        ? [declaration.initializer]
-        : []
-    );
-  });
-  if (spawnCalls.length !== 1) {
+  const firstStatement = statement.statements[0];
+  if (
+    !ts.isVariableStatement(firstStatement) ||
+    (firstStatement.declarationList.flags & ts.NodeFlags.Const) === 0 ||
+    firstStatement.declarationList.declarations.length !== 1
+  ) {
     return false;
   }
-  const spawnArguments = spawnCalls[0].arguments;
+  const resultDeclaration = firstStatement.declarationList.declarations[0];
+  if (
+    resultDeclaration.initializer === undefined ||
+    !ts.isCallExpression(resultDeclaration.initializer) ||
+    !ts.isIdentifier(resultDeclaration.initializer.expression) ||
+    resultDeclaration.initializer.expression.text !== "spawnSync"
+  ) {
+    return false;
+  }
+  const spawnArguments = resultDeclaration.initializer.arguments;
   const commandArguments = spawnArguments[1];
   if (
     spawnArguments.length < 2 ||
@@ -415,6 +551,8 @@ function hasDirectTestSuiteSpawn(statement, suiteName) {
     testPath.expression.expression.text === "path" &&
     testPath.expression.name.text === "join" &&
     testPath.arguments.length === 2 &&
+    ts.isIdentifier(testPath.arguments[0]) &&
+    testPath.arguments[0].text === "compiledTestsRoot" &&
     ts.isIdentifier(testPath.arguments[1]) &&
     testPath.arguments[1].text === suiteName
   );
