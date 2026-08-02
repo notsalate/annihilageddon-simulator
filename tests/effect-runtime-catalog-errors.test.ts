@@ -287,6 +287,20 @@ test("catalog keeps card, wizard-property, and Dead Wizard Token policies distin
   const cases = [
     {
       effect: { effectId: "add_power", timing: "onPlay", amount: 1 },
+      allowed: ["card", "wizardProperty"],
+    },
+    {
+      effect: {
+        effectId: "modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "tokenVictoryPoints",
+        operation: "add",
+        amount: 1,
+        target: {
+          targetType: "token",
+          definitionId: "fixture-token",
+        },
+      },
       allowed: ["card", "wizardProperty", "deadWizardToken"],
     },
     {
