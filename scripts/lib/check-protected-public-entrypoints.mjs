@@ -338,7 +338,8 @@ function collectStaticOriginSymbols(checker, declaration) {
     return {
       ...staticOrigins,
       failClosed:
-        staticOrigins.attempted && !isConstVariableDeclaration(declaration),
+        (staticOrigins.failClosed ?? false) ||
+        (staticOrigins.attempted && !isConstVariableDeclaration(declaration)),
     };
   }
   if (ts.isBindingElement(declaration)) {
@@ -480,7 +481,7 @@ function directWrapperReturnOriginSymbols(checker, expression) {
     return aggregateOriginSymbols(
       unwrappedExpression.elements.map((element) =>
         ts.isSpreadElement(element)
-          ? { attempted: false, symbols: [], failClosed: true }
+          ? arraySpreadOriginSymbols(checker, element.expression)
           : directWrapperReturnOriginSymbols(checker, element)
       )
     );
@@ -504,10 +505,40 @@ function aggregateOriginSymbols(origins) {
   return {
     attempted: origins.some((origin) => origin.attempted),
     symbols,
-    failClosed:
-      symbols.length > 0 &&
-      origins.some((origin) => origin.failClosed ?? false),
+    failClosed: origins.some((origin) => origin.failClosed ?? false),
   };
+}
+
+function arraySpreadOriginSymbols(checker, expression) {
+  const unwrappedExpression = unwrapParenthesizedExpression(expression);
+  if (
+    ts.isArrayLiteralExpression(unwrappedExpression) ||
+    isStaticLiteralExpression(unwrappedExpression)
+  ) {
+    return directWrapperReturnOriginSymbols(checker, unwrappedExpression);
+  }
+  if (ts.isIdentifier(unwrappedExpression)) {
+    const symbol = checker.getSymbolAtLocation(unwrappedExpression);
+    const origin =
+      symbol === undefined ? undefined : resolveAlias(checker, symbol);
+    const declaration = (origin?.declarations ?? []).find(
+      (candidate) =>
+        ts.isVariableDeclaration(candidate) &&
+        candidate.initializer !== undefined &&
+        isConstVariableDeclaration(candidate) &&
+        ts.isArrayLiteralExpression(
+          unwrapParenthesizedExpression(candidate.initializer)
+        )
+    );
+    if (declaration !== undefined && ts.isVariableDeclaration(declaration)) {
+      const traced = directWrapperReturnOriginSymbols(
+        checker,
+        declaration.initializer
+      );
+      return { ...traced, failClosed: true };
+    }
+  }
+  return { attempted: false, symbols: [], failClosed: true };
 }
 
 function collectDirectWrapperReturnExpressions(node, expressions) {

@@ -730,6 +730,123 @@ test("public guard rejects an unlisted adapter inside a returned array", () => {
   assert.equal(violations[0]?.originName, "unlistedAdapter");
 });
 
+test("public guard resolves an unlisted adapter inside a static array spread", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export const allowedAdapter = () => ({});
+      export const unlistedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      import { unlistedAdapter } from "./engine/data.js";
+      const wrapper = () => [...([unlistedAdapter])];
+      export { wrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0]?.kind, "public-export");
+  assert.equal(violations[0]?.file, "src/index.ts");
+  assert.equal(violations[0]?.exportedName, "wrapper");
+  assert.equal(violations[0]?.originFile, "src/engine/data.ts");
+  assert.equal(violations[0]?.originName, "unlistedAdapter");
+});
+
+test("public guard fails closed for an array spread through an alias", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export const allowedAdapter = () => ({});
+      export const unlistedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      import { unlistedAdapter } from "./engine/data.js";
+      const alias = [unlistedAdapter];
+      const wrapper = () => [...alias];
+      export { wrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0]?.kind, "public-export");
+  assert.equal(violations[0]?.file, "src/index.ts");
+  assert.equal(violations[0]?.exportedName, "wrapper");
+  assert.equal(violations[0]?.originFile, "src/index.ts");
+  assert.equal(violations[0]?.originName, "wrapper");
+});
+
+test("public guard permits an allowed adapter inside a static array spread", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export const allowedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      import { allowedAdapter } from "./engine/data.js";
+      const wrapper = () => [...([allowedAdapter])];
+      export { wrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.deepEqual(violations, []);
+});
+
+test("public guard permits literal values inside a static array spread", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export const allowedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      const wrapper = () => [...(["safe"])];
+      export { wrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.deepEqual(violations, []);
+});
+
+test("public guard permits an unrelated runtime array spread", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export const allowedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      declare const state: { values: string[] };
+      const wrapper = () => [...state.values];
+      export { wrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.deepEqual(violations, []);
+});
+
 test("public guard permits allowed adapters in conditional and array expressions", () => {
   const fixture = createPublicEntrypointFixture({
     "src/engine/data.ts": `
