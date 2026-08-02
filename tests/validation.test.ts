@@ -1912,7 +1912,7 @@ test("executable data-pack validation rejects conflicting attack and status targ
     },
   ] as const;
 
-  const results = cases.map(({ cardId, effectId, payload }) => {
+  const results = cases.map(({ cardId, payload }) => {
     const card = createFixtureCard(cardId);
     const dataPack = withOnlyFixtureCard({
       ...card,
