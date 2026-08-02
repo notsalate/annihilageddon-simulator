@@ -12,6 +12,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  baselineBot,
   decodeCurrentRuntimeDataPack,
   determineWinnerIds,
   formatSingleGameDebugTrace,
@@ -123,10 +124,12 @@ test("bot action selection records turn number and safe action identity for debu
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
     maxTurns: 1,
-    bot: {
-      chooseAction() {
-        return { type: "endTurn" };
-      },
+    botFactory() {
+      return {
+        chooseAction() {
+          return { type: "endTurn" };
+        },
+      };
     },
   });
 
@@ -188,6 +191,101 @@ test("single-game simulation gives each player an isolated stateful bot lifecycl
   runSingleGame(options);
 
   assert.deepEqual(factoryCalls, [markPlayerId("player-1"), markPlayerId("player-2")]);
+});
+
+test("bot factory rejects different strategy objects that share a stateful action callback", () => {
+  let retainedView: PlayerDecisionView | undefined;
+  const sharedChooseAction: BotStrategy["chooseAction"] = ({ player }) => {
+    if (
+      retainedView !== undefined &&
+      retainedView.playerId !== player.playerId
+    ) {
+      assert.fail(
+        `Shared chooseAction retained ${retainedView.playerId}'s private hand (${retainedView.hand.length} cards) while choosing for ${player.playerId}`
+      );
+    }
+    retainedView = player;
+    return { type: "endTurn" };
+  };
+
+  assert.throws(
+    () =>
+      runSingleGame({
+        rootDir,
+        dataPackPath: playableRuntimeDataPackPath,
+        seed: 60615,
+        maxTurns: 2,
+        botFactory() {
+          return { chooseAction: sharedChooseAction };
+        },
+      }),
+    /chooseAction callback is already assigned to player-1/
+  );
+});
+
+test("bot factory rejects different strategy objects that share an effect-choice callback", () => {
+  const sharedChooseEffectChoice: NonNullable<
+    BotStrategy["chooseEffectChoice"]
+  > = () => undefined;
+
+  assert.throws(
+    () =>
+      runSingleGame({
+        rootDir,
+        dataPackPath: playableRuntimeDataPackPath,
+        seed: 60615,
+        maxTurns: 2,
+        botFactory() {
+          return {
+            chooseAction() {
+              return { type: "endTurn" };
+            },
+            chooseEffectChoice: sharedChooseEffectChoice,
+          };
+        },
+      }),
+    /chooseEffectChoice callback is already assigned to player-1/
+  );
+});
+
+test("explicit baseline bot preserves implicit baseline results", () => {
+  const options = {
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 80809,
+    maxTurns: 8,
+  };
+
+  const implicitBaselineResult = runSingleGame(options);
+  const explicitBaselineResult = runSingleGame({
+    ...options,
+    bot: baselineBot,
+  });
+
+  assert.deepEqual(explicitBaselineResult, implicitBaselineResult);
+});
+
+test("multiplayer custom legacy bot fails before strategy execution", () => {
+  let chooseActionCalled = false;
+
+  assert.throws(
+    () =>
+      runSingleGame({
+        rootDir,
+        dataPackPath: playableRuntimeDataPackPath,
+        seed: 60615,
+        maxTurns: 1,
+        playerCount: 2,
+        bot: {
+          chooseAction() {
+            chooseActionCalled = true;
+            return { type: "endTurn" };
+          },
+        },
+      }),
+    /Custom multiplayer bot must use botFactory/
+  );
+  assert.equal(chooseActionCalled, false);
 });
 
 test("game end reason is dead wizard token exhaustion when the DWT stack is empty", () => {

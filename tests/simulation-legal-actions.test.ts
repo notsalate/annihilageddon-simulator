@@ -14,27 +14,30 @@ test("BotStrategy receives an isolated public decision view and applies its chos
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
     maxTurns: 1,
-    bot: {
-      chooseAction({ player, legalActions }) {
-        receivedContext = true;
-        assert.equal("deck" in player, false);
-        assert.equal("players" in player, false);
-        assert.ok(
-          legalActions.every(
-            (action) =>
-              !("definitionId" in action) && !("targetDefinitionIds" in action)
-          )
-        );
+    botFactory() {
+      return {
+        chooseAction({ player, legalActions }) {
+          receivedContext = true;
+          assert.equal("deck" in player, false);
+          assert.equal("players" in player, false);
+          assert.ok(
+            legalActions.every(
+              (action) =>
+                !("definitionId" in action) &&
+                !("targetDefinitionIds" in action)
+            )
+          );
 
-        const mutablePlayer = player as unknown as {
-          chips: number;
-          hand: unknown[];
-        };
-        mutablePlayer.chips = 99;
-        mutablePlayer.hand.length = 0;
+          const mutablePlayer = player as unknown as {
+            chips: number;
+            hand: unknown[];
+          };
+          mutablePlayer.chips = 99;
+          mutablePlayer.hand.length = 0;
 
-        return { type: "endTurn" };
-      },
+          return { type: "endTurn" };
+        },
+      };
     },
   });
 

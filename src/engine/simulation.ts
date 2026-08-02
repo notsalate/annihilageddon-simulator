@@ -146,6 +146,14 @@ export const baselineBot: BotStrategy = {
   },
 };
 
+function createBaselineBot(): BotStrategy {
+  return {
+    chooseAction(context) {
+      return baselineBot.chooseAction(context);
+    },
+  };
+}
+
 function mustGetActivePlayer(state: GameState): PlayerState {
   const player = state.players.find(
     (candidate) => candidate.playerId === state.activePlayerId
@@ -204,13 +212,24 @@ function mustGetCardDefinition(
 
 export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
   const { bot, botFactory, ...initializeGameOptions } = options;
+  if (
+    botFactory === undefined &&
+    bot !== undefined &&
+    bot !== baselineBot
+  ) {
+    throw new Error("Custom multiplayer bot must use botFactory");
+  }
   const strategyFactory =
     botFactory ??
-    (bot === undefined
-      ? () => ({ chooseAction: baselineBot.chooseAction })
+    (bot === undefined || bot === baselineBot
+      ? () => createBaselineBot()
       : () => bot);
   const strategiesByPlayerId = new Map<PlayerId, BotStrategy>();
-  const playerIdByStrategy = new Map<BotStrategy, PlayerId>();
+  const playerIdByCallback = new Map<
+    | BotStrategy["chooseAction"]
+    | NonNullable<BotStrategy["chooseEffectChoice"]>,
+    PlayerId
+  >();
 
   function getStrategyForPlayer(playerId: PlayerId): BotStrategy {
     const existingStrategy = strategiesByPlayerId.get(playerId);
@@ -219,14 +238,30 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     }
 
     const strategy = strategyFactory(playerId);
-    const assignedPlayerId = playerIdByStrategy.get(strategy);
-    if (assignedPlayerId !== undefined && assignedPlayerId !== playerId) {
-      throw new Error(
-        `BotStrategy instance is already assigned to ${assignedPlayerId}; create a separate strategy for ${playerId}`
-      );
+    const callbacks: ReadonlyArray<
+      readonly [
+        "chooseAction" | "chooseEffectChoice",
+        | BotStrategy["chooseAction"]
+        | NonNullable<BotStrategy["chooseEffectChoice"]>,
+      ]
+    > = [
+      ["chooseAction", strategy.chooseAction],
+      ...(strategy.chooseEffectChoice === undefined
+        ? []
+        : ([["chooseEffectChoice", strategy.chooseEffectChoice]] as const)),
+    ];
+    for (const [callbackName, callback] of callbacks) {
+      const assignedPlayerId = playerIdByCallback.get(callback);
+      if (assignedPlayerId !== undefined && assignedPlayerId !== playerId) {
+        throw new Error(
+          `${callbackName} callback is already assigned to ${assignedPlayerId}; create a separate callback for ${playerId}`
+        );
+      }
+    }
+    for (const [, callback] of callbacks) {
+      playerIdByCallback.set(callback, playerId);
     }
     strategiesByPlayerId.set(playerId, strategy);
-    playerIdByStrategy.set(strategy, playerId);
     return strategy;
   }
 
