@@ -1,0 +1,49 @@
+{
+  "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5",
+  "overallVerdict": "есть открытые требования",
+  "requirements": [
+    {
+      "id": "REQ-176-AC01",
+      "active": true,
+      "status": "resolved",
+      "findings": ["FIND-009", "FIND-003", "FIND-004", "FIND-006", "FIND-007"],
+      "fixCommits": ["c117414", "9381b4a", "81a5408", "c3559e9"],
+      "tests": [
+        "tests/validation.test.ts",
+        "tests/effect-runtime-applicability.test.ts",
+        "tests/game-state-fork.test.ts",
+        "tests/public-entrypoint-guard.test.ts"
+      ],
+      "specVerdict": "без замечаний",
+      "standardsVerdict": "без замечаний",
+      "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
+    },
+    {
+      "id": "REQ-R3-09-AC02",
+      "active": true,
+      "status": "resolved",
+      "findings": ["FIND-003", "FIND-004", "FIND-006", "FIND-007"],
+      "fixCommits": ["c117414", "9381b4a", "81a5408", "c3559e9"],
+      "tests": [
+        "tests/validation.test.ts",
+        "tests/effect-runtime-applicability.test.ts",
+        "tests/game-state-fork.test.ts",
+        "tests/public-entrypoint-guard.test.ts"
+      ],
+      "specVerdict": "без замечаний",
+      "standardsVerdict": "без замечаний",
+      "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
+    },
+    {
+      "id": "REQ-R3-09-AC03",
+      "active": true,
+      "status": "unresolved",
+      "findings": ["FIND-009"],
+      "fixCommits": [],
+      "tests": ["tests/completion-reconciliation.test.ts"],
+      "specVerdict": "ожидает final review",
+      "standardsVerdict": "ожидает final review",
+      "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
+    }
+  ]
+}

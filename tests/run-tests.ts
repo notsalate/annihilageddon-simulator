@@ -42,6 +42,7 @@ const testSuites = [
   "effect-choice-routing.test.js",
   "best-move-analysis.test.js",
   "best-move-cli.test.js",
+  "completion-reconciliation.test.js",
   "effect-runtime-applicability.test.js",
   "effect-runtime-catalog-types.test.js",
   "effect-runtime-catalog-errors.test.js",
