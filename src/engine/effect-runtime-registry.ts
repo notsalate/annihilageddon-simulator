@@ -1731,6 +1731,25 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler<
         targetPlayer,
         effect.amount
       );
+      const choice = services.chooseEffectChoice(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        [
+          { choiceKind: "option", choiceId: "destroy_both" },
+          { choiceKind: "option", choiceId: "destroy_none" },
+        ]
+      );
+      if (choice === undefined) {
+        return {
+          ok: false,
+          error: "Mayhem destroy choice unexpectedly had no legal options",
+        };
+      }
+      if (choice.choiceId === "destroy_none") {
+        continue;
+      }
       for (const discardedCard of discardedCards) {
         const destination = services.getDestroyDestination(
           state,

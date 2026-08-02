@@ -1686,6 +1686,104 @@ test("Mayhem discards top deck cards and destroys them in active-player order", 
   assert.equal(thirdTopDeckCard.ownerId, thirdPlayer.playerId);
 });
 
+test("Mayhem preserves discarded cards when every affected player chooses destroy none", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60616,
+    playerCount: 2,
+  });
+  const [activePlayer, foe] = getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(foe);
+
+  const normalDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-destroy-none-normal",
+    []
+  );
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-destroy-none",
+    [
+      {
+        effectId:
+          "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        choice: "destroyBothOrDestroyNone",
+        amount: 1,
+        sourceZone: "deck",
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [normalDefinition.cardId, normalDefinition],
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+
+  const activeTopDeckCard: CardInstance = {
+    instanceId: markCardInstanceId("fixture-mayhem-destroy-none-active"),
+    definitionId: markCardDefinitionId(normalDefinition.cardId),
+    ownerId: activePlayer.playerId,
+    marketChips: 0,
+  };
+  const foeTopDeckCard: CardInstance = {
+    instanceId: markCardInstanceId("fixture-mayhem-destroy-none-foe"),
+    definitionId: markCardDefinitionId(normalDefinition.cardId),
+    ownerId: foe.playerId,
+    marketChips: 0,
+  };
+  activePlayer.deck.splice(0, activePlayer.deck.length, activeTopDeckCard);
+  foe.deck.splice(0, foe.deck.length, foeTopDeckCard);
+
+  const mayhem: CardInstance = {
+    instanceId: markCardInstanceId("fixture-mayhem-destroy-none-instance"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(
+    0,
+    state.common.market.length,
+    ...state.common.market.slice(0, 4)
+  );
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem);
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (
+      effectId !==
+      "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none"
+    ) {
+      return undefined;
+    }
+    assert.deepEqual(
+      choices.map((choice) => choice.choiceId),
+      ["destroy_both", "destroy_none"]
+    );
+    return choices.find((choice) => choice.choiceId === "destroy_none");
+  };
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.equal(result.ok, true);
+  assert.equal(activePlayer.discard.includes(activeTopDeckCard), true);
+  assert.equal(foe.discard.includes(foeTopDeckCard), true);
+  assert.equal(state.common.destroyedPile.includes(activeTopDeckCard), false);
+  assert.equal(state.common.destroyedPile.includes(foeTopDeckCard), false);
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.effectId ===
+            "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none"
+      )
+      .map((event) => event.choiceId),
+    ["destroy_none", "destroy_none"]
+  );
+});
+
 test("Mayhem discards each deck and destroys the first discard in active-player order", () => {
   const state = initializeGame({
     rootDir,
