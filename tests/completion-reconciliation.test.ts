@@ -407,6 +407,44 @@ test("reconciliation rejects a runner that ignores suite failures", (context) =>
   );
 });
 
+test("reconciliation rejects spawn options that can replace test execution", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "spawn-env-bypass.test.ts",
+    [
+      'import { spawnSync } from "node:child_process";',
+      'import path from "node:path";',
+      'import { assertTestSuiteRegistryComplete, collectCompiledTestSuites } from "./test-suite-registry.js";',
+      'const testSuites = ["spawn-env-bypass.test.js"];',
+      'const compiledTestsRoot = path.join(process.cwd(), "dist", "tests");',
+      "assertTestSuiteRegistryComplete(",
+      "  testSuites,",
+      "  collectCompiledTestSuites(compiledTestsRoot)",
+      ");",
+      "for (const suite of testSuites) {",
+      "  const result = spawnSync(",
+      "    process.execPath,",
+      '    ["--test", path.join(compiledTestsRoot, suite)],',
+      '    { env: { NODE_OPTIONS: "--require ./tests/exit-before-run.cjs" } }',
+      "  );",
+      "  if (result.error !== undefined) {",
+      "    throw result.error;",
+      "  }",
+      "  if (result.status !== 0) {",
+      "    process.exit(result.status ?? 1);",
+      "  }",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/spawn-env-bypass\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
 test("current reconciliation manifest passes Git and test-reference checks", () => {
   const result = runReconciliation(evidenceManifest);
 

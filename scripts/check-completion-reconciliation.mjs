@@ -535,7 +535,7 @@ function hasDirectTestSuiteSpawn(statement, suiteName) {
   const spawnArguments = resultDeclaration.initializer.arguments;
   const commandArguments = spawnArguments[1];
   if (
-    spawnArguments.length < 2 ||
+    !hasSafeSpawnOptions(spawnArguments) ||
     !ts.isPropertyAccessExpression(spawnArguments[0]) ||
     !ts.isIdentifier(spawnArguments[0].expression) ||
     spawnArguments[0].expression.text !== "process" ||
@@ -562,6 +562,30 @@ function hasDirectTestSuiteSpawn(statement, suiteName) {
     testPath.arguments[1].text === suiteName;
   return (
     launchesCurrentSuite && hasDirectSpawnFailureHandling(statement, resultName)
+  );
+}
+
+function hasSafeSpawnOptions(spawnArguments) {
+  if (spawnArguments.length === 2) {
+    return true;
+  }
+  if (spawnArguments.length !== 3) {
+    return false;
+  }
+  const options = spawnArguments[2];
+  if (
+    !ts.isObjectLiteralExpression(options) ||
+    options.properties.length !== 1
+  ) {
+    return false;
+  }
+  const stdio = options.properties[0];
+  return (
+    ts.isPropertyAssignment(stdio) &&
+    ((ts.isIdentifier(stdio.name) && stdio.name.text === "stdio") ||
+      (ts.isStringLiteral(stdio.name) && stdio.name.text === "stdio")) &&
+    ts.isStringLiteral(stdio.initializer) &&
+    stdio.initializer.text === "inherit"
   );
 }
 
