@@ -591,6 +591,91 @@ test("public guard rejects an unlisted adapter returned by an expression-body wr
   assert.equal(violations[0]?.originName, "unlistedAdapter");
 });
 
+test("public guard rejects an unlisted adapter from an early conditional return", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export const allowedAdapter = () => ({});
+      export const unlistedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      import { unlistedAdapter } from "./engine/data.js";
+      function wrapper(flag: boolean) {
+        if (flag) {
+          return unlistedAdapter();
+        }
+        return {};
+      }
+      export { wrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0]?.kind, "public-export");
+  assert.equal(violations[0]?.file, "src/index.ts");
+  assert.equal(violations[0]?.exportedName, "wrapper");
+  assert.equal(violations[0]?.originFile, "src/engine/data.ts");
+  assert.equal(violations[0]?.originName, "unlistedAdapter");
+});
+
+test("public guard rejects an unlisted adapter inside a returned object literal", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export const allowedAdapter = () => ({});
+      export const unlistedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      import { unlistedAdapter } from "./engine/data.js";
+      const wrapper = () => ({ adapter: unlistedAdapter });
+      export { wrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0]?.kind, "public-export");
+  assert.equal(violations[0]?.file, "src/index.ts");
+  assert.equal(violations[0]?.exportedName, "wrapper");
+  assert.equal(violations[0]?.originFile, "src/engine/data.ts");
+  assert.equal(violations[0]?.originName, "unlistedAdapter");
+});
+
+test("public guard ignores structural fields returned from a trusted module type", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export interface Result {
+        reason: string;
+      }
+      export const allowedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      import type { Result } from "./engine/data.js";
+      declare const result: Result;
+      const { reason } = result;
+      const wrapper = () => ({ reason });
+      export { wrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.deepEqual(violations, []);
+});
+
 test("public guard rejects an unregistered production CLI", () => {
   const fixture = createPublicEntrypointFixture(
     {

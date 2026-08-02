@@ -142,23 +142,18 @@ function collectPublicExportViolations(sourceFile, policy, violations, seen) {
       exported.exportedOrigin ?? exported.origin,
       policy
     );
-    const adapterOrigin =
-      adapterTrace.status === "found" ? adapterTrace.origin : undefined;
-    const originFile =
-      adapterOrigin === undefined ? undefined : originSourceFile(adapterOrigin);
-    const adapterExports =
-      originFile === undefined
-        ? undefined
-        : policy.trustedAdapterValueExports.get(
-            displayPath(policy.rootDir, originFile.fileName)
-          );
+    const adapterOrigins =
+      adapterTrace.status === "found" ? adapterTrace.origins : [];
+    const unapprovedAdapterOrigin = adapterOrigins.find(
+      (origin) => !isApprovedTrustedAdapterOrigin(origin, policy)
+    );
+    const adapterOrigin = unapprovedAdapterOrigin ?? adapterOrigins[0];
     const approvedAdapterExport =
-      adapterOrigin !== undefined &&
-      (adapterExports?.has(originName(adapterOrigin)) ?? false);
+      adapterOrigins.length > 0 && unapprovedAdapterOrigin === undefined;
     if (
       !protectedValue &&
       adapterTrace.status !== "unresolved" &&
-      (adapterExports === undefined || approvedAdapterExport)
+      (adapterTrace.status === "clear" || approvedAdapterExport)
     ) {
       continue;
     }
@@ -300,30 +295,38 @@ function traceTrustedAdapterOrigin(
       displayPath(policy.rootDir, originFile.fileName)
     )
   ) {
-    return { status: "found", origin };
+    return { status: "found", origins: [origin] };
   }
 
+  const adapterOrigins = [];
   for (const declaration of origin.declarations ?? []) {
     const staticOrigins = collectStaticOriginSymbols(checker, declaration);
     if (staticOrigins.attempted && staticOrigins.symbols.length === 0) {
       return { status: "unresolved" };
     }
+    const declarationOrigins = [];
     for (const staticOrigin of staticOrigins.symbols) {
       const traced = traceTrustedAdapterOrigin(
         checker,
         staticOrigin,
         policy,
-        visited
+        new Set(visited)
       );
-      if (staticOrigins.failClosed && traced.status === "found") {
-        return { status: "unresolved" };
-      }
-      if (traced.status !== "clear") {
+      if (traced.status === "unresolved") {
         return traced;
       }
+      if (traced.status === "found") {
+        declarationOrigins.push(...traced.origins);
+      }
     }
+    if (staticOrigins.failClosed && declarationOrigins.length > 0) {
+      return { status: "unresolved" };
+    }
+    adapterOrigins.push(...declarationOrigins);
   }
-  return { status: "clear" };
+  return adapterOrigins.length > 0
+    ? { status: "found", origins: [...new Set(adapterOrigins)] }
+    : { status: "clear" };
 }
 
 function collectStaticOriginSymbols(checker, declaration) {
@@ -395,6 +398,20 @@ function bindingElementOriginSymbols(checker, declaration) {
   ) {
     return { attempted: true, symbols: [] };
   }
+  const initializerSymbol = staticInitializerSymbol(
+    checker,
+    variableDeclaration.initializer
+  );
+  const initializerOrigin =
+    initializerSymbol === undefined
+      ? undefined
+      : resolveAlias(checker, initializerSymbol);
+  if (
+    initializerOrigin === undefined ||
+    !(initializerOrigin.declarations ?? []).some(ts.isSourceFile)
+  ) {
+    return { attempted: false, symbols: [] };
+  }
   const propertySymbol = checker.getPropertyOfType(
     checker.getTypeAtLocation(variableDeclaration.initializer),
     propertyName.text
@@ -414,36 +431,131 @@ function directWrapperOriginSymbols(checker, declaration) {
     return directWrapperReturnOriginSymbols(checker, body);
   }
 
-  const terminalStatement = body.statements.at(-1);
-  const expression =
-    terminalStatement !== undefined &&
-    (ts.isReturnStatement(terminalStatement) ||
-      ts.isExpressionStatement(terminalStatement))
-      ? terminalStatement.expression
-      : undefined;
-  const returnedOrigin = directWrapperReturnOriginSymbols(checker, expression);
-  return returnedOrigin;
+  const returnExpressions = [];
+  collectDirectWrapperReturnExpressions(body, returnExpressions);
+  if (returnExpressions.length === 0) {
+    const terminalStatement = body.statements.at(-1);
+    if (
+      terminalStatement !== undefined &&
+      ts.isExpressionStatement(terminalStatement)
+    ) {
+      returnExpressions.push(terminalStatement.expression);
+    }
+  }
+
+  const symbols = [];
+  let attempted = false;
+  let failClosed = false;
+  for (const expression of returnExpressions) {
+    const returnedOrigin = directWrapperReturnOriginSymbols(
+      checker,
+      expression
+    );
+    attempted ||= returnedOrigin.attempted;
+    failClosed ||= returnedOrigin.failClosed ?? false;
+    symbols.push(...returnedOrigin.symbols);
+  }
+  return {
+    attempted,
+    symbols,
+    failClosed: failClosed && symbols.length > 0,
+  };
 }
 
 function directWrapperReturnOriginSymbols(checker, expression) {
   if (expression === undefined) {
     return { attempted: false, symbols: [] };
   }
-  const originExpression = ts.isCallExpression(expression)
-    ? expression.expression
-    : expression;
+  const unwrappedExpression = unwrapParenthesizedExpression(expression);
+  if (ts.isObjectLiteralExpression(unwrappedExpression)) {
+    return objectLiteralOriginSymbols(checker, unwrappedExpression);
+  }
+  const originExpression = ts.isCallExpression(unwrappedExpression)
+    ? unwrapParenthesizedExpression(unwrappedExpression.expression)
+    : unwrappedExpression;
   const originSymbol = staticInitializerSymbol(checker, originExpression);
   if (originSymbol === undefined) {
     return {
-      attempted:
-        ts.isCallExpression(expression) ||
-        ts.isIdentifier(expression) ||
-        ts.isPropertyAccessExpression(expression) ||
-        ts.isElementAccessExpression(expression),
+      attempted: false,
       symbols: [],
+      failClosed: !isStaticLiteralExpression(unwrappedExpression),
     };
   }
   return { attempted: true, symbols: [originSymbol] };
+}
+
+function collectDirectWrapperReturnExpressions(node, expressions) {
+  ts.forEachChild(node, (child) => {
+    if (ts.isFunctionLike(child)) {
+      return;
+    }
+    if (ts.isReturnStatement(child)) {
+      expressions.push(child.expression);
+      return;
+    }
+    collectDirectWrapperReturnExpressions(child, expressions);
+  });
+}
+
+function objectLiteralOriginSymbols(checker, expression) {
+  const symbols = [];
+  let attempted = false;
+  let failClosed = false;
+  for (const property of expression.properties) {
+    let propertyOrigin;
+    if (ts.isPropertyAssignment(property)) {
+      propertyOrigin = directWrapperReturnOriginSymbols(
+        checker,
+        property.initializer
+      );
+    } else if (ts.isShorthandPropertyAssignment(property)) {
+      const valueSymbol = checker.getShorthandAssignmentValueSymbol(property);
+      propertyOrigin = {
+        attempted: true,
+        symbols: valueSymbol === undefined ? [] : [valueSymbol],
+      };
+    } else {
+      propertyOrigin = { attempted: false, symbols: [], failClosed: true };
+    }
+    attempted ||= propertyOrigin.attempted;
+    failClosed ||= propertyOrigin.failClosed ?? false;
+    symbols.push(...propertyOrigin.symbols);
+  }
+  return {
+    attempted,
+    symbols,
+    failClosed: failClosed && symbols.length > 0,
+  };
+}
+
+function unwrapParenthesizedExpression(expression) {
+  let current = expression;
+  while (ts.isParenthesizedExpression(current)) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function isStaticLiteralExpression(expression) {
+  return (
+    ts.isStringLiteral(expression) ||
+    ts.isNumericLiteral(expression) ||
+    ts.isNoSubstitutionTemplateLiteral(expression) ||
+    expression.kind === ts.SyntaxKind.TrueKeyword ||
+    expression.kind === ts.SyntaxKind.FalseKeyword ||
+    expression.kind === ts.SyntaxKind.NullKeyword
+  );
+}
+
+function isApprovedTrustedAdapterOrigin(origin, policy) {
+  const sourceFile = originSourceFile(origin);
+  if (sourceFile === undefined) {
+    return false;
+  }
+  const adapterExports = policy.trustedAdapterValueExports.get(
+    displayPath(policy.rootDir, sourceFile.fileName)
+  );
+  return adapterExports?.has(originName(origin)) ?? false;
 }
 
 function isConstVariableDeclaration(declaration) {
@@ -455,19 +567,37 @@ function staticInitializerSymbol(checker, initializer) {
     return checker.getSymbolAtLocation(initializer);
   }
   if (ts.isPropertyAccessExpression(initializer)) {
-    return checker.getSymbolAtLocation(initializer.name);
+    return runtimeStaticPropertySymbol(
+      checker.getSymbolAtLocation(initializer.name)
+    );
   }
   if (
     ts.isElementAccessExpression(initializer) &&
     initializer.argumentExpression !== undefined &&
     ts.isStringLiteral(initializer.argumentExpression)
   ) {
-    return checker.getPropertyOfType(
-      checker.getTypeAtLocation(initializer.expression),
-      initializer.argumentExpression.text
+    return runtimeStaticPropertySymbol(
+      checker.getPropertyOfType(
+        checker.getTypeAtLocation(initializer.expression),
+        initializer.argumentExpression.text
+      )
     );
   }
   return undefined;
+}
+
+function runtimeStaticPropertySymbol(symbol) {
+  if (symbol === undefined) {
+    return undefined;
+  }
+  const declarations = symbol.declarations ?? [];
+  return declarations.length > 0 &&
+    declarations.every(
+      (declaration) =>
+        ts.isPropertySignature(declaration) || ts.isMethodSignature(declaration)
+    )
+    ? undefined
+    : symbol;
 }
 
 function resolveAlias(checker, symbol) {
