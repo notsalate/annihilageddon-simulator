@@ -470,6 +470,21 @@ function directWrapperReturnOriginSymbols(checker, expression) {
   if (ts.isObjectLiteralExpression(unwrappedExpression)) {
     return objectLiteralOriginSymbols(checker, unwrappedExpression);
   }
+  if (ts.isConditionalExpression(unwrappedExpression)) {
+    return aggregateOriginSymbols([
+      directWrapperReturnOriginSymbols(checker, unwrappedExpression.whenTrue),
+      directWrapperReturnOriginSymbols(checker, unwrappedExpression.whenFalse),
+    ]);
+  }
+  if (ts.isArrayLiteralExpression(unwrappedExpression)) {
+    return aggregateOriginSymbols(
+      unwrappedExpression.elements.map((element) =>
+        ts.isSpreadElement(element)
+          ? { attempted: false, symbols: [], failClosed: true }
+          : directWrapperReturnOriginSymbols(checker, element)
+      )
+    );
+  }
   const originExpression = ts.isCallExpression(unwrappedExpression)
     ? unwrapParenthesizedExpression(unwrappedExpression.expression)
     : unwrappedExpression;
@@ -482,6 +497,17 @@ function directWrapperReturnOriginSymbols(checker, expression) {
     };
   }
   return { attempted: true, symbols: [originSymbol] };
+}
+
+function aggregateOriginSymbols(origins) {
+  const symbols = origins.flatMap((origin) => origin.symbols);
+  return {
+    attempted: origins.some((origin) => origin.attempted),
+    symbols,
+    failClosed:
+      symbols.length > 0 &&
+      origins.some((origin) => origin.failClosed ?? false),
+  };
 }
 
 function collectDirectWrapperReturnExpressions(node, expressions) {

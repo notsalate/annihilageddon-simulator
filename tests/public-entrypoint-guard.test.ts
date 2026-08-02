@@ -676,6 +676,110 @@ test("public guard ignores structural fields returned from a trusted module type
   assert.deepEqual(violations, []);
 });
 
+test("public guard rejects an unlisted adapter from a conditional expression", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export const allowedAdapter = () => ({});
+      export const unlistedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      import { unlistedAdapter } from "./engine/data.js";
+      const wrapper = (flag: boolean) => flag ? unlistedAdapter() : {};
+      export { wrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0]?.kind, "public-export");
+  assert.equal(violations[0]?.file, "src/index.ts");
+  assert.equal(violations[0]?.exportedName, "wrapper");
+  assert.equal(violations[0]?.originFile, "src/engine/data.ts");
+  assert.equal(violations[0]?.originName, "unlistedAdapter");
+});
+
+test("public guard rejects an unlisted adapter inside a returned array", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export const allowedAdapter = () => ({});
+      export const unlistedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      import { unlistedAdapter } from "./engine/data.js";
+      const wrapper = () => [unlistedAdapter];
+      export { wrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0]?.kind, "public-export");
+  assert.equal(violations[0]?.file, "src/index.ts");
+  assert.equal(violations[0]?.exportedName, "wrapper");
+  assert.equal(violations[0]?.originFile, "src/engine/data.ts");
+  assert.equal(violations[0]?.originName, "unlistedAdapter");
+});
+
+test("public guard permits allowed adapters in conditional and array expressions", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export const allowedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      import { allowedAdapter } from "./engine/data.js";
+      const conditionalWrapper = (flag: boolean) =>
+        flag ? allowedAdapter() : {};
+      const arrayWrapper = () => [allowedAdapter];
+      export { conditionalWrapper, arrayWrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.deepEqual(violations, []);
+});
+
+test("public guard ignores type-only properties in conditional and array expressions", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/data.ts": `
+      export interface Result {
+        reason: string;
+      }
+      export const allowedAdapter = () => ({});
+    `,
+    "src/index.ts": `
+      import type { Result } from "./engine/data.js";
+      declare const result: Result;
+      const conditionalWrapper = (flag: boolean) =>
+        flag ? result.reason : "";
+      const arrayWrapper = () => [result.reason];
+      export { conditionalWrapper, arrayWrapper };
+    `,
+  });
+
+  const violations = analyzeFixtureWithPolicy(
+    fixture,
+    new Map(),
+    new Map([["src/engine/data.ts", new Set(["allowedAdapter"])]])
+  );
+
+  assert.deepEqual(violations, []);
+});
+
 test("public guard rejects an unregistered production CLI", () => {
   const fixture = createPublicEntrypointFixture(
     {
