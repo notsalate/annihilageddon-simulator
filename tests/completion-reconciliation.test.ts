@@ -338,6 +338,75 @@ test("reconciliation rejects additional side-effect imports", (context) => {
   );
 });
 
+test("reconciliation rejects type-only runner imports", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "type-only-imports.test.ts",
+    [
+      'import type { spawnSync } from "node:child_process";',
+      'import type path from "node:path";',
+      'import type { assertTestSuiteRegistryComplete, collectCompiledTestSuites } from "./test-suite-registry.js";',
+      'const testSuites = ["type-only-imports.test.js"];',
+      'const compiledTestsRoot = path.join(process.cwd(), "dist", "tests");',
+      "assertTestSuiteRegistryComplete(",
+      "  testSuites,",
+      "  collectCompiledTestSuites(compiledTestsRoot)",
+      ");",
+      "for (const suite of testSuites) {",
+      "  const result = spawnSync(",
+      "    process.execPath,",
+      '    ["--test", path.join(compiledTestsRoot, suite)]',
+      "  );",
+      "  if (result.error !== undefined) {",
+      "    throw result.error;",
+      "  }",
+      "  if (result.status !== 0) {",
+      "    process.exit(result.status ?? 1);",
+      "  }",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/type-only-imports\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
+test("reconciliation rejects a runner that ignores suite failures", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "ignored-failure.test.ts",
+    [
+      'import { spawnSync } from "node:child_process";',
+      'import path from "node:path";',
+      'import { assertTestSuiteRegistryComplete, collectCompiledTestSuites } from "./test-suite-registry.js";',
+      'const testSuites = ["ignored-failure.test.js"];',
+      'const compiledTestsRoot = path.join(process.cwd(), "dist", "tests");',
+      "assertTestSuiteRegistryComplete(",
+      "  testSuites,",
+      "  collectCompiledTestSuites(compiledTestsRoot)",
+      ");",
+      "for (const suite of testSuites) {",
+      "  const result = spawnSync(",
+      "    process.execPath,",
+      '    ["--test", path.join(compiledTestsRoot, suite)]',
+      "  );",
+      "  void result;",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/ignored-failure\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
 test("current reconciliation manifest passes Git and test-reference checks", () => {
   const result = runReconciliation(evidenceManifest);
 

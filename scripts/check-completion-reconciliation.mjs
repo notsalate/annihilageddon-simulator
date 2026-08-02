@@ -427,12 +427,14 @@ function hasNamedImport(sourceFile, moduleName, importedName) {
       !ts.isStringLiteral(statement.moduleSpecifier) ||
       statement.moduleSpecifier.text !== moduleName ||
       statement.importClause?.namedBindings === undefined ||
+      statement.importClause.isTypeOnly ||
       !ts.isNamedImports(statement.importClause.namedBindings)
     ) {
       return false;
     }
     return statement.importClause.namedBindings.elements.some(
       (element) =>
+        !element.isTypeOnly &&
         (element.propertyName?.text ?? element.name.text) === importedName &&
         element.name.text === importedName
     );
@@ -445,6 +447,7 @@ function hasDefaultImport(sourceFile, moduleName, localName) {
       ts.isImportDeclaration(statement) &&
       ts.isStringLiteral(statement.moduleSpecifier) &&
       statement.moduleSpecifier.text === moduleName &&
+      statement.importClause?.isTypeOnly === false &&
       statement.importClause?.name?.text === localName
   );
 }
@@ -520,6 +523,7 @@ function hasDirectTestSuiteSpawn(statement, suiteName) {
   }
   const resultDeclaration = firstStatement.declarationList.declarations[0];
   if (
+    !ts.isIdentifier(resultDeclaration.name) ||
     resultDeclaration.initializer === undefined ||
     !ts.isCallExpression(resultDeclaration.initializer) ||
     !ts.isIdentifier(resultDeclaration.initializer.expression) ||
@@ -527,6 +531,7 @@ function hasDirectTestSuiteSpawn(statement, suiteName) {
   ) {
     return false;
   }
+  const resultName = resultDeclaration.name.text;
   const spawnArguments = resultDeclaration.initializer.arguments;
   const commandArguments = spawnArguments[1];
   if (
@@ -544,7 +549,7 @@ function hasDirectTestSuiteSpawn(statement, suiteName) {
     return false;
   }
   const testPath = commandArguments.elements[1];
-  return (
+  const launchesCurrentSuite =
     ts.isCallExpression(testPath) &&
     ts.isPropertyAccessExpression(testPath.expression) &&
     ts.isIdentifier(testPath.expression.expression) &&
@@ -554,7 +559,97 @@ function hasDirectTestSuiteSpawn(statement, suiteName) {
     ts.isIdentifier(testPath.arguments[0]) &&
     testPath.arguments[0].text === "compiledTestsRoot" &&
     ts.isIdentifier(testPath.arguments[1]) &&
-    testPath.arguments[1].text === suiteName
+    testPath.arguments[1].text === suiteName;
+  return (
+    launchesCurrentSuite && hasDirectSpawnFailureHandling(statement, resultName)
+  );
+}
+
+function hasDirectSpawnFailureHandling(statement, resultName) {
+  if (statement.statements.length !== 3) {
+    return false;
+  }
+  const errorBranch = statement.statements[1];
+  const statusBranch = statement.statements[2];
+  return (
+    ts.isIfStatement(errorBranch) &&
+    errorBranch.elseStatement === undefined &&
+    isResultPropertyInequality(
+      errorBranch.expression,
+      resultName,
+      "error",
+      ts.isIdentifier,
+      "undefined"
+    ) &&
+    ts.isBlock(errorBranch.thenStatement) &&
+    errorBranch.thenStatement.statements.length === 1 &&
+    ts.isThrowStatement(errorBranch.thenStatement.statements[0]) &&
+    isResultProperty(
+      errorBranch.thenStatement.statements[0].expression,
+      resultName,
+      "error"
+    ) &&
+    ts.isIfStatement(statusBranch) &&
+    statusBranch.elseStatement === undefined &&
+    isResultPropertyInequality(
+      statusBranch.expression,
+      resultName,
+      "status",
+      ts.isNumericLiteral,
+      "0"
+    ) &&
+    ts.isBlock(statusBranch.thenStatement) &&
+    statusBranch.thenStatement.statements.length === 1 &&
+    isFailureExitStatement(statusBranch.thenStatement.statements[0], resultName)
+  );
+}
+
+function isResultPropertyInequality(
+  expression,
+  resultName,
+  propertyName,
+  isExpectedRight,
+  expectedRightText
+) {
+  return (
+    ts.isBinaryExpression(expression) &&
+    expression.operatorToken.kind ===
+      ts.SyntaxKind.ExclamationEqualsEqualsToken &&
+    isResultProperty(expression.left, resultName, propertyName) &&
+    isExpectedRight(expression.right) &&
+    expression.right.text === expectedRightText
+  );
+}
+
+function isResultProperty(expression, resultName, propertyName) {
+  return (
+    expression !== undefined &&
+    ts.isPropertyAccessExpression(expression) &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === resultName &&
+    expression.name.text === propertyName
+  );
+}
+
+function isFailureExitStatement(statement, resultName) {
+  if (
+    !ts.isExpressionStatement(statement) ||
+    !ts.isCallExpression(statement.expression) ||
+    !ts.isPropertyAccessExpression(statement.expression.expression) ||
+    !ts.isIdentifier(statement.expression.expression.expression) ||
+    statement.expression.expression.expression.text !== "process" ||
+    statement.expression.expression.name.text !== "exit" ||
+    statement.expression.arguments.length !== 1
+  ) {
+    return false;
+  }
+  const exitStatus = statement.expression.arguments[0];
+  return (
+    ts.isBinaryExpression(exitStatus) &&
+    exitStatus.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
+    isResultProperty(exitStatus.left, resultName, "status") &&
+    ts.isNumericLiteral(exitStatus.right) &&
+    exitStatus.right.text === "1"
   );
 }
 
