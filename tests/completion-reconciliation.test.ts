@@ -492,6 +492,43 @@ test("reconciliation rejects a runner whose result binding shadows process", (co
   );
 });
 
+test("reconciliation rejects a runner whose suite binding shadows process", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "loop-process-shadowing.test.ts",
+    [
+      'import { spawnSync } from "node:child_process";',
+      'import path from "node:path";',
+      'import { assertTestSuiteRegistryComplete, collectCompiledTestSuites } from "./test-suite-registry.js";',
+      'const testSuites = ["loop-process-shadowing.test.js"];',
+      'const compiledTestsRoot = path.join(process.cwd(), "dist", "tests");',
+      "assertTestSuiteRegistryComplete(",
+      "  testSuites,",
+      "  collectCompiledTestSuites(compiledTestsRoot)",
+      ");",
+      "for (const process of testSuites) {",
+      "  const result = spawnSync(",
+      "    process.execPath,",
+      '    ["--test", path.join(compiledTestsRoot, process)]',
+      "  );",
+      "  if (result.error !== undefined) {",
+      "    throw result.error;",
+      "  }",
+      "  if (result.status !== 0) {",
+      "    process.exit(result.status ?? 1);",
+      "  }",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/loop-process-shadowing\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
 test("reconciliation rejects duplicate suite registrations", (context) => {
   const result = runRegistryFixture(
     context,

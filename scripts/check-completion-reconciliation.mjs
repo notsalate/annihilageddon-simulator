@@ -526,7 +526,11 @@ function getForOfVariableName(statement) {
 }
 
 function hasDirectTestSuiteSpawn(statement, suiteName) {
-  if (!ts.isBlock(statement) || statement.statements.length === 0) {
+  if (
+    suiteName === "process" ||
+    !ts.isBlock(statement) ||
+    statement.statements.length === 0
+  ) {
     return false;
   }
   const firstStatement = statement.statements[0];
