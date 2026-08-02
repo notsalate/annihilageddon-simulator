@@ -65,6 +65,12 @@ export interface BotStrategy {
   ): RuntimeEffectDecisionChoice | undefined;
 }
 
+interface PlayerBotBinding {
+  readonly strategy: BotStrategy;
+  readonly chooseAction: BotStrategy["chooseAction"];
+  readonly chooseEffectChoice: BotStrategy["chooseEffectChoice"];
+}
+
 export interface SetupCardSnapshot {
   instanceId: string;
   definitionId: string;
@@ -220,7 +226,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     (bot === undefined || bot === baselineBot
       ? () => createBaselineBot()
       : () => bot);
-  const strategiesByPlayerId = new Map<PlayerId, BotStrategy>();
+  const botBindingsByPlayerId = new Map<PlayerId, PlayerBotBinding>();
   const playerIdByStrategy = new WeakMap<BotStrategy, PlayerId>();
   const playerIdByCallback = new Map<
     | BotStrategy["chooseAction"]
@@ -228,10 +234,10 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     PlayerId
   >();
 
-  function getStrategyForPlayer(playerId: PlayerId): BotStrategy {
-    const existingStrategy = strategiesByPlayerId.get(playerId);
-    if (existingStrategy !== undefined) {
-      return existingStrategy;
+  function getBotBindingForPlayer(playerId: PlayerId): PlayerBotBinding {
+    const existingBinding = botBindingsByPlayerId.get(playerId);
+    if (existingBinding !== undefined) {
+      return existingBinding;
     }
 
     const strategy = strategyFactory(playerId);
@@ -244,6 +250,8 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
         `BotStrategy object is already assigned to ${assignedStrategyPlayerId}; create a separate strategy for ${playerId}`
       );
     }
+    const chooseAction = strategy.chooseAction;
+    const chooseEffectChoice = strategy.chooseEffectChoice;
     const callbacks: ReadonlyArray<
       readonly [
         "chooseAction" | "chooseEffectChoice",
@@ -253,10 +261,10 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
         ),
       ]
     > = [
-      ["chooseAction", strategy.chooseAction],
-      ...(strategy.chooseEffectChoice === undefined
+      ["chooseAction", chooseAction],
+      ...(chooseEffectChoice === undefined
         ? []
-        : ([["chooseEffectChoice", strategy.chooseEffectChoice]] as const)),
+        : ([["chooseEffectChoice", chooseEffectChoice]] as const)),
     ];
     for (const [callbackName, callback] of callbacks) {
       const assignedPlayerId = playerIdByCallback.get(callback);
@@ -270,16 +278,17 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       playerIdByCallback.set(callback, playerId);
     }
     playerIdByStrategy.set(strategy, playerId);
-    strategiesByPlayerId.set(playerId, strategy);
-    return strategy;
+    const binding = { strategy, chooseAction, chooseEffectChoice };
+    botBindingsByPlayerId.set(playerId, binding);
+    return binding;
   }
 
   const state = initializeGame({
     ...initializeGameOptions,
-    effectChoiceStrategy: (request) =>
-      getStrategyForPlayer(request.player.playerId).chooseEffectChoice?.(
-        request
-      ),
+    effectChoiceStrategy: (request) => {
+      const binding = getBotBindingForPlayer(request.player.playerId);
+      return binding.chooseEffectChoice?.call(binding.strategy, request);
+    },
   });
   const setupState = snapshotSetupState(state);
   if (options.validateInvariants) {
@@ -307,9 +316,8 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
 
     const activePlayer = mustGetActivePlayer(state);
     const legalActions = listLegalActions(state);
-    const selectedAction = getStrategyForPlayer(
-      activePlayer.playerId
-    ).chooseAction({
+    const binding = getBotBindingForPlayer(activePlayer.playerId);
+    const selectedAction = binding.chooseAction.call(binding.strategy, {
       player: createPlayerDecisionView(activePlayer),
       legalActions: createBotDecisionActions(state, legalActions),
     });

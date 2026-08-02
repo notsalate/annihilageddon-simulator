@@ -258,6 +258,73 @@ test("bot factory rejects different strategy objects that share an effect-choice
   );
 });
 
+test("bot factory invokes the action callback captured during ownership validation", () => {
+  const readsByPlayer = new Map<PlayerId, number>();
+  let uncheckedCallbackInvoked = false;
+  const uncheckedChooseAction: BotStrategy["chooseAction"] = () => {
+    uncheckedCallbackInvoked = true;
+    return { type: "endTurn" };
+  };
+
+  runSingleGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    maxTurns: 2,
+    botFactory(playerId) {
+      const capturedChooseAction: BotStrategy["chooseAction"] = ({
+        player,
+      }) => {
+        assert.equal(player.playerId, playerId);
+        return { type: "endTurn" };
+      };
+      return {
+        get chooseAction() {
+          const readCount = (readsByPlayer.get(playerId) ?? 0) + 1;
+          readsByPlayer.set(playerId, readCount);
+          return readCount === 1 ? capturedChooseAction : uncheckedChooseAction;
+        },
+      };
+    },
+  });
+
+  assert.deepEqual([...readsByPlayer.values()], [1, 1]);
+  assert.equal(uncheckedCallbackInvoked, false);
+});
+
+test("bot factory captures each optional effect-choice callback once", () => {
+  const readsByPlayer = new Map<PlayerId, number>();
+  const uncheckedChooseEffectChoice: NonNullable<
+    BotStrategy["chooseEffectChoice"]
+  > = () => undefined;
+
+  runSingleGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    maxTurns: 2,
+    botFactory(playerId) {
+      const capturedChooseEffectChoice: NonNullable<
+        BotStrategy["chooseEffectChoice"]
+      > = () => undefined;
+      return {
+        chooseAction() {
+          return { type: "endTurn" };
+        },
+        get chooseEffectChoice() {
+          const readCount = (readsByPlayer.get(playerId) ?? 0) + 1;
+          readsByPlayer.set(playerId, readCount);
+          return readCount === 1
+            ? capturedChooseEffectChoice
+            : uncheckedChooseEffectChoice;
+        },
+      };
+    },
+  });
+
+  assert.deepEqual([...readsByPlayer.values()], [1, 1]);
+});
+
 test("explicit baseline bot preserves implicit baseline results", () => {
   const options = {
     rootDir,
