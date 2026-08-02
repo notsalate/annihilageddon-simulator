@@ -421,6 +421,138 @@ test("fork preserves Map-backed descriptor storage before replaying extension ca
   assert.equal(forkDescriptor.read()[0]!.marketChips, 5);
 });
 
+test("fork clones each physical card once per Analyzer branch", () => {
+  const source = createFixture();
+  const externalZones = new WeakMap<object, readonly CardInstance[]>();
+  const externalCard = {
+    ...source.players[0]!.hand[0]!,
+    instanceId: markCardInstanceId("clone-count-external-card"),
+  };
+  externalZones.set(source, [externalCard]);
+  registerPhysicalCardZoneDescriptorFactory(
+    source,
+    Object.assign(
+      (state: Pick<GameState, "players" | "common">) => ({
+        cardinality: "many" as const,
+        scoringEligible: false,
+        read: () => externalZones.get(state) ?? [],
+        replace: (cards: readonly CardInstance[]) => {
+          externalZones.set(state, [...cards]);
+        },
+      }),
+      { identity: "fixture.clone-count", zoneName: "cloneCountZone" }
+    )
+  );
+
+  const sourceCards = listPhysicalCardZoneDescriptors(source).flatMap(
+    (descriptor) => descriptor.read()
+  );
+  const marketChipReads = new Map<CardInstance["instanceId"], number>();
+  for (const card of sourceCards) {
+    Object.defineProperty(card, "marketChips", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        marketChipReads.set(
+          card.instanceId,
+          (marketChipReads.get(card.instanceId) ?? 0) + 1
+        );
+        return 0;
+      },
+    });
+  }
+
+  const forks = [forkGameState(source), forkGameState(source), forkGameState(source)];
+
+  assert.equal(marketChipReads.size, sourceCards.length);
+  for (const sourceCard of sourceCards) {
+    assert.equal(marketChipReads.get(sourceCard.instanceId), forks.length);
+  }
+  for (const fork of forks) {
+    const forkCards = new Map(
+      listPhysicalCardZoneDescriptors(fork)
+        .flatMap((descriptor) => descriptor.read())
+        .map((card) => [card.instanceId, card])
+    );
+    for (const sourceCard of sourceCards) {
+      assert.notEqual(forkCards.get(sourceCard.instanceId), sourceCard);
+    }
+  }
+});
+
+test("fork preserves Map descriptor storage while cloning its card once per branch", () => {
+  type StateWithMapDescriptorZone = GameState & {
+    players: Array<
+      GameState["players"][number] & {
+        descriptorStorage: Map<string, CardInstance[]>;
+      }
+    >;
+  };
+  const source = createFixture() as StateWithMapDescriptorZone;
+  const sourcePlayer = source.players[0]!;
+  const sourceCard = {
+    ...sourcePlayer.hand[0]!,
+    instanceId: markCardInstanceId("map-clone-count-card"),
+  };
+  let marketChipReads = 0;
+  Object.defineProperty(sourceCard, "marketChips", {
+    configurable: true,
+    enumerable: true,
+    get() {
+      marketChipReads += 1;
+      return 0;
+    },
+  });
+  sourcePlayer.descriptorStorage = new Map([["extension-zone", [sourceCard]]]);
+  registerPhysicalCardZoneDescriptorFactory(
+    source,
+    Object.assign(
+      (state: Pick<GameState, "players" | "common">) => {
+        const player = state
+          .players[0] as StateWithMapDescriptorZone["players"][number];
+        const storage = player.descriptorStorage.get("extension-zone");
+        assert.ok(storage);
+        return {
+          cardinality: "many" as const,
+          scoringEligible: false,
+          read: () => player.descriptorStorage.get("extension-zone") ?? storage,
+          replace: (cards: readonly CardInstance[]) => {
+            player.descriptorStorage.set("extension-zone", [...cards]);
+          },
+        };
+      },
+      {
+        identity: "fixture.map-clone-count",
+        zoneName: "mapCloneCountZone",
+      }
+    )
+  );
+
+  const forks = [
+    forkGameState(source) as StateWithMapDescriptorZone,
+    forkGameState(source) as StateWithMapDescriptorZone,
+    forkGameState(source) as StateWithMapDescriptorZone,
+  ];
+
+  assert.equal(marketChipReads, forks.length);
+  const forkCards = forks.map((fork) => {
+    const storage = fork.players[0]!.descriptorStorage;
+    assert.ok(storage instanceof Map);
+    assert.notEqual(storage, sourcePlayer.descriptorStorage);
+    const cards = storage.get("extension-zone");
+    assert.ok(cards);
+    assert.notEqual(cards, sourcePlayer.descriptorStorage.get("extension-zone"));
+    assert.notEqual(cards[0], sourceCard);
+    return cards[0]!;
+  });
+  assert.notEqual(forkCards[0], forkCards[1]);
+  assert.notEqual(forkCards[1], forkCards[2]);
+
+  forkCards[0]!.marketChips = 7;
+  assert.equal(forkCards[1]!.marketChips, 0);
+  assert.equal(forkCards[2]!.marketChips, 0);
+});
+
 test("fork isolates source mutations and sibling mutable collections", () => {
   const source = createFixture();
   const first = forkGameState(source);

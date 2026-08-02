@@ -456,7 +456,71 @@ export function clonePhysicalCardZones(
 export function clonePhysicalCardZoneState(
   source: GameState
 ): Pick<GameState, "players" | "common"> {
-  return structuredClone({ players: source.players, common: source.common });
+  const physicalCards = new Set(
+    listPhysicalCardZoneDescriptors(source).flatMap((descriptor) =>
+      descriptor.read()
+    )
+  );
+  return cloneLedgerValue(
+    { players: source.players, common: source.common },
+    physicalCards
+  );
+}
+
+function cloneLedgerValue<T>(
+  value: T,
+  physicalCards: ReadonlySet<object>,
+  clones = new Map<object, unknown>()
+): T {
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  if (physicalCards.has(value)) {
+    return value;
+  }
+  const existing = clones.get(value);
+  if (existing !== undefined) {
+    return existing as T;
+  }
+  if (Array.isArray(value)) {
+    const clone: unknown[] = [];
+    clones.set(value, clone);
+    for (const child of value) {
+      clone.push(cloneLedgerValue(child, physicalCards, clones));
+    }
+    return clone as T;
+  }
+  if (value instanceof Map) {
+    const clone = new Map<unknown, unknown>();
+    clones.set(value, clone);
+    for (const [key, child] of value) {
+      clone.set(
+        cloneLedgerValue(key, physicalCards, clones),
+        cloneLedgerValue(child, physicalCards, clones)
+      );
+    }
+    return clone as T;
+  }
+  if (value instanceof Set) {
+    const clone = new Set<unknown>();
+    clones.set(value, clone);
+    for (const child of value) {
+      clone.add(cloneLedgerValue(child, physicalCards, clones));
+    }
+    return clone as T;
+  }
+  if (Object.getPrototypeOf(value) !== Object.prototype) {
+    const clone = structuredClone(value);
+    clones.set(value, clone);
+    return clone;
+  }
+
+  const clone: Record<string, unknown> = {};
+  clones.set(value, clone);
+  for (const [key, child] of Object.entries(value)) {
+    clone[key] = cloneLedgerValue(child, physicalCards, clones);
+  }
+  return clone as T;
 }
 
 export function listPhysicalCardLocations(
