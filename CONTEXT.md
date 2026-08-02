@@ -241,15 +241,15 @@ The rule that multi-target effects resolve one target at a time in seating order
 _Avoid_: batch target resolution
 
 **Sequential Player Attack Resolution**:
-The rule that normal player-controlled attacks with several affected targets use two phases: first each affected target decides whether to defend, then the attack result is resolved target by target in seating order against the targets that did not avoid it.
-_Avoid_: resolve-target-immediately-before-later-defenses, treating normal attacks like Mayhem wording
+The rule that normal player-controlled attacks with several affected targets resolve one target at a time in seating order. For each target, the defense choice and the selected defense branch resolve completely before the attack continues; if the attack lands, damage, immediate death, DWT effects, and other immediate consequences also resolve before moving to the next target. There is no preliminary round in which all targets decide whether to defend.
+_Avoid_: collecting defense decisions before resolving targets, moving to the next target before the current defense or DWT effects finish, treating normal attacks like Mayhem wording
 
 **State-Sensitive Attack Order**:
 The rule that state changes from one resolved target of a normal player-controlled attack can affect later targets of the same attack during the resolution phase, including modifiers, death, and DWT effects.
 _Avoid_: snapshotting normal attack state
 
 **Two-Phase Mayhem Attack Resolution**:
-The rule that Mayhem and Mega Mayhem attacks also use two phases: they first collect defense decisions from affected players in seating order, then resolve the attack in seating order against targets that did not avoid it. This is separate from normal player-controlled multi-target attacks even though both flows collect defenses before resolving damage.
+The rule that Mayhem and Mega Mayhem attacks use two phases: they first collect defense decisions from affected players in seating order, then resolve the attack in seating order against targets that did not avoid it. This is separate from normal player-controlled multi-target attacks, which fully resolve each target's defense and immediate consequences before moving to the next target.
 _Avoid_: defend-and-resolve-per-target for Mayhem attacks, collapsing Mayhem wording into the generic attack rule
 
 **Minimal Defense Window**:

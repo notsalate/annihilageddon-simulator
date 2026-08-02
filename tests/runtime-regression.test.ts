@@ -17,42 +17,96 @@ import {
 } from "../src/index.js";
 import { executeOnPlayEffects } from "../src/engine/effect-runtime.js";
 import {
-  type EffectRuntimeHandler,
+  resolveResurrectionLifeTotal,
+  type EffectRuntimeCatalogOperationOverridesForTesting,
   type EffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
   markPlayerId,
+  markTokenDefinitionId,
+  markTokenInstanceId,
 } from "../src/domain/types.js";
-import { withTemporaryEffectRuntimeHandler } from "./helpers/with-temporary-effect-runtime-handler.js";
+import {
+  addFixtureDefenseCardToHand,
+  selectFirstFixtureDefense,
+} from "./helpers/defense-fixtures.js";
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 
 const rootDir = process.cwd();
 const fixturePlayerDefeatEffectId = "fixture_add_power_equal_to_target_cost";
-const fixturePlayerDefeatHandler: EffectRuntimeHandler = {
-  effectId: fixturePlayerDefeatEffectId,
-  validateShape() {
-    return [];
-  },
-  execute(_state, player) {
-    return {
-      ok: true,
-      gameEnd: {
-        reason: "playerDefeated",
-        winnerPlayerId: player.playerId,
-      },
-    };
-  },
-};
+const fixturePlayerDefeatHandler: EffectRuntimeCatalogOperationOverridesForTesting<"fixture_add_power_equal_to_target_cost"> =
+  {
+    execute(_state, player) {
+      return {
+        ok: true,
+        gameEnd: {
+          reason: "playerDefeated",
+          winnerPlayerId: player.playerId,
+        },
+      };
+    },
+  };
+
+test("resurrection catalog operation reports malformed replacement instead of falling back to 20", () => {
+  const result = resolveResurrectionLifeTotal(
+    {
+      effectId: "set_resurrection_life_total",
+      timing: "replacement",
+      lifeTotal: "invalid",
+    },
+    resurrectionSource(),
+    []
+  );
+
+  assert.equal(result.status, "error");
+  if (result.status !== "error") return;
+  assert.match(result.error, /lifeTotal must be a positive integer/);
+});
+
+test("resurrection catalog operation resolves the decoded life total", () => {
+  const result = resolveResurrectionLifeTotal(
+    {
+      effectId: "set_resurrection_life_total",
+      timing: "replacement",
+      lifeTotal: 25,
+    },
+    resurrectionSource(),
+    []
+  );
+
+  assert.deepEqual(result, { status: "resolved", result: 25 });
+});
+
+test("resurrection catalog operation skips a replacement blocked by its status", () => {
+  const result = resolveResurrectionLifeTotal(
+    {
+      effectId: "set_resurrection_life_total",
+      timing: "replacement",
+      lifeTotal: 25,
+      unlessStatusId: "loser",
+    },
+    resurrectionSource(),
+    [{ statusId: "loser" }]
+  );
+
+  assert.deepEqual(result, { status: "notApplicable" });
+});
 
 test("playCard propagates a fixture effect's player-defeat game end", () => {
   const state = initializeGame({ rootDir, seed: 99118 });
+  state.runtimeMode = "fixture";
   const activePlayer = mustGetActivePlayer(state);
   const runScenario = () => {
     const card = addFixtureCardToActiveHand(
       state,
       createFixtureCardDefinition("fixture-player-defeat", "normal", [
-        { effectId: fixturePlayerDefeatEffectId, timing: "onPlay" },
+        {
+          effectId: fixturePlayerDefeatEffectId,
+          timing: "onPlay",
+          target: { selector: "mainMarketCard" },
+        },
       ])
     );
 
@@ -69,7 +123,7 @@ test("playCard propagates a fixture effect's player-defeat game end", () => {
     assert.equal(result.winnerPlayerId, activePlayer.playerId);
   };
 
-  withTemporaryEffectRuntimeHandler(
+  withTemporaryEffectRuntimeOperations(
     fixturePlayerDefeatEffectId,
     fixturePlayerDefeatHandler,
     runScenario
@@ -78,12 +132,19 @@ test("playCard propagates a fixture effect's player-defeat game end", () => {
 
 test("play_top_card propagates game end from the nested card", () => {
   const state = initializeGame({ rootDir, seed: 99119 });
+  state.runtimeMode = "fixture";
   const activePlayer = mustGetActivePlayer(state);
   const runScenario = () => {
     const nestedDefinition = createFixtureCardDefinition(
       "fixture-nested-player-defeat",
       "normal",
-      [{ effectId: fixturePlayerDefeatEffectId, timing: "onPlay" }]
+      [
+        {
+          effectId: fixturePlayerDefeatEffectId,
+          timing: "onPlay",
+          target: { selector: "mainMarketCard" },
+        },
+      ]
     );
     state.cardDefinitions = new Map([
       ...state.cardDefinitions,
@@ -121,7 +182,7 @@ test("play_top_card propagates game end from the nested card", () => {
     assert.equal(result.winnerPlayerId, activePlayer.playerId);
   };
 
-  withTemporaryEffectRuntimeHandler(
+  withTemporaryEffectRuntimeOperations(
     fixturePlayerDefeatEffectId,
     fixturePlayerDefeatHandler,
     runScenario
@@ -130,6 +191,7 @@ test("play_top_card propagates game end from the nested card", () => {
 
 test("play_top_card_from_foe_deck propagates game end from the nested card", () => {
   const state = initializeGame({ rootDir, seed: 99120, playerCount: 2 });
+  state.runtimeMode = "fixture";
   const activePlayer = mustGetActivePlayer(state);
   const foe = state.players.find(
     (candidate) => candidate.playerId !== activePlayer.playerId
@@ -139,7 +201,13 @@ test("play_top_card_from_foe_deck propagates game end from the nested card", () 
     const nestedDefinition = createFixtureCardDefinition(
       "fixture-foe-nested-player-defeat",
       "normal",
-      [{ effectId: fixturePlayerDefeatEffectId, timing: "onPlay" }]
+      [
+        {
+          effectId: fixturePlayerDefeatEffectId,
+          timing: "onPlay",
+          target: { selector: "mainMarketCard" },
+        },
+      ]
     );
     state.cardDefinitions = new Map([
       ...state.cardDefinitions,
@@ -180,7 +248,103 @@ test("play_top_card_from_foe_deck propagates game end from the nested card", () 
     assert.equal(result.winnerPlayerId, activePlayer.playerId);
   };
 
-  withTemporaryEffectRuntimeHandler(
+  withTemporaryEffectRuntimeOperations(
+    fixturePlayerDefeatEffectId,
+    fixturePlayerDefeatHandler,
+    runScenario
+  );
+});
+
+test("endTurn propagates a Mayhem defense branch game end without starting the next turn", () => {
+  const state = initializeGame({ rootDir, seed: 99121, playerCount: 2 });
+  state.runtimeMode = "fixture";
+  const endingPlayer = mustGetActivePlayer(state);
+  const defendingPlayer = state.players.find(
+    (player) => player.playerId !== endingPlayer.playerId
+  );
+  assert.ok(defendingPlayer);
+
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-defense-player-defeat",
+    "mayhem",
+    [
+      {
+        effectId: "mayhem_attack",
+        timing: "onMayhemResolve",
+        amount: 1,
+        target: { selector: "allPlayers" },
+      },
+    ]
+  );
+  const normalDefinition = createFixtureCardDefinition(
+    "fixture-after-terminal-mayhem",
+    "normal",
+    []
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+    [normalDefinition.cardId, normalDefinition],
+  ]);
+  const mayhemCard = createCardInstance(
+    "fixture-mayhem-defense-player-defeat-instance",
+    mayhemDefinition.cardId
+  );
+  const normalCard = createCardInstance(
+    "fixture-after-terminal-mayhem-instance",
+    normalDefinition.cardId
+  );
+  state.common.market.splice(0, 1);
+  state.common.mainDeck.splice(
+    0,
+    state.common.mainDeck.length,
+    mayhemCard,
+    normalCard
+  );
+  addFixtureDefenseCardToHand(state, defendingPlayer, "discardSelf", {
+    branchEffects: [
+      {
+        effectId: fixturePlayerDefeatEffectId,
+        timing: "onDefense",
+        target: { selector: "mainMarketCard" },
+      },
+    ],
+  });
+  state.effectChoiceStrategy = selectFirstFixtureDefense;
+
+  const runScenario = () => {
+    const result = applyAction(state, { type: "endTurn" });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      return;
+    }
+    assert.equal(result.gameEndReason, "playerDefeated");
+    assert.equal(result.winnerPlayerId, defendingPlayer.playerId);
+    assert.equal(
+      state.eventLog.some(
+        (event) =>
+          event.type === "mayhemResolved" &&
+          event.cardInstanceId === mayhemCard.instanceId
+      ),
+      false
+    );
+    assert.equal(
+      state.eventLog.some(
+        (event) =>
+          event.type === "mayhemDestroyed" &&
+          event.cardInstanceId === mayhemCard.instanceId
+      ),
+      false
+    );
+    assert.equal(state.common.market.includes(normalCard), false);
+    assert.equal(
+      state.eventLog.some((event) => event.type === "turnStarted"),
+      false
+    );
+  };
+
+  withTemporaryEffectRuntimeOperations(
     fixturePlayerDefeatEffectId,
     fixturePlayerDefeatHandler,
     runScenario
@@ -371,7 +535,7 @@ test("Creator's Hand remains controlled and raises its controller's end-turn han
   assert.equal(activePlayer.hand.length, 6);
 });
 
-test("Creator's Hand ignores an invalid passive hand-limit amount that bypasses data validation", () => {
+test("Creator's Hand rejects an invalid passive hand-limit amount before end-turn mutation", () => {
   const state = initializeGame({ rootDir, seed: 47002 });
   const activePlayer = mustGetActivePlayer(state);
   const definition = state.cardDefinitions.get("esw2_dbg__main_047");
@@ -387,7 +551,7 @@ test("Creator's Hand ignores an invalid passive hand-limit amount that bypasses 
         ...definition,
         engine: {
           ...definition.engine,
-          effects: [{ ...effect, amount: -1 }],
+          effects: [{ ...effect, amount: -1 } as unknown as RuntimeEffect],
         },
       },
     ],
@@ -399,11 +563,24 @@ test("Creator's Hand ignores an invalid passive hand-limit amount that bypasses 
       activePlayer.playerId
     )
   );
+  const activePlayerIdBefore = state.activePlayerId;
+  const turnBefore = structuredClone(state.turn);
+  const handBefore = structuredClone(activePlayer.hand);
+  const discardBefore = structuredClone(activePlayer.discard);
+  const permanentsBefore = structuredClone(activePlayer.permanents);
+  const eventCountBefore = state.eventLog.length;
 
   const result = applyAction(state, { type: "endTurn" });
 
-  assert.equal(result.ok, true);
-  assert.equal(activePlayer.hand.length, 5);
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /amount must be a positive integer/);
+  assert.equal(state.activePlayerId, activePlayerIdBefore);
+  assert.deepEqual(state.turn, turnBefore);
+  assert.deepEqual(activePlayer.hand, handBefore);
+  assert.deepEqual(activePlayer.discard, discardBefore);
+  assert.deepEqual(activePlayer.permanents, permanentsBefore);
+  assert.equal(state.eventLog.length, eventCountBefore);
 });
 
 test("Creator's Hand combines with the maximum-life hand-limit modifier", () => {
@@ -429,7 +606,8 @@ test("Creator's Hand combines with the maximum-life hand-limit modifier", () => 
   );
 
   assert.equal(
-    applyAction(state, { type: "playCard", cardInstanceId: park.instanceId }).ok,
+    applyAction(state, { type: "playCard", cardInstanceId: park.instanceId })
+      .ok,
     true
   );
   assert.equal(
@@ -952,6 +1130,18 @@ function countDefinition(
   definitionId: string
 ): number {
   return cards.filter((card) => card.definitionId === definitionId).length;
+}
+
+function resurrectionSource(): EffectSourceContext {
+  return {
+    sourceType: "wizardProperty",
+    runtimeMode: "combat",
+    playerId: markPlayerId("player-1"),
+    cardInstanceId: "wizard-property-instance",
+    definitionId: "wizard-property-definition",
+    tokenInstanceId: markTokenInstanceId("wizard-property-instance"),
+    tokenDefinitionId: markTokenDefinitionId("wizard-property-definition"),
+  };
 }
 
 function assertNumber(value: unknown): asserts value is number {

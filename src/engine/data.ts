@@ -3,23 +3,15 @@ import path from "node:path";
 
 import { isPlainRecord } from "../common.js";
 import {
-  resolveEffectRuntimeCatalogEntry,
+  validateRuntimeEffectCatalogPayload,
   type EffectRuntimeMode,
   type EffectRuntimeSourceKind,
 } from "./effect-runtime-registry.js";
 import {
-  isEffectTiming,
-  isRuntimeEffectCondition,
-  isRuntimeEffectCost,
-  isRuntimeEffectTarget,
-  isRuntimeEffectTargetSelector,
   isRuntimeEffectId,
-  isWildMagicOption,
   type RuntimeEffect,
-  type AttackOutcomeBranch,
-  type RuntimeEffectFields,
-  type WildMagicOption,
 } from "./runtime-effect.js";
+import { decodeTimedRuntimeEffect } from "./runtime-effect-decoder.js";
 
 type RuntimeJsonDecoder<T> = (value: unknown) => DecodeResult<T>;
 
@@ -1760,263 +1752,16 @@ function requireRuntimeEffectArrayField(
 
   const effects: RuntimeEffect[] = [];
   for (const [index, value] of values.entries()) {
-    if (!isPlainRecord(value)) {
-      errors.push(`${label}[${index}] must be an object`);
-      continue;
+    const result = decodeTimedRuntimeEffect(`${label}[${index}]`, value);
+    if (result.ok) {
+      effects.push(result.value);
+    } else {
+      errors.push(...result.errors);
     }
-
-    if (!isRuntimeEffectId(value["effectId"])) {
-      errors.push(`${label}[${index}].effectId must be a supported effect id`);
-      continue;
-    }
-
-    if (!isEffectTiming(value["timing"])) {
-      errors.push(
-        `${label}[${index}].timing must be a supported effect timing`
-      );
-      continue;
-    }
-
-    if (
-      value["condition"] !== undefined &&
-      !isRuntimeEffectCondition(value["condition"])
-    ) {
-      errors.push(
-        `${label}[${index}].condition must use a supported condition shape`
-      );
-      continue;
-    }
-
-    if (
-      value["costs"] !== undefined &&
-      (!Array.isArray(value["costs"]) ||
-        !value["costs"].every(isRuntimeEffectCost))
-    ) {
-      errors.push(`${label}[${index}].costs must use supported cost shapes`);
-      continue;
-    }
-
-    if (
-      value["target"] !== undefined &&
-      !isRuntimeEffectTarget(value["target"])
-    ) {
-      errors.push(`${label}[${index}].target must use a supported selector`);
-      continue;
-    }
-
-    if (
-      value["targetSelector"] !== undefined &&
-      !isRuntimeEffectTargetSelector(value["targetSelector"])
-    ) {
-      errors.push(
-        `${label}[${index}].targetSelector must be a supported selector`
-      );
-      continue;
-    }
-
-    const decodedEffect: Record<string, unknown> = {
-      effectId: value["effectId"],
-      timing: value["timing"],
-    };
-    for (const field of runtimeEffectPayloadFields) {
-      if (value[field] !== undefined) {
-        if (field === "options" && value["effectId"] === "wild_magic_choice") {
-          if (!Array.isArray(value[field])) {
-            errors.push(`${label}[${index}].options must be an array`);
-            continue;
-          }
-          const options: WildMagicOption[] = [];
-          for (const option of value[field]) {
-            if (!isWildMagicOption(option)) {
-              errors.push(
-                `${label}[${index}].options contains malformed Wild Magic option`
-              );
-              continue;
-            }
-            options.push(
-              option.effectId === "add_power"
-                ? { effectId: "add_power", amount: option.amount }
-                : {
-                    effectId: "play_top_card_from_foe_deck",
-                    targetSelector: "chosenFoe",
-                  }
-            );
-          }
-          decodedEffect[field] = options;
-        } else if (
-          field === "branchEffects" ||
-          field === "onDamageDealt" ||
-          field === "onKill"
-        ) {
-          const branches =
-            field === "branchEffects"
-              ? requireRuntimeEffectArrayField(
-                  { branchEffects: value[field] },
-                  `${label}[${index}].${field}`,
-                  errors,
-                  "branchEffects"
-                )
-              : decodeRuntimeEffectBranchArray(
-                  value[field],
-                  `${label}[${index}].${field}`,
-                  errors
-                );
-          if (branches !== undefined) {
-            decodedEffect[field] = branches;
-          }
-        } else {
-          decodedEffect[field] = value[field];
-        }
-      }
-    }
-    effects.push(decodedEffect as unknown as RuntimeEffect);
   }
 
   return effects;
 }
-
-function decodeRuntimeEffectBranchArray(
-  value: unknown,
-  label: string,
-  errors: string[]
-): AttackOutcomeBranch[] | undefined {
-  if (!Array.isArray(value)) {
-    errors.push(`${label} must be an array`);
-    return undefined;
-  }
-
-  const branches: AttackOutcomeBranch[] = [];
-  for (const [index, branch] of value.entries()) {
-    const decoded = decodeAttackOutcomeBranch(
-      branch,
-      `${label}[${index}]`,
-      errors
-    );
-    if (decoded !== undefined) {
-      branches.push(decoded);
-    }
-  }
-
-  return branches;
-}
-
-function decodeAttackOutcomeBranch(
-  value: unknown,
-  label: string,
-  errors: string[]
-): AttackOutcomeBranch | undefined {
-  if (!isPlainRecord(value)) {
-    errors.push(`${label} must be an object`);
-    return undefined;
-  }
-
-  const effectId = value["effectId"];
-  if (!isAttackOutcomeEffectId(effectId)) {
-    errors.push(
-      `${label} uses unsupported attack outcome branch ${String(effectId)}`
-    );
-    return undefined;
-  }
-
-  if (effectId !== "gain_status" && value["target"] !== undefined) {
-    errors.push(`${label}.target is not supported for ${effectId}`);
-    return undefined;
-  }
-
-  if (effectId === "gain_chips" || effectId === "return_discard_to_hand") {
-    const amount = value["amount"];
-    if (
-      typeof amount !== "number" ||
-      !Number.isSafeInteger(amount) ||
-      amount <= 0
-    ) {
-      errors.push(`${label}.amount must be a positive integer`);
-      return undefined;
-    }
-    return { effectId, amount };
-  }
-
-  if (effectId === "gain_status") {
-    if (value["statusId"] !== "dingler") {
-      errors.push(`${label}.statusId must be dingler`);
-      return undefined;
-    }
-    const target = value["target"];
-    if (target !== undefined && target !== "damagedPlayer") {
-      errors.push(`${label}.target must be damagedPlayer`);
-      return undefined;
-    }
-    return target === "damagedPlayer"
-      ? { effectId, statusId: "dingler", target }
-      : { effectId, statusId: "dingler" };
-  }
-
-  return { effectId };
-}
-
-function isAttackOutcomeEffectId(
-  value: unknown
-): value is AttackOutcomeBranch["effectId"] {
-  return (
-    value === "gain_chips" ||
-    value === "gain_chips_equal_damage_dealt" ||
-    value === "heal_equal_damage_dealt" ||
-    value === "return_discard_to_hand" ||
-    value === "gain_status"
-  );
-}
-
-const runtimeEffectPayloadFields = [
-  "condition",
-  "costs",
-  "target",
-  "targetSelector",
-  "allowDinglerStatusExchange",
-  "allowLifeExchange",
-  "amount",
-  "amountPerOwnedCard",
-  "amountPerPlayer",
-  "branchEffects",
-  "cardDefinitionIds",
-  "cardKind",
-  "cardTags",
-  "cardTypes",
-  "chipAmount",
-  "chipCost",
-  "chooser",
-  "costMode",
-  "countedCardTypes",
-  "destination",
-  "emptyChoice",
-  "excludeSource",
-  "fromDefinitionId",
-  "isOngoing",
-  "lifeCost",
-  "lifeTotal",
-  "onDamageDealt",
-  "onKill",
-  "operation",
-  "optional",
-  "options",
-  "redirectAttack",
-  "source",
-  "status",
-  "statusId",
-  "toDefinitionId",
-  "unlessStatusId",
-  "valueKind",
-  "voteTargetSelector",
-  "winnerDrawAmount",
-] as const satisfies readonly (keyof RuntimeEffectFields)[];
-
-type MissingRuntimeEffectPayloadField = Exclude<
-  keyof RuntimeEffectFields,
-  (typeof runtimeEffectPayloadFields)[number] | "timing"
->;
-const runtimeEffectPayloadFieldsAreComplete: MissingRuntimeEffectPayloadField extends never
-  ? true
-  : never = true;
-void runtimeEffectPayloadFieldsAreComplete;
 
 function optionalUnknownArrayField(
   record: Record<string, unknown>,
@@ -2076,7 +1821,11 @@ function requireNonEmptyStringField(
   key = label
 ): string | undefined {
   const value = record[key];
-  if (typeof value !== "string" || value.trim().length === 0 || (key === "image" && !isCanonicalAssetPath(value))) {
+  if (
+    typeof value !== "string" ||
+    value.trim().length === 0 ||
+    (key === "image" && !isCanonicalAssetPath(value))
+  ) {
     errors.push(`${label} must be a non-empty string`);
     return undefined;
   }
@@ -2289,7 +2038,10 @@ function validateRuntimeEffectDefinition(
   mode: EffectRuntimeMode,
   sourceKind: EffectRuntimeSourceKind
 ): string[] {
-  const resolution = resolveEffectRuntimeCatalogEntry(
+  if (!isRuntimeEffectId(effectId)) {
+    return [`${subjectId} uses unsupported effect id ${effectId}`];
+  }
+  const resolution = validateRuntimeEffectCatalogPayload(
     subjectId,
     effectId,
     effect,
@@ -2300,73 +2052,7 @@ function validateRuntimeEffectDefinition(
     return resolution.errors;
   }
 
-  const catalogEntry = resolution.entry;
-
-  const targetSelector = effect["targetSelector"];
-  if (
-    targetSelector !== undefined &&
-    (!isRuntimeEffectTargetSelector(targetSelector) ||
-      !catalogEntry.handler.allowedTargetSelectors?.includes(targetSelector))
-  ) {
-    return [`${subjectId} ${effectId} uses unsupported target selector`];
-  }
-
-  return validateNestedAttackBranches(subjectId, effect, mode, sourceKind);
-}
-
-function validateNestedAttackBranches(
-  subjectId: string,
-  effect: Record<string, unknown>,
-  mode: EffectRuntimeMode,
-  sourceKind: EffectRuntimeSourceKind
-): string[] {
-  const errors: string[] = [];
-  for (const field of ["branchEffects", "onDamageDealt", "onKill"] as const) {
-    const branches = effect[field];
-    if (branches === undefined) {
-      continue;
-    }
-    if (!Array.isArray(branches)) {
-      errors.push(`${subjectId} ${field} must be an array`);
-      continue;
-    }
-    for (const [index, branch] of branches.entries()) {
-      if (!isEffectRecord(branch)) {
-        errors.push(`${subjectId} ${field}[${index}] must be an object`);
-        continue;
-      }
-      const nestedId = branch["effectId"];
-      const nestedSubjectId = `${subjectId} ${field}[${index}]`;
-      if (field === "branchEffects") {
-        if (typeof nestedId !== "string") {
-          errors.push(
-            `${nestedSubjectId} uses unsupported effect id ${String(nestedId)}`
-          );
-          continue;
-        }
-        errors.push(
-          ...validateRuntimeEffectDefinition(
-            nestedSubjectId,
-            nestedId,
-            branch,
-            mode,
-            sourceKind
-          )
-        );
-        continue;
-      }
-
-      const outcome = decodeAttackOutcomeBranch(
-        branch,
-        nestedSubjectId,
-        errors
-      );
-      if (outcome === undefined) {
-        continue;
-      }
-    }
-  }
-  return errors;
+  return [];
 }
 
 function isEffectRecord(effect: unknown): effect is Record<string, unknown> {

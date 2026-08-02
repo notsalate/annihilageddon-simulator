@@ -262,11 +262,863 @@ test("typed-access guard does not allow new record access in a raw-boundary file
   assert.match(result.stderr, /untracked Record<string, unknown> access/);
 });
 
+test("typed-access guard rejects runtime-effect fallbacks and payload assertions", () => {
+  const fixture = createFixture(`
+    type RuntimeEffectFields = { amount?: unknown };
+    type RuntimeEffectPayload = { effectId: string };
+    const decoded = value as RuntimeEffectPayload;
+    void decoded;
+  `);
+  const result = run("check-engine-typed-access.mjs", fixture);
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /forbidden runtime-effect boundary RuntimeEffectFields/
+  );
+  assert.match(result.stderr, /asserts a decoded runtime effect payload/);
+});
+
+test("typed-access guard permits concrete payload annotations but rejects their assertions", () => {
+  const safeFixture = createFixture(`
+    type RuntimeEffectForId<Id extends string> = { effectId: Id };
+    function execute(effect: RuntimeEffectForId<"add_power">) {
+      return effect.effectId;
+    }
+    void execute;
+  `);
+  const safeResult = run("check-engine-typed-access.mjs", safeFixture);
+  assert.equal(safeResult.status, 0);
+
+  const unsafeFixture = createFixture(`
+    type RuntimeEffectForId<Id extends string> = { effectId: Id };
+    const decoded = value as RuntimeEffectForId<"add_power">;
+    void decoded;
+  `);
+  const unsafeResult = run("check-engine-typed-access.mjs", unsafeFixture);
+  assert.equal(unsafeResult.status, 1);
+  assert.match(unsafeResult.stderr, /asserts a decoded runtime effect payload/);
+});
+
+test("typed-access guard rejects raw known payload access in the effect registry", () => {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
+  const sourceDir = path.join(fixtureRoot, "src", "engine");
+  mkdirSync(sourceDir, { recursive: true });
+  writeFileSync(
+    path.join(sourceDir, "effect-runtime-registry.ts"),
+    'const amount = effect["amount"];\nvoid amount;\n',
+    "utf8"
+  );
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /uses raw bracket access for amount/);
+});
+
+test("typed-access guard rejects Catalog bypass exports and decoder imports", () => {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
+  const sourceDir = path.join(fixtureRoot, "src", "engine");
+  mkdirSync(sourceDir, { recursive: true });
+  writeFileSync(
+    path.join(sourceDir, "effect-runtime-registry.ts"),
+    "export function getEffectRuntimeHandler() {}\n",
+    "utf8"
+  );
+  writeFileSync(
+    path.join(sourceDir, "fixture.ts"),
+    'import { decodeRuntimeEffectForId } from "./runtime-effect-decoder.js";\nvoid decodeRuntimeEffectForId;\n',
+    "utf8"
+  );
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /exports Catalog bypass getEffectRuntimeHandler/);
+  assert.match(
+    result.stderr,
+    /imports runtime effect decoder outside an approved boundary/
+  );
+});
+
+test("typed-access guard rejects aliased and direct Catalog bypass re-exports", () => {
+  const fixtureRoot = createEngineFixture({
+    "effect-runtime-registry.ts": `
+      const effectRuntimeHandlerMap = {};
+      export { effectRuntimeHandlerMap as unsafe };
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+    "fixture.ts":
+      'export { decodeRuntimeEffectForId } from "./runtime-effect-decoder.js";\n',
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /re-exports Catalog bypass effectRuntimeHandlerMap/
+  );
+  assert.match(
+    result.stderr,
+    /re-exports runtime effect decoder outside an approved boundary/
+  );
+});
+
+test("typed-access guard rejects decoder imports exported from an approved module", () => {
+  const fixtureRoot = createEngineFixture({
+    "data.ts": `
+      import { decodeRuntimeEffectForId as importedDecoder } from "./runtime-effect-decoder.js";
+      export { importedDecoder as unsafe };
+    `,
+    "effect-runtime-registry.ts": `
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /exports runtime effect decoder binding importedDecoder/
+  );
+});
+
+test("typed-access guard rejects namespace decoder named exports from an approved module", () => {
+  const fixtureRoot = createEngineFixture({
+    "data.ts": `
+      import * as decoder from "./runtime-effect-decoder.js";
+      export { decoder as unsafe };
+    `,
+    "effect-runtime-registry.ts": `
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /src\/engine\/data\.ts exports runtime effect decoder binding decoder/
+  );
+});
+
+test("typed-access guard rejects namespace decoder default-export aliases", () => {
+  const fixtureRoot = createEngineFixture({
+    "data.ts": `
+      import * as decoder from "./runtime-effect-decoder.js";
+      const localAlias = decoder;
+      export default localAlias;
+    `,
+    "effect-runtime-registry.ts": `
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /src\/engine\/data\.ts exports runtime effect decoder binding/
+  );
+});
+
+test("typed-access guard rejects decoder re-exports from an approved module", () => {
+  const fixtureRoot = createEngineFixture({
+    "data.ts": `
+      export { decodeRuntimeEffectForId as unsafe } from "./runtime-effect-decoder.js";
+    `,
+    "effect-runtime-registry.ts": `
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /exports runtime effect decoder binding decodeRuntimeEffectForId/
+  );
+});
+
+test("typed-access guard rejects default exports of Catalog bypass alias chains", () => {
+  const catalogBypassNames = [
+    "effectRuntimeHandlerMap",
+    "effectRuntimeCatalog",
+    "effectRuntimeRegistry",
+    "getEffectRuntimeHandler",
+    "replaceEffectRuntimeHandlerForTesting",
+    "getEffectRuntimeCatalogEntry",
+    "resolveEffectRuntimeCatalogEntry",
+    "EffectRuntimeHandler",
+    "EffectRuntimeEntry",
+    "EffectRuntimeCatalogDefinition",
+    "EffectRuntimeCatalogResolution",
+  ];
+
+  for (const catalogBypassName of catalogBypassNames) {
+    const fixtureRoot = createEngineFixture({
+      "effect-runtime-registry.ts": `
+        const ${catalogBypassName} = {};
+        const firstAlias = ${catalogBypassName};
+        let exposed = firstAlias;
+        export default exposed;
+        function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+          switch (effectId) {
+            case "fixture": return ["card"];
+          }
+        }
+      `,
+    });
+
+    const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+    assert.equal(result.status, 1, catalogBypassName);
+    assert.match(result.stderr, /exports Catalog bypass/);
+  }
+});
+
+test("typed-access guard permits unexported decoder imports in approved modules", () => {
+  const fixtureRoot = createEngineFixture({
+    "data.ts": `
+      import { decodeRuntimeEffectForId } from "./runtime-effect-decoder.js";
+      void decodeRuntimeEffectForId;
+    `,
+    "effect-runtime-registry.ts": `
+      import { decodeRuntimeEffect } from "./runtime-effect-decoder.js";
+      void decodeRuntimeEffect;
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 0);
+});
+
+test("typed-access guard enforces the closed decoder export surface", () => {
+  const fixtureRoot = createEngineFixture({
+    "effect-runtime-registry.ts": `
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+    "runtime-effect-decoder.ts": `
+      const runtimeEffectDecoders = {};
+      let assignedDecoderMap;
+      assignedDecoderMap = runtimeEffectDecoders;
+      let nestedAssignmentLeak;
+      if (true) nestedAssignmentLeak = runtimeEffectDecoders;
+      const [safeArrayItem, leakedArrayItem] = [1, runtimeEffectDecoders];
+      let assignedSafeArrayItem;
+      let assignedLeakedArrayItem;
+      [assignedSafeArrayItem, assignedLeakedArrayItem] = [1, runtimeEffectDecoders];
+      const { safe: safeObjectProperty, leak: leakedObjectProperty } = {
+        safe: 1,
+        leak: runtimeEffectDecoders,
+      };
+      let assignedSafeObjectProperty;
+      let assignedLeakedObjectProperty;
+      ({ safe: assignedSafeObjectProperty, leak: assignedLeakedObjectProperty } = {
+        safe: 1,
+        leak: runtimeEffectDecoders,
+      });
+      const publicDecoderMap = runtimeEffectDecoders;
+      const transitiveDecoderMap = publicDecoderMap;
+      export { transitiveDecoderMap as exposedDecoderMap };
+      export const directDecoderMap = runtimeEffectDecoders;
+      export { assignedDecoderMap };
+      export const parenthesizedDecoderMap = (runtimeEffectDecoders);
+      export const assertedDecoderMap = runtimeEffectDecoders as unknown;
+      export const satisfiedDecoderMap = runtimeEffectDecoders satisfies object;
+      export const nonNullDecoderMap = runtimeEffectDecoders!;
+      export const objectWrapper = { decoderMap: runtimeEffectDecoders };
+      export const arrayWrapper = [runtimeEffectDecoders];
+      export const closureWrapper = () => runtimeEffectDecoders;
+      export default function decodeRuntimeEffect() {
+        return runtimeEffectDecoders;
+      }
+      export default interface RuntimeEffectDecoder {}
+      const unrelatedDecoderMap = {};
+      export { unrelatedDecoderMap };
+      export { nestedAssignmentLeak, safeArrayItem, leakedArrayItem };
+      export { assignedSafeArrayItem, assignedLeakedArrayItem };
+      export { safeObjectProperty, leakedObjectProperty };
+      export { assignedSafeObjectProperty, assignedLeakedObjectProperty };
+      export const shadowedParameter = (runtimeEffectDecoders: unknown) => runtimeEffectDecoders;
+      type DecoderMapType = typeof runtimeEffectDecoders;
+      export type { DecoderMapType };
+    `,
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /closed decoder export surface/);
+});
+
+test("typed-access guard accepts a renamed explicit source-kind policy helper", () => {
+  const fixtureRoot = createEngineFixture({
+    "effect-runtime-registry.ts": `
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) {
+          case "fixture": return ["card"];
+        }
+      }
+    `,
+  });
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 0);
+});
+
+test("typed-access guard accepts unrelated interfaces but rejects executable raw handler validation", () => {
+  const safe = createEngineFixture({
+    "effect-runtime-registry.ts": `
+      interface Unrelated { checkPayload(raw: unknown): string[]; }
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) { case "fixture": return ["card"]; }
+      }
+    `,
+    "runtime-effect-decoder.ts":
+      "function checkPayload(raw: unknown): string[] { return []; }\nvoid checkPayload;\n",
+  });
+  assert.equal(run("check-engine-typed-access.mjs", safe).status, 0);
+
+  const bypass = createEngineFixture({
+    "effect-runtime-registry.ts": `
+      const handler = {
+        execute: () => {},
+        checkPayload(raw: unknown): string[] { return []; },
+      };
+      void handler;
+      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
+        switch (effectId) { case "fixture": return ["card"]; }
+      }
+    `,
+  });
+  const result = run("check-engine-typed-access.mjs", bypass);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /handler-owned payload validation/);
+});
+
+test("typed-access guard rejects a two-zone consumer without a Ledger import", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    interface PlayerState {
+      hand: unknown[];
+      deck: unknown[];
+    }
+    export function listInventory(players: PlayerState[]) {
+      return players.flatMap((player: PlayerState) => [
+        player.hand,
+        player.deck,
+      ]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /manually enumerates physical-zone inventory without calling a Control Ledger seam/
+  );
+  assert.match(result.stderr, /PlayerState.hand, PlayerState.deck/);
+});
+
+test("typed-access guard rejects a three-zone consumer without a Ledger seam", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    interface PlayerState { hand: unknown[]; deck: unknown[]; discard: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck, player.discard]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /PlayerState.hand, PlayerState.deck, PlayerState.discard/
+  );
+});
+
+test("typed-access guard rejects a type-only Ledger import without a seam call", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import type { clonePhysicalCardZoneState } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /without calling a Control Ledger seam/);
+});
+
+test("typed-access guard rejects a bare Ledger import without a seam call", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /without calling a Control Ledger seam/);
+});
+
+test("typed-access guard accepts an aliased physical-zone Ledger seam", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 0);
+});
+
+test("typed-access guard keeps an aliased Ledger seam outside sibling bindings", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+    function unrelated() {
+      function listLocations() {}
+      listLocations();
+    }
+    if (true) {
+      const { listLocations } = { listLocations: () => {} };
+      listLocations();
+    }
+    void unrelated;
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 0);
+});
+
+test("typed-access guard keeps an aliased Ledger seam after switch and loop bindings", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      switch (0) {
+        case 0:
+          const listLocations = () => {};
+          listLocations();
+          break;
+      }
+      for (const listLocations = () => {}; false;) {
+        listLocations();
+      }
+      for (const listLocations of [() => {}]) {
+        listLocations();
+      }
+      for (const listLocations in { local: () => {} }) {
+        void listLocations;
+      }
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 0);
+});
+
+test("typed-access guard sees a Ledger alias shadow inside a loop scope", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      for (const listLocations of [() => {}]) {
+        listLocations();
+        return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+      }
+      return [];
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /without calling a Control Ledger seam/);
+});
+
+test("typed-access guard keeps Ledger aliases outside every lexical sibling scope", () => {
+  const siblingScopes = [
+    ["Program", ""],
+    [
+      "FunctionLike",
+      "function sibling() { const listLocations = () => {}; listLocations(); }",
+    ],
+    ["Block", "if (true) { const listLocations = () => {}; listLocations(); }"],
+    [
+      "CaseBlock",
+      "switch (0) { case 0: const listLocations = () => {}; listLocations(); break; }",
+    ],
+    [
+      "Catch",
+      "try {} catch { const listLocations = () => {}; listLocations(); }",
+    ],
+    [
+      "For",
+      "for (const listLocations = () => {}; false;) { listLocations(); }",
+    ],
+    ["ForOf", "for (const listLocations of [() => {}]) { listLocations(); }"],
+    [
+      "ForIn",
+      "for (const listLocations in { local: () => {} }) { void listLocations; }",
+    ],
+    [
+      "ModuleBlock",
+      "namespace Sibling { const listLocations = () => {}; listLocations(); }",
+    ],
+    [
+      "ClassStaticBlock",
+      "class Sibling { static { const listLocations = () => {}; listLocations(); } }",
+    ],
+  ] as const;
+
+  for (const [scopeName, siblingScope] of siblingScopes) {
+    const fixtureRoot = createPhysicalZoneFixture(`
+      import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+      interface PlayerState { hand: unknown[]; deck: unknown[] }
+      export function listInventory(players: PlayerState[]) {
+        listLocations();
+        return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+      }
+      ${siblingScope}
+    `);
+    assert.equal(
+      run("check-engine-typed-access.mjs", fixtureRoot).status,
+      0,
+      scopeName
+    );
+  }
+});
+
+test("typed-access guard sees Ledger shadows inside module and static-block scopes", () => {
+  const moduleFixture = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    namespace Unsafe {
+      export function listInventory(players: PlayerState[]) {
+        const listLocations = () => {};
+        listLocations();
+        return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+      }
+    }
+  `);
+  const staticFixture = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    const players: PlayerState[] = [];
+    class Unsafe {
+      static {
+        const listLocations = () => {};
+        listLocations();
+        void players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+      }
+    }
+  `);
+  assert.equal(run("check-engine-typed-access.mjs", moduleFixture).status, 1);
+  assert.equal(run("check-engine-typed-access.mjs", staticFixture).status, 1);
+});
+
+test("typed-access guard ignores a Ledger alias shadowed by a parameter", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(
+      players: PlayerState[],
+      listLocations: () => void
+    ) {
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /without calling a Control Ledger seam/);
+});
+
+test("typed-access guard ignores a Ledger alias shadowed by a function declaration", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      function listLocations() {}
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /without calling a Control Ledger seam/);
+});
+
+test("typed-access guard ignores a hoisted var Ledger alias shadow", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      if (true) {
+        var listLocations = () => {};
+      }
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /without calling a Control Ledger seam/);
+});
+
+test("typed-access guard ignores object and array destructuring Ledger alias shadows", () => {
+  const objectFixture = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      const { listLocations } = { listLocations: () => {} };
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const arrayFixture = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      const [listLocations] = [() => {}];
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  assert.equal(run("check-engine-typed-access.mjs", objectFixture).status, 1);
+  assert.equal(run("check-engine-typed-access.mjs", arrayFixture).status, 1);
+});
+
+test("typed-access guard ignores Ledger aliases shadowed by class and catch bindings", () => {
+  const classFixture = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      class listLocations {}
+      listLocations();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const catchFixture = createPhysicalZoneFixture(`
+    import { listPhysicalCardLocations as listLocations } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      try {} catch ({ listLocations }) {
+        listLocations();
+        return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+      }
+      return [];
+    }
+  `);
+  assert.equal(run("check-engine-typed-access.mjs", classFixture).status, 1);
+  assert.equal(run("check-engine-typed-access.mjs", catchFixture).status, 1);
+});
+
+test("typed-access guard does not treat non-inventory Ledger APIs as a seam", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    import { findCardLocation } from "./control-ledger.js";
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(players: PlayerState[]) {
+      findCardLocation();
+      return players.flatMap((player: PlayerState) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /without calling a Control Ledger seam/);
+});
+
+test("typed-access guard follows GameState.players and PlayerState[] callbacks", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    interface GameState { players: PlayerState[] }
+    export function collectFromGame(state: GameState) {
+      return state.players.flatMap((player) => [player.hand, player.deck]);
+    }
+    export function mapPlayers(state: GameState) {
+      return state.players.map((player) => player.hand.concat(player.deck));
+    }
+    export function filterPlayers(state: GameState) {
+      return state.players.filter((player) => {
+        const inventory = [player.hand, player.deck];
+        return inventory.length > 0;
+      });
+    }
+    export function visitPlayers(players: PlayerState[]) {
+      players.forEach((player) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /PlayerState.hand, PlayerState.deck/);
+});
+
+test("typed-access guard follows a players callback through a nested IIFE", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    interface GameState { players: PlayerState[] }
+    export function collectFromGame(state: GameState) {
+      return state.players.flatMap((player) => (() => [player.hand, player.deck])());
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /PlayerState.hand, PlayerState.deck/);
+});
+
+test("typed-access guard ignores Other.players callbacks", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    interface OtherPlayer { hand: unknown[]; deck: unknown[] }
+    interface Other { players: OtherPlayer[] }
+    export function collect(other: Other) {
+      return other.players.flatMap((player) => [player.hand, player.deck]);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 0);
+});
+
+test("typed-access guard follows intermediate zone aliases pushed into an inventory", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(player: PlayerState) {
+      const hand = player.hand;
+      const deck = player.deck;
+      const inventory: unknown[][] = [];
+      inventory.push(hand, deck);
+      return inventory;
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /PlayerState.hand, PlayerState.deck/);
+});
+
+test("typed-access guard rejects a concat inventory", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(player: PlayerState) {
+      return player.hand.concat(player.deck);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /PlayerState.hand, PlayerState.deck/);
+});
+
+test("typed-access guard follows an object map consumed as an inventory", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function listInventory(player: PlayerState) {
+      const zones = { hand: player.hand, deck: player.deck };
+      return Object.values(zones);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /PlayerState.hand, PlayerState.deck/);
+});
+
+test("typed-access guard ignores unrelated same-named properties", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    interface Other { hand: unknown[]; deck: unknown[] }
+    export function listOther(other: Other) {
+      return [other.hand, other.deck];
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 0);
+});
+
 function createFixture(source: string): string {
   const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
   const sourceDir = path.join(fixtureRoot, "src", "engine");
   mkdirSync(sourceDir, { recursive: true });
   writeFileSync(path.join(sourceDir, "fixture.ts"), source, "utf8");
+  return fixtureRoot;
+}
+
+function createEngineFixture(files: Record<string, string>): string {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
+  const sourceDir = path.join(fixtureRoot, "src", "engine");
+  mkdirSync(sourceDir, { recursive: true });
+  for (const [fileName, source] of Object.entries(files)) {
+    writeFileSync(path.join(sourceDir, fileName), source, "utf8");
+  }
+  return fixtureRoot;
+}
+
+function createPhysicalZoneFixture(consumerSource: string): string {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), "engine-guard-"));
+  const sourceDir = path.join(fixtureRoot, "src", "engine");
+  mkdirSync(sourceDir, { recursive: true });
+  writeFileSync(
+    path.join(sourceDir, "control-ledger.ts"),
+    `
+      function createArrayCardZoneDescriptor(
+        zoneName: string,
+        readStorage: () => readonly unknown[]
+      ) {
+        return { zoneName, readStorage };
+      }
+
+      interface PlayerState {
+        deck: unknown[];
+        hand: unknown[];
+        discard: unknown[];
+        permanents: unknown[];
+      }
+
+      function listPlayerPhysicalCardZoneDescriptors(player: PlayerState) {
+        return [
+          createArrayCardZoneDescriptor("deck", () => player.deck),
+          createArrayCardZoneDescriptor("hand", () => player.hand),
+          createArrayCardZoneDescriptor("discard", () => player.discard),
+          createArrayCardZoneDescriptor("permanents", () => player.permanents),
+        ];
+      }
+      void listPlayerPhysicalCardZoneDescriptors;
+    `,
+    "utf8"
+  );
+  writeFileSync(path.join(sourceDir, "fixture.ts"), consumerSource, "utf8");
   return fixtureRoot;
 }
 

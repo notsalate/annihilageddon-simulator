@@ -1,0 +1,209 @@
+import type { CardDefinition } from "./data.js";
+import { buildControlledObjectView } from "./control-ledger.js";
+import {
+  applyRuntimeEffectAfterDamageDealt,
+  applyRuntimeEffectAfterPlayerAttackDamage,
+  evaluateRuntimeEffectEndTurnDrawModifier,
+  executeRuntimeEffectOnPlayCard,
+  type EffectExecutionResult,
+  type EffectSourceContext,
+} from "./effect-runtime-registry.js";
+import type { RuntimeEffect } from "./runtime-effect.js";
+import type { CardInstance, GameState, PlayerState } from "./setup.js";
+
+export interface ControlledCardDispatchOperationMap {
+  readonly onPlayCard: {
+    readonly kind: "onPlayCard";
+    readonly playedCard: CardInstance;
+    readonly playedDefinition: CardDefinition;
+  };
+  readonly afterPlayerAttackDamage: {
+    readonly kind: "afterPlayerAttackDamage";
+    readonly totalDamageDealt: number;
+    readonly attackSource: EffectSourceContext;
+  };
+  readonly afterDamageDealt: {
+    readonly kind: "afterDamageDealt";
+    readonly damageDealt: number;
+    readonly damageSource: EffectSourceContext;
+  };
+  readonly collectEndTurnDrawModifier: {
+    readonly kind: "collectEndTurnDrawModifier";
+    readonly currentBaseDrawCount: number;
+  };
+}
+
+export interface ControlledCardDispatchResultMap {
+  readonly onPlayCard: EffectExecutionResult;
+  readonly afterPlayerAttackDamage: EffectExecutionResult;
+  readonly afterDamageDealt: EffectExecutionResult;
+  readonly collectEndTurnDrawModifier:
+    | { readonly ok: true; readonly drawCount: number }
+    | { readonly ok: false; readonly error: string };
+}
+
+type ControlledCardDispatchOperation =
+  ControlledCardDispatchOperationMap[keyof ControlledCardDispatchOperationMap];
+type ControlledCardExecutionOperation =
+  | ControlledCardDispatchOperationMap["onPlayCard"]
+  | ControlledCardDispatchOperationMap["afterPlayerAttackDamage"]
+  | ControlledCardDispatchOperationMap["afterDamageDealt"];
+type ControlledCardDispatchResult =
+  ControlledCardDispatchResultMap[keyof ControlledCardDispatchResultMap];
+
+interface ControlledCardEffectCandidate {
+  readonly effect: RuntimeEffect;
+  readonly source: EffectSourceContext;
+  readonly sourceDefinition: CardDefinition;
+}
+
+export function dispatchControlledCardOperation(
+  state: GameState,
+  controller: PlayerState,
+  operation: ControlledCardDispatchOperationMap["onPlayCard"]
+): ControlledCardDispatchResultMap["onPlayCard"];
+// eslint-disable-next-line no-redeclare -- TypeScript overload signature.
+export function dispatchControlledCardOperation(
+  state: GameState,
+  controller: PlayerState,
+  operation: ControlledCardDispatchOperationMap["afterPlayerAttackDamage"]
+): ControlledCardDispatchResultMap["afterPlayerAttackDamage"];
+// eslint-disable-next-line no-redeclare -- TypeScript overload signature.
+export function dispatchControlledCardOperation(
+  state: GameState,
+  controller: PlayerState,
+  operation: ControlledCardDispatchOperationMap["afterDamageDealt"]
+): ControlledCardDispatchResultMap["afterDamageDealt"];
+// eslint-disable-next-line no-redeclare -- TypeScript overload signature.
+export function dispatchControlledCardOperation(
+  state: GameState,
+  controller: PlayerState,
+  operation: ControlledCardDispatchOperationMap["collectEndTurnDrawModifier"]
+): ControlledCardDispatchResultMap["collectEndTurnDrawModifier"];
+/**
+ * Resolves one typed controlled-card operation in stable Control Ledger order.
+ * Discovery, timing policy, source identity, catalog resolution, applicability,
+ * execution, aggregation, and short-circuiting all stay inside this boundary.
+ */
+// eslint-disable-next-line no-redeclare -- TypeScript overload implementation.
+export function dispatchControlledCardOperation(
+  state: GameState,
+  controller: PlayerState,
+  operation: ControlledCardDispatchOperation
+): ControlledCardDispatchResult {
+  const candidates = discoverControlledCardEffects(state, controller);
+  if (operation.kind === "collectEndTurnDrawModifier") {
+    return collectEndTurnDrawModifier(state, controller, operation, candidates);
+  }
+  return executeControlledCardOperation(
+    state,
+    controller,
+    operation,
+    candidates
+  );
+}
+
+function discoverControlledCardEffects(
+  state: GameState,
+  controller: PlayerState
+): ControlledCardEffectCandidate[] {
+  const controlledObjects = buildControlledObjectView(
+    state,
+    controller.playerId
+  );
+  const candidates: ControlledCardEffectCandidate[] = [];
+
+  for (const { card, definition } of controlledObjects.cards) {
+    if (!definition.engine.playableInV0) {
+      continue;
+    }
+
+    const source: EffectSourceContext = {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: controller.playerId,
+      cardInstanceId: card.instanceId,
+      definitionId: card.definitionId,
+    };
+    for (const effect of definition.engine.effects) {
+      candidates.push({ effect, source, sourceDefinition: definition });
+    }
+  }
+
+  return candidates;
+}
+
+function executeControlledCardOperation(
+  state: GameState,
+  controller: PlayerState,
+  operation: ControlledCardExecutionOperation,
+  candidates: readonly ControlledCardEffectCandidate[]
+): EffectExecutionResult {
+  for (const { effect, source, sourceDefinition } of candidates) {
+    const result =
+      operation.kind === "onPlayCard"
+        ? executeRuntimeEffectOnPlayCard(effect, {
+            state,
+            controller,
+            source,
+            sourceDefinition,
+            playedCard: operation.playedCard,
+            playedDefinition: operation.playedDefinition,
+          })
+        : operation.kind === "afterPlayerAttackDamage"
+          ? applyRuntimeEffectAfterPlayerAttackDamage(effect, {
+              state,
+              controller,
+              source,
+              sourceDefinition,
+              totalDamageDealt: operation.totalDamageDealt,
+              attackSource: operation.attackSource,
+            })
+          : applyRuntimeEffectAfterDamageDealt(effect, {
+              state,
+              controller,
+              source,
+              sourceDefinition,
+              damageDealt: operation.damageDealt,
+              damageSource: operation.damageSource,
+            });
+
+    if (result.status === "notApplicable") {
+      continue;
+    }
+    if (result.status === "error") {
+      return { ok: false, error: result.error };
+    }
+    if (!result.result.ok || result.result.gameEnd !== undefined) {
+      return result.result;
+    }
+  }
+
+  return { ok: true };
+}
+
+function collectEndTurnDrawModifier(
+  state: GameState,
+  controller: PlayerState,
+  operation: ControlledCardDispatchOperationMap["collectEndTurnDrawModifier"],
+  candidates: readonly ControlledCardEffectCandidate[]
+): ControlledCardDispatchResultMap["collectEndTurnDrawModifier"] {
+  let drawCount = operation.currentBaseDrawCount;
+  for (const { effect, source } of candidates) {
+    const result = evaluateRuntimeEffectEndTurnDrawModifier(effect, {
+      state,
+      controller,
+      source,
+      currentDrawCount: drawCount,
+    });
+    if (result.status === "notApplicable") {
+      continue;
+    }
+    if (result.status === "error") {
+      return { ok: false, error: result.error };
+    }
+    drawCount = result.result;
+  }
+
+  return { ok: true, drawCount };
+}

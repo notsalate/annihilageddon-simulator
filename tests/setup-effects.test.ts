@@ -2,13 +2,16 @@ import assert from "node:assert/strict";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 import {
+  markCardDefinitionId,
+  markCardInstanceId,
   markTokenDefinitionId,
   markTokenInstanceId,
 } from "../src/domain/types.js";
 import {
-  effectRuntimeCatalog,
   tryExecuteSetupEffect,
+  validateRuntimeEffectCatalogPayload,
   type EffectRuntimeSetupServices,
   type SetupEffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
@@ -102,30 +105,127 @@ test("setup catalog executor sets starting life total", () => {
   assert.equal(subject.life.max, 30);
 });
 
-test("setup catalog validates starting-life effect exactly once before its executor", () => {
-  const entry = effectRuntimeCatalog.get("set_starting_life_total");
-  assert.ok(entry);
-  const originalValidateShape = entry.handler.validateShape;
-  let validationCount = 0;
-  entry.handler.validateShape = (subjectId, effect) => {
-    validationCount += 1;
-    return originalValidateShape(subjectId, effect);
-  };
+test("setup catalog decodes before runtime-mode applicability", () => {
+  const result = tryExecuteSetupEffect(
+    player(),
+    {
+      effectId: "fixture_add_power_equal_to_target_cost",
+      unexpected: true,
+    },
+    source,
+    services()
+  );
 
-  try {
-    const result = tryExecuteSetupEffect(
-      player(),
-      { effectId: "set_starting_life_total", timing: "setup", lifeTotal: 30 },
-      source,
-      services()
-    );
+  assert.equal(result.status, "error");
+  if (result.status !== "error") return;
+  assert.match(result.error, /unsupported field unexpected/);
+});
 
-    assert.deepEqual(result, { status: "executed" });
-  } finally {
-    entry.handler.validateShape = originalValidateShape;
+test("setup catalog keeps the wizard-property source matrix explicit", () => {
+  const setupEffects = [
+    { effectId: "force_starting_player", timing: "setup" },
+    {
+      effectId: "replace_starting_card",
+      timing: "setup",
+      fromDefinitionId: "esw2_dbg__starter_001",
+      toDefinitionId: "esw2_dbg__starter_004",
+    },
+    { effectId: "start_with_basic_trophy", timing: "setup" },
+    {
+      effectId: "set_starting_life_total",
+      timing: "setup",
+      lifeTotal: 25,
+    },
+    {
+      effectId: "set_resurrection_life_total",
+      timing: "replacement",
+      lifeTotal: 25,
+    },
+  ] as const;
+
+  for (const effect of setupEffects) {
+    for (const runtimeMode of ["combat", "fixture"] as const) {
+      assert.equal(
+        validateRuntimeEffectCatalogPayload(
+          `Wizard property ${effect.effectId}`,
+          effect.effectId,
+          effect,
+          runtimeMode,
+          "wizardProperty"
+        ).ok,
+        true
+      );
+    }
+
+    for (const sourceKind of ["card", "deadWizardToken"] as const) {
+      const result = validateRuntimeEffectCatalogPayload(
+        `${sourceKind} ${effect.effectId}`,
+        effect.effectId,
+        effect,
+        "combat",
+        sourceKind
+      );
+      assert.equal(result.ok, false);
+      if (!result.ok) {
+        assert.match(
+          result.errors[0] ?? "",
+          sourceKind === "deadWizardToken"
+            ? /deadWizardToken does not support effect id/
+            : /token-only effect id/
+        );
+      }
+    }
   }
+});
 
-  assert.equal(validationCount, 1);
+test("setup catalog decodes malformed payload before source-kind rejection", () => {
+  const cardSource = {
+    ...source,
+    sourceType: "card",
+  } as unknown as SetupEffectSourceContext;
+
+  const result = tryExecuteSetupEffect(
+    player(),
+    {
+      effectId: "set_starting_life_total",
+      timing: "setup",
+      lifeTotal: 0,
+    },
+    cardSource,
+    services()
+  );
+
+  assert.equal(result.status, "error");
+  if (result.status !== "error") return;
+  assert.match(result.error, /lifeTotal must be a positive integer/);
+});
+
+test("setup catalog passes a concrete starting-life payload to its executor", () => {
+  const observedLifeTotals: number[] = [];
+  const subject = player();
+
+  const result = withTemporaryEffectRuntimeOperations(
+    "set_starting_life_total",
+    {
+      executeSetup(playerState, effect) {
+        observedLifeTotals.push(effect.lifeTotal);
+        playerState.life.current = effect.lifeTotal;
+        playerState.life.max = Math.max(playerState.life.max, effect.lifeTotal);
+        return { ok: true };
+      },
+    },
+    () =>
+      tryExecuteSetupEffect(
+        subject,
+        { effectId: "set_starting_life_total", timing: "setup", lifeTotal: 30 },
+        source,
+        services()
+      )
+  );
+
+  assert.deepEqual(result, { status: "executed" });
+  assert.deepEqual(observedLifeTotals, [30]);
+  assert.equal(subject.life.current, 30);
 });
 
 test("force starting player returns a typed setup directive", () => {
@@ -156,7 +256,7 @@ test("force starting player rejects an invalid target selector before execution"
 
   assert.equal(result.status, "error");
   if (result.status === "error") {
-    assert.match(result.error, /unsupported force-starting-player target/);
+    assert.match(result.error, /targetSelector must be activePlayer/);
   }
 });
 
@@ -220,11 +320,8 @@ test("setup fixture does not depend on the current working directory", () => {
 test("initializeGame does not look up a wizard property again after its setup effects", () => {
   const tokenDefinitions = new TokenDefinitionsWithoutPostSetupLookup(2);
   const state = initializeGame({
-    dataPack: setupDataPack(
-      true,
-      "fixture",
-      tokenDefinitions,
-      () => tokenDefinitions.recordSetupEffectListRead()
+    dataPack: setupDataPack(true, "fixture", tokenDefinitions, () =>
+      tokenDefinitions.recordSetupEffectListRead()
     ),
     seed: 119,
   });
@@ -234,37 +331,30 @@ test("initializeGame does not look up a wizard property again after its setup ef
 });
 
 test("initializeGame passes combat runtime mode to the setup executor", () => {
-  const effectId = "set_starting_life_total";
-  const originalEntry = effectRuntimeCatalog.get(effectId);
-  assert.ok(originalEntry);
-  const originalExecutor = originalEntry.handler.executeSetup;
-  assert.ok(originalExecutor);
   let observedRuntimeMode: SetupEffectSourceContext["runtimeMode"] | undefined;
-  effectRuntimeCatalog.set(effectId, {
-    ...originalEntry,
-    handler: {
-      ...originalEntry.handler,
-      executeSetup(player, effect, source, services) {
-        observedRuntimeMode = source.runtimeMode;
-        return originalExecutor(player, effect, source, services);
+
+  const state = withTemporaryEffectRuntimeOperations(
+    "set_starting_life_total",
+    {
+      executeSetup(playerState, effect, setupSource) {
+        observedRuntimeMode = setupSource.runtimeMode;
+        playerState.life.current = effect.lifeTotal;
+        playerState.life.max = Math.max(playerState.life.max, effect.lifeTotal);
+        return { ok: true };
       },
     },
-  });
+    () =>
+      initializeGame({
+        dataPack: setupDataPack(false, "supported"),
+        seed: 119,
+      })
+  );
 
-  try {
-    const state = initializeGame({
-      dataPack: setupDataPack(false, "supported"),
-      seed: 119,
-    });
-
-    assert.deepEqual(
-      state.players.map((subject) => subject.life.current),
-      [27, 27]
-    );
-    assert.equal(observedRuntimeMode, "combat");
-  } finally {
-    effectRuntimeCatalog.set(effectId, originalEntry);
-  }
+  assert.deepEqual(
+    state.players.map((subject) => subject.life.current),
+    [27, 27]
+  );
+  assert.equal(observedRuntimeMode, "combat");
 });
 
 test("initializeGame executes setup effects in fixture runtime mode", () => {
@@ -351,7 +441,7 @@ test("setup resolver rejects invalid life totals before execution", () => {
         effectId: "set_starting_life_total",
         timing: "setup",
         lifeTotal,
-      } as never,
+      },
       source,
       services()
     );
@@ -428,6 +518,31 @@ test("replace_starting_card replaces first matching card in zone order", () => {
   assert.equal(subject.deck[0]?.instanceId, "deck-a");
 });
 
+test("replace_starting_card replaces a matching unbought familiar", () => {
+  const subject = player();
+  subject.unboughtFamiliar = {
+    instanceId: markCardInstanceId("fixture-familiar-source"),
+    definitionId: markCardDefinitionId("source"),
+    ownerId: subject.playerId,
+    marketChips: 0,
+  };
+
+  const result = tryExecuteSetupEffect(
+    subject,
+    {
+      effectId: "replace_starting_card",
+      timing: "setup",
+      fromDefinitionId: "source",
+      toDefinitionId: "target",
+    },
+    source,
+    services()
+  );
+
+  assert.deepEqual(result, { status: "executed" });
+  assert.equal(subject.unboughtFamiliar?.definitionId, "target");
+});
+
 test("replace_starting_card preserves the matching card owner", () => {
   const subject = player();
   const opponentId = "player-2" as PlayerState["playerId"];
@@ -481,12 +596,10 @@ test("replace_starting_card reports a missing source card for full packs", () =>
   assert.equal(subject.hand.length, 0);
   assert.equal(subject.deck.length, 0);
 
-  const incomplete = tryExecuteSetupEffect(
-    subject,
-    effect,
-    source,
-    { ...services(), allowsMissingData: true }
-  );
+  const incomplete = tryExecuteSetupEffect(subject, effect, source, {
+    ...services(),
+    allowsMissingData: true,
+  });
   assert.deepEqual(incomplete, { status: "executed" });
   assert.equal(subject.hand.length, 0);
   assert.equal(subject.deck.length, 0);
@@ -620,9 +733,7 @@ function setupDataPack(
     "fixture-familiar-002",
     "fixture-familiar-003",
     "fixture-familiar-004",
-  ].map((cardId) =>
-    cardDefinition(cardId, "familiar", effectiveMappingStatus)
-  );
+  ].map((cardId) => cardDefinition(cardId, "familiar", effectiveMappingStatus));
   const effects: RuntimeEffect[] = [
     { effectId: "set_starting_life_total", timing: "setup", lifeTotal: 27 },
     ...(includeForce
@@ -670,16 +781,14 @@ function setupDataPack(
       tokenDefinitionPaths: [],
     },
     cardDefinitions: new Map([
-      ...starterDefinitions.map((definition) => [
-        definition.cardId,
-        definition,
-      ] as const),
+      ...starterDefinitions.map(
+        (definition) => [definition.cardId, definition] as const
+      ),
       [mainDefinition.cardId, mainDefinition],
       [legendDefinition.cardId, legendDefinition],
-      ...familiarDefinitions.map((definition) => [
-        definition.cardId,
-        definition,
-      ] as const),
+      ...familiarDefinitions.map(
+        (definition) => [definition.cardId, definition] as const
+      ),
     ]),
     tokenDefinitions: definitions,
     decks: {

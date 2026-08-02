@@ -3,16 +3,23 @@ import type {
   CardInstance,
   GameState,
   PlayerId,
-  PlayerState,
-  StatusInstance,
   TokenInstance,
-  TrophyLikeInstance,
 } from "./setup.js";
+import {
+  buildControlledObjectView,
+  listOwnedScoringCards,
+  type ControlledCardObject,
+  type ControlledObjectView,
+} from "./control-ledger.js";
 import {
   isRuntimeEffectTarget,
   type RuntimeEffect,
   type RuntimeEffectTarget,
 } from "./runtime-effect.js";
+import {
+  applyEffectiveValueModifier,
+  type EffectSourceContext,
+} from "./effect-runtime-registry.js";
 
 export type EffectiveValueKind =
   | "cardCost"
@@ -34,93 +41,15 @@ export type EffectiveValueTarget =
       targetType: "player";
     };
 
-export interface ControlledObjectView {
-  playerId: PlayerId;
-  cards: readonly ControlledCardObject[];
-  tokens: readonly ControlledTokenObject[];
-  wizardProperties: readonly ControlledTokenObject[];
-  statuses: readonly StatusInstance[];
-  trophyLikeObjects: readonly TrophyLikeInstance[];
-}
-
-export interface ControlledCardObject {
-  sourceType: "controlledCard";
-  card: CardInstance;
-  definition: CardDefinition;
-}
-
-export interface ControlledTokenObject {
-  sourceType: "controlledToken";
-  token: TokenInstance;
-  definition: TokenDefinition;
-}
-
-export function buildControlledObjectView(
-  state: GameState,
-  playerId: PlayerId
-): ControlledObjectView {
-  const player = state.players.find(
-    (candidate) => candidate.playerId === playerId
-  );
-  if (player === undefined) {
-    throw new Error(`Missing player ${playerId}`);
-  }
-
-  return {
-    playerId,
-    cards: getControlledCards(state, player).map((card) => ({
-      sourceType: "controlledCard" as const,
-      card,
-      definition: mustGetCardDefinition(state, card.definitionId),
-    })),
-    tokens: player.deadWizardTokens.map((token) => ({
-      sourceType: "controlledToken" as const,
-      token,
-      definition: mustGetTokenDefinition(state, token.definitionId),
-    })),
-    wizardProperties: player.wizardProperties.map((token) => ({
-      sourceType: "controlledToken" as const,
-      token,
-      definition: mustGetTokenDefinition(state, token.definitionId),
-    })),
-    statuses: [...player.statuses],
-    trophyLikeObjects: [...player.trophyLikeObjects],
-  };
-}
-
-export function getControlledCards(
-  state: GameState,
-  player: PlayerState
-): CardInstance[] {
-  const permanentIds = new Set(
-    player.permanents.map((card) => card.instanceId)
-  );
-  const temporarilyControlled = state.turn.temporaryCardControls
-    .filter((control) => control.controllerId === player.playerId)
-    .map((control) => findCardInstance(state, control.cardInstanceId))
-    .filter((card): card is CardInstance => card !== undefined)
-    .filter((card) => !permanentIds.has(card.instanceId));
-  return [...player.permanents, ...temporarilyControlled];
-}
-
-function findCardInstance(
-  state: GameState,
-  cardInstanceId: CardInstance["instanceId"]
-): CardInstance | undefined {
-  for (const player of state.players) {
-    const card = [
-      ...player.deck,
-      ...player.hand,
-      ...player.discard,
-      ...player.playedThisTurn,
-      ...player.permanents,
-    ].find((candidate) => candidate.instanceId === cardInstanceId);
-    if (card !== undefined) {
-      return card;
-    }
-  }
-  return undefined;
-}
+export {
+  buildControlledObjectView,
+  getControlledCards,
+} from "./control-ledger.js";
+export type {
+  ControlledCardObject,
+  ControlledObjectView,
+  ControlledTokenObject,
+} from "./control-ledger.js";
 
 export function calculateEffectiveCardCost(
   state: GameState,
@@ -232,33 +161,44 @@ export function calculateEffectiveValue(options: {
   let value = options.baseValue;
   const view = buildControlledObjectView(options.state, options.playerId);
 
-  for (const effect of [
-    ...getControlledObjectEffects(view),
+  for (const { effect, source, timing } of [
+    ...getControlledObjectEffects(options.state, options.playerId, view),
     ...getScoringCardEffects(
-      options.scoringCards ?? [],
-      options.target,
-      options.scoredCard
+      options.state,
+      options.playerId,
+      options.scoringCards ?? []
     ),
   ]) {
-    if (
-      !isModifierEffect(
-        options.state,
-        effect,
-        options.valueKind,
-        options.target
-      )
-    ) {
-      continue;
-    }
-
-    if (effect["operation"] === "add") {
-      value += resolveAdditiveModifierAmount(
-        options.state,
-        options.playerId,
-        effect
-      );
-    } else if (effect["operation"] === "invertNegative" && value < 0) {
-      value = Math.abs(value);
+    const result = applyEffectiveValueModifier(effect, source, {
+      timing,
+      valueKind: options.valueKind,
+      targetMatches: (effect) => {
+        if (!matchesTarget(options.state, effect.target, options.target)) {
+          return false;
+        }
+        if (
+          options.target.targetType !== "card" ||
+          options.scoredCard === undefined ||
+          effect.timing !== "whileScoring" ||
+          !isSelfScoringCardEffectTarget(effect.target, source.definitionId)
+        ) {
+          return true;
+        }
+        return source.cardInstanceId === options.scoredCard.instanceId;
+      },
+      countOwnedScoringCards: (countedCardTypes) =>
+        countOwnedScoringCards(
+          options.state,
+          options.playerId,
+          countedCardTypes
+        ),
+      evaluate: (apply) => {
+        value = apply(value);
+        return { status: "resolved", result: undefined };
+      },
+    });
+    if (result.status === "error") {
+      throw new Error(result.error);
     }
   }
 
@@ -269,78 +209,158 @@ export function getOwnedScoringCards(
   state: GameState,
   playerId: PlayerId
 ): ControlledCardObject[] {
-  const player = state.players.find(
-    (candidate) => candidate.playerId === playerId
-  );
-  if (player === undefined) {
-    throw new Error(`Missing player ${playerId}`);
-  }
+  return listOwnedScoringCards(state, playerId);
+}
 
-  return [
-    ...player.hand,
-    ...player.deck,
-    ...player.discard,
-    ...player.playedThisTurn,
-    ...player.permanents.filter((card) => card.ownerId === player.playerId),
-  ].map((card) => ({
-    sourceType: "controlledCard" as const,
-    card,
-    definition: mustGetCardDefinition(state, card.definitionId),
-  }));
+interface EffectiveValueEffect {
+  readonly effect: RuntimeEffect;
+  readonly source: EffectSourceContext;
+  readonly timing: "whileControlled" | "whileScoring";
 }
 
 function getControlledObjectEffects(
+  state: GameState,
+  playerId: PlayerId,
   view: ControlledObjectView
-): RuntimeEffect[] {
+): EffectiveValueEffect[] {
   return [
-    ...view.cards.flatMap((object) => object.definition.engine.effects),
+    ...view.cards.flatMap((object) =>
+      toEffectiveValueEffects(
+        object.definition.engine.effects,
+        cardEffectSource(
+          state,
+          playerId,
+          object.card.instanceId,
+          object.definition.cardId
+        )
+      )
+    ),
     ...view.tokens.flatMap((object) => {
-      return object.definition.kind === "deadWizardToken"
-        ? object.definition.effects
-        : (object.definition.engine?.effects ?? []);
+      const effects =
+        object.definition.kind === "deadWizardToken"
+          ? object.definition.effects
+          : (object.definition.engine?.effects ?? []);
+      return toEffectiveValueEffects(
+        effects,
+        deadWizardTokenEffectSource(
+          state,
+          playerId,
+          object.token.instanceId,
+          object.definition.tokenId
+        )
+      );
     }),
     ...view.wizardProperties.flatMap((object) =>
-      getWizardPropertyEffects(object.definition)
+      toEffectiveValueEffects(
+        getWizardPropertyEffects(object.definition),
+        wizardPropertyEffectSource(
+          state,
+          playerId,
+          object.token.instanceId,
+          object.definition.tokenId
+        )
+      )
     ),
-    ...view.statuses.flatMap((status) => status.effects),
-    ...view.trophyLikeObjects.flatMap((trophy) => trophy.effects),
+    ...view.statuses.flatMap((status) =>
+      toEffectiveValueEffects(
+        status.effects,
+        cardEffectSource(state, playerId, status.instanceId, status.statusId)
+      )
+    ),
+    ...view.trophyLikeObjects.flatMap((trophy) =>
+      toEffectiveValueEffects(
+        trophy.effects,
+        cardEffectSource(state, playerId, trophy.instanceId, trophy.trophyId)
+      )
+    ),
   ];
 }
 
 function getScoringCardEffects(
-  scoringCards: readonly ControlledCardObject[],
-  target: EffectiveValueTarget,
-  scoredCard: CardInstance | undefined
-): RuntimeEffect[] {
+  state: GameState,
+  playerId: PlayerId,
+  scoringCards: readonly ControlledCardObject[]
+): EffectiveValueEffect[] {
   return scoringCards.flatMap((object) => {
-    return object.definition.engine.effects.filter((effect) => {
-      if (effect.timing !== "whileScoring") {
-        return false;
-      }
-
-      if (
-        target.targetType === "card" &&
-        scoredCard !== undefined &&
-        isSelfScoringCardEffect(effect, object.definition.cardId)
-      ) {
-        return object.card.instanceId === scoredCard.instanceId;
-      }
-
-      return true;
-    });
+    return toEffectiveValueEffects(
+      object.definition.engine.effects,
+      cardEffectSource(
+        state,
+        playerId,
+        object.card.instanceId,
+        object.definition.cardId
+      ),
+      "whileScoring"
+    );
   });
 }
 
-function isSelfScoringCardEffect(
-  effect: RuntimeEffect,
+function toEffectiveValueEffects(
+  effects: readonly RuntimeEffect[],
+  source: EffectSourceContext,
+  timing: "whileControlled" | "whileScoring" = "whileControlled"
+): EffectiveValueEffect[] {
+  return effects.map((effect) => ({ effect, source, timing }));
+}
+
+function cardEffectSource(
+  state: GameState,
+  playerId: PlayerId,
+  cardInstanceId: string,
+  definitionId: string
+): EffectSourceContext {
+  return {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId,
+    cardInstanceId,
+    definitionId,
+  };
+}
+
+function wizardPropertyEffectSource(
+  state: GameState,
+  playerId: PlayerId,
+  tokenInstanceId: TokenInstance["instanceId"],
+  tokenDefinitionId: string
+): EffectSourceContext {
+  return {
+    sourceType: "wizardProperty",
+    runtimeMode: state.runtimeMode,
+    playerId,
+    cardInstanceId: tokenInstanceId,
+    definitionId: tokenDefinitionId,
+    tokenInstanceId,
+    tokenDefinitionId,
+  };
+}
+
+function deadWizardTokenEffectSource(
+  state: GameState,
+  playerId: PlayerId,
+  tokenInstanceId: TokenInstance["instanceId"],
+  tokenDefinitionId: string
+): EffectSourceContext {
+  return {
+    sourceType: "deadWizardToken",
+    runtimeMode: state.runtimeMode,
+    playerId,
+    cardInstanceId: tokenInstanceId,
+    definitionId: tokenDefinitionId,
+    tokenInstanceId,
+    tokenDefinitionId,
+  };
+}
+
+function isSelfScoringCardEffectTarget(
+  effectTarget: RuntimeEffectTarget | undefined,
   sourceDefinitionId: string
 ): boolean {
-  const target = effect.target;
   return (
-    target !== undefined &&
-    "targetType" in target &&
-    target.targetType === "card" &&
-    target.definitionId === sourceDefinitionId
+    effectTarget !== undefined &&
+    "targetType" in effectTarget &&
+    effectTarget.targetType === "card" &&
+    effectTarget.definitionId === sourceDefinitionId
   );
 }
 
@@ -360,58 +380,10 @@ function getWizardPropertyEffects(
   return definition.engine.effects;
 }
 
-function isModifierEffect(
-  state: GameState,
-  effect: RuntimeEffect,
-  valueKind: EffectiveValueKind,
-  target: EffectiveValueTarget
-): effect is RuntimeEffect {
-  return (
-    (effect.effectId === "fixture_modify_effective_value" ||
-      effect.effectId === "modify_effective_value") &&
-    (effect.timing === "whileControlled" || effect.timing === "whileScoring") &&
-    effect.valueKind === valueKind &&
-    hasModifierAmount(effect) &&
-    matchesTarget(state, effect.target, target)
-  );
-}
-
-function hasModifierAmount(effect: RuntimeEffect): boolean {
-  if (effect["operation"] === "invertNegative") {
-    return true;
-  }
-
-  return (
-    typeof effect["amount"] === "number" ||
-    typeof effect["amountPerOwnedCard"] === "number"
-  );
-}
-
-function resolveAdditiveModifierAmount(
-  state: GameState,
-  playerId: PlayerId,
-  effect: RuntimeEffect
-): number {
-  const amount = effect["amount"];
-  if (typeof amount === "number") {
-    return amount;
-  }
-
-  const amountPerOwnedCard = effect["amountPerOwnedCard"];
-  if (typeof amountPerOwnedCard !== "number") {
-    return 0;
-  }
-
-  return (
-    amountPerOwnedCard *
-    countOwnedScoringCards(state, playerId, effect["countedCardTypes"])
-  );
-}
-
 function countOwnedScoringCards(
   state: GameState,
   playerId: PlayerId,
-  countedCardTypes: unknown
+  countedCardTypes: readonly string[] | undefined
 ): number {
   if (!Array.isArray(countedCardTypes)) {
     return 0;

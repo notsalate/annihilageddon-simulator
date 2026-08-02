@@ -7,6 +7,7 @@ import {
   calculateEffectiveCardVictoryPoints,
   calculateEffectivePlayerMaxLife,
   calculateEffectivePlayerVictoryPoints,
+  calculateEffectiveTokenVictoryPoints,
   initializeGame,
   applyAction,
   listLegalActions,
@@ -20,15 +21,158 @@ import {
   type TokenDefinition,
   type TrophyLikeInstance,
 } from "../src/index.js";
+import {
+  grantTemporaryControl,
+  listOwnedScoringCards,
+} from "../src/engine/control-ledger.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
+import {
+  applyEffectiveValueModifier,
+  type EffectRuntimeCatalogOperationOverridesForTesting,
+  type EffectRuntimeHandlerOperationResult,
+  type EffectiveValueModifierOperationContext,
+} from "../src/engine/effect-runtime-registry.js";
 import {
   markCardInstanceId,
   markCardDefinitionId,
+  markPlayerId,
 } from "../src/domain/types.js";
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
+
+test("Catalog rejects a malformed effective-value modifier before evaluation", () => {
+  const result = applyEffectiveValueModifier(
+    {
+      effectId: "fixture_modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "cardCost",
+      operation: "add",
+      amount: -1,
+    },
+    {
+      sourceType: "card",
+      runtimeMode: "fixture",
+      playerId: markPlayerId("player-1"),
+      cardInstanceId: "fixture-effective-value-source",
+      definitionId: "fixture-effective-value-source",
+    },
+    {
+      timing: "whileControlled",
+      valueKind: "cardCost",
+      targetMatches: () => true,
+      countOwnedScoringCards: () => 0,
+      evaluate: (apply) => ({ status: "resolved", result: apply(5) }),
+    }
+  );
+
+  assert.deepEqual(result, {
+    status: "error",
+    error: "Effect fixture_modify_effective_value.target is required",
+  });
+});
+
+test("effective-value entrypoints observe the Catalog modifier operation result", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60618,
+  });
+  const player = state.players[0];
+  const card = state.common.market[0];
+  const token = state.common.deadWizardTokens.drawStack[0];
+  assert.ok(player);
+  assert.ok(card);
+  assert.ok(token);
+  const cardDefinition = state.cardDefinitions.get(card.definitionId);
+  const tokenDefinition = state.tokenDefinitions.get(token.definitionId);
+  assert.ok(cardDefinition);
+  assert.equal(tokenDefinition?.kind, "deadWizardToken");
+  player.statuses.push({
+    instanceId: markCardInstanceId("fixture-catalog-operation-status"),
+    statusId: "fixture-catalog-operation-status",
+    ownerId: player.playerId,
+    effects: [
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "cardCost",
+        operation: "add",
+        amount: 1,
+        target: { targetType: "card", definitionId: cardDefinition.cardId },
+      },
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "cardVictoryPoints",
+        operation: "add",
+        amount: 1,
+        target: { targetType: "card", definitionId: cardDefinition.cardId },
+      },
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "tokenVictoryPoints",
+        operation: "add",
+        amount: 1,
+        target: { targetType: "token", definitionId: tokenDefinition.tokenId },
+      },
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "playerVictoryPoints",
+        operation: "add",
+        amount: 1,
+        target: { targetType: "player" },
+      },
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "playerMaxLife",
+        operation: "add",
+        amount: 1,
+        target: { targetType: "player" },
+      },
+    ],
+  });
+
+  const values = withTemporaryEffectRuntimeOperations(
+    "fixture_modify_effective_value",
+    effectiveValueCatalogOperationOverride,
+    () => [
+      calculateEffectiveCardCost(state, player.playerId, cardDefinition),
+      calculateEffectiveCardVictoryPoints(
+        state,
+        player.playerId,
+        cardDefinition,
+        card
+      ),
+      calculateEffectiveTokenVictoryPoints(
+        state,
+        player.playerId,
+        tokenDefinition
+      ),
+      calculateEffectivePlayerVictoryPoints(state, player.playerId, 0),
+      calculateEffectivePlayerMaxLife(state, player.playerId),
+    ]
+  );
+
+  assert.deepEqual(values, [701, 701, 701, 701, 701]);
+});
+
+const effectiveValueCatalogOperationOverride = {
+  applyEffectiveValueModifier<Result>(
+    _effect: Extract<
+      RuntimeEffect,
+      { effectId: "fixture_modify_effective_value" }
+    >,
+    context: EffectiveValueModifierOperationContext<Result>
+  ): EffectRuntimeHandlerOperationResult<Result> {
+    return context.evaluate(() => 701);
+  },
+} satisfies EffectRuntimeCatalogOperationOverridesForTesting<"fixture_modify_effective_value">;
 
 test("current runtime keeps fifteen effectless Limp Wands worth minus one VP", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
@@ -228,7 +372,10 @@ test("a controlled fixture object can modify token scoring without mutating toke
   );
 
   assert.ok(score);
-  assert.equal(score.victoryPoints, expectedCardScore + baseVictoryPoints + 1);
+  assert.equal(
+    score.victoryPoints,
+    expectedCardScore + baseVictoryPoints + 1
+  );
   assert.equal(definition.victoryPoints, baseVictoryPoints);
 });
 
@@ -452,6 +599,116 @@ test("Potnyi GeekPig self-scoring applies once per physical copy", () => {
   );
 });
 
+test("scoring another card reports a malformed self-scoring modifier", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({ dataPack, seed: 60616 });
+  const player = state.players[0];
+  assert.ok(player);
+  const geekPig = state.cardDefinitions.get("esw2_dbg__main_040");
+  const target = state.cardDefinitions.get("esw2_dbg__main_035");
+  assert.ok(geekPig);
+  assert.ok(target);
+  const malformedGeekPig: CardDefinition = {
+    ...geekPig,
+    engine: {
+      ...geekPig.engine,
+      effects: [
+        {
+          effectId: "modify_effective_value",
+          timing: "whileScoring",
+          valueKind: "cardVictoryPoints",
+          operation: "add",
+          amount: "invalid",
+          target: { targetType: "card", definitionId: geekPig.cardId },
+        } as never,
+      ],
+    },
+  };
+  const geekPigCard = createCardInstance(
+    "fixture-malformed-self-scoring-geekpig",
+    geekPig.cardId,
+    player.playerId
+  );
+  const targetCard = createCardInstance(
+    "fixture-scored-target",
+    target.cardId,
+    player.playerId
+  );
+  player.discard.push(geekPigCard, targetCard);
+  const stateWithMalformedSelfScoringEffect = {
+    ...state,
+    cardDefinitions: new Map(state.cardDefinitions).set(
+      geekPig.cardId,
+      malformedGeekPig
+    ),
+  };
+
+  assert.throws(
+    () =>
+      calculateEffectiveCardVictoryPoints(
+        stateWithMalformedSelfScoringEffect,
+        player.playerId,
+        target,
+        targetCard
+      ),
+    /amount must be a safe integer/
+  );
+});
+
+test("whileControlled definition modifier applies from another physical copy", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({ dataPack, seed: 60617 });
+  const player = state.players[0];
+  assert.ok(player);
+  const target = state.cardDefinitions.get("esw2_dbg__main_035");
+  assert.ok(target);
+  const modifiedTarget: CardDefinition = {
+    ...target,
+    engine: {
+      ...target.engine,
+      effects: [
+        {
+          effectId: "modify_effective_value",
+          timing: "whileControlled",
+          valueKind: "cardVictoryPoints",
+          operation: "add",
+          amount: 2,
+          target: { targetType: "card", definitionId: target.cardId },
+        },
+      ],
+    },
+  };
+  const modifierCopy = createCardInstance(
+    "fixture-controlled-modifier-copy",
+    target.cardId,
+    player.playerId
+  );
+  const scoredCopy = createCardInstance(
+    "fixture-controlled-scored-copy",
+    target.cardId,
+    player.playerId
+  );
+  player.permanents.push(modifierCopy);
+  player.discard.push(scoredCopy);
+  const stateWithModifier = {
+    ...state,
+    cardDefinitions: new Map(state.cardDefinitions).set(
+      target.cardId,
+      modifiedTarget
+    ),
+  };
+
+  assert.equal(
+    calculateEffectiveCardVictoryPoints(
+      stateWithModifier,
+      player.playerId,
+      modifiedTarget,
+      scoredCopy
+    ),
+    target.engine.victoryPoints + 2
+  );
+});
+
 test("scoring zones stay aligned between scoreGame and whileScoring modifiers", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
   const state = initializeGame({ dataPack, seed: 60615 });
@@ -516,6 +773,58 @@ test("scoring zones stay aligned between scoreGame and whileScoring modifiers", 
       ?.victoryPoints,
     expectedScore
   );
+});
+
+test("scoreGame counts owned player-zone cards without scoring common locations or an unbought familiar", () => {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const state = initializeGame({ dataPack, seed: 60615 });
+  const player = state.players[0];
+  const otherPlayer = state.players[1];
+  assert.ok(player);
+  assert.ok(otherPlayer);
+  const tower = state.cardDefinitions.get("esw2_dbg__legend_009");
+  assert.ok(tower);
+
+  const controlledTower = createCardInstance(
+    "fixture-controlled-tower",
+    tower.cardId,
+    player.playerId
+  );
+  otherPlayer.permanents.push(controlledTower);
+  grantTemporaryControl(
+    state,
+    controlledTower.instanceId,
+    otherPlayer.playerId
+  );
+  state.common.market.push(
+    createCardInstance("fixture-market-tower", tower.cardId, player.playerId)
+  );
+  player.unboughtFamiliar = createCardInstance(
+    "fixture-familiar-tower",
+    tower.cardId,
+    player.playerId
+  );
+
+  const scoringCardIds = new Set(
+    listOwnedScoringCards(state, player.playerId).map(
+      (object) => object.card.instanceId
+    )
+  );
+  assert.equal(scoringCardIds.has(controlledTower.instanceId), true);
+  assert.equal(scoringCardIds.has(player.unboughtFamiliar.instanceId), false);
+  assert.equal(scoringCardIds.has(state.common.market.at(-1)!.instanceId), false);
+
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === player.playerId)
+      ?.victoryPoints,
+    6
+  );
+  assert.deepEqual(state.turn.temporaryCardControls, [
+    {
+      cardInstanceId: controlledTower.instanceId,
+      controllerId: otherPlayer.playerId,
+    },
+  ]);
 });
 
 function createCostModifierStatus(
@@ -603,8 +912,8 @@ function createTreasureDiscountWizardProperty(
     schemaVersion: 1,
     tokenId,
     runtimeSchema: "krutagidon.tokenDefinition.v0",
-  kind: "wizardProperty",
-  source: { image: "assets/wizard-property/wp_fixture.png" },
+    kind: "wizardProperty",
+    source: { image: "assets/wizard-property/wp_fixture.png" },
     engine: {
       mappingStatus: "mapped",
       playableInV0: true,

@@ -1,0 +1,18 @@
+{
+  "rangeStart": "62777c389c014ea87b35d0facc7bcaa093795e30",
+  "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5",
+  "overallVerdict": "без замечаний",
+  "requirements": [
+    {
+      "id": "REQ-176-AC01",
+      "active": true,
+      "status": "resolved",
+      "findings": ["FIND-009"],
+      "fixCommits": ["c117414"],
+      "tests": ["tests/does-not-exist.test.ts"],
+      "specVerdict": "без замечаний",
+      "standardsVerdict": "без замечаний",
+      "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
+    }
+  ]
+}

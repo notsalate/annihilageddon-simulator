@@ -1,0 +1,812 @@
+import {
+  executeActivationEffects,
+  executeControlledCardOnPlayCardEffects,
+  executeOnPlayEffects,
+  executeWizardPropertyOnPlayCardEffects,
+  executeWizardPropertyActivationEffects,
+  calculateEndTurnDrawCount,
+  getWizardPropertyActivationAvailability,
+  hasExecutableWizardPropertyActivation,
+  moveGainedCardToPlayerDestination,
+} from "./effect-runtime.js";
+import type { EffectGameEnd } from "./effect-runtime-registry.js";
+import { assertNever } from "../common.js";
+import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
+import {
+  getControlledCards,
+  grantTemporaryControl,
+  releaseTemporaryControls,
+} from "./control-ledger.js";
+import { calculateEffectiveCardCost } from "./effective-values.js";
+import { recordCardMoved, recordGameEvent } from "./event-recorder.js";
+import { runMarketFlow, type MarketFlowEndReason } from "./market-flow.js";
+import type {
+  CardInstance,
+  GameState,
+  PlayerState,
+  TokenInstance,
+} from "./setup.js";
+
+export type LegalAction =
+  | PlayCardAction
+  | BuyMarketCardAction
+  | ActivatePermanentAction
+  | ActivateWizardPropertyAction
+  | EndTurnAction;
+export type GameAction = LegalAction;
+
+export interface PlayCardAction {
+  type: "playCard";
+  cardInstanceId: string;
+}
+
+export interface BuyMarketCardAction {
+  type: "buyMarketCard";
+  cardInstanceId: string;
+  source: BuySource;
+}
+
+export type BuySource =
+  | "mainMarket"
+  | "legendMarket"
+  | "wildMagicStack"
+  | "familiar";
+
+export interface ActivatePermanentAction {
+  type: "activatePermanent";
+  cardInstanceId: string;
+}
+
+export interface ActivateWizardPropertyAction {
+  type: "activateWizardProperty";
+  tokenInstanceId: string;
+}
+
+export interface EndTurnAction {
+  type: "endTurn";
+}
+
+export type ActionResult =
+  | {
+      ok: true;
+      gameEndReason?: MarketFlowEndReason | EffectGameEnd["reason"];
+      /** Present only when the action itself established a winner. */
+      winnerPlayerId?: PlayerState["playerId"];
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+interface PaymentResult {
+  remainingPower: number;
+  remainingChips: number;
+  payableCost: number;
+}
+
+interface DrawCardsResult {
+  requestedCount: number;
+  drawnCards: CardInstance[];
+}
+
+interface CleanupMoveRecord {
+  card: CardInstance;
+  sourceZone: string;
+  destinationZone: string;
+}
+
+export function listLegalActions(state: GameState): LegalAction[] {
+  const activePlayer = mustGetActivePlayer(state);
+  return [
+    ...activePlayer.hand.map((card) => ({
+      type: "playCard" as const,
+      cardInstanceId: card.instanceId,
+    })),
+    ...state.common.market
+      .filter((card) => canAfford(state, activePlayer, card))
+      .map((card) => ({
+        type: "buyMarketCard" as const,
+        cardInstanceId: card.instanceId,
+        source: "mainMarket" as const,
+      })),
+    ...state.common.legendMarket
+      .filter((card) => canAffordWithChips(state, activePlayer, card))
+      .map((card) => ({
+        type: "buyMarketCard" as const,
+        cardInstanceId: card.instanceId,
+        source: "legendMarket" as const,
+      })),
+    ...getWildMagicBuyAction(state),
+    ...getFamiliarBuyAction(state, activePlayer),
+    ...getControlledCards(state, activePlayer)
+      .filter((card) => canActivatePermanent(state, activePlayer, card))
+      .map((card) => ({
+        type: "activatePermanent" as const,
+        cardInstanceId: card.instanceId,
+      })),
+    ...activePlayer.wizardProperties
+      .filter((token) => canActivateWizardProperty(state, activePlayer, token))
+      .map((token) => ({
+        type: "activateWizardProperty" as const,
+        tokenInstanceId: token.instanceId,
+      })),
+    {
+      type: "endTurn",
+    },
+  ];
+}
+
+export function applyAction(
+  state: GameState,
+  action: GameAction
+): ActionResult {
+  switch (action.type) {
+    case "playCard":
+      return playCard(state, action.cardInstanceId);
+    case "buyMarketCard":
+      return buyMarketCard(state, action);
+    case "activatePermanent":
+      return activatePermanent(state, action.cardInstanceId);
+    case "activateWizardProperty":
+      return activateWizardProperty(state, action.tokenInstanceId);
+    case "endTurn":
+      return endTurn(state);
+    default:
+      return assertNever(action);
+  }
+}
+
+function endTurn(state: GameState): ActionResult {
+  const activePlayer = mustGetActivePlayer(state);
+  grantBasicTrophyChipAtEndOfTurn(state, activePlayer);
+
+  const cleanedHandCards = activePlayer.hand.splice(0);
+  activePlayer.discard.push(...cleanedHandCards);
+  recordEndTurnCleanup(
+    state,
+    activePlayer,
+    cleanedHandCards.map((card) => ({
+      card,
+      sourceZone: `${activePlayer.playerId}.hand`,
+      destinationZone: `${activePlayer.playerId}.discard`,
+    }))
+  );
+
+  const cleanedPlayedCards = cleanupPlayedCards(state, activePlayer);
+  recordEndTurnCleanup(state, activePlayer, cleanedPlayedCards);
+
+  state.turn.power = 0;
+  state.turn.controlledPowerBonus = 0;
+  state.turn.activatedCardIds = [];
+  recordGameEvent(state, {
+    type: "turnEnded",
+    playerId: activePlayer.playerId,
+  });
+
+  const drawCount = calculateEndTurnDrawCount(state, activePlayer);
+  const drawResult = drawCards(activePlayer, drawCount, state);
+  recordGameEvent(state, {
+    type: "handDrawn",
+    playerId: activePlayer.playerId,
+    amount: drawResult.requestedCount,
+    legalChoiceCount: drawResult.drawnCards.length,
+    choiceId: String(activePlayer.hand.length),
+    destinationZone: `${activePlayer.playerId}.hand`,
+    targetCardInstanceIds: drawResult.drawnCards.map((card) => card.instanceId),
+    targetDefinitionIds: drawResult.drawnCards.map((card) => card.definitionId),
+  });
+
+  releaseTemporaryControls(state);
+  state.turn.gainedCardDefinitionIds = [];
+  state.turn.damagingAttackPlayerIds = [];
+  state.turn.number += 1;
+  state.activePlayerId = getNextPlayer(state, activePlayer).playerId;
+  const marketFlowResult = runMarketFlow(state, { mode: "turn" });
+  if (!marketFlowResult.ok) {
+    return marketFlowResult;
+  }
+  if (marketFlowResult.gameEnd !== undefined) {
+    return gameEndActionResult(marketFlowResult.gameEnd);
+  }
+  if (marketFlowResult.gameEndReason !== undefined) {
+    return marketFlowResult;
+  }
+  reconcileActivePlayerControlledPower(state);
+  recordGameEvent(state, {
+    type: "turnStarted",
+    playerId: state.activePlayerId,
+  });
+
+  return { ok: true };
+}
+
+function activatePermanent(
+  state: GameState,
+  cardInstanceId: string
+): ActionResult {
+  const activePlayer = mustGetActivePlayer(state);
+  const card = getControlledCards(state, activePlayer).find(
+    (card) => card.instanceId === cardInstanceId
+  );
+  if (card === undefined) {
+    return {
+      ok: false,
+      error: "Card is not controlled by the active player",
+    };
+  }
+
+  if (!canActivatePermanent(state, activePlayer, card)) {
+    return {
+      ok: false,
+      error: "Permanent cannot be activated",
+    };
+  }
+
+  const definition = mustGetDefinition(state, card.definitionId);
+  const effectResult = executeActivationEffects(
+    state,
+    activePlayer,
+    definition,
+    {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: activePlayer.playerId,
+      cardInstanceId: card.instanceId,
+      definitionId: card.definitionId,
+    }
+  );
+  if (!effectResult.ok) {
+    return effectResult;
+  }
+  if (effectResult.gameEnd !== undefined) {
+    return gameEndActionResult(effectResult.gameEnd);
+  }
+
+  state.turn.activatedCardIds.push(card.instanceId);
+  recordGameEvent(state, {
+    type: "cardActivated",
+    playerId: activePlayer.playerId,
+    cardInstanceId: card.instanceId,
+    definitionId: card.definitionId,
+  });
+
+  return { ok: true };
+}
+
+function activateWizardProperty(
+  state: GameState,
+  tokenInstanceId: string
+): ActionResult {
+  const activePlayer = mustGetActivePlayer(state);
+  const token = activePlayer.wizardProperties.find(
+    (token) => token.instanceId === tokenInstanceId
+  );
+  if (token === undefined) {
+    return {
+      ok: false,
+      error: "Token is not a controlled wizard property",
+    };
+  }
+
+  if (state.turn.activatedCardIds.includes(token.instanceId)) {
+    return {
+      ok: false,
+      error: "Wizard property cannot be activated",
+    };
+  }
+
+  const definition = state.tokenDefinitions.get(token.definitionId);
+  if (definition === undefined) {
+    return {
+      ok: false,
+      error: `Missing token definition ${token.definitionId}`,
+    };
+  }
+
+  const source = {
+    sourceType: "wizardProperty" as const,
+    runtimeMode: state.runtimeMode,
+    playerId: activePlayer.playerId,
+    cardInstanceId: token.instanceId,
+    definitionId: token.definitionId,
+    tokenInstanceId: token.instanceId,
+    tokenDefinitionId: token.definitionId,
+  };
+  const availability = getWizardPropertyActivationAvailability(
+    state,
+    activePlayer,
+    definition,
+    source
+  );
+  if (!availability.ok) {
+    return availability;
+  }
+  if (!availability.executable) {
+    return {
+      ok: false,
+      error: "Wizard property cannot be activated",
+    };
+  }
+
+  const effectResult = executeWizardPropertyActivationEffects(
+    state,
+    activePlayer,
+    definition,
+    source
+  );
+  if (!effectResult.ok) {
+    return effectResult;
+  }
+  if (effectResult.gameEnd !== undefined) {
+    return gameEndActionResult(effectResult.gameEnd);
+  }
+
+  state.turn.activatedCardIds.push(token.instanceId);
+  recordGameEvent(state, {
+    type: "wizardPropertyActivated",
+    playerId: activePlayer.playerId,
+    tokenInstanceId: token.instanceId,
+    tokenDefinitionId: token.definitionId,
+  });
+
+  return { ok: true };
+}
+
+function grantBasicTrophyChipAtEndOfTurn(
+  state: GameState,
+  activePlayer: PlayerState
+): void {
+  if (
+    !activePlayer.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    )
+  ) {
+    return;
+  }
+
+  activePlayer.chips += 1;
+  recordGameEvent(state, {
+    type: "trophyChipGranted",
+    playerId: activePlayer.playerId,
+    effectId: "basicTrophy",
+    amount: 1,
+  });
+}
+
+function buyMarketCard(
+  state: GameState,
+  action: BuyMarketCardAction
+): ActionResult {
+  const activePlayer = mustGetActivePlayer(state);
+  const card = getBuyCard(state, activePlayer, action);
+  if (card === undefined) {
+    return {
+      ok: false,
+      error: `Card is not in ${action.source}`,
+    };
+  }
+
+  const definition = mustGetDefinition(state, card.definitionId);
+  const cost = calculateEffectiveCardCost(
+    state,
+    activePlayer.playerId,
+    definition
+  );
+  const powerBefore = state.turn.power;
+  const chipsBefore = activePlayer.chips;
+  const payment = calculatePayment(state, activePlayer, cost, action.source);
+  if (payment === undefined) {
+    return {
+      ok: false,
+      error: "Not enough power to buy card",
+    };
+  }
+
+  state.turn.power = payment.remainingPower;
+  activePlayer.chips = payment.remainingChips;
+  const gainResult = moveGainedCardToPlayerDestination(
+    state,
+    activePlayer,
+    card
+  );
+  if (!gainResult.ok) {
+    return gainResult;
+  }
+  recordGameEvent(state, {
+    type: "cardBought",
+    playerId: activePlayer.playerId,
+    cardInstanceId: card.instanceId,
+    definitionId: card.definitionId,
+    destination: gainResult.destination,
+    sourceZone: action.source,
+    amount: payment.payableCost,
+    powerBefore,
+    powerAfter: payment.remainingPower,
+    chipsBefore,
+    chipsAfter: payment.remainingChips,
+  });
+
+  return { ok: true };
+}
+
+function cleanupPlayedCards(
+  state: GameState,
+  activePlayer: PlayerState
+): CleanupMoveRecord[] {
+  const cleanedCards: CleanupMoveRecord[] = [];
+  for (const card of activePlayer.playedThisTurn.splice(0)) {
+    const owner = state.players.find(
+      (player) => player.playerId === card.ownerId
+    );
+    const destinationPlayer = owner ?? activePlayer;
+    destinationPlayer.discard.push(card);
+    cleanedCards.push({
+      card,
+      sourceZone: `${activePlayer.playerId}.playedThisTurn`,
+      destinationZone: `${destinationPlayer.playerId}.discard`,
+    });
+  }
+
+  return cleanedCards;
+}
+
+function recordEndTurnCleanup(
+  state: GameState,
+  activePlayer: PlayerState,
+  moves: readonly CleanupMoveRecord[]
+): void {
+  if (moves.length === 0) {
+    return;
+  }
+
+  const groups = new Map<string, CleanupMoveRecord[]>();
+  for (const move of moves) {
+    const key = `${move.sourceZone}->${move.destinationZone}`;
+    groups.set(key, [...(groups.get(key) ?? []), move]);
+  }
+
+  for (const group of groups.values()) {
+    const firstMove = group[0];
+    if (firstMove === undefined) {
+      continue;
+    }
+
+    recordGameEvent(state, {
+      type: "endTurnCleanupMoved",
+      playerId: activePlayer.playerId,
+      amount: group.length,
+      sourceZone: firstMove.sourceZone,
+      destinationZone: firstMove.destinationZone,
+      targetCardInstanceIds: group.map((move) => move.card.instanceId),
+      targetDefinitionIds: group.map((move) => move.card.definitionId),
+    });
+  }
+}
+
+function playCard(state: GameState, cardInstanceId: string): ActionResult {
+  const activePlayer = mustGetActivePlayer(state);
+  const cardIndex = activePlayer.hand.findIndex(
+    (card) => card.instanceId === cardInstanceId
+  );
+  if (cardIndex < 0) {
+    return {
+      ok: false,
+      error: "Card is not in the active player's hand",
+    };
+  }
+
+  const card = activePlayer.hand[cardIndex];
+  if (card === undefined) {
+    return {
+      ok: false,
+      error: "Card is not in the active player's hand",
+    };
+  }
+
+  activePlayer.hand.splice(cardIndex, 1);
+  const definition = mustGetDefinition(state, card.definitionId);
+  const ownerBefore = card.ownerId;
+  let destinationZone: string;
+  if (definition.engine.isOngoing) {
+    activePlayer.permanents.push(card);
+    destinationZone = `${activePlayer.playerId}.permanents`;
+  } else {
+    activePlayer.playedThisTurn.push(card);
+    destinationZone = `${activePlayer.playerId}.playedThisTurn`;
+  }
+  if (!definition.engine.isOngoing) {
+    grantTemporaryControl(state, card.instanceId, activePlayer.playerId);
+  }
+  recordCardMoved(state, activePlayer, card, {
+    sourceZone: `${activePlayer.playerId}.hand`,
+    destinationZone,
+    ownerBefore,
+    ownerAfter: card.ownerId,
+  });
+
+  const effectResult = executeOnPlayEffects(state, activePlayer, definition, {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: activePlayer.playerId,
+    cardInstanceId: card.instanceId,
+    definitionId: card.definitionId,
+  });
+  if (!effectResult.ok) {
+    return effectResult;
+  }
+  if (effectResult.gameEnd !== undefined) {
+    return gameEndActionResult(effectResult.gameEnd);
+  }
+
+  const wizardPropertyResult = executeWizardPropertyOnPlayCardEffects(
+    state,
+    activePlayer,
+    definition
+  );
+  if (!wizardPropertyResult.ok) {
+    return wizardPropertyResult;
+  }
+  if (wizardPropertyResult.gameEnd !== undefined) {
+    return gameEndActionResult(wizardPropertyResult.gameEnd);
+  }
+
+  const controlledCardResult = executeControlledCardOnPlayCardEffects(
+    state,
+    activePlayer,
+    card
+  );
+  if (!controlledCardResult.ok) {
+    return controlledCardResult;
+  }
+  if (controlledCardResult.gameEnd !== undefined) {
+    return gameEndActionResult(controlledCardResult.gameEnd);
+  }
+
+  reconcileActivePlayerControlledPower(state);
+
+  recordGameEvent(state, {
+    type: "cardPlayed",
+    playerId: activePlayer.playerId,
+    cardInstanceId: card.instanceId,
+    definitionId: card.definitionId,
+  });
+
+  return { ok: true };
+}
+
+function gameEndActionResult(gameEnd: EffectGameEnd): ActionResult {
+  return {
+    ok: true,
+    gameEndReason: gameEnd.reason,
+    winnerPlayerId: gameEnd.winnerPlayerId,
+  };
+}
+
+function canAfford(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance
+): boolean {
+  const definition = mustGetDefinition(state, card.definitionId);
+  return (
+    calculateEffectiveCardCost(state, player.playerId, definition) <=
+    state.turn.power
+  );
+}
+
+function canAffordWithChips(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance
+): boolean {
+  const definition = mustGetDefinition(state, card.definitionId);
+  return (
+    calculateEffectiveCardCost(state, player.playerId, definition) <=
+    state.turn.power + player.chips
+  );
+}
+
+function canActivatePermanent(
+  state: GameState,
+  _player: PlayerState,
+  card: CardInstance
+): boolean {
+  if (state.turn.activatedCardIds.includes(card.instanceId)) {
+    return false;
+  }
+
+  const definition = mustGetDefinition(state, card.definitionId);
+  return definition.engine.effects.some((effect) => {
+    return effect.timing === "activation";
+  });
+}
+
+function canActivateWizardProperty(
+  state: GameState,
+  player: PlayerState,
+  token: TokenInstance
+): boolean {
+  if (state.turn.activatedCardIds.includes(token.instanceId)) {
+    return false;
+  }
+
+  const definition = state.tokenDefinitions.get(token.definitionId);
+  if (definition === undefined) {
+    return false;
+  }
+
+  return hasExecutableWizardPropertyActivation(state, player, definition);
+}
+
+function getWildMagicBuyAction(state: GameState): BuyMarketCardAction[] {
+  const topCard = state.common.wildMagicStack[0];
+  if (topCard === undefined || state.turn.power < 3) {
+    return [];
+  }
+
+  return [
+    {
+      type: "buyMarketCard",
+      cardInstanceId: topCard.instanceId,
+      source: "wildMagicStack",
+    },
+  ];
+}
+
+function getFamiliarBuyAction(
+  state: GameState,
+  player: PlayerState
+): BuyMarketCardAction[] {
+  const familiar = player.unboughtFamiliar;
+  if (familiar === undefined || !canAfford(state, player, familiar)) {
+    return [];
+  }
+
+  return [
+    {
+      type: "buyMarketCard",
+      cardInstanceId: familiar.instanceId,
+      source: "familiar",
+    },
+  ];
+}
+
+function getBuyCard(
+  state: GameState,
+  activePlayer: PlayerState,
+  action: BuyMarketCardAction
+): CardInstance | undefined {
+  if (action.source === "familiar") {
+    const familiar = activePlayer.unboughtFamiliar;
+    return familiar?.instanceId === action.cardInstanceId
+      ? familiar
+      : undefined;
+  }
+
+  return getBuySourceZone(state, action.source).find(
+    (card) => card.instanceId === action.cardInstanceId
+  );
+}
+
+function getBuySourceZone(state: GameState, source: BuySource): CardInstance[] {
+  switch (source) {
+    case "mainMarket":
+      return state.common.market;
+    case "legendMarket":
+      return state.common.legendMarket;
+    case "wildMagicStack":
+      return state.common.wildMagicStack;
+    case "familiar":
+      return [];
+    default:
+      return assertNever(source);
+  }
+}
+
+function calculatePayment(
+  state: GameState,
+  player: PlayerState,
+  cost: number,
+  source: BuySource
+): PaymentResult | undefined {
+  const payableCost = source === "wildMagicStack" ? 3 : cost;
+  if (source !== "legendMarket") {
+    if (payableCost > state.turn.power) {
+      return undefined;
+    }
+
+    return {
+      payableCost,
+      remainingPower: state.turn.power - payableCost,
+      remainingChips: player.chips,
+    };
+  }
+
+  if (payableCost > state.turn.power + player.chips) {
+    return undefined;
+  }
+
+  const powerSpent = Math.min(state.turn.power, payableCost);
+  return {
+    payableCost,
+    remainingPower: state.turn.power - powerSpent,
+    remainingChips: player.chips - (payableCost - powerSpent),
+  };
+}
+
+function drawCards(
+  player: PlayerState,
+  count: number,
+  state: GameState
+): DrawCardsResult {
+  const drawnCards: CardInstance[] = [];
+  for (let index = 0; index < count; index += 1) {
+    if (player.deck.length === 0 && player.discard.length > 0) {
+      player.deck.push(...player.discard.splice(0));
+      shuffleInPlace(player.deck, state);
+      recordGameEvent(state, {
+        type: "discardShuffledIntoDeck",
+        playerId: player.playerId,
+      });
+    }
+
+    const card = player.deck.shift();
+    if (card === undefined) {
+      break;
+    }
+
+    player.hand.push(card);
+    drawnCards.push(card);
+  }
+
+  return {
+    requestedCount: count,
+    drawnCards,
+  };
+}
+
+function getNextPlayer(state: GameState, player: PlayerState): PlayerState {
+  const playerIndex = state.players.findIndex(
+    (candidate) => candidate.playerId === player.playerId
+  );
+  const nextPlayer = state.players[(playerIndex + 1) % state.players.length];
+  if (nextPlayer === undefined) {
+    throw new Error(`Cannot advance turn from player ${player.playerId}`);
+  }
+
+  return nextPlayer;
+}
+
+function shuffleInPlace<T>(items: T[], state: GameState): void {
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const swapIndex = state.rng.nextInt(index + 1);
+    const item = items[index];
+    const swapItem = items[swapIndex];
+    if (item === undefined || swapItem === undefined) {
+      throw new Error("Unexpected sparse array during shuffle");
+    }
+
+    items[index] = swapItem;
+    items[swapIndex] = item;
+  }
+}
+
+function mustGetActivePlayer(state: GameState): PlayerState {
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  if (activePlayer === undefined) {
+    throw new Error(`Missing active player ${state.activePlayerId}`);
+  }
+
+  return activePlayer;
+}
+
+function mustGetDefinition(state: GameState, definitionId: string) {
+  const definition = state.cardDefinitions.get(definitionId);
+  if (definition === undefined) {
+    throw new Error(`Missing card definition ${definitionId}`);
+  }
+
+  return definition;
+}

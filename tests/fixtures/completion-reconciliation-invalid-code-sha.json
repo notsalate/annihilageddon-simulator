@@ -1,0 +1,16 @@
+{
+  "rangeStart": "62777c389c014ea87b35d0facc7bcaa093795e30",
+  "codeSha": "0000000000000000000000000000000000000000",
+  "overallVerdict": "есть открытые требования",
+  "requirements": [
+    {
+      "id": "REQ-176-AC01",
+      "active": true,
+      "status": "unresolved",
+      "findings": ["FIND-009"],
+      "fixCommits": [],
+      "tests": ["tests/completion-reconciliation.test.ts"],
+      "codeSha": "0000000000000000000000000000000000000000"
+    }
+  ]
+}

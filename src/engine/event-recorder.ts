@@ -12,8 +12,24 @@ import type {
   PlayerState,
 } from "./setup.js";
 
-export function recordGameEvent(state: GameState, event: GameEventDraft): void {
+export function recordGameEvent(
+  state: GameState,
+  event: GameEventDraft
+): number {
+  const eventIndex = state.eventLog.length;
   state.eventLog.push(enrichGameEvent(state, event));
+  return eventIndex;
+}
+
+export function setAttackCreatedTargetPlayer(
+  state: GameState,
+  eventIndex: number,
+  targetPlayerId: PlayerState["playerId"]
+): void {
+  const event = state.eventLog[eventIndex];
+  if (event?.type === "attackCreated") {
+    event.targetPlayerId = targetPlayerId;
+  }
 }
 
 export function recordSetupChoiceSelected(

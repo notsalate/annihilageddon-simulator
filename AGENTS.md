@@ -54,31 +54,6 @@ Do not automatically fix adjacent debt or unrelated issues when a task is issue-
 This project is developed on Windows.
 Use PowerShell-compatible commands by default.
 
-Prefer RTK first for repo diagnostics:
-
-```powershell
-rtk git status
-rtk git diff
-rtk git log -n 10
-rtk rg "<pattern>" <existing-source-or-test-paths>
-rtk read <file>
-rtk tree <path>
-rtk npm run build
-rtk npm run clean:dist
-rtk npx lint-staged
-rtk npm run check
-rtk npm run lint
-rtk npm run typecheck
-rtk npm run typecheck:strictest
-rtk npm test
-```
-
-Do not prefix PowerShell cmdlets, shell builtins, navigation, variables, redirects, pipes, or compound shell syntax with `rtk`.
-
-If RTK is unavailable or unsupported, say so briefly and fall back to PowerShell, Git, or npm.
-
-If `rtk rg` fails because `rg` is missing, fall back to `Select-String` and say that ripgrep is unavailable.
-
 Prefer PowerShell equivalents over Unix-only commands:
 
 - list files: `Get-ChildItem`
@@ -243,13 +218,6 @@ Run the narrowest relevant checks for the task.
 Prefer focused tests or targeted verification before broader commands.
 
 Before final reporting, review the repo state with:
-
-```powershell
-rtk git status
-rtk git diff
-```
-
-If RTK is unavailable, fall back to:
 
 ```powershell
 git status

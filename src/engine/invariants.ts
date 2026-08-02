@@ -1,3 +1,4 @@
+import { listPhysicalCardLocations } from "./control-ledger.js";
 import type {
   CardInstance,
   CommonOwner,
@@ -8,12 +9,6 @@ import type {
   TokenInstance,
   TrophyLikeInstance,
 } from "./setup.js";
-
-type CardZoneEntry = {
-  card: CardInstance;
-  zoneName: string;
-  expectedOwnerId?: PlayerId | CommonOwner;
-};
 
 type TokenZoneEntry = {
   expectedOwnerId: PlayerId | CommonOwner;
@@ -52,10 +47,10 @@ export function assertGameStateInvariants(state: GameState): void {
 
   const cardLocations = new Map<string, string[]>();
   const tokenLocations = new Map<string, string[]>();
+  const playerIds = new Set(state.players.map((player) => player.playerId));
 
   for (const player of state.players) {
     assertPlayerInvariants(player);
-    registerCardZones(cardLocations, getPlayerCardZones(player));
     registerTokenZones(tokenLocations, getPlayerTokenZones(player));
     assertOwnedEntries(
       player.statuses,
@@ -69,11 +64,56 @@ export function assertGameStateInvariants(state: GameState): void {
     );
   }
 
-  registerCardZones(cardLocations, getCommonCardZones(state));
+  for (const location of listPhysicalCardLocations(state)) {
+    assertTrue(
+      location.card.ownerId === "common" ||
+        playerIds.has(location.card.ownerId),
+      `${location.card.instanceId} in ${location.zoneName} must be owned by a player or common`
+    );
+    if (location.expectedOwnerId !== undefined) {
+      assertTrue(
+        location.card.ownerId === location.expectedOwnerId,
+        `${location.card.instanceId} in ${location.zoneName} must be owned by ${location.expectedOwnerId}`
+      );
+    }
+    assertNonNegativeMarketChips(location.card, location.zoneName);
+
+    const locations = cardLocations.get(location.card.instanceId) ?? [];
+    locations.push(location.zoneName);
+    cardLocations.set(location.card.instanceId, locations);
+  }
+
   registerTokenZones(tokenLocations, getCommonTokenZones(state));
 
   assertSingleZoneMembership(cardLocations, "card");
   assertSingleZoneMembership(tokenLocations, "token");
+  assertTemporaryCardControls(state, cardLocations);
+}
+
+function assertTemporaryCardControls(
+  state: GameState,
+  cardLocations: ReadonlyMap<string, readonly string[]>
+): void {
+  const playerIds = new Set(state.players.map((player) => player.playerId));
+  const controlledCardIds = new Set<string>();
+
+  for (const control of state.turn.temporaryCardControls) {
+    assertTrue(
+      playerIds.has(control.controllerId),
+      `temporary control references missing controller ${control.controllerId}`
+    );
+    assertTrue(
+      !controlledCardIds.has(control.cardInstanceId),
+      `duplicate temporary control for ${control.cardInstanceId}`
+    );
+    controlledCardIds.add(control.cardInstanceId);
+
+    const locations = cardLocations.get(control.cardInstanceId);
+    assertTrue(
+      locations !== undefined && locations.length === 1,
+      `temporary control references missing card ${control.cardInstanceId}`
+    );
+  }
 }
 
 function assertPlayerInvariants(player: PlayerState): void {
@@ -90,81 +130,6 @@ function assertPlayerInvariants(player: PlayerState): void {
     player.life.current <= player.life.max,
     `${player.playerId}.life.current must be <= life.max`
   );
-}
-
-function getPlayerCardZones(player: PlayerState): CardZoneEntry[] {
-  const zones: CardZoneEntry[] = [];
-  for (const [zoneName, zone] of [
-    [`${player.playerId}.deck`, player.deck],
-    [`${player.playerId}.hand`, player.hand],
-    [`${player.playerId}.discard`, player.discard],
-    [`${player.playerId}.playedThisTurn`, player.playedThisTurn],
-    [`${player.playerId}.permanents`, player.permanents],
-  ] as const) {
-    for (const card of zone) {
-      zones.push({ card, zoneName });
-    }
-  }
-
-  if (player.unboughtFamiliar !== undefined) {
-    zones.push({
-      card: player.unboughtFamiliar,
-      zoneName: `${player.playerId}.unboughtFamiliar`,
-      expectedOwnerId: player.playerId,
-    });
-  }
-
-  for (const card of [...player.deck, ...player.hand, ...player.discard]) {
-    assertTrue(
-      card.ownerId === player.playerId,
-      `${card.instanceId} in ${player.playerId} hidden zones must be owned by ${player.playerId}`
-    );
-    assertNonNegativeMarketChips(card, `${player.playerId} hidden zone`);
-  }
-
-  for (const card of [...player.playedThisTurn, ...player.permanents]) {
-    assertNonNegativeMarketChips(card, `${player.playerId} controlled zone`);
-  }
-
-  return zones;
-}
-
-function getCommonCardZones(state: GameState): CardZoneEntry[] {
-  const zones: CardZoneEntry[] = [];
-  for (const [zoneName, zone] of [
-    ["mainMarket", state.common.market],
-    ["legendMarket", state.common.legendMarket],
-    ["mainDeck", state.common.mainDeck],
-    ["legendDeck", state.common.legendDeck],
-    ["wildMagicStack", state.common.wildMagicStack],
-    ["limpWandStack", state.common.limpWandStack],
-    ["destroyedPile", state.common.destroyedPile],
-    ["destroyedMayhem", state.common.destroyedMayhem],
-    ["destroyedMegaMayhem", state.common.destroyedMegaMayhem],
-  ] as const) {
-    for (const card of zone) {
-      const expectedOwnerId =
-        zoneName === "destroyedPile" ||
-        zoneName === "destroyedMayhem" ||
-        zoneName === "destroyedMegaMayhem"
-          ? undefined
-          : "common";
-      if (expectedOwnerId === undefined) {
-        zones.push({ card, zoneName });
-      } else {
-        zones.push({ card, zoneName, expectedOwnerId });
-      }
-      if (expectedOwnerId !== undefined) {
-        assertTrue(
-          card.ownerId === "common",
-          `${card.instanceId} in ${zoneName} must be owned by common`
-        );
-      }
-      assertNonNegativeMarketChips(card, zoneName);
-    }
-  }
-
-  return zones;
 }
 
 function getPlayerTokenZones(player: PlayerState): TokenZoneEntry[] {
@@ -210,24 +175,6 @@ function assertOwnedEntries(
       `${entry.instanceId} is duplicated in ${zoneName}`
     );
     seenIds.add(entry.instanceId);
-  }
-}
-
-function registerCardZones(
-  cardLocations: Map<string, string[]>,
-  entries: CardZoneEntry[]
-): void {
-  for (const entry of entries) {
-    if (entry.expectedOwnerId !== undefined) {
-      assertTrue(
-        entry.card.ownerId === entry.expectedOwnerId,
-        `${entry.card.instanceId} in ${entry.zoneName} must be owned by ${entry.expectedOwnerId}`
-      );
-    }
-
-    const locations = cardLocations.get(entry.card.instanceId) ?? [];
-    locations.push(entry.zoneName);
-    cardLocations.set(entry.card.instanceId, locations);
   }
 }
 

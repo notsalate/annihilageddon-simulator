@@ -31,7 +31,7 @@
     "effects": [
       {
         "effectId": "ongoing_hand_refill_bonus",
-        "timing": "whileControlled",
+        "timing": "endTurn",
         "amount": 1
       }
     ],

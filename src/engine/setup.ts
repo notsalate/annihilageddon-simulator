@@ -27,6 +27,7 @@ import {
 } from "./event-recorder.js";
 import {
   tryExecuteSetupEffect,
+  type EffectRuntimeMode,
   type EffectRuntimeSetupServices,
   type SetupDirective,
   type SetupEffectSourceContext,
@@ -132,6 +133,12 @@ export interface RuntimeEffectChoiceCardTarget {
   amount: number;
 }
 
+export interface RuntimeEffectChoiceDefense {
+  choiceKind: "defense";
+  choiceId: string;
+  card: CardInstance | undefined;
+}
+
 export interface RuntimeEffectChoiceDirectionalPlayerTarget {
   choiceKind: "directionalPlayerTarget";
   choiceId: string;
@@ -143,23 +150,82 @@ export type RuntimeEffectChoice =
   | RuntimeEffectChoiceOption
   | RuntimeEffectChoicePlayerTarget
   | RuntimeEffectChoiceCardTarget
+  | RuntimeEffectChoiceDefense
   | RuntimeEffectChoiceDirectionalPlayerTarget;
 
+type DecisionView<T> = T extends
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined
+  ? T
+  : T extends (...args: never[]) => unknown
+    ? T
+    : T extends readonly (infer Item)[]
+      ? readonly DecisionView<Item>[]
+      : T extends object
+        ? { readonly [Property in keyof T]: DecisionView<T[Property]> }
+        : T;
+
+export type PlayerDecisionView = DecisionView<Omit<PlayerState, "deck">>;
+
+export interface RuntimeEffectDecisionOption {
+  readonly choiceKind: "option";
+  readonly choiceId: string;
+}
+
+export interface RuntimeEffectDecisionPlayerTarget {
+  readonly choiceKind: "playerTarget";
+  readonly choiceId: string;
+  readonly targetPlayerIds: readonly PlayerId[];
+}
+
+export interface RuntimeEffectDecisionCardTarget {
+  readonly choiceKind: "cardTarget";
+  readonly choiceId: string;
+  readonly targetCardInstanceIds: readonly string[];
+  readonly amount: number;
+}
+
+export interface RuntimeEffectDecisionDefense {
+  readonly choiceKind: "defense";
+  readonly choiceId: string;
+  readonly targetCardInstanceId?: string;
+}
+
+export interface RuntimeEffectDecisionDirectionalPlayerTarget {
+  readonly choiceKind: "directionalPlayerTarget";
+  readonly choiceId: string;
+  readonly direction: "left" | "right";
+  readonly targetPlayerIds: readonly PlayerId[];
+}
+
+export type RuntimeEffectDecisionChoice =
+  | RuntimeEffectDecisionOption
+  | RuntimeEffectDecisionPlayerTarget
+  | RuntimeEffectDecisionCardTarget
+  | RuntimeEffectDecisionDefense
+  | RuntimeEffectDecisionDirectionalPlayerTarget;
+
 export interface RuntimeEffectChoiceRequest {
-  player: PlayerState;
+  player: PlayerDecisionView;
   effectId: RuntimeEffectId;
-  sourceType: "card" | "wizardProperty";
+  sourceType: "card" | "wizardProperty" | "deadWizardToken";
   cardInstanceId: string;
   definitionId: string;
-  choices: readonly RuntimeEffectChoice[];
+  choices: readonly RuntimeEffectDecisionChoice[];
 }
 
 export type RuntimeEffectChoiceStrategy = (
   request: RuntimeEffectChoiceRequest
-) => RuntimeEffectChoice | undefined;
+) => RuntimeEffectDecisionChoice | undefined;
 
 export interface GameState {
   seed: number;
+  runtimeMode: EffectRuntimeMode;
   rng: RandomSource;
   activePlayerId: PlayerId;
   turn: {
@@ -258,7 +324,12 @@ export type GameEventType =
   | "wildMagicChoiceSkipped"
   | "wizardPropertyActivated";
 
-export type GameEventSourceType = "card" | "wizardProperty" | "setup" | "turn";
+export type GameEventSourceType =
+  | "card"
+  | "wizardProperty"
+  | "deadWizardToken"
+  | "setup"
+  | "turn";
 
 export type GameEventDestination =
   | "discard"
@@ -493,6 +564,20 @@ type EffectChoiceSelectedTarget =
       targetPlayerIds?: never;
       targetCardInstanceId?: string;
       targetDefinitionId?: string;
+      direction?: never;
+    }
+  | {
+      choiceKind: "defense";
+      choiceId: string;
+      choiceIds: string[];
+      legalChoiceCount: number;
+      targetCardInstanceId?: string;
+      targetDefinitionId?: string;
+      targetPlayerId?: never;
+      targetPlayerIds?: never;
+      targetCardInstanceIds?: never;
+      targetDefinitionIds?: never;
+      amount?: never;
       direction?: never;
     }
   | {
@@ -808,6 +893,8 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       );
     }
   }
+  const runtimeMode: EffectRuntimeMode =
+    dataPack.manifest.mappingStatus === "fixture" ? "fixture" : "combat";
   const factory = createInstanceFactory();
   const tokenFactory = createTokenInstanceFactory();
   const setupEvents: GameEvent[] = [];
@@ -830,7 +917,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
   const forcedStartingPlayerId = applyWizardPropertySetupEffects(
     players,
     dataPack,
-    dataPack.manifest.mappingStatus === "fixture" ? "fixture" : "combat",
+    runtimeMode,
     {
       hasCardDefinition: (definitionId) =>
         dataPack.cardDefinitions.has(definitionId),
@@ -898,6 +985,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
 
   const state: GameState = {
     seed: options.seed,
+    runtimeMode,
     rng,
     activePlayerId: activePlayer.playerId,
     turn: {
@@ -923,6 +1011,11 @@ export function initializeGame(options: InitializeGameOptions): GameState {
   const marketFlowResult = runMarketFlow(state, { mode: "setup" });
   if (!marketFlowResult.ok) {
     throw new Error(marketFlowResult.error);
+  }
+  if (marketFlowResult.gameEnd !== undefined) {
+    throw new Error(
+      `Cannot initialize game: ${marketFlowResult.gameEnd.reason}`
+    );
   }
   if (marketFlowResult.gameEndReason !== undefined) {
     if (!isIncompleteFullOnlyDataPack(dataPack)) {

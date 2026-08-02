@@ -18,7 +18,7 @@ Finish the runtime layout migration by separating packs, true decks, shuffled st
 - [x] Update manifest schema/types and loader code so packs reference explicit card definition paths, token definition paths, decks, stacks, and pools.
 - [x] Preserve a runnable `v0-first-batch` regression path and verify it with focused tests.
 - [x] Update README to describe the current project status, commands, and final data layout without duplicating full rule/import documentation.
-- [x] Update AGENTS.md only by removing stale duplicate documentation and old paths; preserve safety, Windows/PowerShell, RTK, tests/checks, reporting, workflow, and card simulation conventions.
+- [x] Update AGENTS.md only by removing stale duplicate documentation and old paths; preserve safety, Windows/PowerShell, tests/checks, reporting, workflow, and card simulation conventions.
 - [x] Preserve `docs/agents/domain.md`, `docs/agents/issue-tracker.md`, and `docs/agents/triage-labels.md`.
 - [x] Remove or collapse `docs/simulation-scope.md` once unique current content has been moved to active docs.
 - [x] Keep `docs/single-game-debug-trace.md` as the trace specification, but remove the embedded issue-draft section.

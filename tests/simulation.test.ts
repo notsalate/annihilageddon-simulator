@@ -12,16 +12,20 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  baselineBot,
   decodeCurrentRuntimeDataPack,
   determineWinnerIds,
   formatSingleGameDebugTrace,
   getGameEndReason,
   initializeGame,
+  runMarketFlow,
   runMassSimulation,
   runSingleGame,
   scoreGame,
 } from "../src/index.js";
-import { markPlayerId } from "../src/domain/types.js";
+import { markPlayerId, type PlayerId } from "../src/domain/types.js";
+import type { BotStrategy } from "../src/engine/simulation.js";
+import type { PlayerDecisionView } from "../src/engine/setup.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -117,10 +121,12 @@ test("bot action selection records turn number and safe action identity for debu
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
     maxTurns: 1,
-    bot: {
-      chooseAction() {
-        return { type: "endTurn" };
-      },
+    botFactory() {
+      return {
+        chooseAction() {
+          return { type: "endTurn" };
+        },
+      };
     },
   });
 
@@ -137,6 +143,266 @@ test("bot action selection records turn number and safe action identity for debu
   assert.match(trace, /Turn 1, Action 1 - player-1 \(endTurn\)/);
   assert.match(trace, /- Bot selected endTurn\./);
   assert.doesNotMatch(trace, /Turn \? - player-1/);
+});
+
+test("single-game simulation gives each player an isolated stateful bot lifecycle", () => {
+  const factoryCalls: PlayerId[] = [];
+
+  const options: Parameters<typeof runSingleGame>[0] & {
+    botFactory: (playerId: PlayerId) => BotStrategy;
+  } = {
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    maxTurns: 2,
+    botFactory(playerId) {
+      factoryCalls.push(playerId);
+      let playerView: PlayerDecisionView | undefined;
+      return {
+        chooseAction({ player }) {
+          assert.equal(player.playerId, playerId);
+          assert.equal(playerView?.playerId ?? playerId, playerId);
+          playerView = player;
+          return { type: "endTurn" };
+        },
+      };
+    },
+  };
+
+  runSingleGame(options);
+
+  assert.deepEqual(factoryCalls, [
+    markPlayerId("player-1"),
+    markPlayerId("player-2"),
+  ]);
+});
+
+test("bot factory rejects one strategy object with replaced callbacks", () => {
+  const sharedStrategy: BotStrategy = {
+    chooseAction() {
+      return { type: "endTurn" };
+    },
+  };
+
+  assert.throws(
+    () =>
+      runSingleGame({
+        rootDir,
+        dataPackPath: playableRuntimeDataPackPath,
+        seed: 60615,
+        maxTurns: 2,
+        botFactory(playerId) {
+          sharedStrategy.chooseAction = ({ player }) => {
+            assert.equal(player.playerId, playerId);
+            return { type: "endTurn" };
+          };
+          return sharedStrategy;
+        },
+      }),
+    /BotStrategy object is already assigned to player-1/
+  );
+});
+
+test("bot factory rejects different strategy objects that share a stateful action callback", () => {
+  let retainedView: PlayerDecisionView | undefined;
+  const sharedChooseAction: BotStrategy["chooseAction"] = ({ player }) => {
+    if (
+      retainedView !== undefined &&
+      retainedView.playerId !== player.playerId
+    ) {
+      assert.fail(
+        `Shared chooseAction retained ${retainedView.playerId}'s private hand (${retainedView.hand.length} cards) while choosing for ${player.playerId}`
+      );
+    }
+    retainedView = player;
+    return { type: "endTurn" };
+  };
+
+  assert.throws(
+    () =>
+      runSingleGame({
+        rootDir,
+        dataPackPath: playableRuntimeDataPackPath,
+        seed: 60615,
+        maxTurns: 2,
+        botFactory() {
+          return { chooseAction: sharedChooseAction };
+        },
+      }),
+    /chooseAction callback is already assigned to player-1/
+  );
+});
+
+test("bot factory rejects different strategy objects that share an effect-choice callback", () => {
+  const sharedChooseEffectChoice: NonNullable<
+    BotStrategy["chooseEffectChoice"]
+  > = () => undefined;
+
+  assert.throws(
+    () =>
+      runSingleGame({
+        rootDir,
+        dataPackPath: playableRuntimeDataPackPath,
+        seed: 60615,
+        maxTurns: 2,
+        botFactory() {
+          return {
+            chooseAction() {
+              return { type: "endTurn" };
+            },
+            chooseEffectChoice: sharedChooseEffectChoice,
+          };
+        },
+      }),
+    /chooseEffectChoice callback is already assigned to player-1/
+  );
+});
+
+test("bot factory invokes the action callback captured during ownership validation", () => {
+  const readsByPlayer = new Map<PlayerId, number>();
+  let uncheckedCallbackInvoked = false;
+  const uncheckedChooseAction: BotStrategy["chooseAction"] = () => {
+    uncheckedCallbackInvoked = true;
+    return { type: "endTurn" };
+  };
+
+  runSingleGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    maxTurns: 2,
+    botFactory(playerId) {
+      const capturedChooseAction: BotStrategy["chooseAction"] = ({
+        player,
+      }) => {
+        assert.equal(player.playerId, playerId);
+        return { type: "endTurn" };
+      };
+      return {
+        get chooseAction() {
+          const readCount = (readsByPlayer.get(playerId) ?? 0) + 1;
+          readsByPlayer.set(playerId, readCount);
+          return readCount === 1 ? capturedChooseAction : uncheckedChooseAction;
+        },
+      };
+    },
+  });
+
+  assert.deepEqual([...readsByPlayer.values()], [1, 1]);
+  assert.equal(uncheckedCallbackInvoked, false);
+});
+
+test("bot factory captures each optional effect-choice callback once", () => {
+  const readsByPlayer = new Map<PlayerId, number>();
+  const uncheckedChooseEffectChoice: NonNullable<
+    BotStrategy["chooseEffectChoice"]
+  > = () => undefined;
+
+  runSingleGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    maxTurns: 2,
+    botFactory(playerId) {
+      const capturedChooseEffectChoice: NonNullable<
+        BotStrategy["chooseEffectChoice"]
+      > = () => undefined;
+      return {
+        chooseAction() {
+          return { type: "endTurn" };
+        },
+        get chooseEffectChoice() {
+          const readCount = (readsByPlayer.get(playerId) ?? 0) + 1;
+          readsByPlayer.set(playerId, readCount);
+          return readCount === 1
+            ? capturedChooseEffectChoice
+            : uncheckedChooseEffectChoice;
+        },
+      };
+    },
+  });
+
+  assert.deepEqual([...readsByPlayer.values()], [1, 1]);
+});
+
+test("explicit baseline bot preserves implicit baseline results", () => {
+  const options = {
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 80809,
+    maxTurns: 8,
+  };
+
+  const implicitBaselineResult = runSingleGame(options);
+  const explicitBaselineResult = runSingleGame({
+    ...options,
+    bot: baselineBot,
+  });
+
+  assert.deepEqual(explicitBaselineResult, implicitBaselineResult);
+});
+
+test("explicit baseline bot defers to botFactory when both are provided", () => {
+  const options = {
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+    maxTurns: 2,
+  };
+  const createEndTurnBot = (): BotStrategy => ({
+    chooseAction() {
+      return { type: "endTurn" };
+    },
+  });
+
+  const factoryOnlyResult = runSingleGame({
+    ...options,
+    botFactory: createEndTurnBot,
+  });
+  const explicitBaselineResult = runSingleGame({
+    ...options,
+    bot: baselineBot,
+    botFactory: createEndTurnBot,
+  });
+
+  assert.deepEqual(explicitBaselineResult, factoryOnlyResult);
+});
+
+test("custom legacy bot fails before botFactory and strategy execution", () => {
+  let chooseActionCalled = false;
+  let botFactoryCalled = false;
+
+  assert.throws(
+    () =>
+      runSingleGame({
+        rootDir,
+        dataPackPath: playableRuntimeDataPackPath,
+        seed: 60615,
+        maxTurns: 1,
+        playerCount: 2,
+        bot: {
+          chooseAction() {
+            chooseActionCalled = true;
+            return { type: "endTurn" };
+          },
+        },
+        botFactory() {
+          botFactoryCalled = true;
+          return {
+            chooseAction() {
+              return { type: "endTurn" };
+            },
+          };
+        },
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message, "Custom multiplayer bot must use botFactory");
+      return true;
+    }
+  );
+  assert.equal(chooseActionCalled, false);
+  assert.equal(botFactoryCalled, false);
 });
 
 test("game end reason is dead wizard token exhaustion when the DWT stack is empty", () => {
@@ -170,60 +436,40 @@ test("game end reason does not infer market exhaustion outside Market Flow", () 
   assert.equal(getGameEndReason(state), undefined);
 });
 
-test("single-game simulation uses the Market Flow main deck exhaustion reason directly", () => {
-  let prepared = false;
-  const result = runSingleGame({
+test("Market Flow reports main deck exhaustion directly", () => {
+  const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
-    maxTurns: 20,
-    bot: {
-      chooseAction({ state }) {
-        if (!prepared) {
-          state.common.market.splice(0, 1);
-          state.common.mainDeck.splice(0);
-          prepared = true;
-        }
-
-        return { type: "endTurn" };
-      },
-    },
   });
+  state.common.market.splice(0, 1);
+  state.common.mainDeck.splice(0);
+  const result = runMarketFlow(state, { mode: "setup" });
 
-  assert.equal(result.endReason, "mainDeckExhausted");
-  assert.equal(result.isGameEnd, true);
-  assert.equal(result.eventLog.at(-1)?.type, "marketFlowFailed");
+  assert.equal(result.ok, true);
+  assert.equal(result.gameEndReason, "mainDeckExhausted");
+  assert.equal(state.eventLog.at(-1)?.type, "marketFlowFailed");
   assert.equal(
-    result.eventLog.some((event) => event.type === "turnStarted"),
+    state.eventLog.some((event) => event.type === "turnStarted"),
     false
   );
 });
 
-test("single-game simulation uses the Market Flow legend deck exhaustion reason directly", () => {
-  let prepared = false;
-  const result = runSingleGame({
+test("Market Flow reports legend deck exhaustion directly", () => {
+  const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
-    maxTurns: 20,
-    bot: {
-      chooseAction({ state }) {
-        if (!prepared) {
-          state.common.legendMarket.splice(0, 1);
-          state.common.legendDeck.splice(0);
-          prepared = true;
-        }
-
-        return { type: "endTurn" };
-      },
-    },
   });
+  state.common.legendMarket.splice(0, 1);
+  state.common.legendDeck.splice(0);
+  const result = runMarketFlow(state, { mode: "setup" });
 
-  assert.equal(result.endReason, "legendDeckExhausted");
-  assert.equal(result.isGameEnd, true);
-  assert.equal(result.eventLog.at(-1)?.type, "marketFlowFailed");
+  assert.equal(result.ok, true);
+  assert.equal(result.gameEndReason, "legendDeckExhausted");
+  assert.equal(state.eventLog.at(-1)?.type, "marketFlowFailed");
   assert.equal(
-    result.eventLog.some((event) => event.type === "turnStarted"),
+    state.eventLog.some((event) => event.type === "turnStarted"),
     false
   );
 });
@@ -235,7 +481,8 @@ test("scoring sums owned cards from scoring zones and applies DWT penalty", () =
     seed: 60615,
   });
   const player = state.players[0]!;
-  const legend = state.common.legendMarket[0]!;
+  const legend = state.common.legendMarket.shift();
+  assert.ok(legend);
   legend.ownerId = player.playerId;
   player.permanents.push(legend);
   assert.equal(state.common.deadWizardTokens.status, "available");

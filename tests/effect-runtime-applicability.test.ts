@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 import { initializeGame, type CardInstance } from "../src/index.js";
 import {
   executeEffect,
@@ -9,11 +10,12 @@ import {
 } from "../src/engine/effect-runtime.js";
 import type { CardDefinition } from "../src/engine/data.js";
 import {
-  getEffectRuntimeCatalogEntry,
-  resolveEffectRuntimeCatalogEntry,
+  validateRuntimeEffectCatalogPayload,
 } from "../src/engine/effect-runtime-registry.js";
-import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
-import type { RuntimeEffectPayload } from "../src/engine/runtime-effect.js";
+import type {
+  AttackIntent,
+  EffectSourceContext,
+} from "../src/engine/effect-runtime-registry.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -23,7 +25,7 @@ test("executeEffect applies add_power through the catalog resolver", () => {
   const state = initializeGame({ rootDir: process.cwd(), seed: 11601 });
   const player = state.players[0];
   assert.ok(player);
-  const effect = { effectId: "add_power", amount: 2 } as RuntimeEffectPayload;
+  const effect = { effectId: "add_power", amount: 2 } as const;
   const source: EffectSourceContext = {
     sourceType: "card",
     runtimeMode: "combat",
@@ -36,6 +38,27 @@ test("executeEffect applies add_power through the catalog resolver", () => {
 
   assert.deepEqual(result, { ok: true });
   assert.equal(state.turn.power, 2);
+});
+
+test("attack intent keeps lifecycle context in one typed value", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11610 });
+  const attackingPlayer = state.players[0];
+  const targetPlayer = state.players[1];
+  assert.ok(attackingPlayer);
+  assert.ok(targetPlayer);
+  const source = fixtureSource(attackingPlayer.playerId, "combat");
+
+  const intent: AttackIntent = {
+    attackingPlayer,
+    targetPlayer,
+    amount: 3,
+    effectId: "attack_damage",
+    source,
+  };
+
+  assert.equal(intent.attackingPlayer, attackingPlayer);
+  assert.equal(intent.targetPlayer, targetPlayer);
+  assert.equal(intent.amount, 3);
 });
 
 test("attack profile uses its initiator instead of the active player or source owner", () => {
@@ -104,32 +127,31 @@ test("empty catalog diagnostics use the explicit execution error", () => {
   );
 });
 
-test("executeEffect validates a payload once before invoking its handler", () => {
+test("executeEffect passes one concrete decoded payload to its handler", () => {
   const state = initializeGame({ rootDir: process.cwd(), seed: 11608 });
   const player = state.players[0];
   assert.ok(player);
-  const entry = getEffectRuntimeCatalogEntry("add_power");
-  assert.ok(entry);
-  const originalValidateShape = entry.handler.validateShape;
-  let validationCount = 0;
-  entry.handler.validateShape = (subjectId, effect) => {
-    validationCount += 1;
-    return originalValidateShape(subjectId, effect);
-  };
+  const observedAmounts: number[] = [];
 
-  try {
-    const result = executeEffect(
-      state,
-      player,
-      { effectId: "add_power", amount: 2 },
-      fixtureSource(player.playerId, "combat")
-    );
+  const result = withTemporaryEffectRuntimeOperations(
+    "add_power",
+    {
+      execute(_state, _player, effect) {
+        observedAmounts.push(effect.amount);
+        return { ok: true };
+      },
+    },
+    () =>
+      executeEffect(
+        state,
+        player,
+        { effectId: "add_power", amount: 2 },
+        fixtureSource(player.playerId, "combat")
+      )
+  );
 
-    assert.deepEqual(result, { ok: true });
-    assert.equal(validationCount, 1);
-  } finally {
-    entry.handler.validateShape = originalValidateShape;
-  }
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(observedAmounts, [2]);
 });
 
 function fixtureSource(
@@ -156,12 +178,54 @@ test("fixture-only effect is rejected in combat before its handler", () => {
     {
       effectId: "fixture_add_power_equal_to_target_cost",
       target: { selector: "mainMarketCard" },
-    } as unknown as RuntimeEffectPayload,
+    },
     fixtureSource(player.playerId, "combat")
   );
   assert.equal(result.ok, false);
-  assert.match(result.error, /fixture effect id/);
+  assert.match(result.error, /unavailable in combat mode/);
   assert.equal(state.turn.power, 0);
+});
+
+test("general execution decodes before runtime-mode applicability", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11611 });
+  const player = state.players[0];
+  assert.ok(player);
+
+  const result = executeEffect(
+    state,
+    player,
+    {
+      effectId: "fixture_add_power_equal_to_target_cost",
+      unexpected: true,
+    },
+    fixtureSource(player.playerId, "combat")
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /unsupported field unexpected/);
+});
+
+test("general execution decodes before source-kind applicability", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11612 });
+  const player = state.players[0];
+  assert.ok(player);
+
+  const result = executeEffect(
+    state,
+    player,
+    {
+      effectId: "temporary_hand_limit_by_gained_card_type",
+      timing: "activation",
+      amount: 1,
+      cardTypes: ["spell"],
+    },
+    fixtureSource(player.playerId, "combat", "card")
+  );
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /timing must be endTurn/);
 });
 
 test("fixture-only effect reaches its handler in fixture mode", () => {
@@ -174,7 +238,7 @@ test("fixture-only effect reaches its handler in fixture mode", () => {
     {
       effectId: "fixture_add_power_equal_to_target_cost",
       target: { selector: "mainMarketCard" },
-    } as unknown as RuntimeEffectPayload,
+    },
     fixtureSource(player.playerId, "fixture")
   );
   assert.deepEqual(result, { ok: true });
@@ -196,7 +260,7 @@ test("wizard-property-only effect is rejected for a card source", () => {
     fixtureSource(player.playerId, "combat", "card")
   );
   assert.equal(result.ok, false);
-  assert.match(result.error, /token-only effect id/);
+  assert.match(result.error, /unsupported source kind/);
 });
 
 test("ongoing controlled power is limited to card sources", () => {
@@ -207,7 +271,7 @@ test("ongoing controlled power is limited to card sources", () => {
   } as const;
 
   assert.equal(
-    resolveEffectRuntimeCatalogEntry(
+    validateRuntimeEffectCatalogPayload(
       "Fixture card",
       effect.effectId,
       effect,
@@ -218,7 +282,7 @@ test("ongoing controlled power is limited to card sources", () => {
   );
 
   for (const sourceKind of ["wizardProperty", "deadWizardToken"] as const) {
-    const result = resolveEffectRuntimeCatalogEntry(
+    const result = validateRuntimeEffectCatalogPayload(
       `Fixture ${sourceKind}`,
       effect.effectId,
       effect,
@@ -227,7 +291,12 @@ test("ongoing controlled power is limited to card sources", () => {
     );
     assert.equal(result.ok, false);
     if (!result.ok) {
-      assert.match(result.errors[0] ?? "", /token-only effect id/);
+      assert.match(
+        result.errors[0] ?? "",
+        sourceKind === "deadWizardToken"
+          ? /deadWizardToken does not support effect id/
+          : /token-only effect id/
+      );
     }
   }
 });
@@ -240,7 +309,7 @@ test("DWT-count ongoing power is limited to card sources", () => {
   } as const;
 
   assert.equal(
-    resolveEffectRuntimeCatalogEntry(
+    validateRuntimeEffectCatalogPayload(
       "Fixture card",
       effect.effectId,
       effect,
@@ -251,7 +320,7 @@ test("DWT-count ongoing power is limited to card sources", () => {
   );
 
   for (const sourceKind of ["wizardProperty", "deadWizardToken"] as const) {
-    const result = resolveEffectRuntimeCatalogEntry(
+    const result = validateRuntimeEffectCatalogPayload(
       `Fixture ${sourceKind}`,
       effect.effectId,
       effect,
@@ -260,8 +329,36 @@ test("DWT-count ongoing power is limited to card sources", () => {
     );
     assert.equal(result.ok, false);
     if (!result.ok) {
-      assert.match(result.errors[0] ?? "", /token-only effect id/);
+      assert.match(
+        result.errors[0] ?? "",
+        sourceKind === "deadWizardToken"
+          ? /deadWizardToken does not support effect id/
+          : /token-only effect id/
+      );
     }
+  }
+});
+
+test("dead wizard token validation rejects attack replacement effects without a consumer", () => {
+  const effect = {
+    effectId: "double_owned_attack_damage",
+    timing: "attackReplacement",
+  } as const;
+
+  const result = validateRuntimeEffectCatalogPayload(
+    "Fixture dead wizard token",
+    effect.effectId,
+    effect,
+    "combat",
+    "deadWizardToken"
+  );
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.match(
+      result.errors[0] ?? "",
+      /deadWizardToken does not support effect id double_owned_attack_damage/
+    );
   }
 });
 
@@ -273,7 +370,7 @@ test("ongoing hand refill bonus is limited to card sources", () => {
   } as const;
 
   assert.equal(
-    resolveEffectRuntimeCatalogEntry(
+    validateRuntimeEffectCatalogPayload(
       "Fixture card",
       effect.effectId,
       effect,
@@ -284,7 +381,7 @@ test("ongoing hand refill bonus is limited to card sources", () => {
   );
 
   for (const sourceKind of ["wizardProperty", "deadWizardToken"] as const) {
-    const result = resolveEffectRuntimeCatalogEntry(
+    const result = validateRuntimeEffectCatalogPayload(
       `Fixture ${sourceKind}`,
       effect.effectId,
       effect,
@@ -293,7 +390,12 @@ test("ongoing hand refill bonus is limited to card sources", () => {
     );
     assert.equal(result.ok, false);
     if (!result.ok) {
-      assert.match(result.errors[0] ?? "", /token-only effect id/);
+      assert.match(
+        result.errors[0] ?? "",
+        sourceKind === "deadWizardToken"
+          ? /deadWizardToken does not support effect id/
+          : /token-only effect id/
+      );
     }
   }
 });
@@ -309,7 +411,7 @@ test("known effect with invalid shape is rejected before execution", () => {
     fixtureSource(player.playerId, "combat")
   );
   assert.equal(result.ok, false);
-  assert.match(result.error, /invalid power amount/);
+  assert.match(result.error, /amount must be a positive integer/);
   assert.equal(state.turn.power, 0);
 });
 
@@ -317,36 +419,35 @@ test("timed effect with invalid shape is rejected before its handler", () => {
   const state = initializeGame({ rootDir: process.cwd(), seed: 11606 });
   const player = state.players[0];
   assert.ok(player);
-  const entry = getEffectRuntimeCatalogEntry("fixture_modify_effective_value");
-  assert.ok(entry);
-  const originalExecute = entry.handler.execute;
   let handlerCalled = false;
-  entry.handler.execute = (...args) => {
-    handlerCalled = true;
-    return originalExecute(...args);
-  };
 
-  try {
-    const result = executeEffect(
-      state,
-      player,
-      {
-        effectId: "fixture_modify_effective_value",
-        timing: "onPlay",
-        valueKind: "unknown",
-        operation: "add",
-        amount: "invalid",
-        target: { targetType: "player" },
-      } as unknown as RuntimeEffectPayload,
-      fixtureSource(player.playerId, "fixture")
-    );
+  const result = withTemporaryEffectRuntimeOperations(
+    "fixture_modify_effective_value",
+    {
+      execute() {
+        handlerCalled = true;
+        return { ok: true };
+      },
+    },
+    () =>
+      executeEffect(
+        state,
+        player,
+        {
+          effectId: "fixture_modify_effective_value",
+          timing: "onPlay",
+          valueKind: "unknown",
+          operation: "add",
+          amount: "invalid",
+          target: { targetType: "player" },
+        },
+        fixtureSource(player.playerId, "fixture")
+      )
+  );
 
-    assert.equal(result.ok, false);
-    assert.match(result.error, /unsupported effective-value timing/);
-    assert.equal(handlerCalled, false);
-  } finally {
-    entry.handler.execute = originalExecute;
-  }
+  assert.equal(result.ok, false);
+  assert.match(result.error, /timing must be one of whileControlled, whileScoring/);
+  assert.equal(handlerCalled, false);
 });
 
 test("public Mayhem execution resolves a timed effect deterministically", () => {

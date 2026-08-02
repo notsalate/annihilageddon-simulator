@@ -1,40 +1,65 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
+import {
+  resolveDefenseWindow as resolveDefenseWindowWithServices,
+  type AttackDefenseServices,
+} from "./attack-defense.js";
+import {
+  createAttackDefenseUsage,
+  resolvePlayerControlledAttack as resolvePlayerControlledAttackLifecycle,
+  type AttackDamageAttribution,
+  type AttackTargetResolutionResult,
+  type DamageApplicationResult,
+  type DefenseAttackContext,
+  type DefenseWindowResolutionResult,
+  type PlayerControlledAttackAdapters,
+  type PlayerControlledAttackIntent,
+  type RedirectedAttackIntent,
+} from "./attack-resolution.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import {
-  calculateEffectivePlayerMaxLife,
+  findCardLocation,
   getControlledCards,
-} from "./effective-values.js";
+  grantTemporaryControl,
+  removeCardFromLocation,
+} from "./control-ledger.js";
+import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
 import {
   recordCardMoved,
   recordGameEvent,
   recordMarketChipsGained,
 } from "./event-recorder.js";
 import {
-  type AttackAmountComponents,
-  type DamageResult,
-  type AttackDefenseUsage,
-  type AttackResolution,
-  createAttackDefenseUsage,
-  type DefenseAttackContext,
+  type DamageCause,
   type EffectChoice,
   type EffectExecutionResult,
   type EffectRuntimeServices,
   type EffectSourceContext,
   type MayhemAttackPlanTarget,
-  resolveEffectRuntimeCatalogEntry,
+  type StrictEffectChoiceResolution,
+  executeAttackOutcomeBranch,
+  evaluateRuntimeEffectAtTiming,
+  executeRuntimeEffect,
+  executeRuntimeEffectAtTiming,
+  resolveResurrectionLifeTotal,
   type TargetChoice,
   type TargetChoiceResult,
 } from "./effect-runtime-registry.js";
 import {
   isRuntimeEffectSelectorTarget,
-  isAvoidAttackRuntimeEffect,
-  type AvoidAttackRuntimeEffect,
   type RuntimeEffect,
   type RuntimeEffectId,
   type RuntimeEffectPayload,
   type WildMagicOption,
 } from "./runtime-effect.js";
-import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import type {
+  CardInstance,
+  GameState,
+  PlayerState,
+  RuntimeEffectDecisionChoice,
+  RuntimeEffectChoiceRequest,
+} from "./setup.js";
+import { createPlayerDecisionView } from "./strategy-decision-view.js";
+import { dispatchControlledCardOperation } from "./trigger-dispatch.js";
 export function executeOnPlayEffects(
   state: GameState,
   player: PlayerState,
@@ -84,25 +109,65 @@ export function executeWizardPropertyActivationEffects(
   );
 }
 
-export function hasExecutableWizardPropertyActivation(
+export type WizardPropertyActivationAvailability =
+  | { readonly ok: true; readonly executable: boolean }
+  | { readonly ok: false; readonly error: string };
+
+export function getWizardPropertyActivationAvailability(
   state: GameState,
   player: PlayerState,
-  definition: TokenDefinition
-): boolean {
+  definition: TokenDefinition,
+  source?: EffectSourceContext
+): WizardPropertyActivationAvailability {
   if (
     definition.kind !== "wizardProperty" ||
     definition.engine === undefined ||
     !definition.engine.playableInV0
   ) {
-    return false;
+    return { ok: true, executable: false };
   }
 
-  return definition.engine.effects.some((effect) => {
-    return (
-      effect.timing === "activation" &&
-      effectConditionMatches(state, player, effect)
+  const operationSource: EffectSourceContext = source ?? {
+    sourceType: "wizardProperty",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: definition.tokenId,
+    definitionId: definition.tokenId,
+    tokenDefinitionId: definition.tokenId,
+  };
+  let executable = false;
+  for (const effect of definition.engine.effects) {
+    const result = evaluateRuntimeEffectAtTiming(
+      effect,
+      operationSource,
+      "activation",
+      (decodedEffect) =>
+        effectConditionMatches(state, player, decodedEffect)
+          ? { status: "resolved", result: true }
+          : { status: "notApplicable" }
     );
-  });
+    if (result.status === "error") {
+      return { ok: false, error: result.error };
+    }
+    if (result.status === "resolved") {
+      executable = true;
+    }
+  }
+
+  return { ok: true, executable };
+}
+
+export function hasExecutableWizardPropertyActivation(
+  state: GameState,
+  player: PlayerState,
+  definition: TokenDefinition
+): boolean {
+  const availability = getWizardPropertyActivationAvailability(
+    state,
+    player,
+    definition
+  );
+  return availability.ok && availability.executable;
 }
 
 export function executeWizardPropertyOnPlayCardEffects(
@@ -123,19 +188,18 @@ export function executeWizardPropertyOnPlayCardEffects(
     const result = executeEffects(
       state,
       player,
-      definition.engine.effects.filter((effect) =>
-        cardTriggerMatches(effect, playedDefinition)
-      ),
+      definition.engine.effects,
       "onPlayCard",
       {
         sourceType: "wizardProperty",
-        runtimeMode: "combat",
+        runtimeMode: state.runtimeMode,
         playerId: player.playerId,
         cardInstanceId: token.instanceId,
         definitionId: token.definitionId,
         tokenInstanceId: token.instanceId,
         tokenDefinitionId: token.definitionId,
-      }
+      },
+      (effect) => cardTriggerMatches(effect, playedDefinition)
     );
     if (!result.ok || result.gameEnd !== undefined) {
       return result;
@@ -158,40 +222,11 @@ export function executeControlledCardOnPlayCardEffects(
     };
   }
 
-  for (const card of player.permanents) {
-    if (card.ownerId !== player.playerId) {
-      continue;
-    }
-    const definition = state.cardDefinitions.get(card.definitionId);
-    if (
-      definition === undefined ||
-      !definition.engine.playableInV0 ||
-      !definition.engine.isOngoing
-    ) {
-      continue;
-    }
-
-    const result = executeEffects(
-      state,
-      player,
-      definition.engine.effects.filter((effect) =>
-        cardTriggerMatches(effect, playedDefinition)
-      ),
-      "onPlayCard",
-      {
-        sourceType: "card",
-        runtimeMode: getCardEffectRuntimeMode(card.definitionId),
-        playerId: player.playerId,
-        cardInstanceId: card.instanceId,
-        definitionId: card.definitionId,
-      }
-    );
-    if (!result.ok || result.gameEnd !== undefined) {
-      return result;
-    }
-  }
-
-  return { ok: true };
+  return dispatchControlledCardOperation(state, player, {
+    kind: "onPlayCard",
+    playedCard,
+    playedDefinition,
+  });
 }
 
 export function moveGainedCardToPlayerDestination(
@@ -209,14 +244,15 @@ export function moveGainedCardToPlayerDestination(
     };
   }
 
-  const sourceZone = getCardZoneName(state, card) ?? "unknown";
   const ownerBefore = card.ownerId;
-  if (!removeCardFromKnownZones(state, card)) {
+  const sourceLocation = removeCardFromLocation(state, card.instanceId);
+  if (sourceLocation === undefined) {
     return {
       ok: false,
       error: `Cannot move card ${card.instanceId}`,
     };
   }
+  const sourceZone = sourceLocation.zoneName;
 
   moveMarketChipsToPlayer(state, player, card);
   card.ownerId = player.playerId;
@@ -233,43 +269,70 @@ export function moveGainedCardToPlayerDestination(
       continue;
     }
 
+    const source: EffectSourceContext = {
+      sourceType: "wizardProperty",
+      runtimeMode: state.runtimeMode,
+      playerId: player.playerId,
+      cardInstanceId: token.instanceId,
+      definitionId: token.definitionId,
+      tokenInstanceId: token.instanceId,
+      tokenDefinitionId: token.definitionId,
+    };
     for (const effect of tokenDefinition.engine.effects) {
-      if (
-        effect.timing !== "onGainCard" ||
-        !cardTriggerMatches(effect, definition)
-      ) {
+      const applicability = evaluateRuntimeEffectAtTiming(
+        effect,
+        source,
+        "onGainCard",
+        (decodedEffect) =>
+          cardTriggerMatches(decodedEffect, definition)
+            ? { status: "resolved", result: decodedEffect }
+            : { status: "notApplicable" }
+      );
+      if (applicability.status === "error") {
+        return { ok: false, error: applicability.error };
+      }
+      if (applicability.status === "notApplicable") {
         continue;
       }
 
-      if (effect["effectId"] === "topdeck_gained_card") {
-        destination = "deckTop";
-        recordGameEvent(state, {
-          type: "effectChoiceSelected",
-          playerId: player.playerId,
-          cardInstanceId: token.instanceId,
-          definitionId: token.definitionId,
-          tokenInstanceId: token.instanceId,
-          tokenDefinitionId: token.definitionId,
-          choiceKind: "cardTarget",
-          targetCardInstanceId: card.instanceId,
-          targetDefinitionId: card.definitionId,
-          effectId: "topdeck_gained_card",
-          sourceType: "wizardProperty",
-        });
+      if (applicability.result.effectId === "topdeck_gained_card") {
+        if (applicability.result.optional === true) {
+          const choice = chooseEffectChoice(
+            state,
+            player,
+            source,
+            "topdeck_gained_card",
+            [
+              { choiceKind: "option", choiceId: "apply" },
+              { choiceKind: "option", choiceId: "decline" },
+            ]
+          );
+          if (choice?.choiceId === "apply") {
+            destination = "deckTop";
+          }
+        } else {
+          destination = "deckTop";
+        }
         continue;
       }
 
-      const result = executeEffect(state, player, effect, {
-        sourceType: "wizardProperty",
-        runtimeMode: "combat",
-        playerId: player.playerId,
-        cardInstanceId: token.instanceId,
-        definitionId: token.definitionId,
-        tokenInstanceId: token.instanceId,
-        tokenDefinitionId: token.definitionId,
-      });
-      if (!result.ok) {
-        return result;
+      const execution = executeRuntimeEffectAtTiming(
+        state,
+        player,
+        effect,
+        "onGainCard",
+        source,
+        effectRuntimeServices,
+        (decodedEffect) => cardTriggerMatches(decodedEffect, definition)
+      );
+      if (execution.status === "error") {
+        return { ok: false, error: execution.error };
+      }
+      if (execution.status === "notApplicable") {
+        continue;
+      }
+      if (!execution.result.ok) {
+        return execution.result;
       }
     }
   }
@@ -307,66 +370,49 @@ export function calculateEndTurnDrawCount(
       continue;
     }
 
+    const source: EffectSourceContext = {
+      sourceType: "wizardProperty",
+      runtimeMode: state.runtimeMode,
+      playerId: player.playerId,
+      cardInstanceId: token.instanceId,
+      definitionId: token.definitionId,
+      tokenInstanceId: token.instanceId,
+      tokenDefinitionId: token.definitionId,
+    };
     for (const effect of definition.engine.effects) {
-      if (effect.effectId !== "temporary_hand_limit_by_gained_card_type") {
-        continue;
+      const result = evaluateRuntimeEffectAtTiming(
+        effect,
+        source,
+        "endTurn",
+        (decodedEffect) =>
+          decodedEffect.effectId === "temporary_hand_limit_by_gained_card_type"
+            ? {
+                status: "resolved",
+                result:
+                  drawCount +
+                  decodedEffect.amount *
+                    countGainedCardsMatchingEffect(state, decodedEffect),
+              }
+            : { status: "notApplicable" }
+      );
+      if (result.status === "error") {
+        throw new Error(result.error);
       }
-
-      const amount = effect["amount"];
-      if (
-        effect["timing"] !== "endTurn" ||
-        typeof amount !== "number" ||
-        !Number.isSafeInteger(amount) ||
-        amount <= 0
-      ) {
-        continue;
-      }
-
-      drawCount += amount * countGainedCardsMatchingEffect(state, effect);
-    }
-  }
-
-  for (const card of getControlledCards(state, player)) {
-    const definition = state.cardDefinitions.get(card.definitionId);
-    if (definition === undefined || !definition.engine.playableInV0) {
-      continue;
-    }
-
-    for (const effect of definition.engine.effects) {
-      if (
-        effect.effectId === "ongoing_hand_refill_bonus" &&
-        effect.timing === "endTurn" &&
-        Number.isSafeInteger(effect.amount) &&
-        effect.amount > 0
-      ) {
-        drawCount += effect.amount;
-        continue;
-      }
-
-      if (effect.effectId !== "increase_hand_limit_at_max_life") {
-        continue;
-      }
-
-      const amount = effect["amount"];
-      if (
-        effect["timing"] !== "endTurn" ||
-        typeof amount !== "number" ||
-        !Number.isSafeInteger(amount) ||
-        amount <= 0
-      ) {
-        continue;
-      }
-
-      if (
-        player.life.current >=
-        calculateEffectivePlayerMaxLife(state, player.playerId)
-      ) {
-        drawCount += amount;
+      if (result.status === "resolved") {
+        drawCount = result.result;
       }
     }
   }
 
-  return drawCount;
+  const controlledDrawResult = dispatchControlledCardOperation(state, player, {
+    kind: "collectEndTurnDrawModifier",
+    currentBaseDrawCount: drawCount,
+  });
+  if (!controlledDrawResult.ok) {
+    throw new Error(controlledDrawResult.error);
+  }
+
+  return controlledDrawResult.drawCount;
 }
 
 export function executeMayhemEffects(
@@ -389,18 +435,29 @@ function executeEffects(
   player: PlayerState,
   effects: readonly RuntimeEffect[],
   timing: RuntimeEffect["timing"],
-  source: EffectSourceContext
+  source: EffectSourceContext,
+  isApplicable?: (effect: RuntimeEffectPayload) => boolean
 ): EffectExecutionResult {
   for (const effect of effects) {
-    if (effect.timing !== timing) {
+    const operationResult = executeRuntimeEffectAtTiming(
+      state,
+      player,
+      effect,
+      timing,
+      source,
+      effectRuntimeServices,
+      (decodedEffect) =>
+        effectConditionMatches(state, player, decodedEffect) &&
+        (isApplicable?.(decodedEffect) ?? true)
+    );
+    if (operationResult.status === "error") {
+      return { ok: false, error: operationResult.error };
+    }
+    if (operationResult.status === "notApplicable") {
       continue;
     }
 
-    if (!effectConditionMatches(state, player, effect)) {
-      continue;
-    }
-
-    const result = executeEffect(state, player, effect, source);
+    const result = operationResult.result;
     if (!result.ok || result.gameEnd !== undefined) {
       return result;
     }
@@ -413,23 +470,21 @@ function cardTriggerMatches(
   effect: RuntimeEffectPayload,
   definition: CardDefinition
 ): boolean {
-  const cardTypes = effect.cardTypes;
+  const cardTypes = "cardTypes" in effect ? effect.cardTypes : undefined;
   const matchesType =
     Array.isArray(cardTypes) &&
-    cardTypes.some(
-      (cardType) =>
-        typeof cardType === "string" &&
-        definition.engine.cardTypes.includes(cardType)
+    cardTypes.some((cardType) =>
+      definition.engine.cardTypes.includes(cardType)
     );
   const matchesOngoing =
-    effect.isOngoing === true && definition.engine.isOngoing;
-  const cardTags = effect.cardTags;
+    "isOngoing" in effect &&
+    effect.isOngoing === true &&
+    definition.engine.isOngoing;
+  const cardTags = "cardTags" in effect ? effect.cardTags : undefined;
   const matchesTag =
     Array.isArray(cardTags) &&
     cardTags.some(
-      (cardTag) =>
-        typeof cardTag === "string" &&
-        definition.engine.tags?.includes(cardTag) === true
+      (cardTag) => definition.engine.tags?.includes(cardTag) === true
     );
   return matchesType || matchesOngoing || matchesTag;
 }
@@ -447,21 +502,10 @@ function countGainedCardsMatchingEffect(
 export function executeEffect(
   state: GameState,
   player: PlayerState,
-  effect: RuntimeEffectPayload,
+  effect: unknown,
   source: EffectSourceContext
 ): EffectExecutionResult {
-  const resolution = resolveEffectRuntimeCatalogEntry(
-    `Effect ${asString(effect["effectId"])}`,
-    asString(effect["effectId"]),
-    effect,
-    source.runtimeMode,
-    source.sourceType
-  );
-  if (!resolution.ok) {
-    return { ok: false, error: getEffectExecutionError(resolution.errors) };
-  }
-
-  return resolution.entry.handler.execute(
+  return executeRuntimeEffect(
     state,
     player,
     effect,
@@ -479,7 +523,7 @@ function effectConditionMatches(
   player: PlayerState,
   effect: RuntimeEffectPayload
 ): boolean {
-  const { condition } = effect;
+  const condition = "condition" in effect ? effect.condition : undefined;
   if (condition === undefined) {
     return true;
   }
@@ -489,7 +533,7 @@ function effectConditionMatches(
       const definition = state.cardDefinitions.get(card.definitionId);
       return (
         definition !== undefined &&
-        condition.cardTypes.some((cardType: string) =>
+        condition.cardTypes.some((cardType) =>
           controlledCardMatchesType(definition, cardType)
         )
       );
@@ -511,266 +555,129 @@ function controlledCardMatchesType(
   );
 }
 
-function getAttackProfile(
-  state: GameState,
-  _attackInitiator: PlayerState,
-  source: EffectSourceContext
-): { damageBonus: number; unavoidable: boolean } {
-  if (source.sourceType !== "card") {
-    return { damageBonus: 0, unavoidable: false };
-  }
-
-  const sourceCard = findCardInstance(state, source.cardInstanceId);
-  if (sourceCard === undefined || sourceCard.ownerId === "common") {
-    return { damageBonus: 0, unavoidable: false };
-  }
-
-  const sourceOwner = state.players.find(
-    (candidate) => candidate.playerId === sourceCard.ownerId
+function resolvePlayerControlledAttackWithRuntimeAdapters(
+  intent: PlayerControlledAttackIntent
+): EffectExecutionResult {
+  return resolvePlayerControlledAttackLifecycle(
+    intent,
+    playerControlledAttackAdapters
   );
-  if (sourceOwner === undefined) {
-    return { damageBonus: 0, unavoidable: false };
-  }
-
-  let damageBonus = 0;
-  let unavoidable = false;
-  for (const token of sourceOwner.wizardProperties) {
-    const definition = state.tokenDefinitions.get(token.definitionId);
-    if (
-      definition?.kind !== "wizardProperty" ||
-      definition.engine === undefined ||
-      !definition.engine.playableInV0
-    ) {
-      continue;
-    }
-
-    for (const effect of definition.engine.effects) {
-      if (
-        effect.timing !== "attackReplacement" ||
-        !effectMatchesCardDefinition(state, effect, source.definitionId)
-      ) {
-        continue;
-      }
-
-      if (effect["effectId"] === "modify_owned_wand_attack_damage") {
-        const amount = effect["amount"];
-        if (typeof amount === "number" && Number.isSafeInteger(amount)) {
-          damageBonus += amount;
-        }
-      }
-
-      if (effect["effectId"] === "prevent_defense_against_owned_wand_attacks") {
-        unavoidable = true;
-      }
-    }
-  }
-
-  for (const card of sourceOwner.permanents) {
-    if (card.ownerId !== sourceOwner.playerId) {
-      continue;
-    }
-    const definition = state.cardDefinitions.get(card.definitionId);
-    if (
-      definition === undefined ||
-      !definition.engine.playableInV0 ||
-      !definition.engine.isOngoing
-    ) {
-      continue;
-    }
-
-    for (const effect of definition.engine.effects) {
-      if (
-        effect.timing !== "attackReplacement" ||
-        !effectMatchesCardDefinition(state, effect, source.definitionId)
-      ) {
-        continue;
-      }
-      if (effect["effectId"] === "modify_owned_wand_attack_damage") {
-        const amount = effect["amount"];
-        if (typeof amount === "number" && Number.isSafeInteger(amount)) {
-          damageBonus += amount;
-        }
-      }
-    }
-  }
-
-  return { damageBonus, unavoidable };
 }
 
-function effectMatchesCardDefinition(
-  state: GameState,
-  effect: RuntimeEffectPayload,
-  definitionId: string
-): boolean {
-  const cardDefinitionIds = effect["cardDefinitionIds"];
-  if (
-    Array.isArray(cardDefinitionIds) &&
-    cardDefinitionIds.some((candidate) => candidate === definitionId)
+const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
+  resolveTargets: resolvePlayerControlledAttackTargets,
+  resolveDefenseWindow(
+    state,
+    defendingPlayer,
+    attack,
+    resolveRedirectedAttack
   ) {
-    return true;
-  }
-
-  const cardTags = effect["cardTags"];
-  if (!Array.isArray(cardTags)) {
-    return false;
-  }
-
-  const definition = state.cardDefinitions.get(definitionId);
-  const definitionTags = definition?.engine.tags ?? [];
-  return cardTags.some(
-    (candidate) =>
-      typeof candidate === "string" && definitionTags.includes(candidate)
-  );
-}
-
-function findCardInstance(
-  state: GameState,
-  cardInstanceId: string
-): CardInstance | undefined {
-  for (const player of state.players) {
-    const card = [
-      ...player.hand,
-      ...player.deck,
-      ...player.discard,
-      ...player.playedThisTurn,
-      ...player.permanents,
-    ].find((candidate) => candidate.instanceId === cardInstanceId);
-    if (card !== undefined) {
-      return card;
-    }
-  }
-
-  return [
-    ...state.common.market,
-    ...state.common.legendMarket,
-    ...state.common.mainDeck,
-    ...state.common.legendDeck,
-    ...state.common.wildMagicStack,
-    ...state.common.limpWandStack,
-    ...state.common.destroyedMayhem,
-    ...state.common.destroyedMegaMayhem,
-  ].find((candidate) => candidate.instanceId === cardInstanceId);
-}
-
-function resolveAttackTarget(
-  state: GameState,
-  attackingPlayer: PlayerState,
-  targetPlayer: PlayerState,
-  amount: number,
-  effectId: RuntimeEffectId,
-  source: EffectSourceContext,
-  unavoidable = false,
-  baseAmount = amount,
-  originalSource = source,
-  defenseUsage: AttackDefenseUsage = createAttackDefenseUsage(),
-  amountComponents: AttackAmountComponents = {
-    unresolvedBaseAmount: baseAmount,
-    sourceOwnerModifierAmount: amount - baseAmount,
-    currentAttackerTargetModifierAmount: 0,
-  }
-): AttackResolution {
-  const resolvedAmountComponents = recalculateAttackAmountComponents(
+    return resolveDefenseWindow(
+      state,
+      defendingPlayer,
+      attack,
+      resolveRedirectedAttack
+    );
+  },
+  dealAttackDamage(
     state,
     attackingPlayer,
     targetPlayer,
-    source,
-    amountComponents
-  );
-  const resolvedAmount = sumAttackAmountComponents(resolvedAmountComponents);
-  recordGameEvent(state, {
-    type: "attackTargetStarted",
-    playerId: attackingPlayer.playerId,
-    targetPlayerId: targetPlayer.playerId,
-    cardInstanceId: source.cardInstanceId,
-    definitionId: source.definitionId,
+    amount,
     effectId,
-    amount: resolvedAmount,
-    sourceType: source.sourceType,
-  });
-
-  const defenseResolution = unavoidable
-    ? undefined
-    : resolveDefenseWindow(state, targetPlayer, {
-        kind: "redirectable",
-        attackingPlayer,
-        amountComponents: resolvedAmountComponents,
-        effectId,
-        source,
-        originalSource,
-        defenseUsage,
-      });
-  if (defenseResolution !== undefined) {
-    recordGameEvent(state, {
-      type: "attackAvoided",
-      playerId: targetPlayer.playerId,
-      targetPlayerId: targetPlayer.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId,
-      sourceType: source.sourceType,
-    });
-    return defenseResolution;
-  }
-
-  return {
-    ...dealDamage(
+    source
+  ) {
+    return dealDamage(
       state,
       attackingPlayer,
       targetPlayer,
-      resolvedAmount,
+      amount,
       effectId,
-      source
-    ),
-    avoided: false,
-    amountComponents: resolvedAmountComponents,
-    attackingPlayer,
-    currentAttackerId: attackingPlayer.playerId,
-    targetPlayer,
-    source,
-    originalSource,
-  };
-}
+      source,
+      { kind: "playerControlled", player: attackingPlayer }
+    );
+  },
+  executeOnHitEffect(state, _attackingPlayer, targetPlayer, effect, source) {
+    if (
+      effect.effectId === "attack_gain_status" &&
+      effect["statusId"] === "dingler"
+    ) {
+      gainDinglerStatus(state, targetPlayer, "attack_gain_status", source);
+      return { ok: true };
+    }
+    return {
+      ok: false,
+      error: `Unsupported player-controlled on-hit effect ${effect.effectId}`,
+    };
+  },
+  executeOutcomeBranch(state, attackingPlayer, targetPlayer, branch, context) {
+    return executeAttackOutcomeBranch(
+      state,
+      attackingPlayer,
+      branch,
+      context.source,
+      targetPlayer,
+      context,
+      effectRuntimeServices
+    );
+  },
+  applyAfterAttackDamage(
+    state,
+    attribution: AttackDamageAttribution<EffectSourceContext>
+  ) {
+    return applyAfterPlayerAttackDamage(
+      state,
+      attribution.attackingPlayer,
+      attribution.damageDealt,
+      attribution.source
+    );
+  },
+};
 
-function recalculateAttackAmountComponents(
-  state: GameState,
-  attackingPlayer: PlayerState,
-  targetPlayer: PlayerState,
-  _source: EffectSourceContext,
-  amountComponents: AttackAmountComponents
-): AttackAmountComponents {
-  const unmodifiedAmount =
-    amountComponents.unresolvedBaseAmount +
-    amountComponents.sourceOwnerModifierAmount;
-  const doublesAgainstTarget =
-    attackingPlayer.playerId !== targetPlayer.playerId &&
-    attackingPlayer.permanents.some((permanent) => {
-      const definition = state.cardDefinitions.get(permanent.definitionId);
-      return (
-        definition?.engine.playableInV0 === true &&
-        definition.engine.effects.some(
-          (effect) =>
-            effect.timing === "attackReplacement" &&
-            effect.effectId === "double_owned_attack_damage"
-        )
-      );
-    });
+function resolvePlayerControlledAttackTargets(
+  intent: PlayerControlledAttackIntent
+):
+  | { ok: true; players: readonly PlayerState[] }
+  | { ok: false; error: string } {
+  if (intent.targetPlan.kind === "orderedPlayers") {
+    return { ok: true, players: intent.targetPlan.players };
+  }
 
-  return {
-    ...amountComponents,
-    currentAttackerTargetModifierAmount: doublesAgainstTarget
-      ? unmodifiedAmount
-      : 0,
-  };
-}
+  const effect = intent.targetPlan.effect;
+  if (effect.effectId === "attack_gain_status") {
+    return resolveStatusTargetPlayers(
+      intent.state,
+      intent.attackingPlayer,
+      effect,
+      intent.source
+    );
+  }
+  if ("targetSelector" in effect && effect.targetSelector === "eachFoe") {
+    return {
+      ok: true,
+      players: getOpponentsInSeatingOrder(intent.state, intent.attackingPlayer),
+    };
+  }
 
-function sumAttackAmountComponents(
-  amountComponents: AttackAmountComponents
-): number {
-  return (
-    amountComponents.unresolvedBaseAmount +
-    amountComponents.sourceOwnerModifierAmount +
-    amountComponents.currentAttackerTargetModifierAmount
+  const targetResult = resolveTargetChoice(
+    intent.state,
+    intent.attackingPlayer,
+    effect,
+    intent.source
   );
+  if (!targetResult.ok) {
+    return targetResult;
+  }
+  if (targetResult.choice === undefined) {
+    return { ok: true, players: [] };
+  }
+  if (targetResult.choice.choiceType !== "player") {
+    return {
+      ok: false,
+      error: "Attack effect requires a player target",
+    };
+  }
+  return { ok: true, players: [targetResult.choice.player] };
 }
 
 function resolveMayhemAttackPlan(
@@ -779,7 +686,7 @@ function resolveMayhemAttackPlan(
   targets: readonly MayhemAttackPlanTarget[],
   effectId: RuntimeEffectId,
   source: EffectSourceContext
-): void {
+): EffectExecutionResult {
   const decisions: Array<MayhemAttackPlanTarget & { avoided: boolean }> = [];
   const firstAmount = targets[0]?.amount;
   const phaseAmount =
@@ -809,11 +716,18 @@ function resolveMayhemAttackPlan(
       amount: target.amount,
       sourceType: source.sourceType,
     });
-    const avoided =
-      resolveDefenseWindow(state, target.targetPlayer, {
-        kind: "nonredirectable",
-        defenseUsage: createAttackDefenseUsage(),
-      }) !== undefined;
+    const defenseResult = resolveDefenseWindow(state, target.targetPlayer, {
+      kind: "nonredirectable",
+      source,
+      defenseUsage: createAttackDefenseUsage(),
+    });
+    if (!defenseResult.ok) {
+      return defenseResult;
+    }
+    if (defenseResult.gameEnd !== undefined) {
+      return { ok: true, gameEnd: defenseResult.gameEnd };
+    }
+    const avoided = defenseResult.avoided;
     if (avoided) {
       recordGameEvent(state, {
         type: "attackAvoided",
@@ -863,15 +777,21 @@ function resolveMayhemAttackPlan(
       amount: decision.amount,
       sourceType: source.sourceType,
     });
-    dealDamage(
+    const damageResult = dealDamage(
       state,
       sourcePlayer,
       decision.targetPlayer,
       decision.amount,
       effectId,
-      source
+      source,
+      { kind: "ownerless" }
     );
+    if (!("damageDealt" in damageResult)) {
+      return damageResult;
+    }
   }
+
+  return { ok: true };
 }
 
 function resolveMayhemAttack(
@@ -880,8 +800,8 @@ function resolveMayhemAttack(
   amount: number,
   effectId: RuntimeEffectId,
   source: EffectSourceContext
-): void {
-  resolveMayhemAttackPlan(
+): EffectExecutionResult {
+  return resolveMayhemAttackPlan(
     state,
     sourcePlayer,
     getPlayersInActiveOrder(state).map((targetPlayer) => ({
@@ -950,17 +870,18 @@ const effectRuntimeServices: EffectRuntimeServices = {
   getDestroyDestination,
   getOpponentsInSeatingOrder,
   getPlayersInActiveOrder,
-  getAttackProfile,
+  prepareStrictEffectChoice,
+  recordEffectChoiceSelected,
   chooseEffectChoice,
   dealDamage,
-  applyAfterPlayerAttackDamage,
   healPlayer,
   setPlayerLife,
   resolveStatusTargetPlayers,
   gainDinglerStatus,
   removeDinglerStatus,
   hasDinglerStatus,
-  resolveAttackTarget,
+  resolvePlayerControlledAttack:
+    resolvePlayerControlledAttackWithRuntimeAdapters,
   resolveDefenseWindow,
   resolveMayhemAttack,
   resolveMayhemAttackPlan,
@@ -981,7 +902,10 @@ function resolveStatusTargetPlayers(
   effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): { ok: true; players: PlayerState[] } | { ok: false; error: string } {
-  if (effect["targetSelector"] === "eachPlayerClockwiseFromActive") {
+  if (
+    "targetSelector" in effect &&
+    effect.targetSelector === "eachPlayerClockwiseFromActive"
+  ) {
     return {
       ok: true,
       players: getPlayersInActiveOrder(state),
@@ -1047,7 +971,7 @@ function resolveTargetChoice(
     runtimeChoices
   );
   if (selected === undefined) {
-    if (effect["emptyChoice"] === "fail") {
+    if ("emptyChoice" in effect && effect.emptyChoice === "fail") {
       return {
         ok: false,
         error: `No legal choices for effect ${asString(effectId)}`,
@@ -1101,19 +1025,15 @@ function chooseEffectChoice(
   effectId: RuntimeEffectId,
   choices: readonly EffectChoice[]
 ): EffectChoice | undefined {
-  const selectedChoice = state.effectChoiceStrategy?.({
+  const resolution = resolveEffectChoice(
+    state,
     player,
+    source,
     effectId,
-    sourceType: source.sourceType,
-    cardInstanceId: source.cardInstanceId,
-    definitionId: source.definitionId,
     choices,
-  });
-  const choice =
-    selectedChoice !== undefined && choices.includes(selectedChoice)
-      ? selectedChoice
-      : choices[0];
-  if (choice === undefined) {
+    "fallback"
+  );
+  if (resolution.status !== "selected") {
     recordGameEvent(state, {
       type: "effectChoiceSkipped",
       playerId: player.playerId,
@@ -1126,6 +1046,83 @@ function chooseEffectChoice(
     return undefined;
   }
 
+  recordEffectChoiceSelected(
+    state,
+    player,
+    source,
+    effectId,
+    choices,
+    resolution.choice
+  );
+  return resolution.choice;
+}
+
+function prepareStrictEffectChoice(
+  state: GameState,
+  player: PlayerState,
+  source: EffectSourceContext,
+  effectId: RuntimeEffectId,
+  choices: readonly EffectChoice[]
+): StrictEffectChoiceResolution {
+  return resolveEffectChoice(
+    state,
+    player,
+    source,
+    effectId,
+    choices,
+    "reject"
+  );
+}
+
+function resolveEffectChoice(
+  state: GameState,
+  player: PlayerState,
+  source: EffectSourceContext,
+  effectId: RuntimeEffectId,
+  choices: readonly EffectChoice[],
+  invalidSelectionPolicy: "fallback" | "reject"
+): StrictEffectChoiceResolution {
+  const decisionRequest: RuntimeEffectChoiceRequest = structuredClone({
+    player: createPlayerDecisionView(player),
+    effectId,
+    sourceType: source.sourceType,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    choices: choices.map(createRuntimeEffectDecisionChoice),
+  });
+  const selectedChoice = state.effectChoiceStrategy?.(decisionRequest);
+  if (selectedChoice === undefined) {
+    const defaultChoice = choices[0];
+    return defaultChoice === undefined
+      ? { status: "empty" }
+      : { status: "selected", choice: defaultChoice };
+  }
+
+  const matchedChoice = choices.find((candidate) =>
+    matchesDecisionChoice(candidate, selectedChoice)
+  );
+  if (matchedChoice !== undefined) {
+    return { status: "selected", choice: matchedChoice };
+  }
+
+  if (invalidSelectionPolicy === "reject") {
+    return { status: "invalid" };
+  }
+
+  const fallbackChoice = choices[0];
+  return fallbackChoice === undefined
+    ? { status: "empty" }
+    : { status: "selected", choice: fallbackChoice };
+}
+
+function recordEffectChoiceSelected(
+  state: GameState,
+  player: PlayerState,
+  source: EffectSourceContext,
+  effectId: RuntimeEffectId,
+  choices: readonly EffectChoice[],
+  choice: EffectChoice
+): void {
   const choicePayloadBase = {
     choiceId: choice.choiceId,
     choiceIds: choices.map((candidate) => candidate.choiceId),
@@ -1163,14 +1160,25 @@ function chooseEffectChoice(
                   }
                 : {}),
             }
-          : {
-              ...choicePayloadBase,
-              choiceKind: "directionalPlayerTarget" as const,
-              direction: choice.direction,
-              targetPlayerIds: choice.players.map(
-                (candidate) => candidate.playerId
-              ),
-            };
+          : choice.choiceKind === "defense"
+            ? {
+                ...choicePayloadBase,
+                choiceKind: "defense" as const,
+                ...(choice.card === undefined
+                  ? {}
+                  : {
+                      targetCardInstanceId: choice.card.instanceId,
+                      targetDefinitionId: choice.card.definitionId,
+                    }),
+              }
+            : {
+                ...choicePayloadBase,
+                choiceKind: "directionalPlayerTarget" as const,
+                direction: choice.direction,
+                targetPlayerIds: choice.players.map(
+                  (candidate) => candidate.playerId
+                ),
+              };
 
   recordGameEvent(state, {
     type: "effectChoiceSelected",
@@ -1181,7 +1189,105 @@ function chooseEffectChoice(
     ...choicePayload,
     sourceType: source.sourceType,
   });
-  return choice;
+}
+
+function createRuntimeEffectDecisionChoice(
+  choice: EffectChoice
+): RuntimeEffectDecisionChoice {
+  if (choice.choiceKind === "option") {
+    return { choiceKind: choice.choiceKind, choiceId: choice.choiceId };
+  }
+  if (choice.choiceKind === "playerTarget") {
+    return {
+      choiceKind: choice.choiceKind,
+      choiceId: choice.choiceId,
+      targetPlayerIds: choice.players.map((player) => player.playerId),
+    };
+  }
+  if (choice.choiceKind === "cardTarget") {
+    return {
+      choiceKind: choice.choiceKind,
+      choiceId: choice.choiceId,
+      targetCardInstanceIds: choice.cards.map((card) => card.instanceId),
+      amount: choice.amount,
+    };
+  }
+  if (choice.choiceKind === "defense") {
+    return {
+      choiceKind: choice.choiceKind,
+      choiceId: choice.choiceId,
+      ...(choice.card === undefined
+        ? {}
+        : {
+            targetCardInstanceId: choice.card.instanceId,
+          }),
+    };
+  }
+  return {
+    choiceKind: choice.choiceKind,
+    choiceId: choice.choiceId,
+    direction: choice.direction,
+    targetPlayerIds: choice.players.map((player) => player.playerId),
+  };
+}
+
+function matchesDecisionChoice(
+  choice: EffectChoice,
+  selection: RuntimeEffectDecisionChoice
+): boolean {
+  if (
+    choice.choiceKind !== selection.choiceKind ||
+    choice.choiceId !== selection.choiceId
+  ) {
+    return false;
+  }
+  if (
+    choice.choiceKind === "playerTarget" &&
+    selection.choiceKind === "playerTarget"
+  ) {
+    return sameValues(
+      choice.players.map((player) => player.playerId),
+      selection.targetPlayerIds
+    );
+  }
+  if (
+    choice.choiceKind === "cardTarget" &&
+    selection.choiceKind === "cardTarget"
+  ) {
+    return (
+      choice.amount === selection.amount &&
+      sameValues(
+        choice.cards.map((card) => card.instanceId),
+        selection.targetCardInstanceIds
+      )
+    );
+  }
+  if (choice.choiceKind === "defense" && selection.choiceKind === "defense") {
+    return choice.card?.instanceId === selection.targetCardInstanceId;
+  }
+  if (
+    choice.choiceKind === "directionalPlayerTarget" &&
+    selection.choiceKind === "directionalPlayerTarget"
+  ) {
+    return (
+      choice.direction === selection.direction &&
+      sameValues(
+        choice.players.map((player) => player.playerId),
+        selection.targetPlayerIds
+      )
+    );
+  }
+  return true;
+}
+
+function sameValues(
+  left: readonly string[],
+  right: readonly string[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }
 
 function buildLegalTargetChoices(
@@ -1189,10 +1295,10 @@ function buildLegalTargetChoices(
   player: PlayerState,
   effect: RuntimeEffectPayload
 ): { ok: true; choices: TargetChoice[] } | { ok: false; error: string } {
-  const target = effect.target;
+  const target = "target" in effect ? effect.target : undefined;
   if (!isRuntimeEffectSelectorTarget(target)) {
-    const selector = effect.targetSelector;
-    const targetSelector = effect.targetSelector;
+    const targetSelector =
+      "targetSelector" in effect ? effect.targetSelector : undefined;
     if (targetSelector === "chosenFoe") {
       return {
         ok: true,
@@ -1217,7 +1323,7 @@ function buildLegalTargetChoices(
 
     return {
       ok: false,
-      error: `Unsupported target selector ${asString(selector)}`,
+      error: `Unsupported target selector ${asString(targetSelector)}`,
     };
   }
 
@@ -1379,28 +1485,24 @@ function getResurrectionLifeTotal(
     }
 
     for (const effect of definition.engine.effects) {
-      if (
-        effect.effectId !== "set_resurrection_life_total" ||
-        effect.timing !== "replacement"
-      ) {
-        continue;
+      const result = resolveResurrectionLifeTotal(
+        effect,
+        {
+          sourceType: "wizardProperty",
+          runtimeMode: state.runtimeMode,
+          playerId: player.playerId,
+          cardInstanceId: token.instanceId,
+          definitionId: token.definitionId,
+          tokenInstanceId: token.instanceId,
+          tokenDefinitionId: token.definitionId,
+        },
+        player.statuses
+      );
+      if (result.status === "error") {
+        throw new Error(result.error);
       }
-
-      const unlessStatusId = effect["unlessStatusId"];
-      if (
-        typeof unlessStatusId === "string" &&
-        player.statuses.some((status) => status.statusId === unlessStatusId)
-      ) {
-        continue;
-      }
-
-      const lifeTotal = effect["lifeTotal"];
-      if (
-        typeof lifeTotal === "number" &&
-        Number.isSafeInteger(lifeTotal) &&
-        lifeTotal > 0
-      ) {
-        return lifeTotal;
+      if (result.status === "resolved") {
+        return result.result;
       }
     }
   }
@@ -1415,10 +1517,7 @@ function awardBasicTrophyForKill(
   effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
-  if (
-    killer.playerId === defeatedPlayer.playerId ||
-    !givesBasicTrophyCredit(effectId)
-  ) {
+  if (killer.playerId === defeatedPlayer.playerId) {
     return;
   }
 
@@ -1463,22 +1562,15 @@ function awardBasicTrophyForKill(
   });
 }
 
-function givesBasicTrophyCredit(effectId: RuntimeEffectId): boolean {
-  return (
-    effectId === "attack_damage" ||
-    effectId === "multi_target_attack" ||
-    effectId === "deal_damage"
-  );
-}
-
 function dealDamage(
   state: GameState,
   sourcePlayer: PlayerState,
   targetPlayer: PlayerState,
   amount: number,
   effectId: RuntimeEffectId,
-  source: EffectSourceContext
-): DamageResult {
+  source: EffectSourceContext,
+  cause: DamageCause
+): DamageApplicationResult {
   const previousLife = targetPlayer.life.current;
   targetPlayer.life.current -= amount;
   const damageDealt = Math.max(0, Math.min(previousLife, amount));
@@ -1501,9 +1593,9 @@ function dealDamage(
       state,
       targetPlayer,
       targetPlayer.life.current,
-      givesBasicTrophyCredit(effectId)
+      cause.kind === "playerControlled"
         ? {
-            killer: sourcePlayer,
+            killer: cause.player,
             effectId,
             source,
           }
@@ -1511,13 +1603,16 @@ function dealDamage(
     );
   }
 
-  applyDamageDealtTriggers(
+  const triggerResult = applyDamageDealtTriggers(
     state,
     sourcePlayer,
     targetPlayer,
     damageDealt,
     source
   );
+  if (!triggerResult.ok || triggerResult.gameEnd !== undefined) {
+    return triggerResult;
+  }
 
   return {
     damageDealt,
@@ -1531,43 +1626,20 @@ function applyDamageDealtTriggers(
   targetPlayer: PlayerState,
   damageDealt: number,
   damageSource: EffectSourceContext
-): void {
+): EffectExecutionResult {
   if (
     damageDealt <= 0 ||
     sourcePlayer.playerId === targetPlayer.playerId ||
     state.activePlayerId !== sourcePlayer.playerId
   ) {
-    return;
+    return { ok: true };
   }
 
-  for (const controlledCard of getControlledCards(state, sourcePlayer)) {
-    const definition = state.cardDefinitions.get(controlledCard.definitionId);
-    if (definition === undefined || !definition.engine.playableInV0) {
-      continue;
-    }
-
-    for (const effect of definition.engine.effects) {
-      if (
-        effect.effectId !== "heal_equal_damage_dealt_on_own_turn" ||
-        effect.timing !== "afterDamageDealt"
-      ) {
-        continue;
-      }
-
-      healPlayer(
-        state,
-        sourcePlayer,
-        sourcePlayer,
-        damageDealt,
-        "heal_equal_damage_dealt_on_own_turn",
-        {
-          ...damageSource,
-          cardInstanceId: controlledCard.instanceId,
-          definitionId: controlledCard.definitionId,
-        }
-      );
-    }
-  }
+  return dispatchControlledCardOperation(state, sourcePlayer, {
+    kind: "afterDamageDealt",
+    damageDealt,
+    damageSource,
+  });
 }
 
 /**
@@ -1581,363 +1653,54 @@ function applyAfterPlayerAttackDamage(
   attackingPlayer: PlayerState,
   totalDamageDealt: number,
   attackSource: EffectSourceContext
-): void {
+): EffectExecutionResult {
   if (
     totalDamageDealt <= 0 ||
     state.activePlayerId !== attackingPlayer.playerId ||
     state.turn.damagingAttackPlayerIds.includes(attackingPlayer.playerId)
   ) {
-    return;
+    return { ok: true };
+  }
+
+  const dispatchResult = dispatchControlledCardOperation(
+    state,
+    attackingPlayer,
+    {
+      kind: "afterPlayerAttackDamage",
+      totalDamageDealt,
+      attackSource,
+    }
+  );
+  if (!dispatchResult.ok || dispatchResult.gameEnd !== undefined) {
+    return dispatchResult;
   }
 
   state.turn.damagingAttackPlayerIds.push(attackingPlayer.playerId);
-  for (const permanent of attackingPlayer.permanents) {
-    const definition = state.cardDefinitions.get(permanent.definitionId);
-    if (definition === undefined || !definition.engine.playableInV0) {
-      continue;
-    }
-
-    const source: EffectSourceContext = {
-      ...attackSource,
-      runtimeMode: getCardEffectRuntimeMode(permanent.definitionId),
-      cardInstanceId: permanent.instanceId,
-      definitionId: permanent.definitionId,
-    };
-    for (const effect of definition.engine.effects) {
-      const resolution = resolveEffectRuntimeCatalogEntry(
-        `Effect ${effect.effectId}`,
-        effect.effectId,
-        effect,
-        source.runtimeMode,
-        source.sourceType
-      );
-      if (!resolution.ok) {
-        continue;
-      }
-      resolution.entry.handler.applyAfterPlayerAttackDamage?.(
-        state,
-        attackingPlayer,
-        effect,
-        source,
-        totalDamageDealt
-      );
-    }
-  }
+  return { ok: true };
 }
+
+const attackDefenseServices: AttackDefenseServices = {
+  chooseEffectChoice,
+  executeDefenseEffects(state, player, effects, source) {
+    return executeEffects(state, player, effects, "onDefense", source);
+  },
+};
 
 function resolveDefenseWindow(
   state: GameState,
   defendingPlayer: PlayerState,
-  attack: DefenseAttackContext
-): AttackResolution | undefined {
-  if (attack.defenseUsage.defendedPlayerIds.has(defendingPlayer.playerId)) {
-    return undefined;
-  }
-
-  const defense = findFirstLegalDefense(
+  attack: DefenseAttackContext,
+  resolveRedirectedAttack?: (
+    intent: RedirectedAttackIntent
+  ) => AttackTargetResolutionResult
+): DefenseWindowResolutionResult {
+  return resolveDefenseWindowWithServices(
     state,
     defendingPlayer,
-    attack.defenseUsage
+    attack,
+    attackDefenseServices,
+    resolveRedirectedAttack
   );
-  if (defense === undefined) {
-    return undefined;
-  }
-
-  recordGameEvent(state, {
-    type: "defenseChoiceSelected",
-    playerId: defendingPlayer.playerId,
-    cardInstanceId: defense.card.instanceId,
-    definitionId: defense.card.definitionId,
-    effectId: "avoid_attack",
-  });
-
-  if (!payDefenseCosts(state, defendingPlayer, defense.card, defense.effect)) {
-    return undefined;
-  }
-
-  attack.defenseUsage.defendedPlayerIds.add(defendingPlayer.playerId);
-  attack.defenseUsage.usedDefenseCardInstanceIds.add(defense.card.instanceId);
-
-  const redirectsAttack = defense.effect.redirectAttack === true;
-
-  const defenseSource: EffectSourceContext = {
-    sourceType: "card",
-    runtimeMode: getCardEffectRuntimeMode(defense.card.definitionId),
-    playerId: defendingPlayer.playerId,
-    cardInstanceId: defense.card.instanceId,
-    definitionId: defense.card.definitionId,
-  };
-
-  if (redirectsAttack && !moveDefenseCard(state, defendingPlayer, defense)) {
-    return undefined;
-  }
-
-  const branchEffects = defense.effect.branchEffects;
-  if (branchEffects !== undefined) {
-    const branchResult = executeEffects(
-      state,
-      defendingPlayer,
-      branchEffects,
-      "onDefense",
-      defenseSource
-    );
-    if (!branchResult.ok) {
-      return undefined;
-    }
-  }
-
-  if (redirectsAttack && attack.kind === "redirectable") {
-    return resolveAttackTarget(
-      state,
-      defendingPlayer,
-      attack.attackingPlayer,
-      attack.amountComponents.unresolvedBaseAmount +
-        attack.amountComponents.sourceOwnerModifierAmount,
-      attack.effectId,
-      {
-        ...attack.source,
-        playerId: defendingPlayer.playerId,
-      },
-      false,
-      attack.amountComponents.unresolvedBaseAmount,
-      attack.originalSource,
-      attack.defenseUsage,
-      attack.amountComponents
-    );
-  }
-
-  if (!redirectsAttack && !moveDefenseCard(state, defendingPlayer, defense)) {
-    return undefined;
-  }
-  return {
-    damageDealt: 0,
-    killed: false,
-    avoided: true,
-    amountComponents:
-      attack.kind === "redirectable"
-        ? attack.amountComponents
-        : {
-            unresolvedBaseAmount: 0,
-            sourceOwnerModifierAmount: 0,
-            currentAttackerTargetModifierAmount: 0,
-          },
-    attackingPlayer:
-      attack.kind === "redirectable" ? attack.attackingPlayer : defendingPlayer,
-    currentAttackerId:
-      attack.kind === "redirectable"
-        ? attack.attackingPlayer.playerId
-        : defendingPlayer.playerId,
-    targetPlayer: defendingPlayer,
-    source: defenseSource,
-    originalSource:
-      attack.kind === "redirectable" ? attack.originalSource : defenseSource,
-  };
-}
-
-function moveDefenseCard(
-  state: GameState,
-  defendingPlayer: PlayerState,
-  defense: {
-    card: CardInstance;
-    destination: "discardSelf" | "topdeckSelf";
-  }
-): boolean {
-  const cardIndex = defendingPlayer.hand.findIndex(
-    (card) => card.instanceId === defense.card.instanceId
-  );
-  if (cardIndex < 0) {
-    return false;
-  }
-
-  const [card] = defendingPlayer.hand.splice(cardIndex, 1);
-  if (card === undefined) {
-    return false;
-  }
-
-  if (defense.destination === "discardSelf") {
-    defendingPlayer.discard.push(card);
-    recordGameEvent(state, {
-      type: "defenseCardMoved",
-      playerId: defendingPlayer.playerId,
-      cardInstanceId: card.instanceId,
-      definitionId: card.definitionId,
-      destination: "discard",
-    });
-    return true;
-  }
-
-  if (defense.destination === "topdeckSelf") {
-    defendingPlayer.deck.unshift(card);
-    recordGameEvent(state, {
-      type: "defenseCardMoved",
-      playerId: defendingPlayer.playerId,
-      cardInstanceId: card.instanceId,
-      definitionId: card.definitionId,
-      destination: "deckTop",
-    });
-    return true;
-  }
-
-  return false;
-}
-
-function findFirstLegalDefense(
-  state: GameState,
-  defendingPlayer: PlayerState,
-  defenseUsage: AttackDefenseUsage
-):
-  | {
-      card: CardInstance;
-      destination: "discardSelf" | "topdeckSelf";
-      effect: AvoidAttackRuntimeEffect;
-    }
-  | undefined {
-  for (const card of defendingPlayer.hand) {
-    if (defenseUsage.usedDefenseCardInstanceIds.has(card.instanceId)) {
-      continue;
-    }
-
-    const definition = state.cardDefinitions.get(card.definitionId);
-    if (definition === undefined) {
-      continue;
-    }
-
-    const defenseEffect = definition.engine.effects.find(
-      (effect): effect is AvoidAttackRuntimeEffect => {
-        return isAvoidAttackRuntimeEffect(effect);
-      }
-    );
-    if (
-      defenseEffect !== undefined &&
-      canPayDefenseCosts(defendingPlayer, card, defenseEffect)
-    ) {
-      return {
-        card,
-        destination: defenseEffect.destination,
-        effect: defenseEffect,
-      };
-    }
-  }
-
-  return undefined;
-}
-
-function canPayDefenseCosts(
-  defendingPlayer: PlayerState,
-  defenseCard: CardInstance,
-  defenseEffect: RuntimeEffect
-): boolean {
-  const { costs } = defenseEffect;
-  if (costs === undefined) {
-    return true;
-  }
-
-  for (const cost of costs) {
-    switch (cost.costId) {
-      case "discard_other_hand_card":
-        if (
-          defendingPlayer.hand.every(
-            (card) => card.instanceId === defenseCard.instanceId
-          )
-        ) {
-          return false;
-        }
-        break;
-      case "spend_chips":
-        if (defendingPlayer.chips < cost.amount) {
-          return false;
-        }
-        break;
-      case "pay_life":
-        if (defendingPlayer.life.current - cost.amount < 1) {
-          return false;
-        }
-        break;
-    }
-  }
-
-  return true;
-}
-
-function payDefenseCosts(
-  state: GameState,
-  defendingPlayer: PlayerState,
-  defenseCard: CardInstance,
-  defenseEffect: RuntimeEffect
-): boolean {
-  const { costs } = defenseEffect;
-  if (costs === undefined) {
-    return true;
-  }
-
-  for (const cost of costs) {
-    switch (cost.costId) {
-      case "discard_other_hand_card": {
-        const paidCardIndex = defendingPlayer.hand.findIndex(
-          (card) => card.instanceId !== defenseCard.instanceId
-        );
-        if (paidCardIndex < 0) {
-          return false;
-        }
-
-        const [paidCard] = defendingPlayer.hand.splice(paidCardIndex, 1);
-        if (paidCard === undefined) {
-          return false;
-        }
-
-        defendingPlayer.discard.push(paidCard);
-        recordGameEvent(state, {
-          type: "defenseCostPaid",
-          playerId: defendingPlayer.playerId,
-          cardInstanceId: defenseCard.instanceId,
-          definitionId: defenseCard.definitionId,
-          targetCardInstanceId: paidCard.instanceId,
-          targetDefinitionId: paidCard.definitionId,
-          effectId: cost.costId,
-        });
-        break;
-      }
-      case "spend_chips": {
-        if (defendingPlayer.chips < cost.amount) {
-          return false;
-        }
-
-        defendingPlayer.chips -= cost.amount;
-        recordGameEvent(state, {
-          type: "defenseCostPaid",
-          playerId: defendingPlayer.playerId,
-          cardInstanceId: defenseCard.instanceId,
-          definitionId: defenseCard.definitionId,
-          effectId: cost.costId,
-          amount: cost.amount,
-          chipsBefore: defendingPlayer.chips + cost.amount,
-          chipsAfter: defendingPlayer.chips,
-        });
-        break;
-      }
-      case "pay_life": {
-        if (defendingPlayer.life.current - cost.amount < 1) {
-          return false;
-        }
-
-        const lifeBefore = defendingPlayer.life.current;
-        defendingPlayer.life.current -= cost.amount;
-        recordGameEvent(state, {
-          type: "defenseCostPaid",
-          playerId: defendingPlayer.playerId,
-          cardInstanceId: defenseCard.instanceId,
-          definitionId: defenseCard.definitionId,
-          effectId: cost.costId,
-          amount: cost.amount,
-          lifeBefore,
-          lifeAfter: defendingPlayer.life.current,
-        });
-        break;
-      }
-    }
-  }
-
-  return true;
 }
 
 function healPlayer(
@@ -2013,11 +1776,12 @@ function moveCardToPlayerZone(
   effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): boolean {
-  const sourceZone = getCardZoneName(state, card) ?? "unknown";
   const ownerBefore = card.ownerId;
-  if (!removeCardFromKnownZones(state, card)) {
+  const sourceLocation = removeCardFromLocation(state, card.instanceId);
+  if (sourceLocation === undefined) {
     return false;
   }
+  const sourceZone = sourceLocation.zoneName;
 
   moveMarketChipsToPlayer(state, player, card);
   card.ownerId = player.playerId;
@@ -2058,11 +1822,12 @@ function moveCardToZonePreservingOwner(
   effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): boolean {
-  const sourceZone = getCardZoneName(state, card) ?? "unknown";
   const ownerBefore = card.ownerId;
-  if (!removeCardFromKnownZones(state, card)) {
+  const sourceLocation = removeCardFromLocation(state, card.instanceId);
+  if (sourceLocation === undefined) {
     return false;
   }
+  const sourceZone = sourceLocation.zoneName;
 
   destination.push(card);
   recordCardMoved(state, player, card, {
@@ -2127,88 +1892,6 @@ function getDestroyDestination(
     zone: state.common.destroyedPile,
     zoneName: "destroyedPile",
   };
-}
-
-function getCardZoneName(
-  state: GameState,
-  card: CardInstance
-): string | undefined {
-  for (const player of state.players) {
-    if (player.unboughtFamiliar?.instanceId === card.instanceId) {
-      return `${player.playerId}.unboughtFamiliar`;
-    }
-
-    const playerZones: Array<[string, CardInstance[]]> = [
-      [`${player.playerId}.deck`, player.deck],
-      [`${player.playerId}.hand`, player.hand],
-      [`${player.playerId}.discard`, player.discard],
-      [`${player.playerId}.playedThisTurn`, player.playedThisTurn],
-      [`${player.playerId}.permanents`, player.permanents],
-    ];
-    for (const [zoneName, zone] of playerZones) {
-      if (zone.some((candidate) => candidate.instanceId === card.instanceId)) {
-        return zoneName;
-      }
-    }
-  }
-
-  const commonZones: Array<[string, CardInstance[]]> = [
-    ["mainMarket", state.common.market],
-    ["legendMarket", state.common.legendMarket],
-    ["mainDeck", state.common.mainDeck],
-    ["legendDeck", state.common.legendDeck],
-    ["wildMagicStack", state.common.wildMagicStack],
-    ["limpWandStack", state.common.limpWandStack],
-    ["destroyedPile", state.common.destroyedPile],
-    ["destroyedMayhem", state.common.destroyedMayhem],
-    ["destroyedMegaMayhem", state.common.destroyedMegaMayhem],
-  ];
-  return commonZones.find(([, zone]) =>
-    zone.some((candidate) => candidate.instanceId === card.instanceId)
-  )?.[0];
-}
-
-function removeCardFromKnownZones(
-  state: GameState,
-  card: CardInstance
-): boolean {
-  for (const player of state.players) {
-    if (player.unboughtFamiliar?.instanceId === card.instanceId) {
-      player.unboughtFamiliar = undefined;
-      return true;
-    }
-  }
-
-  const zones = [
-    state.common.market,
-    state.common.legendMarket,
-    state.common.mainDeck,
-    state.common.legendDeck,
-    state.common.wildMagicStack,
-    state.common.limpWandStack,
-    state.common.destroyedPile,
-    state.common.destroyedMayhem,
-    state.common.destroyedMegaMayhem,
-    ...state.players.flatMap((player) => [
-      player.deck,
-      player.hand,
-      player.discard,
-      player.playedThisTurn,
-      player.permanents,
-    ]),
-  ];
-
-  for (const zone of zones) {
-    const index = zone.findIndex(
-      (candidate) => candidate.instanceId === card.instanceId
-    );
-    if (index >= 0) {
-      zone.splice(index, 1);
-      return true;
-    }
-  }
-
-  return false;
 }
 
 function asString(value: unknown): string {
@@ -2360,15 +2043,12 @@ function playResolvedCard(
     player.permanents.push(card);
   } else {
     player.playedThisTurn.push(card);
-    state.turn.temporaryCardControls.push({
-      cardInstanceId: card.instanceId,
-      controllerId: player.playerId,
-    });
+    grantTemporaryControl(state, card.instanceId, player.playerId);
   }
 
   const effectResult = executeOnPlayEffects(state, player, definition, {
     sourceType: "card",
-    runtimeMode: getCardEffectRuntimeMode(card.definitionId),
+    runtimeMode: state.runtimeMode,
     playerId: player.playerId,
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
@@ -2448,12 +2128,6 @@ function moveResolvedNonOngoingCardToDestination(
       error: `Cannot move ${card.instanceId} to a discard that does not belong to its owner`,
     };
   }
-  const cardIndex = controller.playedThisTurn.findIndex(
-    (candidate) => candidate.instanceId === card.instanceId
-  );
-  if (cardIndex < 0) {
-    return { ok: true };
-  }
   const owner = state.players.find(
     (candidate) => candidate.playerId === destination.ownerId
   );
@@ -2464,13 +2138,29 @@ function moveResolvedNonOngoingCardToDestination(
     };
   }
 
-  controller.playedThisTurn.splice(cardIndex, 1);
-  owner.discard.push(card);
-  recordCardMoved(state, controller, card, {
-    sourceZone: `${controller.playerId}.playedThisTurn`,
+  const expectedSourceZone = `${controller.playerId}.playedThisTurn`;
+  const currentLocation = findCardLocation(state, card.instanceId);
+  if (currentLocation?.zoneName !== expectedSourceZone) {
+    return {
+      ok: false,
+      error: `Cannot move resolved card ${card.instanceId}`,
+    };
+  }
+
+  const sourceLocation = removeCardFromLocation(state, card.instanceId);
+  if (sourceLocation === undefined) {
+    return {
+      ok: false,
+      error: `Cannot move resolved card ${card.instanceId}`,
+    };
+  }
+
+  owner.discard.push(sourceLocation.card);
+  recordCardMoved(state, controller, sourceLocation.card, {
+    sourceZone: sourceLocation.zoneName,
     destinationZone: `${owner.playerId}.discard`,
-    ownerBefore: card.ownerId,
-    ownerAfter: card.ownerId,
+    ownerBefore: sourceLocation.card.ownerId,
+    ownerAfter: sourceLocation.card.ownerId,
   });
   return { ok: true };
 }
@@ -2503,8 +2193,4 @@ function shuffleInPlace<T>(items: T[], state: GameState): void {
     items[index] = swapItem;
     items[swapIndex] = item;
   }
-}
-
-function getCardEffectRuntimeMode(definitionId: string): "combat" | "fixture" {
-  return definitionId.startsWith("fixture-") ? "fixture" : "combat";
 }

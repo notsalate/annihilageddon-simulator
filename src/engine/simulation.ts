@@ -20,11 +20,14 @@ import {
   type GameEvent,
   type GameState,
   type PlayerId,
-  type RuntimeEffectChoice,
+  type PlayerDecisionView,
+  type PlayerState,
+  type RuntimeEffectDecisionChoice,
   type RuntimeEffectChoiceRequest,
   type TokenInstance,
 } from "./setup.js";
 import { assertGameStateInvariants } from "./invariants.js";
+import { createPlayerDecisionView } from "./strategy-decision-view.js";
 
 export type GameEndReason =
   | "deadWizardTokensExhausted"
@@ -40,19 +43,32 @@ export interface RunSingleGameOptions {
   playerCount?: number;
   dataPackPath?: string;
   bot?: BotStrategy;
+  botFactory?: (playerId: PlayerId) => BotStrategy;
   validateInvariants?: boolean;
 }
 
 export interface BotDecisionContext {
-  state: GameState;
-  legalActions: readonly LegalAction[];
+  player: PlayerDecisionView;
+  legalActions: readonly BotDecisionAction[];
 }
+
+export type BotDecisionAction =
+  | Exclude<LegalAction, { type: "buyMarketCard" }>
+  | (Extract<LegalAction, { type: "buyMarketCard" }> & {
+      readonly cost: number;
+    });
 
 export interface BotStrategy {
   chooseAction(context: BotDecisionContext): GameAction;
   chooseEffectChoice?(
     request: RuntimeEffectChoiceRequest
-  ): RuntimeEffectChoice | undefined;
+  ): RuntimeEffectDecisionChoice | undefined;
+}
+
+interface PlayerBotBinding {
+  readonly strategy: BotStrategy;
+  readonly chooseAction: BotStrategy["chooseAction"];
+  readonly chooseEffectChoice: BotStrategy["chooseEffectChoice"];
 }
 
 export interface SetupCardSnapshot {
@@ -110,7 +126,7 @@ export interface PlayerScore {
 }
 
 export const baselineBot: BotStrategy = {
-  chooseAction({ state, legalActions }: BotDecisionContext): GameAction {
+  chooseAction({ legalActions }: BotDecisionContext): GameAction {
     const playAction = legalActions.find(
       (action) => action.type === "playCard"
     );
@@ -120,13 +136,13 @@ export const baselineBot: BotStrategy = {
 
     const buyActions = legalActions
       .filter(
-        (action): action is Extract<LegalAction, { type: "buyMarketCard" }> => {
+        (
+          action
+        ): action is Extract<BotDecisionAction, { type: "buyMarketCard" }> => {
           return action.type === "buyMarketCard";
         }
       )
-      .sort((left, right) => {
-        return getBuyActionCost(state, right) - getBuyActionCost(state, left);
-      });
+      .sort((left, right) => right.cost - left.cost);
     const buyAction = buyActions[0];
     if (buyAction !== undefined) {
       return buyAction;
@@ -136,13 +152,143 @@ export const baselineBot: BotStrategy = {
   },
 };
 
+function createBaselineBot(): BotStrategy {
+  return {
+    chooseAction(context) {
+      return baselineBot.chooseAction(context);
+    },
+  };
+}
+
+function mustGetActivePlayer(state: GameState): PlayerState {
+  const player = state.players.find(
+    (candidate) => candidate.playerId === state.activePlayerId
+  );
+  if (player === undefined) {
+    throw new Error(`Active player ${state.activePlayerId} is missing`);
+  }
+  return player;
+}
+
+function createBotDecisionActions(
+  state: GameState,
+  legalActions: readonly LegalAction[]
+): BotDecisionAction[] {
+  const activePlayer = mustGetActivePlayer(state);
+  return legalActions.map((action) =>
+    action.type === "buyMarketCard"
+      ? { ...action, cost: getBuyActionCost(state, activePlayer, action) }
+      : action
+  );
+}
+
+function getBuyActionCost(
+  state: GameState,
+  activePlayer: PlayerState,
+  action: Extract<LegalAction, { type: "buyMarketCard" }>
+): number {
+  if (action.source === "wildMagicStack") {
+    return 3;
+  }
+  const card = [
+    ...state.common.market,
+    ...state.common.legendMarket,
+    activePlayer.unboughtFamiliar,
+  ].find((candidate) => candidate?.instanceId === action.cardInstanceId);
+  if (card === undefined) {
+    throw new Error(`Legal buy target ${action.cardInstanceId} is missing`);
+  }
+  return calculateEffectiveCardCost(
+    state,
+    activePlayer.playerId,
+    mustGetCardDefinition(state, card)
+  );
+}
+
+function mustGetCardDefinition(
+  state: GameState,
+  card: CardInstance
+): CardDefinition {
+  const definition = state.cardDefinitions.get(card.definitionId);
+  if (definition === undefined) {
+    throw new Error(`Missing card definition ${card.definitionId}`);
+  }
+  return definition;
+}
+
 export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
-  const bot = options.bot ?? baselineBot;
+  const { bot, botFactory, ...initializeGameOptions } = options;
+  if (bot !== undefined && bot !== baselineBot) {
+    throw new Error("Custom multiplayer bot must use botFactory");
+  }
+  const strategyFactory =
+    botFactory ??
+    (bot === undefined || bot === baselineBot
+      ? () => createBaselineBot()
+      : () => bot);
+  const botBindingsByPlayerId = new Map<PlayerId, PlayerBotBinding>();
+  const playerIdByStrategy = new WeakMap<BotStrategy, PlayerId>();
+  const playerIdByCallback = new Map<
+    | BotStrategy["chooseAction"]
+    | NonNullable<BotStrategy["chooseEffectChoice"]>,
+    PlayerId
+  >();
+
+  function getBotBindingForPlayer(playerId: PlayerId): PlayerBotBinding {
+    const existingBinding = botBindingsByPlayerId.get(playerId);
+    if (existingBinding !== undefined) {
+      return existingBinding;
+    }
+
+    const strategy = strategyFactory(playerId);
+    const assignedStrategyPlayerId = playerIdByStrategy.get(strategy);
+    if (
+      assignedStrategyPlayerId !== undefined &&
+      assignedStrategyPlayerId !== playerId
+    ) {
+      throw new Error(
+        `BotStrategy object is already assigned to ${assignedStrategyPlayerId}; create a separate strategy for ${playerId}`
+      );
+    }
+    const chooseAction = strategy.chooseAction;
+    const chooseEffectChoice = strategy.chooseEffectChoice;
+    const callbacks: ReadonlyArray<
+      readonly [
+        "chooseAction" | "chooseEffectChoice",
+        (
+          | BotStrategy["chooseAction"]
+          | NonNullable<BotStrategy["chooseEffectChoice"]>
+        ),
+      ]
+    > = [
+      ["chooseAction", chooseAction],
+      ...(chooseEffectChoice === undefined
+        ? []
+        : ([["chooseEffectChoice", chooseEffectChoice]] as const)),
+    ];
+    for (const [callbackName, callback] of callbacks) {
+      const assignedPlayerId = playerIdByCallback.get(callback);
+      if (assignedPlayerId !== undefined && assignedPlayerId !== playerId) {
+        throw new Error(
+          `${callbackName} callback is already assigned to ${assignedPlayerId}; create a separate callback for ${playerId}`
+        );
+      }
+    }
+    for (const [, callback] of callbacks) {
+      playerIdByCallback.set(callback, playerId);
+    }
+    playerIdByStrategy.set(strategy, playerId);
+    const binding = { strategy, chooseAction, chooseEffectChoice };
+    botBindingsByPlayerId.set(playerId, binding);
+    return binding;
+  }
+
   const state = initializeGame({
-    ...options,
-    ...(bot.chooseEffectChoice === undefined
-      ? {}
-      : { effectChoiceStrategy: bot.chooseEffectChoice }),
+    ...initializeGameOptions,
+    effectChoiceStrategy: (request) => {
+      const binding = getBotBindingForPlayer(request.player.playerId);
+      return binding.chooseEffectChoice?.call(binding.strategy, request);
+    },
   });
   const setupState = snapshotSetupState(state);
   if (options.validateInvariants) {
@@ -168,8 +314,13 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       throw new Error(`Bot exceeded ${actionLimit} actions before maxTurns`);
     }
 
+    const activePlayer = mustGetActivePlayer(state);
     const legalActions = listLegalActions(state);
-    const selectedAction = bot.chooseAction({ state, legalActions });
+    const binding = getBotBindingForPlayer(activePlayer.playerId);
+    const selectedAction = binding.chooseAction.call(binding.strategy, {
+      player: createPlayerDecisionView(activePlayer),
+      legalActions: createBotDecisionActions(state, legalActions),
+    });
     if (!isLegalAction(selectedAction, legalActions)) {
       throw new Error(`Bot selected illegal action ${selectedAction.type}`);
     }
@@ -376,49 +527,6 @@ function isLegalAction(
         return assertNever(action);
     }
   });
-}
-
-function getBuyActionCost(
-  state: GameState,
-  action: Extract<LegalAction, { type: "buyMarketCard" }>
-): number {
-  if (action.source === "wildMagicStack") {
-    return 3;
-  }
-
-  const activePlayer = state.players.find(
-    (player) => player.playerId === state.activePlayerId
-  );
-  const card = [
-    ...state.common.market,
-    ...state.common.legendMarket,
-    activePlayer?.unboughtFamiliar,
-  ].find((candidate) => {
-    return (
-      candidate !== undefined && candidate.instanceId === action.cardInstanceId
-    );
-  });
-  if (card === undefined) {
-    return 0;
-  }
-
-  return calculateEffectiveCardCost(
-    state,
-    state.activePlayerId,
-    mustGetDefinition(state, card)
-  );
-}
-
-function mustGetDefinition(
-  state: GameState,
-  card: CardInstance
-): CardDefinition {
-  const definition = state.cardDefinitions.get(card.definitionId);
-  if (definition === undefined) {
-    throw new Error(`Missing card definition ${card.definitionId}`);
-  }
-
-  return definition;
 }
 
 function mustGetTokenDefinition(

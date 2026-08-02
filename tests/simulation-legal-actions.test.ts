@@ -1,162 +1,88 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  runSingleGame,
-  type CardDefinition,
-  type GameState,
-  type TokenDefinition,
-} from "../src/index.js";
-import {
-  markCardDefinitionId,
-  markCardInstanceId,
-  markTokenDefinitionId,
-  markTokenInstanceId,
-} from "../src/domain/types.js";
+import { baselineBot, initializeGame, runSingleGame } from "../src/index.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
 
-const fixturePermanentDefinition = {
-  schemaVersion: 1,
-  cardId: "fixture-activation-permanent",
-  source: { image: "assets/cards/fixtures/fixture-activation-permanent.png" },
-  visible: {
-    nameRu: "Fixture Activation Permanent",
-    cost: 0,
-    victoryPoints: 0,
-    typeRu: "Заклинание",
-    cardKind: "normal",
-    cardTypes: ["spell"],
-    markers: ["ongoing", "activate"],
-  },
-  engine: {
-    runtimeSchema: "krutagidon.cardDefinition.v0",
-    mappingStatus: "fixture",
-    playableInV0: true,
-    cardKind: "normal",
-    cardTypes: ["spell"],
-    cost: 0,
-    victoryPoints: 0,
-    isOngoing: true,
-    marketChipMarker: false,
-    effects: [
-      {
-        effectId: "add_power",
-        timing: "activation",
-        amount: 1,
-      },
-    ],
-    unsupportedMechanics: [],
-  },
-} satisfies CardDefinition;
-
-const fixtureWizardPropertyDefinition = {
-  schemaVersion: 1,
-  tokenId: "fixture-activation-wizard-property",
-  runtimeSchema: "krutagidon.tokenDefinition.v0",
-  kind: "wizardProperty",
-  source: { image: "assets/wizard-property/wp_fixture.png" },
-  visible: {
-    textRu: "☼: +1 мощь.",
-    sourceLabel: "Fixture Activation Property",
-  },
-  engine: {
-    mappingStatus: "fixture",
-    playableInV0: true,
-    effects: [
-      {
-        effectId: "add_power",
-        timing: "activation",
-        amount: 1,
-      },
-    ],
-    unsupportedMechanics: [],
-  },
-} satisfies TokenDefinition;
-
-const permanentInstanceId = "fixture-activation-permanent-instance";
-const wizardPropertyInstanceId = "fixture-activation-wizard-property-instance";
-
-test("single-game simulation accepts activation actions selected by a bot", () => {
-  let prepared = false;
-
+test("BotStrategy receives an isolated public decision view and applies its chosen action", () => {
+  let receivedContext = false;
   const result = runSingleGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
-    maxTurns: 3,
-    bot: {
-      chooseAction({ state, legalActions }) {
-        if (!prepared) {
-          addActivationFixturesToActivePlayer(state);
-          prepared = true;
+    maxTurns: 1,
+    botFactory() {
+      return {
+        chooseAction({ player, legalActions }) {
+          receivedContext = true;
+          assert.equal("deck" in player, false);
+          assert.equal("players" in player, false);
+          assert.ok(
+            legalActions.every(
+              (action) =>
+                !("definitionId" in action) &&
+                !("targetDefinitionIds" in action)
+            )
+          );
+
+          const mutablePlayer = player as unknown as {
+            chips: number;
+            hand: unknown[];
+          };
+          mutablePlayer.chips = 99;
+          mutablePlayer.hand.length = 0;
+
           return { type: "endTurn" };
-        }
-
-        const permanentActivation = legalActions.find(
-          (action) => action.type === "activatePermanent"
-        );
-        if (permanentActivation !== undefined) {
-          return permanentActivation;
-        }
-
-        const wizardPropertyActivation = legalActions.find(
-          (action) => action.type === "activateWizardProperty"
-        );
-        if (wizardPropertyActivation !== undefined) {
-          return wizardPropertyActivation;
-        }
-
-        return { type: "endTurn" };
-      },
+        },
+      };
     },
   });
 
+  assert.equal(receivedContext, true);
+  assert.equal(result.endReason, "maxTurnsReached");
   assert.ok(
-    result.eventLog.some((event) => {
-      return (
-        event.type === "cardActivated" &&
-        event.cardInstanceId === permanentInstanceId
-      );
-    })
-  );
-  assert.ok(
-    result.eventLog.some((event) => {
-      return (
-        event.type === "wizardPropertyActivated" &&
-        event.tokenInstanceId === wizardPropertyInstanceId
-      );
-    })
+    result.eventLog.some(
+      (event) => event.type === "endTurnCleanupMoved" && event.amount > 0
+    )
   );
 });
 
-function addActivationFixturesToActivePlayer(state: GameState): void {
+test("baseline bot chooses the most expensive accessible market purchase", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
   const activePlayer = state.players.find(
     (player) => player.playerId === state.activePlayerId
   );
   assert.ok(activePlayer);
+  const { deck: _deck, ...player } = activePlayer;
+  const cheapMainMarketCardId = "fixture-cheap-main-market-card";
+  const expensiveLegendMarketCardId = "fixture-expensive-legend-market-card";
 
-  state.cardDefinitions = new Map([
-    ...state.cardDefinitions,
-    [fixturePermanentDefinition.cardId, fixturePermanentDefinition],
-  ]);
-  state.tokenDefinitions = new Map([
-    ...state.tokenDefinitions,
-    [fixtureWizardPropertyDefinition.tokenId, fixtureWizardPropertyDefinition],
-  ]);
-  activePlayer.permanents.push({
-    instanceId: markCardInstanceId(permanentInstanceId),
-    definitionId: markCardDefinitionId(fixturePermanentDefinition.cardId),
-    ownerId: activePlayer.playerId,
-    marketChips: 0,
+  const selected = baselineBot.chooseAction({
+    player,
+    legalActions: [
+      {
+        type: "buyMarketCard",
+        cardInstanceId: cheapMainMarketCardId,
+        source: "mainMarket",
+        cost: 1,
+      },
+      {
+        type: "buyMarketCard",
+        cardInstanceId: expensiveLegendMarketCardId,
+        source: "legendMarket",
+        cost: 5,
+      },
+      { type: "endTurn" },
+    ],
   });
-  activePlayer.wizardProperties.push({
-    instanceId: markTokenInstanceId(wizardPropertyInstanceId),
-    definitionId: markTokenDefinitionId(
-      fixtureWizardPropertyDefinition.tokenId
-    ),
-    ownerId: activePlayer.playerId,
+
+  assert.deepEqual(selected, {
+    type: "buyMarketCard",
+    cardInstanceId: expensiveLegendMarketCardId,
+    source: "legendMarket",
+    cost: 5,
   });
-}
+});

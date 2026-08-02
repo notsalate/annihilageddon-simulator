@@ -17,7 +17,7 @@ import {
 } from "../src/index.js";
 import { victoryPointsPolicy } from "../src/engine/best-move-policies.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
-import { withTemporaryEffectRuntimeHandler } from "./helpers/with-temporary-effect-runtime-handler.js";
+import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 
 const rootDir = process.cwd();
 
@@ -490,22 +490,26 @@ test("keeps sibling game-ending ordinary actions and stops each winning line", (
   const lowerScoreCard = addFixtureDefinitionToActiveHand(
     state,
     fixtureDefinition("fixture-game-ending-action-low", [
-      { effectId: "fixture_add_power_equal_to_target_cost", timing: "onPlay" },
+      {
+        effectId: "fixture_add_power_equal_to_target_cost",
+        timing: "onPlay",
+        target: { selector: "mainMarketCard" },
+      },
     ])
   );
   const higherScoreCard = addFixtureDefinitionToActiveHand(
     state,
     fixtureDefinition("fixture-game-ending-action-high", [
-      { effectId: "fixture_add_power_equal_to_target_cost", timing: "onPlay" },
+      {
+        effectId: "fixture_add_power_equal_to_target_cost",
+        timing: "onPlay",
+        target: { selector: "mainMarketCard" },
+      },
     ])
   );
-  const lines = withTemporaryEffectRuntimeHandler(
+  const lines = withTemporaryEffectRuntimeOperations(
     "fixture_add_power_equal_to_target_cost",
     {
-      effectId: "fixture_add_power_equal_to_target_cost",
-      validateShape() {
-        return [];
-      },
       execute(_state, player) {
         return {
           ok: true,
@@ -574,6 +578,7 @@ test("victory-points policy ranks by score even when a lower-scoring line has a 
         {
           effectId: "fixture_add_power_equal_to_target_cost",
           timing: "onPlay",
+          target: { selector: "mainMarketCard" },
         },
       ],
     },
@@ -586,13 +591,9 @@ test("victory-points policy ranks by score even when a lower-scoring line has a 
   state.common.legendDeck = [];
   state.common.wildMagicStack = [];
 
-  const lines = withTemporaryEffectRuntimeHandler(
+  const lines = withTemporaryEffectRuntimeOperations(
     "fixture_add_power_equal_to_target_cost",
     {
-      effectId: "fixture_add_power_equal_to_target_cost",
-      validateShape() {
-        return [];
-      },
       execute(_state, player) {
         player.hand = player.hand.filter(
           (card) => card.instanceId !== bonusCard.instanceId
@@ -667,17 +668,17 @@ test("rejects a non-end action that changes the root player and turn", () => {
   addFixtureDefinitionToActiveHand(
     state,
     fixtureDefinition("fixture-invalid-turn-transition", [
-      { effectId: "fixture_add_power_equal_to_target_cost", timing: "onPlay" },
+      {
+        effectId: "fixture_add_power_equal_to_target_cost",
+        timing: "onPlay",
+        target: { selector: "mainMarketCard" },
+      },
     ])
   );
 
-  withTemporaryEffectRuntimeHandler(
+  withTemporaryEffectRuntimeOperations(
     "fixture_add_power_equal_to_target_cost",
     {
-      effectId: "fixture_add_power_equal_to_target_cost",
-      validateShape() {
-        return [];
-      },
       execute(mutatedState, player) {
         const nextPlayer = mutatedState.players.find(
           (candidate) => candidate.playerId !== player.playerId
@@ -872,6 +873,7 @@ test("fails without a partial result when action or line limits are reached", ()
 
 test("enumerates each card target as a completed branch", () => {
   const state = initializeGame({ rootDir, seed: 126 });
+  state.runtimeMode = "fixture";
   const target = state.common.market[0];
   const secondTarget = state.common.mainDeck[0];
   assert.ok(target);
@@ -927,6 +929,7 @@ test("enumerates each card target as a completed branch", () => {
 
 test("limits the total generated branches across sequential choices", () => {
   const state = initializeGame({ rootDir, seed: 126 });
+  state.runtimeMode = "fixture";
   const target = state.common.market[0];
   const secondTarget = state.common.mainDeck[0];
   assert.ok(target);
@@ -975,6 +978,7 @@ test("limits the total generated branches across sequential choices", () => {
 
 test("enumerates the Cartesian product of sequential choices", () => {
   const state = initializeGame({ rootDir, seed: 126 });
+  state.runtimeMode = "fixture";
   const target = state.common.market[0];
   const secondTarget = state.common.mainDeck[0];
   assert.ok(target);
@@ -1103,7 +1107,7 @@ test("fails explicitly when replay choice metadata drifts", () => {
     amount: 1,
     get targetSelector() {
       targetSelectorReads += 1;
-      return targetSelectorReads <= 4 ? "chosenPlayer" : "chosenFoe";
+      return targetSelectorReads === 1 ? "chosenPlayer" : "chosenFoe";
     },
   };
   addFixtureDefinitionToActiveHand(
