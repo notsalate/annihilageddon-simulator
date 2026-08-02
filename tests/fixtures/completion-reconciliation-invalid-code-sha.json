@@ -1,7 +1,7 @@
 {
   "rangeStart": "62777c389c014ea87b35d0facc7bcaa093795e30",
-  "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5",
-  "overallVerdict": "завершено",
+  "codeSha": "0000000000000000000000000000000000000000",
+  "overallVerdict": "есть открытые требования",
   "requirements": [
     {
       "id": "REQ-176-AC01",
@@ -10,9 +10,7 @@
       "findings": ["FIND-009"],
       "fixCommits": [],
       "tests": ["tests/completion-reconciliation.test.ts"],
-      "specVerdict": "unresolved",
-      "standardsVerdict": "unresolved",
-      "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
+      "codeSha": "0000000000000000000000000000000000000000"
     }
   ]
 }

@@ -1,6 +1,19 @@
 {
+  "rangeStart": "62777c389c014ea87b35d0facc7bcaa093795e30",
   "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5",
   "overallVerdict": "есть открытые требования",
+  "externalAttestation": {
+    "spec": {
+      "range": "62777c389c014ea87b35d0facc7bcaa093795e30...ffe1580fbae94558251c9a585de507e9cbf2c7b5",
+      "verdict": "APPROVED",
+      "findings": 0
+    },
+    "standards": {
+      "range": "62777c389c014ea87b35d0facc7bcaa093795e30...ffe1580fbae94558251c9a585de507e9cbf2c7b5",
+      "verdict": "APPROVED",
+      "findings": 0
+    }
+  },
   "requirements": [
     {
       "id": "REQ-176-AC01",
@@ -14,8 +27,6 @@
         "tests/game-state-fork.test.ts",
         "tests/public-entrypoint-guard.test.ts"
       ],
-      "specVerdict": "без замечаний",
-      "standardsVerdict": "без замечаний",
       "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
     },
     {
@@ -30,8 +41,6 @@
         "tests/game-state-fork.test.ts",
         "tests/public-entrypoint-guard.test.ts"
       ],
-      "specVerdict": "без замечаний",
-      "standardsVerdict": "без замечаний",
       "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
     },
     {
@@ -41,8 +50,6 @@
       "findings": ["FIND-009"],
       "fixCommits": [],
       "tests": ["tests/completion-reconciliation.test.ts"],
-      "specVerdict": "ожидает final review",
-      "standardsVerdict": "ожидает final review",
       "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
     }
   ]

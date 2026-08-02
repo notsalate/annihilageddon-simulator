@@ -173,10 +173,16 @@
 - Modify: this plan
 - Add: `scripts/check-completion-reconciliation.mjs`
 - Add: `tests/completion-reconciliation.test.ts`
+- Modify: `tests/run-tests.ts`
+- Add: `tests/fixtures/pr137-round4-completion-reconciliation.json`
+- Add: `tests/fixtures/completion-reconciliation-unresolved.json`
+- Add: `tests/fixtures/completion-reconciliation-closing-claim.json`
+- Add: `tests/fixtures/completion-reconciliation-invalid-*.json`
 - Update: PR #137 body after push
 
 - [x] Add an evidence reconciliation table mapping active requirements, counterexamples, fixes, tests, reviews, and exact code SHA.
-- [x] Add a machine-checked fixture that rejects a clean overall verdict when an active linked requirement remains unresolved.
+- [x] Add machine-checked fixtures for unresolved and alternative closing verdicts; register `completion-reconciliation.test.ts` in `tests/run-tests.ts`.
+- [x] Run `node scripts/check-completion-reconciliation.mjs tests/fixtures/pr137-round4-completion-reconciliation.json`.
 - [x] Leave `REQ-R3-09-AC03` unresolved and remove conflicting closing claims.
 - [x] Run final Spec and Standards review over `62777c389c014ea87b35d0facc7bcaa093795e30...ffe1580fbae94558251c9a585de507e9cbf2c7b5`: обе оси без замечаний.
 - [x] На `ffe1580fbae94558251c9a585de507e9cbf2c7b5` прошли `npm run check`, `git diff --check` и `git diff --check 62777c389c014ea87b35d0facc7bcaa093795e30...HEAD`.
@@ -185,17 +191,20 @@
 
 ## Task 7: reconciliation evidence
 
-`scripts/check-completion-reconciliation.mjs` verifies the JSON manifest before
-any clean overall verdict. A `resolved` active REQ needs the same full CODE SHA
-as the manifest, at least one finding, integration fix commit and test, plus
-Spec and Standards verdicts «без замечаний». An `unresolved` REQ is allowed
-only while the overall verdict stays open.
+`scripts/check-completion-reconciliation.mjs` проверяет machine-visible
+свидетельства: CODE SHA и fix commits должны быть Git commits в заданном
+диапазоне, а test references — существующими suite из `tests/run-tests.ts`.
+Manifest находится в `tests/fixtures/pr137-round4-completion-reconciliation.json`.
+An `unresolved` REQ разрешён только при verdict «есть открытые требования».
+
+Spec и Standards остаются external attestation: manifest содержит их запись,
+но validator не проверяет содержание ручного review.
 
 | Active REQ | Контрпример / finding | Исправления в интеграции | Тесты | Spec / Standards | CODE SHA | Статус |
 | --- | --- | --- | --- | --- | --- | --- |
 | `REQ-176-AC01` | `FIND-009`: `FIND-003/004/006/007` опровергали закрытие | `c117414`, `9381b4a`, `81a5408`, `c3559e9` и их регрессии | `validation`, `effect-runtime-applicability`, `game-state-fork`, `public-entrypoint-guard` | Spec APPROVED, 0; Standards APPROVED, 0 | `ffe1580fbae94558251c9a585de507e9cbf2c7b5` | resolved |
 | `REQ-R3-09-AC02` | те же `FIND-003/004/006/007` | те же интеграционные commits | те же точечные suites и final gate | Spec APPROVED, 0; Standards APPROVED, 0 | `ffe1580fbae94558251c9a585de507e9cbf2c7b5` | resolved |
-| `REQ-R3-09-AC03` | старые docs claims ссылаются на более ранний код | этот documentation commit; PR body — только после push | `completion-reconciliation.test.ts`, final diff checks | ожидают final verdict | `ffe1580fbae94558251c9a585de507e9cbf2c7b5` | unresolved |
+| `REQ-R3-09-AC03` | старые docs claims ссылаются на более ранний код | этот documentation commit; PR body — только после push | `completion-reconciliation.test.ts`, final diff checks | Spec APPROVED, 0; Standards APPROVED, 0; push/checks/PR body pending | `ffe1580fbae94558251c9a585de507e9cbf2c7b5` | unresolved |
 
 Пока любая строка unresolved, общий verdict — «есть открытые требования»;
 формулировка «без замечаний» запрещена.

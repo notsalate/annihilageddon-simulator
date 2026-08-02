@@ -1,5 +1,6 @@
 {
-  "codeSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "rangeStart": "62777c389c014ea87b35d0facc7bcaa093795e30",
+  "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5",
   "overallVerdict": "без замечаний",
   "requirements": [
     {
@@ -11,7 +12,7 @@
       "tests": ["tests/completion-reconciliation.test.ts"],
       "specVerdict": "unresolved",
       "standardsVerdict": "unresolved",
-      "codeSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      "codeSha": "ffe1580fbae94558251c9a585de507e9cbf2c7b5"
     }
   ]
 }
