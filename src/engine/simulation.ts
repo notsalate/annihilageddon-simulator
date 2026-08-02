@@ -221,6 +221,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       ? () => createBaselineBot()
       : () => bot);
   const strategiesByPlayerId = new Map<PlayerId, BotStrategy>();
+  const playerIdByStrategy = new WeakMap<BotStrategy, PlayerId>();
   const playerIdByCallback = new Map<
     | BotStrategy["chooseAction"]
     | NonNullable<BotStrategy["chooseEffectChoice"]>,
@@ -234,11 +235,22 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     }
 
     const strategy = strategyFactory(playerId);
+    const assignedStrategyPlayerId = playerIdByStrategy.get(strategy);
+    if (
+      assignedStrategyPlayerId !== undefined &&
+      assignedStrategyPlayerId !== playerId
+    ) {
+      throw new Error(
+        `BotStrategy object is already assigned to ${assignedStrategyPlayerId}; create a separate strategy for ${playerId}`
+      );
+    }
     const callbacks: ReadonlyArray<
       readonly [
         "chooseAction" | "chooseEffectChoice",
-        | BotStrategy["chooseAction"]
-        | NonNullable<BotStrategy["chooseEffectChoice"]>,
+        (
+          | BotStrategy["chooseAction"]
+          | NonNullable<BotStrategy["chooseEffectChoice"]>
+        ),
       ]
     > = [
       ["chooseAction", strategy.chooseAction],
@@ -257,6 +269,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     for (const [, callback] of callbacks) {
       playerIdByCallback.set(callback, playerId);
     }
+    playerIdByStrategy.set(strategy, playerId);
     strategiesByPlayerId.set(playerId, strategy);
     return strategy;
   }
@@ -294,7 +307,9 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
 
     const activePlayer = mustGetActivePlayer(state);
     const legalActions = listLegalActions(state);
-    const selectedAction = getStrategyForPlayer(activePlayer.playerId).chooseAction({
+    const selectedAction = getStrategyForPlayer(
+      activePlayer.playerId
+    ).chooseAction({
       player: createPlayerDecisionView(activePlayer),
       legalActions: createBotDecisionActions(state, legalActions),
     });

@@ -23,10 +23,7 @@ import {
   runSingleGame,
   scoreGame,
 } from "../src/index.js";
-import {
-  markPlayerId,
-  type PlayerId,
-} from "../src/domain/types.js";
+import { markPlayerId, type PlayerId } from "../src/domain/types.js";
 import type { BotStrategy } from "../src/engine/simulation.js";
 import type { PlayerDecisionView } from "../src/engine/setup.js";
 
@@ -174,7 +171,36 @@ test("single-game simulation gives each player an isolated stateful bot lifecycl
 
   runSingleGame(options);
 
-  assert.deepEqual(factoryCalls, [markPlayerId("player-1"), markPlayerId("player-2")]);
+  assert.deepEqual(factoryCalls, [
+    markPlayerId("player-1"),
+    markPlayerId("player-2"),
+  ]);
+});
+
+test("bot factory rejects one strategy object with replaced callbacks", () => {
+  const sharedStrategy: BotStrategy = {
+    chooseAction() {
+      return { type: "endTurn" };
+    },
+  };
+
+  assert.throws(
+    () =>
+      runSingleGame({
+        rootDir,
+        dataPackPath: playableRuntimeDataPackPath,
+        seed: 60615,
+        maxTurns: 2,
+        botFactory(playerId) {
+          sharedStrategy.chooseAction = ({ player }) => {
+            assert.equal(player.playerId, playerId);
+            return { type: "endTurn" };
+          };
+          return sharedStrategy;
+        },
+      }),
+    /BotStrategy object is already assigned to player-1/
+  );
 });
 
 test("bot factory rejects different strategy objects that share a stateful action callback", () => {
