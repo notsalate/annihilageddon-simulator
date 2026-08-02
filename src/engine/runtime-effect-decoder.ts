@@ -426,6 +426,11 @@ function requireTargetSelector(
         : undefined;
     const directSelector =
       "targetSelector" in effect ? effect.targetSelector : undefined;
+    if (target !== undefined && directSelector !== undefined) {
+      return [
+        `${subjectId} target and targetSelector cannot both be provided`,
+      ];
+    }
     const selector = nestedSelector ?? directSelector;
     return allowedSelectors.some(
       (allowedSelector) => allowedSelector === selector

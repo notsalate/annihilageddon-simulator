@@ -1886,6 +1886,40 @@ test("multi-target and Mayhem attacks require one nested target representation",
   }
 });
 
+test("attack and status decoders reject simultaneous nested and direct targets", () => {
+  const cases = [
+    {
+      effectId: "attack_damage",
+      payload: {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 2,
+        target: { selector: "opponentPlayer" },
+        targetSelector: "allPlayers",
+      },
+    },
+    {
+      effectId: "gain_status",
+      payload: {
+        effectId: "gain_status",
+        timing: "onPlay",
+        statusId: "dingler",
+        target: { selector: "opponentPlayer" },
+        targetSelector: "allPlayers",
+      },
+    },
+  ] as const;
+
+  for (const { effectId, payload } of cases) {
+    const errors = validateRawRuntimeEffect(effectId, "Fixture", payload);
+    assert.ok(
+      errors.some((error) =>
+        error.includes("target and targetSelector cannot both be provided")
+      )
+    );
+  }
+});
+
 test("combat effect decoders reject invalid concrete payloads", () => {
   const combatEffectIds = [
     "deal_damage",
