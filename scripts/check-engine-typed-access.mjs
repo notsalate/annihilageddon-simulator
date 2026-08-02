@@ -648,7 +648,10 @@ function cliEntrypoints(projectRoot) {
   const entrypoints = new Set();
   for (const script of Object.values(packageJson.scripts ?? {})) {
     if (typeof script !== "string") continue;
-    for (const match of script.matchAll(/\bdist\/src\/cli\/([\w-]+)\.js\b/gu)) {
+    const normalizedScript = script.replaceAll("\\", "/");
+    for (const match of normalizedScript.matchAll(
+      /\bdist\/src\/cli\/([\w-]+)\.js\b/gu
+    )) {
       entrypoints.add(`src/cli/${match[1]}.ts`);
     }
   }

@@ -43,7 +43,9 @@ function isPublicEntrypointGuardModule(
 
 function createPublicEntrypointFixture(
   files: Record<string, string>,
-  cliEntrypoints: readonly string[] = []
+  cliEntrypoints: readonly string[] = [],
+  cliPathSeparator = "/",
+  cliPathPrefix = ""
 ): string {
   const fixtureRoot = mkdtempSync(
     path.join(tmpdir(), "public-entrypoint-guard-")
@@ -66,7 +68,9 @@ function createPublicEntrypointFixture(
       scripts: Object.fromEntries(
         allCliEntrypoints.map((entrypoint, index) => [
           `fixture:${index}`,
-          `node dist/${entrypoint.replace(/\.ts$/u, ".js")}`,
+          `node ${cliPathPrefix}dist/${entrypoint
+            .replace(/\.ts$/u, ".js")
+            .replaceAll("/", cliPathSeparator)}`,
         ])
       ),
     }),
@@ -461,6 +465,33 @@ test("public guard rejects an unregistered production CLI", () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /unregistered production CLI/);
   assert.match(result.stderr, /src\/cli\/new-command\.ts/);
+});
+
+test("public guard discovers a Windows CLI script like its POSIX form", () => {
+  const files = {
+    "src/engine/runtime-effect-decoder.ts":
+      "export function decodeRuntimeEffect() { return {}; }\n",
+    "src/index.ts": "export const safe = true;\n",
+    "src/cli/new-command.ts": "export const safe = true;\n",
+  };
+  const cliEntrypoints = ["src/cli/new-command.ts"];
+  const posixResult = runTypedAccessGuard(
+    createPublicEntrypointFixture(files, cliEntrypoints)
+  );
+  const windowsResult = runTypedAccessGuard(
+    createPublicEntrypointFixture(files, cliEntrypoints, "\\", ".\\")
+  );
+
+  assert.equal(posixResult.status, 1);
+  assert.equal(windowsResult.status, 1);
+  const posixDiagnostic = posixResult.stderr.match(
+    /configuration violation: unregistered production CLI src\/cli\/new-command\.ts/u
+  )?.[0];
+  const windowsDiagnostic = windowsResult.stderr.match(
+    /configuration violation: unregistered production CLI src\/cli\/new-command\.ts/u
+  )?.[0];
+  assert.ok(posixDiagnostic);
+  assert.equal(windowsDiagnostic, posixDiagnostic);
 });
 
 test("public guard rejects a decoder value import outside approved adapters", () => {
