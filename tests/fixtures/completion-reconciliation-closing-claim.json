@@ -1,0 +1,17 @@
+{
+  "codeSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "overallVerdict": "завершено",
+  "requirements": [
+    {
+      "id": "REQ-176-AC01",
+      "active": true,
+      "status": "unresolved",
+      "findings": ["FIND-009"],
+      "fixCommits": [],
+      "tests": ["tests/completion-reconciliation.test.ts"],
+      "specVerdict": "unresolved",
+      "standardsVerdict": "unresolved",
+      "codeSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}

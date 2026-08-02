@@ -54,7 +54,7 @@ function validateManifest(manifest) {
       errors.push(`${requirement.id}: codeSha must match manifest.codeSha`);
     }
     if (requirement.status === "unresolved") {
-      if (manifest.overallVerdict === "без замечаний") {
+      if (manifest.overallVerdict !== "есть открытые требования") {
         errors.push(
           `${requirement.id}: active requirement remains unresolved${formatFindings(requirement.findings)}`
         );
