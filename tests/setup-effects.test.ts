@@ -167,7 +167,12 @@ test("setup catalog keeps the wizard-property source matrix explicit", () => {
       );
       assert.equal(result.ok, false);
       if (!result.ok) {
-        assert.match(result.errors[0] ?? "", /token-only effect id/);
+        assert.match(
+          result.errors[0] ?? "",
+          sourceKind === "deadWizardToken"
+            ? /deadWizardToken does not support effect id/
+            : /token-only effect id/
+        );
       }
     }
   }
