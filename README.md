@@ -54,22 +54,23 @@ npm run simulate:mass -- --firstSeed 9000 --games 100 --maxTurns 200
 
 ## Основные команды
 
-| Команда                                | Что делает                                                                                                      |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `npm run build`                        | Собирает TypeScript в `dist/`                                                                                   |
-| `npm run check`                        | Запускает strictest typecheck, lint, guard и полный набор тестов                                                |
-| `npm run clean:dist`                   | Рекурсивно удаляет `dist/` со всеми результатами предыдущей сборки                                              |
-| `npm run lint`                         | Запускает type-aware ESLint для `src/**/*.ts` и `tests/**/*.ts`                                                 |
-| `npm run typecheck`                    | Проверяет типы без сборки                                                                                       |
-| `npm run typecheck:strictest`          | Запускает максимально строгую проверку TypeScript без сборки                                                    |
-| `npm test`                             | Очищает `dist/`, собирает проект, проверяет полноту реестра и последовательно запускает тестовые наборы         |
-| `npm run simulate`                     | Открывает CLI-меню симулятора                                                                                   |
-| `npm run simulate:single`              | Запускает одну партию                                                                                           |
-| `npm run simulate:mass`                | Запускает массовую симуляцию                                                                                    |
-| `npm run validate:drafts`              | Проверяет draft JSON импорта                                                                                    |
-| `npm run report:import`                | Показывает полноту import pipeline                                                                              |
-| `npm run report:card-runtime-clusters` | Строит актуальный planning report и matrix по card runtime clusters                                             |
-| `npm run report:runtime-coverage`      | Запускает dynamic audit runtime coverage без committed snapshot                                                 |
+| Команда                                | Что делает                                                                                              |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `npm run build`                        | Собирает TypeScript в `dist/`                                                                           |
+| `npm run check`                        | Запускает strictest typecheck, lint, guard и полный набор тестов                                        |
+| `npm run clean:dist`                   | Рекурсивно удаляет `dist/` со всеми результатами предыдущей сборки                                      |
+| `npm run lint`                         | Запускает type-aware ESLint для `src/**/*.ts` и `tests/**/*.ts`                                         |
+| `npm run typecheck`                    | Проверяет типы без сборки                                                                               |
+| `npm run typecheck:strictest`          | Запускает максимально строгую проверку TypeScript без сборки                                            |
+| `npm test`                             | Очищает `dist/`, собирает проект, проверяет полноту реестра и последовательно запускает тестовые наборы |
+| `npm run simulate`                     | Открывает CLI-меню симулятора                                                                           |
+| `npm run simulate:single`              | Запускает одну партию                                                                                   |
+| `npm run simulate:mass`                | Запускает массовую симуляцию                                                                            |
+| `npm run validate:drafts`              | Проверяет draft JSON импорта                                                                            |
+| `npm run validate:adr`                 | Проверяет структуру, индекс и связи Architecture Decision Records                                       |
+| `npm run report:import`                | Показывает полноту import pipeline                                                                      |
+| `npm run report:card-runtime-clusters` | Строит актуальный planning report и matrix по card runtime clusters                                     |
+| `npm run report:runtime-coverage`      | Запускает dynamic audit runtime coverage без committed snapshot                                         |
 
 Посмотреть все доступные scripts:
 
@@ -85,7 +86,8 @@ npm run
 - одиночные и массовые симуляции через CLI;
 - baseline bot для воспроизводимых прогонов;
 - human-readable debug trace одной партии;
-- валидация runtime-данных и draft JSON импорта.
+- валидация runtime-данных и draft JSON импорта;
+- проверяемый жизненный цикл ADR с индексом архитектурных решений.
 
 ### Стратегии и анализ ходов
 

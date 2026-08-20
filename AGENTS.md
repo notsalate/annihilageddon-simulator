@@ -77,6 +77,7 @@ npm run typecheck:strictest
 npm test
 npm run build
 npm run validate:drafts
+npm run validate:adr
 npm run report:runtime-coverage
 npm run simulate
 npm run simulate:single
