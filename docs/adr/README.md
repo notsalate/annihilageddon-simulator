@@ -64,4 +64,5 @@ npm run validate:adr
 ## Связанные решения
 
 - [Индекс ADR](index.md)
+- [Аудит кандидатов на восстановление](../adr-audit.md)
 - [ADR-0001: модель benchmark и эпох производительности](0001-performance-epochs.md)
