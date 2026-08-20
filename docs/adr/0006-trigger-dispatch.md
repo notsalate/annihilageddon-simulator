@@ -13,42 +13,42 @@ superseded_by: none
 
 ## Контекст
 
-Эффекты контролируемых карт могут срабатывать при разных timing: on-play, after-attack и end-turn. Для них важны порядок Control Ledger, ongoing eligibility, source attribution, runtime mode, error semantics и terminal game result. Если каждый caller собирает discovery самостоятельно, эти условия расходятся.
+Эффекты контролируемых карт могут срабатывать в разные моменты: on-play, after-attack и end-turn. Для них важны порядок Control Ledger, допустимость ongoing-эффектов, атрибуция источника, режим выполнения, семантика ошибок и итог игры. Если каждый вызывающий код самостоятельно выполняет обнаружение, эти условия расходятся.
 
 ## Решение
 
-`Trigger Dispatch` принимает `GameState`, controller и discriminated typed operation. Внутри одной границы он строит controlled view через Control Ledger, выбирает timing и policy, создаёт source identity, вызывает Effect Runtime Catalog operation и возвращает typed result.
+`Trigger Dispatch` принимает `GameState`, `controller` и типизированную операцию с различающимися вариантами. Внутри одной границы он строит представление контролируемых объектов через Control Ledger, выбирает момент срабатывания и политику, создаёт идентификатор источника, вызывает операцию Effect Runtime Catalog и возвращает типизированный результат.
 
-Applicability и catalog operation не передаются caller-ом как raw predicate/executor. Discovery сохраняет стабильный Ledger order, non-ongoing cards не получают ongoing triggers, а первая ошибка или `gameEnd` останавливает дальнейшую aggregation. End-turn operation возвращает typed aggregate, а не список raw effects.
+Применимость и операция каталога не передаются вызывающему коду как необработанные предикат и исполнитель. Обнаружение сохраняет стабильный порядок Ledger, карты без ongoing-эффектов не получают ongoing-триггеры, а первая ошибка или `gameEnd` останавливает дальнейшее объединение результатов. Операция end-turn возвращает типизированный итог, а не список необработанных эффектов.
 
 ## Альтернативы
 
-- Дать каждому caller список raw effects и позволить ему выбирать timing/applicability. Текущая ownership boundary исключает этот вариант; первоначальная мотивация неизвестна.
-- Дублировать trigger discovery в `effect-runtime.ts`, `actions.ts` и handlers. История показывает консолидацию в dispatcher, но не восстанавливает исходные обсуждения.
-- Продолжать aggregation после первой ошибки или terminal result. Тесты требуют остановки; историческая дата выбора неизвестна.
+- Дать каждому вызывающему коду список необработанных эффектов и позволить ему выбирать момент срабатывания и применимость. Текущая граница владения исключает этот вариант; первоначальная мотивация неизвестна.
+- Дублировать обнаружение триггеров в `effect-runtime.ts`, `actions.ts` и обработчиках. История показывает консолидацию в dispatcher, но не восстанавливает исходные обсуждения.
+- Продолжать объединение результатов после первой ошибки или итогового результата. Тесты требуют остановки; историческая дата выбора неизвестна.
 
 ## Причины выбора
 
-Одна operation boundary удерживает discovery, timing, source identity и Catalog call в одном порядке. Caller получает только typed result и не может случайно обойти ongoing policy или скрыть malformed payload под `notApplicable`.
+Одна граница операции удерживает обнаружение, момент срабатывания, идентификатор источника и вызов Catalog в одном порядке. Вызывающий код получает только типизированный результат и не может случайно обойти политику ongoing или скрыть некорректные данные под `notApplicable`.
 
 ## Последствия
 
 ### Положительные
 
 - События и эффекты контролируемых объектов разрешаются в предсказуемом порядке.
-- Source attribution и ownership сохраняются через on-play и after-attack operations.
-- Error и terminal semantics единообразны для всех dispatcher consumers.
+- Атрибуция источника и владение сохраняются через операции on-play и after-attack.
+- Правила ошибок и итоговых результатов единообразны для всех потребителей dispatcher.
 
 ### Отрицательные
 
-- Новая операция требует расширить typed dispatcher и Catalog hook.
-- Caller-ам нельзя использовать удобный raw callback для локального исключения из policy.
-- Изменение timing policy затрагивает общий pipeline, а не одну карту.
+- Новая операция требует расширить типизированный dispatcher и точку подключения Catalog.
+- Вызывающим компонентам нельзя использовать удобный необработанный callback для локального исключения из политики.
+- Изменение политики момента срабатывания затрагивает общий конвейер, а не одну карту.
 
 ## Доказательства
 
 - [Trigger Dispatch](../../src/engine/trigger-dispatch.ts) владеет controlled-card operations.
-- [Основные dispatch tests](../../tests/trigger-dispatch.test.ts), [ongoing tests](../../tests/trigger-dispatch-ongoing.test.ts) и [error tests](../../tests/trigger-dispatch-errors.test.ts) проверяют порядок и typed errors.
+- [Основные тесты dispatcher](../../tests/trigger-dispatch.test.ts), [тесты ongoing-эффектов](../../tests/trigger-dispatch-ongoing.test.ts) и [тесты ошибок](../../tests/trigger-dispatch-errors.test.ts) проверяют порядок и типизированные ошибки.
 - [Engine typed-access guard](../../scripts/check-engine-typed-access.mjs) проверяет Trigger Dispatch ownership.
-- [Архитектурная спецификация](../superpowers/specs/2026-07-20-engine-architecture-deepening-design.md) описывает dispatcher candidate и его границы.
+- [Архитектурная спецификация](../superpowers/specs/2026-07-20-engine-architecture-deepening-design.md) описывает кандидат на dispatcher и его границы.
 - [Введение dispatcher контролируемых карт](https://github.com/notsalate/annihilageddon-simulator/commit/70fe2f5), [централизация end-turn discovery](https://github.com/notsalate/annihilageddon-simulator/commit/82087b8) и [перенос catalog execution](https://github.com/notsalate/annihilageddon-simulator/commit/2b0c860) подтверждают действующее правило.

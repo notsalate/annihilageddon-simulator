@@ -13,43 +13,43 @@ superseded_by: none
 
 ## Контекст
 
-Обычная player-controlled атака затрагивает target resolution, defense, redirect, damage, immediate death consequences, attribution, outcome branches и after-attack triggers. Ошибка или частично применённая защита не должны оставлять половину правила в состоянии игры. Mayhem и Mega Mayhem имеют отдельный двухфазный flow.
+Обычная атака игрока затрагивает разрешение целей, защиту, перенаправление, урон, немедленные последствия смерти, атрибуцию, ветви исхода и триггеры после атаки. Ошибка или частично применённая защита не должны оставлять половину правила в состоянии игры. Mayhem и Mega Mayhem имеют отдельный двухфазный процесс.
 
 ## Решение
 
-`Attack Resolution` владеет полным lifecycle обычной атаки через единый intent seam. Он строит стабильный target plan, создаёт attack instrumentation только после успешного непустого target resolution, затем последовательно завершает каждую цель: Defense/redirect, impact, damage/death, branches и attribution. После всех целей он запускает after-attack operations и возвращает typed execution result.
+`Attack Resolution` владеет полным жизненным циклом обычной атаки через единую границу намерения. Он строит стабильный план целей, создаёт запись об атаке только после успешного непустого разрешения целей, затем последовательно завершает каждую цель: Defense/redirect, воздействие, урон/смерть, ветви и атрибуцию. После всех целей он запускает операции после атаки и возвращает типизированный результат выполнения.
 
-`attack-defense.ts` остаётся transactional submodule. Он рассчитывает immutable payment plan, применяет payment/movement/branch effects внутри snapshot boundary и откатывает costs, zones, usage sets, events и RNG при ошибке. Redirect возвращается в `Attack Resolution` через callback lifecycle-owner. Mayhem и Mega Mayhem не сворачиваются в ordinary player-controlled resolver.
+`attack-defense.ts` остаётся транзакционным подмодулем. Он рассчитывает неизменяемый план оплаты, применяет оплату/перемещение/эффекты ветви внутри границы снимка и откатывает затраты, зоны, наборы использованных объектов, события и RNG при ошибке. Redirect возвращается в `Attack Resolution` через callback владельца жизненного цикла. Mayhem и Mega Mayhem не сворачиваются в единый обработчик обычной атаки игрока.
 
 ## Альтернативы
 
-- Оставить target loop и attribution распределёнными по effect runtime и handler-ам. Текущая структура и guards показывают, что сейчас используется единый lifecycle-owner; обсуждался ли иной вариант исторически, неизвестно.
-- Разрешать Defense payment, movement и branch effects отдельными мутациями без rollback. Тесты snapshot подтверждают текущую атомарную границу; исходная история выбора неизвестна.
-- Использовать ordinary attack lifecycle для Mayhem и Mega Mayhem. Rules Canon и текущие flow разделяют их; неизвестно, рассматривался ли вариант при принятии решения.
+- Оставить цикл целей и атрибуцию распределёнными по effect runtime и обработчикам. Текущая структура и защитные проверки показывают, что сейчас используется единый владелец жизненного цикла; обсуждался ли иной вариант исторически, неизвестно.
+- Разрешать оплату Defense, перемещение и эффекты ветви отдельными мутациями без отката. Тесты снимков подтверждают текущую атомарную границу; исходная история выбора неизвестна.
+- Использовать жизненный цикл обычной атаки для Mayhem и Mega Mayhem. Rules Canon и текущие процессы разделяют их; неизвестно, рассматривался ли вариант при принятии решения.
 
 ## Причины выбора
 
-Единый владелец lifecycle сохраняет порядок событий и текущий attacker/source через redirect, а transactional Defense не допускает частичного применения branch. Раздельный Mayhem flow не заставляет одну модель одновременно описывать два разных доменных процесса.
+Единый владелец жизненного цикла сохраняет порядок событий и текущего атакующего/источник через redirect, а транзакционная Defense не допускает частичного применения ветви. Раздельный процесс Mayhem не заставляет одну модель одновременно описывать два разных доменных процесса.
 
 ## Последствия
 
 ### Положительные
 
-- Порядок `attackCreated`, target lifecycle, damage/death и after-attack observable и проверяем.
+- Порядок `attackCreated`, жизненного цикла цели, урона/смерти и наблюдаемых последствий после атаки проверяем.
 - Ошибка Defense возвращает состояние к границе до первой мутации.
-- Новые обычные attack effects подключаются через intent и узкие adapters, не забирая target loop из lifecycle-owner.
+- Новые эффекты обычной атаки подключаются через намерение и узкие адаптеры, не забирая цикл целей у владельца жизненного цикла.
 
 ### Отрицательные
 
-- Attack changes требуют согласовывать несколько typed contexts и snapshot contracts.
-- Mayhem и ordinary attack нельзя бездумно объединять ради повторного использования кода.
-- Сложные redirect и multi-target сценарии требуют точечных тестов на порядок и attribution.
+- Изменения атаки требуют согласовывать несколько типизированных контекстов и контрактов снимка.
+- Mayhem и обычную атаку нельзя бездумно объединять ради повторного использования кода.
+- Сложные redirect и сценарии с несколькими целями требуют точечных тестов на порядок и атрибуцию.
 
 ## Доказательства
 
-- [Attack Resolution](../../src/engine/attack-resolution.ts) владеет target lifecycle и after-attack aggregation.
-- [Defense transaction](../../src/engine/attack-defense.ts) владеет payment, movement и rollback.
-- [Attack tests](../../tests/attack-resolution.test.ts), [ordering tests](../../tests/attack-resolution-ordering.test.ts) и [snapshot tests](../../tests/attack-defense-snapshot.test.ts) проверяют границы.
-- [Rules Canon](../rules-canon.md) отделяет обычную атаку, Defense и Mayhem flow.
-- [Архитектурная спецификация](../superpowers/specs/2026-07-20-engine-architecture-deepening-design.md) описывает lifecycle как отдельный кандидат, а не как исторический мотив.
-- [Передача полного lifecycle в Attack Resolution](https://github.com/notsalate/annihilageddon-simulator/commit/63cc11b) и [атомарное разрешение Defense](https://github.com/notsalate/annihilageddon-simulator/commit/9f051e4) подтверждают действующие seams.
+- [Attack Resolution](../../src/engine/attack-resolution.ts) владеет жизненным циклом целей и агрегацией после атаки.
+- [Транзакция Defense](../../src/engine/attack-defense.ts) владеет оплатой, перемещением и откатом.
+- [Тесты атаки](../../tests/attack-resolution.test.ts), [тесты порядка](../../tests/attack-resolution-ordering.test.ts) и [тесты снимка](../../tests/attack-defense-snapshot.test.ts) проверяют границы.
+- [Rules Canon](../rules-canon.md) отделяет обычную атаку, Defense и процесс Mayhem.
+- [Архитектурная спецификация](../superpowers/specs/2026-07-20-engine-architecture-deepening-design.md) описывает жизненный цикл как отдельный кандидат, а не как исторический мотив.
+- [Передача полного жизненного цикла в Attack Resolution](https://github.com/notsalate/annihilageddon-simulator/commit/63cc11b) и [атомарное разрешение Defense](https://github.com/notsalate/annihilageddon-simulator/commit/9f051e4) подтверждают действующие границы.

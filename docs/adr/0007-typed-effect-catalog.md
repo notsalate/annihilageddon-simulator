@@ -13,45 +13,45 @@ superseded_by: none
 
 ## Контекст
 
-Runtime effects приходят из внешнего JSON и имеют разные payload shapes, timing, source kinds и runtime modes. Общий `unknown` или общий набор полей позволяет передать malformed payload не тому handler-у или обойти policy. При этом engine должен сохранять concrete type между декодированием и исполнением.
+Runtime effects приходят из внешнего JSON и имеют разные структуры данных, моменты срабатывания, виды источников и режимы выполнения. Общий `unknown` или общий набор полей позволяет передать некорректные данные не тому handler-у или обойти policy. При этом engine должен сохранять конкретный тип между декодированием и исполнением.
 
 ## Решение
 
-`runtime-effect.ts` содержит explicit `RuntimeEffectPayloadMap`, из которой выводятся `RuntimeEffectId` и concrete payload union. `runtime-effect-decoder.ts` декодирует каждый зарегистрированный ID, проверяет literal discriminator, exact fields, nested targets/conditions/costs/branches и допускает unsupported effects только явно.
+`runtime-effect.ts` содержит явную `RuntimeEffectPayloadMap`, из которой выводятся `RuntimeEffectId` и объединение конкретных вариантов данных. `runtime-effect-decoder.ts` декодирует каждый зарегистрированный ID, проверяет буквальный дискриминатор, точные поля и вложенные targets/conditions/costs/branches, а неподдерживаемые эффекты допускает только явно.
 
-`effect-runtime-registry.ts` является Effect Runtime Catalog: он связывает decoder, concrete handler, supported source kinds и runtime modes через typed entry. Catalog operation принимает raw input, декодирует его и передаёт concrete payload только соответствующему handler-у внутри одной boundary. Публичные entrypoints не раскрывают низкоуровневый decoder и Catalog обходным импортом; это проверяется static guard.
+`effect-runtime-registry.ts` является Effect Runtime Catalog: он связывает decoder, конкретный обработчик, поддерживаемые виды источников и режимы выполнения через типизированную запись. Операция каталога принимает необработанный вход, декодирует его и передаёт конкретные данные только соответствующему обработчику внутри одной границы. Публичные точки входа не раскрывают низкоуровневый decoder и Catalog обходным импортом; это проверяется статической защитной проверкой.
 
 ## Альтернативы
 
-- Хранить все эффекты как общий bag полей и проверять их в каждом handler-е. Текущая typed boundary не использует общий bag; обсуждался ли такой вариант исторически, неизвестно.
-- Передавать decoder result и handler отдельно, позволяя caller соединять их assertions. Catalog closure исключает этот путь; неизвестно, обсуждался ли он исторически.
-- Открыть raw decoder и низкоуровневый Catalog через root API или CLI. Guard и public-entrypoint policy запрещают обход; исходная история решения неизвестна.
+- Хранить все эффекты как общий набор полей и проверять их в каждом обработчике. Текущая типизированная граница не использует общий набор; обсуждался ли такой вариант исторически, неизвестно.
+- Передавать результат decoder и обработчик отдельно, позволяя вызывающему коду соединять их проверки. Замкнутая структура Catalog исключает этот путь; неизвестно, обсуждался ли он исторически.
+- Открыть необработанный decoder и низкоуровневый Catalog через root API или CLI. Защитная проверка и политика публичной точки входа запрещают обход; исходная история решения неизвестна.
 
 ## Причины выбора
 
-Explicit payload map делает список эффектов исчерпывающим, exact decoder останавливает malformed data на data boundary, а Catalog удерживает pair concrete payload/handler и source-mode policy вместе. Static guard ограничивает поверхность, через которую можно случайно обойти эту границу.
+Явная карта данных делает список эффектов исчерпывающим, точный decoder останавливает некорректные данные на границе данных, а Catalog удерживает связь конкретных данных и обработчика вместе с политикой источника и режима. Статическая защитная проверка ограничивает поверхность, через которую можно случайно обойти эту границу.
 
 ## Последствия
 
 ### Положительные
 
-- Handler получает только payload соответствующего `effectId`.
-- Ошибки формы, source kind и runtime mode возвращаются до игровой мутации.
-- Добавление нового effect ID требует синхронно обновить map, decoder, Catalog и проверки.
-- Public API не раскрывает низкоуровневые операции, позволяющие обойти typed seam.
+- Обработчик получает только данные соответствующего `effectId`.
+- Ошибки формы, вида источника и режима выполнения возвращаются до игровой мутации.
+- Добавление нового effect ID требует синхронно обновить карту, decoder, Catalog и проверки.
+- Публичный API не раскрывает низкоуровневые операции, позволяющие обойти типизированную границу.
 
 ### Отрицательные
 
-- Каждый новый effect требует явного payload и decoder вместо свободного JSON.
-- Registry и static guard требуют поддерживать несколько согласованных матриц.
-- Unsupported mechanics должны быть названы явно, а не спрятаны в универсальном fallback.
+- Каждый новый effect требует явных данных и decoder вместо свободного JSON.
+- Реестр и статическая защитная проверка требуют поддерживать несколько согласованных матриц.
+- Неподдерживаемые механики должны быть названы явно, а не спрятаны в универсальном запасном пути.
 
 ## Доказательства
 
-- [Runtime effect payload map](../../src/engine/runtime-effect.ts) задаёт concrete variants и exhaustiveness checks.
-- [Runtime effect decoder](../../src/engine/runtime-effect-decoder.ts) выполняет exact decoding.
-- [Effect Runtime Catalog](../../src/engine/effect-runtime-registry.ts) связывает decoder, handlers и policies.
-- [Validation tests](../../tests/validation.test.ts) и [public-entrypoint guard tests](../../tests/public-entrypoint-guard.test.ts) проверяют payload и экспортные boundaries.
-- [Engine typed-access guard](../../scripts/check-engine-typed-access.mjs) закрывает обходы decoder/Catalog.
-- [Design specification for decoder/catalog](../superpowers/specs/2026-07-20-engine-architecture-deepening-design.md) описывает проверяемую boundary; она используется как design evidence, а не как реконструкция мотивов.
-- [Concrete payload map](https://github.com/notsalate/annihilageddon-simulator/commit/b8cd8b9), [exhaustive Catalog](https://github.com/notsalate/annihilageddon-simulator/commit/bb58f9e), [typed payload boundary](https://github.com/notsalate/annihilageddon-simulator/commit/68cca0e) и [Catalog operations](https://github.com/notsalate/annihilageddon-simulator/commit/9c89ab8) подтверждают правило.
+- [Карта данных runtime-эффектов](../../src/engine/runtime-effect.ts) задаёт конкретные варианты и проверку полноты.
+- [Декодер runtime-эффектов](../../src/engine/runtime-effect-decoder.ts) выполняет точное декодирование.
+- [Effect Runtime Catalog](../../src/engine/effect-runtime-registry.ts) связывает decoder, обработчики и политики.
+- [Тесты проверки](../../tests/validation.test.ts) и [тесты защитной проверки публичной точки входа](../../tests/public-entrypoint-guard.test.ts) проверяют данные и экспортные границы.
+- [Защитная проверка типизированного доступа движка](../../scripts/check-engine-typed-access.mjs) закрывает обходы decoder/Catalog.
+- [Проектная спецификация декодера и каталога](../superpowers/specs/2026-07-20-engine-architecture-deepening-design.md) описывает проверяемую границу; она используется как доказательство проектной структуры, а не как реконструкция мотивов.
+- [Карта конкретных данных](https://github.com/notsalate/annihilageddon-simulator/commit/b8cd8b9), [полный Catalog](https://github.com/notsalate/annihilageddon-simulator/commit/bb58f9e), [типизированная граница данных](https://github.com/notsalate/annihilageddon-simulator/commit/68cca0e) и [операции Catalog](https://github.com/notsalate/annihilageddon-simulator/commit/9c89ab8) подтверждают правило.
