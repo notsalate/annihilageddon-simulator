@@ -218,6 +218,48 @@ export type {
   RunMassSimulationOptions,
 } from "./engine/mass-simulation.js";
 export { runMassSimulation } from "./engine/mass-simulation.js";
+export type {
+  AnalyzerBenchmarkMetrics,
+  AnalyzerBenchmarkProfile,
+  AnalyzerBenchmarkProfileId,
+  AnalyzerBenchmarkResult,
+  AnalyzerBenchmarkRole,
+  AnalyzerBenchmarkSample,
+  AnalyzerBenchmarkTimings,
+  AnalyzerBenchmarkWorkload,
+  CreateAnalyzerBenchmarkWorkloadOptions,
+  RunAnalyzerBenchmarkOptions,
+} from "./engine/analyzer-benchmark.js";
+export {
+  ANALYZER_BENCHMARK_CONTRACT_VERSION,
+  ANALYZER_BENCHMARK_PROFILES,
+  ANALYZER_REFERENCE_PROFILES,
+  ANALYZER_REFERENCE_WORKLOAD_VERSION,
+  createAnalyzerBenchmarkWorkload,
+  runAnalyzerBenchmark,
+} from "./engine/analyzer-benchmark.js";
+export type {
+  CreateSimulationBenchmarkWorkloadOptions,
+  RunSimulationBenchmarkOptions,
+  SimulationBenchmarkDependencies,
+  SimulationBenchmarkResult,
+  SimulationBenchmarkRole,
+  SimulationBenchmarkSample,
+  SimulationBenchmarkStage,
+  SimulationBenchmarkTimings,
+  SimulationBenchmarkWorkload,
+  SimulationBenchmarkMetrics,
+  SimulationCoverage,
+  SimulationCoverageKey,
+} from "./engine/simulation-benchmark.js";
+export {
+  SIMULATION_BENCHMARK_CONTRACT_VERSION,
+  SIMULATION_BENCHMARK_STAGES,
+  SIMULATION_REFERENCE_COVERAGE,
+  SIMULATION_REFERENCE_WORKLOAD_VERSION,
+  createSimulationBenchmarkWorkload,
+  runSimulationBenchmark,
+} from "./engine/simulation-benchmark.js";
 export type { FormatSingleGameDebugTraceOptions } from "./engine/debug-trace.js";
 export { formatSingleGameDebugTrace } from "./engine/debug-trace.js";
 export {

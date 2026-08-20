@@ -5,7 +5,11 @@ import {
   type LegalAction,
 } from "./actions.js";
 import { assertNever } from "../common.js";
-import type { CardDefinition, TokenDefinition } from "./data.js";
+import type {
+  CardDefinition,
+  LoadedDataPack,
+  TokenDefinition,
+} from "./data.js";
 import {
   calculateEffectiveCardCost,
   calculateEffectiveCardVictoryPoints,
@@ -42,6 +46,7 @@ export interface RunSingleGameOptions {
   maxTurns: number;
   playerCount?: number;
   dataPackPath?: string;
+  dataPack?: LoadedDataPack;
   bot?: BotStrategy;
   botFactory?: (playerId: PlayerId) => BotStrategy;
   validateInvariants?: boolean;
@@ -217,7 +222,10 @@ function mustGetCardDefinition(
 }
 
 export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
-  const { bot, botFactory, ...initializeGameOptions } = options;
+  const { bot, botFactory, dataPack, ...initializeGameOptions } = options;
+  if (dataPack !== undefined && options.dataPackPath !== undefined) {
+    throw new Error("dataPack and dataPackPath cannot be used together");
+  }
   if (bot !== undefined && bot !== baselineBot) {
     throw new Error("Custom multiplayer bot must use botFactory");
   }
@@ -283,13 +291,21 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     return binding;
   }
 
-  const state = initializeGame({
-    ...initializeGameOptions,
-    effectChoiceStrategy: (request) => {
-      const binding = getBotBindingForPlayer(request.player.playerId);
-      return binding.chooseEffectChoice?.call(binding.strategy, request);
-    },
-  });
+  const effectChoiceStrategy = (request: RuntimeEffectChoiceRequest) => {
+    const binding = getBotBindingForPlayer(request.player.playerId);
+    return binding.chooseEffectChoice?.call(binding.strategy, request);
+  };
+  const state =
+    dataPack === undefined
+      ? initializeGame({ ...initializeGameOptions, effectChoiceStrategy })
+      : initializeGame({
+          dataPack,
+          seed: options.seed,
+          ...(options.playerCount === undefined
+            ? {}
+            : { playerCount: options.playerCount }),
+          effectChoiceStrategy,
+        });
   const setupState = snapshotSetupState(state);
   if (options.validateInvariants) {
     assertGameStateInvariants(state);
