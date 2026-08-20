@@ -34,5 +34,6 @@ This folder contains durable project documentation for rules, runtime layout, im
 ## Child DOX Index
 
 - `docs/agents/AGENTS.md` - local process and issue-tracker guidance.
+- `docs/adr/AGENTS.md` - architecture decision records, their format, lifecycle, and validation boundary.
 - `docs/superpowers/AGENTS.md` - design specifications and implementation plans for multi-step agent work.
 - `docs/templates/AGENTS.md` - JSON templates for draft and runtime data shapes.
