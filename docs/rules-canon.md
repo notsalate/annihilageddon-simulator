@@ -282,8 +282,8 @@ Terminology:
 1. Each affected target may use at most 1 defense card/effect from hand for that attack instance, even if the target is also the attacker.
 2. Defense protects only the defending player, not other targets.
 3. For a normal attack by a player:
-   - Collect all defense decisions from affected targets before resolving attack results.
-   - Then resolve the attack target by target in the normal resolution order, skipping targets that avoided it.
+   - Resolve each target in the normal order, asking that target for a defense when its turn in the attack lifecycle is reached.
+   - Complete that target's defense/redirect, impact, damage, death, branches, and attribution before resolving the next target.
    - Earlier resolved targets can still change later targets through death, modifiers, trophy movement, or other state changes before those later targets resolve.
 4. For a беспредел/мегабеспредел attack:
    - Active player decides first.
