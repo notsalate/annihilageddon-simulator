@@ -369,10 +369,13 @@ test("optional effect records a typed option choice payload", () => {
       },
     ]
   );
-  state.effectChoiceStrategy = (request) =>
-    request.choices.find(
-      (choice) => choice.choiceKind === "option" && choice.choiceId === "pass"
+  state.effectChoiceStrategy = (request) => {
+    const choice = request.choices.find(
+      (candidate) =>
+        candidate.choiceKind === "option" && candidate.choiceId === "pass"
     );
+    return choice === undefined ? undefined : { choiceId: choice.choiceId };
+  };
   const source: EffectSourceContext = {
     sourceType: "card",
     runtimeMode: "fixture",

@@ -272,8 +272,8 @@ export function resolveDefenseWindow(
       card: defense.card,
     })),
   ];
-  const defensesByChoice = new Map<EffectChoice, LegalDefense>(
-    legalDefenses.map((defense, index) => [choices[index + 1]!, defense])
+  const defensesByChoice = new Map<string, LegalDefense>(
+    legalDefenses.map((defense) => [defense.card.instanceId, defense])
   );
   const eventLogLengthBeforeChoice = state.eventLog.length;
   const selectedChoice = services.chooseEffectChoice(
@@ -286,7 +286,7 @@ export function resolveDefenseWindow(
   const defense =
     selectedChoice === undefined
       ? undefined
-      : defensesByChoice.get(selectedChoice);
+      : defensesByChoice.get(selectedChoice.choiceId);
   if (defense === undefined) {
     return { ok: true, avoided: false };
   }

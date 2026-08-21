@@ -28,6 +28,7 @@ import {
   createGameScenario,
   givenRuntimeCard,
   play,
+  toChoiceSelection,
 } from "./helpers/game-scenario.js";
 
 const rootDir = process.cwd();
@@ -327,7 +328,9 @@ test("chooseEffect preserves undefined so optional defense declines", () => {
   );
   chooseEffect(scenario, ({ effectId, choices }) =>
     effectId === "attack_damage"
-      ? choices.find((choice) => choice.choiceId === defender.playerId)
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === defender.playerId)
+        )
       : undefined
   );
   const lifeBefore = defender.life.current;
@@ -439,11 +442,7 @@ test("Defense executes onDefense draw and discard shuffle through a terminating 
   assert.equal(targetPlayer.deck.length, 5);
   assert.deepEqual(targetPlayer.discard, []);
   assert.deepEqual(
-    [
-      ...targetPlayer.hand,
-      ...targetPlayer.deck,
-      ...targetPlayer.discard,
-    ]
+    [...targetPlayer.hand, ...targetPlayer.deck, ...targetPlayer.discard]
       .map((card) => card.instanceId)
       .sort(),
     [...shuffledCards, firstTargetDefense, unusedTargetDefense]

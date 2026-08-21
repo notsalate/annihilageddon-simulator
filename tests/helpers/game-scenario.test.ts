@@ -12,6 +12,7 @@ import {
   givenTemporaryControl,
   play,
 } from "./game-scenario.js";
+import { createChoicePlayerView } from "../../src/engine/strategy-decision-view.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -126,7 +127,7 @@ test("player target choice adapter handles only the requested effect", () => {
     },
   ];
   const request = {
-    player: scenario.activePlayer,
+    player: createChoicePlayerView(scenario.activePlayer),
     sourceType: "card" as const,
     cardInstanceId: "fixture-choice-source",
     definitionId: "fixture-choice-source",

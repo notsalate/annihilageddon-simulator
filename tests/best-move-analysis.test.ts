@@ -1024,7 +1024,7 @@ test("enumerates the Cartesian product of sequential choices", () => {
   );
 });
 
-test("replays duplicate choice IDs by index and preserves target combinations", () => {
+test("replays card-target choices by stable IDs and preserves combinations", () => {
   const state = initializeGame({ rootDir, seed: 126 });
   const activePlayer = state.players.find(
     (player) => player.playerId === state.activePlayerId
@@ -1069,16 +1069,22 @@ test("replays duplicate choice IDs by index and preserves target combinations", 
       branch.legalAction.cardInstanceId === attackCard.instanceId
   );
   assert.equal(branches.length, 4);
-  const duplicateBranches = branches.filter(
-    (branch) => branch.selectedChoices[1]?.choiceId === "return_1"
+  const combinationBranches = branches.filter((branch) =>
+    branch.selectedChoices[1]?.choiceId.startsWith("return_1_")
   );
-  assert.equal(duplicateBranches.length, 2);
+  assert.equal(combinationBranches.length, 2);
+  assert.equal(
+    new Set(
+      combinationBranches.map((branch) => branch.selectedChoices[1]?.choiceId)
+    ).size,
+    2
+  );
   assert.deepEqual(
-    duplicateBranches.map((branch) => branch.selectedChoices[1]?.choiceIndex),
+    combinationBranches.map((branch) => branch.selectedChoices[1]?.choiceIndex),
     [0, 1]
   );
   assert.deepEqual(
-    duplicateBranches.map(
+    combinationBranches.map(
       (branch) =>
         [...branch.resultingState.eventLog]
           .reverse()

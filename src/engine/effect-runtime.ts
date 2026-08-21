@@ -35,7 +35,7 @@ import {
   type EffectRuntimeServices,
   type EffectSourceContext,
   type MayhemAttackPlanTarget,
-  type StrictEffectChoiceResolution,
+  type EffectChoiceResolution,
   executeAttackOutcomeBranch,
   evaluateRuntimeEffectAtTiming,
   executeRuntimeEffect,
@@ -52,13 +52,12 @@ import {
   type WildMagicOption,
 } from "./runtime-effect.js";
 import type {
-  CardInstance,
-  GameState,
-  PlayerState,
-  RuntimeEffectDecisionChoice,
-  RuntimeEffectChoiceRequest,
-} from "./setup.js";
-import { createPlayerDecisionView } from "./strategy-decision-view.js";
+  ChoiceRequest,
+  ChoiceSelection,
+  ChoiceView,
+} from "./choice-policy.js";
+import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import { createChoicePlayerView } from "./strategy-decision-view.js";
 import { dispatchControlledCardOperation } from "./trigger-dispatch.js";
 export function executeOnPlayEffects(
   state: GameState,
@@ -870,7 +869,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   getDestroyDestination,
   getOpponentsInSeatingOrder,
   getPlayersInActiveOrder,
-  prepareStrictEffectChoice,
+  prepareEffectChoice,
   recordEffectChoiceSelected,
   chooseEffectChoice,
   dealDamage,
@@ -1030,8 +1029,7 @@ function chooseEffectChoice(
     player,
     source,
     effectId,
-    choices,
-    "fallback"
+    choices
   );
   if (resolution.status !== "selected") {
     recordGameEvent(state, {
@@ -1057,21 +1055,14 @@ function chooseEffectChoice(
   return resolution.choice;
 }
 
-function prepareStrictEffectChoice(
+function prepareEffectChoice(
   state: GameState,
   player: PlayerState,
   source: EffectSourceContext,
   effectId: RuntimeEffectId,
   choices: readonly EffectChoice[]
-): StrictEffectChoiceResolution {
-  return resolveEffectChoice(
-    state,
-    player,
-    source,
-    effectId,
-    choices,
-    "reject"
-  );
+): EffectChoiceResolution {
+  return resolveEffectChoice(state, player, source, effectId, choices);
 }
 
 function resolveEffectChoice(
@@ -1079,16 +1070,15 @@ function resolveEffectChoice(
   player: PlayerState,
   source: EffectSourceContext,
   effectId: RuntimeEffectId,
-  choices: readonly EffectChoice[],
-  invalidSelectionPolicy: "fallback" | "reject"
-): StrictEffectChoiceResolution {
-  const decisionRequest: RuntimeEffectChoiceRequest = structuredClone({
-    player: createPlayerDecisionView(player),
+  choices: readonly EffectChoice[]
+): EffectChoiceResolution {
+  const decisionRequest: ChoiceRequest = structuredClone({
+    player: createChoicePlayerView(player),
     effectId,
     sourceType: source.sourceType,
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
-    choices: choices.map(createRuntimeEffectDecisionChoice),
+    choices: choices.map(createChoiceView),
   });
   const selectedChoice = state.effectChoiceStrategy?.(decisionRequest);
   if (selectedChoice === undefined) {
@@ -1098,15 +1088,28 @@ function resolveEffectChoice(
       : { status: "selected", choice: defaultChoice };
   }
 
-  const matchedChoice = choices.find((candidate) =>
-    matchesDecisionChoice(candidate, selectedChoice)
-  );
-  if (matchedChoice !== undefined) {
-    return { status: "selected", choice: matchedChoice };
+  if (!isCanonicalChoiceSelection(selectedChoice)) {
+    const fallbackChoice = choices[0];
+    return fallbackChoice === undefined
+      ? { status: "empty" }
+      : { status: "selected", choice: fallbackChoice };
   }
 
-  if (invalidSelectionPolicy === "reject") {
-    return { status: "invalid" };
+  const selectedChoiceIndex = readChoiceIndex(selectedChoice);
+  const indexedChoice =
+    selectedChoiceIndex === undefined
+      ? undefined
+      : choices[selectedChoiceIndex];
+  const matchedChoice =
+    indexedChoice !== undefined
+      ? matchesDecisionChoice(indexedChoice, selectedChoice)
+        ? indexedChoice
+        : undefined
+      : choices.find((candidate) =>
+          matchesDecisionChoice(candidate, selectedChoice)
+        );
+  if (matchedChoice !== undefined) {
+    return { status: "selected", choice: matchedChoice };
   }
 
   const fallbackChoice = choices[0];
@@ -1191,9 +1194,7 @@ function recordEffectChoiceSelected(
   });
 }
 
-function createRuntimeEffectDecisionChoice(
-  choice: EffectChoice
-): RuntimeEffectDecisionChoice {
+function createChoiceView(choice: EffectChoice): ChoiceView {
   if (choice.choiceKind === "option") {
     return { choiceKind: choice.choiceKind, choiceId: choice.choiceId };
   }
@@ -1233,61 +1234,42 @@ function createRuntimeEffectDecisionChoice(
 
 function matchesDecisionChoice(
   choice: EffectChoice,
-  selection: RuntimeEffectDecisionChoice
+  selection: ChoiceSelection
 ): boolean {
+  return choice.choiceId === selection.choiceId;
+}
+
+function isCanonicalChoiceSelection(value: unknown): value is ChoiceSelection {
   if (
-    choice.choiceKind !== selection.choiceKind ||
-    choice.choiceId !== selection.choiceId
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
   ) {
     return false;
   }
+
+  const keys = Reflect.ownKeys(value);
   if (
-    choice.choiceKind === "playerTarget" &&
-    selection.choiceKind === "playerTarget"
+    !keys.includes("choiceId") ||
+    keys.some((key) => key !== "choiceId" && key !== "choiceIndex") ||
+    keys.length > 2
   ) {
-    return sameValues(
-      choice.players.map((player) => player.playerId),
-      selection.targetPlayerIds
-    );
+    return false;
   }
-  if (
-    choice.choiceKind === "cardTarget" &&
-    selection.choiceKind === "cardTarget"
-  ) {
-    return (
-      choice.amount === selection.amount &&
-      sameValues(
-        choice.cards.map((card) => card.instanceId),
-        selection.targetCardInstanceIds
-      )
-    );
-  }
-  if (choice.choiceKind === "defense" && selection.choiceKind === "defense") {
-    return choice.card?.instanceId === selection.targetCardInstanceId;
-  }
-  if (
-    choice.choiceKind === "directionalPlayerTarget" &&
-    selection.choiceKind === "directionalPlayerTarget"
-  ) {
-    return (
-      choice.direction === selection.direction &&
-      sameValues(
-        choice.players.map((player) => player.playerId),
-        selection.targetPlayerIds
-      )
-    );
-  }
-  return true;
+
+  const choiceId = (value as { readonly choiceId?: unknown }).choiceId;
+  return (
+    typeof choiceId === "string" &&
+    (keys.length === 1 || readChoiceIndex(value) !== undefined)
+  );
 }
 
-function sameValues(
-  left: readonly string[],
-  right: readonly string[]
-): boolean {
-  return (
-    left.length === right.length &&
-    left.every((value, index) => value === right[index])
-  );
+function readChoiceIndex(selection: unknown): number | undefined {
+  const value = (selection as { readonly choiceIndex?: unknown }).choiceIndex;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : undefined;
 }
 
 function buildLegalTargetChoices(

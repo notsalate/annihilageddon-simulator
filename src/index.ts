@@ -127,15 +127,24 @@ export type {
 } from "./import/draft-generator.js";
 export { runDraftImportHarness } from "./import/draft-generator.js";
 export type {
+  ChoiceCardTargetView,
+  ChoiceDefenseView,
+  ChoiceDirectionalPlayerTargetView,
+  ChoiceKind,
+  ChoiceOptionView,
+  ChoicePlayerTargetView,
+  ChoicePlayerView,
+  ChoicePolicy,
+  ChoiceRequest,
+  ChoiceSelection,
+  ChoiceView,
+} from "./engine/choice-policy.js";
+export type {
   CardInstance,
   CommonState,
   GameState,
   PlayerDecisionView,
   PlayerState,
-  RuntimeEffectDecisionChoice,
-  RuntimeEffectChoice,
-  RuntimeEffectChoiceRequest,
-  RuntimeEffectChoiceStrategy,
   StatusInstance,
   TokenInstance,
   TrophyLikeInstance,
