@@ -1097,6 +1097,16 @@ function resolveEffectChoice(
       : { status: "selected", choice: defaultChoice };
   }
 
+  if (!isCanonicalChoiceSelection(selectedChoice)) {
+    if (invalidSelectionPolicy === "reject") {
+      return { status: "invalid" };
+    }
+    const fallbackChoice = choices[0];
+    return fallbackChoice === undefined
+      ? { status: "empty" }
+      : { status: "selected", choice: fallbackChoice };
+  }
+
   const selectedChoiceIndex = readChoiceIndex(selectedChoice);
   const indexedChoice =
     selectedChoiceIndex === undefined
@@ -1242,113 +1252,40 @@ function matchesDecisionChoice(
   choice: EffectChoice,
   selection: ChoiceSelection
 ): boolean {
-  if (choice.choiceId !== selection.choiceId) {
-    return false;
-  }
-
-  const metadata = selection as ChoiceSelection & {
-    readonly choiceKind?: unknown;
-    readonly targetPlayerIds?: unknown;
-    readonly targetCardInstanceIds?: unknown;
-    readonly amount?: unknown;
-    readonly targetCardInstanceId?: unknown;
-    readonly direction?: unknown;
-  };
-  if (
-    metadata.choiceKind !== undefined &&
-    metadata.choiceKind !== choice.choiceKind
-  ) {
-    return false;
-  }
-  if (
-    metadata.targetPlayerIds !== undefined &&
-    choice.choiceKind !== "playerTarget" &&
-    choice.choiceKind !== "directionalPlayerTarget"
-  ) {
-    return false;
-  }
-  if (
-    metadata.targetCardInstanceIds !== undefined &&
-    choice.choiceKind !== "cardTarget"
-  ) {
-    return false;
-  }
-  if (
-    metadata.amount !== undefined &&
-    (choice.choiceKind !== "cardTarget" || metadata.amount !== choice.amount)
-  ) {
-    return false;
-  }
-  if (
-    metadata.targetCardInstanceId !== undefined &&
-    (choice.choiceKind === "defense"
-      ? metadata.targetCardInstanceId !== choice.card?.instanceId
-      : choice.choiceKind === "cardTarget"
-        ? !choice.cards.some(
-            (card) => card.instanceId === metadata.targetCardInstanceId
-          )
-        : true)
-  ) {
-    return false;
-  }
-  if (
-    metadata.direction !== undefined &&
-    (choice.choiceKind !== "directionalPlayerTarget" ||
-      metadata.direction !== choice.direction)
-  ) {
-    return false;
-  }
-  if (metadata.targetPlayerIds !== undefined) {
-    if (!isStringArray(metadata.targetPlayerIds)) {
-      return false;
-    }
-    const playerIds =
-      choice.choiceKind === "playerTarget" ||
-      choice.choiceKind === "directionalPlayerTarget"
-        ? choice.players.map((player) => player.playerId)
-        : [];
-    if (!sameValues(playerIds, metadata.targetPlayerIds)) {
-      return false;
-    }
-  }
-  if (metadata.targetCardInstanceIds !== undefined) {
-    if (!isStringArray(metadata.targetCardInstanceIds)) {
-      return false;
-    }
-    const cardIds =
-      choice.choiceKind === "cardTarget"
-        ? choice.cards.map((card) => card.instanceId)
-        : [];
-    if (!sameValues(cardIds, metadata.targetCardInstanceIds)) {
-      return false;
-    }
-  }
-  return true;
+  return choice.choiceId === selection.choiceId;
 }
 
-function readChoiceIndex(selection: ChoiceSelection): number | undefined {
-  const value = (
-    selection as ChoiceSelection & { readonly choiceIndex?: unknown }
-  ).choiceIndex;
+function isCanonicalChoiceSelection(value: unknown): value is ChoiceSelection {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return false;
+  }
+
+  const keys = Reflect.ownKeys(value);
+  if (
+    !keys.includes("choiceId") ||
+    keys.some((key) => key !== "choiceId" && key !== "choiceIndex") ||
+    keys.length > 2
+  ) {
+    return false;
+  }
+
+  const choiceId = (value as { readonly choiceId?: unknown }).choiceId;
+  return (
+    typeof choiceId === "string" &&
+    (keys.length === 1 || readChoiceIndex(value) !== undefined)
+  );
+}
+
+function readChoiceIndex(selection: unknown): number | undefined {
+  const value = (selection as { readonly choiceIndex?: unknown }).choiceIndex;
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
     ? value
     : undefined;
-}
-
-function isStringArray(value: unknown): value is readonly string[] {
-  return (
-    Array.isArray(value) && value.every((item) => typeof item === "string")
-  );
-}
-
-function sameValues(
-  left: readonly string[],
-  right: readonly string[]
-): boolean {
-  return (
-    left.length === right.length &&
-    left.every((value, index) => value === right[index])
-  );
 }
 
 function buildLegalTargetChoices(

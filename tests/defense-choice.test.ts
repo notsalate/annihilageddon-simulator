@@ -20,10 +20,10 @@ test("a player can decline a legal optional defense", () => {
   });
   state.effectChoiceStrategy = ({ effectId, choices }) => {
     if (effectId === "attack_damage") {
-      return choices.find((choice) => choice.choiceId === defender.playerId);
+      return selectChoiceById(choices, defender.playerId);
     }
     if (effectId === "avoid_attack") {
-      return choices.find((choice) => choice.choiceId === "decline");
+      return selectChoiceById(choices, "decline");
     }
     return undefined;
   };
@@ -83,12 +83,10 @@ test("a player can select an exact defense instead of the first card", () => {
   );
   state.effectChoiceStrategy = ({ effectId, choices }) => {
     if (effectId === "attack_damage") {
-      return choices.find((choice) => choice.choiceId === defender.playerId);
+      return selectChoiceById(choices, defender.playerId);
     }
     if (effectId === "avoid_attack") {
-      return choices.find(
-        (choice) => choice.choiceId === secondDefense.instanceId
-      );
+      return selectChoiceById(choices, secondDefense.instanceId);
     }
     return undefined;
   };
@@ -120,7 +118,7 @@ test("a player can select an exact defense instead of the first card", () => {
   );
 });
 
-test("a defense choice ignores a cloned card returned by strategy", () => {
+test("a defense choice rejects a live-object strategy result", () => {
   const { state, attacker, defender } = createAttackScenario();
   const firstDefense = addFixtureDefenseCardToHand(
     state,
@@ -134,7 +132,7 @@ test("a defense choice ignores a cloned card returned by strategy", () => {
   );
   state.effectChoiceStrategy = ({ effectId, choices }) => {
     if (effectId === "attack_damage") {
-      return choices.find((choice) => choice.choiceId === defender.playerId);
+      return selectChoiceById(choices, defender.playerId);
     }
     if (effectId === "avoid_attack") {
       const legitimate = choices.find(
@@ -164,16 +162,15 @@ test("a defense choice ignores a cloned card returned by strategy", () => {
   );
 
   assert.deepEqual(result, { ok: true });
-  assert.equal(defender.life.current, lifeBefore);
+  assert.equal(defender.life.current, lifeBefore - 2);
   assert.equal(defender.hand.includes(firstDefense), true);
-  assert.equal(defender.hand.includes(secondDefense), false);
-  assert.equal(defender.discard.includes(secondDefense), true);
+  assert.equal(defender.hand.includes(secondDefense), true);
   assert.equal(
     state.eventLog.some(
       (event) =>
         event.type === "effectChoiceSelected" &&
         event.effectId === "avoid_attack" &&
-        event.choiceId === secondDefense.instanceId
+        event.choiceId === "decline"
     ),
     true
   );
@@ -183,7 +180,7 @@ test("a defense choice ignores a cloned card returned by strategy", () => {
         event.type === "defenseChoiceSelected" &&
         event.cardInstanceId === secondDefense.instanceId
     ),
-    true
+    false
   );
 });
 
@@ -192,13 +189,15 @@ test("a defense choice accepts a reconstructed option by stable identifier", () 
   const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf");
   state.effectChoiceStrategy = ({ effectId, choices }) => {
     if (effectId === "attack_damage") {
-      return choices.find((choice) => choice.choiceId === defender.playerId);
+      return selectChoiceById(choices, defender.playerId);
     }
     if (effectId === "avoid_attack") {
       const legitimate = choices.find(
         (choice) => choice.choiceId === defense.instanceId
       );
-      return legitimate === undefined ? undefined : { ...legitimate };
+      return legitimate === undefined
+        ? undefined
+        : { choiceId: legitimate.choiceId };
     }
     return undefined;
   };
@@ -241,19 +240,10 @@ test("a defense choice falls back to the first legal option when identifiers dis
   );
   state.effectChoiceStrategy = ({ effectId, choices }) => {
     if (effectId === "attack_damage") {
-      return choices.find((choice) => choice.choiceId === defender.playerId);
+      return selectChoiceById(choices, defender.playerId);
     }
     if (effectId === "avoid_attack") {
-      const selected = choices.find(
-        (choice) => choice.choiceId === secondDefense.instanceId
-      );
-      if (selected?.choiceKind !== "defense") {
-        return undefined;
-      }
-      (
-        selected as unknown as { choiceId: typeof firstDefense.instanceId }
-      ).choiceId = firstDefense.instanceId;
-      return selected;
+      return { choiceId: "forged-defense-choice" };
     }
     return undefined;
   };
@@ -304,7 +294,7 @@ test("a defense choice ignores a strategy-mutated option card", () => {
   );
   state.effectChoiceStrategy = ({ effectId, choices }) => {
     if (effectId === "attack_damage") {
-      return choices.find((choice) => choice.choiceId === defender.playerId);
+      return selectChoiceById(choices, defender.playerId);
     }
     if (effectId === "avoid_attack") {
       const selected = choices.find(
@@ -333,16 +323,15 @@ test("a defense choice ignores a strategy-mutated option card", () => {
   );
 
   assert.deepEqual(result, { ok: true });
-  assert.equal(defender.life.current, lifeBefore);
+  assert.equal(defender.life.current, lifeBefore - 2);
   assert.equal(defender.hand.includes(firstDefense), true);
-  assert.equal(defender.hand.includes(secondDefense), false);
-  assert.equal(defender.discard.includes(secondDefense), true);
+  assert.equal(defender.hand.includes(secondDefense), true);
   assert.equal(
     state.eventLog.some(
       (event) =>
         event.type === "effectChoiceSelected" &&
         event.effectId === "avoid_attack" &&
-        event.choiceId === secondDefense.instanceId
+        event.choiceId === "decline"
     ),
     true
   );
@@ -352,9 +341,17 @@ test("a defense choice ignores a strategy-mutated option card", () => {
         event.type === "defenseChoiceSelected" &&
         event.cardInstanceId === secondDefense.instanceId
     ),
-    true
+    false
   );
 });
+
+function selectChoiceById(
+  choices: readonly { readonly choiceId: string }[],
+  choiceId: string
+): { readonly choiceId: string } | undefined {
+  const choice = choices.find((candidate) => candidate.choiceId === choiceId);
+  return choice === undefined ? undefined : { choiceId: choice.choiceId };
+}
 
 function createAttackScenario(): {
   state: GameState;

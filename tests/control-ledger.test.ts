@@ -37,6 +37,7 @@ import {
   createGameScenario,
   endTurn,
   play,
+  toChoiceSelection,
 } from "./helpers/game-scenario.js";
 
 const rootDir = process.cwd();
@@ -499,7 +500,7 @@ test("Wild Magic lets the typed choice strategy play a foe's top card", () => {
     ) {
       return undefined;
     }
-    return choices.at(-1);
+    return toChoiceSelection(choices.at(-1));
   });
 
   const result = play(scenario, wildMagic);

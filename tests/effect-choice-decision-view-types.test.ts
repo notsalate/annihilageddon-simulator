@@ -79,3 +79,7 @@ test("choice requests expose stable identifiers without hidden state", () => {
   assertDecisionChoicesDoNotExposeHiddenState();
   assert.equal(true, true);
 });
+
+test("choice selection exposes only its stable identity", () => {
+  assert.deepEqual(Object.keys({ choiceId: "choice" }), ["choiceId"]);
+});

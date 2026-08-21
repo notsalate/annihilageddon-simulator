@@ -156,11 +156,12 @@ test("failed defense branch rolls back mutations and returns its error", () => {
   );
   state.effectChoiceStrategy = (request) => {
     if (request.effectId !== "avoid_attack") return undefined;
-    return request.choices.find(
+    const choice = request.choices.find(
       (choice) =>
         choice.choiceKind === "defense" &&
         choice.targetCardInstanceId === defenseCard.instanceId
     );
+    return choice === undefined ? undefined : { choiceId: choice.choiceId };
   };
   const lifeBefore = defendingPlayer.life.current;
 
@@ -216,7 +217,7 @@ test("target choice strategy can select a non-first chosenPlayer target", () => 
   state.effectChoiceStrategy = (request) => {
     if (request.effectId !== "attack_damage") return undefined;
     seenRequest = request;
-    return request.choices[1];
+    return { choiceId: request.choices[1]!.choiceId };
   };
 
   const result = applyAction(state, {
@@ -357,7 +358,7 @@ test("defense chooser receives opaque card identifiers and restores its selected
     assert.equal(choice.choiceKind, "defense");
     assert.equal("targetDefinitionId" in choice, false);
     seenDefenseChoice = true;
-    return { ...choice };
+    return { choiceId: choice.choiceId };
   };
 
   const result = applyAction(state, {
@@ -412,7 +413,7 @@ test("target choice strategy routes a non-first market card to its handler", () 
       return undefined;
     }
     seenRequest = request;
-    return request.choices[1];
+    return { choiceId: request.choices[1]!.choiceId };
   };
 
   const result = applyAction(state, {
@@ -496,7 +497,7 @@ test("reconstructed target choice resolves the canonical target by stable identi
       return undefined;
     const choice = request.choices[1];
     assert.ok(choice);
-    return { ...choice };
+    return { choiceId: choice.choiceId };
   };
 
   const result = applyAction(state, {
@@ -648,7 +649,7 @@ test("non-target option choices keep their ordered option identities", () => {
       return undefined;
     }
     requests.push(request);
-    return request.choices[1];
+    return { choiceId: request.choices[1]!.choiceId };
   };
 
   const result = executeEffect(state, activePlayer, effect, source);
@@ -708,7 +709,7 @@ test("directional choices keep their selected direction and ordered targets", ()
   state.effectChoiceStrategy = (request) => {
     if (request.effectId !== "directional_chain_attack") return undefined;
     seenRequest = request;
-    return request.choices[1];
+    return { choiceId: request.choices[1]!.choiceId };
   };
 
   const result = executeEffect(state, activePlayer, effect, source);
@@ -765,7 +766,7 @@ test("multi-card choices preserve the selected card group", () => {
   };
   state.effectChoiceStrategy = (request) => {
     if (request.effectId !== "return_discard_to_hand") return undefined;
-    return request.choices[0];
+    return { choiceId: request.choices[0]!.choiceId };
   };
 
   const result = executeEffect(state, activePlayer, effect, source);

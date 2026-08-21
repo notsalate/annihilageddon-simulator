@@ -9,9 +9,7 @@ import {
   getEffectExecutionError,
 } from "../src/engine/effect-runtime.js";
 import type { CardDefinition } from "../src/engine/data.js";
-import {
-  validateRuntimeEffectCatalogPayload,
-} from "../src/engine/effect-runtime-registry.js";
+import { validateRuntimeEffectCatalogPayload } from "../src/engine/effect-runtime-registry.js";
 import type {
   AttackIntent,
   EffectSourceContext,
@@ -96,7 +94,10 @@ test("attack profile uses its initiator instead of the active player or source o
     if (effectId !== "attack_damage") {
       return undefined;
     }
-    return choices.find((choice) => choice.choiceId === sourceOwner.playerId);
+    const choice = choices.find(
+      (candidate) => candidate.choiceId === sourceOwner.playerId
+    );
+    return choice === undefined ? undefined : { choiceId: choice.choiceId };
   };
 
   const result = executeEffect(
@@ -446,7 +447,10 @@ test("timed effect with invalid shape is rejected before its handler", () => {
   );
 
   assert.equal(result.ok, false);
-  assert.match(result.error, /timing must be one of whileControlled, whileScoring/);
+  assert.match(
+    result.error,
+    /timing must be one of whileControlled, whileScoring/
+  );
   assert.equal(handlerCalled, false);
 });
 

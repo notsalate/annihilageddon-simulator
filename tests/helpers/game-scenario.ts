@@ -156,6 +156,12 @@ export function choosePlayerTargetForEffect(
   });
 }
 
+export function toChoiceSelection(
+  choice: { readonly choiceId: string } | undefined
+): { readonly choiceId: string } | undefined {
+  return choice === undefined ? undefined : { choiceId: choice.choiceId };
+}
+
 export function chooseEffect(
   scenario: GameScenario,
   selector: ChoicePolicy
