@@ -638,6 +638,224 @@ test("activation and ongoing families use exact timing and card-source policies"
   }
 });
 
+test("Mayhem and Mega Mayhem effects use exact family timing and source policies", () => {
+  const validCases = [
+    {
+      effectId: "mayhem_attack",
+      payload: {
+        effectId: "mayhem_attack",
+        timing: "onPlay",
+        amount: 4,
+        target: { selector: "allPlayers" },
+      },
+    },
+    {
+      effectId: "mayhem_attack",
+      payload: {
+        effectId: "mayhem_attack",
+        timing: "onMayhemResolve",
+        amount: 4,
+        target: { selector: "allPlayers" },
+      },
+    },
+    {
+      effectId: "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+      payload: {
+        effectId:
+          "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        statusId: "dingler",
+        lifeCost: 1,
+        chipCost: 1,
+      },
+    },
+    {
+      effectId: "mayhem_each_player_choose_foe_gain_chips",
+      payload: {
+        effectId: "mayhem_each_player_choose_foe_gain_chips",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chipAmount: 1,
+      },
+    },
+    {
+      effectId: "mayhem_each_non_dingler_gain_chips",
+      payload: {
+        effectId: "mayhem_each_non_dingler_gain_chips",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chipAmount: 1,
+      },
+    },
+    {
+      effectId: "mayhem_each_player_battle_highest_hand_cost",
+      payload: {
+        effectId: "mayhem_each_player_battle_highest_hand_cost",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        winnerDrawAmount: 2,
+      },
+    },
+    {
+      effectId: "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
+      payload: {
+        effectId: "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        options: [
+          { effectId: "discard_hand_then_draw_cards", drawAmount: 5 },
+          { effectId: "take_damage", amount: 5 },
+        ],
+      },
+    },
+    {
+      effectId:
+        "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
+      payload: {
+        effectId:
+          "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        choice: "destroyBothOrDestroyNone",
+        amount: 2,
+        sourceZone: "deck",
+      },
+    },
+    {
+      effectId: "mayhem_each_player_discard_deck_then_destroy_from_discard",
+      payload: {
+        effectId: "mayhem_each_player_discard_deck_then_destroy_from_discard",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        destroyAmount: 1,
+        destroySourceZone: "discard",
+        discardSourceZone: "deck",
+      },
+    },
+    {
+      effectId: "mayhem_each_player_gain_chips_then_attack_for_current_chips",
+      payload: {
+        effectId: "mayhem_each_player_gain_chips_then_attack_for_current_chips",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chipAmount: 1,
+      },
+    },
+    {
+      effectId: "mayhem_each_player_reduce_life_to_gain_chips",
+      payload: {
+        effectId: "mayhem_each_player_reduce_life_to_gain_chips",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        lifeTotal: 10,
+        chipAmount: 1,
+      },
+    },
+    {
+      effectId: "mayhem_each_player_vote_dingler",
+      payload: {
+        effectId: "mayhem_each_player_vote_dingler",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        voteTargetSelector: "anyPlayer",
+        statusId: "dingler",
+      },
+    },
+    {
+      effectId: "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
+      payload: {
+        effectId: "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
+        timing: "onMayhemResolve",
+        statusId: "dingler",
+      },
+    },
+    {
+      effectId: "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+      payload: {
+        effectId:
+          "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        deathCondition: {
+          effectId: "destroyed_card_kind_is",
+          cardKind: "mayhem",
+        },
+        destroyedCardSource: "mainDeck",
+      },
+    },
+    {
+      effectId: "mega_mayhem_each_player_toggle_dingler",
+      payload: {
+        effectId: "mega_mayhem_each_player_toggle_dingler",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+      },
+    },
+    {
+      effectId: "mega_mayhem_set_life",
+      payload: {
+        effectId: "mega_mayhem_set_life",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        lifeTotal: 5,
+      },
+    },
+  ] as const;
+
+  for (const { effectId, payload } of validCases) {
+    assert.equal(
+      validateRuntimeEffectCatalogPayload(
+        `Valid ${effectId}`,
+        effectId,
+        payload,
+        "combat",
+        "card"
+      ).ok,
+      true
+    );
+  }
+
+  assert.equal(
+    validateRuntimeEffectCatalogPayload(
+      "Wizard-property Mayhem attack",
+      "mayhem_attack",
+      validCases[1].payload,
+      "combat",
+      "wizardProperty"
+    ).ok,
+    true
+  );
+
+  const unsupportedTiming = validateRuntimeEffectCatalogPayload(
+    "Immediate Mayhem choice",
+    "mayhem_each_player_vote_dingler",
+    {
+      ...validCases[11].payload,
+      timing: "onPlay",
+    },
+    "combat",
+    "card"
+  );
+  assert.equal(unsupportedTiming.ok, false);
+
+  const unsupportedSource = validateRuntimeEffectCatalogPayload(
+    "Dead Wizard Token Mayhem",
+    "mega_mayhem_set_life",
+    validCases[15].payload,
+    "combat",
+    "deadWizardToken"
+  );
+  assert.equal(unsupportedSource.ok, false);
+});
+
 test("public catalog validation rejects an ongoing refill payload with unsupported timing", () => {
   const decoded = validateRuntimeEffectCatalogPayload(
     "Controlled refill",

@@ -413,6 +413,93 @@ test("card ownership and choice family decoders reject malformed payloads before
   }
 });
 
+test("Mayhem family rejects malformed payloads and unsupported sources before handlers", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23026 });
+  const subject = scenario.activePlayer;
+  const cases = [
+    {
+      effectId: "mayhem_attack" as const,
+      payload: {
+        effectId: "mayhem_attack",
+        timing: "onPlay",
+        amount: 4,
+        targetSelector: "allPlayers",
+      },
+    },
+    {
+      effectId: "mayhem_each_player_vote_dingler" as const,
+      payload: {
+        effectId: "mayhem_each_player_vote_dingler",
+        timing: "onPlay",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        voteTargetSelector: "anyPlayer",
+        statusId: "dingler",
+      },
+    },
+    {
+      effectId: "mega_mayhem_set_life" as const,
+      payload: {
+        effectId: "mega_mayhem_set_life",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        lifeTotal: 0,
+      },
+    },
+  ] as const;
+
+  for (const { effectId, payload } of cases) {
+    let handlerCalled = false;
+    const result = withTemporaryEffectRuntimeOperations(
+      effectId,
+      {
+        execute() {
+          handlerCalled = true;
+          return { ok: true };
+        },
+      },
+      () =>
+        executeRuntimeEffect(
+          scenario.state,
+          subject,
+          payload,
+          catalogSource(subject, "card", "combat"),
+          throwingRuntimeServices()
+        )
+    );
+
+    assert.equal(result.ok, false);
+    assert.equal(handlerCalled, false);
+  }
+
+  let handlerCalled = false;
+  const unsupportedSource = withTemporaryEffectRuntimeOperations(
+    "mega_mayhem_set_life",
+    {
+      execute() {
+        handlerCalled = true;
+        return { ok: true };
+      },
+    },
+    () =>
+      executeRuntimeEffect(
+        scenario.state,
+        subject,
+        {
+          effectId: "mega_mayhem_set_life",
+          timing: "onMayhemResolve",
+          targetSelector: "eachPlayerClockwiseFromActive",
+          lifeTotal: 5,
+        },
+        catalogSource(subject, "deadWizardToken", "combat"),
+        throwingRuntimeServices()
+      )
+  );
+
+  assert.equal(unsupportedSource.ok, false);
+  assert.equal(handlerCalled, false);
+});
+
 test("setup effects accept only wizard-property sources", () => {
   const effect = {
     effectId: "set_starting_life_total",
