@@ -89,6 +89,9 @@ function createPublicEntrypointFixture(
       export const validateExecutableDataPack = () => ({});
       export const isIncompleteFullOnlyDataPack = () => false;
     `,
+    "src/engine/runtime-data-intake.ts": `
+      export const intakeRuntimeData = () => ({});
+    `,
     "src/engine/effect-runtime-registry.ts": `
       type EffectRuntimeSupportedSourceKinds = readonly string[];
       function sourceKinds(): EffectRuntimeSupportedSourceKinds { return []; }
@@ -957,6 +960,22 @@ test("public guard rejects a decoder value import outside approved adapters", ()
   );
 });
 
+test("public guard rejects a direct legacy Runtime Data import outside intake", () => {
+  const fixture = createPublicEntrypointFixture({
+    "src/engine/unsafe.ts": `
+      import { loadCurrentRuntimeDataPack } from "./data.js";
+      void loadCurrentRuntimeDataPack;
+    `,
+  });
+
+  const result = runTypedAccessGuard(fixture);
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /src\/engine\/unsafe\.ts imports protected value/
+  );
+});
+
 test("public guard permits a decoder type-only import outside approved adapters", () => {
   const fixture = createPublicEntrypointFixture({
     "src/engine/unsafe.ts": `
@@ -1007,16 +1026,10 @@ test("public guard rejects a new data adapter value exported through the root", 
   );
 });
 
-test("public guard permits the approved data adapter exports through the root", () => {
+test("public guard permits the Runtime Data Intake export through the root", () => {
   const fixture = createPublicEntrypointFixture({
     "src/index.ts": `
-      export {
-        loadCurrentRuntimeDataPack,
-        decodeCurrentRuntimeDataPack,
-        loadV0DataPack,
-        validateExecutableDataPack,
-        isIncompleteFullOnlyDataPack,
-      } from "./engine/data.js";
+      export { intakeRuntimeData } from "./engine/runtime-data-intake.js";
     `,
   });
 

@@ -7,7 +7,6 @@ import {
   calculateEffectivePlayerMaxLife,
   initializeGame,
   listLegalActions,
-  loadCurrentRuntimeDataPack,
   runMarketFlow,
   scoreGame,
   type CardInstance,
@@ -19,6 +18,7 @@ import {
   type StatusInstance,
   type TokenDefinition,
 } from "../src/index.js";
+import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
 import { executeMayhemEffects } from "../src/engine/effect-runtime.js";
 import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
@@ -1830,9 +1830,7 @@ test("Mayhem rejects the second invalid destroy choice before moving any affecte
     marketChips: 0,
   };
   const foeTopDeckCard: CardInstance = {
-    instanceId: markCardInstanceId(
-      "fixture-mayhem-invalid-destroy-choice-foe"
-    ),
+    instanceId: markCardInstanceId("fixture-mayhem-invalid-destroy-choice-foe"),
     definitionId: markCardDefinitionId(normalDefinition.cardId),
     ownerId: foe.playerId,
     marketChips: 0,
@@ -1869,18 +1867,13 @@ test("Mayhem rejects the second invalid destroy choice before moving any affecte
   const eventLogBefore = structuredClone(state.eventLog);
   const nextRandomBefore = state.rng.fork().next();
 
-  const result = executeMayhemEffects(
-    state,
-    activePlayer,
-    mayhemDefinition,
-    {
-      sourceType: "card",
-      runtimeMode: "fixture",
-      playerId: activePlayer.playerId,
-      cardInstanceId: mayhem.instanceId,
-      definitionId: mayhem.definitionId,
-    }
-  );
+  const result = executeMayhemEffects(state, activePlayer, mayhemDefinition, {
+    sourceType: "card",
+    runtimeMode: "fixture",
+    playerId: activePlayer.playerId,
+    cardInstanceId: mayhem.instanceId,
+    definitionId: mayhem.definitionId,
+  });
 
   assert.equal(result.ok, false);
   if (result.ok) {

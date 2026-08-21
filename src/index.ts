@@ -23,9 +23,6 @@ export { createSeededRng } from "./engine/rng.js";
 export type {
   CardDefinition,
   RuntimeSourceMetadata,
-  DecodeResult,
-  DataPackValidationOptions,
-  DataPackValidationResult,
   DeadWizardTokenDefinition,
   DeckComposition,
   LoadedDataPack,
@@ -61,11 +58,17 @@ export type {
   TargetSelector,
 } from "./engine/runtime-effect.js";
 export {
-  decodeCurrentRuntimeDataPack,
-  loadCurrentRuntimeDataPack,
-  loadV0DataPack,
-  validateExecutableDataPack,
-} from "./engine/data.js";
+  intakeRuntimeData,
+  RuntimeDataIntakeError,
+} from "./engine/runtime-data-intake.js";
+export type {
+  RuntimeDataFilesystemSource,
+  RuntimeDataIntakeErrorKind,
+  RuntimeDataIntakeOptions,
+  RuntimeDataPreloadedSource,
+  RuntimeDataSource,
+  VerifiedRuntimeDataPack,
+} from "./engine/runtime-data-intake.js";
 export type {
   DraftValidationMessage,
   DraftValidationResult,

@@ -5,13 +5,8 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  decodeCurrentRuntimeDataPack,
-  loadCurrentRuntimeDataPack,
-  loadV0DataPack,
-  validateExecutableDataPack,
   type AttackOutcomeBranch,
   type CardDefinition,
-  type DecodeResult,
   type EffectTiming,
   type LoadedDataPack,
   type AvoidAttackRuntimeEffect,
@@ -37,6 +32,12 @@ import {
   type TokenDefinition,
 } from "../src/index.js";
 import {
+  decodeCurrentRuntimeDataPack,
+  loadCurrentRuntimeDataPack,
+  validateExecutableDataPack,
+  type DecodeResult,
+} from "../src/engine/data.js";
+import {
   type EffectRuntimeCatalogOperationOverridesForTesting,
   type EffectRuntimeServices,
   validateRuntimeEffectCatalogPayload,
@@ -55,11 +56,11 @@ function validateRawRuntimeEffect<Id extends RuntimeEffectId>(
     raw,
     effectId.startsWith("fixture_") ? "fixture" : "combat",
     effectId === "temporary_hand_limit_by_gained_card_type" ||
-    effectId === "force_starting_player" ||
-    effectId === "replace_starting_card" ||
-    effectId === "start_with_basic_trophy" ||
-    effectId === "set_starting_life_total" ||
-    effectId === "set_resurrection_life_total"
+      effectId === "force_starting_player" ||
+      effectId === "replace_starting_card" ||
+      effectId === "start_with_basic_trophy" ||
+      effectId === "set_starting_life_total" ||
+      effectId === "set_resurrection_life_total"
       ? "wizardProperty"
       : "card"
   );
@@ -455,7 +456,9 @@ test("runtime effect decoder rejects rawOnly fields", () => {
   assert.equal(result.ok, false);
   if (!result.ok) {
     assert.ok(
-      result.errors.some((error) => error.includes("uses unsupported field rawOnly"))
+      result.errors.some((error) =>
+        error.includes("uses unsupported field rawOnly")
+      )
     );
   }
 });
@@ -518,7 +521,11 @@ test("runtime data boundary rejects malformed nested Wild Magic options", () => 
   const result = decodeCurrentRuntimeDataPack(tempRoot, "manifest.json");
   assert.equal(result.ok, false);
   if (!result.ok) {
-    assert.ok(result.errors.some((error) => error.includes("options[0].amount must be a positive integer")));
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes("options[0].amount must be a positive integer")
+      )
+    );
   }
 });
 
@@ -582,7 +589,9 @@ test("runtime data boundary rejects malformed nested attack branches", () => {
   if (!result.ok) {
     assert.ok(result.errors.some((error) => error.includes("onDamageDealt")));
     assert.ok(
-      result.errors.some((error) => error.includes("uses unsupported field target"))
+      result.errors.some((error) =>
+        error.includes("uses unsupported field target")
+      )
     );
   }
 });
@@ -710,7 +719,9 @@ test("runtime data decoder rejects raw-only fields from nested Wild Magic option
   assert.equal(result.ok, false);
   if (!result.ok) {
     assert.ok(
-      result.errors.some((error) => error.includes("options[0] uses unsupported field rawOnly"))
+      result.errors.some((error) =>
+        error.includes("options[0] uses unsupported field rawOnly")
+      )
     );
   }
 });
@@ -1241,11 +1252,7 @@ test("runtime data decoder rejects invalid card and token definition field shape
       )
     );
     assert.ok(
-      result.errors.some((error) =>
-        error.includes(
-          "engine.effects[0].timing"
-        )
-      )
+      result.errors.some((error) => error.includes("engine.effects[0].timing"))
     );
     assert.ok(
       result.errors.some((error) =>
@@ -1499,8 +1506,9 @@ test("executable data-pack validation rejects invalid add-power amount", () => {
 
   assert.equal(result.ok, false);
   assert.equal(
-    result.errors.filter((error) => error.includes("amount must be a positive integer"))
-      .length,
+    result.errors.filter((error) =>
+      error.includes("amount must be a positive integer")
+    ).length,
     3
   );
 });
@@ -1562,7 +1570,9 @@ test("executable data-pack validation rejects invalid add-power Wild Magic optio
 
   assert.equal(result.ok, false);
   assert.ok(
-    result.errors.some((error) => error.includes("options[0].amount must be a positive integer"))
+    result.errors.some((error) =>
+      error.includes("options[0].amount must be a positive integer")
+    )
   );
 });
 
@@ -1717,9 +1727,7 @@ test("executable data-pack validation rejects invalid core movement effect shape
     )
   );
   assert.ok(
-    result.errors.some((error) =>
-      error.includes("destination must be discard")
-    )
+    result.errors.some((error) => error.includes("destination must be discard"))
   );
   assert.ok(
     result.errors.some((error) =>
@@ -1852,9 +1860,12 @@ test("multi-target and Mayhem attacks require one nested target representation",
     },
   ] as const;
 
-  for (
-    const { effectId, selector, conflictingSelector, foreignSelector } of cases
-  ) {
+  for (const {
+    effectId,
+    selector,
+    conflictingSelector,
+    foreignSelector,
+  } of cases) {
     const payload = {
       effectId,
       timing: "onPlay",
@@ -1862,7 +1873,10 @@ test("multi-target and Mayhem attacks require one nested target representation",
       target: { selector },
     };
 
-    assert.deepEqual(validateRawRuntimeEffect(effectId, "Fixture", payload), []);
+    assert.deepEqual(
+      validateRawRuntimeEffect(effectId, "Fixture", payload),
+      []
+    );
     assert.ok(
       validateRawRuntimeEffect(effectId, "Fixture", {
         ...payload,
@@ -2030,7 +2044,6 @@ test("Wand play power decoder owns its typed trigger payload", () => {
 });
 
 test("catalog decoders reject invalid economy and draw payloads", () => {
-
   assert.notDeepEqual(
     validateRawRuntimeEffect("gain_chips", "Fixture", {
       effectId: "gain_chips",
@@ -2048,22 +2061,17 @@ test("catalog decoders reject invalid economy and draw payloads", () => {
     []
   );
   assert.notDeepEqual(
-    validateRawRuntimeEffect(
-      "gain_chips_per_player_with_status",
-      "Fixture",
-      {
-        effectId: "gain_chips_per_player_with_status",
-        timing: "onPlay",
-        amountPerPlayer: 1,
-        status: "wizard",
-      }
-    ),
+    validateRawRuntimeEffect("gain_chips_per_player_with_status", "Fixture", {
+      effectId: "gain_chips_per_player_with_status",
+      timing: "onPlay",
+      amountPerPlayer: 1,
+      status: "wizard",
+    }),
     []
   );
 });
 
 test("catalog decoders reject invalid top-deck and Wild Magic payloads", () => {
-
   assert.notDeepEqual(
     validateRawRuntimeEffect("reveal_top_card", "Fixture", {
       effectId: "reveal_top_card",
@@ -2082,15 +2090,11 @@ test("catalog decoders reject invalid top-deck and Wild Magic payloads", () => {
     []
   );
   assert.notDeepEqual(
-    validateRawRuntimeEffect(
-      "play_top_card_from_foe_deck",
-      "Fixture",
-      {
-        effectId: "play_top_card_from_foe_deck",
-        timing: "onPlay",
-        targetSelector: "unsupportedFoe",
-      }
-    ),
+    validateRawRuntimeEffect("play_top_card_from_foe_deck", "Fixture", {
+      effectId: "play_top_card_from_foe_deck",
+      timing: "onPlay",
+      targetSelector: "unsupportedFoe",
+    }),
     []
   );
   assert.notDeepEqual(
@@ -2109,7 +2113,6 @@ test("catalog decoders reject invalid top-deck and Wild Magic payloads", () => {
 });
 
 test("catalog decoders reject invalid life and Dingler status payloads", () => {
-
   assert.notDeepEqual(
     validateRawRuntimeEffect("heal", "Fixture", {
       effectId: "heal",
@@ -2150,35 +2153,26 @@ test("catalog decoders reject invalid life and Dingler status payloads", () => {
     );
   }
   assert.deepEqual(
-    validateRawRuntimeEffect(
-      "add_power_per_player_with_status",
-      "Fixture",
-      {
-        effectId: "add_power_per_player_with_status",
-        timing: "onPlay",
-        statusId: "dingler",
-        amountPerPlayer: 1,
-      }
-    ),
+    validateRawRuntimeEffect("add_power_per_player_with_status", "Fixture", {
+      effectId: "add_power_per_player_with_status",
+      timing: "onPlay",
+      statusId: "dingler",
+      amountPerPlayer: 1,
+    }),
     []
   );
   assert.notDeepEqual(
-    validateRawRuntimeEffect(
-      "add_power_per_player_with_status",
-      "Fixture",
-      {
-        effectId: "add_power_per_player_with_status",
-        timing: "onPlay",
-        statusId: "wizard",
-        amountPerPlayer: 0,
-      }
-    ),
+    validateRawRuntimeEffect("add_power_per_player_with_status", "Fixture", {
+      effectId: "add_power_per_player_with_status",
+      timing: "onPlay",
+      statusId: "wizard",
+      amountPerPlayer: 0,
+    }),
     []
   );
 });
 
 test("catalog decoders reject invalid Mega Mayhem life and status payloads", () => {
-
   assert.deepEqual(
     validateRawRuntimeEffect("mega_mayhem_set_life", "Fixture", {
       effectId: "mega_mayhem_set_life",
@@ -2202,10 +2196,11 @@ test("catalog decoders reject invalid Mega Mayhem life and status payloads", () 
       "mega_mayhem_each_player_toggle_dingler",
       "Fixture",
       {
-      effectId: "mega_mayhem_each_player_toggle_dingler",
-      timing: "onMayhemResolve",
-      targetSelector: "eachPlayerClockwiseFromActive",
-    }),
+        effectId: "mega_mayhem_each_player_toggle_dingler",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+      }
+    ),
     []
   );
   assert.notDeepEqual(
@@ -2213,11 +2208,12 @@ test("catalog decoders reject invalid Mega Mayhem life and status payloads", () 
       "mega_mayhem_each_player_toggle_dingler",
       "Fixture",
       {
-      effectId: "mega_mayhem_each_player_toggle_dingler",
-      timing: "onPlay",
-      targetSelector: "activePlayer",
-      statusId: "wizard",
-    }),
+        effectId: "mega_mayhem_each_player_toggle_dingler",
+        timing: "onPlay",
+        targetSelector: "activePlayer",
+        statusId: "wizard",
+      }
+    ),
     []
   );
 });
@@ -2432,7 +2428,6 @@ test("catalog decoders reject invalid Mayhem battle and vote payloads", () => {
 });
 
 test("catalog decoders reject invalid wizard-property setup payloads", () => {
-
   assert.deepEqual(
     validateRawRuntimeEffect("replace_starting_card", "Token", {
       effectId: "replace_starting_card",
@@ -2465,16 +2460,12 @@ test("catalog decoders reject invalid wizard-property setup payloads", () => {
     []
   );
   assert.deepEqual(
-    validateRawRuntimeEffect(
-      "set_resurrection_life_total",
-      "Token",
-      {
-        effectId: "set_resurrection_life_total",
-        timing: "replacement",
-        lifeTotal: 25,
-        unlessStatusId: "loser",
-      }
-    ),
+    validateRawRuntimeEffect("set_resurrection_life_total", "Token", {
+      effectId: "set_resurrection_life_total",
+      timing: "replacement",
+      lifeTotal: 25,
+      unlessStatusId: "loser",
+    }),
     []
   );
 
@@ -2504,22 +2495,17 @@ test("catalog decoders reject invalid wizard-property setup payloads", () => {
     []
   );
   assert.notDeepEqual(
-    validateRawRuntimeEffect(
-      "set_resurrection_life_total",
-      "Token",
-      {
-        effectId: "set_resurrection_life_total",
-        timing: "replacement",
-        lifeTotal: "25",
-        unlessStatusId: 5,
-      }
-    ),
+    validateRawRuntimeEffect("set_resurrection_life_total", "Token", {
+      effectId: "set_resurrection_life_total",
+      timing: "replacement",
+      lifeTotal: "25",
+      unlessStatusId: 5,
+    }),
     []
   );
 });
 
 test("wizard property effective-value decoder accepts and rejects exact payloads", () => {
-
   for (const effect of [
     {
       effectId: "modify_effective_value",
@@ -3036,7 +3022,6 @@ test("executable data-pack validation rejects unsupported effect ids", () => {
 });
 
 test("topdeck gained card replacement validates supported and invalid shapes", () => {
-
   const dataPack = withFixtureToken({
     schemaVersion: 1,
     tokenId: "wizard-property-fixture-topdeck-validation",
@@ -3439,13 +3424,6 @@ test("loader rejects duplicate runtime token ids with both conflicting paths", (
   );
 });
 
-test("compatibility v0 loader delegates to current runtime manifest by default", () => {
-  const dataPack = loadV0DataPack(rootDir);
-
-  assert.equal(dataPack.manifest.packId, "current-runtime-data-pack");
-  assert.equal(dataPack.manifest.decks?.mainDeck, "data/decks/main-deck.json");
-});
-
 test("executable data-pack validation allows incomplete-full-only packs without optional setup surfaces", () => {
   const result = validateExecutableDataPack(
     createSetupValidationDataPack("incomplete-full-only", {
@@ -3568,7 +3546,6 @@ test("executable data-pack validation rejects unsupported play-top destinations"
 });
 
 test("executable data-pack validation rejects redirect defense branches", () => {
-
   const card = createFixtureCard("fixture-unsupported-redirect-defense");
   const dataPack = withFixtureCard({
     ...card,

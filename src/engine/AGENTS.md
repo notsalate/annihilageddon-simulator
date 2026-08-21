@@ -14,12 +14,13 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - `trigger-dispatch.ts` owns controlled-card discovery, timing-aware ongoing policy, source identity, Effect Runtime Catalog resolution, operation-specific applicability, execution, aggregation, stable ordering and stop-on-error/game-end behavior. Callers pass only state, controller and a typed operation.
 - `runtime-effect.ts` owns the exhaustive `RuntimeEffectPayloadMap`; `runtime-effect-decoder.ts` owns exact decoders for every registered ID; `effect-runtime-registry.ts` binds each decoder to its concrete handler through a typed catalog closure.
 - Runtime data comes from `data/`; import drafts under `data/import/` are outside executable engine input.
+- `runtime-data-intake.ts` is the only supported Runtime Data boundary: it accepts filesystem or preloaded sources, distinguishes source/decode/validation failures, and returns one verified immutable pack. `data.ts` decode/validation functions are internal intake building blocks and must not be re-exported through `src/index.ts`.
 - CLI orchestration lives in `src/cli/`.
 
 ## Local Contracts
 
 - Preserve deterministic behavior through seeded RNG.
-- Do not add filesystem, terminal, or UI concerns to engine modules except the existing data-loading boundary in `data.ts`.
+- Do not add filesystem, terminal, or UI concerns to engine modules except the Runtime Data loading boundaries in `data.ts` and `runtime-data-intake.ts`.
 - Keep card behavior in explicit typed runtime effects and handlers.
 - Keep `StatusInstance.effects` and `TrophyLikeInstance.effects` as decoded `RuntimeEffect[]`; do not reintroduce raw records after the data boundary.
 - Model runtime effect choices as a discriminated union; record selected typed targets in the event log.

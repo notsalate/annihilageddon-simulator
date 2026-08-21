@@ -8,7 +8,7 @@ const engineDir = path.join(rootDir, "src", "engine");
 const configuredAllowedViolations = [
   {
     filePath: "src/engine/data.ts",
-    line: 166,
+    line: 163,
     column: 15,
     source: "unknown[]",
     owner: "PropertySignature:needsData",
@@ -17,7 +17,7 @@ const configuredAllowedViolations = [
   },
   {
     filePath: "src/engine/data.ts",
-    line: 1722,
+    line: 1748,
     column: 4,
     source: "unknown[]",
     owner: "FunctionDeclaration:requireArrayField",
@@ -26,7 +26,7 @@ const configuredAllowedViolations = [
   },
   {
     filePath: "src/engine/data.ts",
-    line: 1779,
+    line: 1805,
     column: 51,
     source: "unknown[]",
     owner: "FunctionDeclaration:isUnknownArray",

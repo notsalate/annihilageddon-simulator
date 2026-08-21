@@ -7,10 +7,7 @@ import {
   type EffectRuntimeMode,
   type EffectRuntimeSourceKind,
 } from "./effect-runtime-registry.js";
-import {
-  isRuntimeEffectId,
-  type RuntimeEffect,
-} from "./runtime-effect.js";
+import { isRuntimeEffectId, type RuntimeEffect } from "./runtime-effect.js";
 import { decodeTimedRuntimeEffect } from "./runtime-effect-decoder.js";
 
 type RuntimeJsonDecoder<T> = (value: unknown) => DecodeResult<T>;
@@ -205,6 +202,8 @@ export type DataPackValidationResult =
 
 export interface DataPackValidationOptions {
   mode?: EffectRuntimeMode;
+  allowFixtureSetupGaps?: boolean;
+  allowFixtureCatalogGaps?: boolean;
 }
 
 export function loadCurrentRuntimeDataPack(
@@ -362,23 +361,23 @@ export function decodeCurrentRuntimeDataPack(
   });
 }
 
-/** @deprecated Use loadCurrentRuntimeDataPack. */
-export function loadV0DataPack(
-  rootDir: string,
-  manifestPath = "data/packs/current-runtime.json"
-): LoadedDataPack {
-  return loadCurrentRuntimeDataPack(rootDir, manifestPath);
-}
-
 export function validateExecutableDataPack(
   dataPack: LoadedDataPack,
   options: DataPackValidationOptions = {}
 ): DataPackValidationResult {
   const errors: string[] = [];
   const mode = options.mode ?? "combat";
+  const allowFixtureCatalogGaps =
+    options.allowFixtureCatalogGaps === true &&
+    dataPack.manifest.mappingStatus === "fixture";
 
   errors.push(...validateManifestRuntimePaths(dataPack.manifest));
-  errors.push(...validateSetupDataPackCompatibility(dataPack));
+  errors.push(
+    ...validateSetupDataPackCompatibility(
+      dataPack,
+      options.allowFixtureSetupGaps
+    )
+  );
 
   for (const definition of dataPack.cardDefinitions.values()) {
     if (
@@ -414,12 +413,15 @@ export function validateExecutableDataPack(
       }
 
       errors.push(
-        ...validateRuntimeEffectDefinition(
-          `Card ${definition.cardId}`,
-          effectId,
-          effect,
-          mode,
-          "card"
+        ...filterFixtureCatalogGaps(
+          validateRuntimeEffectDefinition(
+            `Card ${definition.cardId}`,
+            effectId,
+            effect,
+            mode,
+            "card"
+          ),
+          allowFixtureCatalogGaps
         )
       );
     }
@@ -441,12 +443,15 @@ export function validateExecutableDataPack(
         }
 
         errors.push(
-          ...validateRuntimeEffectDefinition(
-            `Token ${definition.tokenId}`,
-            effectId,
-            effect,
-            mode,
-            definition.kind
+          ...filterFixtureCatalogGaps(
+            validateRuntimeEffectDefinition(
+              `Token ${definition.tokenId}`,
+              effectId,
+              effect,
+              mode,
+              definition.kind
+            ),
+            allowFixtureCatalogGaps
           )
         );
       }
@@ -481,12 +486,15 @@ export function validateExecutableDataPack(
       }
 
       errors.push(
-        ...validateRuntimeEffectDefinition(
-          `Token ${definition.tokenId}`,
-          effectId,
-          effect,
-          mode,
-          "wizardProperty"
+        ...filterFixtureCatalogGaps(
+          validateRuntimeEffectDefinition(
+            `Token ${definition.tokenId}`,
+            effectId,
+            effect,
+            mode,
+            "wizardProperty"
+          ),
+          allowFixtureCatalogGaps
         )
       );
     }
@@ -500,6 +508,19 @@ export function validateExecutableDataPack(
   }
 
   return { ok: true };
+}
+
+function filterFixtureCatalogGaps(
+  errors: string[],
+  allowFixtureCatalogGaps: boolean
+): string[] {
+  if (!allowFixtureCatalogGaps) {
+    return errors;
+  }
+
+  return errors.filter(
+    (error) => !/ uses unsupported effect(?: id)? /u.test(error)
+  );
 }
 
 export function isIncompleteFullOnlyDataPack(
@@ -527,10 +548,14 @@ function validateManifestRuntimePaths(manifest: DataPackManifest): string[] {
 }
 
 function validateSetupDataPackCompatibility(
-  dataPack: LoadedDataPack
+  dataPack: LoadedDataPack,
+  allowFixtureSetupGaps = false
 ): string[] {
   const errors: string[] = [];
-  const allowsIncompleteSetup = isIncompleteFullOnlyDataPack(dataPack);
+  const allowsFixtureSetupGaps =
+    allowFixtureSetupGaps && dataPack.manifest.mappingStatus === "fixture";
+  const allowsIncompleteSetup =
+    isIncompleteFullOnlyDataPack(dataPack) || allowsFixtureSetupGaps;
 
   if (
     !allowsIncompleteSetup &&
@@ -542,8 +567,9 @@ function validateSetupDataPackCompatibility(
   }
 
   if (
-    !allowsIncompleteSetup ||
-    totalDeckEntryCount(dataPack.decks.starterDeck) > 0
+    !allowsFixtureSetupGaps &&
+    (!allowsIncompleteSetup ||
+      totalDeckEntryCount(dataPack.decks.starterDeck) > 0)
   ) {
     errors.push(
       ...validateCanonicalStarterTemplate(dataPack.decks.starterDeck)

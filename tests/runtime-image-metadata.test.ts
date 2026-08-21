@@ -14,7 +14,7 @@ import test from "node:test";
 import {
   decodeCurrentRuntimeDataPack,
   loadCurrentRuntimeDataPack,
-} from "../src/index.js";
+} from "../src/engine/data.js";
 
 const rootDir = process.cwd();
 

@@ -52,32 +52,32 @@ const physicalInventorySeamApiNames = new Set([
 const controlLedgerOwner = "src/engine/control-ledger.ts";
 const physicalCardZonePaths = collectPhysicalCardZonePaths();
 const configuredAllowedViolations = [
-  ["src/engine/data.ts", 1266, 3, "decodeRuntimeSourceMetadata"],
-  ["src/engine/data.ts", 1670, 1, "expectRuntimeRecord"],
-  ["src/engine/data.ts", 1683, 1, "requireRecordField"],
-  ["src/engine/data.ts", 1684, 3, "requireRecordField"],
-  ["src/engine/data.ts", 1698, 1, "optionalRecordField"],
-  ["src/engine/data.ts", 1699, 3, "optionalRecordField"],
-  ["src/engine/data.ts", 1718, 3, "requireArrayField"],
-  ["src/engine/data.ts", 1733, 3, "requireUnknownArrayField"],
-  ["src/engine/data.ts", 1743, 3, "requireRuntimeEffectArrayField"],
-  ["src/engine/data.ts", 1767, 3, "optionalUnknownArrayField"],
-  ["src/engine/data.ts", 1784, 3, "requireStringField"],
-  ["src/engine/data.ts", 1799, 3, "optionalStringField"],
-  ["src/engine/data.ts", 1818, 3, "requireNonEmptyStringField"],
-  ["src/engine/data.ts", 1836, 3, "optionalNonEmptyStringField"],
-  ["src/engine/data.ts", 1848, 3, "requireStringOrNullField"],
-  ["src/engine/data.ts", 1863, 3, "requireExactStringField"],
-  ["src/engine/data.ts", 1883, 3, "requireNumberField"],
-  ["src/engine/data.ts", 1898, 3, "requireNumberOrNullField"],
-  ["src/engine/data.ts", 1916, 3, "requireBooleanField"],
-  ["src/engine/data.ts", 1931, 3, "requireStringArrayField"],
-  ["src/engine/data.ts", 1955, 3, "requireUnsupportedMechanicsField"],
-  ["src/engine/data.ts", 1984, 3, "optionalStringArrayField"],
-  ["src/engine/data.ts", 1997, 3, "requireCardKindField"],
-  ["src/engine/data.ts", 2012, 3, "requireTokenKindField"],
-  ["src/engine/data.ts", 2037, 3, "validateRuntimeEffectDefinition"],
-  ["src/engine/data.ts", 2058, 43, "isEffectRecord"],
+  ["src/engine/data.ts", 1292, 3, "decodeRuntimeSourceMetadata"],
+  ["src/engine/data.ts", 1696, 1, "expectRuntimeRecord"],
+  ["src/engine/data.ts", 1709, 1, "requireRecordField"],
+  ["src/engine/data.ts", 1710, 3, "requireRecordField"],
+  ["src/engine/data.ts", 1724, 1, "optionalRecordField"],
+  ["src/engine/data.ts", 1725, 3, "optionalRecordField"],
+  ["src/engine/data.ts", 1744, 3, "requireArrayField"],
+  ["src/engine/data.ts", 1759, 3, "requireUnknownArrayField"],
+  ["src/engine/data.ts", 1769, 3, "requireRuntimeEffectArrayField"],
+  ["src/engine/data.ts", 1793, 3, "optionalUnknownArrayField"],
+  ["src/engine/data.ts", 1810, 3, "requireStringField"],
+  ["src/engine/data.ts", 1825, 3, "optionalStringField"],
+  ["src/engine/data.ts", 1844, 3, "requireNonEmptyStringField"],
+  ["src/engine/data.ts", 1862, 3, "optionalNonEmptyStringField"],
+  ["src/engine/data.ts", 1874, 3, "requireStringOrNullField"],
+  ["src/engine/data.ts", 1889, 3, "requireExactStringField"],
+  ["src/engine/data.ts", 1909, 3, "requireNumberField"],
+  ["src/engine/data.ts", 1924, 3, "requireNumberOrNullField"],
+  ["src/engine/data.ts", 1942, 3, "requireBooleanField"],
+  ["src/engine/data.ts", 1957, 3, "requireStringArrayField"],
+  ["src/engine/data.ts", 1981, 3, "requireUnsupportedMechanicsField"],
+  ["src/engine/data.ts", 2010, 3, "optionalStringArrayField"],
+  ["src/engine/data.ts", 2023, 3, "requireCardKindField"],
+  ["src/engine/data.ts", 2038, 3, "requireTokenKindField"],
+  ["src/engine/data.ts", 2063, 3, "validateRuntimeEffectDefinition"],
+  ["src/engine/data.ts", 2084, 43, "isEffectRecord"],
   ["src/engine/runtime-effect-decoder.ts", 76, 9, "decodeObject"],
   ["src/engine/runtime-effect-decoder.ts", 1568, 41, "isPlainRecord"],
   ["src/engine/runtime-effect.ts", 1103, 4, "isRuntimeEffectTargetRecord"],
@@ -100,16 +100,20 @@ const effectRuntimeCatalogBypassExports = new Set([
   "EffectRuntimeCatalogResolution",
 ]);
 const decoderModule = "src/engine/runtime-effect-decoder.ts";
-const approvedRuntimeEffectDecoderImporters = new Set([
-  "src/engine/data.ts",
-  "src/engine/effect-runtime-registry.ts",
-]);
-const allowedDataAdapterValueExports = new Set([
+const runtimeDataModule = "src/engine/data.ts";
+const protectedLegacyRuntimeDataValueExports = new Set([
   "loadCurrentRuntimeDataPack",
   "decodeCurrentRuntimeDataPack",
-  "loadV0DataPack",
   "validateExecutableDataPack",
-  "isIncompleteFullOnlyDataPack",
+]);
+const approvedRuntimeEffectDecoderImporters = new Set([
+  runtimeDataModule,
+  "src/engine/effect-runtime-registry.ts",
+]);
+const allowedLegacyDataAdapterValueExports = new Set();
+const allowedRuntimeDataIntakeValueExports = new Set([
+  "intakeRuntimeData",
+  "RuntimeDataIntakeError",
 ]);
 const allowedRegistryAdapterValueExports = new Set([
   "createAttackDefenseUsage",
@@ -145,6 +149,7 @@ const publicEntrypoints = new Set([
 ]);
 const protectedModules = new Map([
   [decoderModule, "*"],
+  [runtimeDataModule, protectedLegacyRuntimeDataValueExports],
   ["src/engine/effect-runtime-registry.ts", effectRuntimeCatalogBypassExports],
 ]);
 const approvedValueImporters = new Map(
@@ -153,8 +158,32 @@ const approvedValueImporters = new Map(
     new Set([decoderModule]),
   ])
 );
+approvedValueImporters.set(
+  "src/engine/runtime-data-intake.ts",
+  new Set([
+    `${runtimeDataModule}#decodeCurrentRuntimeDataPack`,
+    `${runtimeDataModule}#validateExecutableDataPack`,
+  ])
+);
+approvedValueImporters.set(
+  runtimeDataModule,
+  new Set([
+    decoderModule,
+    "tests/action-loop.test.ts",
+    "tests/benchmark.test.ts",
+    "tests/effective-values.test.ts",
+    "tests/runtime-data-intake.test.ts",
+    "tests/runtime-image-metadata.test.ts",
+    "tests/runtime-regression.test.ts",
+    "tests/setup.test.ts",
+    "tests/simulation.test.ts",
+    "tests/trigger-dispatch.test.ts",
+    "tests/validation.test.ts",
+  ])
+);
 const trustedAdapterValueExports = new Map([
-  ["src/engine/data.ts", allowedDataAdapterValueExports],
+  ["src/engine/data.ts", allowedLegacyDataAdapterValueExports],
+  ["src/engine/runtime-data-intake.ts", allowedRuntimeDataIntakeValueExports],
   ["src/engine/effect-runtime-registry.ts", allowedRegistryAdapterValueExports],
 ]);
 const publicEntrypointPolicy = {

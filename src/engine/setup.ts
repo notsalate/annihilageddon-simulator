@@ -13,8 +13,6 @@ import {
 } from "../domain/types.js";
 import {
   isIncompleteFullOnlyDataPack,
-  loadCurrentRuntimeDataPack,
-  validateExecutableDataPack,
   type CardDefinition,
   type DeckComposition,
   type LoadedDataPack,
@@ -35,6 +33,11 @@ import {
 import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
+import {
+  intakeRuntimeData,
+  type RuntimeDataFilesystemSource,
+  type RuntimeDataPreloadedSource,
+} from "./runtime-data-intake.js";
 import type { RuntimeEffect, RuntimeEffectId } from "./runtime-effect.js";
 
 export type { PlayerId } from "../domain/types.js";
@@ -841,20 +844,14 @@ interface InitializeGameBaseOptions {
 }
 
 export type InitializeGameOptions =
-  | InitializeGameFilesystemOptions
-  | InitializeGameLoadedDataPackOptions;
+  | (InitializeGameBaseOptions & RuntimeDataFilesystemSource)
+  | (InitializeGameBaseOptions & RuntimeDataPreloadedSource);
 
-export interface InitializeGameFilesystemOptions extends InitializeGameBaseOptions {
-  rootDir: string;
-  dataPackPath?: string;
-  dataPack?: never;
-}
+export type InitializeGameFilesystemOptions = InitializeGameBaseOptions &
+  RuntimeDataFilesystemSource;
 
-export interface InitializeGameLoadedDataPackOptions extends InitializeGameBaseOptions {
-  dataPack: LoadedDataPack;
-  rootDir?: never;
-  dataPackPath?: never;
-}
+export type InitializeGameLoadedDataPackOptions = InitializeGameBaseOptions &
+  RuntimeDataPreloadedSource;
 
 interface InstanceFactory {
   create(
@@ -881,18 +878,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
   }
 
   const rng = createSeededRng(options.seed);
-  const dataPack =
-    "dataPack" in options
-      ? options.dataPack
-      : loadCurrentRuntimeDataPack(options.rootDir, options.dataPackPath);
-  if (dataPack.manifest.mappingStatus !== "fixture") {
-    const validation = validateExecutableDataPack(dataPack);
-    if (!validation.ok) {
-      throw new Error(
-        `Cannot initialize game with invalid data pack:\n${validation.errors.join("\n")}`
-      );
-    }
-  }
+  const dataPack = intakeRuntimeData(options);
   const runtimeMode: EffectRuntimeMode =
     dataPack.manifest.mappingStatus === "fixture" ? "fixture" : "combat";
   const factory = createInstanceFactory();

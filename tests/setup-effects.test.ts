@@ -317,7 +317,7 @@ test("setup fixture does not depend on the current working directory", () => {
   }
 });
 
-test("initializeGame does not look up a wizard property again after its setup effects", () => {
+test("initializeGame validates and snapshots wizard-property setup effects before applying them", () => {
   const tokenDefinitions = new TokenDefinitionsWithoutPostSetupLookup(2);
   const state = initializeGame({
     dataPack: setupDataPack(true, "fixture", tokenDefinitions, () =>
@@ -327,7 +327,7 @@ test("initializeGame does not look up a wizard property again after its setup ef
   });
 
   assert.equal(state.activePlayerId, state.players[0]?.playerId);
-  assert.equal(tokenDefinitions.setupEffectListReads, state.players.length);
+  assert.equal(tokenDefinitions.setupEffectListReads, 2);
 });
 
 test("initializeGame passes combat runtime mode to the setup executor", () => {

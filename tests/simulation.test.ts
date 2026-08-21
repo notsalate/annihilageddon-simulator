@@ -13,7 +13,6 @@ import test from "node:test";
 
 import {
   baselineBot,
-  decodeCurrentRuntimeDataPack,
   determineWinnerIds,
   formatSingleGameDebugTrace,
   getGameEndReason,
@@ -23,6 +22,7 @@ import {
   runSingleGame,
   scoreGame,
 } from "../src/index.js";
+import { decodeCurrentRuntimeDataPack } from "../src/engine/data.js";
 import { markPlayerId, type PlayerId } from "../src/domain/types.js";
 import type { BotStrategy } from "../src/engine/simulation.js";
 import type { PlayerDecisionView } from "../src/engine/setup.js";

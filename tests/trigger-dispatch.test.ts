@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  loadCurrentRuntimeDataPack,
   type CardDefinition,
   type CardInstance,
   type GameState,
   type RuntimeEffect,
 } from "../src/index.js";
+import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
 import {
   calculateEndTurnDrawCount,
   executeControlledCardOnPlayCardEffects,
