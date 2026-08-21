@@ -3,7 +3,8 @@ import test from "node:test";
 
 import type {
   BotDecisionContext,
-  RuntimeEffectChoiceRequest,
+  ChoiceRequest,
+  ChoiceSelection,
 } from "../src/index.js";
 
 type Equal<Left, Right> =
@@ -19,7 +20,7 @@ type IsReadonly<Type, Key extends keyof Type> = Equal<
   Readonly<Pick<Type, Key>>
 >;
 
-type DecisionChoice = RuntimeEffectChoiceRequest["choices"][number];
+type DecisionChoice = ChoiceRequest["choices"][number];
 type PlayerTargetChoice = Extract<
   DecisionChoice,
   { choiceKind: "playerTarget" }
@@ -36,8 +37,10 @@ type BotBuyAction = Extract<
 >;
 
 type DecisionChoiceDoesNotExposeHiddenStateAssertions = [
+  AssertFalse<"deck" extends keyof ChoiceRequest["player"] ? true : false>,
+  AssertFalse<"hand" extends keyof ChoiceRequest["player"] ? true : false>,
   AssertFalse<
-    "deck" extends keyof RuntimeEffectChoiceRequest["player"] ? true : false
+    "definitionId" extends keyof ChoiceRequest["player"] ? true : false
   >,
   AssertFalse<"state" extends keyof BotDecisionContext ? true : false>,
   AssertFalse<"players" extends keyof PlayerTargetChoice ? true : false>,
@@ -47,6 +50,7 @@ type DecisionChoiceDoesNotExposeHiddenStateAssertions = [
     "targetDefinitionIds" extends keyof CardTargetChoice ? true : false
   >,
   AssertFalse<"targetDefinitionId" extends keyof DefenseChoice ? true : false>,
+  AssertFalse<"choiceKind" extends keyof ChoiceSelection ? true : false>,
   Assert<"cost" extends keyof BotBuyAction ? true : false>,
 ];
 
@@ -55,6 +59,7 @@ type DecisionChoiceReadonlyAssertions = [
   Assert<IsReadonly<DirectionalPlayerTargetChoice, "targetPlayerIds">>,
   Assert<IsReadonly<CardTargetChoice, "targetCardInstanceIds">>,
   Assert<IsReadonly<DefenseChoice, "targetCardInstanceId">>,
+  Assert<IsReadonly<ChoiceSelection, "choiceId">>,
 ];
 
 function assertDecisionChoiceViewsAreReadonly(
@@ -70,7 +75,11 @@ test("decision choice views are immutable at the strategy boundary", () => {
   assert.equal(true, true);
 });
 
-test("decision choices expose stable target identifiers without hidden state", () => {
+test("choice requests expose stable identifiers without hidden state", () => {
   assertDecisionChoicesDoNotExposeHiddenState();
   assert.equal(true, true);
+});
+
+test("choice selection exposes only its stable identity", () => {
+  assert.deepEqual(Object.keys({ choiceId: "choice" }), ["choiceId"]);
 });

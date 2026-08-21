@@ -32,11 +32,6 @@ export function assertGameStateInvariants(state: GameState): void {
     state.turn.activatedCardIds,
     "turn.activatedCardIds contains duplicate card ids"
   );
-  assertUniqueStrings(
-    state.turn.gainedCardDefinitionIds,
-    "turn.gainedCardDefinitionIds contains duplicate definition ids"
-  );
-
   const activePlayerExists = state.players.some(
     (player) => player.playerId === state.activePlayerId
   );

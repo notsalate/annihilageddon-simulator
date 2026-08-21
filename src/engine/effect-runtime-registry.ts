@@ -33,7 +33,12 @@ import {
   calculateEffectiveCardCost,
   calculateEffectivePlayerMaxLife,
 } from "./effective-values.js";
-import { recordGameEvent, recordTurnPowerChanged } from "./event-recorder.js";
+import { drawDeckCards } from "./deck-lifecycle.js";
+import {
+  recordDeckReshuffle,
+  recordGameEvent,
+  recordTurnPowerChanged,
+} from "./event-recorder.js";
 import { isPlainRecord } from "../common.js";
 import {
   isRuntimeEffectId,
@@ -70,7 +75,6 @@ import type {
   CardInstance,
   GameState,
   PlayerState,
-  RuntimeEffectChoice,
   TokenInstance,
 } from "./setup.js";
 
@@ -169,12 +173,47 @@ export type TargetChoice =
       player: PlayerState;
     };
 
-export type EffectChoice = RuntimeEffectChoice;
+interface EffectChoiceOption {
+  choiceKind: "option";
+  choiceId: string;
+}
 
-export type StrictEffectChoiceResolution =
+interface EffectChoicePlayerTarget {
+  choiceKind: "playerTarget";
+  choiceId: string;
+  players: readonly PlayerState[];
+}
+
+interface EffectChoiceCardTarget {
+  choiceKind: "cardTarget";
+  choiceId: string;
+  cards: readonly CardInstance[];
+  amount: number;
+}
+
+interface EffectChoiceDefense {
+  choiceKind: "defense";
+  choiceId: string;
+  card: CardInstance | undefined;
+}
+
+interface EffectChoiceDirectionalPlayerTarget {
+  choiceKind: "directionalPlayerTarget";
+  choiceId: string;
+  direction: "left" | "right";
+  players: readonly PlayerState[];
+}
+
+export type EffectChoice =
+  | EffectChoiceOption
+  | EffectChoicePlayerTarget
+  | EffectChoiceCardTarget
+  | EffectChoiceDefense
+  | EffectChoiceDirectionalPlayerTarget;
+
+export type EffectChoiceResolution =
   | { status: "selected"; choice: EffectChoice }
-  | { status: "empty" }
-  | { status: "invalid" };
+  | { status: "empty" };
 
 export type TargetChoiceResult =
   | {
@@ -247,13 +286,13 @@ export interface EffectRuntimeServices {
     player: PlayerState
   ): PlayerState[];
   getPlayersInActiveOrder(state: GameState): PlayerState[];
-  prepareStrictEffectChoice(
+  prepareEffectChoice(
     state: GameState,
     player: PlayerState,
     source: EffectSourceContext,
     effectId: RuntimeEffectId,
     choices: readonly EffectChoice[]
-  ): StrictEffectChoiceResolution;
+  ): EffectChoiceResolution;
   recordEffectChoiceSelected(
     state: GameState,
     player: PlayerState,
@@ -1755,7 +1794,7 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler<
     }> = [];
 
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
-      const resolution = services.prepareStrictEffectChoice(
+      const resolution = services.prepareEffectChoice(
         state,
         targetPlayer,
         source,
@@ -1927,18 +1966,21 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler<
 
       const discardedCount = targetPlayer.hand.length;
       targetPlayer.discard.push(...targetPlayer.hand.splice(0));
-      const drawnCount = drawCards(
-        targetPlayer,
+      const drawResult = drawDeckCards(
+        targetPlayer.deck,
+        targetPlayer.discard,
         redrawOption.drawAmount,
-        state
+        state.rng,
+        () => recordDeckReshuffle(state, targetPlayer.playerId)
       );
+      targetPlayer.hand.push(...drawResult.cards);
       recordGameEvent(state, {
         type: "mayhemHandDiscardedAndRedrawn",
         playerId: targetPlayer.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
         effectId,
-        amount: discardedCount + drawnCount,
+        amount: discardedCount + drawResult.cards.length,
         sourceType: source.sourceType,
       });
     }
@@ -2184,7 +2226,14 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler<
     const winnerIds = winners.map((winner) => winner.playerId);
 
     for (const winner of winners) {
-      drawCards(winner, effect.winnerDrawAmount, state);
+      const drawResult = drawDeckCards(
+        winner.deck,
+        winner.discard,
+        effect.winnerDrawAmount,
+        state.rng,
+        () => recordDeckReshuffle(state, winner.playerId)
+      );
+      winner.hand.push(...drawResult.cards);
     }
     for (const participant of participants) {
       if (winnerIds.includes(participant.player.playerId)) {
@@ -3009,14 +3058,21 @@ const drawCardsHandler: EffectRuntimeHandler<RuntimeEffectForId<"draw_cards">> =
   {
     effectId: "draw_cards",
     execute(state, player, effect, source) {
-      const drawnCount = drawCards(player, effect.amount, state);
+      const drawResult = drawDeckCards(
+        player.deck,
+        player.discard,
+        effect.amount,
+        state.rng,
+        () => recordDeckReshuffle(state, player.playerId)
+      );
+      player.hand.push(...drawResult.cards);
       recordGameEvent(state, {
         type: "effectDrawCardsApplied",
         playerId: player.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
         effectId: "draw_cards",
-        amount: drawnCount,
+        amount: drawResult.cards.length,
         sourceType: source.sourceType,
       });
 
@@ -3721,7 +3777,9 @@ function buildDiscardReturnChoices(
     for (const cards of chooseCardCombinations(discard, amount)) {
       choices.push({
         choiceKind: "cardTarget",
-        choiceId: `return_${amount}`,
+        choiceId: `return_${amount}_${cards
+          .map((card) => card.instanceId)
+          .join("_")}`,
         amount,
         cards,
       });
@@ -3782,27 +3840,6 @@ function recordEffectChipsChanged(
   });
 }
 
-function drawCards(
-  player: PlayerState,
-  count: number,
-  state: GameState
-): number {
-  let drawnCount = 0;
-  for (let index = 0; index < count; index += 1) {
-    shuffleDiscardIntoDeckIfNeeded(player, state);
-
-    const card = player.deck.shift();
-    if (card === undefined) {
-      return drawnCount;
-    }
-
-    player.hand.push(card);
-    drawnCount += 1;
-  }
-
-  return drawnCount;
-}
-
 function sumHandCost(state: GameState, player: PlayerState): number {
   return player.hand.reduce((total, card) => {
     const cost = state.cardDefinitions.get(card.definitionId)?.engine.cost;
@@ -3810,35 +3847,6 @@ function sumHandCost(state: GameState, player: PlayerState): number {
   }, 0);
 }
 
-function shuffleDiscardIntoDeckIfNeeded(
-  player: PlayerState,
-  state: GameState
-): void {
-  if (player.deck.length > 0 || player.discard.length === 0) {
-    return;
-  }
-
-  player.deck.push(...player.discard.splice(0));
-  shuffleInPlace(player.deck, state);
-  recordGameEvent(state, {
-    type: "discardShuffledIntoDeck",
-    playerId: player.playerId,
-  });
-}
-
-function shuffleInPlace<T>(items: T[], state: GameState): void {
-  for (let index = items.length - 1; index > 0; index -= 1) {
-    const swapIndex = state.rng.nextInt(index + 1);
-    const item = items[index];
-    const swapItem = items[swapIndex];
-    if (item === undefined || swapItem === undefined) {
-      throw new Error("Unexpected sparse array during shuffle");
-    }
-
-    items[index] = swapItem;
-    items[swapIndex] = item;
-  }
-}
 function setupOnlyExecutionError(
   effectId: RuntimeEffectId
 ): EffectExecutionResult {

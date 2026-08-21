@@ -127,15 +127,24 @@ export type {
 } from "./import/draft-generator.js";
 export { runDraftImportHarness } from "./import/draft-generator.js";
 export type {
+  ChoiceCardTargetView,
+  ChoiceDefenseView,
+  ChoiceDirectionalPlayerTargetView,
+  ChoiceKind,
+  ChoiceOptionView,
+  ChoicePlayerTargetView,
+  ChoicePlayerView,
+  ChoicePolicy,
+  ChoiceRequest,
+  ChoiceSelection,
+  ChoiceView,
+} from "./engine/choice-policy.js";
+export type {
   CardInstance,
   CommonState,
   GameState,
   PlayerDecisionView,
   PlayerState,
-  RuntimeEffectDecisionChoice,
-  RuntimeEffectChoice,
-  RuntimeEffectChoiceRequest,
-  RuntimeEffectChoiceStrategy,
   StatusInstance,
   TokenInstance,
   TrophyLikeInstance,
@@ -195,11 +204,16 @@ export {
   calculateEffectiveTokenVictoryPoints,
   calculateEffectiveValue,
 } from "./engine/effective-values.js";
+export type { AdjudicationResult, PlayerScore } from "./engine/adjudication.js";
+export {
+  adjudicateGame,
+  determineWinnerIds,
+  scoreGame,
+} from "./engine/adjudication.js";
 export type {
   BotDecisionContext,
   BotStrategy,
   GameEndReason,
-  PlayerScore,
   RunSingleGameOptions,
   SetupCardSnapshot,
   SetupPlayerSnapshot,
@@ -209,10 +223,8 @@ export type {
 } from "./engine/simulation.js";
 export {
   baselineBot,
-  determineWinnerIds,
   getGameEndReason,
   runSingleGame,
-  scoreGame,
 } from "./engine/simulation.js";
 export type {
   CompactGameSummary,
@@ -258,11 +270,48 @@ export type {
 export {
   SIMULATION_BENCHMARK_CONTRACT_VERSION,
   SIMULATION_BENCHMARK_STAGES,
+  SIMULATION_REFERENCE_STAGES,
   SIMULATION_REFERENCE_COVERAGE,
   SIMULATION_REFERENCE_WORKLOAD_VERSION,
   createSimulationBenchmarkWorkload,
   runSimulationBenchmark,
 } from "./engine/simulation-benchmark.js";
+export type {
+  BenchmarkClock,
+  BenchmarkEnvironmentFingerprint,
+} from "./engine/benchmark-support.js";
+export type {
+  PerformanceBenchmarkKind,
+  PerformanceBaselineEntry,
+  PerformanceCalibrationMetric,
+  PerformanceCalibrationPair,
+  PerformanceCalibrationResult,
+  PerformanceComparisonReport,
+  PerformanceEpochBaseline,
+  PerformanceEpochCalibrationMetadata,
+  PerformanceMeasurement,
+  PerformanceMetricDelta,
+  PerformanceStage,
+  PerformanceTolerance,
+  PerformanceVerdict,
+  PerformancePairComparison,
+} from "./engine/performance-epoch.js";
+export {
+  PERFORMANCE_CALIBRATION_COMPARISON_COUNT,
+  PERFORMANCE_EPOCH,
+  PERFORMANCE_EPOCH_SCHEMA_VERSION,
+  PERFORMANCE_MEASUREMENT_COUNT,
+  PERFORMANCE_STAGES,
+  PERFORMANCE_WARMUP_COUNT,
+  assertPerformanceCalibrationResult,
+  assertPerformanceEpochBaseline,
+  calibratePerformance,
+  comparePerformance,
+  createPerformanceBaselineEntry,
+  findPerformanceBaselineEntry,
+  parsePerformanceMeasurement,
+  toPerformanceMeasurement,
+} from "./engine/performance-epoch.js";
 export type { FormatSingleGameDebugTraceOptions } from "./engine/debug-trace.js";
 export { formatSingleGameDebugTrace } from "./engine/debug-trace.js";
 export {

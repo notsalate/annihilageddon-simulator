@@ -13,10 +13,13 @@ import {
 import type { LoadedDataPack } from "./data.js";
 import {
   elapsedMs,
+  getBenchmarkCommit,
+  getBenchmarkEnvironmentFingerprint,
   median,
   sha256,
   systemBenchmarkClock,
   type BenchmarkClock,
+  type BenchmarkEnvironmentFingerprint,
 } from "./benchmark-support.js";
 import { initializeGame } from "./setup.js";
 import type { LegalAction } from "./actions.js";
@@ -139,6 +142,8 @@ export interface AnalyzerBenchmarkSample {
 
 export interface AnalyzerBenchmarkResult {
   benchmark: "analyzer";
+  commit: string | null;
+  environment: BenchmarkEnvironmentFingerprint;
   workload: AnalyzerBenchmarkWorkload;
   warmupCount: 1;
   measurementCount: 3;
@@ -154,6 +159,8 @@ export interface AnalyzerBenchmarkResult {
 
 export interface AnalyzerBenchmarkDependencies {
   clock?: BenchmarkClock;
+  commit?: string | null;
+  environment?: BenchmarkEnvironmentFingerprint;
   intakeDataPack?: (rootDir: string, manifestPath: string) => LoadedDataPack;
   initialize?: typeof initializeGame;
   enumerate?: typeof enumerateTurnLines;
@@ -224,6 +231,9 @@ export function runAnalyzerBenchmark(
   const workload = createAnalyzerBenchmarkWorkload(options);
   const dependencies = options.dependencies ?? {};
   const clock = dependencies.clock ?? systemBenchmarkClock;
+  const commit = dependencies.commit ?? getBenchmarkCommit();
+  const environment =
+    dependencies.environment ?? getBenchmarkEnvironmentFingerprint();
   const intakeDataPack =
     dependencies.intakeDataPack ??
     ((rootDir: string, manifestPath: string) =>
@@ -265,6 +275,8 @@ export function runAnalyzerBenchmark(
 
   return {
     benchmark: "analyzer",
+    commit,
+    environment,
     workload,
     warmupCount: 1,
     measurementCount: MEASUREMENT_COUNT,

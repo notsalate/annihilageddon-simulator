@@ -9,16 +9,17 @@ import {
   hasExecutableWizardPropertyActivation,
   moveGainedCardToPlayerDestination,
 } from "./effect-runtime.js";
+import { resolveCardPlay } from "./card-play-resolution.js";
 import type { EffectGameEnd } from "./effect-runtime-registry.js";
 import { assertNever } from "../common.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import {
   getControlledCards,
-  grantTemporaryControl,
   releaseTemporaryControls,
 } from "./control-ledger.js";
 import { calculateEffectiveCardCost } from "./effective-values.js";
-import { recordCardMoved, recordGameEvent } from "./event-recorder.js";
+import { drawDeckCards } from "./deck-lifecycle.js";
+import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import { runMarketFlow, type MarketFlowEndReason } from "./market-flow.js";
 import type {
   CardInstance,
@@ -82,11 +83,6 @@ interface PaymentResult {
   remainingPower: number;
   remainingChips: number;
   payableCost: number;
-}
-
-interface DrawCardsResult {
-  requestedCount: number;
-  drawnCards: CardInstance[];
 }
 
 interface CleanupMoveRecord {
@@ -184,16 +180,23 @@ function endTurn(state: GameState): ActionResult {
   });
 
   const drawCount = calculateEndTurnDrawCount(state, activePlayer);
-  const drawResult = drawCards(activePlayer, drawCount, state);
+  const drawResult = drawDeckCards(
+    activePlayer.deck,
+    activePlayer.discard,
+    drawCount,
+    state.rng,
+    () => recordDeckReshuffle(state, activePlayer.playerId)
+  );
+  activePlayer.hand.push(...drawResult.cards);
   recordGameEvent(state, {
     type: "handDrawn",
     playerId: activePlayer.playerId,
-    amount: drawResult.requestedCount,
-    legalChoiceCount: drawResult.drawnCards.length,
+    amount: drawCount,
+    legalChoiceCount: drawResult.cards.length,
     choiceId: String(activePlayer.hand.length),
     destinationZone: `${activePlayer.playerId}.hand`,
-    targetCardInstanceIds: drawResult.drawnCards.map((card) => card.instanceId),
-    targetDefinitionIds: drawResult.drawnCards.map((card) => card.definitionId),
+    targetCardInstanceIds: drawResult.cards.map((card) => card.instanceId),
+    targetDefinitionIds: drawResult.cards.map((card) => card.definitionId),
   });
 
   releaseTemporaryControls(state);
@@ -504,62 +507,26 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
   }
 
   activePlayer.hand.splice(cardIndex, 1);
-  const definition = mustGetDefinition(state, card.definitionId);
   const ownerBefore = card.ownerId;
-  let destinationZone: string;
-  if (definition.engine.isOngoing) {
-    activePlayer.permanents.push(card);
-    destinationZone = `${activePlayer.playerId}.permanents`;
-  } else {
-    activePlayer.playedThisTurn.push(card);
-    destinationZone = `${activePlayer.playerId}.playedThisTurn`;
-  }
-  if (!definition.engine.isOngoing) {
-    grantTemporaryControl(state, card.instanceId, activePlayer.playerId);
-  }
-  recordCardMoved(state, activePlayer, card, {
-    sourceZone: `${activePlayer.playerId}.hand`,
-    destinationZone,
-    ownerBefore,
-    ownerAfter: card.ownerId,
-  });
-
-  const effectResult = executeOnPlayEffects(state, activePlayer, definition, {
-    sourceType: "card",
-    runtimeMode: state.runtimeMode,
-    playerId: activePlayer.playerId,
-    cardInstanceId: card.instanceId,
-    definitionId: card.definitionId,
-  });
+  const effectResult = resolveCardPlay(
+    state,
+    activePlayer,
+    card,
+    {
+      executeOnPlayEffects,
+      executeWizardPropertyOnPlayCardEffects,
+      executeControlledCardOnPlayCardEffects,
+    },
+    {
+      sourceZone: `${activePlayer.playerId}.hand`,
+      ownerBefore,
+    }
+  );
   if (!effectResult.ok) {
     return effectResult;
   }
   if (effectResult.gameEnd !== undefined) {
     return gameEndActionResult(effectResult.gameEnd);
-  }
-
-  const wizardPropertyResult = executeWizardPropertyOnPlayCardEffects(
-    state,
-    activePlayer,
-    definition
-  );
-  if (!wizardPropertyResult.ok) {
-    return wizardPropertyResult;
-  }
-  if (wizardPropertyResult.gameEnd !== undefined) {
-    return gameEndActionResult(wizardPropertyResult.gameEnd);
-  }
-
-  const controlledCardResult = executeControlledCardOnPlayCardEffects(
-    state,
-    activePlayer,
-    card
-  );
-  if (!controlledCardResult.ok) {
-    return controlledCardResult;
-  }
-  if (controlledCardResult.gameEnd !== undefined) {
-    return gameEndActionResult(controlledCardResult.gameEnd);
   }
 
   reconcileActivePlayerControlledPower(state);
@@ -734,37 +701,6 @@ function calculatePayment(
   };
 }
 
-function drawCards(
-  player: PlayerState,
-  count: number,
-  state: GameState
-): DrawCardsResult {
-  const drawnCards: CardInstance[] = [];
-  for (let index = 0; index < count; index += 1) {
-    if (player.deck.length === 0 && player.discard.length > 0) {
-      player.deck.push(...player.discard.splice(0));
-      shuffleInPlace(player.deck, state);
-      recordGameEvent(state, {
-        type: "discardShuffledIntoDeck",
-        playerId: player.playerId,
-      });
-    }
-
-    const card = player.deck.shift();
-    if (card === undefined) {
-      break;
-    }
-
-    player.hand.push(card);
-    drawnCards.push(card);
-  }
-
-  return {
-    requestedCount: count,
-    drawnCards,
-  };
-}
-
 function getNextPlayer(state: GameState, player: PlayerState): PlayerState {
   const playerIndex = state.players.findIndex(
     (candidate) => candidate.playerId === player.playerId
@@ -775,20 +711,6 @@ function getNextPlayer(state: GameState, player: PlayerState): PlayerState {
   }
 
   return nextPlayer;
-}
-
-function shuffleInPlace<T>(items: T[], state: GameState): void {
-  for (let index = items.length - 1; index > 0; index -= 1) {
-    const swapIndex = state.rng.nextInt(index + 1);
-    const item = items[index];
-    const swapItem = items[swapIndex];
-    if (item === undefined || swapItem === undefined) {
-      throw new Error("Unexpected sparse array during shuffle");
-    }
-
-    items[index] = swapItem;
-    items[swapIndex] = item;
-  }
 }
 
 function mustGetActivePlayer(state: GameState): PlayerState {

@@ -92,7 +92,7 @@ function createFixture(): GameState {
       power: 4,
       controlledPowerBonus: 1,
       activatedCardIds: ["activated-card"],
-      gainedCardDefinitionIds: ["gained-card"],
+      gainedCardDefinitionIds: ["gained-card", "gained-card"],
       damagingAttackPlayerIds: [],
       temporaryCardControls: [
         {
@@ -194,7 +194,10 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
   fork.eventLog[0]!.targetCardInstanceIds!.push("fork-event");
 
   assert.equal(source.turn.activatedCardIds.includes("fork-only"), false);
-  assert.deepEqual(source.turn.gainedCardDefinitionIds, ["gained-card"]);
+  assert.deepEqual(source.turn.gainedCardDefinitionIds, [
+    "gained-card",
+    "gained-card",
+  ]);
   assert.deepEqual(source.turn.temporaryCardControls, [
     {
       cardInstanceId: markCardInstanceId("played-card"),
@@ -462,7 +465,11 @@ test("fork clones each physical card once per Analyzer branch", () => {
     });
   }
 
-  const forks = [forkGameState(source), forkGameState(source), forkGameState(source)];
+  const forks = [
+    forkGameState(source),
+    forkGameState(source),
+    forkGameState(source),
+  ];
 
   assert.equal(marketChipReads.size, sourceCards.length);
   for (const sourceCard of sourceCards) {
@@ -541,7 +548,10 @@ test("fork preserves Map descriptor storage while cloning its card once per bran
     assert.notEqual(storage, sourcePlayer.descriptorStorage);
     const cards = storage.get("extension-zone");
     assert.ok(cards);
-    assert.notEqual(cards, sourcePlayer.descriptorStorage.get("extension-zone"));
+    assert.notEqual(
+      cards,
+      sourcePlayer.descriptorStorage.get("extension-zone")
+    );
     assert.notEqual(cards[0], sourceCard);
     return cards[0]!;
   });
@@ -565,7 +575,10 @@ test("fork isolates source mutations and sibling mutable collections", () => {
   sourcePlayer.statuses[0]!.effects[0]!.timing = "endTurn";
   sourcePlayer.trophyLikeObjects[0]!.effects[0]!.timing = "endTurn";
 
-  assert.deepEqual(first.turn.gainedCardDefinitionIds, ["gained-card"]);
+  assert.deepEqual(first.turn.gainedCardDefinitionIds, [
+    "gained-card",
+    "gained-card",
+  ]);
   assert.equal(firstPlayer.statuses[0]!.effects[0]!.timing, "onPlay");
   assert.equal(firstPlayer.trophyLikeObjects[0]!.effects[0]!.timing, "onPlay");
 
@@ -574,11 +587,15 @@ test("fork isolates source mutations and sibling mutable collections", () => {
   firstPlayer.statuses[0]!.effects[0]!.timing = "whileControlled";
   firstPlayer.trophyLikeObjects[0]!.effects[0]!.timing = "whileControlled";
 
-  assert.deepEqual(second.turn.gainedCardDefinitionIds, ["gained-card"]);
+  assert.deepEqual(second.turn.gainedCardDefinitionIds, [
+    "gained-card",
+    "gained-card",
+  ]);
   assert.deepEqual(second.turn.damagingAttackPlayerIds, []);
   assert.equal(secondPlayer.statuses[0]!.effects[0]!.timing, "onPlay");
   assert.equal(secondPlayer.trophyLikeObjects[0]!.effects[0]!.timing, "onPlay");
   assert.deepEqual(source.turn.gainedCardDefinitionIds, [
+    "gained-card",
     "gained-card",
     "source-gained-card",
   ]);

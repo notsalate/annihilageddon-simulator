@@ -5,19 +5,11 @@ import {
   type LegalAction,
 } from "./actions.js";
 import { assertNever } from "../common.js";
-import type {
-  CardDefinition,
-  LoadedDataPack,
-  TokenDefinition,
-} from "./data.js";
-import {
-  calculateEffectiveCardCost,
-  calculateEffectiveCardVictoryPoints,
-  calculateEffectivePlayerVictoryPoints,
-  calculateEffectiveTokenVictoryPoints,
-  getOwnedScoringCards,
-} from "./effective-values.js";
+import type { ChoiceRequest, ChoiceSelection } from "./choice-policy.js";
+import type { CardDefinition, LoadedDataPack } from "./data.js";
+import { calculateEffectiveCardCost } from "./effective-values.js";
 import { recordBotActionSelected } from "./event-recorder.js";
+import { adjudicateGame, type AdjudicationResult } from "./adjudication.js";
 import {
   initializeGame,
   type CardInstance,
@@ -26,8 +18,6 @@ import {
   type PlayerId,
   type PlayerDecisionView,
   type PlayerState,
-  type RuntimeEffectDecisionChoice,
-  type RuntimeEffectChoiceRequest,
   type TokenInstance,
 } from "./setup.js";
 import { assertGameStateInvariants } from "./invariants.js";
@@ -65,9 +55,7 @@ export type BotDecisionAction =
 
 export interface BotStrategy {
   chooseAction(context: BotDecisionContext): GameAction;
-  chooseEffectChoice?(
-    request: RuntimeEffectChoiceRequest
-  ): RuntimeEffectDecisionChoice | undefined;
+  chooseEffectChoice?(request: ChoiceRequest): ChoiceSelection | undefined;
 }
 
 interface PlayerBotBinding {
@@ -111,23 +99,13 @@ export interface SetupStateSnapshot {
   deadWizardTokenStackSize: number;
 }
 
-export interface SingleGameResult {
+export interface SingleGameResult extends AdjudicationResult {
   seed: number;
   endReason: GameEndReason;
   isGameEnd: boolean;
   turnsElapsed: number;
-  players: PlayerScore[];
-  winnerIds: PlayerId[];
-  isTie: boolean;
   eventLog: GameEvent[];
   setupState?: SetupStateSnapshot;
-}
-
-export interface PlayerScore {
-  playerId: PlayerId;
-  victoryPoints: number;
-  legendCount: number;
-  deadWizardTokenCount: number;
 }
 
 export const baselineBot: BotStrategy = {
@@ -291,7 +269,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     return binding;
   }
 
-  const effectChoiceStrategy = (request: RuntimeEffectChoiceRequest) => {
+  const effectChoiceStrategy = (request: ChoiceRequest) => {
     const binding = getBotBindingForPlayer(request.player.playerId);
     return binding.chooseEffectChoice?.call(binding.strategy, request);
   };
@@ -362,47 +340,6 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
   }
 }
 
-export function scoreGame(state: GameState): PlayerScore[] {
-  return state.players.map((player) => {
-    const scoringCards = getOwnedScoringCards(state, player.playerId);
-    const cardDefinitions = scoringCards.map((object) => object.definition);
-    const deadWizardTokenDefinitions = player.deadWizardTokens.map((token) =>
-      mustGetTokenDefinition(state, token)
-    );
-
-    return {
-      playerId: player.playerId,
-      victoryPoints:
-        scoringCards.reduce((total, object) => {
-          return (
-            total +
-            calculateEffectiveCardVictoryPoints(
-              state,
-              player.playerId,
-              object.definition,
-              object.card
-            )
-          );
-        }, 0) +
-        deadWizardTokenDefinitions.reduce((total, definition) => {
-          return (
-            total +
-            calculateEffectiveTokenVictoryPoints(
-              state,
-              player.playerId,
-              definition
-            )
-          );
-        }, 0) +
-        calculateEffectivePlayerVictoryPoints(state, player.playerId, 0),
-      legendCount: cardDefinitions.filter(
-        (definition) => definition.engine.cardKind === "legend"
-      ).length,
-      deadWizardTokenCount: player.deadWizardTokens.length,
-    };
-  });
-}
-
 function summarizeGame(
   state: GameState,
   endReason: GameEndReason,
@@ -410,18 +347,16 @@ function summarizeGame(
   setupState: SetupStateSnapshot,
   winnerPlayerId?: PlayerId
 ): SingleGameResult {
-  const players = scoreGame(state);
+  const adjudication = adjudicateGame(state);
   const winnerIds =
-    winnerPlayerId === undefined
-      ? determineWinnerIds(players)
-      : [winnerPlayerId];
+    winnerPlayerId === undefined ? adjudication.winnerIds : [winnerPlayerId];
 
   return {
     seed: state.seed,
     endReason,
     isGameEnd,
     turnsElapsed: state.turn.number - 1,
-    players,
+    players: adjudication.players,
     winnerIds,
     isTie: winnerIds.length > 1,
     eventLog: [...state.eventLog],
@@ -488,28 +423,6 @@ export function getGameEndReason(state: GameState): GameEndReason | undefined {
   return undefined;
 }
 
-export function determineWinnerIds(
-  players: readonly PlayerScore[]
-): PlayerId[] {
-  const sorted = [...players].sort(compareScores);
-  const best = sorted[0];
-  if (best === undefined) {
-    return [];
-  }
-
-  return sorted
-    .filter((player) => compareScores(player, best) === 0)
-    .map((player) => player.playerId);
-}
-
-function compareScores(left: PlayerScore, right: PlayerScore): number {
-  return (
-    right.victoryPoints - left.victoryPoints ||
-    right.legendCount - left.legendCount ||
-    left.deadWizardTokenCount - right.deadWizardTokenCount
-  );
-}
-
 function isLegalAction(
   action: GameAction,
   legalActions: readonly LegalAction[]
@@ -543,16 +456,4 @@ function isLegalAction(
         return assertNever(action);
     }
   });
-}
-
-function mustGetTokenDefinition(
-  state: GameState,
-  token: TokenInstance
-): TokenDefinition {
-  const definition = state.tokenDefinitions.get(token.definitionId);
-  if (definition === undefined) {
-    throw new Error(`Missing token definition ${token.definitionId}`);
-  }
-
-  return definition;
 }

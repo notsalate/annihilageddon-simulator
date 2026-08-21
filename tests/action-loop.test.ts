@@ -31,6 +31,7 @@ import {
   createGameScenario,
   givenRuntimeCard,
   play,
+  toChoiceSelection,
 } from "./helpers/game-scenario.js";
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 import { removeCardFromLocation } from "../src/engine/control-ledger.js";
@@ -318,10 +319,12 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
   foe.chips = 2;
   chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) =>
     effectId === "avoid_attack"
-      ? choices.find(
-          (choice) =>
-            choice.choiceKind === "defense" &&
-            choice.targetCardInstanceId === familiar.instanceId
+      ? toChoiceSelection(
+          choices.find(
+            (choice) =>
+              choice.choiceKind === "defense" &&
+              choice.targetCardInstanceId === familiar.instanceId
+          )
         )
       : undefined
   );
@@ -405,10 +408,12 @@ test("redirected foreign Wand does not inherit the redirecting player's wizard p
     if (effectId !== "attack_damage") {
       return undefined;
     }
-    return choices.find(
-      (choice) =>
-        choice.choiceKind === "playerTarget" &&
-        choice.choiceId === redirectingPlayer.playerId
+    return toChoiceSelection(
+      choices.find(
+        (choice) =>
+          choice.choiceKind === "playerTarget" &&
+          choice.choiceId === redirectingPlayer.playerId
+      )
     );
   });
   const attackingLifeBefore = attackingPlayer.life.current;
@@ -457,7 +462,9 @@ test("Chipsychosis Arena doubles a redirected attack for the redirecting attacke
   state.activePlayerId = originalAttacker.playerId;
   chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) =>
     effectId === "attack_damage"
-      ? choices.find((choice) => choice.choiceId === redirector.playerId)
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === redirector.playerId)
+        )
       : undefined
   );
   const attack = addFixtureCardToActiveHand(state, {
@@ -503,7 +510,9 @@ test("Chipsychosis Arena of the original attacker does not double a redirected l
   });
   chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) =>
     effectId === "attack_damage"
-      ? choices.find((choice) => choice.choiceId === redirector.playerId)
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === redirector.playerId)
+        )
       : undefined
   );
   const attack = addFixtureCardToActiveHand(state, {
@@ -573,7 +582,9 @@ test("Chipsychosis Arena does not double a self-targeted attack", () => {
   );
   chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) =>
     effectId === "attack_damage"
-      ? choices.find((choice) => choice.choiceId === attacker.playerId)
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === attacker.playerId)
+        )
       : undefined
   );
   const attack = addFixtureCardToActiveHand(state, {
@@ -624,7 +635,9 @@ test("Chipsychosis Arena follows the current controller of a foreign attack card
   foreignAttack.ownerId = owner.playerId;
   chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) =>
     effectId === "attack_damage"
-      ? choices.find((choice) => choice.choiceId === target.playerId)
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === target.playerId)
+        )
       : undefined
   );
 
@@ -662,7 +675,9 @@ test("Chipsychosis Arena follows the current controller of a foreign attack card
   controller.life.current = 20;
   chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) =>
     effectId === "attack_damage"
-      ? choices.find((choice) => choice.choiceId === controller.playerId)
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === controller.playerId)
+        )
       : undefined
   );
 
@@ -1761,7 +1776,9 @@ test("Mayhem preserves discarded cards when every affected player chooses destro
       choices.map((choice) => choice.choiceId),
       ["destroy_both", "destroy_none"]
     );
-    return choices.find((choice) => choice.choiceId === "destroy_none");
+    return toChoiceSelection(
+      choices.find((choice) => choice.choiceId === "destroy_none")
+    );
   };
 
   const result = runMarketFlow(state, { mode: "turn" });
@@ -1784,7 +1801,7 @@ test("Mayhem preserves discarded cards when every affected player chooses destro
   );
 });
 
-test("Mayhem rejects the second invalid destroy choice before moving any affected cards", () => {
+test("Mayhem falls back for the second invalid destroy choice before moving cards", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -1857,14 +1874,12 @@ test("Mayhem rejects the second invalid destroy choice before moving any affecte
       return undefined;
     }
     if (player.playerId === activePlayer.playerId) {
-      return choices.find((choice) => choice.choiceId === "destroy_both");
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === "destroy_both")
+      );
     }
-    return {
-      choiceKind: "option",
-      choiceId: "invalid_destroy_choice",
-    };
+    return { choiceId: "invalid_destroy_choice" };
   };
-  const eventLogBefore = structuredClone(state.eventLog);
   const nextRandomBefore = state.rng.fork().next();
 
   const result = executeMayhemEffects(state, activePlayer, mayhemDefinition, {
@@ -1875,17 +1890,26 @@ test("Mayhem rejects the second invalid destroy choice before moving any affecte
     definitionId: mayhem.definitionId,
   });
 
-  assert.equal(result.ok, false);
-  if (result.ok) {
-    assert.fail("Expected an invalid Mayhem destroy choice error");
-  }
-  assert.match(result.error, /Invalid effect choice/);
-  assert.deepEqual(activePlayer.deck, [activeTopDeckCard]);
+  assert.equal(result.ok, true);
+  assert.deepEqual(activePlayer.deck, []);
   assert.deepEqual(activePlayer.discard, []);
-  assert.deepEqual(foe.deck, [foeTopDeckCard]);
+  assert.deepEqual(foe.deck, []);
   assert.deepEqual(foe.discard, []);
-  assert.deepEqual(state.common.destroyedPile, []);
-  assert.deepEqual(state.eventLog, eventLogBefore);
+  assert.deepEqual(state.common.destroyedPile, [
+    activeTopDeckCard,
+    foeTopDeckCard,
+  ]);
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.effectId ===
+            "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none"
+      )
+      .map((event) => event.choiceId),
+    ["destroy_both", "destroy_both"]
+  );
   assert.equal(state.rng.fork().next(), nextRandomBefore);
 });
 
@@ -2392,8 +2416,10 @@ test("Mayhem vote can use a non-first affected-player choice", () => {
     if (effectId !== "mayhem_each_player_vote_dingler") {
       return undefined;
     }
-    return choices.find(
-      (choice) => choice.choiceId === `vote-${secondPlayer.playerId}`
+    return toChoiceSelection(
+      choices.find(
+        (choice) => choice.choiceId === `vote-${secondPlayer.playerId}`
+      )
     );
   });
 
@@ -2617,7 +2643,9 @@ test("Mayhem Dingler recovery can choose a non-first legal chip cost", () => {
       if (player.playerId !== activePlayer.playerId) {
         return undefined;
       }
-      return choices.find((choice) => choice.choiceId === "spend_chips");
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === "spend_chips")
+      );
     }
   );
 
@@ -2987,10 +3015,12 @@ test("Avada Loshavra attack-marked Dingler assignment can be avoided by defense"
     if (effectId !== "attack_gain_status") {
       return undefined;
     }
-    return choices.find(
-      (choice) =>
-        choice.choiceKind === "playerTarget" &&
-        choice.choiceId === targetPlayer.playerId
+    return toChoiceSelection(
+      choices.find(
+        (choice) =>
+          choice.choiceKind === "playerTarget" &&
+          choice.choiceId === targetPlayer.playerId
+      )
     );
   });
   const defenseCard = addFixtureDefenseCardToHand(
@@ -3039,10 +3069,12 @@ test("Avada Loshavra makes an undefended target Dingler and counts it for power"
     if (effectId !== "attack_gain_status") {
       return undefined;
     }
-    return choices.find(
-      (choice) =>
-        choice.choiceKind === "playerTarget" &&
-        choice.choiceId === targetPlayer.playerId
+    return toChoiceSelection(
+      choices.find(
+        (choice) =>
+          choice.choiceKind === "playerTarget" &&
+          choice.choiceId === targetPlayer.playerId
+      )
     );
   });
   const card = addRuntimeCardToHand(
@@ -3103,10 +3135,12 @@ test("tagged Wand status attack inherits its owner's defense prevention without 
     if (effectId !== "attack_gain_status") {
       return undefined;
     }
-    return choices.find(
-      (choice) =>
-        choice.choiceKind === "playerTarget" &&
-        choice.choiceId === targetPlayer.playerId
+    return toChoiceSelection(
+      choices.find(
+        (choice) =>
+          choice.choiceKind === "playerTarget" &&
+          choice.choiceId === targetPlayer.playerId
+      )
     );
   });
   const defenseCard = addFixtureDefenseCardToHand(
@@ -3734,10 +3768,12 @@ test("bought familiar can discard another hand card to avoid an attack", () => {
   targetPlayer.hand.push(familiar);
   chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) =>
     effectId === "avoid_attack"
-      ? choices.find(
-          (choice) =>
-            choice.choiceKind === "defense" &&
-            choice.targetCardInstanceId === familiar.instanceId
+      ? toChoiceSelection(
+          choices.find(
+            (choice) =>
+              choice.choiceKind === "defense" &&
+              choice.targetCardInstanceId === familiar.instanceId
+          )
         )
       : undefined
   );
@@ -4262,7 +4298,7 @@ test("nested foreign Wild Magic keeps the acting player in control through activ
   foe.hand = [];
   foe.deck = [foreignWildMagic, activatedTopCard];
   chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) =>
-    effectId === "wild_magic_choice" ? choices[0] : undefined
+    effectId === "wild_magic_choice" ? toChoiceSelection(choices[0]) : undefined
   );
 
   const playResult = applyAction(state, {
@@ -4844,6 +4880,7 @@ test("temporary hand limit modifier counts cards gained this turn and resets aft
     ["spell"],
     0
   );
+  secondSpell.definitionId = firstSpell.definitionId;
   const creature = addFixtureMarketCard(
     state,
     "fixture-gained-creature-1",
@@ -4875,6 +4912,11 @@ test("temporary hand limit modifier counts cards gained this turn and resets aft
     }).ok,
     true
   );
+  assert.deepEqual(state.turn.gainedCardDefinitionIds, [
+    firstSpell.definitionId,
+    firstSpell.definitionId,
+    creature.definitionId,
+  ]);
   assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
 
   assert.equal(activePlayer.hand.length, 7);
@@ -5150,7 +5192,7 @@ test("Wizard Property 006 lets the player decline topdecking a gained creature",
       ),
       false
     );
-    return choices[1];
+    return toChoiceSelection(choices[1]);
   };
 
   const result = applyAction(state, {
@@ -5212,7 +5254,9 @@ test("Wizard Property 006 and 008 apply topdecking after the player chooses appl
     const card = createCommonRuntimeCard(definition.cardId);
     state.common.market.splice(0, state.common.market.length, card);
     state.effectChoiceStrategy = ({ effectId, choices }) =>
-      effectId === "topdeck_gained_card" ? choices[0] : undefined;
+      effectId === "topdeck_gained_card"
+        ? toChoiceSelection(choices[0])
+        : undefined;
 
     const result = applyAction(state, {
       type: "buyMarketCard",
@@ -5311,7 +5355,9 @@ test("Wizard Property 008 lets the player decline topdecking a gained permanent"
   const card = createCommonRuntimeCard(definition.cardId);
   state.common.market.splice(0, state.common.market.length, card);
   state.effectChoiceStrategy = ({ effectId, choices }) =>
-    effectId === "topdeck_gained_card" ? choices[1] : undefined;
+    effectId === "topdeck_gained_card"
+      ? toChoiceSelection(choices[1])
+      : undefined;
 
   const result = applyAction(state, {
     type: "buyMarketCard",
@@ -6374,8 +6420,10 @@ test("attack_damage_equal_to_controlled_card_cost can be avoided after choosing 
       if (player.playerId !== activePlayer.playerId) {
         return undefined;
       }
-      return choices.find(
-        (choice) => choice.choiceId === secondControlled.instanceId
+      return toChoiceSelection(
+        choices.find(
+          (choice) => choice.choiceId === secondControlled.instanceId
+        )
       );
     }
   );
@@ -6681,8 +6729,8 @@ test("Lubricating Dirty Stick does not affect a foe's Wand attack", () => {
       if (effectId !== "attack_damage" || player.playerId !== foe.playerId) {
         return undefined;
       }
-      return choices.find(
-        (choice) => choice.choiceId === modifierOwner.playerId
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === modifierOwner.playerId)
       );
     }
   );
@@ -6773,7 +6821,9 @@ test("Lubricating Dirty Stick gains power when its owner plays a foe's Wand", ()
   wildMagic.ownerId = activePlayer.playerId;
   activePlayer.hand.push(wildMagic);
   chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) => {
-    return effectId === "wild_magic_choice" ? choices.at(-1) : undefined;
+    return effectId === "wild_magic_choice"
+      ? toChoiceSelection(choices.at(-1))
+      : undefined;
   });
   state.turn.power = 0;
 
@@ -6829,13 +6879,15 @@ test("Lubricating Dirty Stick buffs its owner's Wand played through Wild Magic",
   state.activePlayerId = playController.playerId;
   chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) => {
     if (effectId === "wild_magic_choice") {
-      return choices.at(-1);
+      return toChoiceSelection(choices.at(-1));
     }
     if (effectId === "attack_damage") {
-      return choices.find(
-        (choice) =>
-          choice.choiceKind === "playerTarget" &&
-          choice.choiceId === wandOwner.playerId
+      return toChoiceSelection(
+        choices.find(
+          (choice) =>
+            choice.choiceKind === "playerTarget" &&
+            choice.choiceId === wandOwner.playerId
+        )
       );
     }
     return undefined;
@@ -6930,15 +6982,19 @@ test("Hrenalocka Wand returns up to two discard cards to hand when its attack ki
   assert.equal(activePlayer.hand.includes(secondDiscard), true);
   assert.equal(activePlayer.discard.includes(firstDiscard), false);
   assert.equal(activePlayer.discard.includes(secondDiscard), false);
+  const expectedReturnChoiceIds = [
+    `return_2_${firstDiscard.instanceId}_${secondDiscard.instanceId}`,
+    `return_1_${firstDiscard.instanceId}`,
+    `return_1_${secondDiscard.instanceId}`,
+    "return_0",
+  ];
   assert.ok(
     state.eventLog.some((event) => {
       return (
         event.type === "effectChoiceSelected" &&
         event.effectId === "return_discard_to_hand" &&
-        event.choiceId === "return_2" &&
-        event.choiceIds?.includes("return_0") === true &&
-        event.choiceIds?.includes("return_1") === true &&
-        event.choiceIds?.includes("return_2") === true &&
+        event.choiceId === expectedReturnChoiceIds[0] &&
+        event.choiceIds?.join(",") === expectedReturnChoiceIds.join(",") &&
         event.targetCardInstanceIds?.includes(firstDiscard.instanceId) ===
           true &&
         event.targetCardInstanceIds?.includes(secondDiscard.instanceId) === true
@@ -7257,10 +7313,12 @@ test("Palochka-Shlepalocka steals chips equal to actual damage from a chosen non
     if (effectId !== "attack_damage") {
       return undefined;
     }
-    return choices.find(
-      (choice) =>
-        choice.choiceKind === "playerTarget" &&
-        choice.choiceId === targetPlayer.playerId
+    return toChoiceSelection(
+      choices.find(
+        (choice) =>
+          choice.choiceKind === "playerTarget" &&
+          choice.choiceId === targetPlayer.playerId
+      )
     );
   });
   const result = applyAction(state, {
@@ -7445,10 +7503,12 @@ test("Palochka-Chipsalocka can spend one chip to attack its controller", () => {
     if (effectId !== "optional_spend_chip_attack_damage") {
       return undefined;
     }
-    return choices.find(
-      (choice) =>
-        choice.choiceId === "pay_optional_cost" ||
-        choice.choiceId === activePlayer.playerId
+    return toChoiceSelection(
+      choices.find(
+        (choice) =>
+          choice.choiceId === "pay_optional_cost" ||
+          choice.choiceId === activePlayer.playerId
+      )
     );
   });
   const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_041");
@@ -7485,7 +7545,9 @@ test("Palochka-Chipsalocka can decline its optional attack", () => {
     if (effectId !== "optional_spend_chip_attack_damage") {
       return undefined;
     }
-    return choices.find((choice) => choice.choiceId === "skip_optional_cost");
+    return toChoiceSelection(
+      choices.find((choice) => choice.choiceId === "skip_optional_cost")
+    );
   });
   const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_041");
 
@@ -7597,7 +7659,9 @@ test("optional attack offers payment for a payable life cost", () => {
   activePlayer.life.current = 5;
   chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) =>
     effectId === "attack_damage"
-      ? choices.find((choice) => choice.choiceId === "pay_optional_cost")
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === "pay_optional_cost")
+        )
       : undefined
   );
   const attackCardId = addFixtureCardToActiveHand(state, {
@@ -7862,8 +7926,10 @@ test("Venerina Magolovka supports pass, life-only, Dingler-only, and full exchan
           return undefined;
         }
 
-        return choices.find(
-          (choice) => choice.choiceId === testCase.selectedChoiceId
+        return toChoiceSelection(
+          choices.find(
+            (choice) => choice.choiceId === testCase.selectedChoiceId
+          )
         );
       }
     );
@@ -8092,10 +8158,12 @@ test("2D lets each player choose a foe who gains one chip in active-player order
         return undefined;
       }
       const targetPlayerId = targetsByPlayer.get(player.playerId);
-      return choices.find(
-        (choice) =>
-          choice.choiceKind === "playerTarget" &&
-          choice.choiceId === targetPlayerId
+      return toChoiceSelection(
+        choices.find(
+          (choice) =>
+            choice.choiceKind === "playerTarget" &&
+            choice.choiceId === targetPlayerId
+        )
       );
     }
   );
@@ -8263,7 +8331,9 @@ test("2Q can skip its optional life-for-chips choice when a custom chooser passe
       if (player.playerId !== activePlayer.playerId) {
         return undefined;
       }
-      return choices.find((choice) => choice.choiceId === "pass");
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === "pass")
+      );
     }
   );
   const mayhem = createCommonRuntimeCard("esw2_dbg__main_060");
@@ -8323,9 +8393,13 @@ test("2N current runtime honors pass and participate branches for Mayhem battle"
         return undefined;
       }
       if (player.playerId === secondPlayer.playerId) {
-        return choices.find((choice) => choice.choiceId === "pass");
+        return toChoiceSelection(
+          choices.find((choice) => choice.choiceId === "pass")
+        );
       }
-      return choices.find((choice) => choice.choiceId === "participate");
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === "participate")
+      );
     }
   );
 
@@ -8397,12 +8471,16 @@ test("2R current runtime supports non-first vote targets and Dingler ties", () =
         player.playerId === activePlayer.playerId ||
         player.playerId === secondPlayer.playerId
       ) {
-        return choices.find(
-          (choice) => choice.choiceId === `vote-${secondPlayer.playerId}`
+        return toChoiceSelection(
+          choices.find(
+            (choice) => choice.choiceId === `vote-${secondPlayer.playerId}`
+          )
         );
       }
-      return choices.find(
-        (choice) => choice.choiceId === `vote-${thirdPlayer.playerId}`
+      return toChoiceSelection(
+        choices.find(
+          (choice) => choice.choiceId === `vote-${thirdPlayer.playerId}`
+        )
       );
     }
   );
@@ -8504,8 +8582,10 @@ test("2P current runtime supports life payment, chip payment, and skip branches"
         ) {
           return undefined;
         }
-        return choices.find(
-          (choice) => choice.choiceId === testCase.selectedChoiceId
+        return toChoiceSelection(
+          choices.find(
+            (choice) => choice.choiceId === testCase.selectedChoiceId
+          )
         );
       }
     );
@@ -8696,7 +8776,9 @@ test("2O can reach its take-damage branch for an affected player", () => {
       if (player.playerId !== secondPlayer.playerId) {
         return undefined;
       }
-      return choices.find((choice) => choice.choiceId === "take_damage");
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === "take_damage")
+      );
     }
   );
 

@@ -6,6 +6,7 @@ import {
   createGameScenario,
   givenRuntimeCard,
   play,
+  toChoiceSelection,
 } from "./helpers/game-scenario.js";
 
 const rootDir = process.cwd();
@@ -38,17 +39,21 @@ test("directional chain stops when the requested target redirects and survives",
   );
   state.effectChoiceStrategy = ({ effectId, choices }) => {
     if (effectId === "directional_chain_attack") {
-      return choices.find(
-        (choice) =>
-          choice.choiceKind === "directionalPlayerTarget" &&
-          choice.choiceId === "left"
+      return toChoiceSelection(
+        choices.find(
+          (choice) =>
+            choice.choiceKind === "directionalPlayerTarget" &&
+            choice.choiceId === "left"
+        )
       );
     }
     if (effectId === "avoid_attack") {
-      return choices.find(
-        (choice) =>
-          choice.choiceKind === "defense" &&
-          choice.targetCardInstanceId === redirectDefense.instanceId
+      return toChoiceSelection(
+        choices.find(
+          (choice) =>
+            choice.choiceKind === "defense" &&
+            choice.targetCardInstanceId === redirectDefense.instanceId
+        )
       );
     }
     return undefined;

@@ -156,11 +156,12 @@ test("failed defense branch rolls back mutations and returns its error", () => {
   );
   state.effectChoiceStrategy = (request) => {
     if (request.effectId !== "avoid_attack") return undefined;
-    return request.choices.find(
+    const choice = request.choices.find(
       (choice) =>
         choice.choiceKind === "defense" &&
         choice.targetCardInstanceId === defenseCard.instanceId
     );
+    return choice === undefined ? undefined : { choiceId: choice.choiceId };
   };
   const lifeBefore = defendingPlayer.life.current;
 
@@ -216,7 +217,7 @@ test("target choice strategy can select a non-first chosenPlayer target", () => 
   state.effectChoiceStrategy = (request) => {
     if (request.effectId !== "attack_damage") return undefined;
     seenRequest = request;
-    return request.choices[1];
+    return { choiceId: request.choices[1]!.choiceId };
   };
 
   const result = applyAction(state, {
@@ -253,7 +254,7 @@ test("target choice strategy can select a non-first chosenPlayer target", () => 
   assert.equal(choiceEvent.targetPlayerId, selectedTarget.playerId);
 });
 
-test("effect choice strategy receives isolated player decision views", () => {
+test("effect choice strategy receives an isolated minimal player view", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const source = addFixtureDefinitionToActiveHand(
     state,
@@ -286,17 +287,21 @@ test("effect choice strategy receives isolated player decision views", () => {
     );
     assert.ok(choice);
     assert.equal(choice.choiceKind, "playerTarget");
+    assert.equal("hand" in request.player, false);
+    assert.equal("deck" in request.player, false);
+    assert.equal("discard" in request.player, false);
+    assert.equal("permanents" in request.player, false);
 
     const mutablePlayerView = request.player as unknown as {
       chips: number;
       life: { current: number };
-      hand: Array<{ marketChips: number }>;
+      handSize: number;
     };
     mutablePlayerView.chips = 99;
     mutablePlayerView.life.current = 1;
-    mutablePlayerView.hand.length = 0;
+    mutablePlayerView.handSize = 0;
 
-    return choice;
+    return { choiceId: choice.choiceId };
   };
 
   const result = applyAction(state, {
@@ -353,7 +358,7 @@ test("defense chooser receives opaque card identifiers and restores its selected
     assert.equal(choice.choiceKind, "defense");
     assert.equal("targetDefinitionId" in choice, false);
     seenDefenseChoice = true;
-    return { ...choice };
+    return { choiceId: choice.choiceId };
   };
 
   const result = applyAction(state, {
@@ -408,7 +413,7 @@ test("target choice strategy routes a non-first market card to its handler", () 
       return undefined;
     }
     seenRequest = request;
-    return request.choices[1];
+    return { choiceId: request.choices[1]!.choiceId };
   };
 
   const result = applyAction(state, {
@@ -492,7 +497,7 @@ test("reconstructed target choice resolves the canonical target by stable identi
       return undefined;
     const choice = request.choices[1];
     assert.ok(choice);
-    return { ...choice };
+    return { choiceId: choice.choiceId };
   };
 
   const result = applyAction(state, {
@@ -600,8 +605,7 @@ test("empty card targets preserve skip and fail semantics", () => {
         event.type === "effectChoiceSelected") &&
       event.effectId === "discard_card"
   );
-  assert.equal(failedChoiceEvents.length, 1);
-  assert.equal(failedChoiceEvents[0]?.type, "effectChoiceSkipped");
+  assert.equal(failedChoiceEvents.length, 0);
   if (!failed.result.ok) {
     assert.match(
       failed.result.error,
@@ -644,7 +648,7 @@ test("non-target option choices keep their ordered option identities", () => {
       return undefined;
     }
     requests.push(request);
-    return request.choices[1];
+    return { choiceId: request.choices[1]!.choiceId };
   };
 
   const result = executeEffect(state, activePlayer, effect, source);
@@ -704,7 +708,7 @@ test("directional choices keep their selected direction and ordered targets", ()
   state.effectChoiceStrategy = (request) => {
     if (request.effectId !== "directional_chain_attack") return undefined;
     seenRequest = request;
-    return request.choices[1];
+    return { choiceId: request.choices[1]!.choiceId };
   };
 
   const result = executeEffect(state, activePlayer, effect, source);
@@ -761,7 +765,7 @@ test("multi-card choices preserve the selected card group", () => {
   };
   state.effectChoiceStrategy = (request) => {
     if (request.effectId !== "return_discard_to_hand") return undefined;
-    return request.choices[0];
+    return { choiceId: request.choices[0]!.choiceId };
   };
 
   const result = executeEffect(state, activePlayer, effect, source);
@@ -775,11 +779,69 @@ test("multi-card choices preserve the selected card group", () => {
   );
   assert.ok(choiceEvent);
   assert.equal(choiceEvent.choiceKind, "cardTarget");
-  assert.equal(choiceEvent.choiceId, "return_2");
+  assert.equal(
+    choiceEvent.choiceId,
+    `return_2_${discardedCards.map((card) => card.instanceId).join("_")}`
+  );
   assert.equal(choiceEvent.amount, 2);
   assert.deepEqual(
     choiceEvent.targetCardInstanceIds,
     discardedCards.map((card) => card.instanceId)
   );
   assert.equal(choiceEvent.targetCardInstanceId, undefined);
+});
+
+test("multi-card choices use distinct stable IDs for each combination", () => {
+  const state = initializeGame({ rootDir, seed: 60616 });
+  const activePlayer = state.players.find(
+    (candidate) => candidate.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  const discardedCards = activePlayer.hand.splice(0, 2);
+  assert.equal(discardedCards.length, 2);
+  activePlayer.discard.push(...discardedCards);
+  const source: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: "fixture",
+    playerId: activePlayer.playerId,
+    cardInstanceId: "fixture-choice-distinct-card-source",
+    definitionId: "fixture-choice-distinct-card-source",
+  };
+  const effect: RuntimeEffect = {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 1,
+    targetSelector: "chosenFoe",
+    onDamageDealt: [{ effectId: "return_discard_to_hand", amount: 1 }],
+  };
+  let requestedChoiceIds: readonly string[] = [];
+  state.effectChoiceStrategy = (request) => {
+    if (request.effectId !== "return_discard_to_hand") return undefined;
+    requestedChoiceIds = request.choices.map((choice) => choice.choiceId);
+    return { choiceId: request.choices[1]!.choiceId };
+  };
+
+  const result = executeEffect(state, activePlayer, effect, source);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(requestedChoiceIds, [
+    `return_1_${discardedCards[0]!.instanceId}`,
+    `return_1_${discardedCards[1]!.instanceId}`,
+    "return_0",
+  ]);
+  assert.equal(activePlayer.hand.includes(discardedCards[0]!), false);
+  assert.equal(activePlayer.hand.includes(discardedCards[1]!), true);
+  const choiceEvent = state.eventLog.find(
+    (event) =>
+      event.type === "effectChoiceSelected" &&
+      event.effectId === "return_discard_to_hand"
+  );
+  assert.ok(choiceEvent);
+  assert.equal(
+    choiceEvent.choiceId,
+    `return_1_${discardedCards[1]!.instanceId}`
+  );
+  assert.deepEqual(choiceEvent.targetCardInstanceIds, [
+    discardedCards[1]!.instanceId,
+  ]);
 });

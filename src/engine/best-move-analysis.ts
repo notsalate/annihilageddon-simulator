@@ -5,7 +5,8 @@ import {
   type LegalAction,
 } from "./actions.js";
 import { forkGameState } from "./game-state-fork.js";
-import type { GameState, RuntimeEffectChoiceRequest } from "./setup.js";
+import type { ChoiceRequest } from "./choice-policy.js";
+import type { GameState } from "./setup.js";
 
 export interface AnalysisLimits {
   maxChoiceDepth: number;
@@ -16,13 +17,13 @@ export interface AnalysisLimits {
 
 export interface AnalysisChoiceSelection {
   requestIndex: number;
-  effectId: RuntimeEffectChoiceRequest["effectId"];
-  sourceType: RuntimeEffectChoiceRequest["sourceType"];
+  effectId: ChoiceRequest["effectId"];
+  sourceType: ChoiceRequest["sourceType"];
   cardInstanceId: string;
   definitionId: string;
   choiceIndex: number;
   choiceId: string;
-  choiceKind: RuntimeEffectChoiceRequest["choices"][number]["choiceKind"];
+  choiceKind: ChoiceRequest["choices"][number]["choiceKind"];
 }
 
 export interface CompletedActionBranch {
@@ -95,7 +96,7 @@ interface ChoicePrefix {
 class ExpandChoicePath extends Error {
   constructor(
     readonly requestIndex: number,
-    readonly request: RuntimeEffectChoiceRequest
+    readonly request: ChoiceRequest
   ) {
     super("Analyzer choice path expansion");
   }
@@ -147,7 +148,11 @@ export function enumerateActionBranches(
           `choice index ${selection.choiceIndex} is out of range`
         );
       }
-      return choice;
+      const replaySelection = {
+        choiceId: choice.choiceId,
+        choiceIndex: selection.choiceIndex,
+      };
+      return replaySelection;
     };
 
     try {
@@ -392,7 +397,7 @@ function assertFiniteEvaluation(
 
 function validateSelection(
   selection: AnalysisChoiceSelection,
-  request: RuntimeEffectChoiceRequest,
+  request: ChoiceRequest,
   action: LegalAction,
   requestIndex: number
 ): void {

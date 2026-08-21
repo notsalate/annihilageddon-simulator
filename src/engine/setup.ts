@@ -33,12 +33,14 @@ import {
 import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
+import { drawDeckCards, shuffleDeck } from "./deck-lifecycle.js";
 import {
   intakeRuntimeData,
   type RuntimeDataFilesystemSource,
   type RuntimeDataPreloadedSource,
 } from "./runtime-data-intake.js";
-import type { RuntimeEffect, RuntimeEffectId } from "./runtime-effect.js";
+import type { RuntimeEffect } from "./runtime-effect.js";
+import type { ChoiceKind, ChoicePolicy } from "./choice-policy.js";
 
 export type { PlayerId } from "../domain/types.js";
 export type CommonOwner = "common";
@@ -118,44 +120,6 @@ export type DeadWizardTokenState =
       drawStack: TokenInstance[];
     };
 
-export interface RuntimeEffectChoiceOption {
-  choiceKind: "option";
-  choiceId: string;
-}
-
-export interface RuntimeEffectChoicePlayerTarget {
-  choiceKind: "playerTarget";
-  choiceId: string;
-  players: readonly PlayerState[];
-}
-
-export interface RuntimeEffectChoiceCardTarget {
-  choiceKind: "cardTarget";
-  choiceId: string;
-  cards: readonly CardInstance[];
-  amount: number;
-}
-
-export interface RuntimeEffectChoiceDefense {
-  choiceKind: "defense";
-  choiceId: string;
-  card: CardInstance | undefined;
-}
-
-export interface RuntimeEffectChoiceDirectionalPlayerTarget {
-  choiceKind: "directionalPlayerTarget";
-  choiceId: string;
-  direction: "left" | "right";
-  players: readonly PlayerState[];
-}
-
-export type RuntimeEffectChoice =
-  | RuntimeEffectChoiceOption
-  | RuntimeEffectChoicePlayerTarget
-  | RuntimeEffectChoiceCardTarget
-  | RuntimeEffectChoiceDefense
-  | RuntimeEffectChoiceDirectionalPlayerTarget;
-
 type DecisionView<T> = T extends
   | string
   | number
@@ -174,57 +138,6 @@ type DecisionView<T> = T extends
         : T;
 
 export type PlayerDecisionView = DecisionView<Omit<PlayerState, "deck">>;
-
-export interface RuntimeEffectDecisionOption {
-  readonly choiceKind: "option";
-  readonly choiceId: string;
-}
-
-export interface RuntimeEffectDecisionPlayerTarget {
-  readonly choiceKind: "playerTarget";
-  readonly choiceId: string;
-  readonly targetPlayerIds: readonly PlayerId[];
-}
-
-export interface RuntimeEffectDecisionCardTarget {
-  readonly choiceKind: "cardTarget";
-  readonly choiceId: string;
-  readonly targetCardInstanceIds: readonly string[];
-  readonly amount: number;
-}
-
-export interface RuntimeEffectDecisionDefense {
-  readonly choiceKind: "defense";
-  readonly choiceId: string;
-  readonly targetCardInstanceId?: string;
-}
-
-export interface RuntimeEffectDecisionDirectionalPlayerTarget {
-  readonly choiceKind: "directionalPlayerTarget";
-  readonly choiceId: string;
-  readonly direction: "left" | "right";
-  readonly targetPlayerIds: readonly PlayerId[];
-}
-
-export type RuntimeEffectDecisionChoice =
-  | RuntimeEffectDecisionOption
-  | RuntimeEffectDecisionPlayerTarget
-  | RuntimeEffectDecisionCardTarget
-  | RuntimeEffectDecisionDefense
-  | RuntimeEffectDecisionDirectionalPlayerTarget;
-
-export interface RuntimeEffectChoiceRequest {
-  player: PlayerDecisionView;
-  effectId: RuntimeEffectId;
-  sourceType: "card" | "wizardProperty" | "deadWizardToken";
-  cardInstanceId: string;
-  definitionId: string;
-  choices: readonly RuntimeEffectDecisionChoice[];
-}
-
-export type RuntimeEffectChoiceStrategy = (
-  request: RuntimeEffectChoiceRequest
-) => RuntimeEffectDecisionChoice | undefined;
 
 export interface GameState {
   seed: number;
@@ -245,7 +158,7 @@ export interface GameState {
   cardDefinitions: ReadonlyMap<string, CardDefinition>;
   tokenDefinitions: ReadonlyMap<string, TokenDefinition>;
   eventLog: GameEvent[];
-  effectChoiceStrategy?: RuntimeEffectChoiceStrategy;
+  effectChoiceStrategy?: ChoicePolicy;
 }
 
 export type GameEventType =
@@ -373,7 +286,7 @@ interface GameEventPayload {
   effectId?: string;
   costId?: string;
   choiceId?: string;
-  choiceKind?: RuntimeEffectChoice["choiceKind"];
+  choiceKind?: ChoiceKind;
   choiceIds?: string[];
   direction?: "left" | "right";
   legalChoiceCount?: number;
@@ -840,7 +753,7 @@ export type GameEventDraftFor<TType extends GameEventType> = Extract<
 interface InitializeGameBaseOptions {
   seed: number;
   playerCount?: number;
-  effectChoiceStrategy?: RuntimeEffectChoiceStrategy;
+  effectChoiceStrategy?: ChoicePolicy;
 }
 
 export type InitializeGameOptions =
@@ -924,8 +837,8 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     factory,
     "common"
   );
-  shuffleInPlace(mainDeck, rng);
-  shuffleInPlace(legendDeck, rng);
+  shuffleDeck(mainDeck, rng);
+  shuffleDeck(legendDeck, rng);
 
   const common: CommonState = {
     market: [],
@@ -1044,7 +957,7 @@ function instantiateDeadWizardTokens(
     playerCount
   );
 
-  shuffleInPlace(setupPool, rng);
+  shuffleDeck(setupPool, rng);
 
   return {
     status: "available",
@@ -1090,7 +1003,7 @@ function assignStartingWizardProperties(
     players.length
   );
 
-  shuffleInPlace(setupPool, rng);
+  shuffleDeck(setupPool, rng);
 
   for (let index = 0; index < players.length; index += 1) {
     const player = players[index];
@@ -1171,7 +1084,7 @@ function assignStartingFamiliars(
     players.length
   );
 
-  shuffleInPlace(setupPool, rng);
+  shuffleDeck(setupPool, rng);
 
   for (let index = 0; index < players.length; index += 1) {
     const player = players[index];
@@ -1323,7 +1236,7 @@ function createPlayers(
       factory,
       playerId
     );
-    shuffleInPlace(deck, rng);
+    shuffleDeck(deck, rng);
 
     const player: PlayerState = {
       playerId,
@@ -1344,7 +1257,9 @@ function createPlayers(
       },
     };
 
-    drawCards(player, 5);
+    player.hand.push(
+      ...drawDeckCards(player.deck, player.discard, 5, rng).cards
+    );
     return player;
   });
 }
@@ -1411,35 +1326,6 @@ function instantiateTokenStack(
   }
 
   return instances;
-}
-
-function drawCards(player: PlayerState, count: number): void {
-  for (let index = 0; index < count; index += 1) {
-    const card = drawFromTop(player.deck);
-    if (card === undefined) {
-      return;
-    }
-
-    player.hand.push(card);
-  }
-}
-
-function drawFromTop(deck: CardInstance[]): CardInstance | undefined {
-  return deck.shift();
-}
-
-function shuffleInPlace<T>(items: T[], rng: RandomSource): void {
-  for (let index = items.length - 1; index > 0; index -= 1) {
-    const swapIndex = rng.nextInt(index + 1);
-    const item = items[index];
-    const swapItem = items[swapIndex];
-    if (item === undefined || swapItem === undefined) {
-      throw new Error("Unexpected sparse array during shuffle");
-    }
-
-    items[index] = swapItem;
-    items[swapIndex] = item;
-  }
 }
 
 function mustGetDefinition(

@@ -21,6 +21,16 @@ export function recordGameEvent(
   return eventIndex;
 }
 
+export function recordDeckReshuffle(
+  state: GameState,
+  playerId: PlayerState["playerId"]
+): void {
+  recordGameEvent(state, {
+    type: "discardShuffledIntoDeck",
+    playerId,
+  });
+}
+
 export function setAttackCreatedTargetPlayer(
   state: GameState,
   eventIndex: number,

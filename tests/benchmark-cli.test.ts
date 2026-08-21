@@ -18,6 +18,7 @@ test("benchmark CLI parses simulation and analyzer options", () => {
       "manifest.json",
     ]),
     {
+      mode: "run",
       kind: "analyzer",
       role: "current",
       format: "json",
@@ -26,9 +27,17 @@ test("benchmark CLI parses simulation and analyzer options", () => {
       firstSeed: undefined,
       maxTurns: undefined,
       dataPackPath: "manifest.json",
+      commit: undefined,
+      baselinePath: undefined,
+      basePath: undefined,
+      headPath: undefined,
+      confirmationPath: undefined,
+      calibrationPath: undefined,
+      outputPath: undefined,
     }
   );
   assert.deepEqual(parseBenchmarkArgs(["--stage", "1000"]), {
+    mode: "run",
     kind: "simulation",
     role: "reference",
     format: "human",
@@ -37,7 +46,16 @@ test("benchmark CLI parses simulation and analyzer options", () => {
     firstSeed: undefined,
     maxTurns: undefined,
     dataPackPath: undefined,
+    commit: undefined,
+    baselinePath: undefined,
+    basePath: undefined,
+    headPath: undefined,
+    confirmationPath: undefined,
+    calibrationPath: undefined,
+    outputPath: undefined,
   });
+
+  assert.equal(parseBenchmarkArgs(["--commit", "head-sha"]).commit, "head-sha");
 });
 
 test("benchmark CLI rejects unsupported values and malformed numbers", () => {
@@ -47,7 +65,7 @@ test("benchmark CLI rejects unsupported values and malformed numbers", () => {
   );
   assert.throws(
     () => parseBenchmarkArgs(["--stage", "20"]),
-    /stage must be one of 10, 1000, 10000, 100000/
+    /stage must be one of 10, 100, 1000, 10000, 100000/
   );
   assert.throws(
     () => parseBenchmarkArgs(["--firstSeed", "0"]),
@@ -57,4 +75,5 @@ test("benchmark CLI rejects unsupported values and malformed numbers", () => {
     () => parseBenchmarkArgs(["--format"]),
     /--format requires a value/
   );
+  assert.equal(parseBenchmarkArgs(["--mode", "compare"]).mode, "compare");
 });

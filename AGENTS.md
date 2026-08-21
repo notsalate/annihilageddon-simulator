@@ -84,6 +84,8 @@ npm run simulate:single
 npm run simulate:mass
 npm run benchmark:simulation
 npm run benchmark:analyzer
+npm run benchmark:epoch
+npm run benchmark:epoch:calibrate
 ```
 
 `npm test` recursively removes the entire `dist/` directory before compilation, validates the complete test-suite registry, and then runs the registered suites sequentially.
@@ -192,6 +194,8 @@ Preserve the repository's core modeling rules:
 
 Runtime engine work must not read `data/import/**` as executable input.
 Import flow and runtime layout are documented in `docs/import-pipeline.md` and `docs/runtime-layout.md`.
+
+Performance benchmark work uses the immutable `E0` baseline under `docs/benchmarks/`. The `reference` and `current` roles keep separate results; comparison may block only a repeated regression with matching workload, protocol, and calibrated environment. The PR workflow may use its fresh 20-pair calibration only for the immediate `base`/`head` comparison; E0 remains immutable and an environment mismatch reports `not-calibrated`. Calibration compares runner classes (Node.js, platform, architecture, runner image, and CPU count); independent fresh runners may have different CPU models, which remain recorded as calibration noise, while both measurements inside one pair must use the exact environment. The PR gate must publish all simulation and Analyzer reports before enforcing a blocking verdict; the base adapter may bridge a missing numeric stage without changing base source. Baseline replacement requires explicit calibration and epoch acceptance; the manual performance workflow produces the candidate E0 from matched CI reference and calibration artifacts.
 
 When changing simulation behavior:
 
