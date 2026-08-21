@@ -491,6 +491,153 @@ test("attack, defense and replacement effects use exact family policies", () => 
   }
 });
 
+test("activation and ongoing families use exact timing and card-source policies", () => {
+  const validCases = [
+    {
+      effectId: "activation_destroy_self_then_destroy_own_cards",
+      payload: {
+        effectId: "activation_destroy_self_then_destroy_own_cards",
+        timing: "activation",
+        chooser: "controller",
+        activationLimit: "oncePerTurnWhileControlled",
+        sourceZones: "hand",
+        minAmount: 0,
+        maxAmount: 2,
+        destroySelf: true,
+      },
+    },
+    {
+      effectId: "conditional_activation_destroy_own_cards",
+      payload: {
+        effectId: "conditional_activation_destroy_own_cards",
+        timing: "activation",
+        chooser: "controller",
+        activationLimit: "oncePerTurnWhileControlled",
+        sourceZones: ["hand", "discard"],
+        amount: 1,
+      },
+    },
+    {
+      effectId: "conditional_activation_gain_chips",
+      payload: {
+        effectId: "conditional_activation_gain_chips",
+        timing: "activation",
+        activationLimit: "oncePerTurnWhileControlled",
+        amount: 1,
+      },
+    },
+    {
+      effectId: "optional_spend_chip_destroy_own_cards",
+      payload: {
+        effectId: "optional_spend_chip_destroy_own_cards",
+        timing: "onPlay",
+        chipCost: 1,
+        amount: 1,
+        sourceZones: ["hand", "discard"],
+        chooser: "controller",
+      },
+    },
+    {
+      effectId: "ongoing_add_power_when_playing_wand",
+      payload: {
+        effectId: "ongoing_add_power_when_playing_wand",
+        timing: "onPlayCard",
+        amount: 1,
+        cardTags: ["wandCard"],
+      },
+    },
+    {
+      effectId: "ongoing_add_power_when_playing_limp_wand",
+      payload: {
+        effectId: "ongoing_add_power_when_playing_limp_wand",
+        timing: "afterControllerPlaysCard",
+        amount: 1,
+        cardKind: "limpWand",
+      },
+    },
+    {
+      effectId: "ongoing_first_attack_damage_add_power",
+      payload: {
+        effectId: "ongoing_first_attack_damage_add_power",
+        timing: "afterFirstAttackDamageEachTurn",
+        amount: "totalDamageDealtByThatAttack",
+      },
+    },
+    {
+      effectId: "ongoing_hand_refill_bonus",
+      payload: {
+        effectId: "ongoing_hand_refill_bonus",
+        timing: "endTurn",
+        amount: 1,
+      },
+    },
+    {
+      effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand",
+      payload: {
+        effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand",
+        timing: "startOfControllerTurn",
+        destination: "hand",
+        amount: 1,
+        chooser: "controller",
+      },
+    },
+  ] as const;
+  const supportedEffectIds = [
+    "ongoing_add_power_when_playing_wand",
+    "ongoing_first_attack_damage_add_power",
+    "ongoing_hand_refill_bonus",
+  ] as const;
+
+  for (const { effectId, payload } of validCases) {
+    const decoded = validateRuntimeEffectCatalogPayload(
+      `Valid ${effectId}`,
+      effectId,
+      payload,
+      "combat",
+      "card"
+    );
+    assert.equal(
+      decoded.ok,
+      supportedEffectIds.includes(
+        effectId as (typeof supportedEffectIds)[number]
+      )
+    );
+    if (
+      !decoded.ok &&
+      !supportedEffectIds.includes(
+        effectId as (typeof supportedEffectIds)[number]
+      )
+    ) {
+      assert.match(decoded.errors.join("\n"), /uses unsupported effect/);
+    }
+  }
+
+  const invalidSource = validateRuntimeEffectCatalogPayload(
+    "Wizard-property ongoing effect",
+    "ongoing_hand_refill_bonus",
+    validCases[7].payload,
+    "combat",
+    "wizardProperty"
+  );
+  assert.equal(invalidSource.ok, false);
+
+  const invalidTiming = validateRuntimeEffectCatalogPayload(
+    "Wrong ongoing timing",
+    "ongoing_hand_refill_bonus",
+    {
+      effectId: "ongoing_hand_refill_bonus",
+      timing: "whileControlled",
+      amount: 1,
+    },
+    "combat",
+    "card"
+  );
+  assert.equal(invalidTiming.ok, false);
+  if (!invalidTiming.ok) {
+    assert.match(invalidTiming.errors.join("\n"), /timing must be endTurn/);
+  }
+});
+
 test("public catalog validation rejects an ongoing refill payload with unsupported timing", () => {
   const decoded = validateRuntimeEffectCatalogPayload(
     "Controlled refill",

@@ -4202,6 +4202,12 @@ type AttackReplacementEffectId =
   | "double_owned_attack_damage"
   | "prevent_defense_against_owned_wand_attacks";
 
+type ActivationEffectId = keyof ActivationEffectPayloadMap & RuntimeEffectId;
+type OngoingPassiveEffectId = Exclude<
+  keyof OngoingEffectPayloadMap & RuntimeEffectId,
+  "ongoing_add_power" | "ongoing_add_power_per_dead_wizard_token"
+>;
+
 type TransitionalEffectRuntimeHandlerDefinition = Omit<
   EffectRuntimeHandlerDefinition,
   | SetupBootstrapEffectId
@@ -4213,6 +4219,8 @@ type TransitionalEffectRuntimeHandlerDefinition = Omit<
   | AttackEffectId
   | DefenseEffectId
   | AttackReplacementEffectId
+  | ActivationEffectId
+  | OngoingPassiveEffectId
 >;
 
 const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
@@ -4244,7 +4252,6 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
   mayhem_each_player_choose_foe_gain_chips:
     mayhemEachPlayerChooseFoeGainChipsHandler,
   increase_hand_limit_at_max_life: increaseHandLimitAtMaxLifeHandler,
-  ongoing_hand_refill_bonus: ongoingHandRefillBonusHandler,
   mayhem_each_player_battle_highest_hand_cost:
     mayhemEachPlayerBattleHighestHandCostHandler,
   mayhem_each_player_vote_dingler: mayhemEachPlayerVoteDinglerHandler,
@@ -4259,18 +4266,8 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
   temporary_hand_limit_by_gained_card_type:
     temporaryHandLimitByGainedCardTypeHandler,
   mayhem_attack: mayhemAttackHandler,
-  activation_destroy_self_then_destroy_own_cards:
-    createUnsupportedEffectHandler(
-      "activation_destroy_self_then_destroy_own_cards"
-    ),
   add_power_per_controlled_permanent: createUnsupportedEffectHandler(
     "add_power_per_controlled_permanent"
-  ),
-  conditional_activation_destroy_own_cards: createUnsupportedEffectHandler(
-    "conditional_activation_destroy_own_cards"
-  ),
-  conditional_activation_gain_chips: createUnsupportedEffectHandler(
-    "conditional_activation_gain_chips"
   ),
   controls_other_card_type: createUnsupportedEffectHandler(
     "controls_other_card_type"
@@ -4301,21 +4298,8 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
   on_gain_self_gain_limp_wands: createUnsupportedEffectHandler(
     "on_gain_self_gain_limp_wands"
   ),
-  ongoing_add_power_when_playing_wand: ongoingAddPowerWhenPlayingWandHandler,
-  ongoing_add_power_when_playing_limp_wand: createUnsupportedEffectHandler(
-    "ongoing_add_power_when_playing_limp_wand"
-  ),
-  ongoing_first_attack_damage_add_power:
-    ongoingFirstAttackDamageAddPowerHandler,
-  ongoing_start_turn_optional_gain_limp_wand_to_hand:
-    createUnsupportedEffectHandler(
-      "ongoing_start_turn_optional_gain_limp_wand_to_hand"
-    ),
   optional_gain_market_cards_to_hand_this_turn: createUnsupportedEffectHandler(
     "optional_gain_market_cards_to_hand_this_turn"
-  ),
-  optional_spend_chip_destroy_own_cards: createUnsupportedEffectHandler(
-    "optional_spend_chip_destroy_own_cards"
   ),
   return_discard_to_hand: createUnsupportedEffectHandler(
     "return_discard_to_hand"
@@ -4594,6 +4578,21 @@ function getRegisteredEffectRuntimeSourceKinds(
       throw new Error(
         `Effect ${effectId} uses the combat/attack-replacement family registration`
       );
+    case "activation_destroy_self_then_destroy_own_cards":
+    case "conditional_activation_destroy_own_cards":
+    case "conditional_activation_gain_chips":
+    case "optional_spend_chip_destroy_own_cards":
+      throw new Error(
+        `Effect ${effectId} uses the activation family registration`
+      );
+    case "ongoing_add_power_when_playing_wand":
+    case "ongoing_add_power_when_playing_limp_wand":
+    case "ongoing_first_attack_damage_add_power":
+    case "ongoing_hand_refill_bonus":
+    case "ongoing_start_turn_optional_gain_limp_wand_to_hand":
+      throw new Error(
+        `Effect ${effectId} uses the ongoing/passive family registration`
+      );
     case "force_starting_player":
     case "replace_starting_card":
     case "start_with_basic_trophy":
@@ -4601,8 +4600,6 @@ function getRegisteredEffectRuntimeSourceKinds(
     case "set_resurrection_life_total":
     case "temporary_hand_limit_by_gained_card_type":
       return ["wizardProperty"];
-    case "ongoing_hand_refill_bonus":
-      return ["card"];
     case "increase_hand_limit_at_max_life":
     case "endgame_limp_wands_score_positive":
     case "endgame_vp_per_owned_legend":
@@ -4629,14 +4626,6 @@ function getRegisteredEffectRuntimeSourceKinds(
     case "optional_gain_market_cards_to_hand_this_turn":
     case "on_gain_self_gain_limp_wands":
     case "fixture_add_power_equal_to_target_cost":
-    case "activation_destroy_self_then_destroy_own_cards":
-    case "conditional_activation_destroy_own_cards":
-    case "conditional_activation_gain_chips":
-    case "optional_spend_chip_destroy_own_cards":
-    case "ongoing_add_power_when_playing_wand":
-    case "ongoing_add_power_when_playing_limp_wand":
-    case "ongoing_first_attack_damage_add_power":
-    case "ongoing_start_turn_optional_gain_limp_wand_to_hand":
     case "mayhem_attack":
     case "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status":
     case "mayhem_each_player_choose_foe_gain_chips":
@@ -4998,49 +4987,103 @@ const attackReplacementEffectEntries = defineEffectRuntimeFamily(
   Pick<PlayerControlledAttackEffectPayloadMap, AttackReplacementEffectId>
 >;
 
-const activationEffectEntries = {
-  activation_destroy_self_then_destroy_own_cards:
-    defineRegisteredEffectRuntimeEntry(
-      "activation_destroy_self_then_destroy_own_cards",
-      effectRuntimeHandlerMap.activation_destroy_self_then_destroy_own_cards
+const activationEffectEntries = defineEffectRuntimeFamily("activation", [
+  {
+    effectId: "activation_destroy_self_then_destroy_own_cards",
+    decoder: bindRuntimeEffectDecoder(
+      "activation_destroy_self_then_destroy_own_cards"
     ),
-  conditional_activation_destroy_own_cards: defineRegisteredEffectRuntimeEntry(
-    "conditional_activation_destroy_own_cards",
-    effectRuntimeHandlerMap.conditional_activation_destroy_own_cards
-  ),
-  conditional_activation_gain_chips: defineRegisteredEffectRuntimeEntry(
-    "conditional_activation_gain_chips",
-    effectRuntimeHandlerMap.conditional_activation_gain_chips
-  ),
-  optional_spend_chip_destroy_own_cards: defineRegisteredEffectRuntimeEntry(
-    "optional_spend_chip_destroy_own_cards",
-    effectRuntimeHandlerMap.optional_spend_chip_destroy_own_cards
-  ),
-} satisfies EffectRuntimeEntriesFor<ActivationEffectPayloadMap>;
+    supportedTimings: ["activation"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: createUnsupportedEffectHandler(
+      "activation_destroy_self_then_destroy_own_cards"
+    ),
+  },
+  {
+    effectId: "conditional_activation_destroy_own_cards",
+    decoder: bindRuntimeEffectDecoder(
+      "conditional_activation_destroy_own_cards"
+    ),
+    supportedTimings: ["activation"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: createUnsupportedEffectHandler(
+      "conditional_activation_destroy_own_cards"
+    ),
+  },
+  {
+    effectId: "conditional_activation_gain_chips",
+    decoder: bindRuntimeEffectDecoder("conditional_activation_gain_chips"),
+    supportedTimings: ["activation"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: createUnsupportedEffectHandler(
+      "conditional_activation_gain_chips"
+    ),
+  },
+  {
+    effectId: "optional_spend_chip_destroy_own_cards",
+    decoder: bindRuntimeEffectDecoder("optional_spend_chip_destroy_own_cards"),
+    supportedTimings: ["onPlay"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: createUnsupportedEffectHandler(
+      "optional_spend_chip_destroy_own_cards"
+    ),
+  },
+] as const) satisfies EffectRuntimeEntriesFor<ActivationEffectPayloadMap>;
 
-const ongoingEffectEntries = {
-  ongoing_add_power_when_playing_wand: defineRegisteredEffectRuntimeEntry(
-    "ongoing_add_power_when_playing_wand",
-    effectRuntimeHandlerMap.ongoing_add_power_when_playing_wand
-  ),
-  ongoing_add_power_when_playing_limp_wand: defineRegisteredEffectRuntimeEntry(
-    "ongoing_add_power_when_playing_limp_wand",
-    effectRuntimeHandlerMap.ongoing_add_power_when_playing_limp_wand
-  ),
-  ongoing_first_attack_damage_add_power: defineRegisteredEffectRuntimeEntry(
-    "ongoing_first_attack_damage_add_power",
-    effectRuntimeHandlerMap.ongoing_first_attack_damage_add_power
-  ),
-  ongoing_hand_refill_bonus: defineRegisteredEffectRuntimeEntry(
-    "ongoing_hand_refill_bonus",
-    effectRuntimeHandlerMap.ongoing_hand_refill_bonus
-  ),
-  ongoing_start_turn_optional_gain_limp_wand_to_hand:
-    defineRegisteredEffectRuntimeEntry(
-      "ongoing_start_turn_optional_gain_limp_wand_to_hand",
-      effectRuntimeHandlerMap.ongoing_start_turn_optional_gain_limp_wand_to_hand
+const ongoingEffectEntries = defineEffectRuntimeFamily("ongoing/passive", [
+  {
+    effectId: "ongoing_add_power_when_playing_wand",
+    decoder: bindRuntimeEffectDecoder("ongoing_add_power_when_playing_wand"),
+    supportedTimings: ["onPlayCard"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: ongoingAddPowerWhenPlayingWandHandler,
+  },
+  {
+    effectId: "ongoing_add_power_when_playing_limp_wand",
+    decoder: bindRuntimeEffectDecoder(
+      "ongoing_add_power_when_playing_limp_wand"
     ),
-} satisfies EffectRuntimeEntriesFor<
+    supportedTimings: ["afterControllerPlaysCard"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: createUnsupportedEffectHandler(
+      "ongoing_add_power_when_playing_limp_wand"
+    ),
+  },
+  {
+    effectId: "ongoing_first_attack_damage_add_power",
+    decoder: bindRuntimeEffectDecoder("ongoing_first_attack_damage_add_power"),
+    supportedTimings: ["afterFirstAttackDamageEachTurn"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: ongoingFirstAttackDamageAddPowerHandler,
+  },
+  {
+    effectId: "ongoing_hand_refill_bonus",
+    decoder: bindRuntimeEffectDecoder("ongoing_hand_refill_bonus"),
+    supportedTimings: ["endTurn"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: ongoingHandRefillBonusHandler,
+  },
+  {
+    effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand",
+    decoder: bindRuntimeEffectDecoder(
+      "ongoing_start_turn_optional_gain_limp_wand_to_hand"
+    ),
+    supportedTimings: ["startOfControllerTurn"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: createUnsupportedEffectHandler(
+      "ongoing_start_turn_optional_gain_limp_wand_to_hand"
+    ),
+  },
+] as const) satisfies EffectRuntimeEntriesFor<
   Omit<
     OngoingEffectPayloadMap,
     "ongoing_add_power" | "ongoing_add_power_per_dead_wizard_token"
