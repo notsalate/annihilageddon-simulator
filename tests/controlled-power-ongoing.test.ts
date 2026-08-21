@@ -124,6 +124,36 @@ test("controlled-power dispatch is idempotent and rejects malformed payloads", (
   );
 });
 
+test("controlled-power dispatch ignores malformed non-ongoing controlled cards", () => {
+  const scenario = createGameScenario({ rootDir, seed: 47308 });
+  const controller = scenario.activePlayer;
+  scenario.state.turn.power = 6;
+  scenario.state.turn.controlledPowerBonus = 0;
+  controller.permanents = [];
+  controller.playedThisTurn = [];
+  const nonOngoingCard = givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "playedThisTurn",
+    isOngoing: false,
+    effects: [
+      {
+        effectId: "ongoing_add_power",
+        timing: "whileControlled",
+        amount: "invalid",
+      } as unknown as RuntimeEffect,
+    ],
+  });
+  givenTemporaryControl(scenario, nonOngoingCard, controller);
+
+  const result = dispatchControlledCardOperation(scenario.state, controller, {
+    kind: "recalculateControlledPower",
+  });
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(scenario.state.turn.power, 6);
+  assert.equal(scenario.state.turn.controlledPowerBonus, 0);
+});
+
 test("status mutation dispatches controlled power once and preserves rollback", () => {
   const scenario = createGameScenario({ rootDir, seed: 47304 });
   const controller = scenario.activePlayer;

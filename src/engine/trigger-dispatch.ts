@@ -1,5 +1,8 @@
 import type { CardDefinition } from "./data.js";
-import { buildControlledObjectView } from "./control-ledger.js";
+import {
+  buildControlledObjectView,
+  getControlledOngoingCards,
+} from "./control-ledger.js";
 import {
   applyRuntimeEffectAfterDamageDealt,
   applyRuntimeEffectAfterPlayerAttackDamage,
@@ -62,6 +65,11 @@ interface ControlledCardEffectCandidate {
   readonly sourceDefinition: CardDefinition;
 }
 
+interface ControlledCardEntry {
+  readonly card: CardInstance;
+  readonly definition: CardDefinition;
+}
+
 export function dispatchControlledCardOperation(
   state: GameState,
   controller: PlayerState,
@@ -102,7 +110,10 @@ export function dispatchControlledCardOperation(
   controller: PlayerState,
   operation: ControlledCardDispatchOperation
 ): ControlledCardDispatchResult {
-  const candidates = discoverControlledCardEffects(state, controller);
+  const candidates =
+    operation.kind === "recalculateControlledPower"
+      ? discoverControlledOngoingCardEffects(state, controller)
+      : discoverControlledCardEffects(state, controller);
   if (operation.kind === "collectEndTurnDrawModifier") {
     return collectEndTurnDrawModifier(state, controller, operation, candidates);
   }
@@ -155,9 +166,39 @@ function discoverControlledCardEffects(
     state,
     controller.playerId
   );
+  return buildControlledCardEffectCandidates(
+    state,
+    controller,
+    controlledObjects.cards
+  );
+}
+
+function discoverControlledOngoingCardEffects(
+  state: GameState,
+  controller: PlayerState
+): ControlledCardEffectCandidate[] {
+  const controlledCards: ControlledCardEntry[] = [];
+  for (const card of getControlledOngoingCards(state, controller)) {
+    const definition = state.cardDefinitions.get(card.definitionId);
+    if (definition !== undefined) {
+      controlledCards.push({ card, definition });
+    }
+  }
+  return buildControlledCardEffectCandidates(
+    state,
+    controller,
+    controlledCards
+  );
+}
+
+function buildControlledCardEffectCandidates(
+  state: GameState,
+  controller: PlayerState,
+  controlledCards: readonly ControlledCardEntry[]
+): ControlledCardEffectCandidate[] {
   const candidates: ControlledCardEffectCandidate[] = [];
 
-  for (const { card, definition } of controlledObjects.cards) {
+  for (const { card, definition } of controlledCards) {
     if (!definition.engine.playableInV0) {
       continue;
     }
