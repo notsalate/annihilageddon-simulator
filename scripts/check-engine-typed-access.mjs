@@ -653,7 +653,6 @@ function getExportedLocalNamesFromModule(sourceFile, moduleSpecifier) {
 }
 
 function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
-  let sourceKindPolicy;
   const decoderImportBindings =
     collectRuntimeEffectDecoderImportBindings(sourceFile);
   const catalogBypassBindings = collectCatalogBypassBindings(sourceFile);
@@ -736,9 +735,6 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
           `${relativePath} reintroduces handler-owned payload validation`
         );
       }
-      if (ts.isFunctionDeclaration(node) && isSourceKindPolicy(node)) {
-        sourceKindPolicy = node;
-      }
     }
     if (isExportedBinding(node, decoderImportBindings)) {
       effectRuntimeCatalogBoundaryViolations.push(
@@ -751,29 +747,6 @@ function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
 
   if (relativePath === "src/engine/runtime-effect-decoder.ts") {
     checkClosedRuntimeEffectDecoderExportSurface(sourceFile);
-  }
-
-  if (relativePath !== "src/engine/effect-runtime-registry.ts") return;
-  if (sourceKindPolicy === undefined) {
-    effectRuntimeCatalogBoundaryViolations.push(
-      `${relativePath} must declare explicit registered source-kind policies`
-    );
-    return;
-  }
-  let hasDefaultPolicy = false;
-  let usesAllSourceKinds = false;
-  function inspectSourceKindPolicy(node) {
-    if (ts.isDefaultClause(node)) hasDefaultPolicy = true;
-    if (ts.isIdentifier(node) && node.text === "effectRuntimeSourceKinds") {
-      usesAllSourceKinds = true;
-    }
-    ts.forEachChild(node, inspectSourceKindPolicy);
-  }
-  inspectSourceKindPolicy(sourceKindPolicy);
-  if (hasDefaultPolicy || usesAllSourceKinds) {
-    effectRuntimeCatalogBoundaryViolations.push(
-      `${relativePath} must keep registered source-kind policies explicit`
-    );
   }
 }
 
@@ -1010,23 +983,6 @@ function checkClosedRuntimeEffectDecoderExportSurface(sourceFile) {
       );
     }
   }
-}
-
-function isSourceKindPolicy(node) {
-  if (node.type === undefined) return false;
-  let hasSourceKindReturnType = false;
-  function visit(typeNode) {
-    if (
-      ts.isTypeReferenceNode(typeNode) &&
-      ts.isIdentifier(typeNode.typeName) &&
-      typeNode.typeName.text === "EffectRuntimeSupportedSourceKinds"
-    ) {
-      hasSourceKindReturnType = true;
-    }
-    ts.forEachChild(typeNode, visit);
-  }
-  visit(node.type);
-  return hasSourceKindReturnType;
 }
 
 function isHandlerOwnedPayloadValidator(node) {
