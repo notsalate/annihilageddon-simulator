@@ -80,6 +80,7 @@ for (const eventKind of eventKinds) {
     const sourceDeckBefore = [...sourceDeck];
     const marketBefore = [...market];
     const destroyedBefore = [...destroyed];
+    const eventLogBefore = [...eventLog];
     const chipsBefore = state.players.map((player) => player.chips);
     const expectedNextRandom = state.rng.fork().next();
     let executions = 0;
@@ -115,6 +116,7 @@ for (const eventKind of eventKinds) {
     assert.equal(activePlayer.playedThisTurn, playedThisTurn);
     assert.equal(state.turn.temporaryCardControls, controls);
     assert.equal(state.eventLog, eventLog);
+    assert.deepEqual(state.eventLog, eventLogBefore);
     assert.deepEqual(state.turn, turnBefore);
     assert.deepEqual(hand, handBefore);
     assert.deepEqual(deck, deckBefore);
