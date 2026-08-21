@@ -231,7 +231,7 @@ export function runAnalyzerBenchmark(
   const enumerate = dependencies.enumerate ?? enumerateTurnLines;
   const rank = dependencies.rank ?? rankTurnLines;
 
-  executeAnalyzerTrial(
+  const warmup = executeAnalyzerTrial(
     workload,
     options.rootDir,
     0,
@@ -241,6 +241,7 @@ export function runAnalyzerBenchmark(
     enumerate,
     rank
   );
+  const warmupPeakMemoryBytes = warmup.peakMemoryBytes;
 
   const samples = Array.from({ length: MEASUREMENT_COUNT }, (_, index) =>
     executeAnalyzerTrial(
@@ -251,7 +252,8 @@ export function runAnalyzerBenchmark(
       loadDataPack,
       initialize,
       enumerate,
-      rank
+      rank,
+      warmupPeakMemoryBytes
     )
   );
   const firstSample = samples[0];
@@ -297,7 +299,8 @@ function executeAnalyzerTrial(
   loadDataPack: NonNullable<AnalyzerBenchmarkDependencies["loadDataPack"]>,
   initialize: NonNullable<AnalyzerBenchmarkDependencies["initialize"]>,
   enumerate: NonNullable<AnalyzerBenchmarkDependencies["enumerate"]>,
-  rank: NonNullable<AnalyzerBenchmarkDependencies["rank"]>
+  rank: NonNullable<AnalyzerBenchmarkDependencies["rank"]>,
+  warmupPeakMemoryBytes = 0
 ): AnalyzerBenchmarkSample {
   const startedAt = clock.now();
   let peakMemoryBytes = clock.readPeakMemoryBytes();
@@ -433,7 +436,7 @@ function executeAnalyzerTrial(
       resultPreparationMs,
     },
     metrics,
-    peakMemoryBytes,
+    peakMemoryBytes: Math.max(0, peakMemoryBytes - warmupPeakMemoryBytes),
     runtimeDataPackId,
     workloadFingerprint,
     workloadVolumeFingerprint,

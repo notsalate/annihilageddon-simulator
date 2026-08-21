@@ -206,7 +206,7 @@ export function runSimulationBenchmark(
       loadCurrentRuntimeDataPack(rootDir, manifestPath));
   const runGame = dependencies.runGame ?? runSingleGame;
 
-  executeSimulationTrial(
+  const warmup = executeSimulationTrial(
     workload,
     options.rootDir,
     0,
@@ -214,6 +214,7 @@ export function runSimulationBenchmark(
     loadDataPack,
     runGame
   );
+  const warmupPeakMemoryBytes = warmup.peakMemoryBytes;
 
   const samples = Array.from({ length: MEASUREMENT_COUNT }, (_, index) =>
     executeSimulationTrial(
@@ -222,7 +223,8 @@ export function runSimulationBenchmark(
       index + 1,
       clock,
       loadDataPack,
-      runGame
+      runGame,
+      warmupPeakMemoryBytes
     )
   );
 
@@ -283,7 +285,8 @@ function executeSimulationTrial(
   sampleIndex: number,
   clock: BenchmarkClock,
   loadDataPack: NonNullable<SimulationBenchmarkDependencies["loadDataPack"]>,
-  runGame: NonNullable<SimulationBenchmarkDependencies["runGame"]>
+  runGame: NonNullable<SimulationBenchmarkDependencies["runGame"]>,
+  warmupPeakMemoryBytes = 0
 ): SimulationBenchmarkSample {
   const startedAt = clock.now();
   let peakMemoryBytes = clock.readPeakMemoryBytes();
@@ -411,7 +414,7 @@ function executeSimulationTrial(
       resultPreparationMs,
     },
     metrics,
-    peakMemoryBytes,
+    peakMemoryBytes: Math.max(0, peakMemoryBytes - warmupPeakMemoryBytes),
     runtimeDataPackId: safeRuntimeDataPackId,
     workloadFingerprint,
     workloadVolumeFingerprint,

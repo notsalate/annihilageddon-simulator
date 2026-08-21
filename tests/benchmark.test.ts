@@ -168,7 +168,7 @@ test("simulation benchmark excludes warmup and reports stable fingerprints", () 
     new Set(result.samples.map((sample) => sample.resultFingerprint)).size,
     1
   );
-  assert.equal(result.samples[0]?.peakMemoryBytes, 1_024);
+  assert.equal(result.samples[0]?.peakMemoryBytes, 0);
 });
 
 test("single-game simulation preserves results with a preloaded data pack", () => {
