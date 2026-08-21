@@ -35,7 +35,7 @@ import {
   type EffectRuntimeServices,
   type EffectSourceContext,
   type MayhemAttackPlanTarget,
-  type StrictEffectChoiceResolution,
+  type EffectChoiceResolution,
   executeAttackOutcomeBranch,
   evaluateRuntimeEffectAtTiming,
   executeRuntimeEffect,
@@ -869,7 +869,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   getDestroyDestination,
   getOpponentsInSeatingOrder,
   getPlayersInActiveOrder,
-  prepareStrictEffectChoice,
+  prepareEffectChoice,
   recordEffectChoiceSelected,
   chooseEffectChoice,
   dealDamage,
@@ -1029,8 +1029,7 @@ function chooseEffectChoice(
     player,
     source,
     effectId,
-    choices,
-    "fallback"
+    choices
   );
   if (resolution.status !== "selected") {
     recordGameEvent(state, {
@@ -1056,21 +1055,14 @@ function chooseEffectChoice(
   return resolution.choice;
 }
 
-function prepareStrictEffectChoice(
+function prepareEffectChoice(
   state: GameState,
   player: PlayerState,
   source: EffectSourceContext,
   effectId: RuntimeEffectId,
   choices: readonly EffectChoice[]
-): StrictEffectChoiceResolution {
-  return resolveEffectChoice(
-    state,
-    player,
-    source,
-    effectId,
-    choices,
-    "reject"
-  );
+): EffectChoiceResolution {
+  return resolveEffectChoice(state, player, source, effectId, choices);
 }
 
 function resolveEffectChoice(
@@ -1078,9 +1070,8 @@ function resolveEffectChoice(
   player: PlayerState,
   source: EffectSourceContext,
   effectId: RuntimeEffectId,
-  choices: readonly EffectChoice[],
-  invalidSelectionPolicy: "fallback" | "reject"
-): StrictEffectChoiceResolution {
+  choices: readonly EffectChoice[]
+): EffectChoiceResolution {
   const decisionRequest: ChoiceRequest = structuredClone({
     player: createChoicePlayerView(player),
     effectId,
@@ -1098,9 +1089,6 @@ function resolveEffectChoice(
   }
 
   if (!isCanonicalChoiceSelection(selectedChoice)) {
-    if (invalidSelectionPolicy === "reject") {
-      return { status: "invalid" };
-    }
     const fallbackChoice = choices[0];
     return fallbackChoice === undefined
       ? { status: "empty" }
@@ -1122,10 +1110,6 @@ function resolveEffectChoice(
         );
   if (matchedChoice !== undefined) {
     return { status: "selected", choice: matchedChoice };
-  }
-
-  if (invalidSelectionPolicy === "reject") {
-    return { status: "invalid" };
   }
 
   const fallbackChoice = choices[0];

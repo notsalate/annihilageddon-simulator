@@ -780,11 +780,69 @@ test("multi-card choices preserve the selected card group", () => {
   );
   assert.ok(choiceEvent);
   assert.equal(choiceEvent.choiceKind, "cardTarget");
-  assert.equal(choiceEvent.choiceId, "return_2");
+  assert.equal(
+    choiceEvent.choiceId,
+    `return_2_${discardedCards.map((card) => card.instanceId).join("_")}`
+  );
   assert.equal(choiceEvent.amount, 2);
   assert.deepEqual(
     choiceEvent.targetCardInstanceIds,
     discardedCards.map((card) => card.instanceId)
   );
   assert.equal(choiceEvent.targetCardInstanceId, undefined);
+});
+
+test("multi-card choices use distinct stable IDs for each combination", () => {
+  const state = initializeGame({ rootDir, seed: 60616 });
+  const activePlayer = state.players.find(
+    (candidate) => candidate.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  const discardedCards = activePlayer.hand.splice(0, 2);
+  assert.equal(discardedCards.length, 2);
+  activePlayer.discard.push(...discardedCards);
+  const source: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: "fixture",
+    playerId: activePlayer.playerId,
+    cardInstanceId: "fixture-choice-distinct-card-source",
+    definitionId: "fixture-choice-distinct-card-source",
+  };
+  const effect: RuntimeEffect = {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 1,
+    targetSelector: "chosenFoe",
+    onDamageDealt: [{ effectId: "return_discard_to_hand", amount: 1 }],
+  };
+  let requestedChoiceIds: readonly string[] = [];
+  state.effectChoiceStrategy = (request) => {
+    if (request.effectId !== "return_discard_to_hand") return undefined;
+    requestedChoiceIds = request.choices.map((choice) => choice.choiceId);
+    return { choiceId: request.choices[1]!.choiceId };
+  };
+
+  const result = executeEffect(state, activePlayer, effect, source);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(requestedChoiceIds, [
+    `return_1_${discardedCards[0]!.instanceId}`,
+    `return_1_${discardedCards[1]!.instanceId}`,
+    "return_0",
+  ]);
+  assert.equal(activePlayer.hand.includes(discardedCards[0]!), false);
+  assert.equal(activePlayer.hand.includes(discardedCards[1]!), true);
+  const choiceEvent = state.eventLog.find(
+    (event) =>
+      event.type === "effectChoiceSelected" &&
+      event.effectId === "return_discard_to_hand"
+  );
+  assert.ok(choiceEvent);
+  assert.equal(
+    choiceEvent.choiceId,
+    `return_1_${discardedCards[1]!.instanceId}`
+  );
+  assert.deepEqual(choiceEvent.targetCardInstanceIds, [
+    discardedCards[1]!.instanceId,
+  ]);
 });

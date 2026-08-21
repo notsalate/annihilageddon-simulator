@@ -1801,7 +1801,7 @@ test("Mayhem preserves discarded cards when every affected player chooses destro
   );
 });
 
-test("Mayhem rejects the second invalid destroy choice before moving any affected cards", () => {
+test("Mayhem falls back for the second invalid destroy choice before moving cards", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -1880,7 +1880,6 @@ test("Mayhem rejects the second invalid destroy choice before moving any affecte
     }
     return { choiceId: "invalid_destroy_choice" };
   };
-  const eventLogBefore = structuredClone(state.eventLog);
   const nextRandomBefore = state.rng.fork().next();
 
   const result = executeMayhemEffects(state, activePlayer, mayhemDefinition, {
@@ -1891,17 +1890,26 @@ test("Mayhem rejects the second invalid destroy choice before moving any affecte
     definitionId: mayhem.definitionId,
   });
 
-  assert.equal(result.ok, false);
-  if (result.ok) {
-    assert.fail("Expected an invalid Mayhem destroy choice error");
-  }
-  assert.match(result.error, /Invalid effect choice/);
-  assert.deepEqual(activePlayer.deck, [activeTopDeckCard]);
+  assert.equal(result.ok, true);
+  assert.deepEqual(activePlayer.deck, []);
   assert.deepEqual(activePlayer.discard, []);
-  assert.deepEqual(foe.deck, [foeTopDeckCard]);
+  assert.deepEqual(foe.deck, []);
   assert.deepEqual(foe.discard, []);
-  assert.deepEqual(state.common.destroyedPile, []);
-  assert.deepEqual(state.eventLog, eventLogBefore);
+  assert.deepEqual(state.common.destroyedPile, [
+    activeTopDeckCard,
+    foeTopDeckCard,
+  ]);
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.effectId ===
+            "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none"
+      )
+      .map((event) => event.choiceId),
+    ["destroy_both", "destroy_both"]
+  );
   assert.equal(state.rng.fork().next(), nextRandomBefore);
 });
 
@@ -6974,15 +6982,19 @@ test("Hrenalocka Wand returns up to two discard cards to hand when its attack ki
   assert.equal(activePlayer.hand.includes(secondDiscard), true);
   assert.equal(activePlayer.discard.includes(firstDiscard), false);
   assert.equal(activePlayer.discard.includes(secondDiscard), false);
+  const expectedReturnChoiceIds = [
+    `return_2_${firstDiscard.instanceId}_${secondDiscard.instanceId}`,
+    `return_1_${firstDiscard.instanceId}`,
+    `return_1_${secondDiscard.instanceId}`,
+    "return_0",
+  ];
   assert.ok(
     state.eventLog.some((event) => {
       return (
         event.type === "effectChoiceSelected" &&
         event.effectId === "return_discard_to_hand" &&
-        event.choiceId === "return_2" &&
-        event.choiceIds?.includes("return_0") === true &&
-        event.choiceIds?.includes("return_1") === true &&
-        event.choiceIds?.includes("return_2") === true &&
+        event.choiceId === expectedReturnChoiceIds[0] &&
+        event.choiceIds?.join(",") === expectedReturnChoiceIds.join(",") &&
         event.targetCardInstanceIds?.includes(firstDiscard.instanceId) ===
           true &&
         event.targetCardInstanceIds?.includes(secondDiscard.instanceId) === true

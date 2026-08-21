@@ -206,10 +206,9 @@ export type EffectChoice =
   | EffectChoiceDefense
   | EffectChoiceDirectionalPlayerTarget;
 
-export type StrictEffectChoiceResolution =
+export type EffectChoiceResolution =
   | { status: "selected"; choice: EffectChoice }
-  | { status: "empty" }
-  | { status: "invalid" };
+  | { status: "empty" };
 
 export type TargetChoiceResult =
   | {
@@ -282,13 +281,13 @@ export interface EffectRuntimeServices {
     player: PlayerState
   ): PlayerState[];
   getPlayersInActiveOrder(state: GameState): PlayerState[];
-  prepareStrictEffectChoice(
+  prepareEffectChoice(
     state: GameState,
     player: PlayerState,
     source: EffectSourceContext,
     effectId: RuntimeEffectId,
     choices: readonly EffectChoice[]
-  ): StrictEffectChoiceResolution;
+  ): EffectChoiceResolution;
   recordEffectChoiceSelected(
     state: GameState,
     player: PlayerState,
@@ -1790,7 +1789,7 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler<
     }> = [];
 
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
-      const resolution = services.prepareStrictEffectChoice(
+      const resolution = services.prepareEffectChoice(
         state,
         targetPlayer,
         source,
@@ -3756,7 +3755,9 @@ function buildDiscardReturnChoices(
     for (const cards of chooseCardCombinations(discard, amount)) {
       choices.push({
         choiceKind: "cardTarget",
-        choiceId: `return_${amount}`,
+        choiceId: `return_${amount}_${cards
+          .map((card) => card.instanceId)
+          .join("_")}`,
         amount,
         cards,
       });

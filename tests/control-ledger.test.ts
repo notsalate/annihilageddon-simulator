@@ -286,7 +286,9 @@ test("Control Ledger gives activation, costs, passive power, and end-turn rules 
   const lifeBefore = target.life.current;
   state.effectChoiceStrategy = ({ effectId, choices }) =>
     effectId === "attack_damage_equal_to_controlled_card_cost"
-      ? choices.find((choice) => choice.choiceId === target.playerId)
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === target.playerId)
+        )
       : undefined;
   const costAttackResult = executeEffect(
     state,
@@ -414,7 +416,9 @@ test("temporarily controlled ongoing attack modifiers and triggers work outside 
   const lifeBefore = owner.life.current;
   state.effectChoiceStrategy = ({ effectId, choices }) =>
     effectId === "attack_damage"
-      ? choices.find((choice) => choice.choiceId === owner.playerId)
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === owner.playerId)
+        )
       : undefined;
   const attackResult = executeEffect(
     state,
