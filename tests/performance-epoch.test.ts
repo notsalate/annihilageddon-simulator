@@ -122,6 +122,8 @@ test("changed workload receives a non-blocking workload-changed verdict", () => 
   assert.equal(report.blocking, false);
   assert.equal(report.epochComparison.verdict, "workload-changed");
   assert.equal(report.baseComparison.verdict, "workload-changed");
+  assert.match(report.epochComparison.reason, /start a new performance epoch/);
+  assert.match(report.baseComparison.reason, /start a new performance epoch/);
 });
 
 test("environment changes require recalibration without blocking", () => {

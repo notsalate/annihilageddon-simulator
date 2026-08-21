@@ -403,7 +403,7 @@ function comparePair(
   if (!sameWorkload(reference, candidate)) {
     return emptyComparison(
       "workload-changed",
-      "Workload fingerprint, epoch or benchmark contract changed"
+      "Workload fingerprint, epoch or benchmark contract changed; start a new performance epoch"
     );
   }
   if (!sameProtocol(reference, candidate)) {
