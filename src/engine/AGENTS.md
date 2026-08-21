@@ -35,6 +35,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - `mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none` is two-phase: resolve every affected player's non-empty typed choice before recording events or moving cards. An absent or invalid selection uses the deterministic first-option fallback; no card, event-log, or RNG mutation occurs before all choices are resolved.
 - Send closed `GameEventDraft` objects through `event-recorder`; direct `eventLog.push` is confined to that module.
 - Keep the typed effect catalog as the source of truth; every registered ID has one exact decoder and one concrete handler entry, including unsupported IDs.
+- Family registration binds a concrete payload ID to its exact decoder, allowed timing/source/mode set, and handler; duplicate IDs fail during catalog assembly. The existing map/switch path remains a transitional adapter only for families not yet migrated.
 - `optional_spend_chip_attack_damage` accepts `chipCost` as its only payment field and is always optional; its decoder rejects `costs` and `optional`.
 - The effect runtime catalog owns effect ID, source kind, runtime mode, exact payload decoding, decoder diagnostics, and concrete handler dispatch at the executable-data boundary; operation consumers must not duplicate catalog prevalidation or convert decoder errors into `notApplicable`.
 - Preserve the executable source kind at that boundary: card, wizardProperty, and deadWizardToken are distinct catalog inputs.

@@ -132,6 +132,8 @@ const allowedRegistryAdapterValueExports = new Set([
   "applyRuntimeEffectAfterDamageDealt",
   "evaluateRuntimeEffectEndTurnDrawModifier",
   "withEffectRuntimeCatalogOperationsForTesting",
+  "defineEffectRuntimeFamilyForTesting",
+  "defineEffectRuntimeCatalogGroupsForTesting",
   "tryExecuteSetupEffect",
 ]);
 const publicEntrypoints = new Set([

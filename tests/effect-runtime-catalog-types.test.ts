@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  defineEffectRuntimeCatalogGroupsForTesting,
+  defineEffectRuntimeFamilyForTesting,
   validateRuntimeEffectCatalogPayload,
   type EffectRuntimeCatalogOperationOverridesForTesting,
 } from "../src/engine/effect-runtime-registry.js";
@@ -34,6 +36,59 @@ const addPowerOperations: EffectRuntimeCatalogOperationOverridesForTesting<"add_
 const negativeContracts: [AddPowerHasNoDefenseDestination] = [true];
 void negativeContracts;
 void addPowerOperations;
+
+const testFamilyDefinition = {
+  effectId: "force_starting_player" as const,
+  decoder: {
+    effectId: "force_starting_player" as const,
+    decode() {
+      return { ok: false as const, errors: ["fixture decoder error"] };
+    },
+  },
+  supportedTimings: ["setup"] as const,
+  supportedModes: ["combat"] as const,
+  supportedSourceKinds: ["wizardProperty"] as const,
+  handler: {
+    effectId: "force_starting_player" as const,
+    execute() {
+      return { ok: true as const };
+    },
+    executeSetup() {
+      return { ok: true as const };
+    },
+  },
+} as const;
+
+test("effect runtime family registration returns its concrete effect IDs", () => {
+  assert.deepEqual(
+    defineEffectRuntimeFamilyForTesting("fixture-family", [
+      testFamilyDefinition,
+    ]),
+    ["force_starting_player"]
+  );
+});
+
+test("effect runtime family registration rejects duplicate effect IDs", () => {
+  assert.throws(
+    () =>
+      defineEffectRuntimeFamilyForTesting("fixture-family", [
+        testFamilyDefinition,
+        testFamilyDefinition,
+      ]),
+    /registers duplicate effect ID force_starting_player/
+  );
+});
+
+test("effect runtime catalog rejects duplicate IDs across registered families", () => {
+  assert.throws(
+    () =>
+      defineEffectRuntimeCatalogGroupsForTesting([
+        { familyId: "fixture-family-a", definitions: [testFamilyDefinition] },
+        { familyId: "fixture-family-b", definitions: [testFamilyDefinition] },
+      ]),
+    /registers duplicate effect ID force_starting_player/
+  );
+});
 
 test("public catalog validation preserves the concrete payload variant", () => {
   const decoded = validateRuntimeEffectCatalogPayload(

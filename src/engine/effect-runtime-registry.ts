@@ -70,6 +70,7 @@ import {
 import {
   decodeRuntimeEffectForId,
   type DecodeResult,
+  type RuntimeEffectDecoder,
 } from "./runtime-effect-decoder.js";
 import type {
   CardInstance,
@@ -94,6 +95,7 @@ export type EffectRuntimeSupportedSourceKinds = readonly [
   EffectRuntimeSourceKind,
   ...EffectRuntimeSourceKind[],
 ];
+type EffectRuntimeSupportedTimings = readonly [EffectTiming, ...EffectTiming[]];
 
 export interface EffectSourceContext {
   sourceType: EffectRuntimeSourceKind;
@@ -682,14 +684,51 @@ type TestableEffectRuntimeEntry<Id extends RuntimeEffectId> =
 
 interface EffectRuntimeEntryConfig<Id extends RuntimeEffectId> {
   readonly effectId: Id;
+  readonly decoder: RuntimeEffectDecoder<Id>;
   readonly handler: EffectRuntimeHandler<RuntimeEffectForId<NoInfer<Id>>>;
   readonly supportedModes: EffectRuntimeSupportedModes;
   readonly supportedSourceKinds: EffectRuntimeSupportedSourceKinds;
+  readonly supportedTimings?: EffectRuntimeSupportedTimings;
+}
+
+type EffectRuntimeFamilyEntryDefinition<Id extends RuntimeEffectId> = Omit<
+  EffectRuntimeEntryConfig<Id>,
+  "supportedTimings"
+> & {
+  readonly supportedTimings: EffectRuntimeSupportedTimings;
+};
+
+type AnyEffectRuntimeFamilyEntryDefinition = {
+  [Id in RuntimeEffectId]: EffectRuntimeFamilyEntryDefinition<Id>;
+}[RuntimeEffectId];
+
+type EffectRuntimeFamilyEntries<
+  Definitions extends readonly AnyEffectRuntimeFamilyEntryDefinition[],
+> = {
+  [Definition in Definitions[number] as Definition["effectId"]]: EffectRuntimeEntry<
+    Definition["effectId"]
+  >;
+};
+
+function bindRuntimeEffectDecoder<Id extends RuntimeEffectId>(
+  effectId: Id
+): RuntimeEffectDecoder<Id> {
+  return {
+    effectId,
+    decode(subjectId, rawEffect) {
+      return decodeRuntimeEffectForId(subjectId, effectId, rawEffect);
+    },
+  };
 }
 
 function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
   config: EffectRuntimeEntryConfig<Id>
 ): EffectRuntimeEntry<Id> {
+  if (config.decoder.effectId !== config.effectId) {
+    throw new Error(
+      `Effect Runtime Catalog decoder mismatch for ${config.effectId}`
+    );
+  }
   let operationOverrides:
     | EffectRuntimeCatalogOperationOverridesForTesting<Id>
     | undefined;
@@ -697,13 +736,19 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     subjectId: string,
     rawEffect: unknown
   ): DecodeResult<RuntimeEffectForId<Id>> => {
-    const decoded = decodeRuntimeEffectForId(
-      subjectId,
-      config.effectId,
-      rawEffect
-    );
+    const decoded = config.decoder.decode(subjectId, rawEffect);
     if (!decoded.ok) {
       return decoded;
+    }
+    if (config.supportedTimings !== undefined) {
+      const timing =
+        "timing" in decoded.value ? decoded.value.timing : undefined;
+      if (timing === undefined || !config.supportedTimings.includes(timing)) {
+        return {
+          ok: false,
+          errors: [`${subjectId} uses unsupported timing ${String(timing)}`],
+        };
+      }
     }
     return decoded;
   };
@@ -993,6 +1038,32 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
   };
   return entry;
 }
+
+function defineEffectRuntimeFamily<
+  const Definitions extends readonly AnyEffectRuntimeFamilyEntryDefinition[],
+>(
+  familyId: string,
+  definitions: Definitions
+): EffectRuntimeFamilyEntries<Definitions> {
+  const entries = new Map<RuntimeEffectId, EffectRuntimeEntry>();
+  for (const definition of definitions) {
+    if (entries.has(definition.effectId)) {
+      throw new Error(
+        `Effect Runtime family ${familyId} registers duplicate effect ID ${definition.effectId}`
+      );
+    }
+    entries.set(definition.effectId, defineEffectRuntimeEntry(definition));
+  }
+  return Object.fromEntries(entries) as EffectRuntimeFamilyEntries<Definitions>;
+}
+
+export function defineEffectRuntimeFamilyForTesting<
+  const Definitions extends readonly AnyEffectRuntimeFamilyEntryDefinition[],
+>(familyId: string, definitions: Definitions): readonly RuntimeEffectId[] {
+  defineEffectRuntimeFamily(familyId, definitions);
+  return definitions.map((definition) => definition.effectId);
+}
+
 const allEffectRuntimeModes: EffectRuntimeSupportedModes = effectRuntimeModes;
 const fixtureOnlyRuntimeEffectIds = new Set<RuntimeEffectId>([
   "fixture_modify_effective_value",
@@ -3871,7 +3942,18 @@ type EffectRuntimeHandlerDefinition = {
   [Id in RuntimeEffectId]: EffectRuntimeHandler<RuntimeEffectForId<Id>>;
 };
 
-const effectRuntimeHandlerMap: EffectRuntimeHandlerDefinition = {
+type SetupBootstrapEffectId =
+  | "force_starting_player"
+  | "replace_starting_card"
+  | "start_with_basic_trophy"
+  | "set_starting_life_total";
+
+type TransitionalEffectRuntimeHandlerDefinition = Omit<
+  EffectRuntimeHandlerDefinition,
+  SetupBootstrapEffectId
+>;
+
+const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
   add_power: addPowerHandler,
   add_power_per_player_with_status: addPowerPerPlayerWithStatusHandler,
   add_power_if_player_has_status: addPowerIfPlayerHasStatusHandler,
@@ -3917,10 +3999,6 @@ const effectRuntimeHandlerMap: EffectRuntimeHandlerDefinition = {
     mayhemEachDinglerRecoveryChoiceHandler,
   mayhem_lowest_life_players_gain_dingler_and_set_to_max_life:
     mayhemLowestLifeDinglerMaxLifeHandler,
-  replace_starting_card: replaceStartingCardHandler,
-  start_with_basic_trophy: startWithBasicTrophyHandler,
-  force_starting_player: forceStartingPlayerHandler,
-  set_starting_life_total: setStartingLifeTotalHandler,
   set_resurrection_life_total: setResurrectionLifeTotalHandler,
   modify_effective_value: modifyEffectiveValueHandler,
   fixture_modify_effective_value: fixtureModifyEffectiveValueHandler,
@@ -4051,6 +4129,7 @@ function defineRegisteredEffectRuntimeEntry<Id extends RuntimeEffectId>(
   }
   return defineEffectRuntimeEntry({
     effectId,
+    decoder: bindRuntimeEffectDecoder(effectId),
     handler: entry.handler,
     supportedModes,
     supportedSourceKinds: entry.supportedSourceKinds,
@@ -4157,23 +4236,51 @@ function getRegisteredEffectRuntimeSourceKinds(
   }
 }
 
+type SetupBootstrapEffectPayloadMap = Pick<
+  SetupEffectPayloadMap,
+  SetupBootstrapEffectId
+>;
+
+const setupBootstrapEffectEntries = defineEffectRuntimeFamily(
+  "setup/bootstrap",
+  [
+    {
+      effectId: "force_starting_player",
+      decoder: bindRuntimeEffectDecoder("force_starting_player"),
+      supportedTimings: ["setup"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["wizardProperty"],
+      handler: forceStartingPlayerHandler,
+    },
+    {
+      effectId: "replace_starting_card",
+      decoder: bindRuntimeEffectDecoder("replace_starting_card"),
+      supportedTimings: ["setup"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["wizardProperty"],
+      handler: replaceStartingCardHandler,
+    },
+    {
+      effectId: "start_with_basic_trophy",
+      decoder: bindRuntimeEffectDecoder("start_with_basic_trophy"),
+      supportedTimings: ["setup"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["wizardProperty"],
+      handler: startWithBasicTrophyHandler,
+    },
+    {
+      effectId: "set_starting_life_total",
+      decoder: bindRuntimeEffectDecoder("set_starting_life_total"),
+      supportedTimings: ["setup"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["wizardProperty"],
+      handler: setStartingLifeTotalHandler,
+    },
+  ] as const
+) satisfies EffectRuntimeEntriesFor<SetupBootstrapEffectPayloadMap>;
+
 const setupEffectEntries = {
-  force_starting_player: defineRegisteredEffectRuntimeEntry(
-    "force_starting_player",
-    effectRuntimeHandlerMap.force_starting_player
-  ),
-  replace_starting_card: defineRegisteredEffectRuntimeEntry(
-    "replace_starting_card",
-    effectRuntimeHandlerMap.replace_starting_card
-  ),
-  start_with_basic_trophy: defineRegisteredEffectRuntimeEntry(
-    "start_with_basic_trophy",
-    effectRuntimeHandlerMap.start_with_basic_trophy
-  ),
-  set_starting_life_total: defineRegisteredEffectRuntimeEntry(
-    "set_starting_life_total",
-    effectRuntimeHandlerMap.set_starting_life_total
-  ),
+  ...setupBootstrapEffectEntries,
   set_resurrection_life_total: defineRegisteredEffectRuntimeEntry(
     "set_resurrection_life_total",
     effectRuntimeHandlerMap.set_resurrection_life_total
@@ -4551,20 +4658,73 @@ type EffectRuntimeCatalogDefinition = {
   readonly [Id in RuntimeEffectId]: EffectRuntimeEntry<Id>;
 };
 
-function defineEffectRuntimeCatalog(
-  definition: EffectRuntimeCatalogDefinition
+type EffectRuntimeCatalogEntryGroup = Partial<EffectRuntimeCatalogDefinition>;
+
+type KeysOfUnion<Value> = Value extends unknown ? keyof Value : never;
+
+type EffectRuntimeCatalogGroupIds<
+  Groups extends readonly EffectRuntimeCatalogEntryGroup[],
+> = KeysOfUnion<Groups[number]> & RuntimeEffectId;
+
+type MissingEffectRuntimeCatalogEntryIds<
+  Groups extends readonly EffectRuntimeCatalogEntryGroup[],
+> = Exclude<RuntimeEffectId, EffectRuntimeCatalogGroupIds<Groups>>;
+
+function mergeEffectRuntimeCatalogEntryGroups(
+  groups: readonly EffectRuntimeCatalogEntryGroup[]
 ): EffectRuntimeCatalogDefinition {
-  return definition;
+  const entries = new Map<RuntimeEffectId, EffectRuntimeEntry>();
+  for (const group of groups) {
+    for (const [effectId, entry] of Object.entries(group)) {
+      if (!isRuntimeEffectId(effectId) || entry === undefined) {
+        throw new Error(`Invalid Effect Runtime Catalog entry ${effectId}`);
+      }
+      if (entries.has(effectId)) {
+        throw new Error(
+          `Effect Runtime Catalog registers duplicate effect ID ${effectId}`
+        );
+      }
+      entries.set(effectId, entry);
+    }
+  }
+  return Object.fromEntries(entries) as EffectRuntimeCatalogDefinition;
 }
 
-const effectRuntimeCatalogDefinition = defineEffectRuntimeCatalog({
-  ...setupEffectEntries,
-  ...immediateEffectEntries,
-  ...playerControlledAttackEffectEntries,
-  ...activationEffectEntries,
-  ...ongoingEffectEntries,
-  ...mayhemEffectEntries,
-});
+function defineEffectRuntimeCatalog<
+  const Groups extends readonly EffectRuntimeCatalogEntryGroup[],
+>(
+  groups: Groups,
+  ...completeness: MissingEffectRuntimeCatalogEntryIds<Groups> extends never
+    ? []
+    : [MissingEffectRuntimeCatalogEntryIds<Groups>]
+): EffectRuntimeCatalogDefinition {
+  void completeness;
+  return mergeEffectRuntimeCatalogEntryGroups(groups);
+}
+
+export function defineEffectRuntimeCatalogGroupsForTesting(
+  groups: readonly {
+    readonly familyId: string;
+    readonly definitions: readonly AnyEffectRuntimeFamilyEntryDefinition[];
+  }[]
+): readonly RuntimeEffectId[] {
+  const entries = groups.map(({ familyId, definitions }) =>
+    defineEffectRuntimeFamily(familyId, definitions)
+  );
+  mergeEffectRuntimeCatalogEntryGroups(entries);
+  return groups.flatMap(({ definitions }) =>
+    definitions.map((definition) => definition.effectId)
+  );
+}
+
+const effectRuntimeCatalogDefinition = defineEffectRuntimeCatalog([
+  setupEffectEntries,
+  immediateEffectEntries,
+  playerControlledAttackEffectEntries,
+  activationEffectEntries,
+  ongoingEffectEntries,
+  mayhemEffectEntries,
+] as const);
 
 function getEffectRuntimeCatalogEntry<Id extends RuntimeEffectId>(
   effectId: Id
