@@ -300,6 +300,7 @@ test("Control Ledger gives activation, costs, passive power, and end-turn rules 
     controller,
     {
       effectId: "attack_damage_equal_to_controlled_card_cost",
+      timing: "onPlay",
       costMode: "highest",
       targetSelector: "chosenFoe",
     },
@@ -430,6 +431,7 @@ test("temporarily controlled ongoing attack modifiers and triggers work outside 
     controller,
     {
       effectId: "attack_damage",
+      timing: "onPlay",
       amount: 2,
       targetSelector: "chosenFoe",
     },

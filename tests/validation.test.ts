@@ -60,7 +60,8 @@ function validateRawRuntimeEffect<Id extends RuntimeEffectId>(
       effectId === "replace_starting_card" ||
       effectId === "start_with_basic_trophy" ||
       effectId === "set_starting_life_total" ||
-      effectId === "set_resurrection_life_total"
+      effectId === "set_resurrection_life_total" ||
+      effectId === "prevent_defense_against_owned_wand_attacks"
       ? "wizardProperty"
       : "card"
   );

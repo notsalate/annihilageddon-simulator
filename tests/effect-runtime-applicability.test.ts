@@ -105,6 +105,7 @@ test("attack profile uses its initiator instead of the active player or source o
     inactiveInitiator,
     {
       effectId: "attack_damage",
+      timing: "onPlay",
       amount: 2,
       targetSelector: "chosenFoe",
     },

@@ -35,6 +35,7 @@ test("a player can decline a legal optional defense", () => {
     attacker,
     {
       effectId: "attack_damage",
+      timing: "onPlay",
       amount: 2,
       targetSelector: "chosenFoe",
     },
@@ -97,6 +98,7 @@ test("a player can select an exact defense instead of the first card", () => {
     attacker,
     {
       effectId: "attack_damage",
+      timing: "onPlay",
       amount: 2,
       targetSelector: "chosenFoe",
     },
@@ -155,6 +157,7 @@ test("a defense choice rejects a live-object strategy result", () => {
     attacker,
     {
       effectId: "attack_damage",
+      timing: "onPlay",
       amount: 2,
       targetSelector: "chosenFoe",
     },
@@ -207,6 +210,7 @@ test("a defense choice accepts a reconstructed option by stable identifier", () 
     attacker,
     {
       effectId: "attack_damage",
+      timing: "onPlay",
       amount: 2,
       targetSelector: "chosenFoe",
     },
@@ -254,6 +258,7 @@ test("a defense choice falls back to the first legal option when identifiers dis
     attacker,
     {
       effectId: "attack_damage",
+      timing: "onPlay",
       amount: 2,
       targetSelector: "chosenFoe",
     },
@@ -316,6 +321,7 @@ test("a defense choice ignores a strategy-mutated option card", () => {
     attacker,
     {
       effectId: "attack_damage",
+      timing: "onPlay",
       amount: 2,
       targetSelector: "chosenFoe",
     },
