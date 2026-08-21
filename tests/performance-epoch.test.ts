@@ -126,6 +126,26 @@ test("changed workload receives a non-blocking workload-changed verdict", () => 
   assert.match(report.baseComparison.reason, /start a new performance epoch/);
 });
 
+test("changed workload does not block on a regression against the changed base", () => {
+  const report = comparePerformance({
+    baseline: baselineEntry(),
+    base: measurement({ workloadVolumeFingerprint: "new-volume" }),
+    head: measurement({
+      workloadVolumeFingerprint: "new-volume",
+      totalMs: 13,
+    }),
+    confirmation: measurement({
+      workloadVolumeFingerprint: "new-volume",
+      totalMs: 13,
+    }),
+  });
+
+  assert.equal(report.epochComparison.verdict, "workload-changed");
+  assert.equal(report.baseComparison.verdict, "regression");
+  assert.equal(report.verdict, "workload-changed");
+  assert.equal(report.blocking, false);
+});
+
 test("environment changes require recalibration without blocking", () => {
   const report = comparePerformance({
     baseline: baselineEntry(),

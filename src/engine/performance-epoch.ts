@@ -311,23 +311,24 @@ export function comparePerformance(options: {
       options.baseline.reference.environment
   );
   const comparisons = [epochComparison, baseComparison];
-  const verdict = comparisons.some(
-    (comparison) => comparison.verdict === "regression"
-  )
-    ? "regression"
-    : comparisons.some(
-          (comparison) => comparison.verdict === "workload-changed"
-        )
+  const verdict =
+    epochComparison.verdict === "workload-changed"
       ? "workload-changed"
-      : comparisons.some(
-            (comparison) => comparison.verdict === "not-calibrated"
-          )
-        ? "not-calibrated"
+      : comparisons.some((comparison) => comparison.verdict === "regression")
+        ? "regression"
         : comparisons.some(
-              (comparison) => comparison.verdict === "not-measured"
+              (comparison) => comparison.verdict === "workload-changed"
             )
-          ? "not-measured"
-          : "pass";
+          ? "workload-changed"
+          : comparisons.some(
+                (comparison) => comparison.verdict === "not-calibrated"
+              )
+            ? "not-calibrated"
+            : comparisons.some(
+                  (comparison) => comparison.verdict === "not-measured"
+                )
+              ? "not-measured"
+              : "pass";
 
   return {
     benchmark: options.head.benchmark,
