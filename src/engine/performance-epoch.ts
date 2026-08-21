@@ -228,12 +228,12 @@ export function calibratePerformance(
     if (
       !sameWorkload(pair.first, first) ||
       !sameProtocol(pair.first, first) ||
-      !sameEnvironment(pair.first.environment, first.environment) ||
+      !sameCalibrationEnvironment(pair.first.environment, first.environment) ||
       pair.first.commit !== first.commit ||
       pair.second.commit !== first.commit
     ) {
       throw new Error(
-        "Calibration pairs must use one workload, protocol, environment and commit"
+        "Calibration pairs must use one workload, protocol, runner class and commit"
       );
     }
   }
@@ -413,8 +413,8 @@ function comparePair(
     );
   }
   if (
-    !sameEnvironment(reference.environment, calibratedEnvironment) ||
-    !sameEnvironment(candidate.environment, calibratedEnvironment)
+    !sameCalibrationEnvironment(reference.environment, calibratedEnvironment) ||
+    !sameCalibrationEnvironment(candidate.environment, calibratedEnvironment)
   ) {
     return emptyComparison(
       "not-calibrated",
@@ -481,8 +481,11 @@ function comparePair(
   if (
     !sameWorkload(reference, confirmation) ||
     !sameProtocol(reference, confirmation) ||
-    !sameEnvironment(reference.environment, confirmation.environment) ||
-    !sameEnvironment(confirmation.environment, calibratedEnvironment)
+    !sameCalibrationEnvironment(
+      reference.environment,
+      confirmation.environment
+    ) ||
+    !sameCalibrationEnvironment(confirmation.environment, calibratedEnvironment)
   ) {
     return {
       verdict: "not-measured",
@@ -593,6 +596,19 @@ function sameEnvironment(
     left.arch === right.arch &&
     left.runner === right.runner &&
     left.cpuModel === right.cpuModel &&
+    left.cpuCount === right.cpuCount
+  );
+}
+
+function sameCalibrationEnvironment(
+  left: BenchmarkEnvironmentFingerprint,
+  right: BenchmarkEnvironmentFingerprint
+): boolean {
+  return (
+    left.nodeVersion === right.nodeVersion &&
+    left.platform === right.platform &&
+    left.arch === right.arch &&
+    left.runner === right.runner &&
     left.cpuCount === right.cpuCount
   );
 }

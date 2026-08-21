@@ -69,7 +69,7 @@ const entries = workloads.map((workload) => {
     calibration.benchmark !== reference.benchmark ||
     calibration.id !== reference.id ||
     calibration.commit !== reference.commit ||
-    !sameEnvironment(calibration.environment, reference.environment)
+    !sameCalibrationEnvironment(calibration.environment, reference.environment)
   ) {
     throw new Error(
       `Reference and calibration fingerprints differ for ${workload.id}`
@@ -94,7 +94,10 @@ for (const workload of workloads.slice(1)) {
   );
   if (
     calibration.commit !== firstCalibration.commit ||
-    !sameEnvironment(calibration.environment, firstCalibration.environment)
+    !sameCalibrationEnvironment(
+      calibration.environment,
+      firstCalibration.environment
+    )
   ) {
     throw new Error("E0 calibrations must use one commit and environment");
   }
@@ -129,7 +132,7 @@ function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, "utf8"));
 }
 
-function sameEnvironment(left, right) {
+function sameCalibrationEnvironment(left, right) {
   return (
     left.nodeVersion === right.nodeVersion &&
     left.platform === right.platform &&

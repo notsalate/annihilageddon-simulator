@@ -163,6 +163,28 @@ test("calibration derives tolerances from twenty same-commit pairs", () => {
   assert.equal(result.tolerances["totalMs"]?.relativePercent, 6.25);
 });
 
+test("calibration accepts CPU variation across fresh runners in one runner class", () => {
+  const pairs = Array.from(
+    { length: PERFORMANCE_CALIBRATION_COMPARISON_COUNT },
+    (_, index) => {
+      const runnerEnvironment = {
+        ...environment,
+        cpuModel: index % 2 === 0 ? "cpu-a" : "cpu-b",
+      };
+      return {
+        first: measurement({ environment: runnerEnvironment }),
+        second: measurement({
+          environment: runnerEnvironment,
+          totalMs: 10.2,
+        }),
+      };
+    }
+  );
+
+  const result = calibratePerformance(pairs);
+  assert.equal(result.comparisons, PERFORMANCE_CALIBRATION_COMPARISON_COUNT);
+});
+
 test("calibration rejects a mixed workload across paired comparisons", () => {
   const pairs = Array.from(
     { length: PERFORMANCE_CALIBRATION_COMPARISON_COUNT },
@@ -182,7 +204,7 @@ test("calibration rejects a mixed workload across paired comparisons", () => {
 
   assert.throws(
     () => calibratePerformance(pairs),
-    /one workload, protocol, environment and commit/
+    /one workload, protocol, runner class and commit/
   );
 });
 
