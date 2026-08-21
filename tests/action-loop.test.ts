@@ -4844,6 +4844,7 @@ test("temporary hand limit modifier counts cards gained this turn and resets aft
     ["spell"],
     0
   );
+  secondSpell.definitionId = firstSpell.definitionId;
   const creature = addFixtureMarketCard(
     state,
     "fixture-gained-creature-1",
@@ -4875,6 +4876,11 @@ test("temporary hand limit modifier counts cards gained this turn and resets aft
     }).ok,
     true
   );
+  assert.deepEqual(state.turn.gainedCardDefinitionIds, [
+    firstSpell.definitionId,
+    firstSpell.definitionId,
+    creature.definitionId,
+  ]);
   assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
 
   assert.equal(activePlayer.hand.length, 7);
