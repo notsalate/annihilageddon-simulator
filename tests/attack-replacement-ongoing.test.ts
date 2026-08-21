@@ -190,6 +190,7 @@ function resolveOwnedWandAttackScenario(isOngoing: boolean): number {
     attacker,
     {
       effectId: "attack_damage",
+      timing: "onPlay",
       amount: 2,
       targetSelector: "chosenFoe",
     },

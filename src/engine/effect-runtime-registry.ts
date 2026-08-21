@@ -4180,6 +4180,28 @@ type CardOwnershipChoiceEffectId =
   | "play_top_card_from_foe_deck"
   | "wild_magic_choice";
 
+type AttackEffectId =
+  | "attack_damage"
+  | "attack_damage_equal_remembered_card_cost"
+  | "attack_damage_equal_to_controlled_card_cost"
+  | "attack_destroy_top_legend_deck_then_damage_equal_cost"
+  | "attack_discard_cards"
+  | "attack_gain_limp_wand"
+  | "attack_gain_status"
+  | "conditional_activation_attack_damage"
+  | "directional_chain_attack"
+  | "multi_target_attack"
+  | "optional_spend_chip_attack_damage";
+
+type DefenseEffectId =
+  | "avoid_attack"
+  | "defense_discard_self_avoid_attack_then_optional_destroy_hand_card";
+
+type AttackReplacementEffectId =
+  | "modify_owned_wand_attack_damage"
+  | "double_owned_attack_damage"
+  | "prevent_defense_against_owned_wand_attacks";
+
 type TransitionalEffectRuntimeHandlerDefinition = Omit<
   EffectRuntimeHandlerDefinition,
   | SetupBootstrapEffectId
@@ -4188,6 +4210,9 @@ type TransitionalEffectRuntimeHandlerDefinition = Omit<
   | ResourceDrawEffectId
   | LifeStatusEffectId
   | CardOwnershipChoiceEffectId
+  | AttackEffectId
+  | DefenseEffectId
+  | AttackReplacementEffectId
 >;
 
 const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
@@ -4200,9 +4225,6 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
   deal_damage: dealDamageHandler,
   heal_equal_damage_dealt_on_own_turn: healEqualDamageDealtOnOwnTurnHandler,
   exchange_life_and_dingler_status: exchangeLifeAndDinglerStatusHandler,
-  attack_damage_equal_to_controlled_card_cost:
-    attackDamageEqualToControlledCardCostHandler,
-  attack_gain_status: attackGainStatusHandler,
   mega_mayhem_set_life: megaMayhemSetLifeHandler,
   mega_mayhem_each_player_toggle_dingler:
     megaMayhemEachPlayerToggleDinglerHandler,
@@ -4236,14 +4258,6 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
   topdeck_gained_card: topdeckGainedCardHandler,
   temporary_hand_limit_by_gained_card_type:
     temporaryHandLimitByGainedCardTypeHandler,
-  modify_owned_wand_attack_damage: modifyOwnedWandAttackDamageHandler,
-  double_owned_attack_damage: doubleOwnedAttackDamageHandler,
-  prevent_defense_against_owned_wand_attacks:
-    preventDefenseAgainstOwnedWandAttacksHandler,
-  attack_damage: attackDamageHandler,
-  avoid_attack: avoidAttackHandler,
-  directional_chain_attack: directionalChainAttackHandler,
-  multi_target_attack: multiTargetAttackHandler,
   mayhem_attack: mayhemAttackHandler,
   activation_destroy_self_then_destroy_own_cards:
     createUnsupportedEffectHandler(
@@ -4251,20 +4265,6 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
     ),
   add_power_per_controlled_permanent: createUnsupportedEffectHandler(
     "add_power_per_controlled_permanent"
-  ),
-  attack_damage_equal_remembered_card_cost: createUnsupportedEffectHandler(
-    "attack_damage_equal_remembered_card_cost"
-  ),
-  attack_destroy_top_legend_deck_then_damage_equal_cost:
-    createUnsupportedEffectHandler(
-      "attack_destroy_top_legend_deck_then_damage_equal_cost"
-    ),
-  attack_discard_cards: createUnsupportedEffectHandler("attack_discard_cards"),
-  attack_gain_limp_wand: createUnsupportedEffectHandler(
-    "attack_gain_limp_wand"
-  ),
-  conditional_activation_attack_damage: createUnsupportedEffectHandler(
-    "conditional_activation_attack_damage"
   ),
   conditional_activation_destroy_own_cards: createUnsupportedEffectHandler(
     "conditional_activation_destroy_own_cards"
@@ -4275,10 +4275,6 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
   controls_other_card_type: createUnsupportedEffectHandler(
     "controls_other_card_type"
   ),
-  defense_discard_self_avoid_attack_then_optional_destroy_hand_card:
-    createUnsupportedEffectHandler(
-      "defense_discard_self_avoid_attack_then_optional_destroy_hand_card"
-    ),
   destroy_own_cards: createUnsupportedEffectHandler("destroy_own_cards"),
   destroy_random_legend_market_card: createUnsupportedEffectHandler(
     "destroy_random_legend_market_card"
@@ -4318,7 +4314,6 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
   optional_gain_market_cards_to_hand_this_turn: createUnsupportedEffectHandler(
     "optional_gain_market_cards_to_hand_this_turn"
   ),
-  optional_spend_chip_attack_damage: optionalSpendChipAttackDamageHandler,
   optional_spend_chip_destroy_own_cards: createUnsupportedEffectHandler(
     "optional_spend_chip_destroy_own_cards"
   ),
@@ -4574,6 +4569,31 @@ function getRegisteredEffectRuntimeSourceKinds(
       throw new Error(
         `Effect ${effectId} uses the cards/ownership/choice family registration`
       );
+    case "attack_damage":
+    case "attack_damage_equal_remembered_card_cost":
+    case "attack_damage_equal_to_controlled_card_cost":
+    case "attack_destroy_top_legend_deck_then_damage_equal_cost":
+    case "attack_discard_cards":
+    case "attack_gain_limp_wand":
+    case "attack_gain_status":
+    case "conditional_activation_attack_damage":
+    case "directional_chain_attack":
+    case "multi_target_attack":
+    case "optional_spend_chip_attack_damage":
+      throw new Error(
+        `Effect ${effectId} uses the combat/attack family registration`
+      );
+    case "avoid_attack":
+    case "defense_discard_self_avoid_attack_then_optional_destroy_hand_card":
+      throw new Error(
+        `Effect ${effectId} uses the combat/defense family registration`
+      );
+    case "modify_owned_wand_attack_damage":
+    case "double_owned_attack_damage":
+    case "prevent_defense_against_owned_wand_attacks":
+      throw new Error(
+        `Effect ${effectId} uses the combat/attack-replacement family registration`
+      );
     case "force_starting_player":
     case "replace_starting_card":
     case "start_with_basic_trophy":
@@ -4609,22 +4629,6 @@ function getRegisteredEffectRuntimeSourceKinds(
     case "optional_gain_market_cards_to_hand_this_turn":
     case "on_gain_self_gain_limp_wands":
     case "fixture_add_power_equal_to_target_cost":
-    case "attack_damage":
-    case "attack_damage_equal_remembered_card_cost":
-    case "attack_damage_equal_to_controlled_card_cost":
-    case "attack_destroy_top_legend_deck_then_damage_equal_cost":
-    case "attack_discard_cards":
-    case "attack_gain_limp_wand":
-    case "attack_gain_status":
-    case "avoid_attack":
-    case "conditional_activation_attack_damage":
-    case "directional_chain_attack":
-    case "multi_target_attack":
-    case "optional_spend_chip_attack_damage":
-    case "defense_discard_self_avoid_attack_then_optional_destroy_hand_card":
-    case "modify_owned_wand_attack_damage":
-    case "double_owned_attack_damage":
-    case "prevent_defense_against_owned_wand_attacks":
     case "activation_destroy_self_then_destroy_own_cards":
     case "conditional_activation_destroy_own_cards":
     case "conditional_activation_gain_chips":
@@ -4824,76 +4828,175 @@ const immediateEffectEntries = {
   >
 >;
 
-const playerControlledAttackEffectEntries = {
-  attack_damage: defineRegisteredEffectRuntimeEntry(
-    "attack_damage",
-    effectRuntimeHandlerMap.attack_damage
-  ),
-  attack_damage_equal_remembered_card_cost: defineRegisteredEffectRuntimeEntry(
-    "attack_damage_equal_remembered_card_cost",
-    effectRuntimeHandlerMap.attack_damage_equal_remembered_card_cost
-  ),
-  attack_damage_equal_to_controlled_card_cost:
-    defineRegisteredEffectRuntimeEntry(
-      "attack_damage_equal_to_controlled_card_cost",
-      effectRuntimeHandlerMap.attack_damage_equal_to_controlled_card_cost
+const attackEffectTimings = [
+  "activation",
+  "onPlay",
+] as const satisfies EffectRuntimeSupportedTimings;
+
+const attackEffectEntries = defineEffectRuntimeFamily("combat/attack", [
+  {
+    effectId: "attack_damage",
+    decoder: bindRuntimeEffectDecoder("attack_damage"),
+    supportedTimings: attackEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: attackDamageHandler,
+  },
+  {
+    effectId: "attack_damage_equal_remembered_card_cost",
+    decoder: bindRuntimeEffectDecoder(
+      "attack_damage_equal_remembered_card_cost"
     ),
-  attack_destroy_top_legend_deck_then_damage_equal_cost:
-    defineRegisteredEffectRuntimeEntry(
-      "attack_destroy_top_legend_deck_then_damage_equal_cost",
-      effectRuntimeHandlerMap.attack_destroy_top_legend_deck_then_damage_equal_cost
+    supportedTimings: attackEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: createUnsupportedEffectHandler(
+      "attack_damage_equal_remembered_card_cost"
     ),
-  attack_discard_cards: defineRegisteredEffectRuntimeEntry(
-    "attack_discard_cards",
-    effectRuntimeHandlerMap.attack_discard_cards
-  ),
-  attack_gain_limp_wand: defineRegisteredEffectRuntimeEntry(
-    "attack_gain_limp_wand",
-    effectRuntimeHandlerMap.attack_gain_limp_wand
-  ),
-  attack_gain_status: defineRegisteredEffectRuntimeEntry(
-    "attack_gain_status",
-    effectRuntimeHandlerMap.attack_gain_status
-  ),
-  avoid_attack: defineRegisteredEffectRuntimeEntry(
-    "avoid_attack",
-    effectRuntimeHandlerMap.avoid_attack
-  ),
-  conditional_activation_attack_damage: defineRegisteredEffectRuntimeEntry(
-    "conditional_activation_attack_damage",
-    effectRuntimeHandlerMap.conditional_activation_attack_damage
-  ),
-  directional_chain_attack: defineRegisteredEffectRuntimeEntry(
-    "directional_chain_attack",
-    effectRuntimeHandlerMap.directional_chain_attack
-  ),
-  multi_target_attack: defineRegisteredEffectRuntimeEntry(
-    "multi_target_attack",
-    effectRuntimeHandlerMap.multi_target_attack
-  ),
-  optional_spend_chip_attack_damage: defineRegisteredEffectRuntimeEntry(
-    "optional_spend_chip_attack_damage",
-    effectRuntimeHandlerMap.optional_spend_chip_attack_damage
-  ),
-  defense_discard_self_avoid_attack_then_optional_destroy_hand_card:
-    defineRegisteredEffectRuntimeEntry(
+  },
+  {
+    effectId: "attack_damage_equal_to_controlled_card_cost",
+    decoder: bindRuntimeEffectDecoder(
+      "attack_damage_equal_to_controlled_card_cost"
+    ),
+    supportedTimings: attackEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: attackDamageEqualToControlledCardCostHandler,
+  },
+  {
+    effectId: "attack_destroy_top_legend_deck_then_damage_equal_cost",
+    decoder: bindRuntimeEffectDecoder(
+      "attack_destroy_top_legend_deck_then_damage_equal_cost"
+    ),
+    supportedTimings: attackEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: createUnsupportedEffectHandler(
+      "attack_destroy_top_legend_deck_then_damage_equal_cost"
+    ),
+  },
+  {
+    effectId: "attack_discard_cards",
+    decoder: bindRuntimeEffectDecoder("attack_discard_cards"),
+    supportedTimings: attackEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: createUnsupportedEffectHandler("attack_discard_cards"),
+  },
+  {
+    effectId: "attack_gain_limp_wand",
+    decoder: bindRuntimeEffectDecoder("attack_gain_limp_wand"),
+    supportedTimings: attackEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: createUnsupportedEffectHandler("attack_gain_limp_wand"),
+  },
+  {
+    effectId: "attack_gain_status",
+    decoder: bindRuntimeEffectDecoder("attack_gain_status"),
+    supportedTimings: ["onPlay"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: attackGainStatusHandler,
+  },
+  {
+    effectId: "conditional_activation_attack_damage",
+    decoder: bindRuntimeEffectDecoder("conditional_activation_attack_damage"),
+    supportedTimings: attackEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: createUnsupportedEffectHandler(
+      "conditional_activation_attack_damage"
+    ),
+  },
+  {
+    effectId: "directional_chain_attack",
+    decoder: bindRuntimeEffectDecoder("directional_chain_attack"),
+    supportedTimings: attackEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: directionalChainAttackHandler,
+  },
+  {
+    effectId: "multi_target_attack",
+    decoder: bindRuntimeEffectDecoder("multi_target_attack"),
+    supportedTimings: attackEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: multiTargetAttackHandler,
+  },
+  {
+    effectId: "optional_spend_chip_attack_damage",
+    decoder: bindRuntimeEffectDecoder("optional_spend_chip_attack_damage"),
+    supportedTimings: attackEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: optionalSpendChipAttackDamageHandler,
+  },
+] as const) satisfies EffectRuntimeEntriesFor<
+  Pick<PlayerControlledAttackEffectPayloadMap, AttackEffectId>
+>;
+
+const defenseEffectEntries = defineEffectRuntimeFamily("combat/defense", [
+  {
+    effectId: "avoid_attack",
+    decoder: bindRuntimeEffectDecoder("avoid_attack"),
+    supportedTimings: ["onDefense"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: avoidAttackHandler,
+  },
+  {
+    effectId:
       "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
-      effectRuntimeHandlerMap.defense_discard_self_avoid_attack_then_optional_destroy_hand_card
+    decoder: bindRuntimeEffectDecoder(
+      "defense_discard_self_avoid_attack_then_optional_destroy_hand_card"
     ),
-  modify_owned_wand_attack_damage: defineRegisteredEffectRuntimeEntry(
-    "modify_owned_wand_attack_damage",
-    effectRuntimeHandlerMap.modify_owned_wand_attack_damage
-  ),
-  double_owned_attack_damage: defineRegisteredEffectRuntimeEntry(
-    "double_owned_attack_damage",
-    effectRuntimeHandlerMap.double_owned_attack_damage
-  ),
-  prevent_defense_against_owned_wand_attacks:
-    defineRegisteredEffectRuntimeEntry(
-      "prevent_defense_against_owned_wand_attacks",
-      effectRuntimeHandlerMap.prevent_defense_against_owned_wand_attacks
+    supportedTimings: ["defense"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: createUnsupportedEffectHandler(
+      "defense_discard_self_avoid_attack_then_optional_destroy_hand_card"
     ),
-} satisfies EffectRuntimeEntriesFor<PlayerControlledAttackEffectPayloadMap>;
+  },
+] as const) satisfies EffectRuntimeEntriesFor<
+  Pick<PlayerControlledAttackEffectPayloadMap, DefenseEffectId>
+>;
+
+const attackReplacementEffectEntries = defineEffectRuntimeFamily(
+  "combat/attack-replacement",
+  [
+    {
+      effectId: "modify_owned_wand_attack_damage",
+      decoder: bindRuntimeEffectDecoder("modify_owned_wand_attack_damage"),
+      supportedTimings: ["attackReplacement"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card", "wizardProperty"],
+      handler: modifyOwnedWandAttackDamageHandler,
+    },
+    {
+      effectId: "double_owned_attack_damage",
+      decoder: bindRuntimeEffectDecoder("double_owned_attack_damage"),
+      supportedTimings: ["attackReplacement"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: doubleOwnedAttackDamageHandler,
+    },
+    {
+      effectId: "prevent_defense_against_owned_wand_attacks",
+      decoder: bindRuntimeEffectDecoder(
+        "prevent_defense_against_owned_wand_attacks"
+      ),
+      supportedTimings: ["attackReplacement"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["wizardProperty"],
+      handler: preventDefenseAgainstOwnedWandAttacksHandler,
+    },
+  ] as const
+) satisfies EffectRuntimeEntriesFor<
+  Pick<PlayerControlledAttackEffectPayloadMap, AttackReplacementEffectId>
+>;
 
 const activationEffectEntries = {
   activation_destroy_self_then_destroy_own_cards:
@@ -5086,7 +5189,9 @@ const effectRuntimeCatalogDefinition = defineEffectRuntimeCatalog([
   lifeStatusEntries,
   cardOwnershipChoiceEntries,
   immediateEffectEntries,
-  playerControlledAttackEffectEntries,
+  attackEffectEntries,
+  defenseEffectEntries,
+  attackReplacementEffectEntries,
   activationEffectEntries,
   ongoingEffectEntries,
   mayhemEffectEntries,

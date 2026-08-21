@@ -285,7 +285,7 @@ test("on-play compatibility wrapper leaves Wand applicability inside Trigger Dis
   );
 });
 
-test("after-attack dispatch attributes a wizard-property attack trigger to the controlled card", () => {
+test("after-attack dispatch attributes a controlled attack trigger to the controlled card", () => {
   const scenario = createGameScenario({ rootDir, seed: 23004 });
   const state = scenario.state;
   const controller = scenario.activePlayer;
@@ -320,11 +320,12 @@ test("after-attack dispatch attributes a wizard-property attack trigger to the c
     controller,
     {
       effectId: "attack_damage",
+      timing: "onPlay",
       amount: 2,
       targetSelector: "chosenFoe",
     },
     {
-      sourceType: "wizardProperty",
+      sourceType: "card",
       runtimeMode: "fixture",
       playerId: controller.playerId,
       cardInstanceId: "fixture-wizard-property-attack-source",
@@ -379,6 +380,7 @@ test("after-attack dispatch propagates catalog errors without consuming first-at
     controller,
     {
       effectId: "attack_damage",
+      timing: "onPlay",
       amount: 2,
       targetSelector: "chosenFoe",
     },

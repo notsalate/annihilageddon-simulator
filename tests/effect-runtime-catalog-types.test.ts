@@ -363,6 +363,134 @@ test("card ownership and choice effects use exact family policies", () => {
   }
 });
 
+test("attack, defense and replacement effects use exact family policies", () => {
+  const validCases = [
+    {
+      effectId: "attack_damage",
+      payload: {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 2,
+        targetSelector: "chosenPlayer",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "attack_gain_status",
+      payload: {
+        effectId: "attack_gain_status",
+        timing: "onPlay",
+        statusId: "dingler",
+        targetSelector: "anyPlayer",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "avoid_attack",
+      payload: {
+        effectId: "avoid_attack",
+        timing: "onDefense",
+        destination: "discardSelf",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "modify_owned_wand_attack_damage",
+      payload: {
+        effectId: "modify_owned_wand_attack_damage",
+        timing: "attackReplacement",
+        amount: 1,
+        cardTags: ["wandAttackCard"],
+      },
+      sourceKind: "wizardProperty",
+    },
+    {
+      effectId: "double_owned_attack_damage",
+      payload: {
+        effectId: "double_owned_attack_damage",
+        timing: "attackReplacement",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "prevent_defense_against_owned_wand_attacks",
+      payload: {
+        effectId: "prevent_defense_against_owned_wand_attacks",
+        timing: "attackReplacement",
+        cardTags: ["wandAttackCard"],
+      },
+      sourceKind: "wizardProperty",
+    },
+  ] as const;
+
+  for (const { effectId, payload, sourceKind } of validCases) {
+    assert.equal(
+      validateRuntimeEffectCatalogPayload(
+        `Valid ${effectId}`,
+        effectId,
+        payload,
+        "combat",
+        sourceKind
+      ).ok,
+      true
+    );
+  }
+
+  const invalidCases = [
+    {
+      effectId: "attack_damage",
+      payload: {
+        effectId: "attack_damage",
+        timing: "whileControlled",
+        amount: 2,
+        targetSelector: "chosenPlayer",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "avoid_attack",
+      payload: {
+        effectId: "avoid_attack",
+        timing: "onDefense",
+        destination: "discardSelf",
+      },
+      sourceKind: "wizardProperty",
+    },
+    {
+      effectId: "prevent_defense_against_owned_wand_attacks",
+      payload: {
+        effectId: "prevent_defense_against_owned_wand_attacks",
+        timing: "attackReplacement",
+        cardTags: ["wandAttackCard"],
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "modify_owned_wand_attack_damage",
+      payload: {
+        effectId: "modify_owned_wand_attack_damage",
+        timing: "attackReplacement",
+        amount: 0,
+        cardTags: ["wandAttackCard"],
+      },
+      sourceKind: "wizardProperty",
+    },
+  ] as const;
+
+  for (const { effectId, payload, sourceKind } of invalidCases) {
+    assert.equal(
+      validateRuntimeEffectCatalogPayload(
+        `Invalid ${effectId}`,
+        effectId,
+        payload,
+        "combat",
+        sourceKind
+      ).ok,
+      false
+    );
+  }
+});
+
 test("public catalog validation rejects an ongoing refill payload with unsupported timing", () => {
   const decoded = validateRuntimeEffectCatalogPayload(
     "Controlled refill",
