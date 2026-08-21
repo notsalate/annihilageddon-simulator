@@ -121,6 +121,35 @@ test("setup catalog decodes before runtime-mode applicability", () => {
   assert.match(result.error, /unsupported field unexpected/);
 });
 
+test("setup catalog applies source and timing policies before its executor", () => {
+  let handlerCalled = false;
+  const result = withTemporaryEffectRuntimeOperations(
+    "play_top_card_from_foe_deck",
+    {
+      executeSetup() {
+        handlerCalled = true;
+        return { ok: true };
+      },
+    },
+    () =>
+      tryExecuteSetupEffect(
+        player(),
+        {
+          effectId: "play_top_card_from_foe_deck",
+          timing: "onPlay",
+          targetSelector: "chosenFoe",
+        },
+        source,
+        services()
+      )
+  );
+
+  assert.equal(result.status, "error");
+  if (result.status !== "error") return;
+  assert.match(result.error, /unsupported timing .* for source/);
+  assert.equal(handlerCalled, false);
+});
+
 test("setup catalog keeps the wizard-property source matrix explicit", () => {
   const setupEffects = [
     { effectId: "force_starting_player", timing: "setup" },

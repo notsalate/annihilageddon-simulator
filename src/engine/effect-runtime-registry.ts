@@ -996,6 +996,16 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
           error: `Setup effect ${config.effectId} uses unsupported source kind`,
         };
       }
+      const sourceTimingError = getUnsupportedSourceTimingError(
+        subjectId,
+        config.effectId,
+        decoded.value,
+        source.sourceType,
+        config.supportedSourceTimingPolicies
+      );
+      if (sourceTimingError !== undefined) {
+        return { status: "error", error: sourceTimingError };
+      }
       if (!config.supportedModes.includes(source.runtimeMode)) {
         return {
           status: "error",
