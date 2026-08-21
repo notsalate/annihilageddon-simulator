@@ -1,11 +1,11 @@
-import { scoreGame } from "./simulation.js";
+import { adjudicateGame } from "./adjudication.js";
 import type { TurnLineEvaluationPolicy } from "./best-move-analysis.js";
 
 /** Исследовательский критерий, а не универсальное определение лучшего хода. */
 export const victoryPointsPolicy: TurnLineEvaluationPolicy = {
   id: "victory-points",
   evaluate: ({ line, perspectivePlayerId }) => {
-    const player = scoreGame(line.terminalState).find(
+    const player = adjudicateGame(line.terminalState).players.find(
       (candidate) => candidate.playerId === perspectivePlayerId
     );
     if (player === undefined)

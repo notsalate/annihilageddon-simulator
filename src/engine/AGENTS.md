@@ -15,6 +15,7 @@ This folder contains the deterministic game engine: setup, actions, effect runti
 - `runtime-effect.ts` owns the exhaustive `RuntimeEffectPayloadMap`; `runtime-effect-decoder.ts` owns exact decoders for every registered ID; `effect-runtime-registry.ts` binds each decoder to its concrete handler through a typed catalog closure.
 - Runtime data comes from `data/`; import drafts under `data/import/` are outside executable engine input.
 - `benchmark-support.ts` owns benchmark clocks, environment fingerprints, commit identity and shared measurement helpers. `performance-epoch.ts` owns E0 baseline entries, 20-pair calibration, workload comparison and verdicts; it must not silently adopt current results as reference.
+- `adjudication.ts` owns player score calculation, the VP → legends → DWT comparison order, and the complete winner list. Simulation, mass simulation, and Best-Move Analyzer consume this shared adjudication contract rather than implementing parallel scoring or winner logic.
 - `runtime-data-intake.ts` is the only supported Runtime Data boundary: it accepts filesystem or preloaded sources, distinguishes source/decode/validation failures, and returns one verified immutable pack. `data.ts` decode/validation functions are internal intake building blocks and must not be re-exported through `src/index.ts`.
 - CLI orchestration lives in `src/cli/`.
 

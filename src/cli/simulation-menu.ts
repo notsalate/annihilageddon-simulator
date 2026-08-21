@@ -10,10 +10,10 @@ import {
 import {
   runSingleGame,
   type GameEndReason,
-  type PlayerScore,
   type RunSingleGameOptions,
   type SingleGameResult,
 } from "../engine/simulation.js";
+import type { PlayerScore } from "../engine/adjudication.js";
 import type { PlayerId } from "../engine/setup.js";
 
 export interface SimulationMenuOptions {

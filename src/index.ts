@@ -204,11 +204,16 @@ export {
   calculateEffectiveTokenVictoryPoints,
   calculateEffectiveValue,
 } from "./engine/effective-values.js";
+export type { AdjudicationResult, PlayerScore } from "./engine/adjudication.js";
+export {
+  adjudicateGame,
+  determineWinnerIds,
+  scoreGame,
+} from "./engine/adjudication.js";
 export type {
   BotDecisionContext,
   BotStrategy,
   GameEndReason,
-  PlayerScore,
   RunSingleGameOptions,
   SetupCardSnapshot,
   SetupPlayerSnapshot,
@@ -218,10 +223,8 @@ export type {
 } from "./engine/simulation.js";
 export {
   baselineBot,
-  determineWinnerIds,
   getGameEndReason,
   runSingleGame,
-  scoreGame,
 } from "./engine/simulation.js";
 export type {
   CompactGameSummary,
