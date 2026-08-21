@@ -18,7 +18,12 @@ import {
   releaseTemporaryControls,
 } from "./control-ledger.js";
 import { calculateEffectiveCardCost } from "./effective-values.js";
-import { recordCardMoved, recordGameEvent } from "./event-recorder.js";
+import { drawDeckCards } from "./deck-lifecycle.js";
+import {
+  recordCardMoved,
+  recordDeckReshuffle,
+  recordGameEvent,
+} from "./event-recorder.js";
 import { runMarketFlow, type MarketFlowEndReason } from "./market-flow.js";
 import type {
   CardInstance,
@@ -82,11 +87,6 @@ interface PaymentResult {
   remainingPower: number;
   remainingChips: number;
   payableCost: number;
-}
-
-interface DrawCardsResult {
-  requestedCount: number;
-  drawnCards: CardInstance[];
 }
 
 interface CleanupMoveRecord {
@@ -184,16 +184,23 @@ function endTurn(state: GameState): ActionResult {
   });
 
   const drawCount = calculateEndTurnDrawCount(state, activePlayer);
-  const drawResult = drawCards(activePlayer, drawCount, state);
+  const drawResult = drawDeckCards(
+    activePlayer.deck,
+    activePlayer.discard,
+    drawCount,
+    state.rng,
+    () => recordDeckReshuffle(state, activePlayer.playerId)
+  );
+  activePlayer.hand.push(...drawResult.cards);
   recordGameEvent(state, {
     type: "handDrawn",
     playerId: activePlayer.playerId,
-    amount: drawResult.requestedCount,
-    legalChoiceCount: drawResult.drawnCards.length,
+    amount: drawCount,
+    legalChoiceCount: drawResult.cards.length,
     choiceId: String(activePlayer.hand.length),
     destinationZone: `${activePlayer.playerId}.hand`,
-    targetCardInstanceIds: drawResult.drawnCards.map((card) => card.instanceId),
-    targetDefinitionIds: drawResult.drawnCards.map((card) => card.definitionId),
+    targetCardInstanceIds: drawResult.cards.map((card) => card.instanceId),
+    targetDefinitionIds: drawResult.cards.map((card) => card.definitionId),
   });
 
   releaseTemporaryControls(state);
@@ -734,37 +741,6 @@ function calculatePayment(
   };
 }
 
-function drawCards(
-  player: PlayerState,
-  count: number,
-  state: GameState
-): DrawCardsResult {
-  const drawnCards: CardInstance[] = [];
-  for (let index = 0; index < count; index += 1) {
-    if (player.deck.length === 0 && player.discard.length > 0) {
-      player.deck.push(...player.discard.splice(0));
-      shuffleInPlace(player.deck, state);
-      recordGameEvent(state, {
-        type: "discardShuffledIntoDeck",
-        playerId: player.playerId,
-      });
-    }
-
-    const card = player.deck.shift();
-    if (card === undefined) {
-      break;
-    }
-
-    player.hand.push(card);
-    drawnCards.push(card);
-  }
-
-  return {
-    requestedCount: count,
-    drawnCards,
-  };
-}
-
 function getNextPlayer(state: GameState, player: PlayerState): PlayerState {
   const playerIndex = state.players.findIndex(
     (candidate) => candidate.playerId === player.playerId
@@ -775,20 +751,6 @@ function getNextPlayer(state: GameState, player: PlayerState): PlayerState {
   }
 
   return nextPlayer;
-}
-
-function shuffleInPlace<T>(items: T[], state: GameState): void {
-  for (let index = items.length - 1; index > 0; index -= 1) {
-    const swapIndex = state.rng.nextInt(index + 1);
-    const item = items[index];
-    const swapItem = items[swapIndex];
-    if (item === undefined || swapItem === undefined) {
-      throw new Error("Unexpected sparse array during shuffle");
-    }
-
-    items[index] = swapItem;
-    items[swapIndex] = item;
-  }
 }
 
 function mustGetActivePlayer(state: GameState): PlayerState {
