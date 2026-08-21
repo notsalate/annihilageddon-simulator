@@ -6,10 +6,10 @@ import {
   type ActionResult,
   type CardDefinition,
   type CardInstance,
+  type ChoicePolicy,
   type GameState,
   type PlayerState,
   type RuntimeEffect,
-  type RuntimeEffectChoiceStrategy,
   type RuntimeEffectId,
 } from "../../src/index.js";
 import {
@@ -136,11 +136,7 @@ export function givenTemporaryControl(
   card: CardInstance,
   controller: PlayerState
 ): CardInstance {
-  grantTemporaryControl(
-    scenario.state,
-    card.instanceId,
-    controller.playerId
-  );
+  grantTemporaryControl(scenario.state, card.instanceId, controller.playerId);
   return card;
 }
 
@@ -149,16 +145,20 @@ export function choosePlayerTargetForEffect(
   effectId: RuntimeEffectId,
   target: PlayerState
 ): void {
-  chooseEffect(scenario, ({ effectId: requestedEffectId, choices }) =>
-    requestedEffectId === effectId
-      ? choices.find((choice) => choice.choiceId === target.playerId)
-      : undefined
-  );
+  chooseEffect(scenario, ({ effectId: requestedEffectId, choices }) => {
+    if (requestedEffectId !== effectId) {
+      return undefined;
+    }
+    const choice = choices.find(
+      (candidate) => candidate.choiceId === target.playerId
+    );
+    return choice === undefined ? undefined : { choiceId: choice.choiceId };
+  });
 }
 
 export function chooseEffect(
   scenario: GameScenario,
-  selector: RuntimeEffectChoiceStrategy
+  selector: ChoicePolicy
 ): void {
   scenario.state.effectChoiceStrategy = selector;
 }

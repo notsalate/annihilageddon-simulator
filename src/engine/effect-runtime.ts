@@ -52,13 +52,12 @@ import {
   type WildMagicOption,
 } from "./runtime-effect.js";
 import type {
-  CardInstance,
-  GameState,
-  PlayerState,
-  RuntimeEffectDecisionChoice,
-  RuntimeEffectChoiceRequest,
-} from "./setup.js";
-import { createPlayerDecisionView } from "./strategy-decision-view.js";
+  ChoiceRequest,
+  ChoiceSelection,
+  ChoiceView,
+} from "./choice-policy.js";
+import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import { createChoicePlayerView } from "./strategy-decision-view.js";
 import { dispatchControlledCardOperation } from "./trigger-dispatch.js";
 export function executeOnPlayEffects(
   state: GameState,
@@ -1082,13 +1081,13 @@ function resolveEffectChoice(
   choices: readonly EffectChoice[],
   invalidSelectionPolicy: "fallback" | "reject"
 ): StrictEffectChoiceResolution {
-  const decisionRequest: RuntimeEffectChoiceRequest = structuredClone({
-    player: createPlayerDecisionView(player),
+  const decisionRequest: ChoiceRequest = structuredClone({
+    player: createChoicePlayerView(player),
     effectId,
     sourceType: source.sourceType,
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
-    choices: choices.map(createRuntimeEffectDecisionChoice),
+    choices: choices.map(createChoiceView),
   });
   const selectedChoice = state.effectChoiceStrategy?.(decisionRequest);
   if (selectedChoice === undefined) {
@@ -1098,9 +1097,19 @@ function resolveEffectChoice(
       : { status: "selected", choice: defaultChoice };
   }
 
-  const matchedChoice = choices.find((candidate) =>
-    matchesDecisionChoice(candidate, selectedChoice)
-  );
+  const selectedChoiceIndex = readChoiceIndex(selectedChoice);
+  const indexedChoice =
+    selectedChoiceIndex === undefined
+      ? undefined
+      : choices[selectedChoiceIndex];
+  const matchedChoice =
+    indexedChoice !== undefined
+      ? matchesDecisionChoice(indexedChoice, selectedChoice)
+        ? indexedChoice
+        : undefined
+      : choices.find((candidate) =>
+          matchesDecisionChoice(candidate, selectedChoice)
+        );
   if (matchedChoice !== undefined) {
     return { status: "selected", choice: matchedChoice };
   }
@@ -1191,9 +1200,7 @@ function recordEffectChoiceSelected(
   });
 }
 
-function createRuntimeEffectDecisionChoice(
-  choice: EffectChoice
-): RuntimeEffectDecisionChoice {
+function createChoiceView(choice: EffectChoice): ChoiceView {
   if (choice.choiceKind === "option") {
     return { choiceKind: choice.choiceKind, choiceId: choice.choiceId };
   }
@@ -1233,51 +1240,105 @@ function createRuntimeEffectDecisionChoice(
 
 function matchesDecisionChoice(
   choice: EffectChoice,
-  selection: RuntimeEffectDecisionChoice
+  selection: ChoiceSelection
 ): boolean {
+  if (choice.choiceId !== selection.choiceId) {
+    return false;
+  }
+
+  const metadata = selection as ChoiceSelection & {
+    readonly choiceKind?: unknown;
+    readonly targetPlayerIds?: unknown;
+    readonly targetCardInstanceIds?: unknown;
+    readonly amount?: unknown;
+    readonly targetCardInstanceId?: unknown;
+    readonly direction?: unknown;
+  };
   if (
-    choice.choiceKind !== selection.choiceKind ||
-    choice.choiceId !== selection.choiceId
+    metadata.choiceKind !== undefined &&
+    metadata.choiceKind !== choice.choiceKind
   ) {
     return false;
   }
   if (
-    choice.choiceKind === "playerTarget" &&
-    selection.choiceKind === "playerTarget"
+    metadata.targetPlayerIds !== undefined &&
+    choice.choiceKind !== "playerTarget" &&
+    choice.choiceKind !== "directionalPlayerTarget"
   ) {
-    return sameValues(
-      choice.players.map((player) => player.playerId),
-      selection.targetPlayerIds
-    );
+    return false;
   }
   if (
-    choice.choiceKind === "cardTarget" &&
-    selection.choiceKind === "cardTarget"
+    metadata.targetCardInstanceIds !== undefined &&
+    choice.choiceKind !== "cardTarget"
   ) {
-    return (
-      choice.amount === selection.amount &&
-      sameValues(
-        choice.cards.map((card) => card.instanceId),
-        selection.targetCardInstanceIds
-      )
-    );
-  }
-  if (choice.choiceKind === "defense" && selection.choiceKind === "defense") {
-    return choice.card?.instanceId === selection.targetCardInstanceId;
+    return false;
   }
   if (
-    choice.choiceKind === "directionalPlayerTarget" &&
-    selection.choiceKind === "directionalPlayerTarget"
+    metadata.amount !== undefined &&
+    (choice.choiceKind !== "cardTarget" || metadata.amount !== choice.amount)
   ) {
-    return (
-      choice.direction === selection.direction &&
-      sameValues(
-        choice.players.map((player) => player.playerId),
-        selection.targetPlayerIds
-      )
-    );
+    return false;
+  }
+  if (
+    metadata.targetCardInstanceId !== undefined &&
+    (choice.choiceKind === "defense"
+      ? metadata.targetCardInstanceId !== choice.card?.instanceId
+      : choice.choiceKind === "cardTarget"
+        ? !choice.cards.some(
+            (card) => card.instanceId === metadata.targetCardInstanceId
+          )
+        : true)
+  ) {
+    return false;
+  }
+  if (
+    metadata.direction !== undefined &&
+    (choice.choiceKind !== "directionalPlayerTarget" ||
+      metadata.direction !== choice.direction)
+  ) {
+    return false;
+  }
+  if (metadata.targetPlayerIds !== undefined) {
+    if (!isStringArray(metadata.targetPlayerIds)) {
+      return false;
+    }
+    const playerIds =
+      choice.choiceKind === "playerTarget" ||
+      choice.choiceKind === "directionalPlayerTarget"
+        ? choice.players.map((player) => player.playerId)
+        : [];
+    if (!sameValues(playerIds, metadata.targetPlayerIds)) {
+      return false;
+    }
+  }
+  if (metadata.targetCardInstanceIds !== undefined) {
+    if (!isStringArray(metadata.targetCardInstanceIds)) {
+      return false;
+    }
+    const cardIds =
+      choice.choiceKind === "cardTarget"
+        ? choice.cards.map((card) => card.instanceId)
+        : [];
+    if (!sameValues(cardIds, metadata.targetCardInstanceIds)) {
+      return false;
+    }
   }
   return true;
+}
+
+function readChoiceIndex(selection: ChoiceSelection): number | undefined {
+  const value = (
+    selection as ChoiceSelection & { readonly choiceIndex?: unknown }
+  ).choiceIndex;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+function isStringArray(value: unknown): value is readonly string[] {
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === "string")
+  );
 }
 
 function sameValues(

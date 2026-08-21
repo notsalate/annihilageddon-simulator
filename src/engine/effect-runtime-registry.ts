@@ -70,7 +70,6 @@ import type {
   CardInstance,
   GameState,
   PlayerState,
-  RuntimeEffectChoice,
   TokenInstance,
 } from "./setup.js";
 
@@ -169,7 +168,43 @@ export type TargetChoice =
       player: PlayerState;
     };
 
-export type EffectChoice = RuntimeEffectChoice;
+interface EffectChoiceOption {
+  choiceKind: "option";
+  choiceId: string;
+}
+
+interface EffectChoicePlayerTarget {
+  choiceKind: "playerTarget";
+  choiceId: string;
+  players: readonly PlayerState[];
+}
+
+interface EffectChoiceCardTarget {
+  choiceKind: "cardTarget";
+  choiceId: string;
+  cards: readonly CardInstance[];
+  amount: number;
+}
+
+interface EffectChoiceDefense {
+  choiceKind: "defense";
+  choiceId: string;
+  card: CardInstance | undefined;
+}
+
+interface EffectChoiceDirectionalPlayerTarget {
+  choiceKind: "directionalPlayerTarget";
+  choiceId: string;
+  direction: "left" | "right";
+  players: readonly PlayerState[];
+}
+
+export type EffectChoice =
+  | EffectChoiceOption
+  | EffectChoicePlayerTarget
+  | EffectChoiceCardTarget
+  | EffectChoiceDefense
+  | EffectChoiceDirectionalPlayerTarget;
 
 export type StrictEffectChoiceResolution =
   | { status: "selected"; choice: EffectChoice }

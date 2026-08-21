@@ -38,7 +38,8 @@ import {
   type RuntimeDataFilesystemSource,
   type RuntimeDataPreloadedSource,
 } from "./runtime-data-intake.js";
-import type { RuntimeEffect, RuntimeEffectId } from "./runtime-effect.js";
+import type { RuntimeEffect } from "./runtime-effect.js";
+import type { ChoiceKind, ChoicePolicy } from "./choice-policy.js";
 
 export type { PlayerId } from "../domain/types.js";
 export type CommonOwner = "common";
@@ -118,44 +119,6 @@ export type DeadWizardTokenState =
       drawStack: TokenInstance[];
     };
 
-export interface RuntimeEffectChoiceOption {
-  choiceKind: "option";
-  choiceId: string;
-}
-
-export interface RuntimeEffectChoicePlayerTarget {
-  choiceKind: "playerTarget";
-  choiceId: string;
-  players: readonly PlayerState[];
-}
-
-export interface RuntimeEffectChoiceCardTarget {
-  choiceKind: "cardTarget";
-  choiceId: string;
-  cards: readonly CardInstance[];
-  amount: number;
-}
-
-export interface RuntimeEffectChoiceDefense {
-  choiceKind: "defense";
-  choiceId: string;
-  card: CardInstance | undefined;
-}
-
-export interface RuntimeEffectChoiceDirectionalPlayerTarget {
-  choiceKind: "directionalPlayerTarget";
-  choiceId: string;
-  direction: "left" | "right";
-  players: readonly PlayerState[];
-}
-
-export type RuntimeEffectChoice =
-  | RuntimeEffectChoiceOption
-  | RuntimeEffectChoicePlayerTarget
-  | RuntimeEffectChoiceCardTarget
-  | RuntimeEffectChoiceDefense
-  | RuntimeEffectChoiceDirectionalPlayerTarget;
-
 type DecisionView<T> = T extends
   | string
   | number
@@ -174,57 +137,6 @@ type DecisionView<T> = T extends
         : T;
 
 export type PlayerDecisionView = DecisionView<Omit<PlayerState, "deck">>;
-
-export interface RuntimeEffectDecisionOption {
-  readonly choiceKind: "option";
-  readonly choiceId: string;
-}
-
-export interface RuntimeEffectDecisionPlayerTarget {
-  readonly choiceKind: "playerTarget";
-  readonly choiceId: string;
-  readonly targetPlayerIds: readonly PlayerId[];
-}
-
-export interface RuntimeEffectDecisionCardTarget {
-  readonly choiceKind: "cardTarget";
-  readonly choiceId: string;
-  readonly targetCardInstanceIds: readonly string[];
-  readonly amount: number;
-}
-
-export interface RuntimeEffectDecisionDefense {
-  readonly choiceKind: "defense";
-  readonly choiceId: string;
-  readonly targetCardInstanceId?: string;
-}
-
-export interface RuntimeEffectDecisionDirectionalPlayerTarget {
-  readonly choiceKind: "directionalPlayerTarget";
-  readonly choiceId: string;
-  readonly direction: "left" | "right";
-  readonly targetPlayerIds: readonly PlayerId[];
-}
-
-export type RuntimeEffectDecisionChoice =
-  | RuntimeEffectDecisionOption
-  | RuntimeEffectDecisionPlayerTarget
-  | RuntimeEffectDecisionCardTarget
-  | RuntimeEffectDecisionDefense
-  | RuntimeEffectDecisionDirectionalPlayerTarget;
-
-export interface RuntimeEffectChoiceRequest {
-  player: PlayerDecisionView;
-  effectId: RuntimeEffectId;
-  sourceType: "card" | "wizardProperty" | "deadWizardToken";
-  cardInstanceId: string;
-  definitionId: string;
-  choices: readonly RuntimeEffectDecisionChoice[];
-}
-
-export type RuntimeEffectChoiceStrategy = (
-  request: RuntimeEffectChoiceRequest
-) => RuntimeEffectDecisionChoice | undefined;
 
 export interface GameState {
   seed: number;
@@ -245,7 +157,7 @@ export interface GameState {
   cardDefinitions: ReadonlyMap<string, CardDefinition>;
   tokenDefinitions: ReadonlyMap<string, TokenDefinition>;
   eventLog: GameEvent[];
-  effectChoiceStrategy?: RuntimeEffectChoiceStrategy;
+  effectChoiceStrategy?: ChoicePolicy;
 }
 
 export type GameEventType =
@@ -373,7 +285,7 @@ interface GameEventPayload {
   effectId?: string;
   costId?: string;
   choiceId?: string;
-  choiceKind?: RuntimeEffectChoice["choiceKind"];
+  choiceKind?: ChoiceKind;
   choiceIds?: string[];
   direction?: "left" | "right";
   legalChoiceCount?: number;
@@ -840,7 +752,7 @@ export type GameEventDraftFor<TType extends GameEventType> = Extract<
 interface InitializeGameBaseOptions {
   seed: number;
   playerCount?: number;
-  effectChoiceStrategy?: RuntimeEffectChoiceStrategy;
+  effectChoiceStrategy?: ChoicePolicy;
 }
 
 export type InitializeGameOptions =

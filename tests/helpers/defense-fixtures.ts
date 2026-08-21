@@ -34,7 +34,8 @@ export function selectFirstFixtureDefense(
   if (request.effectId !== "avoid_attack") {
     return undefined;
   }
-  return request.choices.find(isFixtureDefenseChoice);
+  const choice = request.choices.find(isFixtureDefenseChoice);
+  return choice === undefined ? undefined : { choiceId: choice.choiceId };
 }
 
 export function selectFixtureDefenseByInstanceId(
@@ -44,11 +45,12 @@ export function selectFixtureDefenseByInstanceId(
     if (request.effectId !== "avoid_attack") {
       return undefined;
     }
-    return request.choices.find(
+    const choice = request.choices.find(
       (choice) =>
         isFixtureDefenseChoice(choice) &&
         choice.targetCardInstanceId === instanceId
     );
+    return choice === undefined ? undefined : { choiceId: choice.choiceId };
   };
 }
 

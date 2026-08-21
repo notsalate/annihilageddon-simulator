@@ -253,7 +253,7 @@ test("target choice strategy can select a non-first chosenPlayer target", () => 
   assert.equal(choiceEvent.targetPlayerId, selectedTarget.playerId);
 });
 
-test("effect choice strategy receives isolated player decision views", () => {
+test("effect choice strategy receives an isolated minimal player view", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const source = addFixtureDefinitionToActiveHand(
     state,
@@ -286,17 +286,21 @@ test("effect choice strategy receives isolated player decision views", () => {
     );
     assert.ok(choice);
     assert.equal(choice.choiceKind, "playerTarget");
+    assert.equal("hand" in request.player, false);
+    assert.equal("deck" in request.player, false);
+    assert.equal("discard" in request.player, false);
+    assert.equal("permanents" in request.player, false);
 
     const mutablePlayerView = request.player as unknown as {
       chips: number;
       life: { current: number };
-      hand: Array<{ marketChips: number }>;
+      handSize: number;
     };
     mutablePlayerView.chips = 99;
     mutablePlayerView.life.current = 1;
-    mutablePlayerView.hand.length = 0;
+    mutablePlayerView.handSize = 0;
 
-    return choice;
+    return { choiceId: choice.choiceId };
   };
 
   const result = applyAction(state, {

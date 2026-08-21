@@ -16,6 +16,7 @@ import {
   selectFirstFixtureDefense,
   selectFixtureDefenseByInstanceId,
 } from "./helpers/defense-fixtures.js";
+import { createChoicePlayerView } from "../src/engine/strategy-decision-view.js";
 
 const rootDir = process.cwd();
 
@@ -59,7 +60,7 @@ test("fixture defense selectors skip production cards and select an exact fixtur
     },
   ];
   const request = {
-    player: defender,
+    player: createChoicePlayerView(defender),
     effectId: "avoid_attack" as const,
     sourceType: "card" as const,
     cardInstanceId: "fixture-selector-source",

@@ -5,6 +5,7 @@ import {
   type LegalAction,
 } from "./actions.js";
 import { assertNever } from "../common.js";
+import type { ChoiceRequest, ChoiceSelection } from "./choice-policy.js";
 import type {
   CardDefinition,
   LoadedDataPack,
@@ -26,8 +27,6 @@ import {
   type PlayerId,
   type PlayerDecisionView,
   type PlayerState,
-  type RuntimeEffectDecisionChoice,
-  type RuntimeEffectChoiceRequest,
   type TokenInstance,
 } from "./setup.js";
 import { assertGameStateInvariants } from "./invariants.js";
@@ -65,9 +64,7 @@ export type BotDecisionAction =
 
 export interface BotStrategy {
   chooseAction(context: BotDecisionContext): GameAction;
-  chooseEffectChoice?(
-    request: RuntimeEffectChoiceRequest
-  ): RuntimeEffectDecisionChoice | undefined;
+  chooseEffectChoice?(request: ChoiceRequest): ChoiceSelection | undefined;
 }
 
 interface PlayerBotBinding {
@@ -291,7 +288,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     return binding;
   }
 
-  const effectChoiceStrategy = (request: RuntimeEffectChoiceRequest) => {
+  const effectChoiceStrategy = (request: ChoiceRequest) => {
     const binding = getBotBindingForPlayer(request.player.playerId);
     return binding.chooseEffectChoice?.call(binding.strategy, request);
   };
