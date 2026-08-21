@@ -82,6 +82,8 @@ npm run report:runtime-coverage
 npm run simulate
 npm run simulate:single
 npm run simulate:mass
+npm run benchmark:simulation
+npm run benchmark:analyzer
 ```
 
 `npm test` recursively removes the entire `dist/` directory before compilation, validates the complete test-suite registry, and then runs the registered suites sequentially.

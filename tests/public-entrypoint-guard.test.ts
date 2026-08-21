@@ -13,6 +13,7 @@ const productionCliEntrypoints = [
   "src/cli/report-import-completeness.ts",
   "src/cli/report-runtime-coverage.ts",
   "src/cli/run-best-move-analysis.ts",
+  "src/cli/run-benchmark.ts",
   "src/cli/run-mass-simulation.ts",
   "src/cli/run-simulation-menu.ts",
   "src/cli/run-single-game.ts",

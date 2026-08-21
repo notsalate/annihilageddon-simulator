@@ -11,6 +11,8 @@
     "simulate:mass": "npm run build -- --pretty false && node dist/src/cli/run-mass-simulation.js",
     "simulate:single": "npm run build -- --pretty false && node dist/src/cli/run-single-game.js",
     "analyze:best-move": "npm run build -- --pretty false && node dist/src/cli/run-best-move-analysis.js",
+    "benchmark:simulation": "npm run build -- --pretty false && node dist/src/cli/run-benchmark.js --kind simulation",
+    "benchmark:analyzer": "npm run build -- --pretty false && node dist/src/cli/run-benchmark.js --kind analyzer",
     "generate:drafts": "npm run build -- --pretty false && node dist/src/cli/generate-drafts.js",
     "report:import": "npm run build -- --pretty false && node dist/src/cli/report-import-completeness.js",
     "report:card-runtime-clusters": "npm run build -- --pretty false && node dist/src/cli/report-card-runtime-clusters.js",
