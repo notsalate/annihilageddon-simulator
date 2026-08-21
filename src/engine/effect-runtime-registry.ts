@@ -4207,6 +4207,7 @@ type OngoingPassiveEffectId = Exclude<
   keyof OngoingEffectPayloadMap & RuntimeEffectId,
   "ongoing_add_power" | "ongoing_add_power_per_dead_wizard_token"
 >;
+type MayhemEffectId = keyof MayhemEffectPayloadMap & RuntimeEffectId;
 
 type TransitionalEffectRuntimeHandlerDefinition = Omit<
   EffectRuntimeHandlerDefinition,
@@ -4221,6 +4222,7 @@ type TransitionalEffectRuntimeHandlerDefinition = Omit<
   | AttackReplacementEffectId
   | ActivationEffectId
   | OngoingPassiveEffectId
+  | MayhemEffectId
 >;
 
 const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
@@ -4233,39 +4235,13 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
   deal_damage: dealDamageHandler,
   heal_equal_damage_dealt_on_own_turn: healEqualDamageDealtOnOwnTurnHandler,
   exchange_life_and_dingler_status: exchangeLifeAndDinglerStatusHandler,
-  mega_mayhem_set_life: megaMayhemSetLifeHandler,
-  mega_mayhem_each_player_toggle_dingler:
-    megaMayhemEachPlayerToggleDinglerHandler,
-  mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem:
-    megaMayhemEachPlayerDestroyTopMainDeckHandler,
-  mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none:
-    mayhemEachPlayerDiscardTopDeckDestroyHandler,
-  mayhem_each_player_discard_deck_then_destroy_from_discard:
-    mayhemEachPlayerDiscardDeckDestroyHandler,
-  mayhem_each_player_choose_discard_hand_draw_or_take_damage:
-    mayhemEachPlayerHandRedrawChoiceHandler,
-  mayhem_each_player_reduce_life_to_gain_chips:
-    mayhemEachPlayerReduceLifeToGainChipsHandler,
-  mayhem_each_non_dingler_gain_chips: mayhemEachNonDinglerGainChipsHandler,
-  mayhem_each_player_gain_chips_then_attack_for_current_chips:
-    mayhemEachPlayerGainChipsThenAttackHandler,
-  mayhem_each_player_choose_foe_gain_chips:
-    mayhemEachPlayerChooseFoeGainChipsHandler,
   increase_hand_limit_at_max_life: increaseHandLimitAtMaxLifeHandler,
-  mayhem_each_player_battle_highest_hand_cost:
-    mayhemEachPlayerBattleHighestHandCostHandler,
-  mayhem_each_player_vote_dingler: mayhemEachPlayerVoteDinglerHandler,
-  mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status:
-    mayhemEachDinglerRecoveryChoiceHandler,
-  mayhem_lowest_life_players_gain_dingler_and_set_to_max_life:
-    mayhemLowestLifeDinglerMaxLifeHandler,
   set_resurrection_life_total: setResurrectionLifeTotalHandler,
   fixture_add_power_equal_to_target_cost:
     fixtureAddPowerEqualToTargetCostHandler,
   topdeck_gained_card: topdeckGainedCardHandler,
   temporary_hand_limit_by_gained_card_type:
     temporaryHandLimitByGainedCardTypeHandler,
-  mayhem_attack: mayhemAttackHandler,
   add_power_per_controlled_permanent: createUnsupportedEffectHandler(
     "add_power_per_controlled_permanent"
   ),
@@ -4593,6 +4569,24 @@ function getRegisteredEffectRuntimeSourceKinds(
       throw new Error(
         `Effect ${effectId} uses the ongoing/passive family registration`
       );
+    case "mayhem_attack":
+    case "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status":
+    case "mayhem_each_player_choose_foe_gain_chips":
+    case "mayhem_each_non_dingler_gain_chips":
+    case "mayhem_each_player_battle_highest_hand_cost":
+    case "mayhem_each_player_choose_discard_hand_draw_or_take_damage":
+    case "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none":
+    case "mayhem_each_player_discard_deck_then_destroy_from_discard":
+    case "mayhem_each_player_gain_chips_then_attack_for_current_chips":
+    case "mayhem_each_player_reduce_life_to_gain_chips":
+    case "mayhem_each_player_vote_dingler":
+    case "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life":
+    case "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem":
+    case "mega_mayhem_each_player_toggle_dingler":
+    case "mega_mayhem_set_life":
+      throw new Error(
+        `Effect ${effectId} uses the events/mayhem family registration`
+      );
     case "force_starting_player":
     case "replace_starting_card":
     case "start_with_basic_trophy":
@@ -4626,21 +4620,6 @@ function getRegisteredEffectRuntimeSourceKinds(
     case "optional_gain_market_cards_to_hand_this_turn":
     case "on_gain_self_gain_limp_wands":
     case "fixture_add_power_equal_to_target_cost":
-    case "mayhem_attack":
-    case "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status":
-    case "mayhem_each_player_choose_foe_gain_chips":
-    case "mayhem_each_non_dingler_gain_chips":
-    case "mayhem_each_player_battle_highest_hand_cost":
-    case "mayhem_each_player_choose_discard_hand_draw_or_take_damage":
-    case "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none":
-    case "mayhem_each_player_discard_deck_then_destroy_from_discard":
-    case "mayhem_each_player_gain_chips_then_attack_for_current_chips":
-    case "mayhem_each_player_reduce_life_to_gain_chips":
-    case "mayhem_each_player_vote_dingler":
-    case "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life":
-    case "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem":
-    case "mega_mayhem_each_player_toggle_dingler":
-    case "mega_mayhem_set_life":
       return ["card", "wizardProperty"];
   }
 }
@@ -5090,77 +5069,161 @@ const ongoingEffectEntries = defineEffectRuntimeFamily("ongoing/passive", [
   >
 >;
 
-const mayhemEffectEntries = {
-  mayhem_attack: defineRegisteredEffectRuntimeEntry(
-    "mayhem_attack",
-    effectRuntimeHandlerMap.mayhem_attack
-  ),
-  mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status:
-    defineRegisteredEffectRuntimeEntry(
-      "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
-      effectRuntimeHandlerMap.mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status
+const mayhemAttackTimings = [
+  "onPlay",
+  "onMayhemResolve",
+] as const satisfies EffectRuntimeSupportedTimings;
+const mayhemResolveTimings = [
+  "onMayhemResolve",
+] as const satisfies EffectRuntimeSupportedTimings;
+const mayhemSourceKinds = [
+  "card",
+  "wizardProperty",
+] as const satisfies EffectRuntimeSupportedSourceKinds;
+
+const mayhemEffectEntries = defineEffectRuntimeFamily("events/mayhem", [
+  {
+    effectId: "mayhem_attack",
+    decoder: bindRuntimeEffectDecoder("mayhem_attack"),
+    supportedTimings: mayhemAttackTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: mayhemAttackHandler,
+  },
+  {
+    effectId: "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+    decoder: bindRuntimeEffectDecoder(
+      "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status"
     ),
-  mayhem_each_player_choose_foe_gain_chips: defineRegisteredEffectRuntimeEntry(
-    "mayhem_each_player_choose_foe_gain_chips",
-    effectRuntimeHandlerMap.mayhem_each_player_choose_foe_gain_chips
-  ),
-  mayhem_each_non_dingler_gain_chips: defineRegisteredEffectRuntimeEntry(
-    "mayhem_each_non_dingler_gain_chips",
-    effectRuntimeHandlerMap.mayhem_each_non_dingler_gain_chips
-  ),
-  mayhem_each_player_battle_highest_hand_cost:
-    defineRegisteredEffectRuntimeEntry(
-      "mayhem_each_player_battle_highest_hand_cost",
-      effectRuntimeHandlerMap.mayhem_each_player_battle_highest_hand_cost
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: mayhemEachDinglerRecoveryChoiceHandler,
+  },
+  {
+    effectId: "mayhem_each_player_choose_foe_gain_chips",
+    decoder: bindRuntimeEffectDecoder(
+      "mayhem_each_player_choose_foe_gain_chips"
     ),
-  mayhem_each_player_choose_discard_hand_draw_or_take_damage:
-    defineRegisteredEffectRuntimeEntry(
-      "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
-      effectRuntimeHandlerMap.mayhem_each_player_choose_discard_hand_draw_or_take_damage
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: mayhemEachPlayerChooseFoeGainChipsHandler,
+  },
+  {
+    effectId: "mayhem_each_non_dingler_gain_chips",
+    decoder: bindRuntimeEffectDecoder("mayhem_each_non_dingler_gain_chips"),
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: mayhemEachNonDinglerGainChipsHandler,
+  },
+  {
+    effectId: "mayhem_each_player_battle_highest_hand_cost",
+    decoder: bindRuntimeEffectDecoder(
+      "mayhem_each_player_battle_highest_hand_cost"
     ),
-  mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none:
-    defineRegisteredEffectRuntimeEntry(
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: mayhemEachPlayerBattleHighestHandCostHandler,
+  },
+  {
+    effectId: "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
+    decoder: bindRuntimeEffectDecoder(
+      "mayhem_each_player_choose_discard_hand_draw_or_take_damage"
+    ),
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: mayhemEachPlayerHandRedrawChoiceHandler,
+  },
+  {
+    effectId:
       "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
-      effectRuntimeHandlerMap.mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none
+    decoder: bindRuntimeEffectDecoder(
+      "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none"
     ),
-  mayhem_each_player_discard_deck_then_destroy_from_discard:
-    defineRegisteredEffectRuntimeEntry(
-      "mayhem_each_player_discard_deck_then_destroy_from_discard",
-      effectRuntimeHandlerMap.mayhem_each_player_discard_deck_then_destroy_from_discard
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: mayhemEachPlayerDiscardTopDeckDestroyHandler,
+  },
+  {
+    effectId: "mayhem_each_player_discard_deck_then_destroy_from_discard",
+    decoder: bindRuntimeEffectDecoder(
+      "mayhem_each_player_discard_deck_then_destroy_from_discard"
     ),
-  mayhem_each_player_gain_chips_then_attack_for_current_chips:
-    defineRegisteredEffectRuntimeEntry(
-      "mayhem_each_player_gain_chips_then_attack_for_current_chips",
-      effectRuntimeHandlerMap.mayhem_each_player_gain_chips_then_attack_for_current_chips
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: mayhemEachPlayerDiscardDeckDestroyHandler,
+  },
+  {
+    effectId: "mayhem_each_player_gain_chips_then_attack_for_current_chips",
+    decoder: bindRuntimeEffectDecoder(
+      "mayhem_each_player_gain_chips_then_attack_for_current_chips"
     ),
-  mayhem_each_player_reduce_life_to_gain_chips:
-    defineRegisteredEffectRuntimeEntry(
-      "mayhem_each_player_reduce_life_to_gain_chips",
-      effectRuntimeHandlerMap.mayhem_each_player_reduce_life_to_gain_chips
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: mayhemEachPlayerGainChipsThenAttackHandler,
+  },
+  {
+    effectId: "mayhem_each_player_reduce_life_to_gain_chips",
+    decoder: bindRuntimeEffectDecoder(
+      "mayhem_each_player_reduce_life_to_gain_chips"
     ),
-  mayhem_each_player_vote_dingler: defineRegisteredEffectRuntimeEntry(
-    "mayhem_each_player_vote_dingler",
-    effectRuntimeHandlerMap.mayhem_each_player_vote_dingler
-  ),
-  mayhem_lowest_life_players_gain_dingler_and_set_to_max_life:
-    defineRegisteredEffectRuntimeEntry(
-      "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
-      effectRuntimeHandlerMap.mayhem_lowest_life_players_gain_dingler_and_set_to_max_life
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: mayhemEachPlayerReduceLifeToGainChipsHandler,
+  },
+  {
+    effectId: "mayhem_each_player_vote_dingler",
+    decoder: bindRuntimeEffectDecoder("mayhem_each_player_vote_dingler"),
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: mayhemEachPlayerVoteDinglerHandler,
+  },
+  {
+    effectId: "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
+    decoder: bindRuntimeEffectDecoder(
+      "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life"
     ),
-  mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem:
-    defineRegisteredEffectRuntimeEntry(
-      "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
-      effectRuntimeHandlerMap.mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: mayhemLowestLifeDinglerMaxLifeHandler,
+  },
+  {
+    effectId: "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+    decoder: bindRuntimeEffectDecoder(
+      "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem"
     ),
-  mega_mayhem_each_player_toggle_dingler: defineRegisteredEffectRuntimeEntry(
-    "mega_mayhem_each_player_toggle_dingler",
-    effectRuntimeHandlerMap.mega_mayhem_each_player_toggle_dingler
-  ),
-  mega_mayhem_set_life: defineRegisteredEffectRuntimeEntry(
-    "mega_mayhem_set_life",
-    effectRuntimeHandlerMap.mega_mayhem_set_life
-  ),
-} satisfies EffectRuntimeEntriesFor<MayhemEffectPayloadMap>;
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: megaMayhemEachPlayerDestroyTopMainDeckHandler,
+  },
+  {
+    effectId: "mega_mayhem_each_player_toggle_dingler",
+    decoder: bindRuntimeEffectDecoder("mega_mayhem_each_player_toggle_dingler"),
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: megaMayhemEachPlayerToggleDinglerHandler,
+  },
+  {
+    effectId: "mega_mayhem_set_life",
+    decoder: bindRuntimeEffectDecoder("mega_mayhem_set_life"),
+    supportedTimings: mayhemResolveTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: mayhemSourceKinds,
+    handler: megaMayhemSetLifeHandler,
+  },
+] as const) satisfies EffectRuntimeEntriesFor<MayhemEffectPayloadMap>;
 
 type EffectRuntimeCatalogDefinition = {
   readonly [Id in RuntimeEffectId]: EffectRuntimeEntry<Id>;
