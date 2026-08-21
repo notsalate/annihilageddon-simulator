@@ -3,6 +3,7 @@ import { buildControlledObjectView } from "./control-ledger.js";
 import {
   applyRuntimeEffectAfterDamageDealt,
   applyRuntimeEffectAfterPlayerAttackDamage,
+  evaluateRuntimeEffectControlledPower,
   evaluateRuntimeEffectEndTurnDrawModifier,
   executeRuntimeEffectOnPlayCard,
   type EffectExecutionResult,
@@ -31,6 +32,9 @@ export interface ControlledCardDispatchOperationMap {
     readonly kind: "collectEndTurnDrawModifier";
     readonly currentBaseDrawCount: number;
   };
+  readonly recalculateControlledPower: {
+    readonly kind: "recalculateControlledPower";
+  };
 }
 
 export interface ControlledCardDispatchResultMap {
@@ -40,6 +44,7 @@ export interface ControlledCardDispatchResultMap {
   readonly collectEndTurnDrawModifier:
     | { readonly ok: true; readonly drawCount: number }
     | { readonly ok: false; readonly error: string };
+  readonly recalculateControlledPower: EffectExecutionResult;
 }
 
 type ControlledCardDispatchOperation =
@@ -80,6 +85,12 @@ export function dispatchControlledCardOperation(
   controller: PlayerState,
   operation: ControlledCardDispatchOperationMap["collectEndTurnDrawModifier"]
 ): ControlledCardDispatchResultMap["collectEndTurnDrawModifier"];
+// eslint-disable-next-line no-redeclare -- TypeScript overload signature.
+export function dispatchControlledCardOperation(
+  state: GameState,
+  controller: PlayerState,
+  operation: ControlledCardDispatchOperationMap["recalculateControlledPower"]
+): ControlledCardDispatchResultMap["recalculateControlledPower"];
 /**
  * Resolves one typed controlled-card operation in stable Control Ledger order.
  * Discovery, timing policy, source identity, catalog resolution, applicability,
@@ -95,12 +106,45 @@ export function dispatchControlledCardOperation(
   if (operation.kind === "collectEndTurnDrawModifier") {
     return collectEndTurnDrawModifier(state, controller, operation, candidates);
   }
+  if (operation.kind === "recalculateControlledPower") {
+    return recalculateControlledPower(state, controller, candidates);
+  }
   return executeControlledCardOperation(
     state,
     controller,
     operation,
     candidates
   );
+}
+
+function recalculateControlledPower(
+  state: GameState,
+  controller: PlayerState,
+  candidates: readonly ControlledCardEffectCandidate[]
+): EffectExecutionResult {
+  let nextBonus = 0;
+  for (const { effect, source, sourceDefinition } of candidates) {
+    const result = evaluateRuntimeEffectControlledPower(effect, {
+      state,
+      controller,
+      source,
+      sourceDefinition,
+    });
+    if (result.status === "notApplicable") {
+      continue;
+    }
+    if (result.status === "error") {
+      return { ok: false, error: result.error };
+    }
+    nextBonus += result.result;
+  }
+
+  const delta = nextBonus - state.turn.controlledPowerBonus;
+  if (delta !== 0) {
+    state.turn.power = Math.max(0, state.turn.power + delta);
+  }
+  state.turn.controlledPowerBonus = nextBonus;
+  return { ok: true };
 }
 
 function discoverControlledCardEffects(

@@ -25,7 +25,7 @@ import {
   markCardInstanceId,
   markPlayerId,
 } from "../src/domain/types.js";
-import { reconcileActivePlayerControlledPower } from "../src/engine/controlled-power.js";
+import { dispatchControlledCardOperation } from "../src/engine/trigger-dispatch.js";
 import {
   calculateEndTurnDrawCount,
   executeControlledCardOnPlayCardEffects,
@@ -261,7 +261,12 @@ test("Control Ledger gives activation, costs, passive power, and end-turn rules 
     "consumer"
   );
 
-  reconcileActivePlayerControlledPower(state);
+  const controlledPowerResult = dispatchControlledCardOperation(
+    state,
+    controller,
+    { kind: "recalculateControlledPower" }
+  );
+  assert.deepEqual(controlledPowerResult, { ok: true });
   assert.equal(state.turn.power, 1);
   assert.equal(calculateEndTurnDrawCount(state, controller), 6);
   assert.equal(

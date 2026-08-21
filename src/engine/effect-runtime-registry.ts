@@ -349,13 +349,13 @@ export interface EffectRuntimeServices {
     player: PlayerState,
     effectId: RuntimeEffectId,
     source: EffectSourceContext
-  ): void;
+  ): EffectExecutionResult;
   removeDinglerStatus(
     state: GameState,
     player: PlayerState,
     effectId: RuntimeEffectId,
     source: EffectSourceContext
-  ): void;
+  ): EffectExecutionResult;
   hasDinglerStatus(player: PlayerState): boolean;
   resolvePlayerControlledAttack(
     intent: PlayerControlledAttackIntent
@@ -379,7 +379,10 @@ export interface EffectRuntimeServices {
     effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): EffectExecutionResult;
-  resolvePlayerDeath(state: GameState, player: PlayerState): void;
+  resolvePlayerDeath(
+    state: GameState,
+    player: PlayerState
+  ): EffectExecutionResult;
   peekTopDeckCard(
     player: PlayerState,
     state: GameState
@@ -457,6 +460,13 @@ export interface EffectRuntimeEndTurnDrawModifierOperationContext {
   readonly currentDrawCount: number;
 }
 
+export interface EffectRuntimeControlledPowerOperationContext {
+  readonly state: GameState;
+  readonly controller: PlayerState;
+  readonly source: EffectSourceContext;
+  readonly sourceDefinition: CardDefinition;
+}
+
 export type EffectRuntimeHandlerOperationResult<Result> =
   | { readonly status: "notApplicable" }
   | { readonly status: "resolved"; readonly result: Result };
@@ -504,6 +514,10 @@ interface EffectRuntimeHandler<
     effect: Effect,
     context: EffectRuntimeEndTurnDrawModifierOperationContext
   ): EffectRuntimeHandlerOperationResult<number>;
+  evaluateControlledPower?(
+    effect: Effect,
+    context: EffectRuntimeControlledPowerOperationContext
+  ): EffectRuntimeHandlerOperationResult<number>;
   executeSetup?(
     player: PlayerState,
     effect: Effect,
@@ -541,6 +555,10 @@ export interface EffectRuntimeCatalogOperationOverridesForTesting<
   readonly evaluateEndTurnDrawModifier?: (
     effect: RuntimeEffectForId<Id>,
     context: EffectRuntimeEndTurnDrawModifierOperationContext
+  ) => EffectRuntimeHandlerOperationResult<number>;
+  readonly evaluateControlledPower?: (
+    effect: RuntimeEffectForId<Id>,
+    context: EffectRuntimeControlledPowerOperationContext
   ) => EffectRuntimeHandlerOperationResult<number>;
   readonly executeSetup?: (
     player: PlayerState,
@@ -649,6 +667,11 @@ interface EffectRuntimeEntry<
     subjectId: string,
     rawEffect: unknown,
     context: EffectRuntimeEndTurnDrawModifierOperationContext
+  ): EffectRuntimeOperationResult<number>;
+  evaluateControlledPower(
+    subjectId: string,
+    rawEffect: unknown,
+    context: EffectRuntimeControlledPowerOperationContext
   ): EffectRuntimeOperationResult<number>;
 }
 
@@ -987,6 +1010,23 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
           return evaluateEndTurnDrawModifier === undefined
             ? { status: "notApplicable" }
             : evaluateEndTurnDrawModifier(decodedEffect, context);
+        },
+      });
+    },
+    evaluateControlledPower(subjectId, rawEffect, context) {
+      return evaluateAtTiming(subjectId, rawEffect, {
+        source: context.source,
+        timing: "whileControlled",
+        evaluate(decodedEffect) {
+          if (!context.sourceDefinition.engine.isOngoing) {
+            return { status: "notApplicable" };
+          }
+          const evaluateControlledPower =
+            operationOverrides?.evaluateControlledPower ??
+            config.handler.evaluateControlledPower;
+          return evaluateControlledPower === undefined
+            ? { status: "notApplicable" }
+            : evaluateControlledPower(decodedEffect, context);
         },
       });
     },
@@ -1566,12 +1606,44 @@ function exchangeLifeAndOrDinglerStatus(
     const playerHadDingler = services.hasDinglerStatus(player);
     const targetHadDingler = services.hasDinglerStatus(targetPlayer);
     if (playerHadDingler && !targetHadDingler) {
-      services.removeDinglerStatus(state, player, effectId, source);
-      services.gainDinglerStatus(state, targetPlayer, effectId, source);
+      const removeResult = services.removeDinglerStatus(
+        state,
+        player,
+        effectId,
+        source
+      );
+      if (!removeResult.ok) {
+        return removeResult;
+      }
+      const gainResult = services.gainDinglerStatus(
+        state,
+        targetPlayer,
+        effectId,
+        source
+      );
+      if (!gainResult.ok) {
+        return gainResult;
+      }
     }
     if (!playerHadDingler && targetHadDingler) {
-      services.removeDinglerStatus(state, targetPlayer, effectId, source);
-      services.gainDinglerStatus(state, player, effectId, source);
+      const removeResult = services.removeDinglerStatus(
+        state,
+        targetPlayer,
+        effectId,
+        source
+      );
+      if (!removeResult.ok) {
+        return removeResult;
+      }
+      const gainResult = services.gainDinglerStatus(
+        state,
+        player,
+        effectId,
+        source
+      );
+      if (!gainResult.ok) {
+        return gainResult;
+      }
     }
   }
 
@@ -1594,7 +1666,15 @@ const gainStatusHandler: EffectRuntimeHandler<
     }
 
     for (const targetPlayer of targetResult.players) {
-      services.gainDinglerStatus(state, targetPlayer, effect.effectId, source);
+      const result = services.gainDinglerStatus(
+        state,
+        targetPlayer,
+        effect.effectId,
+        source
+      );
+      if (!result.ok) {
+        return result;
+      }
     }
 
     return { ok: true };
@@ -1650,12 +1730,15 @@ const removeStatusHandler: EffectRuntimeHandler<
     }
 
     for (const targetPlayer of targetResult.players) {
-      services.removeDinglerStatus(
+      const result = services.removeDinglerStatus(
         state,
         targetPlayer,
         effect.effectId,
         source
       );
+      if (!result.ok) {
+        return result;
+      }
     }
 
     return { ok: true };
@@ -1679,19 +1762,25 @@ const toggleStatusHandler: EffectRuntimeHandler<
 
     for (const targetPlayer of targetResult.players) {
       if (services.hasDinglerStatus(targetPlayer)) {
-        services.removeDinglerStatus(
+        const result = services.removeDinglerStatus(
           state,
           targetPlayer,
           effect.effectId,
           source
         );
+        if (!result.ok) {
+          return result;
+        }
       } else {
-        services.gainDinglerStatus(
+        const result = services.gainDinglerStatus(
           state,
           targetPlayer,
           effect.effectId,
           source
         );
+        if (!result.ok) {
+          return result;
+        }
       }
     }
 
@@ -1753,11 +1842,27 @@ const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler<
       }
 
       if (services.hasDinglerStatus(targetPlayer)) {
-        services.removeDinglerStatus(state, targetPlayer, effectId, source);
+        const result = services.removeDinglerStatus(
+          state,
+          targetPlayer,
+          effectId,
+          source
+        );
+        if (!result.ok) {
+          return result;
+        }
         continue;
       }
 
-      services.gainDinglerStatus(state, targetPlayer, effectId, source);
+      const result = services.gainDinglerStatus(
+        state,
+        targetPlayer,
+        effectId,
+        source
+      );
+      if (!result.ok) {
+        return result;
+      }
     }
 
     return { ok: true };
@@ -1805,7 +1910,10 @@ const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler<
         destroyedCard.definitionId
       );
       if (destroyedDefinition?.engine.cardKind === "mayhem") {
-        services.resolvePlayerDeath(state, targetPlayer);
+        const deathResult = services.resolvePlayerDeath(state, targetPlayer);
+        if (!deathResult.ok) {
+          return deathResult;
+        }
       }
     }
     return { ok: true };
@@ -2343,7 +2451,15 @@ const mayhemEachPlayerVoteDinglerHandler: EffectRuntimeHandler<
       (candidate) => votes.get(candidate.playerId) === highestVoteCount
     );
     for (const winner of winners) {
-      services.gainDinglerStatus(state, winner, effectId, source);
+      const result = services.gainDinglerStatus(
+        state,
+        winner,
+        effectId,
+        source
+      );
+      if (!result.ok) {
+        return result;
+      }
     }
 
     recordGameEvent(state, {
@@ -2400,7 +2516,15 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler<
           amount: effect.lifeCost,
           sourceType: source.sourceType,
         });
-        services.removeDinglerStatus(state, targetPlayer, effectId, source);
+        const result = services.removeDinglerStatus(
+          state,
+          targetPlayer,
+          effectId,
+          source
+        );
+        if (!result.ok) {
+          return result;
+        }
         continue;
       }
 
@@ -2416,7 +2540,15 @@ const mayhemEachDinglerRecoveryChoiceHandler: EffectRuntimeHandler<
           amount: effect.chipCost,
           sourceType: source.sourceType,
         });
-        services.removeDinglerStatus(state, targetPlayer, effectId, source);
+        const result = services.removeDinglerStatus(
+          state,
+          targetPlayer,
+          effectId,
+          source
+        );
+        if (!result.ok) {
+          return result;
+        }
       }
     }
 
@@ -2455,7 +2587,15 @@ const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler<
         continue;
       }
 
-      services.gainDinglerStatus(state, targetPlayer, effectId, source);
+      const statusResult = services.gainDinglerStatus(
+        state,
+        targetPlayer,
+        effectId,
+        source
+      );
+      if (!statusResult.ok) {
+        return statusResult;
+      }
       const maxLife = calculateEffectivePlayerMaxLifeCore(
         state,
         targetPlayer.playerId,
@@ -2757,6 +2897,16 @@ const addPowerIfPlayerHasStatusHandler: EffectRuntimeHandler<
       error: "add_power_if_player_has_status is a passive controlled effect",
     };
   },
+  evaluateControlledPower(effect, context) {
+    return {
+      status: "resolved",
+      result: context.controller.statuses.some(
+        (status) => status.statusId === effect.statusId
+      )
+        ? effect.amount
+        : 0,
+    };
+  },
 };
 
 const ongoingAddPowerHandler = {
@@ -2766,6 +2916,9 @@ const ongoingAddPowerHandler = {
       ok: false,
       error: "ongoing_add_power is a passive controlled effect",
     };
+  },
+  evaluateControlledPower(effect) {
+    return { status: "resolved", result: effect.amount };
   },
 } satisfies EffectRuntimeHandler<OngoingAddPowerRuntimeEffect>;
 
@@ -2848,6 +3001,12 @@ const ongoingAddPowerPerDeadWizardTokenHandler: EffectRuntimeHandler<OngoingAddP
         ok: false,
         error:
           "ongoing_add_power_per_dead_wizard_token is a passive controlled effect",
+      };
+    },
+    evaluateControlledPower(effect, context) {
+      return {
+        status: "resolved",
+        result: context.controller.deadWizardTokens.length * effect.amount,
       };
     },
   };
@@ -3804,8 +3963,12 @@ export function executeAttackOutcomeBranch(
   }
 
   if (branch.effectId === "gain_status" && branch.statusId === "dingler") {
-    services.gainDinglerStatus(state, targetPlayer, "gain_status", source);
-    return { ok: true };
+    return services.gainDinglerStatus(
+      state,
+      targetPlayer,
+      "gain_status",
+      source
+    );
   }
 
   return {
@@ -3924,15 +4087,19 @@ type SetupBootstrapEffectId =
   | "start_with_basic_trophy"
   | "set_starting_life_total";
 
+type ControlledPowerEffectId =
+  | "add_power_if_player_has_status"
+  | "ongoing_add_power"
+  | "ongoing_add_power_per_dead_wizard_token";
+
 type TransitionalEffectRuntimeHandlerDefinition = Omit<
   EffectRuntimeHandlerDefinition,
-  SetupBootstrapEffectId | EffectiveValueModifierId
+  SetupBootstrapEffectId | EffectiveValueModifierId | ControlledPowerEffectId
 >;
 
 const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
   add_power: addPowerHandler,
   add_power_per_player_with_status: addPowerPerPlayerWithStatusHandler,
-  add_power_if_player_has_status: addPowerIfPlayerHasStatusHandler,
   add_power_per_controlled_object: addPowerPerControlledObjectHandler,
   gain_card: gainCardHandler,
   discard_card: discardCardHandler,
@@ -4057,10 +4224,7 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
   on_gain_self_gain_limp_wands: createUnsupportedEffectHandler(
     "on_gain_self_gain_limp_wands"
   ),
-  ongoing_add_power: ongoingAddPowerHandler,
   ongoing_add_power_when_playing_wand: ongoingAddPowerWhenPlayingWandHandler,
-  ongoing_add_power_per_dead_wizard_token:
-    ongoingAddPowerPerDeadWizardTokenHandler,
   ongoing_add_power_when_playing_limp_wand: createUnsupportedEffectHandler(
     "ongoing_add_power_when_playing_limp_wand"
   ),
@@ -4104,6 +4268,44 @@ const effectiveValueModifierEntries = defineEffectRuntimeFamily(
   Pick<SetupEffectPayloadMap, EffectiveValueModifierId>
 >;
 
+const controlledPowerEntries = defineEffectRuntimeFamily(
+  "values/controlled-power",
+  [
+    {
+      effectId: "add_power_if_player_has_status",
+      decoder: bindRuntimeEffectDecoder("add_power_if_player_has_status"),
+      supportedTimings: ["whileControlled"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: addPowerIfPlayerHasStatusHandler,
+    },
+    {
+      effectId: "ongoing_add_power",
+      decoder: bindRuntimeEffectDecoder("ongoing_add_power"),
+      supportedTimings: ["whileControlled"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: ongoingAddPowerHandler,
+    },
+    {
+      effectId: "ongoing_add_power_per_dead_wizard_token",
+      decoder: bindRuntimeEffectDecoder(
+        "ongoing_add_power_per_dead_wizard_token"
+      ),
+      supportedTimings: ["whileControlled"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: ongoingAddPowerPerDeadWizardTokenHandler,
+    },
+  ] as const
+) satisfies EffectRuntimeEntriesFor<
+  Pick<ImmediateEffectPayloadMap, "add_power_if_player_has_status"> &
+    Pick<
+      OngoingEffectPayloadMap,
+      "ongoing_add_power" | "ongoing_add_power_per_dead_wizard_token"
+    >
+>;
+
 function defineRegisteredEffectRuntimeEntry<Id extends RuntimeEffectId>(
   effectId: Id,
   handler: EffectRuntimeHandler<RuntimeEffectForId<Id>>
@@ -4137,6 +4339,12 @@ function getRegisteredEffectRuntimeSourceKinds(
       throw new Error(
         `Effect ${effectId} uses the effective-value family registration`
       );
+    case "add_power_if_player_has_status":
+    case "ongoing_add_power":
+    case "ongoing_add_power_per_dead_wizard_token":
+      throw new Error(
+        `Effect ${effectId} uses the controlled-power family registration`
+      );
     case "force_starting_player":
     case "replace_starting_card":
     case "start_with_basic_trophy":
@@ -4144,9 +4352,7 @@ function getRegisteredEffectRuntimeSourceKinds(
     case "set_resurrection_life_total":
     case "temporary_hand_limit_by_gained_card_type":
       return ["wizardProperty"];
-    case "ongoing_add_power":
     case "ongoing_hand_refill_bonus":
-    case "ongoing_add_power_per_dead_wizard_token":
       return ["card"];
     case "increase_hand_limit_at_max_life":
     case "endgame_limp_wands_score_positive":
@@ -4154,7 +4360,6 @@ function getRegisteredEffectRuntimeSourceKinds(
     case "controls_other_card_type":
     case "destroyed_card_kind_is":
     case "add_power":
-    case "add_power_if_player_has_status":
     case "add_power_per_controlled_object":
     case "add_power_per_controlled_permanent":
     case "add_power_per_player_with_status":
@@ -4311,10 +4516,6 @@ const immediateEffectEntries = {
     "add_power",
     effectRuntimeHandlerMap.add_power
   ),
-  add_power_if_player_has_status: defineRegisteredEffectRuntimeEntry(
-    "add_power_if_player_has_status",
-    effectRuntimeHandlerMap.add_power_if_player_has_status
-  ),
   add_power_per_controlled_object: defineRegisteredEffectRuntimeEntry(
     "add_power_per_controlled_object",
     effectRuntimeHandlerMap.add_power_per_controlled_object
@@ -4444,7 +4645,9 @@ const immediateEffectEntries = {
     "fixture_add_power_equal_to_target_cost",
     effectRuntimeHandlerMap.fixture_add_power_equal_to_target_cost
   ),
-} satisfies EffectRuntimeEntriesFor<ImmediateEffectPayloadMap>;
+} satisfies EffectRuntimeEntriesFor<
+  Omit<ImmediateEffectPayloadMap, "add_power_if_player_has_status">
+>;
 
 const playerControlledAttackEffectEntries = {
   attack_damage: defineRegisteredEffectRuntimeEntry(
@@ -4538,17 +4741,9 @@ const activationEffectEntries = {
 } satisfies EffectRuntimeEntriesFor<ActivationEffectPayloadMap>;
 
 const ongoingEffectEntries = {
-  ongoing_add_power: defineRegisteredEffectRuntimeEntry(
-    "ongoing_add_power",
-    effectRuntimeHandlerMap.ongoing_add_power
-  ),
   ongoing_add_power_when_playing_wand: defineRegisteredEffectRuntimeEntry(
     "ongoing_add_power_when_playing_wand",
     effectRuntimeHandlerMap.ongoing_add_power_when_playing_wand
-  ),
-  ongoing_add_power_per_dead_wizard_token: defineRegisteredEffectRuntimeEntry(
-    "ongoing_add_power_per_dead_wizard_token",
-    effectRuntimeHandlerMap.ongoing_add_power_per_dead_wizard_token
   ),
   ongoing_add_power_when_playing_limp_wand: defineRegisteredEffectRuntimeEntry(
     "ongoing_add_power_when_playing_limp_wand",
@@ -4567,7 +4762,12 @@ const ongoingEffectEntries = {
       "ongoing_start_turn_optional_gain_limp_wand_to_hand",
       effectRuntimeHandlerMap.ongoing_start_turn_optional_gain_limp_wand_to_hand
     ),
-} satisfies EffectRuntimeEntriesFor<OngoingEffectPayloadMap>;
+} satisfies EffectRuntimeEntriesFor<
+  Omit<
+    OngoingEffectPayloadMap,
+    "ongoing_add_power" | "ongoing_add_power_per_dead_wizard_token"
+  >
+>;
 
 const mayhemEffectEntries = {
   mayhem_attack: defineRegisteredEffectRuntimeEntry(
@@ -4706,6 +4906,7 @@ export function defineEffectRuntimeCatalogGroupsForTesting(
 
 const effectRuntimeCatalogDefinition = defineEffectRuntimeCatalog([
   setupEffectEntries,
+  controlledPowerEntries,
   immediateEffectEntries,
   playerControlledAttackEffectEntries,
   activationEffectEntries,
@@ -5097,6 +5298,19 @@ export function evaluateRuntimeEffectEndTurnDrawModifier(
     effect,
     context
   );
+}
+
+export function evaluateRuntimeEffectControlledPower(
+  effect: unknown,
+  context: EffectRuntimeControlledPowerOperationContext
+): EffectRuntimeOperationResult<number> {
+  const resolvedId = readRuntimeEffectId(effect, "Unsupported effect id");
+  if (!resolvedId.ok) {
+    return { status: "error", error: resolvedId.error };
+  }
+  return getEffectRuntimeCatalogEntry(
+    resolvedId.effectId
+  ).evaluateControlledPower(`Effect ${resolvedId.effectId}`, effect, context);
 }
 
 export function withEffectRuntimeCatalogOperationsForTesting<

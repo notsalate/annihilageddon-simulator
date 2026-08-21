@@ -10,6 +10,7 @@ import type {
   EffectSourceContext,
 } from "./effect-runtime-registry.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import { dispatchControlledCardOperation } from "./trigger-dispatch.js";
 
 export interface CardPlayResolutionServices {
   executeOnPlayEffects(
@@ -126,7 +127,7 @@ export function resolveCardPlay(
     }
   }
 
-  return finishResolvedCard(
+  const result = finishResolvedCard(
     state,
     player,
     card,
@@ -134,6 +135,17 @@ export function resolveCardPlay(
     options,
     wizardPropertyResult
   );
+  if (
+    !result.ok ||
+    result.gameEnd !== undefined ||
+    !definition.engine.isOngoing
+  ) {
+    return result;
+  }
+
+  return dispatchControlledCardOperation(state, player, {
+    kind: "recalculateControlledPower",
+  });
 }
 
 function placeResolvedCard(
