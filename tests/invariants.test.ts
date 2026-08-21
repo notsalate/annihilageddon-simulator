@@ -9,6 +9,7 @@ import {
   runSingleGame,
 } from "../src/index.js";
 import {
+  markCardDefinitionId,
   markCardInstanceId,
   markPlayerId,
 } from "../src/domain/types.js";
@@ -34,6 +35,23 @@ test("game state invariants accept setup state and a legal action transition", (
 
   const result = applyAction(state, action);
   assert.equal(result.ok, true);
+  assert.doesNotThrow(() => assertGameStateInvariants(state));
+});
+
+test("game state invariants accept repeated gained card definition ids", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+
+  state.turn.gainedCardDefinitionIds.push(
+    markCardDefinitionId("repeated-definition-id")
+  );
+  state.turn.gainedCardDefinitionIds.push(
+    markCardDefinitionId("repeated-definition-id")
+  );
+
   assert.doesNotThrow(() => assertGameStateInvariants(state));
 });
 
@@ -110,9 +128,7 @@ test("game state invariants use descriptor owner metadata for player and common 
 
   assert.throws(
     () => assertGameStateInvariants(commonState),
-    new RegExp(
-      `${mainDeckCard.instanceId} in mainDeck must be owned by common`
-    )
+    new RegExp(`${mainDeckCard.instanceId} in mainDeck must be owned by common`)
   );
 });
 
