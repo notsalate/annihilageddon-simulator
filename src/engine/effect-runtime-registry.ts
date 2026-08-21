@@ -33,7 +33,12 @@ import {
   calculateEffectiveCardCost,
   calculateEffectivePlayerMaxLife,
 } from "./effective-values.js";
-import { recordGameEvent, recordTurnPowerChanged } from "./event-recorder.js";
+import { drawDeckCards } from "./deck-lifecycle.js";
+import {
+  recordDeckReshuffle,
+  recordGameEvent,
+  recordTurnPowerChanged,
+} from "./event-recorder.js";
 import { isPlainRecord } from "../common.js";
 import {
   isRuntimeEffectId,
@@ -1961,18 +1966,21 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler<
 
       const discardedCount = targetPlayer.hand.length;
       targetPlayer.discard.push(...targetPlayer.hand.splice(0));
-      const drawnCount = drawCards(
-        targetPlayer,
+      const drawResult = drawDeckCards(
+        targetPlayer.deck,
+        targetPlayer.discard,
         redrawOption.drawAmount,
-        state
+        state.rng,
+        () => recordDeckReshuffle(state, targetPlayer.playerId)
       );
+      targetPlayer.hand.push(...drawResult.cards);
       recordGameEvent(state, {
         type: "mayhemHandDiscardedAndRedrawn",
         playerId: targetPlayer.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
         effectId,
-        amount: discardedCount + drawnCount,
+        amount: discardedCount + drawResult.cards.length,
         sourceType: source.sourceType,
       });
     }
@@ -2218,7 +2226,14 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler<
     const winnerIds = winners.map((winner) => winner.playerId);
 
     for (const winner of winners) {
-      drawCards(winner, effect.winnerDrawAmount, state);
+      const drawResult = drawDeckCards(
+        winner.deck,
+        winner.discard,
+        effect.winnerDrawAmount,
+        state.rng,
+        () => recordDeckReshuffle(state, winner.playerId)
+      );
+      winner.hand.push(...drawResult.cards);
     }
     for (const participant of participants) {
       if (winnerIds.includes(participant.player.playerId)) {
@@ -3043,14 +3058,21 @@ const drawCardsHandler: EffectRuntimeHandler<RuntimeEffectForId<"draw_cards">> =
   {
     effectId: "draw_cards",
     execute(state, player, effect, source) {
-      const drawnCount = drawCards(player, effect.amount, state);
+      const drawResult = drawDeckCards(
+        player.deck,
+        player.discard,
+        effect.amount,
+        state.rng,
+        () => recordDeckReshuffle(state, player.playerId)
+      );
+      player.hand.push(...drawResult.cards);
       recordGameEvent(state, {
         type: "effectDrawCardsApplied",
         playerId: player.playerId,
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
         effectId: "draw_cards",
-        amount: drawnCount,
+        amount: drawResult.cards.length,
         sourceType: source.sourceType,
       });
 
@@ -3818,27 +3840,6 @@ function recordEffectChipsChanged(
   });
 }
 
-function drawCards(
-  player: PlayerState,
-  count: number,
-  state: GameState
-): number {
-  let drawnCount = 0;
-  for (let index = 0; index < count; index += 1) {
-    shuffleDiscardIntoDeckIfNeeded(player, state);
-
-    const card = player.deck.shift();
-    if (card === undefined) {
-      return drawnCount;
-    }
-
-    player.hand.push(card);
-    drawnCount += 1;
-  }
-
-  return drawnCount;
-}
-
 function sumHandCost(state: GameState, player: PlayerState): number {
   return player.hand.reduce((total, card) => {
     const cost = state.cardDefinitions.get(card.definitionId)?.engine.cost;
@@ -3846,35 +3847,6 @@ function sumHandCost(state: GameState, player: PlayerState): number {
   }, 0);
 }
 
-function shuffleDiscardIntoDeckIfNeeded(
-  player: PlayerState,
-  state: GameState
-): void {
-  if (player.deck.length > 0 || player.discard.length === 0) {
-    return;
-  }
-
-  player.deck.push(...player.discard.splice(0));
-  shuffleInPlace(player.deck, state);
-  recordGameEvent(state, {
-    type: "discardShuffledIntoDeck",
-    playerId: player.playerId,
-  });
-}
-
-function shuffleInPlace<T>(items: T[], state: GameState): void {
-  for (let index = items.length - 1; index > 0; index -= 1) {
-    const swapIndex = state.rng.nextInt(index + 1);
-    const item = items[index];
-    const swapItem = items[swapIndex];
-    if (item === undefined || swapItem === undefined) {
-      throw new Error("Unexpected sparse array during shuffle");
-    }
-
-    items[index] = swapItem;
-    items[swapIndex] = item;
-  }
-}
 function setupOnlyExecutionError(
   effectId: RuntimeEffectId
 ): EffectExecutionResult {

@@ -23,8 +23,10 @@ import {
   removeCardFromLocation,
 } from "./control-ledger.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
+import { drawDeckCard, refillDeckFromDiscard } from "./deck-lifecycle.js";
 import {
   recordCardMoved,
+  recordDeckReshuffle,
   recordGameEvent,
   recordMarketChipsGained,
 } from "./event-recorder.js";
@@ -1887,9 +1889,12 @@ function discardTopDeckCards(
 ): CardInstance[] {
   const discardedCards: CardInstance[] = [];
   for (let index = 0; index < count; index += 1) {
-    shuffleDiscardIntoDeckIfNeeded(player, state);
+    const result = drawDeckCard(player.deck, player.discard, state.rng);
+    if (result.reshuffled) {
+      recordDeckReshuffle(state, player.playerId);
+    }
 
-    const card = player.deck.shift();
+    const card = result.card;
     if (card === undefined) {
       return discardedCards;
     }
@@ -1988,15 +1993,20 @@ function drawTopDeckCard(
   player: PlayerState,
   state: GameState
 ): CardInstance | undefined {
-  shuffleDiscardIntoDeckIfNeeded(player, state);
-  return player.deck.shift();
+  const result = drawDeckCard(player.deck, player.discard, state.rng);
+  if (result.reshuffled) {
+    recordDeckReshuffle(state, player.playerId);
+  }
+  return result.card;
 }
 
 function peekTopDeckCard(
   player: PlayerState,
   state: GameState
 ): CardInstance | undefined {
-  shuffleDiscardIntoDeckIfNeeded(player, state);
+  if (refillDeckFromDiscard(player.deck, player.discard, state.rng)) {
+    recordDeckReshuffle(state, player.playerId);
+  }
   return player.deck[0];
 }
 
@@ -2145,34 +2155,4 @@ function moveResolvedNonOngoingCardToDestination(
     ownerAfter: sourceLocation.card.ownerId,
   });
   return { ok: true };
-}
-
-function shuffleDiscardIntoDeckIfNeeded(
-  player: PlayerState,
-  state: GameState
-): void {
-  if (player.deck.length > 0 || player.discard.length === 0) {
-    return;
-  }
-
-  player.deck.push(...player.discard.splice(0));
-  shuffleInPlace(player.deck, state);
-  recordGameEvent(state, {
-    type: "discardShuffledIntoDeck",
-    playerId: player.playerId,
-  });
-}
-
-function shuffleInPlace<T>(items: T[], state: GameState): void {
-  for (let index = items.length - 1; index > 0; index -= 1) {
-    const swapIndex = state.rng.nextInt(index + 1);
-    const item = items[index];
-    const swapItem = items[swapIndex];
-    if (item === undefined || swapItem === undefined) {
-      throw new Error("Unexpected sparse array during shuffle");
-    }
-
-    items[index] = swapItem;
-    items[swapIndex] = item;
-  }
 }

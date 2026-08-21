@@ -33,6 +33,7 @@ import {
 import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
+import { drawDeckCards, shuffleDeck } from "./deck-lifecycle.js";
 import {
   intakeRuntimeData,
   type RuntimeDataFilesystemSource,
@@ -836,8 +837,8 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     factory,
     "common"
   );
-  shuffleInPlace(mainDeck, rng);
-  shuffleInPlace(legendDeck, rng);
+  shuffleDeck(mainDeck, rng);
+  shuffleDeck(legendDeck, rng);
 
   const common: CommonState = {
     market: [],
@@ -956,7 +957,7 @@ function instantiateDeadWizardTokens(
     playerCount
   );
 
-  shuffleInPlace(setupPool, rng);
+  shuffleDeck(setupPool, rng);
 
   return {
     status: "available",
@@ -1002,7 +1003,7 @@ function assignStartingWizardProperties(
     players.length
   );
 
-  shuffleInPlace(setupPool, rng);
+  shuffleDeck(setupPool, rng);
 
   for (let index = 0; index < players.length; index += 1) {
     const player = players[index];
@@ -1083,7 +1084,7 @@ function assignStartingFamiliars(
     players.length
   );
 
-  shuffleInPlace(setupPool, rng);
+  shuffleDeck(setupPool, rng);
 
   for (let index = 0; index < players.length; index += 1) {
     const player = players[index];
@@ -1235,7 +1236,7 @@ function createPlayers(
       factory,
       playerId
     );
-    shuffleInPlace(deck, rng);
+    shuffleDeck(deck, rng);
 
     const player: PlayerState = {
       playerId,
@@ -1256,7 +1257,9 @@ function createPlayers(
       },
     };
 
-    drawCards(player, 5);
+    player.hand.push(
+      ...drawDeckCards(player.deck, player.discard, 5, rng).cards
+    );
     return player;
   });
 }
@@ -1323,35 +1326,6 @@ function instantiateTokenStack(
   }
 
   return instances;
-}
-
-function drawCards(player: PlayerState, count: number): void {
-  for (let index = 0; index < count; index += 1) {
-    const card = drawFromTop(player.deck);
-    if (card === undefined) {
-      return;
-    }
-
-    player.hand.push(card);
-  }
-}
-
-function drawFromTop(deck: CardInstance[]): CardInstance | undefined {
-  return deck.shift();
-}
-
-function shuffleInPlace<T>(items: T[], rng: RandomSource): void {
-  for (let index = items.length - 1; index > 0; index -= 1) {
-    const swapIndex = rng.nextInt(index + 1);
-    const item = items[index];
-    const swapItem = items[swapIndex];
-    if (item === undefined || swapItem === undefined) {
-      throw new Error("Unexpected sparse array during shuffle");
-    }
-
-    items[index] = swapItem;
-    items[swapIndex] = item;
-  }
 }
 
 function mustGetDefinition(
