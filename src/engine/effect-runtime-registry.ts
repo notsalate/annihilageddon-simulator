@@ -701,7 +701,7 @@ interface EffectRuntimeEntryConfig<Id extends RuntimeEffectId> {
   readonly handler: EffectRuntimeHandler<RuntimeEffectForId<NoInfer<Id>>>;
   readonly supportedModes: EffectRuntimeSupportedModes;
   readonly supportedSourceKinds: EffectRuntimeSupportedSourceKinds;
-  readonly supportedTimings?: EffectRuntimeSupportedTimings;
+  readonly supportedTimings: EffectRuntimeSupportedTimings;
   readonly supportedSourceTimingPolicies?: readonly EffectRuntimeSourceTimingPolicy[];
 }
 
@@ -709,7 +709,7 @@ type EffectRuntimeFamilyEntryDefinition<Id extends RuntimeEffectId> = Omit<
   EffectRuntimeEntryConfig<Id>,
   "supportedTimings"
 > & {
-  readonly supportedTimings?: EffectRuntimeSupportedTimings;
+  readonly supportedTimings: EffectRuntimeSupportedTimings;
 };
 
 type AnyEffectRuntimeFamilyEntryDefinition = {
@@ -780,15 +780,12 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     if (!decoded.ok) {
       return decoded;
     }
-    if (config.supportedTimings !== undefined) {
-      const timing =
-        "timing" in decoded.value ? decoded.value.timing : undefined;
-      if (timing === undefined || !config.supportedTimings.includes(timing)) {
-        return {
-          ok: false,
-          errors: [`${subjectId} uses unsupported timing ${String(timing)}`],
-        };
-      }
+    const timing = "timing" in decoded.value ? decoded.value.timing : undefined;
+    if (timing !== undefined && !config.supportedTimings.includes(timing)) {
+      return {
+        ok: false,
+        errors: [`${subjectId} uses unsupported timing ${String(timing)}`],
+      };
     }
     return decoded;
   };
@@ -4259,6 +4256,11 @@ const immediateEffectTimings = [
   "onPlayCard",
 ] as const satisfies EffectRuntimeSupportedTimings;
 
+const fixtureEffectTimings = [
+  "setup",
+  ...immediateEffectTimings,
+] as const satisfies EffectRuntimeSupportedTimings;
+
 const resourceDrawEntries = defineEffectRuntimeFamily("resources/draw", [
   {
     effectId: "gain_chips",
@@ -4470,6 +4472,7 @@ const setupAuxiliaryEffectEntries = defineEffectRuntimeFamily(
     {
       effectId: "controls_other_card_type",
       decoder: bindRuntimeEffectDecoder("controls_other_card_type"),
+      supportedTimings: immediateEffectTimings,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["card", "wizardProperty"],
       handler: createUnsupportedEffectHandler("controls_other_card_type"),
@@ -4477,6 +4480,7 @@ const setupAuxiliaryEffectEntries = defineEffectRuntimeFamily(
     {
       effectId: "destroyed_card_kind_is",
       decoder: bindRuntimeEffectDecoder("destroyed_card_kind_is"),
+      supportedTimings: immediateEffectTimings,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["card", "wizardProperty"],
       handler: createUnsupportedEffectHandler("destroyed_card_kind_is"),
@@ -4505,6 +4509,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "add_power",
     decoder: bindRuntimeEffectDecoder("add_power"),
+    supportedTimings: immediateEffectTimings,
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: addPowerHandler,
@@ -4530,6 +4535,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "add_power_per_player_with_status",
     decoder: bindRuntimeEffectDecoder("add_power_per_player_with_status"),
+    supportedTimings: immediateEffectTimings,
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: addPowerPerPlayerWithStatusHandler,
@@ -4537,6 +4543,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "gain_chips_equal_damage_dealt",
     decoder: bindRuntimeEffectDecoder("gain_chips_equal_damage_dealt"),
+    supportedTimings: immediateEffectTimings,
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: createUnsupportedEffectHandler("gain_chips_equal_damage_dealt"),
@@ -4544,6 +4551,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "heal_equal_damage_dealt",
     decoder: bindRuntimeEffectDecoder("heal_equal_damage_dealt"),
+    supportedTimings: immediateEffectTimings,
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: createUnsupportedEffectHandler("heal_equal_damage_dealt"),
@@ -4559,6 +4567,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "exchange_life_and_dingler_status",
     decoder: bindRuntimeEffectDecoder("exchange_life_and_dingler_status"),
+    supportedTimings: immediateEffectTimings,
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: exchangeLifeAndDinglerStatusHandler,
@@ -4566,6 +4575,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "deal_damage",
     decoder: bindRuntimeEffectDecoder("deal_damage"),
+    supportedTimings: immediateEffectTimings,
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: dealDamageHandler,
@@ -4573,6 +4583,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "gain_card",
     decoder: bindRuntimeEffectDecoder("gain_card"),
+    supportedTimings: immediateEffectTimings,
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: gainCardHandler,
@@ -4580,6 +4591,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "discard_card",
     decoder: bindRuntimeEffectDecoder("discard_card"),
+    supportedTimings: immediateEffectTimings,
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: discardCardHandler,
@@ -4587,6 +4599,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "discard_self",
     decoder: bindRuntimeEffectDecoder("discard_self"),
+    supportedTimings: immediateEffectTimings,
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: createUnsupportedEffectHandler("discard_self"),
@@ -4594,6 +4607,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "discard_hand_then_draw_cards",
     decoder: bindRuntimeEffectDecoder("discard_hand_then_draw_cards"),
+    supportedTimings: immediateEffectTimings,
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: createUnsupportedEffectHandler("discard_hand_then_draw_cards"),
@@ -4601,6 +4615,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "destroy_card",
     decoder: bindRuntimeEffectDecoder("destroy_card"),
+    supportedTimings: immediateEffectTimings,
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: destroyCardHandler,
@@ -4608,6 +4623,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "destroy_own_cards",
     decoder: bindRuntimeEffectDecoder("destroy_own_cards"),
+    supportedTimings: immediateEffectTimings,
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: createUnsupportedEffectHandler("destroy_own_cards"),
@@ -4625,6 +4641,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "return_discard_to_hand",
     decoder: bindRuntimeEffectDecoder("return_discard_to_hand"),
+    supportedTimings: immediateEffectTimings,
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: createUnsupportedEffectHandler("return_discard_to_hand"),
@@ -4660,6 +4677,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "fixture_add_power_equal_to_target_cost",
     decoder: bindRuntimeEffectDecoder("fixture_add_power_equal_to_target_cost"),
+    supportedTimings: fixtureEffectTimings,
     supportedModes: ["fixture"],
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: fixtureAddPowerEqualToTargetCostHandler,
