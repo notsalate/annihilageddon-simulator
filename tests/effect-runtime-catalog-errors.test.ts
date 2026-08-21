@@ -537,6 +537,58 @@ test("catalog applies unsupported policy only after operation timing matches", (
   assert.equal(evaluated, false);
 });
 
+test("activation and ongoing families reject unsupported calls before handlers", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23025 });
+  const subject = scenario.activePlayer;
+  const cases = [
+    {
+      effectId: "conditional_activation_gain_chips" as const,
+      payload: {
+        effectId: "conditional_activation_gain_chips" as const,
+        timing: "activation" as const,
+        amount: 1,
+        activationLimit: "oncePerTurnWhileControlled" as const,
+      },
+    },
+    {
+      effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand" as const,
+      payload: {
+        effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand" as const,
+        timing: "startOfControllerTurn" as const,
+        destination: "hand" as const,
+        amount: 1,
+        chooser: "controller" as const,
+      },
+    },
+  ];
+
+  for (const { effectId, payload } of cases) {
+    let handlerCalled = false;
+    const result = withTemporaryEffectRuntimeOperations(
+      effectId,
+      {
+        execute() {
+          handlerCalled = true;
+          return { ok: true };
+        },
+      },
+      () =>
+        executeRuntimeEffect(
+          scenario.state,
+          subject,
+          payload,
+          catalogSource(subject, "card", "combat"),
+          throwingRuntimeServices()
+        )
+    );
+
+    assert.equal(result.ok, false);
+    if (result.ok) continue;
+    assert.match(result.error, /uses unsupported effect/);
+    assert.equal(handlerCalled, false);
+  }
+});
+
 test("catalog end-turn operation reports decoder errors directly", () => {
   const scenario = createGameScenario({ rootDir, seed: 23014 });
   const controller = scenario.activePlayer;
