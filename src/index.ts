@@ -258,11 +258,48 @@ export type {
 export {
   SIMULATION_BENCHMARK_CONTRACT_VERSION,
   SIMULATION_BENCHMARK_STAGES,
+  SIMULATION_REFERENCE_STAGES,
   SIMULATION_REFERENCE_COVERAGE,
   SIMULATION_REFERENCE_WORKLOAD_VERSION,
   createSimulationBenchmarkWorkload,
   runSimulationBenchmark,
 } from "./engine/simulation-benchmark.js";
+export type {
+  BenchmarkClock,
+  BenchmarkEnvironmentFingerprint,
+} from "./engine/benchmark-support.js";
+export type {
+  PerformanceBenchmarkKind,
+  PerformanceBaselineEntry,
+  PerformanceCalibrationMetric,
+  PerformanceCalibrationPair,
+  PerformanceCalibrationResult,
+  PerformanceComparisonReport,
+  PerformanceEpochBaseline,
+  PerformanceEpochCalibrationMetadata,
+  PerformanceMeasurement,
+  PerformanceMetricDelta,
+  PerformanceStage,
+  PerformanceTolerance,
+  PerformanceVerdict,
+  PerformancePairComparison,
+} from "./engine/performance-epoch.js";
+export {
+  PERFORMANCE_CALIBRATION_COMPARISON_COUNT,
+  PERFORMANCE_EPOCH,
+  PERFORMANCE_EPOCH_SCHEMA_VERSION,
+  PERFORMANCE_MEASUREMENT_COUNT,
+  PERFORMANCE_STAGES,
+  PERFORMANCE_WARMUP_COUNT,
+  assertPerformanceCalibrationResult,
+  assertPerformanceEpochBaseline,
+  calibratePerformance,
+  comparePerformance,
+  createPerformanceBaselineEntry,
+  findPerformanceBaselineEntry,
+  parsePerformanceMeasurement,
+  toPerformanceMeasurement,
+} from "./engine/performance-epoch.js";
 export type { FormatSingleGameDebugTraceOptions } from "./engine/debug-trace.js";
 export { formatSingleGameDebugTrace } from "./engine/debug-trace.js";
 export {

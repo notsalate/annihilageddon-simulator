@@ -45,6 +45,8 @@ const testSuites = [
   "best-move-cli.test.js",
   "benchmark.test.js",
   "benchmark-cli.test.js",
+  "performance-epoch.test.js",
+  "performance-tools.test.js",
   "completion-reconciliation.test.js",
   "effect-runtime-applicability.test.js",
   "effect-runtime-catalog-types.test.js",

@@ -1,0 +1,298 @@
+{
+  "schemaVersion": "performance-epoch-v1",
+  "epoch": "E0",
+  "playerCount": 2,
+  "calibration": {
+    "comparisons": 20,
+    "method": "paired-same-commit",
+    "freshRunners": true,
+    "warmupCount": 1,
+    "measurementCount": 3,
+    "formula": "p95-plus-25-percent-safety-margin",
+    "commit": "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb",
+    "environment": {
+      "nodeVersion": "v22.23.2",
+      "platform": "linux",
+      "arch": "x64",
+      "runner": "github:Linux:X64:ubuntu24:20260816.277.1",
+      "cpuModel": "AMD EPYC 7763 64-Core Processor",
+      "cpuCount": 4
+    }
+  },
+  "entries": [
+    {
+      "benchmark": "simulation",
+      "id": "simulation:100",
+      "epoch": "E0",
+      "reference": {
+        "benchmark": "simulation",
+        "id": "simulation:100",
+        "role": "reference",
+        "epoch": "E0",
+        "contractVersion": "simulation-benchmark-v1",
+        "playerCount": 2,
+        "workloadFingerprint": "a1a073deb7b5ab6170bff899b91e40cdbfdf2768f75ef9b70dd884b5e39ee138",
+        "workloadVolumeFingerprint": "c606439fe93b16fe82a9a77263d36d5fb4ac3d5752d9e97e365822b80df694fb",
+        "resultFingerprint": "470b42a041a6ccef59c954b958dd8c50acfbeb77daeaaaa9cb5c6364720b1549",
+        "warmupCount": 1,
+        "measurementCount": 3,
+        "environment": {
+          "nodeVersion": "v22.23.2",
+          "platform": "linux",
+          "arch": "x64",
+          "runner": "github:Linux:X64:ubuntu24:20260816.277.1",
+          "cpuModel": "AMD EPYC 7763 64-Core Processor",
+          "cpuCount": 4
+        },
+        "commit": "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb",
+        "timings": {
+          "totalMs": 10167.885476,
+          "dataLoadMs": 4.163140000000567,
+          "gamesMs": 10155.244498999997,
+          "aggregationMs": 7.495025999993231,
+          "resultPreparationMs": 0.2744410000013886
+        },
+        "metrics": {
+          "totalGames": 100,
+          "totalTurns": 2638,
+          "totalActions": 19276,
+          "totalEvents": 96245,
+          "completedGames": 100,
+          "maxTurnsReached": 0
+        }
+      },
+      "tolerances": {
+        "totalMs": {
+          "relativePercent": 1.93,
+          "absoluteMs": 203.71
+        },
+        "dataLoadMs": {
+          "relativePercent": 10.41,
+          "absoluteMs": 0.48
+        },
+        "gamesMs": {
+          "relativePercent": 1.93,
+          "absoluteMs": 204.05
+        },
+        "aggregationMs": {
+          "relativePercent": 14.73,
+          "absoluteMs": 1.08
+        },
+        "resultPreparationMs": {
+          "relativePercent": 7.77,
+          "absoluteMs": 0.08
+        }
+      }
+    },
+    {
+      "benchmark": "analyzer",
+      "id": "analyzer:light",
+      "epoch": "E0",
+      "reference": {
+        "benchmark": "analyzer",
+        "id": "analyzer:light",
+        "role": "reference",
+        "epoch": "E0",
+        "contractVersion": "analyzer-benchmark-v1",
+        "playerCount": 2,
+        "workloadFingerprint": "bcbae784c06906d15469cab4debdc4eaef7c449c82025c151d6a00fdaff83be6",
+        "workloadVolumeFingerprint": "0c18ea72806c18738ca010f7d8e8ef67830ef75cd327f4003b3e72890c1eab1d",
+        "resultFingerprint": "6b0c97d5c5e9b94e2f3bfbeeeffb82c002a25d297178929f629ed8b1574fbcb4",
+        "warmupCount": 1,
+        "measurementCount": 3,
+        "environment": {
+          "nodeVersion": "v22.23.2",
+          "platform": "linux",
+          "arch": "x64",
+          "runner": "github:Linux:X64:ubuntu24:20260816.277.1",
+          "cpuModel": "AMD EPYC 7763 64-Core Processor",
+          "cpuCount": 4
+        },
+        "commit": "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb",
+        "timings": {
+          "totalMs": 2639.2846979999995,
+          "dataLoadMs": 4.617492000000311,
+          "preparationMs": 0.7833679999994274,
+          "enumerationMs": 1820.7800220000008,
+          "rankingMs": 804.764568,
+          "resultPreparationMs": 2.0507809999999154
+        },
+        "metrics": {
+          "totalSeeds": 4,
+          "lineCount": 978,
+          "rankedLineCount": 978,
+          "actionCount": 4893,
+          "branchCount": 978,
+          "choiceBranchCount": 0,
+          "limitsReached": 1
+        }
+      },
+      "tolerances": {
+        "totalMs": {
+          "relativePercent": 2.77,
+          "absoluteMs": 57.26
+        },
+        "dataLoadMs": {
+          "relativePercent": 11.53,
+          "absoluteMs": 0.55
+        },
+        "preparationMs": {
+          "relativePercent": 11.79,
+          "absoluteMs": 0.12
+        },
+        "enumerationMs": {
+          "relativePercent": 2.16,
+          "absoluteMs": 39.45
+        },
+        "rankingMs": {
+          "relativePercent": 2.23,
+          "absoluteMs": 13.32
+        },
+        "resultPreparationMs": {
+          "relativePercent": 18.59,
+          "absoluteMs": 0.3
+        }
+      }
+    },
+    {
+      "benchmark": "analyzer",
+      "id": "analyzer:typical",
+      "epoch": "E0",
+      "reference": {
+        "benchmark": "analyzer",
+        "id": "analyzer:typical",
+        "role": "reference",
+        "epoch": "E0",
+        "contractVersion": "analyzer-benchmark-v1",
+        "playerCount": 2,
+        "workloadFingerprint": "ce38c60652300c4bf1085e92aa030544998fe30b6d94484d4118be386d611e09",
+        "workloadVolumeFingerprint": "9c7218f1dd2aadf407cee20b8af7e69f25fb9cbeeecda2a362be73b6f62c0768",
+        "resultFingerprint": "4433d1fb125919ea8f0eb58fa58be6f032bd45c5cdeba7dded22f41f44dc33ac",
+        "warmupCount": 1,
+        "measurementCount": 3,
+        "environment": {
+          "nodeVersion": "v22.23.2",
+          "platform": "linux",
+          "arch": "x64",
+          "runner": "github:Linux:X64:ubuntu24:20260816.277.1",
+          "cpuModel": "AMD EPYC 7763 64-Core Processor",
+          "cpuCount": 4
+        },
+        "commit": "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb",
+        "timings": {
+          "totalMs": 5354.627702000002,
+          "dataLoadMs": 4.5419330000004265,
+          "preparationMs": 0.6025819999995292,
+          "enumerationMs": 3268.9031760000016,
+          "rankingMs": 2070.519416000003,
+          "resultPreparationMs": 5.952393999999913
+        },
+        "metrics": {
+          "totalSeeds": 3,
+          "lineCount": 2688,
+          "rankedLineCount": 2688,
+          "actionCount": 16287,
+          "branchCount": 2688,
+          "choiceBranchCount": 0,
+          "limitsReached": 0
+        }
+      },
+      "tolerances": {
+        "totalMs": {
+          "relativePercent": 2.99,
+          "absoluteMs": 146.54
+        },
+        "dataLoadMs": {
+          "relativePercent": 11.74,
+          "absoluteMs": 0.46
+        },
+        "preparationMs": {
+          "relativePercent": 11.51,
+          "absoluteMs": 0.12
+        },
+        "enumerationMs": {
+          "relativePercent": 3.53,
+          "absoluteMs": 98.08
+        },
+        "rankingMs": {
+          "relativePercent": 1.56,
+          "absoluteMs": 24.46
+        },
+        "resultPreparationMs": {
+          "relativePercent": 8.82,
+          "absoluteMs": 0.45
+        }
+      }
+    },
+    {
+      "benchmark": "analyzer",
+      "id": "analyzer:heavy",
+      "epoch": "E0",
+      "reference": {
+        "benchmark": "analyzer",
+        "id": "analyzer:heavy",
+        "role": "reference",
+        "epoch": "E0",
+        "contractVersion": "analyzer-benchmark-v1",
+        "playerCount": 2,
+        "workloadFingerprint": "141a83be9f9c0fddb0133488e81127544e9bfae5bf000d80c7fd30e8abd77199",
+        "workloadVolumeFingerprint": "fa20097bd5b1931ab74bdd519bfb3439c296ae317e7c8eace9b546542adcbbc2",
+        "resultFingerprint": "b90a59736708cb5e88be9bfadcb07c2a25a3fb5bf58d2f4e478df00309b300ad",
+        "warmupCount": 1,
+        "measurementCount": 3,
+        "environment": {
+          "nodeVersion": "v22.23.2",
+          "platform": "linux",
+          "arch": "x64",
+          "runner": "github:Linux:X64:ubuntu24:20260816.277.1",
+          "cpuModel": "AMD EPYC 7763 64-Core Processor",
+          "cpuCount": 4
+        },
+        "commit": "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb",
+        "timings": {
+          "totalMs": 24115.842160999993,
+          "dataLoadMs": 4.508590000004915,
+          "preparationMs": 0.7175849999985076,
+          "enumerationMs": 14405.804336999987,
+          "rankingMs": 9651.120104999995,
+          "resultPreparationMs": 33.101906000010786
+        },
+        "metrics": {
+          "totalSeeds": 3,
+          "lineCount": 10764,
+          "rankedLineCount": 10764,
+          "actionCount": 69499,
+          "branchCount": 35868,
+          "choiceBranchCount": 25104,
+          "limitsReached": 0
+        }
+      },
+      "tolerances": {
+        "totalMs": {
+          "relativePercent": 3.96,
+          "absoluteMs": 953.84
+        },
+        "dataLoadMs": {
+          "relativePercent": 29.49,
+          "absoluteMs": 1.17
+        },
+        "preparationMs": {
+          "relativePercent": 7.22,
+          "absoluteMs": 0.07
+        },
+        "enumerationMs": {
+          "relativePercent": 4.43,
+          "absoluteMs": 608.83
+        },
+        "rankingMs": {
+          "relativePercent": 4.14,
+          "absoluteMs": 418.41
+        },
+        "resultPreparationMs": {
+          "relativePercent": 10.92,
+          "absoluteMs": 3.38
+        }
+      }
+    }
+  ]
+}

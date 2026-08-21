@@ -15,6 +15,7 @@ This folder contains command-line entrypoints and menu orchestration.
 - Keep CLI files thin: parse command intent, call source modules, print results.
 - Do not put game-domain rules or import schema decisions in CLI wrappers.
 - Keep user-facing menu text clear and consistent with the command behavior.
+- `run-benchmark.ts` keeps run, epoch comparison and calibration modes as thin wrappers over engine modules. `--output` paths are explicit machine-artifact destinations; comparison may receive a separate `--calibration` result for the immediate `base`/`head` pair, but CLI output must not rewrite the committed epoch baseline.
 - Do not add network or dependency-install side effects to CLI commands.
 - Public-entrypoint guard follows the static TypeScript import/export graph and canonical symbols. It does not interpret arbitrary JavaScript value flow; new trusted adapters and production CLI entrypoints require an explicit policy update and paired tests.
 

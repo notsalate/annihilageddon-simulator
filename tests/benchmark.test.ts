@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   ANALYZER_REFERENCE_PROFILES,
   SIMULATION_BENCHMARK_STAGES,
+  SIMULATION_REFERENCE_STAGES,
   SIMULATION_REFERENCE_COVERAGE,
   createAnalyzerBenchmarkWorkload,
   createSimulationBenchmarkWorkload,
@@ -21,13 +22,17 @@ import type {
 const rootDir = process.cwd();
 
 test("simulation benchmark exposes the nested reference stages", () => {
-  assert.deepEqual(SIMULATION_BENCHMARK_STAGES, [10, 1_000, 10_000, 100_000]);
+  assert.deepEqual(
+    SIMULATION_BENCHMARK_STAGES,
+    [10, 100, 1_000, 10_000, 100_000]
+  );
+  assert.deepEqual(SIMULATION_REFERENCE_STAGES, [10, 100]);
   const workload = createSimulationBenchmarkWorkload({
-    stage: 1_000,
+    stage: 100,
   });
   assert.equal(workload.role, "reference");
   assert.equal(workload.firstSeed, 1);
-  assert.equal(workload.gameCount, 1_000);
+  assert.equal(workload.gameCount, 100);
   assert.equal(workload.playerCount, 2);
   assert.equal(workload.referenceBaselineReview, "required-on-workload-change");
   assert.deepEqual(SIMULATION_REFERENCE_COVERAGE, [
@@ -39,6 +44,10 @@ test("simulation benchmark exposes the nested reference stages", () => {
     "reshuffle",
     "scoring",
   ]);
+  assert.throws(
+    () => createSimulationBenchmarkWorkload({ stage: 1_000 }),
+    /Reference workload stage must be one of 10, 100/
+  );
   assert.throws(
     () => createSimulationBenchmarkWorkload({ maxTurns: 40 }),
     /Reference workload must use maxTurns 200/
@@ -58,6 +67,41 @@ test("simulation benchmark keeps current workload separate from reference", () =
   assert.equal(workload.referenceBaselineReview, "not-applicable");
   assert.equal(workload.firstSeed, 60615);
   assert.equal(workload.maxTurns, 40);
+});
+
+test("simulation reference and current roles share the workload fingerprint", () => {
+  const reference = createSimulationBenchmarkWorkload({
+    role: "reference",
+    stage: 100,
+  });
+  const current = createSimulationBenchmarkWorkload({
+    role: "current",
+    stage: 100,
+  });
+
+  assert.equal(reference.gameCount, current.gameCount);
+  assert.equal(reference.firstSeed, current.firstSeed);
+  assert.equal(reference.maxTurns, current.maxTurns);
+  assert.equal(reference.dataPackPath, current.dataPackPath);
+});
+
+test("simulation results keep role out of the workload fingerprint", () => {
+  const reference = runSimulationBenchmark({
+    rootDir,
+    role: "reference",
+    stage: 10,
+  });
+  const current = runSimulationBenchmark({
+    rootDir,
+    role: "current",
+    stage: 10,
+  });
+
+  assert.equal(reference.workloadFingerprint, current.workloadFingerprint);
+  assert.equal(
+    reference.workloadVolumeFingerprint,
+    current.workloadVolumeFingerprint
+  );
 });
 
 test("Analyzer reference profiles use the declared deterministic seed groups", () => {

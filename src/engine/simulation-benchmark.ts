@@ -2,10 +2,13 @@ import type { LoadedDataPack } from "./data.js";
 import {
   assertPositiveSafeInteger,
   elapsedMs,
+  getBenchmarkCommit,
+  getBenchmarkEnvironmentFingerprint,
   median,
   sha256,
   systemBenchmarkClock,
   type BenchmarkClock,
+  type BenchmarkEnvironmentFingerprint,
 } from "./benchmark-support.js";
 import { intakeRuntimeData } from "./runtime-data-intake.js";
 import {
@@ -20,8 +23,10 @@ export const SIMULATION_REFERENCE_WORKLOAD_VERSION =
   "simulation-reference-v1" as const;
 
 export const SIMULATION_BENCHMARK_STAGES = [
-  10, 1_000, 10_000, 100_000,
+  10, 100, 1_000, 10_000, 100_000,
 ] as const;
+
+export const SIMULATION_REFERENCE_STAGES = [10, 100] as const;
 
 export type SimulationBenchmarkStage =
   (typeof SIMULATION_BENCHMARK_STAGES)[number];
@@ -104,6 +109,8 @@ export interface SimulationBenchmarkSample {
 
 export interface SimulationBenchmarkResult {
   benchmark: "simulation";
+  commit: string | null;
+  environment: BenchmarkEnvironmentFingerprint;
   workload: SimulationBenchmarkWorkload;
   warmupCount: 1;
   measurementCount: 3;
@@ -122,6 +129,8 @@ export interface SimulationBenchmarkResult {
 
 export interface SimulationBenchmarkDependencies {
   clock?: BenchmarkClock;
+  commit?: string | null;
+  environment?: BenchmarkEnvironmentFingerprint;
   intakeDataPack?: (rootDir: string, manifestPath: string) => LoadedDataPack;
   runGame?: (options: RunSingleGameOptions) => SingleGameResult;
 }
@@ -141,6 +150,16 @@ export function createSimulationBenchmarkWorkload(
   const role = options.role ?? "reference";
   const stage = options.stage ?? 10;
   assertSimulationStage(stage);
+  if (
+    role === "reference" &&
+    !SIMULATION_REFERENCE_STAGES.includes(
+      stage as (typeof SIMULATION_REFERENCE_STAGES)[number]
+    )
+  ) {
+    throw new RangeError(
+      `Reference workload stage must be one of ${SIMULATION_REFERENCE_STAGES.join(", ")}`
+    );
+  }
 
   const firstSeed = options.firstSeed ?? 1;
   assertPositiveSafeInteger(firstSeed, "firstSeed");
@@ -201,6 +220,9 @@ export function runSimulationBenchmark(
   const workload = createSimulationBenchmarkWorkload(options);
   const dependencies = options.dependencies ?? {};
   const clock = dependencies.clock ?? systemBenchmarkClock;
+  const commit = dependencies.commit ?? getBenchmarkCommit();
+  const environment =
+    dependencies.environment ?? getBenchmarkEnvironmentFingerprint();
   const intakeDataPack =
     dependencies.intakeDataPack ??
     ((rootDir: string, manifestPath: string) =>
@@ -260,6 +282,8 @@ export function runSimulationBenchmark(
 
   return {
     benchmark: "simulation",
+    commit,
+    environment,
     workload,
     warmupCount: 1,
     measurementCount: MEASUREMENT_COUNT,
@@ -374,7 +398,7 @@ function executeSimulationTrial(
     JSON.stringify({
       contractVersion: workload.contractVersion,
       epoch: workload.epoch,
-      profile: workload.workloadId,
+      profile: SIMULATION_REFERENCE_WORKLOAD_VERSION,
       playerCount: workload.playerCount,
       firstSeed: workload.firstSeed,
       gameCount: workload.gameCount,
