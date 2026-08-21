@@ -105,6 +105,21 @@ test("public catalog validation preserves the concrete payload variant", () => {
   assert.equal(amount, 2);
 });
 
+test("general effects reject timings outside their Catalog policy", () => {
+  const decoded = validateRuntimeEffectCatalogPayload(
+    "Passive add power",
+    "add_power",
+    { effectId: "add_power", timing: "whileControlled", amount: 2 },
+    "combat",
+    "card"
+  );
+
+  assert.equal(decoded.ok, false);
+  if (!decoded.ok) {
+    assert.match(decoded.errors.join("\n"), /unsupported timing/);
+  }
+});
+
 test("resource and draw effects use the interactive Catalog timing policy", () => {
   const validCases = [
     {

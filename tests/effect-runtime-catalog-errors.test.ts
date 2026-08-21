@@ -739,7 +739,7 @@ test("catalog validates a payload before declaring an end-turn operation not app
 
   assert.deepEqual(
     evaluateRuntimeEffectEndTurnDrawModifier(
-      { effectId: "add_power", timing: "endTurn", amount: 1 },
+      { effectId: "add_power", timing: "onPlay", amount: 1 },
       context
     ),
     { status: "notApplicable" }
@@ -852,7 +852,7 @@ test("catalog validates a payload before declaring an after-attack hook not appl
     applyRuntimeEffectAfterPlayerAttackDamage(
       {
         effectId: "add_power",
-        timing: "afterFirstAttackDamageEachTurn",
+        timing: "onPlay",
         amount: 1,
       },
       context

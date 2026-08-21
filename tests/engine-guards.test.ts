@@ -611,15 +611,9 @@ test("typed-access guard enforces the closed decoder export surface", () => {
   assert.match(result.stderr, /closed decoder export surface/);
 });
 
-test("typed-access guard accepts a renamed explicit source-kind policy helper", () => {
+test("typed-access guard accepts a Catalog-only registry without a source-kind switch", () => {
   const fixtureRoot = createEngineFixture({
-    "effect-runtime-registry.ts": `
-      function resolveSourceKinds(effectId: string): EffectRuntimeSupportedSourceKinds | undefined {
-        switch (effectId) {
-          case "fixture": return ["card"];
-        }
-      }
-    `,
+    "effect-runtime-registry.ts": "",
   });
 
   const result = run("check-engine-typed-access.mjs", fixtureRoot);
