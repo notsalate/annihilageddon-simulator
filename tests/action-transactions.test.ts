@@ -10,10 +10,14 @@ import {
 } from "../src/index.js";
 import { runActionTransaction } from "../src/engine/action-transaction.js";
 import { recordGameEvent } from "../src/engine/event-recorder.js";
-import { markTokenDefinitionId } from "../src/domain/types.js";
+import {
+  markCardInstanceId,
+  markTokenDefinitionId,
+} from "../src/domain/types.js";
 import {
   createGameScenario,
   givenRuntimeCard,
+  play,
 } from "./helpers/game-scenario.js";
 import {
   addFixtureDefenseCardToHand,
@@ -278,6 +282,218 @@ test("public action composes with the nested Defense savepoint", () => {
     state.eventLog.some((event) => event.type === "defenseCostPaid"),
     false
   );
+});
+
+test("attack rolls back damage, death consequences, events, eligibility, and RNG after a late after-attack error", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 18901,
+  });
+  const { state } = scenario;
+  const attacker = scenario.activePlayer;
+  const defender = scenario.foes[0];
+  assert.ok(defender);
+  defender.hand.splice(0);
+  attacker.permanents.splice(0);
+  const afterAttackPermanent = givenRuntimeCard(scenario, {
+    zone: "permanents",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "ongoing_first_attack_damage_add_power",
+        timing: "afterFirstAttackDamageEachTurn",
+        amount: "totalDamageDealtByThatAttack",
+      },
+    ],
+  });
+  const attack = givenRuntimeCard(scenario, {
+    effects: [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 4,
+        target: { selector: "opponentPlayer" },
+      },
+    ],
+  });
+  defender.life.current = 1;
+  defender.trophyLikeObjects.push({
+    instanceId: markCardInstanceId("fixture-transaction-attack-trophy"),
+    trophyId: "basicTrophy",
+    ownerId: defender.playerId,
+    effects: [],
+  });
+
+  const players = state.players;
+  const common = state.common;
+  const turn = state.turn;
+  const eventLog = state.eventLog;
+  const attackerHand = attacker.hand;
+  const attackerPlayed = attacker.playedThisTurn;
+  const attackerPermanents = attacker.permanents;
+  const defenderLife = defender.life;
+  const defenderHand = defender.hand;
+  const defenderDiscard = defender.discard;
+  const defenderDeadWizardTokens = defender.deadWizardTokens;
+  const defenderTrophies = defender.trophyLikeObjects;
+  const deadWizardTokenDrawStack = state.common.deadWizardTokens.drawStack;
+  const playersBefore = structuredClone(state.players);
+  const commonBefore = structuredClone(state.common);
+  const turnBefore = structuredClone(state.turn);
+  const eventLogBefore = structuredClone(state.eventLog);
+  const expectedNextRandom = state.rng.fork().next();
+
+  const result = withTemporaryEffectRuntimeOperations(
+    "ongoing_first_attack_damage_add_power",
+    {
+      applyAfterPlayerAttackDamage(_effect, context) {
+        context.state.turn.power += 13;
+        context.controller.chips += 8;
+        context.state.rng.next();
+        return {
+          status: "resolved",
+          result: { ok: false, error: "late after-attack failure" },
+        };
+      },
+    },
+    () => play(scenario, attack)
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "late after-attack failure",
+  });
+  assert.equal(state.players, players);
+  assert.equal(state.common, common);
+  assert.equal(state.turn, turn);
+  assert.equal(state.eventLog, eventLog);
+  assert.deepEqual(state.players, playersBefore);
+  assert.deepEqual(state.common, commonBefore);
+  assert.deepEqual(state.turn, turnBefore);
+  assert.deepEqual(state.eventLog, eventLogBefore);
+  assert.equal(attacker.hand, attackerHand);
+  assert.equal(attacker.playedThisTurn, attackerPlayed);
+  assert.equal(attacker.permanents, attackerPermanents);
+  assert.equal(defender.life, defenderLife);
+  assert.equal(defender.hand, defenderHand);
+  assert.equal(defender.discard, defenderDiscard);
+  assert.equal(defender.deadWizardTokens, defenderDeadWizardTokens);
+  assert.equal(defender.trophyLikeObjects, defenderTrophies);
+  assert.equal(
+    state.common.deadWizardTokens.drawStack,
+    deadWizardTokenDrawStack
+  );
+  assert.equal(attacker.hand.includes(attack), true);
+  assert.equal(attacker.playedThisTurn.includes(attack), false);
+  assert.equal(attacker.permanents.includes(afterAttackPermanent), true);
+  assert.equal(defender.life.current, 1);
+  assert.equal(defender.trophyLikeObjects[0]?.ownerId, defender.playerId);
+  assert.deepEqual(state.turn.damagingAttackPlayerIds, []);
+  assert.equal(state.rng.next(), expectedNextRandom);
+});
+
+test("outer attack rollback restores a committed Defense savepoint without double commit", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 19001,
+  });
+  const { state } = scenario;
+  const attacker = scenario.activePlayer;
+  const defender = scenario.foes[0];
+  assert.ok(defender);
+  defender.hand.splice(0);
+  defender.discard.splice(0);
+  defender.chips = 1;
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
+    costs: [{ costId: "spend_chips", amount: 1 }],
+    branchEffects: [
+      {
+        effectId: "add_power",
+        timing: "onDefense",
+        amount: 2,
+      },
+    ],
+  });
+  state.effectChoiceStrategy = selectFirstFixtureDefense;
+  const attack = givenRuntimeCard(scenario, {
+    effects: [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 4,
+        target: { selector: "opponentPlayer" },
+      },
+      {
+        effectId: "gain_chips",
+        timing: "onPlay",
+        amount: 1,
+      },
+    ],
+  });
+
+  const players = state.players;
+  const common = state.common;
+  const turn = state.turn;
+  const eventLog = state.eventLog;
+  const attackerHand = attacker.hand;
+  const attackerPlayed = attacker.playedThisTurn;
+  const defenderHand = defender.hand;
+  const defenderDiscard = defender.discard;
+  const playersBefore = structuredClone(state.players);
+  const commonBefore = structuredClone(state.common);
+  const turnBefore = structuredClone(state.turn);
+  const eventLogBefore = structuredClone(state.eventLog);
+  const expectedNextRandom = state.rng.fork().next();
+  let gainChipsCalls = 0;
+
+  const result = withTemporaryEffectRuntimeOperations(
+    "gain_chips",
+    {
+      execute(mutatedState, player) {
+        gainChipsCalls += 1;
+        mutatedState.turn.power += 9;
+        player.chips += 8;
+        mutatedState.rng.next();
+        return { ok: false, error: "outer late failure after Defense" };
+      },
+    },
+    () => play(scenario, attack)
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "outer late failure after Defense",
+  });
+  assert.equal(gainChipsCalls, 1);
+  assert.equal(state.players, players);
+  assert.equal(state.common, common);
+  assert.equal(state.turn, turn);
+  assert.equal(state.eventLog, eventLog);
+  assert.deepEqual(state.players, playersBefore);
+  assert.deepEqual(state.common, commonBefore);
+  assert.deepEqual(state.turn, turnBefore);
+  assert.deepEqual(state.eventLog, eventLogBefore);
+  assert.equal(attacker.hand, attackerHand);
+  assert.equal(attacker.playedThisTurn, attackerPlayed);
+  assert.equal(defender.hand, defenderHand);
+  assert.equal(defender.discard, defenderDiscard);
+  assert.equal(attacker.hand.includes(attack), true);
+  assert.equal(attacker.playedThisTurn.includes(attack), false);
+  assert.equal(defender.hand.includes(defense), true);
+  assert.equal(defender.discard.includes(defense), false);
+  assert.equal(defender.chips, 1);
+  assert.equal(state.turn.power, 0);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
+    false
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseCostPaid"),
+    false
+  );
+  assert.equal(state.rng.next(), expectedNextRandom);
 });
 
 test("buy rolls back payment, ownership, zones, gain ledger, events, and RNG after a late on-gain error", () => {
