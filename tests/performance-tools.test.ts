@@ -414,10 +414,12 @@ test("E0 baseline bootstrap requires matched reference and calibration fingerpri
     for (const [benchmark, id, referenceFile, calibrationFile] of workloads) {
       const reference = referenceMeasurement(benchmark, id);
       writeJson(path.join(referenceRoot, referenceFile), reference);
-      writeJson(
-        path.join(calibrationRoot, calibrationFile),
-        calibrationFor(reference)
-      );
+      const calibration = calibrationFor(reference);
+      calibration.environment = {
+        ...calibration.environment,
+        cpuModel: `fresh-runner-${id}`,
+      };
+      writeJson(path.join(calibrationRoot, calibrationFile), calibration);
     }
 
     const scriptPath = path.join(

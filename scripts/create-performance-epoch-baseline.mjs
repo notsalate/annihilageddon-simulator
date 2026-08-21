@@ -138,7 +138,6 @@ function sameCalibrationEnvironment(left, right) {
     left.platform === right.platform &&
     left.arch === right.arch &&
     left.runner === right.runner &&
-    left.cpuModel === right.cpuModel &&
     left.cpuCount === right.cpuCount
   );
 }
