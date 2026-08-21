@@ -7,12 +7,12 @@ import {
   SIMULATION_REFERENCE_COVERAGE,
   createAnalyzerBenchmarkWorkload,
   createSimulationBenchmarkWorkload,
-  loadCurrentRuntimeDataPack,
   markPlayerId,
   runAnalyzerBenchmark,
   runSimulationBenchmark,
   runSingleGame,
 } from "../src/index.js";
+import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
 import type {
   RunSingleGameOptions,
   SingleGameResult,
@@ -149,7 +149,7 @@ test("simulation benchmark excludes warmup and reports stable fingerprints", () 
           return 1_024;
         },
       },
-      loadDataPack() {
+      intakeDataPack() {
         loadCount += 1;
         return dataPack;
       },
@@ -157,7 +157,7 @@ test("simulation benchmark excludes warmup and reports stable fingerprints", () 
     },
   });
 
-  assert.equal(loadCount, 40);
+  assert.equal(loadCount, 4);
   assert.equal(result.warmupCount, 1);
   assert.equal(result.measurementCount, 3);
   assert.equal(result.samples.length, 3);

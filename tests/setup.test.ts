@@ -3,12 +3,12 @@ import test from "node:test";
 
 import {
   initializeGame,
-  loadCurrentRuntimeDataPack,
   type CardInstance,
   type GameState,
   type LoadedDataPack,
   type RuntimeEffect,
 } from "../src/index.js";
+import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,

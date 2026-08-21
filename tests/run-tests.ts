@@ -29,6 +29,7 @@ const testSuites = [
   "runtime-regression.test.js",
   "market-flow-terminal.test.js",
   "validation.test.js",
+  "runtime-data-intake.test.js",
   "draft-validation.test.js",
   "draft-generator.test.js",
   "import-completeness.test.js",

@@ -123,6 +123,20 @@ data/pools/
 
 Каждый runtime card и token JSON обязан содержать единственное canonical-поле картинки `source.image` с непустым путём к существующему файлу в `assets/`. Поля `source.draft` и `source.text` необязательны, но при наличии тоже должны быть непустыми строками. Весь `source` — только metadata/traceability: эти ссылки не являются исполняемым входом движка и не читаются во время gameplay. Для wizard properties устаревшее `visible.sourceImage` не поддерживается.
 
+## Runtime Data Intake
+
+`src/engine/runtime-data-intake.ts` — единственная поддерживаемая граница передачи Runtime Data в engine. Она принимает filesystem source или уже декодированный `LoadedDataPack`, выполняет intake, проверку и возвращает неизменяемый проверенный pack.
+
+Ошибки intake разделяются по этапам:
+
+- `source` — недоступен root или manifest;
+- `decode` — JSON или структура runtime-файлов не декодируются;
+- `validation` — pack декодирован, но не проходит executable-проверки.
+
+`initializeGame`, public simulation runners и benchmark diagnostics используют эту границу. Массовая симуляция получает один проверенный pack перед первой партией и передает его во все партии; повторное чтение и проверка между партиями не допускаются. Runtime engine не обращается к `data/import/**` напрямую.
+
+Низкоуровневые decode/validate функции остаются внутренними строительными блоками intake и не экспортируются из public entrypoint. Test-only packs с `mappingStatus: "fixture"` сохраняют существующую возможность пропускать проверки полноты executable-каталога, но проходят JSON decoding.
+
 ## ID Style
 
 Runtime card IDs используют стабильный source-group numbering:

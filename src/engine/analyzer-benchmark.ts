@@ -10,7 +10,7 @@ import {
   getBestMovePolicy,
   type BestMoveCriterionId,
 } from "./best-move-policies.js";
-import { loadCurrentRuntimeDataPack, type LoadedDataPack } from "./data.js";
+import type { LoadedDataPack } from "./data.js";
 import {
   elapsedMs,
   median,
@@ -20,6 +20,7 @@ import {
 } from "./benchmark-support.js";
 import { initializeGame } from "./setup.js";
 import type { LegalAction } from "./actions.js";
+import { intakeRuntimeData } from "./runtime-data-intake.js";
 
 export const ANALYZER_BENCHMARK_CONTRACT_VERSION =
   "analyzer-benchmark-v1" as const;
@@ -153,7 +154,7 @@ export interface AnalyzerBenchmarkResult {
 
 export interface AnalyzerBenchmarkDependencies {
   clock?: BenchmarkClock;
-  loadDataPack?: (rootDir: string, manifestPath: string) => LoadedDataPack;
+  intakeDataPack?: (rootDir: string, manifestPath: string) => LoadedDataPack;
   initialize?: typeof initializeGame;
   enumerate?: typeof enumerateTurnLines;
   rank?: typeof rankTurnLines;
@@ -223,10 +224,10 @@ export function runAnalyzerBenchmark(
   const workload = createAnalyzerBenchmarkWorkload(options);
   const dependencies = options.dependencies ?? {};
   const clock = dependencies.clock ?? systemBenchmarkClock;
-  const loadDataPack =
-    dependencies.loadDataPack ??
+  const intakeDataPack =
+    dependencies.intakeDataPack ??
     ((rootDir: string, manifestPath: string) =>
-      loadCurrentRuntimeDataPack(rootDir, manifestPath));
+      intakeRuntimeData({ rootDir, dataPackPath: manifestPath }));
   const initialize = dependencies.initialize ?? initializeGame;
   const enumerate = dependencies.enumerate ?? enumerateTurnLines;
   const rank = dependencies.rank ?? rankTurnLines;
@@ -236,7 +237,7 @@ export function runAnalyzerBenchmark(
     options.rootDir,
     0,
     clock,
-    loadDataPack,
+    intakeDataPack,
     initialize,
     enumerate,
     rank
@@ -249,7 +250,7 @@ export function runAnalyzerBenchmark(
       options.rootDir,
       index + 1,
       clock,
-      loadDataPack,
+      intakeDataPack,
       initialize,
       enumerate,
       rank,
@@ -296,7 +297,7 @@ function executeAnalyzerTrial(
   rootDir: string,
   sampleIndex: number,
   clock: BenchmarkClock,
-  loadDataPack: NonNullable<AnalyzerBenchmarkDependencies["loadDataPack"]>,
+  intakeDataPack: NonNullable<AnalyzerBenchmarkDependencies["intakeDataPack"]>,
   initialize: NonNullable<AnalyzerBenchmarkDependencies["initialize"]>,
   enumerate: NonNullable<AnalyzerBenchmarkDependencies["enumerate"]>,
   rank: NonNullable<AnalyzerBenchmarkDependencies["rank"]>,
@@ -305,7 +306,7 @@ function executeAnalyzerTrial(
   const startedAt = clock.now();
   let peakMemoryBytes = clock.readPeakMemoryBytes();
   const dataLoadStartedAt = clock.now();
-  const dataPack = loadDataPack(rootDir, workload.dataPackPath);
+  const dataPack = intakeDataPack(rootDir, workload.dataPackPath);
   const dataLoadMs = elapsedMs(clock, dataLoadStartedAt);
   peakMemoryBytes = Math.max(peakMemoryBytes, clock.readPeakMemoryBytes());
 

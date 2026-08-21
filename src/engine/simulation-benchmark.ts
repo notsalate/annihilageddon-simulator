@@ -1,4 +1,4 @@
-import { loadCurrentRuntimeDataPack, type LoadedDataPack } from "./data.js";
+import type { LoadedDataPack } from "./data.js";
 import {
   assertPositiveSafeInteger,
   elapsedMs,
@@ -7,6 +7,7 @@ import {
   systemBenchmarkClock,
   type BenchmarkClock,
 } from "./benchmark-support.js";
+import { intakeRuntimeData } from "./runtime-data-intake.js";
 import {
   runSingleGame,
   type RunSingleGameOptions,
@@ -121,7 +122,7 @@ export interface SimulationBenchmarkResult {
 
 export interface SimulationBenchmarkDependencies {
   clock?: BenchmarkClock;
-  loadDataPack?: (rootDir: string, manifestPath: string) => LoadedDataPack;
+  intakeDataPack?: (rootDir: string, manifestPath: string) => LoadedDataPack;
   runGame?: (options: RunSingleGameOptions) => SingleGameResult;
 }
 
@@ -200,10 +201,10 @@ export function runSimulationBenchmark(
   const workload = createSimulationBenchmarkWorkload(options);
   const dependencies = options.dependencies ?? {};
   const clock = dependencies.clock ?? systemBenchmarkClock;
-  const loadDataPack =
-    dependencies.loadDataPack ??
+  const intakeDataPack =
+    dependencies.intakeDataPack ??
     ((rootDir: string, manifestPath: string) =>
-      loadCurrentRuntimeDataPack(rootDir, manifestPath));
+      intakeRuntimeData({ rootDir, dataPackPath: manifestPath }));
   const runGame = dependencies.runGame ?? runSingleGame;
 
   const warmup = executeSimulationTrial(
@@ -211,7 +212,7 @@ export function runSimulationBenchmark(
     options.rootDir,
     0,
     clock,
-    loadDataPack,
+    intakeDataPack,
     runGame
   );
   const warmupPeakMemoryBytes = warmup.peakMemoryBytes;
@@ -222,7 +223,7 @@ export function runSimulationBenchmark(
       options.rootDir,
       index + 1,
       clock,
-      loadDataPack,
+      intakeDataPack,
       runGame,
       warmupPeakMemoryBytes
     )
@@ -284,13 +285,14 @@ function executeSimulationTrial(
   rootDir: string,
   sampleIndex: number,
   clock: BenchmarkClock,
-  loadDataPack: NonNullable<SimulationBenchmarkDependencies["loadDataPack"]>,
+  intakeDataPack: NonNullable<
+    SimulationBenchmarkDependencies["intakeDataPack"]
+  >,
   runGame: NonNullable<SimulationBenchmarkDependencies["runGame"]>,
   warmupPeakMemoryBytes = 0
 ): SimulationBenchmarkSample {
   const startedAt = clock.now();
   let peakMemoryBytes = clock.readPeakMemoryBytes();
-  let dataLoadMs = 0;
   let gamesMs = 0;
   let aggregationMs = 0;
   const gameSummaries: SimulationGameFingerprint[] = [];
@@ -301,20 +303,19 @@ function executeSimulationTrial(
   let completedGames = 0;
   let maxTurnsReached = 0;
   let coverage = createEmptyCoverage();
-  let runtimeDataPackId: string | undefined;
+  const dataLoadStartedAt = clock.now();
+  const dataPack = intakeDataPack(rootDir, workload.dataPackPath);
+  const dataLoadMs = elapsedMs(clock, dataLoadStartedAt);
+  const runtimeDataPackId = dataPack.manifest.packId;
+  peakMemoryBytes = Math.max(peakMemoryBytes, clock.readPeakMemoryBytes());
 
   for (let index = 0; index < workload.gameCount; index += 1) {
     const seed = workload.firstSeed + index;
-    const dataLoadStartedAt = clock.now();
-    const dataPack = loadDataPack(rootDir, workload.dataPackPath);
-    runtimeDataPackId ??= dataPack.manifest.packId;
     if (dataPack.manifest.packId !== runtimeDataPackId) {
       throw new Error(
         "Simulation benchmark loaded different Runtime Data packs"
       );
     }
-    peakMemoryBytes = Math.max(peakMemoryBytes, clock.readPeakMemoryBytes());
-    dataLoadMs += elapsedMs(clock, dataLoadStartedAt);
 
     const gameStartedAt = clock.now();
     const result = runGame({

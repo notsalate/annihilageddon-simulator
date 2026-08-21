@@ -11,7 +11,6 @@ import {
   initializeGame,
   applyAction,
   listLegalActions,
-  loadCurrentRuntimeDataPack,
   scoreGame,
   type CardInstance,
   type CardDefinition,
@@ -21,6 +20,7 @@ import {
   type TokenDefinition,
   type TrophyLikeInstance,
 } from "../src/index.js";
+import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
 import {
   grantTemporaryControl,
   listOwnedScoringCards,
@@ -372,10 +372,7 @@ test("a controlled fixture object can modify token scoring without mutating toke
   );
 
   assert.ok(score);
-  assert.equal(
-    score.victoryPoints,
-    expectedCardScore + baseVictoryPoints + 1
-  );
+  assert.equal(score.victoryPoints, expectedCardScore + baseVictoryPoints + 1);
   assert.equal(definition.victoryPoints, baseVictoryPoints);
 });
 
@@ -812,7 +809,10 @@ test("scoreGame counts owned player-zone cards without scoring common locations 
   );
   assert.equal(scoringCardIds.has(controlledTower.instanceId), true);
   assert.equal(scoringCardIds.has(player.unboughtFamiliar.instanceId), false);
-  assert.equal(scoringCardIds.has(state.common.market.at(-1)!.instanceId), false);
+  assert.equal(
+    scoringCardIds.has(state.common.market.at(-1)!.instanceId),
+    false
+  );
 
   assert.equal(
     scoreGame(state).find((score) => score.playerId === player.playerId)

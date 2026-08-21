@@ -4,6 +4,11 @@ import {
   type PlayerScore,
   type RunSingleGameOptions,
 } from "./simulation.js";
+import {
+  intakeRuntimeData,
+  type RuntimeDataSource,
+} from "./runtime-data-intake.js";
+import type { LoadedDataPack } from "./data.js";
 import type { PlayerId } from "./setup.js";
 
 export interface RunMassSimulationOptions {
@@ -13,6 +18,7 @@ export interface RunMassSimulationOptions {
   maxTurns: number;
   playerCount?: number;
   dataPackPath?: string;
+  dataPack?: LoadedDataPack;
 }
 
 export interface CompactGameSummary {
@@ -53,10 +59,26 @@ export function runMassSimulation(
     throw new RangeError("gameCount must be a positive safe integer");
   }
 
+  if (options.dataPack !== undefined && options.dataPackPath !== undefined) {
+    throw new Error("dataPack and dataPackPath cannot be used together");
+  }
+
+  const dataSource: RuntimeDataSource =
+    options.dataPack === undefined
+      ? {
+          rootDir: options.rootDir,
+          ...(options.dataPackPath === undefined
+            ? {}
+            : { dataPackPath: options.dataPackPath }),
+        }
+      : { dataPack: options.dataPack };
+  const dataPack = intakeRuntimeData(dataSource);
+
   const games = Array.from({ length: options.gameCount }, (_, index) => {
     return toCompactSummary(
       runSingleGame({
         ...toSingleGameOptions(options),
+        dataPack,
         seed: options.firstSeed + index,
       })
     );
@@ -79,9 +101,6 @@ function toSingleGameOptions(
     ...(options.playerCount === undefined
       ? {}
       : { playerCount: options.playerCount }),
-    ...(options.dataPackPath === undefined
-      ? {}
-      : { dataPackPath: options.dataPackPath }),
   };
 }
 

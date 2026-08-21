@@ -5,16 +5,18 @@ import {
   applyAction,
   formatSingleGameDebugTrace,
   initializeGame,
-  loadCurrentRuntimeDataPack,
   runMarketFlow,
   runSingleGame,
-  validateExecutableDataPack,
   type CardDefinition,
   type CardInstance,
   type GameState,
   type RuntimeEffect,
   type SingleGameResult,
 } from "../src/index.js";
+import {
+  loadCurrentRuntimeDataPack,
+  validateExecutableDataPack,
+} from "../src/engine/data.js";
 import { executeOnPlayEffects } from "../src/engine/effect-runtime.js";
 import {
   resolveResurrectionLifeTotal,
