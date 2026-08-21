@@ -17,11 +17,13 @@ import {
 } from "./attack-resolution.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import {
-  findCardLocation,
   getControlledCards,
-  grantTemporaryControl,
   removeCardFromLocation,
 } from "./control-ledger.js";
+import {
+  resolveCardPlay,
+  type CardPlayResolutionServices,
+} from "./card-play-resolution.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
 import { drawDeckCard, refillDeckFromDiscard } from "./deck-lifecycle.js";
 import {
@@ -895,6 +897,12 @@ const effectRuntimeServices: EffectRuntimeServices = {
   isLegalWildMagicOption,
   executeEffect,
   asString,
+};
+
+const cardPlayResolutionServices: CardPlayResolutionServices = {
+  executeOnPlayEffects,
+  executeWizardPropertyOnPlayCardEffects,
+  executeControlledCardOnPlayCardEffects,
 };
 
 function resolveStatusTargetPlayers(
@@ -2022,137 +2030,8 @@ function playResolvedCard(
     ongoingOwnerId?: PlayerState["playerId"] | "common";
   } = {}
 ): EffectExecutionResult {
-  const definition = state.cardDefinitions.get(card.definitionId);
-  if (definition === undefined) {
-    return {
-      ok: false,
-      error: `Missing card definition ${card.definitionId}`,
-    };
-  }
-
-  if (definition.engine.isOngoing) {
-    card.ownerId = ownership.ongoingOwnerId ?? player.playerId;
-    player.permanents.push(card);
-  } else {
-    player.playedThisTurn.push(card);
-    grantTemporaryControl(state, card.instanceId, player.playerId);
-  }
-
-  const effectResult = executeOnPlayEffects(state, player, definition, {
-    sourceType: "card",
-    runtimeMode: state.runtimeMode,
-    playerId: player.playerId,
-    cardInstanceId: card.instanceId,
-    definitionId: card.definitionId,
+  return resolveCardPlay(state, player, card, cardPlayResolutionServices, {
+    ...ownership,
+    ongoingOwnerId: ownership.ongoingOwnerId ?? player.playerId,
   });
-  if (!effectResult.ok) {
-    return effectResult;
-  }
-  if (effectResult.gameEnd !== undefined) {
-    const movementResult = moveResolvedNonOngoingCardToDestination(
-      state,
-      player,
-      card,
-      definition.engine.isOngoing,
-      ownership.nonOngoingDestination
-    );
-    return movementResult.ok ? effectResult : movementResult;
-  }
-
-  const wizardPropertyResult = executeWizardPropertyOnPlayCardEffects(
-    state,
-    player,
-    definition
-  );
-  if (!wizardPropertyResult.ok) {
-    return wizardPropertyResult;
-  }
-
-  if (wizardPropertyResult.gameEnd === undefined) {
-    const controlledCardResult = executeControlledCardOnPlayCardEffects(
-      state,
-      player,
-      card
-    );
-    if (!controlledCardResult.ok) {
-      return controlledCardResult;
-    }
-    if (controlledCardResult.gameEnd !== undefined) {
-      const movementResult = moveResolvedNonOngoingCardToDestination(
-        state,
-        player,
-        card,
-        definition.engine.isOngoing,
-        ownership.nonOngoingDestination
-      );
-      return movementResult.ok ? controlledCardResult : movementResult;
-    }
-  }
-
-  const movementResult = moveResolvedNonOngoingCardToDestination(
-    state,
-    player,
-    card,
-    definition.engine.isOngoing,
-    ownership.nonOngoingDestination
-  );
-  return movementResult.ok ? wizardPropertyResult : movementResult;
-}
-
-function moveResolvedNonOngoingCardToDestination(
-  state: GameState,
-  controller: PlayerState,
-  card: CardInstance,
-  isOngoing: boolean,
-  destination:
-    | {
-        zone: "ownerDiscardAfterResolution";
-        ownerId: PlayerState["playerId"];
-      }
-    | undefined
-): EffectExecutionResult {
-  if (isOngoing || destination === undefined) {
-    return { ok: true };
-  }
-  if (card.ownerId !== destination.ownerId) {
-    return {
-      ok: false,
-      error: `Cannot move ${card.instanceId} to a discard that does not belong to its owner`,
-    };
-  }
-  const owner = state.players.find(
-    (candidate) => candidate.playerId === destination.ownerId
-  );
-  if (owner === undefined) {
-    return {
-      ok: false,
-      error: `Missing card owner ${destination.ownerId}`,
-    };
-  }
-
-  const expectedSourceZone = `${controller.playerId}.playedThisTurn`;
-  const currentLocation = findCardLocation(state, card.instanceId);
-  if (currentLocation?.zoneName !== expectedSourceZone) {
-    return {
-      ok: false,
-      error: `Cannot move resolved card ${card.instanceId}`,
-    };
-  }
-
-  const sourceLocation = removeCardFromLocation(state, card.instanceId);
-  if (sourceLocation === undefined) {
-    return {
-      ok: false,
-      error: `Cannot move resolved card ${card.instanceId}`,
-    };
-  }
-
-  owner.discard.push(sourceLocation.card);
-  recordCardMoved(state, controller, sourceLocation.card, {
-    sourceZone: sourceLocation.zoneName,
-    destinationZone: `${owner.playerId}.discard`,
-    ownerBefore: sourceLocation.card.ownerId,
-    ownerAfter: sourceLocation.card.ownerId,
-  });
-  return { ok: true };
 }

@@ -9,21 +9,17 @@ import {
   hasExecutableWizardPropertyActivation,
   moveGainedCardToPlayerDestination,
 } from "./effect-runtime.js";
+import { resolveCardPlay } from "./card-play-resolution.js";
 import type { EffectGameEnd } from "./effect-runtime-registry.js";
 import { assertNever } from "../common.js";
 import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import {
   getControlledCards,
-  grantTemporaryControl,
   releaseTemporaryControls,
 } from "./control-ledger.js";
 import { calculateEffectiveCardCost } from "./effective-values.js";
 import { drawDeckCards } from "./deck-lifecycle.js";
-import {
-  recordCardMoved,
-  recordDeckReshuffle,
-  recordGameEvent,
-} from "./event-recorder.js";
+import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import { runMarketFlow, type MarketFlowEndReason } from "./market-flow.js";
 import type {
   CardInstance,
@@ -511,62 +507,26 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
   }
 
   activePlayer.hand.splice(cardIndex, 1);
-  const definition = mustGetDefinition(state, card.definitionId);
   const ownerBefore = card.ownerId;
-  let destinationZone: string;
-  if (definition.engine.isOngoing) {
-    activePlayer.permanents.push(card);
-    destinationZone = `${activePlayer.playerId}.permanents`;
-  } else {
-    activePlayer.playedThisTurn.push(card);
-    destinationZone = `${activePlayer.playerId}.playedThisTurn`;
-  }
-  if (!definition.engine.isOngoing) {
-    grantTemporaryControl(state, card.instanceId, activePlayer.playerId);
-  }
-  recordCardMoved(state, activePlayer, card, {
-    sourceZone: `${activePlayer.playerId}.hand`,
-    destinationZone,
-    ownerBefore,
-    ownerAfter: card.ownerId,
-  });
-
-  const effectResult = executeOnPlayEffects(state, activePlayer, definition, {
-    sourceType: "card",
-    runtimeMode: state.runtimeMode,
-    playerId: activePlayer.playerId,
-    cardInstanceId: card.instanceId,
-    definitionId: card.definitionId,
-  });
+  const effectResult = resolveCardPlay(
+    state,
+    activePlayer,
+    card,
+    {
+      executeOnPlayEffects,
+      executeWizardPropertyOnPlayCardEffects,
+      executeControlledCardOnPlayCardEffects,
+    },
+    {
+      sourceZone: `${activePlayer.playerId}.hand`,
+      ownerBefore,
+    }
+  );
   if (!effectResult.ok) {
     return effectResult;
   }
   if (effectResult.gameEnd !== undefined) {
     return gameEndActionResult(effectResult.gameEnd);
-  }
-
-  const wizardPropertyResult = executeWizardPropertyOnPlayCardEffects(
-    state,
-    activePlayer,
-    definition
-  );
-  if (!wizardPropertyResult.ok) {
-    return wizardPropertyResult;
-  }
-  if (wizardPropertyResult.gameEnd !== undefined) {
-    return gameEndActionResult(wizardPropertyResult.gameEnd);
-  }
-
-  const controlledCardResult = executeControlledCardOnPlayCardEffects(
-    state,
-    activePlayer,
-    card
-  );
-  if (!controlledCardResult.ok) {
-    return controlledCardResult;
-  }
-  if (controlledCardResult.gameEnd !== undefined) {
-    return gameEndActionResult(controlledCardResult.gameEnd);
   }
 
   reconcileActivePlayerControlledPower(state);

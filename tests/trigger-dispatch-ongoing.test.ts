@@ -194,7 +194,7 @@ test("attack returns an afterDamageDealt catalog error and stops later triggers"
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.match(result.error, /after-damage failure/);
-  assert.equal(target.life.current, 18);
+  assert.equal(target.life.current, 20);
   assert.deepEqual(executedDefinitionIds, [
     "fixture-after-damage-first",
     "fixture-after-damage-error",
@@ -339,7 +339,7 @@ test("deal_damage returns an afterDamageDealt error and stops later triggers", (
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.match(result.error, /deal-damage after-damage failure/);
-  assert.equal(target.life.current, 18);
+  assert.equal(target.life.current, 20);
   assert.deepEqual(executedDefinitionIds, [
     "fixture-deal-damage-first",
     "fixture-deal-damage-error",

@@ -67,6 +67,19 @@ const additionalPhysicalCardZoneFactories = new WeakMap<
   readonly RegisteredPhysicalCardZoneDescriptorFactory[]
 >();
 
+interface PhysicalCardZoneSnapshotHooks {
+  readonly capture: () => CardInstance[] | undefined;
+  readonly restore: (
+    storage: CardInstance[],
+    cards: readonly CardInstance[]
+  ) => void;
+}
+
+const physicalCardZoneSnapshotHooks = new WeakMap<
+  PhysicalCardZoneDescriptor,
+  PhysicalCardZoneSnapshotHooks
+>();
+
 /** Registers an extension zone with the Ledger-owned physical inventory. */
 export function registerPhysicalCardZoneDescriptorFactory(
   state: Pick<GameState, "players" | "common">,
@@ -134,6 +147,11 @@ export type PhysicalCardMoveResult =
 interface PhysicalCardZoneMoveSnapshot {
   readonly descriptor: PhysicalCardZoneDescriptor;
   readonly cards: readonly CardInstance[];
+  readonly identityStorage?: CardInstance[];
+  readonly restoreIdentity?: (
+    storage: CardInstance[],
+    cards: readonly CardInstance[]
+  ) => void;
   readonly recoveryStorage?: CardInstance[];
 }
 
@@ -952,10 +970,21 @@ function createPhysicalCardZoneMoveSnapshot(
     additionalPhysicalCardZoneFactories
       .get(state)
       ?.some((factory) => factory.zoneName === descriptor.zoneName) === true;
+  const snapshotHooks = physicalCardZoneSnapshotHooks.get(descriptor);
+  const identityStorage = snapshotHooks?.capture();
   if (!isExtensionZone) {
     return {
       ok: true,
-      snapshot: { descriptor, cards: [...cards] },
+      snapshot: {
+        descriptor,
+        cards: [...cards],
+        ...(identityStorage === undefined || snapshotHooks === undefined
+          ? {}
+          : {
+              identityStorage,
+              restoreIdentity: snapshotHooks.restore,
+            }),
+      },
     };
   }
 
@@ -968,6 +997,12 @@ function createPhysicalCardZoneMoveSnapshot(
     snapshot: {
       descriptor,
       cards: [...cards],
+      ...(identityStorage === undefined || snapshotHooks === undefined
+        ? {}
+        : {
+            identityStorage,
+            restoreIdentity: snapshotHooks.restore,
+          }),
       ...(recoveryStorage === undefined ? {} : { recoveryStorage }),
     },
   };
@@ -978,20 +1013,27 @@ function restorePhysicalCardZoneMoveSnapshot(
   descriptor = snapshot.descriptor
 ): string | undefined {
   try {
-    try {
-      descriptor.replace(snapshot.cards);
-    } catch (error) {
-      if (
-        snapshot.recoveryStorage === undefined ||
-        descriptor.read() !== snapshot.recoveryStorage
-      ) {
-        throw error;
+    if (
+      snapshot.identityStorage !== undefined &&
+      snapshot.restoreIdentity !== undefined
+    ) {
+      snapshot.restoreIdentity(snapshot.identityStorage, snapshot.cards);
+    } else {
+      try {
+        descriptor.replace(snapshot.cards);
+      } catch (error) {
+        if (
+          snapshot.recoveryStorage === undefined ||
+          descriptor.read() !== snapshot.recoveryStorage
+        ) {
+          throw error;
+        }
+        snapshot.recoveryStorage.splice(
+          0,
+          snapshot.recoveryStorage.length,
+          ...snapshot.cards
+        );
       }
-      snapshot.recoveryStorage.splice(
-        0,
-        snapshot.recoveryStorage.length,
-        ...snapshot.cards
-      );
     }
     const restoredCards = descriptor.read();
     if (
@@ -1012,12 +1054,12 @@ function describePhysicalCardMoveError(error: unknown): string {
 
 function createArrayCardZoneDescriptor(
   zoneName: string,
-  readStorage: () => readonly CardInstance[],
+  readStorage: () => CardInstance[],
   replaceStorage: (cards: CardInstance[]) => void,
   expectedOwnerId?: CardInstance["ownerId"],
   scoringEligible = false
 ): PhysicalCardZoneDescriptor {
-  return {
+  const descriptor: PhysicalCardZoneDescriptor = {
     zoneName,
     cardinality: "many",
     scoringEligible,
@@ -1029,6 +1071,17 @@ function createArrayCardZoneDescriptor(
       replaceStorage([...cards]);
     },
   };
+  physicalCardZoneSnapshotHooks.set(descriptor, {
+    capture() {
+      const storage = readStorage();
+      return Object.isFrozen(storage) ? undefined : storage;
+    },
+    restore(storage, cards) {
+      storage.splice(0, storage.length, ...cards);
+      replaceStorage(storage);
+    },
+  });
+  return descriptor;
 }
 
 function createSingletonCardZoneDescriptor(

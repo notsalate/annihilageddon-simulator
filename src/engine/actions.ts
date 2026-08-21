@@ -4,6 +4,7 @@ import {
   type ActionResult,
   type GameAction,
 } from "./actions-core.js";
+import { runActionTransaction } from "./action-transaction.js";
 import type { GameState } from "./setup.js";
 
 export { listLegalActions } from "./actions-core.js";
@@ -49,5 +50,5 @@ export function applyAction(
     }
   }
 
-  return applyCoreAction(state, action);
+  return runActionTransaction(state, () => applyCoreAction(state, action));
 }

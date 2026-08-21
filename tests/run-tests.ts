@@ -14,6 +14,7 @@ const testSuites = [
   "setup.test.js",
   "setup-effects.test.js",
   "action-loop.test.js",
+  "action-transactions.test.js",
   "effective-values.test.js",
   "controlled-power-ongoing.test.js",
   "control-ledger.test.js",

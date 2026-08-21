@@ -605,8 +605,7 @@ test("empty card targets preserve skip and fail semantics", () => {
         event.type === "effectChoiceSelected") &&
       event.effectId === "discard_card"
   );
-  assert.equal(failedChoiceEvents.length, 1);
-  assert.equal(failedChoiceEvents[0]?.type, "effectChoiceSkipped");
+  assert.equal(failedChoiceEvents.length, 0);
   if (!failed.result.ok) {
     assert.match(
       failed.result.error,
