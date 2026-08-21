@@ -190,20 +190,13 @@ export type {
   RunMarketFlowOptions,
 } from "./engine/market-flow.js";
 export { runMarketFlow } from "./engine/market-flow.js";
-export type {
-  ControlledObjectView,
-  EffectiveValueKind,
-  EffectiveValueTarget,
-} from "./engine/effective-values.js";
 export {
-  buildControlledObjectView,
   calculateEffectiveCardCost,
   calculateEffectiveCardVictoryPoints,
   calculateEffectivePlayerVictoryPoints,
   calculateEffectivePlayerMaxLife,
   calculateEffectiveTokenVictoryPoints,
-  calculateEffectiveValue,
-} from "./engine/effective-values.js";
+} from "./engine/effective-value-runtime.js";
 export type { AdjudicationResult, PlayerScore } from "./engine/adjudication.js";
 export {
   adjudicateGame,

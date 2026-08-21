@@ -17,7 +17,7 @@ import {
   getControlledCards,
   releaseTemporaryControls,
 } from "./control-ledger.js";
-import { calculateEffectiveCardCost } from "./effective-values.js";
+import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
 import { drawDeckCards } from "./deck-lifecycle.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import { runMarketFlow, type MarketFlowEndReason } from "./market-flow.js";

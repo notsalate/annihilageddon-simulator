@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  buildControlledObjectView,
   calculateEffectiveCardCost,
   calculateEffectiveCardVictoryPoints,
   calculateEffectivePlayerMaxLife,
@@ -22,6 +21,7 @@ import {
 } from "../src/index.js";
 import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
 import {
+  buildControlledObjectView,
   grantTemporaryControl,
   listOwnedScoringCards,
 } from "../src/engine/control-ledger.js";
@@ -30,8 +30,8 @@ import {
   applyEffectiveValueModifier,
   type EffectRuntimeCatalogOperationOverridesForTesting,
   type EffectRuntimeHandlerOperationResult,
-  type EffectiveValueModifierOperationContext,
 } from "../src/engine/effect-runtime-registry.js";
+import type { EffectiveValueModifierOperationContext } from "../src/engine/effective-value-catalog.js";
 import {
   markCardInstanceId,
   markCardDefinitionId,
@@ -173,6 +173,43 @@ const effectiveValueCatalogOperationOverride = {
     return context.evaluate(() => 701);
   },
 } satisfies EffectRuntimeCatalogOperationOverridesForTesting<"fixture_modify_effective_value">;
+
+test("effective-value modifiers keep discovery order", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60619,
+  });
+  const player = state.players[0];
+  assert.ok(player);
+  player.statuses.push({
+    instanceId: markCardInstanceId("fixture-effective-value-order-status"),
+    statusId: "fixture-effective-value-order-status",
+    ownerId: player.playerId,
+    effects: [
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "playerVictoryPoints",
+        operation: "invertNegative",
+        target: { targetType: "player" },
+      },
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "playerVictoryPoints",
+        operation: "add",
+        amount: 5,
+        target: { targetType: "player" },
+      },
+    ],
+  });
+
+  assert.equal(
+    calculateEffectivePlayerVictoryPoints(state, player.playerId, -2),
+    7
+  );
+});
 
 test("current runtime keeps fifteen effectless Limp Wands worth minus one VP", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);

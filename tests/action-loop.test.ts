@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   applyAction,
-  buildControlledObjectView,
   calculateEffectivePlayerMaxLife,
   initializeGame,
   listLegalActions,
@@ -34,7 +33,10 @@ import {
   toChoiceSelection,
 } from "./helpers/game-scenario.js";
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
-import { removeCardFromLocation } from "../src/engine/control-ledger.js";
+import {
+  buildControlledObjectView,
+  removeCardFromLocation,
+} from "../src/engine/control-ledger.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -1161,6 +1163,60 @@ test("controlled-object attack cards use controlled card costs", () => {
         event.definitionId === "esw2_dbg__legend_011" &&
         Array.isArray(targetCardInstanceIds) &&
         targetCardInstanceIds.includes("fixture-runtime-chosen-five")
+      );
+    })
+  );
+
+  activePlayer.hand.splice(0);
+  activePlayer.playedThisTurn.splice(0);
+  activePlayer.permanents.splice(0);
+  activePlayer.statuses.splice(0);
+  activePlayer.permanents.push(
+    createRuntimeCardInstance(
+      activePlayer,
+      "esw2_dbg__main_040",
+      "modified-five"
+    )
+  );
+  activePlayer.statuses.push({
+    instanceId: markCardInstanceId("fixture-attack-effective-cost-modifier"),
+    statusId: "fixture-attack-effective-cost-modifier",
+    ownerId: activePlayer.playerId,
+    effects: [
+      {
+        effectId: "modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "cardCost",
+        operation: "add",
+        amount: 2,
+        target: {
+          targetType: "card",
+          definitionId: "esw2_dbg__main_040",
+        },
+      },
+    ],
+  });
+  const modifiedCostSlippers = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__main_020"
+  );
+  targetPlayer.life.current = 20;
+  lifeBefore = targetPlayer.life.current;
+  result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: modifiedCostSlippers.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, lifeBefore - 7);
+  assert.ok(
+    state.eventLog.some((event) => {
+      return (
+        event.type === "attackCreated" &&
+        event.cardInstanceId === modifiedCostSlippers.instanceId &&
+        event.definitionId === "esw2_dbg__main_020" &&
+        event.amount === 7
       );
     })
   );

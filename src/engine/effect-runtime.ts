@@ -24,7 +24,7 @@ import {
   resolveCardPlay,
   type CardPlayResolutionServices,
 } from "./card-play-resolution.js";
-import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
+import { calculateEffectivePlayerMaxLife } from "./effective-value-runtime.js";
 import { drawDeckCard, refillDeckFromDiscard } from "./deck-lifecycle.js";
 import {
   recordCardMoved,

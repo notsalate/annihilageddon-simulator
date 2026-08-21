@@ -30,9 +30,16 @@ import {
   replaceOwnedCardDefinitionInPlayerZones,
 } from "./control-ledger.js";
 import {
-  calculateEffectiveCardCost,
-  calculateEffectivePlayerMaxLife,
+  applyDecodedEffectiveValueModifier,
+  calculateEffectiveCardCost as calculateEffectiveCardCostCore,
+  calculateEffectivePlayerMaxLife as calculateEffectivePlayerMaxLifeCore,
 } from "./effective-values.js";
+import {
+  effectiveValueModifierCatalogDefinitions,
+  isEffectiveValueModifierEffect,
+  type EffectiveValueModifierId,
+  type EffectiveValueModifierOperationContext,
+} from "./effective-value-catalog.js";
 import { drawDeckCards } from "./deck-lifecycle.js";
 import {
   recordDeckReshuffle,
@@ -45,7 +52,6 @@ import {
   type AvoidAttackRuntimeEffect,
   type DoubleOwnedAttackDamageRuntimeEffect,
   type IncreaseHandLimitAtMaxLifeRuntimeEffect,
-  type ModifyEffectiveValueRuntimeEffect,
   type AttackOutcomeBranch,
   type EffectTiming,
   type ModifyOwnedWandAttackDamageRuntimeEffect,
@@ -470,31 +476,6 @@ export interface EffectRuntimeTimedEvaluationOperationContext<
   ) => EffectRuntimeHandlerOperationResult<Result>;
 }
 
-export type EffectiveValueModifierOperation = (value: number) => number;
-
-function isModifyEffectiveValueRuntimeEffect(
-  effect: RuntimeEffectPayload
-): effect is ModifyEffectiveValueRuntimeEffect {
-  return (
-    effect.effectId === "modify_effective_value" ||
-    effect.effectId === "fixture_modify_effective_value"
-  );
-}
-
-export interface EffectiveValueModifierOperationContext<Result> {
-  readonly timing: "whileControlled" | "whileScoring";
-  readonly valueKind: ModifyEffectiveValueRuntimeEffect["valueKind"];
-  readonly targetMatches: (
-    effect: ModifyEffectiveValueRuntimeEffect
-  ) => boolean;
-  readonly countOwnedScoringCards: (
-    countedCardTypes: readonly string[]
-  ) => number;
-  readonly evaluate: (
-    apply: EffectiveValueModifierOperation
-  ) => EffectRuntimeHandlerOperationResult<Result>;
-}
-
 interface EffectRuntimeHandler<
   Effect extends RuntimeEffectPayload = RuntimeEffectPayload,
 > {
@@ -861,13 +842,7 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
         source,
         timing: context.timing,
         evaluate(decodedEffect) {
-          if (!isModifyEffectiveValueRuntimeEffect(decodedEffect)) {
-            return { status: "notApplicable" };
-          }
-          if (
-            decodedEffect.valueKind !== context.valueKind ||
-            !context.targetMatches(decodedEffect)
-          ) {
+          if (!isEffectiveValueModifierEffect(decodedEffect)) {
             return { status: "notApplicable" };
           }
 
@@ -876,18 +851,7 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
           if (applyEffectiveValueModifier !== undefined) {
             return applyEffectiveValueModifier(decodedEffect, context);
           }
-
-          const apply: EffectiveValueModifierOperation =
-            decodedEffect.operation === "invertNegative"
-              ? (value) => (value < 0 ? Math.abs(value) : value)
-              : (value) =>
-                  value +
-                  (decodedEffect.amount ??
-                    (decodedEffect.amountPerOwnedCard ?? 0) *
-                      context.countOwnedScoringCards(
-                        decodedEffect.countedCardTypes ?? []
-                      ));
-          return context.evaluate(apply);
+          return applyDecodedEffectiveValueModifier(decodedEffect, context);
         },
       });
     },
@@ -1066,7 +1030,6 @@ export function defineEffectRuntimeFamilyForTesting<
 
 const allEffectRuntimeModes: EffectRuntimeSupportedModes = effectRuntimeModes;
 const fixtureOnlyRuntimeEffectIds = new Set<RuntimeEffectId>([
-  "fixture_modify_effective_value",
   "fixture_add_power_equal_to_target_cost",
 ]);
 
@@ -1381,9 +1344,10 @@ function applyLifeChange(
   effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
-  const effectiveMaxLife = calculateEffectivePlayerMaxLife(
+  const effectiveMaxLife = calculateEffectivePlayerMaxLifeCore(
     state,
-    targetPlayer.playerId
+    targetPlayer.playerId,
+    applyEffectiveValueModifier
   );
   const targetLifeBefore = targetPlayer.life.current;
   const unclampedLife = targetLifeBefore + amount;
@@ -2221,9 +2185,10 @@ const increaseHandLimitAtMaxLifeHandler = {
     return { ok: true };
   },
   evaluateEndTurnDrawModifier(effect, context) {
-    const maxLife = calculateEffectivePlayerMaxLife(
+    const maxLife = calculateEffectivePlayerMaxLifeCore(
       context.state,
-      context.controller.playerId
+      context.controller.playerId,
+      applyEffectiveValueModifier
     );
     if (context.controller.life.current < maxLife) {
       return { status: "notApplicable" };
@@ -2491,9 +2456,10 @@ const mayhemLowestLifeDinglerMaxLifeHandler: EffectRuntimeHandler<
       }
 
       services.gainDinglerStatus(state, targetPlayer, effectId, source);
-      const maxLife = calculateEffectivePlayerMaxLife(
+      const maxLife = calculateEffectivePlayerMaxLifeCore(
         state,
-        targetPlayer.playerId
+        targetPlayer.playerId,
+        applyEffectiveValueModifier
       );
       services.setPlayerLife(state, targetPlayer, maxLife);
       recordGameEvent(state, {
@@ -2981,7 +2947,12 @@ function resolveControlledCardCost(
       ok: true,
       amount: Math.max(
         ...cards.map(({ definition }) =>
-          calculateEffectiveCardCost(state, player.playerId, definition)
+          calculateEffectiveCardCostCore(
+            state,
+            player.playerId,
+            definition,
+            applyEffectiveValueModifier
+          )
         )
       ),
     };
@@ -2992,7 +2963,12 @@ function resolveControlledCardCost(
       choiceKind: "cardTarget" as const,
       choiceId: card.instanceId,
       cards: [card],
-      amount: calculateEffectiveCardCost(state, player.playerId, definition),
+      amount: calculateEffectiveCardCostCore(
+        state,
+        player.playerId,
+        definition,
+        applyEffectiveValueModifier
+      ),
     }));
     const choice = services.chooseEffectChoice(
       state,
@@ -3950,7 +3926,7 @@ type SetupBootstrapEffectId =
 
 type TransitionalEffectRuntimeHandlerDefinition = Omit<
   EffectRuntimeHandlerDefinition,
-  SetupBootstrapEffectId
+  SetupBootstrapEffectId | EffectiveValueModifierId
 >;
 
 const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
@@ -4000,8 +3976,6 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
   mayhem_lowest_life_players_gain_dingler_and_set_to_max_life:
     mayhemLowestLifeDinglerMaxLifeHandler,
   set_resurrection_life_total: setResurrectionLifeTotalHandler,
-  modify_effective_value: modifyEffectiveValueHandler,
-  fixture_modify_effective_value: fixtureModifyEffectiveValueHandler,
   fixture_add_power_equal_to_target_cost:
     fixtureAddPowerEqualToTargetCostHandler,
   topdeck_gained_card: topdeckGainedCardHandler,
@@ -4112,6 +4086,24 @@ type EffectRuntimeEntriesFor<PayloadMap> = {
   [Id in keyof PayloadMap & RuntimeEffectId]: EffectRuntimeEntry<Id>;
 };
 
+const effectiveValueModifierEntries = defineEffectRuntimeFamily(
+  "effective-value/modifier",
+  [
+    {
+      ...effectiveValueModifierCatalogDefinitions[0],
+      decoder: bindRuntimeEffectDecoder("modify_effective_value"),
+      handler: modifyEffectiveValueHandler,
+    },
+    {
+      ...effectiveValueModifierCatalogDefinitions[1],
+      decoder: bindRuntimeEffectDecoder("fixture_modify_effective_value"),
+      handler: fixtureModifyEffectiveValueHandler,
+    },
+  ] as const
+) satisfies EffectRuntimeEntriesFor<
+  Pick<SetupEffectPayloadMap, EffectiveValueModifierId>
+>;
+
 function defineRegisteredEffectRuntimeEntry<Id extends RuntimeEffectId>(
   effectId: Id,
   handler: EffectRuntimeHandler<RuntimeEffectForId<Id>>
@@ -4140,6 +4132,11 @@ function getRegisteredEffectRuntimeSourceKinds(
   effectId: RuntimeEffectId
 ): EffectRuntimeSupportedSourceKinds | undefined {
   switch (effectId) {
+    case "modify_effective_value":
+    case "fixture_modify_effective_value":
+      throw new Error(
+        `Effect ${effectId} uses the effective-value family registration`
+      );
     case "force_starting_player":
     case "replace_starting_card":
     case "start_with_basic_trophy":
@@ -4151,9 +4148,6 @@ function getRegisteredEffectRuntimeSourceKinds(
     case "ongoing_hand_refill_bonus":
     case "ongoing_add_power_per_dead_wizard_token":
       return ["card"];
-    case "modify_effective_value":
-    case "fixture_modify_effective_value":
-      return ["card", "wizardProperty", "deadWizardToken"];
     case "increase_hand_limit_at_max_life":
     case "endgame_limp_wands_score_positive":
     case "endgame_vp_per_owned_legend":
@@ -4281,17 +4275,10 @@ const setupBootstrapEffectEntries = defineEffectRuntimeFamily(
 
 const setupEffectEntries = {
   ...setupBootstrapEffectEntries,
+  ...effectiveValueModifierEntries,
   set_resurrection_life_total: defineRegisteredEffectRuntimeEntry(
     "set_resurrection_life_total",
     effectRuntimeHandlerMap.set_resurrection_life_total
-  ),
-  modify_effective_value: defineRegisteredEffectRuntimeEntry(
-    "modify_effective_value",
-    effectRuntimeHandlerMap.modify_effective_value
-  ),
-  fixture_modify_effective_value: defineRegisteredEffectRuntimeEntry(
-    "fixture_modify_effective_value",
-    effectRuntimeHandlerMap.fixture_modify_effective_value
   ),
   increase_hand_limit_at_max_life: defineRegisteredEffectRuntimeEntry(
     "increase_hand_limit_at_max_life",

@@ -4,7 +4,7 @@ import {
   calculateEffectivePlayerVictoryPoints,
   calculateEffectiveTokenVictoryPoints,
   getOwnedScoringCards,
-} from "./effective-values.js";
+} from "./effective-value-runtime.js";
 import type { GameState, PlayerId, TokenInstance } from "./setup.js";
 
 export interface PlayerScore {
