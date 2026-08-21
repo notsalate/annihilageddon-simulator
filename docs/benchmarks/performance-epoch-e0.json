@@ -9,14 +9,14 @@
     "warmupCount": 1,
     "measurementCount": 3,
     "formula": "p95-plus-25-percent-safety-margin",
-    "commit": "25bcb719af24c5b6f70202783741e22259022cab",
+    "commit": "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb",
     "environment": {
-      "nodeVersion": "v22.23.1",
-      "platform": "win32",
+      "nodeVersion": "v22.23.2",
+      "platform": "linux",
       "arch": "x64",
-      "runner": "local",
-      "cpuModel": "13th Gen Intel(R) Core(TM) i5-13420H",
-      "cpuCount": 12
+      "runner": "github:Linux:X64:ubuntu24:20260816.277.1",
+      "cpuModel": "AMD EPYC 7763 64-Core Processor",
+      "cpuCount": 4
     }
   },
   "entries": [
@@ -37,20 +37,20 @@
         "warmupCount": 1,
         "measurementCount": 3,
         "environment": {
-          "nodeVersion": "v22.23.1",
-          "platform": "win32",
+          "nodeVersion": "v22.23.2",
+          "platform": "linux",
           "arch": "x64",
-          "runner": "local",
-          "cpuModel": "13th Gen Intel(R) Core(TM) i5-13420H",
-          "cpuCount": 12
+          "runner": "github:Linux:X64:ubuntu24:20260816.277.1",
+          "cpuModel": "AMD EPYC 7763 64-Core Processor",
+          "cpuCount": 4
         },
-        "commit": "25bcb719af24c5b6f70202783741e22259022cab",
+        "commit": "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb",
         "timings": {
-          "totalMs": 7753.221,
-          "dataLoadMs": 6.793,
-          "gamesMs": 7739.945,
-          "aggregationMs": 4.946,
-          "resultPreparationMs": 0.191
+          "totalMs": 10167.885476,
+          "dataLoadMs": 4.163140000000567,
+          "gamesMs": 10155.244498999997,
+          "aggregationMs": 7.495025999993231,
+          "resultPreparationMs": 0.2744410000013886
         },
         "metrics": {
           "totalGames": 100,
@@ -62,11 +62,26 @@
         }
       },
       "tolerances": {
-        "totalMs": { "relativePercent": 20, "absoluteMs": 1500 },
-        "dataLoadMs": { "relativePercent": 50, "absoluteMs": 5 },
-        "gamesMs": { "relativePercent": 20, "absoluteMs": 1500 },
-        "aggregationMs": { "relativePercent": 50, "absoluteMs": 5 },
-        "resultPreparationMs": { "relativePercent": 50, "absoluteMs": 5 }
+        "totalMs": {
+          "relativePercent": 1.93,
+          "absoluteMs": 203.71
+        },
+        "dataLoadMs": {
+          "relativePercent": 10.41,
+          "absoluteMs": 0.48
+        },
+        "gamesMs": {
+          "relativePercent": 1.93,
+          "absoluteMs": 204.05
+        },
+        "aggregationMs": {
+          "relativePercent": 14.73,
+          "absoluteMs": 1.08
+        },
+        "resultPreparationMs": {
+          "relativePercent": 7.77,
+          "absoluteMs": 0.08
+        }
       }
     },
     {
@@ -86,21 +101,21 @@
         "warmupCount": 1,
         "measurementCount": 3,
         "environment": {
-          "nodeVersion": "v22.23.1",
-          "platform": "win32",
+          "nodeVersion": "v22.23.2",
+          "platform": "linux",
           "arch": "x64",
-          "runner": "local",
-          "cpuModel": "13th Gen Intel(R) Core(TM) i5-13420H",
-          "cpuCount": 12
+          "runner": "github:Linux:X64:ubuntu24:20260816.277.1",
+          "cpuModel": "AMD EPYC 7763 64-Core Processor",
+          "cpuCount": 4
         },
-        "commit": "25bcb719af24c5b6f70202783741e22259022cab",
+        "commit": "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb",
         "timings": {
-          "totalMs": 2262.998,
-          "dataLoadMs": 7.504,
-          "preparationMs": 0.595,
-          "enumerationMs": 1554.098,
-          "rankingMs": 697.218,
-          "resultPreparationMs": 1.669
+          "totalMs": 2639.2846979999995,
+          "dataLoadMs": 4.617492000000311,
+          "preparationMs": 0.7833679999994274,
+          "enumerationMs": 1820.7800220000008,
+          "rankingMs": 804.764568,
+          "resultPreparationMs": 2.0507809999999154
         },
         "metrics": {
           "totalSeeds": 4,
@@ -113,12 +128,30 @@
         }
       },
       "tolerances": {
-        "totalMs": { "relativePercent": 20, "absoluteMs": 500 },
-        "dataLoadMs": { "relativePercent": 50, "absoluteMs": 5 },
-        "preparationMs": { "relativePercent": 50, "absoluteMs": 5 },
-        "enumerationMs": { "relativePercent": 20, "absoluteMs": 500 },
-        "rankingMs": { "relativePercent": 20, "absoluteMs": 500 },
-        "resultPreparationMs": { "relativePercent": 50, "absoluteMs": 5 }
+        "totalMs": {
+          "relativePercent": 2.77,
+          "absoluteMs": 57.26
+        },
+        "dataLoadMs": {
+          "relativePercent": 11.53,
+          "absoluteMs": 0.55
+        },
+        "preparationMs": {
+          "relativePercent": 11.79,
+          "absoluteMs": 0.12
+        },
+        "enumerationMs": {
+          "relativePercent": 2.16,
+          "absoluteMs": 39.45
+        },
+        "rankingMs": {
+          "relativePercent": 2.23,
+          "absoluteMs": 13.32
+        },
+        "resultPreparationMs": {
+          "relativePercent": 18.59,
+          "absoluteMs": 0.3
+        }
       }
     },
     {
@@ -138,21 +171,21 @@
         "warmupCount": 1,
         "measurementCount": 3,
         "environment": {
-          "nodeVersion": "v22.23.1",
-          "platform": "win32",
+          "nodeVersion": "v22.23.2",
+          "platform": "linux",
           "arch": "x64",
-          "runner": "local",
-          "cpuModel": "13th Gen Intel(R) Core(TM) i5-13420H",
-          "cpuCount": 12
+          "runner": "github:Linux:X64:ubuntu24:20260816.277.1",
+          "cpuModel": "AMD EPYC 7763 64-Core Processor",
+          "cpuCount": 4
         },
-        "commit": "25bcb719af24c5b6f70202783741e22259022cab",
+        "commit": "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb",
         "timings": {
-          "totalMs": 4439.45,
-          "dataLoadMs": 7.092,
-          "preparationMs": 0.529,
-          "enumerationMs": 2626.819,
-          "rankingMs": 1800.961,
-          "resultPreparationMs": 5.451
+          "totalMs": 5354.627702000002,
+          "dataLoadMs": 4.5419330000004265,
+          "preparationMs": 0.6025819999995292,
+          "enumerationMs": 3268.9031760000016,
+          "rankingMs": 2070.519416000003,
+          "resultPreparationMs": 5.952393999999913
         },
         "metrics": {
           "totalSeeds": 3,
@@ -165,12 +198,30 @@
         }
       },
       "tolerances": {
-        "totalMs": { "relativePercent": 20, "absoluteMs": 900 },
-        "dataLoadMs": { "relativePercent": 50, "absoluteMs": 5 },
-        "preparationMs": { "relativePercent": 50, "absoluteMs": 5 },
-        "enumerationMs": { "relativePercent": 20, "absoluteMs": 700 },
-        "rankingMs": { "relativePercent": 20, "absoluteMs": 500 },
-        "resultPreparationMs": { "relativePercent": 50, "absoluteMs": 5 }
+        "totalMs": {
+          "relativePercent": 2.99,
+          "absoluteMs": 146.54
+        },
+        "dataLoadMs": {
+          "relativePercent": 11.74,
+          "absoluteMs": 0.46
+        },
+        "preparationMs": {
+          "relativePercent": 11.51,
+          "absoluteMs": 0.12
+        },
+        "enumerationMs": {
+          "relativePercent": 3.53,
+          "absoluteMs": 98.08
+        },
+        "rankingMs": {
+          "relativePercent": 1.56,
+          "absoluteMs": 24.46
+        },
+        "resultPreparationMs": {
+          "relativePercent": 8.82,
+          "absoluteMs": 0.45
+        }
       }
     },
     {
@@ -190,21 +241,21 @@
         "warmupCount": 1,
         "measurementCount": 3,
         "environment": {
-          "nodeVersion": "v22.23.1",
-          "platform": "win32",
+          "nodeVersion": "v22.23.2",
+          "platform": "linux",
           "arch": "x64",
-          "runner": "local",
-          "cpuModel": "13th Gen Intel(R) Core(TM) i5-13420H",
-          "cpuCount": 12
+          "runner": "github:Linux:X64:ubuntu24:20260816.277.1",
+          "cpuModel": "AMD EPYC 7763 64-Core Processor",
+          "cpuCount": 4
         },
-        "commit": "25bcb719af24c5b6f70202783741e22259022cab",
+        "commit": "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb",
         "timings": {
-          "totalMs": 18451.533,
-          "dataLoadMs": 7.201,
-          "preparationMs": 0.472,
-          "enumerationMs": 10910.778,
-          "rankingMs": 7486.542,
-          "resultPreparationMs": 30.666
+          "totalMs": 24115.842160999993,
+          "dataLoadMs": 4.508590000004915,
+          "preparationMs": 0.7175849999985076,
+          "enumerationMs": 14405.804336999987,
+          "rankingMs": 9651.120104999995,
+          "resultPreparationMs": 33.101906000010786
         },
         "metrics": {
           "totalSeeds": 3,
@@ -217,12 +268,30 @@
         }
       },
       "tolerances": {
-        "totalMs": { "relativePercent": 20, "absoluteMs": 3700 },
-        "dataLoadMs": { "relativePercent": 50, "absoluteMs": 5 },
-        "preparationMs": { "relativePercent": 50, "absoluteMs": 5 },
-        "enumerationMs": { "relativePercent": 20, "absoluteMs": 2200 },
-        "rankingMs": { "relativePercent": 20, "absoluteMs": 1500 },
-        "resultPreparationMs": { "relativePercent": 50, "absoluteMs": 50 }
+        "totalMs": {
+          "relativePercent": 3.96,
+          "absoluteMs": 953.84
+        },
+        "dataLoadMs": {
+          "relativePercent": 29.49,
+          "absoluteMs": 1.17
+        },
+        "preparationMs": {
+          "relativePercent": 7.22,
+          "absoluteMs": 0.07
+        },
+        "enumerationMs": {
+          "relativePercent": 4.43,
+          "absoluteMs": 608.83
+        },
+        "rankingMs": {
+          "relativePercent": 4.14,
+          "absoluteMs": 418.41
+        },
+        "resultPreparationMs": {
+          "relativePercent": 10.92,
+          "absoluteMs": 3.38
+        }
       }
     }
   ]
