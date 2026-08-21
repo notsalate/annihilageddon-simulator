@@ -105,6 +105,138 @@ test("public catalog validation preserves the concrete payload variant", () => {
   assert.equal(amount, 2);
 });
 
+test("resource and draw effects use the interactive Catalog timing policy", () => {
+  const validCases = [
+    {
+      effectId: "gain_chips",
+      payload: { effectId: "gain_chips", timing: "onGainCard", amount: 1 },
+      sourceKind: "wizardProperty",
+    },
+    {
+      effectId: "gain_chips_per_player_with_status",
+      payload: {
+        effectId: "gain_chips_per_player_with_status",
+        timing: "onPlay",
+        amountPerPlayer: 1,
+        status: "dingler",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "draw_cards",
+      payload: { effectId: "draw_cards", timing: "onDefense", amount: 1 },
+      sourceKind: "card",
+    },
+  ] as const;
+
+  for (const { effectId, payload, sourceKind } of validCases) {
+    assert.equal(
+      validateRuntimeEffectCatalogPayload(
+        `Valid ${effectId}`,
+        effectId,
+        payload,
+        "combat",
+        sourceKind
+      ).ok,
+      true
+    );
+  }
+
+  const passiveGain = validateRuntimeEffectCatalogPayload(
+    "Passive chip gain",
+    "gain_chips",
+    { effectId: "gain_chips", timing: "whileControlled", amount: 1 },
+    "combat",
+    "card"
+  );
+
+  assert.equal(passiveGain.ok, false);
+  if (!passiveGain.ok) {
+    assert.match(passiveGain.errors.join("\n"), /unsupported timing/);
+  }
+});
+
+test("life and Dingler status effects use typed family payloads and policies", () => {
+  const validCases = [
+    {
+      effectId: "heal",
+      payload: {
+        effectId: "heal",
+        timing: "onPlay",
+        amount: 2,
+        targetSelector: "activePlayer",
+      },
+    },
+    {
+      effectId: "set_life",
+      payload: {
+        effectId: "set_life",
+        timing: "onMayhemResolve",
+        lifeTotal: 15,
+        targetSelector: "activePlayer",
+      },
+    },
+    {
+      effectId: "gain_status",
+      payload: {
+        effectId: "gain_status",
+        timing: "onPlay",
+        statusId: "dingler",
+        targetSelector: "activePlayer",
+      },
+    },
+    {
+      effectId: "remove_status",
+      payload: {
+        effectId: "remove_status",
+        timing: "onPlay",
+        statusId: "dingler",
+        targetSelector: "activePlayer",
+      },
+    },
+    {
+      effectId: "toggle_status",
+      payload: {
+        effectId: "toggle_status",
+        timing: "onPlay",
+        statusId: "dingler",
+        targetSelector: "activePlayer",
+      },
+    },
+  ] as const;
+
+  for (const { effectId, payload } of validCases) {
+    assert.equal(
+      validateRuntimeEffectCatalogPayload(
+        `Valid ${effectId}`,
+        effectId,
+        payload,
+        "combat",
+        "card"
+      ).ok,
+      true
+    );
+  }
+
+  const invalidStatus = validateRuntimeEffectCatalogPayload(
+    "Invalid status",
+    "gain_status",
+    {
+      effectId: "gain_status",
+      timing: "onPlay",
+      statusId: "wizard",
+      targetSelector: "activePlayer",
+    },
+    "combat",
+    "card"
+  );
+
+  assert.equal(invalidStatus.ok, false);
+  if (!invalidStatus.ok) {
+    assert.match(invalidStatus.errors.join("\n"), /statusId must be dingler/);
+  }
+});
+
 test("public catalog validation rejects an ongoing refill payload with unsupported timing", () => {
   const decoded = validateRuntimeEffectCatalogPayload(
     "Controlled refill",
