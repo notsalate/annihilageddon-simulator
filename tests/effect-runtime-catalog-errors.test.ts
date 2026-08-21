@@ -310,6 +310,71 @@ test("resource and life/status family decoders reject malformed payloads before 
   }
 });
 
+test("card ownership and choice family decoders reject malformed payloads before handlers", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23024 });
+  const subject = scenario.activePlayer;
+  const source = catalogSource(subject, "card", "combat");
+  const cases = [
+    {
+      effectId: "reveal_top_card" as const,
+      payload: {
+        effectId: "reveal_top_card",
+        timing: "onPlay",
+        source: "unsupportedDeck",
+      },
+    },
+    {
+      effectId: "play_top_card" as const,
+      payload: {
+        effectId: "play_top_card",
+        timing: "onPlay",
+        source: "activePlayerDeck",
+        destination: "unsupportedDestination",
+      },
+    },
+    {
+      effectId: "play_top_card_from_foe_deck" as const,
+      payload: {
+        effectId: "play_top_card_from_foe_deck",
+        timing: "onPlay",
+        targetSelector: "unsupportedFoe",
+      },
+    },
+    {
+      effectId: "wild_magic_choice" as const,
+      payload: {
+        effectId: "wild_magic_choice",
+        timing: "onPlay",
+        options: [{ effectId: "add_power", amount: "bad" }],
+      },
+    },
+  ] as const;
+
+  for (const { effectId, payload } of cases) {
+    let handlerCalled = false;
+    const result = withTemporaryEffectRuntimeOperations(
+      effectId,
+      {
+        execute() {
+          handlerCalled = true;
+          return { ok: true };
+        },
+      },
+      () =>
+        executeRuntimeEffect(
+          scenario.state,
+          subject,
+          payload,
+          source,
+          throwingRuntimeServices()
+        )
+    );
+
+    assert.equal(result.ok, false);
+    assert.equal(handlerCalled, false);
+  }
+});
+
 test("setup effects accept only wizard-property sources", () => {
   const effect = {
     effectId: "set_starting_life_total",

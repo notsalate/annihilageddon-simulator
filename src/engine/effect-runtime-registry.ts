@@ -3585,7 +3585,12 @@ const wildMagicChoiceHandler: EffectRuntimeHandler<
         effectId: selectedOption.effectId,
         sourceType: source.sourceType,
       });
-      return services.executeEffect(state, player, selectedOption, source);
+      return services.executeEffect(
+        state,
+        player,
+        { ...selectedOption, timing: "onPlay" },
+        source
+      );
     }
 
     recordGameEvent(state, {
@@ -4104,6 +4109,12 @@ type LifeStatusEffectId =
   | "remove_status"
   | "toggle_status";
 
+type CardOwnershipChoiceEffectId =
+  | "reveal_top_card"
+  | "play_top_card"
+  | "play_top_card_from_foe_deck"
+  | "wild_magic_choice";
+
 type TransitionalEffectRuntimeHandlerDefinition = Omit<
   EffectRuntimeHandlerDefinition,
   | SetupBootstrapEffectId
@@ -4111,6 +4122,7 @@ type TransitionalEffectRuntimeHandlerDefinition = Omit<
   | ControlledPowerEffectId
   | ResourceDrawEffectId
   | LifeStatusEffectId
+  | CardOwnershipChoiceEffectId
 >;
 
 const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
@@ -4165,10 +4177,6 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
     preventDefenseAgainstOwnedWandAttacksHandler,
   attack_damage: attackDamageHandler,
   avoid_attack: avoidAttackHandler,
-  reveal_top_card: revealTopCardHandler,
-  play_top_card: playTopCardHandler,
-  play_top_card_from_foe_deck: playTopCardFromFoeDeckHandler,
-  wild_magic_choice: wildMagicChoiceHandler,
   directional_chain_attack: directionalChainAttackHandler,
   multi_target_attack: multiTargetAttackHandler,
   mayhem_attack: mayhemAttackHandler,
@@ -4397,6 +4405,46 @@ const lifeStatusEntries = defineEffectRuntimeFamily("life/status", [
   Pick<ImmediateEffectPayloadMap, LifeStatusEffectId>
 >;
 
+const cardOwnershipChoiceEntries = defineEffectRuntimeFamily(
+  "cards/ownership/choice",
+  [
+    {
+      effectId: "reveal_top_card",
+      decoder: bindRuntimeEffectDecoder("reveal_top_card"),
+      supportedTimings: ["onPlay"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: revealTopCardHandler,
+    },
+    {
+      effectId: "play_top_card",
+      decoder: bindRuntimeEffectDecoder("play_top_card"),
+      supportedTimings: ["onPlay"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: playTopCardHandler,
+    },
+    {
+      effectId: "play_top_card_from_foe_deck",
+      decoder: bindRuntimeEffectDecoder("play_top_card_from_foe_deck"),
+      supportedTimings: ["activation", "onPlay"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card", "wizardProperty"],
+      handler: playTopCardFromFoeDeckHandler,
+    },
+    {
+      effectId: "wild_magic_choice",
+      decoder: bindRuntimeEffectDecoder("wild_magic_choice"),
+      supportedTimings: ["onPlay"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: wildMagicChoiceHandler,
+    },
+  ] as const
+) satisfies EffectRuntimeEntriesFor<
+  Pick<ImmediateEffectPayloadMap, CardOwnershipChoiceEffectId>
+>;
+
 function defineRegisteredEffectRuntimeEntry<Id extends RuntimeEffectId>(
   effectId: Id,
   handler: EffectRuntimeHandler<RuntimeEffectForId<Id>>
@@ -4450,6 +4498,13 @@ function getRegisteredEffectRuntimeSourceKinds(
       throw new Error(
         `Effect ${effectId} uses the life/status family registration`
       );
+    case "reveal_top_card":
+    case "play_top_card":
+    case "play_top_card_from_foe_deck":
+    case "wild_magic_choice":
+      throw new Error(
+        `Effect ${effectId} uses the cards/ownership/choice family registration`
+      );
     case "force_starting_player":
     case "replace_starting_card":
     case "start_with_basic_trophy":
@@ -4481,10 +4536,6 @@ function getRegisteredEffectRuntimeSourceKinds(
     case "destroy_own_cards":
     case "destroy_random_legend_market_card":
     case "return_discard_to_hand":
-    case "reveal_top_card":
-    case "play_top_card":
-    case "play_top_card_from_foe_deck":
-    case "wild_magic_choice":
     case "topdeck_gained_card":
     case "optional_gain_market_cards_to_hand_this_turn":
     case "on_gain_self_gain_limp_wands":
@@ -4677,22 +4728,6 @@ const immediateEffectEntries = {
     "return_discard_to_hand",
     effectRuntimeHandlerMap.return_discard_to_hand
   ),
-  reveal_top_card: defineRegisteredEffectRuntimeEntry(
-    "reveal_top_card",
-    effectRuntimeHandlerMap.reveal_top_card
-  ),
-  play_top_card: defineRegisteredEffectRuntimeEntry(
-    "play_top_card",
-    effectRuntimeHandlerMap.play_top_card
-  ),
-  play_top_card_from_foe_deck: defineRegisteredEffectRuntimeEntry(
-    "play_top_card_from_foe_deck",
-    effectRuntimeHandlerMap.play_top_card_from_foe_deck
-  ),
-  wild_magic_choice: defineRegisteredEffectRuntimeEntry(
-    "wild_magic_choice",
-    effectRuntimeHandlerMap.wild_magic_choice
-  ),
   topdeck_gained_card: defineRegisteredEffectRuntimeEntry(
     "topdeck_gained_card",
     effectRuntimeHandlerMap.topdeck_gained_card
@@ -4713,7 +4748,10 @@ const immediateEffectEntries = {
 } satisfies EffectRuntimeEntriesFor<
   Omit<
     ImmediateEffectPayloadMap,
-    "add_power_if_player_has_status" | ResourceDrawEffectId | LifeStatusEffectId
+    | "add_power_if_player_has_status"
+    | ResourceDrawEffectId
+    | LifeStatusEffectId
+    | CardOwnershipChoiceEffectId
   >
 >;
 
@@ -4977,6 +5015,7 @@ const effectRuntimeCatalogDefinition = defineEffectRuntimeCatalog([
   controlledPowerEntries,
   resourceDrawEntries,
   lifeStatusEntries,
+  cardOwnershipChoiceEntries,
   immediateEffectEntries,
   playerControlledAttackEffectEntries,
   activationEffectEntries,

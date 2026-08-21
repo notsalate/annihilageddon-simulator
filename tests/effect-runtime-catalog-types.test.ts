@@ -237,6 +237,108 @@ test("life and Dingler status effects use typed family payloads and policies", (
   }
 });
 
+test("card ownership and choice effects use exact family policies", () => {
+  const validCases = [
+    {
+      effectId: "reveal_top_card",
+      payload: {
+        effectId: "reveal_top_card",
+        timing: "onPlay",
+        source: "activePlayerDeck",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "play_top_card",
+      payload: {
+        effectId: "play_top_card",
+        timing: "onPlay",
+        source: "activePlayerDeck",
+        destination: "play",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "play_top_card_from_foe_deck",
+      payload: {
+        effectId: "play_top_card_from_foe_deck",
+        timing: "activation",
+        targetSelector: "chosenFoe",
+        nonOngoingCleanupDestination: "ownerDiscard",
+        ongoingOwnership: "controller",
+      },
+      sourceKind: "wizardProperty",
+    },
+    {
+      effectId: "play_top_card_from_foe_deck",
+      payload: {
+        effectId: "play_top_card_from_foe_deck",
+        timing: "onPlay",
+        targetSelector: "chosenFoe",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "wild_magic_choice",
+      payload: {
+        effectId: "wild_magic_choice",
+        timing: "onPlay",
+        options: [
+          { effectId: "add_power", amount: 2 },
+          {
+            effectId: "play_top_card_from_foe_deck",
+            targetSelector: "chosenFoe",
+          },
+        ],
+      },
+      sourceKind: "card",
+    },
+  ] as const;
+
+  for (const { effectId, payload, sourceKind } of validCases) {
+    assert.equal(
+      validateRuntimeEffectCatalogPayload(
+        `Valid ${effectId}`,
+        effectId,
+        payload,
+        "combat",
+        sourceKind
+      ).ok,
+      true
+    );
+  }
+
+  const unsupportedTiming = validateRuntimeEffectCatalogPayload(
+    "Passive top-deck play",
+    "play_top_card",
+    {
+      effectId: "play_top_card",
+      timing: "whileControlled",
+      source: "activePlayerDeck",
+      destination: "play",
+    },
+    "combat",
+    "card"
+  );
+  assert.equal(unsupportedTiming.ok, false);
+  if (!unsupportedTiming.ok) {
+    assert.match(unsupportedTiming.errors.join("\n"), /unsupported timing/);
+  }
+
+  const unsupportedSource = validateRuntimeEffectCatalogPayload(
+    "Wizard-property reveal",
+    "reveal_top_card",
+    {
+      effectId: "reveal_top_card",
+      timing: "onPlay",
+      source: "activePlayerDeck",
+    },
+    "combat",
+    "wizardProperty"
+  );
+  assert.equal(unsupportedSource.ok, false);
+});
+
 test("public catalog validation rejects an ongoing refill payload with unsupported timing", () => {
   const decoded = validateRuntimeEffectCatalogPayload(
     "Controlled refill",
