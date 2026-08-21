@@ -102,6 +102,10 @@ export type EffectRuntimeSupportedSourceKinds = readonly [
   ...EffectRuntimeSourceKind[],
 ];
 type EffectRuntimeSupportedTimings = readonly [EffectTiming, ...EffectTiming[]];
+type EffectRuntimeSourceTimingPolicy = {
+  readonly sourceKind: EffectRuntimeSourceKind;
+  readonly timings: EffectRuntimeSupportedTimings;
+};
 
 export interface EffectSourceContext {
   sourceType: EffectRuntimeSourceKind;
@@ -610,6 +614,11 @@ interface EffectRuntimeEntry<
   readonly supportedModes: EffectRuntimeSupportedModes;
   readonly supportedSourceKinds: EffectRuntimeSupportedSourceKinds;
   readonly unsupported: boolean;
+  validateSourceTiming(
+    subjectId: string,
+    effect: RuntimeEffectForId<EffectId>,
+    sourceKind: EffectRuntimeSourceKind
+  ): string | undefined;
   decode(
     subjectId: string,
     rawEffect: unknown
@@ -693,6 +702,7 @@ interface EffectRuntimeEntryConfig<Id extends RuntimeEffectId> {
   readonly supportedModes: EffectRuntimeSupportedModes;
   readonly supportedSourceKinds: EffectRuntimeSupportedSourceKinds;
   readonly supportedTimings?: EffectRuntimeSupportedTimings;
+  readonly supportedSourceTimingPolicies?: readonly EffectRuntimeSourceTimingPolicy[];
 }
 
 type EffectRuntimeFamilyEntryDefinition<Id extends RuntimeEffectId> = Omit<
@@ -723,6 +733,32 @@ function bindRuntimeEffectDecoder<Id extends RuntimeEffectId>(
       return decodeRuntimeEffectForId(subjectId, effectId, rawEffect);
     },
   };
+}
+
+function getUnsupportedSourceTimingError<Id extends RuntimeEffectId>(
+  subjectId: string,
+  effectId: Id,
+  effect: RuntimeEffectForId<Id>,
+  sourceKind: EffectRuntimeSourceKind,
+  policies: readonly EffectRuntimeSourceTimingPolicy[] | undefined
+): string | undefined {
+  if (policies === undefined) {
+    return undefined;
+  }
+  const timing = "timing" in effect ? effect.timing : undefined;
+  const policy = policies.find(
+    ({ sourceKind: supportedSourceKind }) => supportedSourceKind === sourceKind
+  );
+  if (
+    policy !== undefined &&
+    timing !== undefined &&
+    policy.timings.includes(timing)
+  ) {
+    return undefined;
+  }
+  return `${subjectId} uses unsupported timing ${String(
+    timing
+  )} for source ${sourceKind} in effect ${effectId}`;
 }
 
 function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
@@ -778,6 +814,16 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
         ok: false,
         error: `Effect ${config.effectId} uses unsupported source kind`,
       };
+    }
+    const sourceTimingError = getUnsupportedSourceTimingError(
+      subjectId,
+      config.effectId,
+      decoded.value,
+      source.sourceType,
+      config.supportedSourceTimingPolicies
+    );
+    if (sourceTimingError !== undefined) {
+      return { ok: false, error: sourceTimingError };
     }
     if (!config.supportedModes.includes(source.runtimeMode)) {
       return {
@@ -857,6 +903,15 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     supportedModes: config.supportedModes,
     supportedSourceKinds: config.supportedSourceKinds,
     unsupported: config.handler.unsupported === true,
+    validateSourceTiming(subjectId, effect, sourceKind) {
+      return getUnsupportedSourceTimingError(
+        subjectId,
+        config.effectId,
+        effect,
+        sourceKind,
+        config.supportedSourceTimingPolicies
+      );
+    },
     decode,
     execute,
     evaluateAtTiming,
@@ -4430,6 +4485,10 @@ const cardOwnershipChoiceEntries = defineEffectRuntimeFamily(
       supportedTimings: ["activation", "onPlay"],
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["card", "wizardProperty"],
+      supportedSourceTimingPolicies: [
+        { sourceKind: "card", timings: ["onPlay"] },
+        { sourceKind: "wizardProperty", timings: ["activation"] },
+      ],
       handler: playTopCardFromFoeDeckHandler,
     },
     {
@@ -5073,6 +5132,14 @@ export function validateRuntimeEffectCatalogPayload<Id extends RuntimeEffectId>(
           : `${subjectId} uses token-only effect id ${effectId}`,
       ],
     };
+  }
+  const sourceTimingError = entry.validateSourceTiming(
+    subjectId,
+    decoded.value,
+    sourceKind
+  );
+  if (sourceTimingError !== undefined) {
+    return { ok: false, errors: [sourceTimingError] };
   }
   if (!entry.supportedModes.includes(mode)) {
     return {

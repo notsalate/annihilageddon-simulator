@@ -337,6 +337,30 @@ test("card ownership and choice effects use exact family policies", () => {
     "wizardProperty"
   );
   assert.equal(unsupportedSource.ok, false);
+
+  for (const [sourceKind, timing] of [
+    ["card", "activation"],
+    ["wizardProperty", "onPlay"],
+  ] as const) {
+    const unsupportedSourceTiming = validateRuntimeEffectCatalogPayload(
+      `Unsupported ${sourceKind} and timing pair`,
+      "play_top_card_from_foe_deck",
+      {
+        effectId: "play_top_card_from_foe_deck",
+        timing,
+        targetSelector: "chosenFoe",
+      },
+      "combat",
+      sourceKind
+    );
+
+    assert.equal(unsupportedSourceTiming.ok, false);
+    if (unsupportedSourceTiming.ok) continue;
+    assert.match(
+      unsupportedSourceTiming.errors.join("\n"),
+      /unsupported timing .* for source/
+    );
+  }
 });
 
 test("public catalog validation rejects an ongoing refill payload with unsupported timing", () => {

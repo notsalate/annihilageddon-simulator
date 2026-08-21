@@ -145,6 +145,44 @@ test("catalog decodes Wild Magic options before handing typed options to its han
   assert.equal(handlerCalled, true);
 });
 
+test("catalog execute rejects unsupported source and timing pairs before calling the handler", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23023 });
+  const subject = scenario.activePlayer;
+
+  for (const [sourceType, timing] of [
+    ["card", "activation"],
+    ["wizardProperty", "onPlay"],
+  ] as const) {
+    let handlerCalled = false;
+    const result = withTemporaryEffectRuntimeOperations(
+      "play_top_card_from_foe_deck",
+      {
+        execute() {
+          handlerCalled = true;
+          return { ok: true };
+        },
+      },
+      () =>
+        executeRuntimeEffect(
+          scenario.state,
+          subject,
+          {
+            effectId: "play_top_card_from_foe_deck",
+            timing,
+            targetSelector: "chosenFoe",
+          },
+          catalogSource(subject, sourceType, "combat"),
+          throwingRuntimeServices()
+        )
+    );
+
+    assert.equal(result.ok, false);
+    if (result.ok) continue;
+    assert.match(result.error, /unsupported timing .* for source/);
+    assert.equal(handlerCalled, false);
+  }
+});
+
 test("catalog execute rejects conflicting attack and status targets before calling handlers", () => {
   const scenario = createGameScenario({ rootDir, seed: 23022 });
   const subject = scenario.activePlayer;
