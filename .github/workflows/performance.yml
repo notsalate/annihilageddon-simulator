@@ -1,6 +1,9 @@
 name: performance
 
 on:
+  push:
+    branches:
+      - codex/issues-216-performance-epoch
   pull_request:
   schedule:
     - cron: "0 4 * * *"
@@ -142,7 +145,7 @@ jobs:
           if-no-files-found: error
 
   calibration-run:
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.calibration) }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.calibration) }}
     runs-on: ubuntu-latest
     env:
       BENCHMARK_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
@@ -201,7 +204,7 @@ jobs:
           if-no-files-found: error
 
   calibration:
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.calibration) }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.calibration) }}
     needs: calibration-run
     runs-on: ubuntu-latest
     steps:
@@ -233,7 +236,7 @@ jobs:
           if-no-files-found: error
 
   baseline-bootstrap:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.baseline }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.baseline) }}
     runs-on: ubuntu-latest
     env:
       BENCHMARK_COMMIT: ${{ github.sha }}
@@ -260,7 +263,7 @@ jobs:
           if-no-files-found: error
 
   baseline-candidate:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.calibration && inputs.baseline }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.calibration && inputs.baseline) }}
     needs: [calibration, baseline-bootstrap]
     runs-on: ubuntu-latest
     steps:
