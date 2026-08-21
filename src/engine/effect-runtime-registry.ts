@@ -102,6 +102,10 @@ export type EffectRuntimeSupportedSourceKinds = readonly [
   ...EffectRuntimeSourceKind[],
 ];
 type EffectRuntimeSupportedTimings = readonly [EffectTiming, ...EffectTiming[]];
+type EffectRuntimeSourceTimingPolicy = {
+  readonly sourceKind: EffectRuntimeSourceKind;
+  readonly timings: EffectRuntimeSupportedTimings;
+};
 
 export interface EffectSourceContext {
   sourceType: EffectRuntimeSourceKind;
@@ -610,6 +614,11 @@ interface EffectRuntimeEntry<
   readonly supportedModes: EffectRuntimeSupportedModes;
   readonly supportedSourceKinds: EffectRuntimeSupportedSourceKinds;
   readonly unsupported: boolean;
+  validateSourceTiming(
+    subjectId: string,
+    effect: RuntimeEffectForId<EffectId>,
+    sourceKind: EffectRuntimeSourceKind
+  ): string | undefined;
   decode(
     subjectId: string,
     rawEffect: unknown
@@ -693,6 +702,7 @@ interface EffectRuntimeEntryConfig<Id extends RuntimeEffectId> {
   readonly supportedModes: EffectRuntimeSupportedModes;
   readonly supportedSourceKinds: EffectRuntimeSupportedSourceKinds;
   readonly supportedTimings?: EffectRuntimeSupportedTimings;
+  readonly supportedSourceTimingPolicies?: readonly EffectRuntimeSourceTimingPolicy[];
 }
 
 type EffectRuntimeFamilyEntryDefinition<Id extends RuntimeEffectId> = Omit<
@@ -723,6 +733,32 @@ function bindRuntimeEffectDecoder<Id extends RuntimeEffectId>(
       return decodeRuntimeEffectForId(subjectId, effectId, rawEffect);
     },
   };
+}
+
+function getUnsupportedSourceTimingError<Id extends RuntimeEffectId>(
+  subjectId: string,
+  effectId: Id,
+  effect: RuntimeEffectForId<Id>,
+  sourceKind: EffectRuntimeSourceKind,
+  policies: readonly EffectRuntimeSourceTimingPolicy[] | undefined
+): string | undefined {
+  if (policies === undefined) {
+    return undefined;
+  }
+  const timing = "timing" in effect ? effect.timing : undefined;
+  const policy = policies.find(
+    ({ sourceKind: supportedSourceKind }) => supportedSourceKind === sourceKind
+  );
+  if (
+    policy !== undefined &&
+    timing !== undefined &&
+    policy.timings.includes(timing)
+  ) {
+    return undefined;
+  }
+  return `${subjectId} uses unsupported timing ${String(
+    timing
+  )} for source ${sourceKind} in effect ${effectId}`;
 }
 
 function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
@@ -778,6 +814,16 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
         ok: false,
         error: `Effect ${config.effectId} uses unsupported source kind`,
       };
+    }
+    const sourceTimingError = getUnsupportedSourceTimingError(
+      subjectId,
+      config.effectId,
+      decoded.value,
+      source.sourceType,
+      config.supportedSourceTimingPolicies
+    );
+    if (sourceTimingError !== undefined) {
+      return { ok: false, error: sourceTimingError };
     }
     if (!config.supportedModes.includes(source.runtimeMode)) {
       return {
@@ -857,6 +903,15 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     supportedModes: config.supportedModes,
     supportedSourceKinds: config.supportedSourceKinds,
     unsupported: config.handler.unsupported === true,
+    validateSourceTiming(subjectId, effect, sourceKind) {
+      return getUnsupportedSourceTimingError(
+        subjectId,
+        config.effectId,
+        effect,
+        sourceKind,
+        config.supportedSourceTimingPolicies
+      );
+    },
     decode,
     execute,
     evaluateAtTiming,
@@ -940,6 +995,16 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
           status: "error",
           error: `Setup effect ${config.effectId} uses unsupported source kind`,
         };
+      }
+      const sourceTimingError = getUnsupportedSourceTimingError(
+        subjectId,
+        config.effectId,
+        decoded.value,
+        source.sourceType,
+        config.supportedSourceTimingPolicies
+      );
+      if (sourceTimingError !== undefined) {
+        return { status: "error", error: sourceTimingError };
       }
       if (!config.supportedModes.includes(source.runtimeMode)) {
         return {
@@ -3585,7 +3650,12 @@ const wildMagicChoiceHandler: EffectRuntimeHandler<
         effectId: selectedOption.effectId,
         sourceType: source.sourceType,
       });
-      return services.executeEffect(state, player, selectedOption, source);
+      return services.executeEffect(
+        state,
+        player,
+        { ...selectedOption, timing: "onPlay" },
+        source
+      );
     }
 
     recordGameEvent(state, {
@@ -4104,6 +4174,12 @@ type LifeStatusEffectId =
   | "remove_status"
   | "toggle_status";
 
+type CardOwnershipChoiceEffectId =
+  | "reveal_top_card"
+  | "play_top_card"
+  | "play_top_card_from_foe_deck"
+  | "wild_magic_choice";
+
 type TransitionalEffectRuntimeHandlerDefinition = Omit<
   EffectRuntimeHandlerDefinition,
   | SetupBootstrapEffectId
@@ -4111,6 +4187,7 @@ type TransitionalEffectRuntimeHandlerDefinition = Omit<
   | ControlledPowerEffectId
   | ResourceDrawEffectId
   | LifeStatusEffectId
+  | CardOwnershipChoiceEffectId
 >;
 
 const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
@@ -4165,10 +4242,6 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
     preventDefenseAgainstOwnedWandAttacksHandler,
   attack_damage: attackDamageHandler,
   avoid_attack: avoidAttackHandler,
-  reveal_top_card: revealTopCardHandler,
-  play_top_card: playTopCardHandler,
-  play_top_card_from_foe_deck: playTopCardFromFoeDeckHandler,
-  wild_magic_choice: wildMagicChoiceHandler,
   directional_chain_attack: directionalChainAttackHandler,
   multi_target_attack: multiTargetAttackHandler,
   mayhem_attack: mayhemAttackHandler,
@@ -4397,6 +4470,50 @@ const lifeStatusEntries = defineEffectRuntimeFamily("life/status", [
   Pick<ImmediateEffectPayloadMap, LifeStatusEffectId>
 >;
 
+const cardOwnershipChoiceEntries = defineEffectRuntimeFamily(
+  "cards/ownership/choice",
+  [
+    {
+      effectId: "reveal_top_card",
+      decoder: bindRuntimeEffectDecoder("reveal_top_card"),
+      supportedTimings: ["onPlay"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: revealTopCardHandler,
+    },
+    {
+      effectId: "play_top_card",
+      decoder: bindRuntimeEffectDecoder("play_top_card"),
+      supportedTimings: ["onPlay"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: playTopCardHandler,
+    },
+    {
+      effectId: "play_top_card_from_foe_deck",
+      decoder: bindRuntimeEffectDecoder("play_top_card_from_foe_deck"),
+      supportedTimings: ["activation", "onPlay"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card", "wizardProperty"],
+      supportedSourceTimingPolicies: [
+        { sourceKind: "card", timings: ["onPlay"] },
+        { sourceKind: "wizardProperty", timings: ["activation"] },
+      ],
+      handler: playTopCardFromFoeDeckHandler,
+    },
+    {
+      effectId: "wild_magic_choice",
+      decoder: bindRuntimeEffectDecoder("wild_magic_choice"),
+      supportedTimings: ["onPlay"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: wildMagicChoiceHandler,
+    },
+  ] as const
+) satisfies EffectRuntimeEntriesFor<
+  Pick<ImmediateEffectPayloadMap, CardOwnershipChoiceEffectId>
+>;
+
 function defineRegisteredEffectRuntimeEntry<Id extends RuntimeEffectId>(
   effectId: Id,
   handler: EffectRuntimeHandler<RuntimeEffectForId<Id>>
@@ -4450,6 +4567,13 @@ function getRegisteredEffectRuntimeSourceKinds(
       throw new Error(
         `Effect ${effectId} uses the life/status family registration`
       );
+    case "reveal_top_card":
+    case "play_top_card":
+    case "play_top_card_from_foe_deck":
+    case "wild_magic_choice":
+      throw new Error(
+        `Effect ${effectId} uses the cards/ownership/choice family registration`
+      );
     case "force_starting_player":
     case "replace_starting_card":
     case "start_with_basic_trophy":
@@ -4481,10 +4605,6 @@ function getRegisteredEffectRuntimeSourceKinds(
     case "destroy_own_cards":
     case "destroy_random_legend_market_card":
     case "return_discard_to_hand":
-    case "reveal_top_card":
-    case "play_top_card":
-    case "play_top_card_from_foe_deck":
-    case "wild_magic_choice":
     case "topdeck_gained_card":
     case "optional_gain_market_cards_to_hand_this_turn":
     case "on_gain_self_gain_limp_wands":
@@ -4677,22 +4797,6 @@ const immediateEffectEntries = {
     "return_discard_to_hand",
     effectRuntimeHandlerMap.return_discard_to_hand
   ),
-  reveal_top_card: defineRegisteredEffectRuntimeEntry(
-    "reveal_top_card",
-    effectRuntimeHandlerMap.reveal_top_card
-  ),
-  play_top_card: defineRegisteredEffectRuntimeEntry(
-    "play_top_card",
-    effectRuntimeHandlerMap.play_top_card
-  ),
-  play_top_card_from_foe_deck: defineRegisteredEffectRuntimeEntry(
-    "play_top_card_from_foe_deck",
-    effectRuntimeHandlerMap.play_top_card_from_foe_deck
-  ),
-  wild_magic_choice: defineRegisteredEffectRuntimeEntry(
-    "wild_magic_choice",
-    effectRuntimeHandlerMap.wild_magic_choice
-  ),
   topdeck_gained_card: defineRegisteredEffectRuntimeEntry(
     "topdeck_gained_card",
     effectRuntimeHandlerMap.topdeck_gained_card
@@ -4713,7 +4817,10 @@ const immediateEffectEntries = {
 } satisfies EffectRuntimeEntriesFor<
   Omit<
     ImmediateEffectPayloadMap,
-    "add_power_if_player_has_status" | ResourceDrawEffectId | LifeStatusEffectId
+    | "add_power_if_player_has_status"
+    | ResourceDrawEffectId
+    | LifeStatusEffectId
+    | CardOwnershipChoiceEffectId
   >
 >;
 
@@ -4977,6 +5084,7 @@ const effectRuntimeCatalogDefinition = defineEffectRuntimeCatalog([
   controlledPowerEntries,
   resourceDrawEntries,
   lifeStatusEntries,
+  cardOwnershipChoiceEntries,
   immediateEffectEntries,
   playerControlledAttackEffectEntries,
   activationEffectEntries,
@@ -5034,6 +5142,14 @@ export function validateRuntimeEffectCatalogPayload<Id extends RuntimeEffectId>(
           : `${subjectId} uses token-only effect id ${effectId}`,
       ],
     };
+  }
+  const sourceTimingError = entry.validateSourceTiming(
+    subjectId,
+    decoded.value,
+    sourceKind
+  );
+  if (sourceTimingError !== undefined) {
+    return { ok: false, errors: [sourceTimingError] };
   }
   if (!entry.supportedModes.includes(mode)) {
     return {

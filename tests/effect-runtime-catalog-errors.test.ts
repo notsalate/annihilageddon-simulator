@@ -145,6 +145,44 @@ test("catalog decodes Wild Magic options before handing typed options to its han
   assert.equal(handlerCalled, true);
 });
 
+test("catalog execute rejects unsupported source and timing pairs before calling the handler", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23023 });
+  const subject = scenario.activePlayer;
+
+  for (const [sourceType, timing] of [
+    ["card", "activation"],
+    ["wizardProperty", "onPlay"],
+  ] as const) {
+    let handlerCalled = false;
+    const result = withTemporaryEffectRuntimeOperations(
+      "play_top_card_from_foe_deck",
+      {
+        execute() {
+          handlerCalled = true;
+          return { ok: true };
+        },
+      },
+      () =>
+        executeRuntimeEffect(
+          scenario.state,
+          subject,
+          {
+            effectId: "play_top_card_from_foe_deck",
+            timing,
+            targetSelector: "chosenFoe",
+          },
+          catalogSource(subject, sourceType, "combat"),
+          throwingRuntimeServices()
+        )
+    );
+
+    assert.equal(result.ok, false);
+    if (result.ok) continue;
+    assert.match(result.error, /unsupported timing .* for source/);
+    assert.equal(handlerCalled, false);
+  }
+});
+
 test("catalog execute rejects conflicting attack and status targets before calling handlers", () => {
   const scenario = createGameScenario({ rootDir, seed: 23022 });
   const subject = scenario.activePlayer;
@@ -281,6 +319,71 @@ test("resource and life/status family decoders reject malformed payloads before 
         timing: "onPlay",
         statusId: "wizard",
         targetSelector: "activePlayer",
+      },
+    },
+  ] as const;
+
+  for (const { effectId, payload } of cases) {
+    let handlerCalled = false;
+    const result = withTemporaryEffectRuntimeOperations(
+      effectId,
+      {
+        execute() {
+          handlerCalled = true;
+          return { ok: true };
+        },
+      },
+      () =>
+        executeRuntimeEffect(
+          scenario.state,
+          subject,
+          payload,
+          source,
+          throwingRuntimeServices()
+        )
+    );
+
+    assert.equal(result.ok, false);
+    assert.equal(handlerCalled, false);
+  }
+});
+
+test("card ownership and choice family decoders reject malformed payloads before handlers", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23024 });
+  const subject = scenario.activePlayer;
+  const source = catalogSource(subject, "card", "combat");
+  const cases = [
+    {
+      effectId: "reveal_top_card" as const,
+      payload: {
+        effectId: "reveal_top_card",
+        timing: "onPlay",
+        source: "unsupportedDeck",
+      },
+    },
+    {
+      effectId: "play_top_card" as const,
+      payload: {
+        effectId: "play_top_card",
+        timing: "onPlay",
+        source: "activePlayerDeck",
+        destination: "unsupportedDestination",
+      },
+    },
+    {
+      effectId: "play_top_card_from_foe_deck" as const,
+      payload: {
+        effectId: "play_top_card_from_foe_deck",
+        timing: "onPlay",
+        targetSelector: "unsupportedFoe",
+      },
+    },
+    {
+      effectId: "wild_magic_choice" as const,
+      payload: {
+        effectId: "wild_magic_choice",
+        timing: "onPlay",
+        options: [{ effectId: "add_power", amount: "bad" }],
       },
     },
   ] as const;
