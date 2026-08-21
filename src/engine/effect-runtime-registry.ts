@@ -4092,9 +4092,25 @@ type ControlledPowerEffectId =
   | "ongoing_add_power"
   | "ongoing_add_power_per_dead_wizard_token";
 
+type ResourceDrawEffectId =
+  | "gain_chips"
+  | "gain_chips_per_player_with_status"
+  | "draw_cards";
+
+type LifeStatusEffectId =
+  | "heal"
+  | "set_life"
+  | "gain_status"
+  | "remove_status"
+  | "toggle_status";
+
 type TransitionalEffectRuntimeHandlerDefinition = Omit<
   EffectRuntimeHandlerDefinition,
-  SetupBootstrapEffectId | EffectiveValueModifierId | ControlledPowerEffectId
+  | SetupBootstrapEffectId
+  | EffectiveValueModifierId
+  | ControlledPowerEffectId
+  | ResourceDrawEffectId
+  | LifeStatusEffectId
 >;
 
 const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
@@ -4105,16 +4121,11 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
   discard_card: discardCardHandler,
   destroy_card: destroyCardHandler,
   deal_damage: dealDamageHandler,
-  heal: healHandler,
   heal_equal_damage_dealt_on_own_turn: healEqualDamageDealtOnOwnTurnHandler,
-  set_life: setLifeHandler,
   exchange_life_and_dingler_status: exchangeLifeAndDinglerStatusHandler,
   attack_damage_equal_to_controlled_card_cost:
     attackDamageEqualToControlledCardCostHandler,
-  gain_status: gainStatusHandler,
   attack_gain_status: attackGainStatusHandler,
-  remove_status: removeStatusHandler,
-  toggle_status: toggleStatusHandler,
   mega_mayhem_set_life: megaMayhemSetLifeHandler,
   mega_mayhem_each_player_toggle_dingler:
     megaMayhemEachPlayerToggleDinglerHandler,
@@ -4154,9 +4165,6 @@ const effectRuntimeHandlerMap: TransitionalEffectRuntimeHandlerDefinition = {
     preventDefenseAgainstOwnedWandAttacksHandler,
   attack_damage: attackDamageHandler,
   avoid_attack: avoidAttackHandler,
-  gain_chips: gainChipsHandler,
-  gain_chips_per_player_with_status: gainChipsPerPlayerWithStatusHandler,
-  draw_cards: drawCardsHandler,
   reveal_top_card: revealTopCardHandler,
   play_top_card: playTopCardHandler,
   play_top_card_from_foe_deck: playTopCardFromFoeDeckHandler,
@@ -4306,6 +4314,89 @@ const controlledPowerEntries = defineEffectRuntimeFamily(
     >
 >;
 
+const immediateEffectTimings = [
+  "activation",
+  "onDefense",
+  "onGainCard",
+  "onMayhemResolve",
+  "onPlay",
+  "onPlayCard",
+] as const satisfies EffectRuntimeSupportedTimings;
+
+const resourceDrawEntries = defineEffectRuntimeFamily("resources/draw", [
+  {
+    effectId: "gain_chips",
+    decoder: bindRuntimeEffectDecoder("gain_chips"),
+    supportedTimings: immediateEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card", "wizardProperty"],
+    handler: gainChipsHandler,
+  },
+  {
+    effectId: "gain_chips_per_player_with_status",
+    decoder: bindRuntimeEffectDecoder("gain_chips_per_player_with_status"),
+    supportedTimings: immediateEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card", "wizardProperty"],
+    handler: gainChipsPerPlayerWithStatusHandler,
+  },
+  {
+    effectId: "draw_cards",
+    decoder: bindRuntimeEffectDecoder("draw_cards"),
+    supportedTimings: immediateEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card", "wizardProperty"],
+    handler: drawCardsHandler,
+  },
+] as const) satisfies EffectRuntimeEntriesFor<
+  Pick<ImmediateEffectPayloadMap, ResourceDrawEffectId>
+>;
+
+const lifeStatusEntries = defineEffectRuntimeFamily("life/status", [
+  {
+    effectId: "heal",
+    decoder: bindRuntimeEffectDecoder("heal"),
+    supportedTimings: immediateEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card", "wizardProperty"],
+    handler: healHandler,
+  },
+  {
+    effectId: "set_life",
+    decoder: bindRuntimeEffectDecoder("set_life"),
+    supportedTimings: immediateEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card", "wizardProperty"],
+    handler: setLifeHandler,
+  },
+  {
+    effectId: "gain_status",
+    decoder: bindRuntimeEffectDecoder("gain_status"),
+    supportedTimings: immediateEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card", "wizardProperty"],
+    handler: gainStatusHandler,
+  },
+  {
+    effectId: "remove_status",
+    decoder: bindRuntimeEffectDecoder("remove_status"),
+    supportedTimings: immediateEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card", "wizardProperty"],
+    handler: removeStatusHandler,
+  },
+  {
+    effectId: "toggle_status",
+    decoder: bindRuntimeEffectDecoder("toggle_status"),
+    supportedTimings: immediateEffectTimings,
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card", "wizardProperty"],
+    handler: toggleStatusHandler,
+  },
+] as const) satisfies EffectRuntimeEntriesFor<
+  Pick<ImmediateEffectPayloadMap, LifeStatusEffectId>
+>;
+
 function defineRegisteredEffectRuntimeEntry<Id extends RuntimeEffectId>(
   effectId: Id,
   handler: EffectRuntimeHandler<RuntimeEffectForId<Id>>
@@ -4345,6 +4436,20 @@ function getRegisteredEffectRuntimeSourceKinds(
       throw new Error(
         `Effect ${effectId} uses the controlled-power family registration`
       );
+    case "gain_chips":
+    case "gain_chips_per_player_with_status":
+    case "draw_cards":
+      throw new Error(
+        `Effect ${effectId} uses the resources/draw family registration`
+      );
+    case "heal":
+    case "set_life":
+    case "gain_status":
+    case "remove_status":
+    case "toggle_status":
+      throw new Error(
+        `Effect ${effectId} uses the life/status family registration`
+      );
     case "force_starting_player":
     case "replace_starting_card":
     case "start_with_basic_trophy":
@@ -4363,17 +4468,9 @@ function getRegisteredEffectRuntimeSourceKinds(
     case "add_power_per_controlled_object":
     case "add_power_per_controlled_permanent":
     case "add_power_per_player_with_status":
-    case "gain_chips":
-    case "gain_chips_per_player_with_status":
     case "gain_chips_equal_damage_dealt":
-    case "draw_cards":
-    case "heal":
     case "heal_equal_damage_dealt":
     case "heal_equal_damage_dealt_on_own_turn":
-    case "set_life":
-    case "gain_status":
-    case "remove_status":
-    case "toggle_status":
     case "exchange_life_and_dingler_status":
     case "deal_damage":
     case "gain_card":
@@ -4528,25 +4625,9 @@ const immediateEffectEntries = {
     "add_power_per_player_with_status",
     effectRuntimeHandlerMap.add_power_per_player_with_status
   ),
-  gain_chips: defineRegisteredEffectRuntimeEntry(
-    "gain_chips",
-    effectRuntimeHandlerMap.gain_chips
-  ),
-  gain_chips_per_player_with_status: defineRegisteredEffectRuntimeEntry(
-    "gain_chips_per_player_with_status",
-    effectRuntimeHandlerMap.gain_chips_per_player_with_status
-  ),
   gain_chips_equal_damage_dealt: defineRegisteredEffectRuntimeEntry(
     "gain_chips_equal_damage_dealt",
     effectRuntimeHandlerMap.gain_chips_equal_damage_dealt
-  ),
-  draw_cards: defineRegisteredEffectRuntimeEntry(
-    "draw_cards",
-    effectRuntimeHandlerMap.draw_cards
-  ),
-  heal: defineRegisteredEffectRuntimeEntry(
-    "heal",
-    effectRuntimeHandlerMap.heal
   ),
   heal_equal_damage_dealt: defineRegisteredEffectRuntimeEntry(
     "heal_equal_damage_dealt",
@@ -4555,22 +4636,6 @@ const immediateEffectEntries = {
   heal_equal_damage_dealt_on_own_turn: defineRegisteredEffectRuntimeEntry(
     "heal_equal_damage_dealt_on_own_turn",
     effectRuntimeHandlerMap.heal_equal_damage_dealt_on_own_turn
-  ),
-  set_life: defineRegisteredEffectRuntimeEntry(
-    "set_life",
-    effectRuntimeHandlerMap.set_life
-  ),
-  gain_status: defineRegisteredEffectRuntimeEntry(
-    "gain_status",
-    effectRuntimeHandlerMap.gain_status
-  ),
-  remove_status: defineRegisteredEffectRuntimeEntry(
-    "remove_status",
-    effectRuntimeHandlerMap.remove_status
-  ),
-  toggle_status: defineRegisteredEffectRuntimeEntry(
-    "toggle_status",
-    effectRuntimeHandlerMap.toggle_status
   ),
   exchange_life_and_dingler_status: defineRegisteredEffectRuntimeEntry(
     "exchange_life_and_dingler_status",
@@ -4646,7 +4711,10 @@ const immediateEffectEntries = {
     effectRuntimeHandlerMap.fixture_add_power_equal_to_target_cost
   ),
 } satisfies EffectRuntimeEntriesFor<
-  Omit<ImmediateEffectPayloadMap, "add_power_if_player_has_status">
+  Omit<
+    ImmediateEffectPayloadMap,
+    "add_power_if_player_has_status" | ResourceDrawEffectId | LifeStatusEffectId
+  >
 >;
 
 const playerControlledAttackEffectEntries = {
@@ -4907,6 +4975,8 @@ export function defineEffectRuntimeCatalogGroupsForTesting(
 const effectRuntimeCatalogDefinition = defineEffectRuntimeCatalog([
   setupEffectEntries,
   controlledPowerEntries,
+  resourceDrawEntries,
+  lifeStatusEntries,
   immediateEffectEntries,
   playerControlledAttackEffectEntries,
   activationEffectEntries,
