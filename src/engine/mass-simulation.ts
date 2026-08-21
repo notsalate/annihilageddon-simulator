@@ -1,7 +1,7 @@
+import type { AdjudicationResult } from "./adjudication.js";
 import {
   runSingleGame,
   type GameEndReason,
-  type PlayerScore,
   type RunSingleGameOptions,
 } from "./simulation.js";
 import {
@@ -21,16 +21,16 @@ export interface RunMassSimulationOptions {
   dataPack?: LoadedDataPack;
 }
 
-export interface CompactGameSummary {
+export interface CompactGameSummary extends Pick<
+  AdjudicationResult,
+  "players" | "winnerIds" | "isTie"
+> {
   seed: number;
-  winnerIds: PlayerId[];
-  isTie: boolean;
   endReason: GameEndReason;
   isGameEnd: boolean;
   turnsElapsed: number;
   totalPurchases: number;
   purchasesByPlayer: Record<PlayerId, number>;
-  players: PlayerScore[];
 }
 
 export interface MassSimulationResult {

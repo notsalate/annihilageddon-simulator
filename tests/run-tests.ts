@@ -22,6 +22,7 @@ const testSuites = [
   "trigger-dispatch-ongoing.test.js",
   "trigger-dispatch-errors.test.js",
   "simulation.test.js",
+  "adjudication.test.js",
   "simulation-legal-actions.test.js",
   "debug-trace.test.js",
   "invariants.test.js",
