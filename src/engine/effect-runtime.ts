@@ -15,7 +15,6 @@ import {
   type PlayerControlledAttackIntent,
   type RedirectedAttackIntent,
 } from "./attack-resolution.js";
-import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import {
   getControlledCards,
   removeCardFromLocation,
@@ -24,7 +23,7 @@ import {
   resolveCardPlay,
   type CardPlayResolutionServices,
 } from "./card-play-resolution.js";
-import { calculateEffectivePlayerMaxLife } from "./effective-values.js";
+import { calculateEffectivePlayerMaxLife } from "./effective-value-runtime.js";
 import { drawDeckCard, refillDeckFromDiscard } from "./deck-lifecycle.js";
 import {
   recordCardMoved,
@@ -605,8 +604,12 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
       effect.effectId === "attack_gain_status" &&
       effect["statusId"] === "dingler"
     ) {
-      gainDinglerStatus(state, targetPlayer, "attack_gain_status", source);
-      return { ok: true };
+      return gainDinglerStatus(
+        state,
+        targetPlayer,
+        "attack_gain_status",
+        source
+      );
     }
     return {
       ok: false,
@@ -889,7 +892,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   resolveMayhemAttack,
   resolveMayhemAttackPlan,
   resolvePlayerDeath(state, player) {
-    resolvePlayerDeath(state, player, player.life.current, undefined);
+    return resolvePlayerDeath(state, player, player.life.current, undefined);
   },
   peekTopDeckCard,
   drawTopDeckCard,
@@ -1418,7 +1421,7 @@ function resolvePlayerDeath(
         source: EffectSourceContext;
       }
     | undefined
-): void {
+): EffectExecutionResult {
   recordGameEvent(state, {
     type: "playerDied",
     playerId: player.playerId,
@@ -1446,7 +1449,14 @@ function resolvePlayerDeath(
         tokenInstanceId: token.instanceId,
         tokenDefinitionId: token.definitionId,
       });
-      reconcileActivePlayerControlledPower(state);
+      const controlledPowerResult =
+        recalculateActivePlayerControlledPowerAfterMutation(state, player);
+      if (!controlledPowerResult.ok) {
+        return controlledPowerResult;
+      }
+      if (controlledPowerResult.gameEnd !== undefined) {
+        return controlledPowerResult;
+      }
     }
   }
 
@@ -1460,6 +1470,7 @@ function resolvePlayerDeath(
     lifeBefore: lifeBeforeResurrection,
     lifeAfter: resurrectionLifeTotal,
   });
+  return { ok: true };
 }
 
 function getResurrectionLifeTotal(
@@ -1581,7 +1592,7 @@ function dealDamage(
 
   const killed = targetPlayer.life.current < 1;
   if (killed) {
-    resolvePlayerDeath(
+    const deathResult = resolvePlayerDeath(
       state,
       targetPlayer,
       targetPlayer.life.current,
@@ -1593,6 +1604,9 @@ function dealDamage(
           }
         : undefined
     );
+    if (!deathResult.ok || deathResult.gameEnd !== undefined) {
+      return deathResult;
+    }
   }
 
   const triggerResult = applyDamageDealtTriggers(
@@ -1950,12 +1964,32 @@ function hasDinglerStatus(player: PlayerState): boolean {
   return player.statuses.some((status) => status.statusId === "dingler");
 }
 
+function recalculateActivePlayerControlledPowerAfterMutation(
+  state: GameState,
+  affectedPlayer: PlayerState
+): EffectExecutionResult {
+  if (affectedPlayer.playerId !== state.activePlayerId) {
+    return { ok: true };
+  }
+
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  if (activePlayer === undefined) {
+    return { ok: true };
+  }
+
+  return dispatchControlledCardOperation(state, activePlayer, {
+    kind: "recalculateControlledPower",
+  });
+}
+
 function gainDinglerStatus(
   state: GameState,
   player: PlayerState,
   effectId: RuntimeEffectId,
   source: EffectSourceContext
-): void {
+): EffectExecutionResult {
   if (!hasDinglerStatus(player)) {
     player.statuses.push(createDinglerStatus(player.playerId));
   }
@@ -1969,7 +2003,7 @@ function gainDinglerStatus(
     effectId,
     sourceType: source.sourceType,
   });
-  reconcileActivePlayerControlledPower(state);
+  return recalculateActivePlayerControlledPowerAfterMutation(state, player);
 }
 
 function removeDinglerStatus(
@@ -1977,12 +2011,12 @@ function removeDinglerStatus(
   player: PlayerState,
   effectId: RuntimeEffectId,
   source: EffectSourceContext
-): void {
+): EffectExecutionResult {
   const dinglerIndex = player.statuses.findIndex(
     (status) => status.statusId === "dingler"
   );
   if (dinglerIndex < 0) {
-    return;
+    return { ok: true };
   }
 
   player.statuses.splice(dinglerIndex, 1);
@@ -1994,7 +2028,7 @@ function removeDinglerStatus(
     effectId,
     sourceType: source.sourceType,
   });
-  reconcileActivePlayerControlledPower(state);
+  return recalculateActivePlayerControlledPowerAfterMutation(state, player);
 }
 
 function drawTopDeckCard(

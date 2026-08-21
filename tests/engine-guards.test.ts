@@ -499,6 +499,33 @@ test("typed-access guard rejects default exports of Catalog bypass alias chains"
   }
 });
 
+test("typed-access guard rejects generic Effective Value exports through local aliases", () => {
+  const fixtureRoot = createEngineFixture({
+    "effective-values.ts": `
+      const calculateEffectiveValue = () => 0;
+      void calculateEffectiveValue;
+    `,
+  });
+  writeFileSync(
+    path.join(fixtureRoot, "src", "index.ts"),
+    `
+      import { calculateEffectiveValue as calculate } from "./engine/effective-values.js";
+      const firstAlias = calculate;
+      const secondAlias = firstAlias;
+      export { secondAlias as calculateEffectiveValue };
+    `,
+    "utf8"
+  );
+
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /src\/index\.ts reintroduces the generic Effective Value public export/
+  );
+});
+
 test("typed-access guard permits unexported decoder imports in approved modules", () => {
   const fixtureRoot = createEngineFixture({
     "data.ts": `

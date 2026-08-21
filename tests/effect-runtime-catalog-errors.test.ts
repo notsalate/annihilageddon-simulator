@@ -252,6 +252,64 @@ test("catalog rejects unsupported timing at the decoder boundary before its hand
   assert.equal(handlerCalled, false);
 });
 
+test("resource and life/status family decoders reject malformed payloads before handlers", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23023 });
+  const subject = scenario.activePlayer;
+  const source = catalogSource(subject, "card", "combat");
+  const cases = [
+    {
+      effectId: "gain_chips" as const,
+      payload: { effectId: "gain_chips", timing: "onPlay", amount: 0 },
+    },
+    {
+      effectId: "draw_cards" as const,
+      payload: { effectId: "draw_cards", timing: "onDefense", amount: 0 },
+    },
+    {
+      effectId: "heal" as const,
+      payload: {
+        effectId: "heal",
+        timing: "onPlay",
+        amount: 0,
+        targetSelector: "activePlayer",
+      },
+    },
+    {
+      effectId: "gain_status" as const,
+      payload: {
+        effectId: "gain_status",
+        timing: "onPlay",
+        statusId: "wizard",
+        targetSelector: "activePlayer",
+      },
+    },
+  ] as const;
+
+  for (const { effectId, payload } of cases) {
+    let handlerCalled = false;
+    const result = withTemporaryEffectRuntimeOperations(
+      effectId,
+      {
+        execute() {
+          handlerCalled = true;
+          return { ok: true };
+        },
+      },
+      () =>
+        executeRuntimeEffect(
+          scenario.state,
+          subject,
+          payload,
+          source,
+          throwingRuntimeServices()
+        )
+    );
+
+    assert.equal(result.ok, false);
+    assert.equal(handlerCalled, false);
+  }
+});
+
 test("setup effects accept only wizard-property sources", () => {
   const effect = {
     effectId: "set_starting_life_total",

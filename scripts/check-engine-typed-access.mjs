@@ -33,6 +33,7 @@ const controlledTriggerCallerFunctions = new Set([
   "executeControlledCardOnPlayCardEffects",
 ]);
 const triggerDispatchOwnershipViolations = [];
+const effectiveValueArchitectureViolations = [];
 let attackResolutionOwnerPresent = false;
 let playerControlledAttackOwnerDeclarationCount = 0;
 let triggerDispatchOwnerPresent = false;
@@ -132,6 +133,8 @@ const allowedRegistryAdapterValueExports = new Set([
   "applyRuntimeEffectAfterDamageDealt",
   "evaluateRuntimeEffectEndTurnDrawModifier",
   "withEffectRuntimeCatalogOperationsForTesting",
+  "defineEffectRuntimeFamilyForTesting",
+  "defineEffectRuntimeCatalogGroupsForTesting",
   "tryExecuteSetupEffect",
 ]);
 const publicEntrypoints = new Set([
@@ -277,6 +280,7 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
   }
   checkAttackLifecycleOwnership(relativePath, sourceFile);
   checkTriggerDispatchOwnership(relativePath, sourceFile);
+  checkEffectiveValueArchitecture(relativePath, sourceFile, sourceText);
   checkEffectRuntimeCatalogBoundary(relativePath, sourceFile);
   const aliases = collectTypeAliases(sourceFile);
   function visit(node) {
@@ -329,6 +333,23 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
+}
+
+const publicIndexPath = path.join(rootDir, "src", "index.ts");
+if (statSync(publicIndexPath, { throwIfNoEntry: false })) {
+  const publicIndexText = readFileSync(publicIndexPath, "utf8");
+  const publicIndexSourceFile = ts.createSourceFile(
+    publicIndexPath,
+    publicIndexText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS
+  );
+  checkEffectiveValueArchitecture(
+    "src/index.ts",
+    publicIndexSourceFile,
+    publicIndexText
+  );
 }
 
 checkPublicEntrypointPolicy();
@@ -445,6 +466,190 @@ function checkTriggerDispatchOwnership(relativePath, sourceFile) {
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
+}
+
+function checkEffectiveValueArchitecture(relativePath, sourceFile, sourceText) {
+  const importedBindingsByModule = (moduleSpecifier) => {
+    const bindings = new Set();
+    for (const statement of sourceFile.statements) {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier) ||
+        statement.moduleSpecifier.text !== moduleSpecifier ||
+        statement.importClause === undefined
+      ) {
+        continue;
+      }
+      const clause = statement.importClause;
+      if (clause.name !== undefined) bindings.add(clause.name.text);
+      if (clause.namedBindings === undefined) continue;
+      if (ts.isNamespaceImport(clause.namedBindings)) {
+        bindings.add(clause.namedBindings.name.text);
+        continue;
+      }
+      for (const element of clause.namedBindings.elements) {
+        bindings.add(element.name.text);
+      }
+    }
+    return bindings;
+  };
+
+  const expandLocalAliases = (seedBindings) => {
+    const bindings = new Set(seedBindings);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const statement of sourceFile.statements) {
+        if (!ts.isVariableStatement(statement)) continue;
+        for (const declaration of statement.declarationList.declarations) {
+          if (
+            !ts.isIdentifier(declaration.name) ||
+            declaration.initializer === undefined ||
+            !ts.isIdentifier(declaration.initializer) ||
+            !bindings.has(declaration.initializer.text) ||
+            bindings.has(declaration.name.text)
+          ) {
+            continue;
+          }
+          bindings.add(declaration.name.text);
+          changed = true;
+        }
+      }
+    }
+    return bindings;
+  };
+
+  const controlLedgerBindings = expandLocalAliases(
+    importedBindingsByModule("./control-ledger.js")
+  );
+  const effectiveValuesBindings = expandLocalAliases(
+    importedBindingsByModule("./engine/effective-values.js")
+  );
+
+  const hasExportedBinding = (bindingNames) => {
+    for (const statement of sourceFile.statements) {
+      if (ts.isExportDeclaration(statement)) {
+        if (
+          statement.moduleSpecifier === undefined &&
+          getExportedLocalNames(statement).some((name) =>
+            bindingNames.has(name)
+          )
+        ) {
+          return true;
+        }
+        continue;
+      }
+      if (
+        ts.isExportAssignment(statement) &&
+        ts.isIdentifier(statement.expression) &&
+        bindingNames.has(statement.expression.text)
+      ) {
+        return true;
+      }
+      if (!hasExportModifier(statement)) continue;
+      if (getDeclarationName(statement) !== undefined) {
+        if (bindingNames.has(getDeclarationName(statement))) return true;
+      }
+      if (ts.isVariableStatement(statement)) {
+        if (
+          statement.declarationList.declarations.some(
+            (declaration) =>
+              ts.isIdentifier(declaration.name) &&
+              bindingNames.has(declaration.name.text)
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  if (
+    relativePath === "src/engine/effective-values.ts" &&
+    [...sourceFile.statements].some(
+      (statement) =>
+        ts.isImportDeclaration(statement) &&
+        ts.isStringLiteral(statement.moduleSpecifier) &&
+        statement.moduleSpecifier.text === "./effect-runtime-registry.js"
+    )
+  ) {
+    effectiveValueArchitectureViolations.push(
+      `${relativePath} reintroduces a dependency on Effect Runtime Catalog`
+    );
+  }
+
+  if (
+    relativePath === "src/engine/effective-values.ts" &&
+    ([...sourceFile.statements].some(
+      (statement) =>
+        ts.isExportDeclaration(statement) &&
+        statement.moduleSpecifier !== undefined &&
+        ts.isStringLiteral(statement.moduleSpecifier) &&
+        statement.moduleSpecifier.text === "./control-ledger.js"
+    ) ||
+      [...sourceFile.statements].some(
+        (statement) =>
+          ts.isExportDeclaration(statement) &&
+          statement.moduleSpecifier === undefined &&
+          getExportedLocalNames(statement).some((name) =>
+            controlLedgerBindings.has(name)
+          )
+      ))
+  ) {
+    effectiveValueArchitectureViolations.push(
+      `${relativePath} reintroduces temporary Control Ledger re-exports`
+    );
+  }
+
+  if (
+    relativePath === "src/engine/effective-values.ts" &&
+    hasExportedBinding(new Set(["calculateEffectiveValue"]))
+  ) {
+    effectiveValueArchitectureViolations.push(
+      `${relativePath} reintroduces the generic Effective Value export`
+    );
+  }
+
+  if (
+    relativePath === "src/index.ts" &&
+    ([...sourceFile.statements].some(
+      (statement) =>
+        ts.isExportDeclaration(statement) &&
+        statement.moduleSpecifier !== undefined &&
+        ts.isStringLiteral(statement.moduleSpecifier) &&
+        statement.moduleSpecifier.text === "./engine/effective-values.js"
+    ) ||
+      getExportedLocalNamesFromModule(
+        sourceFile,
+        "./engine/effective-values.js"
+      ).has("calculateEffectiveValue") ||
+      hasExportedBinding(effectiveValuesBindings))
+  ) {
+    effectiveValueArchitectureViolations.push(
+      `${relativePath} reintroduces the generic Effective Value public export`
+    );
+  }
+}
+
+function getExportedLocalNamesFromModule(sourceFile, moduleSpecifier) {
+  const names = new Set();
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isExportDeclaration(statement) ||
+      statement.moduleSpecifier === undefined ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== moduleSpecifier
+    ) {
+      continue;
+    }
+    if (statement.exportClause === undefined) {
+      names.add("*");
+      continue;
+    }
+    for (const name of getExportedLocalNames(statement)) names.add(name);
+  }
+  return names;
 }
 
 function checkEffectRuntimeCatalogBoundary(relativePath, sourceFile) {
@@ -1452,8 +1657,13 @@ if (triggerDispatchOwnershipViolations.length > 0) {
     `Trigger Dispatch ownership violation(s): ${[...new Set(triggerDispatchOwnershipViolations)].join("; ")}`
   );
 }
+if (effectiveValueArchitectureViolations.length > 0) {
+  throw new Error(
+    `Effective Value architecture violation(s): ${[...new Set(effectiveValueArchitectureViolations)].join("; ")}`
+  );
+}
 console.log(
-  `Engine typed-access guard: ok (${violations.length} tracked exception(s)); normal attack lifecycle ownership: ok; Trigger Dispatch ownership: ok; physical card zone ownership: ok`
+  `Engine typed-access guard: ok (${violations.length} tracked exception(s)); normal attack lifecycle ownership: ok; Trigger Dispatch ownership: ok; physical card zone ownership: ok; Effective Value architecture: ok`
 );
 
 function referencesForbiddenRuntimeEffectAssertion(typeNode) {

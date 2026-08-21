@@ -12,23 +12,21 @@ import {
   type ControlledObjectView,
 } from "./control-ledger.js";
 import {
+  type EffectiveValueKind,
+  type EffectiveValueModifierCatalogDispatcher,
+  type EffectiveValueModifierEffect,
+  type EffectiveValueModifierOperation,
+  type EffectiveValueModifierOperationResult,
+  type EffectiveValueModifierOperationContext,
+  type EffectiveValueModifierSource,
+} from "./effective-value-catalog.js";
+import {
   isRuntimeEffectTarget,
   type RuntimeEffect,
   type RuntimeEffectTarget,
 } from "./runtime-effect.js";
-import {
-  applyEffectiveValueModifier,
-  type EffectSourceContext,
-} from "./effect-runtime-registry.js";
 
-export type EffectiveValueKind =
-  | "cardCost"
-  | "cardVictoryPoints"
-  | "tokenVictoryPoints"
-  | "playerVictoryPoints"
-  | "playerMaxLife";
-
-export type EffectiveValueTarget =
+type EffectiveValueTarget =
   | {
       targetType: "card";
       definitionId: CardDefinition["cardId"];
@@ -41,20 +39,35 @@ export type EffectiveValueTarget =
       targetType: "player";
     };
 
-export {
-  buildControlledObjectView,
-  getControlledCards,
-} from "./control-ledger.js";
-export type {
-  ControlledCardObject,
-  ControlledObjectView,
-  ControlledTokenObject,
-} from "./control-ledger.js";
+type EffectiveValueSource = EffectiveValueModifierSource;
+
+export function applyDecodedEffectiveValueModifier<Result>(
+  effect: EffectiveValueModifierEffect,
+  context: EffectiveValueModifierOperationContext<Result>
+): EffectiveValueModifierOperationResult<Result> {
+  if (
+    effect.valueKind !== context.valueKind ||
+    !context.targetMatches(effect)
+  ) {
+    return { status: "notApplicable" };
+  }
+
+  const apply: EffectiveValueModifierOperation =
+    effect.operation === "invertNegative"
+      ? (value) => (value < 0 ? Math.abs(value) : value)
+      : (value) =>
+          value +
+          (effect.amount ??
+            (effect.amountPerOwnedCard ?? 0) *
+              context.countOwnedScoringCards(effect.countedCardTypes ?? []));
+  return context.evaluate(apply);
+}
 
 export function calculateEffectiveCardCost(
   state: GameState,
   playerId: PlayerId,
-  definition: CardDefinition
+  definition: CardDefinition,
+  dispatcher: EffectiveValueModifierCatalogDispatcher
 ): number {
   return calculateEffectiveValue({
     state,
@@ -65,6 +78,7 @@ export function calculateEffectiveCardCost(
       definitionId: definition.cardId,
     },
     baseValue: definition.engine.cost,
+    dispatcher,
   });
 }
 
@@ -72,7 +86,8 @@ export function calculateEffectiveCardVictoryPoints(
   state: GameState,
   playerId: PlayerId,
   definition: CardDefinition,
-  card?: CardInstance
+  card: CardInstance | undefined,
+  dispatcher: EffectiveValueModifierCatalogDispatcher
 ): number {
   return calculateEffectiveValue({
     state,
@@ -85,13 +100,15 @@ export function calculateEffectiveCardVictoryPoints(
     baseValue: definition.engine.victoryPoints,
     scoringCards: getOwnedScoringCards(state, playerId),
     ...(card === undefined ? {} : { scoredCard: card }),
+    dispatcher,
   });
 }
 
 export function calculateEffectiveTokenVictoryPoints(
   state: GameState,
   playerId: PlayerId,
-  definition: TokenDefinition
+  definition: TokenDefinition,
+  dispatcher: EffectiveValueModifierCatalogDispatcher
 ): number {
   if (definition.kind !== "deadWizardToken") {
     throw new Error(`Token ${definition.tokenId} does not have victory points`);
@@ -107,13 +124,15 @@ export function calculateEffectiveTokenVictoryPoints(
     },
     baseValue: definition.victoryPoints,
     scoringCards: getOwnedScoringCards(state, playerId),
+    dispatcher,
   });
 }
 
 export function calculateEffectivePlayerVictoryPoints(
   state: GameState,
   playerId: PlayerId,
-  baseValue: number
+  baseValue: number,
+  dispatcher: EffectiveValueModifierCatalogDispatcher
 ): number {
   return calculateEffectiveValue({
     state,
@@ -124,12 +143,14 @@ export function calculateEffectivePlayerVictoryPoints(
     },
     baseValue,
     scoringCards: getOwnedScoringCards(state, playerId),
+    dispatcher,
   });
 }
 
 export function calculateEffectivePlayerMaxLife(
   state: GameState,
-  playerId: PlayerId
+  playerId: PlayerId,
+  dispatcher: EffectiveValueModifierCatalogDispatcher
 ): number {
   const player = state.players.find(
     (candidate) => candidate.playerId === playerId
@@ -146,15 +167,17 @@ export function calculateEffectivePlayerMaxLife(
       targetType: "player",
     },
     baseValue: player.life.max,
+    dispatcher,
   });
 }
 
-export function calculateEffectiveValue(options: {
+function calculateEffectiveValue(options: {
   state: GameState;
   playerId: PlayerId;
   valueKind: EffectiveValueKind;
   target: EffectiveValueTarget;
   baseValue: number;
+  dispatcher: EffectiveValueModifierCatalogDispatcher;
   scoringCards?: readonly ControlledCardObject[];
   scoredCard?: CardInstance;
 }): number {
@@ -169,18 +192,18 @@ export function calculateEffectiveValue(options: {
       options.scoringCards ?? []
     ),
   ]) {
-    const result = applyEffectiveValueModifier(effect, source, {
+    const dispatched = options.dispatcher(effect, source, {
       timing,
       valueKind: options.valueKind,
-      targetMatches: (effect) => {
-        if (!matchesTarget(options.state, effect.target, options.target)) {
+      targetMatches: (modifier) => {
+        if (!matchesTarget(options.state, modifier.target, options.target)) {
           return false;
         }
         if (
           options.target.targetType !== "card" ||
           options.scoredCard === undefined ||
-          effect.timing !== "whileScoring" ||
-          !isSelfScoringCardEffectTarget(effect.target, source.definitionId)
+          modifier.timing !== "whileScoring" ||
+          !isSelfScoringCardEffectTarget(modifier.target, source.definitionId)
         ) {
           return true;
         }
@@ -197,8 +220,11 @@ export function calculateEffectiveValue(options: {
         return { status: "resolved", result: undefined };
       },
     });
-    if (result.status === "error") {
-      throw new Error(result.error);
+    if (dispatched.status === "error") {
+      throw new Error(dispatched.error);
+    }
+    if (dispatched.status === "notApplicable") {
+      continue;
     }
   }
 
@@ -214,7 +240,7 @@ export function getOwnedScoringCards(
 
 interface EffectiveValueEffect {
   readonly effect: RuntimeEffect;
-  readonly source: EffectSourceContext;
+  readonly source: EffectiveValueSource;
   readonly timing: "whileControlled" | "whileScoring";
 }
 
@@ -297,7 +323,7 @@ function getScoringCardEffects(
 
 function toEffectiveValueEffects(
   effects: readonly RuntimeEffect[],
-  source: EffectSourceContext,
+  source: EffectiveValueSource,
   timing: "whileControlled" | "whileScoring" = "whileControlled"
 ): EffectiveValueEffect[] {
   return effects.map((effect) => ({ effect, source, timing }));
@@ -308,7 +334,7 @@ function cardEffectSource(
   playerId: PlayerId,
   cardInstanceId: string,
   definitionId: string
-): EffectSourceContext {
+): EffectiveValueSource {
   return {
     sourceType: "card",
     runtimeMode: state.runtimeMode,
@@ -323,7 +349,7 @@ function wizardPropertyEffectSource(
   playerId: PlayerId,
   tokenInstanceId: TokenInstance["instanceId"],
   tokenDefinitionId: string
-): EffectSourceContext {
+): EffectiveValueSource {
   return {
     sourceType: "wizardProperty",
     runtimeMode: state.runtimeMode,
@@ -340,7 +366,7 @@ function deadWizardTokenEffectSource(
   playerId: PlayerId,
   tokenInstanceId: TokenInstance["instanceId"],
   tokenDefinitionId: string
-): EffectSourceContext {
+): EffectiveValueSource {
   return {
     sourceType: "deadWizardToken",
     runtimeMode: state.runtimeMode,

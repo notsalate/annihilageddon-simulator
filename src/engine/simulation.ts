@@ -7,7 +7,7 @@ import {
 import { assertNever } from "../common.js";
 import type { ChoiceRequest, ChoiceSelection } from "./choice-policy.js";
 import type { CardDefinition, LoadedDataPack } from "./data.js";
-import { calculateEffectiveCardCost } from "./effective-values.js";
+import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
 import { recordBotActionSelected } from "./event-recorder.js";
 import { adjudicateGame, type AdjudicationResult } from "./adjudication.js";
 import {

@@ -12,15 +12,15 @@ import {
 import { resolveCardPlay } from "./card-play-resolution.js";
 import type { EffectGameEnd } from "./effect-runtime-registry.js";
 import { assertNever } from "../common.js";
-import { reconcileActivePlayerControlledPower } from "./controlled-power.js";
 import {
   getControlledCards,
   releaseTemporaryControls,
 } from "./control-ledger.js";
-import { calculateEffectiveCardCost } from "./effective-values.js";
+import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
 import { drawDeckCards } from "./deck-lifecycle.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import { runMarketFlow, type MarketFlowEndReason } from "./market-flow.js";
+import { dispatchControlledCardOperation } from "./trigger-dispatch.js";
 import type {
   CardInstance,
   GameState,
@@ -214,7 +214,18 @@ function endTurn(state: GameState): ActionResult {
   if (marketFlowResult.gameEndReason !== undefined) {
     return marketFlowResult;
   }
-  reconcileActivePlayerControlledPower(state);
+  const nextActivePlayer = mustGetActivePlayer(state);
+  const controlledPowerResult = dispatchControlledCardOperation(
+    state,
+    nextActivePlayer,
+    { kind: "recalculateControlledPower" }
+  );
+  if (!controlledPowerResult.ok) {
+    return controlledPowerResult;
+  }
+  if (controlledPowerResult.gameEnd !== undefined) {
+    return gameEndActionResult(controlledPowerResult.gameEnd);
+  }
   recordGameEvent(state, {
     type: "turnStarted",
     playerId: state.activePlayerId,
@@ -528,8 +539,6 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
   if (effectResult.gameEnd !== undefined) {
     return gameEndActionResult(effectResult.gameEnd);
   }
-
-  reconcileActivePlayerControlledPower(state);
 
   recordGameEvent(state, {
     type: "cardPlayed",
