@@ -19,7 +19,7 @@ export const SIMULATION_REFERENCE_WORKLOAD_VERSION =
   "simulation-reference-v1" as const;
 
 export const SIMULATION_BENCHMARK_STAGES = [
-  10, 100, 1_000, 10_000, 100_000,
+  10, 1_000, 10_000, 100_000,
 ] as const;
 
 export type SimulationBenchmarkStage =
@@ -289,6 +289,7 @@ function executeSimulationTrial(
   let peakMemoryBytes = clock.readPeakMemoryBytes();
   let dataLoadMs = 0;
   let gamesMs = 0;
+  let aggregationMs = 0;
   const gameSummaries: SimulationGameFingerprint[] = [];
   const eventTypeCounts = new Map<string, number>();
   let totalTurns = 0;
@@ -303,7 +304,6 @@ function executeSimulationTrial(
     const seed = workload.firstSeed + index;
     const dataLoadStartedAt = clock.now();
     const dataPack = loadDataPack(rootDir, workload.dataPackPath);
-    dataLoadMs += elapsedMs(clock, dataLoadStartedAt);
     runtimeDataPackId ??= dataPack.manifest.packId;
     if (dataPack.manifest.packId !== runtimeDataPackId) {
       throw new Error(
@@ -311,6 +311,7 @@ function executeSimulationTrial(
       );
     }
     peakMemoryBytes = Math.max(peakMemoryBytes, clock.readPeakMemoryBytes());
+    dataLoadMs += elapsedMs(clock, dataLoadStartedAt);
 
     const gameStartedAt = clock.now();
     const result = runGame({
@@ -323,6 +324,7 @@ function executeSimulationTrial(
     gamesMs += elapsedMs(clock, gameStartedAt);
     peakMemoryBytes = Math.max(peakMemoryBytes, clock.readPeakMemoryBytes());
 
+    const aggregationStartedAt = clock.now();
     const actionCount = result.eventLog.filter(
       (event) => event.type === "botActionSelected"
     ).length;
@@ -340,12 +342,14 @@ function executeSimulationTrial(
     }
     coverage = {
       ...coverage,
-      scoring: coverage.scoring || result.players.length > 0,
+      scoring:
+        coverage.scoring || hasScoringResult(result, workload.playerCount),
     };
     gameSummaries.push(toSimulationGameFingerprint(result, actionCount));
+    aggregationMs += elapsedMs(clock, aggregationStartedAt);
   }
 
-  const aggregationStartedAt = clock.now();
+  const metricsStartedAt = clock.now();
   const metrics: SimulationBenchmarkMetrics = {
     totalGames: workload.gameCount,
     totalTurns,
@@ -355,7 +359,7 @@ function executeSimulationTrial(
     maxTurnsReached,
     eventTypeCounts: toSortedRecord(eventTypeCounts),
   };
-  const aggregationMs = elapsedMs(clock, aggregationStartedAt);
+  aggregationMs += elapsedMs(clock, metricsStartedAt);
 
   const resultPreparationStartedAt = clock.now();
   const safeRuntimeDataPackId = runtimeDataPackId;
@@ -522,6 +526,22 @@ function updateCoverage(
     reshuffle: coverage.reshuffle || event.type === "discardShuffledIntoDeck",
     scoring: coverage.scoring,
   };
+}
+
+function hasScoringResult(
+  result: SingleGameResult,
+  playerCount: number
+): boolean {
+  return (
+    result.players.length === playerCount &&
+    result.winnerIds.length > 0 &&
+    result.players.every(
+      (player) =>
+        Number.isFinite(player.victoryPoints) &&
+        Number.isInteger(player.legendCount) &&
+        Number.isInteger(player.deadWizardTokenCount)
+    )
+  );
 }
 
 function toSortedRecord(

@@ -47,7 +47,7 @@ test("benchmark CLI rejects unsupported values and malformed numbers", () => {
   );
   assert.throws(
     () => parseBenchmarkArgs(["--stage", "20"]),
-    /stage must be one of 10, 100, 1000, 10000, 100000/
+    /stage must be one of 10, 1000, 10000, 100000/
   );
   assert.throws(
     () => parseBenchmarkArgs(["--firstSeed", "0"]),

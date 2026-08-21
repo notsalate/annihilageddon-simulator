@@ -8,7 +8,7 @@ export interface BenchmarkClock {
 
 export const systemBenchmarkClock: BenchmarkClock = {
   now: () => performance.now(),
-  readPeakMemoryBytes: () => process.memoryUsage().rss,
+  readPeakMemoryBytes: () => process.resourceUsage().maxRSS,
 };
 
 export function median(values: readonly number[]): number {

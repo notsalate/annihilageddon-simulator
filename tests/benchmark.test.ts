@@ -21,16 +21,13 @@ import type {
 const rootDir = process.cwd();
 
 test("simulation benchmark exposes the nested reference stages", () => {
-  assert.deepEqual(
-    SIMULATION_BENCHMARK_STAGES,
-    [10, 100, 1_000, 10_000, 100_000]
-  );
+  assert.deepEqual(SIMULATION_BENCHMARK_STAGES, [10, 1_000, 10_000, 100_000]);
   const workload = createSimulationBenchmarkWorkload({
-    stage: 100,
+    stage: 1_000,
   });
   assert.equal(workload.role, "reference");
   assert.equal(workload.firstSeed, 1);
-  assert.equal(workload.gameCount, 100);
+  assert.equal(workload.gameCount, 1_000);
   assert.equal(workload.playerCount, 2);
   assert.equal(workload.referenceBaselineReview, "required-on-workload-change");
   assert.deepEqual(SIMULATION_REFERENCE_COVERAGE, [

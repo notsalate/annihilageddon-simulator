@@ -129,7 +129,7 @@ export function formatSimulationBenchmark(
     `time: ${formatMilliseconds(result.timings.totalMs)}`,
     `phases: data ${formatMilliseconds(result.timings.dataLoadMs)}, games ${formatMilliseconds(result.timings.gamesMs)}, aggregation ${formatMilliseconds(result.timings.aggregationMs)}, result ${formatMilliseconds(result.timings.resultPreparationMs)}`,
     `throughput: ${formatRate(result.metrics.totalGames, seconds)} games/s, ${formatRate(result.metrics.totalTurns, seconds)} turns/s, ${formatRate(result.metrics.totalActions, seconds)} actions/s`,
-    `games: completed ${result.metrics.completedGames}, maxTurns ${result.metrics.maxTurnsReached}`,
+    `games: completed ${result.metrics.completedGames}, maxTurns limit ${result.workload.maxTurns}, reached ${result.metrics.maxTurnsReached}`,
     `memory: ${result.peakMemoryBytes === undefined ? "not measured for this stage" : formatBytes(result.peakMemoryBytes)}`,
     `coverage: ${result.coverageSatisfied ? "complete" : `missing ${result.missingCoverage.join(", ")}`}`,
     `fingerprints: workload ${result.workloadFingerprint}, volume ${result.workloadVolumeFingerprint}, result ${result.resultFingerprint}`,
