@@ -69,7 +69,7 @@ test("wand mapping and Heart of the Mage normalization remain explicit", () => {
   const wandNote =
     "При создании runtime JSON эта карта обязана получить общие tags `wandCard` и `wandAttackCard`.";
   const heartNote =
-    "Печатный бонус протектора игнорируется при runtime mapping: victoryPoints всегда 3, исполняемое условие протектора не создаётся.";
+    "Условие протектора не моделируется: карта всегда даёт 5 ПО в runtime.";
   const decisions = readJson<ClusterDecisions>(
     ".scratch/krutagidon-card-runtime-clusters/card-cluster-decisions.json"
   );

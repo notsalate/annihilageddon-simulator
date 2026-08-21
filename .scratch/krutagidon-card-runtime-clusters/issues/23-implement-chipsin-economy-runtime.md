@@ -1,8 +1,9 @@
 Status: Todo
 Label: ready-for-agent
 Type: AFK
+GitHub: #239
 
-# Реализовать chipsin-economy runtime cards
+# Закончить chipsin-economy картой «Сердце мага»
 
 ## Parent
 
@@ -11,18 +12,13 @@ Type: AFK
 
 ## What to build
 
-Реализовать Block D slice для всего кластера `chipsin-economy`.
+Закрыть оставшийся Block D slice кластера `chipsin-economy`.
 
-Срез должен довести выбранные карты до `fullRuntime`, включая chipsin gains, costs, transfers, table-wide chipsin effects и chipsin-scaled behavior.
+Шесть main-карт кластера уже `fullRuntime`. Этот issue должен довести оставшуюся карту до `fullRuntime` и завершить кластерный PR.
 
 ## Card IDs
 
-- `esw2_dbg__main_015`
-- `esw2_dbg__main_036`
-- `esw2_dbg__main_041`
-- `esw2_dbg__main_062`
-- `esw2_dbg__main_072`
-- `esw2_dbg__main_075`
+- `esw2_dbg__legend_026`
 
 ## User stories covered
 
@@ -38,8 +34,8 @@ Type: AFK
 - [ ] Для каждой карты из списка добавлен current runtime card JSON, основанный на import draft/source text.
 - [ ] Все выбранные карты добавлены в соответствующие current compositions.
 - [ ] Каждая выбранная карта становится `fullRuntime` в generated matrix.
-- [ ] Полностью реализовано chipsin economy behavior каждой выбранной карты.
-- [ ] Focused tests покрывают gains, costs, transfers и scaled effects where relevant.
+- [ ] Карта берёт 1 карту, даёт 3 чипсины и всегда приносит 5 ПО; условие протектора не создаётся.
+- [ ] Точечные тесты покрывают добор, получение чипсин и подсчёт 5 ПО.
 - [ ] Не реализовывать карты вне списка этого issue.
 - [ ] Не менять cluster assignment и не переоткрывать Block C taxonomy.
 - [ ] Выполнен `npm run report:card-runtime-clusters -- --write`.
@@ -55,3 +51,4 @@ None - can start immediately
 ## Notes
 
 - Issue остаётся внутри `clusterId: "chipsin-economy"`.
+- Этот issue и его PR закрывают оставшийся хвост кластера; уже реализованные main-карты не меняются без необходимости.

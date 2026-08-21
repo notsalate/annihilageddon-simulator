@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "draftKind": "cardDraft",
   "cardId": "esw2_dbg__legend_026",
   "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_026.json",
     "image": "assets/cards/legend/treasure/Легенда-Сокровище. Сердце мага по-эпичному.png",
     "text": "data/import/cards/legend/texts/esw2_dbg__legend_026.md"
   },
@@ -17,10 +17,29 @@
     "markers": [],
     "uncertainty": []
   },
-  "notes": [
-    "Условие протектора не моделируется: карта всегда даёт 5 ПО в runtime."
-  ],
-  "composition": {
-    "quantity": 1
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "cost": 9,
+    "victoryPoints": 5,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "draw_cards",
+        "timing": "onPlay",
+        "amount": 1
+      },
+      {
+        "effectId": "gain_chips",
+        "timing": "onPlay",
+        "amount": 3
+      }
+    ],
+    "unsupportedMechanics": []
   }
 }

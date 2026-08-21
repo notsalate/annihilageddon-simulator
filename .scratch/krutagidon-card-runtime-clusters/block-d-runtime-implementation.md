@@ -20,17 +20,23 @@ Each Block D issue must select concrete cards from one mechanic cluster and make
 
 Start with simple clusters and move upward by implementation complexity.
 
+Deliver cluster PRs sequentially. One PR contains work from exactly one `clusterId`; do not combine several mechanic clusters in one PR.
+
+Current next-cluster order:
+
+1. finish `chipsin-economy`;
+2. implement `market-effects`;
+3. implement `special-card-stack`.
+
 Do not create broad attack, defense, or other foundation work before the concrete cluster that needs it. Shared mechanics should be introduced inside the first cluster issue that proves the need.
 
 ## Issue Slicing
 
 Each Block D issue must stay within one `clusterId`. Do not mix cards from different mechanic clusters in one implementation issue.
 
-Clusters with up to 6 cards should be implemented as one complete issue for the whole cluster.
+A cluster may be split into several issues when coherent runtime surfaces make the work easier to implement and verify. Every split issue must remain inside the same `clusterId`.
 
-Larger clusters may be split into several issues, but every split issue still stays within the same `clusterId`.
-
-Split clusters with 7 or more cards by one coherent runtime surface inside the same `clusterId`, for example `market-effects/cost-and-gain`, `market-effects/wipe-refill`, or `special-card-stack/limp-wand-gain`.
+All issues for the currently selected cluster must land together in one cluster PR. The PR is complete only when every selected missing-runtime card in that cluster is `fullRuntime`.
 
 Planned Block D issue granularity:
 
@@ -105,6 +111,8 @@ Implement as 1 issue:
 - `esw2_dbg__main_062`
 - `esw2_dbg__main_072`
 - `esw2_dbg__main_075`
+
+Current closeout note: the six main-deck cards are already `fullRuntime`; the remaining implementation issue covers `esw2_dbg__legend_026`. The protector condition is not executable; the card always gives 5 VP in runtime.
 
 ### `ongoing-modifiers`
 

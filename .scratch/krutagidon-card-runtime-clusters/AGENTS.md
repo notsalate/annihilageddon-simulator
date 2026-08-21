@@ -28,6 +28,9 @@ This folder contains the local planning workflow for card runtime clusters.
 - `fullRuntime` means the card has current runtime card JSON, direct current deck/stack/pool membership, and focused test refs.
 - `missingRuntime` is normal backlog state, not a process error by itself.
 - Block D is runtime implementation work by mechanic cluster. Start with simpler clusters and move toward harder clusters.
+- A mechanic cluster is the PR delivery boundary: one PR must contain work from exactly one `clusterId` and finish the selected cluster backlog represented by its linked issues.
+- A mechanic cluster may be split into several coherent implementation issues, but all of those issues must land together in the same cluster PR.
+- Sequence cluster PRs from simpler mechanics toward harder mechanics instead of implementing overlapping cluster PRs in parallel.
 - Do not create broad attack, defense, or other foundation issues ahead of the concrete cluster that needs them by default.
 - Block D implementation issues must make their selected cards `fullRuntime`, including adding them to the corresponding current compositions so they participate in the game.
 - `npm run report:card-runtime-clusters` must block non-full runtime card JSON, runtime card JSON without matching drafts, invalid decision references, and direct composition entries that point at missing runtime card definitions.
