@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 
 import {
   PERFORMANCE_CALIBRATION_COMPARISON_COUNT,
+  PERFORMANCE_CALIBRATION_SCHEMA_VERSION,
+  assertPerformanceAcceptedCalibration,
   assertPerformanceEpochBaseline,
   calibratePerformance,
-  comparePerformance,
+  comparePerformance as comparePerformanceWithoutCalibration,
   createPerformanceBaselineEntry,
+  getAcceptedPerformanceEpochCommit,
   parsePerformanceMeasurement,
   type BenchmarkEnvironmentFingerprint,
+  type PerformanceAcceptedCalibration,
   type PerformanceMeasurement,
 } from "../src/index.js";
 
@@ -30,6 +34,7 @@ function measurement(
     workloadVolumeFingerprint?: string;
     resultFingerprint?: string;
     environment?: BenchmarkEnvironmentFingerprint;
+    commit?: string;
   } = {}
 ): PerformanceMeasurement {
   return {
@@ -45,7 +50,8 @@ function measurement(
     warmupCount: 1,
     measurementCount: 3,
     environment: options.environment ?? environment,
-    commit: "commit-1",
+    comparisonPairId: "fixture-pair",
+    commit: options.commit ?? "commit-1",
     timings: {
       totalMs: options.totalMs ?? 10,
       dataLoadMs: 1,
@@ -60,14 +66,70 @@ function measurement(
   };
 }
 
-function baselineEntry() {
-  return createPerformanceBaselineEntry(measurement({ role: "reference" }), {
+function baselineEntry(reference = measurement({ role: "reference" })) {
+  return createPerformanceBaselineEntry(reference, {
     totalMs: { relativePercent: 10, absoluteMs: 1 },
     dataLoadMs: { relativePercent: 25, absoluteMs: 1 },
     gamesMs: { relativePercent: 10, absoluteMs: 1 },
     aggregationMs: { relativePercent: 50, absoluteMs: 1 },
     resultPreparationMs: { relativePercent: 50, absoluteMs: 1 },
   });
+}
+
+function acceptedCalibration(
+  calibrationEnvironment = environment
+): PerformanceAcceptedCalibration {
+  const baseline = baselineEntry();
+  return {
+    schemaVersion: PERFORMANCE_CALIBRATION_SCHEMA_VERSION,
+    calibrationId: "fixture-calibration-v1",
+    commit: "1111111111111111111111111111111111111111",
+    protocol: {
+      comparisons: PERFORMANCE_CALIBRATION_COMPARISON_COUNT,
+      warmupCount: 1,
+      measurementCount: 3,
+      formula: "p95-plus-25-percent-safety-margin",
+    },
+    runnerClass: {
+      nodeVersion: calibrationEnvironment.nodeVersion,
+      platform: calibrationEnvironment.platform,
+      arch: calibrationEnvironment.arch,
+      runner: calibrationEnvironment.runner,
+      cpuCount: calibrationEnvironment.cpuCount,
+    },
+    entries: [
+      {
+        benchmark: baseline.benchmark,
+        id: baseline.id,
+        contractVersion: baseline.reference.contractVersion,
+        workloadFingerprint: baseline.reference.workloadFingerprint,
+        workloadVolumeFingerprint: baseline.reference.workloadVolumeFingerprint,
+        tolerances: baseline.tolerances,
+      },
+    ],
+  };
+}
+
+function comparePerformance(
+  options: Omit<
+    Parameters<typeof comparePerformanceWithoutCalibration>[0],
+    "acceptedCalibration"
+  >
+) {
+  return comparePerformanceWithoutCalibration({
+    ...options,
+    acceptedCalibration: acceptedCalibration(),
+  });
+}
+
+function pairedMeasurement(
+  comparisonPairId: string,
+  options: Parameters<typeof measurement>[0] = {}
+): PerformanceMeasurement & { comparisonPairId: string } {
+  return {
+    ...measurement(options),
+    comparisonPairId,
+  };
 }
 
 test("performance comparison passes within calibrated tolerance", () => {
@@ -105,6 +167,7 @@ test("performance comparison confirms a regression before blocking", () => {
   });
   assert.equal(confirmed.verdict, "regression");
   assert.equal(confirmed.blocking, true);
+  assert.equal(confirmed.blockingSource, "both");
   assert.deepEqual(confirmed.epochComparison.confirmedRegressionMetrics, [
     "totalMs",
   ]);
@@ -126,7 +189,7 @@ test("changed workload receives a non-blocking workload-changed verdict", () => 
   assert.match(report.baseComparison.reason, /start a new performance epoch/);
 });
 
-test("changed workload does not block on a regression against the changed base", () => {
+test("changed workload remains non-blocking without an accepted changed budget", () => {
   const report = comparePerformance({
     baseline: baselineEntry(),
     base: measurement({ workloadVolumeFingerprint: "new-volume" }),
@@ -141,9 +204,36 @@ test("changed workload does not block on a regression against the changed base",
   });
 
   assert.equal(report.epochComparison.verdict, "workload-changed");
-  assert.equal(report.baseComparison.verdict, "regression");
+  assert.equal(report.baseComparison.verdict, "not-calibrated");
   assert.equal(report.verdict, "workload-changed");
   assert.equal(report.blocking, false);
+});
+
+test("changed E0 workload does not mask an independently calibrated PR regression", () => {
+  const calibration = acceptedCalibration();
+  const changedWorkloadCalibration: PerformanceAcceptedCalibration = {
+    ...calibration,
+    entries: calibration.entries.map((entry) => ({
+      ...entry,
+      workloadVolumeFingerprint: "new-volume",
+    })),
+  };
+  const report = comparePerformanceWithoutCalibration({
+    baseline: baselineEntry(),
+    acceptedCalibration: changedWorkloadCalibration,
+    base: measurement({ workloadVolumeFingerprint: "new-volume", totalMs: 10 }),
+    head: measurement({ workloadVolumeFingerprint: "new-volume", totalMs: 13 }),
+    confirmation: measurement({
+      workloadVolumeFingerprint: "new-volume",
+      totalMs: 13,
+    }),
+  });
+
+  assert.equal(report.epochComparison.verdict, "workload-changed");
+  assert.equal(report.baseComparison.verdict, "regression");
+  assert.equal(report.verdict, "regression");
+  assert.equal(report.blocking, true);
+  assert.equal(report.blockingSource, "pull-request-regression");
 });
 
 test("environment changes require recalibration without blocking", () => {
@@ -160,8 +250,148 @@ test("environment changes require recalibration without blocking", () => {
 
   assert.equal(report.verdict, "not-calibrated");
   assert.equal(report.blocking, false);
+  assert.equal(report.blockingSource, null);
   assert.equal(report.epochComparison.verdict, "not-calibrated");
   assert.equal(report.baseComparison.verdict, "not-calibrated");
+});
+
+test("historical E0 from another physical runner cannot block a passing PR pair", () => {
+  const pullRequestEnvironment = {
+    ...environment,
+    cpuModel: "different-physical-cpu",
+  };
+  const report = comparePerformance({
+    baseline: baselineEntry(),
+    base: measurement({
+      totalMs: 13,
+      environment: pullRequestEnvironment,
+    }),
+    head: measurement({
+      totalMs: 13,
+      environment: pullRequestEnvironment,
+    }),
+    confirmation: measurement({
+      totalMs: 13,
+      environment: pullRequestEnvironment,
+    }),
+  });
+
+  assert.equal(report.epochComparison.verdict, "not-calibrated");
+  assert.equal(report.baseComparison.verdict, "pass");
+  assert.equal(report.verdict, "not-calibrated");
+  assert.equal(report.blocking, false);
+});
+
+test("measurements from different runner sessions cannot form a blocking pair", () => {
+  const report = comparePerformance({
+    baseline: baselineEntry(
+      pairedMeasurement("historical-e0", {
+        role: "reference",
+      })
+    ),
+    base: pairedMeasurement("pull-request", { totalMs: 13 }),
+    head: pairedMeasurement("pull-request", { totalMs: 13 }),
+    confirmation: pairedMeasurement("pull-request", { totalMs: 13 }),
+  });
+
+  assert.equal(report.epochComparison.verdict, "not-calibrated");
+  assert.equal(report.baseComparison.verdict, "pass");
+  assert.equal(report.verdict, "not-calibrated");
+  assert.equal(report.blocking, false);
+});
+
+test("fresh E0 measurement can block an accumulated same-runner regression", () => {
+  const freshEpochReference = measurement({
+    role: "reference",
+    totalMs: 10,
+  });
+  const report = comparePerformance({
+    baseline: baselineEntry(),
+    epochReference: freshEpochReference,
+    base: measurement({ totalMs: 13 }),
+    head: measurement({ totalMs: 13 }),
+    confirmation: measurement({ totalMs: 13 }),
+  });
+
+  assert.equal(report.epochReference, freshEpochReference);
+  assert.equal(report.epochComparison.verdict, "regression");
+  assert.equal(report.baseComparison.verdict, "pass");
+  assert.equal(report.verdict, "regression");
+  assert.equal(report.blockingSource, "epoch-health");
+});
+
+test("missing fresh E0 measurement does not mask a PR regression", () => {
+  const report = comparePerformance({
+    baseline: baselineEntry(),
+    epochReference: null,
+    base: measurement({ totalMs: 10 }),
+    head: measurement({ totalMs: 13 }),
+    confirmation: measurement({ totalMs: 13 }),
+  });
+
+  assert.equal(report.epochReference, null);
+  assert.equal(report.epochComparison.verdict, "not-measured");
+  assert.equal(report.baseComparison.verdict, "regression");
+  assert.equal(report.verdict, "regression");
+  assert.equal(report.blockingSource, "pull-request-regression");
+});
+
+test("epoch health rejects a fresh measurement from a non-baseline commit", () => {
+  const report = comparePerformance({
+    baseline: baselineEntry(),
+    epochReference: measurement({
+      role: "reference",
+      totalMs: 10,
+      commit: "different-commit",
+    }),
+    base: measurement({ totalMs: 13 }),
+    head: measurement({ totalMs: 13 }),
+    confirmation: measurement({ totalMs: 13 }),
+  });
+
+  assert.equal(report.epochComparison.verdict, "not-measured");
+  assert.equal(report.baseComparison.verdict, "pass");
+  assert.equal(report.blocking, false);
+});
+
+test("missing accepted calibration cannot fall back to baseline tolerances", () => {
+  const report = comparePerformanceWithoutCalibration({
+    baseline: baselineEntry(),
+    acceptedCalibration: null,
+    epochReference: measurement({ role: "reference", totalMs: 10 }),
+    base: measurement({ totalMs: 10 }),
+    head: measurement({ totalMs: 13 }),
+    confirmation: measurement({ totalMs: 13 }),
+  });
+
+  assert.equal(report.epochComparison.verdict, "not-calibrated");
+  assert.equal(report.baseComparison.verdict, "not-calibrated");
+  assert.equal(report.verdict, "not-calibrated");
+  assert.equal(report.blocking, false);
+  assert.equal(report.calibrationId, null);
+});
+
+test("accepted calibration from another runner class is not applied", () => {
+  const otherRunnerEnvironment = {
+    ...environment,
+    runner: "github:Linux:X64:ubuntu-24.04:new-image",
+  };
+  const report = comparePerformanceWithoutCalibration({
+    baseline: baselineEntry(),
+    acceptedCalibration: acceptedCalibration(),
+    epochReference: null,
+    base: measurement({ environment: otherRunnerEnvironment, totalMs: 10 }),
+    head: measurement({ environment: otherRunnerEnvironment, totalMs: 13 }),
+    confirmation: measurement({
+      environment: otherRunnerEnvironment,
+      totalMs: 13,
+    }),
+  });
+
+  assert.equal(report.epochComparison.verdict, "not-measured");
+  assert.equal(report.baseComparison.verdict, "not-calibrated");
+  assert.equal(report.verdict, "not-calibrated");
+  assert.equal(report.blocking, false);
 });
 
 test("calibration derives tolerances from twenty same-commit pairs", () => {
@@ -242,6 +472,7 @@ test("an epoch regression remains blocking when the immediate base changed workl
   assert.equal(report.baseComparison.verdict, "workload-changed");
   assert.equal(report.verdict, "regression");
   assert.equal(report.blocking, true);
+  assert.equal(report.blockingSource, "epoch-health");
 });
 
 test("performance artifacts accept a normalized measurement wrapper", () => {
@@ -284,9 +515,47 @@ test("the committed E0 baseline covers simulation and all analyzer profiles", ()
   assertPerformanceEpochBaseline(value);
 
   assert.equal(value.epoch, "E0");
+  assert.equal(
+    getAcceptedPerformanceEpochCommit(value),
+    "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb"
+  );
   assert.equal(value.calibration.comparisons, 20);
   assert.deepEqual(
     value.entries.map((entry) => entry.id),
     ["simulation:100", "analyzer:light", "analyzer:typical", "analyzer:heavy"]
+  );
+
+  const calibrationValue: unknown = JSON.parse(
+    readFileSync("docs/benchmarks/performance-calibration-e0-v1.json", "utf8")
+  );
+  assertPerformanceAcceptedCalibration(calibrationValue);
+  assert.equal(
+    calibrationValue.calibrationId,
+    "e0-node22-ubuntu24-20260816-v1"
+  );
+  assert.deepEqual(
+    calibrationValue.entries.map((entry) => entry.id),
+    value.entries.map((entry) => entry.id)
+  );
+  for (const entry of value.entries) {
+    assert.deepEqual(
+      calibrationValue.entries.find((candidate) => candidate.id === entry.id)
+        ?.tolerances,
+      entry.tolerances
+    );
+  }
+
+  const acceptedCalibrations = readdirSync("docs/benchmarks")
+    .filter((fileName) => /^performance-calibration-.*\.json$/u.test(fileName))
+    .map((fileName) => {
+      const accepted: unknown = JSON.parse(
+        readFileSync(`docs/benchmarks/${fileName}`, "utf8")
+      );
+      assertPerformanceAcceptedCalibration(accepted);
+      return accepted;
+    });
+  assert.equal(
+    new Set(acceptedCalibrations.map((item) => item.calibrationId)).size,
+    acceptedCalibrations.length
   );
 });

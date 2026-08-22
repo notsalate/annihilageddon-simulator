@@ -2,7 +2,7 @@
 
 | ID       | Статус   | Заголовок                                    | Документ                                     | Происхождение | Заменяет | Заменён новым |
 | -------- | -------- | -------------------------------------------- | -------------------------------------------- | ------------- | -------- | ------------- |
-| ADR-0001 | proposed | Модель benchmark и эпох производительности   | [ADR-0001](0001-performance-epochs.md)       | new           | —        | —             |
+| ADR-0001 | proposed | Модель benchmark, эпох и калибровок          | [ADR-0001](0001-performance-epochs.md)       | new           | —        | —             |
 | ADR-0002 | accepted | Граница runtime data и import-слоёв          | [ADR-0002](0002-runtime-import-boundary.md)  | restored      | —        | —             |
 | ADR-0003 | accepted | Воспроизводимость и граница Analyzer         | [ADR-0003](0003-determinism-and-analyzer.md) | restored      | —        | —             |
 | ADR-0004 | accepted | Жизненный цикл обычной атаки                 | [ADR-0004](0004-player-attack-lifecycle.md)  | restored      | —        | —             |
