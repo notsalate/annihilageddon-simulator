@@ -140,7 +140,7 @@ export interface PerformanceComparisonReport {
   blockingSource: "epoch-health" | "pull-request-regression" | "both" | null;
   epochComparison: PerformancePairComparison;
   baseComparison: PerformancePairComparison;
-  epochReference: PerformanceMeasurement;
+  epochReference: PerformanceMeasurement | null;
   head: PerformanceMeasurement;
   base: PerformanceMeasurement;
   confirmation?: PerformanceMeasurement;
@@ -295,18 +295,35 @@ export function calibratePerformance(
 
 export function comparePerformance(options: {
   baseline: PerformanceBaselineEntry;
+  epochReference?: PerformanceMeasurement | null;
   base: PerformanceMeasurement;
   head: PerformanceMeasurement;
   confirmation?: PerformanceMeasurement;
   baseCalibration?: PerformanceCalibrationResult;
 }): PerformanceComparisonReport {
-  const epochComparison = comparePair(
-    options.baseline.reference,
-    options.head,
-    options.baseline.tolerances,
-    options.confirmation,
-    options.baseline.reference.environment
-  );
+  const epochReference =
+    options.epochReference === undefined
+      ? options.baseline.reference
+      : options.epochReference;
+  const epochComparison =
+    epochReference === null
+      ? emptyComparison(
+          "not-measured",
+          "The accepted E0 commit was not measured with the current protocol"
+        )
+      : epochReference.commit !== options.baseline.reference.commit
+        ? emptyComparison(
+            "not-measured",
+            "The E0 measurement does not come from the accepted baseline commit"
+          )
+        : comparePair(
+            epochReference,
+            options.head,
+            options.baseline.tolerances,
+            options.confirmation,
+            options.baseCalibration?.environment ??
+              options.baseline.reference.environment
+          );
   const baseComparison = comparePair(
     options.base,
     options.head,
@@ -352,7 +369,7 @@ export function comparePerformance(options: {
     blockingSource,
     epochComparison,
     baseComparison,
-    epochReference: options.baseline.reference,
+    epochReference,
     head: options.head,
     base: options.base,
     ...(options.confirmation === undefined
@@ -375,6 +392,23 @@ export function assertPerformanceCalibrationResult(
   if (!isPerformanceCalibrationResult(value)) {
     throw new TypeError("Invalid performance calibration result");
   }
+}
+
+export function getAcceptedPerformanceEpochCommit(
+  baseline: PerformanceEpochBaseline
+): string {
+  const commit = baseline.calibration.commit;
+  if (!/^[0-9a-f]{40}$/u.test(commit)) {
+    throw new Error(
+      "Performance epoch baseline has no full accepted commit SHA"
+    );
+  }
+  if (baseline.entries.some((entry) => entry.reference.commit !== commit)) {
+    throw new Error(
+      "Performance epoch reference measurements do not share the accepted commit"
+    );
+  }
+  return commit;
 }
 
 export function parsePerformanceMeasurement(

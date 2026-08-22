@@ -204,6 +204,9 @@ test("benchmark CLI compares artifacts, writes a report, and blocks confirmed re
     assert.ok(isRecord(report));
     assert.equal(report["verdict"], "regression");
     assert.equal(report["blocking"], true);
+    const epochComparison = report["epochComparison"];
+    assert.ok(isRecord(epochComparison));
+    assert.equal(epochComparison["verdict"], "not-measured");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -254,6 +257,7 @@ test("benchmark CLI uses supplied calibration for a changed PR environment", () 
   );
   try {
     const baselinePath = path.join(root, "baseline.json");
+    const epochReferencePath = path.join(root, "epoch-reference.json");
     const basePath = path.join(root, "base.json");
     const headPath = path.join(root, "head.json");
     const confirmationPath = path.join(root, "confirmation.json");
@@ -272,6 +276,10 @@ test("benchmark CLI uses supplied calibration for a changed PR environment", () 
       })
     );
     writeJson(baselinePath, baseline());
+    writeJson(
+      epochReferencePath,
+      measurement("reference", 10, pullRequestEnvironment)
+    );
     writeJson(basePath, measurement("current", 10, pullRequestEnvironment));
     writeJson(headPath, measurement("current", 13, pullRequestEnvironment));
     writeJson(
@@ -302,6 +310,8 @@ test("benchmark CLI uses supplied calibration for a changed PR environment", () 
         "compare",
         "--baseline",
         baselinePath,
+        "--epochReference",
+        epochReferencePath,
         "--base",
         basePath,
         "--head",
@@ -326,7 +336,7 @@ test("benchmark CLI uses supplied calibration for a changed PR environment", () 
     const baseComparison = report["baseComparison"];
     assert.ok(isRecord(epochComparison));
     assert.ok(isRecord(baseComparison));
-    assert.equal(epochComparison["verdict"], "not-calibrated");
+    assert.equal(epochComparison["verdict"], "regression");
     assert.equal(baseComparison["verdict"], "regression");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -562,4 +572,24 @@ test("base artifact enricher adds runner metadata and comparison pair", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("accepted E0 commit is read from the committed baseline", () => {
+  const result = runNodeScript(
+    path.join(process.cwd(), "scripts", "read-performance-epoch-commit.mjs"),
+    [
+      path.join(
+        process.cwd(),
+        "docs",
+        "benchmarks",
+        "performance-epoch-e0.json"
+      ),
+    ]
+  );
+
+  assert.equal(result.status, 0);
+  assert.equal(
+    result.stdout.trim(),
+    "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb"
+  );
 });

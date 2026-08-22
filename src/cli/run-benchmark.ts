@@ -45,6 +45,7 @@ export interface BenchmarkArgs {
   commit: string | undefined;
   comparisonPairId: string | undefined;
   baselinePath: string | undefined;
+  epochReferencePath: string | undefined;
   basePath: string | undefined;
   headPath: string | undefined;
   confirmationPath: string | undefined;
@@ -65,6 +66,7 @@ const defaults: BenchmarkArgs = {
   commit: undefined,
   comparisonPairId: undefined,
   baselinePath: undefined,
+  epochReferencePath: undefined,
   basePath: undefined,
   headPath: undefined,
   confirmationPath: undefined,
@@ -87,6 +89,7 @@ export function parseBenchmarkArgs(args: readonly string[]): BenchmarkArgs {
     "commit",
     "comparisonPairId",
     "baseline",
+    "epochReference",
     "base",
     "head",
     "confirmation",
@@ -164,6 +167,7 @@ export function parseBenchmarkArgs(args: readonly string[]): BenchmarkArgs {
     commit: values.get("commit"),
     comparisonPairId: values.get("comparisonPairId"),
     baselinePath: values.get("baseline"),
+    epochReferencePath: values.get("epochReference"),
     basePath: values.get("base"),
     headPath: values.get("head"),
     confirmationPath: values.get("confirmation"),
@@ -271,11 +275,15 @@ function formatLimitKinds(counts: Readonly<Record<string, number>>): string {
 export function formatPerformanceComparison(
   report: ReturnType<typeof comparePerformance>
 ): string {
+  const epochWorkloadFingerprint =
+    report.epochReference?.workloadFingerprint ?? "not-measured";
+  const epochVolumeFingerprint =
+    report.epochReference?.workloadVolumeFingerprint ?? "not-measured";
   const lines = [
     `Performance verdict: ${report.verdict}`,
     `workload: ${report.benchmark} (${report.id}), epoch ${report.epoch}`,
-    `fingerprints: epoch ${report.epochReference.workloadFingerprint}, base ${report.base.workloadFingerprint}, head ${report.head.workloadFingerprint}`,
-    `volume fingerprints: epoch ${report.epochReference.workloadVolumeFingerprint}, base ${report.base.workloadVolumeFingerprint}, head ${report.head.workloadVolumeFingerprint}`,
+    `fingerprints: epoch ${epochWorkloadFingerprint}, base ${report.base.workloadFingerprint}, head ${report.head.workloadFingerprint}`,
+    `volume fingerprints: epoch ${epochVolumeFingerprint}, base ${report.base.workloadVolumeFingerprint}, head ${report.head.workloadVolumeFingerprint}`,
     `Epoch health: ${report.epochComparison.verdict} — ${report.epochComparison.reason}`,
     `PR regression: ${report.baseComparison.verdict} — ${report.baseComparison.reason}`,
     `blocking source: ${report.blockingSource ?? "none"}`,
@@ -412,6 +420,10 @@ function runComparison(args: BenchmarkArgs): {
   output: string;
 } {
   const baseline = readBaseline(requirePath(args.baselinePath, "baseline"));
+  const epochReference =
+    args.epochReferencePath === undefined
+      ? null
+      : readMeasurement(args.epochReferencePath);
   const base = readMeasurement(requirePath(args.basePath, "base"));
   const head = readMeasurement(requirePath(args.headPath, "head"));
   const confirmation =
@@ -432,6 +444,7 @@ function runComparison(args: BenchmarkArgs): {
   const entry = findPerformanceBaselineEntry(baseline, head);
   const report = comparePerformance({
     baseline: entry,
+    epochReference,
     base,
     head,
     ...(confirmation === undefined ? {} : { confirmation }),

@@ -30,6 +30,7 @@ test("benchmark CLI parses simulation and analyzer options", () => {
       commit: undefined,
       comparisonPairId: undefined,
       baselinePath: undefined,
+      epochReferencePath: undefined,
       basePath: undefined,
       headPath: undefined,
       confirmationPath: undefined,
@@ -50,6 +51,7 @@ test("benchmark CLI parses simulation and analyzer options", () => {
     commit: undefined,
     comparisonPairId: undefined,
     baselinePath: undefined,
+    epochReferencePath: undefined,
     basePath: undefined,
     headPath: undefined,
     confirmationPath: undefined,
@@ -62,6 +64,11 @@ test("benchmark CLI parses simulation and analyzer options", () => {
     parseBenchmarkArgs(["--comparisonPairId", "run-42:pull-request"])
       .comparisonPairId,
     "run-42:pull-request"
+  );
+  assert.equal(
+    parseBenchmarkArgs(["--epochReference", "fresh-e0.json"])
+      .epochReferencePath,
+    "fresh-e0.json"
   );
 });
 

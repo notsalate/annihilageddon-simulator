@@ -8,6 +8,7 @@ import {
   calibratePerformance,
   comparePerformance,
   createPerformanceBaselineEntry,
+  getAcceptedPerformanceEpochCommit,
   parsePerformanceMeasurement,
   type BenchmarkEnvironmentFingerprint,
   type PerformanceMeasurement,
@@ -30,6 +31,7 @@ function measurement(
     workloadVolumeFingerprint?: string;
     resultFingerprint?: string;
     environment?: BenchmarkEnvironmentFingerprint;
+    commit?: string;
   } = {}
 ): PerformanceMeasurement {
   return {
@@ -46,7 +48,7 @@ function measurement(
     measurementCount: 3,
     environment: options.environment ?? environment,
     comparisonPairId: "fixture-pair",
-    commit: "commit-1",
+    commit: options.commit ?? "commit-1",
     timings: {
       totalMs: options.totalMs ?? 10,
       dataLoadMs: 1,
@@ -222,6 +224,60 @@ test("measurements from different runner sessions cannot form a blocking pair", 
   assert.equal(report.blocking, false);
 });
 
+test("fresh E0 measurement can block an accumulated same-runner regression", () => {
+  const freshEpochReference = measurement({
+    role: "reference",
+    totalMs: 10,
+  });
+  const report = comparePerformance({
+    baseline: baselineEntry(),
+    epochReference: freshEpochReference,
+    base: measurement({ totalMs: 13 }),
+    head: measurement({ totalMs: 13 }),
+    confirmation: measurement({ totalMs: 13 }),
+  });
+
+  assert.equal(report.epochReference, freshEpochReference);
+  assert.equal(report.epochComparison.verdict, "regression");
+  assert.equal(report.baseComparison.verdict, "pass");
+  assert.equal(report.verdict, "regression");
+  assert.equal(report.blockingSource, "epoch-health");
+});
+
+test("missing fresh E0 measurement does not mask a PR regression", () => {
+  const report = comparePerformance({
+    baseline: baselineEntry(),
+    epochReference: null,
+    base: measurement({ totalMs: 10 }),
+    head: measurement({ totalMs: 13 }),
+    confirmation: measurement({ totalMs: 13 }),
+  });
+
+  assert.equal(report.epochReference, null);
+  assert.equal(report.epochComparison.verdict, "not-measured");
+  assert.equal(report.baseComparison.verdict, "regression");
+  assert.equal(report.verdict, "regression");
+  assert.equal(report.blockingSource, "pull-request-regression");
+});
+
+test("epoch health rejects a fresh measurement from a non-baseline commit", () => {
+  const report = comparePerformance({
+    baseline: baselineEntry(),
+    epochReference: measurement({
+      role: "reference",
+      totalMs: 10,
+      commit: "different-commit",
+    }),
+    base: measurement({ totalMs: 13 }),
+    head: measurement({ totalMs: 13 }),
+    confirmation: measurement({ totalMs: 13 }),
+  });
+
+  assert.equal(report.epochComparison.verdict, "not-measured");
+  assert.equal(report.baseComparison.verdict, "pass");
+  assert.equal(report.blocking, false);
+});
+
 test("calibration derives tolerances from twenty same-commit pairs", () => {
   const pairs = Array.from(
     { length: PERFORMANCE_CALIBRATION_COMPARISON_COUNT },
@@ -343,6 +399,10 @@ test("the committed E0 baseline covers simulation and all analyzer profiles", ()
   assertPerformanceEpochBaseline(value);
 
   assert.equal(value.epoch, "E0");
+  assert.equal(
+    getAcceptedPerformanceEpochCommit(value),
+    "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb"
+  );
   assert.equal(value.calibration.comparisons, 20);
   assert.deepEqual(
     value.entries.map((entry) => entry.id),

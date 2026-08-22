@@ -302,6 +302,7 @@ export {
   comparePerformance,
   createPerformanceBaselineEntry,
   findPerformanceBaselineEntry,
+  getAcceptedPerformanceEpochCommit,
   parsePerformanceMeasurement,
   toPerformanceMeasurement,
 } from "./engine/performance-epoch.js";
