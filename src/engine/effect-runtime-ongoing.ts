@@ -1,13 +1,9 @@
 import { recordTurnPowerChanged } from "./event-recorder.js";
 import type {
   EffectExecutionResult,
-  EffectRuntimeAfterPlayerAttackDamageOperationContext,
-  EffectRuntimeControlledPowerOperationContext,
-  EffectRuntimeEndTurnDrawModifierOperationContext,
-  EffectRuntimeOnPlayCardOperationContext,
-  EffectRuntimeServices,
   EffectSourceContext,
 } from "./effect-runtime-registry.js";
+import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
 import type { EffectTiming, RuntimeEffectForId } from "./runtime-effect.js";
 import {
@@ -16,6 +12,7 @@ import {
   type EffectRuntimeSupportedSourceKinds,
   type EffectRuntimeSupportedTimings,
 } from "./effect-runtime-catalog-shared.js";
+import { createUnsupportedEffectHandler } from "./effect-runtime-family-support.js";
 import type {
   ObjectFields,
   RequiredField,
@@ -200,51 +197,7 @@ export function createOngoingEffectDecoders(
   };
 }
 
-type OngoingEffectHandler<Effect extends { effectId: OngoingEffectId }> = {
-  readonly effectId: Effect["effectId"];
-  readonly unsupported?: true;
-  execute(
-    state: GameState,
-    player: PlayerState,
-    effect: Effect,
-    source: EffectSourceContext,
-    services: EffectRuntimeServices
-  ): EffectExecutionResult;
-  executeOnPlayCard?(
-    effect: Effect,
-    context: EffectRuntimeOnPlayCardOperationContext
-  ):
-    | { status: "notApplicable" }
-    | { status: "resolved"; result: EffectExecutionResult };
-  applyAfterPlayerAttackDamage?(
-    effect: Effect,
-    context: EffectRuntimeAfterPlayerAttackDamageOperationContext
-  ):
-    | { status: "notApplicable" }
-    | { status: "resolved"; result: EffectExecutionResult };
-  evaluateControlledPower?(
-    effect: Effect,
-    context: EffectRuntimeControlledPowerOperationContext
-  ): { status: "notApplicable" } | { status: "resolved"; result: number };
-  evaluateEndTurnDrawModifier?(
-    effect: Effect,
-    context: EffectRuntimeEndTurnDrawModifierOperationContext
-  ): { status: "notApplicable" } | { status: "resolved"; result: number };
-};
-
-function createUnsupportedEffectHandler<Id extends OngoingEffectId>(
-  effectId: Id
-): OngoingEffectHandler<RuntimeEffectForId<Id>> {
-  return {
-    effectId,
-    unsupported: true,
-    execute() {
-      return { ok: false, error: `Unsupported effect id ${effectId}` };
-    },
-  };
-}
-
-const addPowerIfPlayerHasStatusHandler: OngoingEffectHandler<AddPowerIfPlayerHasStatusRuntimeEffect> =
+const addPowerIfPlayerHasStatusHandler: EffectRuntimeHandler<AddPowerIfPlayerHasStatusRuntimeEffect> =
   {
     effectId: "add_power_if_player_has_status",
     execute() {
@@ -265,7 +218,7 @@ const addPowerIfPlayerHasStatusHandler: OngoingEffectHandler<AddPowerIfPlayerHas
     },
   };
 
-const ongoingAddPowerHandler: OngoingEffectHandler<
+const ongoingAddPowerHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"ongoing_add_power">
 > = {
   effectId: "ongoing_add_power",
@@ -280,7 +233,7 @@ const ongoingAddPowerHandler: OngoingEffectHandler<
   },
 };
 
-const ongoingFirstAttackDamageAddPowerHandler: OngoingEffectHandler<
+const ongoingFirstAttackDamageAddPowerHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"ongoing_first_attack_damage_add_power">
 > = {
   effectId: "ongoing_first_attack_damage_add_power",
@@ -326,7 +279,7 @@ function applyOngoingWandPower(
   return { ok: true };
 }
 
-const ongoingAddPowerWhenPlayingWandHandler: OngoingEffectHandler<
+const ongoingAddPowerWhenPlayingWandHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"ongoing_add_power_when_playing_wand">
 > = {
   effectId: "ongoing_add_power_when_playing_wand",
@@ -351,7 +304,7 @@ const ongoingAddPowerWhenPlayingWandHandler: OngoingEffectHandler<
   },
 };
 
-const ongoingAddPowerPerDeadWizardTokenHandler: OngoingEffectHandler<
+const ongoingAddPowerPerDeadWizardTokenHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"ongoing_add_power_per_dead_wizard_token">
 > = {
   effectId: "ongoing_add_power_per_dead_wizard_token",
@@ -370,7 +323,7 @@ const ongoingAddPowerPerDeadWizardTokenHandler: OngoingEffectHandler<
   },
 };
 
-const ongoingHandRefillBonusHandler: OngoingEffectHandler<
+const ongoingHandRefillBonusHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"ongoing_hand_refill_bonus">
 > = {
   effectId: "ongoing_hand_refill_bonus",

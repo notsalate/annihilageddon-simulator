@@ -1,8 +1,4 @@
-import type {
-  EffectExecutionResult,
-  EffectRuntimeServices,
-  EffectSourceContext,
-} from "./effect-runtime-registry.js";
+import { createUnsupportedEffectHandler } from "./effect-runtime-family-support.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
 import type {
   EffectTiming,
@@ -21,7 +17,6 @@ import type {
   RequiredField,
   ValueDecoder,
 } from "./effect-runtime-family-support.js";
-import type { GameState, PlayerState } from "./setup.js";
 
 type TimedEffect<Id extends string, Timing extends EffectTiming> = {
   effectId: Id;
@@ -176,31 +171,6 @@ export function createActivationEffectDecoders(
         chooser: required(literal("controller")),
       }
     ),
-  };
-}
-
-type ActivationEffectHandler<Effect extends { effectId: ActivationEffectId }> =
-  {
-    readonly effectId: Effect["effectId"];
-    readonly unsupported?: true;
-    execute(
-      state: GameState,
-      player: PlayerState,
-      effect: Effect,
-      source: EffectSourceContext,
-      services: EffectRuntimeServices
-    ): EffectExecutionResult;
-  };
-
-function createUnsupportedEffectHandler<Id extends ActivationEffectId>(
-  effectId: Id
-): ActivationEffectHandler<RuntimeEffectForId<Id>> {
-  return {
-    effectId,
-    unsupported: true,
-    execute() {
-      return { ok: false, error: `Unsupported effect id ${effectId}` };
-    },
   };
 }
 

@@ -1,9 +1,5 @@
 import { recordGameEvent } from "./event-recorder.js";
-import type {
-  EffectExecutionResult,
-  EffectRuntimeServices,
-  EffectSourceContext,
-} from "./effect-runtime-registry.js";
+import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
 import type {
   EffectTiming,
@@ -16,13 +12,13 @@ import {
   allEffectRuntimeModes,
   immediateEffectTimings,
 } from "./effect-runtime-catalog-shared.js";
+import { createUnsupportedEffectHandler } from "./effect-runtime-family-support.js";
 import type {
   ObjectFields,
   OptionalField,
   RequiredField,
   ValueDecoder,
 } from "./effect-runtime-family-support.js";
-import type { GameState, PlayerState } from "./setup.js";
 
 type EffectWithOptionalTiming<Id extends string> = {
   effectId: Id;
@@ -359,33 +355,7 @@ function oneOfTools<
         };
 }
 
-type CardOwnershipChoiceEffectHandler<
-  Effect extends { effectId: CardOwnershipChoiceEffectId },
-> = {
-  readonly effectId: Effect["effectId"];
-  readonly unsupported?: true;
-  execute(
-    state: GameState,
-    player: PlayerState,
-    effect: Effect,
-    source: EffectSourceContext,
-    services: EffectRuntimeServices
-  ): EffectExecutionResult;
-};
-
-function createUnsupportedEffectHandler<Id extends CardOwnershipChoiceEffectId>(
-  effectId: Id
-): CardOwnershipChoiceEffectHandler<RuntimeEffectForId<Id>> {
-  return {
-    effectId,
-    unsupported: true,
-    execute() {
-      return { ok: false, error: `Unsupported effect id ${effectId}` };
-    },
-  };
-}
-
-const topdeckGainedCardHandler: CardOwnershipChoiceEffectHandler<
+const topdeckGainedCardHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"topdeck_gained_card">
 > = {
   effectId: "topdeck_gained_card",
@@ -397,9 +367,7 @@ const topdeckGainedCardHandler: CardOwnershipChoiceEffectHandler<
   },
 };
 
-const gainCardHandler: CardOwnershipChoiceEffectHandler<
-  RuntimeEffectForId<"gain_card">
-> = {
+const gainCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"gain_card">> = {
   effectId: "gain_card",
   execute(state, player, effect, source, services) {
     const targetResult = services.resolveTargetChoice(
@@ -438,7 +406,7 @@ const gainCardHandler: CardOwnershipChoiceEffectHandler<
   },
 };
 
-const discardCardHandler: CardOwnershipChoiceEffectHandler<
+const discardCardHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"discard_card">
 > = {
   effectId: "discard_card",
@@ -487,7 +455,7 @@ const discardCardHandler: CardOwnershipChoiceEffectHandler<
   },
 };
 
-const destroyCardHandler: CardOwnershipChoiceEffectHandler<
+const destroyCardHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"destroy_card">
 > = {
   effectId: "destroy_card",
@@ -538,7 +506,7 @@ const destroyCardHandler: CardOwnershipChoiceEffectHandler<
   },
 };
 
-const revealTopCardHandler: CardOwnershipChoiceEffectHandler<
+const revealTopCardHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"reveal_top_card">
 > = {
   effectId: "reveal_top_card",
@@ -569,7 +537,7 @@ const revealTopCardHandler: CardOwnershipChoiceEffectHandler<
   },
 };
 
-const playTopCardHandler: CardOwnershipChoiceEffectHandler<
+const playTopCardHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"play_top_card">
 > = {
   effectId: "play_top_card",
@@ -604,7 +572,7 @@ const playTopCardHandler: CardOwnershipChoiceEffectHandler<
   },
 };
 
-const playTopCardFromFoeDeckHandler: CardOwnershipChoiceEffectHandler<
+const playTopCardFromFoeDeckHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"play_top_card_from_foe_deck">
 > = {
   effectId: "play_top_card_from_foe_deck",

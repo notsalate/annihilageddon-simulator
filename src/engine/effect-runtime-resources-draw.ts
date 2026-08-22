@@ -1,10 +1,7 @@
 import { drawDeckCards } from "./deck-lifecycle.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
-import type {
-  EffectExecutionResult,
-  EffectRuntimeServices,
-  EffectSourceContext,
-} from "./effect-runtime-registry.js";
+import type { EffectSourceContext } from "./effect-runtime-registry.js";
+import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
 import type {
   EffectTiming,
@@ -131,20 +128,7 @@ export function createResourceDrawEffectDecoders(
   };
 }
 
-type ResourceDrawEffectHandler<
-  Effect extends { effectId: ResourceDrawEffectId },
-> = {
-  readonly effectId: Effect["effectId"];
-  execute(
-    state: GameState,
-    player: PlayerState,
-    effect: Effect,
-    source: EffectSourceContext,
-    services: EffectRuntimeServices
-  ): EffectExecutionResult;
-};
-
-const gainChipsHandler: ResourceDrawEffectHandler<GainChipsRuntimeEffect> = {
+const gainChipsHandler: EffectRuntimeHandler<GainChipsRuntimeEffect> = {
   effectId: "gain_chips",
   execute(state, player, effect, source) {
     const chipsBefore = player.chips;
@@ -162,7 +146,7 @@ const gainChipsHandler: ResourceDrawEffectHandler<GainChipsRuntimeEffect> = {
   },
 };
 
-const gainChipsPerPlayerWithStatusHandler: ResourceDrawEffectHandler<GainChipsPerPlayerWithStatusRuntimeEffect> =
+const gainChipsPerPlayerWithStatusHandler: EffectRuntimeHandler<GainChipsPerPlayerWithStatusRuntimeEffect> =
   {
     effectId: "gain_chips_per_player_with_status",
     execute(state, player, effect, source) {
@@ -187,7 +171,7 @@ const gainChipsPerPlayerWithStatusHandler: ResourceDrawEffectHandler<GainChipsPe
     },
   };
 
-const drawCardsHandler: ResourceDrawEffectHandler<DrawCardsRuntimeEffect> = {
+const drawCardsHandler: EffectRuntimeHandler<DrawCardsRuntimeEffect> = {
   effectId: "draw_cards",
   execute(state, player, effect, source) {
     const drawResult = drawDeckCards(
@@ -218,7 +202,7 @@ type ResourceDrawEffectDefinitionFor<Id extends ResourceDrawEffectId> = {
   readonly supportedTimings: EffectRuntimeSupportedTimings;
   readonly supportedModes: EffectRuntimeSupportedModes;
   readonly supportedSourceKinds: EffectRuntimeSupportedSourceKinds;
-  readonly handler: ResourceDrawEffectHandler<RuntimeEffectForId<Id>>;
+  readonly handler: EffectRuntimeHandler<RuntimeEffectForId<Id>>;
 };
 
 type ResourceDrawEffectDefinition = {

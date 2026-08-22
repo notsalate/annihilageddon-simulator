@@ -68,6 +68,7 @@ import { createMayhemEffectDefinitions } from "./effect-runtime-mayhem.js";
 import { createSetupEffectDefinitions } from "./effect-runtime-setup.js";
 import { createWildMagicEffectDefinitions } from "./effect-runtime-wild-magic.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
+import { createUnsupportedEffectHandler } from "./effect-runtime-family-support.js";
 import {
   requireVerifiedRuntimeEffect,
   type VerifiedRuntimeEffect,
@@ -1624,17 +1625,6 @@ const fixtureAddPowerEqualToTargetCostHandler: EffectRuntimeHandler<
   },
 };
 
-function createUnsupportedEffectHandler<Id extends RuntimeEffectId>(
-  effectId: Id
-): EffectRuntimeHandler<RuntimeEffectForId<Id>> {
-  return {
-    effectId,
-    unsupported: true,
-    execute() {
-      return { ok: false, error: `Unsupported effect id ${effectId}` };
-    },
-  };
-}
 type LifeStatusEffectId =
   | "heal"
   | "set_life"
