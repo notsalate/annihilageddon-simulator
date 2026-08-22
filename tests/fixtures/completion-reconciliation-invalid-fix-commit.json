@@ -8,7 +8,7 @@
       "active": true,
       "status": "resolved",
       "findings": ["FIND-009"],
-      "fixCommits": ["bf5fefd"],
+      "fixCommits": ["4dcb12bf04c304c78abd28885ba037df221fb26d"],
       "tests": ["tests/completion-reconciliation.test.ts"],
       "specVerdict": "без замечаний",
       "standardsVerdict": "без замечаний",

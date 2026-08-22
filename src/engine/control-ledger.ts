@@ -9,6 +9,7 @@ import type {
   TemporaryCardControl,
   TrophyLikeInstance,
 } from "./setup.js";
+import { copyRuntimeEffectVerification } from "./runtime-effect-verification.js";
 
 export interface ControlledObjectView {
   playerId: PlayerId;
@@ -500,6 +501,7 @@ function cloneLedgerValue<T extends LedgerCloneValue>(
 
   const clone: LedgerCloneObject = {};
   clones.set(value, clone);
+  copyRuntimeEffectVerification(value, clone);
   for (const [key, child] of Object.entries(value)) {
     clone[key] = cloneLedgerValue(child, physicalCards, clones);
   }

@@ -122,7 +122,7 @@ test("reconciliation rejects a fix commit outside the code SHA ancestry", () => 
   assert.notEqual(result.status, 0);
   assert.match(
     result.stderr,
-    /REQ-176-AC01: fix commit bf5fefd must be an ancestor of manifest.codeSha/
+    /REQ-176-AC01: fix commit 4dcb12bf04c304c78abd28885ba037df221fb26d must be an ancestor of manifest.codeSha/
   );
 });
 

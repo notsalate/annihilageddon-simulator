@@ -9,6 +9,7 @@ import {
   type GameState,
   type TokenDefinition,
 } from "../src/index.js";
+import { calculateEffectivePlayerVictoryPoints } from "../src/engine/effective-values.js";
 import { recordBotActionSelected } from "../src/engine/event-recorder.js";
 import {
   markCardDefinitionId,
@@ -18,6 +19,7 @@ import {
   markTokenInstanceId,
 } from "../src/domain/types.js";
 import { clonePhysicalCardLedger } from "../src/engine/control-ledger.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
 function createFixture(): GameState {
   const playerId = markPlayerId("player-1");
@@ -214,6 +216,30 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
   assert.equal(fork.tokenDefinitions, source.tokenDefinitions);
   assert.equal(fork.effectChoiceStrategy, source.effectChoiceStrategy);
   assert.notEqual(fork.eventLog, source.eventLog);
+});
+
+test("fork preserves verified effects for Effective Value calculations", () => {
+  const source = createFixture();
+  const sourcePlayer = source.players[0]!;
+  sourcePlayer.statuses[0]!.statusId = "dingler";
+  sourcePlayer.statuses[0]!.effects = [
+    verifiedTestRuntimeEffect({
+      effectId: "modify_effective_value",
+      timing: "whileControlled",
+      valueKind: "playerVictoryPoints",
+      operation: "add",
+      amount: -5,
+      target: { targetType: "player" },
+    }),
+  ];
+  sourcePlayer.trophyLikeObjects = [];
+
+  const fork = forkGameState(source);
+
+  assert.equal(
+    calculateEffectivePlayerVictoryPoints(fork, sourcePlayer.playerId, 10),
+    5
+  );
 });
 
 test("Ledger clones all physical card storage through one operation", () => {

@@ -30,6 +30,16 @@ export function markRuntimeEffectTreeVerified(
   return effect as VerifiedRuntimeEffect;
 }
 
+/** Preserve the intake marker when an already verified effect is deep-cloned. */
+export function copyRuntimeEffectVerification(
+  source: unknown,
+  clone: object
+): void {
+  if (isVerifiedRuntimeEffect(source)) {
+    verifiedRuntimeEffects.add(clone);
+  }
+}
+
 export function requireVerifiedRuntimeEffect(
   effect: RuntimeEffect
 ): VerifiedRuntimeEffect {
