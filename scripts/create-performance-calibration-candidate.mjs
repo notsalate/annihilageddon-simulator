@@ -5,6 +5,8 @@ import {
   PERFORMANCE_CALIBRATION_SCHEMA_VERSION,
   assertPerformanceAcceptedCalibration,
   assertPerformanceCalibrationResult,
+  samePerformanceRunnerClass,
+  toPerformanceRunnerClass,
 } from "../dist/src/engine/performance-epoch.js";
 
 const calibrationRoot = process.argv[2];
@@ -47,7 +49,7 @@ for (const result of results.slice(1)) {
     result.warmupCount !== first.warmupCount ||
     result.measurementCount !== first.measurementCount ||
     result.formula !== first.formula ||
-    !sameRunnerClass(result.environment, first.environment)
+    !samePerformanceRunnerClass(result.environment, first.environment)
   ) {
     throw new Error(
       "Calibration candidate requires one commit, protocol and runner class"
@@ -65,13 +67,7 @@ const candidate = {
     measurementCount: first.measurementCount,
     formula: first.formula,
   },
-  runnerClass: {
-    nodeVersion: first.environment.nodeVersion,
-    platform: first.environment.platform,
-    arch: first.environment.arch,
-    runner: first.environment.runner,
-    cpuCount: first.environment.cpuCount,
-  },
+  runnerClass: toPerformanceRunnerClass(first.environment),
   entries: results.map((result) => ({
     benchmark: result.benchmark,
     id: result.id,
@@ -83,13 +79,3 @@ const candidate = {
 };
 assertPerformanceAcceptedCalibration(candidate);
 writeFileSync(outputPath, `${JSON.stringify(candidate, null, 2)}\n`, "utf8");
-
-function sameRunnerClass(left, right) {
-  return (
-    left.nodeVersion === right.nodeVersion &&
-    left.platform === right.platform &&
-    left.arch === right.arch &&
-    left.runner === right.runner &&
-    left.cpuCount === right.cpuCount
-  );
-}

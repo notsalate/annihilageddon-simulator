@@ -105,6 +105,31 @@ export interface PerformanceRunnerClass {
   cpuCount: number;
 }
 
+export function toPerformanceRunnerClass(
+  environment: BenchmarkEnvironmentFingerprint
+): PerformanceRunnerClass {
+  return {
+    nodeVersion: environment.nodeVersion,
+    platform: environment.platform,
+    arch: environment.arch,
+    runner: environment.runner,
+    cpuCount: environment.cpuCount,
+  };
+}
+
+export function samePerformanceRunnerClass(
+  left: PerformanceRunnerClass,
+  right: PerformanceRunnerClass
+): boolean {
+  return (
+    left.nodeVersion === right.nodeVersion &&
+    left.platform === right.platform &&
+    left.arch === right.arch &&
+    left.runner === right.runner &&
+    left.cpuCount === right.cpuCount
+  );
+}
+
 export interface PerformanceCalibrationProtocol {
   comparisons: typeof PERFORMANCE_CALIBRATION_COMPARISON_COUNT;
   warmupCount: typeof PERFORMANCE_WARMUP_COUNT;
@@ -274,7 +299,7 @@ export function calibratePerformance(
     if (
       !sameWorkload(pair.first, first) ||
       !sameProtocol(pair.first, first) ||
-      !sameCalibrationEnvironment(pair.first.environment, first.environment) ||
+      !samePerformanceRunnerClass(pair.first.environment, first.environment) ||
       pair.first.commit !== first.commit ||
       pair.second.commit !== first.commit
     ) {
@@ -539,8 +564,14 @@ function comparePair(
     );
   }
   if (
-    !sameRunnerClass(reference.environment, calibration.runnerClass) ||
-    !sameRunnerClass(candidate.environment, calibration.runnerClass) ||
+    !samePerformanceRunnerClass(
+      reference.environment,
+      calibration.runnerClass
+    ) ||
+    !samePerformanceRunnerClass(
+      candidate.environment,
+      calibration.runnerClass
+    ) ||
     reference.warmupCount !== calibration.protocol.warmupCount ||
     candidate.warmupCount !== calibration.protocol.warmupCount ||
     reference.measurementCount !== calibration.protocol.measurementCount ||
@@ -614,7 +645,10 @@ function comparePair(
     !sameProtocol(reference, confirmation) ||
     !sameEnvironment(reference.environment, confirmation.environment) ||
     !sameComparisonPair(reference, confirmation) ||
-    !sameRunnerClass(confirmation.environment, calibration.runnerClass) ||
+    !samePerformanceRunnerClass(
+      confirmation.environment,
+      calibration.runnerClass
+    ) ||
     confirmation.warmupCount !== calibration.protocol.warmupCount ||
     confirmation.measurementCount !== calibration.protocol.measurementCount
   ) {
@@ -769,32 +803,6 @@ function sameEnvironment(
     left.runner === right.runner &&
     left.cpuModel === right.cpuModel &&
     left.cpuCount === right.cpuCount
-  );
-}
-
-function sameCalibrationEnvironment(
-  left: BenchmarkEnvironmentFingerprint,
-  right: BenchmarkEnvironmentFingerprint
-): boolean {
-  return (
-    left.nodeVersion === right.nodeVersion &&
-    left.platform === right.platform &&
-    left.arch === right.arch &&
-    left.runner === right.runner &&
-    left.cpuCount === right.cpuCount
-  );
-}
-
-function sameRunnerClass(
-  environment: BenchmarkEnvironmentFingerprint,
-  runnerClass: PerformanceRunnerClass
-): boolean {
-  return (
-    environment.nodeVersion === runnerClass.nodeVersion &&
-    environment.platform === runnerClass.platform &&
-    environment.arch === runnerClass.arch &&
-    environment.runner === runnerClass.runner &&
-    environment.cpuCount === runnerClass.cpuCount
   );
 }
 
