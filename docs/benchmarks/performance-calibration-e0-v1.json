@@ -1,0 +1,148 @@
+{
+  "schemaVersion": "performance-calibration-v1",
+  "calibrationId": "e0-node22-ubuntu24-20260816-v1",
+  "commit": "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb",
+  "protocol": {
+    "comparisons": 20,
+    "warmupCount": 1,
+    "measurementCount": 3,
+    "formula": "p95-plus-25-percent-safety-margin"
+  },
+  "runnerClass": {
+    "nodeVersion": "v22.23.2",
+    "platform": "linux",
+    "arch": "x64",
+    "runner": "github:Linux:X64:ubuntu24:20260816.277.1",
+    "cpuCount": 4
+  },
+  "entries": [
+    {
+      "benchmark": "simulation",
+      "id": "simulation:100",
+      "contractVersion": "simulation-benchmark-v1",
+      "workloadFingerprint": "a1a073deb7b5ab6170bff899b91e40cdbfdf2768f75ef9b70dd884b5e39ee138",
+      "workloadVolumeFingerprint": "c606439fe93b16fe82a9a77263d36d5fb4ac3d5752d9e97e365822b80df694fb",
+      "tolerances": {
+        "totalMs": {
+          "relativePercent": 1.93,
+          "absoluteMs": 203.71
+        },
+        "dataLoadMs": {
+          "relativePercent": 10.41,
+          "absoluteMs": 0.48
+        },
+        "gamesMs": {
+          "relativePercent": 1.93,
+          "absoluteMs": 204.05
+        },
+        "aggregationMs": {
+          "relativePercent": 14.73,
+          "absoluteMs": 1.08
+        },
+        "resultPreparationMs": {
+          "relativePercent": 7.77,
+          "absoluteMs": 0.08
+        }
+      }
+    },
+    {
+      "benchmark": "analyzer",
+      "id": "analyzer:light",
+      "contractVersion": "analyzer-benchmark-v1",
+      "workloadFingerprint": "bcbae784c06906d15469cab4debdc4eaef7c449c82025c151d6a00fdaff83be6",
+      "workloadVolumeFingerprint": "0c18ea72806c18738ca010f7d8e8ef67830ef75cd327f4003b3e72890c1eab1d",
+      "tolerances": {
+        "totalMs": {
+          "relativePercent": 2.77,
+          "absoluteMs": 57.26
+        },
+        "dataLoadMs": {
+          "relativePercent": 11.53,
+          "absoluteMs": 0.55
+        },
+        "preparationMs": {
+          "relativePercent": 11.79,
+          "absoluteMs": 0.12
+        },
+        "enumerationMs": {
+          "relativePercent": 2.16,
+          "absoluteMs": 39.45
+        },
+        "rankingMs": {
+          "relativePercent": 2.23,
+          "absoluteMs": 13.32
+        },
+        "resultPreparationMs": {
+          "relativePercent": 18.59,
+          "absoluteMs": 0.3
+        }
+      }
+    },
+    {
+      "benchmark": "analyzer",
+      "id": "analyzer:typical",
+      "contractVersion": "analyzer-benchmark-v1",
+      "workloadFingerprint": "ce38c60652300c4bf1085e92aa030544998fe30b6d94484d4118be386d611e09",
+      "workloadVolumeFingerprint": "9c7218f1dd2aadf407cee20b8af7e69f25fb9cbeeecda2a362be73b6f62c0768",
+      "tolerances": {
+        "totalMs": {
+          "relativePercent": 2.99,
+          "absoluteMs": 146.54
+        },
+        "dataLoadMs": {
+          "relativePercent": 11.74,
+          "absoluteMs": 0.46
+        },
+        "preparationMs": {
+          "relativePercent": 11.51,
+          "absoluteMs": 0.12
+        },
+        "enumerationMs": {
+          "relativePercent": 3.53,
+          "absoluteMs": 98.08
+        },
+        "rankingMs": {
+          "relativePercent": 1.56,
+          "absoluteMs": 24.46
+        },
+        "resultPreparationMs": {
+          "relativePercent": 8.82,
+          "absoluteMs": 0.45
+        }
+      }
+    },
+    {
+      "benchmark": "analyzer",
+      "id": "analyzer:heavy",
+      "contractVersion": "analyzer-benchmark-v1",
+      "workloadFingerprint": "141a83be9f9c0fddb0133488e81127544e9bfae5bf000d80c7fd30e8abd77199",
+      "workloadVolumeFingerprint": "fa20097bd5b1931ab74bdd519bfb3439c296ae317e7c8eace9b546542adcbbc2",
+      "tolerances": {
+        "totalMs": {
+          "relativePercent": 3.96,
+          "absoluteMs": 953.84
+        },
+        "dataLoadMs": {
+          "relativePercent": 29.49,
+          "absoluteMs": 1.17
+        },
+        "preparationMs": {
+          "relativePercent": 7.22,
+          "absoluteMs": 0.07
+        },
+        "enumerationMs": {
+          "relativePercent": 4.43,
+          "absoluteMs": 608.83
+        },
+        "rankingMs": {
+          "relativePercent": 4.14,
+          "absoluteMs": 418.41
+        },
+        "resultPreparationMs": {
+          "relativePercent": 10.92,
+          "absoluteMs": 3.38
+        }
+      }
+    }
+  ]
+}

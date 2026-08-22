@@ -13,12 +13,14 @@ import assert from "node:assert/strict";
 
 import {
   PERFORMANCE_CALIBRATION_COMPARISON_COUNT,
+  PERFORMANCE_CALIBRATION_SCHEMA_VERSION,
   PERFORMANCE_EPOCH_SCHEMA_VERSION,
   PERFORMANCE_MEASUREMENT_COUNT,
   PERFORMANCE_WARMUP_COUNT,
   createPerformanceBaselineEntry,
   type BenchmarkEnvironmentFingerprint,
   type PerformanceEpochBaseline,
+  type PerformanceAcceptedCalibration,
   type PerformanceMeasurement,
 } from "../src/index.js";
 
@@ -49,6 +51,7 @@ function measurement(
     warmupCount: PERFORMANCE_WARMUP_COUNT,
     measurementCount: PERFORMANCE_MEASUREMENT_COUNT,
     environment: measurementEnvironment,
+    comparisonPairId: "fixture-pair",
     commit: "commit-1",
     timings: {
       totalMs,
@@ -108,10 +111,49 @@ function calibrationFor(reference: PerformanceMeasurement) {
     id: reference.id,
     comparisons: PERFORMANCE_CALIBRATION_COMPARISON_COUNT,
     commit: reference.commit,
+    contractVersion: reference.contractVersion,
+    workloadFingerprint: reference.workloadFingerprint,
+    workloadVolumeFingerprint: reference.workloadVolumeFingerprint,
+    warmupCount: PERFORMANCE_WARMUP_COUNT,
+    measurementCount: PERFORMANCE_MEASUREMENT_COUNT,
     environment: reference.environment,
     formula: "p95-plus-25-percent-safety-margin",
     metrics,
     tolerances,
+  };
+}
+
+function acceptedCalibrationFor(
+  reference: PerformanceMeasurement
+): PerformanceAcceptedCalibration {
+  const calibration = calibrationFor(reference);
+  return {
+    schemaVersion: PERFORMANCE_CALIBRATION_SCHEMA_VERSION,
+    calibrationId: "fixture-calibration-v1",
+    commit: "1111111111111111111111111111111111111111",
+    protocol: {
+      comparisons: PERFORMANCE_CALIBRATION_COMPARISON_COUNT,
+      warmupCount: PERFORMANCE_WARMUP_COUNT,
+      measurementCount: PERFORMANCE_MEASUREMENT_COUNT,
+      formula: "p95-plus-25-percent-safety-margin",
+    },
+    runnerClass: {
+      nodeVersion: reference.environment.nodeVersion,
+      platform: reference.environment.platform,
+      arch: reference.environment.arch,
+      runner: reference.environment.runner,
+      cpuCount: reference.environment.cpuCount,
+    },
+    entries: [
+      {
+        benchmark: reference.benchmark,
+        id: reference.id,
+        contractVersion: reference.contractVersion,
+        workloadFingerprint: reference.workloadFingerprint,
+        workloadVolumeFingerprint: reference.workloadVolumeFingerprint,
+        tolerances: calibration.tolerances,
+      },
+    ],
   };
 }
 
@@ -169,11 +211,16 @@ test("benchmark CLI compares artifacts, writes a report, and blocks confirmed re
   );
   try {
     const baselinePath = path.join(root, "baseline.json");
+    const acceptedCalibrationPath = path.join(root, "accepted.json");
     const basePath = path.join(root, "base.json");
     const headPath = path.join(root, "head.json");
     const confirmationPath = path.join(root, "confirmation.json");
     const reportPath = path.join(root, "report.json");
     writeJson(baselinePath, baseline());
+    writeJson(
+      acceptedCalibrationPath,
+      acceptedCalibrationFor(measurement("reference"))
+    );
     writeJson(basePath, measurement());
     writeJson(headPath, measurement("current", 13));
     writeJson(confirmationPath, measurement("current", 13));
@@ -185,6 +232,8 @@ test("benchmark CLI compares artifacts, writes a report, and blocks confirmed re
         "compare",
         "--baseline",
         baselinePath,
+        "--acceptedCalibration",
+        acceptedCalibrationPath,
         "--base",
         basePath,
         "--head",
@@ -203,6 +252,9 @@ test("benchmark CLI compares artifacts, writes a report, and blocks confirmed re
     assert.ok(isRecord(report));
     assert.equal(report["verdict"], "regression");
     assert.equal(report["blocking"], true);
+    const epochComparison = report["epochComparison"];
+    assert.ok(isRecord(epochComparison));
+    assert.equal(epochComparison["verdict"], "not-measured");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -247,17 +299,19 @@ test("benchmark CLI calculates and writes a twenty-pair calibration result", () 
   }
 });
 
-test("benchmark CLI uses supplied calibration for a changed PR environment", () => {
+test("benchmark CLI uses accepted calibration for a changed PR environment", () => {
   const root = mkdtempSync(
     path.join(os.tmpdir(), "krutagidon-performance-compare-calibration-")
   );
   try {
     const baselinePath = path.join(root, "baseline.json");
+    const epochReferencePath = path.join(root, "epoch-reference.json");
     const basePath = path.join(root, "base.json");
     const headPath = path.join(root, "head.json");
     const confirmationPath = path.join(root, "confirmation.json");
     const calibrationInputPath = path.join(root, "calibration-pairs.json");
     const calibrationPath = path.join(root, "calibration.json");
+    const acceptedCalibrationPath = path.join(root, "accepted.json");
     const reportPath = path.join(root, "report.json");
     const pullRequestEnvironment: BenchmarkEnvironmentFingerprint = {
       ...environment,
@@ -271,6 +325,10 @@ test("benchmark CLI uses supplied calibration for a changed PR environment", () 
       })
     );
     writeJson(baselinePath, baseline());
+    writeJson(
+      epochReferencePath,
+      measurement("reference", 10, pullRequestEnvironment)
+    );
     writeJson(basePath, measurement("current", 10, pullRequestEnvironment));
     writeJson(headPath, measurement("current", 13, pullRequestEnvironment));
     writeJson(
@@ -278,6 +336,12 @@ test("benchmark CLI uses supplied calibration for a changed PR environment", () 
       measurement("current", 13, pullRequestEnvironment)
     );
     writeJson(calibrationInputPath, pairs);
+    writeJson(
+      acceptedCalibrationPath,
+      acceptedCalibrationFor(
+        measurement("reference", 10, pullRequestEnvironment)
+      )
+    );
 
     const calibrationResult = runNodeScript(
       path.join(process.cwd(), "dist", "src", "cli", "run-benchmark.js"),
@@ -301,14 +365,16 @@ test("benchmark CLI uses supplied calibration for a changed PR environment", () 
         "compare",
         "--baseline",
         baselinePath,
+        "--epochReference",
+        epochReferencePath,
         "--base",
         basePath,
         "--head",
         headPath,
         "--confirmation",
         confirmationPath,
-        "--calibration",
-        calibrationPath,
+        "--acceptedCalibration",
+        acceptedCalibrationPath,
         "--format",
         "json",
         "--output",
@@ -325,7 +391,7 @@ test("benchmark CLI uses supplied calibration for a changed PR environment", () 
     const baseComparison = report["baseComparison"];
     assert.ok(isRecord(epochComparison));
     assert.ok(isRecord(baseComparison));
-    assert.equal(epochComparison["verdict"], "not-calibrated");
+    assert.equal(epochComparison["verdict"], "regression");
     assert.equal(baseComparison["verdict"], "regression");
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -369,6 +435,83 @@ test("calibration collector groups twenty nested CI bundles by workload id", () 
     const pairs = readJson(path.join(output, "simulation-100.json"));
     assert.ok(Array.isArray(pairs));
     assert.equal(pairs.length, PERFORMANCE_CALIBRATION_COMPARISON_COUNT);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("calibration candidate records one versioned protocol and runner class", () => {
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "krutagidon-performance-calibration-candidate-")
+  );
+  try {
+    const calibrationRoot = path.join(root, "calibration");
+    const outputPath = path.join(root, "candidate.json");
+    mkdirSync(calibrationRoot, { recursive: true });
+    const workloads = [
+      ["simulation", "simulation:100", "calibration-simulation.json"],
+      ["analyzer", "analyzer:light", "calibration-analyzer-light.json"],
+      ["analyzer", "analyzer:typical", "calibration-analyzer-typical.json"],
+      ["analyzer", "analyzer:heavy", "calibration-analyzer-heavy.json"],
+    ] as const;
+    for (const [benchmark, id, fileName] of workloads) {
+      const reference = {
+        ...referenceMeasurement(benchmark, id),
+        commit: "2222222222222222222222222222222222222222",
+        environment: {
+          ...environment,
+          cpuModel: `fixture-${id}`,
+        },
+      };
+      writeJson(
+        path.join(calibrationRoot, fileName),
+        calibrationFor(reference)
+      );
+    }
+
+    const scriptPath = path.join(
+      process.cwd(),
+      "scripts",
+      "create-performance-calibration-candidate.mjs"
+    );
+    const result = runNodeScript(scriptPath, [
+      calibrationRoot,
+      outputPath,
+      "candidate-run-42",
+    ]);
+
+    assert.equal(result.status, 0);
+    const candidate = readJson(outputPath);
+    assert.ok(isRecord(candidate));
+    assert.equal(candidate["calibrationId"], "candidate-run-42");
+    assert.equal(
+      candidate["commit"],
+      "2222222222222222222222222222222222222222"
+    );
+    const runnerClass = candidate["runnerClass"];
+    assert.ok(isRecord(runnerClass));
+    assert.equal(runnerClass["cpuModel"], undefined);
+    const entries = candidate["entries"];
+    assert.ok(Array.isArray(entries));
+    assert.equal(entries.length, 4);
+
+    const mismatched = calibrationFor({
+      ...referenceMeasurement("analyzer", "analyzer:heavy"),
+      commit: "2222222222222222222222222222222222222222",
+      environment: { ...environment, runner: "other-runner-class" },
+    });
+    writeJson(
+      path.join(calibrationRoot, "calibration-analyzer-heavy.json"),
+      mismatched
+    );
+    assert.notEqual(
+      runNodeScript(scriptPath, [
+        calibrationRoot,
+        outputPath,
+        "candidate-run-43",
+      ]).status,
+      0
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -536,7 +679,7 @@ test("performance report gate requires all reports and blocks only blocking verd
   }
 });
 
-test("base artifact enricher adds the runner environment and commit", () => {
+test("base artifact enricher adds runner metadata and comparison pair", () => {
   const root = mkdtempSync(
     path.join(os.tmpdir(), "krutagidon-performance-enrich-")
   );
@@ -547,7 +690,7 @@ test("base artifact enricher adds the runner environment and commit", () => {
 
     const result = runNodeScript(
       path.join(process.cwd(), "scripts", "enrich-performance-artifact.mjs"),
-      [inputPath, outputPath, "base-sha"]
+      [inputPath, outputPath, "base-sha", "run-42:pull-request"]
     );
 
     assert.equal(result.status, 0);
@@ -557,7 +700,54 @@ test("base artifact enricher adds the runner environment and commit", () => {
     assert.ok(isRecord(enrichedEnvironment));
     assert.equal(typeof enrichedEnvironment["runner"], "string");
     assert.equal(enriched["commit"], "base-sha");
+    assert.equal(enriched["comparisonPairId"], "run-42:pull-request");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("accepted E0 commit is read from the committed baseline", () => {
+  const result = runNodeScript(
+    path.join(process.cwd(), "scripts", "read-performance-epoch-commit.mjs"),
+    [
+      path.join(
+        process.cwd(),
+        "docs",
+        "benchmarks",
+        "performance-epoch-e0.json"
+      ),
+    ]
+  );
+
+  assert.equal(result.status, 0);
+  assert.equal(
+    result.stdout.trim(),
+    "8fefe03277b6ec5ada27aa49938ba0e0fe97baeb"
+  );
+});
+
+test("PR workflow consumes accepted calibration without running the matrix", () => {
+  const workflow = readFileSync(
+    path.join(process.cwd(), ".github", "workflows", "performance.yml"),
+    "utf8"
+  );
+  const pullRequestJob = workflow.slice(
+    workflow.indexOf("  pull-request:"),
+    workflow.indexOf("  scheduled:")
+  );
+  const calibrationRunHeader = workflow.slice(
+    workflow.indexOf("  calibration-run:"),
+    workflow.indexOf("    runs-on:", workflow.indexOf("  calibration-run:"))
+  );
+
+  assert.doesNotMatch(pullRequestJob, /needs:\s*calibration/u);
+  assert.doesNotMatch(
+    pullRequestJob,
+    /performance-calibration-results-\$\{\{ github\.run_id \}\}/u
+  );
+  assert.match(pullRequestJob, /--acceptedCalibration/u);
+  assert.match(pullRequestJob, /--diff-filter=MDR/u);
+  assert.doesNotMatch(calibrationRunHeader, /pull_request/u);
+  assert.match(calibrationRunHeader, /workflow_dispatch/u);
+  assert.match(calibrationRunHeader, /event\.schedule/u);
 });

@@ -5,6 +5,7 @@ import {
   assertPerformanceCalibrationResult,
   assertPerformanceEpochBaseline,
   parsePerformanceMeasurement,
+  samePerformanceRunnerClass,
 } from "../dist/src/engine/performance-epoch.js";
 
 const referenceRoot = path.resolve(process.argv[2] ?? "");
@@ -69,7 +70,13 @@ const entries = workloads.map((workload) => {
     calibration.benchmark !== reference.benchmark ||
     calibration.id !== reference.id ||
     calibration.commit !== reference.commit ||
-    !sameCalibrationEnvironment(calibration.environment, reference.environment)
+    calibration.contractVersion !== reference.contractVersion ||
+    calibration.workloadFingerprint !== reference.workloadFingerprint ||
+    calibration.workloadVolumeFingerprint !==
+      reference.workloadVolumeFingerprint ||
+    calibration.warmupCount !== reference.warmupCount ||
+    calibration.measurementCount !== reference.measurementCount ||
+    !samePerformanceRunnerClass(calibration.environment, reference.environment)
   ) {
     throw new Error(
       `Reference and calibration fingerprints differ for ${workload.id}`
@@ -94,7 +101,7 @@ for (const workload of workloads.slice(1)) {
   );
   if (
     calibration.commit !== firstCalibration.commit ||
-    !sameCalibrationEnvironment(
+    !samePerformanceRunnerClass(
       calibration.environment,
       firstCalibration.environment
     )
@@ -130,14 +137,4 @@ function readCalibration(filePath) {
 
 function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, "utf8"));
-}
-
-function sameCalibrationEnvironment(left, right) {
-  return (
-    left.nodeVersion === right.nodeVersion &&
-    left.platform === right.platform &&
-    left.arch === right.arch &&
-    left.runner === right.runner &&
-    left.cpuCount === right.cpuCount
-  );
 }

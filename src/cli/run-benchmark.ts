@@ -8,7 +8,7 @@ import {
   type AnalyzerBenchmarkRole,
 } from "../engine/analyzer-benchmark.js";
 import {
-  assertPerformanceCalibrationResult,
+  assertPerformanceAcceptedCalibration,
   assertPerformanceEpochBaseline,
   calibratePerformance,
   comparePerformance,
@@ -16,7 +16,7 @@ import {
   parsePerformanceMeasurement,
   toPerformanceMeasurement,
   type PerformanceCalibrationPair,
-  type PerformanceCalibrationResult,
+  type PerformanceAcceptedCalibration,
   type PerformanceEpochBaseline,
   type PerformanceMeasurement,
 } from "../engine/performance-epoch.js";
@@ -43,10 +43,13 @@ export interface BenchmarkArgs {
   maxTurns: number | undefined;
   dataPackPath: string | undefined;
   commit: string | undefined;
+  comparisonPairId: string | undefined;
   baselinePath: string | undefined;
+  epochReferencePath: string | undefined;
   basePath: string | undefined;
   headPath: string | undefined;
   confirmationPath: string | undefined;
+  acceptedCalibrationPath: string | undefined;
   calibrationPath: string | undefined;
   outputPath: string | undefined;
 }
@@ -62,10 +65,13 @@ const defaults: BenchmarkArgs = {
   maxTurns: undefined,
   dataPackPath: undefined,
   commit: undefined,
+  comparisonPairId: undefined,
   baselinePath: undefined,
+  epochReferencePath: undefined,
   basePath: undefined,
   headPath: undefined,
   confirmationPath: undefined,
+  acceptedCalibrationPath: undefined,
   calibrationPath: undefined,
   outputPath: undefined,
 };
@@ -83,10 +89,13 @@ export function parseBenchmarkArgs(args: readonly string[]): BenchmarkArgs {
     "maxTurns",
     "dataPackPath",
     "commit",
+    "comparisonPairId",
     "baseline",
+    "epochReference",
     "base",
     "head",
     "confirmation",
+    "acceptedCalibration",
     "calibration",
     "output",
   ]);
@@ -159,10 +168,13 @@ export function parseBenchmarkArgs(args: readonly string[]): BenchmarkArgs {
     maxTurns: parseOptionalPositiveInteger(values.get("maxTurns"), "maxTurns"),
     dataPackPath: values.get("dataPackPath"),
     commit: values.get("commit"),
+    comparisonPairId: values.get("comparisonPairId"),
     baselinePath: values.get("baseline"),
+    epochReferencePath: values.get("epochReference"),
     basePath: values.get("base"),
     headPath: values.get("head"),
     confirmationPath: values.get("confirmation"),
+    acceptedCalibrationPath: values.get("acceptedCalibration"),
     calibrationPath: values.get("calibration"),
     outputPath: values.get("output"),
     mode,
@@ -267,13 +279,19 @@ function formatLimitKinds(counts: Readonly<Record<string, number>>): string {
 export function formatPerformanceComparison(
   report: ReturnType<typeof comparePerformance>
 ): string {
+  const epochWorkloadFingerprint =
+    report.epochReference?.workloadFingerprint ?? "not-measured";
+  const epochVolumeFingerprint =
+    report.epochReference?.workloadVolumeFingerprint ?? "not-measured";
   const lines = [
     `Performance verdict: ${report.verdict}`,
     `workload: ${report.benchmark} (${report.id}), epoch ${report.epoch}`,
-    `fingerprints: epoch ${report.epochReference.workloadFingerprint}, base ${report.base.workloadFingerprint}, head ${report.head.workloadFingerprint}`,
-    `volume fingerprints: epoch ${report.epochReference.workloadVolumeFingerprint}, base ${report.base.workloadVolumeFingerprint}, head ${report.head.workloadVolumeFingerprint}`,
-    `epoch start: ${report.epochComparison.verdict} — ${report.epochComparison.reason}`,
-    `immediate base: ${report.baseComparison.verdict} — ${report.baseComparison.reason}`,
+    `fingerprints: epoch ${epochWorkloadFingerprint}, base ${report.base.workloadFingerprint}, head ${report.head.workloadFingerprint}`,
+    `volume fingerprints: epoch ${epochVolumeFingerprint}, base ${report.base.workloadVolumeFingerprint}, head ${report.head.workloadVolumeFingerprint}`,
+    `accepted calibration: ${report.calibrationId ?? "none"}`,
+    `Epoch health: ${report.epochComparison.verdict} — ${report.epochComparison.reason}`,
+    `PR regression: ${report.baseComparison.verdict} — ${report.baseComparison.reason}`,
+    `blocking source: ${report.blockingSource ?? "none"}`,
   ];
   if (report.blocking) {
     lines.push(
@@ -349,9 +367,9 @@ function readCalibrationPairs(path: string): PerformanceCalibrationPair[] {
   return pairs;
 }
 
-function readCalibrationResult(path: string): PerformanceCalibrationResult {
+function readAcceptedCalibration(path: string): PerformanceAcceptedCalibration {
   const value = readJson(path);
-  assertPerformanceCalibrationResult(value);
+  assertPerformanceAcceptedCalibration(value);
   return value;
 }
 
@@ -407,30 +425,28 @@ function runComparison(args: BenchmarkArgs): {
   output: string;
 } {
   const baseline = readBaseline(requirePath(args.baselinePath, "baseline"));
+  const epochReference =
+    args.epochReferencePath === undefined
+      ? null
+      : readMeasurement(args.epochReferencePath);
   const base = readMeasurement(requirePath(args.basePath, "base"));
   const head = readMeasurement(requirePath(args.headPath, "head"));
   const confirmation =
     args.confirmationPath === undefined
       ? undefined
       : readMeasurement(args.confirmationPath);
-  const baseCalibration =
-    args.calibrationPath === undefined
+  const acceptedCalibration =
+    args.acceptedCalibrationPath === undefined
       ? undefined
-      : readCalibrationResult(args.calibrationPath);
-  if (
-    baseCalibration !== undefined &&
-    (baseCalibration.benchmark !== head.benchmark ||
-      baseCalibration.id !== head.id)
-  ) {
-    throw new Error("Calibration result does not match the head workload");
-  }
+      : readAcceptedCalibration(args.acceptedCalibrationPath);
   const entry = findPerformanceBaselineEntry(baseline, head);
   const report = comparePerformance({
     baseline: entry,
+    acceptedCalibration: acceptedCalibration ?? null,
+    epochReference,
     base,
     head,
     ...(confirmation === undefined ? {} : { confirmation }),
-    ...(baseCalibration === undefined ? {} : { baseCalibration }),
   });
   return {
     report,
@@ -464,7 +480,10 @@ if (process.argv[1]?.endsWith("run-benchmark.js")) {
       const { result, output } = runRawBenchmark(args);
       console.log(output);
       if (args.outputPath !== undefined) {
-        writeJson(args.outputPath, toPerformanceMeasurement(result));
+        writeJson(
+          args.outputPath,
+          toPerformanceMeasurement(result, args.comparisonPairId)
+        );
       }
     } else if (args.mode === "compare") {
       const { report, output } = runComparison(args);

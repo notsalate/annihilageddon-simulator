@@ -290,10 +290,13 @@ export type {
 } from "./engine/benchmark-support.js";
 export type {
   PerformanceBenchmarkKind,
+  PerformanceAcceptedCalibration,
+  PerformanceAcceptedCalibrationEntry,
   PerformanceBaselineEntry,
   PerformanceCalibrationMetric,
   PerformanceCalibrationPair,
   PerformanceCalibrationResult,
+  PerformanceCalibrationProtocol,
   PerformanceComparisonReport,
   PerformanceEpochBaseline,
   PerformanceEpochCalibrationMetadata,
@@ -303,20 +306,24 @@ export type {
   PerformanceTolerance,
   PerformanceVerdict,
   PerformancePairComparison,
+  PerformanceRunnerClass,
 } from "./engine/performance-epoch.js";
 export {
   PERFORMANCE_CALIBRATION_COMPARISON_COUNT,
+  PERFORMANCE_CALIBRATION_SCHEMA_VERSION,
   PERFORMANCE_EPOCH,
   PERFORMANCE_EPOCH_SCHEMA_VERSION,
   PERFORMANCE_MEASUREMENT_COUNT,
   PERFORMANCE_STAGES,
   PERFORMANCE_WARMUP_COUNT,
   assertPerformanceCalibrationResult,
+  assertPerformanceAcceptedCalibration,
   assertPerformanceEpochBaseline,
   calibratePerformance,
   comparePerformance,
   createPerformanceBaselineEntry,
   findPerformanceBaselineEntry,
+  getAcceptedPerformanceEpochCommit,
   parsePerformanceMeasurement,
   toPerformanceMeasurement,
 } from "./engine/performance-epoch.js";

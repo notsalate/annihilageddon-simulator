@@ -28,10 +28,13 @@ test("benchmark CLI parses simulation and analyzer options", () => {
       maxTurns: undefined,
       dataPackPath: "manifest.json",
       commit: undefined,
+      comparisonPairId: undefined,
       baselinePath: undefined,
+      epochReferencePath: undefined,
       basePath: undefined,
       headPath: undefined,
       confirmationPath: undefined,
+      acceptedCalibrationPath: undefined,
       calibrationPath: undefined,
       outputPath: undefined,
     }
@@ -47,15 +50,33 @@ test("benchmark CLI parses simulation and analyzer options", () => {
     maxTurns: undefined,
     dataPackPath: undefined,
     commit: undefined,
+    comparisonPairId: undefined,
     baselinePath: undefined,
+    epochReferencePath: undefined,
     basePath: undefined,
     headPath: undefined,
     confirmationPath: undefined,
+    acceptedCalibrationPath: undefined,
     calibrationPath: undefined,
     outputPath: undefined,
   });
 
   assert.equal(parseBenchmarkArgs(["--commit", "head-sha"]).commit, "head-sha");
+  assert.equal(
+    parseBenchmarkArgs(["--comparisonPairId", "run-42:pull-request"])
+      .comparisonPairId,
+    "run-42:pull-request"
+  );
+  assert.equal(
+    parseBenchmarkArgs(["--epochReference", "fresh-e0.json"])
+      .epochReferencePath,
+    "fresh-e0.json"
+  );
+  assert.equal(
+    parseBenchmarkArgs(["--acceptedCalibration", "accepted.json"])
+      .acceptedCalibrationPath,
+    "accepted.json"
+  );
 });
 
 test("benchmark CLI rejects unsupported values and malformed numbers", () => {
