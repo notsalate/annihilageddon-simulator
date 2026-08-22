@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dispatchControlledCardOperation } from "../src/engine/trigger-dispatch.js";
+import {
+  dispatchControlledCardOperation,
+  runControlledPowerMutation,
+} from "../src/engine/trigger-dispatch.js";
 import { ActionExecutionError } from "../src/engine/action-errors.js";
+import { releaseTemporaryControls } from "../src/engine/control-ledger.js";
 import type { RuntimeEffect } from "../src/engine/runtime-effect.js";
 
 import {
@@ -60,6 +64,102 @@ test("DWT-controlled power uses the controller's token count", () => {
   assert.deepEqual(result, { ok: true });
   assert.equal(scenario.state.turn.power, 4);
   assert.equal(scenario.state.turn.controlledPowerBonus, 4);
+});
+
+test("controlled-state mutation seam recalculates after control changes", () => {
+  const scenario = createGameScenario({ rootDir, seed: 47309 });
+  const controller = scenario.activePlayer;
+  const owner = scenario.foes[0];
+  assert.ok(owner);
+  controller.permanents = [];
+  scenario.state.turn.power = 0;
+  scenario.state.turn.controlledPowerBonus = 0;
+
+  givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "ongoing_add_power",
+        timing: "whileControlled",
+        amount: 1,
+      },
+    ],
+  });
+
+  const controlledCard = givenRuntimeCard(scenario, {
+    player: owner,
+    zone: "discard",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "ongoing_add_power",
+        timing: "whileControlled",
+        amount: 3,
+      },
+    ],
+  });
+
+  let dispatchCount = 0;
+  const result = withTemporaryEffectRuntimeOperations(
+    "ongoing_add_power",
+    {
+      evaluateControlledPower(effect) {
+        dispatchCount += 1;
+        return { status: "resolved", result: effect.amount };
+      },
+    },
+    () =>
+      runControlledPowerMutation(scenario.state, controller.playerId, () => {
+        givenTemporaryControl(scenario, controlledCard, controller);
+        return "control-updated";
+      })
+  );
+
+  assert.deepEqual(result, { ok: true, value: "control-updated" });
+  assert.equal(dispatchCount, 2);
+  assert.equal(scenario.state.turn.power, 4);
+  assert.equal(scenario.state.turn.controlledPowerBonus, 4);
+
+  const releaseResult = withTemporaryEffectRuntimeOperations(
+    "ongoing_add_power",
+    {
+      evaluateControlledPower(effect) {
+        dispatchCount += 1;
+        return { status: "resolved", result: effect.amount };
+      },
+    },
+    () =>
+      runControlledPowerMutation(scenario.state, controller.playerId, () => {
+        releaseTemporaryControls(scenario.state);
+        return "control-released";
+      })
+  );
+
+  assert.deepEqual(releaseResult, { ok: true, value: "control-released" });
+  assert.equal(dispatchCount, 3);
+  assert.equal(scenario.state.turn.power, 1);
+  assert.equal(scenario.state.turn.controlledPowerBonus, 1);
+});
+
+test("controlled-state mutation seam does not recalculate after an expected failure", () => {
+  const scenario = createGameScenario({ rootDir, seed: 47310 });
+  const controller = scenario.activePlayer;
+  scenario.state.turn.power = 7;
+  scenario.state.turn.controlledPowerBonus = 2;
+  const powerBeforeFailure = scenario.state.turn.power;
+  const bonusBeforeFailure = scenario.state.turn.controlledPowerBonus;
+
+  assert.throws(
+    () =>
+      runControlledPowerMutation(scenario.state, controller.playerId, () => {
+        throw new Error("expected mutation failure");
+      }),
+    /expected mutation failure/
+  );
+  assert.equal(scenario.state.turn.power, powerBeforeFailure);
+  assert.equal(scenario.state.turn.controlledPowerBonus, bonusBeforeFailure);
 });
 
 test("controlled-power dispatch is idempotent and rejects malformed payloads", () => {

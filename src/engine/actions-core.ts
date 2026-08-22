@@ -28,7 +28,7 @@ import {
   validateMarketFlow,
   type MarketFlowEndReason,
 } from "./market-flow.js";
-import { dispatchControlledCardOperation } from "./trigger-dispatch.js";
+import { runControlledPowerMutation } from "./trigger-dispatch.js";
 import type {
   CardInstance,
   GameState,
@@ -386,8 +386,23 @@ function endTurn(state: GameState): ActionResult {
   state.turn.gainedCardDefinitionIds = [];
   state.turn.damagingAttackPlayerIds = [];
   state.turn.number += 1;
-  state.activePlayerId = getNextPlayer(state, activePlayer).playerId;
-  const marketFlowResult = runMarketFlow(state, { mode: "turn" });
+  const nextActivePlayer = getNextPlayer(state, activePlayer);
+  const transitionResult = runControlledPowerMutation(
+    state,
+    () => state.activePlayerId,
+    () => {
+      state.activePlayerId = nextActivePlayer.playerId;
+      return runMarketFlow(state, { mode: "turn" });
+    },
+    (marketFlowResult) =>
+      marketFlowResult.ok &&
+      marketFlowResult.gameEnd === undefined &&
+      marketFlowResult.gameEndReason === undefined
+  );
+  if (!transitionResult.ok) {
+    return transitionResult;
+  }
+  const marketFlowResult = transitionResult.value;
   if (!marketFlowResult.ok) {
     return marketFlowResult;
   }
@@ -396,18 +411,6 @@ function endTurn(state: GameState): ActionResult {
   }
   if (marketFlowResult.gameEndReason !== undefined) {
     return marketFlowResult;
-  }
-  const nextActivePlayer = mustGetActivePlayer(state);
-  const controlledPowerResult = dispatchControlledCardOperation(
-    state,
-    nextActivePlayer,
-    { kind: "recalculateControlledPower" }
-  );
-  if (!controlledPowerResult.ok) {
-    return controlledPowerResult;
-  }
-  if (controlledPowerResult.gameEnd !== undefined) {
-    return gameEndActionResult(controlledPowerResult.gameEnd);
   }
   recordGameEvent(state, {
     type: "turnStarted",

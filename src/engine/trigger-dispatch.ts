@@ -9,6 +9,7 @@ import {
   evaluateRuntimeEffectControlledPower,
   evaluateRuntimeEffectEndTurnDrawModifier,
   executeRuntimeEffectOnPlayCard,
+  type EffectGameEnd,
   type EffectExecutionResult,
   type EffectSourceContext,
 } from "./effect-runtime-registry.js";
@@ -62,6 +63,17 @@ type ControlledCardExecutionOperation =
 type ControlledCardDispatchResult =
   ControlledCardDispatchResultMap[keyof ControlledCardDispatchResultMap];
 
+export type ControlledPowerMutationResult<Value> =
+  | {
+      readonly ok: true;
+      readonly value: Value;
+      readonly gameEnd?: EffectGameEnd;
+    }
+  | {
+      readonly ok: false;
+      readonly error: string;
+    };
+
 interface ControlledCardEffectCandidate {
   readonly effect: VerifiedRuntimeEffect;
   readonly source: EffectSourceContext;
@@ -71,6 +83,56 @@ interface ControlledCardEffectCandidate {
 interface ControlledCardEntry {
   readonly card: CardInstance;
   readonly definition: CardDefinition;
+}
+
+/**
+ * Runs one mutation that can change the active controller's passive power and
+ * reconciles that power through Trigger Dispatch after the mutation succeeds.
+ * A selector is useful for turn transitions, where the active player changes
+ * inside the mutation before the controlled view is rebuilt.
+ */
+export function runControlledPowerMutation<Value>(
+  state: GameState,
+  controller:
+    | PlayerState["playerId"]
+    | (() => PlayerState["playerId"] | undefined),
+  mutation: () => Value,
+  shouldRecalculate: (value: Value) => boolean = () => true
+): ControlledPowerMutationResult<Value> {
+  const value = mutation();
+  if (!shouldRecalculate(value)) {
+    return { ok: true, value };
+  }
+
+  const controllerId =
+    typeof controller === "function" ? controller() : controller;
+  if (controllerId === undefined || controllerId !== state.activePlayerId) {
+    return { ok: true, value };
+  }
+
+  const activePlayer = state.players.find(
+    (player) => player.playerId === controllerId
+  );
+  if (activePlayer === undefined) {
+    return { ok: true, value };
+  }
+
+  const controlledPowerResult = dispatchControlledCardOperation(
+    state,
+    activePlayer,
+    { kind: "recalculateControlledPower" }
+  );
+  if (!controlledPowerResult.ok) {
+    return controlledPowerResult;
+  }
+  if (controlledPowerResult.gameEnd === undefined) {
+    return { ok: true, value };
+  }
+  return {
+    ok: true,
+    value,
+    gameEnd: controlledPowerResult.gameEnd,
+  };
 }
 
 export function dispatchControlledCardOperation(
