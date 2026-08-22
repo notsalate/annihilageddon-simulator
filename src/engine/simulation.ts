@@ -6,7 +6,11 @@ import {
 } from "./actions.js";
 import { assertNever } from "../common.js";
 import type { ChoiceRequest, ChoiceSelection } from "./choice-policy.js";
-import type { CardDefinition, LoadedDataPack } from "./data.js";
+import type {
+  CardDefinition,
+  LoadedDataPack,
+  TokenDefinition,
+} from "./data.js";
 import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
 import { recordBotActionSelected } from "./event-recorder.js";
 import { adjudicateGame, type AdjudicationResult } from "./adjudication.js";
@@ -97,6 +101,56 @@ export interface SetupStateSnapshot {
   wildMagicStackSize: number;
   limpWandStackSize: number;
   deadWizardTokenStackSize: number;
+}
+
+export interface SimulationFailureSetup {
+  rootDir: string;
+  seed: number;
+  maxTurns: number;
+  playerCount?: number;
+  dataPackPath?: string;
+  initialState: SetupStateSnapshot;
+}
+
+export interface SimulationFailureRuntimeData {
+  manifest?: LoadedDataPack["manifest"];
+  cardDefinitions: readonly CardDefinition[];
+  tokenDefinitions: readonly TokenDefinition[];
+}
+
+export interface SimulationFailureErrorDetails {
+  message: string;
+  stack: string;
+  causeStack?: string;
+}
+
+export interface SimulationFailureReproduction {
+  command: string;
+  args: readonly string[];
+}
+
+export interface SimulationFailureReport {
+  seed: number;
+  setup: SimulationFailureSetup;
+  runtimeData: SimulationFailureRuntimeData;
+  turnNumber: number;
+  activePlayerId: PlayerId;
+  actions: readonly GameAction[];
+  choices: readonly GameEvent[];
+  error: SimulationFailureErrorDetails;
+  eventLog: readonly GameEvent[];
+  reproduction: SimulationFailureReproduction;
+}
+
+export class SimulationExecutionError extends Error {
+  override name = "SimulationExecutionError";
+
+  constructor(
+    readonly report: SimulationFailureReport,
+    cause?: unknown
+  ) {
+    super(report.error.message, cause === undefined ? undefined : { cause });
+  }
 }
 
 export interface SingleGameResult extends AdjudicationResult {
@@ -290,54 +344,157 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
   }
   const actionLimit = options.maxTurns * 200;
   let actionsApplied = 0;
+  const actionHistory: GameAction[] = [];
 
   while (true) {
-    if (options.validateInvariants) {
-      assertGameStateInvariants(state);
-    }
-    const endReason = getGameEndReason(state);
-    if (endReason !== undefined) {
-      return summarizeGame(state, endReason, true, setupState);
-    }
+    try {
+      if (options.validateInvariants) {
+        assertGameStateInvariants(state);
+      }
+      const endReason = getGameEndReason(state);
+      if (endReason !== undefined) {
+        return summarizeGame(state, endReason, true, setupState);
+      }
 
-    if (state.turn.number > options.maxTurns) {
-      return summarizeGame(state, "maxTurnsReached", false, setupState);
-    }
+      if (state.turn.number > options.maxTurns) {
+        return summarizeGame(state, "maxTurnsReached", false, setupState);
+      }
 
-    if (actionsApplied >= actionLimit) {
-      throw new Error(`Bot exceeded ${actionLimit} actions before maxTurns`);
-    }
+      if (actionsApplied >= actionLimit) {
+        throw new Error(`Bot exceeded ${actionLimit} actions before maxTurns`);
+      }
 
-    const activePlayer = mustGetActivePlayer(state);
-    const legalActions = listLegalActions(state);
-    const binding = getBotBindingForPlayer(activePlayer.playerId);
-    const selectedAction = binding.chooseAction.call(binding.strategy, {
-      player: createPlayerDecisionView(activePlayer),
-      legalActions: createBotDecisionActions(state, legalActions),
-    });
-    if (!isLegalAction(selectedAction, legalActions)) {
-      throw new Error(`Bot selected illegal action ${selectedAction.type}`);
-    }
+      const activePlayer = mustGetActivePlayer(state);
+      const legalActions = listLegalActions(state);
+      const binding = getBotBindingForPlayer(activePlayer.playerId);
+      const selectedAction = binding.chooseAction.call(binding.strategy, {
+        player: createPlayerDecisionView(activePlayer),
+        legalActions: createBotDecisionActions(state, legalActions),
+      });
+      actionHistory.push(selectedAction);
+      if (!isLegalAction(selectedAction, legalActions)) {
+        throw new Error(`Bot selected illegal action ${selectedAction.type}`);
+      }
 
-    recordBotActionSelected(state, selectedAction);
-    const result = applyAction(state, selectedAction);
-    if (!result.ok) {
-      throw new Error(`Legal action failed: ${result.error}`);
-    }
-    if (options.validateInvariants) {
-      assertGameStateInvariants(state);
-    }
-    if (result.gameEndReason !== undefined) {
-      return summarizeGame(
+      recordBotActionSelected(state, selectedAction);
+      const result = applyAction(state, selectedAction);
+      if (!result.ok) {
+        throw new Error(`Legal action failed: ${result.error}`);
+      }
+      if (options.validateInvariants) {
+        assertGameStateInvariants(state);
+      }
+      if (result.gameEndReason !== undefined) {
+        return summarizeGame(
+          state,
+          result.gameEndReason,
+          true,
+          setupState,
+          result.winnerPlayerId
+        );
+      }
+      actionsApplied += 1;
+    } catch (error) {
+      throw createSimulationExecutionError(
         state,
-        result.gameEndReason,
-        true,
+        options,
         setupState,
-        result.winnerPlayerId
+        dataPack,
+        actionHistory,
+        error
       );
     }
-    actionsApplied += 1;
   }
+}
+
+function createSimulationExecutionError(
+  state: GameState,
+  options: RunSingleGameOptions,
+  setupState: SetupStateSnapshot,
+  dataPack: LoadedDataPack | undefined,
+  actionHistory: readonly GameAction[],
+  failure: unknown
+): SimulationExecutionError {
+  const error = getSimulationFailureErrorDetails(failure);
+  const reproductionArgs = [
+    "--seed",
+    String(options.seed),
+    "--maxTurns",
+    String(options.maxTurns),
+    ...(options.playerCount === undefined
+      ? []
+      : ["--playerCount", String(options.playerCount)]),
+    ...(options.dataPackPath === undefined
+      ? []
+      : ["--dataPackPath", options.dataPackPath]),
+  ];
+  const report: SimulationFailureReport = {
+    seed: options.seed,
+    setup: {
+      rootDir: options.rootDir,
+      seed: options.seed,
+      maxTurns: options.maxTurns,
+      ...(options.playerCount === undefined
+        ? {}
+        : { playerCount: options.playerCount }),
+      ...(options.dataPackPath === undefined
+        ? {}
+        : { dataPackPath: options.dataPackPath }),
+      initialState: setupState,
+    },
+    runtimeData: {
+      ...(dataPack === undefined ? {} : { manifest: dataPack.manifest }),
+      cardDefinitions: [...state.cardDefinitions.values()],
+      tokenDefinitions: [...state.tokenDefinitions.values()],
+    },
+    turnNumber: state.turn.number,
+    activePlayerId: state.activePlayerId,
+    actions: [...actionHistory],
+    choices: state.eventLog.filter(isChoiceEvent),
+    error,
+    eventLog: [...state.eventLog],
+    reproduction: {
+      command: ["npm run simulate:single --", ...reproductionArgs]
+        .map((part) => quoteCommandArgument(part))
+        .join(" "),
+      args: reproductionArgs,
+    },
+  };
+  return new SimulationExecutionError(
+    report,
+    failure instanceof Error ? failure : undefined
+  );
+}
+
+function getSimulationFailureErrorDetails(
+  failure: unknown
+): SimulationFailureErrorDetails {
+  if (!(failure instanceof Error)) {
+    return { message: String(failure), stack: "" };
+  }
+
+  const causeStack =
+    failure.cause instanceof Error ? failure.cause.stack : undefined;
+  return {
+    message: failure.message,
+    stack: failure.stack ?? "",
+    ...(causeStack === undefined ? {} : { causeStack }),
+  };
+}
+
+function isChoiceEvent(event: GameEvent): boolean {
+  return (
+    event.type === "effectChoiceSelected" ||
+    event.type === "effectChoiceSkipped" ||
+    event.type === "defenseChoiceSelected" ||
+    event.type === "wildMagicChoiceSelected" ||
+    event.type === "wildMagicChoiceSkipped" ||
+    event.type === "setupChoiceSelected"
+  );
+}
+
+function quoteCommandArgument(value: string): string {
+  return /[\s"]/.test(value) ? JSON.stringify(value) : value;
 }
 
 function summarizeGame(

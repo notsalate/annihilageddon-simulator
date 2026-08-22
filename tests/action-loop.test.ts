@@ -49,7 +49,7 @@ const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
 
-test("play reports an error when a resolved foe-deck card is absent from the Ledger", () => {
+test("late foe-deck cleanup errors stop playing after card placement", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -74,24 +74,24 @@ test("play reports an error when a resolved foe-deck card is absent from the Led
     ],
   });
 
-  const result = withTemporaryEffectRuntimeOperations(
-    "add_power",
-    {
-      execute(state, _player, _effect, source) {
-        removeCardFromLocation(state, source.cardInstanceId);
-        return { ok: true };
-      },
-    },
-    () => play(scenario, card)
+  assert.throws(
+    () =>
+      withTemporaryEffectRuntimeOperations(
+        "add_power",
+        {
+          execute(state, _player, _effect, source) {
+            removeCardFromLocation(state, source.cardInstanceId);
+            return { ok: true };
+          },
+        },
+        () => play(scenario, card)
+      ),
+    new RegExp(`Cannot move resolved card ${resolvedCard.instanceId}`)
   );
-
-  assert.deepEqual(result, {
-    ok: false,
-    error: `Cannot move resolved card ${resolvedCard.instanceId}`,
-  });
+  assert.equal(scenario.activePlayer.playedThisTurn.includes(card), true);
 });
 
-test("play preserves a resolved foe-deck card moved before Ledger cleanup", () => {
+test("late foe-deck cleanup errors preserve a card moved by the effect", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -116,23 +116,23 @@ test("play preserves a resolved foe-deck card moved before Ledger cleanup", () =
     ],
   });
 
-  const result = withTemporaryEffectRuntimeOperations(
-    "add_power",
-    {
-      execute(state, _player, _effect, source) {
-        const moved = removeCardFromLocation(state, source.cardInstanceId);
-        assert.ok(moved);
-        foe.deck.push(moved.card);
-        return { ok: true };
-      },
-    },
-    () => play(scenario, card)
+  assert.throws(
+    () =>
+      withTemporaryEffectRuntimeOperations(
+        "add_power",
+        {
+          execute(state, _player, _effect, source) {
+            const moved = removeCardFromLocation(state, source.cardInstanceId);
+            assert.ok(moved);
+            foe.deck.push(moved.card);
+            return { ok: true };
+          },
+        },
+        () => play(scenario, card)
+      ),
+    new RegExp(`Cannot move resolved card ${resolvedCard.instanceId}`)
   );
-
-  assert.deepEqual(result, {
-    ok: false,
-    error: `Cannot move resolved card ${resolvedCard.instanceId}`,
-  });
+  assert.equal(scenario.activePlayer.playedThisTurn.includes(card), true);
   assert.equal(foe.deck.includes(resolvedCard), true);
   assert.equal(foe.discard.includes(resolvedCard), false);
 });

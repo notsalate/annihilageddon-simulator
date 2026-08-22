@@ -9,6 +9,8 @@ import {
 } from "../engine/mass-simulation.js";
 import {
   runSingleGame,
+  SimulationExecutionError,
+  type SimulationFailureReport,
   type GameEndReason,
   type RunSingleGameOptions,
   type SingleGameResult,
@@ -282,11 +284,15 @@ async function writeErrorReport(
   return reportPath;
 }
 
-function formatErrorReport(
+export function formatErrorReport(
   timestamp: string,
   error: unknown,
   context: Record<string, string | number>
 ): string {
+  if (error instanceof SimulationExecutionError) {
+    return formatSimulationFailureReport(timestamp, error.report);
+  }
+
   const normalizedError = normalizeError(error);
   return [
     "# Simulation Menu Error",
@@ -299,6 +305,62 @@ function formatErrorReport(
     "stack:",
     "```",
     normalizedError.stack,
+    "```",
+    "",
+  ].join("\n");
+}
+
+export function formatSimulationFailureReport(
+  timestamp: string,
+  report: SimulationFailureReport
+): string {
+  return [
+    "# Simulation Failure",
+    "",
+    `timestamp: ${timestamp}`,
+    `seed: ${report.seed}`,
+    `turnNumber: ${report.turnNumber}`,
+    `activePlayerId: ${report.activePlayerId}`,
+    "",
+    "setup:",
+    "```json",
+    JSON.stringify(report.setup, null, 2),
+    "```",
+    "",
+    "runtimeData:",
+    "```json",
+    JSON.stringify(report.runtimeData, null, 2),
+    "```",
+    "",
+    "actions:",
+    "```json",
+    JSON.stringify(report.actions, null, 2),
+    "```",
+    "",
+    "choices:",
+    "```json",
+    JSON.stringify(report.choices, null, 2),
+    "```",
+    "",
+    `message: ${report.error.message}`,
+    "",
+    "stack:",
+    "```",
+    report.error.stack,
+    "```",
+    ...(report.error.causeStack === undefined
+      ? []
+      : ["", "cause stack:", "```", report.error.causeStack, "```"]),
+    "",
+    "eventLog:",
+    "```json",
+    JSON.stringify(report.eventLog, null, 2),
+    "```",
+    "",
+    "reproduction:",
+    `command: ${report.reproduction.command}`,
+    "```json",
+    JSON.stringify(report.reproduction.args, null, 2),
     "```",
     "",
   ].join("\n");

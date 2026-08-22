@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { dispatchControlledCardOperation } from "../src/engine/trigger-dispatch.js";
+import { ActionExecutionError } from "../src/engine/action-errors.js";
 import type { RuntimeEffect } from "../src/engine/runtime-effect.js";
 
 import {
@@ -154,7 +155,7 @@ test("controlled-power dispatch ignores malformed non-ongoing controlled cards",
   assert.equal(scenario.state.turn.controlledPowerBonus, 0);
 });
 
-test("status mutation dispatches controlled power once and preserves rollback", () => {
+test("status mutation dispatches controlled power once and preserves late failure state", () => {
   const scenario = createGameScenario({ rootDir, seed: 47304 });
   const controller = scenario.activePlayer;
   controller.permanents = [];
@@ -225,15 +226,21 @@ test("status mutation dispatches controlled power once and preserves rollback", 
       },
     ],
   });
-  const handBeforeRollback = [...controller.hand];
-  const rollbackResult = play(scenario, secondGainCard);
+  const handBeforeFailure = [...controller.hand];
+  assert.throws(
+    () => play(scenario, secondGainCard),
+    (error: unknown) =>
+      error instanceof ActionExecutionError &&
+      error.message.includes("Effect ongoing_add_power.amount")
+  );
 
-  assert.equal(rollbackResult.ok, false);
-  assert.equal(controller.statuses.length, 0);
-  assert.deepEqual(controller.hand, handBeforeRollback);
+  assert.equal(controller.statuses.length, 1);
+  assert.equal(controller.hand.length, handBeforeFailure.length - 1);
+  assert.equal(controller.hand.includes(secondGainCard), false);
   assert.equal(scenario.state.turn.power, 5);
   assert.equal(scenario.state.turn.controlledPowerBonus, 5);
   assert.equal(controller.permanents.includes(malformedControlledCard), true);
+  assert.equal(controller.playedThisTurn.includes(secondGainCard), true);
 });
 
 test("turn transition recalculates the next active player's controlled power", () => {

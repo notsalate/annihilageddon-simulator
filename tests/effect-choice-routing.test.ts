@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   applyAction,
   initializeGame,
+  ActionExecutionError,
   type CardDefinition,
   type RuntimeEffect,
 } from "../src/index.js";
@@ -98,7 +99,7 @@ test("chosenFoe without a callback keeps the first opponent baseline", () => {
   assert.equal(allChoiceEvents.length, 1);
 });
 
-test("failed defense branch rolls back mutations and returns its error", () => {
+test("failed defense branch rolls back mutations and throws its error", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const attackingPlayer = state.players.find(
     (candidate) => candidate.playerId === state.activePlayerId
@@ -165,13 +166,16 @@ test("failed defense branch rolls back mutations and returns its error", () => {
   };
   const lifeBefore = defendingPlayer.life.current;
 
-  const result = applyAction(state, {
-    type: "playCard",
-    cardInstanceId: attackCard.instanceId,
-  });
-
-  assert.equal(result.ok, false);
-  assert.match(result.error, /No legal choices for effect discard_card/);
+  assert.throws(
+    () =>
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: attackCard.instanceId,
+      }),
+    (error: unknown) =>
+      error instanceof ActionExecutionError &&
+      /No legal choices for effect discard_card/.test(error.message)
+  );
   assert.equal(defendingPlayer.life.current, lifeBefore);
   assert.equal(defendingPlayer.chips, 2);
   assert.equal(defendingPlayer.hand.includes(defenseCard), true);
@@ -575,14 +579,19 @@ test("empty card targets preserve skip and fail semantics", () => {
       }
       return undefined;
     };
-    const result = applyAction(state, {
-      type: "playCard",
-      cardInstanceId: source.instanceId,
-    });
-    return { result, state, source, seenEmptyRequest };
+    try {
+      const result = applyAction(state, {
+        type: "playCard",
+        cardInstanceId: source.instanceId,
+      });
+      return { result, error: undefined, state, source, seenEmptyRequest };
+    } catch (error) {
+      return { result: undefined, error, state, source, seenEmptyRequest };
+    }
   };
 
   const skipped = run("skip");
+  assert.ok(skipped.result);
   assert.equal(skipped.result.ok, true);
   assert.ok(skipped.seenEmptyRequest);
   assert.deepEqual(skipped.seenEmptyRequest.choices, []);
@@ -596,9 +605,11 @@ test("empty card targets preserve skip and fail semantics", () => {
   assert.equal(skippedChoiceEvents[0]?.type, "effectChoiceSkipped");
 
   const failed = run("fail");
+  assert.ok(failed.result);
   assert.equal(failed.result.ok, false);
-  assert.ok(failed.seenEmptyRequest);
-  assert.deepEqual(failed.seenEmptyRequest.choices, []);
+  if (failed.result.ok) return;
+  assert.match(failed.result.error, /No legal choices for effect discard_card/);
+  assert.equal(failed.seenEmptyRequest, undefined);
   const failedChoiceEvents = failed.state.eventLog.filter(
     (event) =>
       (event.type === "effectChoiceSkipped" ||
@@ -606,12 +617,11 @@ test("empty card targets preserve skip and fail semantics", () => {
       event.effectId === "discard_card"
   );
   assert.equal(failedChoiceEvents.length, 0);
-  if (!failed.result.ok) {
-    assert.match(
-      failed.result.error,
-      /No legal choices for effect discard_card/
-    );
-  }
+  const failedActivePlayer = failed.state.players.find(
+    (candidate) => candidate.playerId === failed.state.activePlayerId
+  );
+  assert.ok(failedActivePlayer);
+  assert.equal(failedActivePlayer.hand.includes(failed.source), true);
 });
 
 test("non-target option choices keep their ordered option identities", () => {

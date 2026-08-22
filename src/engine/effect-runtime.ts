@@ -39,11 +39,13 @@ import {
   type EffectSourceContext,
   type MayhemAttackPlanTarget,
   type EffectChoiceResolution,
+  type EffectRuntimeHandlerOperationResult,
   executeAttackOutcomeBranch,
   evaluateRuntimeEffectAtTiming,
   executeRuntimeEffect,
   executeRuntimeEffectAtTiming,
   resolveResurrectionLifeTotal,
+  validateAttackCostPrecondition,
   type TargetChoice,
   type TargetChoiceResult,
 } from "./effect-runtime-registry.js";
@@ -62,6 +64,206 @@ import type {
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 import { createChoicePlayerView } from "./strategy-decision-view.js";
 import { dispatchControlledCardOperation } from "./trigger-dispatch.js";
+
+export function validateOnPlayEffects(
+  state: GameState,
+  player: PlayerState,
+  definition: CardDefinition,
+  source: EffectSourceContext,
+  excludedCardInstanceId?: CardInstance["instanceId"]
+): EffectExecutionResult {
+  return validateEffectsAtTiming(
+    state,
+    player,
+    definition.engine.effects,
+    "onPlay",
+    source,
+    undefined,
+    excludedCardInstanceId
+  );
+}
+
+export function validateActivationEffects(
+  state: GameState,
+  player: PlayerState,
+  definition: CardDefinition,
+  source: EffectSourceContext
+): EffectExecutionResult {
+  return validateEffectsAtTiming(
+    state,
+    player,
+    definition.engine.effects,
+    "activation",
+    source
+  );
+}
+
+export function validateWizardPropertyOnPlayCardEffects(
+  state: GameState,
+  player: PlayerState,
+  playedDefinition: CardDefinition,
+  excludedCardInstanceId?: CardInstance["instanceId"]
+): EffectExecutionResult {
+  for (const token of player.wizardProperties) {
+    const definition = state.tokenDefinitions.get(token.definitionId);
+    if (
+      definition?.kind !== "wizardProperty" ||
+      definition.engine === undefined ||
+      !definition.engine.playableInV0
+    ) {
+      continue;
+    }
+
+    const result = validateEffectsAtTiming(
+      state,
+      player,
+      definition.engine.effects,
+      "onPlayCard",
+      {
+        sourceType: "wizardProperty",
+        runtimeMode: state.runtimeMode,
+        playerId: player.playerId,
+        cardInstanceId: token.instanceId,
+        definitionId: token.definitionId,
+        tokenInstanceId: token.instanceId,
+        tokenDefinitionId: token.definitionId,
+      },
+      (effect) =>
+        cardTriggerMatches(effect, playedDefinition)
+          ? { status: "resolved", result: undefined }
+          : { status: "notApplicable" },
+      excludedCardInstanceId
+    );
+    if (!result.ok) {
+      return result;
+    }
+  }
+
+  return { ok: true };
+}
+
+export function validateGainedCardEffects(
+  state: GameState,
+  player: PlayerState,
+  definition: CardDefinition
+): EffectExecutionResult {
+  for (const token of player.wizardProperties) {
+    const tokenDefinition = state.tokenDefinitions.get(token.definitionId);
+    if (
+      tokenDefinition?.kind !== "wizardProperty" ||
+      tokenDefinition.engine === undefined ||
+      !tokenDefinition.engine.playableInV0
+    ) {
+      continue;
+    }
+
+    const result = validateEffectsAtTiming(
+      state,
+      player,
+      tokenDefinition.engine.effects,
+      "onGainCard",
+      {
+        sourceType: "wizardProperty",
+        runtimeMode: state.runtimeMode,
+        playerId: player.playerId,
+        cardInstanceId: token.instanceId,
+        definitionId: token.definitionId,
+        tokenInstanceId: token.instanceId,
+        tokenDefinitionId: token.definitionId,
+      },
+      (effect) =>
+        cardTriggerMatches(effect, definition)
+          ? { status: "resolved", result: undefined }
+          : { status: "notApplicable" }
+    );
+    if (!result.ok) {
+      return result;
+    }
+  }
+
+  return { ok: true };
+}
+
+function validateEffectsAtTiming(
+  state: GameState,
+  player: PlayerState,
+  effects: readonly RuntimeEffect[],
+  timing: RuntimeEffect["timing"],
+  source: EffectSourceContext,
+  isApplicable?: (
+    effect: RuntimeEffectPayload
+  ) => EffectRuntimeHandlerOperationResult<undefined>,
+  excludedCardInstanceId?: CardInstance["instanceId"]
+): EffectExecutionResult {
+  for (const effect of effects) {
+    let expectedFailure: string | undefined;
+    const result = evaluateRuntimeEffectAtTiming(
+      effect,
+      source,
+      timing,
+      (decodedEffect) => {
+        const applicability =
+          isApplicable?.(decodedEffect) ??
+          ({ status: "resolved", result: undefined } as const);
+        if (applicability.status === "resolved") {
+          expectedFailure = getExpectedEffectFailure(
+            state,
+            player,
+            decodedEffect,
+            excludedCardInstanceId
+          );
+        }
+        return applicability;
+      }
+    );
+    if (result.status === "error") {
+      return { ok: false, error: result.error };
+    }
+    if (expectedFailure !== undefined) {
+      return { ok: false, error: expectedFailure };
+    }
+  }
+
+  return { ok: true };
+}
+
+function getExpectedEffectFailure(
+  state: GameState,
+  player: PlayerState,
+  effect: RuntimeEffectPayload,
+  excludedCardInstanceId?: CardInstance["instanceId"]
+): string | undefined {
+  if (
+    effect.effectId === "attack_damage" &&
+    (!("optional" in effect) || effect.optional !== true) &&
+    "costs" in effect &&
+    effect.costs !== undefined
+  ) {
+    const costError = validateAttackCostPrecondition(player, effect.costs);
+    if (costError !== undefined) {
+      return costError;
+    }
+  }
+
+  if (!("emptyChoice" in effect) || effect.emptyChoice !== "fail") {
+    return undefined;
+  }
+
+  const choices = buildLegalTargetChoices(state, player, effect);
+  if (!choices.ok) {
+    return choices.error;
+  }
+  const legalChoices = choices.choices.filter(
+    (choice) =>
+      choice.choiceType !== "card" ||
+      choice.card.instanceId !== excludedCardInstanceId
+  );
+  if (legalChoices.length === 0) {
+    return `No legal choices for effect ${asString(effect.effectId)}`;
+  }
+  return undefined;
+}
+
 export function executeOnPlayEffects(
   state: GameState,
   player: PlayerState,
@@ -424,6 +626,21 @@ export function executeMayhemEffects(
   source: EffectSourceContext
 ): EffectExecutionResult {
   return executeEffects(
+    state,
+    player,
+    definition.engine.effects,
+    "onMayhemResolve",
+    source
+  );
+}
+
+export function validateMayhemEffects(
+  state: GameState,
+  player: PlayerState,
+  definition: CardDefinition,
+  source: EffectSourceContext
+): EffectExecutionResult {
+  return validateEffectsAtTiming(
     state,
     player,
     definition.engine.effects,

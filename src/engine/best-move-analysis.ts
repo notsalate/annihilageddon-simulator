@@ -1,4 +1,5 @@
 import {
+  ActionExecutionError,
   applyAction,
   listLegalActions,
   type ActionResult,
@@ -83,6 +84,10 @@ export interface RankedTurnLinesResult {
 
 export class AnalysisError extends Error {
   override name = "AnalysisError";
+
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+  }
 }
 
 export class AnalysisLimitError extends AnalysisError {
@@ -178,10 +183,26 @@ export function enumerateActionBranches(
         resultingState: fork,
       });
     } catch (error) {
-      if (!(error instanceof ExpandChoicePath)) {
+      const choiceExpansion =
+        error instanceof ActionExecutionError &&
+        error.cause instanceof ExpandChoicePath
+          ? error.cause
+          : error instanceof ExpandChoicePath
+            ? error
+            : undefined;
+      if (
+        choiceExpansion === undefined &&
+        error instanceof ActionExecutionError
+      ) {
+        throw new AnalysisError(
+          `Analysis failed for action ${describeAction(action)} and choice path ${describePrefix(prefix)}: ${error.message}`,
+          { cause: error }
+        );
+      }
+      if (choiceExpansion === undefined) {
         throw error;
       }
-      if (error.request.choices.length === 0) {
+      if (choiceExpansion.request.choices.length === 0) {
         throw replayError(action, prefix, "empty choice request cannot expand");
       }
       if (prefix.selections.length >= limits.maxChoiceDepth) {
@@ -189,21 +210,23 @@ export function enumerateActionBranches(
           `Analysis choice depth exceeded ${limits.maxChoiceDepth} for action ${describeAction(action)}`
         );
       }
-      const next = error.request.choices.map((choice, choiceIndex) => ({
-        selections: [
-          ...prefix.selections,
-          {
-            requestIndex: error.requestIndex,
-            effectId: error.request.effectId,
-            sourceType: error.request.sourceType,
-            cardInstanceId: error.request.cardInstanceId,
-            definitionId: error.request.definitionId,
-            choiceIndex,
-            choiceId: choice.choiceId,
-            choiceKind: choice.choiceKind,
-          },
-        ],
-      }));
+      const next = choiceExpansion.request.choices.map(
+        (choice, choiceIndex) => ({
+          selections: [
+            ...prefix.selections,
+            {
+              requestIndex: choiceExpansion.requestIndex,
+              effectId: choiceExpansion.request.effectId,
+              sourceType: choiceExpansion.request.sourceType,
+              cardInstanceId: choiceExpansion.request.cardInstanceId,
+              definitionId: choiceExpansion.request.definitionId,
+              choiceIndex,
+              choiceId: choice.choiceId,
+              choiceKind: choice.choiceKind,
+            },
+          ],
+        })
+      );
       generatedBranches += next.length;
       if (generatedBranches > limits.maxBranchesPerAction) {
         throw new AnalysisLimitError(

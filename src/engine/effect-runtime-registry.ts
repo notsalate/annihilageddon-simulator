@@ -3673,6 +3673,14 @@ function planAttackCosts(
   };
 }
 
+export function validateAttackCostPrecondition(
+  player: PlayerState,
+  costs: readonly RuntimeEffectCost[]
+): string | undefined {
+  const plan = planAttackCosts(player, costs);
+  return plan.ok ? undefined : plan.error;
+}
+
 function commitAttackCostPlan(
   state: GameState,
   player: PlayerState,

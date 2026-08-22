@@ -14,7 +14,7 @@ const rootDir = process.cwd();
 const eventKinds = ["mayhem", "megaMayhem"] as const;
 
 for (const eventKind of eventKinds) {
-  test(`endTurn rolls back cleanup, draw, controls, Market Flow, events, and RNG for ${eventKind}`, () => {
+  test(`late endTurn errors stop after cleanup and Market Flow mutations for ${eventKind}`, () => {
     const scenario = createGameScenario({
       rootDir,
       seed: eventKind === "mayhem" ? 18701 : 18801,
@@ -55,89 +55,56 @@ for (const eventKind of eventKinds) {
       eventKind === "mayhem" ? state.common.mainDeck : state.common.legendDeck;
     const market =
       eventKind === "mayhem" ? state.common.market : state.common.legendMarket;
-    const destroyed =
-      eventKind === "mayhem"
-        ? state.common.destroyedMayhem
-        : state.common.destroyedMegaMayhem;
     market.splice(0);
     sourceDeck.splice(0, sourceDeck.length, eventCard);
 
-    const players = state.players;
-    const common = state.common;
-    const turn = state.turn;
-    const activePlayerId = state.activePlayerId;
-    const hand = activePlayer.hand;
-    const deck = activePlayer.deck;
-    const discard = activePlayer.discard;
-    const playedThisTurn = activePlayer.playedThisTurn;
-    const controls = state.turn.temporaryCardControls;
-    const eventLog = state.eventLog;
-    const turnBefore = structuredClone(state.turn);
-    const handBefore = [...hand];
-    const deckBefore = [...deck];
-    const discardBefore = [...discard];
-    const playedThisTurnBefore = [...playedThisTurn];
-    const sourceDeckBefore = [...sourceDeck];
-    const marketBefore = [...market];
-    const destroyedBefore = [...destroyed];
-    const eventLogBefore = [...eventLog];
-    const chipsBefore = state.players.map((player) => player.chips);
-    const expectedNextRandom = state.rng.fork().next();
+    const eventLogLength = state.eventLog.length;
     let executions = 0;
 
-    const result = withTemporaryEffectRuntimeOperations(
-      "add_power",
-      {
-        execute(mutatedState, player) {
-          executions += 1;
-          if (executions === 1) {
-            mutatedState.turn.power += 2;
-            player.chips += 6;
-            return { ok: true };
-          }
-          mutatedState.turn.power += 9;
-          player.chips += 4;
-          mutatedState.rng.next();
-          return { ok: false, error: `late ${eventKind} failure` };
-        },
-      },
-      () => applyAction(state, { type: "endTurn" })
+    assert.throws(
+      () =>
+        withTemporaryEffectRuntimeOperations(
+          "add_power",
+          {
+            execute(mutatedState, player) {
+              executions += 1;
+              if (executions === 1) {
+                mutatedState.turn.power += 2;
+                player.chips += 6;
+                return { ok: true };
+              }
+              mutatedState.turn.power += 9;
+              player.chips += 4;
+              mutatedState.rng.next();
+              return { ok: false, error: `late ${eventKind} failure` };
+            },
+          },
+          () => applyAction(state, { type: "endTurn" })
+        ),
+      new RegExp(`late ${eventKind} failure`)
     );
-
-    assert.deepEqual(result, { ok: false, error: `late ${eventKind} failure` });
     assert.equal(executions, 2);
-    assert.equal(state.players, players);
-    assert.equal(state.common, common);
-    assert.equal(state.turn, turn);
-    assert.equal(state.activePlayerId, activePlayerId);
-    assert.equal(activePlayer.hand, hand);
-    assert.equal(activePlayer.deck, deck);
-    assert.equal(activePlayer.discard, discard);
-    assert.equal(activePlayer.playedThisTurn, playedThisTurn);
-    assert.equal(state.turn.temporaryCardControls, controls);
-    assert.equal(state.eventLog, eventLog);
-    assert.deepEqual(state.eventLog, eventLogBefore);
-    assert.deepEqual(state.turn, turnBefore);
-    assert.deepEqual(hand, handBefore);
-    assert.deepEqual(deck, deckBefore);
-    assert.deepEqual(discard, discardBefore);
-    assert.deepEqual(playedThisTurn, playedThisTurnBefore);
-    assert.deepEqual(sourceDeck, sourceDeckBefore);
-    assert.deepEqual(market, marketBefore);
-    assert.deepEqual(destroyed, destroyedBefore);
-    assert.deepEqual(
-      state.players.map((player) => player.chips),
-      chipsBefore
-    );
+    assert.equal(activePlayer.hand.includes(cleanupCard), false);
+    assert.equal(activePlayer.playedThisTurn.includes(playedCard), false);
+    assert.equal(sourceDeck.includes(eventCard), false);
+    assert.equal(market.includes(eventCard), false);
     assert.equal(
       state.eventLog.some(
         (event) =>
           event.type === "marketEventCardOpened" &&
           event.cardInstanceId === eventCard.instanceId
       ),
-      false
+      true
     );
-    assert.equal(state.rng.next(), expectedNextRandom);
+    assert.equal(
+      state.eventLog.some(
+        (event) =>
+          event.type === "endTurnCleanupMoved" &&
+          event.targetCardInstanceIds?.includes(cleanupCard.instanceId)
+      ),
+      true
+    );
+    assert.ok(state.eventLog.length > eventLogLength);
   });
 
   test(`endTurn commits terminal ${eventKind} after destroying the event card`, () => {
