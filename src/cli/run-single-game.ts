@@ -4,7 +4,10 @@ import {
   createLoadedDataPackFromSimulationFailureReport,
   runSingleGame,
   type SimulationFailureReport,
+  type SimulationFailureReplay,
+  type SimulationFailureReplayChoice,
 } from "../engine/simulation.js";
+import type { GameAction } from "../engine/actions.js";
 
 interface CliOptions {
   seed: number;
@@ -15,18 +18,20 @@ interface CliOptions {
 }
 
 const options = parseArgs(process.argv.slice(2));
-const replayRuntimeData =
+const replayData =
   options.replayReport === undefined
     ? undefined
-    : readSimulationFailureRuntimeData(options.replayReport);
+    : readSimulationFailureReplayData(options.replayReport);
 const dataSource =
-  replayRuntimeData === undefined
+  replayData === undefined
     ? options.dataPackPath === undefined
       ? {}
       : { dataPackPath: options.dataPackPath }
     : {
-        dataPack:
-          createLoadedDataPackFromSimulationFailureReport(replayRuntimeData),
+        dataPack: createLoadedDataPackFromSimulationFailureReport(
+          replayData.runtimeData
+        ),
+        replay: replayData.replay,
       };
 const result = runSingleGame({
   rootDir: process.cwd(),
@@ -72,15 +77,33 @@ function parseArgs(args: string[]): CliOptions {
   };
 }
 
-function readSimulationFailureRuntimeData(
-  reportPath: string
-): SimulationFailureReport["runtimeData"] {
+function readSimulationFailureReplayData(reportPath: string): {
+  runtimeData: SimulationFailureReport["runtimeData"];
+  replay: SimulationFailureReplay;
+} {
   const reportText = readFileSync(reportPath, "utf8");
-  const value: unknown = JSON.parse(readJsonSection(reportText, "runtimeData"));
-  if (!isSimulationFailureRuntimeData(value)) {
+  const runtimeDataValue: unknown = JSON.parse(
+    readJsonSection(reportText, "runtimeData")
+  );
+  if (!isSimulationFailureRuntimeData(runtimeDataValue)) {
     throw new Error("Report runtimeData has an invalid shape");
   }
-  return value;
+  const actionsValue: unknown = JSON.parse(
+    readJsonSection(reportText, "actions")
+  );
+  if (!isGameActionArray(actionsValue)) {
+    throw new Error("Report actions have an invalid shape");
+  }
+  const choicesValue: unknown = JSON.parse(
+    readJsonSection(reportText, "choices")
+  );
+  return {
+    runtimeData: runtimeDataValue,
+    replay: {
+      actions: actionsValue,
+      choices: readReplayChoices(choicesValue),
+    },
+  };
 }
 
 function readJsonSection(reportText: string, section: string): string {
@@ -111,8 +134,85 @@ function isSimulationFailureRuntimeData(
     "cardDefinitions" in record &&
     "tokenDefinitions" in record &&
     "decks" in record &&
-    "tokenStacks" in record
+    "tokenStacks" in record &&
+    Array.isArray(record["cardDefinitions"]) &&
+    Array.isArray(record["tokenDefinitions"])
   );
+}
+
+function isGameActionArray(value: unknown): value is GameAction[] {
+  return Array.isArray(value) && value.every(isGameAction);
+}
+
+function isGameAction(value: unknown): value is GameAction {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  switch (record["type"]) {
+    case "endTurn":
+      return true;
+    case "playCard":
+    case "activatePermanent":
+      return typeof record["cardInstanceId"] === "string";
+    case "activateWizardProperty":
+      return typeof record["tokenInstanceId"] === "string";
+    case "buyMarketCard":
+      return (
+        typeof record["cardInstanceId"] === "string" &&
+        (record["source"] === "mainMarket" ||
+          record["source"] === "legendMarket" ||
+          record["source"] === "wildMagicStack" ||
+          record["source"] === "familiar")
+      );
+    default:
+      return false;
+  }
+}
+
+function readReplayChoices(value: unknown): SimulationFailureReplay["choices"] {
+  if (!Array.isArray(value)) {
+    throw new Error("Report choices have an invalid shape");
+  }
+
+  const choices: SimulationFailureReplayChoice[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new Error("Report choice has an invalid shape");
+    }
+    const record = entry as Record<string, unknown>;
+    if (
+      record["type"] !== "effectChoiceSelected" &&
+      record["type"] !== "effectChoiceSkipped"
+    ) {
+      continue;
+    }
+    if (
+      typeof record["playerId"] !== "string" ||
+      typeof record["effectId"] !== "string"
+    ) {
+      throw new Error("Report effect choice has an invalid shape");
+    }
+    if (record["type"] === "effectChoiceSkipped") {
+      choices.push({
+        type: "effectChoiceSkipped",
+        playerId: record["playerId"],
+        effectId: record["effectId"],
+      });
+      continue;
+    }
+    if (typeof record["choiceId"] !== "string") {
+      throw new Error("Report selected effect choice has no choiceId");
+    }
+    choices.push({
+      type: "effectChoiceSelected",
+      playerId: record["playerId"],
+      effectId: record["effectId"],
+      choiceId: record["choiceId"],
+    });
+  }
+  return choices;
 }
 
 function readOptionalNumberOption(

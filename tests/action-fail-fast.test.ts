@@ -1,12 +1,19 @@
+import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { tmpdir } from "node:os";
 import test from "node:test";
 
 import {
   ActionExecutionError,
   applyAction,
+  formatSimulationFailureReport,
   intakeRuntimeData,
+  initializeGame,
   runSingleGame,
   SimulationExecutionError,
+  type SimulationFailureReport,
 } from "../src/index.js";
 import {
   createGameScenario,
@@ -141,4 +148,85 @@ test("preloaded Runtime Data is embedded in the reproduction source", () => {
       return true;
     }
   );
+});
+
+test("saved failure report replays its actions and choices through the CLI", () => {
+  const dataPack = intakeRuntimeData({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+  });
+  const setupState = initializeGame({ dataPack, seed: 24901 });
+  const activePlayer = setupState.players.find(
+    (player) => player.playerId === setupState.activePlayerId
+  );
+  assert.ok(activePlayer);
+  const targetCard = activePlayer.hand.find(
+    (card) => card.definitionId === "esw2_dbg__starter_003"
+  );
+  assert.ok(targetCard);
+
+  let actionCall = 0;
+  let failureReport: SimulationFailureReport | undefined;
+  assert.throws(
+    () =>
+      runSingleGame({
+        rootDir,
+        dataPack,
+        seed: 24901,
+        maxTurns: 3,
+        botFactory: () => ({
+          chooseAction: () => {
+            actionCall += 1;
+            return actionCall === 1
+              ? { type: "playCard", cardInstanceId: targetCard.instanceId }
+              : { type: "playCard", cardInstanceId: "missing-card" };
+          },
+          chooseEffectChoice: (request) => {
+            const choice = request.choices[0];
+            return choice === undefined
+              ? undefined
+              : { choiceId: choice.choiceId };
+          },
+        }),
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof SimulationExecutionError);
+      failureReport = error.report;
+      return true;
+    }
+  );
+  assert.ok(failureReport);
+  assert.ok(
+    failureReport.choices.some((event) => event.type === "effectChoiceSelected")
+  );
+
+  const reportDirectory = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-replay-report-")
+  );
+  const reportPath = path.join(reportDirectory, "failure.md");
+  writeFileSync(
+    reportPath,
+    formatSimulationFailureReport(
+      "2026-08-22T00:00:00.000Z",
+      failureReport,
+      reportPath
+    ),
+    "utf8"
+  );
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      path.join(rootDir, "dist", "src", "cli", "run-single-game.js"),
+      "--seed",
+      "24901",
+      "--maxTurns",
+      "3",
+      "--replayReport",
+      reportPath,
+    ],
+    { cwd: rootDir, encoding: "utf8" }
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stdout}\n${result.stderr}`, /illegal action/);
 });

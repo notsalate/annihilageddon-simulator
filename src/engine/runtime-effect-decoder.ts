@@ -24,6 +24,12 @@ import { createCombatReplacementEffectDecoders } from "./effect-runtime-combat-r
 import { createMayhemEffectDecoders } from "./effect-runtime-mayhem.js";
 import { createSetupEffectDecoders } from "./effect-runtime-setup.js";
 import { createWildMagicEffectDecoders } from "./effect-runtime-wild-magic.js";
+import type {
+  ObjectFields,
+  OptionalField,
+  RequiredField,
+  ValueDecoder,
+} from "./effect-runtime-family-support.js";
 
 export type DecodeResult<T> =
   | { ok: true; value: T }
@@ -33,27 +39,6 @@ export interface RuntimeEffectDecoder<Id extends RuntimeEffectId> {
   effectId: Id;
   decode(subjectId: string, raw: unknown): DecodeResult<RuntimeEffectForId<Id>>;
 }
-
-type ValueDecoder<T> = (label: string, raw: unknown) => DecodeResult<T>;
-
-interface RequiredField<T> {
-  optional: false;
-  decode: ValueDecoder<T>;
-}
-
-interface OptionalField<T> {
-  optional: true;
-  decode: ValueDecoder<T>;
-}
-
-type FieldDefinition<T extends object, Key extends keyof T> =
-  {} extends Pick<T, Key>
-    ? OptionalField<Exclude<T[Key], undefined>>
-    : RequiredField<T[Key]>;
-
-type ObjectFields<T extends object> = {
-  [Key in keyof T]-?: FieldDefinition<T, Key>;
-};
 
 function required<T>(decode: ValueDecoder<T>): RequiredField<T> {
   return { optional: false, decode };

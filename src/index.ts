@@ -219,6 +219,8 @@ export type {
   SetupTokenSnapshot,
   SimulationFailureErrorDetails,
   SimulationFailureReport,
+  SimulationFailureReplay,
+  SimulationFailureReplayChoice,
   SimulationFailureReproduction,
   SimulationFailureRuntimeData,
   SimulationFailureSetup,
@@ -227,6 +229,7 @@ export type {
 export {
   baselineBot,
   createLoadedDataPackFromSimulationFailureReport,
+  createSimulationFailureReplay,
   getGameEndReason,
   SimulationExecutionError,
   runSingleGame,

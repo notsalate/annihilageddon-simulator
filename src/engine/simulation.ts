@@ -44,6 +44,7 @@ export interface RunSingleGameOptions {
   dataPack?: LoadedDataPack;
   bot?: BotStrategy;
   botFactory?: (playerId: PlayerId) => BotStrategy;
+  replay?: SimulationFailureReplay;
   validateInvariants?: boolean;
 }
 
@@ -132,6 +133,18 @@ export interface SimulationFailureReproduction {
   args: readonly string[];
 }
 
+export interface SimulationFailureReplayChoice {
+  readonly type: "effectChoiceSelected" | "effectChoiceSkipped";
+  readonly playerId: string;
+  readonly effectId: string;
+  readonly choiceId?: string;
+}
+
+export interface SimulationFailureReplay {
+  readonly actions: readonly GameAction[];
+  readonly choices: readonly SimulationFailureReplayChoice[];
+}
+
 export interface SimulationFailureReport {
   seed: number;
   setup: SimulationFailureSetup;
@@ -143,6 +156,38 @@ export interface SimulationFailureReport {
   error: SimulationFailureErrorDetails;
   eventLog: readonly GameEvent[];
   reproduction: SimulationFailureReproduction;
+}
+
+export function createSimulationFailureReplay(
+  report: Pick<SimulationFailureReport, "actions" | "choices">
+): SimulationFailureReplay {
+  const choices: SimulationFailureReplayChoice[] = [];
+  for (const event of report.choices) {
+    if (event.type === "effectChoiceSkipped") {
+      choices.push({
+        type: event.type,
+        playerId: event.playerId,
+        effectId: event.effectId,
+      });
+      continue;
+    }
+    if (event.type !== "effectChoiceSelected") {
+      continue;
+    }
+    if (event.choiceId === undefined) {
+      throw new Error("Effect choice replay event is missing choiceId");
+    }
+    choices.push({
+      type: event.type,
+      playerId: event.playerId,
+      effectId: event.effectId,
+      choiceId: event.choiceId,
+    });
+  }
+  return {
+    actions: [...report.actions],
+    choices,
+  };
 }
 
 export function createLoadedDataPackFromSimulationFailureReport(
@@ -278,19 +323,124 @@ function mustGetCardDefinition(
   return definition;
 }
 
+class SimulationReplayError extends Error {
+  override name = "SimulationReplayError";
+}
+
+interface SimulationReplayController {
+  nextAction(): GameAction;
+  chooseEffectChoice(request: ChoiceRequest): ChoiceSelection | undefined;
+  getIncompleteHistoryError(): SimulationReplayError | undefined;
+}
+
+function createSimulationReplayController(
+  replay: SimulationFailureReplay
+): SimulationReplayController {
+  let actionIndex = 0;
+  let choiceIndex = 0;
+
+  return {
+    nextAction(): GameAction {
+      const action = replay.actions[actionIndex];
+      if (action === undefined) {
+        throw new SimulationReplayError(
+          `Replay action history ended before action ${actionIndex + 1}`
+        );
+      }
+      actionIndex += 1;
+      return action;
+    },
+    chooseEffectChoice(request: ChoiceRequest): ChoiceSelection | undefined {
+      const expected = replay.choices[choiceIndex];
+      if (expected === undefined) {
+        throw new SimulationReplayError(
+          `Replay choice history ended before ${request.effectId}`
+        );
+      }
+      if (
+        expected.playerId !== request.player.playerId ||
+        expected.effectId !== request.effectId
+      ) {
+        throw new SimulationReplayError(
+          `Replay choice ${choiceIndex + 1} does not match ${request.effectId} for ${request.player.playerId}`
+        );
+      }
+      choiceIndex += 1;
+      if (expected.type === "effectChoiceSkipped") {
+        return undefined;
+      }
+      if (
+        expected.choiceId === undefined ||
+        !request.choices.some((choice) => choice.choiceId === expected.choiceId)
+      ) {
+        throw new SimulationReplayError(
+          `Replay choice ${expected.choiceId ?? "<missing>"} is not legal for ${request.effectId}`
+        );
+      }
+      return { choiceId: expected.choiceId };
+    },
+    getIncompleteHistoryError(): SimulationReplayError | undefined {
+      if (actionIndex !== replay.actions.length) {
+        return new SimulationReplayError(
+          `Replay stopped after ${actionIndex} of ${replay.actions.length} actions`
+        );
+      }
+      if (choiceIndex !== replay.choices.length) {
+        return new SimulationReplayError(
+          `Replay stopped after ${choiceIndex} of ${replay.choices.length} choices`
+        );
+      }
+      return undefined;
+    },
+  };
+}
+
+function createReplayBotFactory(
+  replayController: SimulationReplayController
+): (playerId: PlayerId) => BotStrategy {
+  return () => ({
+    chooseAction: () => replayController.nextAction(),
+    chooseEffectChoice: (request) =>
+      replayController.chooseEffectChoice(request),
+  });
+}
+
+function rejectSuccessfulReplay(
+  replayController: SimulationReplayController | undefined
+): never | undefined {
+  if (replayController === undefined) {
+    return undefined;
+  }
+  throw new SimulationReplayError(
+    "Replay completed without reproducing the recorded failure"
+  );
+}
+
 export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
   const { bot, botFactory, dataPack } = options;
   if (dataPack !== undefined && options.dataPackPath !== undefined) {
     throw new Error("dataPack and dataPackPath cannot be used together");
   }
+  if (
+    options.replay !== undefined &&
+    (bot !== undefined || botFactory !== undefined)
+  ) {
+    throw new Error("Replay cannot be combined with bot or botFactory");
+  }
   if (bot !== undefined && bot !== baselineBot) {
     throw new Error("Custom multiplayer bot must use botFactory");
   }
+  const replayController =
+    options.replay === undefined
+      ? undefined
+      : createSimulationReplayController(options.replay);
   const strategyFactory =
-    botFactory ??
-    (bot === undefined || bot === baselineBot
-      ? () => createBaselineBot()
-      : () => bot);
+    replayController === undefined
+      ? (botFactory ??
+        (bot === undefined || bot === baselineBot
+          ? () => createBaselineBot()
+          : () => bot))
+      : createReplayBotFactory(replayController);
   const botBindingsByPlayerId = new Map<PlayerId, PlayerBotBinding>();
   const playerIdByStrategy = new WeakMap<BotStrategy, PlayerId>();
   const playerIdByCallback = new Map<
@@ -384,11 +534,17 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       }
       const endReason = getGameEndReason(state);
       if (endReason !== undefined) {
-        return summarizeGame(state, endReason, true, setupState);
+        return (
+          rejectSuccessfulReplay(replayController) ??
+          summarizeGame(state, endReason, true, setupState)
+        );
       }
 
       if (state.turn.number > options.maxTurns) {
-        return summarizeGame(state, "maxTurnsReached", false, setupState);
+        return (
+          rejectSuccessfulReplay(replayController) ??
+          summarizeGame(state, "maxTurnsReached", false, setupState)
+        );
       }
 
       if (actionsApplied >= actionLimit) {
@@ -416,23 +572,30 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
         assertGameStateInvariants(state);
       }
       if (result.gameEndReason !== undefined) {
-        return summarizeGame(
-          state,
-          result.gameEndReason,
-          true,
-          setupState,
-          result.winnerPlayerId
+        return (
+          rejectSuccessfulReplay(replayController) ??
+          summarizeGame(
+            state,
+            result.gameEndReason,
+            true,
+            setupState,
+            result.winnerPlayerId
+          )
         );
       }
       actionsApplied += 1;
     } catch (error) {
+      const replayFailure =
+        replayController === undefined || error instanceof SimulationReplayError
+          ? undefined
+          : replayController.getIncompleteHistoryError();
       throw createSimulationExecutionError(
         state,
         options,
         setupState,
         runtimeDataPack,
         actionHistory,
-        error
+        replayFailure ?? error
       );
     }
   }
