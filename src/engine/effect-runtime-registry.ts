@@ -27,15 +27,9 @@ import {
   getControlledOngoingCards,
 } from "./control-ledger.js";
 import {
-  applyDecodedEffectiveValueModifier,
   calculateEffectiveCardCost as calculateEffectiveCardCostCore,
   calculateEffectivePlayerMaxLife as calculateEffectivePlayerMaxLifeCore,
 } from "./effective-values.js";
-import {
-  isEffectiveValueModifierEffect,
-  type EffectiveValueModifierId,
-  type EffectiveValueModifierOperationContext,
-} from "./effective-value-catalog.js";
 import {
   allEffectRuntimeModes,
   fixtureEffectTimings,
@@ -65,7 +59,10 @@ import {
   createCardOwnershipChoiceEffectDefinitions,
   type CardOwnershipChoiceEffectId,
 } from "./effect-runtime-cards-ownership-choice.js";
-import { createEffectiveValueModifierEffectDefinitions } from "./effect-runtime-effective-value-modifier.js";
+import {
+  createEffectiveValueModifierEffectDefinitions,
+  type EffectiveValueModifierId,
+} from "./effect-runtime-effective-value-modifier.js";
 import {
   createControlledPowerEffectDefinitions,
   createOngoingEffectDefinitions,
@@ -522,10 +519,6 @@ export interface EffectRuntimeTimedEvaluationOperationContext<
 export interface EffectRuntimeCatalogOperationOverridesForTesting<
   Id extends RuntimeEffectId,
 > {
-  readonly applyEffectiveValueModifier?: <Result>(
-    effect: RuntimeEffectForId<Id>,
-    context: EffectiveValueModifierOperationContext<Result>
-  ) => EffectRuntimeHandlerOperationResult<Result>;
   readonly execute?: (
     state: GameState,
     player: PlayerState,
@@ -605,12 +598,6 @@ interface EffectRuntimeEntry<
       RuntimeEffectForId<EffectId>,
       Result
     >
-  ): EffectRuntimeOperationResult<Result>;
-  applyEffectiveValueModifier<Result>(
-    subjectId: string,
-    rawEffect: unknown,
-    source: EffectSourceContext,
-    context: EffectiveValueModifierOperationContext<Result>
   ): EffectRuntimeOperationResult<Result>;
   executeAtTiming(
     subjectId: string,
@@ -981,24 +968,6 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     executeTyped,
     evaluateAtTiming,
     executeAtTimingTyped,
-    applyEffectiveValueModifier(subjectId, rawEffect, source, context) {
-      return evaluateAtTiming(subjectId, rawEffect, {
-        source,
-        timing: context.timing,
-        evaluate(decodedEffect) {
-          if (!isEffectiveValueModifierEffect(decodedEffect)) {
-            return { status: "notApplicable" };
-          }
-
-          const applyEffectiveValueModifier =
-            operationOverrides?.applyEffectiveValueModifier;
-          if (applyEffectiveValueModifier !== undefined) {
-            return applyEffectiveValueModifier(decodedEffect, context);
-          }
-          return applyDecodedEffectiveValueModifier(decodedEffect, context);
-        },
-      });
-    },
     executeAtTiming(subjectId, rawEffect, context) {
       return evaluateAtTiming(subjectId, rawEffect, {
         source: context.source,
@@ -1347,8 +1316,7 @@ function applyLifeChange(
 ): void {
   const effectiveMaxLife = calculateEffectivePlayerMaxLifeCore(
     state,
-    targetPlayer.playerId,
-    applyEffectiveValueModifier
+    targetPlayer.playerId
   );
   const targetLifeBefore = targetPlayer.life.current;
   const unclampedLife = targetLifeBefore + amount;
@@ -1906,11 +1874,7 @@ const setupFamilyEntries = defineEffectRuntimeFamily(
   createSetupEffectDefinitions({
     bindRuntimeEffectDecoder,
     calculateEffectivePlayerMaxLife: (state, playerId) =>
-      calculateEffectivePlayerMaxLifeCore(
-        state,
-        playerId,
-        applyEffectiveValueModifier
-      ),
+      calculateEffectivePlayerMaxLifeCore(state, playerId),
   })
 );
 
@@ -1930,12 +1894,7 @@ const combatAttackEffectEntries = defineEffectRuntimeFamily(
     bindRuntimeEffectDecoder,
     collectAttackReplacementProfile,
     calculateEffectiveCardCost: (state, playerId, definition) =>
-      calculateEffectiveCardCostCore(
-        state,
-        playerId,
-        definition,
-        applyEffectiveValueModifier
-      ),
+      calculateEffectiveCardCostCore(state, playerId, definition),
   })
 );
 
@@ -1954,11 +1913,7 @@ const mayhemEffectEntries = defineEffectRuntimeFamily(
   createMayhemEffectDefinitions({
     bindRuntimeEffectDecoder,
     calculateEffectivePlayerMaxLife: (state, playerId) =>
-      calculateEffectivePlayerMaxLifeCore(
-        state,
-        playerId,
-        applyEffectiveValueModifier
-      ),
+      calculateEffectivePlayerMaxLifeCore(state, playerId),
   })
 );
 
@@ -2299,32 +2254,6 @@ export function evaluateRuntimeEffectAtTiming<Result>(
     `Effect ${resolvedId.effectId}`,
     effect,
     { source, timing, evaluate }
-  );
-}
-
-export function applyEffectiveValueModifier<Result>(
-  effect: unknown,
-  source: EffectSourceContext,
-  context: EffectiveValueModifierOperationContext<Result>
-): EffectRuntimeOperationResult<Result> {
-  const resolvedId = readRuntimeEffectId(effect, "Unsupported effect id");
-  if (!resolvedId.ok) {
-    return { status: "error", error: resolvedId.error };
-  }
-  if (
-    resolvedId.effectId !== "modify_effective_value" &&
-    resolvedId.effectId !== "fixture_modify_effective_value"
-  ) {
-    return { status: "notApplicable" };
-  }
-
-  return getEffectRuntimeCatalogEntry(
-    resolvedId.effectId
-  ).applyEffectiveValueModifier(
-    `Effect ${resolvedId.effectId}`,
-    effect,
-    source,
-    context
   );
 }
 

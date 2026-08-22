@@ -123,7 +123,6 @@ const allowedRegistryAdapterValueExports = new Set([
   "validateRuntimeEffectCatalogPayload",
   "executeRuntimeEffect",
   "evaluateRuntimeEffectAtTiming",
-  "applyEffectiveValueModifier",
   "collectAttackReplacementProfile",
   "resolveResurrectionLifeTotal",
   "executeRuntimeEffectAtTiming",

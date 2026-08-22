@@ -1,7 +1,6 @@
 import { isPlainRecord } from "../common.js";
 import type { PlayerId, TokenInstanceId } from "../domain/types.js";
 import type {
-  EffectiveValueKind,
   EffectiveValueModifierId,
   EffectiveValueModifierEffectPayloadMap,
 } from "./effect-runtime-effective-value-modifier.js";
@@ -35,34 +34,6 @@ export interface EffectiveValueModifierSource {
   readonly tokenInstanceId?: TokenInstanceId;
   readonly tokenDefinitionId?: string;
 }
-
-export type EffectiveValueModifierOperation = (value: number) => number;
-
-export type EffectiveValueModifierOperationResult<Result> =
-  | { readonly status: "notApplicable" }
-  | { readonly status: "resolved"; readonly result: Result };
-
-export interface EffectiveValueModifierOperationContext<Result> {
-  readonly timing: "whileControlled" | "whileScoring";
-  readonly valueKind: EffectiveValueKind;
-  readonly targetMatches: (effect: EffectiveValueModifierEffect) => boolean;
-  readonly countOwnedScoringCards: (
-    countedCardTypes: readonly string[]
-  ) => number;
-  readonly evaluate: (
-    apply: EffectiveValueModifierOperation
-  ) => EffectiveValueModifierOperationResult<Result>;
-}
-
-export type EffectiveValueModifierCatalogOperationResult<Result> =
-  | EffectiveValueModifierOperationResult<Result>
-  | { readonly status: "error"; readonly error: string };
-
-export type EffectiveValueModifierCatalogDispatcher = <Result>(
-  effect: unknown,
-  source: EffectiveValueModifierSource,
-  context: EffectiveValueModifierOperationContext<Result>
-) => EffectiveValueModifierCatalogOperationResult<Result>;
 
 function readEffectiveValueModifierId(
   rawEffect: unknown

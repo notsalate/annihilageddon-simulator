@@ -13,12 +13,9 @@ import {
 } from "./control-ledger.js";
 import {
   type EffectiveValueKind,
-  type EffectiveValueModifierCatalogDispatcher,
   type EffectiveValueModifierEffect,
-  type EffectiveValueModifierOperation,
-  type EffectiveValueModifierOperationResult,
-  type EffectiveValueModifierOperationContext,
   type EffectiveValueModifierSource,
+  isEffectiveValueModifierEffect,
 } from "./effective-value-catalog.js";
 import {
   isRuntimeEffectTarget,
@@ -41,33 +38,56 @@ type EffectiveValueTarget =
 
 type EffectiveValueSource = EffectiveValueModifierSource;
 
-export function applyDecodedEffectiveValueModifier<Result>(
+interface EffectiveValueModifierEvaluationContext {
+  readonly timing: "whileControlled" | "whileScoring";
+  readonly valueKind: EffectiveValueKind;
+  readonly targetMatches: (effect: EffectiveValueModifierEffect) => boolean;
+  readonly countOwnedScoringCards: (
+    countedCardTypes: readonly string[]
+  ) => number;
+}
+
+type EffectiveValueModifierApplicationResult =
+  | { readonly status: "notApplicable" }
+  | { readonly status: "resolved"; readonly value: number };
+
+function applyEffectiveValueModifier(
   effect: EffectiveValueModifierEffect,
-  context: EffectiveValueModifierOperationContext<Result>
-): EffectiveValueModifierOperationResult<Result> {
+  context: EffectiveValueModifierEvaluationContext,
+  value: number
+): EffectiveValueModifierApplicationResult {
   if (
+    effect.timing !== context.timing ||
     effect.valueKind !== context.valueKind ||
     !context.targetMatches(effect)
   ) {
     return { status: "notApplicable" };
   }
 
-  const apply: EffectiveValueModifierOperation =
-    effect.operation === "invertNegative"
-      ? (value) => (value < 0 ? Math.abs(value) : value)
-      : (value) =>
-          value +
-          (effect.amount ??
-            (effect.amountPerOwnedCard ?? 0) *
-              context.countOwnedScoringCards(effect.countedCardTypes ?? []));
-  return context.evaluate(apply);
+  if (effect.operation === "invertNegative") {
+    return {
+      status: "resolved",
+      value: value < 0 ? Math.abs(value) : value,
+    };
+  }
+
+  const amount =
+    effect.amount ??
+    (effect.amountPerOwnedCard === undefined
+      ? undefined
+      : effect.amountPerOwnedCard *
+        context.countOwnedScoringCards(effect.countedCardTypes ?? []));
+  if (amount === undefined || !Number.isSafeInteger(amount)) {
+    throw new Error(`${effect.effectId}.amount must be a safe integer`);
+  }
+
+  return { status: "resolved", value: value + amount };
 }
 
 export function calculateEffectiveCardCost(
   state: GameState,
   playerId: PlayerId,
-  definition: CardDefinition,
-  dispatcher: EffectiveValueModifierCatalogDispatcher
+  definition: CardDefinition
 ): number {
   return calculateEffectiveValue({
     state,
@@ -78,7 +98,6 @@ export function calculateEffectiveCardCost(
       definitionId: definition.cardId,
     },
     baseValue: definition.engine.cost,
-    dispatcher,
   });
 }
 
@@ -86,8 +105,7 @@ export function calculateEffectiveCardVictoryPoints(
   state: GameState,
   playerId: PlayerId,
   definition: CardDefinition,
-  card: CardInstance | undefined,
-  dispatcher: EffectiveValueModifierCatalogDispatcher
+  card: CardInstance | undefined
 ): number {
   return calculateEffectiveValue({
     state,
@@ -100,15 +118,13 @@ export function calculateEffectiveCardVictoryPoints(
     baseValue: definition.engine.victoryPoints,
     scoringCards: getOwnedScoringCards(state, playerId),
     ...(card === undefined ? {} : { scoredCard: card }),
-    dispatcher,
   });
 }
 
 export function calculateEffectiveTokenVictoryPoints(
   state: GameState,
   playerId: PlayerId,
-  definition: TokenDefinition,
-  dispatcher: EffectiveValueModifierCatalogDispatcher
+  definition: TokenDefinition
 ): number {
   if (definition.kind !== "deadWizardToken") {
     throw new Error(`Token ${definition.tokenId} does not have victory points`);
@@ -124,15 +140,13 @@ export function calculateEffectiveTokenVictoryPoints(
     },
     baseValue: definition.victoryPoints,
     scoringCards: getOwnedScoringCards(state, playerId),
-    dispatcher,
   });
 }
 
 export function calculateEffectivePlayerVictoryPoints(
   state: GameState,
   playerId: PlayerId,
-  baseValue: number,
-  dispatcher: EffectiveValueModifierCatalogDispatcher
+  baseValue: number
 ): number {
   return calculateEffectiveValue({
     state,
@@ -143,14 +157,12 @@ export function calculateEffectivePlayerVictoryPoints(
     },
     baseValue,
     scoringCards: getOwnedScoringCards(state, playerId),
-    dispatcher,
   });
 }
 
 export function calculateEffectivePlayerMaxLife(
   state: GameState,
-  playerId: PlayerId,
-  dispatcher: EffectiveValueModifierCatalogDispatcher
+  playerId: PlayerId
 ): number {
   const player = state.players.find(
     (candidate) => candidate.playerId === playerId
@@ -167,7 +179,6 @@ export function calculateEffectivePlayerMaxLife(
       targetType: "player",
     },
     baseValue: player.life.max,
-    dispatcher,
   });
 }
 
@@ -177,12 +188,15 @@ function calculateEffectiveValue(options: {
   valueKind: EffectiveValueKind;
   target: EffectiveValueTarget;
   baseValue: number;
-  dispatcher: EffectiveValueModifierCatalogDispatcher;
   scoringCards?: readonly ControlledCardObject[];
   scoredCard?: CardInstance;
 }): number {
   let value = options.baseValue;
   const view = buildControlledObjectView(options.state, options.playerId);
+  const scoringCards =
+    options.scoringCards ??
+    getOwnedScoringCards(options.state, options.playerId);
+  const scoringCardTypeIndex = buildScoringCardTypeIndex(scoringCards);
 
   for (const { effect, source, timing } of [
     ...getControlledObjectEffects(options.state, options.playerId, view),
@@ -192,39 +206,32 @@ function calculateEffectiveValue(options: {
       options.scoringCards ?? []
     ),
   ]) {
-    const dispatched = options.dispatcher(effect, source, {
-      timing,
-      valueKind: options.valueKind,
-      targetMatches: (modifier) => {
-        if (!matchesTarget(options.state, modifier.target, options.target)) {
-          return false;
-        }
-        if (
-          options.target.targetType !== "card" ||
-          options.scoredCard === undefined ||
-          modifier.timing !== "whileScoring" ||
-          !isSelfScoringCardEffectTarget(modifier.target, source.definitionId)
-        ) {
-          return true;
-        }
-        return source.cardInstanceId === options.scoredCard.instanceId;
+    const applied = applyEffectiveValueModifier(
+      effect,
+      {
+        timing,
+        valueKind: options.valueKind,
+        targetMatches: (modifier) => {
+          if (!matchesTarget(options.state, modifier.target, options.target)) {
+            return false;
+          }
+          if (
+            options.target.targetType !== "card" ||
+            options.scoredCard === undefined ||
+            modifier.timing !== "whileScoring" ||
+            !isSelfScoringCardEffectTarget(modifier.target, source.definitionId)
+          ) {
+            return true;
+          }
+          return source.cardInstanceId === options.scoredCard.instanceId;
+        },
+        countOwnedScoringCards: (countedCardTypes) =>
+          countOwnedScoringCards(scoringCardTypeIndex, countedCardTypes),
       },
-      countOwnedScoringCards: (countedCardTypes) =>
-        countOwnedScoringCards(
-          options.state,
-          options.playerId,
-          countedCardTypes
-        ),
-      evaluate: (apply) => {
-        value = apply(value);
-        return { status: "resolved", result: undefined };
-      },
-    });
-    if (dispatched.status === "error") {
-      throw new Error(dispatched.error);
-    }
-    if (dispatched.status === "notApplicable") {
-      continue;
+      value
+    );
+    if (applied.status === "resolved") {
+      value = applied.value;
     }
   }
 
@@ -239,7 +246,7 @@ export function getOwnedScoringCards(
 }
 
 interface EffectiveValueEffect {
-  readonly effect: RuntimeEffect;
+  readonly effect: EffectiveValueModifierEffect;
   readonly source: EffectiveValueSource;
   readonly timing: "whileControlled" | "whileScoring";
 }
@@ -326,7 +333,28 @@ function toEffectiveValueEffects(
   source: EffectiveValueSource,
   timing: "whileControlled" | "whileScoring" = "whileControlled"
 ): EffectiveValueEffect[] {
-  return effects.map((effect) => ({ effect, source, timing }));
+  return effects.flatMap((effect) => {
+    if (!isEffectiveValueModifierEffect(effect)) {
+      return [];
+    }
+    assertTypedEffectiveValueModifier(effect);
+    return [{ effect, source, timing }];
+  });
+}
+
+function assertTypedEffectiveValueModifier(
+  effect: EffectiveValueModifierEffect
+): void {
+  if (
+    (effect.operation === "add" &&
+      effect.amount === undefined &&
+      effect.amountPerOwnedCard === undefined) ||
+    (effect.amount !== undefined && !Number.isSafeInteger(effect.amount)) ||
+    (effect.amountPerOwnedCard !== undefined &&
+      !Number.isSafeInteger(effect.amountPerOwnedCard))
+  ) {
+    throw new Error(`${effect.effectId}.amount must be a safe integer`);
+  }
 }
 
 function cardEffectSource(
@@ -406,23 +434,38 @@ function getWizardPropertyEffects(
   return definition.engine.effects;
 }
 
+function buildScoringCardTypeIndex(
+  scoringCards: readonly ControlledCardObject[]
+): ReadonlyMap<string, ReadonlySet<ControlledCardObject>> {
+  const index = new Map<string, Set<ControlledCardObject>>();
+  for (const object of scoringCards) {
+    for (const cardType of new Set(object.definition.engine.cardTypes)) {
+      const cards = index.get(cardType) ?? new Set<ControlledCardObject>();
+      cards.add(object);
+      index.set(cardType, cards);
+    }
+  }
+  return index;
+}
+
 function countOwnedScoringCards(
-  state: GameState,
-  playerId: PlayerId,
+  index: ReadonlyMap<string, ReadonlySet<ControlledCardObject>>,
   countedCardTypes: readonly string[] | undefined
 ): number {
   if (!Array.isArray(countedCardTypes)) {
     return 0;
   }
 
-  return getOwnedScoringCards(state, playerId).filter((object) => {
-    return countedCardTypes.some((cardType) => {
-      return (
-        typeof cardType === "string" &&
-        object.definition.engine.cardTypes.includes(cardType)
-      );
-    });
-  }).length;
+  const matchingCards = new Set<ControlledCardObject>();
+  for (const cardType of new Set(countedCardTypes)) {
+    if (typeof cardType !== "string") {
+      continue;
+    }
+    for (const card of index.get(cardType) ?? []) {
+      matchingCards.add(card);
+    }
+  }
+  return matchingCards.size;
 }
 
 function matchesTarget(

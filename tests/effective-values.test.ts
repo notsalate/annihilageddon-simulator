@@ -6,7 +6,6 @@ import {
   calculateEffectiveCardVictoryPoints,
   calculateEffectivePlayerMaxLife,
   calculateEffectivePlayerVictoryPoints,
-  calculateEffectiveTokenVictoryPoints,
   initializeGame,
   applyAction,
   listLegalActions,
@@ -19,6 +18,7 @@ import {
   type TokenDefinition,
   type TrophyLikeInstance,
 } from "../src/index.js";
+import { calculateEffectiveCardCost as calculateEffectiveCardCostFromDomain } from "../src/engine/effective-values.js";
 import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
 import {
   buildControlledObjectView,
@@ -27,54 +27,15 @@ import {
 } from "../src/engine/control-ledger.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 import {
-  applyEffectiveValueModifier,
-  type EffectRuntimeCatalogOperationOverridesForTesting,
-  type EffectRuntimeHandlerOperationResult,
-} from "../src/engine/effect-runtime-registry.js";
-import type { EffectiveValueModifierOperationContext } from "../src/engine/effective-value-catalog.js";
-import {
   markCardInstanceId,
   markCardDefinitionId,
-  markPlayerId,
 } from "../src/domain/types.js";
-import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
 
-test("Catalog rejects a malformed effective-value modifier before evaluation", () => {
-  const result = applyEffectiveValueModifier(
-    {
-      effectId: "fixture_modify_effective_value",
-      timing: "whileControlled",
-      valueKind: "cardCost",
-      operation: "add",
-      amount: -1,
-    },
-    {
-      sourceType: "card",
-      runtimeMode: "fixture",
-      playerId: markPlayerId("player-1"),
-      cardInstanceId: "fixture-effective-value-source",
-      definitionId: "fixture-effective-value-source",
-    },
-    {
-      timing: "whileControlled",
-      valueKind: "cardCost",
-      targetMatches: () => true,
-      countOwnedScoringCards: () => 0,
-      evaluate: (apply) => ({ status: "resolved", result: apply(5) }),
-    }
-  );
-
-  assert.deepEqual(result, {
-    status: "error",
-    error: "Effect fixture_modify_effective_value.target is required",
-  });
-});
-
-test("effective-value entrypoints observe the Catalog modifier operation result", () => {
+test("Effective Value domain interface applies typed modifiers without a Catalog dispatcher", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -82,17 +43,13 @@ test("effective-value entrypoints observe the Catalog modifier operation result"
   });
   const player = state.players[0];
   const card = state.common.market[0];
-  const token = state.common.deadWizardTokens.drawStack[0];
   assert.ok(player);
   assert.ok(card);
-  assert.ok(token);
   const cardDefinition = state.cardDefinitions.get(card.definitionId);
-  const tokenDefinition = state.tokenDefinitions.get(token.definitionId);
   assert.ok(cardDefinition);
-  assert.equal(tokenDefinition?.kind, "deadWizardToken");
   player.statuses.push({
-    instanceId: markCardInstanceId("fixture-catalog-operation-status"),
-    statusId: "fixture-catalog-operation-status",
+    instanceId: markCardInstanceId("fixture-domain-effective-value-status"),
+    statusId: "fixture-domain-effective-value-status",
     ownerId: player.playerId,
     effects: [
       {
@@ -103,76 +60,18 @@ test("effective-value entrypoints observe the Catalog modifier operation result"
         amount: 1,
         target: { targetType: "card", definitionId: cardDefinition.cardId },
       },
-      {
-        effectId: "fixture_modify_effective_value",
-        timing: "whileControlled",
-        valueKind: "cardVictoryPoints",
-        operation: "add",
-        amount: 1,
-        target: { targetType: "card", definitionId: cardDefinition.cardId },
-      },
-      {
-        effectId: "fixture_modify_effective_value",
-        timing: "whileControlled",
-        valueKind: "tokenVictoryPoints",
-        operation: "add",
-        amount: 1,
-        target: { targetType: "token", definitionId: tokenDefinition.tokenId },
-      },
-      {
-        effectId: "fixture_modify_effective_value",
-        timing: "whileControlled",
-        valueKind: "playerVictoryPoints",
-        operation: "add",
-        amount: 1,
-        target: { targetType: "player" },
-      },
-      {
-        effectId: "fixture_modify_effective_value",
-        timing: "whileControlled",
-        valueKind: "playerMaxLife",
-        operation: "add",
-        amount: 1,
-        target: { targetType: "player" },
-      },
     ],
   });
 
-  const values = withTemporaryEffectRuntimeOperations(
-    "fixture_modify_effective_value",
-    effectiveValueCatalogOperationOverride,
-    () => [
-      calculateEffectiveCardCost(state, player.playerId, cardDefinition),
-      calculateEffectiveCardVictoryPoints(
-        state,
-        player.playerId,
-        cardDefinition,
-        card
-      ),
-      calculateEffectiveTokenVictoryPoints(
-        state,
-        player.playerId,
-        tokenDefinition
-      ),
-      calculateEffectivePlayerVictoryPoints(state, player.playerId, 0),
-      calculateEffectivePlayerMaxLife(state, player.playerId),
-    ]
+  assert.equal(
+    calculateEffectiveCardCostFromDomain(
+      state,
+      player.playerId,
+      cardDefinition
+    ),
+    cardDefinition.engine.cost + 1
   );
-
-  assert.deepEqual(values, [701, 701, 701, 701, 701]);
 });
-
-const effectiveValueCatalogOperationOverride = {
-  applyEffectiveValueModifier<Result>(
-    _effect: Extract<
-      RuntimeEffect,
-      { effectId: "fixture_modify_effective_value" }
-    >,
-    context: EffectiveValueModifierOperationContext<Result>
-  ): EffectRuntimeHandlerOperationResult<Result> {
-    return context.evaluate(() => 701);
-  },
-} satisfies EffectRuntimeCatalogOperationOverridesForTesting<"fixture_modify_effective_value">;
 
 test("effective-value modifiers keep discovery order", () => {
   const state = initializeGame({
@@ -208,6 +107,82 @@ test("effective-value modifiers keep discovery order", () => {
   assert.equal(
     calculateEffectivePlayerVictoryPoints(state, player.playerId, -2),
     7
+  );
+});
+
+test("repeated typed modifiers reuse one scoring-card type index", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60620,
+  });
+  const player = state.players[0];
+  assert.ok(player);
+  const treasure = createTypedFixtureCardDefinition(
+    "fixture-indexed-treasure",
+    ["treasure"],
+    3,
+    1
+  );
+  const spell = createTypedFixtureCardDefinition(
+    "fixture-indexed-spell",
+    ["spell"],
+    4,
+    1
+  );
+  const stateWithFixtures = {
+    ...state,
+    cardDefinitions: new Map([
+      ...state.cardDefinitions,
+      [treasure.cardId, treasure],
+      [spell.cardId, spell],
+    ]),
+  };
+  player.discard.push(
+    createCardInstance(
+      "fixture-indexed-treasure-instance",
+      treasure.cardId,
+      player.playerId
+    ),
+    createCardInstance(
+      "fixture-indexed-spell-instance",
+      spell.cardId,
+      player.playerId
+    )
+  );
+  player.statuses.push({
+    instanceId: markCardInstanceId("fixture-indexed-status"),
+    statusId: "fixture-indexed-status",
+    ownerId: player.playerId,
+    effects: [
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "playerVictoryPoints",
+        operation: "add",
+        amountPerOwnedCard: 2,
+        countedCardTypes: ["treasure"],
+        target: { targetType: "player" },
+      },
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "playerVictoryPoints",
+        operation: "add",
+        amountPerOwnedCard: 3,
+        countedCardTypes: ["treasure", "spell", "treasure"],
+        target: { targetType: "player" },
+      },
+    ],
+  });
+
+  assert.equal(
+    calculateEffectivePlayerVictoryPoints(
+      stateWithFixtures,
+      player.playerId,
+      0
+    ),
+    8
   );
 });
 
