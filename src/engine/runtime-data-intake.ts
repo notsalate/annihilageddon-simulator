@@ -62,7 +62,7 @@ export function intakeRuntimeData(
       return source.dataPack;
     }
 
-    return validateAndFreeze(source.dataPack, options.mode);
+    return validateAndFreeze(source.dataPack, options.mode, true);
   }
 
   const manifestPath = source.dataPackPath ?? DEFAULT_MANIFEST_PATH;
@@ -79,7 +79,7 @@ export function intakeRuntimeData(
     throw new RuntimeDataIntakeError("decode", decoded.errors);
   }
 
-  return validateAndFreeze(decoded.value, options.mode);
+  return validateAndFreeze(decoded.value, options.mode, false);
 }
 
 export function isVerifiedRuntimeDataPack(
@@ -90,7 +90,8 @@ export function isVerifiedRuntimeDataPack(
 
 function validateAndFreeze(
   dataPack: LoadedDataPack,
-  requestedMode: EffectRuntimeMode | undefined
+  requestedMode: EffectRuntimeMode | undefined,
+  cloneSource: boolean
 ): VerifiedRuntimeDataPack {
   const mode =
     requestedMode ??
@@ -105,15 +106,16 @@ function validateAndFreeze(
     throw new RuntimeDataIntakeError("validation", validation.errors);
   }
 
-  const immutableDataPack = createImmutableDataPack(dataPack);
+  const immutableDataPack = createImmutableDataPack(dataPack, cloneSource);
   verifiedDataPacks.add(immutableDataPack);
   return immutableDataPack;
 }
 
 function createImmutableDataPack(
-  dataPack: LoadedDataPack
+  dataPack: LoadedDataPack,
+  cloneSource: boolean
 ): VerifiedRuntimeDataPack {
-  const cloned = structuredClone(dataPack);
+  const cloned = cloneSource ? structuredClone(dataPack) : dataPack;
   const immutable = {
     manifest: freezeDeep(cloned.manifest),
     cardDefinitions: createReadonlyMap(cloned.cardDefinitions),
@@ -122,7 +124,9 @@ function createImmutableDataPack(
     tokenStacks: freezeDeep(cloned.tokenStacks),
   } satisfies LoadedDataPack;
 
-  markDataPackRuntimeEffectsVerified(immutable);
+  if (cloneSource) {
+    markDataPackRuntimeEffectsVerified(immutable);
+  }
 
   return Object.freeze(immutable) as VerifiedRuntimeDataPack;
 }
