@@ -30,7 +30,7 @@ const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
 
-test("action transaction rolls back engine state, identities, events, and RNG", () => {
+test("action transaction rolls back engine state, cards, events, and RNG", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -43,8 +43,6 @@ test("action transaction rolls back engine state, identities, events, and RNG", 
   const common = state.common;
   const turn = state.turn;
   const eventLog = state.eventLog;
-  const hand = player.hand;
-  const discard = player.discard;
   const expectedNextRandom = state.rng.fork().next();
   const powerBefore = state.turn.power;
   const chipsBefore = player.chips;
@@ -69,8 +67,6 @@ test("action transaction rolls back engine state, identities, events, and RNG", 
   assert.equal(state.common, common);
   assert.equal(state.turn, turn);
   assert.equal(state.eventLog, eventLog);
-  assert.equal(player.hand, hand);
-  assert.equal(player.discard, discard);
   assert.equal(player.hand.includes(card), true);
   assert.equal(player.discard.includes(card), false);
   assert.equal(card.ownerId, player.playerId);

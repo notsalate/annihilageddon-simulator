@@ -45,8 +45,7 @@ const forbiddenPhysicalInventoryHelpers = new Set([
   "listPhysicalCardZones",
 ]);
 const physicalInventorySeamApiNames = new Set([
-  "clonePhysicalCardZoneState",
-  "clonePhysicalCardZones",
+  "clonePhysicalCardLedger",
   "listPhysicalCardLocations",
   "listPhysicalCardZoneDescriptors",
 ]);
@@ -1151,10 +1150,10 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
   }
   if (
     relativePath === "src/engine/game-state-fork.ts" &&
-    !calledLedgerApis.has("clonePhysicalCardZoneState")
+    !calledLedgerApis.has("clonePhysicalCardLedger")
   ) {
     physicalCardZoneOwnershipViolations.push(
-      `${relativePath} must call clonePhysicalCardZoneState from Control Ledger`
+      `${relativePath} must call clonePhysicalCardLedger from Control Ledger`
     );
   }
 }
