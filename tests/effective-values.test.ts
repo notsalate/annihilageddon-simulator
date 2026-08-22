@@ -30,11 +30,46 @@ import {
   markCardInstanceId,
   markCardDefinitionId,
 } from "../src/domain/types.js";
-import { markRuntimeEffectTreeVerified } from "../src/engine/runtime-effect-verification.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
+
+test("Effective Value rejects a runtime effect that bypassed Runtime Data Intake", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60617,
+  });
+  const player = state.players[0];
+  assert.ok(player);
+  player.statuses.push({
+    instanceId: markCardInstanceId("fixture-unverified-effective-value-status"),
+    statusId: "fixture-unverified-effective-value-status",
+    ownerId: player.playerId,
+    effects: [
+      {
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "cardCost",
+        operation: "add",
+        amount: 1,
+        target: { targetType: "card", definitionId: "missing-card" },
+      },
+    ],
+  });
+  const card = state.common.market[0];
+  assert.ok(card);
+  const definition = state.cardDefinitions.get(card.definitionId);
+  assert.ok(definition);
+
+  assert.throws(
+    () =>
+      calculateEffectiveCardCostFromDomain(state, player.playerId, definition),
+    /must pass Runtime Data Intake/
+  );
+});
 
 test("Effective Value domain interface applies typed modifiers without a Catalog dispatcher", () => {
   const state = initializeGame({
@@ -53,14 +88,14 @@ test("Effective Value domain interface applies typed modifiers without a Catalog
     statusId: "fixture-domain-effective-value-status",
     ownerId: player.playerId,
     effects: [
-      {
+      verifiedTestRuntimeEffect({
         effectId: "fixture_modify_effective_value",
         timing: "whileControlled",
         valueKind: "cardCost",
         operation: "add",
         amount: 1,
         target: { targetType: "card", definitionId: cardDefinition.cardId },
-      },
+      }),
     ],
   });
 
@@ -87,21 +122,21 @@ test("effective-value modifiers keep discovery order", () => {
     statusId: "fixture-effective-value-order-status",
     ownerId: player.playerId,
     effects: [
-      {
+      verifiedTestRuntimeEffect({
         effectId: "fixture_modify_effective_value",
         timing: "whileControlled",
         valueKind: "playerVictoryPoints",
         operation: "invertNegative",
         target: { targetType: "player" },
-      },
-      {
+      }),
+      verifiedTestRuntimeEffect({
         effectId: "fixture_modify_effective_value",
         timing: "whileControlled",
         valueKind: "playerVictoryPoints",
         operation: "add",
         amount: 5,
         target: { targetType: "player" },
-      },
+      }),
     ],
   });
 
@@ -156,7 +191,7 @@ test("repeated typed modifiers reuse one scoring-card type index", () => {
     statusId: "fixture-indexed-status",
     ownerId: player.playerId,
     effects: [
-      {
+      verifiedTestRuntimeEffect({
         effectId: "fixture_modify_effective_value",
         timing: "whileControlled",
         valueKind: "playerVictoryPoints",
@@ -164,8 +199,8 @@ test("repeated typed modifiers reuse one scoring-card type index", () => {
         amountPerOwnedCard: 2,
         countedCardTypes: ["treasure"],
         target: { targetType: "player" },
-      },
-      {
+      }),
+      verifiedTestRuntimeEffect({
         effectId: "fixture_modify_effective_value",
         timing: "whileControlled",
         valueKind: "playerVictoryPoints",
@@ -173,7 +208,7 @@ test("repeated typed modifiers reuse one scoring-card type index", () => {
         amountPerOwnedCard: 3,
         countedCardTypes: ["treasure", "spell", "treasure"],
         target: { targetType: "player" },
-      },
+      }),
     ],
   });
 
@@ -611,13 +646,8 @@ test("Potnyi GeekPig self-scoring applies once per physical copy", () => {
 
 test("scoring another card reports a malformed self-scoring modifier", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
-  const state = initializeGame({ dataPack, seed: 60616 });
-  const player = state.players[0];
-  assert.ok(player);
-  const geekPig = state.cardDefinitions.get("esw2_dbg__main_040");
-  const target = state.cardDefinitions.get("esw2_dbg__main_035");
+  const geekPig = dataPack.cardDefinitions.get("esw2_dbg__main_040");
   assert.ok(geekPig);
-  assert.ok(target);
   const malformedGeekPig: CardDefinition = {
     ...geekPig,
     engine: {
@@ -634,33 +664,16 @@ test("scoring another card reports a malformed self-scoring modifier", () => {
       ],
     },
   };
-  const geekPigCard = createCardInstance(
-    "fixture-malformed-self-scoring-geekpig",
-    geekPig.cardId,
-    player.playerId
-  );
-  const targetCard = createCardInstance(
-    "fixture-scored-target",
-    target.cardId,
-    player.playerId
-  );
-  player.discard.push(geekPigCard, targetCard);
-  const stateWithMalformedSelfScoringEffect = {
-    ...state,
-    cardDefinitions: new Map(state.cardDefinitions).set(
+  const malformedDataPack = {
+    ...dataPack,
+    cardDefinitions: new Map(dataPack.cardDefinitions).set(
       geekPig.cardId,
       malformedGeekPig
     ),
   };
 
   assert.throws(
-    () =>
-      calculateEffectiveCardVictoryPoints(
-        stateWithMalformedSelfScoringEffect,
-        player.playerId,
-        target,
-        targetCard
-      ),
+    () => initializeGame({ dataPack: malformedDataPack, seed: 60616 }),
     /amount must be a safe integer/
   );
 });
@@ -677,14 +690,14 @@ test("whileControlled definition modifier applies from another physical copy", (
     engine: {
       ...target.engine,
       effects: [
-        {
+        verifiedTestRuntimeEffect({
           effectId: "modify_effective_value",
           timing: "whileControlled",
           valueKind: "cardVictoryPoints",
           operation: "add",
           amount: 2,
           target: { targetType: "card", definitionId: target.cardId },
-        },
+        }),
       ],
     },
   };
@@ -876,7 +889,7 @@ function createTokenVictoryPointModifierTrophy(
     trophyId: "fixture-token-vp-trophy",
     ownerId: playerId,
     effects: [
-      {
+      verifiedTestRuntimeEffect({
         effectId: "fixture_modify_effective_value",
         timing: "whileControlled",
         valueKind: "tokenVictoryPoints",
@@ -886,7 +899,7 @@ function createTokenVictoryPointModifierTrophy(
           targetType: "token",
           definitionId,
         },
-      },
+      }),
     ],
   };
 }
@@ -1028,7 +1041,7 @@ function createCostModifierEffect(
   definitionId: string,
   amount: number
 ): RuntimeEffect {
-  return {
+  return verifiedTestRuntimeEffect({
     effectId: "fixture_modify_effective_value",
     timing: "whileControlled",
     valueKind: "cardCost",
@@ -1038,7 +1051,7 @@ function createCostModifierEffect(
       targetType: "card",
       definitionId,
     },
-  };
+  });
 }
 
 function createCardInstance(
@@ -1087,7 +1100,7 @@ function addFixtureStatusCardToActiveHand(
       isOngoing: false,
       marketChipMarker: false,
       effects: [
-        markRuntimeEffectTreeVerified({
+        verifiedTestRuntimeEffect({
           effectId,
           timing: "onPlay",
           statusId: "dingler",

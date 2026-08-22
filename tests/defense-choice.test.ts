@@ -5,7 +5,7 @@ import { initializeGame } from "../src/index.js";
 import { executeEffect } from "../src/engine/effect-runtime.js";
 import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
 import type { GameState, PlayerState } from "../src/engine/setup.js";
-import { markRuntimeEffectTreeVerified } from "../src/engine/runtime-effect-verification.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 
 const rootDir = process.cwd();
@@ -331,7 +331,7 @@ function selectChoiceById(
 }
 
 function attackEffect() {
-  return markRuntimeEffectTreeVerified({
+  return verifiedTestRuntimeEffect({
     effectId: "attack_damage" as const,
     timing: "onPlay" as const,
     amount: 2,

@@ -25,7 +25,7 @@ import {
 } from "./helpers/defense-fixtures.js";
 import { replacePostSetupWizardPropertyFixture } from "./helpers/fixture-tokens.js";
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
-import { markRuntimeEffectTreeVerified } from "../src/engine/runtime-effect-verification.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -842,7 +842,7 @@ function createWizardPropertyDefinition(
     engine: {
       mappingStatus: "fixture",
       playableInV0: true,
-      effects: effects.map((effect) => markRuntimeEffectTreeVerified(effect)),
+      effects: effects.map((effect) => verifiedTestRuntimeEffect(effect)),
       unsupportedMechanics: [],
     },
   };

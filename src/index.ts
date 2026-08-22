@@ -226,6 +226,7 @@ export type {
 } from "./engine/simulation.js";
 export {
   baselineBot,
+  createLoadedDataPackFromSimulationFailureReport,
   getGameEndReason,
   SimulationExecutionError,
   runSingleGame,

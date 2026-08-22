@@ -289,8 +289,62 @@ test("simulation failure formatter keeps reproduction and runtime context", () =
       },
     },
     runtimeData: {
+      manifest: {
+        schemaVersion: 1,
+        packId: "fixture",
+        runtimeSchema: "krutagidon.dataPack.v0",
+        mappingStatus: "fixture",
+        cardDefinitionPaths: [],
+      },
       cardDefinitions: [],
       tokenDefinitions: [],
+      decks: {
+        starterDeck: {
+          schemaVersion: 1,
+          deckId: "fixture-starter",
+          runtimeSchema: "krutagidon.deckComposition.v0",
+          role: "starter",
+          mappingStatus: "fixture",
+          entries: [],
+        },
+        mainDeck: {
+          schemaVersion: 1,
+          deckId: "fixture-main",
+          runtimeSchema: "krutagidon.deckComposition.v0",
+          role: "main",
+          mappingStatus: "fixture",
+          entries: [],
+        },
+        legendDeck: {
+          schemaVersion: 1,
+          deckId: "fixture-legend",
+          runtimeSchema: "krutagidon.deckComposition.v0",
+          role: "legend",
+          mappingStatus: "fixture",
+          entries: [],
+        },
+        wildMagicStack: {
+          schemaVersion: 1,
+          deckId: "fixture-wild-magic",
+          runtimeSchema: "krutagidon.deckComposition.v0",
+          role: "wildMagic",
+          mappingStatus: "fixture",
+          entries: [],
+        },
+        limpWandStack: {
+          schemaVersion: 1,
+          deckId: "fixture-limp-wand",
+          runtimeSchema: "krutagidon.deckComposition.v0",
+          role: "limpWand",
+          mappingStatus: "fixture",
+          entries: [],
+        },
+        familiarPool: undefined,
+      },
+      tokenStacks: {
+        deadWizardTokens: undefined,
+        wizardProperties: undefined,
+      },
     },
     turnNumber: 2,
     activePlayerId: markPlayerId("player-1"),
@@ -302,8 +356,16 @@ test("simulation failure formatter keeps reproduction and runtime context", () =
     },
     eventLog: [],
     reproduction: {
-      command: "npm run simulate:single -- --seed 24903 --maxTurns 4",
-      args: ["--seed", "24903", "--maxTurns", "4"],
+      command:
+        "npm run simulate:single -- --seed 24903 --maxTurns 4 --replayReport <report-path>",
+      args: [
+        "--seed",
+        "24903",
+        "--maxTurns",
+        "4",
+        "--replayReport",
+        "<report-path>",
+      ],
     },
   };
 
@@ -317,6 +379,16 @@ test("simulation failure formatter keeps reproduction and runtime context", () =
   assert.match(formatted, /message: late failure/);
   assert.match(formatted, /stack:/);
   assert.match(formatted, /--seed 24903/);
+  const materialized = formatSimulationFailureReport(
+    "2026-08-22T00:00:00.000Z",
+    report,
+    "C:/reports/failure report.md"
+  );
+  assert.match(
+    materialized,
+    /--replayReport "C:\/reports\/failure report\.md"/
+  );
+  assert.match(materialized, /"C:\/reports\/failure report\.md"/);
 });
 
 test("mass simulation menu summary includes Russian aggregate metrics and turn-limit warning", () => {

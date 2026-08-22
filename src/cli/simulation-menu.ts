@@ -278,7 +278,7 @@ async function writeErrorReport(
   );
   await writeFile(
     reportPath,
-    formatErrorReport(timestamp, error, context),
+    formatErrorReport(timestamp, error, context, reportPath),
     "utf8"
   );
   return reportPath;
@@ -287,10 +287,11 @@ async function writeErrorReport(
 export function formatErrorReport(
   timestamp: string,
   error: unknown,
-  context: Record<string, string | number>
+  context: Record<string, string | number>,
+  reportPath?: string
 ): string {
   if (error instanceof SimulationExecutionError) {
-    return formatSimulationFailureReport(timestamp, error.report);
+    return formatSimulationFailureReport(timestamp, error.report, reportPath);
   }
 
   const normalizedError = normalizeError(error);
@@ -312,8 +313,10 @@ export function formatErrorReport(
 
 export function formatSimulationFailureReport(
   timestamp: string,
-  report: SimulationFailureReport
+  report: SimulationFailureReport,
+  reportPath?: string
 ): string {
+  const reproduction = materializeReproduction(report.reproduction, reportPath);
   return [
     "# Simulation Failure",
     "",
@@ -358,12 +361,35 @@ export function formatSimulationFailureReport(
     "```",
     "",
     "reproduction:",
-    `command: ${report.reproduction.command}`,
+    `command: ${reproduction.command}`,
     "```json",
-    JSON.stringify(report.reproduction.args, null, 2),
+    JSON.stringify(reproduction.args, null, 2),
     "```",
     "",
   ].join("\n");
+}
+
+function materializeReproduction(
+  reproduction: SimulationFailureReport["reproduction"],
+  reportPath: string | undefined
+): SimulationFailureReport["reproduction"] {
+  if (reportPath === undefined) {
+    return reproduction;
+  }
+
+  return {
+    command: reproduction.command.replaceAll(
+      "<report-path>",
+      quoteCommandArgument(reportPath)
+    ),
+    args: reproduction.args.map((argument) =>
+      argument === "<report-path>" ? reportPath : argument
+    ),
+  };
+}
+
+function quoteCommandArgument(value: string): string {
+  return /[\s"]/.test(value) ? JSON.stringify(value) : value;
 }
 
 function normalizeError(error: unknown): { message: string; stack: string } {

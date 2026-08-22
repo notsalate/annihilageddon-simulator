@@ -10,7 +10,7 @@ import {
   markCardDefinitionId,
   markCardInstanceId,
 } from "../../src/domain/types.js";
-import { markRuntimeEffectTreeVerified } from "../../src/engine/runtime-effect-verification.js";
+import { verifiedTestRuntimeEffect } from "./verified-runtime-effect.js";
 
 export interface FixtureDefenseOptions {
   costs?: Exclude<RuntimeEffectForId<"avoid_attack">["costs"], undefined>;
@@ -62,7 +62,7 @@ export function addFixtureDefenseCardToHand(
   options: FixtureDefenseOptions = {}
 ): CardInstance {
   const sequence = getNextFixtureDefenseSequence(state);
-  const defenseEffect = markRuntimeEffectTreeVerified({
+  const defenseEffect = verifiedTestRuntimeEffect({
     effectId: "avoid_attack",
     timing: "onDefense",
     destination,

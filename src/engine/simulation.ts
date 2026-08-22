@@ -26,6 +26,7 @@ import {
 } from "./setup.js";
 import { assertGameStateInvariants } from "./invariants.js";
 import { createPlayerDecisionView } from "./strategy-decision-view.js";
+import { intakeRuntimeData } from "./runtime-data-intake.js";
 
 export type GameEndReason =
   | "deadWizardTokensExhausted"
@@ -113,9 +114,11 @@ export interface SimulationFailureSetup {
 }
 
 export interface SimulationFailureRuntimeData {
-  manifest?: LoadedDataPack["manifest"];
+  manifest: LoadedDataPack["manifest"];
   cardDefinitions: readonly CardDefinition[];
   tokenDefinitions: readonly TokenDefinition[];
+  decks: LoadedDataPack["decks"];
+  tokenStacks: LoadedDataPack["tokenStacks"];
 }
 
 export interface SimulationFailureErrorDetails {
@@ -140,6 +143,28 @@ export interface SimulationFailureReport {
   error: SimulationFailureErrorDetails;
   eventLog: readonly GameEvent[];
   reproduction: SimulationFailureReproduction;
+}
+
+export function createLoadedDataPackFromSimulationFailureReport(
+  runtimeData: SimulationFailureRuntimeData
+): LoadedDataPack {
+  return {
+    manifest: runtimeData.manifest,
+    cardDefinitions: new Map(
+      runtimeData.cardDefinitions.map((definition) => [
+        definition.cardId,
+        definition,
+      ])
+    ),
+    tokenDefinitions: new Map(
+      runtimeData.tokenDefinitions.map((definition) => [
+        definition.tokenId,
+        definition,
+      ])
+    ),
+    decks: runtimeData.decks,
+    tokenStacks: runtimeData.tokenStacks,
+  };
 }
 
 export class SimulationExecutionError extends Error {
@@ -254,7 +279,7 @@ function mustGetCardDefinition(
 }
 
 export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
-  const { bot, botFactory, dataPack, ...initializeGameOptions } = options;
+  const { bot, botFactory, dataPack } = options;
   if (dataPack !== undefined && options.dataPackPath !== undefined) {
     throw new Error("dataPack and dataPackPath cannot be used together");
   }
@@ -327,17 +352,23 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     const binding = getBotBindingForPlayer(request.player.playerId);
     return binding.chooseEffectChoice?.call(binding.strategy, request);
   };
-  const state =
+  const runtimeDataPack =
     dataPack === undefined
-      ? initializeGame({ ...initializeGameOptions, effectChoiceStrategy })
-      : initializeGame({
-          dataPack,
-          seed: options.seed,
-          ...(options.playerCount === undefined
+      ? intakeRuntimeData({
+          rootDir: options.rootDir,
+          ...(options.dataPackPath === undefined
             ? {}
-            : { playerCount: options.playerCount }),
-          effectChoiceStrategy,
-        });
+            : { dataPackPath: options.dataPackPath }),
+        })
+      : intakeRuntimeData({ dataPack });
+  const state = initializeGame({
+    dataPack: runtimeDataPack,
+    seed: options.seed,
+    ...(options.playerCount === undefined
+      ? {}
+      : { playerCount: options.playerCount }),
+    effectChoiceStrategy,
+  });
   const setupState = snapshotSetupState(state);
   if (options.validateInvariants) {
     assertGameStateInvariants(state);
@@ -399,7 +430,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
         state,
         options,
         setupState,
-        dataPack,
+        runtimeDataPack,
         actionHistory,
         error
       );
@@ -411,7 +442,7 @@ function createSimulationExecutionError(
   state: GameState,
   options: RunSingleGameOptions,
   setupState: SetupStateSnapshot,
-  dataPack: LoadedDataPack | undefined,
+  dataPack: LoadedDataPack,
   actionHistory: readonly GameAction[],
   failure: unknown
 ): SimulationExecutionError {
@@ -424,9 +455,8 @@ function createSimulationExecutionError(
     ...(options.playerCount === undefined
       ? []
       : ["--playerCount", String(options.playerCount)]),
-    ...(options.dataPackPath === undefined
-      ? []
-      : ["--dataPackPath", options.dataPackPath]),
+    "--replayReport",
+    "<report-path>",
   ];
   const report: SimulationFailureReport = {
     seed: options.seed,
@@ -443,9 +473,11 @@ function createSimulationExecutionError(
       initialState: setupState,
     },
     runtimeData: {
-      ...(dataPack === undefined ? {} : { manifest: dataPack.manifest }),
+      manifest: dataPack.manifest,
       cardDefinitions: [...state.cardDefinitions.values()],
       tokenDefinitions: [...state.tokenDefinitions.values()],
+      decks: dataPack.decks,
+      tokenStacks: dataPack.tokenStacks,
     },
     turnNumber: state.turn.number,
     activePlayerId: state.activePlayerId,

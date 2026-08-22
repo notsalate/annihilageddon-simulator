@@ -26,7 +26,7 @@ import {
   validateRuntimeEffectCatalogPayload,
   type EffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
-import { markRuntimeEffectTreeVerified } from "../src/engine/runtime-effect-verification.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 import {
   addFixtureDefenseCardToHand,
@@ -1190,7 +1190,7 @@ test("controlled-object attack cards use controlled card costs", () => {
     statusId: "fixture-attack-effective-cost-modifier",
     ownerId: activePlayer.playerId,
     effects: [
-      {
+      verifiedTestRuntimeEffect({
         effectId: "modify_effective_value",
         timing: "whileControlled",
         valueKind: "cardCost",
@@ -1200,7 +1200,7 @@ test("controlled-object attack cards use controlled card costs", () => {
           targetType: "card",
           definitionId: "esw2_dbg__main_040",
         },
-      },
+      }),
     ],
   });
   const modifiedCostSlippers = addRuntimeCardToHand(
@@ -9839,7 +9839,7 @@ test("unowned Mega Mayhem death does not move Basic Trophy", () => {
       engine: {
         ...mayhemDefinition.engine,
         effects: [
-          markRuntimeEffectTreeVerified({
+          verifiedTestRuntimeEffect({
             effectId:
               "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
             timing: "onMayhemResolve",
@@ -10754,7 +10754,7 @@ function createFixtureCardDefinition(
       victoryPoints: 0,
       isOngoing: options.isOngoing ?? false,
       marketChipMarker: false,
-      effects: effects.map((effect) => markRuntimeEffectTreeVerified(effect)),
+      effects: effects.map((effect) => verifiedTestRuntimeEffect(effect)),
       unsupportedMechanics: [],
     },
   };
@@ -10863,7 +10863,7 @@ function createChipActivationWizardProperty(
       mappingStatus: "fixture",
       playableInV0: true,
       effects: [
-        markRuntimeEffectTreeVerified({
+        verifiedTestRuntimeEffect({
           effectId: "gain_chips",
           timing: "activation",
           amount: 1,
@@ -10892,7 +10892,7 @@ function createOnPlayOngoingChipWizardProperty(
       mappingStatus: "fixture",
       playableInV0: true,
       effects: [
-        markRuntimeEffectTreeVerified({
+        verifiedTestRuntimeEffect({
           effectId: "gain_chips",
           timing: "onPlayCard",
           isOngoing: true,
@@ -10918,7 +10918,7 @@ function createOnPlayTypeChipWizardProperty(
       mappingStatus: "fixture",
       playableInV0: true,
       effects: [
-        markRuntimeEffectTreeVerified({
+        verifiedTestRuntimeEffect({
           effectId: "gain_chips",
           timing: "onPlayCard",
           cardTypes,
@@ -10945,7 +10945,7 @@ function createTopdeckOnGainWizardProperty(
       mappingStatus: "fixture",
       playableInV0: true,
       effects: [
-        markRuntimeEffectTreeVerified(
+        verifiedTestRuntimeEffect(
           optional === "omitted"
             ? {
                 effectId: "topdeck_gained_card",
@@ -10980,7 +10980,7 @@ function createTemporaryHandLimitWizardProperty(
       mappingStatus: "fixture",
       playableInV0: true,
       effects: [
-        markRuntimeEffectTreeVerified({
+        verifiedTestRuntimeEffect({
           effectId: "temporary_hand_limit_by_gained_card_type",
           timing: "endTurn",
           amount,
@@ -11046,7 +11046,7 @@ function createMaxLifeModifierStatus(
     statusId: "fixture-max-life-status",
     ownerId: playerId,
     effects: [
-      markRuntimeEffectTreeVerified({
+      verifiedTestRuntimeEffect({
         effectId: "fixture_modify_effective_value",
         timing: "whileControlled",
         valueKind: "playerMaxLife",

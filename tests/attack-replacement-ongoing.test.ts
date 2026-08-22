@@ -7,7 +7,7 @@ import {
 } from "../src/engine/attack-resolution.js";
 import { validateRuntimeEffectCatalogPayload } from "../src/engine/effect-runtime-registry.js";
 import { executeEffect } from "../src/engine/effect-runtime.js";
-import { markRuntimeEffectTreeVerified } from "../src/engine/runtime-effect-verification.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
 import {
   choosePlayerTargetForEffect,
@@ -148,7 +148,7 @@ function resolveOwnedWandAttackScenario(isOngoing: boolean): number {
   const result = executeEffect(
     state,
     attacker,
-    markRuntimeEffectTreeVerified({
+    verifiedTestRuntimeEffect({
       effectId: "attack_damage",
       timing: "onPlay",
       amount: 2,

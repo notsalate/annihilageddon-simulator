@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   ActionExecutionError,
   applyAction,
+  intakeRuntimeData,
   runSingleGame,
   SimulationExecutionError,
 } from "../src/index.js";
@@ -90,10 +91,53 @@ test("simulation failure report contains deterministic reproduction context", ()
         cardInstanceId: "missing-card",
       });
       assert.ok(error.report.runtimeData.cardDefinitions.length > 0);
+      assert.ok(error.report.runtimeData.decks.mainDeck.entries.length > 0);
+      assert.ok(
+        error.report.runtimeData.tokenStacks.deadWizardTokens?.entries.length
+      );
       assert.match(error.report.error.message, /illegal action/);
       assert.ok(error.report.error.stack.length > 0);
       assert.match(error.report.reproduction.command, /--seed 24902/);
       assert.ok(error.report.eventLog.length > 0);
+      return true;
+    }
+  );
+});
+
+test("preloaded Runtime Data is embedded in the reproduction source", () => {
+  const dataPack = intakeRuntimeData({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+  });
+
+  assert.throws(
+    () =>
+      runSingleGame({
+        rootDir,
+        dataPack,
+        seed: 24903,
+        maxTurns: 3,
+        botFactory: () => ({
+          chooseAction: () => ({
+            type: "playCard" as const,
+            cardInstanceId: "missing-card",
+          }),
+        }),
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof SimulationExecutionError);
+      assert.equal(
+        error.report.runtimeData.manifest.packId,
+        "playable-runtime-test-data-pack"
+      );
+      assert.ok(error.report.runtimeData.decks.mainDeck.entries.length > 0);
+      assert.ok(
+        error.report.runtimeData.tokenStacks.deadWizardTokens?.entries.length
+      );
+      assert.deepEqual(error.report.reproduction.args.slice(-2), [
+        "--replayReport",
+        "<report-path>",
+      ]);
       return true;
     }
   );

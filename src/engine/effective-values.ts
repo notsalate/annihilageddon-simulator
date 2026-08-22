@@ -22,6 +22,10 @@ import {
   type RuntimeEffect,
   type RuntimeEffectTarget,
 } from "./runtime-effect.js";
+import {
+  requireVerifiedRuntimeEffect,
+  type VerifiedRuntimeEffect,
+} from "./runtime-effect-verification.js";
 
 type EffectiveValueTarget =
   | {
@@ -246,7 +250,7 @@ export function getOwnedScoringCards(
 }
 
 interface EffectiveValueEffect {
-  readonly effect: EffectiveValueModifierEffect;
+  readonly effect: VerifiedRuntimeEffect & EffectiveValueModifierEffect;
   readonly source: EffectiveValueSource;
   readonly timing: "whileControlled" | "whileScoring";
 }
@@ -334,27 +338,12 @@ function toEffectiveValueEffects(
   timing: "whileControlled" | "whileScoring" = "whileControlled"
 ): EffectiveValueEffect[] {
   return effects.flatMap((effect) => {
-    if (!isEffectiveValueModifierEffect(effect)) {
+    const verifiedEffect = requireVerifiedRuntimeEffect(effect);
+    if (!isEffectiveValueModifierEffect(verifiedEffect)) {
       return [];
     }
-    assertTypedEffectiveValueModifier(effect);
-    return [{ effect, source, timing }];
+    return [{ effect: verifiedEffect, source, timing }];
   });
-}
-
-function assertTypedEffectiveValueModifier(
-  effect: EffectiveValueModifierEffect
-): void {
-  if (
-    (effect.operation === "add" &&
-      effect.amount === undefined &&
-      effect.amountPerOwnedCard === undefined) ||
-    (effect.amount !== undefined && !Number.isSafeInteger(effect.amount)) ||
-    (effect.amountPerOwnedCard !== undefined &&
-      !Number.isSafeInteger(effect.amountPerOwnedCard))
-  ) {
-    throw new Error(`${effect.effectId}.amount must be a safe integer`);
-  }
 }
 
 function cardEffectSource(

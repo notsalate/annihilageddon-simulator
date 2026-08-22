@@ -37,7 +37,6 @@ import {
 } from "./helpers/defense-fixtures.js";
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
-import { markRuntimeEffectTreeVerified } from "../src/engine/runtime-effect-verification.js";
 
 const rootDir = process.cwd();
 const fixturePlayerDefeatEffectId = "fixture_add_power_equal_to_target_cost";
@@ -1200,7 +1199,7 @@ function createFixtureCardDefinition(
       victoryPoints: 0,
       isOngoing: false,
       marketChipMarker: false,
-      effects: effects.map((effect) => markRuntimeEffectTreeVerified(effect)),
+      effects: effects.map((effect) => verifiedTestRuntimeEffect(effect)),
       unsupportedMechanics: [],
     },
   };

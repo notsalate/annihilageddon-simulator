@@ -14,7 +14,7 @@ import {
 } from "../src/engine/effect-runtime.js";
 import { dispatchControlledCardOperation } from "../src/engine/trigger-dispatch.js";
 import { validateRuntimeEffectCatalogPayload } from "../src/engine/effect-runtime-registry.js";
-import { markRuntimeEffectTreeVerified } from "../src/engine/runtime-effect-verification.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
 import {
   choosePlayerTargetForEffect,
@@ -318,7 +318,7 @@ test("after-attack dispatch attributes a controlled attack trigger to the contro
   const result = executeEffect(
     state,
     controller,
-    markRuntimeEffectTreeVerified({
+    verifiedTestRuntimeEffect({
       effectId: "attack_damage",
       timing: "onPlay",
       amount: 2,

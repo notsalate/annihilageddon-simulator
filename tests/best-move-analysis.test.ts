@@ -16,7 +16,7 @@ import {
   type TurnLineEvaluationContext,
 } from "../src/index.js";
 import { victoryPointsPolicy } from "../src/engine/best-move-policies.js";
-import { markRuntimeEffectTreeVerified } from "../src/engine/runtime-effect-verification.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 
@@ -100,7 +100,7 @@ function fixtureDefinition(
       victoryPoints: 0,
       isOngoing: false,
       marketChipMarker: false,
-      effects: effects.map((effect) => markRuntimeEffectTreeVerified(effect)),
+      effects: effects.map((effect) => verifiedTestRuntimeEffect(effect)),
       unsupportedMechanics: [],
     },
   };
@@ -576,7 +576,7 @@ test("victory-points policy ranks by score even when a lower-scoring line has a 
     engine: {
       ...winningDefinition.engine,
       effects: [
-        markRuntimeEffectTreeVerified({
+        verifiedTestRuntimeEffect({
           effectId: "fixture_add_power_equal_to_target_cost",
           timing: "onPlay",
           target: { selector: "mainMarketCard" },

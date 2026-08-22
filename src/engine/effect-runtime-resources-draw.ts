@@ -17,6 +17,12 @@ import type {
   EffectRuntimeSupportedSourceKinds,
   EffectRuntimeSupportedTimings,
 } from "./effect-runtime-catalog-shared.js";
+import type {
+  ObjectFields,
+  OptionalField,
+  RequiredField,
+  ValueDecoder,
+} from "./effect-runtime-family-support.js";
 import type { GameState, PlayerState } from "./setup.js";
 
 type EffectWithOptionalTiming<Id extends string> = {
@@ -26,25 +32,6 @@ type EffectWithOptionalTiming<Id extends string> = {
 
 type PositiveAmount = { amount: number };
 type Conditioned = { condition?: RuntimeEffectCondition };
-type ValueDecoder<T> = (
-  label: string,
-  raw: unknown
-) => { ok: true; value: T } | { ok: false; errors: string[] };
-type RequiredField<T> = {
-  optional: false;
-  decode: ValueDecoder<T>;
-};
-type OptionalField<T> = {
-  optional: true;
-  decode: ValueDecoder<T>;
-};
-type FieldDefinition<T extends object, Key extends keyof T> =
-  {} extends Pick<T, Key>
-    ? OptionalField<Exclude<T[Key], undefined>>
-    : RequiredField<T[Key]>;
-type ObjectFields<T extends object> = {
-  [Key in keyof T]-?: FieldDefinition<T, Key>;
-};
 type DecodedPayloadValidator<Id extends ResourceDrawEffectId> = (
   subjectId: string,
   effect: RuntimeEffectForId<Id>

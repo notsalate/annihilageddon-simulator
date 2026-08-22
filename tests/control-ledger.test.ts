@@ -31,7 +31,7 @@ import {
   executeControlledCardOnPlayCardEffects,
   executeEffect,
 } from "../src/engine/effect-runtime.js";
-import { markRuntimeEffectTreeVerified } from "../src/engine/runtime-effect-verification.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
 import {
   chooseEffect,
@@ -243,17 +243,17 @@ test("Control Ledger gives activation, costs, passive power, and end-turn rules 
       isOngoing: true,
       marketChipMarker: false,
       effects: [
-        markRuntimeEffectTreeVerified({
+        verifiedTestRuntimeEffect({
           effectId: "ongoing_add_power",
           timing: "whileControlled",
           amount: 1,
         }),
-        markRuntimeEffectTreeVerified({
+        verifiedTestRuntimeEffect({
           effectId: "ongoing_hand_refill_bonus",
           timing: "endTurn",
           amount: 1,
         }),
-        markRuntimeEffectTreeVerified({
+        verifiedTestRuntimeEffect({
           effectId: "add_power",
           timing: "activation",
           amount: 2,
@@ -311,7 +311,7 @@ test("Control Ledger gives activation, costs, passive power, and end-turn rules 
   const costAttackResult = executeEffect(
     state,
     controller,
-    markRuntimeEffectTreeVerified({
+    verifiedTestRuntimeEffect({
       effectId: "attack_damage_equal_to_controlled_card_cost",
       timing: "onPlay",
       costMode: "highest",
@@ -346,7 +346,7 @@ test("Control Ledger gives activation, costs, passive power, and end-turn rules 
       isOngoing: false,
       marketChipMarker: false,
       effects: [
-        markRuntimeEffectTreeVerified({
+        verifiedTestRuntimeEffect({
           effectId: "add_power",
           timing: "onPlay",
           amount: 4,
@@ -442,7 +442,7 @@ test("temporarily controlled ongoing attack modifiers and triggers work outside 
   const attackResult = executeEffect(
     state,
     controller,
-    markRuntimeEffectTreeVerified({
+    verifiedTestRuntimeEffect({
       effectId: "attack_damage",
       timing: "onPlay",
       amount: 2,

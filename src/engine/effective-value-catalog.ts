@@ -1,11 +1,10 @@
-import { isPlainRecord } from "../common.js";
 import type { PlayerId, TokenInstanceId } from "../domain/types.js";
 import type {
   EffectiveValueModifierId,
   EffectiveValueModifierEffectPayloadMap,
 } from "./effect-runtime-effective-value-modifier.js";
 import { effectiveValueModifierEffectIds } from "./effect-runtime-effective-value-modifier.js";
-import { isRuntimeEffectId } from "./runtime-effect.js";
+import type { VerifiedRuntimeEffect } from "./runtime-effect-verification.js";
 
 export type {
   EffectiveValueKind,
@@ -35,22 +34,10 @@ export interface EffectiveValueModifierSource {
   readonly tokenDefinitionId?: string;
 }
 
-function readEffectiveValueModifierId(
-  rawEffect: unknown
-): EffectiveValueModifierId | undefined {
-  if (!isPlainRecord(rawEffect) || !isRuntimeEffectId(rawEffect["effectId"])) {
-    return undefined;
-  }
-
-  return effectiveValueModifierEffectIds.includes(
-    rawEffect["effectId"] as EffectiveValueModifierId
-  )
-    ? (rawEffect["effectId"] as EffectiveValueModifierId)
-    : undefined;
-}
-
 export function isEffectiveValueModifierEffect(
-  effect: unknown
-): effect is EffectiveValueModifierEffect {
-  return readEffectiveValueModifierId(effect) !== undefined;
+  effect: VerifiedRuntimeEffect
+): effect is VerifiedRuntimeEffect & EffectiveValueModifierEffect {
+  return (effectiveValueModifierEffectIds as readonly string[]).includes(
+    effect.effectId
+  );
 }
