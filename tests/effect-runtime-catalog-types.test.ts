@@ -12,6 +12,12 @@ import { cardOwnershipChoiceEffectIds } from "../src/engine/effect-runtime-cards
 import { ongoingEffectIds } from "../src/engine/effect-runtime-ongoing.js";
 import { effectiveValueModifierEffectIds } from "../src/engine/effect-runtime-effective-value-modifier.js";
 import { resourceDrawEffectIds } from "../src/engine/effect-runtime-resources-draw.js";
+import { combatAttackEffectIds } from "../src/engine/effect-runtime-combat-attack.js";
+import { combatDefenseEffectIds } from "../src/engine/effect-runtime-combat-defense.js";
+import { combatReplacementEffectIds } from "../src/engine/effect-runtime-combat-replacement.js";
+import { mayhemEffectIds } from "../src/engine/effect-runtime-mayhem.js";
+import { setupEffectIds } from "../src/engine/effect-runtime-setup.js";
+import { wildMagicEffectIds } from "../src/engine/effect-runtime-wild-magic.js";
 import type { RuntimeEffectForId } from "../src/engine/runtime-effect.js";
 
 type Equal<Left, Right> =
@@ -184,6 +190,62 @@ test("resource and draw IDs belong to one family module", () => {
   ]);
 });
 
+test("remaining Catalog families expose one local ID inventory each", () => {
+  assert.deepEqual(combatAttackEffectIds, [
+    "attack_damage",
+    "attack_damage_equal_remembered_card_cost",
+    "attack_damage_equal_to_controlled_card_cost",
+    "attack_destroy_top_legend_deck_then_damage_equal_cost",
+    "attack_discard_cards",
+    "attack_gain_limp_wand",
+    "attack_gain_status",
+    "conditional_activation_attack_damage",
+    "directional_chain_attack",
+    "multi_target_attack",
+    "optional_spend_chip_attack_damage",
+  ]);
+  assert.deepEqual(combatDefenseEffectIds, [
+    "avoid_attack",
+    "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
+  ]);
+  assert.deepEqual(combatReplacementEffectIds, [
+    "modify_owned_wand_attack_damage",
+    "double_owned_attack_damage",
+    "prevent_defense_against_owned_wand_attacks",
+  ]);
+  assert.deepEqual(mayhemEffectIds, [
+    "mayhem_attack",
+    "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
+    "mayhem_each_player_choose_foe_gain_chips",
+    "mayhem_each_non_dingler_gain_chips",
+    "mayhem_each_player_battle_highest_hand_cost",
+    "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
+    "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
+    "mayhem_each_player_discard_deck_then_destroy_from_discard",
+    "mayhem_each_player_gain_chips_then_attack_for_current_chips",
+    "mayhem_each_player_reduce_life_to_gain_chips",
+    "mayhem_each_player_vote_dingler",
+    "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
+    "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+    "mega_mayhem_each_player_toggle_dingler",
+    "mega_mayhem_set_life",
+  ]);
+  assert.deepEqual(setupEffectIds, [
+    "force_starting_player",
+    "replace_starting_card",
+    "start_with_basic_trophy",
+    "set_starting_life_total",
+    "set_resurrection_life_total",
+    "increase_hand_limit_at_max_life",
+    "temporary_hand_limit_by_gained_card_type",
+    "endgame_limp_wands_score_positive",
+    "endgame_vp_per_owned_legend",
+    "controls_other_card_type",
+    "destroyed_card_kind_is",
+  ]);
+  assert.deepEqual(wildMagicEffectIds, ["wild_magic_choice"]);
+});
+
 test("card, activation, ongoing and modifier IDs belong to family modules", () => {
   assert.deepEqual(cardOwnershipChoiceEffectIds, [
     "gain_card",
@@ -197,7 +259,6 @@ test("card, activation, ongoing and modifier IDs belong to family modules", () =
     "reveal_top_card",
     "play_top_card",
     "play_top_card_from_foe_deck",
-    "wild_magic_choice",
     "topdeck_gained_card",
     "optional_gain_market_cards_to_hand_this_turn",
     "on_gain_self_gain_limp_wands",

@@ -3,7 +3,6 @@ import type {
   EffectExecutionResult,
   EffectRuntimeServices,
   EffectSourceContext,
-  EffectChoice,
 } from "./effect-runtime-registry.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
 import type {
@@ -155,7 +154,6 @@ export type CardOwnershipChoiceEffectId =
   | "reveal_top_card"
   | "play_top_card"
   | "play_top_card_from_foe_deck"
-  | "wild_magic_choice"
   | "topdeck_gained_card"
   | "optional_gain_market_cards_to_hand_this_turn"
   | "on_gain_self_gain_limp_wands";
@@ -172,7 +170,6 @@ export const cardOwnershipChoiceEffectIds = [
   "reveal_top_card",
   "play_top_card",
   "play_top_card_from_foe_deck",
-  "wild_magic_choice",
   "topdeck_gained_card",
   "optional_gain_market_cards_to_hand_this_turn",
   "on_gain_self_gain_limp_wands",
@@ -205,8 +202,6 @@ export interface CardOwnershipChoiceEffectDecoderTools {
   optionalTargetSelector: OptionalField<
     NonNullable<RuntimeEffectForId<"gain_card">["targetSelector"]>
   >;
-  wildMagicOption: ValueDecoder<WildMagicOption>;
-  arrayOf<T>(decoder: ValueDecoder<T>): ValueDecoder<T[]>;
   booleanValue: ValueDecoder<boolean>;
   destroyOwnCardsSourceZones: ValueDecoder<"hand" | ("hand" | "discard")[]>;
   requireNestedTargetSelector(
@@ -237,8 +232,6 @@ export function createCardOwnershipChoiceEffectDecoders(
     optionalTiming,
     optionalTarget,
     optionalTargetSelector,
-    wildMagicOption,
-    arrayOf,
     booleanValue,
     destroyOwnCardsSourceZones,
     requireNestedTargetSelector,
@@ -329,11 +322,6 @@ export function createCardOwnershipChoiceEffectDecoders(
       targetSelector: required(literal("chosenFoe")),
       nonOngoingCleanupDestination: optional(literal("ownerDiscard")),
       ongoingOwnership: optional(literal("controller")),
-    }),
-    wild_magic_choice: defineDecoder("wild_magic_choice", {
-      effectId: required(literal("wild_magic_choice")),
-      timing: required(literal("onPlay")),
-      options: required(arrayOf(wildMagicOption)),
     }),
     topdeck_gained_card: defineDecoder("topdeck_gained_card", {
       effectId: required(literal("topdeck_gained_card")),
@@ -685,54 +673,6 @@ const playTopCardFromFoeDeckHandler: CardOwnershipChoiceEffectHandler<
   },
 };
 
-const wildMagicChoiceHandler: CardOwnershipChoiceEffectHandler<
-  RuntimeEffectForId<"wild_magic_choice">
-> = {
-  effectId: "wild_magic_choice",
-  execute(state, player, effect, source, services) {
-    const legalOptions = effect.options.filter((option) =>
-      services.isLegalWildMagicOption(state, player, option)
-    );
-    const choices: EffectChoice[] = legalOptions.map((_, index) => ({
-      choiceKind: "option",
-      choiceId: `wild_magic_option_${index}`,
-    }));
-    const choice = services.chooseEffectChoice(
-      state,
-      player,
-      source,
-      effect.effectId,
-      choices
-    );
-    const selectedOption = legalOptions[choices.indexOf(choice!)];
-    if (selectedOption !== undefined) {
-      recordGameEvent(state, {
-        type: "wildMagicChoiceSelected",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: selectedOption.effectId,
-        sourceType: source.sourceType,
-      });
-      return services.executeEffect(
-        state,
-        player,
-        { ...selectedOption, timing: "onPlay" },
-        source
-      );
-    }
-    recordGameEvent(state, {
-      type: "wildMagicChoiceSkipped",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: "wild_magic_choice",
-      sourceType: source.sourceType,
-    });
-    return { ok: true };
-  },
-};
-
 export interface CardOwnershipChoiceCatalogTools {
   bindRuntimeEffectDecoder<Id extends CardOwnershipChoiceEffectId>(
     effectId: Id
@@ -837,14 +777,6 @@ export function createCardOwnershipChoiceEffectDefinitions(
         { sourceKind: "wizardProperty", timings: ["activation"] as const },
       ] as const,
       handler: playTopCardFromFoeDeckHandler,
-    },
-    {
-      effectId: "wild_magic_choice",
-      decoder: bindRuntimeEffectDecoder("wild_magic_choice"),
-      supportedTimings: ["onPlay"] as const,
-      supportedModes: allEffectRuntimeModes,
-      supportedSourceKinds: ["card"],
-      handler: wildMagicChoiceHandler,
     },
     {
       effectId: "topdeck_gained_card",

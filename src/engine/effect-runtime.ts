@@ -40,15 +40,17 @@ import {
   type MayhemAttackPlanTarget,
   type EffectChoiceResolution,
   type EffectRuntimeHandlerOperationResult,
-  executeAttackOutcomeBranch,
   evaluateRuntimeEffectAtTiming,
   executeRuntimeEffect,
   executeRuntimeEffectAtTiming,
   resolveResurrectionLifeTotal,
-  validateAttackCostPrecondition,
   type TargetChoice,
   type TargetChoiceResult,
 } from "./effect-runtime-registry.js";
+import {
+  executeAttackOutcomeBranch,
+  validateAttackCostPrecondition,
+} from "./effect-runtime-combat-attack.js";
 import {
   isRuntimeEffectSelectorTarget,
   type RuntimeEffect,
