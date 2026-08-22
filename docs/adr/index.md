@@ -8,4 +8,4 @@
 | ADR-0004 | accepted | Жизненный цикл обычной атаки                 | [ADR-0004](0004-player-attack-lifecycle.md)  | restored      | —        | —             |
 | ADR-0005 | accepted | Control Ledger для контроля и физических зон | [ADR-0005](0005-control-ledger.md)           | restored      | —        | —             |
 | ADR-0006 | accepted | Trigger Dispatch для контролируемых объектов | [ADR-0006](0006-trigger-dispatch.md)         | restored      | —        | —             |
-| ADR-0007 | accepted | Typed Decoder и Effect Runtime Catalog       | [ADR-0007](0007-typed-effect-catalog.md)     | restored      | —        | —             |
+| ADR-0007 | accepted | Typed Decoder и typed Effect Runtime Catalog | [ADR-0007](0007-typed-effect-catalog.md)     | restored      | —        | —             |

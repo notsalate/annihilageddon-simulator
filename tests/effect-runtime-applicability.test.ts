@@ -8,6 +8,7 @@ import {
   executeMayhemEffects,
   getEffectExecutionError,
 } from "../src/engine/effect-runtime.js";
+import { isVerifiedRuntimeEffect } from "../src/engine/runtime-effect-verification.js";
 import type { CardDefinition } from "../src/engine/data.js";
 import { validateRuntimeEffectCatalogPayload } from "../src/engine/effect-runtime-registry.js";
 import type {
@@ -36,6 +37,59 @@ test("executeEffect applies add_power through the catalog resolver", () => {
 
   assert.deepEqual(result, { ok: true });
   assert.equal(state.turn.power, 2);
+});
+
+test("Runtime Data Intake marks resource effects as verified runtime effects", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11600 });
+  const resourceEffect = [
+    ...[...state.cardDefinitions.values()].flatMap(
+      (definition) => definition.engine.effects
+    ),
+    ...[...state.tokenDefinitions.values()].flatMap((definition) =>
+      definition.kind === "deadWizardToken"
+        ? definition.effects
+        : (definition.engine?.effects ?? [])
+    ),
+  ].find((effect) => effect.effectId === "gain_chips");
+
+  assert.ok(resourceEffect);
+  assert.equal(isVerifiedRuntimeEffect(resourceEffect), true);
+});
+
+test("typed resource Catalog keeps the verified payload identity", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11607 });
+  const player = state.players[0];
+  assert.ok(player);
+  const resourceEffect = [...state.tokenDefinitions.values()]
+    .flatMap((definition) =>
+      definition.kind === "deadWizardToken"
+        ? definition.effects
+        : (definition.engine?.effects ?? [])
+    )
+    .find((effect) => effect.effectId === "gain_chips");
+  assert.ok(resourceEffect);
+
+  let observedEffect: unknown;
+  const result = withTemporaryEffectRuntimeOperations(
+    "gain_chips",
+    {
+      execute(_state, _player, effect) {
+        observedEffect = effect;
+        return { ok: true };
+      },
+    },
+    () =>
+      executeEffect(state, player, resourceEffect, {
+        sourceType: "wizardProperty",
+        runtimeMode: state.runtimeMode,
+        playerId: player.playerId,
+        cardInstanceId: "fixture-resource-source",
+        definitionId: "fixture-resource-source",
+      })
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(observedEffect, resourceEffect);
 });
 
 test("attack intent keeps lifecycle context in one typed value", () => {

@@ -52,8 +52,14 @@ export type {
   EffectRuntimeSupportedSourceKinds,
   EffectRuntimeSupportedTimings,
 } from "./effect-runtime-catalog-shared.js";
-import { createResourceDrawEffectDefinitions } from "./effect-runtime-resources-draw.js";
-import type { ResourceDrawEffectPayloadMap } from "./effect-runtime-resources-draw.js";
+import {
+  createResourceDrawEffectDefinitions,
+  resourceDrawEffectIds,
+} from "./effect-runtime-resources-draw.js";
+import type {
+  ResourceDrawEffectId,
+  ResourceDrawEffectPayloadMap,
+} from "./effect-runtime-resources-draw.js";
 import { createActivationEffectDefinitions } from "./effect-runtime-activation.js";
 import {
   createCardOwnershipChoiceEffectDefinitions,
@@ -71,6 +77,10 @@ import { createMayhemEffectDefinitions } from "./effect-runtime-mayhem.js";
 import { createSetupEffectDefinitions } from "./effect-runtime-setup.js";
 import { createWildMagicEffectDefinitions } from "./effect-runtime-wild-magic.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
+import {
+  isVerifiedRuntimeEffect,
+  type VerifiedRuntimeEffectForId,
+} from "./runtime-effect-verification.js";
 import { recordGameEvent, recordTurnPowerChanged } from "./event-recorder.js";
 import { isPlainRecord } from "../common.js";
 import {
@@ -432,6 +442,23 @@ export interface EffectRuntimeTimedExecutionOperationContext {
   readonly isApplicable?: (effect: RuntimeEffectPayload) => boolean;
 }
 
+type VerifiedResourceDrawEffect =
+  VerifiedRuntimeEffectForId<ResourceDrawEffectId>;
+
+interface TypedEffectRuntimeCatalog {
+  execute(
+    effect: VerifiedResourceDrawEffect,
+    state: GameState,
+    player: PlayerState,
+    source: EffectSourceContext,
+    services: EffectRuntimeServices
+  ): EffectExecutionResult;
+  executeAtTiming(
+    effect: VerifiedResourceDrawEffect,
+    context: EffectRuntimeTimedExecutionOperationContext
+  ): EffectRuntimeOperationResult<EffectExecutionResult>;
+}
+
 export interface EffectRuntimeOnPlayCardOperationContext {
   readonly state: GameState;
   readonly controller: PlayerState;
@@ -563,6 +590,14 @@ interface EffectRuntimeEntry<
     source: EffectSourceContext,
     services: EffectRuntimeServices
   ): EffectExecutionResult;
+  executeTyped(
+    subjectId: string,
+    effect: VerifiedRuntimeEffectForId<EffectId>,
+    state: GameState,
+    player: PlayerState,
+    source: EffectSourceContext,
+    services: EffectRuntimeServices
+  ): EffectExecutionResult;
   evaluateAtTiming<Result>(
     subjectId: string,
     rawEffect: unknown,
@@ -580,6 +615,11 @@ interface EffectRuntimeEntry<
   executeAtTiming(
     subjectId: string,
     rawEffect: unknown,
+    context: EffectRuntimeTimedExecutionOperationContext
+  ): EffectRuntimeOperationResult<EffectExecutionResult>;
+  executeAtTimingTyped(
+    subjectId: string,
+    effect: VerifiedRuntimeEffectForId<EffectId>,
     context: EffectRuntimeTimedExecutionOperationContext
   ): EffectRuntimeOperationResult<EffectExecutionResult>;
   executeOnPlayCard(
@@ -763,6 +803,42 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     return { ok: true, effect: decoded.value };
   };
 
+  const validateTypedCatalogOperation = (
+    subjectId: string,
+    effect: VerifiedRuntimeEffectForId<Id>,
+    source: EffectSourceContext
+  ): DecodedCatalogOperation => {
+    if (!config.supportedTimings.includes(effect.timing)) {
+      return {
+        ok: false,
+        error: `${subjectId} uses unsupported timing ${String(effect.timing)}`,
+      };
+    }
+    if (!config.supportedSourceKinds.includes(source.sourceType)) {
+      return {
+        ok: false,
+        error: `Effect ${config.effectId} uses unsupported source kind`,
+      };
+    }
+    const sourceTimingError = getUnsupportedSourceTimingError(
+      subjectId,
+      config.effectId,
+      effect,
+      source.sourceType,
+      config.supportedSourceTimingPolicies
+    );
+    if (sourceTimingError !== undefined) {
+      return { ok: false, error: sourceTimingError };
+    }
+    if (!config.supportedModes.includes(source.runtimeMode)) {
+      return {
+        ok: false,
+        error: `Effect ${config.effectId} is unavailable in ${source.runtimeMode} mode`,
+      };
+    }
+    return { ok: true, effect };
+  };
+
   const requireSupportedOperation = (
     subjectId: string,
     decoded: DecodedCatalogOperation
@@ -827,6 +903,65 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
       : { ok: false, error: decoded.error };
   };
 
+  const executeTyped = (
+    subjectId: string,
+    effect: VerifiedRuntimeEffectForId<Id>,
+    state: GameState,
+    player: PlayerState,
+    source: EffectSourceContext,
+    services: EffectRuntimeServices
+  ): EffectExecutionResult => {
+    const validated = requireSupportedOperation(
+      subjectId,
+      validateTypedCatalogOperation(subjectId, effect, source)
+    );
+    const executeOperation =
+      operationOverrides?.execute ?? config.handler.execute;
+    return validated.ok
+      ? executeOperation(state, player, validated.effect, source, services)
+      : { ok: false, error: validated.error };
+  };
+
+  const executeAtTimingTyped = (
+    subjectId: string,
+    effect: VerifiedRuntimeEffectForId<Id>,
+    context: EffectRuntimeTimedExecutionOperationContext
+  ): EffectRuntimeOperationResult<EffectExecutionResult> => {
+    const validated = validateTypedCatalogOperation(
+      subjectId,
+      effect,
+      context.source
+    );
+    if (!validated.ok) {
+      return { status: "error", error: validated.error };
+    }
+    if (validated.effect.timing !== context.timing) {
+      return { status: "notApplicable" };
+    }
+    const supported = requireSupportedOperation(subjectId, validated);
+    if (!supported.ok) {
+      return { status: "error", error: supported.error };
+    }
+    if (
+      context.isApplicable !== undefined &&
+      !context.isApplicable(supported.effect)
+    ) {
+      return { status: "notApplicable" };
+    }
+    const executeOperation =
+      operationOverrides?.execute ?? config.handler.execute;
+    return {
+      status: "resolved",
+      result: executeOperation(
+        context.state,
+        context.player,
+        supported.effect,
+        context.source,
+        context.services
+      ),
+    };
+  };
+
   const entry: TestableEffectRuntimeEntry<Id> = {
     effectId: config.effectId,
     supportedModes: config.supportedModes,
@@ -843,7 +978,9 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     },
     decode,
     execute,
+    executeTyped,
     evaluateAtTiming,
+    executeAtTimingTyped,
     applyEffectiveValueModifier(subjectId, rawEffect, source, context) {
       return evaluateAtTiming(subjectId, rawEffect, {
         source,
@@ -2019,6 +2156,35 @@ function getEffectRuntimeCatalogEntry<Id extends RuntimeEffectId>(
   return effectRuntimeCatalogDefinition[effectId];
 }
 
+const typedEffectRuntimeCatalog: TypedEffectRuntimeCatalog = {
+  execute(effect, state, player, source, services) {
+    return getEffectRuntimeCatalogEntry(effect.effectId).executeTyped(
+      `Effect ${effect.effectId}`,
+      effect,
+      state,
+      player,
+      source,
+      services
+    );
+  },
+  executeAtTiming(effect, context) {
+    return getEffectRuntimeCatalogEntry(effect.effectId).executeAtTimingTyped(
+      `Effect ${effect.effectId}`,
+      effect,
+      context
+    );
+  },
+};
+
+function isVerifiedResourceDrawEffect(
+  effect: unknown
+): effect is VerifiedResourceDrawEffect {
+  return (
+    isVerifiedRuntimeEffect(effect) &&
+    resourceDrawEffectIds.some((effectId) => effectId === effect.effectId)
+  );
+}
+
 function readRuntimeEffectId(
   effect: unknown,
   errorPrefix: "Unsupported effect id" | "Unsupported setup effect id"
@@ -2093,6 +2259,16 @@ export function executeRuntimeEffect(
   source: EffectSourceContext,
   services: EffectRuntimeServices
 ): EffectExecutionResult {
+  if (isVerifiedResourceDrawEffect(effect)) {
+    return typedEffectRuntimeCatalog.execute(
+      effect,
+      state,
+      player,
+      source,
+      services
+    );
+  }
+
   const resolvedId = readRuntimeEffectId(effect, "Unsupported effect id");
   if (!resolvedId.ok) {
     return { ok: false, error: resolvedId.error };
@@ -2327,6 +2503,17 @@ export function executeRuntimeEffectAtTiming(
   services: EffectRuntimeServices,
   isApplicable?: (effect: RuntimeEffectPayload) => boolean
 ): EffectRuntimeOperationResult<EffectExecutionResult> {
+  if (isVerifiedResourceDrawEffect(effect)) {
+    return typedEffectRuntimeCatalog.executeAtTiming(effect, {
+      state,
+      player,
+      source,
+      services,
+      timing,
+      ...(isApplicable === undefined ? {} : { isApplicable }),
+    });
+  }
+
   const resolvedId = readRuntimeEffectId(effect, "Unsupported effect id");
   if (!resolvedId.ok) {
     return { status: "error", error: resolvedId.error };

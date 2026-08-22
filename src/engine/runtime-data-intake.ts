@@ -8,6 +8,7 @@ import {
   type LoadedDataPack,
 } from "./data.js";
 import type { EffectRuntimeMode } from "./effect-runtime-registry.js";
+import { markRuntimeEffectTreeVerified } from "./runtime-effect-verification.js";
 
 const DEFAULT_MANIFEST_PATH = "data/packs/current-runtime.json";
 
@@ -121,7 +122,31 @@ function createImmutableDataPack(
     tokenStacks: freezeDeep(cloned.tokenStacks),
   } satisfies LoadedDataPack;
 
+  markDataPackRuntimeEffectsVerified(immutable);
+
   return Object.freeze(immutable) as VerifiedRuntimeDataPack;
+}
+
+function markDataPackRuntimeEffectsVerified(dataPack: LoadedDataPack): void {
+  for (const definition of dataPack.cardDefinitions.values()) {
+    for (const effect of definition.engine.effects) {
+      markRuntimeEffectTreeVerified(effect);
+    }
+  }
+
+  for (const definition of dataPack.tokenDefinitions.values()) {
+    const effects =
+      definition.kind === "deadWizardToken"
+        ? definition.effects
+        : definition.engine?.effects;
+    if (effects === undefined) {
+      continue;
+    }
+
+    for (const effect of effects) {
+      markRuntimeEffectTreeVerified(effect);
+    }
+  }
 }
 
 function createReadonlyMap<K, V>(source: ReadonlyMap<K, V>): ReadonlyMap<K, V> {
