@@ -1,3 +1,12 @@
+import type { ResourceDrawEffectPayloadMap } from "./effect-runtime-resources-draw.js";
+
+export type {
+  ResourceDrawEffectPayloadMap,
+  GainChipsRuntimeEffect,
+  GainChipsPerPlayerWithStatusRuntimeEffect,
+  DrawCardsRuntimeEffect,
+} from "./effect-runtime-resources-draw.js";
+
 export const effectTimings = [
   "activation",
   "afterControllerPlaysCard",
@@ -384,23 +393,8 @@ export type AddPowerPerPlayerWithStatusRuntimeEffect =
     amountPerPlayer: number;
   };
 
-export type GainChipsRuntimeEffect = EffectWithOptionalTiming<"gain_chips"> &
-  PositiveAmount &
-  Conditioned & {
-    cardTypes?: string[];
-    isOngoing?: true;
-  };
-
-export type GainChipsPerPlayerWithStatusRuntimeEffect =
-  EffectWithOptionalTiming<"gain_chips_per_player_with_status"> & {
-    amountPerPlayer: number;
-    status: "dingler";
-  };
-
 export type GainChipsEqualDamageDealtRuntimeEffect =
   EffectWithOptionalTiming<"gain_chips_equal_damage_dealt">;
-export type DrawCardsRuntimeEffect = EffectWithOptionalTiming<"draw_cards"> &
-  PositiveAmount;
 export type HealRuntimeEffect = EffectWithOptionalTiming<"heal"> &
   PositiveAmount &
   Targetable;
@@ -513,16 +507,13 @@ export type FixtureAddPowerEqualToTargetCostRuntimeEffect =
   EffectWithOptionalTiming<"fixture_add_power_equal_to_target_cost"> &
     Targetable & { emptyChoice?: "fail" };
 
-export interface ImmediateEffectPayloadMap {
+export interface ImmediateEffectPayloadMap extends ResourceDrawEffectPayloadMap {
   add_power: AddPowerRuntimeEffect;
   add_power_if_player_has_status: AddPowerIfPlayerHasStatusRuntimeEffect;
   add_power_per_controlled_object: AddPowerPerControlledObjectRuntimeEffect;
   add_power_per_controlled_permanent: AddPowerPerControlledPermanentRuntimeEffect;
   add_power_per_player_with_status: AddPowerPerPlayerWithStatusRuntimeEffect;
-  gain_chips: GainChipsRuntimeEffect;
-  gain_chips_per_player_with_status: GainChipsPerPlayerWithStatusRuntimeEffect;
   gain_chips_equal_damage_dealt: GainChipsEqualDamageDealtRuntimeEffect;
-  draw_cards: DrawCardsRuntimeEffect;
   heal: HealRuntimeEffect;
   heal_equal_damage_dealt: HealEqualDamageDealtRuntimeEffect;
   heal_equal_damage_dealt_on_own_turn: HealEqualDamageDealtOnOwnTurnRuntimeEffect;

@@ -7,6 +7,7 @@ import {
   validateRuntimeEffectCatalogPayload,
   type EffectRuntimeCatalogOperationOverridesForTesting,
 } from "../src/engine/effect-runtime-registry.js";
+import { resourceDrawEffectIds } from "../src/engine/effect-runtime-resources-draw.js";
 import type { RuntimeEffectForId } from "../src/engine/runtime-effect.js";
 
 type Equal<Left, Right> =
@@ -169,6 +170,14 @@ test("resource and draw effects use the interactive Catalog timing policy", () =
   if (!passiveGain.ok) {
     assert.match(passiveGain.errors.join("\n"), /unsupported timing/);
   }
+});
+
+test("resource and draw IDs belong to one family module", () => {
+  assert.deepEqual(resourceDrawEffectIds, [
+    "gain_chips",
+    "gain_chips_per_player_with_status",
+    "draw_cards",
+  ]);
 });
 
 test("life and Dingler status effects use typed family payloads and policies", () => {

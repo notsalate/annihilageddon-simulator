@@ -40,6 +40,27 @@ import {
   type EffectiveValueModifierId,
   type EffectiveValueModifierOperationContext,
 } from "./effective-value-catalog.js";
+import {
+  allEffectRuntimeModes,
+  fixtureEffectTimings,
+  immediateEffectTimings,
+} from "./effect-runtime-catalog-shared.js";
+export {
+  effectRuntimeModes,
+  effectRuntimeSourceKinds,
+} from "./effect-runtime-catalog-shared.js";
+export type {
+  EffectRuntimeMode,
+  EffectRuntimeSourceKind,
+  EffectRuntimeSupportedModes,
+  EffectRuntimeSupportedSourceKinds,
+  EffectRuntimeSupportedTimings,
+} from "./effect-runtime-catalog-shared.js";
+import {
+  createResourceDrawEffectDefinitions,
+  recordEffectChipsChanged,
+} from "./effect-runtime-resources-draw.js";
+import type { ResourceDrawEffectPayloadMap } from "./effect-runtime-resources-draw.js";
 import { drawDeckCards } from "./deck-lifecycle.js";
 import {
   recordDeckReshuffle,
@@ -85,23 +106,13 @@ import type {
   TokenInstance,
 } from "./setup.js";
 
-export const effectRuntimeModes = ["combat", "fixture"] as const;
-export type EffectRuntimeMode = (typeof effectRuntimeModes)[number];
-export type EffectRuntimeSupportedModes = readonly [
+import type {
   EffectRuntimeMode,
-  ...EffectRuntimeMode[],
-];
-export const effectRuntimeSourceKinds = [
-  "card",
-  "wizardProperty",
-  "deadWizardToken",
-] as const;
-export type EffectRuntimeSourceKind = (typeof effectRuntimeSourceKinds)[number];
-export type EffectRuntimeSupportedSourceKinds = readonly [
   EffectRuntimeSourceKind,
-  ...EffectRuntimeSourceKind[],
-];
-type EffectRuntimeSupportedTimings = readonly [EffectTiming, ...EffectTiming[]];
+  EffectRuntimeSupportedModes,
+  EffectRuntimeSupportedSourceKinds,
+  EffectRuntimeSupportedTimings,
+} from "./effect-runtime-catalog-shared.js";
 type EffectRuntimeSourceTimingPolicy = {
   readonly sourceKind: EffectRuntimeSourceKind;
   readonly timings: EffectRuntimeSupportedTimings;
@@ -576,7 +587,6 @@ type PositiveAmountRuntimeEffect<EffectId extends RuntimeEffectId> =
   RuntimeEffectForId<EffectId> & { amount: number };
 
 type AddPowerRuntimeEffect = PositiveAmountRuntimeEffect<"add_power">;
-type GainChipsRuntimeEffect = PositiveAmountRuntimeEffect<"gain_chips">;
 type MayhemEachNonDinglerGainChipsRuntimeEffect =
   RuntimeEffectForId<"mayhem_each_non_dingler_gain_chips"> & {
     chipAmount: number;
@@ -1129,8 +1139,6 @@ export function defineEffectRuntimeFamilyForTesting<
   defineEffectRuntimeFamily(familyId, definitions);
   return definitions.map((definition) => definition.effectId);
 }
-
-const allEffectRuntimeModes: EffectRuntimeSupportedModes = effectRuntimeModes;
 
 const addPowerHandler: EffectRuntimeHandler<AddPowerRuntimeEffect> = {
   effectId: "add_power",
@@ -3275,76 +3283,6 @@ const avoidAttackHandler: EffectRuntimeHandler<AvoidAttackRuntimeEffect> = {
   },
 };
 
-const gainChipsHandler: EffectRuntimeHandler<GainChipsRuntimeEffect> = {
-  effectId: "gain_chips",
-  execute(state, player, effect, source) {
-    const chipsBefore = player.chips;
-    player.chips += effect.amount;
-    recordEffectChipsChanged(
-      state,
-      player,
-      source,
-      "gain_chips",
-      chipsBefore,
-      player.chips
-    );
-
-    return { ok: true };
-  },
-};
-
-const gainChipsPerPlayerWithStatusHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"gain_chips_per_player_with_status">
-> = {
-  effectId: "gain_chips_per_player_with_status",
-  execute(state, player, effect, source) {
-    const matchingPlayerCount = state.players.filter((candidate) => {
-      return candidate.statuses.some(
-        (candidateStatus) => candidateStatus.statusId === "dingler"
-      );
-    }).length;
-    const amount = matchingPlayerCount * effect.amountPerPlayer;
-    const chipsBefore = player.chips;
-    player.chips += amount;
-    recordEffectChipsChanged(
-      state,
-      player,
-      source,
-      "gain_chips_per_player_with_status",
-      chipsBefore,
-      player.chips
-    );
-
-    return { ok: true };
-  },
-};
-
-const drawCardsHandler: EffectRuntimeHandler<RuntimeEffectForId<"draw_cards">> =
-  {
-    effectId: "draw_cards",
-    execute(state, player, effect, source) {
-      const drawResult = drawDeckCards(
-        player.deck,
-        player.discard,
-        effect.amount,
-        state.rng,
-        () => recordDeckReshuffle(state, player.playerId)
-      );
-      player.hand.push(...drawResult.cards);
-      recordGameEvent(state, {
-        type: "effectDrawCardsApplied",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: "draw_cards",
-        amount: drawResult.cards.length,
-        sourceType: source.sourceType,
-      });
-
-      return { ok: true };
-    },
-  };
-
 const directionalChainAttackHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"directional_chain_attack">
 > = {
@@ -4093,27 +4031,6 @@ function chooseCardCombinations(
   return combinations;
 }
 
-function recordEffectChipsChanged(
-  state: GameState,
-  player: PlayerState,
-  source: EffectSourceContext,
-  effectId: RuntimeEffectId,
-  chipsBefore: number,
-  chipsAfter: number
-): void {
-  recordGameEvent(state, {
-    type: "effectChipsGained",
-    playerId: player.playerId,
-    cardInstanceId: source.cardInstanceId,
-    definitionId: source.definitionId,
-    effectId,
-    chipsBefore,
-    chipsAfter,
-    amount: chipsAfter - chipsBefore,
-    sourceType: source.sourceType,
-  });
-}
-
 function sumHandCost(state: GameState, player: PlayerState): number {
   return player.hand.reduce((total, card) => {
     const cost = state.cardDefinitions.get(card.definitionId)?.engine.cost;
@@ -4146,11 +4063,6 @@ type SetupBootstrapEffectId =
   | "replace_starting_card"
   | "start_with_basic_trophy"
   | "set_starting_life_total";
-
-type ResourceDrawEffectId =
-  | "gain_chips"
-  | "gain_chips_per_player_with_status"
-  | "draw_cards";
 
 type LifeStatusEffectId =
   | "heal"
@@ -4247,48 +4159,10 @@ const controlledPowerEntries = defineEffectRuntimeFamily(
     >
 >;
 
-const immediateEffectTimings = [
-  "activation",
-  "onDefense",
-  "onGainCard",
-  "onMayhemResolve",
-  "onPlay",
-  "onPlayCard",
-] as const satisfies EffectRuntimeSupportedTimings;
-
-const fixtureEffectTimings = [
-  "setup",
-  ...immediateEffectTimings,
-] as const satisfies EffectRuntimeSupportedTimings;
-
-const resourceDrawEntries = defineEffectRuntimeFamily("resources/draw", [
-  {
-    effectId: "gain_chips",
-    decoder: bindRuntimeEffectDecoder("gain_chips"),
-    supportedTimings: immediateEffectTimings,
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: gainChipsHandler,
-  },
-  {
-    effectId: "gain_chips_per_player_with_status",
-    decoder: bindRuntimeEffectDecoder("gain_chips_per_player_with_status"),
-    supportedTimings: immediateEffectTimings,
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: gainChipsPerPlayerWithStatusHandler,
-  },
-  {
-    effectId: "draw_cards",
-    decoder: bindRuntimeEffectDecoder("draw_cards"),
-    supportedTimings: immediateEffectTimings,
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: drawCardsHandler,
-  },
-] as const) satisfies EffectRuntimeEntriesFor<
-  Pick<ImmediateEffectPayloadMap, ResourceDrawEffectId>
->;
+const resourceDrawEntries = defineEffectRuntimeFamily(
+  "resources/draw",
+  createResourceDrawEffectDefinitions({ bindRuntimeEffectDecoder })
+);
 
 const lifeStatusEntries = defineEffectRuntimeFamily("life/status", [
   {
@@ -4686,7 +4560,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   Omit<
     ImmediateEffectPayloadMap,
     | "add_power_if_player_has_status"
-    | ResourceDrawEffectId
+    | keyof ResourceDrawEffectPayloadMap
     | LifeStatusEffectId
     | CardOwnershipChoiceEffectId
   >

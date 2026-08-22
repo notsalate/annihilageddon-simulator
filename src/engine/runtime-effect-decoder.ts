@@ -13,6 +13,7 @@ import {
   type RuntimeEffectTargetSelector,
   type WildMagicOption,
 } from "./runtime-effect.js";
+import { createResourceDrawEffectDecoders } from "./effect-runtime-resources-draw.js";
 
 export type DecodeResult<T> =
   | { ok: true; value: T }
@@ -427,9 +428,7 @@ function requireTargetSelector(
     const directSelector =
       "targetSelector" in effect ? effect.targetSelector : undefined;
     if (target !== undefined && directSelector !== undefined) {
-      return [
-        `${subjectId} target and targetSelector cannot both be provided`,
-      ];
+      return [`${subjectId} target and targetSelector cannot both be provided`];
     }
     const selector = nestedSelector ?? directSelector;
     return allowedSelectors.some(
@@ -593,6 +592,17 @@ const optionalCondition = optional(runtimeCondition);
 const optionalCosts = optional(runtimeCosts);
 const optionalAttackBranches = optional(attackBranches);
 
+const resourceDrawEffectDecoders = createResourceDrawEffectDecoders({
+  defineDecoder,
+  required,
+  optional,
+  literal,
+  positiveInteger,
+  nonEmptyStringArray,
+  optionalCondition,
+  optionalTiming,
+});
+
 const runtimeEffectDecoders: {
   [Id in RuntimeEffectId]: RuntimeEffectDecoder<Id>;
 } = {
@@ -751,23 +761,7 @@ const runtimeEffectDecoders: {
       amountPerPlayer: required(positiveInteger),
     }
   ),
-  gain_chips: defineDecoder("gain_chips", {
-    effectId: required(literal("gain_chips")),
-    timing: optionalTiming,
-    amount: required(positiveInteger),
-    condition: optionalCondition,
-    cardTypes: optional(nonEmptyStringArray),
-    isOngoing: optional(literal(true)),
-  }),
-  gain_chips_per_player_with_status: defineDecoder(
-    "gain_chips_per_player_with_status",
-    {
-      effectId: required(literal("gain_chips_per_player_with_status")),
-      timing: optionalTiming,
-      amountPerPlayer: required(positiveInteger),
-      status: required(literal("dingler")),
-    }
-  ),
+  ...resourceDrawEffectDecoders,
   gain_chips_equal_damage_dealt: defineDecoder(
     "gain_chips_equal_damage_dealt",
     {
@@ -775,11 +769,6 @@ const runtimeEffectDecoders: {
       timing: optionalTiming,
     }
   ),
-  draw_cards: defineDecoder("draw_cards", {
-    effectId: required(literal("draw_cards")),
-    timing: optionalTiming,
-    amount: required(positiveInteger),
-  }),
   heal: defineDecoder(
     "heal",
     {
