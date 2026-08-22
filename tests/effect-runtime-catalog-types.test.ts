@@ -7,6 +7,10 @@ import {
   validateRuntimeEffectCatalogPayload,
   type EffectRuntimeCatalogOperationOverridesForTesting,
 } from "../src/engine/effect-runtime-registry.js";
+import { activationEffectIds } from "../src/engine/effect-runtime-activation.js";
+import { cardOwnershipChoiceEffectIds } from "../src/engine/effect-runtime-cards-ownership-choice.js";
+import { ongoingEffectIds } from "../src/engine/effect-runtime-ongoing.js";
+import { effectiveValueModifierEffectIds } from "../src/engine/effect-runtime-effective-value-modifier.js";
 import { resourceDrawEffectIds } from "../src/engine/effect-runtime-resources-draw.js";
 import type { RuntimeEffectForId } from "../src/engine/runtime-effect.js";
 
@@ -177,6 +181,45 @@ test("resource and draw IDs belong to one family module", () => {
     "gain_chips",
     "gain_chips_per_player_with_status",
     "draw_cards",
+  ]);
+});
+
+test("card, activation, ongoing and modifier IDs belong to family modules", () => {
+  assert.deepEqual(cardOwnershipChoiceEffectIds, [
+    "gain_card",
+    "discard_card",
+    "discard_self",
+    "discard_hand_then_draw_cards",
+    "destroy_card",
+    "destroy_own_cards",
+    "destroy_random_legend_market_card",
+    "return_discard_to_hand",
+    "reveal_top_card",
+    "play_top_card",
+    "play_top_card_from_foe_deck",
+    "wild_magic_choice",
+    "topdeck_gained_card",
+    "optional_gain_market_cards_to_hand_this_turn",
+    "on_gain_self_gain_limp_wands",
+  ]);
+  assert.deepEqual(activationEffectIds, [
+    "activation_destroy_self_then_destroy_own_cards",
+    "conditional_activation_destroy_own_cards",
+    "conditional_activation_gain_chips",
+    "optional_spend_chip_destroy_own_cards",
+  ]);
+  assert.deepEqual(ongoingEffectIds, [
+    "ongoing_add_power",
+    "ongoing_add_power_when_playing_wand",
+    "ongoing_add_power_per_dead_wizard_token",
+    "ongoing_add_power_when_playing_limp_wand",
+    "ongoing_first_attack_damage_add_power",
+    "ongoing_hand_refill_bonus",
+    "ongoing_start_turn_optional_gain_limp_wand_to_hand",
+  ]);
+  assert.deepEqual(effectiveValueModifierEffectIds, [
+    "modify_effective_value",
+    "fixture_modify_effective_value",
   ]);
 });
 

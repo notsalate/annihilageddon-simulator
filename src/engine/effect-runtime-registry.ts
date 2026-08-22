@@ -35,7 +35,6 @@ import {
   calculateEffectivePlayerMaxLife as calculateEffectivePlayerMaxLifeCore,
 } from "./effective-values.js";
 import {
-  effectiveValueModifierCatalogDefinitions,
   isEffectiveValueModifierEffect,
   type EffectiveValueModifierId,
   type EffectiveValueModifierOperationContext,
@@ -61,6 +60,16 @@ import {
   recordEffectChipsChanged,
 } from "./effect-runtime-resources-draw.js";
 import type { ResourceDrawEffectPayloadMap } from "./effect-runtime-resources-draw.js";
+import { createActivationEffectDefinitions } from "./effect-runtime-activation.js";
+import {
+  createCardOwnershipChoiceEffectDefinitions,
+  type CardOwnershipChoiceEffectId,
+} from "./effect-runtime-cards-ownership-choice.js";
+import { createEffectiveValueModifierEffectDefinitions } from "./effect-runtime-effective-value-modifier.js";
+import {
+  createControlledPowerEffectDefinitions,
+  createOngoingEffectDefinitions,
+} from "./effect-runtime-ongoing.js";
 import { drawDeckCards } from "./deck-lifecycle.js";
 import {
   recordDeckReshuffle,
@@ -76,11 +85,6 @@ import {
   type AttackOutcomeBranch,
   type EffectTiming,
   type ModifyOwnedWandAttackDamageRuntimeEffect,
-  type OngoingAddPowerRuntimeEffect,
-  type OngoingAddPowerWhenPlayingWandRuntimeEffect,
-  type OngoingAddPowerPerDeadWizardTokenRuntimeEffect,
-  type OngoingFirstAttackDamageAddPowerRuntimeEffect,
-  type OngoingHandRefillBonusRuntimeEffect,
   type PreventDefenseAgainstOwnedWandAttacksRuntimeEffect,
   type RuntimeEffectForId,
   type RuntimeEffectId,
@@ -1180,171 +1184,6 @@ const addPowerPerPlayerWithStatusHandler: EffectRuntimeHandler<
   },
 };
 
-const gainCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"gain_card">> = {
-  effectId: "gain_card",
-  execute(state, player, effect, source, services) {
-    const targetResult = services.resolveTargetChoice(
-      state,
-      player,
-      effect,
-      source
-    );
-    if (!targetResult.ok) {
-      return targetResult;
-    }
-
-    if (targetResult.choice === undefined) {
-      return { ok: true };
-    }
-
-    const effectId = effect["effectId"];
-    const choice = services.requireCardChoice(targetResult.choice, effectId);
-    if (!choice.ok) {
-      return choice;
-    }
-
-    const moved = services.moveGainedCardToPlayerDestination(
-      state,
-      player,
-      choice.card
-    );
-    if (!moved.ok) {
-      return moved;
-    }
-
-    recordGameEvent(state, {
-      type: "effectCardGained",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      targetCardInstanceId: choice.card.instanceId,
-      targetDefinitionId: choice.card.definitionId,
-      effectId,
-      destination: moved.destination,
-      sourceType: source.sourceType,
-    });
-
-    return { ok: true };
-  },
-};
-
-const discardCardHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"discard_card">
-> = {
-  effectId: "discard_card",
-  execute(state, player, effect, source, services) {
-    const targetResult = services.resolveTargetChoice(
-      state,
-      player,
-      effect,
-      source
-    );
-    if (!targetResult.ok) {
-      return targetResult;
-    }
-
-    if (targetResult.choice === undefined) {
-      return { ok: true };
-    }
-
-    const effectId = effect.effectId;
-    const choice = services.requireCardChoice(targetResult.choice, effectId);
-    if (!choice.ok) {
-      return choice;
-    }
-
-    const moved = services.moveCardToPlayerZone(
-      state,
-      choice.card,
-      player,
-      player.discard,
-      `${player.playerId}.discard`,
-      effectId,
-      source
-    );
-    if (!moved) {
-      return {
-        ok: false,
-        error: `Cannot move card ${choice.card.instanceId}`,
-      };
-    }
-
-    recordGameEvent(state, {
-      type: "effectCardDiscarded",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      targetCardInstanceId: choice.card.instanceId,
-      targetDefinitionId: choice.card.definitionId,
-      effectId,
-      sourceType: source.sourceType,
-    });
-
-    return { ok: true };
-  },
-};
-
-const destroyCardHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"destroy_card">
-> = {
-  effectId: "destroy_card",
-  execute(state, player, effect, source, services) {
-    const targetResult = services.resolveTargetChoice(
-      state,
-      player,
-      effect,
-      source
-    );
-    if (!targetResult.ok) {
-      return targetResult;
-    }
-
-    if (targetResult.choice === undefined) {
-      return { ok: true };
-    }
-
-    const effectId = effect.effectId;
-    const choice = services.requireCardChoice(targetResult.choice, effectId);
-    if (!choice.ok) {
-      return choice;
-    }
-
-    const destination = services.getDestroyDestination(state, choice.card);
-    if (!destination.ok) {
-      return destination;
-    }
-
-    const moved = services.moveCardToZonePreservingOwner(
-      state,
-      player,
-      choice.card,
-      destination.zone,
-      destination.zoneName,
-      effectId,
-      source
-    );
-    if (!moved) {
-      return {
-        ok: false,
-        error: `Cannot move card ${choice.card.instanceId}`,
-      };
-    }
-
-    recordGameEvent(state, {
-      type: "effectCardDestroyed",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      targetCardInstanceId: choice.card.instanceId,
-      targetDefinitionId: choice.card.definitionId,
-      effectId,
-      sourceType: source.sourceType,
-    });
-
-    return { ok: true };
-  },
-};
-
 const dealDamageHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"deal_damage">
 > = {
@@ -2375,23 +2214,6 @@ const increaseHandLimitAtMaxLifeHandler = {
   },
 } satisfies EffectRuntimeHandler<IncreaseHandLimitAtMaxLifeRuntimeEffect>;
 
-const ongoingHandRefillBonusHandler: EffectRuntimeHandler<OngoingHandRefillBonusRuntimeEffect> =
-  {
-    effectId: "ongoing_hand_refill_bonus",
-    execute() {
-      return {
-        ok: false,
-        error: "ongoing_hand_refill_bonus is an end-turn hand-limit effect",
-      };
-    },
-    evaluateEndTurnDrawModifier(effect, context) {
-      return {
-        status: "resolved",
-        result: context.currentDrawCount + effect.amount,
-      };
-    },
-  };
-
 const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"mayhem_each_player_battle_highest_hand_cost">
 > = {
@@ -2779,30 +2601,6 @@ const setResurrectionLifeTotalHandler: EffectRuntimeHandler<
   },
 };
 
-const modifyEffectiveValueHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"modify_effective_value">
-> = {
-  effectId: "modify_effective_value",
-  execute() {
-    return {
-      ok: false,
-      error: "modify_effective_value is an effective-value-only effect",
-    };
-  },
-};
-
-const fixtureModifyEffectiveValueHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"fixture_modify_effective_value">
-> = {
-  effectId: "fixture_modify_effective_value",
-  execute() {
-    return {
-      ok: false,
-      error: "fixture_modify_effective_value is an effective-value-only effect",
-    };
-  },
-};
-
 const fixtureAddPowerEqualToTargetCostHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"fixture_add_power_equal_to_target_cost">
 > = {
@@ -2852,18 +2650,6 @@ const fixtureAddPowerEqualToTargetCostHandler: EffectRuntimeHandler<
     });
 
     return { ok: true };
-  },
-};
-
-const topdeckGainedCardHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"topdeck_gained_card">
-> = {
-  effectId: "topdeck_gained_card",
-  execute() {
-    return {
-      ok: false,
-      error: "topdeck_gained_card is a gained-card replacement effect",
-    };
   },
 };
 
@@ -2951,130 +2737,6 @@ const optionalSpendChipAttackDamageHandler: EffectRuntimeHandler<OptionalSpendCh
           costs: [{ costId: "spend_chips", amount: effect.chipCost }],
         };
       return executeAttackDamage(state, player, attackEffect, source, services);
-    },
-  };
-
-const addPowerIfPlayerHasStatusHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"add_power_if_player_has_status">
-> = {
-  effectId: "add_power_if_player_has_status",
-  execute() {
-    return {
-      ok: false,
-      error: "add_power_if_player_has_status is a passive controlled effect",
-    };
-  },
-  evaluateControlledPower(effect, context) {
-    return {
-      status: "resolved",
-      result: context.controller.statuses.some(
-        (status) => status.statusId === effect.statusId
-      )
-        ? effect.amount
-        : 0,
-    };
-  },
-};
-
-const ongoingAddPowerHandler = {
-  effectId: "ongoing_add_power",
-  execute() {
-    return {
-      ok: false,
-      error: "ongoing_add_power is a passive controlled effect",
-    };
-  },
-  evaluateControlledPower(effect) {
-    return { status: "resolved", result: effect.amount };
-  },
-} satisfies EffectRuntimeHandler<OngoingAddPowerRuntimeEffect>;
-
-const ongoingFirstAttackDamageAddPowerHandler: EffectRuntimeHandler<OngoingFirstAttackDamageAddPowerRuntimeEffect> =
-  {
-    effectId: "ongoing_first_attack_damage_add_power",
-    execute() {
-      return {
-        ok: false,
-        error:
-          "ongoing_first_attack_damage_add_power is a triggered controlled effect",
-      };
-    },
-    applyAfterPlayerAttackDamage(_effect, context) {
-      const { state, controller, source, totalDamageDealt } = context;
-      const powerBefore = state.turn.power;
-      state.turn.power += totalDamageDealt;
-      recordTurnPowerChanged(
-        state,
-        controller,
-        source,
-        "ongoing_first_attack_damage_add_power",
-        powerBefore,
-        state.turn.power
-      );
-      return { status: "resolved", result: { ok: true } };
-    },
-  };
-
-const ongoingAddPowerWhenPlayingWandHandler: EffectRuntimeHandler<OngoingAddPowerWhenPlayingWandRuntimeEffect> =
-  {
-    effectId: "ongoing_add_power_when_playing_wand",
-    execute(state, player, effect, source) {
-      return applyOngoingWandPower(state, player, effect, source);
-    },
-    executeOnPlayCard(effect, context) {
-      const matchesPlayedCard = effect.cardTags.some(
-        (cardTag) =>
-          context.playedDefinition.engine.tags?.includes(cardTag) === true
-      );
-      if (!matchesPlayedCard) {
-        return { status: "notApplicable" };
-      }
-      return {
-        status: "resolved",
-        result: applyOngoingWandPower(
-          context.state,
-          context.controller,
-          effect,
-          context.source
-        ),
-      };
-    },
-  };
-
-function applyOngoingWandPower(
-  state: GameState,
-  player: PlayerState,
-  effect: OngoingAddPowerWhenPlayingWandRuntimeEffect,
-  source: EffectSourceContext
-): EffectExecutionResult {
-  const powerBefore = state.turn.power;
-  state.turn.power += effect.amount;
-  recordTurnPowerChanged(
-    state,
-    player,
-    source,
-    "ongoing_add_power_when_playing_wand",
-    powerBefore,
-    state.turn.power
-  );
-  return { ok: true };
-}
-
-const ongoingAddPowerPerDeadWizardTokenHandler: EffectRuntimeHandler<OngoingAddPowerPerDeadWizardTokenRuntimeEffect> =
-  {
-    effectId: "ongoing_add_power_per_dead_wizard_token",
-    execute() {
-      return {
-        ok: false,
-        error:
-          "ongoing_add_power_per_dead_wizard_token is a passive controlled effect",
-      };
-    },
-    evaluateControlledPower(effect, context) {
-      return {
-        status: "resolved",
-        result: context.controller.deadWizardTokens.length * effect.amount,
-      };
     },
   };
 
@@ -3413,192 +3075,6 @@ const mayhemAttackHandler: EffectRuntimeHandler<
       "mayhem_attack",
       source
     );
-  },
-};
-
-const revealTopCardHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"reveal_top_card">
-> = {
-  effectId: "reveal_top_card",
-  execute(state, player, effect, source, services) {
-    const effectId = effect.effectId;
-    const card = services.peekTopDeckCard(player, state);
-    if (card === undefined) {
-      recordGameEvent(state, {
-        type: "effectRevealSkipped",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId,
-        sourceType: source.sourceType,
-      });
-      return { ok: true };
-    }
-
-    recordGameEvent(state, {
-      type: "effectCardRevealed",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      targetCardInstanceId: card.instanceId,
-      targetDefinitionId: card.definitionId,
-      effectId,
-      sourceType: source.sourceType,
-    });
-
-    return { ok: true };
-  },
-};
-
-const playTopCardHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"play_top_card">
-> = {
-  effectId: "play_top_card",
-  execute(state, player, effect, source, services) {
-    const effectId = effect.effectId;
-    const card = services.drawTopDeckCard(player, state);
-    if (card === undefined) {
-      recordGameEvent(state, {
-        type: "effectPlayTopSkipped",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId,
-        sourceType: source.sourceType,
-      });
-      return { ok: true };
-    }
-
-    const playedResult = services.playResolvedCard(state, player, card);
-    if (!playedResult.ok || playedResult.gameEnd !== undefined) {
-      return playedResult;
-    }
-
-    recordGameEvent(state, {
-      type: "effectCardPlayedFromDeck",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      targetCardInstanceId: card.instanceId,
-      targetDefinitionId: card.definitionId,
-      effectId,
-      sourceType: source.sourceType,
-    });
-
-    return { ok: true };
-  },
-};
-
-const playTopCardFromFoeDeckHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"play_top_card_from_foe_deck">
-> = {
-  effectId: "play_top_card_from_foe_deck",
-  execute(state, player, effect, source, services) {
-    const foe = services
-      .getOpponentsInSeatingOrder(state, player)
-      .find((candidate) => {
-        return candidate.deck.length > 0 || candidate.discard.length > 0;
-      });
-    if (foe === undefined) {
-      recordGameEvent(state, {
-        type: "effectPlayTopFoeDeckSkipped",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: effect.effectId,
-        sourceType: source.sourceType,
-      });
-      return { ok: true };
-    }
-
-    const card = services.drawTopDeckCard(foe, state);
-    if (card === undefined) {
-      recordGameEvent(state, {
-        type: "effectPlayTopFoeDeckSkipped",
-        playerId: player.playerId,
-        targetPlayerId: foe.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: effect.effectId,
-        sourceType: source.sourceType,
-      });
-      return { ok: true };
-    }
-
-    const playedResult = services.playResolvedCard(state, player, card, {
-      nonOngoingDestination: {
-        zone: "ownerDiscardAfterResolution",
-        ownerId: foe.playerId,
-      },
-      ongoingOwnerId: player.playerId,
-    });
-    if (!playedResult.ok || playedResult.gameEnd !== undefined) {
-      return playedResult;
-    }
-
-    recordGameEvent(state, {
-      type: "effectFoeDeckCardPlayed",
-      playerId: player.playerId,
-      targetPlayerId: foe.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      targetCardInstanceId: card.instanceId,
-      targetDefinitionId: card.definitionId,
-      effectId: effect.effectId,
-      sourceType: source.sourceType,
-    });
-
-    return { ok: true };
-  },
-};
-
-const wildMagicChoiceHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"wild_magic_choice">
-> = {
-  effectId: "wild_magic_choice",
-  execute(state, player, effect, source, services) {
-    const legalOptions = effect.options.filter((option) =>
-      services.isLegalWildMagicOption(state, player, option)
-    );
-    const choices: EffectChoice[] = legalOptions.map((_, index) => ({
-      choiceKind: "option",
-      choiceId: `wild_magic_option_${index}`,
-    }));
-    const choice = services.chooseEffectChoice(
-      state,
-      player,
-      source,
-      effect.effectId,
-      choices
-    );
-    const selectedOption = legalOptions[choices.indexOf(choice!)];
-
-    if (selectedOption !== undefined) {
-      recordGameEvent(state, {
-        type: "wildMagicChoiceSelected",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId: selectedOption.effectId,
-        sourceType: source.sourceType,
-      });
-      return services.executeEffect(
-        state,
-        player,
-        { ...selectedOption, timing: "onPlay" },
-        source
-      );
-    }
-
-    recordGameEvent(state, {
-      type: "wildMagicChoiceSkipped",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: "wild_magic_choice",
-      sourceType: source.sourceType,
-    });
-    return { ok: true };
   },
 };
 
@@ -4079,12 +3555,6 @@ type LifeStatusEffectId =
   | "remove_status"
   | "toggle_status";
 
-type CardOwnershipChoiceEffectId =
-  | "reveal_top_card"
-  | "play_top_card"
-  | "play_top_card_from_foe_deck"
-  | "wild_magic_choice";
-
 type AttackEffectId =
   | "attack_damage"
   | "attack_damage_equal_remembered_card_cost"
@@ -4113,52 +3583,14 @@ type EffectRuntimeEntriesFor<PayloadMap> = {
 
 const effectiveValueModifierEntries = defineEffectRuntimeFamily(
   "effective-value/modifier",
-  [
-    {
-      ...effectiveValueModifierCatalogDefinitions[0],
-      decoder: bindRuntimeEffectDecoder("modify_effective_value"),
-      handler: modifyEffectiveValueHandler,
-    },
-    {
-      ...effectiveValueModifierCatalogDefinitions[1],
-      decoder: bindRuntimeEffectDecoder("fixture_modify_effective_value"),
-      handler: fixtureModifyEffectiveValueHandler,
-    },
-  ] as const
+  createEffectiveValueModifierEffectDefinitions({ bindRuntimeEffectDecoder })
 ) satisfies EffectRuntimeEntriesFor<
   Pick<SetupEffectPayloadMap, EffectiveValueModifierId>
 >;
 
 const controlledPowerEntries = defineEffectRuntimeFamily(
   "values/controlled-power",
-  [
-    {
-      effectId: "add_power_if_player_has_status",
-      decoder: bindRuntimeEffectDecoder("add_power_if_player_has_status"),
-      supportedTimings: ["whileControlled"],
-      supportedModes: allEffectRuntimeModes,
-      supportedSourceKinds: ["card"],
-      handler: addPowerIfPlayerHasStatusHandler,
-    },
-    {
-      effectId: "ongoing_add_power",
-      decoder: bindRuntimeEffectDecoder("ongoing_add_power"),
-      supportedTimings: ["whileControlled"],
-      supportedModes: allEffectRuntimeModes,
-      supportedSourceKinds: ["card"],
-      handler: ongoingAddPowerHandler,
-    },
-    {
-      effectId: "ongoing_add_power_per_dead_wizard_token",
-      decoder: bindRuntimeEffectDecoder(
-        "ongoing_add_power_per_dead_wizard_token"
-      ),
-      supportedTimings: ["whileControlled"],
-      supportedModes: allEffectRuntimeModes,
-      supportedSourceKinds: ["card"],
-      handler: ongoingAddPowerPerDeadWizardTokenHandler,
-    },
-  ] as const
+  createControlledPowerEffectDefinitions({ bindRuntimeEffectDecoder })
 ) satisfies EffectRuntimeEntriesFor<
   Pick<ImmediateEffectPayloadMap, "add_power_if_player_has_status"> &
     Pick<
@@ -4219,44 +3651,7 @@ const lifeStatusEntries = defineEffectRuntimeFamily("life/status", [
 
 const cardOwnershipChoiceEntries = defineEffectRuntimeFamily(
   "cards/ownership/choice",
-  [
-    {
-      effectId: "reveal_top_card",
-      decoder: bindRuntimeEffectDecoder("reveal_top_card"),
-      supportedTimings: ["onPlay"],
-      supportedModes: allEffectRuntimeModes,
-      supportedSourceKinds: ["card"],
-      handler: revealTopCardHandler,
-    },
-    {
-      effectId: "play_top_card",
-      decoder: bindRuntimeEffectDecoder("play_top_card"),
-      supportedTimings: ["onPlay"],
-      supportedModes: allEffectRuntimeModes,
-      supportedSourceKinds: ["card"],
-      handler: playTopCardHandler,
-    },
-    {
-      effectId: "play_top_card_from_foe_deck",
-      decoder: bindRuntimeEffectDecoder("play_top_card_from_foe_deck"),
-      supportedTimings: ["activation", "onPlay"],
-      supportedModes: allEffectRuntimeModes,
-      supportedSourceKinds: ["card", "wizardProperty"],
-      supportedSourceTimingPolicies: [
-        { sourceKind: "card", timings: ["onPlay"] },
-        { sourceKind: "wizardProperty", timings: ["activation"] },
-      ],
-      handler: playTopCardFromFoeDeckHandler,
-    },
-    {
-      effectId: "wild_magic_choice",
-      decoder: bindRuntimeEffectDecoder("wild_magic_choice"),
-      supportedTimings: ["onPlay"],
-      supportedModes: allEffectRuntimeModes,
-      supportedSourceKinds: ["card"],
-      handler: wildMagicChoiceHandler,
-    },
-  ] as const
+  createCardOwnershipChoiceEffectDefinitions({ bindRuntimeEffectDecoder })
 ) satisfies EffectRuntimeEntriesFor<
   Pick<ImmediateEffectPayloadMap, CardOwnershipChoiceEffectId>
 >;
@@ -4463,100 +3858,6 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
     handler: dealDamageHandler,
   },
   {
-    effectId: "gain_card",
-    decoder: bindRuntimeEffectDecoder("gain_card"),
-    supportedTimings: immediateEffectTimings,
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: gainCardHandler,
-  },
-  {
-    effectId: "discard_card",
-    decoder: bindRuntimeEffectDecoder("discard_card"),
-    supportedTimings: immediateEffectTimings,
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: discardCardHandler,
-  },
-  {
-    effectId: "discard_self",
-    decoder: bindRuntimeEffectDecoder("discard_self"),
-    supportedTimings: immediateEffectTimings,
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: createUnsupportedEffectHandler("discard_self"),
-  },
-  {
-    effectId: "discard_hand_then_draw_cards",
-    decoder: bindRuntimeEffectDecoder("discard_hand_then_draw_cards"),
-    supportedTimings: immediateEffectTimings,
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: createUnsupportedEffectHandler("discard_hand_then_draw_cards"),
-  },
-  {
-    effectId: "destroy_card",
-    decoder: bindRuntimeEffectDecoder("destroy_card"),
-    supportedTimings: immediateEffectTimings,
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: destroyCardHandler,
-  },
-  {
-    effectId: "destroy_own_cards",
-    decoder: bindRuntimeEffectDecoder("destroy_own_cards"),
-    supportedTimings: immediateEffectTimings,
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: createUnsupportedEffectHandler("destroy_own_cards"),
-  },
-  {
-    effectId: "destroy_random_legend_market_card",
-    decoder: bindRuntimeEffectDecoder("destroy_random_legend_market_card"),
-    supportedTimings: ["onPlay"],
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: createUnsupportedEffectHandler(
-      "destroy_random_legend_market_card"
-    ),
-  },
-  {
-    effectId: "return_discard_to_hand",
-    decoder: bindRuntimeEffectDecoder("return_discard_to_hand"),
-    supportedTimings: immediateEffectTimings,
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: createUnsupportedEffectHandler("return_discard_to_hand"),
-  },
-  {
-    effectId: "topdeck_gained_card",
-    decoder: bindRuntimeEffectDecoder("topdeck_gained_card"),
-    supportedTimings: ["onGainCard"],
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: topdeckGainedCardHandler,
-  },
-  {
-    effectId: "optional_gain_market_cards_to_hand_this_turn",
-    decoder: bindRuntimeEffectDecoder(
-      "optional_gain_market_cards_to_hand_this_turn"
-    ),
-    supportedTimings: ["untilEndOfTurn"],
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: createUnsupportedEffectHandler(
-      "optional_gain_market_cards_to_hand_this_turn"
-    ),
-  },
-  {
-    effectId: "on_gain_self_gain_limp_wands",
-    decoder: bindRuntimeEffectDecoder("on_gain_self_gain_limp_wands"),
-    supportedTimings: ["onGain"],
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
-    handler: createUnsupportedEffectHandler("on_gain_self_gain_limp_wands"),
-  },
-  {
     effectId: "fixture_add_power_equal_to_target_cost",
     decoder: bindRuntimeEffectDecoder("fixture_add_power_equal_to_target_cost"),
     supportedTimings: fixtureEffectTimings,
@@ -4744,103 +4045,15 @@ const attackReplacementEffectEntries = defineEffectRuntimeFamily(
   Pick<PlayerControlledAttackEffectPayloadMap, AttackReplacementEffectId>
 >;
 
-const activationEffectEntries = defineEffectRuntimeFamily("activation", [
-  {
-    effectId: "activation_destroy_self_then_destroy_own_cards",
-    decoder: bindRuntimeEffectDecoder(
-      "activation_destroy_self_then_destroy_own_cards"
-    ),
-    supportedTimings: ["activation"],
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card"],
-    handler: createUnsupportedEffectHandler(
-      "activation_destroy_self_then_destroy_own_cards"
-    ),
-  },
-  {
-    effectId: "conditional_activation_destroy_own_cards",
-    decoder: bindRuntimeEffectDecoder(
-      "conditional_activation_destroy_own_cards"
-    ),
-    supportedTimings: ["activation"],
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card"],
-    handler: createUnsupportedEffectHandler(
-      "conditional_activation_destroy_own_cards"
-    ),
-  },
-  {
-    effectId: "conditional_activation_gain_chips",
-    decoder: bindRuntimeEffectDecoder("conditional_activation_gain_chips"),
-    supportedTimings: ["activation"],
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card"],
-    handler: createUnsupportedEffectHandler(
-      "conditional_activation_gain_chips"
-    ),
-  },
-  {
-    effectId: "optional_spend_chip_destroy_own_cards",
-    decoder: bindRuntimeEffectDecoder("optional_spend_chip_destroy_own_cards"),
-    supportedTimings: ["onPlay"],
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card"],
-    handler: createUnsupportedEffectHandler(
-      "optional_spend_chip_destroy_own_cards"
-    ),
-  },
-] as const) satisfies EffectRuntimeEntriesFor<ActivationEffectPayloadMap>;
+const activationEffectEntries = defineEffectRuntimeFamily(
+  "activation",
+  createActivationEffectDefinitions({ bindRuntimeEffectDecoder })
+) satisfies EffectRuntimeEntriesFor<ActivationEffectPayloadMap>;
 
-const ongoingEffectEntries = defineEffectRuntimeFamily("ongoing/passive", [
-  {
-    effectId: "ongoing_add_power_when_playing_wand",
-    decoder: bindRuntimeEffectDecoder("ongoing_add_power_when_playing_wand"),
-    supportedTimings: ["onPlayCard"],
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card"],
-    handler: ongoingAddPowerWhenPlayingWandHandler,
-  },
-  {
-    effectId: "ongoing_add_power_when_playing_limp_wand",
-    decoder: bindRuntimeEffectDecoder(
-      "ongoing_add_power_when_playing_limp_wand"
-    ),
-    supportedTimings: ["afterControllerPlaysCard"],
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card"],
-    handler: createUnsupportedEffectHandler(
-      "ongoing_add_power_when_playing_limp_wand"
-    ),
-  },
-  {
-    effectId: "ongoing_first_attack_damage_add_power",
-    decoder: bindRuntimeEffectDecoder("ongoing_first_attack_damage_add_power"),
-    supportedTimings: ["afterFirstAttackDamageEachTurn"],
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card"],
-    handler: ongoingFirstAttackDamageAddPowerHandler,
-  },
-  {
-    effectId: "ongoing_hand_refill_bonus",
-    decoder: bindRuntimeEffectDecoder("ongoing_hand_refill_bonus"),
-    supportedTimings: ["endTurn"],
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card"],
-    handler: ongoingHandRefillBonusHandler,
-  },
-  {
-    effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand",
-    decoder: bindRuntimeEffectDecoder(
-      "ongoing_start_turn_optional_gain_limp_wand_to_hand"
-    ),
-    supportedTimings: ["startOfControllerTurn"],
-    supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card"],
-    handler: createUnsupportedEffectHandler(
-      "ongoing_start_turn_optional_gain_limp_wand_to_hand"
-    ),
-  },
-] as const) satisfies EffectRuntimeEntriesFor<
+const ongoingEffectEntries = defineEffectRuntimeFamily(
+  "ongoing/passive",
+  createOngoingEffectDefinitions({ bindRuntimeEffectDecoder })
+) satisfies EffectRuntimeEntriesFor<
   Omit<
     OngoingEffectPayloadMap,
     "ongoing_add_power" | "ongoing_add_power_per_dead_wizard_token"

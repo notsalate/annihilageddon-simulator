@@ -1,19 +1,24 @@
 import { isPlainRecord } from "../common.js";
 import type { PlayerId, TokenInstanceId } from "../domain/types.js";
-import {
-  isRuntimeEffectId,
-  type RuntimeEffectForId,
-} from "./runtime-effect.js";
+import type {
+  EffectiveValueKind,
+  EffectiveValueModifierId,
+  EffectiveValueModifierEffectPayloadMap,
+} from "./effect-runtime-effective-value-modifier.js";
+import { effectiveValueModifierEffectIds } from "./effect-runtime-effective-value-modifier.js";
+import { isRuntimeEffectId } from "./runtime-effect.js";
 
-export const effectiveValueModifierEffectIds = [
-  "modify_effective_value",
-  "fixture_modify_effective_value",
-] as const;
-
-export type EffectiveValueModifierId =
-  (typeof effectiveValueModifierEffectIds)[number];
+export type {
+  EffectiveValueKind,
+  EffectiveValueModifierCatalogDefinition,
+  EffectiveValueModifierId,
+} from "./effect-runtime-effective-value-modifier.js";
+export {
+  effectiveValueModifierCatalogDefinitions,
+  effectiveValueModifierEffectIds,
+} from "./effect-runtime-effective-value-modifier.js";
 export type EffectiveValueModifierEffect =
-  RuntimeEffectForId<EffectiveValueModifierId>;
+  EffectiveValueModifierEffectPayloadMap[EffectiveValueModifierId];
 
 export type EffectiveValueModifierSourceKind =
   | "card"
@@ -30,13 +35,6 @@ export interface EffectiveValueModifierSource {
   readonly tokenInstanceId?: TokenInstanceId;
   readonly tokenDefinitionId?: string;
 }
-
-export type EffectiveValueKind =
-  | "cardCost"
-  | "cardVictoryPoints"
-  | "tokenVictoryPoints"
-  | "playerVictoryPoints"
-  | "playerMaxLife";
 
 export type EffectiveValueModifierOperation = (value: number) => number;
 
@@ -65,39 +63,6 @@ export type EffectiveValueModifierCatalogDispatcher = <Result>(
   source: EffectiveValueModifierSource,
   context: EffectiveValueModifierOperationContext<Result>
 ) => EffectiveValueModifierCatalogOperationResult<Result>;
-
-export interface EffectiveValueModifierCatalogDefinition<
-  Id extends EffectiveValueModifierId = EffectiveValueModifierId,
-> {
-  readonly effectId: Id;
-  readonly supportedTimings: readonly [
-    "whileControlled" | "whileScoring",
-    ...("whileControlled" | "whileScoring")[],
-  ];
-  readonly supportedModes: readonly [
-    EffectiveValueModifierRuntimeMode,
-    ...EffectiveValueModifierRuntimeMode[],
-  ];
-  readonly supportedSourceKinds: readonly [
-    EffectiveValueModifierSourceKind,
-    ...EffectiveValueModifierSourceKind[],
-  ];
-}
-
-export const effectiveValueModifierCatalogDefinitions = [
-  {
-    effectId: "modify_effective_value",
-    supportedTimings: ["whileControlled", "whileScoring"],
-    supportedModes: ["combat", "fixture"],
-    supportedSourceKinds: ["card", "wizardProperty", "deadWizardToken"],
-  },
-  {
-    effectId: "fixture_modify_effective_value",
-    supportedTimings: ["whileControlled", "whileScoring"],
-    supportedModes: ["fixture"],
-    supportedSourceKinds: ["card", "wizardProperty", "deadWizardToken"],
-  },
-] as const satisfies readonly EffectiveValueModifierCatalogDefinition[];
 
 function readEffectiveValueModifierId(
   rawEffect: unknown
