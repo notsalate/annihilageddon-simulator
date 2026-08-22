@@ -10,6 +10,8 @@ import type {
 } from "./simulation-benchmark.js";
 
 export const PERFORMANCE_EPOCH_SCHEMA_VERSION = "performance-epoch-v1" as const;
+export const PERFORMANCE_CALIBRATION_SCHEMA_VERSION =
+  "performance-calibration-v1" as const;
 export const PERFORMANCE_EPOCH = "E0" as const;
 export const PERFORMANCE_CALIBRATION_COMPARISON_COUNT = 20 as const;
 export const PERFORMANCE_WARMUP_COUNT = 1 as const;
@@ -84,10 +86,48 @@ export interface PerformanceCalibrationResult {
   id: string;
   comparisons: typeof PERFORMANCE_CALIBRATION_COMPARISON_COUNT;
   commit: string;
+  contractVersion: string;
+  workloadFingerprint: string;
+  workloadVolumeFingerprint: string;
+  warmupCount: typeof PERFORMANCE_WARMUP_COUNT;
+  measurementCount: typeof PERFORMANCE_MEASUREMENT_COUNT;
   environment: BenchmarkEnvironmentFingerprint;
   formula: "p95-plus-25-percent-safety-margin";
   metrics: Readonly<Record<string, PerformanceCalibrationMetric>>;
   tolerances: Readonly<Record<string, PerformanceTolerance>>;
+}
+
+export interface PerformanceRunnerClass {
+  nodeVersion: string;
+  platform: string;
+  arch: string;
+  runner: string;
+  cpuCount: number;
+}
+
+export interface PerformanceCalibrationProtocol {
+  comparisons: typeof PERFORMANCE_CALIBRATION_COMPARISON_COUNT;
+  warmupCount: typeof PERFORMANCE_WARMUP_COUNT;
+  measurementCount: typeof PERFORMANCE_MEASUREMENT_COUNT;
+  formula: "p95-plus-25-percent-safety-margin";
+}
+
+export interface PerformanceAcceptedCalibrationEntry {
+  benchmark: PerformanceBenchmarkKind;
+  id: string;
+  contractVersion: string;
+  workloadFingerprint: string;
+  workloadVolumeFingerprint: string;
+  tolerances: Readonly<Record<string, PerformanceTolerance>>;
+}
+
+export interface PerformanceAcceptedCalibration {
+  schemaVersion: typeof PERFORMANCE_CALIBRATION_SCHEMA_VERSION;
+  calibrationId: string;
+  commit: string;
+  protocol: PerformanceCalibrationProtocol;
+  runnerClass: PerformanceRunnerClass;
+  entries: readonly PerformanceAcceptedCalibrationEntry[];
 }
 
 export interface PerformanceCalibrationPair {
@@ -137,6 +177,7 @@ export interface PerformanceComparisonReport {
   epoch: string;
   verdict: PerformanceVerdict;
   blocking: boolean;
+  calibrationId: string | null;
   blockingSource: "epoch-health" | "pull-request-regression" | "both" | null;
   epochComparison: PerformancePairComparison;
   baseComparison: PerformancePairComparison;
@@ -286,6 +327,11 @@ export function calibratePerformance(
     id: first.id,
     comparisons: PERFORMANCE_CALIBRATION_COMPARISON_COUNT,
     commit: first.commit,
+    contractVersion: first.contractVersion,
+    workloadFingerprint: first.workloadFingerprint,
+    workloadVolumeFingerprint: first.workloadVolumeFingerprint,
+    warmupCount: PERFORMANCE_WARMUP_COUNT,
+    measurementCount: PERFORMANCE_MEASUREMENT_COUNT,
     environment: first.environment,
     formula: "p95-plus-25-percent-safety-margin",
     metrics,
@@ -295,12 +341,16 @@ export function calibratePerformance(
 
 export function comparePerformance(options: {
   baseline: PerformanceBaselineEntry;
+  acceptedCalibration: PerformanceAcceptedCalibration | null;
   epochReference?: PerformanceMeasurement | null;
   base: PerformanceMeasurement;
   head: PerformanceMeasurement;
   confirmation?: PerformanceMeasurement;
-  baseCalibration?: PerformanceCalibrationResult;
 }): PerformanceComparisonReport {
+  const comparisonCalibration = resolveAcceptedCalibration(
+    options.acceptedCalibration,
+    options.head
+  );
   const epochReference =
     options.epochReference === undefined
       ? options.baseline.reference
@@ -319,18 +369,14 @@ export function comparePerformance(options: {
         : comparePair(
             epochReference,
             options.head,
-            options.baseline.tolerances,
             options.confirmation,
-            options.baseCalibration?.environment ??
-              options.baseline.reference.environment
+            comparisonCalibration
           );
   const baseComparison = comparePair(
     options.base,
     options.head,
-    options.baseCalibration?.tolerances ?? options.baseline.tolerances,
     options.confirmation,
-    options.baseCalibration?.environment ??
-      options.baseline.reference.environment
+    comparisonCalibration
   );
   const comparisons = [epochComparison, baseComparison];
   const verdict =
@@ -366,6 +412,7 @@ export function comparePerformance(options: {
     epoch: options.head.epoch,
     verdict,
     blocking,
+    calibrationId: options.acceptedCalibration?.calibrationId ?? null,
     blockingSource,
     epochComparison,
     baseComparison,
@@ -391,6 +438,14 @@ export function assertPerformanceCalibrationResult(
 ): asserts value is PerformanceCalibrationResult {
   if (!isPerformanceCalibrationResult(value)) {
     throw new TypeError("Invalid performance calibration result");
+  }
+}
+
+export function assertPerformanceAcceptedCalibration(
+  value: unknown
+): asserts value is PerformanceAcceptedCalibration {
+  if (!isPerformanceAcceptedCalibration(value)) {
+    throw new TypeError("Invalid accepted performance calibration");
   }
 }
 
@@ -445,9 +500,14 @@ export function findPerformanceBaselineEntry(
 function comparePair(
   reference: PerformanceMeasurement,
   candidate: PerformanceMeasurement,
-  tolerances: Readonly<Record<string, PerformanceTolerance>>,
   confirmation: PerformanceMeasurement | undefined,
-  calibratedEnvironment: BenchmarkEnvironmentFingerprint
+  calibration:
+    | {
+        runnerClass: PerformanceRunnerClass;
+        protocol: PerformanceCalibrationProtocol;
+        tolerances: Readonly<Record<string, PerformanceTolerance>>;
+      }
+    | undefined
 ): PerformancePairComparison {
   if (!sameWorkload(reference, candidate)) {
     return emptyComparison(
@@ -473,15 +533,26 @@ function comparePair(
       "Blocking comparison requires measurements from one runner session"
     );
   }
+  if (calibration === undefined) {
+    return emptyComparison(
+      "not-calibrated",
+      "No accepted compatible calibration is available"
+    );
+  }
   if (
-    !sameCalibrationEnvironment(reference.environment, calibratedEnvironment) ||
-    !sameCalibrationEnvironment(candidate.environment, calibratedEnvironment)
+    !sameRunnerClass(reference.environment, calibration.runnerClass) ||
+    !sameRunnerClass(candidate.environment, calibration.runnerClass) ||
+    reference.warmupCount !== calibration.protocol.warmupCount ||
+    candidate.warmupCount !== calibration.protocol.warmupCount ||
+    reference.measurementCount !== calibration.protocol.measurementCount ||
+    candidate.measurementCount !== calibration.protocol.measurementCount
   ) {
     return emptyComparison(
       "not-calibrated",
       "Benchmark environment differs from the calibrated environment"
     );
   }
+  const tolerances = calibration.tolerances;
 
   const deltas = Object.fromEntries(
     Object.entries(reference.timings).map(([metricName, referenceMs]) => {
@@ -544,7 +615,9 @@ function comparePair(
     !sameProtocol(reference, confirmation) ||
     !sameEnvironment(reference.environment, confirmation.environment) ||
     !sameComparisonPair(reference, confirmation) ||
-    !sameCalibrationEnvironment(confirmation.environment, calibratedEnvironment)
+    !sameRunnerClass(confirmation.environment, calibration.runnerClass) ||
+    confirmation.warmupCount !== calibration.protocol.warmupCount ||
+    confirmation.measurementCount !== calibration.protocol.measurementCount
   ) {
     return {
       verdict: "not-measured",
@@ -594,6 +667,37 @@ function comparePair(
     observedRegressionMetrics,
     confirmedRegressionMetrics,
     deltas: completeDeltas,
+  };
+}
+
+function resolveAcceptedCalibration(
+  calibration: PerformanceAcceptedCalibration | null,
+  measurement: PerformanceMeasurement
+):
+  | {
+      runnerClass: PerformanceRunnerClass;
+      protocol: PerformanceCalibrationProtocol;
+      tolerances: Readonly<Record<string, PerformanceTolerance>>;
+    }
+  | undefined {
+  if (calibration === null) return undefined;
+  const entry = calibration.entries.find(
+    (candidate) =>
+      candidate.benchmark === measurement.benchmark &&
+      candidate.id === measurement.id
+  );
+  if (
+    entry === undefined ||
+    entry.contractVersion !== measurement.contractVersion ||
+    entry.workloadFingerprint !== measurement.workloadFingerprint ||
+    entry.workloadVolumeFingerprint !== measurement.workloadVolumeFingerprint
+  ) {
+    return undefined;
+  }
+  return {
+    runnerClass: calibration.runnerClass,
+    protocol: calibration.protocol,
+    tolerances: entry.tolerances,
   };
 }
 
@@ -679,6 +783,19 @@ function sameCalibrationEnvironment(
     left.arch === right.arch &&
     left.runner === right.runner &&
     left.cpuCount === right.cpuCount
+  );
+}
+
+function sameRunnerClass(
+  environment: BenchmarkEnvironmentFingerprint,
+  runnerClass: PerformanceRunnerClass
+): boolean {
+  return (
+    environment.nodeVersion === runnerClass.nodeVersion &&
+    environment.platform === runnerClass.platform &&
+    environment.arch === runnerClass.arch &&
+    environment.runner === runnerClass.runner &&
+    environment.cpuCount === runnerClass.cpuCount
   );
 }
 
@@ -944,6 +1061,11 @@ function isPerformanceCalibrationResult(
     isString(value["id"]) &&
     value["comparisons"] === PERFORMANCE_CALIBRATION_COMPARISON_COUNT &&
     isString(value["commit"]) &&
+    isString(value["contractVersion"]) &&
+    isString(value["workloadFingerprint"]) &&
+    isString(value["workloadVolumeFingerprint"]) &&
+    value["warmupCount"] === PERFORMANCE_WARMUP_COUNT &&
+    value["measurementCount"] === PERFORMANCE_MEASUREMENT_COUNT &&
     isEnvironmentFingerprint(value["environment"]) &&
     value["formula"] === "p95-plus-25-percent-safety-margin" &&
     isPlainRecord(value["metrics"]) &&
@@ -951,6 +1073,67 @@ function isPerformanceCalibrationResult(
     isPlainRecord(value["tolerances"]) &&
     Object.values(value["tolerances"]).every(isPerformanceTolerance)
   );
+}
+
+function isPerformanceRunnerClass(
+  value: unknown
+): value is PerformanceRunnerClass {
+  if (!isPlainRecord(value)) return false;
+  return (
+    isString(value["nodeVersion"]) &&
+    isString(value["platform"]) &&
+    isString(value["arch"]) &&
+    isString(value["runner"]) &&
+    isNumber(value["cpuCount"]) &&
+    Number.isInteger(value["cpuCount"]) &&
+    value["cpuCount"] > 0
+  );
+}
+
+function isPerformanceAcceptedCalibrationEntry(
+  value: unknown
+): value is PerformanceAcceptedCalibrationEntry {
+  if (!isPlainRecord(value)) return false;
+  return (
+    (value["benchmark"] === "simulation" ||
+      value["benchmark"] === "analyzer") &&
+    isString(value["id"]) &&
+    isString(value["contractVersion"]) &&
+    isString(value["workloadFingerprint"]) &&
+    isString(value["workloadVolumeFingerprint"]) &&
+    isPlainRecord(value["tolerances"]) &&
+    Object.values(value["tolerances"]).every(isPerformanceTolerance)
+  );
+}
+
+function isPerformanceAcceptedCalibration(
+  value: unknown
+): value is PerformanceAcceptedCalibration {
+  if (!isPlainRecord(value)) return false;
+  const protocol = value["protocol"];
+  const entries = value["entries"];
+  if (
+    !(
+      value["schemaVersion"] === PERFORMANCE_CALIBRATION_SCHEMA_VERSION &&
+      isString(value["calibrationId"]) &&
+      value["calibrationId"].length > 0 &&
+      isString(value["commit"]) &&
+      /^[0-9a-f]{40}$/u.test(value["commit"]) &&
+      isPlainRecord(protocol) &&
+      protocol["comparisons"] === PERFORMANCE_CALIBRATION_COMPARISON_COUNT &&
+      protocol["warmupCount"] === PERFORMANCE_WARMUP_COUNT &&
+      protocol["measurementCount"] === PERFORMANCE_MEASUREMENT_COUNT &&
+      protocol["formula"] === "p95-plus-25-percent-safety-margin" &&
+      isPerformanceRunnerClass(value["runnerClass"]) &&
+      Array.isArray(entries) &&
+      entries.length > 0 &&
+      entries.every(isPerformanceAcceptedCalibrationEntry)
+    )
+  ) {
+    return false;
+  }
+  const keys = entries.map((entry) => `${entry.benchmark}:${entry.id}`);
+  return new Set(keys).size === keys.length;
 }
 
 function isPerformanceCalibrationMetric(

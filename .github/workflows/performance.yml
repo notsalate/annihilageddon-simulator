@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       calibration:
-        description: "Выполнить первичную калибровку на 20 runner"
+        description: "Собрать новый candidate калибровки на 20 runner"
         required: true
         default: false
         type: boolean
@@ -31,11 +31,11 @@ permissions:
 jobs:
   pull-request:
     if: ${{ github.event_name == 'pull_request' }}
-    needs: calibration
     runs-on: ubuntu-latest
     env:
       BENCHMARK_COMMIT: ${{ github.event.pull_request.head.sha }}
       PERFORMANCE_COMPARISON_PAIR_ID: ${{ github.run_id }}:${{ github.job }}
+      PERFORMANCE_ACCEPTED_CALIBRATION: docs/benchmarks/performance-calibration-e0-v1.json
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
@@ -45,6 +45,14 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+      - name: Guard immutable accepted calibrations
+        run: |
+          modified="$(git diff --name-only --diff-filter=MDR "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" -- 'docs/benchmarks/performance-calibration-*.json')"
+          if [[ -n "$modified" ]]; then
+            echo "Accepted calibration artifacts are immutable; add a new versioned file instead:"
+            echo "$modified"
+            exit 1
+          fi
       - name: Install head dependencies
         run: npm ci
       - name: Build head benchmark CLI
@@ -52,10 +60,6 @@ jobs:
       - name: Read accepted E0 commit
         id: accepted_e0
         run: echo "commit=$(node scripts/read-performance-epoch-commit.mjs docs/benchmarks/performance-epoch-e0.json)" >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
-        with:
-          name: performance-calibration-results-${{ github.run_id }}
-          path: ${{ runner.temp }}/calibration-results
       - name: Smoke current workload
         run: npm run benchmark:simulation -- --role current --stage 10 --format human --commit "$BENCHMARK_COMMIT"
       - name: Measure head simulation
@@ -135,7 +139,7 @@ jobs:
           if [[ -f "$RUNNER_TEMP/performance-e0-simulation.json" ]]; then
             epoch_args=(--epochReference "$RUNNER_TEMP/performance-e0-simulation.json")
           fi
-          npm run benchmark:epoch -- "${epoch_args[@]}" --baseline docs/benchmarks/performance-epoch-e0.json --base "$RUNNER_TEMP/performance-base-simulation.json" --head "$RUNNER_TEMP/performance-head-simulation.json" --confirmation "$RUNNER_TEMP/performance-head-repeat-simulation.json" --calibration "$RUNNER_TEMP/calibration-results/calibration-simulation.json" --format human --output "$RUNNER_TEMP/performance-report-simulation.json"
+          npm run benchmark:epoch -- "${epoch_args[@]}" --baseline docs/benchmarks/performance-epoch-e0.json --acceptedCalibration "$PERFORMANCE_ACCEPTED_CALIBRATION" --base "$RUNNER_TEMP/performance-base-simulation.json" --head "$RUNNER_TEMP/performance-head-simulation.json" --confirmation "$RUNNER_TEMP/performance-head-repeat-simulation.json" --format human --output "$RUNNER_TEMP/performance-report-simulation.json"
       - name: Compare analyzer profiles
         continue-on-error: true
         run: |
@@ -145,7 +149,7 @@ jobs:
             if [[ -f "$RUNNER_TEMP/performance-e0-analyzer-$profile.json" ]]; then
               epoch_args=(--epochReference "$RUNNER_TEMP/performance-e0-analyzer-$profile.json")
             fi
-            npm run benchmark:epoch -- "${epoch_args[@]}" --baseline docs/benchmarks/performance-epoch-e0.json --base "$RUNNER_TEMP/performance-base-analyzer-$profile.json" --head "$RUNNER_TEMP/performance-head-analyzer-$profile.json" --confirmation "$RUNNER_TEMP/performance-head-repeat-analyzer-$profile.json" --calibration "$RUNNER_TEMP/calibration-results/calibration-analyzer-$profile.json" --format human --output "$RUNNER_TEMP/performance-report-analyzer-$profile.json" || true
+            npm run benchmark:epoch -- "${epoch_args[@]}" --baseline docs/benchmarks/performance-epoch-e0.json --acceptedCalibration "$PERFORMANCE_ACCEPTED_CALIBRATION" --base "$RUNNER_TEMP/performance-base-analyzer-$profile.json" --head "$RUNNER_TEMP/performance-head-analyzer-$profile.json" --confirmation "$RUNNER_TEMP/performance-head-repeat-analyzer-$profile.json" --format human --output "$RUNNER_TEMP/performance-report-analyzer-$profile.json" || true
           }
           compare_analyzer light
           compare_analyzer typical
@@ -154,7 +158,9 @@ jobs:
         if: ${{ always() }}
         with:
           name: performance-pr-${{ github.run_id }}
-          path: ${{ runner.temp }}/performance-*.json
+          path: |
+            ${{ runner.temp }}/performance-*.json
+            docs/benchmarks/performance-calibration-e0-v1.json
           if-no-files-found: error
       - name: Enforce performance gate
         if: ${{ always() }}
@@ -183,7 +189,7 @@ jobs:
           if-no-files-found: error
 
   calibration-run:
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.calibration) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.calibration) || (github.event_name == 'schedule' && github.event.schedule == '0 4 * * 1') }}
     runs-on: ubuntu-latest
     env:
       BENCHMARK_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
@@ -242,7 +248,7 @@ jobs:
           if-no-files-found: error
 
   calibration:
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.calibration) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.calibration) || (github.event_name == 'schedule' && github.event.schedule == '0 4 * * 1') }}
     needs: calibration-run
     runs-on: ubuntu-latest
     steps:
@@ -267,10 +273,14 @@ jobs:
           npm run benchmark:epoch:calibrate -- --calibration "$RUNNER_TEMP/calibration-pairs/analyzer-light.json" --format human --output "$RUNNER_TEMP/calibration-analyzer-light.json"
           npm run benchmark:epoch:calibrate -- --calibration "$RUNNER_TEMP/calibration-pairs/analyzer-typical.json" --format human --output "$RUNNER_TEMP/calibration-analyzer-typical.json"
           npm run benchmark:epoch:calibrate -- --calibration "$RUNNER_TEMP/calibration-pairs/analyzer-heavy.json" --format human --output "$RUNNER_TEMP/calibration-analyzer-heavy.json"
+      - name: Build immutable calibration candidate
+        run: node scripts/create-performance-calibration-candidate.mjs "$RUNNER_TEMP" "$RUNNER_TEMP/performance-calibration-candidate.json" "candidate-${{ github.run_id }}"
       - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4
         with:
           name: performance-calibration-results-${{ github.run_id }}
-          path: ${{ runner.temp }}/calibration-*.json
+          path: |
+            ${{ runner.temp }}/calibration-*.json
+            ${{ runner.temp }}/performance-calibration-candidate.json
           if-no-files-found: error
 
   baseline-bootstrap:

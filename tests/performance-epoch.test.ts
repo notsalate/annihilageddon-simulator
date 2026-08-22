@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 
 import {
   PERFORMANCE_CALIBRATION_COMPARISON_COUNT,
+  PERFORMANCE_CALIBRATION_SCHEMA_VERSION,
+  assertPerformanceAcceptedCalibration,
   assertPerformanceEpochBaseline,
   calibratePerformance,
-  comparePerformance,
+  comparePerformance as comparePerformanceWithoutCalibration,
   createPerformanceBaselineEntry,
   getAcceptedPerformanceEpochCommit,
   parsePerformanceMeasurement,
   type BenchmarkEnvironmentFingerprint,
+  type PerformanceAcceptedCalibration,
   type PerformanceMeasurement,
 } from "../src/index.js";
 
@@ -70,6 +73,52 @@ function baselineEntry(reference = measurement({ role: "reference" })) {
     gamesMs: { relativePercent: 10, absoluteMs: 1 },
     aggregationMs: { relativePercent: 50, absoluteMs: 1 },
     resultPreparationMs: { relativePercent: 50, absoluteMs: 1 },
+  });
+}
+
+function acceptedCalibration(
+  calibrationEnvironment = environment
+): PerformanceAcceptedCalibration {
+  const baseline = baselineEntry();
+  return {
+    schemaVersion: PERFORMANCE_CALIBRATION_SCHEMA_VERSION,
+    calibrationId: "fixture-calibration-v1",
+    commit: "1111111111111111111111111111111111111111",
+    protocol: {
+      comparisons: PERFORMANCE_CALIBRATION_COMPARISON_COUNT,
+      warmupCount: 1,
+      measurementCount: 3,
+      formula: "p95-plus-25-percent-safety-margin",
+    },
+    runnerClass: {
+      nodeVersion: calibrationEnvironment.nodeVersion,
+      platform: calibrationEnvironment.platform,
+      arch: calibrationEnvironment.arch,
+      runner: calibrationEnvironment.runner,
+      cpuCount: calibrationEnvironment.cpuCount,
+    },
+    entries: [
+      {
+        benchmark: baseline.benchmark,
+        id: baseline.id,
+        contractVersion: baseline.reference.contractVersion,
+        workloadFingerprint: baseline.reference.workloadFingerprint,
+        workloadVolumeFingerprint: baseline.reference.workloadVolumeFingerprint,
+        tolerances: baseline.tolerances,
+      },
+    ],
+  };
+}
+
+function comparePerformance(
+  options: Omit<
+    Parameters<typeof comparePerformanceWithoutCalibration>[0],
+    "acceptedCalibration"
+  >
+) {
+  return comparePerformanceWithoutCalibration({
+    ...options,
+    acceptedCalibration: acceptedCalibration(),
   });
 }
 
@@ -140,7 +189,7 @@ test("changed workload receives a non-blocking workload-changed verdict", () => 
   assert.match(report.baseComparison.reason, /start a new performance epoch/);
 });
 
-test("changed workload does not block on a regression against the changed base", () => {
+test("changed workload remains non-blocking without an accepted changed budget", () => {
   const report = comparePerformance({
     baseline: baselineEntry(),
     base: measurement({ workloadVolumeFingerprint: "new-volume" }),
@@ -155,7 +204,7 @@ test("changed workload does not block on a regression against the changed base",
   });
 
   assert.equal(report.epochComparison.verdict, "workload-changed");
-  assert.equal(report.baseComparison.verdict, "regression");
+  assert.equal(report.baseComparison.verdict, "not-calibrated");
   assert.equal(report.verdict, "workload-changed");
   assert.equal(report.blocking, false);
 });
@@ -275,6 +324,46 @@ test("epoch health rejects a fresh measurement from a non-baseline commit", () =
 
   assert.equal(report.epochComparison.verdict, "not-measured");
   assert.equal(report.baseComparison.verdict, "pass");
+  assert.equal(report.blocking, false);
+});
+
+test("missing accepted calibration cannot fall back to baseline tolerances", () => {
+  const report = comparePerformanceWithoutCalibration({
+    baseline: baselineEntry(),
+    acceptedCalibration: null,
+    epochReference: measurement({ role: "reference", totalMs: 10 }),
+    base: measurement({ totalMs: 10 }),
+    head: measurement({ totalMs: 13 }),
+    confirmation: measurement({ totalMs: 13 }),
+  });
+
+  assert.equal(report.epochComparison.verdict, "not-calibrated");
+  assert.equal(report.baseComparison.verdict, "not-calibrated");
+  assert.equal(report.verdict, "not-calibrated");
+  assert.equal(report.blocking, false);
+  assert.equal(report.calibrationId, null);
+});
+
+test("accepted calibration from another runner class is not applied", () => {
+  const otherRunnerEnvironment = {
+    ...environment,
+    runner: "github:Linux:X64:ubuntu-24.04:new-image",
+  };
+  const report = comparePerformanceWithoutCalibration({
+    baseline: baselineEntry(),
+    acceptedCalibration: acceptedCalibration(),
+    epochReference: null,
+    base: measurement({ environment: otherRunnerEnvironment, totalMs: 10 }),
+    head: measurement({ environment: otherRunnerEnvironment, totalMs: 13 }),
+    confirmation: measurement({
+      environment: otherRunnerEnvironment,
+      totalMs: 13,
+    }),
+  });
+
+  assert.equal(report.epochComparison.verdict, "not-measured");
+  assert.equal(report.baseComparison.verdict, "not-calibrated");
+  assert.equal(report.verdict, "not-calibrated");
   assert.equal(report.blocking, false);
 });
 
@@ -407,5 +496,39 @@ test("the committed E0 baseline covers simulation and all analyzer profiles", ()
   assert.deepEqual(
     value.entries.map((entry) => entry.id),
     ["simulation:100", "analyzer:light", "analyzer:typical", "analyzer:heavy"]
+  );
+
+  const calibrationValue: unknown = JSON.parse(
+    readFileSync("docs/benchmarks/performance-calibration-e0-v1.json", "utf8")
+  );
+  assertPerformanceAcceptedCalibration(calibrationValue);
+  assert.equal(
+    calibrationValue.calibrationId,
+    "e0-node22-ubuntu24-20260816-v1"
+  );
+  assert.deepEqual(
+    calibrationValue.entries.map((entry) => entry.id),
+    value.entries.map((entry) => entry.id)
+  );
+  for (const entry of value.entries) {
+    assert.deepEqual(
+      calibrationValue.entries.find((candidate) => candidate.id === entry.id)
+        ?.tolerances,
+      entry.tolerances
+    );
+  }
+
+  const acceptedCalibrations = readdirSync("docs/benchmarks")
+    .filter((fileName) => /^performance-calibration-.*\.json$/u.test(fileName))
+    .map((fileName) => {
+      const accepted: unknown = JSON.parse(
+        readFileSync(`docs/benchmarks/${fileName}`, "utf8")
+      );
+      assertPerformanceAcceptedCalibration(accepted);
+      return accepted;
+    });
+  assert.equal(
+    new Set(acceptedCalibrations.map((item) => item.calibrationId)).size,
+    acceptedCalibrations.length
   );
 });

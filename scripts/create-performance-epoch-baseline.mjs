@@ -69,6 +69,12 @@ const entries = workloads.map((workload) => {
     calibration.benchmark !== reference.benchmark ||
     calibration.id !== reference.id ||
     calibration.commit !== reference.commit ||
+    calibration.contractVersion !== reference.contractVersion ||
+    calibration.workloadFingerprint !== reference.workloadFingerprint ||
+    calibration.workloadVolumeFingerprint !==
+      reference.workloadVolumeFingerprint ||
+    calibration.warmupCount !== reference.warmupCount ||
+    calibration.measurementCount !== reference.measurementCount ||
     !sameCalibrationEnvironment(calibration.environment, reference.environment)
   ) {
     throw new Error(

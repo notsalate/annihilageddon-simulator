@@ -34,6 +34,7 @@ test("benchmark CLI parses simulation and analyzer options", () => {
       basePath: undefined,
       headPath: undefined,
       confirmationPath: undefined,
+      acceptedCalibrationPath: undefined,
       calibrationPath: undefined,
       outputPath: undefined,
     }
@@ -55,6 +56,7 @@ test("benchmark CLI parses simulation and analyzer options", () => {
     basePath: undefined,
     headPath: undefined,
     confirmationPath: undefined,
+    acceptedCalibrationPath: undefined,
     calibrationPath: undefined,
     outputPath: undefined,
   });
@@ -69,6 +71,11 @@ test("benchmark CLI parses simulation and analyzer options", () => {
     parseBenchmarkArgs(["--epochReference", "fresh-e0.json"])
       .epochReferencePath,
     "fresh-e0.json"
+  );
+  assert.equal(
+    parseBenchmarkArgs(["--acceptedCalibration", "accepted.json"])
+      .acceptedCalibrationPath,
+    "accepted.json"
   );
 });
 
