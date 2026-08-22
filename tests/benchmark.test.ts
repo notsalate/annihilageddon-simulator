@@ -14,6 +14,10 @@ import {
   runSingleGame,
 } from "../src/index.js";
 import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
+import {
+  EFFECT_RUNTIME_BENCHMARK_CONTRACT_VERSION,
+  runEffectRuntimeBenchmark,
+} from "../src/engine/effect-runtime-benchmark.js";
 import type {
   RunSingleGameOptions,
   SingleGameResult,
@@ -151,6 +155,29 @@ test("Analyzer benchmark reports complete light-profile measurements", () => {
     new Set(result.samples.map((sample) => sample.resultFingerprint)).size,
     1
   );
+});
+
+test("effect runtime benchmark reports equivalent typed execution", () => {
+  assert.throws(
+    () => runEffectRuntimeBenchmark({ rootDir, iterations: 0 }),
+    /iterations must be a positive safe integer/
+  );
+
+  const result = runEffectRuntimeBenchmark({ rootDir, iterations: 2 });
+
+  assert.equal(result.benchmark, "effect-runtime");
+  assert.equal(
+    result.contractVersion,
+    EFFECT_RUNTIME_BENCHMARK_CONTRACT_VERSION
+  );
+  assert.equal(result.iterations, 2);
+  assert.equal(result.warmupCount, 1);
+  assert.equal(result.measurementCount, 3);
+  assert.equal(result.legacyDecodeSamplesMs.length, 3);
+  assert.equal(result.typedCatalogSamplesMs.length, 3);
+  assert.ok(result.legacyDecodeMedianMs >= 0);
+  assert.ok(result.typedCatalogMedianMs >= 0);
+  assert.equal(result.equivalentResults, true);
 });
 
 test("simulation benchmark excludes warmup and reports stable fingerprints", () => {
