@@ -28,6 +28,7 @@ test("benchmark CLI parses simulation and analyzer options", () => {
       maxTurns: undefined,
       dataPackPath: "manifest.json",
       commit: undefined,
+      comparisonPairId: undefined,
       baselinePath: undefined,
       basePath: undefined,
       headPath: undefined,
@@ -47,6 +48,7 @@ test("benchmark CLI parses simulation and analyzer options", () => {
     maxTurns: undefined,
     dataPackPath: undefined,
     commit: undefined,
+    comparisonPairId: undefined,
     baselinePath: undefined,
     basePath: undefined,
     headPath: undefined,
@@ -56,6 +58,11 @@ test("benchmark CLI parses simulation and analyzer options", () => {
   });
 
   assert.equal(parseBenchmarkArgs(["--commit", "head-sha"]).commit, "head-sha");
+  assert.equal(
+    parseBenchmarkArgs(["--comparisonPairId", "run-42:pull-request"])
+      .comparisonPairId,
+    "run-42:pull-request"
+  );
 });
 
 test("benchmark CLI rejects unsupported values and malformed numbers", () => {

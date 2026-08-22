@@ -54,6 +54,7 @@ export interface PerformanceMeasurement {
   warmupCount: number;
   measurementCount: number;
   environment: BenchmarkEnvironmentFingerprint;
+  comparisonPairId?: string;
   commit: string | null;
   timings: Readonly<Record<string, number>>;
   metrics: Readonly<Record<string, number>>;
@@ -136,6 +137,7 @@ export interface PerformanceComparisonReport {
   epoch: string;
   verdict: PerformanceVerdict;
   blocking: boolean;
+  blockingSource: "epoch-health" | "pull-request-regression" | "both" | null;
   epochComparison: PerformancePairComparison;
   baseComparison: PerformancePairComparison;
   epochReference: PerformanceMeasurement;
@@ -147,7 +149,8 @@ export interface PerformanceComparisonReport {
 type BenchmarkResult = SimulationBenchmarkResult | AnalyzerBenchmarkResult;
 
 export function toPerformanceMeasurement(
-  result: BenchmarkResult
+  result: BenchmarkResult,
+  comparisonPairId?: string
 ): PerformanceMeasurement {
   if (result.benchmark === "simulation") {
     return {
@@ -163,6 +166,7 @@ export function toPerformanceMeasurement(
       warmupCount: result.warmupCount,
       measurementCount: result.measurementCount,
       environment: result.environment,
+      ...(comparisonPairId === undefined ? {} : { comparisonPairId }),
       commit: result.commit,
       timings: simulationTimings(result.timings),
       metrics: simulationMetrics(result.metrics),
@@ -182,6 +186,7 @@ export function toPerformanceMeasurement(
     warmupCount: result.warmupCount,
     measurementCount: result.measurementCount,
     environment: result.environment,
+    ...(comparisonPairId === undefined ? {} : { comparisonPairId }),
     commit: result.commit,
     timings: analyzerTimings(result.timings),
     metrics: analyzerMetrics(result.metrics),
@@ -329,13 +334,22 @@ export function comparePerformance(options: {
                 )
               ? "not-measured"
               : "pass";
+  const blocking = verdict === "regression";
+  const blockingSource = !blocking
+    ? null
+    : epochComparison.blocking && baseComparison.blocking
+      ? "both"
+      : epochComparison.blocking
+        ? "epoch-health"
+        : "pull-request-regression";
 
   return {
     benchmark: options.head.benchmark,
     id: options.head.id,
     epoch: options.head.epoch,
     verdict,
-    blocking: verdict === "regression",
+    blocking,
+    blockingSource,
     epochComparison,
     baseComparison,
     epochReference: options.baseline.reference,
@@ -413,6 +427,18 @@ function comparePair(
       "Benchmark protocol changed; repeat the calibration"
     );
   }
+  if (!sameEnvironment(reference.environment, candidate.environment)) {
+    return emptyComparison(
+      "not-calibrated",
+      "Blocking comparison requires measurements from one exact environment"
+    );
+  }
+  if (!sameComparisonPair(reference, candidate)) {
+    return emptyComparison(
+      "not-calibrated",
+      "Blocking comparison requires measurements from one runner session"
+    );
+  }
   if (
     !sameCalibrationEnvironment(reference.environment, calibratedEnvironment) ||
     !sameCalibrationEnvironment(candidate.environment, calibratedEnvironment)
@@ -482,10 +508,8 @@ function comparePair(
   if (
     !sameWorkload(reference, confirmation) ||
     !sameProtocol(reference, confirmation) ||
-    !sameCalibrationEnvironment(
-      reference.environment,
-      confirmation.environment
-    ) ||
+    !sameEnvironment(reference.environment, confirmation.environment) ||
+    !sameComparisonPair(reference, confirmation) ||
     !sameCalibrationEnvironment(confirmation.environment, calibratedEnvironment)
   ) {
     return {
@@ -572,6 +596,16 @@ function sameWorkload(
     left.playerCount === right.playerCount &&
     left.workloadFingerprint === right.workloadFingerprint &&
     left.workloadVolumeFingerprint === right.workloadVolumeFingerprint
+  );
+}
+
+function sameComparisonPair(
+  left: PerformanceMeasurement,
+  right: PerformanceMeasurement
+): boolean {
+  return (
+    left.comparisonPairId !== undefined &&
+    left.comparisonPairId === right.comparisonPairId
   );
 }
 
@@ -743,6 +777,8 @@ function isPerformanceMeasurement(
     isNumber(value["warmupCount"]) &&
     isNumber(value["measurementCount"]) &&
     isEnvironmentFingerprint(value["environment"]) &&
+    (value["comparisonPairId"] === undefined ||
+      isString(value["comparisonPairId"])) &&
     (value["commit"] === null || isString(value["commit"])) &&
     isNumberRecord(value["timings"]) &&
     isNumberRecord(value["metrics"])

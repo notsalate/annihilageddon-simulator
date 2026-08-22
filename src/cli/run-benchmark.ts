@@ -43,6 +43,7 @@ export interface BenchmarkArgs {
   maxTurns: number | undefined;
   dataPackPath: string | undefined;
   commit: string | undefined;
+  comparisonPairId: string | undefined;
   baselinePath: string | undefined;
   basePath: string | undefined;
   headPath: string | undefined;
@@ -62,6 +63,7 @@ const defaults: BenchmarkArgs = {
   maxTurns: undefined,
   dataPackPath: undefined,
   commit: undefined,
+  comparisonPairId: undefined,
   baselinePath: undefined,
   basePath: undefined,
   headPath: undefined,
@@ -83,6 +85,7 @@ export function parseBenchmarkArgs(args: readonly string[]): BenchmarkArgs {
     "maxTurns",
     "dataPackPath",
     "commit",
+    "comparisonPairId",
     "baseline",
     "base",
     "head",
@@ -159,6 +162,7 @@ export function parseBenchmarkArgs(args: readonly string[]): BenchmarkArgs {
     maxTurns: parseOptionalPositiveInteger(values.get("maxTurns"), "maxTurns"),
     dataPackPath: values.get("dataPackPath"),
     commit: values.get("commit"),
+    comparisonPairId: values.get("comparisonPairId"),
     baselinePath: values.get("baseline"),
     basePath: values.get("base"),
     headPath: values.get("head"),
@@ -272,8 +276,9 @@ export function formatPerformanceComparison(
     `workload: ${report.benchmark} (${report.id}), epoch ${report.epoch}`,
     `fingerprints: epoch ${report.epochReference.workloadFingerprint}, base ${report.base.workloadFingerprint}, head ${report.head.workloadFingerprint}`,
     `volume fingerprints: epoch ${report.epochReference.workloadVolumeFingerprint}, base ${report.base.workloadVolumeFingerprint}, head ${report.head.workloadVolumeFingerprint}`,
-    `epoch start: ${report.epochComparison.verdict} — ${report.epochComparison.reason}`,
-    `immediate base: ${report.baseComparison.verdict} — ${report.baseComparison.reason}`,
+    `Epoch health: ${report.epochComparison.verdict} — ${report.epochComparison.reason}`,
+    `PR regression: ${report.baseComparison.verdict} — ${report.baseComparison.reason}`,
+    `blocking source: ${report.blockingSource ?? "none"}`,
   ];
   if (report.blocking) {
     lines.push(
@@ -464,7 +469,10 @@ if (process.argv[1]?.endsWith("run-benchmark.js")) {
       const { result, output } = runRawBenchmark(args);
       console.log(output);
       if (args.outputPath !== undefined) {
-        writeJson(args.outputPath, toPerformanceMeasurement(result));
+        writeJson(
+          args.outputPath,
+          toPerformanceMeasurement(result, args.comparisonPairId)
+        );
       }
     } else if (args.mode === "compare") {
       const { report, output } = runComparison(args);

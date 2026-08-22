@@ -49,6 +49,7 @@ function measurement(
     warmupCount: PERFORMANCE_WARMUP_COUNT,
     measurementCount: PERFORMANCE_MEASUREMENT_COUNT,
     environment: measurementEnvironment,
+    comparisonPairId: "fixture-pair",
     commit: "commit-1",
     timings: {
       totalMs,
@@ -536,7 +537,7 @@ test("performance report gate requires all reports and blocks only blocking verd
   }
 });
 
-test("base artifact enricher adds the runner environment and commit", () => {
+test("base artifact enricher adds runner metadata and comparison pair", () => {
   const root = mkdtempSync(
     path.join(os.tmpdir(), "krutagidon-performance-enrich-")
   );
@@ -547,7 +548,7 @@ test("base artifact enricher adds the runner environment and commit", () => {
 
     const result = runNodeScript(
       path.join(process.cwd(), "scripts", "enrich-performance-artifact.mjs"),
-      [inputPath, outputPath, "base-sha"]
+      [inputPath, outputPath, "base-sha", "run-42:pull-request"]
     );
 
     assert.equal(result.status, 0);
@@ -557,6 +558,7 @@ test("base artifact enricher adds the runner environment and commit", () => {
     assert.ok(isRecord(enrichedEnvironment));
     assert.equal(typeof enrichedEnvironment["runner"], "string");
     assert.equal(enriched["commit"], "base-sha");
+    assert.equal(enriched["comparisonPairId"], "run-42:pull-request");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

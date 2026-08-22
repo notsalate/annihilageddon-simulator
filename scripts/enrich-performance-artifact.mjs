@@ -8,9 +8,10 @@ import {
 const inputPath = process.argv[2];
 const outputPath = process.argv[3];
 const commitOverride = process.argv[4];
+const comparisonPairId = process.argv[5];
 if (inputPath === undefined || outputPath === undefined) {
   throw new Error(
-    "Usage: node scripts/enrich-performance-artifact.mjs <input> <output> [commit]"
+    "Usage: node scripts/enrich-performance-artifact.mjs <input> <output> [commit] [comparisonPairId]"
   );
 }
 
@@ -26,6 +27,7 @@ writeFileSync(
       ...value,
       environment: getBenchmarkEnvironmentFingerprint(),
       commit: commitOverride ?? getBenchmarkCommit(),
+      ...(comparisonPairId === undefined ? {} : { comparisonPairId }),
     },
     null,
     2
