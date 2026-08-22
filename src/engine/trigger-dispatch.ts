@@ -12,7 +12,10 @@ import {
   type EffectExecutionResult,
   type EffectSourceContext,
 } from "./effect-runtime-registry.js";
-import type { RuntimeEffect } from "./runtime-effect.js";
+import {
+  requireVerifiedRuntimeEffect,
+  type VerifiedRuntimeEffect,
+} from "./runtime-effect-verification.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export interface ControlledCardDispatchOperationMap {
@@ -60,7 +63,7 @@ type ControlledCardDispatchResult =
   ControlledCardDispatchResultMap[keyof ControlledCardDispatchResultMap];
 
 interface ControlledCardEffectCandidate {
-  readonly effect: RuntimeEffect;
+  readonly effect: VerifiedRuntimeEffect;
   readonly source: EffectSourceContext;
   readonly sourceDefinition: CardDefinition;
 }
@@ -211,7 +214,11 @@ function buildControlledCardEffectCandidates(
       definitionId: card.definitionId,
     };
     for (const effect of definition.engine.effects) {
-      candidates.push({ effect, source, sourceDefinition: definition });
+      candidates.push({
+        effect: requireVerifiedRuntimeEffect(effect),
+        source,
+        sourceDefinition: definition,
+      });
     }
   }
 

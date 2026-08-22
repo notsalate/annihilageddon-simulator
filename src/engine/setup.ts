@@ -34,6 +34,7 @@ import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
 import { drawDeckCards, shuffleDeck } from "./deck-lifecycle.js";
+import { requireVerifiedRuntimeEffect } from "./runtime-effect-verification.js";
 import {
   intakeRuntimeData,
   type RuntimeDataFilesystemSource,
@@ -1194,7 +1195,7 @@ function applyWizardPropertySetupEffects(
         };
         const execution = tryExecuteSetupEffect(
           player,
-          effect,
+          requireVerifiedRuntimeEffect(effect),
           source,
           services
         );

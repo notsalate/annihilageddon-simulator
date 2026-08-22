@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -47,6 +49,20 @@ const addPowerOperations: EffectRuntimeCatalogOperationOverridesForTesting<"add_
 const negativeContracts: [AddPowerHasNoDefenseDestination] = [true];
 void negativeContracts;
 void addPowerOperations;
+
+test("gameplay Catalog operations expose only the verified effect boundary", () => {
+  const source = readFileSync(
+    path.join(process.cwd(), "src", "engine", "effect-runtime-registry.ts"),
+    "utf8"
+  );
+  const gameplayBoundary = source.slice(
+    source.indexOf("export function executeRuntimeEffect(")
+  );
+
+  assert.doesNotMatch(gameplayBoundary, /effect: unknown/);
+  assert.doesNotMatch(gameplayBoundary, /rawEffect/);
+  assert.match(source, /executeVerified\(/);
+});
 
 const testFamilyDefinition = {
   effectId: "force_starting_player" as const,

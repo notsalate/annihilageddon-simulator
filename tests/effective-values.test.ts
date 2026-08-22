@@ -30,6 +30,7 @@ import {
   markCardInstanceId,
   markCardDefinitionId,
 } from "../src/domain/types.js";
+import { markRuntimeEffectTreeVerified } from "../src/engine/runtime-effect-verification.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -1086,14 +1087,14 @@ function addFixtureStatusCardToActiveHand(
       isOngoing: false,
       marketChipMarker: false,
       effects: [
-        {
+        markRuntimeEffectTreeVerified({
           effectId,
           timing: "onPlay",
           statusId: "dingler",
           target: {
             selector: "activePlayer",
           },
-        },
+        }),
       ],
       unsupportedMechanics: [],
     },

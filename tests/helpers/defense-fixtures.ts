@@ -10,6 +10,7 @@ import {
   markCardDefinitionId,
   markCardInstanceId,
 } from "../../src/domain/types.js";
+import { markRuntimeEffectTreeVerified } from "../../src/engine/runtime-effect-verification.js";
 
 export interface FixtureDefenseOptions {
   costs?: Exclude<RuntimeEffectForId<"avoid_attack">["costs"], undefined>;
@@ -61,6 +62,18 @@ export function addFixtureDefenseCardToHand(
   options: FixtureDefenseOptions = {}
 ): CardInstance {
   const sequence = getNextFixtureDefenseSequence(state);
+  const defenseEffect = markRuntimeEffectTreeVerified({
+    effectId: "avoid_attack",
+    timing: "onDefense",
+    destination,
+    ...(options.redirectAttack === undefined
+      ? {}
+      : { redirectAttack: options.redirectAttack }),
+    ...(options.costs === undefined ? {} : { costs: options.costs }),
+    ...(options.branchEffects === undefined
+      ? {}
+      : { branchEffects: options.branchEffects }),
+  });
   const definition: CardDefinition = {
     schemaVersion: 1,
     cardId: `fixture-defense-${state.seed}-${sequence}-${player.playerId}-${destination}`,
@@ -84,20 +97,7 @@ export function addFixtureDefenseCardToHand(
       victoryPoints: 0,
       isOngoing: false,
       marketChipMarker: false,
-      effects: [
-        {
-          effectId: "avoid_attack",
-          timing: "onDefense",
-          destination,
-          ...(options.redirectAttack === undefined
-            ? {}
-            : { redirectAttack: options.redirectAttack }),
-          ...(options.costs === undefined ? {} : { costs: options.costs }),
-          ...(options.branchEffects === undefined
-            ? {}
-            : { branchEffects: options.branchEffects }),
-        },
-      ],
+      effects: [defenseEffect],
       unsupportedMechanics: [],
     },
   };

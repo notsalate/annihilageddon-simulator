@@ -10,6 +10,7 @@ import {
 } from "../src/index.js";
 import { executeEffect } from "../src/engine/effect-runtime.js";
 import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
+import { markRuntimeEffectTreeVerified } from "../src/engine/runtime-effect-verification.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 import {
@@ -46,7 +47,7 @@ function fixtureDefinition(
       victoryPoints: 0,
       isOngoing: false,
       marketChipMarker: false,
-      effects,
+      effects: effects.map((effect) => markRuntimeEffectTreeVerified(effect)),
       unsupportedMechanics: [],
     },
   };
@@ -642,14 +643,14 @@ test("non-target option choices keep their ordered option identities", () => {
     cardInstanceId: "fixture-choice-option-source",
     definitionId: "fixture-choice-option-source",
   };
-  const effect: RuntimeEffect = {
+  const effect: RuntimeEffect = markRuntimeEffectTreeVerified({
     effectId: "mayhem_each_player_reduce_life_to_gain_chips",
     timing: "onMayhemResolve",
     targetSelector: "eachPlayerClockwiseFromActive",
     chooser: "affectedPlayer",
     lifeTotal: 10,
     chipAmount: 2,
-  };
+  });
   const requests: Array<
     Parameters<NonNullable<typeof state.effectChoiceStrategy>>[0]
   > = [];
@@ -706,12 +707,12 @@ test("directional choices keep their selected direction and ordered targets", ()
     cardInstanceId: "fixture-choice-directional-source",
     definitionId: "fixture-choice-directional-source",
   };
-  const effect: RuntimeEffect = {
+  const effect: RuntimeEffect = markRuntimeEffectTreeVerified({
     effectId: "directional_chain_attack",
     timing: "onPlay",
     amount: 1,
     targetSelector: "leftOrRightFoe",
-  };
+  });
   let seenRequest:
     | Parameters<NonNullable<typeof state.effectChoiceStrategy>>[0]
     | undefined;
@@ -766,13 +767,13 @@ test("multi-card choices preserve the selected card group", () => {
     cardInstanceId: "fixture-choice-multi-card-source",
     definitionId: "fixture-choice-multi-card-source",
   };
-  const effect: RuntimeEffect = {
+  const effect: RuntimeEffect = markRuntimeEffectTreeVerified({
     effectId: "attack_damage",
     timing: "onPlay",
     amount: 1,
     targetSelector: "chosenFoe",
     onDamageDealt: [{ effectId: "return_discard_to_hand", amount: 2 }],
-  };
+  });
   state.effectChoiceStrategy = (request) => {
     if (request.effectId !== "return_discard_to_hand") return undefined;
     return { choiceId: request.choices[0]!.choiceId };
@@ -817,13 +818,13 @@ test("multi-card choices use distinct stable IDs for each combination", () => {
     cardInstanceId: "fixture-choice-distinct-card-source",
     definitionId: "fixture-choice-distinct-card-source",
   };
-  const effect: RuntimeEffect = {
+  const effect: RuntimeEffect = markRuntimeEffectTreeVerified({
     effectId: "attack_damage",
     timing: "onPlay",
     amount: 1,
     targetSelector: "chosenFoe",
     onDamageDealt: [{ effectId: "return_discard_to_hand", amount: 1 }],
-  };
+  });
   let requestedChoiceIds: readonly string[] = [];
   state.effectChoiceStrategy = (request) => {
     if (request.effectId !== "return_discard_to_hand") return undefined;

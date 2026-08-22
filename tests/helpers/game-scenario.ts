@@ -17,6 +17,7 @@ import {
   markCardInstanceId,
 } from "../../src/domain/types.js";
 import { grantTemporaryControl } from "../../src/engine/control-ledger.js";
+import { markRuntimeEffectTreeVerified } from "../../src/engine/runtime-effect-verification.js";
 
 export interface CreateGameScenarioOptions {
   rootDir: string;
@@ -217,7 +218,9 @@ function registerFixtureDefinition(
       victoryPoints: 0,
       isOngoing,
       marketChipMarker: false,
-      effects: options.effects,
+      effects: options.effects.map((effect) =>
+        markRuntimeEffectTreeVerified(effect)
+      ),
       unsupportedMechanics: [],
     },
   };

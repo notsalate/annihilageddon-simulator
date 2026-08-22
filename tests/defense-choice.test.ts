@@ -5,6 +5,7 @@ import { initializeGame } from "../src/index.js";
 import { executeEffect } from "../src/engine/effect-runtime.js";
 import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
 import type { GameState, PlayerState } from "../src/engine/setup.js";
+import { markRuntimeEffectTreeVerified } from "../src/engine/runtime-effect-verification.js";
 import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 
 const rootDir = process.cwd();
@@ -33,12 +34,7 @@ test("a player can decline a legal optional defense", () => {
   const result = executeEffect(
     state,
     attacker,
-    {
-      effectId: "attack_damage",
-      timing: "onPlay",
-      amount: 2,
-      targetSelector: "chosenFoe",
-    },
+    attackEffect(),
     attackSource(attacker)
   );
 
@@ -96,12 +92,7 @@ test("a player can select an exact defense instead of the first card", () => {
   const result = executeEffect(
     state,
     attacker,
-    {
-      effectId: "attack_damage",
-      timing: "onPlay",
-      amount: 2,
-      targetSelector: "chosenFoe",
-    },
+    attackEffect(),
     attackSource(attacker)
   );
 
@@ -155,12 +146,7 @@ test("a defense choice rejects a live-object strategy result", () => {
   const result = executeEffect(
     state,
     attacker,
-    {
-      effectId: "attack_damage",
-      timing: "onPlay",
-      amount: 2,
-      targetSelector: "chosenFoe",
-    },
+    attackEffect(),
     attackSource(attacker)
   );
 
@@ -208,12 +194,7 @@ test("a defense choice accepts a reconstructed option by stable identifier", () 
   const result = executeEffect(
     state,
     attacker,
-    {
-      effectId: "attack_damage",
-      timing: "onPlay",
-      amount: 2,
-      targetSelector: "chosenFoe",
-    },
+    attackEffect(),
     attackSource(attacker)
   );
 
@@ -256,12 +237,7 @@ test("a defense choice falls back to the first legal option when identifiers dis
   const result = executeEffect(
     state,
     attacker,
-    {
-      effectId: "attack_damage",
-      timing: "onPlay",
-      amount: 2,
-      targetSelector: "chosenFoe",
-    },
+    attackEffect(),
     attackSource(attacker)
   );
 
@@ -319,12 +295,7 @@ test("a defense choice ignores a strategy-mutated option card", () => {
   const result = executeEffect(
     state,
     attacker,
-    {
-      effectId: "attack_damage",
-      timing: "onPlay",
-      amount: 2,
-      targetSelector: "chosenFoe",
-    },
+    attackEffect(),
     attackSource(attacker)
   );
 
@@ -357,6 +328,15 @@ function selectChoiceById(
 ): { readonly choiceId: string } | undefined {
   const choice = choices.find((candidate) => candidate.choiceId === choiceId);
   return choice === undefined ? undefined : { choiceId: choice.choiceId };
+}
+
+function attackEffect() {
+  return markRuntimeEffectTreeVerified({
+    effectId: "attack_damage" as const,
+    timing: "onPlay" as const,
+    amount: 2,
+    targetSelector: "chosenFoe" as const,
+  });
 }
 
 function createAttackScenario(): {

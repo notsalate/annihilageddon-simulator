@@ -31,6 +31,7 @@ import {
   executeControlledCardOnPlayCardEffects,
   executeEffect,
 } from "../src/engine/effect-runtime.js";
+import { markRuntimeEffectTreeVerified } from "../src/engine/runtime-effect-verification.js";
 
 import {
   chooseEffect,
@@ -242,9 +243,21 @@ test("Control Ledger gives activation, costs, passive power, and end-turn rules 
       isOngoing: true,
       marketChipMarker: false,
       effects: [
-        { effectId: "ongoing_add_power", timing: "whileControlled", amount: 1 },
-        { effectId: "ongoing_hand_refill_bonus", timing: "endTurn", amount: 1 },
-        { effectId: "add_power", timing: "activation", amount: 2 },
+        markRuntimeEffectTreeVerified({
+          effectId: "ongoing_add_power",
+          timing: "whileControlled",
+          amount: 1,
+        }),
+        markRuntimeEffectTreeVerified({
+          effectId: "ongoing_hand_refill_bonus",
+          timing: "endTurn",
+          amount: 1,
+        }),
+        markRuntimeEffectTreeVerified({
+          effectId: "add_power",
+          timing: "activation",
+          amount: 2,
+        }),
       ],
       unsupportedMechanics: [],
     },
@@ -298,12 +311,12 @@ test("Control Ledger gives activation, costs, passive power, and end-turn rules 
   const costAttackResult = executeEffect(
     state,
     controller,
-    {
+    markRuntimeEffectTreeVerified({
       effectId: "attack_damage_equal_to_controlled_card_cost",
       timing: "onPlay",
       costMode: "highest",
       targetSelector: "chosenFoe",
-    },
+    }),
     fixtureSource(controller, "fixture-controlled-cost")
   );
   assert.deepEqual(costAttackResult, { ok: true });
@@ -333,7 +346,7 @@ test("Control Ledger gives activation, costs, passive power, and end-turn rules 
       isOngoing: false,
       marketChipMarker: false,
       effects: [
-        {
+        markRuntimeEffectTreeVerified({
           effectId: "add_power",
           timing: "onPlay",
           amount: 4,
@@ -342,7 +355,7 @@ test("Control Ledger gives activation, costs, passive power, and end-turn rules 
             cardTypes: ["treasure"],
             minimumCount: 1,
           },
-        },
+        }),
       ],
       unsupportedMechanics: [],
     },
@@ -429,12 +442,12 @@ test("temporarily controlled ongoing attack modifiers and triggers work outside 
   const attackResult = executeEffect(
     state,
     controller,
-    {
+    markRuntimeEffectTreeVerified({
       effectId: "attack_damage",
       timing: "onPlay",
       amount: 2,
       targetSelector: "chosenFoe",
-    },
+    }),
     {
       sourceType: "card",
       runtimeMode: "combat",

@@ -58,6 +58,10 @@ import {
   type RuntimeEffectPayload,
   type WildMagicOption,
 } from "./runtime-effect.js";
+import {
+  markRuntimeEffectTreeVerified,
+  requireVerifiedRuntimeEffect,
+} from "./runtime-effect-verification.js";
 import type {
   ChoiceRequest,
   ChoiceSelection,
@@ -198,9 +202,10 @@ function validateEffectsAtTiming(
   excludedCardInstanceId?: CardInstance["instanceId"]
 ): EffectExecutionResult {
   for (const effect of effects) {
+    const verifiedEffect = requireVerifiedRuntimeEffect(effect);
     let expectedFailure: string | undefined;
     const result = evaluateRuntimeEffectAtTiming(
-      effect,
+      verifiedEffect,
       source,
       timing,
       (decodedEffect) => {
@@ -343,8 +348,9 @@ export function getWizardPropertyActivationAvailability(
   };
   let executable = false;
   for (const effect of definition.engine.effects) {
+    const verifiedEffect = requireVerifiedRuntimeEffect(effect);
     const result = evaluateRuntimeEffectAtTiming(
-      effect,
+      verifiedEffect,
       operationSource,
       "activation",
       (decodedEffect) =>
@@ -485,8 +491,9 @@ export function moveGainedCardToPlayerDestination(
       tokenDefinitionId: token.definitionId,
     };
     for (const effect of tokenDefinition.engine.effects) {
+      const verifiedEffect = requireVerifiedRuntimeEffect(effect);
       const applicability = evaluateRuntimeEffectAtTiming(
-        effect,
+        verifiedEffect,
         source,
         "onGainCard",
         (decodedEffect) =>
@@ -525,7 +532,7 @@ export function moveGainedCardToPlayerDestination(
       const execution = executeRuntimeEffectAtTiming(
         state,
         player,
-        effect,
+        verifiedEffect,
         "onGainCard",
         source,
         effectRuntimeServices,
@@ -586,8 +593,9 @@ export function calculateEndTurnDrawCount(
       tokenDefinitionId: token.definitionId,
     };
     for (const effect of definition.engine.effects) {
+      const verifiedEffect = requireVerifiedRuntimeEffect(effect);
       const result = evaluateRuntimeEffectAtTiming(
-        effect,
+        verifiedEffect,
         source,
         "endTurn",
         (decodedEffect) =>
@@ -660,10 +668,11 @@ function executeEffects(
   isApplicable?: (effect: RuntimeEffectPayload) => boolean
 ): EffectExecutionResult {
   for (const effect of effects) {
+    const verifiedEffect = requireVerifiedRuntimeEffect(effect);
     const operationResult = executeRuntimeEffectAtTiming(
       state,
       player,
-      effect,
+      verifiedEffect,
       timing,
       source,
       effectRuntimeServices,
@@ -723,13 +732,13 @@ function countGainedCardsMatchingEffect(
 export function executeEffect(
   state: GameState,
   player: PlayerState,
-  effect: unknown,
+  effect: RuntimeEffect,
   source: EffectSourceContext
 ): EffectExecutionResult {
   return executeRuntimeEffect(
     state,
     player,
-    effect,
+    requireVerifiedRuntimeEffect(effect),
     source,
     effectRuntimeServices
   );
@@ -1707,8 +1716,9 @@ function getResurrectionLifeTotal(
     }
 
     for (const effect of definition.engine.effects) {
+      const verifiedEffect = requireVerifiedRuntimeEffect(effect);
       const result = resolveResurrectionLifeTotal(
-        effect,
+        verifiedEffect,
         {
           sourceType: "wizardProperty",
           runtimeMode: state.runtimeMode,
@@ -2155,7 +2165,7 @@ function createDinglerStatus(
     statusId: "dingler",
     ownerId: playerId,
     effects: [
-      {
+      markRuntimeEffectTreeVerified({
         effectId: "modify_effective_value",
         timing: "whileControlled",
         valueKind: "playerMaxLife",
@@ -2164,8 +2174,8 @@ function createDinglerStatus(
         target: {
           targetType: "player",
         },
-      },
-      {
+      }),
+      markRuntimeEffectTreeVerified({
         effectId: "modify_effective_value",
         timing: "whileControlled",
         valueKind: "playerVictoryPoints",
@@ -2174,7 +2184,7 @@ function createDinglerStatus(
         target: {
           targetType: "player",
         },
-      },
+      }),
     ],
   };
 }

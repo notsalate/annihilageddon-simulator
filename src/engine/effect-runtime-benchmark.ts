@@ -12,7 +12,9 @@ import type {
   EffectSourceContext,
   EffectRuntimeMode,
 } from "./effect-runtime-registry.js";
+import { validateRuntimeEffectCatalogPayload } from "./effect-runtime-registry.js";
 import type { RuntimeEffect } from "./runtime-effect.js";
+import { markRuntimeEffectTreeVerified } from "./runtime-effect-verification.js";
 
 export const EFFECT_RUNTIME_BENCHMARK_CONTRACT_VERSION =
   "effect-runtime-typed-execution-v1" as const;
@@ -60,11 +62,11 @@ export function runEffectRuntimeBenchmark(
   const typedFixture = createFixture(options.rootDir, 25301);
   const legacyEffect = structuredClone(legacyFixture.effect);
 
-  measure(legacyFixture, legacyEffect, iterations);
+  measure(legacyFixture, legacyEffect, iterations, true);
   measure(typedFixture, typedFixture.effect, iterations);
 
   const legacySamplesMs = Array.from({ length: MEASUREMENT_COUNT }, () =>
-    measure(legacyFixture, legacyEffect, iterations)
+    measure(legacyFixture, legacyEffect, iterations, true)
   );
   const typedSamplesMs = Array.from({ length: MEASUREMENT_COUNT }, () =>
     measure(typedFixture, typedFixture.effect, iterations)
@@ -195,15 +197,19 @@ function createSource(
 function measure(
   fixture: BenchmarkFixture,
   effect: RuntimeEffect,
-  iterations: number
+  iterations: number,
+  decodeAtIntake = false
 ): number {
   fixture.state.eventLog.length = 0;
   const startedAt = systemBenchmarkClock.now();
   for (let iteration = 0; iteration < iterations; iteration += 1) {
+    const executableEffect = decodeAtIntake
+      ? decodeEffectAtIntake(fixture, effect)
+      : effect;
     const result = executeEffect(
       fixture.state,
       fixture.player,
-      effect,
+      executableEffect,
       fixture.source
     );
     if (!result.ok) {
@@ -211,4 +217,21 @@ function measure(
     }
   }
   return systemBenchmarkClock.now() - startedAt;
+}
+
+function decodeEffectAtIntake(
+  fixture: BenchmarkFixture,
+  effect: RuntimeEffect
+): RuntimeEffect {
+  const decoded = validateRuntimeEffectCatalogPayload(
+    `Benchmark ${effect.effectId}`,
+    effect.effectId,
+    effect,
+    fixture.source.runtimeMode,
+    fixture.source.sourceType
+  );
+  if (!decoded.ok) {
+    throw new Error(decoded.errors.join("\n"));
+  }
+  return markRuntimeEffectTreeVerified(decoded.value as RuntimeEffect);
 }

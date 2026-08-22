@@ -3,6 +3,7 @@ import type { EffectChoice } from "./effect-runtime-registry.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
 import type { RuntimeEffectForId, WildMagicOption } from "./runtime-effect.js";
+import { markRuntimeEffectTreeVerified } from "./runtime-effect-verification.js";
 import {
   allEffectRuntimeModes,
   type EffectRuntimeSupportedModes,
@@ -93,12 +94,11 @@ const wildMagicChoiceHandler: EffectRuntimeHandler<
         effectId: selectedOption.effectId,
         sourceType: source.sourceType,
       });
-      return services.executeEffect(
-        state,
-        player,
-        { ...selectedOption, timing: "onPlay" },
-        source
-      );
+      const selectedEffect = markRuntimeEffectTreeVerified({
+        ...selectedOption,
+        timing: "onPlay",
+      });
+      return services.executeEffect(state, player, selectedEffect, source);
     }
     recordGameEvent(state, {
       type: "wildMagicChoiceSkipped",
