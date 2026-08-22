@@ -209,6 +209,33 @@ test("changed workload remains non-blocking without an accepted changed budget",
   assert.equal(report.blocking, false);
 });
 
+test("changed E0 workload does not mask an independently calibrated PR regression", () => {
+  const calibration = acceptedCalibration();
+  const changedWorkloadCalibration: PerformanceAcceptedCalibration = {
+    ...calibration,
+    entries: calibration.entries.map((entry) => ({
+      ...entry,
+      workloadVolumeFingerprint: "new-volume",
+    })),
+  };
+  const report = comparePerformanceWithoutCalibration({
+    baseline: baselineEntry(),
+    acceptedCalibration: changedWorkloadCalibration,
+    base: measurement({ workloadVolumeFingerprint: "new-volume", totalMs: 10 }),
+    head: measurement({ workloadVolumeFingerprint: "new-volume", totalMs: 13 }),
+    confirmation: measurement({
+      workloadVolumeFingerprint: "new-volume",
+      totalMs: 13,
+    }),
+  });
+
+  assert.equal(report.epochComparison.verdict, "workload-changed");
+  assert.equal(report.baseComparison.verdict, "regression");
+  assert.equal(report.verdict, "regression");
+  assert.equal(report.blocking, true);
+  assert.equal(report.blockingSource, "pull-request-regression");
+});
+
 test("environment changes require recalibration without blocking", () => {
   const report = comparePerformance({
     baseline: baselineEntry(),

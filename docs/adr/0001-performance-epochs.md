@@ -1,6 +1,6 @@
 ---
 id: ADR-0001
-title: Модель benchmark и эпох производительности
+title: Модель benchmark, эпох и калибровок
 status: proposed
 origin: new
 recorded: 2026-08-21
@@ -9,7 +9,7 @@ supersedes: none
 superseded_by: none
 ---
 
-# ADR-0001: Модель benchmark и эпох производительности
+# ADR-0001: Модель benchmark, эпох и калибровок
 
 ## Контекст
 

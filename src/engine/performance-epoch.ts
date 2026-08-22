@@ -379,24 +379,23 @@ export function comparePerformance(options: {
     comparisonCalibration
   );
   const comparisons = [epochComparison, baseComparison];
-  const verdict =
-    epochComparison.verdict === "workload-changed"
+  const verdict = comparisons.some(
+    (comparison) => comparison.verdict === "regression"
+  )
+    ? "regression"
+    : comparisons.some(
+          (comparison) => comparison.verdict === "workload-changed"
+        )
       ? "workload-changed"
-      : comparisons.some((comparison) => comparison.verdict === "regression")
-        ? "regression"
+      : comparisons.some(
+            (comparison) => comparison.verdict === "not-calibrated"
+          )
+        ? "not-calibrated"
         : comparisons.some(
-              (comparison) => comparison.verdict === "workload-changed"
+              (comparison) => comparison.verdict === "not-measured"
             )
-          ? "workload-changed"
-          : comparisons.some(
-                (comparison) => comparison.verdict === "not-calibrated"
-              )
-            ? "not-calibrated"
-            : comparisons.some(
-                  (comparison) => comparison.verdict === "not-measured"
-                )
-              ? "not-measured"
-              : "pass";
+          ? "not-measured"
+          : "pass";
   const blocking = verdict === "regression";
   const blockingSource = !blocking
     ? null
