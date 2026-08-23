@@ -372,45 +372,19 @@ export interface PhysicalCardLedgerClone {
 export function clonePhysicalCardLedger(
   source: GameState
 ): PhysicalCardLedgerClone {
-  const sourceZones = listPhysicalCardZoneDescriptors(source).map(
-    (descriptor) => ({
-      zoneName: descriptor.zoneName,
-      cards: [...descriptor.read()],
-    })
+  const physicalCards = new Set(
+    listPhysicalCardZoneDescriptors(source).flatMap((descriptor) =>
+      descriptor.read()
+    )
   );
-  const physicalCards = new Set(sourceZones.flatMap((zone) => zone.cards));
-  const clones = new Map<object, object>();
-  const cloned = cloneLedgerValue(
+  return cloneLedgerValue(
     {
       players: source.players,
       common: source.common,
       temporaryCardControls: source.turn.temporaryCardControls,
     },
-    physicalCards,
-    clones
+    physicalCards
   );
-  const targetDescriptors = new Map(
-    listPhysicalCardZoneDescriptors(cloned).map((descriptor) => [
-      descriptor.zoneName,
-      descriptor,
-    ])
-  );
-  for (const zone of sourceZones) {
-    const targetDescriptor = targetDescriptors.get(zone.zoneName);
-    if (targetDescriptor === undefined) {
-      throw new Error(`Missing physical card zone ${zone.zoneName} in clone`);
-    }
-    targetDescriptor.replace(
-      zone.cards.map((card) => {
-        const clonedCard = clones.get(card);
-        if (clonedCard === undefined) {
-          throw new Error(`Missing cloned physical card ${card.instanceId}`);
-        }
-        return clonedCard as CardInstance;
-      })
-    );
-  }
-  return cloned;
 }
 
 type LedgerCloneValue =
@@ -458,9 +432,9 @@ function cloneLedgerValue<T extends LedgerCloneValue>(
     if (existingPhysicalCard !== undefined) {
       return existingPhysicalCard as T;
     }
-    const clonedPhysicalCard = structuredClone(value);
+    const clonedPhysicalCard = { ...(value as CardInstance) };
     clones.set(value, clonedPhysicalCard);
-    return clonedPhysicalCard;
+    return clonedPhysicalCard as T;
   }
   const existing = clones.get(value);
   if (existing !== undefined) {
