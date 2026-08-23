@@ -50,6 +50,20 @@ The command stores each requested run under:
 
 The gate receives an expected fresh-session pair ID. A produced base, head, confirmation, or available E0 measurement that loses this ID, disagrees on it, or disagrees on exact environment or protocol is an infrastructure failure. Do not reclassify a legitimate diagnostic verdict because of this failure.
 
+## Handling PR Results
+
+A green performance gate means that the accepted comparison contract found no blocking regression. It does not replace correctness checks or code review.
+
+When the performance gate is red:
+
+1. Check report integrity and comparability first. Treat missing artifacts, mismatched pair IDs, environments, protocols, or workloads as measurement or infrastructure problems, not as proven code regressions.
+2. For a confirmed regression, inspect the affected workload and phase, reproduce it when needed, and try to remove the slowdown without compromising correctness, architecture, or the requested behavior.
+3. Do not weaken an accepted threshold, overwrite E0, discard a valid metric, or create a new epoch merely to make CI green.
+4. If the slowdown cannot reasonably be removed, record its cause and measured impact, the attempted remedies, and why avoiding it would violate a required behavior or impose a worse technical trade-off.
+5. Keep the PR blocked until the regression is fixed or that evidence is reviewed and the compromise is explicitly accepted as a new performance epoch such as E1.
+
+Accepting a new epoch requires an ADR update describing the previous contract, the new contract, and the lasting consequence, followed by a fresh calibration and immutable baseline artifacts for that epoch. An agent must not accept this trade-off implicitly or on its own.
+
 ## Calibration
 
 - Full calibration uses 20 matched pairs and runs manually or on the weekly schedule.
