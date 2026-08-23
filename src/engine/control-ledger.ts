@@ -537,6 +537,13 @@ export function peekLegendDeckCard(
   return state.common.legendDeck[0];
 }
 
+/** Returns the next main-deck card through the Ledger-owned zone. */
+export function peekMainDeckCard(
+  state: Pick<GameState, "common">
+): CardInstance | undefined {
+  return state.common.mainDeck[0];
+}
+
 /** Lists locations that can supply a voluntary Defense for one player. */
 export function listDefenseCardLocations(
   state: GameState,

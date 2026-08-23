@@ -1664,6 +1664,60 @@ test("megaMayhem destroys top main deck cards in active-player order and kills p
   );
 });
 
+test("megaMayhem keeps a main-deck card when its destroy destination is invalid", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60615,
+  });
+  const player = state.players[0];
+  assert.ok(player);
+  const megaMayhemDefinition = createFixtureCardDefinition(
+    "fixture-mega-mayhem-destroy-top-invalid-destination",
+    [
+      {
+        effectId:
+          "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        deathCondition: {
+          effectId: "destroyed_card_kind_is",
+          cardKind: "mayhem",
+        },
+        destroyedCardSource: "mainDeck",
+      },
+    ],
+    { cardKind: "megaMayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [megaMayhemDefinition.cardId, megaMayhemDefinition],
+  ]);
+  const unresolvedCard: CardInstance = {
+    instanceId: markCardInstanceId("fixture-main-deck-missing-definition"),
+    definitionId: markCardDefinitionId("fixture-missing-definition"),
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, unresolvedCard);
+
+  const result = executeMayhemEffects(state, player, megaMayhemDefinition, {
+    sourceType: "card",
+    runtimeMode: "fixture",
+    playerId: player.playerId,
+    cardInstanceId: markCardInstanceId(
+      "fixture-mega-mayhem-destroy-top-invalid-destination-instance"
+    ),
+    definitionId: markCardDefinitionId(megaMayhemDefinition.cardId),
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: "Missing target card definition fixture-missing-definition",
+  });
+  assert.deepEqual(state.common.mainDeck, [unresolvedCard]);
+});
+
 test("Mayhem discards top deck cards and destroys them in active-player order", () => {
   const state = initializeGame({
     rootDir,

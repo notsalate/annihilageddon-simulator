@@ -5,6 +5,7 @@ import {
   listMainMarketCards,
   movePhysicalCard,
   peekLegendDeckCard,
+  peekMainDeckCard,
 } from "./control-ledger.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import { recordEffectChipsChanged } from "./effect-runtime-resources-draw.js";
@@ -518,7 +519,7 @@ const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler<
   effectId: "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
   execute(state, _player, effect, source, services) {
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
-      const destroyedCard = state.common.mainDeck.shift();
+      const destroyedCard = peekMainDeckCard(state);
       if (destroyedCard === undefined) {
         recordGameEvent(state, {
           type: "effectDestroyTopMainDeckSkipped",
@@ -532,7 +533,16 @@ const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler<
       }
       const destination = services.getDestroyDestination(state, destroyedCard);
       if (!destination.ok) return destination;
-      destination.zone.push(destroyedCard);
+      const moved = movePhysicalCard(
+        state,
+        destroyedCard.instanceId,
+        destination.zoneName,
+        "back",
+        "mainDeck"
+      );
+      if (!moved.ok) {
+        return { ok: false, error: moved.reason };
+      }
       recordGameEvent(state, {
         type: "effectTopMainDeckCardDestroyed",
         playerId: targetPlayer.playerId,
