@@ -1,8 +1,9 @@
-Status: Todo
+Status: Done
 Label: ready-for-agent
 Type: AFK
+GitHub: #239
 
-# Реализовать chipsin-economy runtime cards
+# Закончить chipsin-economy картой «Сердце мага»
 
 ## Parent
 
@@ -11,18 +12,13 @@ Type: AFK
 
 ## What to build
 
-Реализовать Block D slice для всего кластера `chipsin-economy`.
+Закрыть оставшийся Block D slice кластера `chipsin-economy`.
 
-Срез должен довести выбранные карты до `fullRuntime`, включая chipsin gains, costs, transfers, table-wide chipsin effects и chipsin-scaled behavior.
+Шесть main-карт кластера уже `fullRuntime`. Этот issue должен довести оставшуюся карту до `fullRuntime` и завершить кластерный PR.
 
 ## Card IDs
 
-- `esw2_dbg__main_015`
-- `esw2_dbg__main_036`
-- `esw2_dbg__main_041`
-- `esw2_dbg__main_062`
-- `esw2_dbg__main_072`
-- `esw2_dbg__main_075`
+- `esw2_dbg__legend_026`
 
 ## User stories covered
 
@@ -34,19 +30,19 @@ Type: AFK
 
 ## Acceptance criteria
 
-- [ ] Для каждой карты из списка прочитан canonical draft/source text.
-- [ ] Для каждой карты из списка добавлен current runtime card JSON, основанный на import draft/source text.
-- [ ] Все выбранные карты добавлены в соответствующие current compositions.
-- [ ] Каждая выбранная карта становится `fullRuntime` в generated matrix.
-- [ ] Полностью реализовано chipsin economy behavior каждой выбранной карты.
-- [ ] Focused tests покрывают gains, costs, transfers и scaled effects where relevant.
-- [ ] Не реализовывать карты вне списка этого issue.
-- [ ] Не менять cluster assignment и не переоткрывать Block C taxonomy.
-- [ ] Выполнен `npm run report:card-runtime-clusters -- --write`.
-- [ ] `npm run report:card-runtime-clusters` проходит.
-- [ ] `npm run typecheck` проходит.
-- [ ] `npm test` проходит.
-- [ ] `git diff --check` проходит.
+- [x] Для карты из списка прочитан canonical draft/source text.
+- [x] Для карты из списка добавлен current runtime card JSON, основанный на import draft/source text.
+- [x] Карта добавлена в соответствующую current composition.
+- [x] Карта становится `fullRuntime` в generated matrix.
+- [x] Карта берёт 1 карту, даёт 3 чипсины и всегда приносит 5 ПО; условие протектора не создаётся.
+- [x] Точечный тест покрывает добор, получение чипсин и подсчёт 5 ПО.
+- [x] Не реализованы карты вне списка этого issue.
+- [x] Не изменены cluster assignment и Block C taxonomy.
+- [x] Выполнен `npm run report:card-runtime-clusters -- --write`.
+- [x] `npm run report:card-runtime-clusters` проходит.
+- [x] `npm run typecheck` проходит.
+- [x] `npm test` проходит в составе `npm run check`.
+- [x] `git diff --check` проходит.
 
 ## Blocked by
 
@@ -55,3 +51,14 @@ None - can start immediately
 ## Notes
 
 - Issue остаётся внутри `clusterId: "chipsin-economy"`.
+- Этот issue и его PR закрывают оставшийся хвост кластера; уже реализованные main-карты не меняются без необходимости.
+
+## Verification
+
+- `npm run check` — pass.
+- `npm run report:card-runtime-clusters -- --write` — pass; `esw2_dbg__legend_026` отмечена как `fullRuntime`.
+- `npm run report:card-runtime-clusters` — pass.
+- `npm run validate:drafts` — pass.
+- `git diff --check` — pass.
+
+Оставшаяся работа: дождаться ревью, CI и слияния PR #247.

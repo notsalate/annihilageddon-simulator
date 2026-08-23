@@ -198,7 +198,7 @@
       "cardId": "esw2_dbg__legend_026",
       "status": "clustered",
       "clusterId": "chipsin-economy",
-      "notes": "Draw и 3 chipsin — исполняемая часть карты. Печатный бонус протектора игнорируется при runtime mapping: victoryPoints всегда 3, исполняемое условие протектора не создаётся."
+      "notes": "Draw и 3 chipsin — исполняемая часть карты. Условие протектора не моделируется: карта всегда даёт 5 ПО в runtime."
     },
     {
       "cardId": "esw2_dbg__legend_027",

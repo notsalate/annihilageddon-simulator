@@ -84,7 +84,7 @@ Preserve these repository-wide invariants:
 
 Import flow and runtime layout are defined in `docs/import-pipeline.md` and `docs/runtime-layout.md`.
 
-For performance benchmark work, read `docs/benchmarks/README.md` before running, comparing, accepting, or downloading benchmark artifacts.
+For performance benchmark work, read `docs/benchmarks/README.md` before running, comparing, accepting, or downloading benchmark artifacts. A blocking performance regression stops merge until it is fixed or a new epoch is explicitly accepted; never loosen a threshold merely to make CI green.
 
 When simulation behavior changes, preserve existing tested behavior unless the task changes the rules, add deterministic focused tests, and report simplifications or incomplete mechanics.
 

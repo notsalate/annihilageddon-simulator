@@ -11070,3 +11070,46 @@ function createBasicTrophy(
     effects: [],
   };
 }
+
+test("Сердце мага даёт карту, 3 чипсины и 5 ПО", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const cardId = "esw2_dbg__legend_026";
+  const definition = currentRuntimeDataPack.cardDefinitions.get(cardId);
+  assert.ok(definition);
+  assert.equal(definition.engine.victoryPoints, 5);
+  assert.deepEqual(definition.engine.effects, [
+    { effectId: "draw_cards", timing: "onPlay", amount: 1 },
+    { effectId: "gain_chips", timing: "onPlay", amount: 3 },
+  ]);
+  assert.deepEqual(
+    currentRuntimeDataPack.decks.legendDeck.entries.find(
+      (entry) => entry.cardId === cardId
+    ),
+    { cardId, count: 1 }
+  );
+
+  const scenario = createGameScenario({ rootDir, seed: 239026 });
+  scenario.activePlayer.deck.splice(0);
+  const drawnCard = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_004",
+    zone: "deck",
+  });
+  const chipsBefore = scenario.activePlayer.chips;
+  const scoreBefore = scoreGame(scenario.state).find(
+    (score) => score.playerId === scenario.activePlayer.playerId
+  );
+  assert.ok(scoreBefore);
+  const heart = givenRuntimeCard(scenario, { definitionId: cardId });
+  const handBefore = scenario.activePlayer.hand.length;
+
+  assert.deepEqual(play(scenario, heart), { ok: true });
+
+  assert.equal(scenario.activePlayer.chips, chipsBefore + 3);
+  assert.equal(scenario.activePlayer.hand.length, handBefore);
+  assert.equal(scenario.activePlayer.hand.includes(drawnCard), true);
+  const scoreAfter = scoreGame(scenario.state).find(
+    (score) => score.playerId === scenario.activePlayer.playerId
+  );
+  assert.ok(scoreAfter);
+  assert.equal(scoreAfter.victoryPoints - scoreBefore.victoryPoints, 5);
+});
