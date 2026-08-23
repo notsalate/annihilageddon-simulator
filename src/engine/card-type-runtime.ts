@@ -1,8 +1,27 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
 import type { GameState, PlayerId, TokenInstance } from "./setup.js";
-import { isOwnedCardsCountAsCardTypeRuntimeEffect } from "./effect-runtime-card-type.js";
-import { evaluateRuntimeEffectAtTiming } from "./effect-runtime-registry.js";
+import {
+  isOwnedCardsCountAsCardTypeRuntimeEffect,
+  type OwnedCardsCountAsCardTypeRuntimeEffect,
+} from "./effect-runtime-card-type.js";
+import {
+  evaluateRuntimeEffectAtTiming,
+  type EffectSourceContext,
+} from "./effect-runtime-registry.js";
+import type { RuntimeEffect } from "./runtime-effect.js";
 import { requireVerifiedRuntimeEffect } from "./runtime-effect-verification.js";
+
+type CardTypeEffectResolution =
+  | {
+      readonly status: "resolved";
+      readonly effect: OwnedCardsCountAsCardTypeRuntimeEffect;
+    }
+  | { readonly status: "error"; readonly error: string };
+
+const cardTypeEffectResolutionCache = new WeakMap<
+  object,
+  Map<string, CardTypeEffectResolution>
+>();
 
 export function cardMatchesTypeForPlayer(
   state: GameState,
@@ -58,26 +77,60 @@ function wizardPropertyCountsDefinitionAsType(
   };
   for (const effect of effects) {
     if (!isOwnedCardsCountAsCardTypeRuntimeEffect(effect)) continue;
-    const result = evaluateRuntimeEffectAtTiming(
-      requireVerifiedRuntimeEffect(effect),
-      source,
-      "whileControlled",
-      (decoded) => {
-        if (decoded.effectId !== "owned_cards_count_as_card_type") {
-          return { status: "notApplicable" };
-        }
-        return decoded.countedAsCardType === cardType &&
-          decoded.sourceCardTypes.some((sourceCardType) =>
-            definition.engine.cardTypes.includes(sourceCardType)
-          )
-          ? { status: "resolved", result: true }
-          : { status: "notApplicable" };
-      }
-    );
-    if (result.status === "error") {
-      throw new Error(result.error);
+    const resolvedEffect = resolveCardTypeEffect(effect, source);
+    if (resolvedEffect.status === "error") {
+      throw new Error(resolvedEffect.error);
     }
-    if (result.status === "resolved" && result.result) return true;
+    if (
+      resolvedEffect.effect.countedAsCardType === cardType &&
+      resolvedEffect.effect.sourceCardTypes.some((sourceCardType) =>
+        definition.engine.cardTypes.includes(sourceCardType)
+      )
+    ) {
+      return true;
+    }
   }
   return false;
+}
+
+function resolveCardTypeEffect(
+  effect: RuntimeEffect,
+  source: EffectSourceContext
+): CardTypeEffectResolution {
+  const cacheable = Object.isFrozen(effect);
+  const cached = cacheable
+    ? cardTypeEffectResolutionCache.get(effect)?.get(source.runtimeMode)
+    : undefined;
+  if (cached !== undefined) return cached;
+
+  const result = evaluateRuntimeEffectAtTiming(
+    requireVerifiedRuntimeEffect(effect),
+    source,
+    "whileControlled",
+    (decoded) => {
+      if (decoded.effectId !== "owned_cards_count_as_card_type") {
+        return { status: "notApplicable" };
+      }
+      return {
+        status: "resolved",
+        result: decoded as OwnedCardsCountAsCardTypeRuntimeEffect,
+      };
+    }
+  );
+  const resolved: CardTypeEffectResolution =
+    result.status === "resolved"
+      ? { status: "resolved", effect: result.result }
+      : {
+          status: "error",
+          error:
+            result.status === "error"
+              ? result.error
+              : "owned_cards_count_as_card_type is not applicable",
+        };
+  if (cacheable) {
+    const cache = cardTypeEffectResolutionCache.get(effect) ?? new Map();
+    cache.set(source.runtimeMode, resolved);
+    cardTypeEffectResolutionCache.set(effect, cache);
+  }
+  return resolved;
 }
