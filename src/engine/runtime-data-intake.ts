@@ -7,8 +7,16 @@ import {
   type DataPackValidationOptions,
   type LoadedDataPack,
 } from "./data.js";
-import type { EffectRuntimeMode } from "./effect-runtime-registry.js";
-import { markRuntimeEffectTreeVerified } from "./runtime-effect-verification.js";
+import {
+  validateRuntimeEffectCatalogPayload,
+  type EffectRuntimeMode,
+  type EffectRuntimeSourceKind,
+} from "./effect-runtime-registry.js";
+import type { RuntimeEffect, RuntimeEffectId } from "./runtime-effect.js";
+import {
+  markRuntimeEffectTreeVerified,
+  type VerifiedRuntimeEffect,
+} from "./runtime-effect-verification.js";
 
 const DEFAULT_MANIFEST_PATH = "data/packs/current-runtime.json";
 
@@ -80,6 +88,27 @@ export function intakeRuntimeData(
   }
 
   return validateAndFreeze(decoded.value, options.mode, false);
+}
+
+/** Keeps the legacy decoder benchmark inside the Runtime Data Intake boundary. */
+export function decodeRuntimeEffectAtIntake(
+  subjectId: string,
+  effectId: RuntimeEffectId,
+  effect: unknown,
+  mode: EffectRuntimeMode,
+  sourceKind: EffectRuntimeSourceKind
+): VerifiedRuntimeEffect {
+  const decoded = validateRuntimeEffectCatalogPayload(
+    subjectId,
+    effectId,
+    effect,
+    mode,
+    sourceKind
+  );
+  if (!decoded.ok) {
+    throw new RuntimeDataIntakeError("decode", decoded.errors);
+  }
+  return markRuntimeEffectTreeVerified(decoded.value as RuntimeEffect);
 }
 
 export function isVerifiedRuntimeDataPack(

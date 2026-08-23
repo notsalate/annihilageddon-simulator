@@ -12,9 +12,8 @@ import type {
   EffectSourceContext,
   EffectRuntimeMode,
 } from "./effect-runtime-registry.js";
-import { validateRuntimeEffectCatalogPayload } from "./effect-runtime-registry.js";
+import { decodeRuntimeEffectAtIntake } from "./runtime-data-intake.js";
 import type { RuntimeEffect } from "./runtime-effect.js";
-import { markRuntimeEffectTreeVerified } from "./runtime-effect-verification.js";
 
 export const EFFECT_RUNTIME_BENCHMARK_CONTRACT_VERSION =
   "effect-runtime-typed-execution-v1" as const;
@@ -223,15 +222,11 @@ function decodeEffectAtIntake(
   fixture: BenchmarkFixture,
   effect: RuntimeEffect
 ): RuntimeEffect {
-  const decoded = validateRuntimeEffectCatalogPayload(
+  return decodeRuntimeEffectAtIntake(
     `Benchmark ${effect.effectId}`,
     effect.effectId,
     effect,
     fixture.source.runtimeMode,
     fixture.source.sourceType
   );
-  if (!decoded.ok) {
-    throw new Error(decoded.errors.join("\n"));
-  }
-  return markRuntimeEffectTreeVerified(decoded.value as RuntimeEffect);
 }
