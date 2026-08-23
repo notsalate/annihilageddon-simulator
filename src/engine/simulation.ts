@@ -158,6 +158,28 @@ export interface SimulationFailureReport {
   reproduction: SimulationFailureReproduction;
 }
 
+interface SimulationFailureRuntimeDataCandidate {
+  readonly manifest?: unknown;
+  readonly cardDefinitions?: unknown;
+  readonly tokenDefinitions?: unknown;
+  readonly decks?: unknown;
+  readonly tokenStacks?: unknown;
+}
+
+interface GameActionCandidate {
+  readonly type?: unknown;
+  readonly cardInstanceId?: unknown;
+  readonly tokenInstanceId?: unknown;
+  readonly source?: unknown;
+}
+
+interface SimulationFailureReplayChoiceCandidate {
+  readonly type?: unknown;
+  readonly playerId?: unknown;
+  readonly effectId?: unknown;
+  readonly choiceId?: unknown;
+}
+
 export function createSimulationFailureReplay(
   report: Pick<SimulationFailureReport, "actions" | "choices">
 ): SimulationFailureReplay {
@@ -188,6 +210,143 @@ export function createSimulationFailureReplay(
     actions: [...report.actions],
     choices,
   };
+}
+
+export function parseSimulationFailureReplayReport(reportText: string): {
+  runtimeData: SimulationFailureReport["runtimeData"];
+  replay: SimulationFailureReplay;
+} {
+  const runtimeDataValue: unknown = JSON.parse(
+    readJsonSection(reportText, "runtimeData")
+  );
+  if (!isSimulationFailureRuntimeData(runtimeDataValue)) {
+    throw new Error("Report runtimeData has an invalid shape");
+  }
+  const actionsValue: unknown = JSON.parse(
+    readJsonSection(reportText, "actions")
+  );
+  if (!isGameActionArray(actionsValue)) {
+    throw new Error("Report actions have an invalid shape");
+  }
+  const choicesValue: unknown = JSON.parse(
+    readJsonSection(reportText, "choices")
+  );
+  return {
+    runtimeData: runtimeDataValue,
+    replay: {
+      actions: actionsValue,
+      choices: readReplayChoices(choicesValue),
+    },
+  };
+}
+
+function readJsonSection(reportText: string, section: string): string {
+  const codeFence = "`".repeat(3);
+  const marker = `${section}:\n${codeFence}json\n`;
+  const start = reportText.indexOf(marker);
+  if (start < 0) {
+    throw new Error(`Report does not contain ${section}`);
+  }
+  const contentStart = start + marker.length;
+  const contentEnd = reportText.indexOf(`\n${codeFence}`, contentStart);
+  if (contentEnd < 0) {
+    throw new Error(`Report section ${section} is not closed`);
+  }
+  return reportText.slice(contentStart, contentEnd);
+}
+
+function isSimulationFailureRuntimeData(
+  value: unknown
+): value is SimulationFailureReport["runtimeData"] {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const record = value as SimulationFailureRuntimeDataCandidate;
+  return (
+    "manifest" in value &&
+    "cardDefinitions" in value &&
+    "tokenDefinitions" in value &&
+    "decks" in value &&
+    "tokenStacks" in value &&
+    Array.isArray(record.cardDefinitions) &&
+    Array.isArray(record.tokenDefinitions)
+  );
+}
+
+function isGameActionArray(value: unknown): value is GameAction[] {
+  return Array.isArray(value) && value.every(isGameAction);
+}
+
+function isGameAction(value: unknown): value is GameAction {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as GameActionCandidate;
+  switch (record.type) {
+    case "endTurn":
+      return true;
+    case "playCard":
+    case "activatePermanent":
+      return typeof record.cardInstanceId === "string";
+    case "activateWizardProperty":
+      return typeof record.tokenInstanceId === "string";
+    case "buyMarketCard":
+      return (
+        typeof record.cardInstanceId === "string" &&
+        (record.source === "mainMarket" ||
+          record.source === "legendMarket" ||
+          record.source === "wildMagicStack" ||
+          record.source === "familiar")
+      );
+    default:
+      return false;
+  }
+}
+
+function readReplayChoices(value: unknown): SimulationFailureReplay["choices"] {
+  if (!Array.isArray(value)) {
+    throw new Error("Report choices have an invalid shape");
+  }
+
+  const choices: SimulationFailureReplayChoice[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new Error("Report choice has an invalid shape");
+    }
+    const record = entry as SimulationFailureReplayChoiceCandidate;
+    if (
+      record.type !== "effectChoiceSelected" &&
+      record.type !== "effectChoiceSkipped"
+    ) {
+      continue;
+    }
+    if (
+      typeof record.playerId !== "string" ||
+      typeof record.effectId !== "string"
+    ) {
+      throw new Error("Report effect choice has an invalid shape");
+    }
+    if (record.type === "effectChoiceSkipped") {
+      choices.push({
+        type: "effectChoiceSkipped",
+        playerId: record.playerId,
+        effectId: record.effectId,
+      });
+      continue;
+    }
+    if (typeof record.choiceId !== "string") {
+      throw new Error("Report selected effect choice has no choiceId");
+    }
+    choices.push({
+      type: "effectChoiceSelected",
+      playerId: record.playerId,
+      effectId: record.effectId,
+      choiceId: record.choiceId,
+    });
+  }
+  return choices;
 }
 
 export function createLoadedDataPackFromSimulationFailureReport(
