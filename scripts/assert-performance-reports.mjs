@@ -4,10 +4,10 @@ import path from "node:path";
 import { assertPerformancePullRequestReportIntegrity } from "../dist/src/engine/performance-epoch.js";
 
 const reportsDir = process.argv[2];
-const expectedComparisonPairId = process.argv[3];
-if (reportsDir === undefined || expectedComparisonPairId === undefined) {
+const expectedRunId = process.argv[3];
+if (reportsDir === undefined || expectedRunId === undefined) {
   throw new Error(
-    "Usage: node scripts/assert-performance-reports.mjs <reports-dir> <expected-comparison-pair-id>"
+    "Usage: node scripts/assert-performance-reports.mjs <reports-dir> <expected-run-id>"
   );
 }
 
@@ -32,7 +32,7 @@ for (const [fileId, benchmark, id] of expectedReports) {
     } else {
       assertPerformancePullRequestReportIntegrity(
         report,
-        expectedComparisonPairId
+        `${expectedRunId}:${fileId}`
       );
       if (report.benchmark !== benchmark || report.id !== id) {
         failures.push(`${fileName}: report identity does not match its file`);
