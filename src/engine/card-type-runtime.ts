@@ -113,7 +113,7 @@ function resolveCardTypeEffect(
       }
       return {
         status: "resolved",
-        result: decoded as OwnedCardsCountAsCardTypeRuntimeEffect,
+        result: decoded,
       };
     }
   );
