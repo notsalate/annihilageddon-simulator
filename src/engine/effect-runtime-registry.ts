@@ -428,6 +428,12 @@ export interface EffectRuntimeServices {
     effect: VerifiedRuntimeEffect,
     source: EffectSourceContext
   ): EffectExecutionResult;
+  executeMayhemEffects(
+    state: GameState,
+    player: PlayerState,
+    definition: CardDefinition,
+    source: EffectSourceContext
+  ): EffectExecutionResult;
   asString(value: unknown): string;
 }
 

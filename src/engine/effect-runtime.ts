@@ -1193,6 +1193,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   playResolvedCard,
   isLegalWildMagicOption,
   executeEffect,
+  executeMayhemEffects,
   asString,
 };
 

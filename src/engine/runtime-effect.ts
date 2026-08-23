@@ -650,7 +650,7 @@ export type MayhemRefreshLegendMarketRuntimeEffect = TimedEffect<
   "onMayhemResolve"
 > & {
   targetSize: number;
-  destroyMegaMayhem: true;
+  destroyMegaMayhem?: true;
 };
 export type MayhemEachPlayerBattleHighestHandCostRuntimeEffect = TimedEffect<
   "mayhem_each_player_battle_highest_hand_cost",

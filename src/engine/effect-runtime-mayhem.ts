@@ -84,6 +84,7 @@ export interface MayhemEffectDecoderTools {
     fields: ObjectFields<RuntimeEffectForId<Id>>
   ): RuntimeEffectDecoder<Id>;
   required<T>(decode: ValueDecoder<T>): RequiredField<T>;
+  optional<T>(decode: ValueDecoder<T>): OptionalField<T>;
   literal<const Value extends string | number | boolean>(
     expected: Value
   ): ValueDecoder<Value>;
@@ -112,6 +113,7 @@ export function createMayhemEffectDecoders(
   const {
     defineDecoder,
     required,
+    optional,
     literal,
     positiveInteger,
     nonNegativeInteger,
@@ -186,7 +188,7 @@ export function createMayhemEffectDecoders(
         effectId: required(literal("mayhem_refresh_legend_market")),
         timing: required(literal("onMayhemResolve")),
         targetSize: required(positiveInteger),
-        destroyMegaMayhem: required(literal(true)),
+        destroyMegaMayhem: optional(literal(true)),
       }
     ),
     mayhem_each_player_battle_highest_hand_cost: defineDecoder(
@@ -840,7 +842,7 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"mayhem_refresh_legend_market">
 > = {
   effectId: "mayhem_refresh_legend_market",
-  execute(state, player, effect, source) {
+  execute(state, player, effect, source, services) {
     for (const card of [...listLegendMarketCards(state)]) {
       const moved = movePhysicalCard(
         state,
@@ -877,6 +879,41 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
         };
       }
       if (definition.engine.cardKind === "megaMayhem") {
+        let gameEnd: EffectGameEnd | undefined;
+        if (effect.destroyMegaMayhem !== true) {
+          recordGameEvent(state, {
+            type: "marketEventCardOpened",
+            playerId: player.playerId,
+            sourceType: source.sourceType,
+            destinationZone: "legendMarket",
+            cardInstanceId: card.instanceId,
+            definitionId: card.definitionId,
+          });
+          const mayhemResult = services.executeMayhemEffects(
+            state,
+            player,
+            definition,
+            {
+              sourceType: "card",
+              runtimeMode: state.runtimeMode,
+              playerId: player.playerId,
+              cardInstanceId: card.instanceId,
+              definitionId: card.definitionId,
+            }
+          );
+          if (!mayhemResult.ok) {
+            return mayhemResult;
+          }
+          gameEnd = mayhemResult.gameEnd;
+          if (gameEnd === undefined) {
+            recordGameEvent(state, {
+              type: "mayhemResolved",
+              playerId: player.playerId,
+              cardInstanceId: card.instanceId,
+              definitionId: card.definitionId,
+            });
+          }
+        }
         const moved = movePhysicalCard(
           state,
           card.instanceId,
@@ -886,6 +923,9 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
         );
         if (!moved.ok) {
           return { ok: false, error: moved.reason };
+        }
+        if (gameEnd !== undefined) {
+          return { ok: true, gameEnd };
         }
         recordGameEvent(state, {
           type: "megaMayhemDestroyed",

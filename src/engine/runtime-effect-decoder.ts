@@ -596,6 +596,7 @@ const combatReplacementEffectDecoders = createCombatReplacementEffectDecoders({
 const mayhemEffectDecoders = createMayhemEffectDecoders({
   defineDecoder,
   required,
+  optional,
   literal,
   positiveInteger,
   nonNegativeInteger,

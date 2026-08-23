@@ -11601,3 +11601,42 @@ test("2G выдаёт по чипсине каждому игроку и зан�
     assert.equal(targetPlayer.chips, 1);
   }
 });
+
+test("2G разыгрывает МегаБеспредел при обычном заполнении рынка легенд", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const mayhemDefinition = state.cardDefinitions.get("esw2_dbg__main_073");
+  assert.ok(mayhemDefinition);
+  const megaMayhem = {
+    ...createCommonRuntimeCard("esw2_dbg__mega_mayhem_005"),
+    instanceId: markCardInstanceId("fixture-2g-mega-mayhem"),
+  };
+  const replacementLegends = Array.from({ length: 3 }, (_value, index) => ({
+    ...createCommonRuntimeCard("esw2_dbg__legend_030"),
+    instanceId: markCardInstanceId(`fixture-2g-after-mega-${index}`),
+  }));
+  state.common.legendDeck.splice(
+    0,
+    state.common.legendDeck.length,
+    megaMayhem,
+    ...replacementLegends
+  );
+  for (const targetPlayer of state.players) {
+    targetPlayer.life.current = 20;
+  }
+
+  const result = executeMayhemEffects(state, player, mayhemDefinition, {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: markCardInstanceId("fixture-2g-mega"),
+    definitionId: mayhemDefinition.cardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(state.common.legendMarket, replacementLegends);
+  assert.equal(state.common.destroyedMegaMayhem.includes(megaMayhem), true);
+  for (const targetPlayer of state.players) {
+    assert.equal(targetPlayer.life.current, 5);
+  }
+});

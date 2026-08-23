@@ -38,8 +38,7 @@
       {
         "effectId": "mayhem_refresh_legend_market",
         "timing": "onMayhemResolve",
-        "targetSize": 3,
-        "destroyMegaMayhem": true
+        "targetSize": 3
       }
     ],
     "unsupportedMechanics": []
