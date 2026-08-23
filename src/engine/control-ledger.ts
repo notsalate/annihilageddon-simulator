@@ -525,6 +525,18 @@ export function listPhysicalCardLocations(
   );
 }
 
+/** Lists cards in one physical zone without exposing its storage. */
+export function listPhysicalCardsInZone(
+  state: GameState,
+  zoneName: string
+): readonly CardInstance[] {
+  return (
+    listPhysicalCardZoneDescriptors(state).find(
+      (descriptor) => descriptor.zoneName === zoneName
+    )?.read() ?? []
+  );
+}
+
 /** Lists locations that can supply a voluntary Defense for one player. */
 export function listDefenseCardLocations(
   state: GameState,
