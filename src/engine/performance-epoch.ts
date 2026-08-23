@@ -504,6 +504,89 @@ export function parsePerformanceMeasurement(
   throw new TypeError("Invalid performance benchmark artifact");
 }
 
+export function assertPerformancePullRequestReportIntegrity(
+  value: unknown,
+  expectedComparisonPairId: string
+): void {
+  if (expectedComparisonPairId.length === 0) {
+    throw new TypeError("Expected comparisonPairId must not be empty");
+  }
+  if (!isPlainRecord(value)) {
+    throw new TypeError("Performance report must be an object");
+  }
+
+  const base = value["base"];
+  const head = value["head"];
+  const confirmation = value["confirmation"];
+  const epochReference = value["epochReference"];
+  const verdict = value["verdict"];
+  if (
+    !isPerformanceMeasurement(base) ||
+    !isPerformanceMeasurement(head) ||
+    !isPerformanceMeasurement(confirmation) ||
+    (epochReference !== null && !isPerformanceMeasurement(epochReference))
+  ) {
+    throw new TypeError(
+      "Fresh PR report requires valid base, head, confirmation and optional E0 measurements"
+    );
+  }
+  if (
+    (verdict !== "pass" &&
+      verdict !== "regression" &&
+      verdict !== "not-calibrated" &&
+      verdict !== "not-measured" &&
+      verdict !== "workload-changed") ||
+    typeof value["blocking"] !== "boolean" ||
+    (verdict === "regression") !== value["blocking"]
+  ) {
+    throw new TypeError("Performance report has an inconsistent verdict");
+  }
+  if (value["benchmark"] !== head.benchmark || value["id"] !== head.id) {
+    throw new Error("Performance report identity does not match head");
+  }
+
+  const measurements = [base, head, confirmation];
+  if (epochReference !== null) measurements.push(epochReference);
+  for (const measurement of measurements) {
+    if (measurement.comparisonPairId !== expectedComparisonPairId) {
+      throw new Error(
+        `${measurement.role} ${measurement.benchmark}/${measurement.id} has invalid comparisonPairId`
+      );
+    }
+    if (!sameEnvironment(head.environment, measurement.environment)) {
+      throw new Error(
+        `${measurement.role} ${measurement.benchmark}/${measurement.id} does not share the exact fresh PR environment`
+      );
+    }
+    if (
+      !sameProtocol(head, measurement) ||
+      head.contractVersion !== measurement.contractVersion
+    ) {
+      throw new Error(
+        `${measurement.role} ${measurement.benchmark}/${measurement.id} does not share the fresh PR protocol`
+      );
+    }
+    if (
+      head.benchmark !== measurement.benchmark ||
+      head.id !== measurement.id ||
+      head.playerCount !== measurement.playerCount
+    ) {
+      throw new Error(
+        `${measurement.role} measurement does not match the fresh PR workload identity`
+      );
+    }
+  }
+
+  if (
+    base.role !== "current" ||
+    head.role !== "current" ||
+    confirmation.role !== "current" ||
+    (epochReference !== null && epochReference.role !== "reference")
+  ) {
+    throw new Error("Fresh PR report contains invalid measurement roles");
+  }
+}
+
 export function findPerformanceBaselineEntry(
   baseline: PerformanceEpochBaseline,
   measurement: Pick<PerformanceMeasurement, "benchmark" | "id">
@@ -996,6 +1079,9 @@ function parseLegacyPerformanceMeasurement(
     environment: isEnvironmentFingerprint(value["environment"])
       ? value["environment"]
       : LEGACY_BENCHMARK_ENVIRONMENT,
+    ...(isString(value["comparisonPairId"])
+      ? { comparisonPairId: value["comparisonPairId"] }
+      : {}),
     commit:
       value["commit"] === null || isString(value["commit"])
         ? value["commit"]

@@ -164,7 +164,7 @@ jobs:
           if-no-files-found: error
       - name: Enforce performance gate
         if: ${{ always() }}
-        run: node scripts/assert-performance-reports.mjs "$RUNNER_TEMP"
+        run: node scripts/assert-performance-reports.mjs "$RUNNER_TEMP" "$PERFORMANCE_COMPARISON_PAIR_ID"
 
   scheduled:
     if: ${{ github.event_name == 'schedule' }}

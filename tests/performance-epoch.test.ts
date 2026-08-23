@@ -16,6 +16,7 @@ import {
   type PerformanceAcceptedCalibration,
   type PerformanceMeasurement,
 } from "../src/index.js";
+import { assertPerformancePullRequestReportIntegrity } from "../src/engine/performance-epoch.js";
 
 const environment: BenchmarkEnvironmentFingerprint = {
   nodeVersion: "v22.23.1",
@@ -506,6 +507,151 @@ test("legacy benchmark artifacts are accepted as not-calibrated measurements", (
   assert.equal(parsed.id, "simulation:100");
   assert.equal(parsed.environment.runner, "unknown");
   assert.equal(parsed.commit, null);
+});
+
+test("legacy benchmark artifacts preserve fresh-session metadata through JSON", () => {
+  const legacy = JSON.parse(
+    JSON.stringify({
+      benchmark: "simulation",
+      workload: {
+        role: "reference",
+        epoch: "E0",
+        contractVersion: "simulation-benchmark-v1",
+        playerCount: 2,
+        gameCount: 100,
+      },
+      warmupCount: 1,
+      measurementCount: 3,
+      timings: measurement().timings,
+      metrics: {
+        ...measurement().metrics,
+        eventTypeCounts: { gameEnd: 100 },
+      },
+      workloadFingerprint: "workload",
+      workloadVolumeFingerprint: "volume",
+      resultFingerprint: "result",
+      environment,
+      comparisonPairId: "run-42:pull-request",
+      commit: "e0-sha",
+    })
+  ) as unknown;
+
+  const parsed = parsePerformanceMeasurement(legacy);
+  assert.deepEqual(parsed.environment, environment);
+  assert.equal(parsed.comparisonPairId, "run-42:pull-request");
+  assert.equal(parsed.commit, "e0-sha");
+});
+
+test("legacy same-session E0 exposes a confirmed regression instead of false green", () => {
+  const epochReference = parsePerformanceMeasurement(
+    JSON.parse(
+      JSON.stringify({
+        benchmark: "simulation",
+        workload: {
+          role: "reference",
+          epoch: "E0",
+          contractVersion: "simulation-benchmark-v1",
+          playerCount: 2,
+          gameCount: 100,
+        },
+        warmupCount: 1,
+        measurementCount: 3,
+        timings: measurement({ totalMs: 10 }).timings,
+        metrics: measurement().metrics,
+        workloadFingerprint: "workload",
+        workloadVolumeFingerprint: "volume",
+        resultFingerprint: "result",
+        environment,
+        comparisonPairId: "fixture-pair",
+        commit: "commit-1",
+      })
+    ) as unknown
+  );
+  const report = comparePerformance({
+    baseline: baselineEntry(),
+    epochReference,
+    base: measurement({ totalMs: 20 }),
+    head: measurement({ totalMs: 13 }),
+    confirmation: measurement({ totalMs: 13 }),
+  });
+
+  assert.equal(report.epochComparison.verdict, "regression");
+  assert.equal(report.baseComparison.verdict, "pass");
+  assert.equal(report.blocking, true);
+  assert.equal(report.blockingSource, "epoch-health");
+});
+
+test("fresh PR report integrity rejects lost pair, environment, protocol and confirmation", () => {
+  const validReport = comparePerformance({
+    baseline: baselineEntry(),
+    epochReference: measurement({ role: "reference" }),
+    base: measurement(),
+    head: measurement(),
+    confirmation: measurement(),
+  });
+  assert.doesNotThrow(() =>
+    assertPerformancePullRequestReportIntegrity(validReport, "fixture-pair")
+  );
+
+  const noEpochReport = { ...validReport, epochReference: null };
+  assert.doesNotThrow(() =>
+    assertPerformancePullRequestReportIntegrity(noEpochReport, "fixture-pair")
+  );
+
+  const lostPairReport = {
+    ...validReport,
+    base: { ...validReport.base, comparisonPairId: undefined },
+  };
+  assert.throws(
+    () =>
+      assertPerformancePullRequestReportIntegrity(
+        lostPairReport,
+        "fixture-pair"
+      ),
+    /comparisonPairId/u
+  );
+
+  const changedEnvironmentReport = {
+    ...validReport,
+    base: {
+      ...validReport.base,
+      environment: { ...validReport.base.environment, cpuCount: 8 },
+    },
+  };
+  assert.throws(
+    () =>
+      assertPerformancePullRequestReportIntegrity(
+        changedEnvironmentReport,
+        "fixture-pair"
+      ),
+    /exact fresh PR environment/u
+  );
+
+  const changedProtocolReport = {
+    ...validReport,
+    confirmation: { ...validReport.confirmation, warmupCount: 2 },
+  };
+  assert.throws(
+    () =>
+      assertPerformancePullRequestReportIntegrity(
+        changedProtocolReport,
+        "fixture-pair"
+      ),
+    /fresh PR protocol/u
+  );
+
+  const missingConfirmationReport = {
+    ...validReport,
+    confirmation: undefined,
+  };
+  assert.throws(
+    () =>
+      assertPerformancePullRequestReportIntegrity(
+        missingConfirmationReport,
+        "fixture-pair"
+      ),
+    /requires valid base, head, confirmation/u
+  );
 });
 
 test("the committed E0 baseline covers simulation and all analyzer profiles", () => {

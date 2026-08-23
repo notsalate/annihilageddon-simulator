@@ -1,22 +1,25 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { assertPerformancePullRequestReportIntegrity } from "../dist/src/engine/performance-epoch.js";
+
 const reportsDir = process.argv[2];
-if (reportsDir === undefined) {
+const expectedComparisonPairId = process.argv[3];
+if (reportsDir === undefined || expectedComparisonPairId === undefined) {
   throw new Error(
-    "Usage: node scripts/assert-performance-reports.mjs <reports-dir>"
+    "Usage: node scripts/assert-performance-reports.mjs <reports-dir> <expected-comparison-pair-id>"
   );
 }
 
 const expectedReports = [
-  "simulation",
-  "analyzer-light",
-  "analyzer-typical",
-  "analyzer-heavy",
+  ["simulation", "simulation", "simulation:100"],
+  ["analyzer-light", "analyzer", "analyzer:light"],
+  ["analyzer-typical", "analyzer", "analyzer:typical"],
+  ["analyzer-heavy", "analyzer", "analyzer:heavy"],
 ];
 const failures = [];
-for (const id of expectedReports) {
-  const fileName = `performance-report-${id}.json`;
+for (const [fileId, benchmark, id] of expectedReports) {
+  const fileName = `performance-report-${fileId}.json`;
   const filePath = path.join(reportsDir, fileName);
   try {
     const report = JSON.parse(readFileSync(filePath, "utf8"));
@@ -26,8 +29,17 @@ for (const id of expectedReports) {
       Array.isArray(report)
     ) {
       failures.push(`${fileName}: report is not an object`);
-    } else if (report.blocking === true) {
-      failures.push(`${fileName}: blocking performance regression`);
+    } else {
+      assertPerformancePullRequestReportIntegrity(
+        report,
+        expectedComparisonPairId
+      );
+      if (report.benchmark !== benchmark || report.id !== id) {
+        failures.push(`${fileName}: report identity does not match its file`);
+      }
+      if (report.blocking === true) {
+        failures.push(`${fileName}: blocking performance regression`);
+      }
     }
   } catch (error) {
     failures.push(
