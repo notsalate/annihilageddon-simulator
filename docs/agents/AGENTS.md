@@ -6,8 +6,8 @@ This folder contains local agent workflow documentation.
 
 ## Ownership
 
-- Owns `domain.md`, `issue-tracker.md`, and `triage-labels.md`.
-- Does not own game rules, card behavior, runtime layout, or import schemas.
+- Owns process documents directly under `docs/agents/`, including task routing, domain-doc consumption, CodeGraph workflow, DOX maintenance, and review language.
+- Does not own game rules, card behavior, runtime layout, import schemas, or benchmark protocol.
 
 ## Local Contracts
 

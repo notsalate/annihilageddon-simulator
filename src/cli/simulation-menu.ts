@@ -9,6 +9,8 @@ import {
 } from "../engine/mass-simulation.js";
 import {
   runSingleGame,
+  SimulationExecutionError,
+  type SimulationFailureReport,
   type GameEndReason,
   type RunSingleGameOptions,
   type SingleGameResult,
@@ -276,17 +278,22 @@ async function writeErrorReport(
   );
   await writeFile(
     reportPath,
-    formatErrorReport(timestamp, error, context),
+    formatErrorReport(timestamp, error, context, reportPath),
     "utf8"
   );
   return reportPath;
 }
 
-function formatErrorReport(
+export function formatErrorReport(
   timestamp: string,
   error: unknown,
-  context: Record<string, string | number>
+  context: Record<string, string | number>,
+  reportPath?: string
 ): string {
+  if (error instanceof SimulationExecutionError) {
+    return formatSimulationFailureReport(timestamp, error.report, reportPath);
+  }
+
   const normalizedError = normalizeError(error);
   return [
     "# Simulation Menu Error",
@@ -302,6 +309,87 @@ function formatErrorReport(
     "```",
     "",
   ].join("\n");
+}
+
+export function formatSimulationFailureReport(
+  timestamp: string,
+  report: SimulationFailureReport,
+  reportPath?: string
+): string {
+  const reproduction = materializeReproduction(report.reproduction, reportPath);
+  return [
+    "# Simulation Failure",
+    "",
+    `timestamp: ${timestamp}`,
+    `seed: ${report.seed}`,
+    `turnNumber: ${report.turnNumber}`,
+    `activePlayerId: ${report.activePlayerId}`,
+    "",
+    "setup:",
+    "```json",
+    JSON.stringify(report.setup, null, 2),
+    "```",
+    "",
+    "runtimeData:",
+    "```json",
+    JSON.stringify(report.runtimeData, null, 2),
+    "```",
+    "",
+    "actions:",
+    "```json",
+    JSON.stringify(report.actions, null, 2),
+    "```",
+    "",
+    "choices:",
+    "```json",
+    JSON.stringify(report.choices, null, 2),
+    "```",
+    "",
+    `message: ${report.error.message}`,
+    "",
+    "stack:",
+    "```",
+    report.error.stack,
+    "```",
+    ...(report.error.causeStack === undefined
+      ? []
+      : ["", "cause stack:", "```", report.error.causeStack, "```"]),
+    "",
+    "eventLog:",
+    "```json",
+    JSON.stringify(report.eventLog, null, 2),
+    "```",
+    "",
+    "reproduction:",
+    `command: ${reproduction.command}`,
+    "```json",
+    JSON.stringify(reproduction.args, null, 2),
+    "```",
+    "",
+  ].join("\n");
+}
+
+function materializeReproduction(
+  reproduction: SimulationFailureReport["reproduction"],
+  reportPath: string | undefined
+): SimulationFailureReport["reproduction"] {
+  if (reportPath === undefined) {
+    return reproduction;
+  }
+
+  return {
+    command: reproduction.command.replaceAll(
+      "<report-path>",
+      quoteCommandArgument(reportPath)
+    ),
+    args: reproduction.args.map((argument) =>
+      argument === "<report-path>" ? reportPath : argument
+    ),
+  };
+}
+
+function quoteCommandArgument(value: string): string {
+  return /[\s"]/.test(value) ? JSON.stringify(value) : value;
 }
 
 function normalizeError(error: unknown): { message: string; stack: string } {

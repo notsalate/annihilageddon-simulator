@@ -10,11 +10,13 @@ import {
   markTokenInstanceId,
 } from "../src/domain/types.js";
 import {
-  tryExecuteSetupEffect,
+  tryExecuteSetupEffect as executeVerifiedSetupEffect,
   validateRuntimeEffectCatalogPayload,
   type EffectRuntimeSetupServices,
   type SetupEffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
+import { isRuntimeEffectId } from "../src/engine/runtime-effect.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 import type { PlayerState } from "../src/engine/setup.js";
 import {
   initializeGame,
@@ -24,6 +26,51 @@ import {
   type RuntimeEffect,
   type TokenDefinition,
 } from "../src/index.js";
+
+function tryExecuteSetupEffect(
+  subject: PlayerState,
+  effect: unknown,
+  source: SetupEffectSourceContext,
+  setupServices: EffectRuntimeSetupServices
+): ReturnType<typeof executeVerifiedSetupEffect> {
+  if (
+    typeof effect !== "object" ||
+    effect === null ||
+    !("effectId" in effect) ||
+    typeof effect.effectId !== "string" ||
+    !isRuntimeEffectId(effect.effectId)
+  ) {
+    return {
+      status: "error",
+      error: `Unsupported setup effect id ${String(
+        typeof effect === "object" && effect !== null && "effectId" in effect
+          ? effect.effectId
+          : undefined
+      )}`,
+    };
+  }
+
+  const validation = validateRuntimeEffectCatalogPayload(
+    "Test setup effect",
+    effect.effectId,
+    effect,
+    source.runtimeMode,
+    source.sourceType
+  );
+  if (!validation.ok) {
+    return {
+      status: "error",
+      error: validation.errors[0] ?? "Invalid setup effect",
+    };
+  }
+
+  return executeVerifiedSetupEffect(
+    subject,
+    verifiedTestRuntimeEffect(validation.value as RuntimeEffect),
+    source,
+    setupServices
+  );
+}
 
 function services(
   definitions: string[] = ["target"]

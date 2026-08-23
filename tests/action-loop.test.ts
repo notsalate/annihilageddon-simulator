@@ -17,9 +17,16 @@ import {
   type StatusInstance,
   type TokenDefinition,
 } from "../src/index.js";
-import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
+import {
+  loadCurrentRuntimeDataPack,
+  validateExecutableDataPack,
+} from "../src/engine/data.js";
 import { executeMayhemEffects } from "../src/engine/effect-runtime.js";
-import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
+import {
+  validateRuntimeEffectCatalogPayload,
+  type EffectSourceContext,
+} from "../src/engine/effect-runtime-registry.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 import {
   addFixtureDefenseCardToHand,
@@ -49,7 +56,7 @@ const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
 
-test("play reports an error when a resolved foe-deck card is absent from the Ledger", () => {
+test("late foe-deck cleanup errors stop playing after card placement", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -74,24 +81,24 @@ test("play reports an error when a resolved foe-deck card is absent from the Led
     ],
   });
 
-  const result = withTemporaryEffectRuntimeOperations(
-    "add_power",
-    {
-      execute(state, _player, _effect, source) {
-        removeCardFromLocation(state, source.cardInstanceId);
-        return { ok: true };
-      },
-    },
-    () => play(scenario, card)
+  assert.throws(
+    () =>
+      withTemporaryEffectRuntimeOperations(
+        "add_power",
+        {
+          execute(state, _player, _effect, source) {
+            removeCardFromLocation(state, source.cardInstanceId);
+            return { ok: true };
+          },
+        },
+        () => play(scenario, card)
+      ),
+    new RegExp(`Cannot move resolved card ${resolvedCard.instanceId}`)
   );
-
-  assert.deepEqual(result, {
-    ok: false,
-    error: `Cannot move resolved card ${resolvedCard.instanceId}`,
-  });
+  assert.equal(scenario.activePlayer.playedThisTurn.includes(card), true);
 });
 
-test("play preserves a resolved foe-deck card moved before Ledger cleanup", () => {
+test("late foe-deck cleanup errors preserve a card moved by the effect", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -116,23 +123,23 @@ test("play preserves a resolved foe-deck card moved before Ledger cleanup", () =
     ],
   });
 
-  const result = withTemporaryEffectRuntimeOperations(
-    "add_power",
-    {
-      execute(state, _player, _effect, source) {
-        const moved = removeCardFromLocation(state, source.cardInstanceId);
-        assert.ok(moved);
-        foe.deck.push(moved.card);
-        return { ok: true };
-      },
-    },
-    () => play(scenario, card)
+  assert.throws(
+    () =>
+      withTemporaryEffectRuntimeOperations(
+        "add_power",
+        {
+          execute(state, _player, _effect, source) {
+            const moved = removeCardFromLocation(state, source.cardInstanceId);
+            assert.ok(moved);
+            foe.deck.push(moved.card);
+            return { ok: true };
+          },
+        },
+        () => play(scenario, card)
+      ),
+    new RegExp(`Cannot move resolved card ${resolvedCard.instanceId}`)
   );
-
-  assert.deepEqual(result, {
-    ok: false,
-    error: `Cannot move resolved card ${resolvedCard.instanceId}`,
-  });
+  assert.equal(scenario.activePlayer.playedThisTurn.includes(card), true);
   assert.equal(foe.deck.includes(resolvedCard), true);
   assert.equal(foe.discard.includes(resolvedCard), false);
 });
@@ -1183,7 +1190,7 @@ test("controlled-object attack cards use controlled card costs", () => {
     statusId: "fixture-attack-effective-cost-modifier",
     ownerId: activePlayer.playerId,
     effects: [
-      {
+      verifiedTestRuntimeEffect({
         effectId: "modify_effective_value",
         timing: "whileControlled",
         valueKind: "cardCost",
@@ -1193,7 +1200,7 @@ test("controlled-object attack cards use controlled card costs", () => {
           targetType: "card",
           definitionId: "esw2_dbg__main_040",
         },
-      },
+      }),
     ],
   });
   const modifiedCostSlippers = addRuntimeCardToHand(
@@ -3633,71 +3640,20 @@ test("Market Flow reports legend deck exhaustion without starting the next turn"
   );
 });
 
-test("unsupported Mayhem effect fails during Market Flow instead of becoming a silent no-op", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
-  });
-  const unsupportedMayhemDefinition: CardDefinition = {
-    schemaVersion: 1,
-    cardId: "fixture-unsupported-mayhem",
-    source: { image: "assets/cards/fixtures/fixture-unsupported-mayhem.png" },
-    visible: {
-      nameRu: "Unsupported Mayhem",
-      cost: 0,
-      victoryPoints: 0,
-      typeRu: null,
-      cardKind: "mayhem",
-      cardTypes: [],
-      markers: [],
-    },
-    engine: {
-      runtimeSchema: "krutagidon.cardDefinition.v0",
-      mappingStatus: "fixture",
-      playableInV0: true,
-      cardKind: "mayhem",
-      cardTypes: [],
-      cost: 0,
-      victoryPoints: 0,
-      isOngoing: false,
-      marketChipMarker: false,
-      effects: [
-        {
-          effectId: "unsupported_mayhem_runtime_effect",
-          timing: "onMayhemResolve",
-        },
-      ] as unknown as RuntimeEffect[],
-      unsupportedMechanics: [],
-    },
-  };
-  state.cardDefinitions = new Map([
-    ...state.cardDefinitions,
-    [unsupportedMayhemDefinition.cardId, unsupportedMayhemDefinition],
-  ]);
-  const unsupportedMayhem: CardInstance = {
-    instanceId: markCardInstanceId("fixture-unsupported-mayhem-instance"),
-    definitionId: markCardDefinitionId(unsupportedMayhemDefinition.cardId),
-    ownerId: "common",
-    marketChips: 0,
-  };
-  state.common.market.splice(0, 1);
-  state.common.mainDeck.splice(
-    0,
-    state.common.mainDeck.length,
-    unsupportedMayhem
-  );
+test("unsupported Mayhem effect is rejected at Runtime Data Intake", () => {
+  const errors = validateFixtureEffectAtIntake("fixture-unsupported-mayhem", {
+    effectId: "unsupported_mayhem_runtime_effect",
+    timing: "onMayhemResolve",
+  } as unknown as RuntimeEffect);
 
-  const result = applyAction(state, {
-    type: "endTurn",
-  });
-
-  assert.equal(result.ok, false);
-  assert.match(
-    result.error,
-    /Unsupported effect id unsupported_mayhem_runtime_effect/
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        "uses unsupported effect id unsupported_mayhem_runtime_effect"
+      )
+    ),
+    errors.join("\n")
   );
-  assert.equal(state.common.destroyedMayhem.includes(unsupportedMayhem), false);
 });
 
 test("active player can buy wild magic from its stack into discard", () => {
@@ -4716,45 +4672,18 @@ test("active player can activate a wizard property only when its control-count c
   );
 });
 
-test("wizard property activation decodes before timing applicability", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
-  });
-  const activePlayer = state.players.find(
-    (player) => player.playerId === state.activePlayerId
+test("wizard property activation payload is rejected at Runtime Data Intake", () => {
+  const result = validateRuntimeEffectCatalogPayload(
+    "Token fixture-malformed-activation-property.engine.effects[0]",
+    "gain_chips",
+    { effectId: "gain_chips", timing: "onPlay", amount: "invalid" },
+    "combat",
+    "wizardProperty"
   );
-  assert.ok(activePlayer);
-  const definition = createChipActivationWizardProperty(
-    "fixture-malformed-activation-property",
-    ["treasure"],
-    1
-  );
-  assert.equal(definition.kind, "wizardProperty");
-  if (definition.kind !== "wizardProperty") return;
-  assert.ok(definition.engine);
-  definition.engine.effects = [
-    {
-      effectId: "gain_chips",
-      timing: "onPlay",
-      amount: "invalid",
-    } as unknown as RuntimeEffect,
-  ];
-  const property = replaceFirstWizardProperty(state, activePlayer, definition);
-  const chipsBefore = activePlayer.chips;
-  const eventCountBefore = state.eventLog.length;
-
-  const result = applyAction(state, {
-    type: "activateWizardProperty",
-    tokenInstanceId: property.instanceId,
-  });
 
   assert.equal(result.ok, false);
   if (result.ok) return;
-  assert.match(result.error, /amount must be a positive integer/);
-  assert.equal(activePlayer.chips, chipsBefore);
-  assert.equal(state.eventLog.length, eventCountBefore);
+  assert.match(result.errors.join("\n"), /amount must be a positive integer/);
 });
 
 test("wizard property on-play trigger grants chips only for matching ongoing cards", () => {
@@ -4849,48 +4778,23 @@ test("wizard property optional topdeck for gained cards runs before normal disca
   assert.equal(activePlayer.discard.includes(spell), true);
 });
 
-test("wizard property on-gain decodes before timing applicability", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
-  });
-  const activePlayer = state.players.find(
-    (player) => player.playerId === state.activePlayerId
-  );
-  assert.ok(activePlayer);
-  const malformedDefinition = createTopdeckOnGainWizardProperty(
-    "fixture-malformed-on-gain-property",
-    ["creature"]
-  );
-  assert.equal(malformedDefinition.kind, "wizardProperty");
-  if (malformedDefinition.kind !== "wizardProperty") return;
-  assert.ok(malformedDefinition.engine);
-  malformedDefinition.engine.effects = [
+test("wizard property on-gain payload is rejected at Runtime Data Intake", () => {
+  const result = validateRuntimeEffectCatalogPayload(
+    "Token fixture-malformed-on-gain-property.engine.effects[0]",
+    "topdeck_gained_card",
     {
       effectId: "topdeck_gained_card",
       timing: "onPlayCard",
       optional: true,
       cardTypes: ["creature"],
-    } as unknown as RuntimeEffect,
-  ];
-  replaceFirstWizardProperty(state, activePlayer, malformedDefinition);
-  const creature = addFixtureMarketCard(
-    state,
-    "fixture-malformed-on-gain-creature",
-    ["creature"],
-    0
+    },
+    "combat",
+    "wizardProperty"
   );
-
-  const result = applyAction(state, {
-    type: "buyMarketCard",
-    cardInstanceId: creature.instanceId,
-    source: "mainMarket",
-  });
 
   assert.equal(result.ok, false);
   if (result.ok) return;
-  assert.match(result.error, /timing must be onGainCard/);
+  assert.match(result.errors.join("\n"), /timing must be onGainCard/);
 });
 
 test("temporary hand limit modifier counts cards gained this turn and resets after drawing", () => {
@@ -4979,63 +4883,23 @@ test("temporary hand limit modifier counts cards gained this turn and resets aft
   assert.deepEqual(state.turn.gainedCardDefinitionIds, []);
 });
 
-test("temporary hand limit modifier returns a decoder error before end-turn mutation", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
-  });
-  const activePlayer = state.players.find(
-    (player) => player.playerId === state.activePlayerId
+test("temporary hand limit modifier payload is rejected at Runtime Data Intake", () => {
+  const result = validateRuntimeEffectCatalogPayload(
+    "Token fixture-invalid-hand-limit-property.engine.effects[0]",
+    "temporary_hand_limit_by_gained_card_type",
+    {
+      effectId: "temporary_hand_limit_by_gained_card_type",
+      timing: "endTurn",
+      amount: -1,
+      cardTypes: ["spell"],
+    },
+    "combat",
+    "wizardProperty"
   );
-  assert.ok(activePlayer);
-  replaceFirstWizardProperty(
-    state,
-    activePlayer,
-    createTemporaryHandLimitWizardProperty(
-      "fixture-invalid-hand-limit-property",
-      ["spell"],
-      -1
-    )
-  );
-  activePlayer.hand.splice(0);
-  activePlayer.deck.splice(
-    0,
-    activePlayer.deck.length,
-    ...createFixtureCardInstances("fixture-filler", activePlayer.playerId, 5)
-  );
-  state.cardDefinitions = new Map([
-    ...state.cardDefinitions,
-    [
-      createFixtureCardDefinition("fixture-filler", []).cardId,
-      createFixtureCardDefinition("fixture-filler", []),
-    ],
-  ]);
-  const spell = addFixtureMarketCard(
-    state,
-    "fixture-invalid-limit-gained-spell",
-    ["spell"],
-    0
-  );
-  state.turn.gainedCardDefinitionIds.push(spell.definitionId);
-  const handBefore = [...activePlayer.hand];
-  const deckBefore = [...activePlayer.deck];
-  const discardBefore = [...activePlayer.discard];
-  const turnNumberBefore = state.turn.number;
-  const activePlayerIdBefore = state.activePlayerId;
-  const eventCountBefore = state.eventLog.length;
-
-  const result = applyAction(state, { type: "endTurn" });
 
   assert.equal(result.ok, false);
   if (result.ok) return;
-  assert.match(result.error, /amount must be a positive integer/);
-  assert.deepEqual(activePlayer.hand, handBefore);
-  assert.deepEqual(activePlayer.deck, deckBefore);
-  assert.deepEqual(activePlayer.discard, discardBefore);
-  assert.equal(state.turn.number, turnNumberBefore);
-  assert.equal(state.activePlayerId, activePlayerIdBefore);
-  assert.equal(state.eventLog.length, eventCountBefore);
+  assert.match(result.errors.join("\n"), /amount must be a positive integer/);
 });
 
 test("playing a v0 draw card draws from the active player's deck", () => {
@@ -9975,7 +9839,7 @@ test("unowned Mega Mayhem death does not move Basic Trophy", () => {
       engine: {
         ...mayhemDefinition.engine,
         effects: [
-          {
+          verifiedTestRuntimeEffect({
             effectId:
               "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
             timing: "onMayhemResolve",
@@ -9985,7 +9849,7 @@ test("unowned Mega Mayhem death does not move Basic Trophy", () => {
               cardKind: "mayhem",
             },
             destroyedCardSource: "mainDeck",
-          },
+          }),
         ],
       },
     },
@@ -10323,50 +10187,40 @@ test("targeted fixture effect can fail when legal choices are empty", () => {
   assert.match(result.error, /No legal choices/);
 });
 
-test("targeted fixture effect surfaces unsupported selectors explicitly", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
-  });
-  const fixtureCardId = addFixtureCardToActiveHand(state, {
-    effectId: "fixture_add_power_equal_to_target_cost",
-    timing: "onPlay",
-    target: {
-      targetType: "player",
+test("targeted fixture effect selector is rejected at Runtime Data Intake", () => {
+  const result = validateRuntimeEffectCatalogPayload(
+    "Card fixture-targeted-effect-card",
+    "fixture_add_power_equal_to_target_cost",
+    {
+      effectId: "fixture_add_power_equal_to_target_cost",
+      timing: "onPlay",
+      target: {
+        targetType: "player",
+      },
+      targetSelector: "unsupportedFixtureSelector",
     },
-    targetSelector: "unsupportedFixtureSelector",
-  });
-
-  const result = applyAction(state, {
-    type: "playCard",
-    cardInstanceId: fixtureCardId,
-  });
+    "fixture",
+    "card"
+  );
 
   assert.equal(result.ok, false);
-  assert.match(result.error, /targetSelector must be one of/);
+  if (result.ok) return;
+  assert.match(result.errors.join("\n"), /targetSelector must be one of/);
 });
 
-test("runtime execution rejects unsupported effect ids explicitly", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
-  });
-  const fixtureCardId = addFixtureCardToActiveHand(state, {
+test("runtime effect ids are rejected at Runtime Data Intake", () => {
+  const errors = validateFixtureEffectAtIntake("fixture-runtime-effect", {
     effectId: "fixture_runtime_effect_not_in_catalog",
     timing: "onPlay",
-  });
+  } as unknown as RuntimeEffect);
 
-  const result = applyAction(state, {
-    type: "playCard",
-    cardInstanceId: fixtureCardId,
-  });
-
-  assert.equal(result.ok, false);
-  assert.match(
-    result.error,
-    /Unsupported effect id fixture_runtime_effect_not_in_catalog/
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        "uses unsupported effect id fixture_runtime_effect_not_in_catalog"
+      )
+    ),
+    errors.join("\n")
   );
 });
 
@@ -10650,6 +10504,28 @@ function addFixtureCardToActiveHand(
   }).instanceId;
 }
 
+function validateFixtureEffectAtIntake(
+  cardId: string,
+  effect: RuntimeEffect
+): string[] {
+  const dataPack = loadCurrentRuntimeDataPack(
+    rootDir,
+    playableRuntimeDataPackPath
+  );
+  const definition = createFixtureCardDefinition(cardId, [effect]);
+  const result = validateExecutableDataPack(
+    {
+      ...dataPack,
+      cardDefinitions: new Map([
+        ...dataPack.cardDefinitions,
+        [definition.cardId, definition],
+      ]),
+    },
+    { mode: "fixture" }
+  );
+  return result.ok ? [] : result.errors;
+}
+
 function createMarketFlowModeFixture(): GameState {
   const state = initializeGame({
     rootDir,
@@ -10878,7 +10754,7 @@ function createFixtureCardDefinition(
       victoryPoints: 0,
       isOngoing: options.isOngoing ?? false,
       marketChipMarker: false,
-      effects,
+      effects: effects.map((effect) => verifiedTestRuntimeEffect(effect)),
       unsupportedMechanics: [],
     },
   };
@@ -10987,7 +10863,7 @@ function createChipActivationWizardProperty(
       mappingStatus: "fixture",
       playableInV0: true,
       effects: [
-        {
+        verifiedTestRuntimeEffect({
           effectId: "gain_chips",
           timing: "activation",
           amount: 1,
@@ -10996,7 +10872,7 @@ function createChipActivationWizardProperty(
             cardTypes,
             minimumCount,
           },
-        },
+        }),
       ],
       unsupportedMechanics: [],
     },
@@ -11016,12 +10892,12 @@ function createOnPlayOngoingChipWizardProperty(
       mappingStatus: "fixture",
       playableInV0: true,
       effects: [
-        {
+        verifiedTestRuntimeEffect({
           effectId: "gain_chips",
           timing: "onPlayCard",
           isOngoing: true,
           amount: 1,
-        },
+        }),
       ],
       unsupportedMechanics: [],
     },
@@ -11042,12 +10918,12 @@ function createOnPlayTypeChipWizardProperty(
       mappingStatus: "fixture",
       playableInV0: true,
       effects: [
-        {
+        verifiedTestRuntimeEffect({
           effectId: "gain_chips",
           timing: "onPlayCard",
           cardTypes,
           amount: 1,
-        },
+        }),
       ],
       unsupportedMechanics: [],
     },
@@ -11069,18 +10945,20 @@ function createTopdeckOnGainWizardProperty(
       mappingStatus: "fixture",
       playableInV0: true,
       effects: [
-        optional === "omitted"
-          ? {
-              effectId: "topdeck_gained_card",
-              timing: "onGainCard",
-              cardTypes,
-            }
-          : {
-              effectId: "topdeck_gained_card",
-              timing: "onGainCard",
-              optional,
-              cardTypes,
-            },
+        verifiedTestRuntimeEffect(
+          optional === "omitted"
+            ? {
+                effectId: "topdeck_gained_card",
+                timing: "onGainCard",
+                cardTypes,
+              }
+            : {
+                effectId: "topdeck_gained_card",
+                timing: "onGainCard",
+                optional,
+                cardTypes,
+              }
+        ),
       ],
       unsupportedMechanics: [],
     },
@@ -11102,12 +10980,12 @@ function createTemporaryHandLimitWizardProperty(
       mappingStatus: "fixture",
       playableInV0: true,
       effects: [
-        {
+        verifiedTestRuntimeEffect({
           effectId: "temporary_hand_limit_by_gained_card_type",
           timing: "endTurn",
           amount,
           cardTypes,
-        },
+        }),
       ],
       unsupportedMechanics: [],
     },
@@ -11168,7 +11046,7 @@ function createMaxLifeModifierStatus(
     statusId: "fixture-max-life-status",
     ownerId: playerId,
     effects: [
-      {
+      verifiedTestRuntimeEffect({
         effectId: "fixture_modify_effective_value",
         timing: "whileControlled",
         valueKind: "playerMaxLife",
@@ -11177,7 +11055,7 @@ function createMaxLifeModifierStatus(
         target: {
           targetType: "player",
         },
-      },
+      }),
     ],
   };
 }

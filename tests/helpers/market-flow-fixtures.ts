@@ -8,6 +8,7 @@ import {
   markCardDefinitionId,
   markCardInstanceId,
 } from "../../src/domain/types.js";
+import { verifiedTestRuntimeEffect } from "./verified-runtime-effect.js";
 
 export interface CreateTerminalMarketEventFixtureOptions {
   state: GameState;
@@ -94,7 +95,7 @@ function createFixtureDefinition(
       victoryPoints: 0,
       isOngoing: false,
       marketChipMarker: false,
-      effects,
+      effects: effects.map((effect) => verifiedTestRuntimeEffect(effect)),
       unsupportedMechanics: [],
     },
   };

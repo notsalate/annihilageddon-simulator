@@ -45,44 +45,43 @@ const forbiddenPhysicalInventoryHelpers = new Set([
   "listPhysicalCardZones",
 ]);
 const physicalInventorySeamApiNames = new Set([
-  "clonePhysicalCardZoneState",
-  "clonePhysicalCardZones",
+  "clonePhysicalCardLedger",
   "listPhysicalCardLocations",
   "listPhysicalCardZoneDescriptors",
 ]);
 const controlLedgerOwner = "src/engine/control-ledger.ts";
 const physicalCardZonePaths = collectPhysicalCardZonePaths();
 const configuredAllowedViolations = [
-  ["src/engine/data.ts", 1292, 3, "decodeRuntimeSourceMetadata"],
-  ["src/engine/data.ts", 1696, 1, "expectRuntimeRecord"],
-  ["src/engine/data.ts", 1709, 1, "requireRecordField"],
-  ["src/engine/data.ts", 1710, 3, "requireRecordField"],
-  ["src/engine/data.ts", 1724, 1, "optionalRecordField"],
-  ["src/engine/data.ts", 1725, 3, "optionalRecordField"],
-  ["src/engine/data.ts", 1744, 3, "requireArrayField"],
-  ["src/engine/data.ts", 1759, 3, "requireUnknownArrayField"],
-  ["src/engine/data.ts", 1769, 3, "requireRuntimeEffectArrayField"],
-  ["src/engine/data.ts", 1793, 3, "optionalUnknownArrayField"],
-  ["src/engine/data.ts", 1810, 3, "requireStringField"],
-  ["src/engine/data.ts", 1825, 3, "optionalStringField"],
-  ["src/engine/data.ts", 1844, 3, "requireNonEmptyStringField"],
-  ["src/engine/data.ts", 1862, 3, "optionalNonEmptyStringField"],
-  ["src/engine/data.ts", 1874, 3, "requireStringOrNullField"],
-  ["src/engine/data.ts", 1889, 3, "requireExactStringField"],
-  ["src/engine/data.ts", 1909, 3, "requireNumberField"],
-  ["src/engine/data.ts", 1924, 3, "requireNumberOrNullField"],
-  ["src/engine/data.ts", 1942, 3, "requireBooleanField"],
-  ["src/engine/data.ts", 1957, 3, "requireStringArrayField"],
-  ["src/engine/data.ts", 1981, 3, "requireUnsupportedMechanicsField"],
-  ["src/engine/data.ts", 2010, 3, "optionalStringArrayField"],
-  ["src/engine/data.ts", 2023, 3, "requireCardKindField"],
-  ["src/engine/data.ts", 2038, 3, "requireTokenKindField"],
-  ["src/engine/data.ts", 2063, 3, "validateRuntimeEffectDefinition"],
-  ["src/engine/data.ts", 2084, 43, "isEffectRecord"],
-  ["src/engine/runtime-effect-decoder.ts", 76, 9, "decodeObject"],
-  ["src/engine/runtime-effect-decoder.ts", 1568, 41, "isPlainRecord"],
-  ["src/engine/runtime-effect.ts", 1103, 4, "isRuntimeEffectTargetRecord"],
-  ["src/engine/runtime-effect.ts", 1108, 3, "hasExactKeys"],
+  ["src/engine/data.ts", 1293, 3, "decodeRuntimeSourceMetadata"],
+  ["src/engine/data.ts", 1697, 1, "expectRuntimeRecord"],
+  ["src/engine/data.ts", 1710, 1, "requireRecordField"],
+  ["src/engine/data.ts", 1711, 3, "requireRecordField"],
+  ["src/engine/data.ts", 1725, 1, "optionalRecordField"],
+  ["src/engine/data.ts", 1726, 3, "optionalRecordField"],
+  ["src/engine/data.ts", 1745, 3, "requireArrayField"],
+  ["src/engine/data.ts", 1760, 3, "requireUnknownArrayField"],
+  ["src/engine/data.ts", 1770, 3, "requireRuntimeEffectArrayField"],
+  ["src/engine/data.ts", 1794, 3, "optionalUnknownArrayField"],
+  ["src/engine/data.ts", 1811, 3, "requireStringField"],
+  ["src/engine/data.ts", 1826, 3, "optionalStringField"],
+  ["src/engine/data.ts", 1845, 3, "requireNonEmptyStringField"],
+  ["src/engine/data.ts", 1863, 3, "optionalNonEmptyStringField"],
+  ["src/engine/data.ts", 1875, 3, "requireStringOrNullField"],
+  ["src/engine/data.ts", 1890, 3, "requireExactStringField"],
+  ["src/engine/data.ts", 1910, 3, "requireNumberField"],
+  ["src/engine/data.ts", 1925, 3, "requireNumberOrNullField"],
+  ["src/engine/data.ts", 1943, 3, "requireBooleanField"],
+  ["src/engine/data.ts", 1958, 3, "requireStringArrayField"],
+  ["src/engine/data.ts", 1982, 3, "requireUnsupportedMechanicsField"],
+  ["src/engine/data.ts", 2011, 3, "optionalStringArrayField"],
+  ["src/engine/data.ts", 2024, 3, "requireCardKindField"],
+  ["src/engine/data.ts", 2039, 3, "requireTokenKindField"],
+  ["src/engine/data.ts", 2064, 3, "validateRuntimeEffectDefinition"],
+  ["src/engine/data.ts", 2085, 43, "isEffectRecord"],
+  ["src/engine/runtime-effect-decoder.ts", 72, 9, "decodeObject"],
+  ["src/engine/runtime-effect-decoder.ts", 823, 41, "isPlainRecord"],
+  ["src/engine/runtime-effect.ts", 926, 4, "isRuntimeEffectTargetRecord"],
+  ["src/engine/runtime-effect.ts", 931, 3, "hasExactKeys"],
 ];
 
 const typedEffectBoundaryViolations = [];
@@ -124,7 +123,6 @@ const allowedRegistryAdapterValueExports = new Set([
   "validateRuntimeEffectCatalogPayload",
   "executeRuntimeEffect",
   "evaluateRuntimeEffectAtTiming",
-  "applyEffectiveValueModifier",
   "collectAttackReplacementProfile",
   "resolveResurrectionLifeTotal",
   "executeRuntimeEffectAtTiming",
@@ -1151,10 +1149,10 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
   }
   if (
     relativePath === "src/engine/game-state-fork.ts" &&
-    !calledLedgerApis.has("clonePhysicalCardZoneState")
+    !calledLedgerApis.has("clonePhysicalCardLedger")
   ) {
     physicalCardZoneOwnershipViolations.push(
-      `${relativePath} must call clonePhysicalCardZoneState from Control Ledger`
+      `${relativePath} must call clonePhysicalCardLedger from Control Ledger`
     );
   }
 }

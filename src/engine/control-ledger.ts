@@ -9,6 +9,7 @@ import type {
   TemporaryCardControl,
   TrophyLikeInstance,
 } from "./setup.js";
+import { copyRuntimeEffectVerification } from "./runtime-effect-verification.js";
 
 export interface ControlledObjectView {
   playerId: PlayerId;
@@ -47,86 +48,6 @@ export interface PhysicalCardZoneDescriptor {
   replace(cards: readonly CardInstance[]): void;
 }
 
-export type PhysicalCardZoneDescriptorFactory = ((
-  state: Pick<GameState, "players" | "common">
-) => Omit<PhysicalCardZoneDescriptor, "zoneName"> & {
-  readonly zoneName?: never;
-}) & {
-  readonly identity: string;
-  readonly zoneName: string;
-};
-
-interface RegisteredPhysicalCardZoneDescriptorFactory {
-  readonly factory: PhysicalCardZoneDescriptorFactory;
-  readonly identity: string;
-  readonly zoneName: string;
-}
-
-const additionalPhysicalCardZoneFactories = new WeakMap<
-  object,
-  readonly RegisteredPhysicalCardZoneDescriptorFactory[]
->();
-
-interface PhysicalCardZoneSnapshotHooks {
-  readonly capture: () => CardInstance[] | undefined;
-  readonly restore: (
-    storage: CardInstance[],
-    cards: readonly CardInstance[]
-  ) => void;
-}
-
-const physicalCardZoneSnapshotHooks = new WeakMap<
-  PhysicalCardZoneDescriptor,
-  PhysicalCardZoneSnapshotHooks
->();
-
-/** Registers an extension zone with the Ledger-owned physical inventory. */
-export function registerPhysicalCardZoneDescriptorFactory(
-  state: Pick<GameState, "players" | "common">,
-  factory: PhysicalCardZoneDescriptorFactory
-): void {
-  const existing = additionalPhysicalCardZoneFactories.get(state) ?? [];
-  const registeredFactory = Object.freeze({
-    factory,
-    identity: factory.identity,
-    zoneName: factory.zoneName,
-  });
-  const hasDuplicateZoneName =
-    listBuiltinPhysicalCardZoneDescriptors(state).some(
-      (descriptor) => descriptor.zoneName === registeredFactory.zoneName
-    ) ||
-    existing.some(
-      (candidate) => candidate.zoneName === registeredFactory.zoneName
-    );
-  if (hasDuplicateZoneName) {
-    throw new Error(
-      `Duplicate physical card zone descriptor ${registeredFactory.zoneName}`
-    );
-  }
-  if (
-    existing.some(
-      (candidate) => candidate.identity === registeredFactory.identity
-    )
-  ) {
-    throw new Error(
-      `Duplicate physical card zone descriptor identity ${registeredFactory.identity}`
-    );
-  }
-  additionalPhysicalCardZoneFactories.set(state, [
-    ...existing,
-    registeredFactory,
-  ]);
-}
-
-export function clonePhysicalCardZoneDescriptorFactories(
-  source: Pick<GameState, "players" | "common">,
-  target: Pick<GameState, "players" | "common">
-): void {
-  const factories = additionalPhysicalCardZoneFactories.get(source);
-  if (factories !== undefined)
-    additionalPhysicalCardZoneFactories.set(target, factories);
-}
-
 export interface PhysicalCardLocation {
   readonly card: CardInstance;
   readonly zoneName: string;
@@ -142,29 +63,6 @@ export interface PhysicalCardMove {
 
 export type PhysicalCardMoveResult =
   | { readonly ok: true; readonly move: PhysicalCardMove }
-  | { readonly ok: false; readonly reason: string };
-
-interface PhysicalCardZoneMoveSnapshot {
-  readonly descriptor: PhysicalCardZoneDescriptor;
-  readonly cards: readonly CardInstance[];
-  readonly identityStorage?: CardInstance[];
-  readonly restoreIdentity?: (
-    storage: CardInstance[],
-    cards: readonly CardInstance[]
-  ) => void;
-  readonly recoveryStorage?: CardInstance[];
-}
-
-export interface PhysicalCardZoneStateSnapshot {
-  readonly zones: readonly PhysicalCardZoneMoveSnapshot[];
-}
-
-export type PhysicalCardZoneStateSnapshotResult =
-  | { readonly ok: true; readonly snapshot: PhysicalCardZoneStateSnapshot }
-  | { readonly ok: false; readonly reason: string };
-
-export type PhysicalCardZoneStateRestoreResult =
-  | { readonly ok: true }
   | { readonly ok: false; readonly reason: string };
 
 export function buildControlledObjectView(
@@ -368,25 +266,7 @@ function listPlayerPhysicalCardZoneDescriptors(
 export function listPhysicalCardZoneDescriptors(
   state: Pick<GameState, "players" | "common">
 ): readonly PhysicalCardZoneDescriptor[] {
-  return [
-    ...listBuiltinPhysicalCardZoneDescriptors(state),
-    ...(additionalPhysicalCardZoneFactories
-      .get(state)
-      ?.map(({ factory, zoneName }) => {
-        const descriptor = factory(state);
-        return {
-          zoneName,
-          cardinality: descriptor.cardinality,
-          scoringEligible: descriptor.scoringEligible,
-          ...(descriptor.expectedOwnerId === undefined
-            ? {}
-            : { expectedOwnerId: descriptor.expectedOwnerId }),
-          read: () => descriptor.read(),
-          replace: (cards: readonly CardInstance[]) =>
-            descriptor.replace(cards),
-        };
-      }) ?? []),
-  ];
+  return listBuiltinPhysicalCardZoneDescriptors(state);
 }
 
 function listBuiltinPhysicalCardZoneDescriptors(
@@ -482,42 +362,55 @@ export function listOwnedScoringCards(
     }));
 }
 
-export function clonePhysicalCardZones(
-  source: Pick<GameState, "players" | "common">,
-  target: Pick<GameState, "players" | "common">,
-  cloneCard: (card: CardInstance) => CardInstance
-): void {
+export interface PhysicalCardLedgerClone {
+  readonly players: GameState["players"];
+  readonly common: GameState["common"];
+  readonly temporaryCardControls: TemporaryCardControl[];
+}
+
+/** Creates an isolated clone of the Ledger-owned cards and control metadata. */
+export function clonePhysicalCardLedger(
+  source: GameState
+): PhysicalCardLedgerClone {
+  const sourceZones = listPhysicalCardZoneDescriptors(source).map(
+    (descriptor) => ({
+      zoneName: descriptor.zoneName,
+      cards: [...descriptor.read()],
+    })
+  );
+  const physicalCards = new Set(sourceZones.flatMap((zone) => zone.cards));
+  const clones = new Map<object, object>();
+  const cloned = cloneLedgerValue(
+    {
+      players: source.players,
+      common: source.common,
+      temporaryCardControls: source.turn.temporaryCardControls,
+    },
+    physicalCards,
+    clones
+  );
   const targetDescriptors = new Map(
-    listPhysicalCardZoneDescriptors(target).map((descriptor) => [
+    listPhysicalCardZoneDescriptors(cloned).map((descriptor) => [
       descriptor.zoneName,
       descriptor,
     ])
   );
-
-  for (const sourceDescriptor of listPhysicalCardZoneDescriptors(source)) {
-    const targetDescriptor = targetDescriptors.get(sourceDescriptor.zoneName);
+  for (const zone of sourceZones) {
+    const targetDescriptor = targetDescriptors.get(zone.zoneName);
     if (targetDescriptor === undefined) {
-      throw new Error(
-        `Missing physical card zone ${sourceDescriptor.zoneName} in clone target`
-      );
+      throw new Error(`Missing physical card zone ${zone.zoneName} in clone`);
     }
-    targetDescriptor.replace(sourceDescriptor.read().map(cloneCard));
+    targetDescriptor.replace(
+      zone.cards.map((card) => {
+        const clonedCard = clones.get(card);
+        if (clonedCard === undefined) {
+          throw new Error(`Missing cloned physical card ${card.instanceId}`);
+        }
+        return clonedCard as CardInstance;
+      })
+    );
   }
-}
-
-/** Creates an isolated clone of all physical card storage and player-owned state. */
-export function clonePhysicalCardZoneState(
-  source: GameState
-): Pick<GameState, "players" | "common"> {
-  const physicalCards = new Set(
-    listPhysicalCardZoneDescriptors(source).flatMap((descriptor) =>
-      descriptor.read()
-    )
-  );
-  return cloneLedgerValue(
-    { players: source.players, common: source.common },
-    physicalCards
-  );
+  return cloned;
 }
 
 type LedgerCloneValue =
@@ -561,7 +454,13 @@ function cloneLedgerValue<T extends LedgerCloneValue>(
     return value;
   }
   if (physicalCards.has(value)) {
-    return value;
+    const existingPhysicalCard = clones.get(value);
+    if (existingPhysicalCard !== undefined) {
+      return existingPhysicalCard as T;
+    }
+    const clonedPhysicalCard = structuredClone(value);
+    clones.set(value, clonedPhysicalCard);
+    return clonedPhysicalCard;
   }
   const existing = clones.get(value);
   if (existing !== undefined) {
@@ -602,6 +501,7 @@ function cloneLedgerValue<T extends LedgerCloneValue>(
 
   const clone: LedgerCloneObject = {};
   clones.set(value, clone);
+  copyRuntimeEffectVerification(value, clone);
   for (const [key, child] of Object.entries(value)) {
     clone[key] = cloneLedgerValue(child, physicalCards, clones);
   }
@@ -630,17 +530,11 @@ export function listDefenseCardLocations(
   state: GameState,
   playerId: PlayerId
 ): readonly CardLocation[] {
-  const extensionZoneNames = new Set(
-    additionalPhysicalCardZoneFactories
-      .get(state)
-      ?.map((factory) => factory.zoneName) ?? []
-  );
   return listPhysicalCardLocations(state)
     .filter(
       (location) =>
         location.card.ownerId === playerId &&
-        (location.zoneName === `${playerId}.hand` ||
-          extensionZoneNames.has(location.zoneName))
+        location.zoneName === `${playerId}.hand`
     )
     .map(({ card, zoneName }) => ({ card, zoneName }));
 }
@@ -743,36 +637,28 @@ export function movePhysicalCard(
     };
   }
 
+  let destinationCards: readonly CardInstance[];
+  try {
+    destinationCards = destination.read();
+  } catch (error) {
+    return {
+      ok: false,
+      reason: describePhysicalCardMoveError(error),
+    };
+  }
+  if (destination.cardinality === "zeroOrOne" && destinationCards.length > 0) {
+    return {
+      ok: false,
+      reason: `Destination zone ${destinationZoneName} is already occupied`,
+    };
+  }
+
   const cardIndex = source.cards.findIndex(
     (card) => card.instanceId === cardInstanceId
   );
   const card = source.cards[cardIndex];
   if (card === undefined) {
     return { ok: false, reason: `Missing card ${cardInstanceId}` };
-  }
-  const sourceSnapshotResult = createPhysicalCardZoneMoveSnapshot(
-    state,
-    source.descriptor,
-    source.cards
-  );
-  if (!sourceSnapshotResult.ok) {
-    return sourceSnapshotResult;
-  }
-  const destinationSnapshotResult = createPhysicalCardZoneMoveSnapshot(
-    state,
-    destination
-  );
-  if (!destinationSnapshotResult.ok) {
-    return destinationSnapshotResult;
-  }
-  const sourceSnapshot = sourceSnapshotResult.snapshot;
-  const destinationSnapshot = destinationSnapshotResult.snapshot;
-  const destinationCards = destinationSnapshot.cards;
-  if (destination.cardinality === "zeroOrOne" && destinationCards.length > 0) {
-    return {
-      ok: false,
-      reason: `Destination zone ${destinationZoneName} is already occupied`,
-    };
   }
 
   const sourceAfter = [
@@ -783,22 +669,8 @@ export function movePhysicalCard(
     placement === "front"
       ? [card, ...destinationCards]
       : [...destinationCards, card];
-  try {
-    source.descriptor.replace(sourceAfter);
-    destination.replace(destinationAfter);
-  } catch (error) {
-    const rollbackErrors = restorePhysicalCardZoneMoveSnapshots(state, [
-      destinationSnapshot,
-      sourceSnapshot,
-    ]);
-    return {
-      ok: false,
-      reason:
-        rollbackErrors.length === 0
-          ? describePhysicalCardMoveError(error)
-          : `${describePhysicalCardMoveError(error)}; rollback failed: ${rollbackErrors.join("; ")}`,
-    };
-  }
+  source.descriptor.replace(sourceAfter);
+  destination.replace(destinationAfter);
 
   return {
     ok: true,
@@ -808,244 +680,6 @@ export function movePhysicalCard(
       destinationZoneName,
     },
   };
-}
-
-/** Captures every physical zone with Ledger-owned recovery metadata. */
-export function capturePhysicalCardZoneState(
-  state: GameState
-): PhysicalCardZoneStateSnapshotResult {
-  let descriptors: readonly PhysicalCardZoneDescriptor[];
-  try {
-    descriptors = listPhysicalCardZoneDescriptors(state);
-  } catch (error) {
-    return { ok: false, reason: describePhysicalCardMoveError(error) };
-  }
-  if (
-    new Set(descriptors.map((descriptor) => descriptor.zoneName)).size !==
-    descriptors.length
-  ) {
-    return {
-      ok: false,
-      reason: "Physical card zone snapshot found duplicate descriptors",
-    };
-  }
-
-  const zones: PhysicalCardZoneMoveSnapshot[] = [];
-  for (const descriptor of descriptors) {
-    const snapshotResult = createPhysicalCardZoneMoveSnapshot(
-      state,
-      descriptor
-    );
-    if (!snapshotResult.ok) {
-      return snapshotResult;
-    }
-    zones.push(snapshotResult.snapshot);
-  }
-  return { ok: true, snapshot: { zones } };
-}
-
-/** Restores every captured physical zone and reports failures without throwing. */
-export function restorePhysicalCardZoneState(
-  state: GameState,
-  snapshot: PhysicalCardZoneStateSnapshot
-): PhysicalCardZoneStateRestoreResult {
-  let descriptors: readonly PhysicalCardZoneDescriptor[];
-  try {
-    descriptors = listPhysicalCardZoneDescriptors(state);
-  } catch (error) {
-    return { ok: false, reason: describePhysicalCardMoveError(error) };
-  }
-  const descriptorsByName = new Map(
-    descriptors.map((descriptor) => [descriptor.zoneName, descriptor])
-  );
-  const snapshotsByName = new Map(
-    snapshot.zones.map((zone) => [zone.descriptor.zoneName, zone])
-  );
-  if (descriptorsByName.size !== descriptors.length) {
-    return {
-      ok: false,
-      reason: "Physical card zone restore found duplicate descriptors",
-    };
-  }
-  if (snapshotsByName.size !== snapshot.zones.length) {
-    return {
-      ok: false,
-      reason: "Physical card zone restore found duplicate snapshots",
-    };
-  }
-  for (const descriptor of descriptors) {
-    if (!snapshotsByName.has(descriptor.zoneName)) {
-      return {
-        ok: false,
-        reason: `Physical card zone restore found unknown zone ${descriptor.zoneName}`,
-      };
-    }
-  }
-  for (const zone of snapshot.zones) {
-    const descriptor = descriptorsByName.get(zone.descriptor.zoneName);
-    if (descriptor === undefined) {
-      return {
-        ok: false,
-        reason: `Physical card zone restore is missing zone ${zone.descriptor.zoneName}`,
-      };
-    }
-    if (descriptor.cardinality === "zeroOrOne" && zone.cards.length > 1) {
-      return {
-        ok: false,
-        reason: `Physical card zone restore violates singleton zone ${descriptor.zoneName}`,
-      };
-    }
-  }
-
-  const errors: string[] = [];
-  for (const zone of snapshot.zones) {
-    const descriptor = descriptorsByName.get(zone.descriptor.zoneName);
-    if (descriptor === undefined) {
-      return {
-        ok: false,
-        reason: `Physical card zone restore is missing zone ${zone.descriptor.zoneName}`,
-      };
-    }
-    const error = restorePhysicalCardZoneMoveSnapshot(zone, descriptor);
-    if (error !== undefined) {
-      errors.push(error);
-    }
-  }
-  return errors.length === 0
-    ? { ok: true }
-    : { ok: false, reason: errors.join("; ") };
-}
-
-function restorePhysicalCardZoneMoveSnapshots(
-  state: GameState,
-  snapshots: readonly PhysicalCardZoneMoveSnapshot[]
-): string[] {
-  const errors: string[] = [];
-  for (const snapshot of snapshots) {
-    let descriptors: readonly PhysicalCardZoneDescriptor[];
-    try {
-      descriptors = listPhysicalCardZoneDescriptors(state);
-    } catch (error) {
-      errors.push(
-        `Cannot list physical card zones for rollback: ${describePhysicalCardMoveError(error)}`
-      );
-      continue;
-    }
-    const descriptorsByName = new Map(
-      descriptors.map((descriptor) => [descriptor.zoneName, descriptor])
-    );
-    if (descriptorsByName.size !== descriptors.length) {
-      errors.push("Physical card zone rollback found duplicate descriptors");
-      continue;
-    }
-    const descriptor = descriptorsByName.get(snapshot.descriptor.zoneName);
-    if (descriptor === undefined) {
-      errors.push(
-        `Physical card zone rollback is missing zone ${snapshot.descriptor.zoneName}`
-      );
-      continue;
-    }
-    const error = restorePhysicalCardZoneMoveSnapshot(snapshot, descriptor);
-    if (error !== undefined) {
-      errors.push(error);
-    }
-  }
-  return errors;
-}
-
-function createPhysicalCardZoneMoveSnapshot(
-  state: GameState,
-  descriptor: PhysicalCardZoneDescriptor,
-  existingCards?: readonly CardInstance[]
-):
-  | { readonly ok: true; readonly snapshot: PhysicalCardZoneMoveSnapshot }
-  | { readonly ok: false; readonly reason: string } {
-  let cards: readonly CardInstance[];
-  try {
-    cards = existingCards ?? descriptor.read();
-  } catch (error) {
-    return { ok: false, reason: describePhysicalCardMoveError(error) };
-  }
-  const isExtensionZone =
-    additionalPhysicalCardZoneFactories
-      .get(state)
-      ?.some((factory) => factory.zoneName === descriptor.zoneName) === true;
-  const snapshotHooks = physicalCardZoneSnapshotHooks.get(descriptor);
-  const identityStorage = snapshotHooks?.capture();
-  if (!isExtensionZone) {
-    return {
-      ok: true,
-      snapshot: {
-        descriptor,
-        cards: [...cards],
-        ...(identityStorage === undefined || snapshotHooks === undefined
-          ? {}
-          : {
-              identityStorage,
-              restoreIdentity: snapshotHooks.restore,
-            }),
-      },
-    };
-  }
-
-  const recoveryStorage =
-    Array.isArray(cards) && !Object.isFrozen(cards)
-      ? (cards as CardInstance[])
-      : undefined;
-  return {
-    ok: true,
-    snapshot: {
-      descriptor,
-      cards: [...cards],
-      ...(identityStorage === undefined || snapshotHooks === undefined
-        ? {}
-        : {
-            identityStorage,
-            restoreIdentity: snapshotHooks.restore,
-          }),
-      ...(recoveryStorage === undefined ? {} : { recoveryStorage }),
-    },
-  };
-}
-
-function restorePhysicalCardZoneMoveSnapshot(
-  snapshot: PhysicalCardZoneMoveSnapshot,
-  descriptor = snapshot.descriptor
-): string | undefined {
-  try {
-    if (
-      snapshot.identityStorage !== undefined &&
-      snapshot.restoreIdentity !== undefined
-    ) {
-      snapshot.restoreIdentity(snapshot.identityStorage, snapshot.cards);
-    } else {
-      try {
-        descriptor.replace(snapshot.cards);
-      } catch (error) {
-        if (
-          snapshot.recoveryStorage === undefined ||
-          descriptor.read() !== snapshot.recoveryStorage
-        ) {
-          throw error;
-        }
-        snapshot.recoveryStorage.splice(
-          0,
-          snapshot.recoveryStorage.length,
-          ...snapshot.cards
-        );
-      }
-    }
-    const restoredCards = descriptor.read();
-    if (
-      restoredCards.length !== snapshot.cards.length ||
-      restoredCards.some((card, index) => card !== snapshot.cards[index])
-    ) {
-      return `Cannot restore physical card zone ${descriptor.zoneName}`;
-    }
-    return undefined;
-  } catch (error) {
-    return `${descriptor.zoneName}: ${describePhysicalCardMoveError(error)}`;
-  }
 }
 
 function describePhysicalCardMoveError(error: unknown): string {
@@ -1071,16 +705,6 @@ function createArrayCardZoneDescriptor(
       replaceStorage([...cards]);
     },
   };
-  physicalCardZoneSnapshotHooks.set(descriptor, {
-    capture() {
-      const storage = readStorage();
-      return Object.isFrozen(storage) ? undefined : storage;
-    },
-    restore(storage, cards) {
-      storage.splice(0, storage.length, ...cards);
-      replaceStorage(storage);
-    },
-  });
   return descriptor;
 }
 

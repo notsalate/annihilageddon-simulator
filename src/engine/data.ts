@@ -7,6 +7,7 @@ import {
   type EffectRuntimeMode,
   type EffectRuntimeSourceKind,
 } from "./effect-runtime-registry.js";
+import { markRuntimeEffectTreeVerified } from "./runtime-effect-verification.js";
 import { isRuntimeEffectId, type RuntimeEffect } from "./runtime-effect.js";
 import { decodeTimedRuntimeEffect } from "./runtime-effect-decoder.js";
 
@@ -1780,7 +1781,7 @@ function requireRuntimeEffectArrayField(
   for (const [index, value] of values.entries()) {
     const result = decodeTimedRuntimeEffect(`${label}[${index}]`, value);
     if (result.ok) {
-      effects.push(result.value);
+      effects.push(markRuntimeEffectTreeVerified(result.value));
     } else {
       errors.push(...result.errors);
     }

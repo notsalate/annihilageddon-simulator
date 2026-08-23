@@ -20,6 +20,7 @@ import {
 import { executeOnPlayEffects } from "../src/engine/effect-runtime.js";
 import {
   resolveResurrectionLifeTotal,
+  validateRuntimeEffectCatalogPayload,
   type EffectRuntimeCatalogOperationOverridesForTesting,
   type EffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
@@ -35,6 +36,7 @@ import {
   selectFirstFixtureDefense,
 } from "./helpers/defense-fixtures.js";
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
 const rootDir = process.cwd();
 const fixturePlayerDefeatEffectId = "fixture_add_power_equal_to_target_cost";
@@ -51,29 +53,34 @@ const fixturePlayerDefeatHandler: EffectRuntimeCatalogOperationOverridesForTesti
     },
   };
 
-test("resurrection catalog operation reports malformed replacement instead of falling back to 20", () => {
-  const result = resolveResurrectionLifeTotal(
+test("resurrection catalog intake rejects malformed replacement instead of falling back to 20", () => {
+  const result = validateRuntimeEffectCatalogPayload(
+    "Malformed resurrection replacement",
+    "set_resurrection_life_total",
     {
       effectId: "set_resurrection_life_total",
       timing: "replacement",
       lifeTotal: "invalid",
     },
-    resurrectionSource(),
-    []
+    "combat",
+    "wizardProperty"
   );
 
-  assert.equal(result.status, "error");
-  if (result.status !== "error") return;
-  assert.match(result.error, /lifeTotal must be a positive integer/);
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(
+    result.errors.join("\n"),
+    /lifeTotal must be a positive integer/
+  );
 });
 
 test("resurrection catalog operation resolves the decoded life total", () => {
   const result = resolveResurrectionLifeTotal(
-    {
+    verifiedTestRuntimeEffect({
       effectId: "set_resurrection_life_total",
       timing: "replacement",
       lifeTotal: 25,
-    },
+    }),
     resurrectionSource(),
     []
   );
@@ -83,12 +90,12 @@ test("resurrection catalog operation resolves the decoded life total", () => {
 
 test("resurrection catalog operation skips a replacement blocked by its status", () => {
   const result = resolveResurrectionLifeTotal(
-    {
+    verifiedTestRuntimeEffect({
       effectId: "set_resurrection_life_total",
       timing: "replacement",
       lifeTotal: 25,
       unlessStatusId: "loser",
-    },
+    }),
     resurrectionSource(),
     [{ statusId: "loser" }]
   );
@@ -540,52 +547,24 @@ test("Creator's Hand remains controlled and raises its controller's end-turn han
   assert.equal(activePlayer.hand.length, 6);
 });
 
-test("Creator's Hand rejects an invalid passive hand-limit amount before end-turn mutation", () => {
+test("Creator's Hand rejects an invalid passive hand-limit amount at intake", () => {
   const state = initializeGame({ rootDir, seed: 47002 });
-  const activePlayer = mustGetActivePlayer(state);
   const definition = state.cardDefinitions.get("esw2_dbg__main_047");
   assert.ok(definition);
   const effect = definition.engine.effects[0];
   assert.ok(effect);
 
-  state.cardDefinitions = new Map([
-    ...state.cardDefinitions,
-    [
-      definition.cardId,
-      {
-        ...definition,
-        engine: {
-          ...definition.engine,
-          effects: [{ ...effect, amount: -1 } as unknown as RuntimeEffect],
-        },
-      },
-    ],
-  ]);
-  activePlayer.permanents.push(
-    createCardInstance(
-      "runtime-creators-hand-invalid-amount",
-      definition.cardId,
-      activePlayer.playerId
-    )
+  const result = validateRuntimeEffectCatalogPayload(
+    "Creator's Hand invalid effect",
+    effect.effectId,
+    { ...effect, amount: -1 },
+    state.runtimeMode,
+    "card"
   );
-  const activePlayerIdBefore = state.activePlayerId;
-  const turnBefore = structuredClone(state.turn);
-  const handBefore = structuredClone(activePlayer.hand);
-  const discardBefore = structuredClone(activePlayer.discard);
-  const permanentsBefore = structuredClone(activePlayer.permanents);
-  const eventCountBefore = state.eventLog.length;
-
-  const result = applyAction(state, { type: "endTurn" });
 
   assert.equal(result.ok, false);
   if (result.ok) return;
-  assert.match(result.error, /amount must be a positive integer/);
-  assert.equal(state.activePlayerId, activePlayerIdBefore);
-  assert.deepEqual(state.turn, turnBefore);
-  assert.deepEqual(activePlayer.hand, handBefore);
-  assert.deepEqual(activePlayer.discard, discardBefore);
-  assert.deepEqual(activePlayer.permanents, permanentsBefore);
-  assert.equal(state.eventLog.length, eventCountBefore);
+  assert.match(result.errors.join("\n"), /amount must be a positive integer/);
 });
 
 test("Creator's Hand combines with the maximum-life hand-limit modifier", () => {
@@ -1220,7 +1199,7 @@ function createFixtureCardDefinition(
       victoryPoints: 0,
       isOngoing: false,
       marketChipMarker: false,
-      effects,
+      effects: effects.map((effect) => verifiedTestRuntimeEffect(effect)),
       unsupportedMechanics: [],
     },
   };

@@ -1,3 +1,65 @@
+import type { ResourceDrawEffectPayloadMap } from "./effect-runtime-resources-draw.js";
+import type {
+  CardOwnershipChoiceEffectPayloadMap,
+  WildMagicOption,
+} from "./effect-runtime-cards-ownership-choice.js";
+import type { ActivationEffectPayloadMap } from "./effect-runtime-activation.js";
+import type {
+  AddPowerIfPlayerHasStatusRuntimeEffect,
+  OngoingEffectPayloadMap,
+} from "./effect-runtime-ongoing.js";
+import type { EffectiveValueModifierEffectPayloadMap } from "./effect-runtime-effective-value-modifier.js";
+
+export type {
+  ResourceDrawEffectPayloadMap,
+  GainChipsRuntimeEffect,
+  GainChipsPerPlayerWithStatusRuntimeEffect,
+  DrawCardsRuntimeEffect,
+} from "./effect-runtime-resources-draw.js";
+export type {
+  CardOwnershipChoiceEffectPayloadMap,
+  DiscardCardRuntimeEffect,
+  DiscardHandThenDrawCardsRuntimeEffect,
+  DiscardSelfRuntimeEffect,
+  DestroyCardRuntimeEffect,
+  DestroyOwnCardsRuntimeEffect,
+  DestroyRandomLegendMarketCardRuntimeEffect,
+  GainCardRuntimeEffect,
+  OnGainSelfGainLimpWandsRuntimeEffect,
+  OptionalGainMarketCardsToHandThisTurnRuntimeEffect,
+  PlayTopCardFromFoeDeckRuntimeEffect,
+  PlayTopCardRuntimeEffect,
+  ReturnDiscardToHandRuntimeEffect,
+  RevealTopCardRuntimeEffect,
+  TopdeckGainedCardRuntimeEffect,
+  WildMagicChoiceRuntimeEffect,
+  WildMagicOption,
+} from "./effect-runtime-cards-ownership-choice.js";
+export type {
+  ActivationDestroySelfThenDestroyOwnCardsRuntimeEffect,
+  ActivationEffectPayloadMap,
+  ConditionalActivationDestroyOwnCardsRuntimeEffect,
+  ConditionalActivationGainChipsRuntimeEffect,
+  OptionalSpendChipDestroyOwnCardsRuntimeEffect,
+} from "./effect-runtime-activation.js";
+export type {
+  AddPowerIfPlayerHasStatusRuntimeEffect,
+  OngoingAddPowerPerDeadWizardTokenRuntimeEffect,
+  OngoingAddPowerRuntimeEffect,
+  OngoingAddPowerWhenPlayingLimpWandRuntimeEffect,
+  OngoingAddPowerWhenPlayingWandRuntimeEffect,
+  OngoingEffectPayloadMap,
+  OngoingFirstAttackDamageAddPowerRuntimeEffect,
+  OngoingHandRefillBonusRuntimeEffect,
+  OngoingStartTurnOptionalGainLimpWandToHandRuntimeEffect,
+} from "./effect-runtime-ongoing.js";
+export type {
+  EffectiveValueKind,
+  EffectiveValueModifierEffectPayloadMap,
+  EffectiveValueOperation,
+  ModifyEffectiveValueRuntimeEffect,
+} from "./effect-runtime-effective-value-modifier.js";
+
 export const effectTimings = [
   "activation",
   "afterControllerPlaysCard",
@@ -109,18 +171,6 @@ export type AttackOutcomeBranch =
       effectId: "gain_status";
       statusId: "dingler";
       target?: "damagedPlayer";
-    };
-
-export type WildMagicOption =
-  | {
-      effectId: "add_power";
-      amount: number;
-    }
-  | {
-      effectId: "play_top_card_from_foe_deck";
-      targetSelector: "chosenFoe";
-      nonOngoingCleanupDestination?: "ownerDiscard";
-      ongoingOwnership?: "controller";
     };
 
 export type MayhemHandRedrawOption =
@@ -281,28 +331,6 @@ export type SetResurrectionLifeTotalRuntimeEffect = TimedEffect<
   unlessStatusId?: string;
 };
 
-export type EffectiveValueKind =
-  | "cardCost"
-  | "cardVictoryPoints"
-  | "tokenVictoryPoints"
-  | "playerMaxLife"
-  | "playerVictoryPoints";
-
-export type EffectiveValueOperation = "add" | "invertNegative";
-
-export type ModifyEffectiveValueRuntimeEffect<
-  Id extends "modify_effective_value" | "fixture_modify_effective_value" =
-    | "modify_effective_value"
-    | "fixture_modify_effective_value",
-> = TimedEffect<Id, "whileControlled" | "whileScoring"> & {
-  valueKind: EffectiveValueKind;
-  operation: EffectiveValueOperation;
-  amount?: number;
-  amountPerOwnedCard?: number;
-  countedCardTypes?: string[];
-  target: RuntimeEffectTarget;
-};
-
 export type IncreaseHandLimitAtMaxLifeRuntimeEffect = TimedEffect<
   "increase_hand_limit_at_max_life",
   "endTurn"
@@ -339,14 +367,12 @@ export type DestroyedCardKindIsRuntimeEffect =
     cardKind: string;
   };
 
-export interface SetupEffectPayloadMap {
+export interface SetupEffectPayloadMap extends EffectiveValueModifierEffectPayloadMap {
   force_starting_player: ForceStartingPlayerRuntimeEffect;
   replace_starting_card: ReplaceStartingCardRuntimeEffect;
   start_with_basic_trophy: StartWithBasicTrophyRuntimeEffect;
   set_starting_life_total: SetStartingLifeTotalRuntimeEffect;
   set_resurrection_life_total: SetResurrectionLifeTotalRuntimeEffect;
-  modify_effective_value: ModifyEffectiveValueRuntimeEffect<"modify_effective_value">;
-  fixture_modify_effective_value: ModifyEffectiveValueRuntimeEffect<"fixture_modify_effective_value">;
   increase_hand_limit_at_max_life: IncreaseHandLimitAtMaxLifeRuntimeEffect;
   temporary_hand_limit_by_gained_card_type: TemporaryHandLimitByGainedCardTypeRuntimeEffect;
   endgame_limp_wands_score_positive: EndgameLimpWandsScorePositiveRuntimeEffect;
@@ -360,12 +386,6 @@ export type AddPowerRuntimeEffect = EffectWithOptionalTiming<"add_power"> &
   Conditioned & {
     activationLimit?: "oncePerTurnWhileControlled";
   };
-
-export type AddPowerIfPlayerHasStatusRuntimeEffect = TimedEffect<
-  "add_power_if_player_has_status",
-  "whileControlled"
-> &
-  PositiveAmount & { statusId: "dingler" };
 
 export type AddPowerPerControlledObjectRuntimeEffect = TimedEffect<
   "add_power_per_controlled_object",
@@ -384,23 +404,8 @@ export type AddPowerPerPlayerWithStatusRuntimeEffect =
     amountPerPlayer: number;
   };
 
-export type GainChipsRuntimeEffect = EffectWithOptionalTiming<"gain_chips"> &
-  PositiveAmount &
-  Conditioned & {
-    cardTypes?: string[];
-    isOngoing?: true;
-  };
-
-export type GainChipsPerPlayerWithStatusRuntimeEffect =
-  EffectWithOptionalTiming<"gain_chips_per_player_with_status"> & {
-    amountPerPlayer: number;
-    status: "dingler";
-  };
-
 export type GainChipsEqualDamageDealtRuntimeEffect =
   EffectWithOptionalTiming<"gain_chips_equal_damage_dealt">;
-export type DrawCardsRuntimeEffect = EffectWithOptionalTiming<"draw_cards"> &
-  PositiveAmount;
 export type HealRuntimeEffect = EffectWithOptionalTiming<"heal"> &
   PositiveAmount &
   Targetable;
@@ -437,92 +442,18 @@ export type ExchangeLifeAndDinglerStatusRuntimeEffect =
 export type DealDamageRuntimeEffect = EffectWithOptionalTiming<"deal_damage"> &
   PositiveAmount &
   Targetable;
-export type GainCardRuntimeEffect = EffectWithOptionalTiming<"gain_card"> &
-  Targetable & { destination: "discard" };
-export type DiscardCardRuntimeEffect =
-  EffectWithOptionalTiming<"discard_card"> &
-    Targetable & { emptyChoice?: "fail" };
-export type DiscardSelfRuntimeEffect = EffectWithOptionalTiming<"discard_self">;
-export type DiscardHandThenDrawCardsRuntimeEffect =
-  EffectWithOptionalTiming<"discard_hand_then_draw_cards"> & {
-    drawAmount: number;
-  };
-export type DestroyCardRuntimeEffect =
-  EffectWithOptionalTiming<"destroy_card"> & Targetable;
-export type DestroyOwnCardsRuntimeEffect =
-  EffectWithOptionalTiming<"destroy_own_cards"> & {
-    amount?: number;
-    sourceZones?: "hand" | ("hand" | "discard")[];
-    chooser?: "controller" | "defendingPlayer";
-  };
-export type DestroyRandomLegendMarketCardRuntimeEffect = TimedEffect<
-  "destroy_random_legend_market_card",
-  "onPlay"
-> & {
-  rememberAs: "destroyedLegend";
-  sourceZone: "legendMarket";
-  rng: "seeded";
-};
-export type ReturnDiscardToHandRuntimeEffect =
-  EffectWithOptionalTiming<"return_discard_to_hand"> & PositiveAmount;
-export type RevealTopCardRuntimeEffect =
-  EffectWithOptionalTiming<"reveal_top_card"> & {
-    source: "activePlayerDeck";
-  };
-export type PlayTopCardRuntimeEffect =
-  EffectWithOptionalTiming<"play_top_card"> & {
-    source: "activePlayerDeck";
-    destination: "play";
-  };
-export type PlayTopCardFromFoeDeckRuntimeEffect =
-  EffectWithOptionalTiming<"play_top_card_from_foe_deck"> &
-    Conditioned & {
-      targetSelector: "chosenFoe";
-      nonOngoingCleanupDestination?: "ownerDiscard";
-      ongoingOwnership?: "controller";
-    };
-export type WildMagicChoiceRuntimeEffect = TimedEffect<
-  "wild_magic_choice",
-  "onPlay"
-> & { options: WildMagicOption[] };
-export type TopdeckGainedCardRuntimeEffect = TimedEffect<
-  "topdeck_gained_card",
-  "onGainCard"
-> & {
-  optional?: boolean;
-  destination?: "deckTop";
-  cardTypes?: string[];
-  isOngoing?: true;
-};
-export type OptionalGainMarketCardsToHandThisTurnRuntimeEffect = TimedEffect<
-  "optional_gain_market_cards_to_hand_this_turn",
-  "untilEndOfTurn"
-> & {
-  appliesTo: "cardsGainedFromMainMarket";
-  chooser: "controller";
-  destinationOverride: "hand";
-};
-export type OnGainSelfGainLimpWandsRuntimeEffect = TimedEffect<
-  "on_gain_self_gain_limp_wands",
-  "onGain"
-> & {
-  destination: "gainingPlayerDiscard";
-  amount: number;
-};
 export type FixtureAddPowerEqualToTargetCostRuntimeEffect =
   EffectWithOptionalTiming<"fixture_add_power_equal_to_target_cost"> &
     Targetable & { emptyChoice?: "fail" };
 
-export interface ImmediateEffectPayloadMap {
+export interface ImmediateEffectPayloadMap
+  extends ResourceDrawEffectPayloadMap, CardOwnershipChoiceEffectPayloadMap {
   add_power: AddPowerRuntimeEffect;
   add_power_if_player_has_status: AddPowerIfPlayerHasStatusRuntimeEffect;
   add_power_per_controlled_object: AddPowerPerControlledObjectRuntimeEffect;
   add_power_per_controlled_permanent: AddPowerPerControlledPermanentRuntimeEffect;
   add_power_per_player_with_status: AddPowerPerPlayerWithStatusRuntimeEffect;
-  gain_chips: GainChipsRuntimeEffect;
-  gain_chips_per_player_with_status: GainChipsPerPlayerWithStatusRuntimeEffect;
   gain_chips_equal_damage_dealt: GainChipsEqualDamageDealtRuntimeEffect;
-  draw_cards: DrawCardsRuntimeEffect;
   heal: HealRuntimeEffect;
   heal_equal_damage_dealt: HealEqualDamageDealtRuntimeEffect;
   heal_equal_damage_dealt_on_own_turn: HealEqualDamageDealtOnOwnTurnRuntimeEffect;
@@ -532,21 +463,6 @@ export interface ImmediateEffectPayloadMap {
   toggle_status: ToggleStatusRuntimeEffect;
   exchange_life_and_dingler_status: ExchangeLifeAndDinglerStatusRuntimeEffect;
   deal_damage: DealDamageRuntimeEffect;
-  gain_card: GainCardRuntimeEffect;
-  discard_card: DiscardCardRuntimeEffect;
-  discard_self: DiscardSelfRuntimeEffect;
-  discard_hand_then_draw_cards: DiscardHandThenDrawCardsRuntimeEffect;
-  destroy_card: DestroyCardRuntimeEffect;
-  destroy_own_cards: DestroyOwnCardsRuntimeEffect;
-  destroy_random_legend_market_card: DestroyRandomLegendMarketCardRuntimeEffect;
-  return_discard_to_hand: ReturnDiscardToHandRuntimeEffect;
-  reveal_top_card: RevealTopCardRuntimeEffect;
-  play_top_card: PlayTopCardRuntimeEffect;
-  play_top_card_from_foe_deck: PlayTopCardFromFoeDeckRuntimeEffect;
-  wild_magic_choice: WildMagicChoiceRuntimeEffect;
-  topdeck_gained_card: TopdeckGainedCardRuntimeEffect;
-  optional_gain_market_cards_to_hand_this_turn: OptionalGainMarketCardsToHandThisTurnRuntimeEffect;
-  on_gain_self_gain_limp_wands: OnGainSelfGainLimpWandsRuntimeEffect;
   fixture_add_power_equal_to_target_cost: FixtureAddPowerEqualToTargetCostRuntimeEffect;
 }
 
@@ -674,99 +590,6 @@ export interface PlayerControlledAttackEffectPayloadMap {
   modify_owned_wand_attack_damage: ModifyOwnedWandAttackDamageRuntimeEffect;
   double_owned_attack_damage: DoubleOwnedAttackDamageRuntimeEffect;
   prevent_defense_against_owned_wand_attacks: PreventDefenseAgainstOwnedWandAttacksRuntimeEffect;
-}
-
-export type ActivationDestroySelfThenDestroyOwnCardsRuntimeEffect = TimedEffect<
-  "activation_destroy_self_then_destroy_own_cards",
-  "activation"
-> & {
-  chooser: "controller";
-  activationLimit: "oncePerTurnWhileControlled";
-  sourceZones: "hand";
-  minAmount: number;
-  maxAmount: number;
-  destroySelf: true;
-};
-export type ConditionalActivationDestroyOwnCardsRuntimeEffect = TimedEffect<
-  "conditional_activation_destroy_own_cards",
-  "activation"
-> &
-  Conditioned & {
-    chooser: "controller";
-    activationLimit: "oncePerTurnWhileControlled";
-    sourceZones: ("hand" | "discard")[];
-    amount: number;
-  };
-export type ConditionalActivationGainChipsRuntimeEffect = TimedEffect<
-  "conditional_activation_gain_chips",
-  "activation"
-> &
-  PositiveAmount &
-  Conditioned & { activationLimit: "oncePerTurnWhileControlled" };
-export type OptionalSpendChipDestroyOwnCardsRuntimeEffect = TimedEffect<
-  "optional_spend_chip_destroy_own_cards",
-  "onPlay"
-> & {
-  chipCost: number;
-  amount: number;
-  sourceZones: ("hand" | "discard")[];
-  chooser: "controller";
-};
-
-export interface ActivationEffectPayloadMap {
-  activation_destroy_self_then_destroy_own_cards: ActivationDestroySelfThenDestroyOwnCardsRuntimeEffect;
-  conditional_activation_destroy_own_cards: ConditionalActivationDestroyOwnCardsRuntimeEffect;
-  conditional_activation_gain_chips: ConditionalActivationGainChipsRuntimeEffect;
-  optional_spend_chip_destroy_own_cards: OptionalSpendChipDestroyOwnCardsRuntimeEffect;
-}
-
-export interface OngoingAddPowerRuntimeEffect
-  extends TimedEffect<"ongoing_add_power", "whileControlled">, PositiveAmount {}
-export interface OngoingAddPowerWhenPlayingWandRuntimeEffect
-  extends
-    TimedEffect<"ongoing_add_power_when_playing_wand", "onPlayCard">,
-    PositiveAmount {
-  cardTags: ["wandCard"];
-}
-export interface OngoingAddPowerPerDeadWizardTokenRuntimeEffect
-  extends
-    TimedEffect<"ongoing_add_power_per_dead_wizard_token", "whileControlled">,
-    PositiveAmount {}
-export interface OngoingAddPowerWhenPlayingLimpWandRuntimeEffect
-  extends
-    TimedEffect<
-      "ongoing_add_power_when_playing_limp_wand",
-      "afterControllerPlaysCard"
-    >,
-    PositiveAmount {
-  cardKind: "limpWand";
-}
-export interface OngoingFirstAttackDamageAddPowerRuntimeEffect extends TimedEffect<
-  "ongoing_first_attack_damage_add_power",
-  "afterFirstAttackDamageEachTurn"
-> {
-  amount: "totalDamageDealtByThatAttack";
-}
-export interface OngoingHandRefillBonusRuntimeEffect
-  extends TimedEffect<"ongoing_hand_refill_bonus", "endTurn">, PositiveAmount {}
-export type OngoingStartTurnOptionalGainLimpWandToHandRuntimeEffect =
-  TimedEffect<
-    "ongoing_start_turn_optional_gain_limp_wand_to_hand",
-    "startOfControllerTurn"
-  > & {
-    destination: "hand";
-    amount: number;
-    chooser: "controller";
-  };
-
-export interface OngoingEffectPayloadMap {
-  ongoing_add_power: OngoingAddPowerRuntimeEffect;
-  ongoing_add_power_when_playing_wand: OngoingAddPowerWhenPlayingWandRuntimeEffect;
-  ongoing_add_power_per_dead_wizard_token: OngoingAddPowerPerDeadWizardTokenRuntimeEffect;
-  ongoing_add_power_when_playing_limp_wand: OngoingAddPowerWhenPlayingLimpWandRuntimeEffect;
-  ongoing_first_attack_damage_add_power: OngoingFirstAttackDamageAddPowerRuntimeEffect;
-  ongoing_hand_refill_bonus: OngoingHandRefillBonusRuntimeEffect;
-  ongoing_start_turn_optional_gain_limp_wand_to_hand: OngoingStartTurnOptionalGainLimpWandToHandRuntimeEffect;
 }
 
 export type MayhemAttackRuntimeEffect =

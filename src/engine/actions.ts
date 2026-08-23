@@ -1,13 +1,18 @@
-import { calculateEndTurnDrawCount } from "./effect-runtime.js";
 import {
   applyAction as applyCoreAction,
+  preflightAction,
   type ActionResult,
   type GameAction,
 } from "./actions-core.js";
-import { runActionTransaction } from "./action-transaction.js";
+import {
+  ActionExecutionError,
+  createActionExecutionError,
+} from "./action-errors.js";
 import type { GameState } from "./setup.js";
 
 export { listLegalActions } from "./actions-core.js";
+export { ActionExecutionError } from "./action-errors.js";
+export type { ActionExecutionContext } from "./action-errors.js";
 export type {
   ActivatePermanentAction,
   ActivateWizardPropertyAction,
@@ -29,26 +34,21 @@ export function applyAction(
   state: GameState,
   action: GameAction
 ): ActionResult {
-  if (action.type === "endTurn") {
-    const activePlayer = state.players.find(
-      (player) => player.playerId === state.activePlayerId
-    );
-    if (activePlayer === undefined) {
-      return {
-        ok: false,
-        error: `Missing active player ${state.activePlayerId}`,
-      };
-    }
-
-    try {
-      calculateEndTurnDrawCount(state, activePlayer);
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
+  const preflightResult = preflightAction(state, action);
+  if (preflightResult !== undefined) {
+    return preflightResult;
   }
 
-  return runActionTransaction(state, () => applyCoreAction(state, action));
+  try {
+    const result = applyCoreAction(state, action);
+    if (!result.ok) {
+      throw createActionExecutionError(state, action, result.error);
+    }
+    return result;
+  } catch (error) {
+    if (error instanceof ActionExecutionError) {
+      throw error;
+    }
+    throw createActionExecutionError(state, action, error);
+  }
 }

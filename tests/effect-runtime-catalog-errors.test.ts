@@ -17,6 +17,7 @@ import {
   givenRuntimeCard,
 } from "./helpers/game-scenario.js";
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
 const rootDir = process.cwd();
 
@@ -37,11 +38,11 @@ test("catalog execute rejects an unsupported source kind before calling its hand
       executeRuntimeEffect(
         scenario.state,
         subject,
-        {
+        verifiedTestRuntimeEffect({
           effectId: "ongoing_hand_refill_bonus",
           timing: "endTurn",
           amount: 1,
-        },
+        }),
         catalogSource(subject, "wizardProperty", "combat"),
         throwingRuntimeServices()
       )
@@ -70,10 +71,11 @@ test("catalog execute rejects an unavailable runtime mode before calling its han
       executeRuntimeEffect(
         scenario.state,
         subject,
-        {
+        verifiedTestRuntimeEffect({
           effectId: "fixture_add_power_equal_to_target_cost",
+          timing: "onPlay",
           target: { selector: "mainMarketCard" },
-        },
+        }),
         catalogSource(subject, "card", "combat"),
         throwingRuntimeServices()
       )
@@ -91,26 +93,16 @@ test("catalog decodes Wild Magic options before handing typed options to its han
   const source = catalogSource(subject, "card", "fixture");
   let handlerCalled = false;
 
-  const malformed = withTemporaryEffectRuntimeOperations(
+  const malformed = validateRuntimeEffectCatalogPayload(
+    "Wild Magic",
     "wild_magic_choice",
     {
-      execute() {
-        handlerCalled = true;
-        return { ok: true };
-      },
+      effectId: "wild_magic_choice",
+      timing: "onPlay",
+      options: [{ effectId: "add_power", amount: "bad" }],
     },
-    () =>
-      executeRuntimeEffect(
-        scenario.state,
-        subject,
-        {
-          effectId: "wild_magic_choice",
-          timing: "onPlay",
-          options: [{ effectId: "add_power", amount: "bad" }],
-        },
-        source,
-        throwingRuntimeServices()
-      )
+    "fixture",
+    "card"
   );
 
   assert.equal(malformed.ok, false);
@@ -131,11 +123,11 @@ test("catalog decodes Wild Magic options before handing typed options to its han
       executeRuntimeEffect(
         scenario.state,
         subject,
-        {
+        verifiedTestRuntimeEffect({
           effectId: "wild_magic_choice",
           timing: "onPlay",
           options: [{ effectId: "add_power", amount: 2 }],
-        },
+        }),
         source,
         throwingRuntimeServices()
       )
@@ -166,11 +158,11 @@ test("catalog execute rejects unsupported source and timing pairs before calling
         executeRuntimeEffect(
           scenario.state,
           subject,
-          {
+          verifiedTestRuntimeEffect({
             effectId: "play_top_card_from_foe_deck",
             timing,
             targetSelector: "chosenFoe",
-          },
+          }),
           catalogSource(subject, sourceType, "combat"),
           throwingRuntimeServices()
         )
@@ -209,47 +201,31 @@ test("catalog execute rejects conflicting attack and status targets before calli
       },
     },
   ] as const;
-  const executorCalls: Array<(typeof cases)[number]["effectId"]> = [];
-
   const results = cases.map(({ effectId, payload }) =>
-    withTemporaryEffectRuntimeOperations(
+    validateRuntimeEffectCatalogPayload(
+      `Conflicting ${effectId}`,
       effectId,
-      {
-        execute() {
-          executorCalls.push(effectId);
-          return { ok: true };
-        },
-      },
-      () =>
-        executeRuntimeEffect(
-          scenario.state,
-          subject,
-          payload,
-          source,
-          throwingRuntimeServices()
-        )
+      payload,
+      source.runtimeMode,
+      source.sourceType
     )
   );
 
-  assert.deepEqual(results, [
-    {
-      ok: false,
-      error:
-        "Effect attack_damage target and targetSelector cannot both be provided",
-    },
-    {
-      ok: false,
-      error:
-        "Effect gain_status target and targetSelector cannot both be provided",
-    },
-  ]);
-  assert.deepEqual(executorCalls, []);
+  assert.equal(
+    results.every((result) => !result.ok),
+    true
+  );
+  assert.match(
+    results[0]?.ok ? "" : (results[0]?.errors[0] ?? ""),
+    /target and targetSelector cannot both be provided/
+  );
+  assert.match(
+    results[1]?.ok ? "" : (results[1]?.errors[0] ?? ""),
+    /target and targetSelector cannot both be provided/
+  );
 });
 
 test("catalog rejects unsupported timing at the decoder boundary before its handler", () => {
-  const scenario = createGameScenario({ rootDir, seed: 23020 });
-  const subject = scenario.activePlayer;
-  let handlerCalled = false;
   const effect = {
     effectId: "ongoing_hand_refill_bonus",
     timing: "whileControlled",
@@ -267,27 +243,6 @@ test("catalog rejects unsupported timing at the decoder boundary before its hand
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.match(result.errors.join("\n"), /timing must be endTurn/);
-
-  const execution = withTemporaryEffectRuntimeOperations(
-    effect.effectId,
-    {
-      execute() {
-        handlerCalled = true;
-        return { ok: true };
-      },
-    },
-    () =>
-      executeRuntimeEffect(
-        scenario.state,
-        subject,
-        effect,
-        catalogSource(subject, "card", "fixture"),
-        throwingRuntimeServices()
-      )
-  );
-
-  assert.equal(execution.ok, false);
-  assert.equal(handlerCalled, false);
 });
 
 test("resource and life/status family decoders reject malformed payloads before handlers", () => {
@@ -324,31 +279,19 @@ test("resource and life/status family decoders reject malformed payloads before 
   ] as const;
 
   for (const { effectId, payload } of cases) {
-    let handlerCalled = false;
-    const result = withTemporaryEffectRuntimeOperations(
+    const result = validateRuntimeEffectCatalogPayload(
+      `Malformed ${effectId}`,
       effectId,
-      {
-        execute() {
-          handlerCalled = true;
-          return { ok: true };
-        },
-      },
-      () =>
-        executeRuntimeEffect(
-          scenario.state,
-          subject,
-          payload,
-          source,
-          throwingRuntimeServices()
-        )
+      payload,
+      source.runtimeMode,
+      source.sourceType
     );
 
     assert.equal(result.ok, false);
-    assert.equal(handlerCalled, false);
   }
 });
 
-test("card ownership and choice family decoders reject malformed payloads before handlers", () => {
+test("card ownership and choice family decoders reject malformed payloads at intake", () => {
   const scenario = createGameScenario({ rootDir, seed: 23024 });
   const subject = scenario.activePlayer;
   const source = catalogSource(subject, "card", "combat");
@@ -389,31 +332,19 @@ test("card ownership and choice family decoders reject malformed payloads before
   ] as const;
 
   for (const { effectId, payload } of cases) {
-    let handlerCalled = false;
-    const result = withTemporaryEffectRuntimeOperations(
+    const result = validateRuntimeEffectCatalogPayload(
+      `Malformed ${effectId}`,
       effectId,
-      {
-        execute() {
-          handlerCalled = true;
-          return { ok: true };
-        },
-      },
-      () =>
-        executeRuntimeEffect(
-          scenario.state,
-          subject,
-          payload,
-          source,
-          throwingRuntimeServices()
-        )
+      payload,
+      source.runtimeMode,
+      source.sourceType
     );
 
     assert.equal(result.ok, false);
-    assert.equal(handlerCalled, false);
   }
 });
 
-test("Mayhem family rejects malformed payloads and unsupported sources before handlers", () => {
+test("Mayhem family rejects malformed payloads at intake", () => {
   const scenario = createGameScenario({ rootDir, seed: 23026 });
   const subject = scenario.activePlayer;
   const cases = [
@@ -449,27 +380,15 @@ test("Mayhem family rejects malformed payloads and unsupported sources before ha
   ] as const;
 
   for (const { effectId, payload } of cases) {
-    let handlerCalled = false;
-    const result = withTemporaryEffectRuntimeOperations(
+    const result = validateRuntimeEffectCatalogPayload(
+      `Malformed ${effectId}`,
       effectId,
-      {
-        execute() {
-          handlerCalled = true;
-          return { ok: true };
-        },
-      },
-      () =>
-        executeRuntimeEffect(
-          scenario.state,
-          subject,
-          payload,
-          catalogSource(subject, "card", "combat"),
-          throwingRuntimeServices()
-        )
+      payload,
+      "combat",
+      "card"
     );
 
     assert.equal(result.ok, false);
-    assert.equal(handlerCalled, false);
   }
 
   let handlerCalled = false;
@@ -485,12 +404,12 @@ test("Mayhem family rejects malformed payloads and unsupported sources before ha
       executeRuntimeEffect(
         scenario.state,
         subject,
-        {
+        verifiedTestRuntimeEffect({
           effectId: "mega_mayhem_set_life",
           timing: "onMayhemResolve",
           targetSelector: "eachPlayerClockwiseFromActive",
           lifeTotal: 5,
-        },
+        }),
         catalogSource(subject, "deadWizardToken", "combat"),
         throwingRuntimeServices()
       )
@@ -602,7 +521,7 @@ test("catalog applies unsupported policy only after operation timing matches", (
   let evaluated = false;
 
   const result = evaluateRuntimeEffectAtTiming(
-    {
+    verifiedTestRuntimeEffect({
       effectId: "activation_destroy_self_then_destroy_own_cards",
       timing: "activation",
       chooser: "controller",
@@ -611,7 +530,7 @@ test("catalog applies unsupported policy only after operation timing matches", (
       minAmount: 0,
       maxAmount: 2,
       destroySelf: true,
-    },
+    }),
     source,
     "onPlay",
     () => {
@@ -663,7 +582,7 @@ test("activation and ongoing families reject unsupported calls before handlers",
         executeRuntimeEffect(
           scenario.state,
           subject,
-          payload,
+          verifiedTestRuntimeEffect(payload),
           catalogSource(subject, "card", "combat"),
           throwingRuntimeServices()
         )
@@ -676,35 +595,23 @@ test("activation and ongoing families reject unsupported calls before handlers",
   }
 });
 
-test("catalog end-turn operation reports decoder errors directly", () => {
-  const scenario = createGameScenario({ rootDir, seed: 23014 });
-  const controller = scenario.activePlayer;
-  const source: EffectSourceContext = {
-    sourceType: "card",
-    runtimeMode: scenario.state.runtimeMode,
-    playerId: controller.playerId,
-    cardInstanceId: "fixture-catalog-end-turn-error",
-    definitionId: "fixture-catalog-end-turn-error",
-  };
-
-  const result = evaluateRuntimeEffectEndTurnDrawModifier(
+test("catalog reports malformed end-turn payloads at intake", () => {
+  const result = validateRuntimeEffectCatalogPayload(
+    "Malformed end-turn effect",
+    "ongoing_hand_refill_bonus",
     {
       effectId: "ongoing_hand_refill_bonus",
       timing: "endTurn",
       amount: "invalid",
     },
-    {
-      state: scenario.state,
-      controller,
-      source,
-      currentDrawCount: 5,
-    }
+    "combat",
+    "card"
   );
 
-  if (result.status !== "error") {
-    assert.fail(`Expected catalog error, received ${result.status}`);
+  if (result.ok) {
+    assert.fail("Expected catalog error");
   }
-  assert.match(result.error, /amount must be a positive integer/);
+  assert.match(result.errors.join("\n"), /amount must be a positive integer/);
 });
 
 test("catalog validates a payload before declaring an end-turn operation not applicable", () => {
@@ -724,22 +631,32 @@ test("catalog validates a payload before declaring an end-turn operation not app
     currentDrawCount: 5,
   };
 
-  const malformed = evaluateRuntimeEffectEndTurnDrawModifier(
+  const malformed = validateRuntimeEffectCatalogPayload(
+    "Malformed end-turn effect",
+    "add_power",
     {
       effectId: "add_power",
       timing: "endTurn",
       amount: "invalid",
     },
-    context
+    scenario.state.runtimeMode,
+    source.sourceType
   );
-  if (malformed.status !== "error") {
-    assert.fail(`Expected catalog error, received ${malformed.status}`);
+  if (malformed.ok) {
+    assert.fail("Expected catalog error");
   }
-  assert.match(malformed.error, /amount must be a positive integer/);
+  assert.match(
+    malformed.errors.join("\n"),
+    /amount must be a positive integer/
+  );
 
   assert.deepEqual(
     evaluateRuntimeEffectEndTurnDrawModifier(
-      { effectId: "add_power", timing: "onPlay", amount: 1 },
+      verifiedTestRuntimeEffect({
+        effectId: "add_power",
+        timing: "onPlay",
+        amount: 1,
+      }),
       context
     ),
     { status: "notApplicable" }
@@ -784,22 +701,32 @@ test("catalog validates a payload before declaring an on-play hook not applicabl
     playedDefinition,
   };
 
-  const malformed = executeRuntimeEffectOnPlayCard(
+  const malformed = validateRuntimeEffectCatalogPayload(
+    "Malformed on-play hook",
+    "add_power",
     {
       effectId: "add_power",
       timing: "onPlayCard",
       amount: "invalid",
     },
-    context
+    scenario.state.runtimeMode,
+    source.sourceType
   );
-  if (malformed.status !== "error") {
-    assert.fail(`Expected catalog error, received ${malformed.status}`);
+  if (malformed.ok) {
+    assert.fail("Expected catalog error");
   }
-  assert.match(malformed.error, /amount must be a positive integer/);
+  assert.match(
+    malformed.errors.join("\n"),
+    /amount must be a positive integer/
+  );
 
   assert.deepEqual(
     executeRuntimeEffectOnPlayCard(
-      { effectId: "add_power", timing: "onPlayCard", amount: 1 },
+      verifiedTestRuntimeEffect({
+        effectId: "add_power",
+        timing: "onPlayCard",
+        amount: 1,
+      }),
       context
     ),
     { status: "notApplicable" }
@@ -835,26 +762,32 @@ test("catalog validates a payload before declaring an after-attack hook not appl
     attackSource: source,
   };
 
-  const malformed = applyRuntimeEffectAfterPlayerAttackDamage(
+  const malformed = validateRuntimeEffectCatalogPayload(
+    "Malformed after-attack hook",
+    "add_power",
     {
       effectId: "add_power",
       timing: "afterFirstAttackDamageEachTurn",
       amount: "invalid",
     },
-    context
+    scenario.state.runtimeMode,
+    source.sourceType
   );
-  if (malformed.status !== "error") {
-    assert.fail(`Expected catalog error, received ${malformed.status}`);
+  if (malformed.ok) {
+    assert.fail("Expected catalog error");
   }
-  assert.match(malformed.error, /amount must be a positive integer/);
+  assert.match(
+    malformed.errors.join("\n"),
+    /amount must be a positive integer/
+  );
 
   assert.deepEqual(
     applyRuntimeEffectAfterPlayerAttackDamage(
-      {
+      verifiedTestRuntimeEffect({
         effectId: "add_power",
         timing: "onPlay",
         amount: 1,
-      },
+      }),
       context
     ),
     { status: "notApplicable" }

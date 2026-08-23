@@ -6,9 +6,11 @@ import { tmpdir } from "node:os";
 
 import {
   formatMassSimulationSummary,
+  formatSimulationFailureReport,
   formatSingleGameSummary,
   runSimulationMenu,
   type MassSimulationResult,
+  type SimulationFailureReport,
   type SingleGameResult,
 } from "../src/index.js";
 import { markPlayerId } from "../src/domain/types.js";
@@ -266,6 +268,127 @@ test("simulation menu writes seed range and game count for unexpected mass failu
   assert.match(report, /seedRange: 500-10499/);
   assert.match(report, /gameCount: 10000/);
   assert.match(report, /message: mass fixture failure/);
+});
+
+test("simulation failure formatter keeps reproduction and runtime context", () => {
+  const report: SimulationFailureReport = {
+    seed: 24903,
+    setup: {
+      rootDir: "C:/repo",
+      seed: 24903,
+      maxTurns: 4,
+      initialState: {
+        players: [],
+        mainMarket: [],
+        legendMarket: [],
+        mainDeckSize: 0,
+        legendDeckSize: 0,
+        wildMagicStackSize: 0,
+        limpWandStackSize: 0,
+        deadWizardTokenStackSize: 0,
+      },
+    },
+    runtimeData: {
+      manifest: {
+        schemaVersion: 1,
+        packId: "fixture",
+        runtimeSchema: "krutagidon.dataPack.v0",
+        mappingStatus: "fixture",
+        cardDefinitionPaths: [],
+      },
+      cardDefinitions: [],
+      tokenDefinitions: [],
+      decks: {
+        starterDeck: {
+          schemaVersion: 1,
+          deckId: "fixture-starter",
+          runtimeSchema: "krutagidon.deckComposition.v0",
+          role: "starter",
+          mappingStatus: "fixture",
+          entries: [],
+        },
+        mainDeck: {
+          schemaVersion: 1,
+          deckId: "fixture-main",
+          runtimeSchema: "krutagidon.deckComposition.v0",
+          role: "main",
+          mappingStatus: "fixture",
+          entries: [],
+        },
+        legendDeck: {
+          schemaVersion: 1,
+          deckId: "fixture-legend",
+          runtimeSchema: "krutagidon.deckComposition.v0",
+          role: "legend",
+          mappingStatus: "fixture",
+          entries: [],
+        },
+        wildMagicStack: {
+          schemaVersion: 1,
+          deckId: "fixture-wild-magic",
+          runtimeSchema: "krutagidon.deckComposition.v0",
+          role: "wildMagic",
+          mappingStatus: "fixture",
+          entries: [],
+        },
+        limpWandStack: {
+          schemaVersion: 1,
+          deckId: "fixture-limp-wand",
+          runtimeSchema: "krutagidon.deckComposition.v0",
+          role: "limpWand",
+          mappingStatus: "fixture",
+          entries: [],
+        },
+        familiarPool: undefined,
+      },
+      tokenStacks: {
+        deadWizardTokens: undefined,
+        wizardProperties: undefined,
+      },
+    },
+    turnNumber: 2,
+    activePlayerId: markPlayerId("player-1"),
+    actions: [{ type: "endTurn" }],
+    choices: [],
+    error: {
+      message: "late failure",
+      stack: "Error: late failure",
+    },
+    eventLog: [],
+    reproduction: {
+      command:
+        "npm run simulate:single -- --seed 24903 --maxTurns 4 --replayReport <report-path>",
+      args: [
+        "--seed",
+        "24903",
+        "--maxTurns",
+        "4",
+        "--replayReport",
+        "<report-path>",
+      ],
+    },
+  };
+
+  const formatted = formatSimulationFailureReport(
+    "2026-08-22T00:00:00.000Z",
+    report
+  );
+  assert.match(formatted, /seed: 24903/);
+  assert.match(formatted, /runtimeData:/);
+  assert.match(formatted, /actions:/);
+  assert.match(formatted, /message: late failure/);
+  assert.match(formatted, /stack:/);
+  assert.match(formatted, /--seed 24903/);
+  const materialized = formatSimulationFailureReport(
+    "2026-08-22T00:00:00.000Z",
+    report,
+    "C:/reports/failure report.md"
+  );
+  assert.match(
+    materialized,
+    /--replayReport "C:\/reports\/failure report\.md"/
+  );
+  assert.match(materialized, /"C:\/reports\/failure report\.md"/);
 });
 
 test("mass simulation menu summary includes Russian aggregate metrics and turn-limit warning", () => {

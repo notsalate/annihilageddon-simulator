@@ -7,7 +7,16 @@ import {
   type DataPackValidationOptions,
   type LoadedDataPack,
 } from "./data.js";
-import type { EffectRuntimeMode } from "./effect-runtime-registry.js";
+import {
+  validateRuntimeEffectCatalogPayload,
+  type EffectRuntimeMode,
+  type EffectRuntimeSourceKind,
+} from "./effect-runtime-registry.js";
+import type { RuntimeEffect, RuntimeEffectId } from "./runtime-effect.js";
+import {
+  markRuntimeEffectTreeVerified,
+  type VerifiedRuntimeEffect,
+} from "./runtime-effect-verification.js";
 
 const DEFAULT_MANIFEST_PATH = "data/packs/current-runtime.json";
 
@@ -61,7 +70,7 @@ export function intakeRuntimeData(
       return source.dataPack;
     }
 
-    return validateAndFreeze(source.dataPack, options.mode);
+    return validateAndFreeze(source.dataPack, options.mode, true);
   }
 
   const manifestPath = source.dataPackPath ?? DEFAULT_MANIFEST_PATH;
@@ -78,7 +87,28 @@ export function intakeRuntimeData(
     throw new RuntimeDataIntakeError("decode", decoded.errors);
   }
 
-  return validateAndFreeze(decoded.value, options.mode);
+  return validateAndFreeze(decoded.value, options.mode, false);
+}
+
+/** Keeps the legacy decoder benchmark inside the Runtime Data Intake boundary. */
+export function decodeRuntimeEffectAtIntake(
+  subjectId: string,
+  effectId: RuntimeEffectId,
+  effect: unknown,
+  mode: EffectRuntimeMode,
+  sourceKind: EffectRuntimeSourceKind
+): VerifiedRuntimeEffect {
+  const decoded = validateRuntimeEffectCatalogPayload(
+    subjectId,
+    effectId,
+    effect,
+    mode,
+    sourceKind
+  );
+  if (!decoded.ok) {
+    throw new RuntimeDataIntakeError("decode", decoded.errors);
+  }
+  return markRuntimeEffectTreeVerified(decoded.value as RuntimeEffect);
 }
 
 export function isVerifiedRuntimeDataPack(
@@ -89,7 +119,8 @@ export function isVerifiedRuntimeDataPack(
 
 function validateAndFreeze(
   dataPack: LoadedDataPack,
-  requestedMode: EffectRuntimeMode | undefined
+  requestedMode: EffectRuntimeMode | undefined,
+  cloneSource: boolean
 ): VerifiedRuntimeDataPack {
   const mode =
     requestedMode ??
@@ -104,15 +135,16 @@ function validateAndFreeze(
     throw new RuntimeDataIntakeError("validation", validation.errors);
   }
 
-  const immutableDataPack = createImmutableDataPack(dataPack);
+  const immutableDataPack = createImmutableDataPack(dataPack, cloneSource);
   verifiedDataPacks.add(immutableDataPack);
   return immutableDataPack;
 }
 
 function createImmutableDataPack(
-  dataPack: LoadedDataPack
+  dataPack: LoadedDataPack,
+  cloneSource: boolean
 ): VerifiedRuntimeDataPack {
-  const cloned = structuredClone(dataPack);
+  const cloned = cloneSource ? structuredClone(dataPack) : dataPack;
   const immutable = {
     manifest: freezeDeep(cloned.manifest),
     cardDefinitions: createReadonlyMap(cloned.cardDefinitions),
@@ -121,7 +153,33 @@ function createImmutableDataPack(
     tokenStacks: freezeDeep(cloned.tokenStacks),
   } satisfies LoadedDataPack;
 
+  if (cloneSource) {
+    markDataPackRuntimeEffectsVerified(immutable);
+  }
+
   return Object.freeze(immutable) as VerifiedRuntimeDataPack;
+}
+
+function markDataPackRuntimeEffectsVerified(dataPack: LoadedDataPack): void {
+  for (const definition of dataPack.cardDefinitions.values()) {
+    for (const effect of definition.engine.effects) {
+      markRuntimeEffectTreeVerified(effect);
+    }
+  }
+
+  for (const definition of dataPack.tokenDefinitions.values()) {
+    const effects =
+      definition.kind === "deadWizardToken"
+        ? definition.effects
+        : definition.engine?.effects;
+    if (effects === undefined) {
+      continue;
+    }
+
+    for (const effect of effects) {
+      markRuntimeEffectTreeVerified(effect);
+    }
+  }
 }
 
 function createReadonlyMap<K, V>(source: ReadonlyMap<K, V>): ReadonlyMap<K, V> {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { runMarketFlow } from "../src/index.js";
+import { ActionExecutionError } from "../src/engine/action-errors.js";
 import { executeControlledCardOnPlayCardEffects } from "../src/engine/effect-runtime.js";
 
 import {
@@ -175,26 +176,28 @@ test("attack returns an afterDamageDealt catalog error and stops later triggers"
   });
 
   const executedDefinitionIds: string[] = [];
-  const result = withTemporaryEffectRuntimeOperations(
-    "heal_equal_damage_dealt_on_own_turn",
-    {
-      applyAfterDamageDealt(_effect, context) {
-        executedDefinitionIds.push(context.source.definitionId);
-        return context.source.definitionId === "fixture-after-damage-error"
-          ? {
-              status: "resolved",
-              result: { ok: false, error: "after-damage failure" },
-            }
-          : { status: "resolved", result: { ok: true } };
-      },
-    },
-    () => play(scenario, attack)
+  assert.throws(
+    () =>
+      withTemporaryEffectRuntimeOperations(
+        "heal_equal_damage_dealt_on_own_turn",
+        {
+          applyAfterDamageDealt(_effect, context) {
+            executedDefinitionIds.push(context.source.definitionId);
+            return context.source.definitionId === "fixture-after-damage-error"
+              ? {
+                  status: "resolved",
+                  result: { ok: false, error: "after-damage failure" },
+                }
+              : { status: "resolved", result: { ok: true } };
+          },
+        },
+        () => play(scenario, attack)
+      ),
+    (error: unknown) =>
+      error instanceof ActionExecutionError &&
+      /after-damage failure/.test(error.message)
   );
-
-  assert.equal(result.ok, false);
-  if (result.ok) return;
-  assert.match(result.error, /after-damage failure/);
-  assert.equal(target.life.current, 20);
+  assert.equal(target.life.current, 18);
   assert.deepEqual(executedDefinitionIds, [
     "fixture-after-damage-first",
     "fixture-after-damage-error",
@@ -319,27 +322,29 @@ test("deal_damage returns an afterDamageDealt error and stops later triggers", (
   });
 
   const executedDefinitionIds: string[] = [];
-  const result = withTemporaryEffectRuntimeOperations(
-    "heal_equal_damage_dealt_on_own_turn",
-    {
-      applyAfterDamageDealt(_effect, context) {
-        executedDefinitionIds.push(context.source.definitionId);
-        return {
-          status: "resolved",
-          result:
-            context.source.definitionId === "fixture-deal-damage-error"
-              ? { ok: false, error: "deal-damage after-damage failure" }
-              : { ok: true },
-        };
-      },
-    },
-    () => play(scenario, damage)
+  assert.throws(
+    () =>
+      withTemporaryEffectRuntimeOperations(
+        "heal_equal_damage_dealt_on_own_turn",
+        {
+          applyAfterDamageDealt(_effect, context) {
+            executedDefinitionIds.push(context.source.definitionId);
+            return {
+              status: "resolved",
+              result:
+                context.source.definitionId === "fixture-deal-damage-error"
+                  ? { ok: false, error: "deal-damage after-damage failure" }
+                  : { ok: true },
+            };
+          },
+        },
+        () => play(scenario, damage)
+      ),
+    (error: unknown) =>
+      error instanceof ActionExecutionError &&
+      /deal-damage after-damage failure/.test(error.message)
   );
-
-  assert.equal(result.ok, false);
-  if (result.ok) return;
-  assert.match(result.error, /deal-damage after-damage failure/);
-  assert.equal(target.life.current, 20);
+  assert.equal(target.life.current, 18);
   assert.deepEqual(executedDefinitionIds, [
     "fixture-deal-damage-first",
     "fixture-deal-damage-error",

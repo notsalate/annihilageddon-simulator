@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       calibration:
-        description: "Выполнить первичную калибровку на 20 runner"
+        description: "Собрать новый candidate калибровки на 20 runner"
         required: true
         default: false
         type: boolean
@@ -31,10 +31,11 @@ permissions:
 jobs:
   pull-request:
     if: ${{ github.event_name == 'pull_request' }}
-    needs: calibration
     runs-on: ubuntu-latest
     env:
       BENCHMARK_COMMIT: ${{ github.event.pull_request.head.sha }}
+      PERFORMANCE_COMPARISON_PAIR_ID: ${{ github.run_id }}:${{ github.job }}
+      PERFORMANCE_ACCEPTED_CALIBRATION: docs/benchmarks/performance-calibration-e0-v1.json
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
@@ -44,30 +45,37 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+      - name: Guard immutable accepted calibrations
+        run: |
+          modified="$(git diff --name-only --diff-filter=MDR "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" -- 'docs/benchmarks/performance-calibration-*.json')"
+          if [[ -n "$modified" ]]; then
+            echo "Accepted calibration artifacts are immutable; add a new versioned file instead:"
+            echo "$modified"
+            exit 1
+          fi
       - name: Install head dependencies
         run: npm ci
       - name: Build head benchmark CLI
         run: npm run build -- --pretty false
-      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
-        with:
-          name: performance-calibration-results-${{ github.run_id }}
-          path: ${{ runner.temp }}/calibration-results
+      - name: Read accepted E0 commit
+        id: accepted_e0
+        run: echo "commit=$(node scripts/read-performance-epoch-commit.mjs docs/benchmarks/performance-epoch-e0.json)" >> "$GITHUB_OUTPUT"
       - name: Smoke current workload
         run: npm run benchmark:simulation -- --role current --stage 10 --format human --commit "$BENCHMARK_COMMIT"
       - name: Measure head simulation
-        run: npm run benchmark:simulation -- --role current --stage 100 --format human --commit "$BENCHMARK_COMMIT" --output "$RUNNER_TEMP/performance-head-simulation.json"
+        run: npm run benchmark:simulation -- --role current --stage 100 --format human --commit "$BENCHMARK_COMMIT" --comparisonPairId "$PERFORMANCE_COMPARISON_PAIR_ID" --output "$RUNNER_TEMP/performance-head-simulation.json"
       - name: Measure head analyzer light
-        run: npm run benchmark:analyzer -- --role current --profile light --format human --commit "$BENCHMARK_COMMIT" --output "$RUNNER_TEMP/performance-head-analyzer-light.json"
+        run: npm run benchmark:analyzer -- --role current --profile light --format human --commit "$BENCHMARK_COMMIT" --comparisonPairId "$PERFORMANCE_COMPARISON_PAIR_ID" --output "$RUNNER_TEMP/performance-head-analyzer-light.json"
       - name: Measure head analyzer typical
-        run: npm run benchmark:analyzer -- --role current --profile typical --format human --commit "$BENCHMARK_COMMIT" --output "$RUNNER_TEMP/performance-head-analyzer-typical.json"
+        run: npm run benchmark:analyzer -- --role current --profile typical --format human --commit "$BENCHMARK_COMMIT" --comparisonPairId "$PERFORMANCE_COMPARISON_PAIR_ID" --output "$RUNNER_TEMP/performance-head-analyzer-typical.json"
       - name: Measure head analyzer heavy
-        run: npm run benchmark:analyzer -- --role current --profile heavy --format human --commit "$BENCHMARK_COMMIT" --output "$RUNNER_TEMP/performance-head-analyzer-heavy.json"
+        run: npm run benchmark:analyzer -- --role current --profile heavy --format human --commit "$BENCHMARK_COMMIT" --comparisonPairId "$PERFORMANCE_COMPARISON_PAIR_ID" --output "$RUNNER_TEMP/performance-head-analyzer-heavy.json"
       - name: Measure confirming head workloads
         run: |
-          npm run benchmark:simulation -- --role current --stage 100 --format human --commit "$BENCHMARK_COMMIT" --output "$RUNNER_TEMP/performance-head-repeat-simulation.json"
-          npm run benchmark:analyzer -- --role current --profile light --format human --commit "$BENCHMARK_COMMIT" --output "$RUNNER_TEMP/performance-head-repeat-analyzer-light.json"
-          npm run benchmark:analyzer -- --role current --profile typical --format human --commit "$BENCHMARK_COMMIT" --output "$RUNNER_TEMP/performance-head-repeat-analyzer-typical.json"
-          npm run benchmark:analyzer -- --role current --profile heavy --format human --commit "$BENCHMARK_COMMIT" --output "$RUNNER_TEMP/performance-head-repeat-analyzer-heavy.json"
+          npm run benchmark:simulation -- --role current --stage 100 --format human --commit "$BENCHMARK_COMMIT" --comparisonPairId "$PERFORMANCE_COMPARISON_PAIR_ID" --output "$RUNNER_TEMP/performance-head-repeat-simulation.json"
+          npm run benchmark:analyzer -- --role current --profile light --format human --commit "$BENCHMARK_COMMIT" --comparisonPairId "$PERFORMANCE_COMPARISON_PAIR_ID" --output "$RUNNER_TEMP/performance-head-repeat-analyzer-light.json"
+          npm run benchmark:analyzer -- --role current --profile typical --format human --commit "$BENCHMARK_COMMIT" --comparisonPairId "$PERFORMANCE_COMPARISON_PAIR_ID" --output "$RUNNER_TEMP/performance-head-repeat-analyzer-typical.json"
+          npm run benchmark:analyzer -- --role current --profile heavy --format human --commit "$BENCHMARK_COMMIT" --comparisonPairId "$PERFORMANCE_COMPARISON_PAIR_ID" --output "$RUNNER_TEMP/performance-head-repeat-analyzer-heavy.json"
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           ref: ${{ github.event.pull_request.base.sha }}
@@ -88,36 +96,75 @@ jobs:
           node ../scripts/run-base-simulation-benchmark.mjs . "$RUNNER_TEMP/performance-base-simulation-raw.json"
       - name: Enrich base artifacts with runner metadata
         run: |
-          node scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-base-simulation-raw.json" "$RUNNER_TEMP/performance-base-simulation.json" "${{ github.event.pull_request.base.sha }}"
-          node scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-base-analyzer-light-raw.json" "$RUNNER_TEMP/performance-base-analyzer-light.json" "${{ github.event.pull_request.base.sha }}"
-          node scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-base-analyzer-typical-raw.json" "$RUNNER_TEMP/performance-base-analyzer-typical.json" "${{ github.event.pull_request.base.sha }}"
-          node scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-base-analyzer-heavy-raw.json" "$RUNNER_TEMP/performance-base-analyzer-heavy.json" "${{ github.event.pull_request.base.sha }}"
+          node scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-base-simulation-raw.json" "$RUNNER_TEMP/performance-base-simulation.json" "${{ github.event.pull_request.base.sha }}" "$PERFORMANCE_COMPARISON_PAIR_ID"
+          node scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-base-analyzer-light-raw.json" "$RUNNER_TEMP/performance-base-analyzer-light.json" "${{ github.event.pull_request.base.sha }}" "$PERFORMANCE_COMPARISON_PAIR_ID"
+          node scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-base-analyzer-typical-raw.json" "$RUNNER_TEMP/performance-base-analyzer-typical.json" "${{ github.event.pull_request.base.sha }}" "$PERFORMANCE_COMPARISON_PAIR_ID"
+          node scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-base-analyzer-heavy-raw.json" "$RUNNER_TEMP/performance-base-analyzer-heavy.json" "${{ github.event.pull_request.base.sha }}" "$PERFORMANCE_COMPARISON_PAIR_ID"
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        id: checkout_e0
+        continue-on-error: true
+        with:
+          ref: ${{ steps.accepted_e0.outputs.commit }}
+          path: .performance-e0
+          fetch-depth: 0
+      - name: Install E0 dependencies
+        id: install_e0
+        if: ${{ steps.checkout_e0.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: .performance-e0
+        run: npm ci
+      - name: Build E0 benchmark CLI
+        id: build_e0
+        if: ${{ steps.install_e0.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: .performance-e0
+        run: npm run build -- --pretty false
+      - name: Measure accepted E0 workloads
+        if: ${{ steps.build_e0.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: .performance-e0
+        run: |
+          node dist/src/cli/run-benchmark.js --kind simulation --role reference --stage 100 --format json > "$RUNNER_TEMP/performance-e0-simulation-raw.json"
+          node dist/src/cli/run-benchmark.js --kind analyzer --role reference --profile light --format json > "$RUNNER_TEMP/performance-e0-analyzer-light-raw.json"
+          node dist/src/cli/run-benchmark.js --kind analyzer --role reference --profile typical --format json > "$RUNNER_TEMP/performance-e0-analyzer-typical-raw.json"
+          node dist/src/cli/run-benchmark.js --kind analyzer --role reference --profile heavy --format json > "$RUNNER_TEMP/performance-e0-analyzer-heavy-raw.json"
+          node ../scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-e0-simulation-raw.json" "$RUNNER_TEMP/performance-e0-simulation.json" "${{ steps.accepted_e0.outputs.commit }}" "$PERFORMANCE_COMPARISON_PAIR_ID"
+          node ../scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-e0-analyzer-light-raw.json" "$RUNNER_TEMP/performance-e0-analyzer-light.json" "${{ steps.accepted_e0.outputs.commit }}" "$PERFORMANCE_COMPARISON_PAIR_ID"
+          node ../scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-e0-analyzer-typical-raw.json" "$RUNNER_TEMP/performance-e0-analyzer-typical.json" "${{ steps.accepted_e0.outputs.commit }}" "$PERFORMANCE_COMPARISON_PAIR_ID"
+          node ../scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-e0-analyzer-heavy-raw.json" "$RUNNER_TEMP/performance-e0-analyzer-heavy.json" "${{ steps.accepted_e0.outputs.commit }}" "$PERFORMANCE_COMPARISON_PAIR_ID"
       - name: Compare simulation
         continue-on-error: true
-        run: >-
-          npm run benchmark:epoch --
-          --baseline docs/benchmarks/performance-epoch-e0.json
-          --base "$RUNNER_TEMP/performance-base-simulation.json"
-          --head "$RUNNER_TEMP/performance-head-simulation.json"
-          --confirmation "$RUNNER_TEMP/performance-head-repeat-simulation.json"
-          --calibration "$RUNNER_TEMP/calibration-results/calibration-simulation.json"
-          --format human
-          --output "$RUNNER_TEMP/performance-report-simulation.json"
+        run: |
+          epoch_args=()
+          if [[ -f "$RUNNER_TEMP/performance-e0-simulation.json" ]]; then
+            epoch_args=(--epochReference "$RUNNER_TEMP/performance-e0-simulation.json")
+          fi
+          npm run benchmark:epoch -- "${epoch_args[@]}" --baseline docs/benchmarks/performance-epoch-e0.json --acceptedCalibration "$PERFORMANCE_ACCEPTED_CALIBRATION" --base "$RUNNER_TEMP/performance-base-simulation.json" --head "$RUNNER_TEMP/performance-head-simulation.json" --confirmation "$RUNNER_TEMP/performance-head-repeat-simulation.json" --format human --output "$RUNNER_TEMP/performance-report-simulation.json"
       - name: Compare analyzer profiles
         continue-on-error: true
         run: |
-          npm run benchmark:epoch -- --baseline docs/benchmarks/performance-epoch-e0.json --base "$RUNNER_TEMP/performance-base-analyzer-light.json" --head "$RUNNER_TEMP/performance-head-analyzer-light.json" --confirmation "$RUNNER_TEMP/performance-head-repeat-analyzer-light.json" --calibration "$RUNNER_TEMP/calibration-results/calibration-analyzer-light.json" --format human --output "$RUNNER_TEMP/performance-report-analyzer-light.json" || true
-          npm run benchmark:epoch -- --baseline docs/benchmarks/performance-epoch-e0.json --base "$RUNNER_TEMP/performance-base-analyzer-typical.json" --head "$RUNNER_TEMP/performance-head-analyzer-typical.json" --confirmation "$RUNNER_TEMP/performance-head-repeat-analyzer-typical.json" --calibration "$RUNNER_TEMP/calibration-results/calibration-analyzer-typical.json" --format human --output "$RUNNER_TEMP/performance-report-analyzer-typical.json" || true
-          npm run benchmark:epoch -- --baseline docs/benchmarks/performance-epoch-e0.json --base "$RUNNER_TEMP/performance-base-analyzer-heavy.json" --head "$RUNNER_TEMP/performance-head-analyzer-heavy.json" --confirmation "$RUNNER_TEMP/performance-head-repeat-analyzer-heavy.json" --calibration "$RUNNER_TEMP/calibration-results/calibration-analyzer-heavy.json" --format human --output "$RUNNER_TEMP/performance-report-analyzer-heavy.json" || true
+          compare_analyzer() {
+            local profile="$1"
+            local epoch_args=()
+            if [[ -f "$RUNNER_TEMP/performance-e0-analyzer-$profile.json" ]]; then
+              epoch_args=(--epochReference "$RUNNER_TEMP/performance-e0-analyzer-$profile.json")
+            fi
+            npm run benchmark:epoch -- "${epoch_args[@]}" --baseline docs/benchmarks/performance-epoch-e0.json --acceptedCalibration "$PERFORMANCE_ACCEPTED_CALIBRATION" --base "$RUNNER_TEMP/performance-base-analyzer-$profile.json" --head "$RUNNER_TEMP/performance-head-analyzer-$profile.json" --confirmation "$RUNNER_TEMP/performance-head-repeat-analyzer-$profile.json" --format human --output "$RUNNER_TEMP/performance-report-analyzer-$profile.json" || true
+          }
+          compare_analyzer light
+          compare_analyzer typical
+          compare_analyzer heavy
       - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4
         if: ${{ always() }}
         with:
           name: performance-pr-${{ github.run_id }}
-          path: ${{ runner.temp }}/performance-*.json
+          path: |
+            ${{ runner.temp }}/performance-*.json
+            docs/benchmarks/performance-calibration-e0-v1.json
           if-no-files-found: error
       - name: Enforce performance gate
         if: ${{ always() }}
-        run: node scripts/assert-performance-reports.mjs "$RUNNER_TEMP"
+        run: node scripts/assert-performance-reports.mjs "$RUNNER_TEMP" "$PERFORMANCE_COMPARISON_PAIR_ID"
 
   scheduled:
     if: ${{ github.event_name == 'schedule' }}
@@ -142,7 +189,7 @@ jobs:
           if-no-files-found: error
 
   calibration-run:
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.calibration) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.calibration) || (github.event_name == 'schedule' && github.event.schedule == '0 4 * * 1') }}
     runs-on: ubuntu-latest
     env:
       BENCHMARK_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
@@ -201,7 +248,7 @@ jobs:
           if-no-files-found: error
 
   calibration:
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.calibration) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.calibration) || (github.event_name == 'schedule' && github.event.schedule == '0 4 * * 1') }}
     needs: calibration-run
     runs-on: ubuntu-latest
     steps:
@@ -226,10 +273,14 @@ jobs:
           npm run benchmark:epoch:calibrate -- --calibration "$RUNNER_TEMP/calibration-pairs/analyzer-light.json" --format human --output "$RUNNER_TEMP/calibration-analyzer-light.json"
           npm run benchmark:epoch:calibrate -- --calibration "$RUNNER_TEMP/calibration-pairs/analyzer-typical.json" --format human --output "$RUNNER_TEMP/calibration-analyzer-typical.json"
           npm run benchmark:epoch:calibrate -- --calibration "$RUNNER_TEMP/calibration-pairs/analyzer-heavy.json" --format human --output "$RUNNER_TEMP/calibration-analyzer-heavy.json"
+      - name: Build immutable calibration candidate
+        run: node scripts/create-performance-calibration-candidate.mjs "$RUNNER_TEMP" "$RUNNER_TEMP/performance-calibration-candidate.json" "candidate-${{ github.run_id }}"
       - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4
         with:
           name: performance-calibration-results-${{ github.run_id }}
-          path: ${{ runner.temp }}/calibration-*.json
+          path: |
+            ${{ runner.temp }}/calibration-*.json
+            ${{ runner.temp }}/performance-calibration-candidate.json
           if-no-files-found: error
 
   baseline-bootstrap:
