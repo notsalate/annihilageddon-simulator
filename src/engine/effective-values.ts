@@ -289,7 +289,7 @@ function getControlledObjectEffects(
   if (player === undefined) {
     throw new Error(`Missing player ${playerId}`);
   }
-  const playedThisTurnCards = listPlayerPlayedThisTurnCards(state, playerId);
+  const playedThisTurnCards = listPlayerPlayedThisTurnCards(player);
   const playedThisTurnIds = new Set(
     playedThisTurnCards.map((card) => card.instanceId)
   );

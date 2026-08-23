@@ -142,19 +142,13 @@ test("Control Ledger reads a player's played cards without traversing other zone
   player.playedThisTurn.push(playedCard);
   otherPlayer.playedThisTurn.push(otherPlayedCard);
 
-  assert.deepEqual(listPlayerPlayedThisTurnCards(state, player.playerId), [
-    playedCard,
-  ]);
+  assert.deepEqual(listPlayerPlayedThisTurnCards(player), [playedCard]);
   assert.equal(
-    findPlayerPlayedThisTurnCard(state, player.playerId, playedCard.instanceId),
+    findPlayerPlayedThisTurnCard(player, playedCard.instanceId),
     playedCard
   );
   assert.equal(
-    findPlayerPlayedThisTurnCard(
-      state,
-      player.playerId,
-      otherPlayedCard.instanceId
-    ),
+    findPlayerPlayedThisTurnCard(player, otherPlayedCard.instanceId),
     undefined
   );
 });

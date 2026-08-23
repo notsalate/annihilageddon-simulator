@@ -527,22 +527,17 @@ export function listPhysicalCardLocations(
 
 /** Returns the current player's played cards through the Ledger-owned zone. */
 export function listPlayerPlayedThisTurnCards(
-  state: Pick<GameState, "players">,
-  playerId: PlayerId
+  player: PlayerState
 ): readonly CardInstance[] {
-  return (
-    state.players.find((player) => player.playerId === playerId)
-      ?.playedThisTurn ?? []
-  );
+  return player.playedThisTurn;
 }
 
 /** Finds one card in the current player's Ledger-owned played zone. */
 export function findPlayerPlayedThisTurnCard(
-  state: Pick<GameState, "players">,
-  playerId: PlayerId,
+  player: PlayerState,
   cardInstanceId: string
 ): CardInstance | undefined {
-  return listPlayerPlayedThisTurnCards(state, playerId).find(
+  return listPlayerPlayedThisTurnCards(player).find(
     (card) => card.instanceId === cardInstanceId
   );
 }

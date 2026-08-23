@@ -461,8 +461,7 @@ export function resolveMainMarketGainDestination(
   for (const sourceCardInstanceId of state.turn
     .mainMarketCardHandReplacementSourceCardIds) {
     const playedCard = findPlayerPlayedThisTurnCard(
-      state,
-      player.playerId,
+      player,
       sourceCardInstanceId
     );
     if (playedCard === undefined) {
