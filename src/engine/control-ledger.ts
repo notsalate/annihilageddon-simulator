@@ -525,18 +525,6 @@ export function listPhysicalCardLocations(
   );
 }
 
-/** Lists cards in one physical zone without exposing its storage. */
-export function listPhysicalCardsInZone(
-  state: GameState,
-  zoneName: string
-): readonly CardInstance[] {
-  return (
-    listPhysicalCardZoneDescriptors(state)
-      .find((descriptor) => descriptor.zoneName === zoneName)
-      ?.read() ?? []
-  );
-}
-
 /** Returns the current player's played cards through the Ledger-owned zone. */
 export function listPlayerPlayedThisTurnCards(
   state: Pick<GameState, "players">,
