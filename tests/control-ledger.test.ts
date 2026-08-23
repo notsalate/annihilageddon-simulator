@@ -16,8 +16,10 @@ import {
   buildControlledObjectView,
   cloneTemporaryControls,
   findCardLocation,
+  findPlayerPlayedThisTurnCard,
   getControlledCards,
   grantTemporaryControl,
+  listPlayerPlayedThisTurnCards,
   releaseTemporaryControls,
 } from "../src/engine/control-ledger.js";
 import {
@@ -124,6 +126,36 @@ test("Control Ledger locates player singleton and common card zones", () => {
   assert.equal(
     findCardLocation(state, marketCard.instanceId)?.zoneName,
     "mainMarket"
+  );
+});
+
+test("Control Ledger reads a player's played cards without traversing other zones", () => {
+  const state = initializeGame({ rootDir, seed: 22008 });
+  const player = state.players[0];
+  const otherPlayer = state.players[1];
+  assert.ok(player);
+  assert.ok(otherPlayer);
+  const playedCard = player.hand.shift();
+  const otherPlayedCard = otherPlayer.hand.shift();
+  assert.ok(playedCard);
+  assert.ok(otherPlayedCard);
+  player.playedThisTurn.push(playedCard);
+  otherPlayer.playedThisTurn.push(otherPlayedCard);
+
+  assert.deepEqual(listPlayerPlayedThisTurnCards(state, player.playerId), [
+    playedCard,
+  ]);
+  assert.equal(
+    findPlayerPlayedThisTurnCard(state, player.playerId, playedCard.instanceId),
+    playedCard
+  );
+  assert.equal(
+    findPlayerPlayedThisTurnCard(
+      state,
+      player.playerId,
+      otherPlayedCard.instanceId
+    ),
+    undefined
   );
 });
 

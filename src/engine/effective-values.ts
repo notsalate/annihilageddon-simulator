@@ -7,7 +7,7 @@ import type {
 } from "./setup.js";
 import {
   buildControlledObjectView,
-  listPhysicalCardsInZone,
+  listPlayerPlayedThisTurnCards,
   listOwnedScoringCards,
   type ControlledCardObject,
   type ControlledObjectView,
@@ -289,10 +289,7 @@ function getControlledObjectEffects(
   if (player === undefined) {
     throw new Error(`Missing player ${playerId}`);
   }
-  const playedThisTurnCards = listPhysicalCardsInZone(
-    state,
-    `${playerId}.playedThisTurn`
-  );
+  const playedThisTurnCards = listPlayerPlayedThisTurnCards(state, playerId);
   const playedThisTurnIds = new Set(
     playedThisTurnCards.map((card) => card.instanceId)
   );

@@ -16,7 +16,7 @@ import {
   type RedirectedAttackIntent,
 } from "./attack-resolution.js";
 import {
-  findCardLocation,
+  findPlayerPlayedThisTurnCard,
   getControlledCards,
   removeCardFromLocation,
 } from "./control-ledger.js";
@@ -484,17 +484,14 @@ export function moveGainedCardToPlayerDestination(
   if (sourceZone === "mainMarket") {
     for (const sourceCardInstanceId of state.turn
       .mainMarketCardHandReplacementSourceCardIds) {
-      const playedCardLocation = findCardLocation(
+      const playedCard = findPlayerPlayedThisTurnCard(
         state,
+        player.playerId,
         sourceCardInstanceId
       );
-      if (
-        playedCardLocation === undefined ||
-        playedCardLocation.zoneName !== `${player.playerId}.playedThisTurn`
-      ) {
+      if (playedCard === undefined) {
         continue;
       }
-      const playedCard = playedCardLocation.card;
       const playedDefinition = state.cardDefinitions.get(
         playedCard.definitionId
       );

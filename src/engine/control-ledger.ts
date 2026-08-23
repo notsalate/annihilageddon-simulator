@@ -531,9 +531,31 @@ export function listPhysicalCardsInZone(
   zoneName: string
 ): readonly CardInstance[] {
   return (
-    listPhysicalCardZoneDescriptors(state).find(
-      (descriptor) => descriptor.zoneName === zoneName
-    )?.read() ?? []
+    listPhysicalCardZoneDescriptors(state)
+      .find((descriptor) => descriptor.zoneName === zoneName)
+      ?.read() ?? []
+  );
+}
+
+/** Returns the current player's played cards through the Ledger-owned zone. */
+export function listPlayerPlayedThisTurnCards(
+  state: Pick<GameState, "players">,
+  playerId: PlayerId
+): readonly CardInstance[] {
+  return (
+    state.players.find((player) => player.playerId === playerId)
+      ?.playedThisTurn ?? []
+  );
+}
+
+/** Finds one card in the current player's Ledger-owned played zone. */
+export function findPlayerPlayedThisTurnCard(
+  state: Pick<GameState, "players">,
+  playerId: PlayerId,
+  cardInstanceId: string
+): CardInstance | undefined {
+  return listPlayerPlayedThisTurnCards(state, playerId).find(
+    (card) => card.instanceId === cardInstanceId
   );
 }
 
