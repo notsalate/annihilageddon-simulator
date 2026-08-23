@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import type * as PublicEntrypointGuard from "../scripts/lib/check-protected-public-entrypoints.mjs";
+import { runEngineTypedAccessGuard } from "./helpers/guard-runners.js";
 
-const rootDir = process.cwd();
 const productionCliEntrypoints = [
   "src/cli/generate-drafts.ts",
   "src/cli/report-card-runtime-clusters.ts",
@@ -110,14 +109,7 @@ function createPublicEntrypointFixture(
 }
 
 function runTypedAccessGuard(fixtureRoot: string) {
-  return spawnSync(
-    process.execPath,
-    [
-      path.join(rootDir, "scripts", "check-engine-typed-access.mjs"),
-      fixtureRoot,
-    ],
-    { encoding: "utf8" }
-  );
+  return runEngineTypedAccessGuard(fixtureRoot);
 }
 
 function writeFixtureFiles(

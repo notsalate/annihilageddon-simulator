@@ -1,76 +1,84 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import { captureGuard, runGuardCli } from "./lib/guard-cli.mjs";
 
-const rootDir = path.resolve(process.argv[2] ?? process.cwd());
-const engineDir = path.join(rootDir, "src", "engine");
+export function runEngineUnknownArraysGuard(rootPath = process.cwd()) {
+  return captureGuard(() => {
+    const rootDir = path.resolve(rootPath);
+    const engineDir = path.join(rootDir, "src", "engine");
 
-const configuredAllowedViolations = [
-  {
-    filePath: "src/engine/data.ts",
-    line: 164,
-    column: 15,
-    source: "unknown[]",
-    owner: "PropertySignature:needsData",
-    issue: "#64",
-    reason: "raw/decode boundary",
-  },
-  {
-    filePath: "src/engine/data.ts",
-    line: 1749,
-    column: 4,
-    source: "unknown[]",
-    owner: "FunctionDeclaration:requireArrayField",
-    issue: "#64",
-    reason: "raw/decode boundary",
-  },
-  {
-    filePath: "src/engine/data.ts",
-    line: 1806,
-    column: 51,
-    source: "unknown[]",
-    owner: "FunctionDeclaration:isUnknownArray",
-    issue: "#64",
-    reason: "raw/decode boundary",
-  },
-];
-const allowedViolations = statSync(path.join(engineDir, "data.ts"), {
-  throwIfNoEntry: false,
-})
-  ? configuredAllowedViolations
-  : [];
-const allowedKeys = new Set(allowedViolations.map(createKey));
-const violations = collectViolations(engineDir);
-const actualKeys = new Set(violations.map(createKey));
-const stale = allowedViolations.filter(
-  (item) => !actualKeys.has(createKey(item))
-);
-const untracked = violations.filter(
-  (item) => !allowedKeys.has(createKey(item))
-);
+    const configuredAllowedViolations = [
+      {
+        filePath: "src/engine/data.ts",
+        line: 164,
+        column: 15,
+        source: "unknown[]",
+        owner: "PropertySignature:needsData",
+        issue: "#64",
+        reason: "raw/decode boundary",
+      },
+      {
+        filePath: "src/engine/data.ts",
+        line: 1749,
+        column: 4,
+        source: "unknown[]",
+        owner: "FunctionDeclaration:requireArrayField",
+        issue: "#64",
+        reason: "raw/decode boundary",
+      },
+      {
+        filePath: "src/engine/data.ts",
+        line: 1806,
+        column: 51,
+        source: "unknown[]",
+        owner: "FunctionDeclaration:isUnknownArray",
+        issue: "#64",
+        reason: "raw/decode boundary",
+      },
+    ];
+    const allowedViolations = statSync(path.join(engineDir, "data.ts"), {
+      throwIfNoEntry: false,
+    })
+      ? configuredAllowedViolations
+      : [];
+    const allowedKeys = new Set(allowedViolations.map(createKey));
+    const violations = collectViolations(engineDir, rootDir);
+    const actualKeys = new Set(violations.map(createKey));
+    const stale = allowedViolations.filter(
+      (item) => !actualKeys.has(createKey(item))
+    );
+    const untracked = violations.filter(
+      (item) => !allowedKeys.has(createKey(item))
+    );
 
-for (const item of stale)
-  console.error(
-    `${item.filePath}:${item.line} stale unknown-array exception (${item.issue}, ${item.reason})`
-  );
-for (const item of untracked)
-  console.error(
-    `${item.filePath}:${item.line}:${item.column} untracked unknown-array pattern: ${item.source}`
-  );
-if (stale.length || untracked.length) {
-  console.error(
-    `Engine unknown-array guard failed: ${untracked.length} untracked, ${stale.length} stale exception(s)`
-  );
-  process.exit(1);
+    if (stale.length || untracked.length) {
+      throw new Error(
+        [
+          ...stale.map(
+            (item) =>
+              `${item.filePath}:${item.line} stale unknown-array exception (${item.issue}, ${item.reason})`
+          ),
+          ...untracked.map(
+            (item) =>
+              `${item.filePath}:${item.line}:${item.column} untracked unknown-array pattern: ${item.source}`
+          ),
+          `Engine unknown-array guard failed: ${untracked.length} untracked, ${stale.length} stale exception(s)`,
+        ].join("\n")
+      );
+    }
+    return `Engine unknown-array guard: ok (${violations.length} tracked exception(s))`;
+  });
 }
-console.log(
-  `Engine unknown-array guard: ok (${violations.length} tracked exception(s))`
+
+runGuardCli(import.meta.url, () =>
+  runEngineUnknownArraysGuard(process.argv[2] ?? process.cwd())
 );
 
-function collectViolations(targetPath) {
+function collectViolations(targetPath, rootDir) {
   if (statSync(targetPath).isDirectory()) {
     return readdirSync(targetPath, { withFileTypes: true }).flatMap((entry) =>
-      collectViolations(path.join(targetPath, entry.name))
+      collectViolations(path.join(targetPath, entry.name), rootDir)
     );
   }
   if (!targetPath.endsWith(".ts")) return [];

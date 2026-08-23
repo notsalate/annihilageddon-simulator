@@ -74,16 +74,18 @@ assertTestSuiteRegistryComplete(
   collectCompiledTestSuites(compiledTestsRoot)
 );
 
-for (const suite of testSuites) {
-  const result = spawnSync(
-    process.execPath,
-    ["--test", path.join(compiledTestsRoot, suite)],
-    { stdio: "inherit" }
-  );
-  if (result.error !== undefined) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
-  }
+const result = spawnSync(
+  process.execPath,
+  [
+    "--test",
+    "--test-concurrency=4",
+    ...testSuites.map((suite) => path.join(compiledTestsRoot, suite)),
+  ],
+  { stdio: "inherit" }
+);
+if (result.error !== undefined) {
+  throw result.error;
+}
+if (result.status !== 0) {
+  process.exit(result.status ?? 1);
 }

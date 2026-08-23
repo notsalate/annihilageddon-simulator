@@ -2,7 +2,15 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { captureGuard, runGuardCli } from "./lib/guard-cli.mjs";
 
+// Keep caches and validator state lexical so repeated fixture checks stay isolated.
+// prettier-ignore
+export function runCompletionReconciliationGuard(
+  manifestPath,
+  workingDirectory = process.cwd()
+) {
+  return captureGuard(() => {
 const frozenActiveRequirementIds = [
   "REQ-176-AC01",
   "REQ-R3-09-AC02",
@@ -18,31 +26,22 @@ const directTestSuiteExecutionDependencyNames = new Set([
   "spawnSync",
 ]);
 
-const manifestPath = process.argv[2];
-
 if (manifestPath === undefined) {
-  console.error(
+  throw new Error(
     "usage: node scripts/check-completion-reconciliation.mjs <manifest.json>"
   );
-  process.exitCode = 1;
-} else {
-  let manifest;
-  try {
-    manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-  } catch (error) {
-    console.error(`cannot read reconciliation manifest: ${String(error)}`);
-    process.exitCode = 1;
-  }
+}
 
-  if (manifest !== undefined) {
-    const errors = validateManifest(manifest);
-    if (errors.length > 0) {
-      for (const error of errors) {
-        console.error(error);
-      }
-      process.exitCode = 1;
-    }
-  }
+let manifest;
+try {
+  manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+} catch (error) {
+  throw new Error(`cannot read reconciliation manifest: ${String(error)}`);
+}
+
+const manifestErrors = validateManifest(manifest);
+if (manifestErrors.length > 0) {
+  throw new Error(manifestErrors.join("\n"));
 }
 
 function validateManifest(manifest) {
@@ -162,7 +161,7 @@ function resolveCommit(reference, label, errors) {
   const result = spawnSync(
     "git",
     ["rev-parse", "--verify", `${reference}^{commit}`],
-    { cwd: process.cwd(), encoding: "utf8" }
+    { cwd: workingDirectory, encoding: "utf8" }
   );
   if (result.status !== 0) {
     errors.push(`${label} must resolve to a commit`);
@@ -174,7 +173,7 @@ function resolveCommit(reference, label, errors) {
 function isAncestor(ancestor, descendant) {
   return (
     spawnSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
-      cwd: process.cwd(),
+      cwd: workingDirectory,
     }).status === 0
   );
 }
@@ -238,7 +237,7 @@ function isRegisteredTestReference(testReference, codeCommit) {
   const testObject = spawnSync(
     "git",
     ["cat-file", "-e", `${codeCommit}:${testReference}`],
-    { cwd: process.cwd() }
+    { cwd: workingDirectory }
   );
   if (testObject.status !== 0) {
     return false;
@@ -256,12 +255,12 @@ function getRegisteredTestSuites(codeCommit) {
   const runnerResult = spawnSync(
     "git",
     ["show", `${codeCommit}:tests/run-tests.ts`],
-    { cwd: process.cwd(), encoding: "utf8" }
+    { cwd: workingDirectory, encoding: "utf8" }
   );
   const helperResult = spawnSync(
     "git",
     ["show", `${codeCommit}:tests/test-suite-registry.ts`],
-    { cwd: process.cwd(), encoding: "utf8" }
+    { cwd: workingDirectory, encoding: "utf8" }
   );
   const testSuites =
     runnerResult.status === 0 &&
@@ -319,6 +318,13 @@ function parseTestSuiteRegistry(sourceText) {
 }
 
 function hasUnambiguousTestSuiteExecution(sourceFile, declaration) {
+  return (
+    hasUnambiguousSequentialTestSuiteExecution(sourceFile, declaration) ||
+    hasUnambiguousParallelTestSuiteExecution(sourceFile, declaration)
+  );
+}
+
+function hasUnambiguousSequentialTestSuiteExecution(sourceFile, declaration) {
   if (
     !ts.isVariableDeclarationList(declaration.parent) ||
     (declaration.parent.flags & ts.NodeFlags.Const) === 0 ||
@@ -440,6 +446,210 @@ function hasUnambiguousTestSuiteExecution(sourceFile, declaration) {
   }
   visit(sourceFile);
   return referencesAreClosed;
+}
+
+function hasUnambiguousParallelTestSuiteExecution(sourceFile, declaration) {
+  if (
+    !ts.isVariableDeclarationList(declaration.parent) ||
+    (declaration.parent.flags & ts.NodeFlags.Const) === 0 ||
+    declaration.parent.declarations.length !== 1 ||
+    !ts.isVariableStatement(declaration.parent.parent) ||
+    !hasNamedImport(sourceFile, "node:child_process", "spawnSync") ||
+    !hasDefaultImport(sourceFile, "node:path", "path") ||
+    !hasNamedImport(
+      sourceFile,
+      "./test-suite-registry.js",
+      "assertTestSuiteRegistryComplete"
+    ) ||
+    !hasNamedImport(
+      sourceFile,
+      "./test-suite-registry.js",
+      "collectCompiledTestSuites"
+    ) ||
+    sourceFile.statements.filter(ts.isImportDeclaration).length !== 3
+  ) {
+    return false;
+  }
+
+  const registryStatement = declaration.parent.parent;
+  const variableStatements = sourceFile.statements.filter(
+    ts.isVariableStatement
+  );
+  const compiledRootStatement = variableStatements.find((statement) =>
+    statement.declarationList.declarations.some(
+      (candidate) =>
+        ts.isIdentifier(candidate.name) &&
+        candidate.name.text === "compiledTestsRoot"
+    )
+  );
+  const resultStatement = variableStatements.find((statement) =>
+    statement.declarationList.declarations.some(
+      (candidate) =>
+        ts.isIdentifier(candidate.name) && candidate.name.text === "result"
+    )
+  );
+  const completenessStatements = sourceFile.statements.filter(
+    (statement) =>
+      ts.isExpressionStatement(statement) &&
+      ts.isCallExpression(statement.expression) &&
+      ts.isIdentifier(statement.expression.expression) &&
+      statement.expression.expression.text === "assertTestSuiteRegistryComplete"
+  );
+  const failureBranches = sourceFile.statements.filter(ts.isIfStatement);
+  if (
+    variableStatements.length !== 3 ||
+    compiledRootStatement === undefined ||
+    resultStatement === undefined ||
+    completenessStatements.length !== 1 ||
+    failureBranches.length !== 2 ||
+    resultStatement.declarationList.declarations.length !== 1
+  ) {
+    return false;
+  }
+
+  const compiledRootDeclaration =
+    compiledRootStatement.declarationList.declarations[0];
+  const resultDeclaration = resultStatement.declarationList.declarations[0];
+  const completenessStatement = completenessStatements[0];
+  const completenessCall = completenessStatement.expression;
+  if (
+    (compiledRootStatement.declarationList.flags & ts.NodeFlags.Const) === 0 ||
+    compiledRootStatement.declarationList.declarations.length !== 1 ||
+    !hasDirectCompiledTestsRoot(compiledRootDeclaration) ||
+    (resultStatement.declarationList.flags & ts.NodeFlags.Const) === 0 ||
+    !ts.isIdentifier(resultDeclaration.name) ||
+    resultDeclaration.name.text !== "result" ||
+    resultDeclaration.initializer === undefined ||
+    !hasDirectParallelTestSuiteSpawn(resultDeclaration.initializer) ||
+    !hasDirectSpawnFailureBranches(
+      failureBranches[0],
+      failureBranches[1],
+      "result"
+    ) ||
+    completenessCall.arguments[0] === undefined ||
+    !ts.isIdentifier(completenessCall.arguments[0]) ||
+    completenessCall.arguments[0].text !== "testSuites" ||
+    !hasDirectCompletenessInventory(completenessCall)
+  ) {
+    return false;
+  }
+
+  const allowedStatements = new Set([
+    registryStatement,
+    compiledRootStatement,
+    completenessStatement,
+    resultStatement,
+    ...failureBranches,
+  ]);
+  if (
+    sourceFile.statements.some(
+      (statement) =>
+        !ts.isImportDeclaration(statement) && !allowedStatements.has(statement)
+    ) ||
+    sourceFile.statements.indexOf(registryStatement) >=
+      sourceFile.statements.indexOf(compiledRootStatement) ||
+    sourceFile.statements.indexOf(compiledRootStatement) >=
+      sourceFile.statements.indexOf(completenessStatement) ||
+    sourceFile.statements.indexOf(completenessStatement) >=
+      sourceFile.statements.indexOf(resultStatement) ||
+    sourceFile.statements.indexOf(resultStatement) >=
+      sourceFile.statements.indexOf(failureBranches[0]) ||
+    sourceFile.statements.indexOf(failureBranches[0]) >=
+      sourceFile.statements.indexOf(failureBranches[1])
+  ) {
+    return false;
+  }
+
+  const allowedReferences = new Set([
+    declaration.name,
+    completenessCall.arguments[0],
+  ]);
+  let referencesAreClosed = true;
+  function visit(node) {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === "testSuites" &&
+      node.expression.name.text === "map"
+    ) {
+      allowedReferences.add(node.expression.expression);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(resultDeclaration.initializer);
+  function checkReference(node) {
+    if (
+      ts.isIdentifier(node) &&
+      node.text === "testSuites" &&
+      !allowedReferences.has(node)
+    ) {
+      referencesAreClosed = false;
+      return;
+    }
+    ts.forEachChild(node, checkReference);
+  }
+  checkReference(sourceFile);
+  return referencesAreClosed;
+}
+
+function hasDirectParallelTestSuiteSpawn(initializer) {
+  if (
+    !ts.isCallExpression(initializer) ||
+    !ts.isIdentifier(initializer.expression) ||
+    initializer.expression.text !== "spawnSync" ||
+    hasIdentifierReference(initializer, "result") ||
+    !hasSafeSpawnOptions(initializer.arguments)
+  ) {
+    return false;
+  }
+  const command = initializer.arguments[0];
+  const commandArguments = initializer.arguments[1];
+  if (
+    !ts.isPropertyAccessExpression(command) ||
+    !ts.isIdentifier(command.expression) ||
+    command.expression.text !== "process" ||
+    command.name.text !== "execPath" ||
+    commandArguments === undefined ||
+    !ts.isArrayLiteralExpression(commandArguments) ||
+    commandArguments.elements.length !== 3 ||
+    !ts.isStringLiteral(commandArguments.elements[0]) ||
+    commandArguments.elements[0].text !== "--test" ||
+    !ts.isStringLiteral(commandArguments.elements[1]) ||
+    commandArguments.elements[1].text !== "--test-concurrency=4"
+  ) {
+    return false;
+  }
+  const suitePaths = commandArguments.elements[2];
+  if (
+    !ts.isSpreadElement(suitePaths) ||
+    !ts.isCallExpression(suitePaths.expression) ||
+    !ts.isPropertyAccessExpression(suitePaths.expression.expression) ||
+    !ts.isIdentifier(suitePaths.expression.expression.expression) ||
+    suitePaths.expression.expression.expression.text !== "testSuites" ||
+    suitePaths.expression.expression.name.text !== "map" ||
+    suitePaths.expression.arguments.length !== 1
+  ) {
+    return false;
+  }
+  const mapper = suitePaths.expression.arguments[0];
+  if (
+    !ts.isArrowFunction(mapper) ||
+    mapper.parameters.length !== 1 ||
+    !ts.isIdentifier(mapper.parameters[0].name) ||
+    !ts.isCallExpression(mapper.body) ||
+    !ts.isPropertyAccessExpression(mapper.body.expression) ||
+    !ts.isIdentifier(mapper.body.expression.expression) ||
+    mapper.body.expression.expression.text !== "path" ||
+    mapper.body.expression.name.text !== "join" ||
+    mapper.body.arguments.length !== 2 ||
+    !ts.isIdentifier(mapper.body.arguments[0]) ||
+    mapper.body.arguments[0].text !== "compiledTestsRoot" ||
+    !ts.isIdentifier(mapper.body.arguments[1])
+  ) {
+    return false;
+  }
+  return mapper.body.arguments[1].text === mapper.parameters[0].name.text;
 }
 
 function hasNamedImport(sourceFile, moduleName, importedName) {
@@ -635,8 +845,18 @@ function hasDirectSpawnFailureHandling(statement, resultName) {
   if (statement.statements.length !== 3) {
     return false;
   }
-  const errorBranch = statement.statements[1];
-  const statusBranch = statement.statements[2];
+  return hasDirectSpawnFailureBranches(
+    statement.statements[1],
+    statement.statements[2],
+    resultName
+  );
+}
+
+function hasDirectSpawnFailureBranches(
+  errorBranch,
+  statusBranch,
+  resultName
+) {
   return (
     ts.isIfStatement(errorBranch) &&
     errorBranch.elseStatement === undefined &&
@@ -739,3 +959,9 @@ function hasEntries(value) {
 function formatFindings(value) {
   return hasEntries(value) ? ` (${value.join(", ")})` : "";
 }
+  });
+}
+
+runGuardCli(import.meta.url, () =>
+  runCompletionReconciliationGuard(process.argv[2], process.cwd())
+);

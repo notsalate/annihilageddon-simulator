@@ -4,6 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
+import {
+  runEngineTypedAccessGuard,
+  runEngineUnknownArraysGuard,
+} from "./helpers/guard-runners.js";
 
 const rootDir = process.cwd();
 
@@ -47,6 +51,18 @@ test("unknown-array guard accepts a clean fixture", () => {
     createFixture("type Good = string[];\n")
   );
   assert.equal(result.status, 0);
+});
+
+test("unknown-array guard CLI preserves the failure exit code", () => {
+  const fixture = createFixture("type Bad = unknown[];\n");
+  const result = spawnSync(
+    process.execPath,
+    [path.join(rootDir, "scripts", "check-engine-unknown-arrays.mjs"), fixture],
+    { encoding: "utf8" }
+  );
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /untracked unknown-array pattern/);
 });
 
 test("typed-access guard rejects multiline, angle-bracket, and aliased assertions", () => {
@@ -1144,9 +1160,11 @@ function createPhysicalZoneFixture(consumerSource: string): string {
 }
 
 function run(script: string, fixtureRoot: string) {
-  return spawnSync(
-    process.execPath,
-    [path.join(rootDir, "scripts", script), fixtureRoot],
-    { encoding: "utf8" }
-  );
+  if (script === "check-engine-unknown-arrays.mjs") {
+    return runEngineUnknownArraysGuard(fixtureRoot);
+  }
+  if (script === "check-engine-typed-access.mjs") {
+    return runEngineTypedAccessGuard(fixtureRoot);
+  }
+  throw new Error(`Unsupported guard script: ${script}`);
 }
