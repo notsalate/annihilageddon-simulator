@@ -17,6 +17,7 @@ import {
   PERFORMANCE_EPOCH_SCHEMA_VERSION,
   PERFORMANCE_MEASUREMENT_COUNT,
   PERFORMANCE_WARMUP_COUNT,
+  comparePerformance,
   createPerformanceBaselineEntry,
   type BenchmarkEnvironmentFingerprint,
   type PerformanceEpochBaseline,
@@ -183,6 +184,45 @@ function baseline(): PerformanceEpochBaseline {
       }),
     ],
   };
+}
+
+function passingReport(
+  benchmark: PerformanceMeasurement["benchmark"],
+  id: string
+) {
+  const reference = referenceMeasurement(benchmark, id);
+  const current: PerformanceMeasurement = {
+    ...reference,
+    role: "current",
+    commit: "head-commit",
+  };
+  return comparePerformance({
+    baseline: createPerformanceBaselineEntry(
+      reference,
+      calibrationFor(reference).tolerances
+    ),
+    acceptedCalibration: acceptedCalibrationFor(reference),
+    epochReference: reference,
+    base: { ...current, commit: "base-commit" },
+    head: current,
+    confirmation: current,
+  });
+}
+
+const performanceReportFixtures = [
+  ["simulation", "simulation", "simulation:100"],
+  ["analyzer-light", "analyzer", "analyzer:light"],
+  ["analyzer-typical", "analyzer", "analyzer:typical"],
+  ["analyzer-heavy", "analyzer", "analyzer:heavy"],
+] as const;
+
+function writePassingReports(root: string): void {
+  for (const [fileId, benchmark, id] of performanceReportFixtures) {
+    writeJson(
+      path.join(root, `performance-report-${fileId}.json`),
+      passingReport(benchmark, id)
+    );
+  }
 }
 
 function writeJson(filePath: string, value: unknown): void {
@@ -645,35 +685,59 @@ test("performance report gate requires all reports and blocks only blocking verd
     path.join(os.tmpdir(), "krutagidon-performance-report-gate-")
   );
   try {
-    for (const id of [
-      "simulation",
-      "analyzer-light",
-      "analyzer-typical",
-      "analyzer-heavy",
-    ]) {
-      writeJson(path.join(root, `performance-report-${id}.json`), {
-        blocking: false,
-      });
-    }
+    writePassingReports(root);
     const scriptPath = path.join(
       process.cwd(),
       "scripts",
       "assert-performance-reports.mjs"
     );
-    assert.equal(runNodeScript(scriptPath, [root]).status, 0);
-    writeJson(path.join(root, "performance-report-analyzer-heavy.json"), {
-      blocking: true,
-    });
-    assert.equal(runNodeScript(scriptPath, [root]).status, 1);
-    writeJson(path.join(root, "performance-report-analyzer-heavy.json"), {
-      blocking: false,
-    });
+    assert.equal(runNodeScript(scriptPath, [root, "fixture-pair"]).status, 0);
+    const heavyPath = path.join(
+      root,
+      "performance-report-analyzer-heavy.json"
+    );
+    const blockingReport = readJson(heavyPath);
+    assert.ok(isRecord(blockingReport));
+    blockingReport["blocking"] = true;
+    blockingReport["verdict"] = "regression";
+    writeJson(heavyPath, blockingReport);
+    assert.equal(runNodeScript(scriptPath, [root, "fixture-pair"]).status, 1);
+    writePassingReports(root);
     writeFileSync(
       path.join(root, "performance-report-analyzer-typical.json"),
       "not json",
       "utf8"
     );
-    assert.equal(runNodeScript(scriptPath, [root]).status, 1);
+    assert.equal(runNodeScript(scriptPath, [root, "fixture-pair"]).status, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("performance report gate rejects a lost fresh-session comparison pair", () => {
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "krutagidon-performance-report-integrity-")
+  );
+  try {
+    writePassingReports(root);
+
+    const simulationPath = path.join(
+      root,
+      "performance-report-simulation.json"
+    );
+    const brokenSimulation = readJson(simulationPath);
+    assert.ok(isRecord(brokenSimulation));
+    const brokenBase = brokenSimulation["base"];
+    assert.ok(isRecord(brokenBase));
+    delete brokenBase["comparisonPairId"];
+    writeJson(simulationPath, brokenSimulation);
+
+    const result = runNodeScript(
+      path.join(process.cwd(), "scripts", "assert-performance-reports.mjs"),
+      [root, "fixture-pair"]
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /comparisonPairId/u);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -747,6 +811,14 @@ test("PR workflow consumes accepted calibration without running the matrix", () 
   );
   assert.match(pullRequestJob, /--acceptedCalibration/u);
   assert.match(pullRequestJob, /--diff-filter=MDR/u);
+  assert.match(
+    pullRequestJob,
+    /assert-performance-reports\.mjs "\$RUNNER_TEMP" "\$PERFORMANCE_COMPARISON_PAIR_ID"/u
+  );
+  assert.ok(
+    pullRequestJob.indexOf("actions/upload-artifact") <
+      pullRequestJob.indexOf("Enforce performance gate")
+  );
   assert.doesNotMatch(calibrationRunHeader, /pull_request/u);
   assert.match(calibrationRunHeader, /workflow_dispatch/u);
   assert.match(calibrationRunHeader, /event\.schedule/u);
