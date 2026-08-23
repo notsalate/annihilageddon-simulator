@@ -8,8 +8,6 @@ import {
   type RuntimeEffect,
   type TokenDefinition,
 } from "../src/index.js";
-import { runActionTransaction } from "../src/engine/action-transaction.js";
-import { recordGameEvent } from "../src/engine/event-recorder.js";
 import {
   markCardInstanceId,
   markTokenDefinitionId,
@@ -25,151 +23,13 @@ import {
 } from "./helpers/defense-fixtures.js";
 import { replacePostSetupWizardPropertyFixture } from "./helpers/fixture-tokens.js";
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
 
-test("action transaction rolls back engine state, identities, events, and RNG", () => {
-  const scenario = createGameScenario({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 18301,
-  });
-  const { state } = scenario;
-  const player = scenario.activePlayer;
-  const card = givenRuntimeCard(scenario, { effects: [] });
-  const players = state.players;
-  const common = state.common;
-  const turn = state.turn;
-  const eventLog = state.eventLog;
-  const hand = player.hand;
-  const discard = player.discard;
-  const expectedNextRandom = state.rng.fork().next();
-  const powerBefore = state.turn.power;
-  const chipsBefore = player.chips;
-
-  const result = runActionTransaction(state, () => {
-    state.turn.power += 11;
-    player.chips += 3;
-    player.hand.splice(player.hand.indexOf(card), 1);
-    player.discard.push(card);
-    card.ownerId = scenario.foes[0]?.playerId ?? player.playerId;
-    state.turn.activatedCardIds.push(card.instanceId);
-    state.rng.next();
-    recordGameEvent(state, {
-      type: "turnEnded",
-      playerId: player.playerId,
-    });
-    return { ok: false as const, error: "forced rollback" };
-  });
-
-  assert.deepEqual(result, { ok: false, error: "forced rollback" });
-  assert.equal(state.players, players);
-  assert.equal(state.common, common);
-  assert.equal(state.turn, turn);
-  assert.equal(state.eventLog, eventLog);
-  assert.equal(player.hand, hand);
-  assert.equal(player.discard, discard);
-  assert.equal(player.hand.includes(card), true);
-  assert.equal(player.discard.includes(card), false);
-  assert.equal(card.ownerId, player.playerId);
-  assert.equal(state.turn.power, powerBefore);
-  assert.equal(player.chips, chipsBefore);
-  assert.deepEqual(state.turn.activatedCardIds, []);
-  assert.equal(state.eventLog.length, eventLog.length);
-  assert.equal(state.rng.next(), expectedNextRandom);
-});
-
-test("action transaction rolls back before rethrowing technical errors", () => {
-  const scenario = createGameScenario({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 18302,
-  });
-  const { state } = scenario;
-  const player = scenario.activePlayer;
-  const turn = state.turn;
-  const eventLog = state.eventLog;
-  const powerBefore = state.turn.power;
-
-  assert.throws(
-    () =>
-      runActionTransaction(state, () => {
-        state.turn.power = 0;
-        state.eventLog = [];
-        throw new Error("technical failure");
-      }),
-    /technical failure/
-  );
-
-  assert.equal(state.turn, turn);
-  assert.equal(state.turn.power, powerBefore);
-  assert.equal(state.eventLog, eventLog);
-  assert.equal(player, scenario.activePlayer);
-});
-
-test("action transaction wraps non-Error exceptions after rollback", () => {
-  const scenario = createGameScenario({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 18306,
-  });
-  const { state } = scenario;
-  const turn = state.turn;
-
-  let thrown: unknown;
-  try {
-    runActionTransaction(state, () => {
-      state.turn.power = 0;
-      throw "non-Error failure";
-    });
-  } catch (error) {
-    thrown = error;
-  }
-
-  assert.ok(thrown instanceof Error);
-  assert.equal(
-    thrown.message,
-    "Action transaction operation threw a non-Error exception"
-  );
-  assert.equal(
-    Object.getOwnPropertyDescriptor(thrown, "cause")?.value,
-    "non-Error failure"
-  );
-  assert.equal(state.turn, turn);
-  assert.equal(state.turn.power, 0);
-});
-
-test("successful terminal action commits its mutations", () => {
-  const scenario = createGameScenario({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 18303,
-  });
-  const { state } = scenario;
-  const player = scenario.activePlayer;
-
-  const result = runActionTransaction(state, () => {
-    state.turn.power = 7;
-    player.chips += 1;
-    return {
-      ok: true as const,
-      gameEndReason: "playerDefeated" as const,
-      winnerPlayerId: player.playerId,
-    };
-  });
-
-  assert.deepEqual(result, {
-    ok: true,
-    gameEndReason: "playerDefeated",
-    winnerPlayerId: player.playerId,
-  });
-  assert.equal(state.turn.power, 7);
-  assert.equal(player.chips, 1);
-});
-
-test("choice callback exceptions roll back the action and preserve callback state", () => {
+test("choice callback exceptions abort the action after its first mutation", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -209,12 +69,19 @@ test("choice callback exceptions roll back the action and preserve callback stat
   assert.equal(callbackCalls, 1);
   assert.equal(state.turn, turn);
   assert.equal(state.eventLog, eventLog);
-  assert.equal(player.hand.includes(card), true);
-  assert.equal(player.playedThisTurn.includes(card), false);
-  assert.equal(state.eventLog.length, eventLogLength);
+  assert.equal(player.hand.includes(card), false);
+  assert.equal(player.playedThisTurn.includes(card), true);
+  assert.ok(state.eventLog.length > eventLogLength);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "cardMoved" && event.cardInstanceId === card.instanceId
+    ),
+    true
+  );
 });
 
-test("public action composes with the nested Defense savepoint", () => {
+test("public action keeps the nested Defense savepoint while failing fast", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -248,35 +115,34 @@ test("public action composes with the nested Defense savepoint", () => {
       },
     ],
   });
-  const turn = state.turn;
-  const eventLog = state.eventLog;
   const expectedNextRandom = state.rng.fork().next();
 
-  const result = withTemporaryEffectRuntimeOperations(
-    "add_power",
-    {
-      execute(mutatedState, player) {
-        mutatedState.turn.power += 9;
-        player.chips += 8;
-        mutatedState.rng.next();
-        return { ok: false, error: "nested defense failure" };
-      },
-    },
+  assert.throws(
     () =>
-      applyAction(state, {
-        type: "playCard",
-        cardInstanceId: attack.instanceId,
-      })
+      withTemporaryEffectRuntimeOperations(
+        "add_power",
+        {
+          execute(mutatedState, player) {
+            mutatedState.turn.power += 9;
+            player.chips += 8;
+            mutatedState.rng.next();
+            return { ok: false, error: "nested defense failure" };
+          },
+        },
+        () =>
+          applyAction(state, {
+            type: "playCard",
+            cardInstanceId: attack.instanceId,
+          })
+      ),
+    /nested defense failure/
   );
-
-  assert.deepEqual(result, { ok: false, error: "nested defense failure" });
-  assert.equal(state.turn, turn);
-  assert.equal(state.eventLog, eventLog);
-  assert.equal(attacker.hand.includes(attack), true);
+  assert.equal(state.turn.power, 0);
+  assert.equal(attacker.hand.includes(attack), false);
+  assert.equal(attacker.playedThisTurn.includes(attack), true);
   assert.equal(defender.hand.includes(defense), true);
   assert.equal(defender.discard.includes(defense), false);
   assert.equal(defender.chips, 1);
-  assert.equal(state.turn.power, 0);
   assert.equal(state.rng.next(), expectedNextRandom);
   assert.equal(
     state.eventLog.some((event) => event.type === "defenseCostPaid"),
@@ -284,7 +150,7 @@ test("public action composes with the nested Defense savepoint", () => {
   );
 });
 
-test("attack rolls back damage, death consequences, events, eligibility, and RNG after a late after-attack error", () => {
+test("late after-attack errors stop the action after combat mutations", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -325,75 +191,37 @@ test("attack rolls back damage, death consequences, events, eligibility, and RNG
     effects: [],
   });
 
-  const players = state.players;
-  const common = state.common;
-  const turn = state.turn;
-  const eventLog = state.eventLog;
-  const attackerHand = attacker.hand;
-  const attackerPlayed = attacker.playedThisTurn;
-  const attackerPermanents = attacker.permanents;
-  const defenderLife = defender.life;
-  const defenderHand = defender.hand;
-  const defenderDiscard = defender.discard;
-  const defenderDeadWizardTokens = defender.deadWizardTokens;
-  const defenderTrophies = defender.trophyLikeObjects;
-  const deadWizardTokenDrawStack = state.common.deadWizardTokens.drawStack;
-  const playersBefore = structuredClone(state.players);
-  const commonBefore = structuredClone(state.common);
   const turnBefore = structuredClone(state.turn);
-  const eventLogBefore = structuredClone(state.eventLog);
-  const expectedNextRandom = state.rng.fork().next();
+  const eventLogLength = state.eventLog.length;
 
-  const result = withTemporaryEffectRuntimeOperations(
-    "ongoing_first_attack_damage_add_power",
-    {
-      applyAfterPlayerAttackDamage(_effect, context) {
-        context.state.turn.power += 13;
-        context.controller.chips += 8;
-        context.state.rng.next();
-        return {
-          status: "resolved",
-          result: { ok: false, error: "late after-attack failure" },
-        };
-      },
-    },
-    () => play(scenario, attack)
+  assert.throws(
+    () =>
+      withTemporaryEffectRuntimeOperations(
+        "ongoing_first_attack_damage_add_power",
+        {
+          applyAfterPlayerAttackDamage(_effect, context) {
+            context.state.turn.power += 13;
+            context.controller.chips += 8;
+            context.state.rng.next();
+            return {
+              status: "resolved",
+              result: { ok: false, error: "late after-attack failure" },
+            };
+          },
+        },
+        () => play(scenario, attack)
+      ),
+    /late after-attack failure/
   );
-
-  assert.deepEqual(result, {
-    ok: false,
-    error: "late after-attack failure",
-  });
-  assert.equal(state.players, players);
-  assert.equal(state.common, common);
-  assert.equal(state.turn, turn);
-  assert.equal(state.eventLog, eventLog);
-  assert.deepEqual(state.players, playersBefore);
-  assert.deepEqual(state.common, commonBefore);
-  assert.deepEqual(state.turn, turnBefore);
-  assert.deepEqual(state.eventLog, eventLogBefore);
-  assert.equal(attacker.hand, attackerHand);
-  assert.equal(attacker.playedThisTurn, attackerPlayed);
-  assert.equal(attacker.permanents, attackerPermanents);
-  assert.equal(defender.life, defenderLife);
-  assert.equal(defender.hand, defenderHand);
-  assert.equal(defender.discard, defenderDiscard);
-  assert.equal(defender.deadWizardTokens, defenderDeadWizardTokens);
-  assert.equal(defender.trophyLikeObjects, defenderTrophies);
-  assert.equal(
-    state.common.deadWizardTokens.drawStack,
-    deadWizardTokenDrawStack
-  );
-  assert.equal(attacker.hand.includes(attack), true);
-  assert.equal(attacker.playedThisTurn.includes(attack), false);
+  assert.equal(attacker.hand.includes(attack), false);
+  assert.equal(attacker.playedThisTurn.includes(attack), true);
   assert.equal(attacker.permanents.includes(afterAttackPermanent), true);
-  assert.equal(defender.life.current, 1);
-  assert.equal(defender.trophyLikeObjects[0]?.ownerId, defender.playerId);
-  assert.deepEqual(state.turn.damagingAttackPlayerIds, []);
-  assert.equal(state.rng.next(), expectedNextRandom);
+  assert.notEqual(defender.life.current, 1);
+  assert.notDeepEqual(state.turn, turnBefore);
+  assert.ok(state.eventLog.length > eventLogLength);
 });
 
-test("outer attack rollback restores a committed Defense savepoint without double commit", () => {
+test("late outer attack errors preserve a committed Defense savepoint", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -433,70 +261,44 @@ test("outer attack rollback restores a committed Defense savepoint without doubl
     ],
   });
 
-  const players = state.players;
-  const common = state.common;
-  const turn = state.turn;
-  const eventLog = state.eventLog;
-  const attackerHand = attacker.hand;
-  const attackerPlayed = attacker.playedThisTurn;
-  const defenderHand = defender.hand;
-  const defenderDiscard = defender.discard;
-  const playersBefore = structuredClone(state.players);
-  const commonBefore = structuredClone(state.common);
-  const turnBefore = structuredClone(state.turn);
-  const eventLogBefore = structuredClone(state.eventLog);
-  const expectedNextRandom = state.rng.fork().next();
   let gainChipsCalls = 0;
 
-  const result = withTemporaryEffectRuntimeOperations(
-    "gain_chips",
-    {
-      execute(mutatedState, player) {
-        gainChipsCalls += 1;
-        mutatedState.turn.power += 9;
-        player.chips += 8;
-        mutatedState.rng.next();
-        return { ok: false, error: "outer late failure after Defense" };
-      },
-    },
-    () => play(scenario, attack)
+  assert.throws(
+    () =>
+      withTemporaryEffectRuntimeOperations(
+        "gain_chips",
+        {
+          execute(mutatedState, player) {
+            gainChipsCalls += 1;
+            mutatedState.turn.power += 9;
+            player.chips += 8;
+            mutatedState.rng.next();
+            return { ok: false, error: "outer late failure after Defense" };
+          },
+        },
+        () => play(scenario, attack)
+      ),
+    /outer late failure after Defense/
   );
-
-  assert.deepEqual(result, {
-    ok: false,
-    error: "outer late failure after Defense",
-  });
   assert.equal(gainChipsCalls, 1);
-  assert.equal(state.players, players);
-  assert.equal(state.common, common);
-  assert.equal(state.turn, turn);
-  assert.equal(state.eventLog, eventLog);
-  assert.deepEqual(state.players, playersBefore);
-  assert.deepEqual(state.common, commonBefore);
-  assert.deepEqual(state.turn, turnBefore);
-  assert.deepEqual(state.eventLog, eventLogBefore);
-  assert.equal(attacker.hand, attackerHand);
-  assert.equal(attacker.playedThisTurn, attackerPlayed);
-  assert.equal(defender.hand, defenderHand);
-  assert.equal(defender.discard, defenderDiscard);
-  assert.equal(attacker.hand.includes(attack), true);
-  assert.equal(attacker.playedThisTurn.includes(attack), false);
-  assert.equal(defender.hand.includes(defense), true);
-  assert.equal(defender.discard.includes(defense), false);
-  assert.equal(defender.chips, 1);
-  assert.equal(state.turn.power, 0);
+  assert.equal(attacker.hand.includes(attack), false);
+  assert.equal(attacker.playedThisTurn.includes(attack), true);
+  assert.equal(defender.hand.includes(defense), false);
+  assert.equal(defender.discard.includes(defense), true);
+  assert.equal(defender.chips, 0);
+  assert.equal(state.turn.power, 11);
+  assert.equal(attacker.chips, 8);
   assert.equal(
     state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
-    false
+    true
   );
   assert.equal(
     state.eventLog.some((event) => event.type === "defenseCostPaid"),
-    false
+    true
   );
-  assert.equal(state.rng.next(), expectedNextRandom);
 });
 
-test("buy rolls back payment, ownership, zones, gain ledger, events, and RNG after a late on-gain error", () => {
+test("late on-gain errors stop buying after payment and ownership mutations", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -526,41 +328,35 @@ test("buy rolls back payment, ownership, zones, gain ledger, events, and RNG aft
   card.ownerId = "common";
   state.common.market.splice(0, state.common.market.length, card);
   state.turn.power = 10;
-  const powerBefore = state.turn.power;
-  const chipsBefore = player.chips;
-  const market = state.common.market;
   const discard = player.discard;
-  const eventLog = state.eventLog;
-  const expectedNextRandom = state.rng.fork().next();
 
-  const result = withTemporaryEffectRuntimeOperations(
-    "gain_chips",
-    {
-      execute(state, targetPlayer) {
-        targetPlayer.chips += 9;
-        state.turn.power -= 2;
-        return { ok: false, error: "late on-gain failure" };
-      },
-    },
+  assert.throws(
     () =>
-      applyAction(state, {
-        type: "buyMarketCard",
-        cardInstanceId: card.instanceId,
-        source: "mainMarket",
-      })
+      withTemporaryEffectRuntimeOperations(
+        "gain_chips",
+        {
+          execute(state, targetPlayer) {
+            targetPlayer.chips += 9;
+            state.turn.power -= 2;
+            return { ok: false, error: "late on-gain failure" };
+          },
+        },
+        () =>
+          applyAction(state, {
+            type: "buyMarketCard",
+            cardInstanceId: card.instanceId,
+            source: "mainMarket",
+          })
+      ),
+    /late on-gain failure/
   );
-
-  assert.deepEqual(result, { ok: false, error: "late on-gain failure" });
-  assert.equal(state.common.market, market);
   assert.equal(player.discard, discard);
-  assert.equal(state.eventLog, eventLog);
-  assert.equal(state.common.market.includes(card), true);
+  assert.equal(state.common.market.includes(card), false);
   assert.equal(player.discard.includes(card), false);
-  assert.equal(card.ownerId, "common");
-  assert.equal(state.turn.power, powerBefore);
-  assert.equal(player.chips, chipsBefore);
-  assert.deepEqual(state.turn.gainedCardDefinitionIds, []);
-  assert.equal(state.rng.next(), expectedNextRandom);
+  assert.equal(card.ownerId, player.playerId);
+  assert.equal(state.turn.power, 8);
+  assert.equal(player.chips, 9);
+  assert.deepEqual(state.turn.gainedCardDefinitionIds, [card.definitionId]);
 });
 
 test("buy preflight failure preserves payment, market, identities, and events", () => {
@@ -648,7 +444,7 @@ test("successful buy commits payment, ownership, destination, gain ledger, and e
   );
 });
 
-test("play rolls back after an on-play effect error", () => {
+test("late on-play effect errors stop playing after card placement", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -662,27 +458,25 @@ test("play rolls back after an on-play effect error", () => {
     cardInstanceId: card.instanceId,
   };
 
-  const result = withTemporaryEffectRuntimeOperations(
-    "add_power",
-    {
-      execute(state, player) {
-        state.turn.power += 9;
-        player.chips += 4;
-        return { ok: false, error: "late on-play failure" };
-      },
-    },
-    () => applyAction(scenario.state, action)
+  assert.throws(
+    () =>
+      withTemporaryEffectRuntimeOperations(
+        "add_power",
+        {
+          execute(state, player) {
+            state.turn.power += 9;
+            player.chips += 4;
+            return { ok: false, error: "late on-play failure" };
+          },
+        },
+        () => applyAction(scenario.state, action)
+      ),
+    /late on-play failure/
   );
-
-  assertFailedActionRollback(
-    scenario.state,
-    scenario.activePlayer,
-    card,
-    result
-  );
+  assertFailedActionIsFatal(scenario.state, scenario.activePlayer, card, 9, 4);
 });
 
-test("play rolls back after a wizard property on-play error", () => {
+test("late wizard property on-play errors stop playing after card placement", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -708,29 +502,29 @@ test("play rolls back after a wizard property on-play error", () => {
     cardTypes: ["creature"],
   });
 
-  const result = withTemporaryEffectRuntimeOperations(
-    "gain_chips",
-    {
-      execute(state, targetPlayer) {
-        targetPlayer.chips += 8;
-        state.turn.power += 3;
-        return { ok: false, error: "wizard property on-play failure" };
-      },
-    },
+  assert.throws(
     () =>
-      applyAction(state, { type: "playCard", cardInstanceId: card.instanceId })
+      withTemporaryEffectRuntimeOperations(
+        "gain_chips",
+        {
+          execute(state, targetPlayer) {
+            targetPlayer.chips += 8;
+            state.turn.power += 3;
+            return { ok: false, error: "wizard property on-play failure" };
+          },
+        },
+        () =>
+          applyAction(state, {
+            type: "playCard",
+            cardInstanceId: card.instanceId,
+          })
+      ),
+    /wizard property on-play failure/
   );
-
-  assertFailedActionRollback(
-    state,
-    player,
-    card,
-    result,
-    "wizard property on-play failure"
-  );
+  assertFailedActionIsFatal(state, player, card, 3, 8);
 });
 
-test("play rolls back after a controlled-card on-play error", () => {
+test("late controlled-card on-play errors stop playing after card placement", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -757,32 +551,32 @@ test("play rolls back after a controlled-card on-play error", () => {
     cardTypes: ["creature"],
   });
 
-  const result = withTemporaryEffectRuntimeOperations(
-    "gain_chips",
-    {
-      executeOnPlayCard(_effect, context) {
-        context.controller.chips += 6;
-        context.state.turn.power += 4;
-        return {
-          status: "resolved",
-          result: { ok: false, error: "controlled-card on-play failure" },
-        };
-      },
-    },
+  assert.throws(
     () =>
-      applyAction(state, { type: "playCard", cardInstanceId: card.instanceId })
+      withTemporaryEffectRuntimeOperations(
+        "gain_chips",
+        {
+          executeOnPlayCard(_effect, context) {
+            context.controller.chips += 6;
+            context.state.turn.power += 4;
+            return {
+              status: "resolved",
+              result: { ok: false, error: "controlled-card on-play failure" },
+            };
+          },
+        },
+        () =>
+          applyAction(state, {
+            type: "playCard",
+            cardInstanceId: card.instanceId,
+          })
+      ),
+    /controlled-card on-play failure/
   );
-
-  assertFailedActionRollback(
-    state,
-    player,
-    card,
-    result,
-    "controlled-card on-play failure"
-  );
+  assertFailedActionIsFatal(state, player, card, 4, 6);
 });
 
-test("permanent activation rolls back before recording its activation marker", () => {
+test("late permanent activation errors stop without an activation marker", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -793,28 +587,28 @@ test("permanent activation rolls back before recording its activation marker", (
     isOngoing: true,
     effects: [{ effectId: "add_power", timing: "activation", amount: 2 }],
   });
-  const result = withTemporaryEffectRuntimeOperations(
-    "add_power",
-    {
-      execute(state, player) {
-        state.turn.power += 10;
-        player.chips += 2;
-        return { ok: false, error: "permanent activation failure" };
-      },
-    },
+  assert.throws(
     () =>
-      applyAction(scenario.state, {
-        type: "activatePermanent",
-        cardInstanceId: card.instanceId,
-      })
+      withTemporaryEffectRuntimeOperations(
+        "add_power",
+        {
+          execute(state, player) {
+            state.turn.power += 10;
+            player.chips += 2;
+            return { ok: false, error: "permanent activation failure" };
+          },
+        },
+        () =>
+          applyAction(scenario.state, {
+            type: "activatePermanent",
+            cardInstanceId: card.instanceId,
+          })
+      ),
+    /permanent activation failure/
   );
-
-  assert.deepEqual(result, {
-    ok: false,
-    error: "permanent activation failure",
-  });
   assert.deepEqual(scenario.state.turn.activatedCardIds, []);
-  assert.equal(scenario.state.turn.power, 0);
+  assert.equal(scenario.state.turn.power, 10);
+  assert.equal(scenario.activePlayer.chips, 2);
   assert.equal(scenario.activePlayer.permanents.includes(card), true);
   assert.equal(
     scenario.state.eventLog.some(
@@ -826,7 +620,7 @@ test("permanent activation rolls back before recording its activation marker", (
   );
 });
 
-test("Wizard Property activation rolls back before recording its activation marker", () => {
+test("late Wizard Property activation errors stop without an activation marker", () => {
   const scenario = createGameScenario({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -845,29 +639,28 @@ test("Wizard Property activation rolls back before recording its activation mark
   );
   player.wizardProperties.splice(1);
 
-  const result = withTemporaryEffectRuntimeOperations(
-    "gain_chips",
-    {
-      execute(state, targetPlayer) {
-        targetPlayer.chips += 7;
-        state.turn.power += 5;
-        return { ok: false, error: "wizard property activation failure" };
-      },
-    },
+  assert.throws(
     () =>
-      applyAction(state, {
-        type: "activateWizardProperty",
-        tokenInstanceId: property.instanceId,
-      })
+      withTemporaryEffectRuntimeOperations(
+        "gain_chips",
+        {
+          execute(state, targetPlayer) {
+            targetPlayer.chips += 7;
+            state.turn.power += 5;
+            return { ok: false, error: "wizard property activation failure" };
+          },
+        },
+        () =>
+          applyAction(state, {
+            type: "activateWizardProperty",
+            tokenInstanceId: property.instanceId,
+          })
+      ),
+    /wizard property activation failure/
   );
-
-  assert.deepEqual(result, {
-    ok: false,
-    error: "wizard property activation failure",
-  });
   assert.deepEqual(state.turn.activatedCardIds, []);
-  assert.equal(state.turn.power, 0);
-  assert.equal(player.chips, 0);
+  assert.equal(state.turn.power, 5);
+  assert.equal(player.chips, 7);
   assert.equal(
     state.eventLog.some(
       (event) =>
@@ -878,26 +671,24 @@ test("Wizard Property activation rolls back before recording its activation mark
   );
 });
 
-function assertFailedActionRollback(
+function assertFailedActionIsFatal(
   state: GameState,
   player: GameState["players"][number],
   card: GameState["players"][number]["hand"][number],
-  result: { readonly ok: boolean; readonly error?: string },
-  expectedError = "late on-play failure"
+  power: number,
+  chips: number
 ): void {
-  assert.deepEqual(result, { ok: false, error: expectedError });
-  assert.equal(player.hand.includes(card), true);
-  assert.equal(player.playedThisTurn.includes(card), false);
+  assert.equal(player.hand.includes(card), false);
+  assert.equal(player.playedThisTurn.includes(card), true);
   assert.equal(player.permanents.includes(card), false);
-  assert.deepEqual(state.turn.temporaryCardControls, []);
-  assert.equal(state.turn.power, 0);
-  assert.equal(player.chips, 0);
+  assert.equal(state.turn.power, power);
+  assert.equal(player.chips, chips);
   assert.equal(
     state.eventLog.some(
       (event) =>
         event.type === "cardMoved" && event.cardInstanceId === card.instanceId
     ),
-    false
+    true
   );
 }
 
@@ -914,7 +705,7 @@ function createWizardPropertyDefinition(
     engine: {
       mappingStatus: "fixture",
       playableInV0: true,
-      effects,
+      effects: effects.map((effect) => verifiedTestRuntimeEffect(effect)),
       unsupportedMechanics: [],
     },
   };

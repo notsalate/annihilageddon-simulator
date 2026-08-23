@@ -4,11 +4,13 @@ import test from "node:test";
 import {
   applyAction,
   initializeGame,
+  ActionExecutionError,
   type CardDefinition,
   type RuntimeEffect,
 } from "../src/index.js";
 import { executeEffect } from "../src/engine/effect-runtime.js";
 import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 import {
@@ -45,7 +47,7 @@ function fixtureDefinition(
       victoryPoints: 0,
       isOngoing: false,
       marketChipMarker: false,
-      effects,
+      effects: effects.map((effect) => verifiedTestRuntimeEffect(effect)),
       unsupportedMechanics: [],
     },
   };
@@ -98,7 +100,7 @@ test("chosenFoe without a callback keeps the first opponent baseline", () => {
   assert.equal(allChoiceEvents.length, 1);
 });
 
-test("failed defense branch rolls back mutations and returns its error", () => {
+test("failed defense branch rolls back mutations and throws its error", () => {
   const state = initializeGame({ rootDir, seed: 60615 });
   const attackingPlayer = state.players.find(
     (candidate) => candidate.playerId === state.activePlayerId
@@ -165,13 +167,16 @@ test("failed defense branch rolls back mutations and returns its error", () => {
   };
   const lifeBefore = defendingPlayer.life.current;
 
-  const result = applyAction(state, {
-    type: "playCard",
-    cardInstanceId: attackCard.instanceId,
-  });
-
-  assert.equal(result.ok, false);
-  assert.match(result.error, /No legal choices for effect discard_card/);
+  assert.throws(
+    () =>
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: attackCard.instanceId,
+      }),
+    (error: unknown) =>
+      error instanceof ActionExecutionError &&
+      /No legal choices for effect discard_card/.test(error.message)
+  );
   assert.equal(defendingPlayer.life.current, lifeBefore);
   assert.equal(defendingPlayer.chips, 2);
   assert.equal(defendingPlayer.hand.includes(defenseCard), true);
@@ -575,14 +580,19 @@ test("empty card targets preserve skip and fail semantics", () => {
       }
       return undefined;
     };
-    const result = applyAction(state, {
-      type: "playCard",
-      cardInstanceId: source.instanceId,
-    });
-    return { result, state, source, seenEmptyRequest };
+    try {
+      const result = applyAction(state, {
+        type: "playCard",
+        cardInstanceId: source.instanceId,
+      });
+      return { result, error: undefined, state, source, seenEmptyRequest };
+    } catch (error) {
+      return { result: undefined, error, state, source, seenEmptyRequest };
+    }
   };
 
   const skipped = run("skip");
+  assert.ok(skipped.result);
   assert.equal(skipped.result.ok, true);
   assert.ok(skipped.seenEmptyRequest);
   assert.deepEqual(skipped.seenEmptyRequest.choices, []);
@@ -596,9 +606,11 @@ test("empty card targets preserve skip and fail semantics", () => {
   assert.equal(skippedChoiceEvents[0]?.type, "effectChoiceSkipped");
 
   const failed = run("fail");
+  assert.ok(failed.result);
   assert.equal(failed.result.ok, false);
-  assert.ok(failed.seenEmptyRequest);
-  assert.deepEqual(failed.seenEmptyRequest.choices, []);
+  if (failed.result.ok) return;
+  assert.match(failed.result.error, /No legal choices for effect discard_card/);
+  assert.equal(failed.seenEmptyRequest, undefined);
   const failedChoiceEvents = failed.state.eventLog.filter(
     (event) =>
       (event.type === "effectChoiceSkipped" ||
@@ -606,12 +618,11 @@ test("empty card targets preserve skip and fail semantics", () => {
       event.effectId === "discard_card"
   );
   assert.equal(failedChoiceEvents.length, 0);
-  if (!failed.result.ok) {
-    assert.match(
-      failed.result.error,
-      /No legal choices for effect discard_card/
-    );
-  }
+  const failedActivePlayer = failed.state.players.find(
+    (candidate) => candidate.playerId === failed.state.activePlayerId
+  );
+  assert.ok(failedActivePlayer);
+  assert.equal(failedActivePlayer.hand.includes(failed.source), true);
 });
 
 test("non-target option choices keep their ordered option identities", () => {
@@ -632,14 +643,14 @@ test("non-target option choices keep their ordered option identities", () => {
     cardInstanceId: "fixture-choice-option-source",
     definitionId: "fixture-choice-option-source",
   };
-  const effect: RuntimeEffect = {
+  const effect: RuntimeEffect = verifiedTestRuntimeEffect({
     effectId: "mayhem_each_player_reduce_life_to_gain_chips",
     timing: "onMayhemResolve",
     targetSelector: "eachPlayerClockwiseFromActive",
     chooser: "affectedPlayer",
     lifeTotal: 10,
     chipAmount: 2,
-  };
+  });
   const requests: Array<
     Parameters<NonNullable<typeof state.effectChoiceStrategy>>[0]
   > = [];
@@ -696,12 +707,12 @@ test("directional choices keep their selected direction and ordered targets", ()
     cardInstanceId: "fixture-choice-directional-source",
     definitionId: "fixture-choice-directional-source",
   };
-  const effect: RuntimeEffect = {
+  const effect: RuntimeEffect = verifiedTestRuntimeEffect({
     effectId: "directional_chain_attack",
     timing: "onPlay",
     amount: 1,
     targetSelector: "leftOrRightFoe",
-  };
+  });
   let seenRequest:
     | Parameters<NonNullable<typeof state.effectChoiceStrategy>>[0]
     | undefined;
@@ -756,13 +767,13 @@ test("multi-card choices preserve the selected card group", () => {
     cardInstanceId: "fixture-choice-multi-card-source",
     definitionId: "fixture-choice-multi-card-source",
   };
-  const effect: RuntimeEffect = {
+  const effect: RuntimeEffect = verifiedTestRuntimeEffect({
     effectId: "attack_damage",
     timing: "onPlay",
     amount: 1,
     targetSelector: "chosenFoe",
     onDamageDealt: [{ effectId: "return_discard_to_hand", amount: 2 }],
-  };
+  });
   state.effectChoiceStrategy = (request) => {
     if (request.effectId !== "return_discard_to_hand") return undefined;
     return { choiceId: request.choices[0]!.choiceId };
@@ -807,13 +818,13 @@ test("multi-card choices use distinct stable IDs for each combination", () => {
     cardInstanceId: "fixture-choice-distinct-card-source",
     definitionId: "fixture-choice-distinct-card-source",
   };
-  const effect: RuntimeEffect = {
+  const effect: RuntimeEffect = verifiedTestRuntimeEffect({
     effectId: "attack_damage",
     timing: "onPlay",
     amount: 1,
     targetSelector: "chosenFoe",
     onDamageDealt: [{ effectId: "return_discard_to_hand", amount: 1 }],
-  };
+  });
   let requestedChoiceIds: readonly string[] = [];
   state.effectChoiceStrategy = (request) => {
     if (request.effectId !== "return_discard_to_hand") return undefined;

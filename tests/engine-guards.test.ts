@@ -690,7 +690,7 @@ test("typed-access guard rejects a three-zone consumer without a Ledger seam", (
 
 test("typed-access guard rejects a type-only Ledger import without a seam call", () => {
   const fixtureRoot = createPhysicalZoneFixture(`
-    import type { clonePhysicalCardZoneState } from "./control-ledger.js";
+    import type { clonePhysicalCardLedger } from "./control-ledger.js";
     interface PlayerState { hand: unknown[]; deck: unknown[] }
     export function listInventory(players: PlayerState[]) {
       return players.flatMap((player: PlayerState) => [player.hand, player.deck]);

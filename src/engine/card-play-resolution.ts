@@ -10,7 +10,7 @@ import type {
   EffectSourceContext,
 } from "./effect-runtime-registry.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
-import { dispatchControlledCardOperation } from "./trigger-dispatch.js";
+import { runControlledPowerMutation } from "./trigger-dispatch.js";
 
 export interface CardPlayResolutionServices {
   executeOnPlayEffects(
@@ -57,20 +57,32 @@ export function resolveCardPlay(
     };
   }
 
-  const destinationZone = placeResolvedCard(
-    state,
-    player,
-    card,
-    definition,
-    options
-  );
-  if (options.sourceZone !== undefined) {
-    recordCardMoved(state, player, card, {
-      sourceZone: options.sourceZone,
-      destinationZone,
-      ownerBefore: options.ownerBefore ?? card.ownerId,
-      ownerAfter: card.ownerId,
-    });
+  const placeAndRecord = (): string => {
+    const destinationZone = placeResolvedCard(
+      state,
+      player,
+      card,
+      definition,
+      options
+    );
+    if (options.sourceZone !== undefined) {
+      recordCardMoved(state, player, card, {
+        sourceZone: options.sourceZone,
+        destinationZone,
+        ownerBefore: options.ownerBefore ?? card.ownerId,
+        ownerAfter: card.ownerId,
+      });
+    }
+    return destinationZone;
+  };
+  const placementResult = definition.engine.isOngoing
+    ? runControlledPowerMutation(state, player.playerId, placeAndRecord)
+    : { ok: true as const, value: placeAndRecord() };
+  if (!placementResult.ok) {
+    return placementResult;
+  }
+  if (placementResult.gameEnd !== undefined) {
+    return placementResult;
   }
 
   const source: EffectSourceContext = {
@@ -143,9 +155,7 @@ export function resolveCardPlay(
     return result;
   }
 
-  return dispatchControlledCardOperation(state, player, {
-    kind: "recalculateControlledPower",
-  });
+  return result;
 }
 
 function placeResolvedCard(

@@ -13,6 +13,23 @@ import {
   type RuntimeEffectTargetSelector,
   type WildMagicOption,
 } from "./runtime-effect.js";
+import { createActivationEffectDecoders } from "./effect-runtime-activation.js";
+import { createCardOwnershipChoiceEffectDecoders } from "./effect-runtime-cards-ownership-choice.js";
+import { createEffectiveValueModifierEffectDecoders } from "./effect-runtime-effective-value-modifier.js";
+import { createOngoingEffectDecoders } from "./effect-runtime-ongoing.js";
+import { createResourceDrawEffectDecoders } from "./effect-runtime-resources-draw.js";
+import { createCombatAttackEffectDecoders } from "./effect-runtime-combat-attack.js";
+import { createCombatDefenseEffectDecoders } from "./effect-runtime-combat-defense.js";
+import { createCombatReplacementEffectDecoders } from "./effect-runtime-combat-replacement.js";
+import { createMayhemEffectDecoders } from "./effect-runtime-mayhem.js";
+import { createSetupEffectDecoders } from "./effect-runtime-setup.js";
+import { createWildMagicEffectDecoders } from "./effect-runtime-wild-magic.js";
+import type {
+  ObjectFields,
+  OptionalField,
+  RequiredField,
+  ValueDecoder,
+} from "./effect-runtime-family-support.js";
 
 export type DecodeResult<T> =
   | { ok: true; value: T }
@@ -22,27 +39,6 @@ export interface RuntimeEffectDecoder<Id extends RuntimeEffectId> {
   effectId: Id;
   decode(subjectId: string, raw: unknown): DecodeResult<RuntimeEffectForId<Id>>;
 }
-
-type ValueDecoder<T> = (label: string, raw: unknown) => DecodeResult<T>;
-
-interface RequiredField<T> {
-  optional: false;
-  decode: ValueDecoder<T>;
-}
-
-interface OptionalField<T> {
-  optional: true;
-  decode: ValueDecoder<T>;
-}
-
-type FieldDefinition<T extends object, Key extends keyof T> =
-  {} extends Pick<T, Key>
-    ? OptionalField<Exclude<T[Key], undefined>>
-    : RequiredField<T[Key]>;
-
-type ObjectFields<T extends object> = {
-  [Key in keyof T]-?: FieldDefinition<T, Key>;
-};
 
 function required<T>(decode: ValueDecoder<T>): RequiredField<T> {
   return { optional: false, decode };
@@ -121,11 +117,6 @@ const nonEmptyString: ValueDecoder<string> = (label, raw) =>
   typeof raw === "string" && raw.length > 0
     ? success(raw)
     : failure(`${label} must be a non-empty string`);
-
-const stableString: ValueDecoder<string> = (label, raw) =>
-  typeof raw === "string" && raw.length > 0 && raw.trim() === raw
-    ? success(raw)
-    : failure(`${label} must be a stable non-empty string`);
 
 const safeInteger: ValueDecoder<number> = (label, raw) =>
   typeof raw === "number" && Number.isSafeInteger(raw)
@@ -427,9 +418,7 @@ function requireTargetSelector(
     const directSelector =
       "targetSelector" in effect ? effect.targetSelector : undefined;
     if (target !== undefined && directSelector !== undefined) {
-      return [
-        `${subjectId} target and targetSelector cannot both be provided`,
-      ];
+      return [`${subjectId} target and targetSelector cannot both be provided`];
     }
     const selector = nestedSelector ?? directSelector;
     return allowedSelectors.some(
@@ -460,132 +449,6 @@ function requireNestedTargetSelector(
   };
 }
 
-const runtimeCardTypes = new Set([
-  "wizardCard",
-  "spell",
-  "treasure",
-  "creature",
-]);
-
-function validateTemporaryHandLimitCardTypes(
-  subjectId: string,
-  effect: RuntimeEffectForId<"temporary_hand_limit_by_gained_card_type">
-): string[] {
-  const unknownCardType = effect.cardTypes.find(
-    (cardType) => !runtimeCardTypes.has(cardType)
-  );
-  return unknownCardType === undefined
-    ? []
-    : [
-        `${subjectId} uses unknown temporary-hand-limit card type ${unknownCardType}`,
-      ];
-}
-
-function validateWandAttackReplacement(
-  subjectId: string,
-  effect:
-    | RuntimeEffectForId<"modify_owned_wand_attack_damage">
-    | RuntimeEffectForId<"prevent_defense_against_owned_wand_attacks">
-): string[] {
-  return effect.cardDefinitionIds === undefined && effect.cardTags === undefined
-    ? [
-        `${subjectId} uses unsupported wand-attack replacement filter cardDefinitionIds/cardTags`,
-      ]
-    : [];
-}
-
-function validateEffectiveValuePayload(
-  subjectId: string,
-  effect:
-    | RuntimeEffectForId<"modify_effective_value">
-    | RuntimeEffectForId<"fixture_modify_effective_value">
-): string[] {
-  const errors: string[] = [];
-  if (
-    effect.operation === "add" &&
-    effect.amount === undefined &&
-    effect.amountPerOwnedCard === undefined
-  ) {
-    errors.push(`${subjectId} uses add operation without amount`);
-  }
-  if (
-    effect.operation === "add" &&
-    effect.amount !== undefined &&
-    effect.amountPerOwnedCard !== undefined
-  ) {
-    errors.push(
-      `${subjectId} uses add operation with both amount and amountPerOwnedCard`
-    );
-  }
-  if (effect.operation === "invertNegative" && effect.amount !== undefined) {
-    errors.push(`${subjectId} uses invertNegative with amount`);
-  }
-  if (
-    effect.operation === "invertNegative" &&
-    effect.amountPerOwnedCard !== undefined
-  ) {
-    errors.push(`${subjectId} uses invertNegative with amountPerOwnedCard`);
-  }
-  if (
-    effect.operation === "invertNegative" &&
-    effect.countedCardTypes !== undefined
-  ) {
-    errors.push(`${subjectId} uses invertNegative with countedCardTypes`);
-  }
-  if (
-    effect.amountPerOwnedCard !== undefined &&
-    (effect.countedCardTypes === undefined ||
-      effect.countedCardTypes.length === 0)
-  ) {
-    errors.push(
-      `${subjectId} uses amountPerOwnedCard without countedCardTypes`
-    );
-  }
-  if (
-    effect.operation === "add" &&
-    effect.amountPerOwnedCard === undefined &&
-    effect.countedCardTypes !== undefined
-  ) {
-    errors.push(
-      `${subjectId} uses countedCardTypes without amountPerOwnedCard`
-    );
-  }
-
-  const target = effect.target;
-  if (!("targetType" in target)) {
-    errors.push(`${subjectId} uses invalid effective-value target`);
-    return errors;
-  }
-  if (
-    effect.valueKind === "cardCost" ||
-    effect.valueKind === "cardVictoryPoints"
-  ) {
-    if (target.targetType !== "card") {
-      errors.push(
-        `${subjectId} uses unsupported effective-value target ${target.targetType}`
-      );
-    } else if (
-      target.definitionId === undefined &&
-      (target.cardTypes === undefined || target.cardTypes.length === 0)
-    ) {
-      errors.push(`${subjectId} uses invalid effective-value card target`);
-    }
-  } else if (effect.valueKind === "tokenVictoryPoints") {
-    if (
-      target.targetType !== "token" ||
-      (target.definitionId === undefined &&
-        target.tokenKind !== "deadWizardToken")
-    ) {
-      errors.push(`${subjectId} uses unsupported effective-value target`);
-    }
-  } else if (target.targetType !== "player") {
-    errors.push(
-      `${subjectId} uses unsupported effective-value target ${target.targetType}`
-    );
-  }
-  return errors;
-}
-
 const optionalTiming = optional(effectTiming);
 const optionalTarget = optional(runtimeTarget);
 const optionalTargetSelector = optional(targetSelector);
@@ -593,122 +456,153 @@ const optionalCondition = optional(runtimeCondition);
 const optionalCosts = optional(runtimeCosts);
 const optionalAttackBranches = optional(attackBranches);
 
+const resourceDrawEffectDecoders = createResourceDrawEffectDecoders({
+  defineDecoder,
+  required,
+  optional,
+  literal,
+  positiveInteger,
+  nonEmptyStringArray,
+  optionalCondition,
+  optionalTiming,
+});
+
+const cardOwnershipChoiceEffectDecoders =
+  createCardOwnershipChoiceEffectDecoders({
+    defineDecoder,
+    required,
+    optional,
+    literal,
+    positiveInteger,
+    nonNegativeInteger,
+    nonEmptyStringArray,
+    optionalCondition,
+    optionalTiming,
+    optionalTarget,
+    optionalTargetSelector,
+    booleanValue,
+    destroyOwnCardsSourceZones,
+    requireNestedTargetSelector,
+  });
+
+const activationEffectDecoders = createActivationEffectDecoders({
+  defineDecoder,
+  required,
+  optional,
+  literal,
+  positiveInteger,
+  optionalCondition,
+  handOrDiscardZones,
+  optionalTiming,
+});
+
+const oneWandCardTag: ValueDecoder<["wandCard"]> = (label, raw) => {
+  const result = arrayOf(literal("wandCard"))(label, raw);
+  return result.ok && result.value.length === 1
+    ? success(["wandCard"] as ["wandCard"])
+    : result.ok
+      ? failure(`${label} must contain exactly wandCard`)
+      : result;
+};
+
+const ongoingEffectDecoders = createOngoingEffectDecoders({
+  defineDecoder,
+  required,
+  literal,
+  positiveInteger,
+  oneWandCardTag,
+});
+
+const effectiveValueModifierEffectDecoders =
+  createEffectiveValueModifierEffectDecoders({
+    defineDecoder,
+    required,
+    optional,
+    literal,
+    safeInteger,
+    nonEmptyStringArray,
+    runtimeTarget,
+  });
+
+const setupEffectDecoders = createSetupEffectDecoders({
+  defineDecoder,
+  required,
+  optional,
+  literal,
+  positiveInteger,
+  safeInteger,
+  nonNegativeInteger,
+  nonEmptyString,
+  nonEmptyStringArray,
+  optionalTiming,
+});
+
+const wildMagicEffectDecoders = createWildMagicEffectDecoders({
+  defineDecoder,
+  required,
+  literal,
+  wildMagicOption,
+  arrayOf,
+});
+
+const combatAttackEffectDecoders = createCombatAttackEffectDecoders({
+  defineDecoder,
+  required,
+  optional,
+  literal,
+  booleanValue,
+  positiveInteger,
+  optionalCondition,
+  optionalTiming,
+  optionalTarget,
+  optionalTargetSelector,
+  optionalCosts,
+  optionalAttackBranches,
+  selectorTarget,
+  requireTargetSelector,
+  oneOf,
+});
+
+const combatDefenseEffectDecoders = createCombatDefenseEffectDecoders({
+  defineDecoder,
+  required,
+  optional,
+  literal,
+  booleanValue,
+  optionalCosts,
+  optionalRuntimeEffectArray: optional(runtimeEffectArray),
+  oneOf,
+  positiveInteger,
+  decodeObject,
+});
+
+const combatReplacementEffectDecoders = createCombatReplacementEffectDecoders({
+  defineDecoder,
+  required,
+  optional,
+  literal,
+  positiveInteger,
+  nonEmptyStringArray,
+});
+
+const mayhemEffectDecoders = createMayhemEffectDecoders({
+  defineDecoder,
+  required,
+  literal,
+  positiveInteger,
+  nonNegativeInteger,
+  optionalTiming,
+  selectorTarget,
+  arrayOf,
+  mayhemRedrawOption,
+  decodeObject,
+});
+
 const runtimeEffectDecoders: {
   [Id in RuntimeEffectId]: RuntimeEffectDecoder<Id>;
 } = {
-  force_starting_player: defineDecoder("force_starting_player", {
-    effectId: required(literal("force_starting_player")),
-    timing: required(literal("setup")),
-    targetSelector: optional(literal("activePlayer")),
-  }),
-  replace_starting_card: defineDecoder("replace_starting_card", {
-    effectId: required(literal("replace_starting_card")),
-    timing: required(literal("setup")),
-    fromDefinitionId: required(stableString),
-    toDefinitionId: required(stableString),
-  }),
-  start_with_basic_trophy: defineDecoder("start_with_basic_trophy", {
-    effectId: required(literal("start_with_basic_trophy")),
-    timing: required(literal("setup")),
-  }),
-  set_starting_life_total: defineDecoder("set_starting_life_total", {
-    effectId: required(literal("set_starting_life_total")),
-    timing: required(literal("setup")),
-    lifeTotal: required(positiveInteger),
-  }),
-  set_resurrection_life_total: defineDecoder("set_resurrection_life_total", {
-    effectId: required(literal("set_resurrection_life_total")),
-    timing: required(literal("replacement")),
-    lifeTotal: required(positiveInteger),
-    unlessStatusId: optional(nonEmptyString),
-  }),
-  modify_effective_value: defineDecoder(
-    "modify_effective_value",
-    {
-      effectId: required(literal("modify_effective_value")),
-      timing: required(oneOf(["whileControlled", "whileScoring"] as const)),
-      valueKind: required(
-        oneOf([
-          "cardCost",
-          "cardVictoryPoints",
-          "tokenVictoryPoints",
-          "playerMaxLife",
-          "playerVictoryPoints",
-        ] as const)
-      ),
-      operation: required(oneOf(["add", "invertNegative"] as const)),
-      amount: optional(safeInteger),
-      amountPerOwnedCard: optional(safeInteger),
-      countedCardTypes: optional(nonEmptyStringArray),
-      target: required(runtimeTarget),
-    },
-    validateEffectiveValuePayload
-  ),
-  fixture_modify_effective_value: defineDecoder(
-    "fixture_modify_effective_value",
-    {
-      effectId: required(literal("fixture_modify_effective_value")),
-      timing: required(oneOf(["whileControlled", "whileScoring"] as const)),
-      valueKind: required(
-        oneOf([
-          "cardCost",
-          "cardVictoryPoints",
-          "tokenVictoryPoints",
-          "playerMaxLife",
-          "playerVictoryPoints",
-        ] as const)
-      ),
-      operation: required(oneOf(["add", "invertNegative"] as const)),
-      amount: optional(safeInteger),
-      amountPerOwnedCard: optional(safeInteger),
-      countedCardTypes: optional(nonEmptyStringArray),
-      target: required(runtimeTarget),
-    },
-    validateEffectiveValuePayload
-  ),
-  increase_hand_limit_at_max_life: defineDecoder(
-    "increase_hand_limit_at_max_life",
-    {
-      effectId: required(literal("increase_hand_limit_at_max_life")),
-      timing: required(literal("endTurn")),
-      amount: required(positiveInteger),
-    }
-  ),
-  temporary_hand_limit_by_gained_card_type: defineDecoder(
-    "temporary_hand_limit_by_gained_card_type",
-    {
-      effectId: required(literal("temporary_hand_limit_by_gained_card_type")),
-      timing: required(literal("endTurn")),
-      amount: required(positiveInteger),
-      cardTypes: required(nonEmptyStringArray),
-    },
-    validateTemporaryHandLimitCardTypes
-  ),
-  endgame_limp_wands_score_positive: defineDecoder(
-    "endgame_limp_wands_score_positive",
-    {
-      effectId: required(literal("endgame_limp_wands_score_positive")),
-      timing: required(literal("scoring")),
-      scoreMode: required(literal("absolutePositiveVictoryPoints")),
-      appliesToOwnedCardKind: required(literal("limpWand")),
-    }
-  ),
-  endgame_vp_per_owned_legend: defineDecoder("endgame_vp_per_owned_legend", {
-    effectId: required(literal("endgame_vp_per_owned_legend")),
-    timing: required(literal("scoring")),
-    amountPerOwnedLegend: required(safeInteger),
-  }),
-  controls_other_card_type: defineDecoder("controls_other_card_type", {
-    effectId: required(literal("controls_other_card_type")),
-    timing: optionalTiming,
-    minimum: required(nonNegativeInteger),
-    cardType: required(nonEmptyString),
-  }),
-  destroyed_card_kind_is: defineDecoder("destroyed_card_kind_is", {
-    effectId: required(literal("destroyed_card_kind_is")),
-    timing: optionalTiming,
-    cardKind: required(nonEmptyString),
-  }),
+  ...setupEffectDecoders,
+  ...effectiveValueModifierEffectDecoders,
 
   add_power: defineDecoder("add_power", {
     effectId: required(literal("add_power")),
@@ -717,15 +611,6 @@ const runtimeEffectDecoders: {
     condition: optionalCondition,
     activationLimit: optional(literal("oncePerTurnWhileControlled")),
   }),
-  add_power_if_player_has_status: defineDecoder(
-    "add_power_if_player_has_status",
-    {
-      effectId: required(literal("add_power_if_player_has_status")),
-      timing: required(literal("whileControlled")),
-      amount: required(positiveInteger),
-      statusId: required(literal("dingler")),
-    }
-  ),
   add_power_per_controlled_object: defineDecoder(
     "add_power_per_controlled_object",
     {
@@ -751,23 +636,7 @@ const runtimeEffectDecoders: {
       amountPerPlayer: required(positiveInteger),
     }
   ),
-  gain_chips: defineDecoder("gain_chips", {
-    effectId: required(literal("gain_chips")),
-    timing: optionalTiming,
-    amount: required(positiveInteger),
-    condition: optionalCondition,
-    cardTypes: optional(nonEmptyStringArray),
-    isOngoing: optional(literal(true)),
-  }),
-  gain_chips_per_player_with_status: defineDecoder(
-    "gain_chips_per_player_with_status",
-    {
-      effectId: required(literal("gain_chips_per_player_with_status")),
-      timing: optionalTiming,
-      amountPerPlayer: required(positiveInteger),
-      status: required(literal("dingler")),
-    }
-  ),
+  ...resourceDrawEffectDecoders,
   gain_chips_equal_damage_dealt: defineDecoder(
     "gain_chips_equal_damage_dealt",
     {
@@ -775,11 +644,6 @@ const runtimeEffectDecoders: {
       timing: optionalTiming,
     }
   ),
-  draw_cards: defineDecoder("draw_cards", {
-    effectId: required(literal("draw_cards")),
-    timing: optionalTiming,
-    amount: required(positiveInteger),
-  }),
   heal: defineDecoder(
     "heal",
     {
@@ -889,119 +753,7 @@ const runtimeEffectDecoders: {
     },
     requireTargetSelector("damage", ["opponentPlayer", "activePlayer"])
   ),
-  gain_card: defineDecoder(
-    "gain_card",
-    {
-      effectId: required(literal("gain_card")),
-      timing: optionalTiming,
-      target: optionalTarget,
-      targetSelector: optionalTargetSelector,
-      destination: required(literal("discard")),
-    },
-    requireNestedTargetSelector("gain", "mainMarketCard")
-  ),
-  discard_card: defineDecoder(
-    "discard_card",
-    {
-      effectId: required(literal("discard_card")),
-      timing: optionalTiming,
-      target: optionalTarget,
-      targetSelector: optionalTargetSelector,
-      emptyChoice: optional(literal("fail")),
-    },
-    requireNestedTargetSelector("discard", "activePlayerHandCard")
-  ),
-  discard_self: defineDecoder("discard_self", {
-    effectId: required(literal("discard_self")),
-    timing: optionalTiming,
-  }),
-  discard_hand_then_draw_cards: defineDecoder("discard_hand_then_draw_cards", {
-    effectId: required(literal("discard_hand_then_draw_cards")),
-    timing: optionalTiming,
-    drawAmount: required(positiveInteger),
-  }),
-  destroy_card: defineDecoder(
-    "destroy_card",
-    {
-      effectId: required(literal("destroy_card")),
-      timing: optionalTiming,
-      target: optionalTarget,
-      targetSelector: optionalTargetSelector,
-    },
-    requireNestedTargetSelector("destroy", "activePlayerHandCard")
-  ),
-  destroy_own_cards: defineDecoder("destroy_own_cards", {
-    effectId: required(literal("destroy_own_cards")),
-    timing: optionalTiming,
-    amount: optional(nonNegativeInteger),
-    sourceZones: optional(destroyOwnCardsSourceZones),
-    chooser: optional(oneOf(["controller", "defendingPlayer"] as const)),
-  }),
-  destroy_random_legend_market_card: defineDecoder(
-    "destroy_random_legend_market_card",
-    {
-      effectId: required(literal("destroy_random_legend_market_card")),
-      timing: required(literal("onPlay")),
-      rememberAs: required(literal("destroyedLegend")),
-      sourceZone: required(literal("legendMarket")),
-      rng: required(literal("seeded")),
-    }
-  ),
-  return_discard_to_hand: defineDecoder("return_discard_to_hand", {
-    effectId: required(literal("return_discard_to_hand")),
-    timing: optionalTiming,
-    amount: required(positiveInteger),
-  }),
-  reveal_top_card: defineDecoder("reveal_top_card", {
-    effectId: required(literal("reveal_top_card")),
-    timing: optionalTiming,
-    source: required(literal("activePlayerDeck")),
-  }),
-  play_top_card: defineDecoder("play_top_card", {
-    effectId: required(literal("play_top_card")),
-    timing: optionalTiming,
-    source: required(literal("activePlayerDeck")),
-    destination: required(literal("play")),
-  }),
-  play_top_card_from_foe_deck: defineDecoder("play_top_card_from_foe_deck", {
-    effectId: required(literal("play_top_card_from_foe_deck")),
-    timing: optionalTiming,
-    condition: optionalCondition,
-    targetSelector: required(literal("chosenFoe")),
-    nonOngoingCleanupDestination: optional(literal("ownerDiscard")),
-    ongoingOwnership: optional(literal("controller")),
-  }),
-  wild_magic_choice: defineDecoder("wild_magic_choice", {
-    effectId: required(literal("wild_magic_choice")),
-    timing: required(literal("onPlay")),
-    options: required(arrayOf(wildMagicOption)),
-  }),
-  topdeck_gained_card: defineDecoder("topdeck_gained_card", {
-    effectId: required(literal("topdeck_gained_card")),
-    timing: required(literal("onGainCard")),
-    optional: optional(booleanValue),
-    destination: optional(literal("deckTop")),
-    cardTypes: optional(nonEmptyStringArray),
-    isOngoing: optional(literal(true)),
-  }),
-  optional_gain_market_cards_to_hand_this_turn: defineDecoder(
-    "optional_gain_market_cards_to_hand_this_turn",
-    {
-      effectId: required(
-        literal("optional_gain_market_cards_to_hand_this_turn")
-      ),
-      timing: required(literal("untilEndOfTurn")),
-      appliesTo: required(literal("cardsGainedFromMainMarket")),
-      chooser: required(literal("controller")),
-      destinationOverride: required(literal("hand")),
-    }
-  ),
-  on_gain_self_gain_limp_wands: defineDecoder("on_gain_self_gain_limp_wands", {
-    effectId: required(literal("on_gain_self_gain_limp_wands")),
-    timing: required(literal("onGain")),
-    destination: required(literal("gainingPlayerDiscard")),
-    amount: required(positiveInteger),
-  }),
+  ...cardOwnershipChoiceEffectDecoders,
   fixture_add_power_equal_to_target_cost: defineDecoder(
     "fixture_add_power_equal_to_target_cost",
     {
@@ -1014,512 +766,15 @@ const runtimeEffectDecoders: {
     requireNestedTargetSelector("fixture target-cost power", "mainMarketCard")
   ),
 
-  attack_damage: defineDecoder(
-    "attack_damage",
-    {
-      effectId: required(literal("attack_damage")),
-      timing: optionalTiming,
-      amount: required(positiveInteger),
-      target: optionalTarget,
-      targetSelector: optionalTargetSelector,
-      costs: optionalCosts,
-      optional: optional(booleanValue),
-      onDamageDealt: optionalAttackBranches,
-      onKill: optionalAttackBranches,
-    },
-    requireTargetSelector("attack", [
-      "opponentPlayer",
-      "chosenFoe",
-      "chosenPlayer",
-      "eachFoe",
-    ])
-  ),
-  attack_damage_equal_remembered_card_cost: defineDecoder(
-    "attack_damage_equal_remembered_card_cost",
-    {
-      effectId: required(literal("attack_damage_equal_remembered_card_cost")),
-      timing: optionalTiming,
-      target: optionalTarget,
-      targetSelector: optionalTargetSelector,
-      onDamageDealt: optionalAttackBranches,
-      onKill: optionalAttackBranches,
-      rememberedCard: required(literal("destroyedLegend")),
-    }
-  ),
-  attack_damage_equal_to_controlled_card_cost: defineDecoder(
-    "attack_damage_equal_to_controlled_card_cost",
-    {
-      effectId: required(
-        literal("attack_damage_equal_to_controlled_card_cost")
-      ),
-      timing: optionalTiming,
-      target: optionalTarget,
-      targetSelector: optionalTargetSelector,
-      onDamageDealt: optionalAttackBranches,
-      onKill: optionalAttackBranches,
-      costMode: required(oneOf(["highest", "chosen"] as const)),
-      excludeSource: optional(booleanValue),
-    },
-    requireTargetSelector("attack", [
-      "opponentPlayer",
-      "chosenFoe",
-      "chosenPlayer",
-      "eachFoe",
-    ])
-  ),
-  attack_destroy_top_legend_deck_then_damage_equal_cost: defineDecoder(
-    "attack_destroy_top_legend_deck_then_damage_equal_cost",
-    {
-      effectId: required(
-        literal("attack_destroy_top_legend_deck_then_damage_equal_cost")
-      ),
-      timing: optionalTiming,
-      target: optionalTarget,
-      targetSelector: optionalTargetSelector,
-      onDamageDealt: optionalAttackBranches,
-      onKill: optionalAttackBranches,
-      damageUsesDestroyedCardCost: required(literal(true)),
-      destroyedCardSource: required(literal("legendDeck")),
-    }
-  ),
-  attack_discard_cards: defineDecoder("attack_discard_cards", {
-    effectId: required(literal("attack_discard_cards")),
-    timing: optionalTiming,
-    target: optionalTarget,
-    targetSelector: optionalTargetSelector,
-    amount: required(positiveInteger),
-    chooser: required(literal("target")),
-    sourceZone: required(literal("hand")),
-  }),
-  attack_gain_limp_wand: defineDecoder("attack_gain_limp_wand", {
-    effectId: required(literal("attack_gain_limp_wand")),
-    timing: optionalTiming,
-    target: optionalTarget,
-    targetSelector: optionalTargetSelector,
-    destination: required(literal("targetDiscard")),
-    amount: required(positiveInteger),
-  }),
-  attack_gain_status: defineDecoder(
-    "attack_gain_status",
-    {
-      effectId: required(literal("attack_gain_status")),
-      timing: required(literal("onPlay")),
-      target: optionalTarget,
-      targetSelector: optionalTargetSelector,
-      statusId: required(literal("dingler")),
-    },
-    requireTargetSelector("attack-status", [
-      "activePlayer",
-      "opponentPlayer",
-      "anyPlayer",
-      "eachPlayerClockwiseFromActive",
-    ])
-  ),
-  avoid_attack: defineDecoder("avoid_attack", {
-    effectId: required(literal("avoid_attack")),
-    timing: required(literal("onDefense")),
-    destination: required(oneOf(["discardSelf", "topdeckSelf"] as const)),
-    redirectAttack: optional(booleanValue),
-    costs: optionalCosts,
-    branchEffects: optional(runtimeEffectArray),
-  }),
-  conditional_activation_attack_damage: defineDecoder(
-    "conditional_activation_attack_damage",
-    {
-      effectId: required(literal("conditional_activation_attack_damage")),
-      timing: optionalTiming,
-      amount: required(positiveInteger),
-      target: optionalTarget,
-      targetSelector: optionalTargetSelector,
-      condition: optionalCondition,
-    }
-  ),
-  directional_chain_attack: defineDecoder(
-    "directional_chain_attack",
-    {
-      effectId: required(literal("directional_chain_attack")),
-      timing: optionalTiming,
-      amount: required(positiveInteger),
-      target: optionalTarget,
-      targetSelector: optionalTargetSelector,
-      onDamageDealt: optionalAttackBranches,
-      onKill: optionalAttackBranches,
-    },
-    requireTargetSelector("directional attack", ["leftOrRightFoe"])
-  ),
-  multi_target_attack: defineDecoder("multi_target_attack", {
-    effectId: required(literal("multi_target_attack")),
-    timing: optionalTiming,
-    amount: required(positiveInteger),
-    target: required(selectorTarget("opponentPlayers")),
-    onDamageDealt: optionalAttackBranches,
-    onKill: optionalAttackBranches,
-  }),
-  optional_spend_chip_attack_damage: defineDecoder(
-    "optional_spend_chip_attack_damage",
-    {
-      effectId: required(literal("optional_spend_chip_attack_damage")),
-      timing: optionalTiming,
-      amount: required(positiveInteger),
-      target: optionalTarget,
-      targetSelector: optionalTargetSelector,
-      onDamageDealt: optionalAttackBranches,
-      onKill: optionalAttackBranches,
-      chipCost: required(positiveInteger),
-    },
-    requireTargetSelector("optional chip attack", ["chosenPlayer"])
-  ),
-  defense_discard_self_avoid_attack_then_optional_destroy_hand_card:
-    defineDecoder(
-      "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
-      {
-        effectId: required(
-          literal(
-            "defense_discard_self_avoid_attack_then_optional_destroy_hand_card"
-          )
-        ),
-        timing: required(literal("defense")),
-        defenseCost: required((label, raw) =>
-          decodeObject(label, raw, {
-            effectId: required(literal("discard_self")),
-          })
-        ),
-        avoids: required(literal("attack")),
-        optionalFollowup: required((label, raw) =>
-          decodeObject(label, raw, {
-            effectId: required(literal("destroy_own_cards")),
-            sourceZones: required(literal("hand")),
-            amount: required(positiveInteger),
-            chooser: required(literal("defendingPlayer")),
-          })
-        ),
-      }
-    ),
-  modify_owned_wand_attack_damage: defineDecoder(
-    "modify_owned_wand_attack_damage",
-    {
-      effectId: required(literal("modify_owned_wand_attack_damage")),
-      timing: required(literal("attackReplacement")),
-      amount: required(positiveInteger),
-      cardDefinitionIds: optional(nonEmptyStringArray),
-      cardTags: optional(nonEmptyStringArray),
-    },
-    validateWandAttackReplacement
-  ),
-  double_owned_attack_damage: defineDecoder("double_owned_attack_damage", {
-    effectId: required(literal("double_owned_attack_damage")),
-    timing: required(literal("attackReplacement")),
-  }),
-  prevent_defense_against_owned_wand_attacks: defineDecoder(
-    "prevent_defense_against_owned_wand_attacks",
-    {
-      effectId: required(literal("prevent_defense_against_owned_wand_attacks")),
-      timing: required(literal("attackReplacement")),
-      cardDefinitionIds: optional(nonEmptyStringArray),
-      cardTags: optional(nonEmptyStringArray),
-    },
-    validateWandAttackReplacement
-  ),
+  ...activationEffectDecoders,
+  ...ongoingEffectDecoders,
 
-  activation_destroy_self_then_destroy_own_cards: defineDecoder(
-    "activation_destroy_self_then_destroy_own_cards",
-    {
-      effectId: required(
-        literal("activation_destroy_self_then_destroy_own_cards")
-      ),
-      timing: required(literal("activation")),
-      chooser: required(literal("controller")),
-      activationLimit: required(literal("oncePerTurnWhileControlled")),
-      sourceZones: required(literal("hand")),
-      minAmount: required(nonNegativeInteger),
-      maxAmount: required(positiveInteger),
-      destroySelf: required(literal(true)),
-    }
-  ),
-  conditional_activation_destroy_own_cards: defineDecoder(
-    "conditional_activation_destroy_own_cards",
-    {
-      effectId: required(literal("conditional_activation_destroy_own_cards")),
-      timing: required(literal("activation")),
-      condition: optionalCondition,
-      chooser: required(literal("controller")),
-      activationLimit: required(literal("oncePerTurnWhileControlled")),
-      sourceZones: required(handOrDiscardZones),
-      amount: required(positiveInteger),
-    }
-  ),
-  conditional_activation_gain_chips: defineDecoder(
-    "conditional_activation_gain_chips",
-    {
-      effectId: required(literal("conditional_activation_gain_chips")),
-      timing: required(literal("activation")),
-      amount: required(positiveInteger),
-      condition: optionalCondition,
-      activationLimit: required(literal("oncePerTurnWhileControlled")),
-    }
-  ),
-  optional_spend_chip_destroy_own_cards: defineDecoder(
-    "optional_spend_chip_destroy_own_cards",
-    {
-      effectId: required(literal("optional_spend_chip_destroy_own_cards")),
-      timing: required(literal("onPlay")),
-      chipCost: required(positiveInteger),
-      amount: required(positiveInteger),
-      sourceZones: required(handOrDiscardZones),
-      chooser: required(literal("controller")),
-    }
-  ),
-
-  ongoing_add_power: defineDecoder("ongoing_add_power", {
-    effectId: required(literal("ongoing_add_power")),
-    timing: required(literal("whileControlled")),
-    amount: required(positiveInteger),
-  }),
-  ongoing_add_power_when_playing_wand: defineDecoder(
-    "ongoing_add_power_when_playing_wand",
-    {
-      effectId: required(literal("ongoing_add_power_when_playing_wand")),
-      timing: required(literal("onPlayCard")),
-      amount: required(positiveInteger),
-      cardTags: required((label, raw) => {
-        const result = arrayOf(literal("wandCard"))(label, raw);
-        return result.ok && result.value.length === 1
-          ? success(["wandCard"] as ["wandCard"])
-          : result.ok
-            ? failure(`${label} must contain exactly wandCard`)
-            : result;
-      }),
-    }
-  ),
-  ongoing_add_power_per_dead_wizard_token: defineDecoder(
-    "ongoing_add_power_per_dead_wizard_token",
-    {
-      effectId: required(literal("ongoing_add_power_per_dead_wizard_token")),
-      timing: required(literal("whileControlled")),
-      amount: required(positiveInteger),
-    }
-  ),
-  ongoing_add_power_when_playing_limp_wand: defineDecoder(
-    "ongoing_add_power_when_playing_limp_wand",
-    {
-      effectId: required(literal("ongoing_add_power_when_playing_limp_wand")),
-      timing: required(literal("afterControllerPlaysCard")),
-      amount: required(positiveInteger),
-      cardKind: required(literal("limpWand")),
-    }
-  ),
-  ongoing_first_attack_damage_add_power: defineDecoder(
-    "ongoing_first_attack_damage_add_power",
-    {
-      effectId: required(literal("ongoing_first_attack_damage_add_power")),
-      timing: required(literal("afterFirstAttackDamageEachTurn")),
-      amount: required(literal("totalDamageDealtByThatAttack")),
-    }
-  ),
-  ongoing_hand_refill_bonus: defineDecoder("ongoing_hand_refill_bonus", {
-    effectId: required(literal("ongoing_hand_refill_bonus")),
-    timing: required(literal("endTurn")),
-    amount: required(positiveInteger),
-  }),
-  ongoing_start_turn_optional_gain_limp_wand_to_hand: defineDecoder(
-    "ongoing_start_turn_optional_gain_limp_wand_to_hand",
-    {
-      effectId: required(
-        literal("ongoing_start_turn_optional_gain_limp_wand_to_hand")
-      ),
-      timing: required(literal("startOfControllerTurn")),
-      destination: required(literal("hand")),
-      amount: required(positiveInteger),
-      chooser: required(literal("controller")),
-    }
-  ),
-
-  mayhem_attack: defineDecoder("mayhem_attack", {
-    effectId: required(literal("mayhem_attack")),
-    timing: optionalTiming,
-    amount: required(positiveInteger),
-    target: required(selectorTarget("allPlayers")),
-  }),
-  mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status: defineDecoder(
-    "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
-    {
-      effectId: required(
-        literal("mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status")
-      ),
-      timing: required(literal("onMayhemResolve")),
-      targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-      chooser: required(literal("affectedPlayer")),
-      statusId: required(literal("dingler")),
-      lifeCost: required(positiveInteger),
-      chipCost: required(positiveInteger),
-    }
-  ),
-  mayhem_each_player_choose_foe_gain_chips: defineDecoder(
-    "mayhem_each_player_choose_foe_gain_chips",
-    {
-      effectId: required(literal("mayhem_each_player_choose_foe_gain_chips")),
-      timing: required(literal("onMayhemResolve")),
-      targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-      chipAmount: required(positiveInteger),
-    }
-  ),
-  mayhem_each_non_dingler_gain_chips: defineDecoder(
-    "mayhem_each_non_dingler_gain_chips",
-    {
-      effectId: required(literal("mayhem_each_non_dingler_gain_chips")),
-      timing: required(literal("onMayhemResolve")),
-      targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-      chipAmount: required(positiveInteger),
-    }
-  ),
-  mayhem_each_player_battle_highest_hand_cost: defineDecoder(
-    "mayhem_each_player_battle_highest_hand_cost",
-    {
-      effectId: required(
-        literal("mayhem_each_player_battle_highest_hand_cost")
-      ),
-      timing: required(literal("onMayhemResolve")),
-      targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-      chooser: required(literal("affectedPlayer")),
-      winnerDrawAmount: required(nonNegativeInteger),
-    }
-  ),
-  mayhem_each_player_choose_discard_hand_draw_or_take_damage: defineDecoder(
-    "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
-    {
-      effectId: required(
-        literal("mayhem_each_player_choose_discard_hand_draw_or_take_damage")
-      ),
-      timing: required(literal("onMayhemResolve")),
-      targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-      chooser: required(literal("affectedPlayer")),
-      options: required((label, raw) => {
-        const result = arrayOf(mayhemRedrawOption)(label, raw);
-        if (!result.ok) return result;
-        if (
-          result.value.length !== 2 ||
-          result.value[0]?.effectId !== "discard_hand_then_draw_cards" ||
-          result.value[1]?.effectId !== "take_damage"
-        ) {
-          return failure(`${label} must contain redraw then damage options`);
-        }
-        return success([result.value[0], result.value[1]] as [
-          Extract<
-            MayhemHandRedrawOption,
-            { effectId: "discard_hand_then_draw_cards" }
-          >,
-          Extract<MayhemHandRedrawOption, { effectId: "take_damage" }>,
-        ]);
-      }),
-    }
-  ),
-  mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none:
-    defineDecoder(
-      "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
-      {
-        effectId: required(
-          literal(
-            "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none"
-          )
-        ),
-        timing: required(literal("onMayhemResolve")),
-        targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-        chooser: required(literal("affectedPlayer")),
-        choice: required(literal("destroyBothOrDestroyNone")),
-        amount: required(nonNegativeInteger),
-        sourceZone: required(literal("deck")),
-      }
-    ),
-  mayhem_each_player_discard_deck_then_destroy_from_discard: defineDecoder(
-    "mayhem_each_player_discard_deck_then_destroy_from_discard",
-    {
-      effectId: required(
-        literal("mayhem_each_player_discard_deck_then_destroy_from_discard")
-      ),
-      timing: required(literal("onMayhemResolve")),
-      targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-      chooser: required(literal("affectedPlayer")),
-      destroyAmount: required(positiveInteger),
-      destroySourceZone: required(literal("discard")),
-      discardSourceZone: required(literal("deck")),
-    }
-  ),
-  mayhem_each_player_gain_chips_then_attack_for_current_chips: defineDecoder(
-    "mayhem_each_player_gain_chips_then_attack_for_current_chips",
-    {
-      effectId: required(
-        literal("mayhem_each_player_gain_chips_then_attack_for_current_chips")
-      ),
-      timing: required(literal("onMayhemResolve")),
-      targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-      chipAmount: required(positiveInteger),
-    }
-  ),
-  mayhem_each_player_reduce_life_to_gain_chips: defineDecoder(
-    "mayhem_each_player_reduce_life_to_gain_chips",
-    {
-      effectId: required(
-        literal("mayhem_each_player_reduce_life_to_gain_chips")
-      ),
-      timing: required(literal("onMayhemResolve")),
-      targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-      chooser: required(literal("affectedPlayer")),
-      lifeTotal: required(positiveInteger),
-      chipAmount: required(positiveInteger),
-    }
-  ),
-  mayhem_each_player_vote_dingler: defineDecoder(
-    "mayhem_each_player_vote_dingler",
-    {
-      effectId: required(literal("mayhem_each_player_vote_dingler")),
-      timing: required(literal("onMayhemResolve")),
-      targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-      chooser: required(literal("affectedPlayer")),
-      voteTargetSelector: required(literal("anyPlayer")),
-      statusId: required(literal("dingler")),
-    }
-  ),
-  mayhem_lowest_life_players_gain_dingler_and_set_to_max_life: defineDecoder(
-    "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
-    {
-      effectId: required(
-        literal("mayhem_lowest_life_players_gain_dingler_and_set_to_max_life")
-      ),
-      timing: required(literal("onMayhemResolve")),
-      statusId: required(literal("dingler")),
-    }
-  ),
-  mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem: defineDecoder(
-    "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
-    {
-      effectId: required(
-        literal("mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem")
-      ),
-      timing: required(literal("onMayhemResolve")),
-      targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-      deathCondition: required((label, raw) =>
-        decodeObject(label, raw, {
-          effectId: required(literal("destroyed_card_kind_is")),
-          cardKind: required(literal("mayhem")),
-        })
-      ),
-      destroyedCardSource: required(literal("mainDeck")),
-    }
-  ),
-  mega_mayhem_each_player_toggle_dingler: defineDecoder(
-    "mega_mayhem_each_player_toggle_dingler",
-    {
-      effectId: required(literal("mega_mayhem_each_player_toggle_dingler")),
-      timing: required(literal("onMayhemResolve")),
-      targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-    }
-  ),
-  mega_mayhem_set_life: defineDecoder("mega_mayhem_set_life", {
-    effectId: required(literal("mega_mayhem_set_life")),
-    timing: required(literal("onMayhemResolve")),
-    targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-    lifeTotal: required(positiveInteger),
-  }),
+  ...setupEffectDecoders,
+  ...wildMagicEffectDecoders,
+  ...combatAttackEffectDecoders,
+  ...combatDefenseEffectDecoders,
+  ...combatReplacementEffectDecoders,
+  ...mayhemEffectDecoders,
 };
 
 export function decodeRuntimeEffectForId<Id extends RuntimeEffectId>(

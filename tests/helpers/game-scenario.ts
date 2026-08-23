@@ -17,6 +17,7 @@ import {
   markCardInstanceId,
 } from "../../src/domain/types.js";
 import { grantTemporaryControl } from "../../src/engine/control-ledger.js";
+import { verifiedTestRuntimeEffect } from "./verified-runtime-effect.js";
 
 export interface CreateGameScenarioOptions {
   rootDir: string;
@@ -72,6 +73,11 @@ export type GivenRuntimeCardOptions = GivenRuntimeCardCommonOptions &
       }
   );
 
+type GivenRuntimeCardWithEffects = Extract<
+  GivenRuntimeCardOptions,
+  { effects: RuntimeEffect[] }
+>;
+
 export function createGameScenario(
   options: CreateGameScenarioOptions
 ): GameScenario {
@@ -109,6 +115,21 @@ export function givenRuntimeCard(
   scenario: GameScenario,
   options: GivenRuntimeCardOptions
 ): CardInstance {
+  return givenRuntimeCardInternal(scenario, options, true);
+}
+
+export function givenUnverifiedRuntimeCard(
+  scenario: GameScenario,
+  options: GivenRuntimeCardWithEffects
+): CardInstance {
+  return givenRuntimeCardInternal(scenario, options, false);
+}
+
+function givenRuntimeCardInternal(
+  scenario: GameScenario,
+  options: GivenRuntimeCardOptions,
+  verifyEffects: boolean
+): CardInstance {
   const player = options.player ?? scenario.activePlayer;
   const sequence = scenario.nextFixtureSequence;
   scenario.nextFixtureSequence += 1;
@@ -116,7 +137,7 @@ export function givenRuntimeCard(
   const definitionId =
     "definitionId" in options && options.definitionId !== undefined
       ? options.definitionId
-      : registerFixtureDefinition(scenario, options, sequence);
+      : registerFixtureDefinition(scenario, options, sequence, verifyEffects);
   assert.ok(scenario.state.cardDefinitions.has(definitionId));
 
   const card: CardInstance = {
@@ -185,8 +206,9 @@ export function endTurn(scenario: GameScenario): ActionResult {
 
 function registerFixtureDefinition(
   scenario: GameScenario,
-  options: Extract<GivenRuntimeCardOptions, { effects: RuntimeEffect[] }>,
-  sequence: number
+  options: GivenRuntimeCardWithEffects,
+  sequence: number,
+  verifyEffects: boolean
 ): string {
   const cardId =
     options.cardId ??
@@ -217,7 +239,9 @@ function registerFixtureDefinition(
       victoryPoints: 0,
       isOngoing,
       marketChipMarker: false,
-      effects: options.effects,
+      effects: options.effects.map((effect) =>
+        verifyEffects ? verifiedTestRuntimeEffect(effect) : effect
+      ),
       unsupportedMechanics: [],
     },
   };

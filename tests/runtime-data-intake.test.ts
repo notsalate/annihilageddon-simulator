@@ -9,6 +9,7 @@ import {
   loadCurrentRuntimeDataPack,
   type LoadedDataPack,
 } from "../src/engine/data.js";
+import { isVerifiedRuntimeEffect } from "../src/engine/runtime-effect-verification.js";
 
 const rootDir = process.cwd();
 
@@ -43,6 +44,27 @@ test("Runtime Data Intake reuses an already verified immutable pack", () => {
   const dataPack = intakeRuntimeData({ rootDir });
 
   assert.equal(intakeRuntimeData({ dataPack }), dataPack);
+});
+
+test("Runtime Data Intake keeps preloaded source ownership isolated", () => {
+  const source = loadCurrentRuntimeDataPack(rootDir);
+  const sourceDefinition = source.cardDefinitions.values().next().value;
+  assert.ok(sourceDefinition);
+  const sourceEffect = sourceDefinition.engine.effects[0];
+  assert.ok(sourceEffect);
+
+  const dataPack = intakeRuntimeData({ dataPack: source });
+  const dataPackDefinition = dataPack.cardDefinitions.values().next().value;
+  assert.ok(dataPackDefinition);
+  const dataPackEffect = dataPackDefinition.engine.effects[0];
+  assert.ok(dataPackEffect);
+
+  assert.notEqual(dataPack, source);
+  assert.equal(Object.isFrozen(source), false);
+  assert.equal(Object.isFrozen(sourceEffect), false);
+  assert.equal(Object.isFrozen(dataPack), true);
+  assert.equal(Object.isFrozen(dataPackEffect), true);
+  assert.equal(isVerifiedRuntimeEffect(dataPackEffect), true);
 });
 
 test("Runtime Data Intake keeps source, decode, and validation errors distinct", () => {

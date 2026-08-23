@@ -178,11 +178,16 @@ export {
 } from "./engine/best-move-analysis.js";
 export { assertGameStateInvariants } from "./engine/invariants.js";
 export type {
+  ActionExecutionContext,
   ActionResult,
   GameAction,
   LegalAction,
 } from "./engine/actions.js";
-export { applyAction, listLegalActions } from "./engine/actions.js";
+export {
+  ActionExecutionError,
+  applyAction,
+  listLegalActions,
+} from "./engine/actions.js";
 export type {
   MarketFlowEndReason,
   MarketFlowMode,
@@ -212,11 +217,21 @@ export type {
   SetupPlayerSnapshot,
   SetupStateSnapshot,
   SetupTokenSnapshot,
+  SimulationFailureErrorDetails,
+  SimulationFailureReport,
+  SimulationFailureReplay,
+  SimulationFailureReplayChoice,
+  SimulationFailureReproduction,
+  SimulationFailureRuntimeData,
+  SimulationFailureSetup,
   SingleGameResult,
 } from "./engine/simulation.js";
 export {
   baselineBot,
+  createLoadedDataPackFromSimulationFailureReport,
+  createSimulationFailureReplay,
   getGameEndReason,
+  SimulationExecutionError,
   runSingleGame,
 } from "./engine/simulation.js";
 export type {
@@ -316,6 +331,7 @@ export type { FormatSingleGameDebugTraceOptions } from "./engine/debug-trace.js"
 export { formatSingleGameDebugTrace } from "./engine/debug-trace.js";
 export {
   formatMassSimulationSummary,
+  formatSimulationFailureReport,
   formatSingleGameSummary,
   runSimulationMenu,
 } from "./cli/simulation-menu.js";

@@ -1,13 +1,15 @@
 import {
-  capturePhysicalCardZoneState,
   listDefenseCardLocations,
   listPhysicalCardLocations,
   movePhysicalCard,
-  restorePhysicalCardZoneState,
-  type PhysicalCardZoneStateSnapshot,
 } from "./control-ledger.js";
 import { installGameEventLog } from "./game-events.js";
 import { recordGameEvent } from "./event-recorder.js";
+import {
+  capturePhysicalCardZoneState,
+  restorePhysicalCardZoneState,
+  type PhysicalCardZoneStateSnapshot,
+} from "./physical-card-zone-snapshot.js";
 import {
   isAvoidAttackRuntimeEffect,
   type AvoidAttackRuntimeEffect,

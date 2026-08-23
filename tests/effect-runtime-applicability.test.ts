@@ -8,8 +8,10 @@ import {
   executeMayhemEffects,
   getEffectExecutionError,
 } from "../src/engine/effect-runtime.js";
+import { isVerifiedRuntimeEffect } from "../src/engine/runtime-effect-verification.js";
 import type { CardDefinition } from "../src/engine/data.js";
 import { validateRuntimeEffectCatalogPayload } from "../src/engine/effect-runtime-registry.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 import type {
   AttackIntent,
   EffectSourceContext,
@@ -23,7 +25,11 @@ test("executeEffect applies add_power through the catalog resolver", () => {
   const state = initializeGame({ rootDir: process.cwd(), seed: 11601 });
   const player = state.players[0];
   assert.ok(player);
-  const effect = { effectId: "add_power", amount: 2 } as const;
+  const effect = verifiedTestRuntimeEffect({
+    effectId: "add_power",
+    timing: "onPlay",
+    amount: 2,
+  });
   const source: EffectSourceContext = {
     sourceType: "card",
     runtimeMode: "combat",
@@ -36,6 +42,72 @@ test("executeEffect applies add_power through the catalog resolver", () => {
 
   assert.deepEqual(result, { ok: true });
   assert.equal(state.turn.power, 2);
+});
+
+test("Runtime Data Intake marks resource effects as verified runtime effects", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11600 });
+  const resourceEffect = [
+    ...[...state.cardDefinitions.values()].flatMap(
+      (definition) => definition.engine.effects
+    ),
+    ...[...state.tokenDefinitions.values()].flatMap((definition) =>
+      definition.kind === "deadWizardToken"
+        ? definition.effects
+        : (definition.engine?.effects ?? [])
+    ),
+  ].find((effect) => effect.effectId === "gain_chips");
+
+  assert.ok(resourceEffect);
+  assert.equal(isVerifiedRuntimeEffect(resourceEffect), true);
+});
+
+test("Runtime Data Intake marks non-resource families as verified runtime effects", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11613 });
+  const combatEffect = [...state.cardDefinitions.values()]
+    .flatMap((definition) => definition.engine.effects)
+    .find(
+      (effect) =>
+        effect.effectId === "add_power" || effect.effectId === "attack_damage"
+    );
+
+  assert.ok(combatEffect);
+  assert.equal(isVerifiedRuntimeEffect(combatEffect), true);
+});
+
+test("typed resource Catalog keeps the verified payload identity", () => {
+  const state = initializeGame({ rootDir: process.cwd(), seed: 11607 });
+  const player = state.players[0];
+  assert.ok(player);
+  const resourceEffect = [...state.tokenDefinitions.values()]
+    .flatMap((definition) =>
+      definition.kind === "deadWizardToken"
+        ? definition.effects
+        : (definition.engine?.effects ?? [])
+    )
+    .find((effect) => effect.effectId === "gain_chips");
+  assert.ok(resourceEffect);
+
+  let observedEffect: unknown;
+  const result = withTemporaryEffectRuntimeOperations(
+    "gain_chips",
+    {
+      execute(_state, _player, effect) {
+        observedEffect = effect;
+        return { ok: true };
+      },
+    },
+    () =>
+      executeEffect(state, player, resourceEffect, {
+        sourceType: "wizardProperty",
+        runtimeMode: state.runtimeMode,
+        playerId: player.playerId,
+        cardInstanceId: "fixture-resource-source",
+        definitionId: "fixture-resource-source",
+      })
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(observedEffect, resourceEffect);
 });
 
 test("attack intent keeps lifecycle context in one typed value", () => {
@@ -103,12 +175,12 @@ test("attack profile uses its initiator instead of the active player or source o
   const result = executeEffect(
     state,
     inactiveInitiator,
-    {
+    verifiedTestRuntimeEffect({
       effectId: "attack_damage",
       timing: "onPlay",
       amount: 2,
       targetSelector: "chosenFoe",
-    },
+    }),
     {
       sourceType: "card",
       runtimeMode: "combat",
@@ -147,7 +219,11 @@ test("executeEffect passes one concrete decoded payload to its handler", () => {
       executeEffect(
         state,
         player,
-        { effectId: "add_power", amount: 2 },
+        verifiedTestRuntimeEffect({
+          effectId: "add_power",
+          timing: "onPlay",
+          amount: 2,
+        }),
         fixtureSource(player.playerId, "combat")
       )
   );
@@ -177,10 +253,11 @@ test("fixture-only effect is rejected in combat before its handler", () => {
   const result = executeEffect(
     state,
     player,
-    {
+    verifiedTestRuntimeEffect({
       effectId: "fixture_add_power_equal_to_target_cost",
+      timing: "onPlay",
       target: { selector: "mainMarketCard" },
-    },
+    }),
     fixtureSource(player.playerId, "combat")
   );
   assert.equal(result.ok, false);
@@ -188,46 +265,40 @@ test("fixture-only effect is rejected in combat before its handler", () => {
   assert.equal(state.turn.power, 0);
 });
 
-test("general execution decodes before runtime-mode applicability", () => {
-  const state = initializeGame({ rootDir: process.cwd(), seed: 11611 });
-  const player = state.players[0];
-  assert.ok(player);
-
-  const result = executeEffect(
-    state,
-    player,
+test("runtime-mode applicability uses the intake validation boundary", () => {
+  const result = validateRuntimeEffectCatalogPayload(
+    "Fixture effect",
+    "fixture_add_power_equal_to_target_cost",
     {
       effectId: "fixture_add_power_equal_to_target_cost",
       unexpected: true,
     },
-    fixtureSource(player.playerId, "combat")
+    "combat",
+    "card"
   );
 
   assert.equal(result.ok, false);
   if (result.ok) return;
-  assert.match(result.error, /unsupported field unexpected/);
+  assert.match(result.errors.join("\n"), /unsupported field unexpected/);
 });
 
-test("general execution decodes before source-kind applicability", () => {
-  const state = initializeGame({ rootDir: process.cwd(), seed: 11612 });
-  const player = state.players[0];
-  assert.ok(player);
-
-  const result = executeEffect(
-    state,
-    player,
+test("timing applicability uses the intake validation boundary", () => {
+  const result = validateRuntimeEffectCatalogPayload(
+    "Temporary hand limit",
+    "temporary_hand_limit_by_gained_card_type",
     {
       effectId: "temporary_hand_limit_by_gained_card_type",
       timing: "activation",
       amount: 1,
       cardTypes: ["spell"],
     },
-    fixtureSource(player.playerId, "combat", "card")
+    "combat",
+    "card"
   );
 
   assert.equal(result.ok, false);
   if (result.ok) return;
-  assert.match(result.error, /timing must be endTurn/);
+  assert.match(result.errors.join("\n"), /timing must be endTurn/);
 });
 
 test("fixture-only effect reaches its handler in fixture mode", () => {
@@ -237,10 +308,11 @@ test("fixture-only effect reaches its handler in fixture mode", () => {
   const result = executeEffect(
     state,
     player,
-    {
+    verifiedTestRuntimeEffect({
       effectId: "fixture_add_power_equal_to_target_cost",
+      timing: "onPlay",
       target: { selector: "mainMarketCard" },
-    },
+    }),
     fixtureSource(player.playerId, "fixture")
   );
   assert.deepEqual(result, { ok: true });
@@ -253,12 +325,12 @@ test("wizard-property-only effect is rejected for a card source", () => {
   const result = executeEffect(
     state,
     player,
-    {
+    verifiedTestRuntimeEffect({
       effectId: "temporary_hand_limit_by_gained_card_type",
       timing: "endTurn",
       amount: 1,
       cardTypes: ["spell"],
-    },
+    }),
     fixtureSource(player.playerId, "combat", "card")
   );
   assert.equal(result.ok, false);
@@ -402,57 +474,41 @@ test("ongoing hand refill bonus is limited to card sources", () => {
   }
 });
 
-test("known effect with invalid shape is rejected before execution", () => {
-  const state = initializeGame({ rootDir: process.cwd(), seed: 11605 });
-  const player = state.players[0];
-  assert.ok(player);
-  const result = executeEffect(
-    state,
-    player,
+test("known effect with invalid shape is rejected at intake", () => {
+  const result = validateRuntimeEffectCatalogPayload(
+    "Malformed add power",
+    "add_power",
     { effectId: "add_power", amount: 0 },
-    fixtureSource(player.playerId, "combat")
+    "combat",
+    "card"
   );
   assert.equal(result.ok, false);
-  assert.match(result.error, /amount must be a positive integer/);
-  assert.equal(state.turn.power, 0);
+  if (result.ok) return;
+  assert.match(result.errors.join("\n"), /amount must be a positive integer/);
 });
 
-test("timed effect with invalid shape is rejected before its handler", () => {
-  const state = initializeGame({ rootDir: process.cwd(), seed: 11606 });
-  const player = state.players[0];
-  assert.ok(player);
-  let handlerCalled = false;
-
-  const result = withTemporaryEffectRuntimeOperations(
+test("timed effect with invalid shape is rejected at intake", () => {
+  const result = validateRuntimeEffectCatalogPayload(
+    "Malformed effective value",
     "fixture_modify_effective_value",
     {
-      execute() {
-        handlerCalled = true;
-        return { ok: true };
-      },
+      effectId: "fixture_modify_effective_value",
+      timing: "onPlay",
+      valueKind: "unknown",
+      operation: "add",
+      amount: "invalid",
+      target: { targetType: "player" },
     },
-    () =>
-      executeEffect(
-        state,
-        player,
-        {
-          effectId: "fixture_modify_effective_value",
-          timing: "onPlay",
-          valueKind: "unknown",
-          operation: "add",
-          amount: "invalid",
-          target: { targetType: "player" },
-        },
-        fixtureSource(player.playerId, "fixture")
-      )
+    "fixture",
+    "card"
   );
 
   assert.equal(result.ok, false);
+  if (result.ok) return;
   assert.match(
-    result.error,
+    result.errors.join("\n"),
     /timing must be one of whileControlled, whileScoring/
   );
-  assert.equal(handlerCalled, false);
 });
 
 test("public Mayhem execution resolves a timed effect deterministically", () => {
@@ -483,7 +539,11 @@ test("public Mayhem execution resolves a timed effect deterministically", () => 
       isOngoing: false,
       marketChipMarker: false,
       effects: [
-        { effectId: "add_power", timing: "onMayhemResolve", amount: 2 },
+        verifiedTestRuntimeEffect({
+          effectId: "add_power",
+          timing: "onMayhemResolve",
+          amount: 2,
+        }),
       ],
       unsupportedMechanics: [],
     },

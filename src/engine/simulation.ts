@@ -6,7 +6,11 @@ import {
 } from "./actions.js";
 import { assertNever } from "../common.js";
 import type { ChoiceRequest, ChoiceSelection } from "./choice-policy.js";
-import type { CardDefinition, LoadedDataPack } from "./data.js";
+import type {
+  CardDefinition,
+  LoadedDataPack,
+  TokenDefinition,
+} from "./data.js";
 import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
 import { recordBotActionSelected } from "./event-recorder.js";
 import { adjudicateGame, type AdjudicationResult } from "./adjudication.js";
@@ -22,6 +26,7 @@ import {
 } from "./setup.js";
 import { assertGameStateInvariants } from "./invariants.js";
 import { createPlayerDecisionView } from "./strategy-decision-view.js";
+import { intakeRuntimeData } from "./runtime-data-intake.js";
 
 export type GameEndReason =
   | "deadWizardTokensExhausted"
@@ -39,6 +44,7 @@ export interface RunSingleGameOptions {
   dataPack?: LoadedDataPack;
   bot?: BotStrategy;
   botFactory?: (playerId: PlayerId) => BotStrategy;
+  replay?: SimulationFailureReplay;
   validateInvariants?: boolean;
 }
 
@@ -97,6 +103,283 @@ export interface SetupStateSnapshot {
   wildMagicStackSize: number;
   limpWandStackSize: number;
   deadWizardTokenStackSize: number;
+}
+
+export interface SimulationFailureSetup {
+  rootDir: string;
+  seed: number;
+  maxTurns: number;
+  playerCount?: number;
+  dataPackPath?: string;
+  initialState: SetupStateSnapshot;
+}
+
+export interface SimulationFailureRuntimeData {
+  manifest: LoadedDataPack["manifest"];
+  cardDefinitions: readonly CardDefinition[];
+  tokenDefinitions: readonly TokenDefinition[];
+  decks: LoadedDataPack["decks"];
+  tokenStacks: LoadedDataPack["tokenStacks"];
+}
+
+export interface SimulationFailureErrorDetails {
+  message: string;
+  stack: string;
+  causeStack?: string;
+}
+
+export interface SimulationFailureReproduction {
+  command: string;
+  args: readonly string[];
+}
+
+export interface SimulationFailureReplayChoice {
+  readonly type: "effectChoiceSelected" | "effectChoiceSkipped";
+  readonly playerId: string;
+  readonly effectId: string;
+  readonly choiceId?: string;
+}
+
+export interface SimulationFailureReplay {
+  readonly actions: readonly GameAction[];
+  readonly choices: readonly SimulationFailureReplayChoice[];
+}
+
+export interface SimulationFailureReport {
+  seed: number;
+  setup: SimulationFailureSetup;
+  runtimeData: SimulationFailureRuntimeData;
+  turnNumber: number;
+  activePlayerId: PlayerId;
+  actions: readonly GameAction[];
+  choices: readonly GameEvent[];
+  error: SimulationFailureErrorDetails;
+  eventLog: readonly GameEvent[];
+  reproduction: SimulationFailureReproduction;
+}
+
+interface SimulationFailureRuntimeDataCandidate {
+  readonly manifest?: unknown;
+  readonly cardDefinitions?: unknown;
+  readonly tokenDefinitions?: unknown;
+  readonly decks?: unknown;
+  readonly tokenStacks?: unknown;
+}
+
+interface GameActionCandidate {
+  readonly type?: unknown;
+  readonly cardInstanceId?: unknown;
+  readonly tokenInstanceId?: unknown;
+  readonly source?: unknown;
+}
+
+interface SimulationFailureReplayChoiceCandidate {
+  readonly type?: unknown;
+  readonly playerId?: unknown;
+  readonly effectId?: unknown;
+  readonly choiceId?: unknown;
+}
+
+export function createSimulationFailureReplay(
+  report: Pick<SimulationFailureReport, "actions" | "choices">
+): SimulationFailureReplay {
+  const choices: SimulationFailureReplayChoice[] = [];
+  for (const event of report.choices) {
+    if (event.type === "effectChoiceSkipped") {
+      choices.push({
+        type: event.type,
+        playerId: event.playerId,
+        effectId: event.effectId,
+      });
+      continue;
+    }
+    if (event.type !== "effectChoiceSelected") {
+      continue;
+    }
+    if (event.choiceId === undefined) {
+      throw new Error("Effect choice replay event is missing choiceId");
+    }
+    choices.push({
+      type: event.type,
+      playerId: event.playerId,
+      effectId: event.effectId,
+      choiceId: event.choiceId,
+    });
+  }
+  return {
+    actions: [...report.actions],
+    choices,
+  };
+}
+
+export function parseSimulationFailureReplayReport(reportText: string): {
+  runtimeData: SimulationFailureReport["runtimeData"];
+  replay: SimulationFailureReplay;
+} {
+  const runtimeDataValue: unknown = JSON.parse(
+    readJsonSection(reportText, "runtimeData")
+  );
+  if (!isSimulationFailureRuntimeData(runtimeDataValue)) {
+    throw new Error("Report runtimeData has an invalid shape");
+  }
+  const actionsValue: unknown = JSON.parse(
+    readJsonSection(reportText, "actions")
+  );
+  if (!isGameActionArray(actionsValue)) {
+    throw new Error("Report actions have an invalid shape");
+  }
+  const choicesValue: unknown = JSON.parse(
+    readJsonSection(reportText, "choices")
+  );
+  return {
+    runtimeData: runtimeDataValue,
+    replay: {
+      actions: actionsValue,
+      choices: readReplayChoices(choicesValue),
+    },
+  };
+}
+
+function readJsonSection(reportText: string, section: string): string {
+  const codeFence = "`".repeat(3);
+  const marker = `${section}:\n${codeFence}json\n`;
+  const start = reportText.indexOf(marker);
+  if (start < 0) {
+    throw new Error(`Report does not contain ${section}`);
+  }
+  const contentStart = start + marker.length;
+  const contentEnd = reportText.indexOf(`\n${codeFence}`, contentStart);
+  if (contentEnd < 0) {
+    throw new Error(`Report section ${section} is not closed`);
+  }
+  return reportText.slice(contentStart, contentEnd);
+}
+
+function isSimulationFailureRuntimeData(
+  value: unknown
+): value is SimulationFailureReport["runtimeData"] {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const record = value as SimulationFailureRuntimeDataCandidate;
+  return (
+    "manifest" in value &&
+    "cardDefinitions" in value &&
+    "tokenDefinitions" in value &&
+    "decks" in value &&
+    "tokenStacks" in value &&
+    Array.isArray(record.cardDefinitions) &&
+    Array.isArray(record.tokenDefinitions)
+  );
+}
+
+function isGameActionArray(value: unknown): value is GameAction[] {
+  return Array.isArray(value) && value.every(isGameAction);
+}
+
+function isGameAction(value: unknown): value is GameAction {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as GameActionCandidate;
+  switch (record.type) {
+    case "endTurn":
+      return true;
+    case "playCard":
+    case "activatePermanent":
+      return typeof record.cardInstanceId === "string";
+    case "activateWizardProperty":
+      return typeof record.tokenInstanceId === "string";
+    case "buyMarketCard":
+      return (
+        typeof record.cardInstanceId === "string" &&
+        (record.source === "mainMarket" ||
+          record.source === "legendMarket" ||
+          record.source === "wildMagicStack" ||
+          record.source === "familiar")
+      );
+    default:
+      return false;
+  }
+}
+
+function readReplayChoices(value: unknown): SimulationFailureReplay["choices"] {
+  if (!Array.isArray(value)) {
+    throw new Error("Report choices have an invalid shape");
+  }
+
+  const choices: SimulationFailureReplayChoice[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new Error("Report choice has an invalid shape");
+    }
+    const record = entry as SimulationFailureReplayChoiceCandidate;
+    if (
+      record.type !== "effectChoiceSelected" &&
+      record.type !== "effectChoiceSkipped"
+    ) {
+      continue;
+    }
+    if (
+      typeof record.playerId !== "string" ||
+      typeof record.effectId !== "string"
+    ) {
+      throw new Error("Report effect choice has an invalid shape");
+    }
+    if (record.type === "effectChoiceSkipped") {
+      choices.push({
+        type: "effectChoiceSkipped",
+        playerId: record.playerId,
+        effectId: record.effectId,
+      });
+      continue;
+    }
+    if (typeof record.choiceId !== "string") {
+      throw new Error("Report selected effect choice has no choiceId");
+    }
+    choices.push({
+      type: "effectChoiceSelected",
+      playerId: record.playerId,
+      effectId: record.effectId,
+      choiceId: record.choiceId,
+    });
+  }
+  return choices;
+}
+
+export function createLoadedDataPackFromSimulationFailureReport(
+  runtimeData: SimulationFailureRuntimeData
+): LoadedDataPack {
+  return {
+    manifest: runtimeData.manifest,
+    cardDefinitions: new Map(
+      runtimeData.cardDefinitions.map((definition) => [
+        definition.cardId,
+        definition,
+      ])
+    ),
+    tokenDefinitions: new Map(
+      runtimeData.tokenDefinitions.map((definition) => [
+        definition.tokenId,
+        definition,
+      ])
+    ),
+    decks: runtimeData.decks,
+    tokenStacks: runtimeData.tokenStacks,
+  };
+}
+
+export class SimulationExecutionError extends Error {
+  override name = "SimulationExecutionError";
+
+  constructor(
+    readonly report: SimulationFailureReport,
+    cause?: unknown
+  ) {
+    super(report.error.message, cause === undefined ? undefined : { cause });
+  }
 }
 
 export interface SingleGameResult extends AdjudicationResult {
@@ -199,19 +482,124 @@ function mustGetCardDefinition(
   return definition;
 }
 
+class SimulationReplayError extends Error {
+  override name = "SimulationReplayError";
+}
+
+interface SimulationReplayController {
+  nextAction(): GameAction;
+  chooseEffectChoice(request: ChoiceRequest): ChoiceSelection | undefined;
+  getIncompleteHistoryError(): SimulationReplayError | undefined;
+}
+
+function createSimulationReplayController(
+  replay: SimulationFailureReplay
+): SimulationReplayController {
+  let actionIndex = 0;
+  let choiceIndex = 0;
+
+  return {
+    nextAction(): GameAction {
+      const action = replay.actions[actionIndex];
+      if (action === undefined) {
+        throw new SimulationReplayError(
+          `Replay action history ended before action ${actionIndex + 1}`
+        );
+      }
+      actionIndex += 1;
+      return action;
+    },
+    chooseEffectChoice(request: ChoiceRequest): ChoiceSelection | undefined {
+      const expected = replay.choices[choiceIndex];
+      if (expected === undefined) {
+        throw new SimulationReplayError(
+          `Replay choice history ended before ${request.effectId}`
+        );
+      }
+      if (
+        expected.playerId !== request.player.playerId ||
+        expected.effectId !== request.effectId
+      ) {
+        throw new SimulationReplayError(
+          `Replay choice ${choiceIndex + 1} does not match ${request.effectId} for ${request.player.playerId}`
+        );
+      }
+      choiceIndex += 1;
+      if (expected.type === "effectChoiceSkipped") {
+        return undefined;
+      }
+      if (
+        expected.choiceId === undefined ||
+        !request.choices.some((choice) => choice.choiceId === expected.choiceId)
+      ) {
+        throw new SimulationReplayError(
+          `Replay choice ${expected.choiceId ?? "<missing>"} is not legal for ${request.effectId}`
+        );
+      }
+      return { choiceId: expected.choiceId };
+    },
+    getIncompleteHistoryError(): SimulationReplayError | undefined {
+      if (actionIndex !== replay.actions.length) {
+        return new SimulationReplayError(
+          `Replay stopped after ${actionIndex} of ${replay.actions.length} actions`
+        );
+      }
+      if (choiceIndex !== replay.choices.length) {
+        return new SimulationReplayError(
+          `Replay stopped after ${choiceIndex} of ${replay.choices.length} choices`
+        );
+      }
+      return undefined;
+    },
+  };
+}
+
+function createReplayBotFactory(
+  replayController: SimulationReplayController
+): (playerId: PlayerId) => BotStrategy {
+  return () => ({
+    chooseAction: () => replayController.nextAction(),
+    chooseEffectChoice: (request) =>
+      replayController.chooseEffectChoice(request),
+  });
+}
+
+function rejectSuccessfulReplay(
+  replayController: SimulationReplayController | undefined
+): never | undefined {
+  if (replayController === undefined) {
+    return undefined;
+  }
+  throw new SimulationReplayError(
+    "Replay completed without reproducing the recorded failure"
+  );
+}
+
 export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
-  const { bot, botFactory, dataPack, ...initializeGameOptions } = options;
+  const { bot, botFactory, dataPack } = options;
   if (dataPack !== undefined && options.dataPackPath !== undefined) {
     throw new Error("dataPack and dataPackPath cannot be used together");
+  }
+  if (
+    options.replay !== undefined &&
+    (bot !== undefined || botFactory !== undefined)
+  ) {
+    throw new Error("Replay cannot be combined with bot or botFactory");
   }
   if (bot !== undefined && bot !== baselineBot) {
     throw new Error("Custom multiplayer bot must use botFactory");
   }
+  const replayController =
+    options.replay === undefined
+      ? undefined
+      : createSimulationReplayController(options.replay);
   const strategyFactory =
-    botFactory ??
-    (bot === undefined || bot === baselineBot
-      ? () => createBaselineBot()
-      : () => bot);
+    replayController === undefined
+      ? (botFactory ??
+        (bot === undefined || bot === baselineBot
+          ? () => createBaselineBot()
+          : () => bot))
+      : createReplayBotFactory(replayController);
   const botBindingsByPlayerId = new Map<PlayerId, PlayerBotBinding>();
   const playerIdByStrategy = new WeakMap<BotStrategy, PlayerId>();
   const playerIdByCallback = new Map<
@@ -273,71 +661,194 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     const binding = getBotBindingForPlayer(request.player.playerId);
     return binding.chooseEffectChoice?.call(binding.strategy, request);
   };
-  const state =
+  const runtimeDataPack =
     dataPack === undefined
-      ? initializeGame({ ...initializeGameOptions, effectChoiceStrategy })
-      : initializeGame({
-          dataPack,
-          seed: options.seed,
-          ...(options.playerCount === undefined
+      ? intakeRuntimeData({
+          rootDir: options.rootDir,
+          ...(options.dataPackPath === undefined
             ? {}
-            : { playerCount: options.playerCount }),
-          effectChoiceStrategy,
-        });
+            : { dataPackPath: options.dataPackPath }),
+        })
+      : intakeRuntimeData({ dataPack });
+  const state = initializeGame({
+    dataPack: runtimeDataPack,
+    seed: options.seed,
+    ...(options.playerCount === undefined
+      ? {}
+      : { playerCount: options.playerCount }),
+    effectChoiceStrategy,
+  });
   const setupState = snapshotSetupState(state);
   if (options.validateInvariants) {
     assertGameStateInvariants(state);
   }
   const actionLimit = options.maxTurns * 200;
   let actionsApplied = 0;
+  const actionHistory: GameAction[] = [];
 
   while (true) {
-    if (options.validateInvariants) {
-      assertGameStateInvariants(state);
-    }
-    const endReason = getGameEndReason(state);
-    if (endReason !== undefined) {
-      return summarizeGame(state, endReason, true, setupState);
-    }
+    try {
+      if (options.validateInvariants) {
+        assertGameStateInvariants(state);
+      }
+      const endReason = getGameEndReason(state);
+      if (endReason !== undefined) {
+        return (
+          rejectSuccessfulReplay(replayController) ??
+          summarizeGame(state, endReason, true, setupState)
+        );
+      }
 
-    if (state.turn.number > options.maxTurns) {
-      return summarizeGame(state, "maxTurnsReached", false, setupState);
-    }
+      if (state.turn.number > options.maxTurns) {
+        return (
+          rejectSuccessfulReplay(replayController) ??
+          summarizeGame(state, "maxTurnsReached", false, setupState)
+        );
+      }
 
-    if (actionsApplied >= actionLimit) {
-      throw new Error(`Bot exceeded ${actionLimit} actions before maxTurns`);
-    }
+      if (actionsApplied >= actionLimit) {
+        throw new Error(`Bot exceeded ${actionLimit} actions before maxTurns`);
+      }
 
-    const activePlayer = mustGetActivePlayer(state);
-    const legalActions = listLegalActions(state);
-    const binding = getBotBindingForPlayer(activePlayer.playerId);
-    const selectedAction = binding.chooseAction.call(binding.strategy, {
-      player: createPlayerDecisionView(activePlayer),
-      legalActions: createBotDecisionActions(state, legalActions),
-    });
-    if (!isLegalAction(selectedAction, legalActions)) {
-      throw new Error(`Bot selected illegal action ${selectedAction.type}`);
-    }
+      const activePlayer = mustGetActivePlayer(state);
+      const legalActions = listLegalActions(state);
+      const binding = getBotBindingForPlayer(activePlayer.playerId);
+      const selectedAction = binding.chooseAction.call(binding.strategy, {
+        player: createPlayerDecisionView(activePlayer),
+        legalActions: createBotDecisionActions(state, legalActions),
+      });
+      actionHistory.push(selectedAction);
+      if (!isLegalAction(selectedAction, legalActions)) {
+        throw new Error(`Bot selected illegal action ${selectedAction.type}`);
+      }
 
-    recordBotActionSelected(state, selectedAction);
-    const result = applyAction(state, selectedAction);
-    if (!result.ok) {
-      throw new Error(`Legal action failed: ${result.error}`);
-    }
-    if (options.validateInvariants) {
-      assertGameStateInvariants(state);
-    }
-    if (result.gameEndReason !== undefined) {
-      return summarizeGame(
+      recordBotActionSelected(state, selectedAction);
+      const result = applyAction(state, selectedAction);
+      if (!result.ok) {
+        throw new Error(`Legal action failed: ${result.error}`);
+      }
+      if (options.validateInvariants) {
+        assertGameStateInvariants(state);
+      }
+      if (result.gameEndReason !== undefined) {
+        return (
+          rejectSuccessfulReplay(replayController) ??
+          summarizeGame(
+            state,
+            result.gameEndReason,
+            true,
+            setupState,
+            result.winnerPlayerId
+          )
+        );
+      }
+      actionsApplied += 1;
+    } catch (error) {
+      const replayFailure =
+        replayController === undefined || error instanceof SimulationReplayError
+          ? undefined
+          : replayController.getIncompleteHistoryError();
+      throw createSimulationExecutionError(
         state,
-        result.gameEndReason,
-        true,
+        options,
         setupState,
-        result.winnerPlayerId
+        runtimeDataPack,
+        actionHistory,
+        replayFailure ?? error
       );
     }
-    actionsApplied += 1;
   }
+}
+
+function createSimulationExecutionError(
+  state: GameState,
+  options: RunSingleGameOptions,
+  setupState: SetupStateSnapshot,
+  dataPack: LoadedDataPack,
+  actionHistory: readonly GameAction[],
+  failure: unknown
+): SimulationExecutionError {
+  const error = getSimulationFailureErrorDetails(failure);
+  const reproductionArgs = [
+    "--seed",
+    String(options.seed),
+    "--maxTurns",
+    String(options.maxTurns),
+    ...(options.playerCount === undefined
+      ? []
+      : ["--playerCount", String(options.playerCount)]),
+    "--replayReport",
+    "<report-path>",
+  ];
+  const report: SimulationFailureReport = {
+    seed: options.seed,
+    setup: {
+      rootDir: options.rootDir,
+      seed: options.seed,
+      maxTurns: options.maxTurns,
+      ...(options.playerCount === undefined
+        ? {}
+        : { playerCount: options.playerCount }),
+      ...(options.dataPackPath === undefined
+        ? {}
+        : { dataPackPath: options.dataPackPath }),
+      initialState: setupState,
+    },
+    runtimeData: {
+      manifest: dataPack.manifest,
+      cardDefinitions: [...state.cardDefinitions.values()],
+      tokenDefinitions: [...state.tokenDefinitions.values()],
+      decks: dataPack.decks,
+      tokenStacks: dataPack.tokenStacks,
+    },
+    turnNumber: state.turn.number,
+    activePlayerId: state.activePlayerId,
+    actions: [...actionHistory],
+    choices: state.eventLog.filter(isChoiceEvent),
+    error,
+    eventLog: [...state.eventLog],
+    reproduction: {
+      command: ["npm run simulate:single --", ...reproductionArgs]
+        .map((part) => quoteCommandArgument(part))
+        .join(" "),
+      args: reproductionArgs,
+    },
+  };
+  return new SimulationExecutionError(
+    report,
+    failure instanceof Error ? failure : undefined
+  );
+}
+
+function getSimulationFailureErrorDetails(
+  failure: unknown
+): SimulationFailureErrorDetails {
+  if (!(failure instanceof Error)) {
+    return { message: String(failure), stack: "" };
+  }
+
+  const causeStack =
+    failure.cause instanceof Error ? failure.cause.stack : undefined;
+  return {
+    message: failure.message,
+    stack: failure.stack ?? "",
+    ...(causeStack === undefined ? {} : { causeStack }),
+  };
+}
+
+function isChoiceEvent(event: GameEvent): boolean {
+  return (
+    event.type === "effectChoiceSelected" ||
+    event.type === "effectChoiceSkipped" ||
+    event.type === "defenseChoiceSelected" ||
+    event.type === "wildMagicChoiceSelected" ||
+    event.type === "wildMagicChoiceSkipped" ||
+    event.type === "setupChoiceSelected"
+  );
+}
+
+function quoteCommandArgument(value: string): string {
+  return /[\s"]/.test(value) ? JSON.stringify(value) : value;
 }
 
 function summarizeGame(

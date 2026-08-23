@@ -1,5 +1,8 @@
 import type { CardDefinition } from "./data.js";
-import { executeMayhemEffects } from "./effect-runtime.js";
+import {
+  executeMayhemEffects,
+  validateMayhemEffects,
+} from "./effect-runtime.js";
 import type { EffectGameEnd } from "./effect-runtime-registry.js";
 import { recordGameEvent } from "./event-recorder.js";
 import type {
@@ -80,6 +83,82 @@ export function runMarketFlow(
   }
 
   return { ok: true };
+}
+
+export function validateMarketFlow(
+  state: GameState,
+  options: RunMarketFlowOptions
+): { ok: true } | { ok: false; error: string } {
+  const legendValidation = validateMarketFlowDeck(state, {
+    sourceDeck: state.common.legendDeck,
+    market: state.common.legendMarket,
+    targetSize: 3,
+    eventKind: "megaMayhem",
+    mode: options.mode,
+  });
+  if (!legendValidation.ok) {
+    return legendValidation;
+  }
+  if (legendValidation.exhausted) {
+    return { ok: true };
+  }
+
+  const mainValidation = validateMarketFlowDeck(state, {
+    sourceDeck: state.common.mainDeck,
+    market: state.common.market,
+    targetSize: 5,
+    eventKind: "mayhem",
+    mode: options.mode,
+  });
+  return mainValidation.ok ? { ok: true } : mainValidation;
+}
+
+function validateMarketFlowDeck(
+  state: GameState,
+  options: {
+    sourceDeck: readonly CardInstance[];
+    market: readonly CardInstance[];
+    targetSize: number;
+    eventKind: CardDefinition["engine"]["cardKind"];
+    mode: MarketFlowMode;
+  }
+): { ok: true; exhausted: boolean } | { ok: false; error: string } {
+  let sourceIndex = 0;
+  let marketSize = options.market.length;
+  while (marketSize < options.targetSize) {
+    const card = options.sourceDeck[sourceIndex];
+    if (card === undefined) {
+      return { ok: true, exhausted: true };
+    }
+    sourceIndex += 1;
+
+    const definition = mustGetDefinition(state, card.definitionId);
+    if (definition.engine.cardKind === options.eventKind) {
+      if (options.mode === "turn") {
+        const activePlayer = mustGetActivePlayer(state);
+        const validation = validateMayhemEffects(
+          state,
+          activePlayer,
+          definition,
+          {
+            sourceType: "card",
+            runtimeMode: state.runtimeMode,
+            playerId: activePlayer.playerId,
+            cardInstanceId: card.instanceId,
+            definitionId: card.definitionId,
+          }
+        );
+        if (!validation.ok) {
+          return validation;
+        }
+      }
+      continue;
+    }
+
+    marketSize += 1;
+  }
+
+  return { ok: true, exhausted: false };
 }
 
 function fillMarket(
