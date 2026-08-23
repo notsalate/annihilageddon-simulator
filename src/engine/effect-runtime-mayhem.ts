@@ -1,8 +1,10 @@
 import { drawDeckCards } from "./deck-lifecycle.js";
 import { createAttackDefenseUsage } from "./attack-resolution.js";
 import {
-  listPhysicalCardLocations,
+  listLegendMarketCards,
+  listMainMarketCards,
   movePhysicalCard,
+  peekLegendDeckCard,
 } from "./control-ledger.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import { recordEffectChipsChanged } from "./effect-runtime-resources-draw.js";
@@ -428,10 +430,7 @@ const mayhemAddChipsToMainMarketHandler: EffectRuntimeHandler<
 > = {
   effectId: "mayhem_add_chips_to_main_market",
   execute(state, player, effect, source) {
-    const mainMarketCards = listPhysicalCardLocations(state).filter(
-      (location) => location.zoneName === "mainMarket"
-    );
-    for (const { card } of mainMarketCards) {
+    for (const card of listMainMarketCards(state)) {
       card.marketChips += effect.amount;
       recordGameEvent(state, {
         type: "marketChipAdded",
@@ -842,10 +841,7 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
 > = {
   effectId: "mayhem_refresh_legend_market",
   execute(state, player, effect, source) {
-    const legendMarketCards = listPhysicalCardLocations(state).filter(
-      (location) => location.zoneName === "legendMarket"
-    );
-    for (const { card } of legendMarketCards) {
+    for (const card of [...listLegendMarketCards(state)]) {
       const moved = movePhysicalCard(
         state,
         card.instanceId,
@@ -868,14 +864,8 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
       });
     }
 
-    while (
-      listPhysicalCardLocations(state).filter(
-        (location) => location.zoneName === "legendMarket"
-      ).length < effect.targetSize
-    ) {
-      const card = listPhysicalCardLocations(state).find(
-        (location) => location.zoneName === "legendDeck"
-      )?.card;
+    while (listLegendMarketCards(state).length < effect.targetSize) {
+      const card = peekLegendDeckCard(state);
       if (card === undefined) {
         return { ok: true };
       }

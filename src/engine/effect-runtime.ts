@@ -16,10 +16,10 @@ import {
   type RedirectedAttackIntent,
 } from "./attack-resolution.js";
 import {
-  findPlayerPlayedThisTurnCard,
   getControlledCards,
   removeCardFromLocation,
 } from "./control-ledger.js";
+import { resolveMainMarketGainDestination } from "./effect-runtime-cards-ownership-choice.js";
 import {
   resolveCardPlay,
   type CardPlayResolutionServices,
@@ -478,52 +478,17 @@ export function moveGainedCardToPlayerDestination(
   if (!onGainCardResult.ok) {
     return onGainCardResult;
   }
-  let destination: "discard" | "deckTop" | "hand" =
-    onGainCardResult.destination;
-
-  if (sourceZone === "mainMarket") {
-    for (const sourceCardInstanceId of state.turn
-      .mainMarketCardHandReplacementSourceCardIds) {
-      const playedCard = findPlayerPlayedThisTurnCard(
-        state,
-        player.playerId,
-        sourceCardInstanceId
-      );
-      if (playedCard === undefined) {
-        continue;
-      }
-      const playedDefinition = state.cardDefinitions.get(
-        playedCard.definitionId
-      );
-      if (playedDefinition === undefined) {
-        return {
-          ok: false,
-          error: `Missing played card definition ${playedCard.definitionId}`,
-        };
-      }
-      const source: EffectSourceContext = {
-        sourceType: "card",
-        runtimeMode: state.runtimeMode,
-        playerId: player.playerId,
-        cardInstanceId: playedCard.instanceId,
-        definitionId: playedDefinition.cardId,
-      };
-
-      const choice = chooseEffectChoice(
-        state,
-        player,
-        source,
-        "optional_gain_market_cards_to_hand_this_turn",
-        [
-          { choiceKind: "option", choiceId: "apply" },
-          { choiceKind: "option", choiceId: "decline" },
-        ]
-      );
-      if (choice?.choiceId === "apply") {
-        destination = "hand";
-      }
-    }
+  const destinationResult = resolveMainMarketGainDestination(
+    state,
+    player,
+    sourceZone,
+    onGainCardResult.destination,
+    effectRuntimeServices
+  );
+  if (!destinationResult.ok) {
+    return destinationResult;
   }
+  const destination = destinationResult.destination;
 
   if (destination === "deckTop") {
     player.deck.unshift(card);
