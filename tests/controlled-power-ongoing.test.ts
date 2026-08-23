@@ -13,6 +13,7 @@ import {
   createGameScenario,
   endTurn,
   givenRuntimeCard,
+  givenUnverifiedRuntimeCard,
   givenTemporaryControl,
   play,
 } from "./helpers/game-scenario.js";
@@ -197,11 +198,18 @@ test("controlled-power dispatch is idempotent and rejects malformed payloads", (
   assert.equal(scenario.state.turn.controlledPowerBonus, 3);
 
   controller.permanents = [];
-  givenUnverifiedOngoingCard(scenario, {
-    effectId: "ongoing_add_power",
-    timing: "whileControlled",
-    amount: "invalid",
-  } as unknown as RuntimeEffect);
+  givenUnverifiedRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "ongoing_add_power",
+        timing: "whileControlled",
+        amount: "invalid",
+      } as unknown as RuntimeEffect,
+    ],
+  });
   const powerBeforeMalformedDispatch = scenario.state.turn.power;
   const bonusBeforeMalformedDispatch = scenario.state.turn.controlledPowerBonus;
   assert.throws(
@@ -296,11 +304,18 @@ test("status mutation dispatches controlled power once and preserves late failur
 
   controller.permanents = [];
   controller.statuses = [];
-  const malformedControlledCard = givenUnverifiedOngoingCard(scenario, {
-    effectId: "ongoing_add_power",
-    timing: "whileControlled",
-    amount: "invalid",
-  } as unknown as RuntimeEffect);
+  const malformedControlledCard = givenUnverifiedRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "ongoing_add_power",
+        timing: "whileControlled",
+        amount: "invalid",
+      } as unknown as RuntimeEffect,
+    ],
+  });
   const secondGainCard = givenRuntimeCard(scenario, {
     player: controller,
     effects: [
@@ -360,38 +375,6 @@ test("turn transition recalculates the next active player's controlled power", (
   assert.equal(scenario.state.turn.power, 2);
   assert.equal(scenario.state.turn.controlledPowerBonus, 2);
 });
-
-function givenUnverifiedOngoingCard(
-  scenario: ReturnType<typeof createGameScenario>,
-  effect: RuntimeEffect
-) {
-  const template = scenario.state.cardDefinitions.values().next().value;
-  assert.ok(template);
-  const cardId = `fixture-unverified-ongoing-${scenario.nextFixtureSequence}`;
-  const definition = {
-    ...template,
-    cardId,
-    visible: {
-      ...template.visible,
-      nameRu: cardId,
-      markers: ["ongoing"],
-    },
-    engine: {
-      ...template.engine,
-      isOngoing: true,
-      effects: [effect],
-    },
-  };
-  scenario.state.cardDefinitions = new Map([
-    ...scenario.state.cardDefinitions,
-    [cardId, definition],
-  ]);
-  return givenRuntimeCard(scenario, {
-    player: scenario.activePlayer,
-    zone: "permanents",
-    definitionId: cardId,
-  });
-}
 
 function reconcilePowerScenario(isOngoing: boolean): number {
   const scenario = createGameScenario({
