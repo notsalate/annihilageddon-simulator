@@ -58,6 +58,11 @@ import {
   type EffectiveValueModifierId,
 } from "./effect-runtime-effective-value-modifier.js";
 import {
+  createCardTypeEffectDefinitions,
+  type CardTypeEffectId,
+  type CardTypeEffectPayloadMap,
+} from "./effect-runtime-card-type.js";
+import {
   createControlledPowerEffectDefinitions,
   createOngoingEffectDefinitions,
 } from "./effect-runtime-ongoing.js";
@@ -1643,6 +1648,13 @@ const effectiveValueModifierEntries = defineEffectRuntimeFamily(
   Pick<SetupEffectPayloadMap, EffectiveValueModifierId>
 >;
 
+const cardTypeEntries = defineEffectRuntimeFamily(
+  "cards/type",
+  createCardTypeEffectDefinitions({ bindRuntimeEffectDecoder })
+) satisfies EffectRuntimeEntriesFor<
+  Pick<CardTypeEffectPayloadMap, CardTypeEffectId>
+>;
+
 const controlledPowerEntries = defineEffectRuntimeFamily(
   "values/controlled-power",
   createControlledPowerEffectDefinitions({ bindRuntimeEffectDecoder })
@@ -1933,6 +1945,7 @@ export function defineEffectRuntimeCatalogGroupsForTesting(
 
 const effectRuntimeCatalogDefinition = defineEffectRuntimeCatalog([
   setupEffectEntries,
+  cardTypeEntries,
   controlledPowerEntries,
   resourceDrawEntries,
   lifeStatusEntries,

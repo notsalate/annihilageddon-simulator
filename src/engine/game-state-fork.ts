@@ -16,6 +16,9 @@ export function forkGameState(source: GameState): GameState {
       controlledPowerBonus: source.turn.controlledPowerBonus,
       activatedCardIds: [...source.turn.activatedCardIds],
       gainedCardDefinitionIds: [...source.turn.gainedCardDefinitionIds],
+      mainMarketCardHandReplacementSourceCardIds: [
+        ...source.turn.mainMarketCardHandReplacementSourceCardIds,
+      ],
       rememberedDestroyedLegendCost: source.turn.rememberedDestroyedLegendCost,
       damagingAttackPlayerIds: [...source.turn.damagingAttackPlayerIds],
       temporaryCardControls: ledger.temporaryCardControls,

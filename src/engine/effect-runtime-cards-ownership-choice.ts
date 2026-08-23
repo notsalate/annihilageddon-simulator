@@ -1,4 +1,8 @@
 import { recordGameEvent } from "./event-recorder.js";
+import {
+  listPhysicalCardLocations,
+  movePhysicalCard,
+} from "./control-ledger.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
 import type {
@@ -100,7 +104,7 @@ export type TopdeckGainedCardRuntimeEffect = {
 };
 export type OptionalGainMarketCardsToHandThisTurnRuntimeEffect = {
   effectId: "optional_gain_market_cards_to_hand_this_turn";
-  timing: "untilEndOfTurn";
+  timing: "onPlay";
   appliesTo: "cardsGainedFromMainMarket";
   chooser: "controller";
   destinationOverride: "hand";
@@ -325,7 +329,7 @@ export function createCardOwnershipChoiceEffectDecoders(
         effectId: required(
           literal("optional_gain_market_cards_to_hand_this_turn")
         ),
-        timing: required(literal("untilEndOfTurn")),
+        timing: required(literal("onPlay")),
         appliesTo: required(literal("cardsGainedFromMainMarket")),
         chooser: required(literal("controller")),
         destinationOverride: required(literal("hand")),
@@ -373,11 +377,14 @@ const destroyRandomLegendMarketCardHandler: EffectRuntimeHandler<
   effectId: "destroy_random_legend_market_card",
   execute(state, player, effect, source, services) {
     state.turn.rememberedDestroyedLegendCost = undefined;
-    if (state.common.legendMarket.length === 0) {
+    const legendMarketCards = listPhysicalCardLocations(state).filter(
+      (location) => location.zoneName === "legendMarket"
+    );
+    if (legendMarketCards.length === 0) {
       return { ok: true };
     }
-    const targetIndex = state.rng.nextInt(state.common.legendMarket.length);
-    const targetCard = state.common.legendMarket.splice(targetIndex, 1)[0];
+    const targetIndex = state.rng.nextInt(legendMarketCards.length);
+    const targetCard = legendMarketCards[targetIndex]?.card;
     if (targetCard === undefined) {
       return { ok: true };
     }
@@ -390,7 +397,16 @@ const destroyRandomLegendMarketCardHandler: EffectRuntimeHandler<
     }
     const destination = services.getDestroyDestination(state, targetCard);
     if (!destination.ok) return destination;
-    destination.zone.push(targetCard);
+    const moved = movePhysicalCard(
+      state,
+      targetCard.instanceId,
+      destination.zoneName,
+      "back",
+      "legendMarket"
+    );
+    if (!moved.ok) {
+      return { ok: false, error: moved.reason };
+    }
     state.turn.rememberedDestroyedLegendCost = targetDefinition.engine.cost;
     recordGameEvent(state, {
       type: "effectCardDestroyed",
@@ -410,12 +426,17 @@ const optionalGainMarketCardsToHandThisTurnHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"optional_gain_market_cards_to_hand_this_turn">
 > = {
   effectId: "optional_gain_market_cards_to_hand_this_turn",
-  execute() {
-    return {
-      ok: false,
-      error:
-        "optional_gain_market_cards_to_hand_this_turn is a gained-card replacement effect",
-    };
+  execute(state, _player, _effect, source) {
+    if (
+      !state.turn.mainMarketCardHandReplacementSourceCardIds.includes(
+        source.cardInstanceId
+      )
+    ) {
+      state.turn.mainMarketCardHandReplacementSourceCardIds.push(
+        source.cardInstanceId
+      );
+    }
+    return { ok: true };
   },
 };
 
@@ -701,7 +722,7 @@ export function createCardOwnershipChoiceEffectDefinitions(
       decoder: bindRuntimeEffectDecoder("gain_card"),
       supportedTimings: immediateEffectTimings,
       supportedModes: allEffectRuntimeModes,
-      supportedSourceKinds: ["card", "wizardProperty"],
+      supportedSourceKinds: ["card"],
       handler: gainCardHandler,
     },
     {
@@ -801,9 +822,9 @@ export function createCardOwnershipChoiceEffectDefinitions(
       decoder: bindRuntimeEffectDecoder(
         "optional_gain_market_cards_to_hand_this_turn"
       ),
-      supportedTimings: ["untilEndOfTurn"] as const,
+      supportedTimings: ["onPlay"] as const,
       supportedModes: allEffectRuntimeModes,
-      supportedSourceKinds: ["card", "wizardProperty"],
+      supportedSourceKinds: ["card"],
       handler: optionalGainMarketCardsToHandThisTurnHandler,
     },
     {

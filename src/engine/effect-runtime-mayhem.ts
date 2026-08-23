@@ -1,5 +1,9 @@
 import { drawDeckCards } from "./deck-lifecycle.js";
 import { createAttackDefenseUsage } from "./attack-resolution.js";
+import {
+  listPhysicalCardLocations,
+  movePhysicalCard,
+} from "./control-ledger.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import { recordEffectChipsChanged } from "./effect-runtime-resources-draw.js";
 import type {
@@ -835,8 +839,20 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
 > = {
   effectId: "mayhem_refresh_legend_market",
   execute(state, player, effect, source) {
-    for (const card of state.common.legendMarket.splice(0)) {
-      state.common.destroyedPile.push(card);
+    const legendMarketCards = listPhysicalCardLocations(state).filter(
+      (location) => location.zoneName === "legendMarket"
+    );
+    for (const { card } of legendMarketCards) {
+      const moved = movePhysicalCard(
+        state,
+        card.instanceId,
+        "destroyedPile",
+        "back",
+        "legendMarket"
+      );
+      if (!moved.ok) {
+        return { ok: false, error: moved.reason };
+      }
       recordGameEvent(state, {
         type: "effectCardDestroyed",
         playerId: player.playerId,
@@ -849,8 +865,14 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
       });
     }
 
-    while (state.common.legendMarket.length < effect.targetSize) {
-      const card = state.common.legendDeck.shift();
+    while (
+      listPhysicalCardLocations(state).filter(
+        (location) => location.zoneName === "legendMarket"
+      ).length < effect.targetSize
+    ) {
+      const card = listPhysicalCardLocations(state).find(
+        (location) => location.zoneName === "legendDeck"
+      )?.card;
       if (card === undefined) {
         return { ok: true };
       }
@@ -862,7 +884,16 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
         };
       }
       if (definition.engine.cardKind === "megaMayhem") {
-        state.common.destroyedMegaMayhem.push(card);
+        const moved = movePhysicalCard(
+          state,
+          card.instanceId,
+          "destroyedMegaMayhem",
+          "back",
+          "legendDeck"
+        );
+        if (!moved.ok) {
+          return { ok: false, error: moved.reason };
+        }
         recordGameEvent(state, {
           type: "megaMayhemDestroyed",
           playerId: player.playerId,
@@ -873,7 +904,16 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
         });
         continue;
       }
-      state.common.legendMarket.push(card);
+      const moved = movePhysicalCard(
+        state,
+        card.instanceId,
+        "legendMarket",
+        "back",
+        "legendDeck"
+      );
+      if (!moved.ok) {
+        return { ok: false, error: moved.reason };
+      }
       recordGameEvent(state, {
         type: "marketFlowCardAdded",
         playerId: player.playerId,

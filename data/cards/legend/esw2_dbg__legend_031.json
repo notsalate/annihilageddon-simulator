@@ -32,7 +32,7 @@
       { "effectId": "add_power", "timing": "onPlay", "amount": 1 },
       {
         "effectId": "optional_gain_market_cards_to_hand_this_turn",
-        "timing": "untilEndOfTurn",
+        "timing": "onPlay",
         "appliesTo": "cardsGainedFromMainMarket",
         "chooser": "controller",
         "destinationOverride": "hand"

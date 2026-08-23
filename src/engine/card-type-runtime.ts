@@ -1,7 +1,6 @@
 import type { CardDefinition } from "./data.js";
 import type { GameState, PlayerId } from "./setup.js";
-
-const familiarAsLegendWizardPropertyId = "esw2_dbg__wizard_property_003";
+import { isOwnedCardsCountAsCardTypeRuntimeEffect } from "./effect-runtime-card-type.js";
 
 export function cardMatchesTypeForPlayer(
   state: GameState,
@@ -15,18 +14,27 @@ export function cardMatchesTypeForPlayer(
   ) {
     return true;
   }
-  if (
-    cardType !== "legend" ||
-    !definition.engine.cardTypes.includes("familiar")
-  ) {
-    return false;
-  }
-
   return (
     state.players
       .find((player) => player.playerId === playerId)
-      ?.wizardProperties.some(
-        (property) => property.definitionId === familiarAsLegendWizardPropertyId
-      ) ?? false
+      ?.wizardProperties.some((property) => {
+        const propertyDefinition = state.tokenDefinitions.get(
+          property.definitionId
+        );
+        const effects =
+          propertyDefinition?.kind === "wizardProperty"
+            ? propertyDefinition.engine?.effects
+            : undefined;
+        return (
+          effects?.some(
+            (effect) =>
+              isOwnedCardsCountAsCardTypeRuntimeEffect(effect) &&
+              effect.countedAsCardType === cardType &&
+              effect.sourceCardTypes.some((sourceCardType) =>
+                definition.engine.cardTypes.includes(sourceCardType)
+              )
+          ) ?? false
+        );
+      }) ?? false
   );
 }

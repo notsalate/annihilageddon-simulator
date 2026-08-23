@@ -27,6 +27,7 @@ import {
   type VerifiedRuntimeEffect,
 } from "./runtime-effect-verification.js";
 import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
+import { isOwnedCardsCountAsCardTypeRuntimeEffect } from "./effect-runtime-card-type.js";
 
 type EffectiveValueTarget =
   | {
@@ -461,10 +462,16 @@ function getWizardPropertyEffects(
     return [];
   }
 
-  if (!definition.engine.playableInV0 && definition.engine.effects.length > 0) {
-    throw new Error(
-      `Cannot execute non-playable wizard property ${definition.tokenId}`
+  if (!definition.engine.playableInV0) {
+    const hasExecutableEffect = definition.engine.effects.some(
+      (effect) => !isOwnedCardsCountAsCardTypeRuntimeEffect(effect)
     );
+    if (hasExecutableEffect) {
+      throw new Error(
+        `Cannot execute non-playable wizard property ${definition.tokenId}`
+      );
+    }
+    return [];
   }
 
   return definition.engine.effects;

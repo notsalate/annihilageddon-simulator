@@ -37,7 +37,7 @@
       {
         "effectId": "optional_gain_market_cards_to_hand_this_turn",
         "appliesTo": "cardsGainedFromMainMarket",
-        "timing": "untilEndOfTurn",
+        "timing": "onPlay",
         "chooser": "controller",
         "destinationOverride": "hand"
       }

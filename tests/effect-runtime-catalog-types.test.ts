@@ -13,6 +13,7 @@ import { activationEffectIds } from "../src/engine/effect-runtime-activation.js"
 import { cardOwnershipChoiceEffectIds } from "../src/engine/effect-runtime-cards-ownership-choice.js";
 import { ongoingEffectIds } from "../src/engine/effect-runtime-ongoing.js";
 import { effectiveValueModifierEffectIds } from "../src/engine/effect-runtime-effective-value-modifier.js";
+import { cardTypeEffectIds } from "../src/engine/effect-runtime-card-type.js";
 import { resourceDrawEffectIds } from "../src/engine/effect-runtime-resources-draw.js";
 import { combatAttackEffectIds } from "../src/engine/effect-runtime-combat-attack.js";
 import { combatDefenseEffectIds } from "../src/engine/effect-runtime-combat-defense.js";
@@ -301,6 +302,7 @@ test("card, activation, ongoing and modifier IDs belong to family modules", () =
     "modify_effective_value",
     "fixture_modify_effective_value",
   ]);
+  assert.deepEqual(cardTypeEffectIds, ["owned_cards_count_as_card_type"]);
 });
 
 test("life and Dingler status effects use typed family payloads and policies", () => {

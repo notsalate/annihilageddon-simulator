@@ -9,6 +9,7 @@ import type {
   OngoingEffectPayloadMap,
 } from "./effect-runtime-ongoing.js";
 import type { EffectiveValueModifierEffectPayloadMap } from "./effect-runtime-effective-value-modifier.js";
+import type { CardTypeEffectPayloadMap } from "./effect-runtime-card-type.js";
 
 export type {
   ResourceDrawEffectPayloadMap,
@@ -59,6 +60,10 @@ export type {
   EffectiveValueOperation,
   ModifyEffectiveValueRuntimeEffect,
 } from "./effect-runtime-effective-value-modifier.js";
+export type {
+  CardTypeEffectPayloadMap,
+  OwnedCardsCountAsCardTypeRuntimeEffect,
+} from "./effect-runtime-card-type.js";
 
 export const effectTimings = [
   "activation",
@@ -256,6 +261,7 @@ export const knownRuntimeEffectIds = [
   "ongoing_hand_refill_bonus",
   "ongoing_start_turn_optional_gain_limp_wand_to_hand",
   "optional_gain_market_cards_to_hand_this_turn",
+  "owned_cards_count_as_card_type",
   "optional_spend_chip_attack_damage",
   "optional_spend_chip_destroy_own_cards",
   "play_top_card",
@@ -772,7 +778,8 @@ export type RuntimeEffectPayloadMap = SetupEffectPayloadMap &
   PlayerControlledAttackEffectPayloadMap &
   ActivationEffectPayloadMap &
   OngoingEffectPayloadMap &
-  MayhemEffectPayloadMap;
+  MayhemEffectPayloadMap &
+  CardTypeEffectPayloadMap;
 
 export type RuntimeEffectId = keyof RuntimeEffectPayloadMap;
 export type RuntimeEffectForId<Id extends RuntimeEffectId> =

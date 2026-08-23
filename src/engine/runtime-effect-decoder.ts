@@ -15,6 +15,7 @@ import {
 } from "./runtime-effect.js";
 import { createActivationEffectDecoders } from "./effect-runtime-activation.js";
 import { createCardOwnershipChoiceEffectDecoders } from "./effect-runtime-cards-ownership-choice.js";
+import { createCardTypeEffectDecoders } from "./effect-runtime-card-type.js";
 import { createEffectiveValueModifierEffectDecoders } from "./effect-runtime-effective-value-modifier.js";
 import { createOngoingEffectDecoders } from "./effect-runtime-ongoing.js";
 import { createResourceDrawEffectDecoders } from "./effect-runtime-resources-draw.js";
@@ -524,6 +525,13 @@ const effectiveValueModifierEffectDecoders =
     runtimeTarget,
   });
 
+const cardTypeEffectDecoders = createCardTypeEffectDecoders({
+  defineDecoder,
+  required,
+  literal,
+  nonEmptyStringArray,
+});
+
 const setupEffectDecoders = createSetupEffectDecoders({
   defineDecoder,
   required,
@@ -754,6 +762,7 @@ const runtimeEffectDecoders: {
     requireTargetSelector("damage", ["opponentPlayer", "activePlayer"])
   ),
   ...cardOwnershipChoiceEffectDecoders,
+  ...cardTypeEffectDecoders,
   fixture_add_power_equal_to_target_cost: defineDecoder(
     "fixture_add_power_equal_to_target_cost",
     {

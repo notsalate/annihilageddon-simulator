@@ -481,7 +481,14 @@ export function moveGainedCardToPlayerDestination(
     onGainCardResult.destination;
 
   if (sourceZone === "mainMarket") {
-    for (const playedCard of player.playedThisTurn) {
+    for (const sourceCardInstanceId of state.turn
+      .mainMarketCardHandReplacementSourceCardIds) {
+      const playedCard = player.playedThisTurn.find(
+        (card) => card.instanceId === sourceCardInstanceId
+      );
+      if (playedCard === undefined) {
+        continue;
+      }
       const playedDefinition = state.cardDefinitions.get(
         playedCard.definitionId
       );
@@ -499,37 +506,18 @@ export function moveGainedCardToPlayerDestination(
         definitionId: playedDefinition.cardId,
       };
 
-      for (const effect of playedDefinition.engine.effects) {
-        const applicability = evaluateRuntimeEffectAtTiming(
-          requireVerifiedRuntimeEffect(effect),
-          source,
-          "untilEndOfTurn",
-          (decodedEffect) =>
-            decodedEffect.effectId ===
-            "optional_gain_market_cards_to_hand_this_turn"
-              ? { status: "resolved", result: decodedEffect }
-              : { status: "notApplicable" }
-        );
-        if (applicability.status === "error") {
-          return { ok: false, error: applicability.error };
-        }
-        if (applicability.status === "notApplicable") {
-          continue;
-        }
-
-        const choice = chooseEffectChoice(
-          state,
-          player,
-          source,
-          applicability.result.effectId,
-          [
-            { choiceKind: "option", choiceId: "apply" },
-            { choiceKind: "option", choiceId: "decline" },
-          ]
-        );
-        if (choice?.choiceId === "apply") {
-          destination = "hand";
-        }
+      const choice = chooseEffectChoice(
+        state,
+        player,
+        source,
+        "optional_gain_market_cards_to_hand_this_turn",
+        [
+          { choiceKind: "option", choiceId: "apply" },
+          { choiceKind: "option", choiceId: "decline" },
+        ]
+      );
+      if (choice?.choiceId === "apply") {
+        destination = "hand";
       }
     }
   }
