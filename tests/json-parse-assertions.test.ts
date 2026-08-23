@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
+import { runJsonParseAssertionsGuard } from "./helpers/guard-runners.js";
 
 const rootDir = process.cwd();
 const guardPath = path.join(
@@ -52,7 +53,17 @@ function createFixtureRoot(sourceText: string): string {
 }
 
 function runGuard(fixtureRoot: string) {
-  return spawnSync(process.execPath, [guardPath, fixtureRoot], {
+  return runJsonParseAssertionsGuard(fixtureRoot);
+}
+
+test("JSON parse assertion guard CLI preserves successful output", () => {
+  const fixtureRoot = createFixtureRoot(
+    "const raw = JSON.parse(source) as unknown;\n"
+  );
+  const result = spawnSync(process.execPath, [guardPath, fixtureRoot], {
     encoding: "utf8",
   });
-}
+
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /JSON parse assertion guard: ok/);
+});
