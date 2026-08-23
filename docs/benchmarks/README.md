@@ -36,19 +36,24 @@ The command stores each requested run under:
 
 - Keep `reference` and `current` results separate.
 - A comparison may block only a repeated regression with matching workload and protocol.
-- Blocking measurements must share the exact environment fingerprint and one comparison-pair ID produced by a single runner session.
+- Blocking measurements for one workload must share the exact environment fingerprint and one comparison-pair ID produced by a single runner session.
 - A historical E0 measurement without that physical pairing is diagnostic only.
 - Workload changes, missing calibration, and uncalibrated environments produce non-blocking reports.
 
 ## PR Gate
 
+- Cancel an older in-progress PR run when a newer commit makes its result obsolete.
+- Skip the heavy gate only when every changed path is guaranteed non-executable: Markdown or a GitHub issue template. Unknown paths run the full gate by default, and renames are safe to skip only when both paths are non-executable.
+- Measure simulation and the three Analyzer profiles in independent jobs. Each job keeps its own head, base, available E0, and confirmation measurements on one runner with one workload-specific comparison-pair ID.
 - Read the accepted E0 commit from the baseline, build it in an isolated checkout, and measure it beside head on the same runner.
 - Failure to measure E0 reports `not-measured` without masking the independent `base`/`head` verdict.
 - Use only a compatible accepted calibration. Missing or incompatible calibration reports `not-calibrated`; do not fall back to baseline tolerances.
+- Run the confirming head measurement only when the preliminary E0/head or base/head comparison observes a calibrated regression. A clean preliminary comparison remains valid without a redundant confirmation.
 - Publish all simulation and Analyzer reports before enforcing a blocking verdict.
+- Aggregate the four workload artifacts in one final `pull-request` job; this job also reports a successful explicit skip for guaranteed non-executable changes.
 - The base adapter may bridge a missing numeric stage without changing base source.
 
-The gate receives an expected fresh-session pair ID. A produced base, head, confirmation, or available E0 measurement that loses this ID, disagrees on it, or disagrees on exact environment or protocol is an infrastructure failure. Do not reclassify a legitimate diagnostic verdict because of this failure.
+The gate derives one expected fresh-session pair ID per workload from the workflow run. A produced base, head, required confirmation, or available E0 measurement that loses this ID, disagrees on it, or disagrees on exact environment or protocol is an infrastructure failure. Do not reclassify a legitimate diagnostic verdict because of this failure.
 
 ## Handling PR Results
 

@@ -188,9 +188,13 @@ function baseline(): PerformanceEpochBaseline {
 
 function passingReport(
   benchmark: PerformanceMeasurement["benchmark"],
-  id: string
+  id: string,
+  comparisonPairId = "fixture-pair"
 ) {
-  const reference = referenceMeasurement(benchmark, id);
+  const reference = {
+    ...referenceMeasurement(benchmark, id),
+    comparisonPairId,
+  };
   const current: PerformanceMeasurement = {
     ...reference,
     role: "current",
@@ -216,11 +220,11 @@ const performanceReportFixtures = [
   ["analyzer-heavy", "analyzer", "analyzer:heavy"],
 ] as const;
 
-function writePassingReports(root: string): void {
+function writePassingReports(root: string, runId = "fixture-run"): void {
   for (const [fileId, benchmark, id] of performanceReportFixtures) {
     writeJson(
       path.join(root, `performance-report-${fileId}.json`),
-      passingReport(benchmark, id)
+      passingReport(benchmark, id, `${runId}:${fileId}`)
     );
   }
 }
@@ -238,11 +242,39 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function runNodeScript(scriptPath: string, args: readonly string[]) {
+function runNodeScript(
+  scriptPath: string,
+  args: readonly string[],
+  cwd = process.cwd()
+) {
   return spawnSync(process.execPath, [scriptPath, ...args], {
+    cwd,
+    encoding: "utf8",
+    env: withoutLocalGitEnvironment(),
+  });
+}
+
+function withoutLocalGitEnvironment(): NodeJS.ProcessEnv {
+  const environment = { ...process.env };
+  const localVariables = spawnSync("git", ["rev-parse", "--local-env-vars"], {
     cwd: process.cwd(),
     encoding: "utf8",
   });
+  assert.equal(localVariables.status, 0, localVariables.stderr);
+  for (const variableName of localVariables.stdout.split(/\r?\n/u)) {
+    if (variableName.length > 0) delete environment[variableName];
+  }
+  return environment;
+}
+
+function runGit(cwd: string, args: readonly string[]): string {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    env: withoutLocalGitEnvironment(),
+  });
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout.trim();
 }
 
 test("benchmark CLI compares artifacts, writes a report, and blocks confirmed regression", () => {
@@ -691,24 +723,21 @@ test("performance report gate requires all reports and blocks only blocking verd
       "scripts",
       "assert-performance-reports.mjs"
     );
-    assert.equal(runNodeScript(scriptPath, [root, "fixture-pair"]).status, 0);
-    const heavyPath = path.join(
-      root,
-      "performance-report-analyzer-heavy.json"
-    );
+    assert.equal(runNodeScript(scriptPath, [root, "fixture-run"]).status, 0);
+    const heavyPath = path.join(root, "performance-report-analyzer-heavy.json");
     const blockingReport = readJson(heavyPath);
     assert.ok(isRecord(blockingReport));
     blockingReport["blocking"] = true;
     blockingReport["verdict"] = "regression";
     writeJson(heavyPath, blockingReport);
-    assert.equal(runNodeScript(scriptPath, [root, "fixture-pair"]).status, 1);
+    assert.equal(runNodeScript(scriptPath, [root, "fixture-run"]).status, 1);
     writePassingReports(root);
     writeFileSync(
       path.join(root, "performance-report-analyzer-typical.json"),
       "not json",
       "utf8"
     );
-    assert.equal(runNodeScript(scriptPath, [root, "fixture-pair"]).status, 1);
+    assert.equal(runNodeScript(scriptPath, [root, "fixture-run"]).status, 1);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -734,10 +763,117 @@ test("performance report gate rejects a lost fresh-session comparison pair", () 
 
     const result = runNodeScript(
       path.join(process.cwd(), "scripts", "assert-performance-reports.mjs"),
-      [root, "fixture-pair"]
+      [root, "fixture-run"]
     );
     assert.equal(result.status, 1);
     assert.match(result.stderr, /comparisonPairId/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("confirmation decision repeats only an observed preliminary regression", () => {
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "krutagidon-performance-confirmation-")
+  );
+  try {
+    const reference = referenceMeasurement("simulation", "simulation:100");
+    const current: PerformanceMeasurement = {
+      ...reference,
+      role: "current",
+      commit: "head-commit",
+    };
+    const baselineEntry = createPerformanceBaselineEntry(
+      reference,
+      calibrationFor(reference).tolerances
+    );
+    const cleanPath = path.join(root, "clean.json");
+    const regressionPath = path.join(root, "regression.json");
+    writeJson(
+      cleanPath,
+      comparePerformance({
+        baseline: baselineEntry,
+        acceptedCalibration: acceptedCalibrationFor(reference),
+        epochReference: reference,
+        base: { ...current, commit: "base-commit" },
+        head: current,
+      })
+    );
+    writeJson(
+      regressionPath,
+      comparePerformance({
+        baseline: baselineEntry,
+        acceptedCalibration: acceptedCalibrationFor(reference),
+        epochReference: reference,
+        base: { ...current, commit: "base-commit" },
+        head: {
+          ...current,
+          timings: { ...current.timings, totalMs: 13 },
+        },
+      })
+    );
+
+    const scriptPath = path.join(
+      process.cwd(),
+      "scripts",
+      "performance-confirmation-required.mjs"
+    );
+    assert.equal(runNodeScript(scriptPath, [cleanPath]).stdout.trim(), "false");
+    assert.equal(
+      runNodeScript(scriptPath, [regressionPath]).stdout.trim(),
+      "true"
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("performance impact classifier skips only guaranteed non-executable changes", () => {
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "krutagidon-performance-impact-")
+  );
+  try {
+    runGit(root, ["init"]);
+    runGit(root, ["config", "user.name", "Performance Test"]);
+    runGit(root, ["config", "user.email", "performance@example.invalid"]);
+    writeFileSync(path.join(root, "README.md"), "initial\n", "utf8");
+    runGit(root, ["add", "README.md"]);
+    runGit(root, ["commit", "-m", "initial"]);
+
+    const initial = runGit(root, ["rev-parse", "HEAD"]);
+    mkdirSync(path.join(root, "docs"));
+    writeFileSync(path.join(root, "docs", "guide.md"), "guide\n", "utf8");
+    runGit(root, ["add", "docs/guide.md"]);
+    runGit(root, ["commit", "-m", "docs"]);
+    const docsHead = runGit(root, ["rev-parse", "HEAD"]);
+
+    const scriptPath = path.join(
+      process.cwd(),
+      "scripts",
+      "performance-pr-impact.mjs"
+    );
+    assert.equal(
+      runNodeScript(scriptPath, [initial, docsHead], root).stdout.trim(),
+      "false"
+    );
+
+    mkdirSync(path.join(root, "src"));
+    writeFileSync(path.join(root, "src", "example.ts"), "export {};\n", "utf8");
+    runGit(root, ["add", "src/example.ts"]);
+    runGit(root, ["commit", "-m", "source"]);
+    const sourceHead = runGit(root, ["rev-parse", "HEAD"]);
+    assert.equal(
+      runNodeScript(scriptPath, [docsHead, sourceHead], root).stdout.trim(),
+      "true"
+    );
+
+    runGit(root, ["mv", "src/example.ts", "docs/example.md"]);
+    runGit(root, ["commit", "-m", "rename source to docs"]);
+    const renameHead = runGit(root, ["rev-parse", "HEAD"]);
+    assert.equal(
+      runNodeScript(scriptPath, [sourceHead, renameHead], root).stdout.trim(),
+      "true"
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -790,13 +926,21 @@ test("accepted E0 commit is read from the committed baseline", () => {
   );
 });
 
-test("PR workflow consumes accepted calibration without running the matrix", () => {
+test("PR workflow shards workloads and conditionally confirms regressions", () => {
   const workflow = readFileSync(
     path.join(process.cwd(), ".github", "workflows", "performance.yml"),
     "utf8"
   );
-  const pullRequestJob = workflow.slice(
-    workflow.indexOf("  pull-request:"),
+  const pullRequestPlan = workflow.slice(
+    workflow.indexOf("  pull-request-plan:"),
+    workflow.indexOf("  pull-request-workload:")
+  );
+  const pullRequestWorkload = workflow.slice(
+    workflow.indexOf("  pull-request-workload:"),
+    workflow.indexOf("  pull-request:\n")
+  );
+  const pullRequestGate = workflow.slice(
+    workflow.indexOf("  pull-request:\n"),
     workflow.indexOf("  scheduled:")
   );
   const calibrationRunHeader = workflow.slice(
@@ -804,22 +948,78 @@ test("PR workflow consumes accepted calibration without running the matrix", () 
     workflow.indexOf("    runs-on:", workflow.indexOf("  calibration-run:"))
   );
 
-  assert.doesNotMatch(pullRequestJob, /needs:\s*calibration/u);
+  assert.match(
+    workflow,
+    /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/u
+  );
+  assert.match(pullRequestPlan, /performance-pr-impact\.mjs/u);
+  assert.match(pullRequestPlan, /--diff-filter=MDR/u);
+  assert.match(pullRequestWorkload, /id: simulation/u);
+  assert.match(pullRequestWorkload, /id: analyzer-light/u);
+  assert.match(pullRequestWorkload, /id: analyzer-typical/u);
+  assert.match(pullRequestWorkload, /id: analyzer-heavy/u);
+  assert.match(
+    pullRequestWorkload,
+    /PERFORMANCE_COMPARISON_PAIR_ID: \$\{\{ github\.run_id \}\}:\$\{\{ matrix\.id \}\}/u
+  );
+  assert.match(pullRequestWorkload, /performance-preliminary-report/u);
+  assert.match(pullRequestWorkload, /performance-confirmation-required\.mjs/u);
+  assert.match(
+    pullRequestWorkload,
+    /performance-accepted-calibration-\$PERFORMANCE_WORKLOAD_ID\.json/u
+  );
   assert.doesNotMatch(
-    pullRequestJob,
+    pullRequestWorkload.slice(
+      pullRequestWorkload.indexOf("actions/upload-artifact")
+    ),
+    /docs\/benchmarks\/performance-calibration-e0-v1\.json/u
+  );
+  assert.match(
+    pullRequestWorkload,
+    /steps\.confirmation\.outputs\.required == 'true'/u
+  );
+  assert.doesNotMatch(pullRequestWorkload, /npm run benchmark:/u);
+  assert.doesNotMatch(pullRequestWorkload, /needs:\s*calibration/u);
+  assert.doesNotMatch(
+    pullRequestWorkload,
     /performance-calibration-results-\$\{\{ github\.run_id \}\}/u
   );
-  assert.match(pullRequestJob, /--acceptedCalibration/u);
-  assert.match(pullRequestJob, /--diff-filter=MDR/u);
+  assert.match(pullRequestWorkload, /--acceptedCalibration/u);
   assert.match(
-    pullRequestJob,
-    /assert-performance-reports\.mjs "\$RUNNER_TEMP" "\$PERFORMANCE_COMPARISON_PAIR_ID"/u
+    pullRequestGate,
+    /assert-performance-reports\.mjs "\$RUNNER_TEMP\/performance-reports" "\$\{\{ github\.run_id \}\}"/u
   );
   assert.ok(
-    pullRequestJob.indexOf("actions/upload-artifact") <
-      pullRequestJob.indexOf("Enforce performance gate")
+    workflow.indexOf("actions/upload-artifact") <
+      workflow.indexOf("Enforce performance gate")
   );
   assert.doesNotMatch(calibrationRunHeader, /pull_request/u);
   assert.match(calibrationRunHeader, /workflow_dispatch/u);
   assert.match(calibrationRunHeader, /event\.schedule/u);
+});
+
+test("every pull-request workflow cancels only an obsolete PR run", () => {
+  const workflowPaths = [
+    "security.yml",
+    "sast.yml",
+    "supply-chain.yml",
+    "codeql.optional.yml",
+    "performance.yml",
+  ];
+  for (const workflowPath of workflowPaths) {
+    const workflow = readFileSync(
+      path.join(process.cwd(), ".github", "workflows", workflowPath),
+      "utf8"
+    );
+    assert.match(
+      workflow,
+      /group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.event\.pull_request\.number \|\| github\.run_id \}\}/u,
+      workflowPath
+    );
+    assert.match(
+      workflow,
+      /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/u,
+      workflowPath
+    );
+  }
 });

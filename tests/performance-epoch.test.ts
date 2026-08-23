@@ -581,7 +581,7 @@ test("legacy same-session E0 exposes a confirmed regression instead of false gre
   assert.equal(report.blockingSource, "epoch-health");
 });
 
-test("fresh PR report integrity rejects lost pair, environment, protocol and confirmation", () => {
+test("fresh PR report integrity rejects lost pair, environment and protocol", () => {
   const validReport = comparePerformance({
     baseline: baselineEntry(),
     epochReference: measurement({ role: "reference" }),
@@ -640,17 +640,32 @@ test("fresh PR report integrity rejects lost pair, environment, protocol and con
     /fresh PR protocol/u
   );
 
-  const missingConfirmationReport = {
-    ...validReport,
-    confirmation: undefined,
-  };
+  const cleanPreliminaryReport = comparePerformance({
+    baseline: baselineEntry(),
+    epochReference: measurement({ role: "reference" }),
+    base: measurement(),
+    head: measurement(),
+  });
+  assert.doesNotThrow(() =>
+    assertPerformancePullRequestReportIntegrity(
+      cleanPreliminaryReport,
+      "fixture-pair"
+    )
+  );
+
+  const missingConfirmationReport = comparePerformance({
+    baseline: baselineEntry(),
+    epochReference: measurement({ role: "reference" }),
+    base: measurement(),
+    head: measurement({ totalMs: 13 }),
+  });
   assert.throws(
     () =>
       assertPerformancePullRequestReportIntegrity(
         missingConfirmationReport,
         "fixture-pair"
       ),
-    /requires valid base, head, confirmation/u
+    /requires confirmation after an observed regression/u
   );
 });
 
