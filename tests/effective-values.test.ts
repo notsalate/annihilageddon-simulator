@@ -222,6 +222,63 @@ test("repeated typed modifiers reuse one scoring-card type index", () => {
   );
 });
 
+test("per-owned-card modifiers still load scoring cards lazily", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60621,
+  });
+  const player = state.players[0];
+  const targetCard = state.common.market[0];
+  assert.ok(player);
+  assert.ok(targetCard);
+  const targetDefinition = state.cardDefinitions.get(targetCard.definitionId);
+  assert.ok(targetDefinition);
+
+  const scoringCard = createTypedFixtureCardDefinition(
+    "fixture-lazy-scoring-card",
+    ["treasure"],
+    2,
+    1
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [scoringCard.cardId, scoringCard],
+  ]);
+  player.discard.push(
+    createCardInstance(
+      "fixture-lazy-scoring-card-instance",
+      scoringCard.cardId,
+      player.playerId
+    )
+  );
+  player.statuses.push({
+    instanceId: markCardInstanceId("fixture-lazy-scoring-status"),
+    statusId: "fixture-lazy-scoring-status",
+    ownerId: player.playerId,
+    effects: [
+      verifiedTestRuntimeEffect({
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "cardCost",
+        operation: "add",
+        amountPerOwnedCard: 2,
+        countedCardTypes: ["treasure"],
+        target: { targetType: "card", definitionId: targetDefinition.cardId },
+      }),
+    ],
+  });
+
+  assert.equal(
+    calculateEffectiveCardCostFromDomain(
+      state,
+      player.playerId,
+      targetDefinition
+    ),
+    targetDefinition.engine.cost + 2
+  );
+});
+
 test("current runtime keeps fifteen effectless Limp Wands worth minus one VP", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
   const state = initializeGame({ dataPack, seed: 60615 });

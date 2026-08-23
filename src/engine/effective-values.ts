@@ -42,6 +42,11 @@ type EffectiveValueTarget =
 
 type EffectiveValueSource = EffectiveValueModifierSource;
 
+const effectiveValueEffectCache = new WeakMap<
+  object,
+  readonly (VerifiedRuntimeEffect & EffectiveValueModifierEffect)[]
+>();
+
 interface EffectiveValueModifierEvaluationContext {
   readonly timing: "whileControlled" | "whileScoring";
   readonly valueKind: EffectiveValueKind;
@@ -197,10 +202,18 @@ function calculateEffectiveValue(options: {
 }): number {
   let value = options.baseValue;
   const view = buildControlledObjectView(options.state, options.playerId);
-  const scoringCards =
-    options.scoringCards ??
-    getOwnedScoringCards(options.state, options.playerId);
-  const scoringCardTypeIndex = buildScoringCardTypeIndex(scoringCards);
+  let scoringCardTypeIndex:
+    | ReadonlyMap<string, ReadonlySet<ControlledCardObject>>
+    | undefined;
+  const getScoringCardTypeIndex = () => {
+    if (scoringCardTypeIndex === undefined) {
+      const scoringCards =
+        options.scoringCards ??
+        getOwnedScoringCards(options.state, options.playerId);
+      scoringCardTypeIndex = buildScoringCardTypeIndex(scoringCards);
+    }
+    return scoringCardTypeIndex;
+  };
 
   for (const { effect, source, timing } of [
     ...getControlledObjectEffects(options.state, options.playerId, view),
@@ -230,7 +243,7 @@ function calculateEffectiveValue(options: {
           return source.cardInstanceId === options.scoredCard.instanceId;
         },
         countOwnedScoringCards: (countedCardTypes) =>
-          countOwnedScoringCards(scoringCardTypeIndex, countedCardTypes),
+          countOwnedScoringCards(getScoringCardTypeIndex(), countedCardTypes),
       },
       value
     );
@@ -337,13 +350,20 @@ function toEffectiveValueEffects(
   source: EffectiveValueSource,
   timing: "whileControlled" | "whileScoring" = "whileControlled"
 ): EffectiveValueEffect[] {
-  return effects.flatMap((effect) => {
-    const verifiedEffect = requireVerifiedRuntimeEffect(effect);
-    if (!isEffectiveValueModifierEffect(verifiedEffect)) {
-      return [];
+  let effectiveEffects = effectiveValueEffectCache.get(effects);
+  if (effectiveEffects === undefined) {
+    effectiveEffects = effects.flatMap((effect) => {
+      const verifiedEffect = requireVerifiedRuntimeEffect(effect);
+      return isEffectiveValueModifierEffect(verifiedEffect)
+        ? [verifiedEffect]
+        : [];
+    });
+    if (Object.isFrozen(effects)) {
+      effectiveValueEffectCache.set(effects, effectiveEffects);
     }
-    return [{ effect: verifiedEffect, source, timing }];
-  });
+  }
+
+  return effectiveEffects.map((effect) => ({ effect, source, timing }));
 }
 
 function cardEffectSource(
