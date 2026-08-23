@@ -26,6 +26,7 @@ import {
   requireVerifiedRuntimeEffect,
   type VerifiedRuntimeEffect,
 } from "./runtime-effect-verification.js";
+import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
 
 type EffectiveValueTarget =
   | {
@@ -229,7 +230,14 @@ function calculateEffectiveValue(options: {
         timing,
         valueKind: options.valueKind,
         targetMatches: (modifier) => {
-          if (!matchesTarget(options.state, modifier.target, options.target)) {
+          if (
+            !matchesTarget(
+              options.state,
+              options.playerId,
+              modifier.target,
+              options.target
+            )
+          ) {
             return false;
           }
           if (
@@ -273,18 +281,37 @@ function getControlledObjectEffects(
   playerId: PlayerId,
   view: ControlledObjectView
 ): EffectiveValueEffect[] {
+  const player = state.players.find(
+    (candidate) => candidate.playerId === playerId
+  );
+  if (player === undefined) {
+    throw new Error(`Missing player ${playerId}`);
+  }
+  const playedThisTurnIds = new Set(
+    player.playedThisTurn.map((card) => card.instanceId)
+  );
+
   return [
-    ...view.cards.flatMap((object) =>
-      toEffectiveValueEffects(
-        object.definition.engine.effects,
-        cardEffectSource(
-          state,
-          playerId,
-          object.card.instanceId,
-          object.definition.cardId
+    ...player.playedThisTurn.flatMap((card) => {
+      const definition = mustGetCardDefinition(state, card.definitionId);
+      return toEffectiveValueEffects(
+        definition.engine.effects,
+        cardEffectSource(state, playerId, card.instanceId, definition.cardId)
+      );
+    }),
+    ...view.cards
+      .filter((object) => !playedThisTurnIds.has(object.card.instanceId))
+      .flatMap((object) =>
+        toEffectiveValueEffects(
+          object.definition.engine.effects,
+          cardEffectSource(
+            state,
+            playerId,
+            object.card.instanceId,
+            object.definition.cardId
+          )
         )
-      )
-    ),
+      ),
     ...view.tokens.flatMap((object) => {
       const effects =
         object.definition.kind === "deadWizardToken"
@@ -479,6 +506,7 @@ function countOwnedScoringCards(
 
 function matchesTarget(
   state: GameState,
+  playerId: PlayerId,
   effectTarget: RuntimeEffectTarget | undefined,
   target: EffectiveValueTarget
 ): boolean {
@@ -520,7 +548,7 @@ function matchesTarget(
     return effectTarget.cardTypes.some((cardType) => {
       return (
         typeof cardType === "string" &&
-        definition.engine.cardTypes.includes(cardType)
+        cardMatchesTypeForPlayer(state, playerId, definition, cardType)
       );
     });
   }

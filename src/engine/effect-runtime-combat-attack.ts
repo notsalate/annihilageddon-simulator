@@ -576,6 +576,7 @@ function resolveControlledCardCost(
 type PlayerControlledDamageAttackEffect =
   | RuntimeEffectForId<"attack_damage">
   | RuntimeEffectForId<"optional_spend_chip_attack_damage">
+  | RuntimeEffectForId<"attack_damage_equal_remembered_card_cost">
   | RuntimeEffectForId<"attack_damage_equal_to_controlled_card_cost">;
 
 function resolvePlayerControlledDamageAttack(
@@ -1005,6 +1006,24 @@ export function createCombatAttackEffectDefinitions(
       );
     },
   };
+  const attackDamageEqualRememberedCardCostHandler: EffectRuntimeHandler<
+    RuntimeEffectForId<"attack_damage_equal_remembered_card_cost">
+  > = {
+    effectId: "attack_damage_equal_remembered_card_cost",
+    execute(state, player, effect, source, services) {
+      const amount = state.turn.rememberedDestroyedLegendCost ?? 0;
+      if (amount <= 0) return { ok: true };
+      return resolvePlayerControlledDamageAttack(
+        state,
+        player,
+        effect,
+        source,
+        services,
+        amount,
+        collectAttackReplacementProfile
+      );
+    },
+  };
   const attackDamageEqualToControlledCardCostHandler: EffectRuntimeHandler<
     RuntimeEffectForId<"attack_damage_equal_to_controlled_card_cost">
   > = {
@@ -1059,9 +1078,7 @@ export function createCombatAttackEffectDefinitions(
       supportedTimings: attackTimings,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
-      handler: createUnsupportedEffectHandler(
-        "attack_damage_equal_remembered_card_cost"
-      ),
+      handler: attackDamageEqualRememberedCardCostHandler,
     },
     {
       effectId: "attack_damage_equal_to_controlled_card_cost",

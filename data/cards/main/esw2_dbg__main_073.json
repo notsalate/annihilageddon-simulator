@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_073",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_073.json",
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2G.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_073.md"
+  },
+  "visible": {
+    "nameRu": "2G",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун получает 1 чипсину.\nЗатем уничтожь легендарную барахолку и выложи новые карты на замену.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_each_player_gain_chips",
+        "timing": "onMayhemResolve",
+        "targetSelector": "eachPlayerClockwiseFromActive",
+        "chipAmount": 1
+      },
+      {
+        "effectId": "mayhem_refresh_legend_market",
+        "timing": "onMayhemResolve",
+        "targetSize": 3,
+        "destroyMegaMayhem": true
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

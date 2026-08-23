@@ -359,6 +359,9 @@ test("Mayhem returns an afterDamageDealt game end and stops later targets", () =
   });
   const state = scenario.state;
   state.runtimeMode = "fixture";
+  const firstPlayer = state.players[0];
+  assert.ok(firstPlayer);
+  state.activePlayerId = firstPlayer.playerId;
   const attacker = scenario.activePlayer;
   const [firstFoe, secondFoe] = scenario.foes;
   assert.ok(firstFoe);

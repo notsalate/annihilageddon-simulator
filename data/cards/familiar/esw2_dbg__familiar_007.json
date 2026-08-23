@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__familiar_007",
+  "source": {
+    "draft": "data/import/cards/familiar/drafts/esw2_dbg__familiar_007.json",
+    "image": "assets/cards/familiar/Фамильяр. Мыжсемья.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_007.md"
+  },
+  "visible": {
+    "nameRu": "Мыжсемья",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "textRu": "Возьми 1 карту.\nВ этот ход легенды стоят на 2 дешевле.\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, возьми 2 карты.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "cost": 6,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "draw_cards", "timing": "onPlay", "amount": 1 },
+      {
+        "effectId": "modify_effective_value",
+        "timing": "whileControlled",
+        "valueKind": "cardCost",
+        "operation": "add",
+        "amount": -2,
+        "target": { "targetType": "card", "cardTypes": ["legend"] }
+      },
+      {
+        "effectId": "avoid_attack",
+        "timing": "onDefense",
+        "destination": "discardSelf",
+        "branchEffects": [
+          { "effectId": "draw_cards", "timing": "onDefense", "amount": 2 }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

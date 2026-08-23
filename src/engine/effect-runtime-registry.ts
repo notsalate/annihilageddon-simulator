@@ -267,7 +267,7 @@ export interface EffectRuntimeServices {
     player: PlayerState,
     card: CardInstance
   ):
-    | { ok: true; destination: "discard" | "deckTop" }
+    | { ok: true; destination: "discard" | "deckTop" | "hand" }
     | { ok: false; error: string };
   moveCardToPlayerZone(
     state: GameState,

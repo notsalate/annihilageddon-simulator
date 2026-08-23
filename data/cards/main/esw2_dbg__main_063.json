@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_063",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_063.json",
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2E.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_063.md"
+  },
+  "visible": {
+    "nameRu": "2E",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Положи 1 чипсину на каждую карту барахолки. Получая одну из этих карт с барахолки, колдун получит и чипсину.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_add_chips_to_main_market",
+        "timing": "onMayhemResolve",
+        "market": "mainMarket",
+        "amount": 1
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

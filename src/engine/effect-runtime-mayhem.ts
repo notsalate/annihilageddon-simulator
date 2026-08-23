@@ -33,9 +33,12 @@ import type { GameState, PlayerState } from "./setup.js";
 
 export type MayhemEffectId =
   | "mayhem_attack"
+  | "mayhem_add_chips_to_main_market"
   | "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status"
   | "mayhem_each_player_choose_foe_gain_chips"
   | "mayhem_each_non_dingler_gain_chips"
+  | "mayhem_each_player_gain_chips"
+  | "mayhem_refresh_legend_market"
   | "mayhem_each_player_battle_highest_hand_cost"
   | "mayhem_each_player_choose_discard_hand_draw_or_take_damage"
   | "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none"
@@ -50,9 +53,12 @@ export type MayhemEffectId =
 
 export const mayhemEffectIds = [
   "mayhem_attack",
+  "mayhem_add_chips_to_main_market",
   "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
   "mayhem_each_player_choose_foe_gain_chips",
   "mayhem_each_non_dingler_gain_chips",
+  "mayhem_each_player_gain_chips",
+  "mayhem_refresh_legend_market",
   "mayhem_each_player_battle_highest_hand_cost",
   "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
   "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
@@ -116,6 +122,15 @@ export function createMayhemEffectDecoders(
       amount: required(positiveInteger),
       target: required(selectorTarget("allPlayers")),
     }),
+    mayhem_add_chips_to_main_market: defineDecoder(
+      "mayhem_add_chips_to_main_market",
+      {
+        effectId: required(literal("mayhem_add_chips_to_main_market")),
+        timing: required(literal("onMayhemResolve")),
+        market: required(literal("mainMarket")),
+        amount: required(positiveInteger),
+      }
+    ),
     mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status: defineDecoder(
       "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
       {
@@ -148,6 +163,24 @@ export function createMayhemEffectDecoders(
         timing: required(literal("onMayhemResolve")),
         targetSelector: required(literal("eachPlayerClockwiseFromActive")),
         chipAmount: required(positiveInteger),
+      }
+    ),
+    mayhem_each_player_gain_chips: defineDecoder(
+      "mayhem_each_player_gain_chips",
+      {
+        effectId: required(literal("mayhem_each_player_gain_chips")),
+        timing: required(literal("onMayhemResolve")),
+        targetSelector: required(literal("eachPlayerClockwiseFromActive")),
+        chipAmount: required(positiveInteger),
+      }
+    ),
+    mayhem_refresh_legend_market: defineDecoder(
+      "mayhem_refresh_legend_market",
+      {
+        effectId: required(literal("mayhem_refresh_legend_market")),
+        timing: required(literal("onMayhemResolve")),
+        targetSize: required(positiveInteger),
+        destroyMegaMayhem: required(literal(true)),
       }
     ),
     mayhem_each_player_battle_highest_hand_cost: defineDecoder(
@@ -385,6 +418,26 @@ function collectMayhemAttackDefenseDecisions(
   });
   return { ok: true, decisions };
 }
+
+const mayhemAddChipsToMainMarketHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_add_chips_to_main_market">
+> = {
+  effectId: "mayhem_add_chips_to_main_market",
+  execute(state, player, effect, source) {
+    for (const card of state.common.market) {
+      card.marketChips += effect.amount;
+      recordGameEvent(state, {
+        type: "marketChipAdded",
+        playerId: player.playerId,
+        sourceType: source.sourceType,
+        cardInstanceId: card.instanceId,
+        definitionId: card.definitionId,
+        amount: effect.amount,
+      });
+    }
+    return { ok: true };
+  },
+};
 
 const megaMayhemSetLifeHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"mega_mayhem_set_life">
@@ -751,6 +804,84 @@ const mayhemEachNonDinglerGainChipsHandler: EffectRuntimeHandler<
         chipsBefore,
         targetPlayer.chips
       );
+    }
+    return { ok: true };
+  },
+};
+
+const mayhemEachPlayerGainChipsHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_each_player_gain_chips">
+> = {
+  effectId: "mayhem_each_player_gain_chips",
+  execute(state, _player, effect, source, services) {
+    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+      const chipsBefore = targetPlayer.chips;
+      targetPlayer.chips += effect.chipAmount;
+      recordEffectChipsChanged(
+        state,
+        targetPlayer,
+        source,
+        effect.effectId,
+        chipsBefore,
+        targetPlayer.chips
+      );
+    }
+    return { ok: true };
+  },
+};
+
+const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_refresh_legend_market">
+> = {
+  effectId: "mayhem_refresh_legend_market",
+  execute(state, player, effect, source) {
+    for (const card of state.common.legendMarket.splice(0)) {
+      state.common.destroyedPile.push(card);
+      recordGameEvent(state, {
+        type: "effectCardDestroyed",
+        playerId: player.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        targetCardInstanceId: card.instanceId,
+        targetDefinitionId: card.definitionId,
+        effectId: effect.effectId,
+        sourceType: source.sourceType,
+      });
+    }
+
+    while (state.common.legendMarket.length < effect.targetSize) {
+      const card = state.common.legendDeck.shift();
+      if (card === undefined) {
+        return { ok: true };
+      }
+      const definition = state.cardDefinitions.get(card.definitionId);
+      if (definition === undefined) {
+        return {
+          ok: false,
+          error: `Missing legend definition ${card.definitionId}`,
+        };
+      }
+      if (definition.engine.cardKind === "megaMayhem") {
+        state.common.destroyedMegaMayhem.push(card);
+        recordGameEvent(state, {
+          type: "megaMayhemDestroyed",
+          playerId: player.playerId,
+          sourceType: source.sourceType,
+          destinationZone: "legendMarket",
+          cardInstanceId: card.instanceId,
+          definitionId: card.definitionId,
+        });
+        continue;
+      }
+      state.common.legendMarket.push(card);
+      recordGameEvent(state, {
+        type: "marketFlowCardAdded",
+        playerId: player.playerId,
+        sourceType: source.sourceType,
+        destinationZone: "legendMarket",
+        cardInstanceId: card.instanceId,
+        definitionId: card.definitionId,
+      });
     }
     return { ok: true };
   },
@@ -1151,6 +1282,11 @@ export function createMayhemEffectDefinitions(
   return [
     definition("mayhem_attack", mayhemAttackTimings, mayhemAttackHandler),
     definition(
+      "mayhem_add_chips_to_main_market",
+      mayhemResolveTimings,
+      mayhemAddChipsToMainMarketHandler
+    ),
+    definition(
       "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
       mayhemResolveTimings,
       mayhemEachDinglerRecoveryChoiceHandler
@@ -1164,6 +1300,16 @@ export function createMayhemEffectDefinitions(
       "mayhem_each_non_dingler_gain_chips",
       mayhemResolveTimings,
       mayhemEachNonDinglerGainChipsHandler
+    ),
+    definition(
+      "mayhem_each_player_gain_chips",
+      mayhemResolveTimings,
+      mayhemEachPlayerGainChipsHandler
+    ),
+    definition(
+      "mayhem_refresh_legend_market",
+      mayhemResolveTimings,
+      mayhemRefreshLegendMarketHandler
     ),
     definition(
       "mayhem_each_player_battle_highest_hand_cost",

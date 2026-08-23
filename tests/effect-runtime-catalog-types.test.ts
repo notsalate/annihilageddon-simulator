@@ -231,9 +231,12 @@ test("remaining Catalog families expose one local ID inventory each", () => {
   ]);
   assert.deepEqual(mayhemEffectIds, [
     "mayhem_attack",
+    "mayhem_add_chips_to_main_market",
     "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
     "mayhem_each_player_choose_foe_gain_chips",
     "mayhem_each_non_dingler_gain_chips",
+    "mayhem_each_player_gain_chips",
+    "mayhem_refresh_legend_market",
     "mayhem_each_player_battle_highest_hand_cost",
     "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
     "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
@@ -794,6 +797,15 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
       },
     },
     {
+      effectId: "mayhem_add_chips_to_main_market",
+      payload: {
+        effectId: "mayhem_add_chips_to_main_market",
+        timing: "onMayhemResolve",
+        market: "mainMarket",
+        amount: 1,
+      },
+    },
+    {
       effectId: "mayhem_attack",
       payload: {
         effectId: "mayhem_attack",
@@ -831,6 +843,24 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         timing: "onMayhemResolve",
         targetSelector: "eachPlayerClockwiseFromActive",
         chipAmount: 1,
+      },
+    },
+    {
+      effectId: "mayhem_each_player_gain_chips",
+      payload: {
+        effectId: "mayhem_each_player_gain_chips",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chipAmount: 1,
+      },
+    },
+    {
+      effectId: "mayhem_refresh_legend_market",
+      payload: {
+        effectId: "mayhem_refresh_legend_market",
+        timing: "onMayhemResolve",
+        targetSize: 3,
+        destroyMegaMayhem: true,
       },
     },
     {
@@ -971,7 +1001,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
     validateRuntimeEffectCatalogPayload(
       "Wizard-property Mayhem attack",
       "mayhem_attack",
-      validCases[1].payload,
+      validCases[2].payload,
       "combat",
       "wizardProperty"
     ).ok,
@@ -982,7 +1012,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
     "Immediate Mayhem choice",
     "mayhem_each_player_vote_dingler",
     {
-      ...validCases[11].payload,
+      ...validCases[14].payload,
       timing: "onPlay",
     },
     "combat",
@@ -993,7 +1023,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
   const unsupportedSource = validateRuntimeEffectCatalogPayload(
     "Dead Wizard Token Mayhem",
     "mega_mayhem_set_life",
-    validCases[15].payload,
+    validCases[18].payload,
     "combat",
     "deadWizardToken"
   );
