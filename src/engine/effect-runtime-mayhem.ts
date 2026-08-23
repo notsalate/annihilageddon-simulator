@@ -428,7 +428,10 @@ const mayhemAddChipsToMainMarketHandler: EffectRuntimeHandler<
 > = {
   effectId: "mayhem_add_chips_to_main_market",
   execute(state, player, effect, source) {
-    for (const card of state.common.market) {
+    const mainMarketCards = listPhysicalCardLocations(state).filter(
+      (location) => location.zoneName === "mainMarket"
+    );
+    for (const { card } of mainMarketCards) {
       card.marketChips += effect.amount;
       recordGameEvent(state, {
         type: "marketChipAdded",

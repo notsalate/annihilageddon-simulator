@@ -8,7 +8,7 @@ import {
   evaluateRuntimeEffectAtTiming,
   type EffectSourceContext,
 } from "./effect-runtime-registry.js";
-import type { RuntimeEffect } from "./runtime-effect.js";
+import type { RuntimeEffectForId } from "./runtime-effect.js";
 import { requireVerifiedRuntimeEffect } from "./runtime-effect-verification.js";
 
 type CardTypeEffectResolution =
@@ -94,10 +94,11 @@ function wizardPropertyCountsDefinitionAsType(
 }
 
 function resolveCardTypeEffect(
-  effect: RuntimeEffect,
+  effect: RuntimeEffectForId<"owned_cards_count_as_card_type">,
   source: EffectSourceContext
 ): CardTypeEffectResolution {
-  const cacheable = Object.isFrozen(effect);
+  const cacheable =
+    Object.isFrozen(effect) && Object.isFrozen(effect.sourceCardTypes);
   const cached = cacheable
     ? cardTypeEffectResolutionCache.get(effect)?.get(source.runtimeMode)
     : undefined;
