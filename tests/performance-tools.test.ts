@@ -966,6 +966,16 @@ test("PR workflow shards workloads and conditionally confirms regressions", () =
   assert.match(pullRequestWorkload, /performance-confirmation-required\.mjs/u);
   assert.match(
     pullRequestWorkload,
+    /performance-accepted-calibration-\$PERFORMANCE_WORKLOAD_ID\.json/u
+  );
+  assert.doesNotMatch(
+    pullRequestWorkload.slice(
+      pullRequestWorkload.indexOf("actions/upload-artifact")
+    ),
+    /docs\/benchmarks\/performance-calibration-e0-v1\.json/u
+  );
+  assert.match(
+    pullRequestWorkload,
     /steps\.confirmation\.outputs\.required == 'true'/u
   );
   assert.doesNotMatch(pullRequestWorkload, /npm run benchmark:/u);

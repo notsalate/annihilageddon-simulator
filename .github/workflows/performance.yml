@@ -203,13 +203,13 @@ jobs:
             confirmation_args=(--confirmation "$RUNNER_TEMP/performance-confirmation-$PERFORMANCE_WORKLOAD_ID.json")
           fi
           node dist/src/cli/run-benchmark.js --mode compare "${epoch_args[@]}" "${confirmation_args[@]}" --baseline docs/benchmarks/performance-epoch-e0.json --acceptedCalibration "$PERFORMANCE_ACCEPTED_CALIBRATION" --base "$RUNNER_TEMP/performance-base-$PERFORMANCE_WORKLOAD_ID.json" --head "$RUNNER_TEMP/performance-head-$PERFORMANCE_WORKLOAD_ID.json" --format human --output "$RUNNER_TEMP/performance-report-$PERFORMANCE_WORKLOAD_ID.json"
+      - name: Package accepted calibration with workload artifacts
+        run: cp "$PERFORMANCE_ACCEPTED_CALIBRATION" "$RUNNER_TEMP/performance-accepted-calibration-$PERFORMANCE_WORKLOAD_ID.json"
       - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4
         if: ${{ always() }}
         with:
           name: performance-pr-${{ github.run_id }}-${{ matrix.id }}
-          path: |
-            ${{ runner.temp }}/performance-*-${{ matrix.id }}.json
-            docs/benchmarks/performance-calibration-e0-v1.json
+          path: ${{ runner.temp }}/performance-*-${{ matrix.id }}.json
           if-no-files-found: error
 
   pull-request:
