@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { captureGuard, runGuardCli } from "./lib/guard-cli.mjs";
 
-const ROOT_DIR = process.cwd();
 const TARGET_DIRS = ["src", "tests"];
 const forbiddenPatterns = [
   {
@@ -18,29 +18,38 @@ const forbiddenPatterns = [
   },
 ];
 
-const violations = TARGET_DIRS.flatMap((targetDir) =>
-  collectViolations(path.join(ROOT_DIR, targetDir))
+export function runTsSuppressionsGuard(rootPath = process.cwd()) {
+  return captureGuard(() => {
+    const rootDir = path.resolve(rootPath);
+    const violations = TARGET_DIRS.flatMap((targetDir) =>
+      collectViolations(path.join(rootDir, targetDir), rootDir)
+    );
+
+    if (violations.length === 0) {
+      return "TS suppression guard: ok";
+    }
+
+    throw new Error(
+      [
+        ...violations.map(
+          (violation) =>
+            `${violation.filePath}:${violation.lineNumber} forbidden TS suppression pattern ${violation.pattern}`
+        ),
+        `TS suppression guard failed: ${violations.length} violation(s)`,
+      ].join("\n")
+    );
+  });
+}
+
+runGuardCli(import.meta.url, () =>
+  runTsSuppressionsGuard(process.argv[2] ?? process.cwd())
 );
 
-if (violations.length === 0) {
-  console.log("TS suppression guard: ok");
-  process.exit(0);
-}
-
-for (const violation of violations) {
-  console.error(
-    `${violation.filePath}:${violation.lineNumber} forbidden TS suppression pattern ${violation.pattern}`
-  );
-}
-
-console.error(`TS suppression guard failed: ${violations.length} violation(s)`);
-process.exit(1);
-
-function collectViolations(absolutePath) {
+function collectViolations(absolutePath, rootDir) {
   const pathStat = statSync(absolutePath);
   if (pathStat.isDirectory()) {
     return readdirSync(absolutePath, { withFileTypes: true }).flatMap((entry) =>
-      collectViolations(path.join(absolutePath, entry.name))
+      collectViolations(path.join(absolutePath, entry.name), rootDir)
     );
   }
 
@@ -48,13 +57,13 @@ function collectViolations(absolutePath) {
     return [];
   }
 
-  return findForbiddenPatterns(absolutePath);
+  return findForbiddenPatterns(absolutePath, rootDir);
 }
 
-function findForbiddenPatterns(absolutePath) {
+function findForbiddenPatterns(absolutePath, rootDir) {
   const sourceText = readFileSync(absolutePath, "utf8");
   const displayPath = path
-    .relative(ROOT_DIR, absolutePath)
+    .relative(rootDir, absolutePath)
     .replaceAll("\\", "/");
   const violations = [];
 

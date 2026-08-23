@@ -1,33 +1,43 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import { captureGuard, runGuardCli } from "./lib/guard-cli.mjs";
 
-const ROOT_DIR = path.resolve(process.argv[2] ?? process.cwd());
 const TARGET_DIR = "src";
 
-const violations = collectViolations(path.join(ROOT_DIR, TARGET_DIR));
+export function runJsonParseAssertionsGuard(rootPath = process.cwd()) {
+  return captureGuard(() => {
+    const rootDir = path.resolve(rootPath);
+    const violations = collectViolations(
+      path.join(rootDir, TARGET_DIR),
+      rootDir
+    );
 
-if (violations.length === 0) {
-  console.log("JSON parse assertion guard: ok");
-  process.exit(0);
+    if (violations.length === 0) {
+      return "JSON parse assertion guard: ok";
+    }
+
+    throw new Error(
+      [
+        ...violations.map(
+          (violation) =>
+            `${violation.filePath}:${violation.lineNumber} JSON.parse result must remain unknown before decoding, not ${violation.typeText}`
+        ),
+        `JSON parse assertion guard failed: ${violations.length} violation(s)`,
+      ].join("\n")
+    );
+  });
 }
 
-for (const violation of violations) {
-  console.error(
-    `${violation.filePath}:${violation.lineNumber} JSON.parse result must remain unknown before decoding, not ${violation.typeText}`
-  );
-}
-
-console.error(
-  `JSON parse assertion guard failed: ${violations.length} violation(s)`
+runGuardCli(import.meta.url, () =>
+  runJsonParseAssertionsGuard(process.argv[2] ?? process.cwd())
 );
-process.exit(1);
 
-function collectViolations(absolutePath) {
+function collectViolations(absolutePath, rootDir) {
   const pathStat = statSync(absolutePath);
   if (pathStat.isDirectory()) {
     return readdirSync(absolutePath, { withFileTypes: true }).flatMap((entry) =>
-      collectViolations(path.join(absolutePath, entry.name))
+      collectViolations(path.join(absolutePath, entry.name), rootDir)
     );
   }
 
@@ -35,10 +45,10 @@ function collectViolations(absolutePath) {
     return [];
   }
 
-  return findViolations(absolutePath);
+  return findViolations(absolutePath, rootDir);
 }
 
-function findViolations(absolutePath) {
+function findViolations(absolutePath, rootDir) {
   const sourceText = readFileSync(absolutePath, "utf8");
   const sourceFile = ts.createSourceFile(
     absolutePath,
@@ -47,7 +57,7 @@ function findViolations(absolutePath) {
     true
   );
   const displayPath = path
-    .relative(ROOT_DIR, absolutePath)
+    .relative(rootDir, absolutePath)
     .replaceAll("\\", "/");
   const violations = [];
 

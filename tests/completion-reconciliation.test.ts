@@ -11,6 +11,7 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import test from "node:test";
+import { runCompletionReconciliationGuard } from "./helpers/guard-runners.js";
 
 const testsDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(testsDirectory, "..", "..");
@@ -89,18 +90,7 @@ test("reconciliation rejects a clean overall verdict when an active requirement 
 });
 
 test("reconciliation rejects every closing verdict when an active requirement is unresolved", () => {
-  const result = spawnSync(
-    process.execPath,
-    [
-      path.join(
-        repositoryRoot,
-        "scripts",
-        "check-completion-reconciliation.mjs"
-      ),
-      closingClaimFixture,
-    ],
-    { encoding: "utf8" }
-  );
+  const result = runReconciliation(closingClaimFixture);
 
   assert.notEqual(result.status, 0);
   assert.match(
@@ -167,6 +157,33 @@ test("reconciliation ignores test names that appear only in registry comments", 
   assert.match(
     result.stderr,
     /test reference tests\/comment-only\.test\.ts must exist and be registered at manifest\.codeSha/
+  );
+});
+
+test("reconciliation accepts the closed parallel test runner", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "parallel-runner.test.ts",
+    createParallelRegistrySource("parallel-runner.test.js")
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test("reconciliation rejects a parallel runner with changed concurrency", (context) => {
+  const result = runRegistryFixture(
+    context,
+    "parallel-concurrency.test.ts",
+    createParallelRegistrySource("parallel-concurrency.test.js").replace(
+      "--test-concurrency=4",
+      "--test-concurrency=8"
+    )
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /test reference tests\/parallel-concurrency\.test\.ts must exist and be registered at manifest\.codeSha/
   );
 });
 
@@ -627,18 +644,7 @@ function runReconciliation(
   fixturePath: string,
   workingDirectory = repositoryRoot
 ) {
-  return spawnSync(
-    process.execPath,
-    [
-      path.join(
-        repositoryRoot,
-        "scripts",
-        "check-completion-reconciliation.mjs"
-      ),
-      fixturePath,
-    ],
-    { cwd: workingDirectory, encoding: "utf8" }
-  );
+  return runCompletionReconciliationGuard(fixturePath, workingDirectory);
 }
 
 function runFixtureGit(repository: string, args: readonly string[]) {
@@ -742,6 +748,36 @@ function createValidRegistrySource(testSuite: string) {
     "  if (result.status !== 0) {",
     "    process.exit(result.status ?? 1);",
     "  }",
+    "}",
+    "",
+  ].join("\n");
+}
+
+function createParallelRegistrySource(testSuite: string) {
+  return [
+    'import { spawnSync } from "node:child_process";',
+    'import path from "node:path";',
+    'import { assertTestSuiteRegistryComplete, collectCompiledTestSuites } from "./test-suite-registry.js";',
+    `const testSuites = [${JSON.stringify(testSuite)}];`,
+    'const compiledTestsRoot = path.join(process.cwd(), "dist", "tests");',
+    "assertTestSuiteRegistryComplete(",
+    "  testSuites,",
+    "  collectCompiledTestSuites(compiledTestsRoot)",
+    ");",
+    "const result = spawnSync(",
+    "  process.execPath,",
+    "  [",
+    '    "--test",',
+    '    "--test-concurrency=4",',
+    "    ...testSuites.map((suite) => path.join(compiledTestsRoot, suite)),",
+    "  ],",
+    '  { stdio: "inherit" }',
+    ");",
+    "if (result.error !== undefined) {",
+    "  throw result.error;",
+    "}",
+    "if (result.status !== 0) {",
+    "  process.exit(result.status ?? 1);",
     "}",
     "",
   ].join("\n");

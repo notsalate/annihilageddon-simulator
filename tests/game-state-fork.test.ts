@@ -90,6 +90,7 @@ function createFixture(): GameState {
       controlledPowerBonus: 1,
       activatedCardIds: ["activated-card"],
       gainedCardDefinitionIds: ["gained-card", "gained-card"],
+      mainMarketCardHandReplacementSourceCardIds: ["replacement-source"],
       damagingAttackPlayerIds: [],
       temporaryCardControls: [
         {

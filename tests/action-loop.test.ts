@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   applyAction,
+  calculateEffectiveCardCost,
   calculateEffectivePlayerMaxLife,
   initializeGame,
   listLegalActions,
@@ -251,9 +252,12 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
     "esw2_dbg__familiar_005"
   );
   assert.ok(familiarDefinition);
-  assert.deepEqual(currentRuntimeDataPack.decks.familiarPool?.entries, [
-    { cardId: "esw2_dbg__familiar_005", count: 1 },
-  ]);
+  assert.deepEqual(
+    currentRuntimeDataPack.decks.familiarPool?.entries.find(
+      (entry) => entry.cardId === "esw2_dbg__familiar_005"
+    ),
+    { cardId: "esw2_dbg__familiar_005", count: 1 }
+  );
 
   const state = initializeGame({
     rootDir,
@@ -5133,6 +5137,248 @@ test("Wizard Property 006 lets the player decline topdecking a gained creature",
         event.choiceId === "decline" &&
         event.choiceIds.join(",") === "apply,decline"
     )
+  );
+});
+
+test("Зад в будущее предлагает взять с обычной барахолки карту на руку", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 60615,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const zadVFutureshe = addRuntimeCardToHand(
+    state,
+    player,
+    "esw2_dbg__legend_031"
+  );
+  const mainMarketCard = addFixtureMarketCard(
+    state,
+    "fixture-zad-v-buduschee-main-market",
+    [],
+    0
+  );
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: zadVFutureshe.instanceId,
+  });
+  assert.equal(playResult.ok, true);
+
+  let choiceRequested = false;
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId !== "optional_gain_market_cards_to_hand_this_turn") {
+      return undefined;
+    }
+    choiceRequested = true;
+    assert.deepEqual(
+      choices.map((choice) => choice.choiceId),
+      ["apply", "decline"]
+    );
+    return toChoiceSelection(choices[0]);
+  };
+
+  const buyResult = applyAction(state, {
+    type: "buyMarketCard",
+    source: "mainMarket",
+    cardInstanceId: mainMarketCard.instanceId,
+  });
+
+  assert.equal(buyResult.ok, true);
+  assert.equal(choiceRequested, true);
+  assert.equal(player.hand.includes(mainMarketCard), true);
+  assert.equal(player.discard.includes(mainMarketCard), false);
+});
+
+test("Зад в будущее не меняет получение карты с барахолки легенд", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 60615,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  state.turn.power = 99;
+  const zadVFutureshe = addRuntimeCardToHand(
+    state,
+    player,
+    "esw2_dbg__legend_031"
+  );
+  const legendMarketCard = state.common.legendMarket[0];
+  assert.ok(legendMarketCard);
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: zadVFutureshe.instanceId,
+  });
+  assert.equal(playResult.ok, true);
+
+  state.effectChoiceStrategy = ({ effectId }) => {
+    assert.notEqual(effectId, "optional_gain_market_cards_to_hand_this_turn");
+    return undefined;
+  };
+  const buyResult = applyAction(state, {
+    type: "buyMarketCard",
+    source: "legendMarket",
+    cardInstanceId: legendMarketCard.instanceId,
+  });
+
+  assert.equal(buyResult.ok, true);
+  assert.equal(player.hand.includes(legendMarketCard), false);
+  assert.equal(player.discard.includes(legendMarketCard), true);
+});
+
+test("Сувернирный ларёк предлагает положить полученную легенду на верх колоды", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  state.turn.power = 99;
+  const suvenirnyiLarek = addRuntimeCardToHand(
+    state,
+    player,
+    "esw2_dbg__main_008"
+  );
+  const legendMarketCard = state.common.legendMarket[0];
+  assert.ok(legendMarketCard);
+
+  const playResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: suvenirnyiLarek.instanceId,
+  });
+  assert.equal(playResult.ok, true);
+  assert.equal(player.permanents.includes(suvenirnyiLarek), true);
+
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId !== "topdeck_gained_card") {
+      return undefined;
+    }
+    return toChoiceSelection(choices[0]);
+  };
+  const buyResult = applyAction(state, {
+    type: "buyMarketCard",
+    source: "legendMarket",
+    cardInstanceId: legendMarketCard.instanceId,
+  });
+
+  assert.equal(buyResult.ok, true);
+  assert.equal(player.deck[0], legendMarketCard);
+  assert.equal(player.discard.includes(legendMarketCard), false);
+});
+
+test("Мыжсемья и Эпичный мерч суммируют скидки на легенды текущего хода", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const myZheSemya = addRuntimeCardToHand(
+    state,
+    player,
+    "esw2_dbg__familiar_007"
+  );
+  const epichnyiMerch = addRuntimeCardToHand(
+    state,
+    player,
+    "esw2_dbg__main_044"
+  );
+  const legendMarketCard = state.common.legendMarket[0];
+  assert.ok(legendMarketCard);
+  const legendDefinition = state.cardDefinitions.get(
+    legendMarketCard.definitionId
+  );
+  assert.ok(legendDefinition);
+
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: myZheSemya.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: epichnyiMerch.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(state.turn.power, 2);
+  assert.equal(
+    calculateEffectiveCardCost(state, player.playerId, legendDefinition),
+    Math.max(0, legendDefinition.engine.cost - 4)
+  );
+});
+
+test("защита Мыжсемья сбрасывает карту, избегает атаку и добирает две карты", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const attacker = mustGetPlayer(state, state.activePlayerId);
+  const target = state.players.find(
+    (candidate) => candidate.playerId !== attacker.playerId
+  );
+  assert.ok(target);
+  const myZheSemya = addRuntimeCardToHand(
+    state,
+    target,
+    "esw2_dbg__familiar_007"
+  );
+  const targetLifeBefore = target.life.current;
+  const targetHandBefore = target.hand.length;
+  chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) => {
+    if (effectId === "attack_damage") {
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === target.playerId)
+      );
+    }
+    if (effectId === "avoid_attack") {
+      return toChoiceSelection(
+        choices.find(
+          (choice) =>
+            choice.choiceKind === "defense" &&
+            choice.targetCardInstanceId === myZheSemya.instanceId
+        )
+      );
+    }
+    return undefined;
+  });
+  const attackCardId = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 5,
+    target: { selector: "opponentPlayer" },
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attackCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(target.life.current, targetLifeBefore);
+  assert.equal(target.hand.includes(myZheSemya), false);
+  assert.equal(target.discard.includes(myZheSemya), true);
+  assert.equal(target.hand.length, targetHandBefore + 1);
+});
+
+test("свойство волшебника 003 позволяет считать своего фамильяра легендой", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_003");
+  assert.ok(property);
+  assert.equal(property.kind, "wizardProperty");
+  replaceFirstWizardProperty(state, player, property);
+  const epichnyiMerch = addRuntimeCardToHand(
+    state,
+    player,
+    "esw2_dbg__main_044"
+  );
+  const familiarDefinition = state.cardDefinitions.get(
+    "esw2_dbg__familiar_007"
+  );
+  assert.ok(familiarDefinition);
+
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: epichnyiMerch.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(
+    calculateEffectiveCardCost(state, player.playerId, familiarDefinition),
+    familiarDefinition.engine.cost - 2
   );
 });
 
@@ -11112,4 +11358,246 @@ test("Сердце мага даёт карту, 3 чипсины и 5 ПО", ()
   );
   assert.ok(scoreAfter);
   assert.equal(scoreAfter.victoryPoints - scoreBefore.victoryPoints, 5);
+});
+
+test("все карты market-effects входят в текущий runtime-набор", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const expectedCards = [
+    "esw2_dbg__familiar_007",
+    "esw2_dbg__legend_030",
+    "esw2_dbg__legend_031",
+    "esw2_dbg__main_008",
+    "esw2_dbg__main_044",
+    "esw2_dbg__main_063",
+    "esw2_dbg__main_065",
+    "esw2_dbg__main_073",
+  ];
+
+  for (const cardId of expectedCards) {
+    assert.ok(currentRuntimeDataPack.cardDefinitions.has(cardId));
+  }
+  assert.deepEqual(
+    currentRuntimeDataPack.decks.familiarPool?.entries.find(
+      (entry) => entry.cardId === "esw2_dbg__familiar_007"
+    ),
+    { cardId: "esw2_dbg__familiar_007", count: 1 }
+  );
+  assert.deepEqual(
+    currentRuntimeDataPack.decks.legendDeck.entries.find(
+      (entry) => entry.cardId === "esw2_dbg__legend_030"
+    ),
+    { cardId: "esw2_dbg__legend_030", count: 1 }
+  );
+  assert.deepEqual(
+    currentRuntimeDataPack.decks.legendDeck.entries.find(
+      (entry) => entry.cardId === "esw2_dbg__legend_031"
+    ),
+    { cardId: "esw2_dbg__legend_031", count: 1 }
+  );
+  assert.deepEqual(
+    currentRuntimeDataPack.decks.mainDeck.entries.filter((entry) =>
+      [
+        "esw2_dbg__main_008",
+        "esw2_dbg__main_044",
+        "esw2_dbg__main_063",
+        "esw2_dbg__main_065",
+        "esw2_dbg__main_073",
+      ].includes(entry.cardId)
+    ),
+    [
+      { cardId: "esw2_dbg__main_008", count: 1 },
+      { cardId: "esw2_dbg__main_044", count: 2 },
+      { cardId: "esw2_dbg__main_063", count: 1 },
+      { cardId: "esw2_dbg__main_065", count: 1 },
+      { cardId: "esw2_dbg__main_073", count: 1 },
+    ]
+  );
+});
+
+test("2E добавляет чипсину каждой текущей карте обычной барахолки", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const mayhemDefinition = state.cardDefinitions.get("esw2_dbg__main_063");
+  assert.ok(mayhemDefinition);
+  const firstMarketCard = state.common.market[0];
+  const secondMarketCard = state.common.market[1];
+  assert.ok(firstMarketCard);
+  assert.ok(secondMarketCard);
+  firstMarketCard.marketChips = 2;
+
+  const result = executeMayhemEffects(state, player, mayhemDefinition, {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: markCardInstanceId("fixture-2e"),
+    definitionId: mayhemDefinition.cardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(firstMarketCard.marketChips, 3);
+  assert.equal(secondMarketCard.marketChips, 1);
+  state.turn.power = 99;
+  const buyResult = applyAction(state, {
+    type: "buyMarketCard",
+    source: "mainMarket",
+    cardInstanceId: firstMarketCard.instanceId,
+  });
+  assert.equal(buyResult.ok, true);
+  assert.equal(player.chips, 3);
+  assert.equal(firstMarketCard.marketChips, 0);
+});
+
+test("Дерьмак Гастрит случайно уничтожает легенду и атакует каждого врага на её стоимость", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const foe = state.players.find(
+    (candidate) => candidate.playerId !== player.playerId
+  );
+  assert.ok(foe);
+  const lowCostLegend = createFixtureCardDefinition(
+    "fixture-gastrit-low-cost-legend",
+    [],
+    { cardTypes: ["legend"] }
+  );
+  lowCostLegend.engine.cost = 3;
+  const highCostLegend = createFixtureCardDefinition(
+    "fixture-gastrit-high-cost-legend",
+    [],
+    { cardTypes: ["legend"] }
+  );
+  highCostLegend.engine.cost = 7;
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [lowCostLegend.cardId, lowCostLegend],
+    [highCostLegend.cardId, highCostLegend],
+  ]);
+  const lowCostCard = createCommonRuntimeCard(lowCostLegend.cardId);
+  const highCostCard = createCommonRuntimeCard(highCostLegend.cardId);
+  state.common.legendMarket.splice(
+    0,
+    state.common.legendMarket.length,
+    lowCostCard,
+    highCostCard
+  );
+  const gastrit = addRuntimeCardToHand(state, player, "esw2_dbg__legend_030");
+  const foeLifeBefore = foe.life.current;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: gastrit.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  const destroyedCard = state.common.destroyedPile.at(-1);
+  assert.ok(destroyedCard);
+  const destroyedCost = state.cardDefinitions.get(destroyedCard.definitionId)
+    ?.engine.cost;
+  assert.ok(typeof destroyedCost === "number");
+  assert.equal(foe.life.current, foeLifeBefore - destroyedCost);
+  assert.equal(state.common.legendMarket.length, 1);
+  assert.equal(state.turn.power, 2);
+});
+
+test("2R очищает рынок легенд, пропускает МегаБеспредел и заполняет его до четырёх", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const mayhemDefinition = state.cardDefinitions.get("esw2_dbg__main_065");
+  assert.ok(mayhemDefinition);
+  const oldLegendCards = state.common.legendMarket.slice(0, 2);
+  state.common.legendMarket.splice(
+    0,
+    state.common.legendMarket.length,
+    ...oldLegendCards
+  );
+  const megaMayhem = {
+    ...createCommonRuntimeCard("esw2_dbg__mega_mayhem_004"),
+    instanceId: markCardInstanceId("fixture-2r-mega-mayhem"),
+  };
+  const replacementLegends = Array.from({ length: 4 }, (_value, index) => ({
+    ...createCommonRuntimeCard("esw2_dbg__legend_030"),
+    instanceId: markCardInstanceId(`fixture-2r-legend-${index}`),
+  }));
+  state.common.legendDeck.splice(
+    0,
+    state.common.legendDeck.length,
+    megaMayhem,
+    ...replacementLegends
+  );
+
+  const result = executeMayhemEffects(state, player, mayhemDefinition, {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: markCardInstanceId("fixture-2r"),
+    definitionId: mayhemDefinition.cardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.common.legendMarket.length, 4);
+  assert.deepEqual(state.common.legendMarket, replacementLegends);
+  assert.equal(state.common.destroyedMegaMayhem.includes(megaMayhem), true);
+  for (const oldLegendCard of oldLegendCards) {
+    assert.equal(state.common.destroyedPile.includes(oldLegendCard), true);
+  }
+});
+
+test("2R оставляет неполный рынок при исчерпании колоды легенд до следующей проверки рынка", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const mayhemDefinition = state.cardDefinitions.get("esw2_dbg__main_065");
+  assert.ok(mayhemDefinition);
+  const oldLegendCards = state.common.legendMarket.slice();
+  state.common.legendDeck.splice(0);
+
+  const result = executeMayhemEffects(state, player, mayhemDefinition, {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: markCardInstanceId("fixture-2r-exhausted"),
+    definitionId: mayhemDefinition.cardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(state.common.legendMarket.length, 0);
+  for (const oldLegendCard of oldLegendCards) {
+    assert.equal(state.common.destroyedPile.includes(oldLegendCard), true);
+  }
+  assert.deepEqual(runMarketFlow(state, { mode: "turn" }), {
+    ok: true,
+    gameEndReason: "legendDeckExhausted",
+  });
+});
+
+test("2G выдаёт по чипсине каждому игроку и заново заполняет рынок легенд до трёх", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const mayhemDefinition = state.cardDefinitions.get("esw2_dbg__main_073");
+  assert.ok(mayhemDefinition);
+  const replacementLegends = Array.from({ length: 3 }, (_value, index) => ({
+    ...createCommonRuntimeCard("esw2_dbg__legend_030"),
+    instanceId: markCardInstanceId(`fixture-2g-legend-${index}`),
+  }));
+  state.common.legendDeck.splice(
+    0,
+    state.common.legendDeck.length,
+    ...replacementLegends
+  );
+  for (const targetPlayer of state.players) {
+    targetPlayer.chips = 0;
+  }
+
+  const result = executeMayhemEffects(state, player, mayhemDefinition, {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: markCardInstanceId("fixture-2g"),
+    definitionId: mayhemDefinition.cardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(state.common.legendMarket, replacementLegends);
+  assert.equal(state.common.legendMarket.length, 3);
+  for (const targetPlayer of state.players) {
+    assert.equal(targetPlayer.chips, 1);
+  }
 });

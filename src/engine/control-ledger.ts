@@ -525,6 +525,49 @@ export function listPhysicalCardLocations(
   );
 }
 
+/** Returns the current player's played cards through the Ledger-owned zone. */
+export function listPlayerPlayedThisTurnCards(
+  state: Pick<GameState, "players">,
+  playerId: PlayerId
+): readonly CardInstance[] {
+  return (
+    state.players.find((player) => player.playerId === playerId)
+      ?.playedThisTurn ?? []
+  );
+}
+
+/** Finds one card in the current player's Ledger-owned played zone. */
+export function findPlayerPlayedThisTurnCard(
+  state: Pick<GameState, "players">,
+  playerId: PlayerId,
+  cardInstanceId: string
+): CardInstance | undefined {
+  return listPlayerPlayedThisTurnCards(state, playerId).find(
+    (card) => card.instanceId === cardInstanceId
+  );
+}
+
+/** Lists the current main-market cards through the Ledger-owned zone. */
+export function listMainMarketCards(
+  state: Pick<GameState, "common">
+): readonly CardInstance[] {
+  return state.common.market;
+}
+
+/** Lists the current legend-market cards through the Ledger-owned zone. */
+export function listLegendMarketCards(
+  state: Pick<GameState, "common">
+): readonly CardInstance[] {
+  return state.common.legendMarket;
+}
+
+/** Returns the next legend-deck card through the Ledger-owned zone. */
+export function peekLegendDeckCard(
+  state: Pick<GameState, "common">
+): CardInstance | undefined {
+  return state.common.legendDeck[0];
+}
+
 /** Lists locations that can supply a voluntary Defense for one player. */
 export function listDefenseCardLocations(
   state: GameState,

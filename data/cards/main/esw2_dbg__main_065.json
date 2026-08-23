@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_065",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_065.json",
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2R.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_065.md"
+  },
+  "visible": {
+    "nameRu": "2R",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Уничтожь легендарную барахолку.\nВыложи 4 новые легенды на замену\n(стандартный размер барахолки остаётся равен 3).",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_refresh_legend_market",
+        "timing": "onMayhemResolve",
+        "targetSize": 4,
+        "destroyMegaMayhem": true
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

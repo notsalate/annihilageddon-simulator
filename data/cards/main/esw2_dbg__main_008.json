@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_008",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_008.json",
+    "image": "assets/cards/location/Место. Сувернирный ларёк в зале легенд.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_008.md"
+  },
+  "visible": {
+    "nameRu": "Сувернирный ларёк в зале легенд",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Место",
+    "cardKind": "normal",
+    "cardTypes": ["location"],
+    "textRu": "ПОСТОЯНКА: Получив легенду, можешь положить ее на верх своей колоды.",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["location"],
+    "cost": 4,
+    "victoryPoints": 1,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "topdeck_gained_card",
+        "timing": "onGainCard",
+        "optional": true,
+        "destination": "deckTop",
+        "cardTypes": ["legend"]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

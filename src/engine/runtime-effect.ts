@@ -9,6 +9,7 @@ import type {
   OngoingEffectPayloadMap,
 } from "./effect-runtime-ongoing.js";
 import type { EffectiveValueModifierEffectPayloadMap } from "./effect-runtime-effective-value-modifier.js";
+import type { CardTypeEffectPayloadMap } from "./effect-runtime-card-type.js";
 
 export type {
   ResourceDrawEffectPayloadMap,
@@ -59,6 +60,10 @@ export type {
   EffectiveValueOperation,
   ModifyEffectiveValueRuntimeEffect,
 } from "./effect-runtime-effective-value-modifier.js";
+export type {
+  CardTypeEffectPayloadMap,
+  OwnedCardsCountAsCardTypeRuntimeEffect,
+} from "./effect-runtime-card-type.js";
 
 export const effectTimings = [
   "activation",
@@ -227,9 +232,12 @@ export const knownRuntimeEffectIds = [
   "heal_equal_damage_dealt_on_own_turn",
   "increase_hand_limit_at_max_life",
   "mayhem_attack",
+  "mayhem_add_chips_to_main_market",
   "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
   "mayhem_each_player_choose_foe_gain_chips",
   "mayhem_each_non_dingler_gain_chips",
+  "mayhem_each_player_gain_chips",
+  "mayhem_refresh_legend_market",
   "mayhem_each_player_battle_highest_hand_cost",
   "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
   "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
@@ -253,6 +261,7 @@ export const knownRuntimeEffectIds = [
   "ongoing_hand_refill_bonus",
   "ongoing_start_turn_optional_gain_limp_wand_to_hand",
   "optional_gain_market_cards_to_hand_this_turn",
+  "owned_cards_count_as_card_type",
   "optional_spend_chip_attack_damage",
   "optional_spend_chip_destroy_own_cards",
   "play_top_card",
@@ -597,6 +606,13 @@ export type MayhemAttackRuntimeEffect =
     PositiveAmount & {
       target: RuntimeEffectSelectorTarget & { selector: "allPlayers" };
     };
+export type MayhemAddChipsToMainMarketRuntimeEffect = TimedEffect<
+  "mayhem_add_chips_to_main_market",
+  "onMayhemResolve"
+> & {
+  market: "mainMarket";
+  amount: number;
+};
 export type MayhemEachDinglerChoosePayLifeOrChipToRemoveStatusRuntimeEffect =
   TimedEffect<
     "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
@@ -621,6 +637,20 @@ export type MayhemEachNonDinglerGainChipsRuntimeEffect = TimedEffect<
 > & {
   targetSelector: "eachPlayerClockwiseFromActive";
   chipAmount: number;
+};
+export type MayhemEachPlayerGainChipsRuntimeEffect = TimedEffect<
+  "mayhem_each_player_gain_chips",
+  "onMayhemResolve"
+> & {
+  targetSelector: "eachPlayerClockwiseFromActive";
+  chipAmount: number;
+};
+export type MayhemRefreshLegendMarketRuntimeEffect = TimedEffect<
+  "mayhem_refresh_legend_market",
+  "onMayhemResolve"
+> & {
+  targetSize: number;
+  destroyMegaMayhem: true;
 };
 export type MayhemEachPlayerBattleHighestHandCostRuntimeEffect = TimedEffect<
   "mayhem_each_player_battle_highest_hand_cost",
@@ -724,9 +754,12 @@ export type MegaMayhemSetLifeRuntimeEffect = TimedEffect<
 
 export interface MayhemEffectPayloadMap {
   mayhem_attack: MayhemAttackRuntimeEffect;
+  mayhem_add_chips_to_main_market: MayhemAddChipsToMainMarketRuntimeEffect;
   mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status: MayhemEachDinglerChoosePayLifeOrChipToRemoveStatusRuntimeEffect;
   mayhem_each_player_choose_foe_gain_chips: MayhemEachPlayerChooseFoeGainChipsRuntimeEffect;
   mayhem_each_non_dingler_gain_chips: MayhemEachNonDinglerGainChipsRuntimeEffect;
+  mayhem_each_player_gain_chips: MayhemEachPlayerGainChipsRuntimeEffect;
+  mayhem_refresh_legend_market: MayhemRefreshLegendMarketRuntimeEffect;
   mayhem_each_player_battle_highest_hand_cost: MayhemEachPlayerBattleHighestHandCostRuntimeEffect;
   mayhem_each_player_choose_discard_hand_draw_or_take_damage: MayhemEachPlayerChooseDiscardHandDrawOrTakeDamageRuntimeEffect;
   mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none: MayhemEachPlayerDiscardTopDeckCardsChooseDestroyAllOrNoneRuntimeEffect;
@@ -745,7 +778,8 @@ export type RuntimeEffectPayloadMap = SetupEffectPayloadMap &
   PlayerControlledAttackEffectPayloadMap &
   ActivationEffectPayloadMap &
   OngoingEffectPayloadMap &
-  MayhemEffectPayloadMap;
+  MayhemEffectPayloadMap &
+  CardTypeEffectPayloadMap;
 
 export type RuntimeEffectId = keyof RuntimeEffectPayloadMap;
 export type RuntimeEffectForId<Id extends RuntimeEffectId> =

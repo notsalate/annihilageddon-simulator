@@ -2,8 +2,13 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import { checkProtectedPublicEntrypoints } from "./lib/check-protected-public-entrypoints.mjs";
+import { captureGuard, runGuardCli } from "./lib/guard-cli.mjs";
 
-const rootDir = path.resolve(process.argv[2] ?? process.cwd());
+// Keep the full analysis body lexical so every in-process fixture gets isolated state.
+// prettier-ignore
+export function runEngineTypedAccessGuard(rootPath = process.cwd()) {
+  return captureGuard(() => {
+const rootDir = path.resolve(rootPath);
 const engineDir = path.join(rootDir, "src", "engine");
 const violations = [];
 const physicalCardZoneOwnershipViolations = [];
@@ -78,10 +83,10 @@ const configuredAllowedViolations = [
   ["src/engine/data.ts", 2039, 3, "requireTokenKindField"],
   ["src/engine/data.ts", 2064, 3, "validateRuntimeEffectDefinition"],
   ["src/engine/data.ts", 2085, 43, "isEffectRecord"],
-  ["src/engine/runtime-effect-decoder.ts", 72, 9, "decodeObject"],
-  ["src/engine/runtime-effect-decoder.ts", 823, 41, "isPlainRecord"],
-  ["src/engine/runtime-effect.ts", 926, 4, "isRuntimeEffectTargetRecord"],
-  ["src/engine/runtime-effect.ts", 931, 3, "hasExactKeys"],
+  ["src/engine/runtime-effect-decoder.ts", 73, 9, "decodeObject"],
+  ["src/engine/runtime-effect-decoder.ts", 832, 41, "isPlainRecord"],
+  ["src/engine/runtime-effect.ts", 960, 4, "isRuntimeEffectTargetRecord"],
+  ["src/engine/runtime-effect.ts", 965, 3, "hasExactKeys"],
 ];
 
 const typedEffectBoundaryViolations = [];
@@ -1616,9 +1621,7 @@ if (effectiveValueArchitectureViolations.length > 0) {
     `Effective Value architecture violation(s): ${[...new Set(effectiveValueArchitectureViolations)].join("; ")}`
   );
 }
-console.log(
-  `Engine typed-access guard: ok (${violations.length} tracked exception(s)); normal attack lifecycle ownership: ok; Trigger Dispatch ownership: ok; physical card zone ownership: ok; Effective Value architecture: ok`
-);
+return `Engine typed-access guard: ok (${violations.length} tracked exception(s)); normal attack lifecycle ownership: ok; Trigger Dispatch ownership: ok; physical card zone ownership: ok; Effective Value architecture: ok`;
 
 function referencesForbiddenRuntimeEffectAssertion(typeNode) {
   if (
@@ -1767,3 +1770,9 @@ function listTypeScriptFiles(targetPath) {
     listTypeScriptFiles(path.join(targetPath, entry.name))
   );
 }
+  });
+}
+
+runGuardCli(import.meta.url, () =>
+  runEngineTypedAccessGuard(process.argv[2] ?? process.cwd())
+);

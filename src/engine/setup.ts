@@ -151,6 +151,8 @@ export interface GameState {
     controlledPowerBonus: number;
     activatedCardIds: string[];
     gainedCardDefinitionIds: string[];
+    mainMarketCardHandReplacementSourceCardIds: string[];
+    rememberedDestroyedLegendCost?: number | undefined;
     damagingAttackPlayerIds: PlayerId[];
     temporaryCardControls: TemporaryCardControl[];
   };
@@ -251,6 +253,7 @@ export type GameEventSourceType =
 export type GameEventDestination =
   | "discard"
   | "deckTop"
+  | "hand"
   | "discardSelf"
   | "topdeckSelf";
 export type SetupChoicePolicyId = "alwaysPickFirst";
@@ -894,6 +897,8 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       controlledPowerBonus: 0,
       activatedCardIds: [],
       gainedCardDefinitionIds: [],
+      mainMarketCardHandReplacementSourceCardIds: [],
+      rememberedDestroyedLegendCost: undefined,
       damagingAttackPlayerIds: [],
       temporaryCardControls: [],
     },
@@ -1070,20 +1075,14 @@ function assignStartingFamiliars(
   }
 
   const setupPool = instantiateDeck(familiarPool, dataPack, factory, "common");
-  if (setupPool.length < 2) {
+  if (setupPool.length < players.length * 2) {
     if (isIncompleteFullOnlyDataPack(dataPack)) {
       return;
     }
     throw new Error(
-      `Deck ${familiarPool.deckId} must include at least two familiar setup candidates`
+      `Deck ${familiarPool.deckId} must include at least ${players.length * 2} familiar setup candidates`
     );
   }
-  assertSetupPoolSize(
-    setupPool.length,
-    players.length * 2,
-    "Familiar setup pool",
-    players.length
-  );
 
   shuffleDeck(setupPool, rng);
 
