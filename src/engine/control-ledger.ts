@@ -372,45 +372,19 @@ export interface PhysicalCardLedgerClone {
 export function clonePhysicalCardLedger(
   source: GameState
 ): PhysicalCardLedgerClone {
-  const sourceZones = listPhysicalCardZoneDescriptors(source).map(
-    (descriptor) => ({
-      zoneName: descriptor.zoneName,
-      cards: [...descriptor.read()],
-    })
+  const physicalCards = new Set(
+    listPhysicalCardZoneDescriptors(source).flatMap((descriptor) =>
+      descriptor.read()
+    )
   );
-  const physicalCards = new Set(sourceZones.flatMap((zone) => zone.cards));
-  const clones = new Map<object, object>();
-  const cloned = cloneLedgerValue(
+  return cloneLedgerValue(
     {
       players: source.players,
       common: source.common,
       temporaryCardControls: source.turn.temporaryCardControls,
     },
-    physicalCards,
-    clones
+    physicalCards
   );
-  const targetDescriptors = new Map(
-    listPhysicalCardZoneDescriptors(cloned).map((descriptor) => [
-      descriptor.zoneName,
-      descriptor,
-    ])
-  );
-  for (const zone of sourceZones) {
-    const targetDescriptor = targetDescriptors.get(zone.zoneName);
-    if (targetDescriptor === undefined) {
-      throw new Error(`Missing physical card zone ${zone.zoneName} in clone`);
-    }
-    targetDescriptor.replace(
-      zone.cards.map((card) => {
-        const clonedCard = clones.get(card);
-        if (clonedCard === undefined) {
-          throw new Error(`Missing cloned physical card ${card.instanceId}`);
-        }
-        return clonedCard as CardInstance;
-      })
-    );
-  }
-  return cloned;
 }
 
 type LedgerCloneValue =
@@ -458,9 +432,9 @@ function cloneLedgerValue<T extends LedgerCloneValue>(
     if (existingPhysicalCard !== undefined) {
       return existingPhysicalCard as T;
     }
-    const clonedPhysicalCard = structuredClone(value);
+    const clonedPhysicalCard = { ...(value as CardInstance) };
     clones.set(value, clonedPhysicalCard);
-    return clonedPhysicalCard;
+    return clonedPhysicalCard as T;
   }
   const existing = clones.get(value);
   if (existing !== undefined) {
@@ -523,6 +497,51 @@ export function listPhysicalCardLocations(
           }
     )
   );
+}
+
+/** Returns the current player's played cards through the Ledger-owned zone. */
+export function listPlayerPlayedThisTurnCards(
+  player: PlayerState
+): readonly CardInstance[] {
+  return player.playedThisTurn;
+}
+
+/** Finds one card in the current player's Ledger-owned played zone. */
+export function findPlayerPlayedThisTurnCard(
+  player: PlayerState,
+  cardInstanceId: string
+): CardInstance | undefined {
+  return listPlayerPlayedThisTurnCards(player).find(
+    (card) => card.instanceId === cardInstanceId
+  );
+}
+
+/** Lists the current main-market cards through the Ledger-owned zone. */
+export function listMainMarketCards(
+  state: Pick<GameState, "common">
+): readonly CardInstance[] {
+  return state.common.market;
+}
+
+/** Lists the current legend-market cards through the Ledger-owned zone. */
+export function listLegendMarketCards(
+  state: Pick<GameState, "common">
+): readonly CardInstance[] {
+  return state.common.legendMarket;
+}
+
+/** Returns the next legend-deck card through the Ledger-owned zone. */
+export function peekLegendDeckCard(
+  state: Pick<GameState, "common">
+): CardInstance | undefined {
+  return state.common.legendDeck[0];
+}
+
+/** Returns the next main-deck card through the Ledger-owned zone. */
+export function peekMainDeckCard(
+  state: Pick<GameState, "common">
+): CardInstance | undefined {
+  return state.common.mainDeck[0];
 }
 
 /** Lists locations that can supply a voluntary Defense for one player. */

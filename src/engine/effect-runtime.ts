@@ -19,6 +19,7 @@ import {
   getControlledCards,
   removeCardFromLocation,
 } from "./control-ledger.js";
+import { resolveMainMarketGainDestination } from "./effect-runtime-cards-ownership-choice.js";
 import {
   resolveCardPlay,
   type CardPlayResolutionServices,
@@ -62,6 +63,7 @@ import {
   markRuntimeEffectTreeVerified,
   requireVerifiedRuntimeEffect,
 } from "./runtime-effect-verification.js";
+import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
 import type {
   ChoiceRequest,
   ChoiceSelection,
@@ -449,7 +451,7 @@ export function moveGainedCardToPlayerDestination(
   player: PlayerState,
   card: CardInstance
 ):
-  | { ok: true; destination: "discard" | "deckTop" }
+  | { ok: true; destination: "discard" | "deckTop" | "hand" }
   | { ok: false; error: string } {
   const definition = state.cardDefinitions.get(card.definitionId);
   if (definition === undefined) {
@@ -472,35 +474,106 @@ export function moveGainedCardToPlayerDestination(
   moveMarketChipsToPlayer(state, player, card);
   card.ownerId = player.playerId;
   state.turn.gainedCardDefinitionIds.push(card.definitionId);
+  const onGainCardResult = runOnGainCardEffects(state, player, definition);
+  if (!onGainCardResult.ok) {
+    return onGainCardResult;
+  }
+  const destinationResult = resolveMainMarketGainDestination(
+    state,
+    player,
+    sourceZone,
+    onGainCardResult.destination,
+    effectRuntimeServices
+  );
+  if (!destinationResult.ok) {
+    return destinationResult;
+  }
+  const destination = destinationResult.destination;
+
+  if (destination === "deckTop") {
+    player.deck.unshift(card);
+  } else if (destination === "hand") {
+    player.hand.push(card);
+  } else {
+    player.discard.push(card);
+  }
+  recordCardMoved(state, player, card, {
+    sourceZone,
+    destinationZone:
+      destination === "deckTop"
+        ? `${player.playerId}.deckTop`
+        : destination === "hand"
+          ? `${player.playerId}.hand`
+          : `${player.playerId}.discard`,
+    ownerBefore,
+    ownerAfter: card.ownerId,
+  });
+
+  return { ok: true, destination };
+}
+
+function runOnGainCardEffects(
+  state: GameState,
+  player: PlayerState,
+  gainedDefinition: CardDefinition
+):
+  | { ok: true; destination: "discard" | "deckTop" }
+  | { ok: false; error: string } {
   let destination: "discard" | "deckTop" = "discard";
+  const effectSources: {
+    source: EffectSourceContext;
+    effects: readonly RuntimeEffect[];
+  }[] = [];
 
   for (const token of player.wizardProperties) {
-    const tokenDefinition = state.tokenDefinitions.get(token.definitionId);
+    const definition = state.tokenDefinitions.get(token.definitionId);
     if (
-      tokenDefinition?.kind !== "wizardProperty" ||
-      tokenDefinition.engine === undefined ||
-      !tokenDefinition.engine.playableInV0
+      definition?.kind !== "wizardProperty" ||
+      definition.engine === undefined ||
+      !definition.engine.playableInV0
     ) {
       continue;
     }
+    effectSources.push({
+      source: {
+        sourceType: "wizardProperty",
+        runtimeMode: state.runtimeMode,
+        playerId: player.playerId,
+        cardInstanceId: token.instanceId,
+        definitionId: token.definitionId,
+        tokenInstanceId: token.instanceId,
+        tokenDefinitionId: token.definitionId,
+      },
+      effects: definition.engine.effects,
+    });
+  }
 
-    const source: EffectSourceContext = {
-      sourceType: "wizardProperty",
-      runtimeMode: state.runtimeMode,
-      playerId: player.playerId,
-      cardInstanceId: token.instanceId,
-      definitionId: token.definitionId,
-      tokenInstanceId: token.instanceId,
-      tokenDefinitionId: token.definitionId,
-    };
-    for (const effect of tokenDefinition.engine.effects) {
+  for (const controlledCard of getControlledCards(state, player)) {
+    const definition = state.cardDefinitions.get(controlledCard.definitionId);
+    if (definition === undefined || !definition.engine.playableInV0) {
+      continue;
+    }
+    effectSources.push({
+      source: {
+        sourceType: "card",
+        runtimeMode: state.runtimeMode,
+        playerId: player.playerId,
+        cardInstanceId: controlledCard.instanceId,
+        definitionId: definition.cardId,
+      },
+      effects: definition.engine.effects,
+    });
+  }
+
+  for (const { source, effects } of effectSources) {
+    for (const effect of effects) {
       const verifiedEffect = requireVerifiedRuntimeEffect(effect);
       const applicability = evaluateRuntimeEffectAtTiming(
         verifiedEffect,
         source,
         "onGainCard",
         (decodedEffect) =>
-          cardTriggerMatches(decodedEffect, definition)
+          cardTriggerMatches(decodedEffect, gainedDefinition, state, player)
             ? { status: "resolved", result: decodedEffect }
             : { status: "notApplicable" }
       );
@@ -539,7 +612,8 @@ export function moveGainedCardToPlayerDestination(
         "onGainCard",
         source,
         effectRuntimeServices,
-        (decodedEffect) => cardTriggerMatches(decodedEffect, definition)
+        (decodedEffect) =>
+          cardTriggerMatches(decodedEffect, gainedDefinition, state, player)
       );
       if (execution.status === "error") {
         return { ok: false, error: execution.error };
@@ -552,21 +626,6 @@ export function moveGainedCardToPlayerDestination(
       }
     }
   }
-
-  if (destination === "deckTop") {
-    player.deck.unshift(card);
-  } else {
-    player.discard.push(card);
-  }
-  recordCardMoved(state, player, card, {
-    sourceZone,
-    destinationZone:
-      destination === "deckTop"
-        ? `${player.playerId}.deckTop`
-        : `${player.playerId}.discard`,
-    ownerBefore,
-    ownerAfter: card.ownerId,
-  });
 
   return { ok: true, destination };
 }
@@ -701,13 +760,17 @@ function executeEffects(
 
 function cardTriggerMatches(
   effect: RuntimeEffectPayload,
-  definition: CardDefinition
+  definition: CardDefinition,
+  state?: GameState,
+  player?: PlayerState
 ): boolean {
   const cardTypes = "cardTypes" in effect ? effect.cardTypes : undefined;
   const matchesType =
     Array.isArray(cardTypes) &&
     cardTypes.some((cardType) =>
-      definition.engine.cardTypes.includes(cardType)
+      state === undefined || player === undefined
+        ? definition.engine.cardTypes.includes(cardType)
+        : cardMatchesTypeForPlayer(state, player.playerId, definition, cardType)
     );
   const matchesOngoing =
     "isOngoing" in effect &&
@@ -1130,6 +1193,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   playResolvedCard,
   isLegalWildMagicOption,
   executeEffect,
+  executeMayhemEffects,
   asString,
 };
 

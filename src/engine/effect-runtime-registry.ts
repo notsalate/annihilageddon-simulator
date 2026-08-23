@@ -58,6 +58,11 @@ import {
   type EffectiveValueModifierId,
 } from "./effect-runtime-effective-value-modifier.js";
 import {
+  createCardTypeEffectDefinitions,
+  type CardTypeEffectId,
+  type CardTypeEffectPayloadMap,
+} from "./effect-runtime-card-type.js";
+import {
   createControlledPowerEffectDefinitions,
   createOngoingEffectDefinitions,
 } from "./effect-runtime-ongoing.js";
@@ -267,7 +272,7 @@ export interface EffectRuntimeServices {
     player: PlayerState,
     card: CardInstance
   ):
-    | { ok: true; destination: "discard" | "deckTop" }
+    | { ok: true; destination: "discard" | "deckTop" | "hand" }
     | { ok: false; error: string };
   moveCardToPlayerZone(
     state: GameState,
@@ -421,6 +426,12 @@ export interface EffectRuntimeServices {
     state: GameState,
     player: PlayerState,
     effect: VerifiedRuntimeEffect,
+    source: EffectSourceContext
+  ): EffectExecutionResult;
+  executeMayhemEffects(
+    state: GameState,
+    player: PlayerState,
+    definition: CardDefinition,
     source: EffectSourceContext
   ): EffectExecutionResult;
   asString(value: unknown): string;
@@ -1643,6 +1654,13 @@ const effectiveValueModifierEntries = defineEffectRuntimeFamily(
   Pick<SetupEffectPayloadMap, EffectiveValueModifierId>
 >;
 
+const cardTypeEntries = defineEffectRuntimeFamily(
+  "cards/type",
+  createCardTypeEffectDefinitions({ bindRuntimeEffectDecoder })
+) satisfies EffectRuntimeEntriesFor<
+  Pick<CardTypeEffectPayloadMap, CardTypeEffectId>
+>;
+
 const controlledPowerEntries = defineEffectRuntimeFamily(
   "values/controlled-power",
   createControlledPowerEffectDefinitions({ bindRuntimeEffectDecoder })
@@ -1933,6 +1951,7 @@ export function defineEffectRuntimeCatalogGroupsForTesting(
 
 const effectRuntimeCatalogDefinition = defineEffectRuntimeCatalog([
   setupEffectEntries,
+  cardTypeEntries,
   controlledPowerEntries,
   resourceDrawEntries,
   lifeStatusEntries,

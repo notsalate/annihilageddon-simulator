@@ -523,11 +523,11 @@ export function assertPerformancePullRequestReportIntegrity(
   if (
     !isPerformanceMeasurement(base) ||
     !isPerformanceMeasurement(head) ||
-    !isPerformanceMeasurement(confirmation) ||
+    (confirmation !== undefined && !isPerformanceMeasurement(confirmation)) ||
     (epochReference !== null && !isPerformanceMeasurement(epochReference))
   ) {
     throw new TypeError(
-      "Fresh PR report requires valid base, head, confirmation and optional E0 measurements"
+      "Fresh PR report requires valid base, head, optional confirmation and optional E0 measurements"
     );
   }
   if (
@@ -545,7 +545,29 @@ export function assertPerformancePullRequestReportIntegrity(
     throw new Error("Performance report identity does not match head");
   }
 
-  const measurements = [base, head, confirmation];
+  const comparisons = [value["epochComparison"], value["baseComparison"]];
+  const confirmationRequired = comparisons.some((comparison) => {
+    if (
+      !isPlainRecord(comparison) ||
+      !Array.isArray(comparison["observedRegressionMetrics"]) ||
+      !comparison["observedRegressionMetrics"].every(
+        (metricName) => typeof metricName === "string"
+      )
+    ) {
+      throw new TypeError(
+        "Performance report contains an invalid comparison summary"
+      );
+    }
+    return comparison["observedRegressionMetrics"].length > 0;
+  });
+  if (confirmationRequired && confirmation === undefined) {
+    throw new TypeError(
+      "Fresh PR report requires confirmation after an observed regression"
+    );
+  }
+
+  const measurements = [base, head];
+  if (confirmation !== undefined) measurements.push(confirmation);
   if (epochReference !== null) measurements.push(epochReference);
   for (const measurement of measurements) {
     if (measurement.comparisonPairId !== expectedComparisonPairId) {
@@ -580,7 +602,7 @@ export function assertPerformancePullRequestReportIntegrity(
   if (
     base.role !== "current" ||
     head.role !== "current" ||
-    confirmation.role !== "current" ||
+    (confirmation !== undefined && confirmation.role !== "current") ||
     (epochReference !== null && epochReference.role !== "reference")
   ) {
     throw new Error("Fresh PR report contains invalid measurement roles");

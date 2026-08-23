@@ -357,13 +357,11 @@ test("raises an analysis error when a legal action cannot be applied", () => {
     state,
     fixtureDefinition("fixture-analysis-mismatch")
   );
-  let handMapCalls = 0;
   const sourceHand = [card];
   activePlayer.hand = new Proxy(sourceHand, {
     get(target, property, receiver) {
-      if (property === "map") {
-        handMapCalls += 1;
-        return handMapCalls === 1 ? target.map.bind(target) : () => [];
+      if (property === Symbol.iterator) {
+        return function* (): IterableIterator<(typeof sourceHand)[number]> {};
       }
       return Reflect.get(target, property, receiver) as never;
     },

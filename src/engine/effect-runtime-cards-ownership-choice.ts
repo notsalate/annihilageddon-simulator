@@ -1,5 +1,14 @@
 import { recordGameEvent } from "./event-recorder.js";
+import {
+  findPlayerPlayedThisTurnCard,
+  listLegendMarketCards,
+  movePhysicalCard,
+} from "./control-ledger.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
+import type {
+  EffectRuntimeServices,
+  EffectSourceContext,
+} from "./effect-runtime-registry.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
 import type {
   EffectTiming,
@@ -19,6 +28,7 @@ import type {
   RequiredField,
   ValueDecoder,
 } from "./effect-runtime-family-support.js";
+import type { GameState, PlayerState } from "./setup.js";
 
 type EffectWithOptionalTiming<Id extends string> = {
   effectId: Id;
@@ -100,7 +110,7 @@ export type TopdeckGainedCardRuntimeEffect = {
 };
 export type OptionalGainMarketCardsToHandThisTurnRuntimeEffect = {
   effectId: "optional_gain_market_cards_to_hand_this_turn";
-  timing: "untilEndOfTurn";
+  timing: "onPlay";
   appliesTo: "cardsGainedFromMainMarket";
   chooser: "controller";
   destinationOverride: "hand";
@@ -325,7 +335,7 @@ export function createCardOwnershipChoiceEffectDecoders(
         effectId: required(
           literal("optional_gain_market_cards_to_hand_this_turn")
         ),
-        timing: required(literal("untilEndOfTurn")),
+        timing: required(literal("onPlay")),
         appliesTo: required(literal("cardsGainedFromMainMarket")),
         chooser: required(literal("controller")),
         destinationOverride: required(literal("hand")),
@@ -366,6 +376,128 @@ const topdeckGainedCardHandler: EffectRuntimeHandler<
     };
   },
 };
+
+const destroyRandomLegendMarketCardHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"destroy_random_legend_market_card">
+> = {
+  effectId: "destroy_random_legend_market_card",
+  execute(state, player, effect, source, services) {
+    state.turn.rememberedDestroyedLegendCost = undefined;
+    const legendMarketCards = listLegendMarketCards(state);
+    if (legendMarketCards.length === 0) {
+      return { ok: true };
+    }
+    const targetIndex = state.rng.nextInt(legendMarketCards.length);
+    const targetCard = legendMarketCards[targetIndex];
+    if (targetCard === undefined) {
+      return { ok: true };
+    }
+    const targetDefinition = state.cardDefinitions.get(targetCard.definitionId);
+    if (targetDefinition === undefined) {
+      return {
+        ok: false,
+        error: `Missing destroyed legend definition ${targetCard.definitionId}`,
+      };
+    }
+    const destination = services.getDestroyDestination(state, targetCard);
+    if (!destination.ok) return destination;
+    const moved = movePhysicalCard(
+      state,
+      targetCard.instanceId,
+      destination.zoneName,
+      "back",
+      "legendMarket"
+    );
+    if (!moved.ok) {
+      return { ok: false, error: moved.reason };
+    }
+    state.turn.rememberedDestroyedLegendCost = targetDefinition.engine.cost;
+    recordGameEvent(state, {
+      type: "effectCardDestroyed",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      targetCardInstanceId: targetCard.instanceId,
+      targetDefinitionId: targetCard.definitionId,
+      effectId: effect.effectId,
+      sourceType: source.sourceType,
+    });
+    return { ok: true };
+  },
+};
+
+const optionalGainMarketCardsToHandThisTurnHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"optional_gain_market_cards_to_hand_this_turn">
+> = {
+  effectId: "optional_gain_market_cards_to_hand_this_turn",
+  execute(state, _player, _effect, source) {
+    if (
+      !state.turn.mainMarketCardHandReplacementSourceCardIds.includes(
+        source.cardInstanceId
+      )
+    ) {
+      state.turn.mainMarketCardHandReplacementSourceCardIds.push(
+        source.cardInstanceId
+      );
+    }
+    return { ok: true };
+  },
+};
+
+export function resolveMainMarketGainDestination(
+  state: GameState,
+  player: PlayerState,
+  sourceZone: string,
+  initialDestination: "discard" | "deckTop",
+  services: Pick<EffectRuntimeServices, "chooseEffectChoice">
+):
+  | { ok: true; destination: "discard" | "deckTop" | "hand" }
+  | { ok: false; error: string } {
+  if (sourceZone !== "mainMarket") {
+    return { ok: true, destination: initialDestination };
+  }
+
+  let destination: "discard" | "deckTop" | "hand" = initialDestination;
+  for (const sourceCardInstanceId of state.turn
+    .mainMarketCardHandReplacementSourceCardIds) {
+    const playedCard = findPlayerPlayedThisTurnCard(
+      player,
+      sourceCardInstanceId
+    );
+    if (playedCard === undefined) {
+      continue;
+    }
+    const playedDefinition = state.cardDefinitions.get(playedCard.definitionId);
+    if (playedDefinition === undefined) {
+      return {
+        ok: false,
+        error: `Missing played card definition ${playedCard.definitionId}`,
+      };
+    }
+    const source: EffectSourceContext = {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: player.playerId,
+      cardInstanceId: playedCard.instanceId,
+      definitionId: playedDefinition.cardId,
+    };
+    const choice = services.chooseEffectChoice(
+      state,
+      player,
+      source,
+      "optional_gain_market_cards_to_hand_this_turn",
+      [
+        { choiceKind: "option", choiceId: "apply" },
+        { choiceKind: "option", choiceId: "decline" },
+      ]
+    );
+    if (choice?.choiceId === "apply") {
+      destination = "hand";
+    }
+  }
+
+  return { ok: true, destination };
+}
 
 const gainCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"gain_card">> = {
   effectId: "gain_card",
@@ -649,7 +781,7 @@ export function createCardOwnershipChoiceEffectDefinitions(
       decoder: bindRuntimeEffectDecoder("gain_card"),
       supportedTimings: immediateEffectTimings,
       supportedModes: allEffectRuntimeModes,
-      supportedSourceKinds: ["card", "wizardProperty"],
+      supportedSourceKinds: ["card"],
       handler: gainCardHandler,
     },
     {
@@ -698,9 +830,7 @@ export function createCardOwnershipChoiceEffectDefinitions(
       supportedTimings: ["onPlay"] as const,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["card", "wizardProperty"],
-      handler: createUnsupportedEffectHandler(
-        "destroy_random_legend_market_card"
-      ),
+      handler: destroyRandomLegendMarketCardHandler,
     },
     {
       effectId: "return_discard_to_hand",
@@ -751,12 +881,10 @@ export function createCardOwnershipChoiceEffectDefinitions(
       decoder: bindRuntimeEffectDecoder(
         "optional_gain_market_cards_to_hand_this_turn"
       ),
-      supportedTimings: ["untilEndOfTurn"] as const,
+      supportedTimings: ["onPlay"] as const,
       supportedModes: allEffectRuntimeModes,
-      supportedSourceKinds: ["card", "wizardProperty"],
-      handler: createUnsupportedEffectHandler(
-        "optional_gain_market_cards_to_hand_this_turn"
-      ),
+      supportedSourceKinds: ["card"],
+      handler: optionalGainMarketCardsToHandThisTurnHandler,
     },
     {
       effectId: "on_gain_self_gain_limp_wands",

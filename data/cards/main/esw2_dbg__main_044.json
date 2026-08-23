@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_044",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_044.json",
+    "image": "assets/cards/treasure/Сокровище. Эпичный мерч боевых магов.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_044.md"
+  },
+  "visible": {
+    "nameRu": "Эпичный мерч боевых магов",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "textRu": "+2 мощи\nВ этом ходу ты тратишь на 2 меньше на покупку легенд.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "cost": 4,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 2 },
+      {
+        "effectId": "modify_effective_value",
+        "timing": "whileControlled",
+        "valueKind": "cardCost",
+        "operation": "add",
+        "amount": -2,
+        "target": { "targetType": "card", "cardTypes": ["legend"] }
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}
