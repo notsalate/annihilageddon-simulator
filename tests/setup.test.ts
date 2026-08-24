@@ -149,13 +149,28 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
     },
   };
 
-  const state = initializeGame({ dataPack, playerCount: 2, seed: 81203 });
+  const setupChoicePhases: string[] = [];
+  const state = initializeGame({
+    dataPack,
+    playerCount: 2,
+    seed: 81203,
+    familiarSetupChoicePolicy: ({ phase, candidateDefinitionIds }) => {
+      setupChoicePhases.push(phase);
+      return phase === "thirdFamiliar" ? candidateDefinitionIds.length - 1 : 1;
+    },
+  });
   const player = state.players[0];
   const otherPlayer = state.players[1];
   assert.ok(player);
   assert.ok(otherPlayer);
   assert.equal(state.activePlayerId, player.playerId);
   assert.equal(state.players.length, 2);
+  assert.deepEqual(setupChoicePhases, [
+    "startingPair",
+    "thirdFamiliar",
+    "startingPair",
+    "thirdFamiliar",
+  ]);
   assert.equal(player.unboughtFamiliars.length, 3);
   assert.equal(otherPlayer.unboughtFamiliars.length, 3);
   assert.ok(
@@ -180,9 +195,11 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
   const foreignDefinition = state.cardDefinitions.get(
     foreignFamiliar.definitionId
   );
+  const perCardDefinition = state.cardDefinitions.get("esw2_dbg__familiar_003");
   assert.ok(firstDefinition);
   assert.ok(secondDefinition);
   assert.ok(foreignDefinition);
+  assert.ok(perCardDefinition);
 
   assert.equal(
     listLegalActions(state).some(
@@ -220,6 +237,15 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
       secondDefinition,
       "legend",
       secondFamiliar
+    ),
+    false
+  );
+  assert.equal(
+    cardMatchesTypeForPlayer(
+      state,
+      player.playerId,
+      perCardDefinition,
+      "legend"
     ),
     false
   );

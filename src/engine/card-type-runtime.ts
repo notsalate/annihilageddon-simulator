@@ -71,7 +71,7 @@ export function cardMatchesTypeForPlayer(
   if (capabilityMode === undefined || capabilityMode === "always") {
     return capabilityMode === "always";
   }
-  if (card === undefined) return true;
+  if (card === undefined) return false;
   return player.effectiveCardTypeSelections.some(
     (selection) =>
       selection.cardInstanceId === card.instanceId &&

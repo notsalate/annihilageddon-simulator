@@ -5756,6 +5756,21 @@ test("свойство волшебника 003 позволяет считат�
     "esw2_dbg__familiar_007"
   );
   assert.ok(familiarDefinition);
+  const familiar = createRuntimeCardInstance(
+    player,
+    "esw2_dbg__familiar_007",
+    "familiar-effective-type"
+  );
+  player.unboughtFamiliars.push(familiar);
+  assert.deepEqual(
+    applyAction(state, {
+      type: "setCardEffectiveType",
+      cardInstanceId: familiar.instanceId,
+      cardType: "legend",
+      enabled: true,
+    }),
+    { ok: true }
+  );
 
   assert.equal(
     applyAction(state, {
@@ -5765,7 +5780,12 @@ test("свойство волшебника 003 позволяет считат�
     true
   );
   assert.equal(
-    calculateEffectiveCardCost(state, player.playerId, familiarDefinition),
+    calculateEffectiveCardCost(
+      state,
+      player.playerId,
+      familiarDefinition,
+      familiar
+    ),
     familiarDefinition.engine.cost - 2
   );
 });

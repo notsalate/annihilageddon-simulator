@@ -144,6 +144,9 @@ export type {
 export type {
   CardInstance,
   CommonState,
+  FamiliarSetupChoicePhase,
+  FamiliarSetupChoicePolicy,
+  FamiliarSetupChoiceRequest,
   GameState,
   PlayerDecisionView,
   PlayerState,

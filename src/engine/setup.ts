@@ -279,7 +279,19 @@ export type GameEventDestination =
   | "hand"
   | "discardSelf"
   | "topdeckSelf";
-export type SetupChoicePolicyId = "alwaysPickFirst";
+export type SetupChoicePolicyId = "alwaysPickFirst" | "provided";
+
+export type FamiliarSetupChoicePhase = "startingPair" | "thirdFamiliar";
+
+export interface FamiliarSetupChoiceRequest {
+  readonly playerId: PlayerId;
+  readonly phase: FamiliarSetupChoicePhase;
+  readonly candidateDefinitionIds: readonly CardDefinitionId[];
+}
+
+export type FamiliarSetupChoicePolicy = (
+  request: FamiliarSetupChoiceRequest
+) => number | undefined;
 
 export interface GameEventMetadata {
   eventSequence?: number;
@@ -789,6 +801,7 @@ interface InitializeGameBaseOptions {
   seed: number;
   playerCount?: number;
   effectChoiceStrategy?: ChoicePolicy;
+  familiarSetupChoicePolicy?: FamiliarSetupChoicePolicy;
 }
 
 export type InitializeGameOptions =
@@ -859,7 +872,8 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     factory,
     createSeededRng(options.seed + 7919),
     setupEvents,
-    setupDirectives
+    setupDirectives,
+    options.familiarSetupChoicePolicy
   );
   const forcedStartingPlayerId = setupDirectives.find(
     (directive) => directive.kind === "forceStartingPlayer"
@@ -1102,7 +1116,8 @@ function assignStartingFamiliars(
   factory: InstanceFactory,
   rng: RandomSource,
   eventLog: GameEvent[],
-  setupDirectives: readonly SetupDirective[]
+  setupDirectives: readonly SetupDirective[],
+  familiarSetupChoicePolicy?: FamiliarSetupChoicePolicy
 ): void {
   const familiarPool = dataPack.decks.familiarPool;
   if (familiarPool === undefined) {
@@ -1162,35 +1177,30 @@ function assignStartingFamiliars(
       );
     }
 
-    const selectedCandidate = alwaysPickFirstSetupChoice(
+    const selectedPairChoice = selectFamiliarSetupChoice(
       player,
-      "familiar",
+      "startingPair",
       [firstCandidate, secondCandidate],
+      familiarSetupChoicePolicy,
       eventLog
     );
 
-    player.unboughtFamiliars.push(
-      factory.create(selectedCandidate.definitionId, player.playerId)
-    );
-
     if (playersRetainingBothFamiliars.has(player.playerId)) {
-      player.unboughtFamiliars.push(
-        factory.create(secondCandidate.definitionId, player.playerId)
-      );
-      const thirdCandidateOffset =
-        players.length * 2 +
-        players
-          .slice(0, index)
-          .filter((candidate) =>
-            playersRetainingBothFamiliars.has(candidate.playerId)
-          ).length;
-      const remainingCandidates = setupPool.slice(thirdCandidateOffset);
-      const thirdCandidate = alwaysPickFirstSetupChoice(
+      for (const candidate of [firstCandidate, secondCandidate]) {
+        player.unboughtFamiliars.push(
+          factory.create(candidate.definitionId, player.playerId)
+        );
+      }
+      const familiarPairCount = players.length * 2;
+      const thirdCandidateChoice = selectFamiliarSetupChoice(
         player,
-        "familiar",
-        remainingCandidates,
+        "thirdFamiliar",
+        setupPool.slice(familiarPairCount),
+        familiarSetupChoicePolicy,
         eventLog
       );
+      const thirdCandidate = thirdCandidateChoice.candidate;
+      setupPool.splice(familiarPairCount + thirdCandidateChoice.index, 1);
       const thirdDefinition = mustGetDefinition(
         dataPack,
         thirdCandidate.definitionId
@@ -1203,8 +1213,63 @@ function assignStartingFamiliars(
       player.unboughtFamiliars.push(
         factory.create(thirdCandidate.definitionId, player.playerId)
       );
+    } else {
+      player.unboughtFamiliars.push(
+        factory.create(
+          selectedPairChoice.candidate.definitionId,
+          player.playerId
+        )
+      );
     }
   }
+}
+
+function selectFamiliarSetupChoice<
+  TCandidate extends SetupCandidate<CardDefinitionId>,
+>(
+  player: PlayerState,
+  phase: FamiliarSetupChoicePhase,
+  candidates: readonly TCandidate[],
+  policy: FamiliarSetupChoicePolicy | undefined,
+  eventLog: GameEvent[]
+): { candidate: TCandidate; index: number } {
+  if (candidates.length === 0) {
+    throw new Error(
+      `Setup choice familiar has no candidates for ${player.playerId}`
+    );
+  }
+  const requestedIndex = policy?.({
+    playerId: player.playerId,
+    phase,
+    candidateDefinitionIds: candidates.map(
+      (candidate) => candidate.definitionId
+    ),
+  });
+  const selectedIndex = requestedIndex ?? 0;
+  if (
+    !Number.isSafeInteger(selectedIndex) ||
+    selectedIndex < 0 ||
+    selectedIndex >= candidates.length
+  ) {
+    throw new Error(
+      `Familiar setup choice for ${player.playerId} returned invalid candidate index ${String(selectedIndex)}`
+    );
+  }
+  const chosenCandidate = candidates[selectedIndex];
+  if (chosenCandidate === undefined) {
+    throw new Error("Unexpected sparse array during familiar setup choice");
+  }
+  recordSetupChoiceSelected(eventLog, {
+    type: "setupChoiceSelected",
+    playerId: player.playerId,
+    setupChoiceKind: "familiar",
+    policyId: requestedIndex === undefined ? "alwaysPickFirst" : "provided",
+    candidateDefinitionIds: candidates.map(
+      (candidate) => candidate.definitionId
+    ),
+    chosenDefinitionId: chosenCandidate.definitionId,
+  });
+  return { candidate: chosenCandidate, index: selectedIndex };
 }
 
 function alwaysPickFirstSetupChoice<TCandidate extends SetupCandidate<string>>(
