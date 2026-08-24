@@ -1,4 +1,5 @@
 import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
+import { changePlayerChips } from "./effect-runtime-resources-draw.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
@@ -15,11 +16,40 @@ import type {
 } from "./effect-runtime-family-support.js";
 
 export const deadWizardTokenEffectIds = [
+  "dead_wizard_token_each_foe_gain_chips",
+  "dead_wizard_token_gain_chips",
   "dead_wizard_token_gain_limp_wands_per_discard_legend",
   "dead_wizard_token_gain_limp_wand_to_deck_top",
+  "dead_wizard_token_lose_half_chips",
+  "dead_wizard_token_reward_killer_chips",
 ] as const;
 
 export type DeadWizardTokenEffectId = (typeof deadWizardTokenEffectIds)[number];
+
+export type DeadWizardTokenGainChipsRuntimeEffect = {
+  effectId: "dead_wizard_token_gain_chips";
+  timing: "onDeadWizardTokenFace";
+  amount: 1;
+};
+
+export type DeadWizardTokenEachFoeGainChipsRuntimeEffect = {
+  effectId: "dead_wizard_token_each_foe_gain_chips";
+  timing: "onDeadWizardTokenFace";
+  amount: 1;
+};
+
+export type DeadWizardTokenLoseHalfChipsRuntimeEffect = {
+  effectId: "dead_wizard_token_lose_half_chips";
+  timing: "onDeadWizardTokenFace";
+  loss: "half";
+  rounding: "up";
+};
+
+export type DeadWizardTokenRewardKillerChipsRuntimeEffect = {
+  effectId: "dead_wizard_token_reward_killer_chips";
+  timing: "onDeadWizardTokenFace";
+  amount: 2;
+};
 
 export type DeadWizardTokenGainLimpWandsPerDiscardLegendRuntimeEffect = {
   effectId: "dead_wizard_token_gain_limp_wands_per_discard_legend";
@@ -36,8 +66,12 @@ export type DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect = {
 };
 
 export interface DeadWizardTokenEffectPayloadMap {
+  dead_wizard_token_each_foe_gain_chips: DeadWizardTokenEachFoeGainChipsRuntimeEffect;
+  dead_wizard_token_gain_chips: DeadWizardTokenGainChipsRuntimeEffect;
   dead_wizard_token_gain_limp_wands_per_discard_legend: DeadWizardTokenGainLimpWandsPerDiscardLegendRuntimeEffect;
   dead_wizard_token_gain_limp_wand_to_deck_top: DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect;
+  dead_wizard_token_lose_half_chips: DeadWizardTokenLoseHalfChipsRuntimeEffect;
+  dead_wizard_token_reward_killer_chips: DeadWizardTokenRewardKillerChipsRuntimeEffect;
 }
 
 export interface DeadWizardTokenDecoderTools {
@@ -60,6 +94,39 @@ export function createDeadWizardTokenEffectDecoders(
 ): { [Id in DeadWizardTokenEffectId]: RuntimeEffectDecoder<Id> } {
   const { defineDecoder, required, literal } = tools;
   return {
+    dead_wizard_token_each_foe_gain_chips: defineDecoder(
+      "dead_wizard_token_each_foe_gain_chips",
+      {
+        effectId: required(literal("dead_wizard_token_each_foe_gain_chips")),
+        timing: required(literal("onDeadWizardTokenFace")),
+        amount: required(literal(1)),
+      }
+    ),
+    dead_wizard_token_gain_chips: defineDecoder(
+      "dead_wizard_token_gain_chips",
+      {
+        effectId: required(literal("dead_wizard_token_gain_chips")),
+        timing: required(literal("onDeadWizardTokenFace")),
+        amount: required(literal(1)),
+      }
+    ),
+    dead_wizard_token_lose_half_chips: defineDecoder(
+      "dead_wizard_token_lose_half_chips",
+      {
+        effectId: required(literal("dead_wizard_token_lose_half_chips")),
+        timing: required(literal("onDeadWizardTokenFace")),
+        loss: required(literal("half")),
+        rounding: required(literal("up")),
+      }
+    ),
+    dead_wizard_token_reward_killer_chips: defineDecoder(
+      "dead_wizard_token_reward_killer_chips",
+      {
+        effectId: required(literal("dead_wizard_token_reward_killer_chips")),
+        timing: required(literal("onDeadWizardTokenFace")),
+        amount: required(literal(2)),
+      }
+    ),
     dead_wizard_token_gain_limp_wands_per_discard_legend: defineDecoder(
       "dead_wizard_token_gain_limp_wands_per_discard_legend",
       {
@@ -117,6 +184,64 @@ const gainLimpWandsPerDiscardLegendHandler: EffectRuntimeHandler<DeadWizardToken
     },
   };
 
+const gainChipsHandler: EffectRuntimeHandler<DeadWizardTokenGainChipsRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_gain_chips",
+    execute(state, player, effect, source) {
+      changePlayerChips(state, player, effect.amount, source, effect.effectId);
+      return { ok: true };
+    },
+  };
+
+const eachFoeGainChipsHandler: EffectRuntimeHandler<DeadWizardTokenEachFoeGainChipsRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_each_foe_gain_chips",
+    execute(state, player, effect, source, services) {
+      for (const foe of services.getOpponentsInSeatingOrder(state, player)) {
+        changePlayerChips(state, foe, effect.amount, source, effect.effectId);
+      }
+      return { ok: true };
+    },
+  };
+
+const loseHalfChipsHandler: EffectRuntimeHandler<DeadWizardTokenLoseHalfChipsRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_lose_half_chips",
+    execute(state, player, effect, source) {
+      changePlayerChips(
+        state,
+        player,
+        -(effect.rounding === "up"
+          ? Math.ceil(player.chips / 2)
+          : Math.floor(player.chips / 2)),
+        source,
+        effect.effectId
+      );
+      return { ok: true };
+    },
+  };
+
+const rewardKillerChipsHandler: EffectRuntimeHandler<DeadWizardTokenRewardKillerChipsRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_reward_killer_chips",
+    execute(state, _player, effect, source) {
+      const killerPlayerId = source.deadWizardTokenDeathKillerPlayerId;
+      const killer = state.players.find(
+        (candidate) => candidate.playerId === killerPlayerId
+      );
+      if (killer !== undefined) {
+        changePlayerChips(
+          state,
+          killer,
+          effect.amount,
+          source,
+          effect.effectId
+        );
+      }
+      return { ok: true };
+    },
+  };
+
 const gainLimpWandToDeckTopHandler: EffectRuntimeHandler<DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect> =
   {
     effectId: "dead_wizard_token_gain_limp_wand_to_deck_top",
@@ -162,6 +287,42 @@ export function createDeadWizardTokenEffectDefinitions(
   const supportedModes = ["combat", "fixture"] as const;
   const supportedSourceKinds = ["deadWizardToken"] as const;
   return [
+    {
+      effectId: "dead_wizard_token_each_foe_gain_chips",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_each_foe_gain_chips"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: eachFoeGainChipsHandler,
+    },
+    {
+      effectId: "dead_wizard_token_gain_chips",
+      decoder: bindRuntimeEffectDecoder("dead_wizard_token_gain_chips"),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: gainChipsHandler,
+    },
+    {
+      effectId: "dead_wizard_token_lose_half_chips",
+      decoder: bindRuntimeEffectDecoder("dead_wizard_token_lose_half_chips"),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: loseHalfChipsHandler,
+    },
+    {
+      effectId: "dead_wizard_token_reward_killer_chips",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_reward_killer_chips"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: rewardKillerChipsHandler,
+    },
     {
       effectId: "dead_wizard_token_gain_limp_wands_per_discard_legend",
       decoder: bindRuntimeEffectDecoder(

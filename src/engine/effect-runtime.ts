@@ -624,6 +624,11 @@ function resolveQueuedDeadWizardTokenFaces(
       definitionId: definition.tokenId,
       tokenInstanceId: token.instanceId,
       tokenDefinitionId: definition.tokenId,
+      ...(currentFace.deathKillerPlayerId === undefined
+        ? {}
+        : {
+            deadWizardTokenDeathKillerPlayerId: currentFace.deathKillerPlayerId,
+          }),
     };
     beginDeadWizardTokenResolutionBoundary(state);
     let result: EffectExecutionResult;
@@ -2030,7 +2035,7 @@ function resolvePlayerDeath(
     lifeAfter: resurrectionLifeTotal,
   });
 
-  return issueDeadWizardToken(state, player);
+  return issueDeadWizardToken(state, player, killCredit?.killer.playerId);
 }
 
 export function gainDeadWizardToken(
@@ -2044,7 +2049,8 @@ export function gainDeadWizardToken(
 
 function issueDeadWizardToken(
   state: GameState,
-  player: PlayerState
+  player: PlayerState,
+  deathKillerPlayerId?: PlayerState["playerId"]
 ): EffectExecutionResult {
   if (
     state.common.deadWizardTokens.status === "available" &&
@@ -2067,7 +2073,7 @@ function issueDeadWizardToken(
           tokenInstanceId: token.instanceId,
           tokenDefinitionId: token.definitionId,
         });
-        enqueueDeadWizardTokenFace(state, player, token);
+        enqueueDeadWizardTokenFace(state, player, token, deathKillerPlayerId);
         return token;
       }
     );

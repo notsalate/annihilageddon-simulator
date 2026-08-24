@@ -67,8 +67,12 @@ export type {
 } from "./effect-runtime-card-type.js";
 export type {
   DeadWizardTokenEffectPayloadMap,
+  DeadWizardTokenEachFoeGainChipsRuntimeEffect,
+  DeadWizardTokenGainChipsRuntimeEffect,
   DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect,
   DeadWizardTokenGainLimpWandsPerDiscardLegendRuntimeEffect,
+  DeadWizardTokenLoseHalfChipsRuntimeEffect,
+  DeadWizardTokenRewardKillerChipsRuntimeEffect,
 } from "./effect-runtime-dead-wizard-token.js";
 
 export const effectTimings = [
@@ -213,8 +217,12 @@ export const knownRuntimeEffectIds = [
   "conditional_activation_gain_chips",
   "controls_other_card_type",
   "deal_damage",
+  "dead_wizard_token_each_foe_gain_chips",
+  "dead_wizard_token_gain_chips",
   "dead_wizard_token_gain_limp_wand_to_deck_top",
   "dead_wizard_token_gain_limp_wands_per_discard_legend",
+  "dead_wizard_token_lose_half_chips",
+  "dead_wizard_token_reward_killer_chips",
   "double_owned_attack_damage",
   "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
   "destroy_card",

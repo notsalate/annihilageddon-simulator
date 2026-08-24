@@ -166,6 +166,7 @@ export interface GameState {
       playerId: PlayerId;
       tokenInstanceId: TokenInstanceId;
       tokenDefinitionId: TokenDefinitionId;
+      deathKillerPlayerId?: PlayerId;
     }>;
   };
   eventLog: GameEvent[];

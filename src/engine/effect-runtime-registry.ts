@@ -130,6 +130,7 @@ export interface EffectSourceContext {
   definitionId: string;
   tokenInstanceId?: TokenInstance["instanceId"];
   tokenDefinitionId?: TokenDefinition["tokenId"];
+  deadWizardTokenDeathKillerPlayerId?: PlayerState["playerId"];
 }
 
 export interface AttackReplacementProfile {
