@@ -1818,12 +1818,7 @@
         {
           "draftPoint": { "path": "visible.victoryPoints", "value": -4 },
           "runtimeRefs": [
-            {
-              "kind": "effect",
-              "effectId": "modify_owned_wand_attack_damage",
-              "timing": "attackReplacement",
-              "fields": { "cardTags": ["wandAttackCard"], "amount": 4 }
-            }
+            { "kind": "field", "path": "victoryPoints", "value": -7 }
           ],
           "testRefs": [
             {

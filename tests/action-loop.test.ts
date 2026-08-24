@@ -401,6 +401,10 @@ test("redirected foreign Wand uses the redirecting player's DWT016 but not wizar
   );
   assert.ok(redirectingPlayer);
   attackingPlayer.wizardProperties = [];
+  const scoreBeforeDwt = scoreGame(state).find(
+    (score) => score.playerId === redirectingPlayer.playerId
+  );
+  assert.ok(scoreBeforeDwt);
   replaceFirstWizardProperty(
     state,
     redirectingPlayer,
@@ -466,6 +470,12 @@ test("redirected foreign Wand uses the redirecting player's DWT016 but not wizar
   assert.deepEqual(
     attackStarts.map((event) => event.amount),
     [1, 5]
+  );
+  assert.equal(
+    scoreGame(state).find(
+      (score) => score.playerId === redirectingPlayer.playerId
+    )?.victoryPoints,
+    scoreBeforeDwt.victoryPoints - 7
   );
 });
 
