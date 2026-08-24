@@ -10,6 +10,7 @@ import {
   calculateEndTurnDrawCount,
   getWizardPropertyActivationAvailability,
   hasExecutableWizardPropertyActivation,
+  isBasicTrophyChipPayoutSuppressed,
   moveGainedCardToPlayerDestination,
   resolveWithinDeadWizardTokenResolutionBoundary,
   validateActivationEffects,
@@ -579,7 +580,8 @@ function grantBasicTrophyChipAtEndOfTurn(
   if (
     !activePlayer.trophyLikeObjects.some(
       (trophy) => trophy.trophyId === "basicTrophy"
-    )
+    ) ||
+    isBasicTrophyChipPayoutSuppressed(state, activePlayer)
   ) {
     return;
   }

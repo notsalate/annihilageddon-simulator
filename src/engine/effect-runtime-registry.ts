@@ -136,6 +136,8 @@ export interface EffectSourceContext {
 export interface AttackReplacementProfile {
   readonly doublesOwnedAttackDamage: boolean;
   readonly damageBonus: number;
+  readonly controlledCardDamageBonus: number;
+  readonly deadWizardTokenDamageBonus: number;
   readonly unavoidable: boolean;
 }
 
@@ -2139,11 +2141,21 @@ export function isSupportedRuntimeEffectTiming(
 export function collectAttackReplacementProfile(
   state: GameState,
   attackingPlayer: PlayerState,
-  source: EffectSourceContext
+  source: EffectSourceContext,
+  options?: {
+    includeDeadWizardTokenModifiers?: boolean;
+    includeSourceOwnerModifiers?: boolean;
+  }
 ): EffectRuntimeOperationResult<AttackReplacementProfile> {
+  const includeDeadWizardTokenModifiers =
+    options?.includeDeadWizardTokenModifiers ?? false;
+  const includeSourceOwnerModifiers =
+    options?.includeSourceOwnerModifiers ?? true;
   const profile = {
     doublesOwnedAttackDamage: false,
     damageBonus: 0,
+    controlledCardDamageBonus: 0,
+    deadWizardTokenDamageBonus: 0,
     unavoidable: false,
   };
   const applyEffects = (
@@ -2167,6 +2179,14 @@ export function collectAttackReplacementProfile(
           }
           if (decoded.effectId === "modify_owned_wand_attack_damage") {
             profile.damageBonus += decoded.amount;
+            if (effectSource.sourceType === "deadWizardToken") {
+              profile.deadWizardTokenDamageBonus += decoded.amount;
+            } else if (
+              effectSource.sourceType === "card" &&
+              effectSource.playerId === attackingPlayer.playerId
+            ) {
+              profile.controlledCardDamageBonus += decoded.amount;
+            }
           }
           if (
             allowWandDefensePrevention &&
@@ -2199,7 +2219,28 @@ export function collectAttackReplacementProfile(
     if (result.status === "error") return result;
   }
 
-  if (source.sourceType !== "card")
+  if (includeDeadWizardTokenModifiers) {
+    for (const token of attackingPlayer.deadWizardTokens) {
+      const definition = state.tokenDefinitions.get(token.definitionId);
+      if (definition?.kind !== "deadWizardToken") continue;
+      const result = applyEffects(
+        definition.effects,
+        {
+          sourceType: "deadWizardToken",
+          runtimeMode: source.runtimeMode,
+          playerId: attackingPlayer.playerId,
+          cardInstanceId: token.instanceId,
+          definitionId: definition.tokenId,
+          tokenInstanceId: token.instanceId,
+          tokenDefinitionId: definition.tokenId,
+        },
+        false
+      );
+      if (result.status === "error") return result;
+    }
+  }
+
+  if (!includeSourceOwnerModifiers || source.sourceType !== "card")
     return { status: "resolved", result: profile };
   const sourceCard = findCardLocation(state, source.cardInstanceId)?.card;
   if (sourceCard === undefined || sourceCard.ownerId === "common") {

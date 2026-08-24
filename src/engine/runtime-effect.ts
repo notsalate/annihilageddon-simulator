@@ -53,6 +53,7 @@ export type {
   OngoingEffectPayloadMap,
   OngoingFirstAttackDamageAddPowerRuntimeEffect,
   OngoingHandRefillBonusRuntimeEffect,
+  SuppressBasicTrophyChipPayoutRuntimeEffect,
   OngoingStartTurnOptionalGainLimpWandToHandRuntimeEffect,
 } from "./effect-runtime-ongoing.js";
 export type {
@@ -284,6 +285,7 @@ export const knownRuntimeEffectIds = [
   "ongoing_add_power_when_playing_limp_wand",
   "ongoing_first_attack_damage_add_power",
   "ongoing_hand_refill_bonus",
+  "suppress_basic_trophy_chip_payout",
   "ongoing_start_turn_optional_gain_limp_wand_to_hand",
   "optional_gain_market_cards_to_hand_this_turn",
   "owned_cards_count_as_card_type",

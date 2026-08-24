@@ -985,6 +985,47 @@ export function calculateEndTurnDrawCount(
   return controlledDrawResult.drawCount;
 }
 
+export function isBasicTrophyChipPayoutSuppressed(
+  state: GameState,
+  player: PlayerState
+): boolean {
+  for (const token of player.deadWizardTokens) {
+    const definition = state.tokenDefinitions.get(token.definitionId);
+    if (definition?.kind !== "deadWizardToken") {
+      continue;
+    }
+
+    const source: EffectSourceContext = {
+      sourceType: "deadWizardToken",
+      runtimeMode: state.runtimeMode,
+      playerId: player.playerId,
+      cardInstanceId: token.instanceId,
+      definitionId: definition.tokenId,
+      tokenInstanceId: token.instanceId,
+      tokenDefinitionId: definition.tokenId,
+    };
+    for (const effect of definition.effects) {
+      const result = evaluateRuntimeEffectAtTiming(
+        requireVerifiedRuntimeEffect(effect),
+        source,
+        "whileControlled",
+        (decodedEffect) =>
+          decodedEffect.effectId === "suppress_basic_trophy_chip_payout"
+            ? { status: "resolved", result: true }
+            : { status: "notApplicable" }
+      );
+      if (result.status === "error") {
+        throw new Error(result.error);
+      }
+      if (result.status === "resolved" && result.result) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 export function executeMayhemEffects(
   state: GameState,
   player: PlayerState,

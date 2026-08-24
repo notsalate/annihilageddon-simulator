@@ -386,7 +386,7 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
   );
 });
 
-test("redirected foreign Wand does not inherit the redirecting player's wizard property", () => {
+test("redirected foreign Wand uses the redirecting player's DWT016 but not wizard property", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -408,10 +408,15 @@ test("redirected foreign Wand does not inherit the redirecting player's wizard p
       "esw2_dbg__wizard_property_009"
     ) as TokenDefinition
   );
+  redirectingPlayer.deadWizardTokens.push({
+    instanceId: markTokenInstanceId("fixture-dwt016-redirect"),
+    definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_016"),
+    ownerId: redirectingPlayer.playerId,
+  });
   const wand = addRuntimeCardToHand(
     state,
     attackingPlayer,
-    "esw2_dbg__starter_004"
+    "esw2_dbg__starter_003"
   );
   addFixtureDefenseCardToHand(state, redirectingPlayer, "discardSelf", {
     redirectAttack: true,
@@ -441,6 +446,7 @@ test("redirected foreign Wand does not inherit the redirecting player's wizard p
   });
 
   assert.equal(result.ok, true);
+  assert.equal(state.activePlayerId, attackingPlayer.playerId);
   assert.equal(attackingPlayer.life.current, attackingLifeBefore);
   assert.equal(attackingPlayer.discard.includes(returnDefense), true);
   const redirectedAttack = state.eventLog.find(
@@ -451,7 +457,16 @@ test("redirected foreign Wand does not inherit the redirecting player's wizard p
   );
   assert.ok(redirectedAttack);
   assert.equal(redirectedAttack.cardInstanceId, wand.instanceId);
-  assert.equal(redirectedAttack.amount, 1);
+  assert.equal(redirectedAttack.amount, 5);
+  const attackStarts = state.eventLog.filter(
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.cardInstanceId === wand.instanceId
+  );
+  assert.deepEqual(
+    attackStarts.map((event) => event.amount),
+    [1, 5]
+  );
 });
 
 test("Chipsychosis Arena doubles a redirected attack for the redirecting attacker", () => {
@@ -4576,6 +4591,37 @@ test("Basic Trophy grants a chip at the end of its controller's turn", () => {
       );
     })
   );
+});
+
+test("DWT 020 suppresses only its controller's Basic Trophy payout", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 62020,
+  });
+  const firstPlayer = mustGetPlayer(state, state.activePlayerId);
+  const secondPlayer = state.players.find(
+    (player) => player.playerId !== firstPlayer.playerId
+  );
+  assert.ok(secondPlayer);
+  firstPlayer.trophyLikeObjects.push(createBasicTrophy(firstPlayer.playerId));
+  firstPlayer.deadWizardTokens.push({
+    instanceId: markTokenInstanceId("fixture-dwt020"),
+    definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_020"),
+    ownerId: firstPlayer.playerId,
+  });
+
+  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+  assert.equal(state.turn.number, 2);
+  assert.equal(firstPlayer.chips, 0);
+
+  const trophy = firstPlayer.trophyLikeObjects.pop();
+  assert.ok(trophy);
+  trophy.ownerId = secondPlayer.playerId;
+  secondPlayer.trophyLikeObjects.push(trophy);
+  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+  assert.equal(state.turn.number, 3);
+  assert.equal(secondPlayer.chips, 1);
 });
 
 test("played permanents stay in the controlled permanent zone after cleanup", () => {

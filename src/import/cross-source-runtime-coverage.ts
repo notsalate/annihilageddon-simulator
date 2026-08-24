@@ -830,9 +830,6 @@ function getRuntimeReferenceFields(
 ): Record<string, CrossSourceRuntimeValue> | undefined {
   const record = getRecord(value);
   const entries = Object.entries(record);
-  if (entries.length === 0) {
-    return undefined;
-  }
   const fields: Record<string, CrossSourceRuntimeValue> = {};
   for (const [fieldName, fieldValue] of entries) {
     const decodedValue = getRuntimeValue(fieldValue);

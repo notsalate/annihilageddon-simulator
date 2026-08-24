@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "tokenId": "esw2_dbg__dead_wizard_token_020",
+  "runtimeSchema": "krutagidon.tokenDefinition.v0",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_020.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_020.md"
+  },
+  "victoryPoints": -3,
+  "effects": [
+    {
+      "effectId": "suppress_basic_trophy_chip_payout",
+      "timing": "whileControlled"
+    }
+  ]
+}

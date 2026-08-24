@@ -254,19 +254,25 @@ export function resolveAttackAmount(
   state: GameState,
   attackingPlayer: PlayerState,
   targetPlayer: PlayerState,
-  amountState: AttackAmountState
+  amountState: AttackAmountState,
+  source?: EffectSourceContext,
+  originalSource?: EffectSourceContext
 ): ResolvedAttackAmount {
   const unmodifiedAmount =
     amountState.unresolvedBaseAmount + amountState.sourceOwnerModifierAmount;
   const attackReplacementProfile = collectAttackReplacementProfile(
     state,
     attackingPlayer,
-    {
+    source ?? {
       sourceType: "card",
       runtimeMode: state.runtimeMode,
       playerId: attackingPlayer.playerId,
       cardInstanceId: "attack-resolution",
       definitionId: "attack-resolution",
+    },
+    {
+      includeDeadWizardTokenModifiers: true,
+      includeSourceOwnerModifiers: false,
     }
   );
   if (attackReplacementProfile.status === "error") {
@@ -276,11 +282,20 @@ export function resolveAttackAmount(
     attackingPlayer.playerId !== targetPlayer.playerId &&
     attackReplacementProfile.status === "resolved" &&
     attackReplacementProfile.result.doublesOwnedAttackDamage;
+  const currentAttackerDamageBonus =
+    attackReplacementProfile.status === "resolved"
+      ? attackReplacementProfile.result.deadWizardTokenDamageBonus +
+        (source !== undefined &&
+        originalSource !== undefined &&
+        source.playerId !== originalSource.playerId
+          ? attackReplacementProfile.result.controlledCardDamageBonus
+          : 0)
+      : 0;
   const components: AttackAmountComponents = {
     ...amountState,
-    currentAttackerTargetModifierAmount: doublesAgainstTarget
-      ? unmodifiedAmount
-      : 0,
+    currentAttackerTargetModifierAmount:
+      currentAttackerDamageBonus +
+      (doublesAgainstTarget ? unmodifiedAmount : 0),
   };
 
   return {
@@ -463,7 +478,9 @@ function resolvePlayerControlledAttackTarget(
     intent.state,
     current.attackingPlayer,
     current.targetPlayer,
-    current.amountComponents
+    current.amountComponents,
+    current.source,
+    context.originalSource
   );
   recordAttackTargetStarted(
     intent,

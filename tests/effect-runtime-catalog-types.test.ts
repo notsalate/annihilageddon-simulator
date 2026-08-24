@@ -299,6 +299,7 @@ test("card, activation, ongoing and modifier IDs belong to family modules", () =
     "ongoing_add_power_when_playing_limp_wand",
     "ongoing_first_attack_damage_add_power",
     "ongoing_hand_refill_bonus",
+    "suppress_basic_trophy_chip_payout",
     "ongoing_start_turn_optional_gain_limp_wand_to_hand",
   ]);
   assert.deepEqual(effectiveValueModifierEffectIds, [
