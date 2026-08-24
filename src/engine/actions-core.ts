@@ -23,13 +23,14 @@ import type { EffectGameEnd } from "./effect-runtime-registry.js";
 import { assertNever } from "../common.js";
 import {
   getControlledCards,
-  listPhysicalCardLocations,
+  listOwnedPlayerPhysicalCards,
   releaseTemporaryControls,
 } from "./control-ledger.js";
 import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
 import { drawDeckCards } from "./deck-lifecycle.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import {
+  cardMatchesTypeForPlayer,
   clearPlayerCardEffectiveType,
   getCardEffectiveTypeOptions,
   isPlayerCardEffectiveTypeSelected,
@@ -240,7 +241,7 @@ export function preflightAction(
           card
         );
         if (
-          calculatePayment(state, activePlayer, cost, action.source) ===
+          calculatePayment(state, activePlayer, cost, action.source, card) ===
           undefined
         ) {
           return {
@@ -716,7 +717,13 @@ function buyMarketCard(
   );
   const powerBefore = state.turn.power;
   const chipsBefore = activePlayer.chips;
-  const payment = calculatePayment(state, activePlayer, cost, action.source);
+  const payment = calculatePayment(
+    state,
+    activePlayer,
+    cost,
+    action.source,
+    card
+  );
   if (payment === undefined) {
     return {
       ok: false,
@@ -895,6 +902,37 @@ function canAffordWithChips(
   );
 }
 
+function canAffordFamiliar(
+  state: GameState,
+  player: PlayerState,
+  familiar: CardInstance
+): boolean {
+  return canUseChipsForPurchase(state, player, familiar, "familiar")
+    ? canAffordWithChips(state, player, familiar)
+    : canAfford(state, player, familiar);
+}
+
+function canUseChipsForPurchase(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance,
+  source: BuySource
+): boolean {
+  if (source === "legendMarket") {
+    return true;
+  }
+  if (source !== "familiar") {
+    return false;
+  }
+  return cardMatchesTypeForPlayer(
+    state,
+    player.playerId,
+    mustGetDefinition(state, card.definitionId),
+    "legend",
+    card
+  );
+}
+
 function canActivatePermanent(
   state: GameState,
   _player: PlayerState,
@@ -947,7 +985,7 @@ function getFamiliarBuyAction(
   player: PlayerState
 ): BuyMarketCardAction[] {
   return player.unboughtFamiliars
-    .filter((familiar) => canAfford(state, player, familiar))
+    .filter((familiar) => canAffordFamiliar(state, player, familiar))
     .map((familiar) => ({
       type: "buyMarketCard" as const,
       cardInstanceId: familiar.instanceId,
@@ -961,7 +999,6 @@ function getCardEffectiveTypeActions(
 ): SetCardEffectiveTypeAction[] {
   const cards = new Map<string, CardInstance>();
   for (const card of [
-    ...player.unboughtFamiliars,
     ...getControlledCards(state, player),
     ...getOwnedFamiliarCards(state, player),
   ]) {
@@ -993,7 +1030,6 @@ function getCardEffectiveTypeActionCard(
   cardInstanceId: string
 ): CardInstance | undefined {
   return [
-    ...player.unboughtFamiliars,
     ...getControlledCards(state, player),
     ...getOwnedFamiliarCards(state, player),
   ].find((card) => card.instanceId === cardInstanceId);
@@ -1003,14 +1039,11 @@ function getOwnedFamiliarCards(
   state: GameState,
   player: PlayerState
 ): CardInstance[] {
-  return listPhysicalCardLocations(state)
-    .map((location) => location.card)
-    .filter(
-      (card) =>
-        card.ownerId === player.playerId &&
-        state.cardDefinitions.get(card.definitionId)?.engine.cardKind ===
-          "familiar"
-    );
+  return listOwnedPlayerPhysicalCards(state, player.playerId).filter(
+    (card) =>
+      state.cardDefinitions.get(card.definitionId)?.engine.cardKind ===
+      "familiar"
+  );
 }
 
 function getBuyCard(
@@ -1048,10 +1081,11 @@ function calculatePayment(
   state: GameState,
   player: PlayerState,
   cost: number,
-  source: BuySource
+  source: BuySource,
+  card: CardInstance
 ): PaymentResult | undefined {
   const payableCost = source === "wildMagicStack" ? 3 : cost;
-  if (source !== "legendMarket") {
+  if (!canUseChipsForPurchase(state, player, card, source)) {
     if (payableCost > state.turn.power) {
       return undefined;
     }

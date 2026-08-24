@@ -499,6 +499,21 @@ export function listPhysicalCardLocations(
   );
 }
 
+/** Lists owned cards in one player's Ledger-owned physical zones. */
+export function listOwnedPlayerPhysicalCards(
+  state: GameState,
+  playerId: PlayerId
+): readonly CardInstance[] {
+  const playerZonePrefix = `${playerId}.`;
+  return listPhysicalCardLocations(state)
+    .filter(
+      (location) =>
+        location.zoneName.startsWith(playerZonePrefix) &&
+        location.card.ownerId === playerId
+    )
+    .map((location) => location.card);
+}
+
 /** Returns the current player's played cards through the Ledger-owned zone. */
 export function listPlayerPlayedThisTurnCards(
   player: PlayerState

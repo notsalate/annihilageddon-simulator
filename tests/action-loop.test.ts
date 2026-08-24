@@ -5762,25 +5762,8 @@ test("свойство волшебника 003 позволяет считат�
     "familiar-effective-type"
   );
   player.unboughtFamiliars.push(familiar);
-  state.turn.power = familiarDefinition.engine.cost;
-  assert.deepEqual(
-    applyAction(state, {
-      type: "buyMarketCard",
-      cardInstanceId: familiar.instanceId,
-      source: "familiar",
-    }),
-    { ok: true }
-  );
-  assert.equal(player.discard.includes(familiar), true);
-  assert.ok(
-    listLegalActions(state).some(
-      (action) =>
-        action.type === "setCardEffectiveType" &&
-        action.cardInstanceId === familiar.instanceId &&
-        action.cardType === "legend" &&
-        action.enabled
-    )
-  );
+  state.turn.power = 0;
+  player.chips = familiarDefinition.engine.cost;
   assert.deepEqual(
     applyAction(state, {
       type: "setCardEffectiveType",
@@ -5790,6 +5773,17 @@ test("свойство волшебника 003 позволяет считат�
     }),
     { ok: true }
   );
+  assert.deepEqual(
+    applyAction(state, {
+      type: "buyMarketCard",
+      cardInstanceId: familiar.instanceId,
+      source: "familiar",
+    }),
+    { ok: true }
+  );
+  assert.equal(player.discard.includes(familiar), true);
+  assert.equal(state.turn.power, 0);
+  assert.equal(player.chips, 0);
 
   assert.equal(
     applyAction(state, {
@@ -5824,6 +5818,15 @@ test("свойство волшебника 003 позволяет считат�
       familiar
     ),
     familiarDefinition.engine.cost
+  );
+  assert.ok(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "setCardEffectiveType" &&
+        action.cardInstanceId === familiar.instanceId &&
+        action.cardType === "legend" &&
+        action.enabled
+    )
   );
 });
 
