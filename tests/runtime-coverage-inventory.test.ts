@@ -331,7 +331,7 @@ test("cross-source coverage requires matching runtime and focused test evidence 
   writeText(
     rootDir,
     "tests/wizard-property-runtime.test.ts",
-    `test("gains a chip while activated", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.equal(result.ok, true);\n});\n`
+    `test("gains a chip while activated", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.equal(state.players[0]?.chips, 1);\n});\n`
   );
 
   const report = createRuntimeCoverageInventory(rootDir);
@@ -440,7 +440,7 @@ test("cross-source coverage blocks effects outside their source-kind policy", ()
   writeText(
     rootDir,
     "tests/dead-wizard-token-runtime.test.ts",
-    `test("rejects setup replacement on a DWT", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.equal(result.ok, true);\n});\n`
+    `test("rejects setup replacement on a DWT", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.equal(state.players[0]?.chips, 1);\n});\n`
   );
 
   const item = createRuntimeCoverageInventory(rootDir).items.find(
@@ -585,7 +585,7 @@ test("cross-source coverage applies complete evidence to cards", () => {
   writeText(
     rootDir,
     "tests/card-runtime.test.ts",
-    `test("gains a chip from the mapped card", () => {\n  const cardId = "${cardId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId });\n  assert.equal(result.ok, true);\n});\n`
+    `test("gains a chip from the mapped card", () => {\n  const cardId = "${cardId}";\n  const state = initializeGame({ rootDir });\n  applyAction(state, { type: "playCard", cardId });\n  assert.equal(state.players[0]?.chips, 1);\n});\n`
   );
 
   const item = createRuntimeCoverageInventory(rootDir).items.find(
@@ -595,6 +595,29 @@ test("cross-source coverage applies complete evidence to cards", () => {
   assert.ok(item);
   assert.equal(item.crossSourceStatus, "crossSourceComplete");
   assert.equal(item.primaryMechanicCluster, "chipsin-economy");
+
+  writeJson(rootDir, "data/decks/main-deck.json", {
+    deckId: "main-deck",
+    role: "mainDeck",
+    entries: [{ tokenId: cardId, count: 2 }],
+  });
+  const itemWithTokenEntry = createRuntimeCoverageInventory(rootDir).items.find(
+    (candidate) => candidate.id === cardId
+  );
+
+  assert.ok(itemWithTokenEntry);
+  assert.equal(itemWithTokenEntry.crossSourceStatus, "blocked");
+  assert.ok(
+    itemWithTokenEntry.crossSourceBlockers.includes(
+      "missing appropriate deck/stack/pool composition membership"
+    )
+  );
+
+  writeJson(rootDir, "data/decks/main-deck.json", {
+    deckId: "main-deck",
+    role: "mainDeck",
+    entries: [{ cardId, count: 2 }],
+  });
 
   writeJson(rootDir, "config/runtime-coverage/cross-source-mechanics.json", {
     schemaVersion: 1,
@@ -693,7 +716,7 @@ test("cross-source coverage compares effect payloads and runtime fields", () => 
                 kind: "effect",
                 effectId: "modify_effective_value",
                 timing: "whileControlled",
-                fields: { amount: 2 },
+                fields: { amount: 1 },
               },
             ],
             testRefs: [testRef],
@@ -711,7 +734,7 @@ test("cross-source coverage compares effect payloads and runtime fields", () => 
   writeText(
     rootDir,
     testRef.file,
-    `test("${testRef.name}", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.equal(result.ok, true);\n});\n`
+    `test("${testRef.name}", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.equal(state.players[0]?.chips, 1);\n});\n`
   );
 
   const item = createRuntimeCoverageInventory(rootDir).items.find(

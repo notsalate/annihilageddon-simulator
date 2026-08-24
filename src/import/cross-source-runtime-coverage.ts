@@ -183,25 +183,31 @@ export function hasAppropriateRuntimeComposition(
       );
     }
     if (sourceGroupOrTokenKind === "main") {
-      return membership.role === "mainDeck";
+      return membership.entryKind === "card" && membership.role === "mainDeck";
     }
     if (sourceGroupOrTokenKind === "legend") {
-      return membership.role === "legendDeck";
+      return (
+        membership.entryKind === "card" && membership.role === "legendDeck"
+      );
     }
     if (sourceGroupOrTokenKind === "starter") {
       return (
-        membership.role === "starterDeck" ||
-        membership.role === "starterDeckTemplate" ||
-        membership.role === "starterReplacement"
+        membership.entryKind === "card" &&
+        (membership.role === "starterDeck" ||
+          membership.role === "starterDeckTemplate" ||
+          membership.role === "starterReplacement")
       );
     }
     if (sourceGroupOrTokenKind === "familiar") {
-      return membership.role === "familiarPool";
+      return (
+        membership.entryKind === "card" && membership.role === "familiarPool"
+      );
     }
     if (sourceGroupOrTokenKind === "special") {
       return (
-        membership.role === "limpWandStack" ||
-        membership.role === "wildMagicStack"
+        membership.entryKind === "card" &&
+        (membership.role === "limpWandStack" ||
+          membership.role === "wildMagicStack")
       );
     }
     return false;
@@ -514,8 +520,14 @@ function hasExpectedRuntimeFields(
   effect: Record<string, unknown>,
   expectedFields: Record<string, CrossSourceRuntimeValue>
 ): boolean {
-  return Object.entries(expectedFields).every(([fieldName, expectedValue]) =>
-    matchesRuntimeValue(effect[fieldName], expectedValue)
+  const actualFields = Object.fromEntries(
+    Object.entries(effect).filter(
+      ([fieldName]) => fieldName !== "effectId" && fieldName !== "timing"
+    )
+  );
+  return (
+    Object.keys(actualFields).length === Object.keys(expectedFields).length &&
+    matchesRuntimeValue(actualFields, expectedFields)
   );
 }
 
@@ -566,8 +578,10 @@ function hasFocusedTestReference(
 }
 
 interface RuntimeSeamCall {
+  name: (typeof runtimeSeamNames)[number];
   start: number;
   end: number;
+  invocation: string;
 }
 
 const runtimeSeamNames = [
@@ -598,17 +612,23 @@ function findStableIdBindings(testBody: string, id: string): string[] {
 function findRuntimeSeamCalls(testBody: string): RuntimeSeamCall[] {
   const calls: RuntimeSeamCall[] = [];
   const expression = new RegExp(
-    `\\b(?:${runtimeSeamNames.join("|")})\\s*\\(`,
+    `\\b(${runtimeSeamNames.join("|")})\\s*\\(`,
     "g"
   );
   for (const match of testBody.matchAll(expression)) {
     const start = match.index;
-    if (start === undefined) {
+    const name = match[1];
+    if (start === undefined || !isRuntimeSeamName(name)) {
       continue;
     }
     const end = findInvocationEnd(testBody, start + match[0].length - 1);
     if (end !== undefined) {
-      calls.push({ start, end });
+      calls.push({
+        name,
+        start,
+        end,
+        invocation: testBody.slice(start, end),
+      });
     }
   }
   return calls;
@@ -633,18 +653,65 @@ function hasAssertionForSeamResult(
   testBody: string,
   call: RuntimeSeamCall
 ): boolean {
+  const assertions = getAssertionsAfter(testBody, call.end);
+  if (assertions.length === 0) {
+    return false;
+  }
+
+  const stateBinding = getStateBinding(testBody, call);
+  if (stateBinding !== undefined) {
+    const stateAccess = new RegExp(
+      `\\b${escapeRegExp(stateBinding)}\\s*(?:\\.|\\[)`
+    );
+    return assertions.some((assertion) => stateAccess.test(assertion));
+  }
+
   const bindingMatch =
     /\b(?:const|let)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*$/.exec(
       testBody.slice(0, call.start)
     );
   const resultBinding = bindingMatch?.[1];
-  if (resultBinding === undefined) {
-    return false;
+  if (resultBinding !== undefined) {
+    const resultReference = new RegExp(`\\b${escapeRegExp(resultBinding)}\\b`);
+    return assertions.some((assertion) => resultReference.test(assertion));
   }
-  return new RegExp(
-    `\\bassert\\s*\\.\\s*[a-zA-Z_$][a-zA-Z0-9_$]*\\s*\\([^;]*\\b${escapeRegExp(resultBinding)}\\b`,
-    "s"
-  ).test(testBody.slice(call.end));
+  return assertions.some((assertion) => assertion.includes(call.invocation));
+}
+
+function isRuntimeSeamName(
+  value: string | undefined
+): value is (typeof runtimeSeamNames)[number] {
+  return runtimeSeamNames.some((name) => name === value);
+}
+
+function getAssertionsAfter(testBody: string, callEnd: number): string[] {
+  return Array.from(
+    testBody
+      .slice(callEnd)
+      .matchAll(/\bassert\s*\.\s*[a-zA-Z_$][a-zA-Z0-9_$]*\s*\([^;]*\)/gs),
+    (match) => match[0]
+  );
+}
+
+function getStateBinding(
+  testBody: string,
+  call: RuntimeSeamCall
+): string | undefined {
+  if (call.name === "initializeGame") {
+    const resultBinding =
+      /\b(?:const|let)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*$/.exec(
+        testBody.slice(0, call.start)
+      );
+    return resultBinding?.[1];
+  }
+  if (call.name !== "applyAction" && call.name !== "runMarketFlow") {
+    return undefined;
+  }
+  const argumentMatch =
+    /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(\s*([a-zA-Z_$][a-zA-Z0-9_$]*)/.exec(
+      call.invocation
+    );
+  return argumentMatch?.[1];
 }
 
 function findNamedTestBody(text: string, name: string): string | undefined {
