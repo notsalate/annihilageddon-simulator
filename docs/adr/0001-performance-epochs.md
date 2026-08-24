@@ -1,10 +1,10 @@
 ---
 id: ADR-0001
 title: Модель benchmark, эпох и калибровок
-status: proposed
+status: accepted
 origin: new
 recorded: 2026-08-21
-decision_date: 2026-08-21
+decision_date: 2026-08-24
 supersedes: none
 superseded_by: none
 ---
@@ -20,6 +20,12 @@ superseded_by: none
 ## Решение
 
 Вводится модель `reference` / `current` и последовательность performance epochs.
+
+### Переход E0 → E1
+
+Активной становится эпоха `E1`; артефакты E0 сохраняются без изменений как историческая точка сравнения. Решение принято после подтверждённого накопленного отклонения `dataLoad` у `analyzer-light`: свежая парная проверка E0/head показала +36,23% (+1,61 ms) и повторный head подтвердил отклонение. В то же время PR #321 относительно актуального `master` остался в допуске (+0,45% общего времени, +1,22% `dataLoad`), поэтому локальная оптимизация PR не устранила бы блокировку.
+
+Новая E1-база и калибровка принимаются только из 20 парных CI-измерений одного commit и класса runner. Последующие PR сравниваются с E1; повторное накопленное отклонение снова блокирует слияние.
 
 ### Reference workload
 
@@ -86,9 +92,12 @@ Performance gate может блокировать изменение тольк
 - Reference workload, manifest и бюджеты нужно поддерживать явно.
 - Простое сравнение времени без подготовки fingerprint больше не считается достаточным доказательством регрессии.
 - До появления benchmark harness и принятой baseline отсутствие данных будет давать `not measured`, а не блокирующий verdict.
+- Переход на E1 сохраняет историю E0, но начинает новый измеряемый бюджет для расширенного runtime.
 
 ## Доказательства
 
 - [Roadmap архитектурных issue #191](https://github.com/notsalate/annihilageddon-simulator/issues/191) задаёт место #210 и границу между ADR, benchmark и первой эпохой.
 - [Issue #210](https://github.com/notsalate/annihilageddon-simulator/issues/210) требует жизненный цикл ADR и первое решение о benchmark и performance epochs.
 - [README](../../README.md) описывает существующие воспроизводимые `simulate:mass` и `analyze:best-move`, но не заявляет benchmark harness.
+- [Performance run 32759341886](https://github.com/notsalate/annihilageddon-simulator/actions/runs/32759341886) подтверждает E0 health regression при чистом сравнении base/head для PR #321.
+- [Performance calibration 32760918760](https://github.com/notsalate/annihilageddon-simulator/actions/runs/32760918760) публикует candidate E1 из 20 пар и reference-измерений.

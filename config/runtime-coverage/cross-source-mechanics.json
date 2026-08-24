@@ -858,10 +858,69 @@
       "id": "esw2_dbg__dead_wizard_token_012",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "chipsin-economy",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in chipsin-economy"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Каждый твой враг получает 1 чипсину."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_each_foe_gain_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 012 выдаёт по одной чипсине противникам в порядке рассадки"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Каждый враг игрока получает 1 чипсину."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_each_foe_gain_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 012 выдаёт по одной чипсине противникам в порядке рассадки"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Сам игрок, получивший ЖДК, не получает чипсину по этому тексту."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_each_foe_gain_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 012 выдаёт по одной чипсине противникам в порядке рассадки"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_013",
@@ -885,10 +944,49 @@
       "id": "esw2_dbg__dead_wizard_token_015",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "chipsin-economy",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in chipsin-economy"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Получи 1 чипсину."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_gain_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 015 выдаёт получателю одну чипсину после границы текущего источника"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Игрок, получивший ЖДК, получает 1 чипсину."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_gain_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 015 выдаёт получателю одну чипсину после границы текущего источника"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_016",
@@ -903,10 +1001,113 @@
       "id": "esw2_dbg__dead_wizard_token_017",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "chipsin-economy",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in chipsin-economy"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Убивший тебя колдун получает 2 чипсины."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reward_killer_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "amount": 2 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 017 выдаёт две чипсины убийце после остальных эффектов карты"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Эффект относится к колдуну, который убил игрока, получившего этот ЖДК."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reward_killer_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "amount": 2 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 017 выдаёт две чипсины убийце после остальных эффектов карты"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Убийца получает 2 чипсины."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reward_killer_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "amount": 2 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 017 выдаёт две чипсины убийце после остальных эффектов карты"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Если убийца не игрок/бот, а ЖДК, Беспредел,или другие неопределенные случаи, то эффект ЖДК не применяется."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reward_killer_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "amount": 2 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "прямой и вложенный ЖДК 017 не наследуют убийцу"
+            },
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ownerless Market Flow не назначает убийцу для ЖДК 017"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Если игрок убил сам себя и получил этот ЖДК, то он получает 2 чипсины"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reward_killer_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "amount": 2 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 017 вознаграждает player-attributed самоубийство без перемещения главного приза"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_018",
@@ -1018,10 +1219,129 @@
       "id": "esw2_dbg__dead_wizard_token_021",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "chipsin-economy",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in chipsin-economy"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Потеряй половину своих чипсин (округляя вверх)."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_lose_half_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "loss": "half", "rounding": "up" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 021 отнимает половину чипсин, округляя вверх, без оплаты стоимости"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Игрок теряет половину своих чипсин."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_lose_half_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "loss": "half", "rounding": "up" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 021 отнимает половину чипсин, округляя вверх, без оплаты стоимости"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Округление идёт вверх."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_lose_half_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "loss": "half", "rounding": "up" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 021 отнимает половину чипсин, округляя вверх, без оплаты стоимости"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Например, если у игрока 5 чипсин, он теряет 3."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_lose_half_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "loss": "half", "rounding": "up" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 021 отнимает половину чипсин, округляя вверх, без оплаты стоимости"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Если у игрока 1 чипсина, он теряет 1."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_lose_half_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "loss": "half", "rounding": "up" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 021 отнимает половину чипсин, округляя вверх, без оплаты стоимости"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Если у игрока 0 чипсин, он теряет 0"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_lose_half_chips",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "loss": "half", "rounding": "up" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 021 отнимает половину чипсин, округляя вверх, без оплаты стоимости"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_022",

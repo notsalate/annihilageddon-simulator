@@ -12,7 +12,7 @@ import type {
 export const PERFORMANCE_EPOCH_SCHEMA_VERSION = "performance-epoch-v1" as const;
 export const PERFORMANCE_CALIBRATION_SCHEMA_VERSION =
   "performance-calibration-v1" as const;
-export const PERFORMANCE_EPOCH = "E0" as const;
+export const PERFORMANCE_EPOCH = "E1" as const;
 export const PERFORMANCE_CALIBRATION_COMPARISON_COUNT = 20 as const;
 export const PERFORMANCE_WARMUP_COUNT = 1 as const;
 export const PERFORMANCE_MEASUREMENT_COUNT = 3 as const;
@@ -384,12 +384,12 @@ export function comparePerformance(options: {
     epochReference === null
       ? emptyComparison(
           "not-measured",
-          "The accepted E0 commit was not measured with the current protocol"
+          "The accepted performance-epoch commit was not measured with the current protocol"
         )
       : epochReference.commit !== options.baseline.reference.commit
         ? emptyComparison(
             "not-measured",
-            "The E0 measurement does not come from the accepted baseline commit"
+            "The performance-epoch measurement does not come from the accepted baseline commit"
           )
         : comparePair(
             epochReference,
@@ -527,7 +527,7 @@ export function assertPerformancePullRequestReportIntegrity(
     (epochReference !== null && !isPerformanceMeasurement(epochReference))
   ) {
     throw new TypeError(
-      "Fresh PR report requires valid base, head, optional confirmation and optional E0 measurements"
+      "Fresh PR report requires valid base, head, optional confirmation and optional epoch measurements"
     );
   }
   if (

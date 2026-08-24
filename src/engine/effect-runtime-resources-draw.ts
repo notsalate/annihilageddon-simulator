@@ -278,3 +278,22 @@ export function recordEffectChipsChanged(
     sourceType: source.sourceType,
   });
 }
+
+export function changePlayerChips(
+  state: GameState,
+  player: PlayerState,
+  amount: number,
+  source: EffectSourceContext,
+  effectId: RuntimeEffectId
+): void {
+  const chipsBefore = player.chips;
+  player.chips += amount;
+  recordEffectChipsChanged(
+    state,
+    player,
+    source,
+    effectId,
+    chipsBefore,
+    player.chips
+  );
+}

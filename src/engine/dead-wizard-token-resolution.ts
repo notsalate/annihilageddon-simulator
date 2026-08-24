@@ -18,12 +18,14 @@ export function endDeadWizardTokenResolutionBoundary(
 export function enqueueDeadWizardTokenFace(
   state: GameState,
   player: PlayerState,
-  token: TokenInstance
+  token: TokenInstance,
+  deathKillerPlayerId?: PlayerState["playerId"]
 ): void {
   state.deadWizardTokenResolution.pendingFaces.push({
     playerId: player.playerId,
     tokenInstanceId: token.instanceId,
     tokenDefinitionId: token.definitionId,
+    ...(deathKillerPlayerId === undefined ? {} : { deathKillerPlayerId }),
   });
 }
 
@@ -32,6 +34,7 @@ export function dequeueDeadWizardTokenFace(state: GameState):
       playerId: PlayerState["playerId"];
       tokenInstanceId: TokenInstance["instanceId"];
       tokenDefinitionId: TokenInstance["definitionId"];
+      deathKillerPlayerId?: PlayerState["playerId"];
     }
   | undefined {
   return state.deadWizardTokenResolution.pendingFaces.shift();

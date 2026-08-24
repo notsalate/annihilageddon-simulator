@@ -13,7 +13,7 @@ on:
         default: false
         type: boolean
       baseline:
-        description: "Собрать candidate E0 из reference-измерений"
+        description: "Собрать candidate текущей performance-эпохи из reference-измерений"
         required: true
         default: false
         type: boolean
@@ -86,7 +86,7 @@ jobs:
             value: heavy
     env:
       BENCHMARK_COMMIT: ${{ github.event.pull_request.head.sha }}
-      PERFORMANCE_ACCEPTED_CALIBRATION: docs/benchmarks/performance-calibration-e0-v1.json
+      PERFORMANCE_ACCEPTED_CALIBRATION: docs/benchmarks/performance-calibration-e1-v1.json
       PERFORMANCE_COMPARISON_PAIR_ID: ${{ github.run_id }}:${{ matrix.id }}
       PERFORMANCE_WORKLOAD_ID: ${{ matrix.id }}
       PERFORMANCE_WORKLOAD_KIND: ${{ matrix.kind }}
@@ -104,9 +104,9 @@ jobs:
         run: npm ci
       - name: Build head benchmark CLI
         run: npm run build -- --pretty false
-      - name: Read accepted E0 commit
-        id: accepted_e0
-        run: echo "commit=$(node scripts/read-performance-epoch-commit.mjs docs/benchmarks/performance-epoch-e0.json)" >> "$GITHUB_OUTPUT"
+      - name: Read accepted E1 commit
+        id: accepted_e1
+        run: echo "commit=$(node scripts/read-performance-epoch-commit.mjs docs/benchmarks/performance-epoch-e1.json)" >> "$GITHUB_OUTPUT"
       - name: Smoke current workload
         if: ${{ matrix.id == 'simulation' }}
         run: node dist/src/cli/run-benchmark.js --kind simulation --role current --stage 10 --format human --commit "$BENCHMARK_COMMIT"
@@ -140,45 +140,45 @@ jobs:
       - name: Enrich base artifacts with runner metadata
         run: node scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-base-$PERFORMANCE_WORKLOAD_ID-raw.json" "$RUNNER_TEMP/performance-base-$PERFORMANCE_WORKLOAD_ID.json" "${{ github.event.pull_request.base.sha }}" "$PERFORMANCE_COMPARISON_PAIR_ID"
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        id: checkout_e0
+        id: checkout_e1
         continue-on-error: true
         with:
-          ref: ${{ steps.accepted_e0.outputs.commit }}
-          path: .performance-e0
+          ref: ${{ steps.accepted_e1.outputs.commit }}
+          path: .performance-e1
           fetch-depth: 0
-      - name: Install E0 dependencies
-        id: install_e0
-        if: ${{ steps.checkout_e0.outcome == 'success' }}
+      - name: Install E1 dependencies
+        id: install_e1
+        if: ${{ steps.checkout_e1.outcome == 'success' }}
         continue-on-error: true
-        working-directory: .performance-e0
+        working-directory: .performance-e1
         run: npm ci
-      - name: Build E0 benchmark CLI
-        id: build_e0
-        if: ${{ steps.install_e0.outcome == 'success' }}
+      - name: Build E1 benchmark CLI
+        id: build_e1
+        if: ${{ steps.install_e1.outcome == 'success' }}
         continue-on-error: true
-        working-directory: .performance-e0
+        working-directory: .performance-e1
         run: npm run build -- --pretty false
-      - name: Measure accepted E0 workloads
-        if: ${{ steps.build_e0.outcome == 'success' }}
+      - name: Measure accepted E1 workloads
+        if: ${{ steps.build_e1.outcome == 'success' }}
         continue-on-error: true
-        working-directory: .performance-e0
+        working-directory: .performance-e1
         run: |
           if [[ "$PERFORMANCE_WORKLOAD_KIND" == "simulation" ]]; then
             workload_args=(--kind simulation --stage "$PERFORMANCE_WORKLOAD_VALUE")
           else
             workload_args=(--kind analyzer --profile "$PERFORMANCE_WORKLOAD_VALUE")
           fi
-          node dist/src/cli/run-benchmark.js "${workload_args[@]}" --role reference --format json > "$RUNNER_TEMP/performance-e0-$PERFORMANCE_WORKLOAD_ID-raw.json"
-          node ../scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-e0-$PERFORMANCE_WORKLOAD_ID-raw.json" "$RUNNER_TEMP/performance-e0-$PERFORMANCE_WORKLOAD_ID.json" "${{ steps.accepted_e0.outputs.commit }}" "$PERFORMANCE_COMPARISON_PAIR_ID"
+          node dist/src/cli/run-benchmark.js "${workload_args[@]}" --role reference --format json > "$RUNNER_TEMP/performance-e1-$PERFORMANCE_WORKLOAD_ID-raw.json"
+          node ../scripts/enrich-performance-artifact.mjs "$RUNNER_TEMP/performance-e1-$PERFORMANCE_WORKLOAD_ID-raw.json" "$RUNNER_TEMP/performance-e1-$PERFORMANCE_WORKLOAD_ID.json" "${{ steps.accepted_e1.outputs.commit }}" "$PERFORMANCE_COMPARISON_PAIR_ID"
       - name: Compare preliminary workload
         id: preliminary
         continue-on-error: true
         run: |
           epoch_args=()
-          if [[ -f "$RUNNER_TEMP/performance-e0-$PERFORMANCE_WORKLOAD_ID.json" ]]; then
-            epoch_args=(--epochReference "$RUNNER_TEMP/performance-e0-$PERFORMANCE_WORKLOAD_ID.json")
+          if [[ -f "$RUNNER_TEMP/performance-e1-$PERFORMANCE_WORKLOAD_ID.json" ]]; then
+            epoch_args=(--epochReference "$RUNNER_TEMP/performance-e1-$PERFORMANCE_WORKLOAD_ID.json")
           fi
-          node dist/src/cli/run-benchmark.js --mode compare "${epoch_args[@]}" --baseline docs/benchmarks/performance-epoch-e0.json --acceptedCalibration "$PERFORMANCE_ACCEPTED_CALIBRATION" --base "$RUNNER_TEMP/performance-base-$PERFORMANCE_WORKLOAD_ID.json" --head "$RUNNER_TEMP/performance-head-$PERFORMANCE_WORKLOAD_ID.json" --format human --output "$RUNNER_TEMP/performance-preliminary-report-$PERFORMANCE_WORKLOAD_ID.json"
+          node dist/src/cli/run-benchmark.js --mode compare "${epoch_args[@]}" --baseline docs/benchmarks/performance-epoch-e1.json --acceptedCalibration "$PERFORMANCE_ACCEPTED_CALIBRATION" --base "$RUNNER_TEMP/performance-base-$PERFORMANCE_WORKLOAD_ID.json" --head "$RUNNER_TEMP/performance-head-$PERFORMANCE_WORKLOAD_ID.json" --format human --output "$RUNNER_TEMP/performance-preliminary-report-$PERFORMANCE_WORKLOAD_ID.json"
       - name: Decide whether confirmation is required
         id: confirmation
         run: echo "required=$(node scripts/performance-confirmation-required.mjs "$RUNNER_TEMP/performance-preliminary-report-$PERFORMANCE_WORKLOAD_ID.json")" >> "$GITHUB_OUTPUT"
@@ -196,13 +196,13 @@ jobs:
         run: |
           epoch_args=()
           confirmation_args=()
-          if [[ -f "$RUNNER_TEMP/performance-e0-$PERFORMANCE_WORKLOAD_ID.json" ]]; then
-            epoch_args=(--epochReference "$RUNNER_TEMP/performance-e0-$PERFORMANCE_WORKLOAD_ID.json")
+          if [[ -f "$RUNNER_TEMP/performance-e1-$PERFORMANCE_WORKLOAD_ID.json" ]]; then
+            epoch_args=(--epochReference "$RUNNER_TEMP/performance-e1-$PERFORMANCE_WORKLOAD_ID.json")
           fi
           if [[ -f "$RUNNER_TEMP/performance-confirmation-$PERFORMANCE_WORKLOAD_ID.json" ]]; then
             confirmation_args=(--confirmation "$RUNNER_TEMP/performance-confirmation-$PERFORMANCE_WORKLOAD_ID.json")
           fi
-          node dist/src/cli/run-benchmark.js --mode compare "${epoch_args[@]}" "${confirmation_args[@]}" --baseline docs/benchmarks/performance-epoch-e0.json --acceptedCalibration "$PERFORMANCE_ACCEPTED_CALIBRATION" --base "$RUNNER_TEMP/performance-base-$PERFORMANCE_WORKLOAD_ID.json" --head "$RUNNER_TEMP/performance-head-$PERFORMANCE_WORKLOAD_ID.json" --format human --output "$RUNNER_TEMP/performance-report-$PERFORMANCE_WORKLOAD_ID.json"
+          node dist/src/cli/run-benchmark.js --mode compare "${epoch_args[@]}" "${confirmation_args[@]}" --baseline docs/benchmarks/performance-epoch-e1.json --acceptedCalibration "$PERFORMANCE_ACCEPTED_CALIBRATION" --base "$RUNNER_TEMP/performance-base-$PERFORMANCE_WORKLOAD_ID.json" --head "$RUNNER_TEMP/performance-head-$PERFORMANCE_WORKLOAD_ID.json" --format human --output "$RUNNER_TEMP/performance-report-$PERFORMANCE_WORKLOAD_ID.json"
       - name: Package accepted calibration with workload artifacts
         run: cp "$PERFORMANCE_ACCEPTED_CALIBRATION" "$RUNNER_TEMP/performance-accepted-calibration-$PERFORMANCE_WORKLOAD_ID.json"
       - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4
@@ -380,7 +380,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build -- --pretty false
-      - name: Measure E0 reference workloads
+      - name: Measure E1 reference workloads
         run: |
           npm run benchmark:simulation -- --role reference --stage 100 --format human --commit "$BENCHMARK_COMMIT" --output "$RUNNER_TEMP/performance-epoch-reference-simulation.json"
           npm run benchmark:analyzer -- --role reference --profile light --format human --commit "$BENCHMARK_COMMIT" --output "$RUNNER_TEMP/performance-epoch-reference-analyzer-light.json"
@@ -414,12 +414,12 @@ jobs:
         with:
           name: performance-calibration-results-${{ github.run_id }}
           path: ${{ runner.temp }}/calibration-results
-      - name: Build E0 baseline candidate
-        run: node scripts/create-performance-epoch-baseline.mjs "$RUNNER_TEMP/epoch-reference" "$RUNNER_TEMP/calibration-results" "$RUNNER_TEMP/performance-epoch-e0.json"
+      - name: Build E1 baseline candidate
+        run: node scripts/create-performance-epoch-baseline.mjs "$RUNNER_TEMP/epoch-reference" "$RUNNER_TEMP/calibration-results" "$RUNNER_TEMP/performance-epoch-e1.json"
       - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4
         with:
-          name: performance-epoch-e0-candidate-${{ github.run_id }}
-          path: ${{ runner.temp }}/performance-epoch-e0.json
+          name: performance-epoch-e1-candidate-${{ github.run_id }}
+          path: ${{ runner.temp }}/performance-epoch-e1.json
           if-no-files-found: error
 
   manual-release:

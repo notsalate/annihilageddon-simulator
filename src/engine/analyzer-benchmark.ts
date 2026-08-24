@@ -23,6 +23,7 @@ import {
 } from "./benchmark-support.js";
 import { initializeGame } from "./setup.js";
 import type { LegalAction } from "./actions.js";
+import { PERFORMANCE_EPOCH } from "./performance-epoch.js";
 import { intakeRuntimeData } from "./runtime-data-intake.js";
 
 export const ANALYZER_BENCHMARK_CONTRACT_VERSION =
@@ -92,7 +93,7 @@ export interface AnalyzerBenchmarkWorkload {
   role: AnalyzerBenchmarkRole;
   workloadId: string;
   contractVersion: typeof ANALYZER_BENCHMARK_CONTRACT_VERSION;
-  epoch: "E0";
+  epoch: typeof PERFORMANCE_EPOCH;
   referenceWorkloadVersion: typeof ANALYZER_REFERENCE_WORKLOAD_VERSION | null;
   referenceBaselineReview: "required-on-workload-change" | "not-applicable";
   profile: AnalyzerBenchmarkProfileId;
@@ -211,7 +212,7 @@ export function createAnalyzerBenchmarkWorkload(
         ? ANALYZER_REFERENCE_WORKLOAD_VERSION
         : "analyzer-current-game",
     contractVersion: ANALYZER_BENCHMARK_CONTRACT_VERSION,
-    epoch: "E0",
+    epoch: PERFORMANCE_EPOCH,
     referenceWorkloadVersion:
       role === "reference" ? ANALYZER_REFERENCE_WORKLOAD_VERSION : null,
     referenceBaselineReview:

@@ -12916,3 +12916,366 @@ test("прямая выдача ЖДК не воскрешает игрока и
     1
   );
 });
+
+test("ЖДК 015 выдаёт получателю одну чипсину после границы текущего источника", () => {
+  const state = initializeGame({ rootDir, seed: 303015 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  player.chips = 0;
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt015"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_015"),
+      ownerId: "common",
+    },
+  ];
+
+  const result = resolveWithinDeadWizardTokenResolutionBoundary(state, () => {
+    assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+    assert.equal(player.chips, 0);
+    return { ok: true };
+  });
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(player.chips, 1);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChipsGained" &&
+        event.playerId === player.playerId &&
+        event.effectId === "dead_wizard_token_gain_chips" &&
+        event.amount === 1 &&
+        event.definitionId === "esw2_dbg__dead_wizard_token_015"
+    )
+  );
+});
+
+test("ЖДК 012 выдаёт по одной чипсине противникам в порядке рассадки", () => {
+  const state = initializeGame({ rootDir, seed: 303012 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const foes = getOpponentsInSeatingOrder(state, player);
+  player.chips = 0;
+  for (const foe of foes) {
+    foe.chips = 0;
+  }
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt012"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_012"),
+      ownerId: "common",
+    },
+  ];
+
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+
+  assert.equal(player.chips, 0);
+  assert.deepEqual(
+    foes.map((foe) => foe.chips),
+    foes.map(() => 1)
+  );
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChipsGained" &&
+          event.effectId === "dead_wizard_token_each_foe_gain_chips"
+      )
+      .map((event) => event.playerId),
+    foes.map((foe) => foe.playerId)
+  );
+});
+
+test("ЖДК 021 отнимает половину чипсин, округляя вверх, без оплаты стоимости", () => {
+  const cases = [
+    { chipsBefore: 0, chipsAfter: 0 },
+    { chipsBefore: 1, chipsAfter: 0 },
+    { chipsBefore: 2, chipsAfter: 1 },
+    { chipsBefore: 5, chipsAfter: 2 },
+  ];
+
+  for (const { chipsBefore, chipsAfter } of cases) {
+    const state = initializeGame({ rootDir, seed: 303021 + chipsBefore });
+    const player = mustGetPlayer(state, state.activePlayerId);
+    player.chips = chipsBefore;
+    state.common.deadWizardTokens.drawStack = [
+      {
+        instanceId: markTokenInstanceId(`fixture-dwt021-${chipsBefore}`),
+        definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_021"),
+        ownerId: "common",
+      },
+    ];
+
+    assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+
+    assert.equal(player.chips, chipsAfter);
+    assert.equal(
+      state.eventLog.some((event) => event.type === "effectCostPaid"),
+      false
+    );
+    assert.ok(
+      state.eventLog.some(
+        (event) =>
+          event.type === "effectChipsGained" &&
+          event.effectId === "dead_wizard_token_lose_half_chips" &&
+          event.amount === chipsAfter - chipsBefore
+      )
+    );
+  }
+});
+
+test("ЖДК 017 выдаёт две чипсины убийце после остальных эффектов карты", () => {
+  const state = initializeGame({ rootDir, seed: 304017 });
+  const killer = mustGetPlayer(state, state.activePlayerId);
+  const defeatedPlayer = getOpponentsInSeatingOrder(state, killer)[0];
+  assert.ok(defeatedPlayer);
+  killer.wizardProperties = [];
+  defeatedPlayer.wizardProperties = [];
+  killer.chips = 0;
+  defeatedPlayer.life.current = 1;
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt017"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_017"),
+      ownerId: "common",
+    },
+  ];
+  const attack = addFixtureDefinitionToActiveHand(
+    state,
+    createFixtureCardDefinition("fixture-dwt017-death", [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        targetSelector: "chosenFoe",
+        amount: 1,
+      },
+      { effectId: "gain_chips", timing: "onPlay", amount: 1 },
+    ])
+  );
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === defeatedPlayer.playerId)
+        )
+      : undefined;
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attack.instanceId }),
+    { ok: true }
+  );
+
+  assert.equal(killer.chips, 3);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChipsGained" &&
+        event.definitionId === "esw2_dbg__dead_wizard_token_017" &&
+        event.effectId === "dead_wizard_token_reward_killer_chips" &&
+        event.playerId === killer.playerId &&
+        event.amount === 2
+    )
+  );
+  assertEventOrder(state, [
+    (event) =>
+      event.type === "effectChipsGained" &&
+      event.definitionId === attack.definitionId &&
+      event.effectId === "gain_chips",
+    (event) =>
+      event.type === "effectChipsGained" &&
+      event.definitionId === "esw2_dbg__dead_wizard_token_017" &&
+      event.effectId === "dead_wizard_token_reward_killer_chips" &&
+      event.playerId === killer.playerId &&
+      event.amount === 2,
+  ]);
+});
+
+test("ЖДК 017 вознаграждает player-attributed самоубийство без перемещения главного приза", () => {
+  const state = initializeGame({ rootDir, seed: 3040171 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  player.wizardProperties = [];
+  player.life.current = 1;
+  player.chips = 0;
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt017-self-kill"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_017"),
+      ownerId: "common",
+    },
+  ];
+  const selfDamage = addFixtureCardToActiveHand(state, {
+    effectId: "deal_damage",
+    timing: "onPlay",
+    amount: 1,
+    target: { selector: "activePlayer" },
+  });
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: selfDamage }),
+    { ok: true }
+  );
+
+  assert.equal(player.chips, 2);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "trophyControlChanged"),
+    false
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChipsGained" &&
+        event.effectId === "dead_wizard_token_reward_killer_chips" &&
+        event.playerId === player.playerId &&
+        event.amount === 2
+    )
+  );
+});
+
+test("прямой и вложенный ЖДК 017 не наследуют убийцу", () => {
+  const directState = initializeGame({ rootDir, seed: 3040172 });
+  const directRecipient = mustGetPlayer(
+    directState,
+    directState.activePlayerId
+  );
+  directRecipient.chips = 0;
+  directState.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt017-direct"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_017"),
+      ownerId: "common",
+    },
+  ];
+
+  assert.deepEqual(gainDeadWizardToken(directState, directRecipient), {
+    ok: true,
+  });
+  assert.equal(directRecipient.chips, 0);
+
+  const nestedState = initializeGame({ rootDir, seed: 3040173 });
+  const killer = mustGetPlayer(nestedState, nestedState.activePlayerId);
+  const defeatedPlayer = getOpponentsInSeatingOrder(nestedState, killer)[0];
+  assert.ok(defeatedPlayer);
+  killer.wizardProperties = [];
+  defeatedPlayer.wizardProperties = [];
+  killer.chips = 0;
+  defeatedPlayer.life.current = 1;
+  const deathFace = createFixtureDeadWizardTokenDefinition(
+    "fixture-dwt017-ownerless-nested-death",
+    [
+      {
+        effectId: "set_life",
+        timing: "onDeadWizardTokenFace",
+        lifeTotal: 0,
+        target: { selector: "activePlayer" },
+      },
+    ]
+  );
+  nestedState.tokenDefinitions = new Map([
+    ...nestedState.tokenDefinitions,
+    [deathFace.tokenId, deathFace],
+  ]);
+  nestedState.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt017-ownerless-death"),
+      definitionId: markTokenDefinitionId(deathFace.tokenId),
+      ownerId: "common",
+    },
+    {
+      instanceId: markTokenInstanceId("fixture-dwt017-nested"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_017"),
+      ownerId: "common",
+    },
+  ];
+  const attack = addFixtureCardToActiveHand(nestedState, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    targetSelector: "chosenFoe",
+    amount: 1,
+  });
+  nestedState.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === defeatedPlayer.playerId)
+        )
+      : undefined;
+
+  assert.deepEqual(
+    applyAction(nestedState, { type: "playCard", cardInstanceId: attack }),
+    { ok: true }
+  );
+  assert.equal(killer.chips, 0);
+  assert.equal(
+    nestedState.eventLog.some(
+      (event) => event.effectId === "dead_wizard_token_reward_killer_chips"
+    ),
+    false
+  );
+});
+
+test("ownerless Market Flow не назначает убийцу для ЖДК 017", () => {
+  const state = initializeGame({ rootDir, seed: 3040174 });
+  const affectedPlayer = mustGetPlayer(state, state.activePlayerId);
+  affectedPlayer.wizardProperties = [];
+  affectedPlayer.life.current = 1;
+  affectedPlayer.chips = 0;
+  const fillerDefinition = createFixtureCardDefinition(
+    "fixture-dwt017-market-flow-filler",
+    []
+  );
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-dwt017-ownerless-market-flow",
+    [
+      {
+        effectId: "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        options: [
+          { effectId: "discard_hand_then_draw_cards", drawAmount: 5 },
+          { effectId: "take_damage", amount: 5 },
+        ],
+        chooser: "affectedPlayer",
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [fillerDefinition.cardId, fillerDefinition],
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt017-market-flow"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_017"),
+      ownerId: "common",
+    },
+  ];
+  const mayhem: CardInstance = {
+    instanceId: markCardInstanceId("fixture-dwt017-market-flow-mayhem"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
+    ownerId: "common",
+    marketChips: 0,
+  };
+  const filler: CardInstance = {
+    instanceId: markCardInstanceId("fixture-dwt017-market-flow-filler"),
+    definitionId: markCardDefinitionId(fillerDefinition.cardId),
+    ownerId: "common",
+    marketChips: 0,
+  };
+  state.common.market.splice(4);
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, mayhem, filler);
+  state.effectChoiceStrategy = ({ effectId, player, choices }) =>
+    effectId === "mayhem_each_player_choose_discard_hand_draw_or_take_damage" &&
+    player.playerId === affectedPlayer.playerId
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === "take_damage")
+        )
+      : undefined;
+
+  assert.deepEqual(runMarketFlow(state, { mode: "turn" }), { ok: true });
+
+  assert.equal(affectedPlayer.chips, 0);
+  assert.equal(
+    state.eventLog.some(
+      (event) => event.effectId === "dead_wizard_token_reward_killer_chips"
+    ),
+    false
+  );
+});

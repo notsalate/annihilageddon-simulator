@@ -2,13 +2,13 @@
 
 Benchmark измеряет только уже проверенный workload: сборка, запуск npm, меню и ввод пользователя в замер не входят. Перед каждым измерением выполняется один прогрев, затем три замера; итоговые времена — медианы.
 
-## Первая эпоха
+## Активная эпоха
 
-Первая база `E0` хранится в [performance-epoch-e0.json](benchmarks/performance-epoch-e0.json). Принятые допуски хранятся отдельно в неизменяемом версионированном артефакте [performance-calibration-e0-v1.json](benchmarks/performance-calibration-e0-v1.json). Он фиксирует собственный ID, commit, протокол, класс runner и бюджеты массовой симуляции и профилей Best-Move Analyzer.
+Активная база `E1` хранится в [performance-epoch-e1.json](benchmarks/performance-epoch-e1.json). Принятые допуски хранятся отдельно в неизменяемом версионированном артефакте [performance-calibration-e1-v1.json](benchmarks/performance-calibration-e1-v1.json). Они фиксируют commit, протокол, класс runner и бюджеты массовой симуляции и профилей Best-Move Analyzer. Артефакты E0 остаются неизменяемой историей.
 
-База не переписывается результатом очередного запуска. Если меняются правила игры, reference workload, версия Node.js или runner, сначала выполняется новая калибровка и явно принимается новая эпоха. Обычный рефакторинг без изменения объёма работы остаётся в `E0`.
+База не переписывается результатом очередного запуска. Если меняются правила игры, reference workload, версия Node.js или runner, сначала выполняется новая калибровка и явно принимается новая эпоха. Обычный рефакторинг без изменения объёма работы остаётся в текущей эпохе.
 
-Для новой калибровки запусти workflow `performance` вручную с `calibration=true`; тот же процесс запускается по недельному расписанию. Workflow собирает 20 пар на свежих runner и публикует candidate, но не изменяет принятый артефакт. Candidate нужно проверить и явно принять новым версионированным JSON-файлом в `docs/benchmarks/`; существующие принятые файлы не переписываются. Для новой эпохи дополнительно укажи `baseline=true`: candidate E0 принимается отдельно в `performance-epoch-e0.json` или в новом файле следующей эпохи.
+Для новой калибровки запусти workflow `performance` вручную с `calibration=true`; тот же процесс запускается по недельному расписанию. Workflow собирает 20 пар на свежих runner и публикует candidate, но не изменяет принятый артефакт. Candidate нужно проверить и явно принять новым версионированным JSON-файлом в `docs/benchmarks/`; существующие принятые файлы не переписываются. Для новой эпохи дополнительно укажи `baseline=true`: candidate принимается в новом файле следующей эпохи.
 
 ## Ступени
 
@@ -45,10 +45,10 @@ Reference seed фиксирован по профилям:
 Запуск benchmark с `--output path.json` сохраняет нормализованный машинный артефакт. Для PR нужны одинаковые артефакты `base`, `head` и повторного `head`:
 
 ```powershell
-npm run benchmark:epoch -- --baseline docs/benchmarks/performance-epoch-e0.json --acceptedCalibration docs/benchmarks/performance-calibration-e0-v1.json --epochReference e0-fresh.json --base base.json --head head.json --confirmation head-repeat.json --format human --output performance-report.json
+npm run benchmark:epoch -- --baseline docs/benchmarks/performance-epoch-e1.json --acceptedCalibration docs/benchmarks/performance-calibration-e1-v1.json --epochReference e1-fresh.json --base base.json --head head.json --confirmation head-repeat.json --format human --output performance-report.json
 ```
 
-Сравнение показывает `PR regression` (`base`/`head`) и `Epoch health` (свежий E0/head) раздельно и называет источник блокировки. Для блокирующего `regression` нужны совпадающие epoch, workload, протокол, точная физическая среда, общий `comparisonPairId` и совместимая принятая калибровка. Изменение workload возвращает неблокирующий `workload-changed`; отсутствие свежего E0 — `not-measured`; отсутствие совместимой калибровки или смена класса runner — `not-calibrated`.
+Сравнение показывает `PR regression` (`base`/`head`) и `Epoch health` (свежий E1/head) раздельно и называет источник блокировки. Для блокирующего `regression` нужны совпадающие epoch, workload, протокол, точная физическая среда, общий `comparisonPairId` и совместимая принятая калибровка. Изменение workload возвращает неблокирующий `workload-changed`; отсутствие свежего E1 — `not-measured`; отсутствие совместимой калибровки или смена класса runner — `not-calibrated`.
 
 Калибровка принимает артефакт с 20 парными запусками одного commit и одного класса runner. Класс включает версию Node.js, платформу, архитектуру, образ runner и число CPU; свежие runner могут иметь разные модели CPU, и эта вариативность входит в рассчитанный допуск. Внутри каждой пары оба замера должны использовать точное окружение:
 
@@ -57,9 +57,9 @@ npm run benchmark:epoch:calibrate -- --calibration pairs.json --format json --ou
 ```
 
 Каждая пара обязана использовать один seed-набор, один прогрев, три измерения и медиану. Калибровка проверяет commit и класс runner, а допуск вычисляет по p95 наблюдаемого расхождения с запасом 25%.
-Обычный PR не запускает 20 calibration jobs и не принимает свежий budget. Он измеряет E0, base и head в одном job и использует только принятый артефакт, совместимый с текущими workload, протоколом и классом runner.
+Обычный PR не запускает 20 calibration jobs и не принимает свежий budget. Он измеряет E1, base и head в одном job и использует только принятый артефакт, совместимый с текущими workload, протоколом и классом runner.
 Candidate принятой калибровки собирается командой `node scripts/create-performance-calibration-candidate.mjs <calibration-dir> <output> <calibration-id>`. Скрипт требует один commit, протокол и класс runner, но допускает разные модели CPU между независимыми calibration jobs. Принятие выполняется только отдельным изменением репозитория.
-Для сборки candidate E0 из CI-артефактов используется `node scripts/create-performance-epoch-baseline.mjs <reference-dir> <calibration-dir> <output>`. Скрипт отклоняет reference и калибровку с разными commit, идентификаторами workload или классами runner.
+Для сборки candidate активной эпохи из CI-артефактов используется `node scripts/create-performance-epoch-baseline.mjs <reference-dir> <calibration-dir> <output>`. Скрипт отклоняет reference и калибровку с разными commit, идентификаторами workload или классами runner.
 Артефакт каждой стороны должен содержать SHA именно измеренного checkout: для `head` workflow передаёт SHA PR, для `base` — SHA базовой ветки; локальный запуск без `--commit` использует `GITHUB_SHA`, если он задан.
 Если старый `base` ещё не знает PR-ступень 100, workflow запускает его собранный `simulation-benchmark` через совместимый адаптер, который добавляет только эту допустимую числовую ступень и не меняет код base. Сравнение всех четырёх workload завершается после публикации отчётов: отдельный gate блокирует PR только по отчётам с `blocking: true` и не скрывает остальные профили из-за первой регрессии.
 

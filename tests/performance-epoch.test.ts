@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   PERFORMANCE_CALIBRATION_COMPARISON_COUNT,
   PERFORMANCE_CALIBRATION_SCHEMA_VERSION,
+  PERFORMANCE_EPOCH,
   assertPerformanceAcceptedCalibration,
   assertPerformanceEpochBaseline,
   calibratePerformance,
@@ -719,4 +720,42 @@ test("the committed E0 baseline covers simulation and all analyzer profiles", ()
     new Set(acceptedCalibrations.map((item) => item.calibrationId)).size,
     acceptedCalibrations.length
   );
+});
+
+test("the committed E1 baseline covers simulation and all analyzer profiles", () => {
+  const baselineValue: unknown = JSON.parse(
+    readFileSync("docs/benchmarks/performance-epoch-e1.json", "utf8")
+  );
+  assertPerformanceEpochBaseline(baselineValue);
+
+  assert.equal(baselineValue.epoch, PERFORMANCE_EPOCH);
+  assert.equal(
+    getAcceptedPerformanceEpochCommit(baselineValue),
+    "f638884a673f9ba3deacde9f6df0f9abe7d24941"
+  );
+  assert.equal(baselineValue.calibration.comparisons, 20);
+  assert.deepEqual(
+    baselineValue.entries.map((entry) => entry.id),
+    ["simulation:100", "analyzer:light", "analyzer:typical", "analyzer:heavy"]
+  );
+
+  const calibrationValue: unknown = JSON.parse(
+    readFileSync("docs/benchmarks/performance-calibration-e1-v1.json", "utf8")
+  );
+  assertPerformanceAcceptedCalibration(calibrationValue);
+  assert.equal(
+    calibrationValue.calibrationId,
+    "e1-node22-ubuntu24-20260824-v1"
+  );
+  assert.deepEqual(
+    calibrationValue.entries.map((entry) => entry.id),
+    baselineValue.entries.map((entry) => entry.id)
+  );
+  for (const entry of baselineValue.entries) {
+    assert.deepEqual(
+      calibrationValue.entries.find((candidate) => candidate.id === entry.id)
+        ?.tolerances,
+      entry.tolerances
+    );
+  }
 });
