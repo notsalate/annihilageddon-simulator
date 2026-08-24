@@ -4898,7 +4898,6 @@ test("wizard property optional topdeck for gained cards runs before normal disca
 test("Wizard Property 007 counts only spells gained by its controller this turn", () => {
   const state = initializeGame({
     rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
     seed: 60707,
   });
   const activePlayer = mustGetPlayer(state, state.activePlayerId);
@@ -4917,13 +4916,9 @@ test("Wizard Property 007 counts only spells gained by its controller this turn"
     ["creature"],
     0
   );
-  const foreignSpell = addFixtureMarketCard(
-    state,
-    "fixture-wp007-foreign-spell",
-    ["spell"],
-    0
-  );
-  state.turn.power = 10;
+  const foreignSpell = createCommonRuntimeCard("esw2_dbg__legend_014");
+  state.common.legendMarket.push(foreignSpell);
+  state.turn.power = 12;
   assert.equal(
     applyAction(state, {
       type: "buyMarketCard",
@@ -4934,11 +4929,11 @@ test("Wizard Property 007 counts only spells gained by its controller this turn"
   );
 
   state.activePlayerId = otherPlayer.playerId;
-  state.turn.power = 10;
+  state.turn.power = 12;
   assert.equal(
     applyAction(state, {
       type: "buyMarketCard",
-      source: "mainMarket",
+      source: "legendMarket",
       cardInstanceId: foreignSpell.instanceId,
     }).ok,
     true
