@@ -834,14 +834,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     rng,
     setupEvents
   );
-  assignStartingFamiliars(
-    players,
-    dataPack,
-    factory,
-    createSeededRng(options.seed + 7919),
-    setupEvents
-  );
-  const forcedStartingPlayerId = applyWizardPropertySetupEffects(
+  const setupDirectives = applyWizardPropertySetupEffects(
     players,
     dataPack,
     runtimeMode,
@@ -853,6 +846,17 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       allowsMissingData: isIncompleteFullOnlyDataPack(dataPack),
     }
   );
+  assignStartingFamiliars(
+    players,
+    dataPack,
+    factory,
+    createSeededRng(options.seed + 7919),
+    setupEvents,
+    setupDirectives
+  );
+  const forcedStartingPlayerId = setupDirectives.find(
+    (directive) => directive.kind === "forceStartingPlayer"
+  )?.playerId;
   const mainDeck = instantiateDeck(
     dataPack.decks.mainDeck,
     dataPack,
@@ -1090,7 +1094,8 @@ function assignStartingFamiliars(
   dataPack: LoadedDataPack,
   factory: InstanceFactory,
   rng: RandomSource,
-  eventLog: GameEvent[]
+  eventLog: GameEvent[],
+  setupDirectives: readonly SetupDirective[]
 ): void {
   const familiarPool = dataPack.decks.familiarPool;
   if (familiarPool === undefined) {
@@ -1103,13 +1108,13 @@ function assignStartingFamiliars(
   }
 
   const setupPool = instantiateDeck(familiarPool, dataPack, factory, "common");
-  const playersRetainingBothFamiliars = players.filter((player) =>
-    player.wizardProperties.some(
-      (property) => property.definitionId === "esw2_dbg__wizard_property_003"
-    )
-  ).length;
+  const playersRetainingBothFamiliars = new Set(
+    setupDirectives
+      .filter((directive) => directive.kind === "retainAndChooseThirdFamiliar")
+      .map((directive) => directive.playerId)
+  );
   const requiredSetupPoolSize =
-    players.length * 2 + playersRetainingBothFamiliars;
+    players.length * 2 + playersRetainingBothFamiliars.size;
   if (setupPool.length < requiredSetupPoolSize) {
     if (isIncompleteFullOnlyDataPack(dataPack)) {
       return;
@@ -1161,11 +1166,7 @@ function assignStartingFamiliars(
       factory.create(selectedCandidate.definitionId, player.playerId)
     );
 
-    if (
-      player.wizardProperties.some(
-        (property) => property.definitionId === "esw2_dbg__wizard_property_003"
-      )
-    ) {
+    if (playersRetainingBothFamiliars.has(player.playerId)) {
       player.unboughtFamiliars.push(
         factory.create(secondCandidate.definitionId, player.playerId)
       );
@@ -1174,10 +1175,7 @@ function assignStartingFamiliars(
         players
           .slice(0, index)
           .filter((candidate) =>
-            candidate.wizardProperties.some(
-              (property) =>
-                property.definitionId === "esw2_dbg__wizard_property_003"
-            )
+            playersRetainingBothFamiliars.has(candidate.playerId)
           ).length;
       const remainingCandidates = setupPool.slice(thirdCandidateOffset);
       const thirdCandidate = alwaysPickFirstSetupChoice(
@@ -1245,8 +1243,8 @@ function applyWizardPropertySetupEffects(
   dataPack: LoadedDataPack,
   runtimeMode: "combat" | "fixture",
   services: EffectRuntimeSetupServices
-): PlayerId | undefined {
-  let forcedStartingPlayer: PlayerId | undefined;
+): SetupDirective[] {
+  const setupDirectives: SetupDirective[] = [];
   for (const player of players) {
     for (const property of player.wizardProperties) {
       const definition = dataPack.tokenDefinitions.get(property.definitionId);
@@ -1278,11 +1276,8 @@ function applyWizardPropertySetupEffects(
         );
         if (execution.status === "executed") {
           const directive: SetupDirective | undefined = execution.directive;
-          if (
-            forcedStartingPlayer === undefined &&
-            directive?.kind === "forceStartingPlayer"
-          ) {
-            forcedStartingPlayer = directive.playerId;
+          if (directive !== undefined) {
+            setupDirectives.push(directive);
           }
           continue;
         }
@@ -1293,7 +1288,7 @@ function applyWizardPropertySetupEffects(
       }
     }
   }
-  return forcedStartingPlayer;
+  return setupDirectives;
 }
 
 function isSetupEffect(effect: RuntimeEffect): boolean {

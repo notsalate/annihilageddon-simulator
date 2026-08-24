@@ -31,6 +31,7 @@ type DecodedPayloadValidator<Id extends SetupEffectId> = (
 export type SetupEffectId =
   | "force_starting_player"
   | "replace_starting_card"
+  | "setup_retain_and_choose_third_familiar"
   | "start_with_basic_trophy"
   | "set_starting_life_total"
   | "set_resurrection_life_total"
@@ -46,6 +47,7 @@ export type SetupEffectId =
 export const setupEffectIds = [
   "force_starting_player",
   "replace_starting_card",
+  "setup_retain_and_choose_third_familiar",
   "start_with_basic_trophy",
   "set_starting_life_total",
   "set_resurrection_life_total",
@@ -124,6 +126,13 @@ export function createSetupEffectDecoders(
             }
       ),
     }),
+    setup_retain_and_choose_third_familiar: defineDecoder(
+      "setup_retain_and_choose_third_familiar",
+      {
+        effectId: required(literal("setup_retain_and_choose_third_familiar")),
+        timing: required(literal("setup")),
+      }
+    ),
     start_with_basic_trophy: defineDecoder("start_with_basic_trophy", {
       effectId: required(literal("start_with_basic_trophy")),
       timing: required(literal("setup")),
@@ -296,6 +305,24 @@ const startWithBasicTrophyHandler: EffectRuntimeHandler<
   },
 };
 
+const setupRetainAndChooseThirdFamiliarHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"setup_retain_and_choose_third_familiar">
+> = {
+  effectId: "setup_retain_and_choose_third_familiar",
+  execute() {
+    return setupOnlyExecutionError("setup_retain_and_choose_third_familiar");
+  },
+  executeSetup(_player, _effect, source) {
+    return {
+      ok: true,
+      directive: {
+        kind: "retainAndChooseThirdFamiliar",
+        playerId: source.playerId,
+      },
+    };
+  },
+};
+
 const setStartingLifeTotalHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"set_starting_life_total">
 > = {
@@ -450,6 +477,16 @@ export function createSetupEffectDefinitions(
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["wizardProperty"],
       handler: startWithBasicTrophyHandler,
+    },
+    {
+      effectId: "setup_retain_and_choose_third_familiar",
+      decoder: bindRuntimeEffectDecoder(
+        "setup_retain_and_choose_third_familiar"
+      ),
+      supportedTimings: setupTiming,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["wizardProperty"],
+      handler: setupRetainAndChooseThirdFamiliarHandler,
     },
     {
       effectId: "set_starting_life_total",

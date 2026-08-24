@@ -319,6 +319,12 @@
                 "sourceCardTypes": ["familiar"],
                 "countedAsCardType": "legend"
               }
+            },
+            {
+              "kind": "effect",
+              "effectId": "setup_retain_and_choose_third_familiar",
+              "timing": "setup",
+              "fields": {}
             }
           ],
           "testRefs": [
@@ -335,9 +341,10 @@
           },
           "runtimeRefs": [
             {
-              "kind": "field",
-              "path": "engine.playableInV0",
-              "value": true
+              "kind": "effect",
+              "effectId": "setup_retain_and_choose_third_familiar",
+              "timing": "setup",
+              "fields": {}
             }
           ],
           "testRefs": [
@@ -354,9 +361,10 @@
           },
           "runtimeRefs": [
             {
-              "kind": "field",
-              "path": "engine.playableInV0",
-              "value": true
+              "kind": "effect",
+              "effectId": "setup_retain_and_choose_third_familiar",
+              "timing": "setup",
+              "fields": {}
             }
           ],
           "testRefs": [
@@ -373,9 +381,10 @@
           },
           "runtimeRefs": [
             {
-              "kind": "field",
-              "path": "engine.playableInV0",
-              "value": true
+              "kind": "effect",
+              "effectId": "setup_retain_and_choose_third_familiar",
+              "timing": "setup",
+              "fields": {}
             }
           ],
           "testRefs": [

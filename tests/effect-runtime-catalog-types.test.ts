@@ -254,6 +254,7 @@ test("remaining Catalog families expose one local ID inventory each", () => {
   assert.deepEqual(setupEffectIds, [
     "force_starting_player",
     "replace_starting_card",
+    "setup_retain_and_choose_third_familiar",
     "start_with_basic_trophy",
     "set_starting_life_total",
     "set_resurrection_life_total",

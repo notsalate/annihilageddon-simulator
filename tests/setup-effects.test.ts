@@ -153,6 +153,28 @@ test("setup catalog executor sets starting life total", () => {
   assert.equal(subject.life.max, 30);
 });
 
+test("setup catalog emits the additional-familiar directive", () => {
+  const subject = player();
+
+  const result = tryExecuteSetupEffect(
+    subject,
+    {
+      effectId: "setup_retain_and_choose_third_familiar",
+      timing: "setup",
+    },
+    source,
+    services()
+  );
+
+  assert.deepEqual(result, {
+    status: "executed",
+    directive: {
+      kind: "retainAndChooseThirdFamiliar",
+      playerId: source.playerId,
+    },
+  });
+});
+
 test("setup catalog decodes before runtime-mode applicability", () => {
   const result = tryExecuteSetupEffect(
     player(),
@@ -201,6 +223,10 @@ test("setup catalog applies source and timing policies before its executor", () 
 test("setup catalog keeps the wizard-property source matrix explicit", () => {
   const setupEffects = [
     { effectId: "force_starting_player", timing: "setup" },
+    {
+      effectId: "setup_retain_and_choose_third_familiar",
+      timing: "setup",
+    },
     {
       effectId: "replace_starting_card",
       timing: "setup",

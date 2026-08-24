@@ -171,7 +171,7 @@ export type MayhemAttackImpact =
     };
 
 export type SetupDirective = {
-  kind: "forceStartingPlayer";
+  kind: "forceStartingPlayer" | "retainAndChooseThirdFamiliar";
   playerId: PlayerState["playerId"];
 };
 

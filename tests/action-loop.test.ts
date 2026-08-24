@@ -13030,7 +13030,18 @@ test("ЖДК 001 считает реальные и fixture-легенды в с
   const foe = getOpponentsInSeatingOrder(state, player)[0];
   assert.ok(foe);
   player.wizardProperties = [];
-  foe.wizardProperties = [];
+  const wizardProperty003 = state.tokenDefinitions.get(
+    "esw2_dbg__wizard_property_003"
+  );
+  assert.ok(wizardProperty003);
+  assert.equal(wizardProperty003.kind, "wizardProperty");
+  foe.wizardProperties = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt001-wizard-property-003"),
+      definitionId: markTokenDefinitionId(wizardProperty003.tokenId),
+      ownerId: foe.playerId,
+    },
+  ];
   foe.life.current = 1;
   const realLegend = createRuntimeCardInstance(
     foe,
@@ -13040,35 +13051,36 @@ test("ЖДК 001 считает реальные и fixture-легенды в с
   const effectiveLegendDefinition = createFixtureCardDefinition(
     "fixture-dwt001-effective-legend",
     [],
-    { cardTypes: ["familiar"] }
+    { cardKind: "familiar", cardTypes: ["familiar"] }
   );
-  const effectiveLegendProperty = createEffectiveCardTypeWizardProperty(
-    "fixture-dwt001-effective-legend-property",
-    "familiar",
-    "legend"
+  const unselectedFamiliarDefinition = createFixtureCardDefinition(
+    "fixture-dwt001-unselected-familiar",
+    [],
+    { cardKind: "familiar", cardTypes: ["familiar"] }
   );
   state.cardDefinitions = new Map([
     ...state.cardDefinitions,
     [effectiveLegendDefinition.cardId, effectiveLegendDefinition],
+    [unselectedFamiliarDefinition.cardId, unselectedFamiliarDefinition],
   ]);
-  state.tokenDefinitions = new Map([
-    ...state.tokenDefinitions,
-    [effectiveLegendProperty.tokenId, effectiveLegendProperty],
-  ]);
-  foe.wizardProperties.push({
-    instanceId: markTokenInstanceId("fixture-dwt001-effective-legend-property"),
-    definitionId: markTokenDefinitionId(effectiveLegendProperty.tokenId),
-    ownerId: foe.playerId,
-  });
   const effectiveLegend = createRuntimeCardInstance(
     foe,
     effectiveLegendDefinition.cardId,
     "fixture-dwt001-effective-legend"
   );
-  foe.discard = [realLegend, effectiveLegend];
+  const unselectedFamiliar = createRuntimeCardInstance(
+    foe,
+    unselectedFamiliarDefinition.cardId,
+    "fixture-dwt001-unselected-familiar"
+  );
+  foe.effectiveCardTypeSelections.push({
+    cardInstanceId: effectiveLegend.instanceId,
+    cardType: "legend",
+  });
+  foe.discard = [realLegend, effectiveLegend, unselectedFamiliar];
   const wand = state.common.limpWandStack[0];
   assert.ok(wand);
-  state.common.limpWandStack.splice(1);
+  state.common.limpWandStack.splice(3);
   state.common.deadWizardTokens.drawStack = [
     {
       instanceId: markTokenInstanceId("fixture-dwt001"),
@@ -13099,9 +13111,15 @@ test("ЖДК 001 считает реальные и fixture-легенды в с
     { ok: true }
   );
 
-  assert.equal(state.common.limpWandStack.length, 0);
-  assert.equal(foe.discard.includes(wand), true);
-  assert.equal(wand.ownerId, foe.playerId);
+  assert.equal(state.common.limpWandStack.length, 1);
+  const gainedWands = foe.discard.filter(
+    (card) => card.definitionId === wand.definitionId
+  );
+  assert.equal(gainedWands.length, 2);
+  assert.equal(
+    gainedWands.every((card) => card.ownerId === foe.playerId),
+    true
+  );
 });
 
 test("ЖДК 018 кладёт палочку наверх колоды и не меняет состояние при пустой special stack", () => {

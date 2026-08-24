@@ -204,7 +204,8 @@ const gainLimpWandsPerDiscardLegendHandler: EffectRuntimeHandler<DeadWizardToken
             state,
             player.playerId,
             definition,
-            effect.countedCardType
+            effect.countedCardType,
+            card
           )
         );
       }).length;

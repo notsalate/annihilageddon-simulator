@@ -24,6 +24,10 @@
     "playableInV0": true,
     "effects": [
       {
+        "effectId": "setup_retain_and_choose_third_familiar",
+        "timing": "setup"
+      },
+      {
         "effectId": "owned_cards_count_as_card_type",
         "timing": "whileControlled",
         "sourceCardTypes": ["familiar"],

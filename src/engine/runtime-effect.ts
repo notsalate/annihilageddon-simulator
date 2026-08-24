@@ -296,6 +296,7 @@ export const knownRuntimeEffectIds = [
   "prevent_defense_against_owned_wand_attacks",
   "remove_status",
   "replace_starting_card",
+  "setup_retain_and_choose_third_familiar",
   "return_discard_to_hand",
   "reveal_top_card",
   "set_life",
@@ -348,6 +349,11 @@ export type ReplaceStartingCardRuntimeEffect = TimedEffect<
   fromDefinitionId: string;
   toDefinitionId: string;
 };
+
+export type SetupRetainAndChooseThirdFamiliarRuntimeEffect = TimedEffect<
+  "setup_retain_and_choose_third_familiar",
+  "setup"
+>;
 
 export type StartWithBasicTrophyRuntimeEffect = TimedEffect<
   "start_with_basic_trophy",
@@ -419,6 +425,7 @@ export type DestroyedCardKindIsRuntimeEffect =
 export interface SetupEffectPayloadMap extends EffectiveValueModifierEffectPayloadMap {
   force_starting_player: ForceStartingPlayerRuntimeEffect;
   replace_starting_card: ReplaceStartingCardRuntimeEffect;
+  setup_retain_and_choose_third_familiar: SetupRetainAndChooseThirdFamiliarRuntimeEffect;
   start_with_basic_trophy: StartWithBasicTrophyRuntimeEffect;
   set_starting_life_total: SetStartingLifeTotalRuntimeEffect;
   set_resurrection_life_total: SetResurrectionLifeTotalRuntimeEffect;
