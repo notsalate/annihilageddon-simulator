@@ -1942,7 +1942,7 @@ type MissingEffectRuntimeCatalogEntryIds<
 
 function mergeEffectRuntimeCatalogEntryGroups(
   groups: readonly EffectRuntimeCatalogEntryGroup[]
-): EffectRuntimeCatalogDefinition {
+): ReadonlyMap<RuntimeEffectId, EffectRuntimeEntry> {
   const entries = new Map<RuntimeEffectId, EffectRuntimeEntry>();
   for (const group of groups) {
     for (const [effectId, entry] of Object.entries(group)) {
@@ -1957,7 +1957,7 @@ function mergeEffectRuntimeCatalogEntryGroups(
       entries.set(effectId, entry);
     }
   }
-  return Object.fromEntries(entries) as EffectRuntimeCatalogDefinition;
+  return entries;
 }
 
 function defineEffectRuntimeCatalog<
@@ -1967,7 +1967,7 @@ function defineEffectRuntimeCatalog<
   ...completeness: MissingEffectRuntimeCatalogEntryIds<Groups> extends never
     ? []
     : [MissingEffectRuntimeCatalogEntryIds<Groups>]
-): EffectRuntimeCatalogDefinition {
+): ReadonlyMap<RuntimeEffectId, EffectRuntimeEntry> {
   void completeness;
   return mergeEffectRuntimeCatalogEntryGroups(groups);
 }
@@ -2008,7 +2008,11 @@ const effectRuntimeCatalogDefinition = defineEffectRuntimeCatalog([
 function getEffectRuntimeCatalogEntry<Id extends RuntimeEffectId>(
   effectId: Id
 ): EffectRuntimeEntry<Id> {
-  return effectRuntimeCatalogDefinition[effectId];
+  const entry = effectRuntimeCatalogDefinition.get(effectId);
+  if (entry === undefined) {
+    throw new Error(`Missing Effect Runtime Catalog entry ${effectId}`);
+  }
+  return entry as EffectRuntimeEntry<Id>;
 }
 
 function getVerifiedEffectRuntimeCatalogEntry(
