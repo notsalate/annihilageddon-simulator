@@ -3,11 +3,27 @@
   "stackId": "v0-dead-wizard-token-stack",
   "runtimeSchema": "krutagidon.tokenStack.v0",
   "role": "deadWizardTokens",
-  "mappingStatus": "neutral-v0",
+  "mappingStatus": "mixed-runtime-v0",
   "entries": [
     {
       "tokenId": "esw2_dbg__dead_wizard_token_001",
-      "count": 30
+      "count": 1
+    },
+    {
+      "tokenId": "esw2_dbg__dead_wizard_token_002",
+      "count": 1
+    },
+    {
+      "tokenId": "esw2_dbg__dead_wizard_token_003",
+      "count": 2
+    },
+    {
+      "tokenId": "esw2_dbg__dead_wizard_token_029",
+      "count": 1
+    },
+    {
+      "tokenId": "esw2_dbg__dead_wizard_token_neutral",
+      "count": 25
     }
   ]
 }

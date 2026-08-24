@@ -6,6 +6,8 @@ import {
   calculateEffectiveCardVictoryPoints,
   calculateEffectivePlayerMaxLife,
   calculateEffectivePlayerVictoryPoints,
+  calculateEffectiveTokenVictoryPoints,
+  determineWinnerIds,
   initializeGame,
   applyAction,
   listLegalActions,
@@ -30,12 +32,167 @@ import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
 import {
   markCardInstanceId,
   markCardDefinitionId,
+  markTokenDefinitionId,
+  markTokenInstanceId,
 } from "../src/domain/types.js";
 import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
+
+test("реальный ЖДК 002 даёт полный штраф в -6 ПО", () => {
+  const state = initializeGame({ rootDir, seed: 60202 });
+  const player = state.players[0];
+  assert.ok(player);
+  const scoreBefore = scoreGame(state).find(
+    (candidate) => candidate.playerId === player.playerId
+  );
+  assert.ok(scoreBefore);
+
+  player.deadWizardTokens.push({
+    instanceId: markTokenInstanceId("real-dwt-002"),
+    definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_002"),
+    ownerId: player.playerId,
+  });
+
+  const definition = state.tokenDefinitions.get(
+    "esw2_dbg__dead_wizard_token_002"
+  );
+  assert.equal(definition?.kind, "deadWizardToken");
+  assert.equal(
+    definition?.kind === "deadWizardToken"
+      ? definition.victoryPoints
+      : undefined,
+    -6
+  );
+  const scoreAfter = scoreGame(state).find(
+    (candidate) => candidate.playerId === player.playerId
+  );
+  assert.ok(scoreAfter);
+  assert.equal(scoreAfter.victoryPoints, scoreBefore.victoryPoints - 6);
+  assert.equal(scoreAfter.deadWizardTokenCount, 1);
+});
+
+test("пара реальных ЖДК 003 исключается из очков и tie-breaker", () => {
+  const state = initializeGame({ rootDir, seed: 60203 });
+  const [firstPlayer, secondPlayer] = state.players;
+  assert.ok(firstPlayer);
+  assert.ok(secondPlayer);
+  for (const player of state.players) {
+    player.deck.splice(0);
+    player.hand.splice(0);
+    player.discard.splice(0);
+    player.playedThisTurn.splice(0);
+    player.permanents.splice(0);
+  }
+
+  firstPlayer.deadWizardTokens.push({
+    instanceId: markTokenInstanceId("real-dwt-003-first"),
+    definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_003"),
+    ownerId: firstPlayer.playerId,
+  });
+
+  const scoreWithOneToken = scoreGame(state).find(
+    (score) => score.playerId === firstPlayer.playerId
+  );
+  assert.ok(scoreWithOneToken);
+  assert.equal(scoreWithOneToken.victoryPoints, -8);
+  assert.equal(scoreWithOneToken.deadWizardTokenCount, 1);
+
+  secondPlayer.deadWizardTokens.push({
+    instanceId: markTokenInstanceId("real-dwt-003-second"),
+    definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_003"),
+    ownerId: secondPlayer.playerId,
+  });
+
+  const scores = scoreGame(state);
+  assert.deepEqual(
+    scores.map(({ victoryPoints, deadWizardTokenCount }) => ({
+      victoryPoints,
+      deadWizardTokenCount,
+    })),
+    [
+      { victoryPoints: 0, deadWizardTokenCount: 0 },
+      { victoryPoints: 0, deadWizardTokenCount: 0 },
+    ]
+  );
+  assert.deepEqual(determineWinnerIds(scores), [
+    firstPlayer.playerId,
+    secondPlayer.playerId,
+  ]);
+});
+
+test("реальный ЖДК 029 удваивает уже инвертированные ПО вялых палочек", () => {
+  const state = initializeGame({ rootDir, seed: 60229 });
+  const player = state.players[0];
+  assert.ok(player);
+  const scoreBefore = scoreGame(state).find(
+    (candidate) => candidate.playerId === player.playerId
+  );
+  assert.ok(scoreBefore);
+  player.discard.push(
+    createCardInstance(
+      "real-dwt-029-limp-wand-1",
+      "esw2_dbg__limp_wand",
+      player.playerId
+    ),
+    createCardInstance(
+      "real-dwt-029-limp-wand-2",
+      "esw2_dbg__limp_wand",
+      player.playerId
+    )
+  );
+  const scoreWithNegativeWands = scoreGame(state).find(
+    (candidate) => candidate.playerId === player.playerId
+  );
+  assert.ok(scoreWithNegativeWands);
+  assert.equal(
+    scoreWithNegativeWands.victoryPoints,
+    scoreBefore.victoryPoints - 2
+  );
+
+  player.deadWizardTokens.push({
+    instanceId: markTokenInstanceId("real-dwt-029"),
+    definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_029"),
+    ownerId: player.playerId,
+  });
+
+  const scoreAfterNegativeDoubling = scoreGame(state).find(
+    (candidate) => candidate.playerId === player.playerId
+  );
+  assert.ok(scoreAfterNegativeDoubling);
+  assert.equal(
+    scoreAfterNegativeDoubling.victoryPoints,
+    scoreBefore.victoryPoints - 7
+  );
+
+  player.statuses.push({
+    instanceId: markCardInstanceId("fixture-limp-wand-vp-inverter"),
+    statusId: "fixture-limp-wand-vp-inverter",
+    ownerId: player.playerId,
+    effects: [
+      verifiedTestRuntimeEffect({
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "cardVictoryPoints",
+        operation: "invertNegative",
+        target: {
+          targetType: "card",
+          definitionId: "esw2_dbg__limp_wand",
+        },
+      }),
+    ],
+  });
+  const scoreAfterInversion = scoreGame(state).find(
+    (candidate) => candidate.playerId === player.playerId
+  );
+  assert.ok(scoreAfterInversion);
+  assert.equal(
+    scoreAfterInversion.victoryPoints,
+    scoreBefore.victoryPoints + 1
+  );
+});
 
 test("Effective Value rejects a runtime effect that bypassed Runtime Data Intake", () => {
   const state = initializeGame({
@@ -742,7 +899,7 @@ test("Gusynya scores two VP per owned Legend card", () => {
   assert.equal(gusynya.engine.victoryPoints, 0);
 });
 
-test("Tsirk bratiev loshashnykh turns owned DWT penalties into bonus VP", () => {
+test("Tsirk bratiev loshashnykh turns only the Dingler penalty into bonus VP", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
   const state = initializeGame({ dataPack, seed: 60615 });
   const player = state.players[0];
@@ -752,21 +909,55 @@ test("Tsirk bratiev loshashnykh turns owned DWT penalties into bonus VP", () => 
   player.discard.push(
     createCardInstance("fixture-circus", circus.cardId, player.playerId)
   );
-  assert.equal(state.common.deadWizardTokens.status, "available");
-  const dwt = state.common.deadWizardTokens.drawStack.shift();
-  assert.ok(dwt);
-  dwt.ownerId = player.playerId;
-  player.deadWizardTokens.push(dwt);
-  const dwtDefinition = state.tokenDefinitions.get(dwt.definitionId);
+  const dwtDefinition = state.tokenDefinitions.get(
+    "esw2_dbg__dead_wizard_token_002"
+  );
   assert.equal(dwtDefinition?.kind, "deadWizardToken");
-  assert.ok(dwtDefinition.victoryPoints < 0);
+  if (dwtDefinition?.kind !== "deadWizardToken") return;
+  player.deadWizardTokens.push({
+    instanceId: markTokenInstanceId("fixture-circus-dwt-002"),
+    definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_002"),
+    ownerId: player.playerId,
+  });
 
+  assert.equal(
+    calculateEffectiveTokenVictoryPoints(state, player.playerId, dwtDefinition),
+    -6
+  );
+  const scoreWithoutDingler = scoreGame(state).find(
+    (score) => score.playerId === player.playerId
+  );
+  assert.ok(scoreWithoutDingler);
+
+  player.statuses.push({
+    instanceId: "fixture-circus-dingler",
+    statusId: "dingler",
+    ownerId: player.playerId,
+    effects: [
+      verifiedTestRuntimeEffect({
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "playerVictoryPoints",
+        operation: "add",
+        amount: -5,
+        target: { targetType: "player" },
+      }),
+    ],
+  });
+
+  assert.equal(
+    calculateEffectivePlayerVictoryPoints(state, player.playerId, 0),
+    5
+  );
+  assert.equal(
+    calculateEffectiveTokenVictoryPoints(state, player.playerId, dwtDefinition),
+    -6
+  );
   assert.equal(
     scoreGame(state).find((score) => score.playerId === player.playerId)
       ?.victoryPoints,
-    2 + Math.abs(dwtDefinition.victoryPoints)
+    scoreWithoutDingler.victoryPoints + 5
   );
-  assert.equal(dwtDefinition.victoryPoints, -3);
 });
 
 test("Potnyi GeekPig scores one VP per owned creature card", () => {

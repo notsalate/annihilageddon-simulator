@@ -342,6 +342,117 @@ test("cross-source coverage requires matching runtime and focused test evidence 
   assert.deepEqual(item.crossSourceBlockers, []);
 });
 
+test("cross-source coverage accepts scoreGame with a stable DWT definition as focused evidence", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-cross-source-scoring-dwt-")
+  );
+  const tokenId = "esw2_dbg__dead_wizard_token_003";
+
+  writeJson(
+    rootDir,
+    `data/import/tokens/dead-wizard-token/drafts/${tokenId}.json`,
+    {
+      schemaVersion: 1,
+      draftKind: "deadWizardTokenDraft",
+      tokenId,
+      kind: "deadWizardToken",
+      source: { image: "assets/dead-wizard-token/DWT_003-004.png" },
+      visible: {
+        sourceLabel: "Уничтожь пару ЖДК",
+        textRu: "В конце игры: удали оба ЖДК с тем же текстом.",
+        victoryPoints: -8,
+        uncertainty: [],
+      },
+      notes: [],
+      composition: { quantity: 2 },
+    }
+  );
+  writeJson(rootDir, `data/tokens/dead-wizard/${tokenId}.json`, {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "deadWizardToken",
+    victoryPoints: -8,
+    effects: [
+      {
+        effectId: "endgame_remove_matching_dead_wizard_tokens",
+        timing: "scoring",
+        matching: "sameDefinition",
+        minimumCount: 2,
+      },
+    ],
+  });
+  writeJson(rootDir, "data/stacks/tokens/dead-wizard-tokens.json", {
+    stackId: "dead-wizard-tokens",
+    role: "deadWizardTokens",
+    entries: [{ tokenId, count: 2 }],
+  });
+  writeJson(rootDir, "config/runtime-coverage/cross-source-mechanics.json", {
+    schemaVersion: 1,
+    entries: [
+      {
+        id: tokenId,
+        objectKind: "deadWizardToken",
+        primaryMechanicCluster: "scoring-effects",
+        semanticMappings: [
+          {
+            draftPoint: {
+              path: "visible.textRu",
+              value: "В конце игры: удали оба ЖДК с тем же текстом.",
+            },
+            runtimeRefs: [
+              {
+                kind: "effect",
+                effectId: "endgame_remove_matching_dead_wizard_tokens",
+                timing: "scoring",
+                fields: { matching: "sameDefinition", minimumCount: 2 },
+              },
+            ],
+            testRefs: [
+              {
+                file: "tests/dead-wizard-token-scoring.test.ts",
+                name: "scores one paired DWT 003",
+              },
+            ],
+          },
+          {
+            draftPoint: { path: "visible.victoryPoints", value: -8 },
+            runtimeRefs: [{ kind: "field", path: "victoryPoints", value: -8 }],
+            testRefs: [
+              {
+                file: "tests/dead-wizard-token-scoring.test.ts",
+                name: "scores one paired DWT 003",
+              },
+            ],
+          },
+        ],
+        unresolvedMechanics: [],
+      },
+    ],
+  });
+  writeText(
+    rootDir,
+    "tests/dead-wizard-token-scoring.test.ts",
+    `test("scores one paired DWT 003", () => {
+  const state = initializeGame({ rootDir });
+  state.players[0].deadWizardTokens.push({
+    definitionId: markTokenDefinitionId("${tokenId}"),
+  });
+  const scores = scoreGame(state);
+  assert.equal(scores[0].victoryPoints, -8);
+});
+`
+  );
+
+  const item = createRuntimeCoverageInventory(rootDir).items.find(
+    (candidate) => candidate.id === tokenId
+  );
+
+  assert.ok(item);
+  assert.deepEqual(item.crossSourceBlockers, []);
+  assert.equal(item.crossSourceStatus, "crossSourceComplete");
+});
+
 test("cross-source coverage blocks effects outside their source-kind policy", () => {
   const rootDir = mkdtempSync(
     path.join(tmpdir(), "krutagidon-cross-source-policy-")
@@ -796,8 +907,8 @@ test("repository cross-source registry assigns every wizard property and DWT to 
       (item) => item.primaryMechanicCluster !== undefined
     )
   );
-  assert.equal(report.crossSourceSummary.blocked, 171);
-  assert.equal(report.crossSourceSummary.crossSourceComplete, 1);
+  assert.equal(report.crossSourceSummary.blocked, 168);
+  assert.equal(report.crossSourceSummary.crossSourceComplete, 4);
   assert.ok(firstDeadWizardToken);
   assert.ok(wizardProperty004);
   assert.equal(wizardProperty004.crossSourceStatus, "crossSourceComplete");
@@ -805,11 +916,6 @@ test("repository cross-source registry assigns every wizard property and DWT to 
   assert.equal(firstDeadWizardToken.crossSourceStatus, "blocked");
   assert.ok(
     firstDeadWizardToken.crossSourceBlockers.includes("runtime has no effects")
-  );
-  assert.ok(
-    firstDeadWizardToken.crossSourceBlockers.includes(
-      "composition quantity 30 does not match canonical quantity 1"
-    )
   );
 });
 

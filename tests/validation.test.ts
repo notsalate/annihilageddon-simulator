@@ -2749,7 +2749,7 @@ test("executable data-pack validation rejects invalid effective-value modifier s
     result.errors.some((error) => {
       return (
         error.includes("wizard-property-fixture-invalid-effective-value") &&
-        error.includes("operation must be one of add, invertNegative")
+        error.includes("uses multiply operation without multiplier")
       );
     })
   );

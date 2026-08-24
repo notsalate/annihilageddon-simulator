@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "tokenId": "esw2_dbg__dead_wizard_token_002",
+  "runtimeSchema": "krutagidon.tokenDefinition.v0",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_002.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_002.md"
+  },
+  "victoryPoints": -6,
+  "effects": [
+    {
+      "effectId": "endgame_fixed_token_victory_points",
+      "timing": "scoring",
+      "victoryPoints": -6
+    }
+  ]
+}

@@ -572,9 +572,19 @@ function hasFocusedTestReference(
       invocation.includes(id) ||
       idBindings.some((binding) =>
         new RegExp(`\\b${escapeRegExp(binding)}\\b`).test(invocation)
-      );
+      ) ||
+      (call.name === "scoreGame" &&
+        hasScoredDefinitionReference(testBody.slice(0, call.end), id));
     return definitionIsUsed && hasAssertionForSeamResult(testBody, call);
   });
+}
+
+function hasScoredDefinitionReference(testPrefix: string, id: string): boolean {
+  const escapedId = escapeRegExp(id);
+  return new RegExp(
+    `\\bmark(?:Card|Token)DefinitionId\\s*\\(\\s*(["'])${escapedId}\\1\\s*\\)`,
+    "u"
+  ).test(testPrefix);
 }
 
 interface RuntimeSeamCall {

@@ -36,6 +36,8 @@ export type SetupEffectId =
   | "set_resurrection_life_total"
   | "increase_hand_limit_at_max_life"
   | "temporary_hand_limit_by_gained_card_type"
+  | "endgame_fixed_token_victory_points"
+  | "endgame_remove_matching_dead_wizard_tokens"
   | "endgame_limp_wands_score_positive"
   | "endgame_vp_per_owned_legend"
   | "controls_other_card_type"
@@ -49,6 +51,8 @@ export const setupEffectIds = [
   "set_resurrection_life_total",
   "increase_hand_limit_at_max_life",
   "temporary_hand_limit_by_gained_card_type",
+  "endgame_fixed_token_victory_points",
+  "endgame_remove_matching_dead_wizard_tokens",
   "endgame_limp_wands_score_positive",
   "endgame_vp_per_owned_legend",
   "controls_other_card_type",
@@ -160,6 +164,25 @@ export function createSetupEffectDecoders(
         timing: required(literal("scoring")),
         scoreMode: required(literal("absolutePositiveVictoryPoints")),
         appliesToOwnedCardKind: required(literal("limpWand")),
+      }
+    ),
+    endgame_fixed_token_victory_points: defineDecoder(
+      "endgame_fixed_token_victory_points",
+      {
+        effectId: required(literal("endgame_fixed_token_victory_points")),
+        timing: required(literal("scoring")),
+        victoryPoints: required(safeInteger),
+      }
+    ),
+    endgame_remove_matching_dead_wizard_tokens: defineDecoder(
+      "endgame_remove_matching_dead_wizard_tokens",
+      {
+        effectId: required(
+          literal("endgame_remove_matching_dead_wizard_tokens")
+        ),
+        timing: required(literal("scoring")),
+        matching: required(literal("sameDefinition")),
+        minimumCount: required(literal(2)),
       }
     ),
     endgame_vp_per_owned_legend: defineDecoder("endgame_vp_per_owned_legend", {
@@ -327,6 +350,31 @@ const temporaryHandLimitByGainedCardTypeHandler: EffectRuntimeHandler<
   },
 };
 
+const endgameRemoveMatchingDeadWizardTokensHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"endgame_remove_matching_dead_wizard_tokens">
+> = {
+  effectId: "endgame_remove_matching_dead_wizard_tokens",
+  execute() {
+    return {
+      ok: false,
+      error:
+        "endgame_remove_matching_dead_wizard_tokens is a scoring-only effect",
+    };
+  },
+};
+
+const endgameFixedTokenVictoryPointsHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"endgame_fixed_token_victory_points">
+> = {
+  effectId: "endgame_fixed_token_victory_points",
+  execute() {
+    return {
+      ok: false,
+      error: "endgame_fixed_token_victory_points is a scoring-only effect",
+    };
+  },
+};
+
 export interface SetupCatalogTools {
   bindRuntimeEffectDecoder<Id extends SetupEffectId>(
     effectId: Id
@@ -431,6 +479,24 @@ export function createSetupEffectDefinitions(
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["wizardProperty"],
       handler: temporaryHandLimitByGainedCardTypeHandler,
+    },
+    {
+      effectId: "endgame_fixed_token_victory_points",
+      decoder: bindRuntimeEffectDecoder("endgame_fixed_token_victory_points"),
+      supportedTimings: scoringTiming,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["deadWizardToken"],
+      handler: endgameFixedTokenVictoryPointsHandler,
+    },
+    {
+      effectId: "endgame_remove_matching_dead_wizard_tokens",
+      decoder: bindRuntimeEffectDecoder(
+        "endgame_remove_matching_dead_wizard_tokens"
+      ),
+      supportedTimings: scoringTiming,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["deadWizardToken"],
+      handler: endgameRemoveMatchingDeadWizardTokensHandler,
     },
     {
       effectId: "endgame_limp_wands_score_positive",

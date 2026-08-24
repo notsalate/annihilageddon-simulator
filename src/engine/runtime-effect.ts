@@ -216,6 +216,8 @@ export const knownRuntimeEffectIds = [
   "discard_hand_then_draw_cards",
   "discard_self",
   "draw_cards",
+  "endgame_fixed_token_victory_points",
+  "endgame_remove_matching_dead_wizard_tokens",
   "endgame_limp_wands_score_positive",
   "endgame_vp_per_owned_legend",
   "exchange_life_and_dingler_status",
@@ -360,6 +362,19 @@ export type EndgameLimpWandsScorePositiveRuntimeEffect = TimedEffect<
   appliesToOwnedCardKind: "limpWand";
 };
 
+export type EndgameFixedTokenVictoryPointsRuntimeEffect = TimedEffect<
+  "endgame_fixed_token_victory_points",
+  "scoring"
+> & { victoryPoints: number };
+
+export type EndgameRemoveMatchingDeadWizardTokensRuntimeEffect = TimedEffect<
+  "endgame_remove_matching_dead_wizard_tokens",
+  "scoring"
+> & {
+  matching: "sameDefinition";
+  minimumCount: 2;
+};
+
 export type EndgameVpPerOwnedLegendRuntimeEffect = TimedEffect<
   "endgame_vp_per_owned_legend",
   "scoring"
@@ -384,6 +399,8 @@ export interface SetupEffectPayloadMap extends EffectiveValueModifierEffectPaylo
   set_resurrection_life_total: SetResurrectionLifeTotalRuntimeEffect;
   increase_hand_limit_at_max_life: IncreaseHandLimitAtMaxLifeRuntimeEffect;
   temporary_hand_limit_by_gained_card_type: TemporaryHandLimitByGainedCardTypeRuntimeEffect;
+  endgame_fixed_token_victory_points: EndgameFixedTokenVictoryPointsRuntimeEffect;
+  endgame_remove_matching_dead_wizard_tokens: EndgameRemoveMatchingDeadWizardTokensRuntimeEffect;
   endgame_limp_wands_score_positive: EndgameLimpWandsScorePositiveRuntimeEffect;
   endgame_vp_per_owned_legend: EndgameVpPerOwnedLegendRuntimeEffect;
   controls_other_card_type: ControlsOtherCardTypeRuntimeEffect;

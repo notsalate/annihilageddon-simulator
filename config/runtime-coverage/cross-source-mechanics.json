@@ -313,19 +313,202 @@
       "id": "esw2_dbg__dead_wizard_token_002",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "scoring-effects",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in scoring-effects"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": { "path": "visible.textRu", "value": "-3" },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "endgame_fixed_token_victory_points",
+              "timing": "scoring",
+              "fields": { "victoryPoints": -6 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "реальный ЖДК 002 даёт полный штраф в -6 ПО"
+            }
+          ]
+        },
+        {
+          "draftPoint": { "path": "visible.victoryPoints", "value": -3 },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "endgame_fixed_token_victory_points",
+              "timing": "scoring",
+              "fields": { "victoryPoints": -6 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "реальный ЖДК 002 даёт полный штраф в -6 ПО"
+            }
+          ]
+        },
+        {
+          "draftPoint": { "path": "notes[0]", "value": "Дополнительно -3 VP" },
+          "runtimeRefs": [
+            { "kind": "field", "path": "victoryPoints", "value": -6 }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "реальный ЖДК 002 даёт полный штраф в -6 ПО"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Весь жетон дает -6 VP"
+          },
+          "runtimeRefs": [
+            { "kind": "field", "path": "victoryPoints", "value": -6 }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "реальный ЖДК 002 даёт полный штраф в -6 ПО"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_003",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "scoring-effects",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in scoring-effects"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "В КОНЦЕ ИГРЫ. Если у любого колдуна есть второй жетон дохлого колдуна с таким же текстом, уничтожь оба жетона."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "endgame_remove_matching_dead_wizard_tokens",
+              "timing": "scoring",
+              "fields": { "matching": "sameDefinition", "minimumCount": 2 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "пара реальных ЖДК 003 исключается из очков и tie-breaker"
+            }
+          ]
+        },
+        {
+          "draftPoint": { "path": "visible.victoryPoints", "value": -5 },
+          "runtimeRefs": [
+            { "kind": "field", "path": "victoryPoints", "value": -8 }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "пара реальных ЖДК 003 исключается из очков и tie-breaker"
+            }
+          ]
+        },
+        {
+          "draftPoint": { "path": "notes[0]", "value": "Это end-game эффект." },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "endgame_remove_matching_dead_wizard_tokens",
+              "timing": "scoring",
+              "fields": { "matching": "sameDefinition", "minimumCount": 2 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "пара реальных ЖДК 003 исключается из очков и tie-breaker"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Нужно искать второй ЖДК с таким же текстом у любого колдуна."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "endgame_remove_matching_dead_wizard_tokens",
+              "timing": "scoring",
+              "fields": { "matching": "sameDefinition", "minimumCount": 2 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "пара реальных ЖДК 003 исключается из очков и tie-breaker"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Если найден второй ЖДК с таким же текстом, оба жетона уничтожаются."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "endgame_remove_matching_dead_wizard_tokens",
+              "timing": "scoring",
+              "fields": { "matching": "sameDefinition", "minimumCount": 2 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "пара реальных ЖДК 003 исключается из очков и tie-breaker"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Значение -5 относится к штрафным ПО/VP этого жетона, если JSON mapping подтвердит это как scoring value."
+          },
+          "runtimeRefs": [
+            { "kind": "field", "path": "victoryPoints", "value": -8 }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "пара реальных ЖДК 003 исключается из очков и tie-breaker"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Всего 2 таких экземпляра ЖДК в игре"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "endgame_remove_matching_dead_wizard_tokens",
+              "timing": "scoring",
+              "fields": { "matching": "sameDefinition", "minimumCount": 2 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "пара реальных ЖДК 003 исключается из очков и tie-breaker"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_005",
@@ -547,10 +730,205 @@
       "id": "esw2_dbg__dead_wizard_token_029",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "scoring-effects",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in scoring-effects"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "В КОНЦЕ ИГРЫ: Удвой свои штрафные ПО за вялые палочки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardVictoryPoints",
+                "operation": "multiply",
+                "multiplier": 2,
+                "target": {
+                  "targetType": "card",
+                  "definitionId": "esw2_dbg__limp_wand"
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "реальный ЖДК 029 удваивает уже инвертированные ПО вялых палочек"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Это end-game эффект."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardVictoryPoints",
+                "operation": "multiply",
+                "multiplier": 2,
+                "target": {
+                  "targetType": "card",
+                  "definitionId": "esw2_dbg__limp_wand"
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "реальный ЖДК 029 удваивает уже инвертированные ПО вялых палочек"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Эффект относится к штрафным ПО/VP за вялые палочки игрока."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardVictoryPoints",
+                "operation": "multiply",
+                "multiplier": 2,
+                "target": {
+                  "targetType": "card",
+                  "definitionId": "esw2_dbg__limp_wand"
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "реальный ЖДК 029 удваивает уже инвертированные ПО вялых палочек"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Нужно удвоить именно штраф от вялых палочек, а не все штрафные ПО игрока."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardVictoryPoints",
+                "operation": "multiply",
+                "multiplier": 2,
+                "target": {
+                  "targetType": "card",
+                  "definitionId": "esw2_dbg__limp_wand"
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "реальный ЖДК 029 удваивает уже инвертированные ПО вялых палочек"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Например, 6 вялых палочек дают -6 ПО. ЖДК удваивает ПО в -12 ПО."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardVictoryPoints",
+                "operation": "multiply",
+                "multiplier": 2,
+                "target": {
+                  "targetType": "card",
+                  "definitionId": "esw2_dbg__limp_wand"
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "реальный ЖДК 029 удваивает уже инвертированные ПО вялых палочек"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Не противоречит действиям Легенды-Волшебника Виагрус, который меняет ПО вялой палочки с -1 на +1."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardVictoryPoints",
+                "operation": "multiply",
+                "multiplier": 2,
+                "target": {
+                  "targetType": "card",
+                  "definitionId": "esw2_dbg__limp_wand"
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "реальный ЖДК 029 удваивает уже инвертированные ПО вялых палочек"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[5]",
+            "value": "То есть 6 вялых палочек и Виагрус дают +12 ПО, а не 6."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardVictoryPoints",
+                "operation": "multiply",
+                "multiplier": 2,
+                "target": {
+                  "targetType": "card",
+                  "definitionId": "esw2_dbg__limp_wand"
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "реальный ЖДК 029 удваивает уже инвертированные ПО вялых палочек"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     }
   ]
 }

@@ -6,6 +6,7 @@ import {
   getOwnedScoringCards,
 } from "./effective-value-runtime.js";
 import type { GameState, PlayerId, TokenInstance } from "./setup.js";
+import { requireVerifiedRuntimeEffect } from "./runtime-effect-verification.js";
 
 export interface PlayerScore {
   playerId: PlayerId;
@@ -31,10 +32,15 @@ export function adjudicateGame(state: GameState): AdjudicationResult {
 }
 
 export function scoreGame(state: GameState): PlayerScore[] {
+  const removedDeadWizardTokenInstanceIds =
+    getRemovedDeadWizardTokenInstanceIdsForScoring(state);
   return state.players.map((player) => {
     const scoringCards = getOwnedScoringCards(state, player.playerId);
     const cardDefinitions = scoringCards.map((object) => object.definition);
-    const deadWizardTokenDefinitions = player.deadWizardTokens.map((token) =>
+    const scoringDeadWizardTokens = player.deadWizardTokens.filter(
+      (token) => !removedDeadWizardTokenInstanceIds.has(token.instanceId)
+    );
+    const deadWizardTokenDefinitions = scoringDeadWizardTokens.map((token) =>
       mustGetTokenDefinition(state, token)
     );
 
@@ -66,9 +72,50 @@ export function scoreGame(state: GameState): PlayerScore[] {
       legendCount: cardDefinitions.filter(
         (definition) => definition.engine.cardKind === "legend"
       ).length,
-      deadWizardTokenCount: player.deadWizardTokens.length,
+      deadWizardTokenCount: scoringDeadWizardTokens.length,
     };
   });
+}
+
+function getRemovedDeadWizardTokenInstanceIdsForScoring(
+  state: GameState
+): ReadonlySet<TokenInstance["instanceId"]> {
+  const tokenEntries = state.players.flatMap((player) =>
+    player.deadWizardTokens.map((token) => ({
+      token,
+      definition: mustGetTokenDefinition(state, token),
+    }))
+  );
+  const removed = new Set<TokenInstance["instanceId"]>();
+
+  for (const { token, definition } of tokenEntries) {
+    if (
+      definition.kind !== "deadWizardToken" ||
+      !definition.effects.some((effect) => {
+        const verifiedEffect = requireVerifiedRuntimeEffect(effect);
+        return (
+          verifiedEffect.effectId ===
+            "endgame_remove_matching_dead_wizard_tokens" &&
+          verifiedEffect.timing === "scoring" &&
+          verifiedEffect.matching === "sameDefinition" &&
+          verifiedEffect.minimumCount === 2
+        );
+      })
+    ) {
+      continue;
+    }
+
+    const matchingTokens = tokenEntries.filter(
+      (candidate) => candidate.token.definitionId === token.definitionId
+    );
+    if (matchingTokens.length >= 2) {
+      for (const matchingToken of matchingTokens) {
+        removed.add(matchingToken.token.instanceId);
+      }
+    }
+  }
+
+  return removed;
 }
 
 export function determineWinnerIds(

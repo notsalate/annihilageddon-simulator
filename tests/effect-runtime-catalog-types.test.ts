@@ -258,6 +258,8 @@ test("remaining Catalog families expose one local ID inventory each", () => {
     "set_resurrection_life_total",
     "increase_hand_limit_at_max_life",
     "temporary_hand_limit_by_gained_card_type",
+    "endgame_fixed_token_victory_points",
+    "endgame_remove_matching_dead_wizard_tokens",
     "endgame_limp_wands_score_positive",
     "endgame_vp_per_owned_legend",
     "controls_other_card_type",
