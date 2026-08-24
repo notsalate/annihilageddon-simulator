@@ -907,16 +907,14 @@ test("repository cross-source registry assigns every wizard property and DWT to 
       (item) => item.primaryMechanicCluster !== undefined
     )
   );
-  assert.equal(report.crossSourceSummary.blocked, 168);
-  assert.equal(report.crossSourceSummary.crossSourceComplete, 4);
+  assert.equal(report.crossSourceSummary.blocked, 165);
+  assert.equal(report.crossSourceSummary.crossSourceComplete, 7);
   assert.ok(firstDeadWizardToken);
   assert.ok(wizardProperty004);
   assert.equal(wizardProperty004.crossSourceStatus, "crossSourceComplete");
   assert.deepEqual(wizardProperty004.crossSourceBlockers, []);
-  assert.equal(firstDeadWizardToken.crossSourceStatus, "blocked");
-  assert.ok(
-    firstDeadWizardToken.crossSourceBlockers.includes("runtime has no effects")
-  );
+  assert.equal(firstDeadWizardToken.crossSourceStatus, "crossSourceComplete");
+  assert.deepEqual(firstDeadWizardToken.crossSourceBlockers, []);
 });
 
 function createCardDraft(

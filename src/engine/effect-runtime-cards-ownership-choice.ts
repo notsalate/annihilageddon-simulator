@@ -22,6 +22,7 @@ import {
   immediateEffectTimings,
 } from "./effect-runtime-catalog-shared.js";
 import { createUnsupportedEffectHandler } from "./effect-runtime-family-support.js";
+import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
 import type {
   ObjectFields,
   OptionalField,
@@ -444,6 +445,23 @@ const optionalGainMarketCardsToHandThisTurnHandler: EffectRuntimeHandler<
   },
 };
 
+const onGainSelfGainLimpWandsHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"on_gain_self_gain_limp_wands">
+> = {
+  effectId: "on_gain_self_gain_limp_wands",
+  execute(state, player, effect, source, services) {
+    return gainLimpWandsFromCommonStack(
+      state,
+      player,
+      effect.amount,
+      "discard",
+      effect.effectId,
+      source,
+      services
+    );
+  },
+};
+
 export function resolveMainMarketGainDestination(
   state: GameState,
   player: PlayerState,
@@ -709,12 +727,16 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler<
 > = {
   effectId: "play_top_card_from_foe_deck",
   execute(state, player, effect, source, services) {
-    const foe = services
-      .getOpponentsInSeatingOrder(state, player)
-      .find(
-        (candidate) => candidate.deck.length > 0 || candidate.discard.length > 0
-      );
-    if (foe === undefined) {
+    const targetResult = services.resolveTargetChoice(
+      state,
+      player,
+      effect,
+      source
+    );
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+    if (targetResult.choice?.choiceType !== "player") {
       recordGameEvent(state, {
         type: "effectPlayTopFoeDeckSkipped",
         playerId: player.playerId,
@@ -725,6 +747,7 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler<
       });
       return { ok: true };
     }
+    const foe = targetResult.choice.player;
 
     const card = services.drawTopDeckCard(foe, state);
     if (card === undefined) {
@@ -740,12 +763,15 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler<
       return { ok: true };
     }
 
+    const ownerDiscardDestination = {
+      zone: "ownerDiscardAfterResolution" as const,
+      ownerId: foe.playerId,
+    };
     const playedResult = services.playResolvedCard(state, player, card, {
-      nonOngoingDestination: {
-        zone: "ownerDiscardAfterResolution",
-        ownerId: foe.playerId,
-      },
-      ongoingOwnerId: player.playerId,
+      nonOngoingDestination: ownerDiscardDestination,
+      ...(source.sourceType === "wizardProperty"
+        ? { forceOngoingDiscard: ownerDiscardDestination }
+        : { ongoingOwnerId: player.playerId }),
     });
     if (!playedResult.ok || playedResult.gameEnd !== undefined) {
       return playedResult;
@@ -892,7 +918,7 @@ export function createCardOwnershipChoiceEffectDefinitions(
       supportedTimings: ["onGain"] as const,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["card", "wizardProperty"],
-      handler: createUnsupportedEffectHandler("on_gain_self_gain_limp_wands"),
+      handler: onGainSelfGainLimpWandsHandler,
     },
   ] as const;
 }

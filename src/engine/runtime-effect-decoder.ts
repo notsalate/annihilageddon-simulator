@@ -16,6 +16,7 @@ import {
 import { createActivationEffectDecoders } from "./effect-runtime-activation.js";
 import { createCardOwnershipChoiceEffectDecoders } from "./effect-runtime-cards-ownership-choice.js";
 import { createCardTypeEffectDecoders } from "./effect-runtime-card-type.js";
+import { createDeadWizardTokenEffectDecoders } from "./effect-runtime-dead-wizard-token.js";
 import { createEffectiveValueModifierEffectDecoders } from "./effect-runtime-effective-value-modifier.js";
 import { createOngoingEffectDecoders } from "./effect-runtime-ongoing.js";
 import { createResourceDrawEffectDecoders } from "./effect-runtime-resources-draw.js";
@@ -315,6 +316,11 @@ const attackOutcomeBranch: ValueDecoder<AttackOutcomeBranch> = (label, raw) => {
         effectId: required(literal("return_discard_to_hand")),
         amount: required(positiveInteger),
       });
+    case "transfer_limp_wands_to_killed_target":
+      return decodeObject(label, raw, {
+        effectId: required(literal("transfer_limp_wands_to_killed_target")),
+        amount: required(positiveInteger),
+      });
     case "gain_status":
       return decodeObject<
         Extract<AttackOutcomeBranch, { effectId: "gain_status" }>
@@ -530,6 +536,12 @@ const cardTypeEffectDecoders = createCardTypeEffectDecoders({
   required,
   literal,
   nonEmptyStringArray,
+});
+
+const deadWizardTokenEffectDecoders = createDeadWizardTokenEffectDecoders({
+  defineDecoder,
+  required,
+  literal,
 });
 
 const setupEffectDecoders = createSetupEffectDecoders({
@@ -764,6 +776,7 @@ const runtimeEffectDecoders: {
   ),
   ...cardOwnershipChoiceEffectDecoders,
   ...cardTypeEffectDecoders,
+  ...deadWizardTokenEffectDecoders,
   fixture_add_power_equal_to_target_cost: defineDecoder(
     "fixture_add_power_equal_to_target_cost",
     {

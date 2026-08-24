@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "tokenId": "esw2_dbg__dead_wizard_token_018",
+  "runtimeSchema": "krutagidon.tokenDefinition.v0",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_018.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_018.md"
+  },
+  "victoryPoints": -3,
+  "effects": [
+    {
+      "effectId": "dead_wizard_token_gain_limp_wand_to_deck_top",
+      "timing": "onDeadWizardTokenFace",
+      "amount": 1,
+      "destination": "deckTop"
+    }
+  ]
+}

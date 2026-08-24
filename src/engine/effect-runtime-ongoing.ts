@@ -1,4 +1,5 @@
 import { recordTurnPowerChanged } from "./event-recorder.js";
+import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
 import type {
   EffectExecutionResult,
   EffectSourceContext,
@@ -12,7 +13,6 @@ import {
   type EffectRuntimeSupportedSourceKinds,
   type EffectRuntimeSupportedTimings,
 } from "./effect-runtime-catalog-shared.js";
-import { createUnsupportedEffectHandler } from "./effect-runtime-family-support.js";
 import type {
   ObjectFields,
   RequiredField,
@@ -263,7 +263,9 @@ const ongoingFirstAttackDamageAddPowerHandler: EffectRuntimeHandler<
 function applyOngoingWandPower(
   state: GameState,
   player: PlayerState,
-  effect: RuntimeEffectForId<"ongoing_add_power_when_playing_wand">,
+  effect:
+    | RuntimeEffectForId<"ongoing_add_power_when_playing_wand">
+    | RuntimeEffectForId<"ongoing_add_power_when_playing_limp_wand">,
   source: EffectSourceContext
 ): EffectExecutionResult {
   const powerBefore = state.turn.power;
@@ -272,7 +274,7 @@ function applyOngoingWandPower(
     state,
     player,
     source,
-    "ongoing_add_power_when_playing_wand",
+    effect.effectId,
     powerBefore,
     state.turn.power
   );
@@ -301,6 +303,48 @@ const ongoingAddPowerWhenPlayingWandHandler: EffectRuntimeHandler<
         context.source
       ),
     };
+  },
+};
+
+const ongoingAddPowerWhenPlayingLimpWandHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"ongoing_add_power_when_playing_limp_wand">
+> = {
+  effectId: "ongoing_add_power_when_playing_limp_wand",
+  execute(state, player, effect, source) {
+    return applyOngoingWandPower(state, player, effect, source);
+  },
+};
+
+const ongoingStartTurnOptionalGainLimpWandToHandHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"ongoing_start_turn_optional_gain_limp_wand_to_hand">
+> = {
+  effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand",
+  execute(state, player, effect, source, services) {
+    if (state.common.limpWandStack.length === 0) {
+      return { ok: true };
+    }
+    const choice = services.chooseEffectChoice(
+      state,
+      player,
+      source,
+      effect.effectId,
+      [
+        { choiceKind: "option", choiceId: "apply" },
+        { choiceKind: "option", choiceId: "decline" },
+      ]
+    );
+    if (choice?.choiceId !== "apply") {
+      return { ok: true };
+    }
+    return gainLimpWandsFromCommonStack(
+      state,
+      player,
+      effect.amount,
+      effect.destination,
+      effect.effectId,
+      source,
+      services
+    );
   },
 };
 
@@ -416,9 +460,7 @@ export function createOngoingEffectDefinitions(tools: OngoingCatalogTools) {
       supportedTimings: ["afterControllerPlaysCard"] as const,
       supportedModes,
       supportedSourceKinds,
-      handler: createUnsupportedEffectHandler(
-        "ongoing_add_power_when_playing_limp_wand"
-      ),
+      handler: ongoingAddPowerWhenPlayingLimpWandHandler,
     },
     {
       effectId: "ongoing_first_attack_damage_add_power",
@@ -446,9 +488,7 @@ export function createOngoingEffectDefinitions(tools: OngoingCatalogTools) {
       supportedTimings: ["startOfControllerTurn"] as const,
       supportedModes,
       supportedSourceKinds,
-      handler: createUnsupportedEffectHandler(
-        "ongoing_start_turn_optional_gain_limp_wand_to_hand"
-      ),
+      handler: ongoingStartTurnOptionalGainLimpWandToHandHandler,
     },
   ] as const;
 }

@@ -27,6 +27,12 @@ export function forkGameState(source: GameState): GameState {
     common: ledger.common,
     cardDefinitions: source.cardDefinitions,
     tokenDefinitions: source.tokenDefinitions,
+    deadWizardTokenResolution: {
+      boundaryDepth: source.deadWizardTokenResolution.boundaryDepth,
+      pendingFaces: source.deadWizardTokenResolution.pendingFaces.map(
+        (face) => ({ ...face })
+      ),
+    },
     eventLog: structuredClone([...source.eventLog]),
     ...(source.effectChoiceStrategy === undefined
       ? {}

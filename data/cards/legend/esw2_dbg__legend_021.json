@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_021",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_021.json",
+    "image": "assets/cards/legend/treasure/Легенда-Сокровище. ТА САМАЯ Вялая Палочка.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_021.md"
+  },
+  "visible": {
+    "nameRu": "ТА САМАЯ Вялая Палочка",
+    "cost": 11,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Сокровище",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "textRu": "+4 мощи\nАтака: Нанеси 7 урона выбранному колдуну. Если он от этого подох, можешь дать ему 3 или меньше вялых палочек с руки, или из твоей стопки сброса, или из колоды вялых палочек.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "tags": ["wandCard", "wandAttackCard"],
+    "cost": 11,
+    "victoryPoints": 4,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 4
+      },
+      {
+        "effectId": "attack_damage",
+        "timing": "onPlay",
+        "targetSelector": "chosenFoe",
+        "amount": 7,
+        "onKill": [
+          {
+            "effectId": "transfer_limp_wands_to_killed_target",
+            "amount": 3
+          }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

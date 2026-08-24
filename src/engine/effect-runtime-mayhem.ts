@@ -9,6 +9,7 @@ import {
 } from "./control-ledger.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import { recordEffectChipsChanged } from "./effect-runtime-resources-draw.js";
+import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
 import type {
   EffectChoice,
   EffectGameEnd,
@@ -55,6 +56,7 @@ export type MayhemEffectId =
   | "mayhem_each_player_vote_dingler"
   | "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life"
   | "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem"
+  | "mega_mayhem_each_player_gain_limp_wands_to_hand"
   | "mega_mayhem_each_player_toggle_dingler"
   | "mega_mayhem_set_life";
 
@@ -75,6 +77,7 @@ export const mayhemEffectIds = [
   "mayhem_each_player_vote_dingler",
   "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
   "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+  "mega_mayhem_each_player_gain_limp_wands_to_hand",
   "mega_mayhem_each_player_toggle_dingler",
   "mega_mayhem_set_life",
 ] as const satisfies readonly MayhemEffectId[];
@@ -335,6 +338,18 @@ export function createMayhemEffectDecoders(
           destroyedCardSource: required(literal("mainDeck")),
         }
       ),
+    mega_mayhem_each_player_gain_limp_wands_to_hand: defineDecoder(
+      "mega_mayhem_each_player_gain_limp_wands_to_hand",
+      {
+        effectId: required(
+          literal("mega_mayhem_each_player_gain_limp_wands_to_hand")
+        ),
+        timing: required(literal("onMayhemResolve")),
+        targetSelector: required(literal("eachPlayerClockwiseFromActive")),
+        destination: required(literal("hand")),
+        amount: required(positiveInteger),
+      }
+    ),
     mega_mayhem_each_player_toggle_dingler: defineDecoder(
       "mega_mayhem_each_player_toggle_dingler",
       {
@@ -1313,6 +1328,38 @@ const mayhemAttackHandler: EffectRuntimeHandler<
   },
 };
 
+const megaMayhemEachPlayerGainLimpWandsToHandHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mega_mayhem_each_player_gain_limp_wands_to_hand">
+> = {
+  effectId: "mega_mayhem_each_player_gain_limp_wands_to_hand",
+  execute(state, player, effect, source, services) {
+    return services.resolveMayhemAttackPlan(
+      state,
+      player,
+      services.getPlayersInActiveOrder(state).map((targetPlayer) => ({
+        targetPlayer,
+        amount: effect.amount,
+      })),
+      effect.effectId,
+      source,
+      {
+        kind: "effect",
+        executeOnHit(targetPlayer) {
+          return gainLimpWandsFromCommonStack(
+            state,
+            targetPlayer,
+            effect.amount,
+            "hand",
+            effect.effectId,
+            source,
+            services
+          );
+        },
+      }
+    );
+  },
+};
+
 export interface MayhemCatalogTools {
   bindRuntimeEffectDecoder<Id extends MayhemEffectId>(
     effectId: Id
@@ -1440,6 +1487,11 @@ export function createMayhemEffectDefinitions(
       "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
       mayhemResolveTimings,
       megaMayhemEachPlayerDestroyTopMainDeckHandler
+    ),
+    definition(
+      "mega_mayhem_each_player_gain_limp_wands_to_hand",
+      mayhemResolveTimings,
+      megaMayhemEachPlayerGainLimpWandsToHandHandler
     ),
     definition(
       "mega_mayhem_each_player_toggle_dingler",

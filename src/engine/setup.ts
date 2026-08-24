@@ -160,6 +160,14 @@ export interface GameState {
   common: CommonState;
   cardDefinitions: ReadonlyMap<string, CardDefinition>;
   tokenDefinitions: ReadonlyMap<string, TokenDefinition>;
+  deadWizardTokenResolution: {
+    boundaryDepth: number;
+    pendingFaces: Array<{
+      playerId: PlayerId;
+      tokenInstanceId: TokenInstanceId;
+      tokenDefinitionId: TokenDefinitionId;
+    }>;
+  };
   eventLog: GameEvent[];
   effectChoiceStrategy?: ChoicePolicy;
 }
@@ -176,6 +184,7 @@ export type GameEventType =
   | "cardBought"
   | "cardMoved"
   | "cardPlayed"
+  | "deadWizardTokenFaceResolved"
   | "deadWizardTokenGained"
   | "defenseCardMoved"
   | "defenseChoiceSelected"
@@ -644,7 +653,9 @@ type GameEventPayloadUnion =
       "playerId" | "cardInstanceId" | "definitionId" | "destination"
     >
   | GameEventOf<
-      "deadWizardTokenGained" | "wizardPropertyActivated",
+      | "deadWizardTokenFaceResolved"
+      | "deadWizardTokenGained"
+      | "wizardPropertyActivated",
       "playerId" | "tokenInstanceId" | "tokenDefinitionId"
     >
   | GameEventOf<
@@ -906,6 +917,10 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     common,
     cardDefinitions: dataPack.cardDefinitions,
     tokenDefinitions: dataPack.tokenDefinitions,
+    deadWizardTokenResolution: {
+      boundaryDepth: 0,
+      pendingFaces: [],
+    },
     eventLog: [...setupEvents],
     ...(options.effectChoiceStrategy === undefined
       ? {}

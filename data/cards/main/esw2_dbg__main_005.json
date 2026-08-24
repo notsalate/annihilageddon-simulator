@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_005",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_005.json",
+    "image": "assets/cards/location/Место. Вялая башня.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_005.md"
+  },
+  "visible": {
+    "nameRu": "Вялая башня",
+    "cost": 3,
+    "victoryPoints": 3,
+    "typeRu": "Место",
+    "cardKind": "normal",
+    "cardTypes": ["location"],
+    "textRu": "Получив эту карту, получи 2 вялые палочки.\nПостоянка: +1 мощь.",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["location"],
+    "cost": 3,
+    "victoryPoints": 3,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "on_gain_self_gain_limp_wands",
+        "timing": "onGain",
+        "destination": "gainingPlayerDiscard",
+        "amount": 2
+      },
+      {
+        "effectId": "ongoing_add_power",
+        "timing": "whileControlled",
+        "amount": 1
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

@@ -6,6 +6,14 @@
   "mappingStatus": "incomplete-full-only",
   "entries": [
     {
+      "cardId": "esw2_dbg__legend_001",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__mega_mayhem_002",
+      "count": 1
+    },
+    {
       "cardId": "esw2_dbg__legend_002",
       "count": 1
     },
@@ -38,7 +46,15 @@
       "count": 1
     },
     {
+      "cardId": "esw2_dbg__legend_021",
+      "count": 1
+    },
+    {
       "cardId": "esw2_dbg__legend_025",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__legend_029",
       "count": 1
     },
     {

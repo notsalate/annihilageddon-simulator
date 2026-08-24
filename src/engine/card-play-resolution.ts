@@ -29,6 +29,11 @@ export interface CardPlayResolutionServices {
     player: PlayerState,
     card: CardInstance
   ): EffectExecutionResult;
+  executeControlledCardAfterControllerPlaysCardEffects(
+    state: GameState,
+    player: PlayerState,
+    card: CardInstance
+  ): EffectExecutionResult;
 }
 
 export interface CardPlayResolutionOptions {
@@ -37,6 +42,10 @@ export interface CardPlayResolutionOptions {
     readonly ownerId: PlayerState["playerId"];
   };
   readonly ongoingOwnerId?: CardInstance["ownerId"];
+  readonly forceOngoingDiscard?: {
+    readonly zone: "ownerDiscardAfterResolution";
+    readonly ownerId: PlayerState["playerId"];
+  };
   readonly sourceZone?: string;
   readonly ownerBefore?: CardInstance["ownerId"];
 }
@@ -75,7 +84,9 @@ export function resolveCardPlay(
     }
     return destinationZone;
   };
-  const placementResult = definition.engine.isOngoing
+  const persistsAsOngoing =
+    definition.engine.isOngoing && options.forceOngoingDiscard === undefined;
+  const placementResult = persistsAsOngoing
     ? runControlledPowerMutation(state, player.playerId, placeAndRecord)
     : { ok: true as const, value: placeAndRecord() };
   if (!placementResult.ok) {
@@ -137,6 +148,25 @@ export function resolveCardPlay(
         controlledCardResult
       );
     }
+    const afterControllerPlayResult =
+      services.executeControlledCardAfterControllerPlaysCardEffects(
+        state,
+        player,
+        card
+      );
+    if (!afterControllerPlayResult.ok) {
+      return afterControllerPlayResult;
+    }
+    if (afterControllerPlayResult.gameEnd !== undefined) {
+      return finishResolvedCard(
+        state,
+        player,
+        card,
+        definition,
+        options,
+        afterControllerPlayResult
+      );
+    }
   }
 
   const result = finishResolvedCard(
@@ -165,7 +195,10 @@ function placeResolvedCard(
   definition: CardDefinition,
   options: CardPlayResolutionOptions
 ): string {
-  if (definition.engine.isOngoing) {
+  if (
+    definition.engine.isOngoing &&
+    options.forceOngoingDiscard === undefined
+  ) {
     card.ownerId = options.ongoingOwnerId ?? card.ownerId;
     player.permanents.push(card);
     return `${player.playerId}.permanents`;
@@ -188,8 +221,8 @@ function finishResolvedCard(
     state,
     controller,
     card,
-    definition.engine.isOngoing,
-    options.nonOngoingDestination
+    definition.engine.isOngoing && options.forceOngoingDiscard === undefined,
+    options.forceOngoingDiscard ?? options.nonOngoingDestination
   );
   return movementResult.ok ? result : movementResult;
 }

@@ -63,6 +63,11 @@ import {
   type CardTypeEffectPayloadMap,
 } from "./effect-runtime-card-type.js";
 import {
+  createDeadWizardTokenEffectDefinitions,
+  type DeadWizardTokenEffectId,
+  type DeadWizardTokenEffectPayloadMap,
+} from "./effect-runtime-dead-wizard-token.js";
+import {
   createControlledPowerEffectDefinitions,
   createOngoingEffectDefinitions,
 } from "./effect-runtime-ongoing.js";
@@ -154,6 +159,13 @@ export interface MayhemAttackPlanTarget {
   targetPlayer: PlayerState;
   amount: number;
 }
+
+export type MayhemAttackImpact =
+  | { kind: "damage" }
+  | {
+      kind: "effect";
+      executeOnHit(targetPlayer: PlayerState): EffectExecutionResult;
+    };
 
 export type SetupDirective = {
   kind: "forceStartingPlayer";
@@ -281,7 +293,8 @@ export interface EffectRuntimeServices {
     destination: CardInstance[],
     destinationZone: string,
     effectId: RuntimeEffectId,
-    source: EffectSourceContext
+    source: EffectSourceContext,
+    placeOnTop?: boolean
   ): boolean;
   moveCardToZonePreservingOwner(
     state: GameState,
@@ -391,7 +404,8 @@ export interface EffectRuntimeServices {
     sourcePlayer: PlayerState,
     targets: readonly MayhemAttackPlanTarget[],
     effectId: RuntimeEffectId,
-    source: EffectSourceContext
+    source: EffectSourceContext,
+    impact?: MayhemAttackImpact
   ): EffectExecutionResult;
   resolvePlayerDeath(
     state: GameState,
@@ -1661,6 +1675,13 @@ const cardTypeEntries = defineEffectRuntimeFamily(
   Pick<CardTypeEffectPayloadMap, CardTypeEffectId>
 >;
 
+const deadWizardTokenEntries = defineEffectRuntimeFamily(
+  "tokens/dead-wizard",
+  createDeadWizardTokenEffectDefinitions({ bindRuntimeEffectDecoder })
+) satisfies EffectRuntimeEntriesFor<
+  Pick<DeadWizardTokenEffectPayloadMap, DeadWizardTokenEffectId>
+>;
+
 const controlledPowerEntries = defineEffectRuntimeFamily(
   "values/controlled-power",
   createControlledPowerEffectDefinitions({ bindRuntimeEffectDecoder })
@@ -1952,6 +1973,7 @@ export function defineEffectRuntimeCatalogGroupsForTesting(
 const effectRuntimeCatalogDefinition = defineEffectRuntimeCatalog([
   setupEffectEntries,
   cardTypeEntries,
+  deadWizardTokenEntries,
   controlledPowerEntries,
   resourceDrawEntries,
   lifeStatusEntries,

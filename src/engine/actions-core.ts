@@ -1,6 +1,8 @@
 import {
   executeActivationEffects,
+  executeControlledCardAfterControllerPlaysCardEffects,
   executeControlledCardOnPlayCardEffects,
+  executeControlledCardStartOfControllerTurnEffects,
   executeOnPlayEffects,
   executeWizardPropertyOnPlayCardEffects,
   executeWizardPropertyActivationEffects,
@@ -8,6 +10,7 @@ import {
   getWizardPropertyActivationAvailability,
   hasExecutableWizardPropertyActivation,
   moveGainedCardToPlayerDestination,
+  resolveWithinDeadWizardTokenResolutionBoundary,
   validateActivationEffects,
   validateGainedCardEffects,
   validateOnPlayEffects,
@@ -206,7 +209,8 @@ export function preflightAction(
         const gainValidation = validateGainedCardEffects(
           state,
           activePlayer,
-          definition
+          definition,
+          card
         );
         if (!gainValidation.ok) {
           return gainValidation;
@@ -418,6 +422,17 @@ function endTurn(state: GameState): ActionResult {
     type: "turnStarted",
     playerId: state.activePlayerId,
   });
+
+  const startOfTurnResult = executeControlledCardStartOfControllerTurnEffects(
+    state,
+    nextActivePlayer
+  );
+  if (!startOfTurnResult.ok) {
+    return startOfTurnResult;
+  }
+  if (startOfTurnResult.gameEnd !== undefined) {
+    return gameEndActionResult(startOfTurnResult.gameEnd);
+  }
 
   return { ok: true };
 }
@@ -699,19 +714,24 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
 
   activePlayer.hand.splice(cardIndex, 1);
   const ownerBefore = card.ownerId;
-  const effectResult = resolveCardPlay(
+  const effectResult = resolveWithinDeadWizardTokenResolutionBoundary(
     state,
-    activePlayer,
-    card,
-    {
-      executeOnPlayEffects,
-      executeWizardPropertyOnPlayCardEffects,
-      executeControlledCardOnPlayCardEffects,
-    },
-    {
-      sourceZone: `${activePlayer.playerId}.hand`,
-      ownerBefore,
-    }
+    () =>
+      resolveCardPlay(
+        state,
+        activePlayer,
+        card,
+        {
+          executeOnPlayEffects,
+          executeWizardPropertyOnPlayCardEffects,
+          executeControlledCardOnPlayCardEffects,
+          executeControlledCardAfterControllerPlaysCardEffects,
+        },
+        {
+          sourceZone: `${activePlayer.playerId}.hand`,
+          ownerBefore,
+        }
+      )
   );
   if (!effectResult.ok) {
     return effectResult;

@@ -163,6 +163,7 @@ export interface PlayerControlledAttackIntent {
 }
 
 export interface ResolvedAttackBranchContext {
+  readonly effectId: RuntimeEffectId;
   readonly source: EffectSourceContext;
   readonly damageDealt: number;
   readonly killed: boolean;
@@ -576,14 +577,22 @@ function resolvePlayerControlledEffectsAttackTarget(
         intent.state,
         current.targetPlayer,
         {
-          kind: "nonredirectable",
+          kind: "redirectable",
+          attackingPlayer: current.attackingPlayer,
+          amountComponents: current.amountComponents,
+          effectId: intent.effectId,
           source: current.source,
+          originalSource: context.originalSource,
           defenseUsage: context.defenseUsage,
         },
-        () => ({
-          ok: false,
-          error: "A non-damage attack cannot be redirected",
-        })
+        (redirectedIntent) =>
+          resolvePlayerControlledAttackTarget(intent, context, adapters, {
+            attackingPlayer: redirectedIntent.attackingPlayer,
+            targetPlayer: redirectedIntent.targetPlayer,
+            source: redirectedIntent.source,
+            unavoidable: redirectedIntent.unavoidable ?? false,
+            amountComponents: redirectedIntent.amountComponents,
+          })
       );
   if (!defenseResult.ok) {
     return defenseResult;
@@ -641,6 +650,7 @@ function executeResolvedAttackBranches(
   resolution: AttackResolution
 ): EffectExecutionResult {
   const branchContext: ResolvedAttackBranchContext = {
+    effectId: intent.effectId,
     source: resolution.source,
     damageDealt: resolution.damageDealt,
     killed: resolution.killed,

@@ -556,16 +556,6 @@ test("activation and ongoing families reject unsupported calls before handlers",
         activationLimit: "oncePerTurnWhileControlled" as const,
       },
     },
-    {
-      effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand" as const,
-      payload: {
-        effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand" as const,
-        timing: "startOfControllerTurn" as const,
-        destination: "hand" as const,
-        amount: 1,
-        chooser: "controller" as const,
-      },
-    },
   ];
 
   for (const { effectId, payload } of cases) {

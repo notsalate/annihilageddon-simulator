@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__mega_mayhem_002",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__mega_mayhem_002.json",
+    "image": "assets/cards/mega-mayhem/МегаБеспредел. MB.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__mega_mayhem_002.md"
+  },
+  "visible": {
+    "nameRu": "МегаБеспредел MB",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "МегаБеспредел",
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "textRu": "Атака: каждый колдун получает 3 вялые палочки на руку.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "cost": null,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mega_mayhem_each_player_gain_limp_wands_to_hand",
+        "timing": "onMayhemResolve",
+        "targetSelector": "eachPlayerClockwiseFromActive",
+        "destination": "hand",
+        "amount": 3
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}
