@@ -11183,6 +11183,48 @@ function createChipActivationWizardProperty(
   };
 }
 
+function createEffectiveCardTypeWizardProperty(
+  tokenId: string,
+  sourceCardType: string,
+  countedAsCardType: string
+): TokenDefinition {
+  return {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    source: { image: "assets/wizard-property/wp_fixture.png" },
+    engine: {
+      mappingStatus: "fixture",
+      playableInV0: true,
+      effects: [
+        verifiedTestRuntimeEffect({
+          effectId: "owned_cards_count_as_card_type",
+          timing: "whileControlled",
+          sourceCardTypes: [sourceCardType],
+          countedAsCardType,
+        }),
+      ],
+      unsupportedMechanics: [],
+    },
+  };
+}
+
+function createFixtureDeadWizardTokenDefinition(
+  tokenId: string,
+  effects: RuntimeEffect[]
+): TokenDefinition {
+  return {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "deadWizardToken",
+    source: { image: "assets/dead-wizard-token/dwt_fixture.png" },
+    victoryPoints: -3,
+    effects: effects.map((effect) => verifiedTestRuntimeEffect(effect)),
+  };
+}
+
 function createOnPlayOngoingChipWizardProperty(
   tokenId: string
 ): TokenDefinition {
@@ -11934,6 +11976,41 @@ test("ТА САМАЯ Вялая Палочка после убийства пе
   );
 });
 
+test("ТА САМАЯ Вялая Палочка после убийства передаёт меньший остаток палочек", () => {
+  const state = initializeGame({ rootDir, seed: 244024 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const foe = state.players.find(
+    (candidate) => candidate.playerId !== player.playerId
+  );
+  assert.ok(foe);
+  player.wizardProperties = [];
+  foe.wizardProperties = [];
+  foe.life.current = 7;
+  const remainingWand = state.common.limpWandStack[0];
+  assert.ok(remainingWand);
+  state.common.limpWandStack.splice(1);
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId !== "attack_damage") return undefined;
+    return toChoiceSelection(
+      choices.find(
+        (choice) =>
+          choice.choiceId === foe.playerId ||
+          choice.choiceId === `transfer_${remainingWand.instanceId}`
+      )
+    );
+  };
+  const card = addRuntimeCardToHand(state, player, "esw2_dbg__legend_021");
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: card.instanceId }),
+    { ok: true }
+  );
+
+  assert.deepEqual(state.common.limpWandStack, []);
+  assert.equal(foe.discard.includes(remainingWand), true);
+  assert.equal(remainingWand.ownerId, foe.playerId);
+});
+
 test("ТА САМАЯ Вялая Палочка позволяет отказаться от передачи после убийства", () => {
   const state = initializeGame({ rootDir, seed: 244023 });
   const player = mustGetPlayer(state, state.activePlayerId);
@@ -12001,6 +12078,40 @@ test("Сальный шут даёт 3 мощи и атакой выдаёт п�
   assert.equal(state.turn.power, 3);
   assert.deepEqual(foe.discard, [expectedWand]);
   assert.equal(state.common.limpWandStack.length, 0);
+});
+
+test("Сальный шут сохраняет атаку при пустом стеке палочек", () => {
+  const state = initializeGame({ rootDir, seed: 245005 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const foe = state.players.find(
+    (candidate) => candidate.playerId !== player.playerId
+  );
+  assert.ok(foe);
+  player.wizardProperties = [];
+  foe.wizardProperties = [];
+  state.common.limpWandStack = [];
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "attack_gain_limp_wand"
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === foe.playerId)
+        )
+      : undefined;
+  const familiar = addRuntimeCardToHand(
+    state,
+    player,
+    "esw2_dbg__familiar_003"
+  );
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: familiar.instanceId,
+    }),
+    { ok: true }
+  );
+
+  assert.equal(state.turn.power, 3);
+  assert.deepEqual(foe.discard, []);
 });
 
 test("Сальный шут защищается, берёт карту и перенаправляет палочку атакующему", () => {
@@ -12263,6 +12374,78 @@ test("смерть в незавершённой карте сначала во�
   ]);
 });
 
+test("set_life до нуля проводит смерть через общий lifecycle ЖДК", () => {
+  const state = initializeGame({ rootDir, seed: 301003 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  player.wizardProperties = [];
+  for (const targetPlayer of state.players) {
+    targetPlayer.wizardProperties = [];
+  }
+  state.common.deadWizardTokens.drawStack.splice(1);
+  const setLife = addFixtureCardToActiveHand(state, {
+    effectId: "set_life",
+    timing: "onPlay",
+    lifeTotal: 0,
+    target: { selector: "activePlayer" },
+  });
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: setLife }),
+    { ok: true }
+  );
+
+  assert.equal(player.life.current, 20);
+  assert.equal(player.deadWizardTokens.length, 1);
+  assertEventOrder(state, [
+    (event) =>
+      event.type === "effectLifeSet" && event.playerId === player.playerId,
+    (event) =>
+      event.type === "playerDied" && event.playerId === player.playerId,
+    (event) =>
+      event.type === "playerResurrected" && event.playerId === player.playerId,
+    (event) =>
+      event.type === "deadWizardTokenGained" &&
+      event.playerId === player.playerId,
+  ]);
+});
+
+test("МегаБеспредел с set_life до нуля использует lifecycle ЖДК для каждого игрока", () => {
+  const state = initializeGame({ rootDir, seed: 301004 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  for (const targetPlayer of state.players) {
+    targetPlayer.wizardProperties = [];
+  }
+  state.common.deadWizardTokens.drawStack.splice(state.players.length);
+  const definition = createFixtureCardDefinition(
+    "fixture-mega-mayhem-set-life-zero",
+    [
+      {
+        effectId: "mega_mayhem_set_life",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        lifeTotal: 0,
+      },
+    ],
+    { cardKind: "megaMayhem" }
+  );
+
+  assert.deepEqual(
+    executeMayhemEffects(state, player, definition, {
+      sourceType: "card",
+      runtimeMode: "fixture",
+      playerId: player.playerId,
+      cardInstanceId: markCardInstanceId("fixture-mega-mayhem-set-life-zero"),
+      definitionId: definition.cardId,
+    }),
+    { ok: true }
+  );
+
+  for (const targetPlayer of state.players) {
+    assert.equal(targetPlayer.life.current, 20);
+    assert.equal(targetPlayer.deadWizardTokens.length, 1);
+  }
+});
+
 test("несколько смертей одной карты выдают ЖДК сразу, а их лица разрешают FIFO после карты", () => {
   const state = initializeGame({ rootDir, seed: 301002, playerCount: 3 });
   const player = mustGetPlayer(state, state.activePlayerId);
@@ -12328,6 +12511,79 @@ test("несколько смертей одной карты выдают ЖД�
   ]);
 });
 
+test("смерть от лица ЖДК выдаёт следующий жетон до завершения текущего лица", () => {
+  const state = initializeGame({ rootDir, seed: 301005 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  player.wizardProperties = [];
+  player.life.current = 1;
+  const deathFace = createFixtureDeadWizardTokenDefinition(
+    "fixture-dwt-face-causes-death",
+    [
+      {
+        effectId: "set_life",
+        timing: "onDeadWizardTokenFace",
+        lifeTotal: 0,
+        target: { selector: "activePlayer" },
+      },
+    ]
+  );
+  const neutralFace = createFixtureDeadWizardTokenDefinition(
+    "fixture-dwt-face-after-nested-death",
+    []
+  );
+  state.tokenDefinitions = new Map([
+    ...state.tokenDefinitions,
+    [deathFace.tokenId, deathFace],
+    [neutralFace.tokenId, neutralFace],
+  ]);
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt-face-causes-death"),
+      definitionId: markTokenDefinitionId(deathFace.tokenId),
+      ownerId: "common",
+    },
+    {
+      instanceId: markTokenInstanceId("fixture-dwt-face-after-nested-death"),
+      definitionId: markTokenDefinitionId(neutralFace.tokenId),
+      ownerId: "common",
+    },
+  ];
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    targetSelector: "chosenPlayer",
+    amount: 1,
+  });
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === player.playerId)
+        )
+      : undefined;
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }),
+    { ok: true }
+  );
+
+  assertEventOrder(state, [
+    (event) =>
+      event.type === "deadWizardTokenGained" &&
+      event.playerId === player.playerId,
+    (event) =>
+      event.type === "playerDied" && event.playerId === player.playerId,
+    (event) =>
+      event.type === "deadWizardTokenGained" &&
+      event.playerId === player.playerId,
+    (event) =>
+      event.type === "deadWizardTokenFaceResolved" &&
+      event.playerId === player.playerId,
+    (event) =>
+      event.type === "deadWizardTokenFaceResolved" &&
+      event.playerId === player.playerId,
+  ]);
+});
+
 test("свойство 002 разыгрывает верхнюю постоянку врага один раз и сбрасывает её владельцу", () => {
   const state = initializeGame({ rootDir, seed: 310002 });
   const player = mustGetPlayer(state, state.activePlayerId);
@@ -12350,11 +12606,25 @@ test("свойство 002 разыгрывает верхнюю постоян�
   });
   assert.deepEqual(state.turn.activatedCardIds, []);
 
-  addControlledFixturePermanent(state, player, "fixture-wp002-wizard", [
-    "wizardCard",
+  const effectiveTypeProperty = createEffectiveCardTypeWizardProperty(
+    "fixture-wp002-effective-wizard",
+    "familiar",
+    "wizardCard"
+  );
+  state.tokenDefinitions = new Map([
+    ...state.tokenDefinitions,
+    [effectiveTypeProperty.tokenId, effectiveTypeProperty],
   ]);
-  addControlledFixturePermanent(state, player, "fixture-wp002-spell", [
-    "spell",
+  player.wizardProperties.push({
+    instanceId: markTokenInstanceId("fixture-wp002-effective-wizard"),
+    definitionId: markTokenDefinitionId(effectiveTypeProperty.tokenId),
+    ownerId: player.playerId,
+  });
+  addControlledFixturePermanent(state, player, "fixture-wp002-familiar-one", [
+    "familiar",
+  ]);
+  addControlledFixturePermanent(state, player, "fixture-wp002-familiar-two", [
+    "familiar",
   ]);
   const foreignOngoingDefinition = createFixtureCardDefinition(
     "fixture-wp002-foe-ongoing",
@@ -12539,6 +12809,50 @@ test("ЖДК 018 кладёт палочку наверх колоды и не �
   const emptyStack = resolveDwt018Death(false);
   assert.deepEqual(emptyStack.foe.deck, []);
   assert.equal(emptyStack.state.common.limpWandStack.length, 0);
+});
+
+test("endTurn проверяет start-of-turn эффекты следующего игрока до мутаций", () => {
+  const state = initializeGame({ rootDir, seed: 246030 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const nextPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(nextPlayer);
+  const invalidStartEffect = {
+    effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand",
+    timing: "onPlay",
+    destination: "hand",
+    amount: 1,
+    chooser: "controller",
+  } as unknown as RuntimeEffect;
+  const definition = createFixtureCardDefinition(
+    "fixture-invalid-start-of-turn-effect",
+    [invalidStartEffect],
+    { isOngoing: true }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  nextPlayer.permanents.push({
+    instanceId: markCardInstanceId("fixture-invalid-start-of-turn-effect"),
+    definitionId: markCardDefinitionId(definition.cardId),
+    ownerId: nextPlayer.playerId,
+    marketChips: 0,
+  });
+  const activeHand = activePlayer.hand.slice();
+  const eventLog = state.eventLog.slice();
+  const turnNumber = state.turn.number;
+
+  const result = applyAction(state, { type: "endTurn" });
+
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /uses unsupported timing onPlay/);
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(state.turn.number, turnNumber);
+  assert.deepEqual(activePlayer.hand, activeHand);
+  assert.deepEqual(state.eventLog, eventLog);
 });
 
 test("прямая выдача ЖДК не воскрешает игрока и ждёт границы источника", () => {

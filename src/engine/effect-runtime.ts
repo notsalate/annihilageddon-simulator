@@ -522,6 +522,41 @@ export function executeControlledCardStartOfControllerTurnEffects(
   });
 }
 
+export function validateControlledCardStartOfControllerTurnEffects(
+  state: GameState,
+  player: PlayerState
+): EffectExecutionResult {
+  return dispatchControlledCardOperation(state, player, {
+    kind: "startOfControllerTurn",
+    executeEffect(effect, source) {
+      let expectedFailure: string | undefined;
+      const result = evaluateRuntimeEffectAtTiming(
+        effect,
+        source,
+        "startOfControllerTurn",
+        (decodedEffect) => {
+          expectedFailure = getExpectedEffectFailure(
+            state,
+            player,
+            decodedEffect
+          );
+          return { status: "resolved", result: undefined };
+        }
+      );
+      if (result.status === "error") {
+        return result;
+      }
+      if (expectedFailure !== undefined) {
+        return {
+          status: "resolved",
+          result: { ok: false, error: expectedFailure },
+        };
+      }
+      return { status: "resolved", result: { ok: true } };
+    },
+  });
+}
+
 export function resolveWithinDeadWizardTokenResolutionBoundary(
   state: GameState,
   resolve: () => EffectExecutionResult
@@ -1050,7 +1085,7 @@ function effectConditionMatches(
       return (
         definition !== undefined &&
         condition.cardTypes.some((cardType) =>
-          controlledCardMatchesType(definition, cardType)
+          cardMatchesTypeForPlayer(state, player.playerId, definition, cardType)
         )
       );
     }).length;
@@ -1059,16 +1094,6 @@ function effectConditionMatches(
   }
 
   return false;
-}
-
-function controlledCardMatchesType(
-  definition: CardDefinition,
-  cardType: string
-): boolean {
-  return (
-    definition.engine.cardTypes.includes(cardType) ||
-    definition.engine.tags?.includes("counts_as_every_card_type") === true
-  );
 }
 
 function resolvePlayerControlledAttackWithRuntimeAdapters(

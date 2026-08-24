@@ -692,7 +692,7 @@ const runtimeEffectDecoders: {
     {
       effectId: required(literal("set_life")),
       timing: optionalTiming,
-      lifeTotal: required(positiveInteger),
+      lifeTotal: required(nonNegativeInteger),
       target: optionalTarget,
       targetSelector: optionalTargetSelector,
     },

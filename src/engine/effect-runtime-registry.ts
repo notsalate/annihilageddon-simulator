@@ -1263,6 +1263,9 @@ const setLifeHandler: EffectRuntimeHandler<RuntimeEffectForId<"set_life">> = {
       targetLifeAfter: lifeChange.lifeAfter,
       sourceType: source.sourceType,
     });
+    if (lifeChange.lifeAfter < 1) {
+      return services.resolvePlayerDeath(state, targetResult.choice.player);
+    }
     return { ok: true };
   },
 };
@@ -1698,6 +1701,11 @@ const resourceDrawEntries = defineEffectRuntimeFamily(
   createResourceDrawEffectDefinitions({ bindRuntimeEffectDecoder })
 );
 
+const setLifeSupportedTimings = [
+  ...immediateEffectTimings,
+  "onDeadWizardTokenFace",
+] as const satisfies EffectRuntimeSupportedTimings;
+
 const lifeStatusEntries = defineEffectRuntimeFamily("life/status", [
   {
     effectId: "heal",
@@ -1710,9 +1718,9 @@ const lifeStatusEntries = defineEffectRuntimeFamily("life/status", [
   {
     effectId: "set_life",
     decoder: bindRuntimeEffectDecoder("set_life"),
-    supportedTimings: immediateEffectTimings,
+    supportedTimings: setLifeSupportedTimings,
     supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
+    supportedSourceKinds: ["card", "wizardProperty", "deadWizardToken"],
     handler: setLifeHandler,
   },
   {

@@ -324,7 +324,7 @@ test("life and Dingler status effects use typed family payloads and policies", (
       payload: {
         effectId: "set_life",
         timing: "onMayhemResolve",
-        lifeTotal: 15,
+        lifeTotal: 0,
         targetSelector: "activePlayer",
       },
     },
@@ -369,6 +369,20 @@ test("life and Dingler status effects use typed family payloads and policies", (
       true
     );
   }
+
+  assert.equal(
+    validateRuntimeEffectCatalogPayload(
+      "Dead Wizard Token set life",
+      "set_life",
+      {
+        ...validCases[1].payload,
+        timing: "onDeadWizardTokenFace",
+      },
+      "combat",
+      "deadWizardToken"
+    ).ok,
+    true
+  );
 
   const invalidStatus = validateRuntimeEffectCatalogPayload(
     "Invalid status",
@@ -986,7 +1000,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         effectId: "mega_mayhem_set_life",
         timing: "onMayhemResolve",
         targetSelector: "eachPlayerClockwiseFromActive",
-        lifeTotal: 5,
+        lifeTotal: 0,
       },
     },
     {

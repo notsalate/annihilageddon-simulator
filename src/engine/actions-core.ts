@@ -3,6 +3,7 @@ import {
   executeControlledCardAfterControllerPlaysCardEffects,
   executeControlledCardOnPlayCardEffects,
   executeControlledCardStartOfControllerTurnEffects,
+  validateControlledCardStartOfControllerTurnEffects,
   executeOnPlayEffects,
   executeWizardPropertyOnPlayCardEffects,
   executeWizardPropertyActivationEffects,
@@ -302,6 +303,15 @@ export function preflightAction(
       }
       case "endTurn": {
         calculateEndTurnDrawCount(state, activePlayer);
+        const nextActivePlayer = getNextPlayer(state, activePlayer);
+        const startOfTurnValidation =
+          validateControlledCardStartOfControllerTurnEffects(
+            state,
+            nextActivePlayer
+          );
+        if (!startOfTurnValidation.ok) {
+          return startOfTurnValidation;
+        }
         const marketValidation = validateMarketFlow(state, { mode: "turn" });
         if (!marketValidation.ok) {
           return marketValidation;

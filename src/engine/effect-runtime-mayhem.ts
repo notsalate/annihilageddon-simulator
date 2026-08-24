@@ -362,7 +362,7 @@ export function createMayhemEffectDecoders(
       effectId: required(literal("mega_mayhem_set_life")),
       timing: required(literal("onMayhemResolve")),
       targetSelector: required(literal("eachPlayerClockwiseFromActive")),
-      lifeTotal: required(positiveInteger),
+      lifeTotal: required(nonNegativeInteger),
     }),
   };
 }
@@ -486,6 +486,12 @@ const megaMayhemSetLifeHandler: EffectRuntimeHandler<
         targetLifeAfter: lifeChange.lifeAfter,
         sourceType: source.sourceType,
       });
+      if (lifeChange.lifeAfter < 1) {
+        const deathResult = services.resolvePlayerDeath(state, targetPlayer);
+        if (!deathResult.ok || deathResult.gameEnd !== undefined) {
+          return deathResult;
+        }
+      }
     }
     return { ok: true };
   },

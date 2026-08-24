@@ -374,7 +374,7 @@ test("Mayhem family rejects malformed payloads at intake", () => {
         effectId: "mega_mayhem_set_life",
         timing: "onMayhemResolve",
         targetSelector: "eachPlayerClockwiseFromActive",
-        lifeTotal: 0,
+        lifeTotal: -1,
       },
     },
   ] as const;
