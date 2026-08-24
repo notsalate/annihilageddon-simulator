@@ -429,6 +429,10 @@ export interface EffectRuntimeServices {
         ownerId: PlayerState["playerId"];
       };
       ongoingOwnerId?: CardInstance["ownerId"];
+      forceOngoingDiscard?: {
+        zone: "ownerDiscardAfterResolution";
+        ownerId: PlayerState["playerId"];
+      };
     }
   ): EffectExecutionResult;
   isLegalWildMagicOption(
