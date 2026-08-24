@@ -131,7 +131,16 @@ export function createResourceDrawEffectDecoders(
 const gainChipsHandler: EffectRuntimeHandler<GainChipsRuntimeEffect> = {
   effectId: "gain_chips",
   execute(state, player, effect, source) {
-    changePlayerChips(state, player, effect.amount, source, "gain_chips");
+    const chipsBefore = player.chips;
+    player.chips += effect.amount;
+    recordEffectChipsChanged(
+      state,
+      player,
+      source,
+      "gain_chips",
+      chipsBefore,
+      player.chips
+    );
 
     return { ok: true };
   },
