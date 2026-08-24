@@ -20,6 +20,8 @@ export const deadWizardTokenEffectIds = [
   "dead_wizard_token_gain_chips",
   "dead_wizard_token_gain_limp_wands_per_discard_legend",
   "dead_wizard_token_gain_limp_wand_to_deck_top",
+  "dead_wizard_token_gain_status_or_draw_face",
+  "dead_wizard_token_killer_optional_remove_dingler",
   "dead_wizard_token_lose_half_chips",
   "dead_wizard_token_reward_killer_chips",
 ] as const;
@@ -51,6 +53,18 @@ export type DeadWizardTokenRewardKillerChipsRuntimeEffect = {
   amount: 2;
 };
 
+export type DeadWizardTokenKillerOptionalRemoveDinglerRuntimeEffect = {
+  effectId: "dead_wizard_token_killer_optional_remove_dingler";
+  timing: "onDeadWizardTokenFace";
+  statusId: "dingler";
+};
+
+export type DeadWizardTokenGainStatusOrDrawFaceRuntimeEffect = {
+  effectId: "dead_wizard_token_gain_status_or_draw_face";
+  timing: "onDeadWizardTokenFace";
+  statusId: "dingler";
+};
+
 export type DeadWizardTokenGainLimpWandsPerDiscardLegendRuntimeEffect = {
   effectId: "dead_wizard_token_gain_limp_wands_per_discard_legend";
   timing: "onDeadWizardTokenFace";
@@ -70,6 +84,8 @@ export interface DeadWizardTokenEffectPayloadMap {
   dead_wizard_token_gain_chips: DeadWizardTokenGainChipsRuntimeEffect;
   dead_wizard_token_gain_limp_wands_per_discard_legend: DeadWizardTokenGainLimpWandsPerDiscardLegendRuntimeEffect;
   dead_wizard_token_gain_limp_wand_to_deck_top: DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect;
+  dead_wizard_token_killer_optional_remove_dingler: DeadWizardTokenKillerOptionalRemoveDinglerRuntimeEffect;
+  dead_wizard_token_gain_status_or_draw_face: DeadWizardTokenGainStatusOrDrawFaceRuntimeEffect;
   dead_wizard_token_lose_half_chips: DeadWizardTokenLoseHalfChipsRuntimeEffect;
   dead_wizard_token_reward_killer_chips: DeadWizardTokenRewardKillerChipsRuntimeEffect;
 }
@@ -125,6 +141,26 @@ export function createDeadWizardTokenEffectDecoders(
         effectId: required(literal("dead_wizard_token_reward_killer_chips")),
         timing: required(literal("onDeadWizardTokenFace")),
         amount: required(literal(2)),
+      }
+    ),
+    dead_wizard_token_killer_optional_remove_dingler: defineDecoder(
+      "dead_wizard_token_killer_optional_remove_dingler",
+      {
+        effectId: required(
+          literal("dead_wizard_token_killer_optional_remove_dingler")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
+        statusId: required(literal("dingler")),
+      }
+    ),
+    dead_wizard_token_gain_status_or_draw_face: defineDecoder(
+      "dead_wizard_token_gain_status_or_draw_face",
+      {
+        effectId: required(
+          literal("dead_wizard_token_gain_status_or_draw_face")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
+        statusId: required(literal("dingler")),
       }
     ),
     dead_wizard_token_gain_limp_wands_per_discard_legend: defineDecoder(
@@ -242,6 +278,50 @@ const rewardKillerChipsHandler: EffectRuntimeHandler<DeadWizardTokenRewardKiller
     },
   };
 
+const killerOptionalRemoveDinglerHandler: EffectRuntimeHandler<DeadWizardTokenKillerOptionalRemoveDinglerRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_killer_optional_remove_dingler",
+    execute(state, _player, effect, source, services) {
+      const killer = state.players.find(
+        (candidate) =>
+          candidate.playerId === source.deadWizardTokenDeathKillerPlayerId
+      );
+      if (killer === undefined || !services.hasDinglerStatus(killer)) {
+        return { ok: true };
+      }
+      const choice = services.chooseEffectChoice(
+        state,
+        killer,
+        source,
+        effect.effectId,
+        [
+          { choiceKind: "option", choiceId: "apply" },
+          { choiceKind: "option", choiceId: "decline" },
+        ]
+      );
+      if (choice?.choiceId !== "apply") {
+        return { ok: true };
+      }
+      return services.removeDinglerStatus(
+        state,
+        killer,
+        effect.effectId,
+        source
+      );
+    },
+  };
+
+const gainStatusOrDrawFaceHandler: EffectRuntimeHandler<DeadWizardTokenGainStatusOrDrawFaceRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_gain_status_or_draw_face",
+    execute(state, player, effect, source, services) {
+      if (services.hasDinglerStatus(player)) {
+        return services.gainDeadWizardToken(state, player);
+      }
+      return services.gainDinglerStatus(state, player, effect.effectId, source);
+    },
+  };
+
 const gainLimpWandToDeckTopHandler: EffectRuntimeHandler<DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect> =
   {
     effectId: "dead_wizard_token_gain_limp_wand_to_deck_top",
@@ -322,6 +402,26 @@ export function createDeadWizardTokenEffectDefinitions(
       supportedModes,
       supportedSourceKinds,
       handler: rewardKillerChipsHandler,
+    },
+    {
+      effectId: "dead_wizard_token_killer_optional_remove_dingler",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_killer_optional_remove_dingler"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: killerOptionalRemoveDinglerHandler,
+    },
+    {
+      effectId: "dead_wizard_token_gain_status_or_draw_face",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_gain_status_or_draw_face"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: gainStatusOrDrawFaceHandler,
     },
     {
       effectId: "dead_wizard_token_gain_limp_wands_per_discard_legend",

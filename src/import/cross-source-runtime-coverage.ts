@@ -604,6 +604,7 @@ const runtimeSeamNames = [
   "calculateEffectiveCardCost",
   "calculateEffectiveCardVictoryPoints",
   "calculateEffectivePlayerMaxLife",
+  "gainDeadWizardToken",
   "initializeGame",
   "runMarketFlow",
   "scoreGame",
@@ -719,7 +720,11 @@ function getStateBinding(
       );
     return resultBinding?.[1];
   }
-  if (call.name !== "applyAction" && call.name !== "runMarketFlow") {
+  if (
+    call.name !== "applyAction" &&
+    call.name !== "gainDeadWizardToken" &&
+    call.name !== "runMarketFlow"
+  ) {
     return undefined;
   }
   const argumentMatch =

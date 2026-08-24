@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "tokenId": "esw2_dbg__dead_wizard_token_027",
+  "runtimeSchema": "krutagidon.tokenDefinition.v0",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_027.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_027.md"
+  },
+  "victoryPoints": -3,
+  "effects": [
+    {
+      "effectId": "dead_wizard_token_gain_status_or_draw_face",
+      "timing": "onDeadWizardTokenFace",
+      "statusId": "dingler"
+    }
+  ]
+}

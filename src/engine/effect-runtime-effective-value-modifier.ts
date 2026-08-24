@@ -85,6 +85,7 @@ export type ModifyEffectiveValueRuntimeEffect<
   amountPerOwnedCard?: number;
   countedCardTypes?: string[];
   multiplier?: number;
+  requiresStatus?: "dingler";
   target: RuntimeEffectTarget;
 };
 export interface EffectiveValueModifierEffectPayloadMap {
@@ -151,6 +152,7 @@ export function createEffectiveValueModifierEffectDecoders(
         amountPerOwnedCard: optional(safeInteger),
         countedCardTypes: optional(nonEmptyStringArray),
         multiplier: optional(safeInteger),
+        requiresStatus: optional(literal("dingler")),
         target: required(runtimeTarget),
       },
       validateEffectiveValuePayload
@@ -178,6 +180,7 @@ export function createEffectiveValueModifierEffectDecoders(
         amountPerOwnedCard: optional(safeInteger),
         countedCardTypes: optional(nonEmptyStringArray),
         multiplier: optional(safeInteger),
+        requiresStatus: optional(literal("dingler")),
         target: required(runtimeTarget),
       },
       validateEffectiveValuePayload
@@ -263,6 +266,13 @@ function validateEffectiveValuePayload(
     errors.push(
       `${subjectId} uses amountPerOwnedCard without countedCardTypes`
     );
+  }
+
+  if (
+    effect.requiresStatus !== undefined &&
+    (!("targetType" in effect.target) || effect.target.targetType !== "player")
+  ) {
+    errors.push(`${subjectId} uses requiresStatus with a non-player target`);
   }
   if (
     effect.operation === "add" &&

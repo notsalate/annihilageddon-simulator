@@ -71,6 +71,8 @@ export type {
   DeadWizardTokenGainChipsRuntimeEffect,
   DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect,
   DeadWizardTokenGainLimpWandsPerDiscardLegendRuntimeEffect,
+  DeadWizardTokenGainStatusOrDrawFaceRuntimeEffect,
+  DeadWizardTokenKillerOptionalRemoveDinglerRuntimeEffect,
   DeadWizardTokenLoseHalfChipsRuntimeEffect,
   DeadWizardTokenRewardKillerChipsRuntimeEffect,
 } from "./effect-runtime-dead-wizard-token.js";
@@ -221,6 +223,8 @@ export const knownRuntimeEffectIds = [
   "dead_wizard_token_gain_chips",
   "dead_wizard_token_gain_limp_wand_to_deck_top",
   "dead_wizard_token_gain_limp_wands_per_discard_legend",
+  "dead_wizard_token_gain_status_or_draw_face",
+  "dead_wizard_token_killer_optional_remove_dingler",
   "dead_wizard_token_lose_half_chips",
   "dead_wizard_token_reward_killer_chips",
   "double_owned_attack_damage",
@@ -472,6 +476,8 @@ export type GainStatusRuntimeEffect =
 export type RemoveStatusRuntimeEffect =
   EffectWithOptionalTiming<"remove_status"> & {
     statusId: "dingler";
+    optional?: boolean;
+    cardTypes?: string[];
   } & Targetable;
 export type ToggleStatusRuntimeEffect =
   EffectWithOptionalTiming<"toggle_status"> & {

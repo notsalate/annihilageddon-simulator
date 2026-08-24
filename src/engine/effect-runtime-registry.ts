@@ -385,6 +385,10 @@ export interface EffectRuntimeServices {
     source: EffectSourceContext
   ): EffectExecutionResult;
   hasDinglerStatus(player: PlayerState): boolean;
+  gainDeadWizardToken(
+    state: GameState,
+    player: PlayerState
+  ): EffectExecutionResult;
   resolvePlayerControlledAttack(
     intent: PlayerControlledAttackIntent
   ): EffectExecutionResult;
@@ -1516,6 +1520,24 @@ const removeStatusHandler: EffectRuntimeHandler<
     }
 
     for (const targetPlayer of targetResult.players) {
+      if (!services.hasDinglerStatus(targetPlayer)) {
+        continue;
+      }
+      if (effect.optional === true) {
+        const choice = services.chooseEffectChoice(
+          state,
+          targetPlayer,
+          source,
+          effect.effectId,
+          [
+            { choiceKind: "option", choiceId: "apply" },
+            { choiceKind: "option", choiceId: "decline" },
+          ]
+        );
+        if (choice?.choiceId !== "apply") {
+          continue;
+        }
+      }
       const result = services.removeDinglerStatus(
         state,
         targetPlayer,
@@ -1715,6 +1737,11 @@ const setLifeSupportedTimings = [
   "onDeadWizardTokenFace",
 ] as const satisfies EffectRuntimeSupportedTimings;
 
+const statusEffectTimings = [
+  ...immediateEffectTimings,
+  "onDeadWizardTokenFace",
+] as const satisfies EffectRuntimeSupportedTimings;
+
 const lifeStatusEntries = defineEffectRuntimeFamily("life/status", [
   {
     effectId: "heal",
@@ -1735,25 +1762,25 @@ const lifeStatusEntries = defineEffectRuntimeFamily("life/status", [
   {
     effectId: "gain_status",
     decoder: bindRuntimeEffectDecoder("gain_status"),
-    supportedTimings: immediateEffectTimings,
+    supportedTimings: statusEffectTimings,
     supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
+    supportedSourceKinds: ["card", "wizardProperty", "deadWizardToken"],
     handler: gainStatusHandler,
   },
   {
     effectId: "remove_status",
     decoder: bindRuntimeEffectDecoder("remove_status"),
-    supportedTimings: immediateEffectTimings,
+    supportedTimings: statusEffectTimings,
     supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
+    supportedSourceKinds: ["card", "wizardProperty", "deadWizardToken"],
     handler: removeStatusHandler,
   },
   {
     effectId: "toggle_status",
     decoder: bindRuntimeEffectDecoder("toggle_status"),
-    supportedTimings: immediateEffectTimings,
+    supportedTimings: statusEffectTimings,
     supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
+    supportedSourceKinds: ["card", "wizardProperty", "deadWizardToken"],
     handler: toggleStatusHandler,
   },
 ] as const) satisfies EffectRuntimeEntriesFor<

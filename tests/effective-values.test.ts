@@ -22,6 +22,7 @@ import {
 } from "../src/index.js";
 import { calculateEffectiveCardCost as calculateEffectiveCardCostFromDomain } from "../src/engine/effective-values.js";
 import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
+import { gainDeadWizardToken } from "../src/engine/effect-runtime.js";
 import { createRuntimeCoverageInventory } from "../src/import/runtime-coverage-inventory.js";
 import {
   buildControlledObjectView,
@@ -191,6 +192,101 @@ test("реальный ЖДК 029 удваивает уже инвертиров
   assert.equal(
     scoreAfterInversion.victoryPoints,
     scoreBefore.victoryPoints + 1
+  );
+});
+
+test("ЖДК 026 удваивает только активный штраф статуса лошары", () => {
+  const state = initializeGame({ rootDir, seed: 305026 });
+  const player = state.players.find(
+    (candidate) => candidate.playerId === state.activePlayerId
+  );
+  assert.ok(player);
+  for (const candidate of state.players) {
+    candidate.deck = [];
+    candidate.hand = [];
+    candidate.discard = [];
+    candidate.playedThisTurn = [];
+    candidate.permanents = [];
+    candidate.wizardProperties = [];
+    candidate.statuses = [];
+    candidate.deadWizardTokens = [];
+  }
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt026"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_026"),
+      ownerId: "common",
+    },
+  ];
+  const scoreBefore = scoreGame(state).find(
+    (score) => score.playerId === player.playerId
+  );
+  assert.ok(scoreBefore);
+
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+  assert.equal(
+    player.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === player.playerId)
+      ?.victoryPoints,
+    scoreBefore.victoryPoints - 13
+  );
+
+  player.statuses.push({
+    instanceId: markCardInstanceId("fixture-dwt026-invert-dingler-vp"),
+    statusId: "fixture-dwt026-invert-dingler-vp",
+    ownerId: player.playerId,
+    effects: [
+      verifiedTestRuntimeEffect({
+        effectId: "fixture_modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "playerVictoryPoints",
+        operation: "invertNegative",
+        target: { targetType: "player" },
+      }),
+    ],
+  });
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === player.playerId)
+      ?.victoryPoints,
+    scoreBefore.victoryPoints + 7
+  );
+
+  const removeStatusDefinition = createTypedFixtureCardDefinition(
+    "fixture-dwt026-remove-status",
+    [],
+    0,
+    0
+  );
+  removeStatusDefinition.engine.effects = [
+    verifiedTestRuntimeEffect({
+      effectId: "remove_status",
+      timing: "onPlay",
+      statusId: "dingler",
+      target: { selector: "activePlayer" },
+    }),
+  ];
+  const removeStatus = addFixtureDefinitionToActiveHand(
+    state,
+    removeStatusDefinition
+  );
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: removeStatus.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(
+    player.statuses.some((status) => status.statusId === "dingler"),
+    false
+  );
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === player.playerId)
+      ?.victoryPoints,
+    scoreBefore.victoryPoints - 3
   );
 });
 

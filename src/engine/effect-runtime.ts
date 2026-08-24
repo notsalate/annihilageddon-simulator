@@ -1450,6 +1450,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   gainDinglerStatus,
   removeDinglerStatus,
   hasDinglerStatus,
+  gainDeadWizardToken,
   resolvePlayerControlledAttack:
     resolvePlayerControlledAttackWithRuntimeAdapters,
   resolveDefenseWindow,

@@ -4840,6 +4840,111 @@ test("wizard property optional topdeck for gained cards runs before normal disca
   assert.equal(activePlayer.discard.includes(spell), true);
 });
 
+test("свойство 001 после получения Волшебника даёт чипсину и позволяет лошаре снять статус", () => {
+  for (const [choiceId, remainsDingler] of [
+    ["apply", false],
+    ["decline", true],
+  ] as const) {
+    const state = initializeGame({
+      rootDir,
+      dataPackPath: playableRuntimeDataPackPath,
+      seed: 305001,
+    });
+    const player = mustGetPlayer(state, state.activePlayerId);
+    const property = state.tokenDefinitions.get(
+      "esw2_dbg__wizard_property_001"
+    );
+    assert.equal(property?.kind, "wizardProperty");
+    if (property?.kind !== "wizardProperty") return;
+    replaceFirstWizardProperty(state, player, property);
+    player.chips = 0;
+    player.statuses = [
+      {
+        instanceId: markCardInstanceId(`fixture-dingler-${choiceId}`),
+        statusId: "dingler",
+        ownerId: player.playerId,
+        effects: [],
+      },
+    ];
+    const wizard = addFixtureMarketCard(
+      state,
+      `fixture-wizard-property-001-${choiceId}`,
+      ["wizardCard"],
+      0
+    );
+    state.effectChoiceStrategy = ({ effectId, choices }) =>
+      effectId === "remove_status"
+        ? toChoiceSelection(
+            choices.find((choice) => choice.choiceId === choiceId)
+          )
+        : undefined;
+
+    assert.deepEqual(
+      applyAction(state, {
+        type: "buyMarketCard",
+        source: "mainMarket",
+        cardInstanceId: wizard.instanceId,
+      }),
+      { ok: true }
+    );
+
+    assert.equal(player.chips, 1);
+    assert.equal(
+      player.statuses.some((status) => status.statusId === "dingler"),
+      remainsDingler
+    );
+    assert.ok(
+      state.eventLog.some(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.effectId === "remove_status" &&
+          event.choiceId === choiceId &&
+          event.choiceIds.join(",") === "apply,decline"
+      )
+    );
+  }
+
+  const normalState = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 3050011,
+  });
+  const normalPlayer = mustGetPlayer(normalState, normalState.activePlayerId);
+  const property = normalState.tokenDefinitions.get(
+    "esw2_dbg__wizard_property_001"
+  );
+  assert.equal(property?.kind, "wizardProperty");
+  if (property?.kind !== "wizardProperty") return;
+  replaceFirstWizardProperty(normalState, normalPlayer, property);
+  normalPlayer.chips = 0;
+  normalPlayer.statuses = [];
+  const wizard = addFixtureMarketCard(
+    normalState,
+    "fixture-wizard-property-001-normal",
+    ["wizardCard"],
+    0
+  );
+  assert.deepEqual(
+    applyAction(normalState, {
+      type: "buyMarketCard",
+      source: "mainMarket",
+      cardInstanceId: wizard.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(normalPlayer.chips, 1);
+  assert.equal(
+    normalState.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "remove_status" &&
+        "choiceIds" in event &&
+        event.choiceIds?.join(",") === "apply,decline"
+    ),
+    false
+  );
+});
+
 test("wizard property on-gain payload is rejected at Runtime Data Intake", () => {
   const result = validateRuntimeEffectCatalogPayload(
     "Token fixture-malformed-on-gain-property.engine.effects[0]",
@@ -7965,6 +8070,13 @@ test("Potny's Buzzing Wand chooses left or right and chains in the chosen direct
   leftFoe.life.current = 1;
   nextLeftFoe.life.current = 20;
   rightFoe.life.current = 20;
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-potny-buzzing-wand-dwt"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_015"),
+      ownerId: "common",
+    },
+  ];
   const wand = addRuntimeCardToHand(
     state,
     activePlayer,
@@ -13087,6 +13199,110 @@ test("ЖДК 017 выдаёт две чипсины убийце после ос
   ]);
 });
 
+test("ЖДК 007 позволяет только убившему лошаре снять статус", () => {
+  for (const [choiceId, remainsDingler] of [
+    ["apply", false],
+    ["decline", true],
+  ] as const) {
+    const state = initializeGame({ rootDir, seed: 305007 });
+    const killer = mustGetPlayer(state, state.activePlayerId);
+    const defeatedPlayer = getOpponentsInSeatingOrder(state, killer)[0];
+    assert.ok(defeatedPlayer);
+    for (const player of state.players) {
+      player.wizardProperties = [];
+    }
+    killer.statuses = [
+      {
+        instanceId: markCardInstanceId(`fixture-dwt007-dingler-${choiceId}`),
+        statusId: "dingler",
+        ownerId: killer.playerId,
+        effects: [],
+      },
+    ];
+    defeatedPlayer.life.current = 1;
+    state.common.deadWizardTokens.drawStack = [
+      {
+        instanceId: markTokenInstanceId(`fixture-dwt007-${choiceId}`),
+        definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_007"),
+        ownerId: "common",
+      },
+    ];
+    const attack = addFixtureDefinitionToActiveHand(
+      state,
+      createFixtureCardDefinition(`fixture-dwt007-death-${choiceId}`, [
+        {
+          effectId: "attack_damage",
+          timing: "onPlay",
+          targetSelector: "chosenFoe",
+          amount: 1,
+        },
+      ])
+    );
+    state.effectChoiceStrategy = ({ effectId, choices }) => {
+      if (effectId === "attack_damage") {
+        return toChoiceSelection(
+          choices.find((choice) => choice.choiceId === defeatedPlayer.playerId)
+        );
+      }
+      return effectId === "dead_wizard_token_killer_optional_remove_dingler"
+        ? toChoiceSelection(
+            choices.find((choice) => choice.choiceId === choiceId)
+          )
+        : undefined;
+    };
+
+    assert.deepEqual(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: attack.instanceId,
+      }),
+      { ok: true }
+    );
+    assert.equal(
+      killer.statuses.some((status) => status.statusId === "dingler"),
+      remainsDingler
+    );
+    assert.ok(
+      state.eventLog.some(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.effectId ===
+            "dead_wizard_token_killer_optional_remove_dingler" &&
+          event.playerId === killer.playerId &&
+          event.choiceId === choiceId
+      )
+    );
+  }
+
+  const directState = initializeGame({ rootDir, seed: 3050071 });
+  const recipient = mustGetPlayer(directState, directState.activePlayerId);
+  recipient.statuses = [
+    {
+      instanceId: markCardInstanceId("fixture-dwt007-direct-dingler"),
+      statusId: "dingler",
+      ownerId: recipient.playerId,
+      effects: [],
+    },
+  ];
+  directState.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt007-direct"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_007"),
+      ownerId: "common",
+    },
+  ];
+
+  assert.deepEqual(gainDeadWizardToken(directState, recipient), { ok: true });
+  assert.equal(
+    recipient.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+  assert.equal(
+    directState.eventLog.some((event) => event.type === "effectChoiceSelected"),
+    false
+  );
+});
+
 test("ЖДК 017 вознаграждает player-attributed самоубийство без перемещения главного приза", () => {
   const state = initializeGame({ rootDir, seed: 3040171 });
   const player = mustGetPlayer(state, state.activePlayerId);
@@ -13126,6 +13342,143 @@ test("ЖДК 017 вознаграждает player-attributed самоубийс
         event.amount === 2
     )
   );
+});
+
+test("ЖДК 027 делает нормального лошарой, а лошаре полностью разрешает ещё один ЖДК", () => {
+  const normalState = initializeGame({ rootDir, seed: 305027 });
+  const normalPlayer = mustGetPlayer(normalState, normalState.activePlayerId);
+  normalPlayer.wizardProperties = [];
+  normalState.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt027-normal"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_027"),
+      ownerId: "common",
+    },
+  ];
+
+  assert.deepEqual(gainDeadWizardToken(normalState, normalPlayer), {
+    ok: true,
+  });
+  assert.equal(
+    normalPlayer.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+  assert.equal(normalPlayer.deadWizardTokens.length, 1);
+
+  const recursiveState = initializeGame({ rootDir, seed: 3050271 });
+  const recursivePlayer = mustGetPlayer(
+    recursiveState,
+    recursiveState.activePlayerId
+  );
+  recursivePlayer.wizardProperties = [];
+  recursivePlayer.chips = 0;
+  recursivePlayer.statuses = [
+    {
+      instanceId: markCardInstanceId("fixture-dwt027-dingler"),
+      statusId: "dingler",
+      ownerId: recursivePlayer.playerId,
+      effects: [],
+    },
+  ];
+  recursiveState.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt027-recursive"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_027"),
+      ownerId: "common",
+    },
+    {
+      instanceId: markTokenInstanceId("fixture-dwt027-recursive-followup"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_015"),
+      ownerId: "common",
+    },
+  ];
+
+  assert.deepEqual(gainDeadWizardToken(recursiveState, recursivePlayer), {
+    ok: true,
+  });
+  assert.deepEqual(
+    recursivePlayer.deadWizardTokens.map((token) => token.definitionId),
+    ["esw2_dbg__dead_wizard_token_027", "esw2_dbg__dead_wizard_token_015"]
+  );
+  assert.equal(recursivePlayer.chips, 1);
+  assert.equal(
+    recursiveState.eventLog.filter(
+      (event) => event.type === "deadWizardTokenFaceResolved"
+    ).length,
+    2
+  );
+  assert.equal(
+    recursiveState.eventLog.some((event) => event.type === "playerDied"),
+    false
+  );
+  assert.equal(
+    recursiveState.eventLog.some((event) => event.type === "playerResurrected"),
+    false
+  );
+
+  const emptyStackState = initializeGame({ rootDir, seed: 3050272 });
+  const emptyStackPlayer = mustGetPlayer(
+    emptyStackState,
+    emptyStackState.activePlayerId
+  );
+  emptyStackPlayer.statuses = [
+    {
+      instanceId: markCardInstanceId("fixture-dwt027-empty-stack-dingler"),
+      statusId: "dingler",
+      ownerId: emptyStackPlayer.playerId,
+      effects: [],
+    },
+  ];
+  emptyStackState.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt027-empty-stack"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_027"),
+      ownerId: "common",
+    },
+  ];
+
+  assert.deepEqual(gainDeadWizardToken(emptyStackState, emptyStackPlayer), {
+    ok: true,
+  });
+  assert.equal(emptyStackPlayer.deadWizardTokens.length, 1);
+});
+
+test("ЖДК 028 меняет исходный Dingler-статус получателя", () => {
+  for (const isDingler of [false, true]) {
+    const state = initializeGame({
+      rootDir,
+      seed: isDingler ? 3050281 : 305028,
+    });
+    const player = mustGetPlayer(state, state.activePlayerId);
+    player.wizardProperties = [];
+    if (isDingler) {
+      player.statuses = [
+        {
+          instanceId: markCardInstanceId("fixture-dwt028-dingler"),
+          statusId: "dingler",
+          ownerId: player.playerId,
+          effects: [],
+        },
+      ];
+    }
+    state.common.deadWizardTokens.drawStack = [
+      {
+        instanceId: markTokenInstanceId(
+          `fixture-dwt028-${isDingler ? "dingler" : "normal"}`
+        ),
+        definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_028"),
+        ownerId: "common",
+      },
+    ];
+
+    assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+    assert.equal(
+      state.players
+        .find((candidate) => candidate.playerId === player.playerId)
+        ?.statuses.some((status) => status.statusId === "dingler"),
+      !isDingler
+    );
+  }
 });
 
 test("прямой и вложенный ЖДК 017 не наследуют убийцу", () => {
