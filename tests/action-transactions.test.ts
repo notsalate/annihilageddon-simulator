@@ -356,7 +356,10 @@ test("late on-gain errors stop buying after payment and ownership mutations", ()
   assert.equal(card.ownerId, player.playerId);
   assert.equal(state.turn.power, 8);
   assert.equal(player.chips, 9);
-  assert.deepEqual(state.turn.gainedCardDefinitionIds, [card.definitionId]);
+  assert.deepEqual(
+    state.turn.gainedCards.map((record) => record.definitionId),
+    [card.definitionId]
+  );
 });
 
 test("buy preflight failure preserves payment, market, identities, and events", () => {
@@ -434,7 +437,10 @@ test("successful buy commits payment, ownership, destination, gain ledger, and e
   assert.equal(player.discard.includes(card), true);
   assert.equal(card.ownerId, player.playerId);
   assert.equal(state.turn.power, 3);
-  assert.deepEqual(state.turn.gainedCardDefinitionIds, [card.definitionId]);
+  assert.deepEqual(
+    state.turn.gainedCards.map((record) => record.definitionId),
+    [card.definitionId]
+  );
   assert.equal(
     state.eventLog.some(
       (event) =>

@@ -766,19 +766,363 @@
       "id": "esw2_dbg__wizard_property_007",
       "objectKind": "wizardProperty",
       "primaryMechanicCluster": "ongoing-modifiers",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in ongoing-modifiers"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "В конце твоего хода за каждое полученное в этот ход заклинание получи +1 к пределу руки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Свойство проверяется в конце хода игрока."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Легенда-заклинание подходит под условие"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Нужно посчитать заклинания, которые игрок получил именно в этот ход."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "За каждое такое заклинание игрок получает +1 к пределу руки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Например, игрок получил 3 заклинания за ход. Игрок берет 8 карт (5 + 3)"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[5]",
+            "value": "В следующем ходу увеличение руки сбрасывается. Чтобы заново сработало условие нужно покупать заклинания"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[6]",
+            "value": "Например, чтобы каждый ход брать 6 карт, игроку потребуется каждый ход покупать 1 заклинание"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__wizard_property_008",
       "objectKind": "wizardProperty",
       "primaryMechanicCluster": "ongoing-modifiers",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in ongoing-modifiers"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Каждый раз, когда ты играешь карту-постоянку, получай 1 чипсину. Каждый раз, когда ты получаешь карту-постоянку, можешь класть её на верх своей колоды."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onPlayCard",
+              "fields": { "isOngoing": true, "amount": 1 }
+            },
+            {
+              "kind": "effect",
+              "effectId": "topdeck_gained_card",
+              "timing": "onGainCard",
+              "fields": { "optional": true, "isOngoing": true }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 008 grants one chip on first permanent play, not activation"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Первая часть срабатывает каждый раз, когда игрок играет карту-постоянку."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onPlayCard",
+              "fields": { "isOngoing": true, "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 008 grants one chip on first permanent play, not activation"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Игрок сыграл карту-постоянку, когда в первый раз сыграл эту карту, точнее положил ее в поле для постоянок. Последущие применения свойств активируемой постоянки не подходят под условие свойства. Только если постоянка была каким-то образом сброшена, и позже, заново активирована"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onPlayCard",
+              "fields": { "isOngoing": true, "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 008 grants one chip on first permanent play, not activation"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Легенды со свойством \"Постоянка\" подходят под условие свойства"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onPlayCard",
+              "fields": { "isOngoing": true, "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 008 grants one chip on first permanent play, not activation"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "За каждую сыгранную карту-постоянку игрок получает 1 чипсину."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onPlayCard",
+              "fields": { "isOngoing": true, "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 008 grants one chip on first permanent play, not activation"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Вторая часть срабатывает каждый раз, когда игрок получает карту-постоянку."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "topdeck_gained_card",
+              "timing": "onGainCard",
+              "fields": { "optional": true, "isOngoing": true }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "fixed-discard gain cannot be redirected by Wizard Property 008"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[5]",
+            "value": "Полученную карту-постоянку игрок может положить на верх своей колоды."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "topdeck_gained_card",
+              "timing": "onGainCard",
+              "fields": { "optional": true, "isOngoing": true }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 006 and 008 apply topdecking after the player chooses apply"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[6]",
+            "value": "Слово \"можешь\" означает, что размещение карты на верх колоды необязательно."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "topdeck_gained_card",
+              "timing": "onGainCard",
+              "fields": { "optional": true, "isOngoing": true }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 008 lets the player decline topdecking a gained permanent"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[7]",
+            "value": "Постоянка купленная/полученная в \"сброс\" не может быть поставлена на верх колоды по свойству."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "topdeck_gained_card",
+              "timing": "onGainCard",
+              "fields": { "optional": true, "isOngoing": true }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "fixed-discard gain cannot be redirected by Wizard Property 008"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__wizard_property_009",

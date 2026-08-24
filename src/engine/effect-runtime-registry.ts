@@ -283,7 +283,8 @@ export interface EffectRuntimeServices {
   moveGainedCardToPlayerDestination(
     state: GameState,
     player: PlayerState,
-    card: CardInstance
+    card: CardInstance,
+    fixedDestination?: "discard"
   ):
     | { ok: true; destination: "discard" | "deckTop" | "hand" }
     | { ok: false; error: string };

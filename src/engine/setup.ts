@@ -162,7 +162,7 @@ export interface GameState {
     power: number;
     controlledPowerBonus: number;
     activatedCardIds: string[];
-    gainedCardDefinitionIds: string[];
+    gainedCards: GainedCardRecord[];
     mainMarketCardHandReplacementSourceCardIds: string[];
     rememberedDestroyedLegendCost?: number | undefined;
     damagingAttackPlayerIds: PlayerId[];
@@ -920,7 +920,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       power: 0,
       controlledPowerBonus: 0,
       activatedCardIds: [],
-      gainedCardDefinitionIds: [],
+      gainedCards: [],
       mainMarketCardHandReplacementSourceCardIds: [],
       rememberedDestroyedLegendCost: undefined,
       damagingAttackPlayerIds: [],

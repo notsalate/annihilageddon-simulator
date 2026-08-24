@@ -89,7 +89,18 @@ function createFixture(): GameState {
       power: 4,
       controlledPowerBonus: 1,
       activatedCardIds: ["activated-card"],
-      gainedCardDefinitionIds: ["gained-card", "gained-card"],
+      gainedCards: [
+        {
+          playerId,
+          definitionId: markCardDefinitionId("gained-card"),
+          cardInstanceId: markCardInstanceId("gained-instance-1"),
+        },
+        {
+          playerId,
+          definitionId: markCardDefinitionId("gained-card"),
+          cardInstanceId: markCardInstanceId("gained-instance-2"),
+        },
+      ],
       mainMarketCardHandReplacementSourceCardIds: ["replacement-source"],
       damagingAttackPlayerIds: [],
       temporaryCardControls: [
@@ -107,7 +118,8 @@ function createFixture(): GameState {
         discard: [card("discard-1"), card("discard-2"), card("discard-3")],
         playedThisTurn: [card("played-card")],
         permanents: [card("permanent-card")],
-        unboughtFamiliar: card("familiar-card"),
+        unboughtFamiliars: [card("familiar-card")],
+        effectiveCardTypeSelections: [],
         deadWizardTokens: [token("player-dwt")],
         wizardProperties: [token("wizard-property")],
         statuses: [
@@ -179,7 +191,11 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
   assert.ok(forkPlayer);
 
   fork.turn.activatedCardIds.push("fork-only");
-  fork.turn.gainedCardDefinitionIds.push("fork-gained-card");
+  fork.turn.gainedCards.push({
+    playerId: markPlayerId("player-1"),
+    definitionId: markCardDefinitionId("fork-gained-card"),
+    cardInstanceId: markCardInstanceId("fork-gained-instance"),
+  });
   fork.turn.temporaryCardControls[0]!.controllerId = markPlayerId("player-2");
   fork.turn.temporaryCardControls.push({
     cardInstanceId: markCardInstanceId("fork-controlled-card"),
@@ -196,10 +212,10 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
   fork.eventLog[0]!.targetCardInstanceIds!.push("fork-event");
 
   assert.equal(source.turn.activatedCardIds.includes("fork-only"), false);
-  assert.deepEqual(source.turn.gainedCardDefinitionIds, [
-    "gained-card",
-    "gained-card",
-  ]);
+  assert.deepEqual(
+    source.turn.gainedCards.map((record) => record.definitionId),
+    ["gained-card", "gained-card"]
+  );
   assert.deepEqual(source.turn.temporaryCardControls, [
     {
       cardInstanceId: markCardInstanceId("played-card"),
@@ -274,34 +290,41 @@ test("fork isolates source mutations and sibling mutable collections", () => {
   const firstPlayer = first.players[0]!;
   const secondPlayer = second.players[0]!;
 
-  source.turn.gainedCardDefinitionIds.push("source-gained-card");
+  source.turn.gainedCards.push({
+    playerId: markPlayerId("player-1"),
+    definitionId: markCardDefinitionId("source-gained-card"),
+    cardInstanceId: markCardInstanceId("source-gained-instance"),
+  });
   sourcePlayer.statuses[0]!.effects[0]!.timing = "endTurn";
   sourcePlayer.trophyLikeObjects[0]!.effects[0]!.timing = "endTurn";
 
-  assert.deepEqual(first.turn.gainedCardDefinitionIds, [
-    "gained-card",
-    "gained-card",
-  ]);
+  assert.deepEqual(
+    first.turn.gainedCards.map((record) => record.definitionId),
+    ["gained-card", "gained-card"]
+  );
   assert.equal(firstPlayer.statuses[0]!.effects[0]!.timing, "onPlay");
   assert.equal(firstPlayer.trophyLikeObjects[0]!.effects[0]!.timing, "onPlay");
 
-  first.turn.gainedCardDefinitionIds.push("first-gained-card");
+  first.turn.gainedCards.push({
+    playerId: markPlayerId("player-1"),
+    definitionId: markCardDefinitionId("first-gained-card"),
+    cardInstanceId: markCardInstanceId("first-gained-instance"),
+  });
   first.turn.damagingAttackPlayerIds.push(markPlayerId("player-1"));
   firstPlayer.statuses[0]!.effects[0]!.timing = "whileControlled";
   firstPlayer.trophyLikeObjects[0]!.effects[0]!.timing = "whileControlled";
 
-  assert.deepEqual(second.turn.gainedCardDefinitionIds, [
-    "gained-card",
-    "gained-card",
-  ]);
+  assert.deepEqual(
+    second.turn.gainedCards.map((record) => record.definitionId),
+    ["gained-card", "gained-card"]
+  );
   assert.deepEqual(second.turn.damagingAttackPlayerIds, []);
   assert.equal(secondPlayer.statuses[0]!.effects[0]!.timing, "onPlay");
   assert.equal(secondPlayer.trophyLikeObjects[0]!.effects[0]!.timing, "onPlay");
-  assert.deepEqual(source.turn.gainedCardDefinitionIds, [
-    "gained-card",
-    "gained-card",
-    "source-gained-card",
-  ]);
+  assert.deepEqual(
+    source.turn.gainedCards.map((record) => record.definitionId),
+    ["gained-card", "gained-card", "source-gained-card"]
+  );
   assert.deepEqual(source.turn.damagingAttackPlayerIds, []);
   assert.equal(sourcePlayer.statuses[0]!.effects[0]!.timing, "endTurn");
   assert.equal(
@@ -331,7 +354,7 @@ test("fork isolates turn power, zones, statuses, and trophies", () => {
     ...forkPlayer.discard[0]!,
     instanceId: markCardInstanceId("fork-permanent"),
   });
-  forkPlayer.unboughtFamiliar!.marketChips = 3;
+  forkPlayer.unboughtFamiliars[0]!.marketChips = 3;
   forkPlayer.deadWizardTokens[0]!.definitionId =
     markTokenDefinitionId("fork-dwt");
   forkPlayer.wizardProperties[0]!.definitionId =
@@ -345,7 +368,7 @@ test("fork isolates turn power, zones, statuses, and trophies", () => {
   assert.equal(sourcePlayer.discard.length, 3);
   assert.equal(sourcePlayer.playedThisTurn.length, 1);
   assert.equal(sourcePlayer.permanents.length, 1);
-  assert.equal(sourcePlayer.unboughtFamiliar!.marketChips, 0);
+  assert.equal(sourcePlayer.unboughtFamiliars[0]!.marketChips, 0);
   assert.equal(
     sourcePlayer.deadWizardTokens[0]!.definitionId,
     markTokenDefinitionId("fixture-token")

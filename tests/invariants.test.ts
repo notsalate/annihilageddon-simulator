@@ -45,11 +45,17 @@ test("game state invariants accept repeated gained card definition ids", () => {
     seed: 60615,
   });
 
-  state.turn.gainedCardDefinitionIds.push(
-    markCardDefinitionId("repeated-definition-id")
-  );
-  state.turn.gainedCardDefinitionIds.push(
-    markCardDefinitionId("repeated-definition-id")
+  state.turn.gainedCards.push(
+    {
+      playerId: markPlayerId("player-1"),
+      definitionId: markCardDefinitionId("repeated-definition-id"),
+      cardInstanceId: markCardInstanceId("repeated-instance-1"),
+    },
+    {
+      playerId: markPlayerId("player-1"),
+      definitionId: markCardDefinitionId("repeated-definition-id"),
+      cardInstanceId: markCardInstanceId("repeated-instance-2"),
+    }
   );
 
   assert.doesNotThrow(() => assertGameStateInvariants(state));

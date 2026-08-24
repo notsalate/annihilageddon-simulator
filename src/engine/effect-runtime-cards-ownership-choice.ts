@@ -539,7 +539,8 @@ const gainCardHandler: EffectRuntimeHandler<RuntimeEffectForId<"gain_card">> = {
     const moved = services.moveGainedCardToPlayerDestination(
       state,
       player,
-      choice.card
+      choice.card,
+      effect.destination
     );
     if (!moved.ok) return moved;
 

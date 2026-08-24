@@ -4849,6 +4849,73 @@ test("wizard property optional topdeck for gained cards runs before normal disca
   assert.equal(activePlayer.discard.includes(spell), true);
 });
 
+test("Wizard Property 007 counts only spells gained by its controller this turn", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60707,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const otherPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(otherPlayer);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_007");
+  assert.ok(property);
+  assert.equal(property.kind, "wizardProperty");
+  replaceFirstWizardProperty(state, activePlayer, property);
+
+  const creature = addFixtureMarketCard(
+    state,
+    "fixture-wp007-active-creature",
+    ["creature"],
+    0
+  );
+  const foreignSpell = addFixtureMarketCard(
+    state,
+    "fixture-wp007-foreign-spell",
+    ["spell"],
+    0
+  );
+  state.turn.power = 10;
+  assert.equal(
+    applyAction(state, {
+      type: "buyMarketCard",
+      source: "mainMarket",
+      cardInstanceId: creature.instanceId,
+    }).ok,
+    true
+  );
+
+  state.activePlayerId = otherPlayer.playerId;
+  state.turn.power = 10;
+  assert.equal(
+    applyAction(state, {
+      type: "buyMarketCard",
+      source: "mainMarket",
+      cardInstanceId: foreignSpell.instanceId,
+    }).ok,
+    true
+  );
+  assert.deepEqual(
+    state.turn.gainedCards.map((record) => record.playerId),
+    [activePlayer.playerId, otherPlayer.playerId]
+  );
+
+  state.activePlayerId = activePlayer.playerId;
+  const result = applyAction(state, { type: "endTurn" });
+
+  assert.equal(result.ok, true);
+  const drawEvent = [...state.eventLog]
+    .reverse()
+    .find(
+      (event) =>
+        event.type === "handDrawn" && event.playerId === activePlayer.playerId
+    );
+  assert.ok(drawEvent?.type === "handDrawn");
+  assert.equal(drawEvent.amount, 5);
+});
+
 test("свойство 001 после получения Волшебника даёт чипсину и позволяет лошаре снять статус", () => {
   for (const [choiceId, remainsDingler] of [
     ["apply", false],
@@ -5048,15 +5115,14 @@ test("temporary hand limit modifier counts cards gained this turn and resets aft
     }).ok,
     true
   );
-  assert.deepEqual(state.turn.gainedCardDefinitionIds, [
-    firstSpell.definitionId,
-    firstSpell.definitionId,
-    creature.definitionId,
-  ]);
+  assert.deepEqual(
+    state.turn.gainedCards.map((record) => record.definitionId),
+    [firstSpell.definitionId, firstSpell.definitionId, creature.definitionId]
+  );
   assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
 
   assert.equal(activePlayer.hand.length, 7);
-  assert.deepEqual(state.turn.gainedCardDefinitionIds, []);
+  assert.deepEqual(state.turn.gainedCards, []);
 });
 
 test("temporary hand limit modifier payload is rejected at Runtime Data Intake", () => {
@@ -5190,6 +5256,97 @@ test("gain_card moves the first legal market card into the active player's disca
   );
 });
 
+test("Wizard Property 008 grants one chip on first permanent play, not activation", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60808,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_008");
+  assert.ok(property);
+  assert.equal(property.kind, "wizardProperty");
+  replaceFirstWizardProperty(state, player, property);
+
+  const definition = createFixtureCardDefinition(
+    "fixture-wp008-activation",
+    [
+      { effectId: "add_power", timing: "onPlay", amount: 1 },
+      { effectId: "add_power", timing: "activation", amount: 2 },
+    ],
+    { isOngoing: true }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const card = addFixtureDefinitionToActiveHand(state, definition);
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: card.instanceId })
+      .ok,
+    true
+  );
+  assert.equal(player.chips, 1);
+  assert.equal(
+    applyAction(state, {
+      type: "activatePermanent",
+      cardInstanceId: card.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(player.chips, 1);
+  assert.equal(state.turn.power, 3);
+});
+
+test("fixed-discard gain cannot be redirected by Wizard Property 008", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60809,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_008");
+  assert.ok(property);
+  assert.equal(property.kind, "wizardProperty");
+  replaceFirstWizardProperty(state, player, property);
+  const gainedCard = addFixtureMarketCard(
+    state,
+    "fixture-wp008-fixed-discard-permanent",
+    [],
+    0
+  );
+  state.common.market.splice(0, state.common.market.length, gainedCard);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [
+      gainedCard.definitionId,
+      createFixtureCardDefinition(gainedCard.definitionId, [], {
+        isOngoing: true,
+      }),
+    ],
+  ]);
+  state.effectChoiceStrategy = ({ effectId }) => {
+    assert.notEqual(effectId, "topdeck_gained_card");
+    return undefined;
+  };
+  const gainCardId = addFixtureCardToActiveHand(state, {
+    effectId: "gain_card",
+    timing: "onPlay",
+    target: { selector: "mainMarketCard" },
+    destination: "discard",
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: gainCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(player.discard.includes(gainedCard), true);
+  assert.equal(player.deck.includes(gainedCard), false);
+});
+
 test("buying and gain_card share gained-card movement guarantees", () => {
   const buyState = initializeGame({
     rootDir,
@@ -5234,13 +5391,15 @@ test("buying and gain_card share gained-card movement guarantees", () => {
     buyState,
     bought.player,
     bought.card,
-    "cardBought"
+    "cardBought",
+    "deckTop"
   );
   assertGainedMovementGuarantees(
     gainState,
     gained.player,
     gained.card,
-    "effectCardGained"
+    "effectCardGained",
+    "discard"
   );
 });
 
@@ -10755,11 +10914,22 @@ function assertGainedMovementGuarantees(
   state: GameState,
   player: PlayerState,
   card: CardInstance,
-  completionEventType: "cardBought" | "effectCardGained"
+  completionEventType: "cardBought" | "effectCardGained",
+  destination: "discard" | "deckTop"
 ): void {
   assert.equal(state.common.market.includes(card), false);
-  assert.equal(player.deck[0], card);
-  assert.equal(player.discard.includes(card), false);
+  assert.equal(
+    destination === "deckTop"
+      ? player.deck[0] === card
+      : player.discard.includes(card),
+    true
+  );
+  assert.equal(
+    destination === "deckTop"
+      ? player.discard.includes(card)
+      : player.deck.includes(card),
+    false
+  );
   assert.equal(card.ownerId, player.playerId);
   assert.equal(card.marketChips, 0);
   assert.equal(player.chips, 2);
@@ -10782,23 +10952,34 @@ function assertGainedMovementGuarantees(
         event.playerId === player.playerId &&
         event.cardInstanceId === card.instanceId &&
         event.sourceZone === "mainMarket" &&
-        event.destinationZone === `${player.playerId}.deckTop` &&
+        event.destinationZone === `${player.playerId}.${destination}` &&
         event.ownerBefore === "common" &&
         event.ownerAfter === player.playerId
       );
     })
   );
-  assert.ok(
-    state.eventLog.some((event) => {
-      return (
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
         event.type === "effectChoiceSelected" &&
         event.playerId === player.playerId &&
-        event.effectId === "topdeck_gained_card" &&
-        event.choiceId === "apply" &&
-        event.choiceIds.join(",") === "apply,decline"
-      );
-    })
+        event.effectId === "topdeck_gained_card"
+    ),
+    destination === "deckTop"
   );
+  if (destination === "deckTop") {
+    assert.ok(
+      state.eventLog.some((event) => {
+        return (
+          event.type === "effectChoiceSelected" &&
+          event.playerId === player.playerId &&
+          event.effectId === "topdeck_gained_card" &&
+          event.choiceId === "apply" &&
+          event.choiceIds.join(",") === "apply,decline"
+        );
+      })
+    );
+  }
   assert.ok(
     state.eventLog.some((event) => {
       return (
@@ -10806,7 +10987,7 @@ function assertGainedMovementGuarantees(
         event.playerId === player.playerId &&
         (event.cardInstanceId === card.instanceId ||
           event.targetCardInstanceId === card.instanceId) &&
-        event.destination === "deckTop"
+        event.destination === destination
       );
     })
   );

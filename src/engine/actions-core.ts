@@ -398,7 +398,7 @@ function endTurn(state: GameState): ActionResult {
   });
 
   releaseTemporaryControls(state);
-  state.turn.gainedCardDefinitionIds = [];
+  state.turn.gainedCards = [];
   state.turn.mainMarketCardHandReplacementSourceCardIds = [];
   state.turn.rememberedDestroyedLegendCost = undefined;
   state.turn.damagingAttackPlayerIds = [];
