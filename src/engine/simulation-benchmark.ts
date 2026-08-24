@@ -11,6 +11,7 @@ import {
   type BenchmarkEnvironmentFingerprint,
 } from "./benchmark-support.js";
 import { intakeRuntimeData } from "./runtime-data-intake.js";
+import { PERFORMANCE_EPOCH } from "./performance-epoch.js";
 import {
   runSingleGame,
   type RunSingleGameOptions,
@@ -59,7 +60,7 @@ export interface SimulationBenchmarkWorkload {
   role: SimulationBenchmarkRole;
   workloadId: string;
   contractVersion: typeof SIMULATION_BENCHMARK_CONTRACT_VERSION;
-  epoch: "E0";
+  epoch: typeof PERFORMANCE_EPOCH;
   referenceWorkloadVersion: typeof SIMULATION_REFERENCE_WORKLOAD_VERSION | null;
   referenceBaselineReview: "required-on-workload-change" | "not-applicable";
   playerCount: 2;
@@ -201,7 +202,7 @@ export function createSimulationBenchmarkWorkload(
         ? SIMULATION_REFERENCE_WORKLOAD_VERSION
         : "simulation-current-game",
     contractVersion: SIMULATION_BENCHMARK_CONTRACT_VERSION,
-    epoch: "E0",
+    epoch: PERFORMANCE_EPOCH,
     referenceWorkloadVersion:
       role === "reference" ? SIMULATION_REFERENCE_WORKLOAD_VERSION : null,
     referenceBaselineReview:

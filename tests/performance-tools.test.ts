@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import {
   PERFORMANCE_CALIBRATION_COMPARISON_COUNT,
   PERFORMANCE_CALIBRATION_SCHEMA_VERSION,
+  PERFORMANCE_EPOCH,
   PERFORMANCE_EPOCH_SCHEMA_VERSION,
   PERFORMANCE_MEASUREMENT_COUNT,
   PERFORMANCE_WARMUP_COUNT,
@@ -589,14 +590,14 @@ test("calibration candidate records one versioned protocol and runner class", ()
   }
 });
 
-test("E0 baseline bootstrap requires matched reference and calibration fingerprints", () => {
+test("current epoch baseline bootstrap requires matched reference and calibration fingerprints", () => {
   const root = mkdtempSync(
     path.join(os.tmpdir(), "krutagidon-performance-baseline-bootstrap-")
   );
   try {
     const referenceRoot = path.join(root, "reference");
     const calibrationRoot = path.join(root, "calibration");
-    const outputPath = path.join(root, "performance-epoch-e0.json");
+    const outputPath = path.join(root, "performance-epoch-current.json");
     mkdirSync(referenceRoot, { recursive: true });
     mkdirSync(calibrationRoot, { recursive: true });
 
@@ -650,7 +651,7 @@ test("E0 baseline bootstrap requires matched reference and calibration fingerpri
     assert.equal(result.status, 0);
     const baselineCandidate = readJson(outputPath);
     assert.ok(isRecord(baselineCandidate));
-    assert.equal(baselineCandidate["epoch"], "E0");
+    assert.equal(baselineCandidate["epoch"], PERFORMANCE_EPOCH);
     assert.equal(baselineCandidate["playerCount"], 2);
     assert.equal(
       Array.isArray(baselineCandidate["entries"])

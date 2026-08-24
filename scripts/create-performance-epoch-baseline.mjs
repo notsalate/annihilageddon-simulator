@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  PERFORMANCE_EPOCH,
   assertPerformanceCalibrationResult,
   assertPerformanceEpochBaseline,
   parsePerformanceMeasurement,
@@ -86,8 +87,8 @@ const entries = workloads.map((workload) => {
   return {
     benchmark: reference.benchmark,
     id: reference.id,
-    epoch: "E0",
-    reference: { ...reference, epoch: "E0" },
+    epoch: PERFORMANCE_EPOCH,
+    reference: { ...reference, epoch: PERFORMANCE_EPOCH },
     tolerances: calibration.tolerances,
   };
 });
@@ -106,13 +107,13 @@ for (const workload of workloads.slice(1)) {
       firstCalibration.environment
     )
   ) {
-    throw new Error("E0 calibrations must use one commit and environment");
+    throw new Error("Epoch calibrations must use one commit and environment");
   }
 }
 
 const baseline = {
   schemaVersion: "performance-epoch-v1",
-  epoch: "E0",
+  epoch: PERFORMANCE_EPOCH,
   playerCount: 2,
   calibration: {
     comparisons: 20,
