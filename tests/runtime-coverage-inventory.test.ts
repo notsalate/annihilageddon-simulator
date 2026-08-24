@@ -161,7 +161,7 @@ test("runtime coverage inventory distinguishes planning statuses and proposes a 
   );
 });
 
-test("cross-source coverage blocks an empty DWT runtime and ignores an ID-only test mention", () => {
+test("cross-source coverage blocks an empty DWT runtime and ignores an ID outside its runtime seam", () => {
   const rootDir = mkdtempSync(
     path.join(tmpdir(), "krutagidon-cross-source-runtime-")
   );
@@ -235,7 +235,7 @@ test("cross-source coverage blocks an empty DWT runtime and ignores an ID-only t
   writeText(
     rootDir,
     "tests/dead-wizard-token-runtime.test.ts",
-    `const tokenId = "${tokenId}";\ntest("resolves limp wand payout", () => { assert.ok(true); });\n`
+    `test("resolves limp wand payout", () => {\n  const tokenId = "${tokenId}";\n  const result = applyAction(state, { type: "playCard", cardId: "esw2_dbg__main_001" });\n  assert.equal(result.ok, true);\n});\n`
   );
 
   const report = createRuntimeCoverageInventory(rootDir);
@@ -331,7 +331,7 @@ test("cross-source coverage requires matching runtime and focused test evidence 
   writeText(
     rootDir,
     "tests/wizard-property-runtime.test.ts",
-    `test("gains a chip while activated", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.ok(result);\n});\n`
+    `test("gains a chip while activated", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.equal(result.ok, true);\n});\n`
   );
 
   const report = createRuntimeCoverageInventory(rootDir);
@@ -440,7 +440,7 @@ test("cross-source coverage blocks effects outside their source-kind policy", ()
   writeText(
     rootDir,
     "tests/dead-wizard-token-runtime.test.ts",
-    `test("rejects setup replacement on a DWT", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.ok(result);\n});\n`
+    `test("rejects setup replacement on a DWT", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.equal(result.ok, true);\n});\n`
   );
 
   const item = createRuntimeCoverageInventory(rootDir).items.find(
@@ -572,7 +572,7 @@ test("cross-source coverage applies complete evidence to cards", () => {
   writeText(
     rootDir,
     "tests/card-runtime.test.ts",
-    `test("gains a chip from the mapped card", () => {\n  const cardId = "${cardId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId });\n  assert.ok(result);\n});\n`
+    `test("gains a chip from the mapped card", () => {\n  const cardId = "${cardId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId });\n  assert.equal(result.ok, true);\n});\n`
   );
 
   const item = createRuntimeCoverageInventory(rootDir).items.find(
@@ -693,7 +693,7 @@ test("cross-source coverage compares effect payloads and runtime fields", () => 
   writeText(
     rootDir,
     testRef.file,
-    `test("${testRef.name}", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.ok(result);\n});\n`
+    `test("${testRef.name}", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.equal(result.ok, true);\n});\n`
   );
 
   const item = createRuntimeCoverageInventory(rootDir).items.find(

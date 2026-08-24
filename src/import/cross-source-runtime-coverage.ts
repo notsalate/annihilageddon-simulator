@@ -545,14 +545,102 @@ function hasFocusedTestReference(
   }
   const text = readFileSync(absolutePath, "utf8");
   const testBody = findNamedTestBody(text, testRef.name);
-  return (
-    testBody !== undefined &&
-    testBody.includes(id) &&
-    /\bassert\s*\./.test(testBody) &&
-    /\b(applyAction|calculateEffectiveCardCost|calculateEffectiveCardVictoryPoints|calculateEffectivePlayerMaxLife|initializeGame|runMarketFlow|scoreGame)\s*\(/.test(
-      testBody
-    )
+  if (testBody === undefined) {
+    return false;
+  }
+
+  const idBindings = findStableIdBindings(testBody, id);
+  return findRuntimeSeamCalls(testBody).some((call) => {
+    const invocation = testBody.slice(call.start, call.end);
+    const definitionIsUsed =
+      invocation.includes(id) ||
+      idBindings.some((binding) =>
+        new RegExp(`\\b${escapeRegExp(binding)}\\b`).test(invocation)
+      );
+    return definitionIsUsed && hasAssertionForSeamResult(testBody, call);
+  });
+}
+
+interface RuntimeSeamCall {
+  start: number;
+  end: number;
+}
+
+const runtimeSeamNames = [
+  "applyAction",
+  "calculateEffectiveCardCost",
+  "calculateEffectiveCardVictoryPoints",
+  "calculateEffectivePlayerMaxLife",
+  "initializeGame",
+  "runMarketFlow",
+  "scoreGame",
+] as const;
+
+function findStableIdBindings(testBody: string, id: string): string[] {
+  const bindings = new Set<string>();
+  const expression = new RegExp(
+    `\\b(?:const|let)\\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*=\\s*(["'])${escapeRegExp(id)}\\2`,
+    "g"
   );
+  for (const match of testBody.matchAll(expression)) {
+    const binding = match[1];
+    if (binding !== undefined) {
+      bindings.add(binding);
+    }
+  }
+  return Array.from(bindings);
+}
+
+function findRuntimeSeamCalls(testBody: string): RuntimeSeamCall[] {
+  const calls: RuntimeSeamCall[] = [];
+  const expression = new RegExp(
+    `\\b(?:${runtimeSeamNames.join("|")})\\s*\\(`,
+    "g"
+  );
+  for (const match of testBody.matchAll(expression)) {
+    const start = match.index;
+    if (start === undefined) {
+      continue;
+    }
+    const end = findInvocationEnd(testBody, start + match[0].length - 1);
+    if (end !== undefined) {
+      calls.push({ start, end });
+    }
+  }
+  return calls;
+}
+
+function findInvocationEnd(
+  text: string,
+  openingParenthesis: number
+): number | undefined {
+  let depth = 0;
+  for (let index = openingParenthesis; index < text.length; index += 1) {
+    if (text[index] === "(") depth += 1;
+    if (text[index] === ")") depth -= 1;
+    if (depth === 0) {
+      return index + 1;
+    }
+  }
+  return undefined;
+}
+
+function hasAssertionForSeamResult(
+  testBody: string,
+  call: RuntimeSeamCall
+): boolean {
+  const bindingMatch =
+    /\b(?:const|let)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*$/.exec(
+      testBody.slice(0, call.start)
+    );
+  const resultBinding = bindingMatch?.[1];
+  if (resultBinding === undefined) {
+    return false;
+  }
+  return new RegExp(
+    `\\bassert\\s*\\.\\s*[a-zA-Z_$][a-zA-Z0-9_$]*\\s*\\([^;]*\\b${escapeRegExp(resultBinding)}\\b`,
+    "s"
+  ).test(testBody.slice(call.end));
 }
 
 function findNamedTestBody(text: string, name: string): string | undefined {

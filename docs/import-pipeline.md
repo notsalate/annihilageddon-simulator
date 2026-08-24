@@ -293,7 +293,7 @@ Runtime JSON должен быть самодостаточным для engine.
 - runtime definition имеет effects, проходит policy `sourceKind × timing` и включён в правильный stack с canonical количеством;
 - runtime reference и test reference существуют.
 
-Пустой `effects: []`, упоминание stable ID вне тела именованного теста с assertion и публичным игровым runtime seam (не вызовом самого audit), несовпавшее количество в stack или любая composition reference без runtime definition всегда оставляют объект в статусе `blocked`.
+Пустой `effects: []`, stable ID, не переданный в вызов публичного игрового runtime seam и не связанный с assertion его результата, вызов самого audit вместо игрового seam, несовпавшее количество в stack или любая composition reference без runtime definition всегда оставляют объект в статусе `blocked`.
 
 Ссылки `source.draft`, `source.text` и `source.image` в runtime JSON допустимы только как metadata/traceability для ревью и сверки. Движок не должен читать эти ссылки во время партии и не должен выводить из них поведение карты. Draft JSON из `data/import/**` также не является executable engine input.
 
