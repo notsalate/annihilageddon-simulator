@@ -29,6 +29,12 @@ import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
 import { drawDeckCards } from "./deck-lifecycle.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import {
+  clearPlayerCardEffectiveType,
+  getCardEffectiveTypeOptions,
+  isPlayerCardEffectiveTypeSelected,
+  setPlayerCardEffectiveType,
+} from "./card-type-runtime.js";
+import {
   runMarketFlow,
   validateMarketFlow,
   type MarketFlowEndReason,
@@ -46,6 +52,7 @@ export type LegalAction =
   | BuyMarketCardAction
   | ActivatePermanentAction
   | ActivateWizardPropertyAction
+  | SetCardEffectiveTypeAction
   | EndTurnAction;
 export type GameAction = LegalAction;
 
@@ -74,6 +81,13 @@ export interface ActivatePermanentAction {
 export interface ActivateWizardPropertyAction {
   type: "activateWizardProperty";
   tokenInstanceId: string;
+}
+
+export interface SetCardEffectiveTypeAction {
+  type: "setCardEffectiveType";
+  cardInstanceId: string;
+  cardType: string;
+  enabled: boolean;
 }
 
 export interface EndTurnAction {
@@ -139,6 +153,7 @@ export function listLegalActions(state: GameState): LegalAction[] {
         type: "activateWizardProperty" as const,
         tokenInstanceId: token.instanceId,
       })),
+    ...getCardEffectiveTypeActions(state, activePlayer),
     {
       type: "endTurn",
     },
@@ -303,6 +318,44 @@ export function preflightAction(
         }
         return undefined;
       }
+      case "setCardEffectiveType": {
+        const card = getCardEffectiveTypeActionCard(
+          state,
+          activePlayer,
+          action.cardInstanceId
+        );
+        if (card === undefined) {
+          return {
+            ok: false,
+            error: "Card is not an eligible effective-type target",
+          };
+        }
+        if (
+          !getCardEffectiveTypeOptions(
+            state,
+            activePlayer.playerId,
+            card
+          ).includes(action.cardType)
+        ) {
+          return {
+            ok: false,
+            error: `Card cannot be counted as ${action.cardType}`,
+          };
+        }
+        const selected = isPlayerCardEffectiveTypeSelected(
+          state,
+          activePlayer.playerId,
+          card.instanceId,
+          action.cardType
+        );
+        if (selected === action.enabled) {
+          return {
+            ok: false,
+            error: `Card effective type ${action.cardType} is already ${action.enabled ? "enabled" : "disabled"}`,
+          };
+        }
+        return undefined;
+      }
       case "endTurn": {
         calculateEndTurnDrawCount(state, activePlayer);
         const nextActivePlayer = getNextPlayer(state, activePlayer);
@@ -344,6 +397,8 @@ export function applyAction(
       return activatePermanent(state, action.cardInstanceId);
     case "activateWizardProperty":
       return activateWizardProperty(state, action.tokenInstanceId);
+    case "setCardEffectiveType":
+      return setCardEffectiveType(state, action);
     case "endTurn":
       return endTurn(state);
     default:
@@ -570,6 +625,49 @@ function activateWizardProperty(
     tokenDefinitionId: token.definitionId,
   });
 
+  return { ok: true };
+}
+
+function setCardEffectiveType(
+  state: GameState,
+  action: SetCardEffectiveTypeAction
+): ActionResult {
+  const activePlayer = mustGetActivePlayer(state);
+  const card = getCardEffectiveTypeActionCard(
+    state,
+    activePlayer,
+    action.cardInstanceId
+  );
+  if (card === undefined) {
+    return {
+      ok: false,
+      error: "Card is not an eligible effective-type target",
+    };
+  }
+
+  if (action.enabled) {
+    setPlayerCardEffectiveType(
+      state,
+      activePlayer.playerId,
+      card.instanceId,
+      action.cardType
+    );
+  } else {
+    clearPlayerCardEffectiveType(
+      state,
+      activePlayer.playerId,
+      card.instanceId,
+      action.cardType
+    );
+  }
+  recordGameEvent(state, {
+    type: "cardEffectiveTypeChanged",
+    playerId: activePlayer.playerId,
+    cardInstanceId: card.instanceId,
+    definitionId: card.definitionId,
+    cardType: action.cardType,
+    enabled: action.enabled,
+  });
   return { ok: true };
 }
 
@@ -854,6 +952,48 @@ function getFamiliarBuyAction(
       cardInstanceId: familiar.instanceId,
       source: "familiar" as const,
     }));
+}
+
+function getCardEffectiveTypeActions(
+  state: GameState,
+  player: PlayerState
+): SetCardEffectiveTypeAction[] {
+  const cards = new Map<string, CardInstance>();
+  for (const card of [
+    ...player.unboughtFamiliars,
+    ...getControlledCards(state, player),
+  ]) {
+    cards.set(card.instanceId, card);
+  }
+
+  return Array.from(cards.values()).flatMap((card) =>
+    getCardEffectiveTypeOptions(state, player.playerId, card).flatMap(
+      (cardType) => [
+        {
+          type: "setCardEffectiveType" as const,
+          cardInstanceId: card.instanceId,
+          cardType,
+          enabled: !isPlayerCardEffectiveTypeSelected(
+            state,
+            player.playerId,
+            card.instanceId,
+            cardType
+          ),
+        },
+      ]
+    )
+  );
+}
+
+function getCardEffectiveTypeActionCard(
+  state: GameState,
+  player: PlayerState,
+  cardInstanceId: string
+): CardInstance | undefined {
+  return [
+    ...player.unboughtFamiliars,
+    ...getControlledCards(state, player),
+  ].find((card) => card.instanceId === cardInstanceId);
 }
 
 function getBuyCard(

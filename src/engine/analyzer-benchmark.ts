@@ -521,6 +521,13 @@ function stableAction(action: LegalAction): Record<string, string> {
       return { type: action.type, cardInstanceId: action.cardInstanceId };
     case "activateWizardProperty":
       return { type: action.type, tokenInstanceId: action.tokenInstanceId };
+    case "setCardEffectiveType":
+      return {
+        type: action.type,
+        cardInstanceId: action.cardInstanceId,
+        cardType: action.cardType,
+        enabled: action.enabled ? "true" : "false",
+      };
     case "buyMarketCard":
       return {
         type: action.type,

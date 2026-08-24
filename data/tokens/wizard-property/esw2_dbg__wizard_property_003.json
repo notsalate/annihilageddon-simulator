@@ -31,7 +31,8 @@
         "effectId": "owned_cards_count_as_card_type",
         "timing": "whileControlled",
         "sourceCardTypes": ["familiar"],
-        "countedAsCardType": "legend"
+        "countedAsCardType": "legend",
+        "selectionMode": "perCard"
       }
     ],
     "unsupportedMechanics": []

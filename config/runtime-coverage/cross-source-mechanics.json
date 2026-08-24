@@ -317,7 +317,8 @@
               "timing": "whileControlled",
               "fields": {
                 "sourceCardTypes": ["familiar"],
-                "countedAsCardType": "legend"
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
               }
             },
             {
@@ -406,7 +407,8 @@
               "timing": "whileControlled",
               "fields": {
                 "sourceCardTypes": ["familiar"],
-                "countedAsCardType": "legend"
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
               }
             }
           ],
@@ -429,7 +431,8 @@
               "timing": "whileControlled",
               "fields": {
                 "sourceCardTypes": ["familiar"],
-                "countedAsCardType": "legend"
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
               }
             }
           ],
@@ -452,7 +455,8 @@
               "timing": "whileControlled",
               "fields": {
                 "sourceCardTypes": ["familiar"],
-                "countedAsCardType": "legend"
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
               }
             }
           ],
@@ -475,7 +479,8 @@
               "timing": "whileControlled",
               "fields": {
                 "sourceCardTypes": ["familiar"],
-                "countedAsCardType": "legend"
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
               }
             }
           ],
@@ -498,7 +503,8 @@
               "timing": "whileControlled",
               "fields": {
                 "sourceCardTypes": ["familiar"],
-                "countedAsCardType": "legend"
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
               }
             }
           ],
@@ -521,7 +527,8 @@
               "timing": "whileControlled",
               "fields": {
                 "sourceCardTypes": ["familiar"],
-                "countedAsCardType": "legend"
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
               }
             }
           ],

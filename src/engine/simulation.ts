@@ -955,6 +955,13 @@ function isLegalAction(
           legalAction.type === "activateWizardProperty" &&
           legalAction.tokenInstanceId === action.tokenInstanceId
         );
+      case "setCardEffectiveType":
+        return (
+          legalAction.type === "setCardEffectiveType" &&
+          legalAction.cardInstanceId === action.cardInstanceId &&
+          legalAction.cardType === action.cardType &&
+          legalAction.enabled === action.enabled
+        );
       case "endTurn":
         return legalAction.type === "endTurn";
       default:

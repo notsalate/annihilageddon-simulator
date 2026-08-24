@@ -186,6 +186,10 @@ function formatEvent(
     return `- Played ${formatCard(event, options)}.${formatTextSuffix(event, options)}`;
   }
 
+  if (event.type === "cardEffectiveTypeChanged") {
+    return `- ${formatCard(event, options)} effective type ${event.cardType ?? "<unknown-type>"} ${event.enabled ? "enabled" : "disabled"}.`;
+  }
+
   if (event.type === "cardBought") {
     return `- Bought ${formatCard(event, options)} -> ${event.destination ?? "<unknown-zone>"}${formatPaymentSummary(event)}.`;
   }

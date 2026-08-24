@@ -195,6 +195,7 @@ export type GameEventType =
   | "buyMarketCard"
   | "cardActivated"
   | "cardBought"
+  | "cardEffectiveTypeChanged"
   | "cardMoved"
   | "cardPlayed"
   | "deadWizardTokenFaceResolved"
@@ -314,6 +315,8 @@ interface GameEventPayload {
   choiceId?: string;
   choiceKind?: ChoiceKind;
   choiceIds?: string[];
+  cardType?: string;
+  enabled?: boolean;
   direction?: "left" | "right";
   legalChoiceCount?: number;
   amount?: number;
@@ -650,6 +653,10 @@ type GameEventPayloadUnion =
   | GameEventOf<
       "cardActivated" | "cardPlayed",
       "playerId" | "cardInstanceId" | "definitionId"
+    >
+  | GameEventOf<
+      "cardEffectiveTypeChanged",
+      "playerId" | "cardInstanceId" | "definitionId" | "cardType" | "enabled"
     >
   | GameEventOf<
       "cardMoved",

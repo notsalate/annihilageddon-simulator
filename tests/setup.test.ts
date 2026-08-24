@@ -2,17 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  applyAction,
   initializeGame,
+  listLegalActions,
   type CardInstance,
   type GameState,
   type LoadedDataPack,
   type RuntimeEffect,
 } from "../src/index.js";
-import {
-  cardMatchesTypeForPlayer,
-  clearPlayerCardEffectiveType,
-  setPlayerCardEffectiveType,
-} from "../src/engine/card-type-runtime.js";
+import { cardMatchesTypeForPlayer } from "../src/engine/card-type-runtime.js";
 import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
 import {
   markCardDefinitionId,
@@ -156,6 +154,8 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
   const otherPlayer = state.players[1];
   assert.ok(player);
   assert.ok(otherPlayer);
+  assert.equal(state.activePlayerId, player.playerId);
+  assert.equal(state.players.length, 2);
   assert.equal(player.unboughtFamiliars.length, 3);
   assert.equal(otherPlayer.unboughtFamiliars.length, 3);
   assert.ok(
@@ -184,11 +184,24 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
   assert.ok(secondDefinition);
   assert.ok(foreignDefinition);
 
-  setPlayerCardEffectiveType(
-    state,
-    player.playerId,
-    firstFamiliar.instanceId,
-    "legend"
+  assert.equal(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "setCardEffectiveType" &&
+        action.cardInstanceId === firstFamiliar.instanceId &&
+        action.cardType === "legend" &&
+        action.enabled
+    ),
+    true
+  );
+  assert.deepEqual(
+    applyAction(state, {
+      type: "setCardEffectiveType",
+      cardInstanceId: firstFamiliar.instanceId,
+      cardType: "legend",
+      enabled: true,
+    }),
+    { ok: true }
   );
   assert.equal(
     cardMatchesTypeForPlayer(
@@ -221,11 +234,14 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
     false
   );
 
-  clearPlayerCardEffectiveType(
-    state,
-    player.playerId,
-    firstFamiliar.instanceId,
-    "legend"
+  assert.deepEqual(
+    applyAction(state, {
+      type: "setCardEffectiveType",
+      cardInstanceId: firstFamiliar.instanceId,
+      cardType: "legend",
+      enabled: false,
+    }),
+    { ok: true }
   );
   assert.equal(
     cardMatchesTypeForPlayer(
@@ -237,14 +253,16 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
     ),
     false
   );
-  assert.throws(() =>
-    setPlayerCardEffectiveType(
-      state,
-      otherPlayer.playerId,
-      firstFamiliar.instanceId,
-      "legend"
-    )
-  );
+  const foreignResult = applyAction(state, {
+    type: "setCardEffectiveType",
+    cardInstanceId: foreignFamiliar.instanceId,
+    cardType: "legend",
+    enabled: true,
+  });
+  assert.equal(foreignResult.ok, false);
+  if (!foreignResult.ok) {
+    assert.match(foreignResult.error, /eligible effective-type target/);
+  }
 });
 
 test("wizard property setup effects update cards, trophies, life, and first player", () => {

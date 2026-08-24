@@ -24,6 +24,8 @@ type CardTypeEffectResolution =
     }
   | { readonly status: "error"; readonly error: string };
 
+type CardTypeCapabilityMode = "always" | "perCard";
+
 const cardTypeEffectResolutionCache = new WeakMap<
   object,
   Map<string, CardTypeEffectResolution>
@@ -47,36 +49,96 @@ export function cardMatchesTypeForPlayer(
   );
   if (player === undefined) return false;
 
-  if (card !== undefined) {
-    if (card.ownerId !== playerId) return false;
-    if (
-      player.effectiveCardTypeSelections.some(
-        (selection) =>
-          selection.cardInstanceId === card.instanceId &&
-          selection.cardType === cardType
-      )
-    ) {
-      return true;
-    }
-
-    const isDynamicFamiliarLegendType =
-      definition.engine.cardKind === "familiar" &&
-      cardType === "legend" &&
-      player.wizardProperties.some(
-        (property) => property.definitionId === "esw2_dbg__wizard_property_003"
-      );
-    if (isDynamicFamiliarLegendType) return false;
-  }
-
-  return player.wizardProperties.some((property) =>
-    wizardPropertyCountsDefinitionAsType(
+  if (card !== undefined && card.ownerId !== playerId) return false;
+  let capabilityMode: CardTypeCapabilityMode | undefined;
+  for (const property of player.wizardProperties) {
+    const propertyCapability = wizardPropertyCountsDefinitionAsType(
       state,
       playerId,
       property.instanceId,
       property.definitionId,
       definition,
       cardType
-    )
+    );
+    if (propertyCapability === "always") {
+      capabilityMode = "always";
+      break;
+    }
+    if (propertyCapability === "perCard") {
+      capabilityMode = "perCard";
+    }
+  }
+  if (capabilityMode === undefined || capabilityMode === "always") {
+    return capabilityMode === "always";
+  }
+  if (card === undefined) return true;
+  return player.effectiveCardTypeSelections.some(
+    (selection) =>
+      selection.cardInstanceId === card.instanceId &&
+      selection.cardType === cardType
+  );
+}
+
+export function getCardEffectiveTypeOptions(
+  state: GameState,
+  playerId: PlayerId,
+  card: CardInstance
+): string[] {
+  const player = requirePlayer(state, playerId);
+  if (card.ownerId !== playerId) return [];
+  const definition = state.cardDefinitions.get(card.definitionId);
+  if (definition === undefined) return [];
+
+  const options = new Set<string>();
+  for (const property of player.wizardProperties) {
+    const propertyDefinition = state.tokenDefinitions.get(
+      property.definitionId
+    );
+    const effects =
+      propertyDefinition?.kind === "wizardProperty"
+        ? propertyDefinition.engine?.effects
+        : undefined;
+    if (effects === undefined) continue;
+
+    const source = {
+      sourceType: "wizardProperty" as const,
+      runtimeMode: state.runtimeMode,
+      playerId,
+      cardInstanceId: property.instanceId,
+      definitionId: property.definitionId,
+      tokenInstanceId: property.instanceId,
+      tokenDefinitionId: property.definitionId,
+    };
+    for (const effect of effects) {
+      if (!isOwnedCardsCountAsCardTypeRuntimeEffect(effect)) continue;
+      const resolvedEffect = resolveCardTypeEffect(effect, source);
+      if (resolvedEffect.status === "error") {
+        throw new Error(resolvedEffect.error);
+      }
+      if (
+        resolvedEffect.effect.selectionMode === "perCard" &&
+        resolvedEffect.effect.sourceCardTypes.some((sourceCardType) =>
+          definition.engine.cardTypes.includes(sourceCardType)
+        )
+      ) {
+        options.add(resolvedEffect.effect.countedAsCardType);
+      }
+    }
+  }
+  return Array.from(options).sort();
+}
+
+export function isPlayerCardEffectiveTypeSelected(
+  state: GameState,
+  playerId: PlayerId,
+  cardInstanceId: CardInstance["instanceId"],
+  cardType: string
+): boolean {
+  const player = requirePlayer(state, playerId);
+  return player.effectiveCardTypeSelections.some(
+    (selection) =>
+      selection.cardInstanceId === cardInstanceId &&
+      selection.cardType === cardType
   );
 }
 
@@ -98,22 +160,11 @@ export function setPlayerCardEffectiveType(
   if (definition === undefined) {
     throw new Error(`Missing card definition ${location.card.definitionId}`);
   }
-  if (definition.engine.cardKind !== "familiar") {
-    throw new Error(
-      `Card ${cardInstanceId} cannot receive a familiar effective type`
-    );
-  }
-  const supported = player.wizardProperties.some((property) =>
-    wizardPropertyCountsDefinitionAsType(
-      state,
-      playerId,
-      property.instanceId,
-      property.definitionId,
-      definition,
+  if (
+    !getCardEffectiveTypeOptions(state, playerId, location.card).includes(
       cardType
     )
-  );
-  if (!supported) {
+  ) {
     throw new Error(
       `Player ${playerId} has no wizard property that counts ${cardInstanceId} as ${cardType}`
     );
@@ -167,13 +218,13 @@ function wizardPropertyCountsDefinitionAsType(
   tokenDefinitionId: TokenDefinition["tokenId"],
   definition: CardDefinition,
   cardType: string
-): boolean {
+): CardTypeCapabilityMode | undefined {
   const propertyDefinition = state.tokenDefinitions.get(tokenDefinitionId);
   const effects =
     propertyDefinition?.kind === "wizardProperty"
       ? propertyDefinition.engine?.effects
       : undefined;
-  if (effects === undefined) return false;
+  if (effects === undefined) return undefined;
 
   const source = {
     sourceType: "wizardProperty" as const,
@@ -196,10 +247,10 @@ function wizardPropertyCountsDefinitionAsType(
         definition.engine.cardTypes.includes(sourceCardType)
       )
     ) {
-      return true;
+      return resolvedEffect.effect.selectionMode ?? "always";
     }
   }
-  return false;
+  return undefined;
 }
 
 function resolveCardTypeEffect(
