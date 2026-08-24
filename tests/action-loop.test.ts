@@ -280,7 +280,7 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
     (player) => player.playerId !== activePlayer.playerId
   );
   assert.ok(foe);
-  const familiar = activePlayer.unboughtFamiliar;
+  const familiar = activePlayer.unboughtFamiliars[0];
   assert.ok(familiar);
   familiar.definitionId = markCardDefinitionId(familiarDefinition.cardId);
 
@@ -3766,13 +3766,18 @@ test("active player can buy and play their setup familiar", () => {
   );
   assert.ok(activePlayer);
   assert.ok(foe);
-  const familiar = activePlayer.unboughtFamiliar;
+  const familiar = activePlayer.unboughtFamiliars[0];
   assert.ok(familiar);
 
   assert.equal(familiar.definitionId, "esw2_dbg__familiar_001");
   assert.equal(familiar.ownerId, activePlayer.playerId);
   assert.equal(findOwnedCard(activePlayer, familiar.definitionId), undefined);
-  assert.equal(foe.unboughtFamiliar?.instanceId === familiar.instanceId, false);
+  assert.equal(
+    foe.unboughtFamiliars.some(
+      (candidate) => candidate.instanceId === familiar.instanceId
+    ),
+    false
+  );
   assert.equal(
     scoreGame(state).find((score) => score.playerId === activePlayer.playerId)
       ?.victoryPoints,
@@ -3800,7 +3805,7 @@ test("active player can buy and play their setup familiar", () => {
 
   const buyResult = applyAction(state, buyAction);
   assert.equal(buyResult.ok, true);
-  assert.equal(activePlayer.unboughtFamiliar, undefined);
+  assert.equal(activePlayer.unboughtFamiliars.includes(familiar), false);
   assert.equal(activePlayer.discard.includes(familiar), true);
   assert.equal(
     scoreGame(state).find((score) => score.playerId === activePlayer.playerId)
@@ -3833,11 +3838,13 @@ test("bought familiar can discard another hand card to avoid an attack", () => {
   );
   assert.ok(activePlayer);
   assert.ok(targetPlayer);
-  const familiar = targetPlayer.unboughtFamiliar;
+  const familiar = targetPlayer.unboughtFamiliars[0];
   assert.ok(familiar);
   const paidDiscard = targetPlayer.hand[0];
   assert.ok(paidDiscard);
-  targetPlayer.unboughtFamiliar = undefined;
+  targetPlayer.unboughtFamiliars = targetPlayer.unboughtFamiliars.filter(
+    (candidate) => candidate.instanceId !== familiar.instanceId
+  );
   familiar.ownerId = targetPlayer.playerId;
   targetPlayer.hand.push(familiar);
   chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) =>
@@ -3926,10 +3933,12 @@ test("bought familiar cannot defend when no other hand card can pay its discard 
   );
   assert.ok(activePlayer);
   assert.ok(targetPlayer);
-  const familiar = targetPlayer.unboughtFamiliar;
+  const familiar = targetPlayer.unboughtFamiliars[0];
   assert.ok(familiar);
   targetPlayer.hand.splice(0);
-  targetPlayer.unboughtFamiliar = undefined;
+  targetPlayer.unboughtFamiliars = targetPlayer.unboughtFamiliars.filter(
+    (candidate) => candidate.instanceId !== familiar.instanceId
+  );
   familiar.ownerId = targetPlayer.playerId;
   targetPlayer.hand.push(familiar);
   targetPlayer.life.current = 10;

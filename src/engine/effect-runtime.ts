@@ -1090,7 +1090,13 @@ function effectConditionMatches(
       return (
         definition !== undefined &&
         condition.cardTypes.some((cardType) =>
-          cardMatchesTypeForPlayer(state, player.playerId, definition, cardType)
+          cardMatchesTypeForPlayer(
+            state,
+            player.playerId,
+            definition,
+            cardType,
+            card
+          )
         )
       );
     }).length;

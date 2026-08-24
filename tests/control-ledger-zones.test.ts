@@ -110,37 +110,34 @@ test("Control Ledger describes its physical card inventory in deterministic orde
   assert.equal(removeCardFromLocation(state, "missing-card"), undefined);
 });
 
-test("singleton physical card descriptor enforces zero-or-one storage", () => {
+test("familiar physical card descriptor supports multiple cards", () => {
   const state = initializeGame({ rootDir, seed: 47601 });
   const player = state.players[0];
   assert.ok(player);
   const descriptor = listPhysicalCardZoneDescriptors(state).find(
-    (candidate) => candidate.zoneName === `${player.playerId}.unboughtFamiliar`
+    (candidate) => candidate.zoneName === `${player.playerId}.unboughtFamiliars`
   );
   assert.ok(descriptor);
-  assert.equal(descriptor.cardinality, "zeroOrOne");
+  assert.equal(descriptor.cardinality, "many");
 
   const first = createCard("singleton-first", player.playerId);
   const second = createCard("singleton-second", player.playerId);
 
   descriptor.replace([]);
-  assert.equal(player.unboughtFamiliar, undefined);
+  assert.deepEqual(player.unboughtFamiliars, []);
   assert.deepEqual(descriptor.read(), []);
 
   descriptor.replace([first]);
-  assert.equal(player.unboughtFamiliar, first);
+  assert.deepEqual(player.unboughtFamiliars, [first]);
   assert.deepEqual(descriptor.read(), [first]);
 
-  assert.throws(
-    () => descriptor.replace([first, second]),
-    /accepts at most one card, received 2/
-  );
-  assert.equal(player.unboughtFamiliar, first);
+  descriptor.replace([first, second]);
+  assert.deepEqual(player.unboughtFamiliars, [first, second]);
 
   descriptor.replace([]);
-  assert.equal(player.unboughtFamiliar, undefined);
+  assert.deepEqual(player.unboughtFamiliars, []);
   descriptor.replace([second]);
-  assert.equal(player.unboughtFamiliar, second);
+  assert.deepEqual(player.unboughtFamiliars, [second]);
 });
 
 test("Ledger exposes only the built-in hand as a voluntary Defense source", () => {
@@ -158,27 +155,31 @@ test("Ledger exposes only the built-in hand as a voluntary Defense source", () =
   ]);
 });
 
-test("built-in card movement rejects an occupied singleton before mutation", () => {
+test("built-in card movement appends to the multi-card familiar zone", () => {
   const state = initializeGame({ rootDir, seed: 47608 });
   const player = state.players[0]!;
   const sourceCard = createCard("move-source", player.playerId);
   const destinationCard = createCard("move-destination", player.playerId);
   player.hand = [sourceCard];
-  player.unboughtFamiliar = destinationCard;
+  player.unboughtFamiliars = [destinationCard];
 
   const result = movePhysicalCard(
     state,
     sourceCard.instanceId,
-    `${player.playerId}.unboughtFamiliar`,
+    `${player.playerId}.unboughtFamiliars`,
     "back"
   );
 
   assert.deepEqual(result, {
-    ok: false,
-    reason: `Destination zone ${player.playerId}.unboughtFamiliar is already occupied`,
+    ok: true,
+    move: {
+      card: sourceCard,
+      sourceZoneName: `${player.playerId}.hand`,
+      destinationZoneName: `${player.playerId}.unboughtFamiliars`,
+    },
   });
-  assert.deepEqual(player.hand, [sourceCard]);
-  assert.equal(player.unboughtFamiliar, destinationCard);
+  assert.deepEqual(player.hand, []);
+  assert.deepEqual(player.unboughtFamiliars, [destinationCard, sourceCard]);
 });
 
 function snapshotZoneMembership(

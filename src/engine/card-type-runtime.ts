@@ -1,5 +1,11 @@
 import type { CardDefinition, TokenDefinition } from "./data.js";
-import type { GameState, PlayerId, TokenInstance } from "./setup.js";
+import type {
+  CardInstance,
+  GameState,
+  PlayerId,
+  TokenInstance,
+} from "./setup.js";
+import { findCardLocation } from "./control-ledger.js";
 import {
   isOwnedCardsCountAsCardTypeRuntimeEffect,
   type OwnedCardsCountAsCardTypeRuntimeEffect,
@@ -27,7 +33,8 @@ export function cardMatchesTypeForPlayer(
   state: GameState,
   playerId: PlayerId,
   definition: CardDefinition,
-  cardType: string
+  cardType: string,
+  card?: CardInstance
 ): boolean {
   if (
     definition.engine.cardTypes.includes(cardType) ||
@@ -35,20 +42,122 @@ export function cardMatchesTypeForPlayer(
   ) {
     return true;
   }
-  return (
-    state.players
-      .find((player) => player.playerId === playerId)
-      ?.wizardProperties.some((property) =>
-        wizardPropertyCountsDefinitionAsType(
-          state,
-          playerId,
-          property.instanceId,
-          property.definitionId,
-          definition,
-          cardType
-        )
-      ) ?? false
+  const player = state.players.find(
+    (candidate) => candidate.playerId === playerId
   );
+  if (player === undefined) return false;
+
+  if (card !== undefined) {
+    if (card.ownerId !== playerId) return false;
+    if (
+      player.effectiveCardTypeSelections.some(
+        (selection) =>
+          selection.cardInstanceId === card.instanceId &&
+          selection.cardType === cardType
+      )
+    ) {
+      return true;
+    }
+
+    const isDynamicFamiliarLegendType =
+      definition.engine.cardKind === "familiar" &&
+      cardType === "legend" &&
+      player.wizardProperties.some(
+        (property) => property.definitionId === "esw2_dbg__wizard_property_003"
+      );
+    if (isDynamicFamiliarLegendType) return false;
+  }
+
+  return player.wizardProperties.some((property) =>
+    wizardPropertyCountsDefinitionAsType(
+      state,
+      playerId,
+      property.instanceId,
+      property.definitionId,
+      definition,
+      cardType
+    )
+  );
+}
+
+export function setPlayerCardEffectiveType(
+  state: GameState,
+  playerId: PlayerId,
+  cardInstanceId: CardInstance["instanceId"],
+  cardType: string
+): void {
+  const player = requirePlayer(state, playerId);
+  const location = findCardLocation(state, cardInstanceId);
+  if (location === undefined || location.card.ownerId !== playerId) {
+    throw new Error(
+      `Card ${cardInstanceId} is not owned by player ${playerId}`
+    );
+  }
+
+  const definition = state.cardDefinitions.get(location.card.definitionId);
+  if (definition === undefined) {
+    throw new Error(`Missing card definition ${location.card.definitionId}`);
+  }
+  if (definition.engine.cardKind !== "familiar") {
+    throw new Error(
+      `Card ${cardInstanceId} cannot receive a familiar effective type`
+    );
+  }
+  const supported = player.wizardProperties.some((property) =>
+    wizardPropertyCountsDefinitionAsType(
+      state,
+      playerId,
+      property.instanceId,
+      property.definitionId,
+      definition,
+      cardType
+    )
+  );
+  if (!supported) {
+    throw new Error(
+      `Player ${playerId} has no wizard property that counts ${cardInstanceId} as ${cardType}`
+    );
+  }
+  if (
+    !player.effectiveCardTypeSelections.some(
+      (selection) =>
+        selection.cardInstanceId === cardInstanceId &&
+        selection.cardType === cardType
+    )
+  ) {
+    player.effectiveCardTypeSelections.push({ cardInstanceId, cardType });
+  }
+}
+
+export function clearPlayerCardEffectiveType(
+  state: GameState,
+  playerId: PlayerId,
+  cardInstanceId: CardInstance["instanceId"],
+  cardType: string
+): void {
+  const player = requirePlayer(state, playerId);
+  const location = findCardLocation(state, cardInstanceId);
+  if (location === undefined || location.card.ownerId !== playerId) {
+    throw new Error(
+      `Card ${cardInstanceId} is not owned by player ${playerId}`
+    );
+  }
+  player.effectiveCardTypeSelections =
+    player.effectiveCardTypeSelections.filter(
+      (selection) =>
+        selection.cardInstanceId !== cardInstanceId ||
+        selection.cardType !== cardType
+    );
+}
+
+function requirePlayer(state: GameState, playerId: PlayerId) {
+  const player = state.players.find(
+    (candidate) => candidate.playerId === playerId
+  );
+  if (player === undefined) {
+    throw new Error(`Missing player ${playerId}`);
+  }
+  return player;
 }
 
 function wizardPropertyCountsDefinitionAsType(

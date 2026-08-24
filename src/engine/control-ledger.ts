@@ -252,11 +252,11 @@ function listPlayerPhysicalCardZoneDescriptors(
       undefined,
       true
     ),
-    createSingletonCardZoneDescriptor(
-      `${player.playerId}.unboughtFamiliar`,
-      () => player.unboughtFamiliar,
+    createArrayCardZoneDescriptor(
+      `${player.playerId}.unboughtFamiliars`,
+      () => player.unboughtFamiliars,
       (card) => {
-        player.unboughtFamiliar = card;
+        player.unboughtFamiliars = card;
       },
       player.playerId
     ),
@@ -725,33 +725,6 @@ function createArrayCardZoneDescriptor(
     },
   };
   return descriptor;
-}
-
-function createSingletonCardZoneDescriptor(
-  zoneName: string,
-  readStorage: () => CardInstance | undefined,
-  replaceStorage: (card: CardInstance | undefined) => void,
-  expectedOwnerId?: CardInstance["ownerId"],
-  scoringEligible = false
-): PhysicalCardZoneDescriptor {
-  return {
-    zoneName,
-    cardinality: "zeroOrOne",
-    scoringEligible,
-    ...(expectedOwnerId === undefined ? {} : { expectedOwnerId }),
-    read() {
-      const card = readStorage();
-      return card === undefined ? [] : [card];
-    },
-    replace(cards) {
-      if (cards.length > 1) {
-        throw new Error(
-          `Physical card zone ${zoneName} accepts at most one card, received ${cards.length}`
-        );
-      }
-      replaceStorage(cards[0]);
-    },
-  };
 }
 
 function mustGetCardDefinition(

@@ -219,7 +219,8 @@ export function preflightAction(
         const cost = calculateEffectiveCardCost(
           state,
           activePlayer.playerId,
-          definition
+          definition,
+          card
         );
         if (
           calculatePayment(state, activePlayer, cost, action.source) ===
@@ -609,7 +610,8 @@ function buyMarketCard(
   const cost = calculateEffectiveCardCost(
     state,
     activePlayer.playerId,
-    definition
+    definition,
+    card
   );
   const powerBefore = state.turn.power;
   const chipsBefore = activePlayer.chips;
@@ -775,7 +777,7 @@ function canAfford(
 ): boolean {
   const definition = mustGetDefinition(state, card.definitionId);
   return (
-    calculateEffectiveCardCost(state, player.playerId, definition) <=
+    calculateEffectiveCardCost(state, player.playerId, definition, card) <=
     state.turn.power
   );
 }
@@ -787,7 +789,7 @@ function canAffordWithChips(
 ): boolean {
   const definition = mustGetDefinition(state, card.definitionId);
   return (
-    calculateEffectiveCardCost(state, player.playerId, definition) <=
+    calculateEffectiveCardCost(state, player.playerId, definition, card) <=
     state.turn.power + player.chips
   );
 }
@@ -843,18 +845,13 @@ function getFamiliarBuyAction(
   state: GameState,
   player: PlayerState
 ): BuyMarketCardAction[] {
-  const familiar = player.unboughtFamiliar;
-  if (familiar === undefined || !canAfford(state, player, familiar)) {
-    return [];
-  }
-
-  return [
-    {
-      type: "buyMarketCard",
+  return player.unboughtFamiliars
+    .filter((familiar) => canAfford(state, player, familiar))
+    .map((familiar) => ({
+      type: "buyMarketCard" as const,
       cardInstanceId: familiar.instanceId,
-      source: "familiar",
-    },
-  ];
+      source: "familiar" as const,
+    }));
 }
 
 function getBuyCard(
@@ -863,10 +860,9 @@ function getBuyCard(
   action: BuyMarketCardAction
 ): CardInstance | undefined {
   if (action.source === "familiar") {
-    const familiar = activePlayer.unboughtFamiliar;
-    return familiar?.instanceId === action.cardInstanceId
-      ? familiar
-      : undefined;
+    return activePlayer.unboughtFamiliars.find(
+      (familiar) => familiar.instanceId === action.cardInstanceId
+    );
   }
 
   return getBuySourceZone(state, action.source).find(

@@ -106,12 +106,12 @@ test("game state invariants use descriptor owner metadata for player and common 
   const familiar = player.hand.shift();
   assert.ok(familiar);
   familiar.ownerId = "common";
-  player.unboughtFamiliar = familiar;
+  player.unboughtFamiliars = [familiar];
 
   assert.throws(
     () => assertGameStateInvariants(playerState),
     new RegExp(
-      `${familiar.instanceId} in ${player.playerId}\\.unboughtFamiliar must be owned by ${player.playerId}`
+      `${familiar.instanceId} in ${player.playerId}\\.unboughtFamiliars must be owned by ${player.playerId}`
     )
   );
 
@@ -162,14 +162,14 @@ test("game state invariants detect duplicates across singleton, destroyed, and a
   assert.ok(player);
   assert.ok(card);
 
-  player.unboughtFamiliar = card;
+  player.unboughtFamiliars = [card];
   state.common.destroyedMegaMayhem.push(card);
 
   assert.throws(
     () => assertGameStateInvariants(state),
     new RegExp(
       `card ${card.instanceId} appears in multiple zones: ` +
-        `${player.playerId}\\.hand, ${player.playerId}\\.unboughtFamiliar, destroyedMegaMayhem`
+        `${player.playerId}\\.hand, ${player.playerId}\\.unboughtFamiliars, destroyedMegaMayhem`
     )
   );
 });

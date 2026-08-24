@@ -51,7 +51,7 @@ function rankingFixture(): {
   activePlayer.wizardProperties = [];
   activePlayer.statuses = [];
   activePlayer.trophyLikeObjects = [];
-  activePlayer.unboughtFamiliar = undefined;
+  activePlayer.unboughtFamiliars = [];
   activePlayer.deck = [];
   activePlayer.discard = [];
   addFixtureDefinitionToActiveHand(
@@ -239,7 +239,7 @@ function analysisFixtureState(seed: number): GameState {
     (player) => player.playerId === state.activePlayerId
   );
   if (activePlayer !== undefined) {
-    activePlayer.unboughtFamiliar = undefined;
+    activePlayer.unboughtFamiliars = [];
   }
   return state;
 }
@@ -396,7 +396,7 @@ test("enumerates every current-turn action history through endTurn", () => {
   activePlayer.wizardProperties = [];
   activePlayer.statuses = [];
   activePlayer.trophyLikeObjects = [];
-  activePlayer.unboughtFamiliar = undefined;
+  activePlayer.unboughtFamiliars = [];
   activePlayer.deck = [];
   activePlayer.discard = [];
   addFixtureDefinitionToActiveHand(

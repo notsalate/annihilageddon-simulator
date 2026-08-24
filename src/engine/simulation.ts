@@ -91,7 +91,7 @@ export interface SetupPlayerSnapshot {
   hand: SetupCardSnapshot[];
   wizardProperties: SetupTokenSnapshot[];
   statuses: string[];
-  unboughtFamiliar?: SetupCardSnapshot;
+  unboughtFamiliars: SetupCardSnapshot[];
 }
 
 export interface SetupStateSnapshot {
@@ -459,7 +459,7 @@ function getBuyActionCost(
   const card = [
     ...state.common.market,
     ...state.common.legendMarket,
-    activePlayer.unboughtFamiliar,
+    ...activePlayer.unboughtFamiliars,
   ].find((candidate) => candidate?.instanceId === action.cardInstanceId);
   if (card === undefined) {
     throw new Error(`Legal buy target ${action.cardInstanceId} is missing`);
@@ -467,7 +467,8 @@ function getBuyActionCost(
   return calculateEffectiveCardCost(
     state,
     activePlayer.playerId,
-    mustGetCardDefinition(state, card)
+    mustGetCardDefinition(state, card),
+    card
   );
 }
 
@@ -878,7 +879,6 @@ function summarizeGame(
 function snapshotSetupState(state: GameState): SetupStateSnapshot {
   return {
     players: state.players.map((player) => {
-      const familiar = snapshotOptionalCard(player.unboughtFamiliar);
       return {
         playerId: player.playerId,
         handSize: player.hand.length,
@@ -889,7 +889,7 @@ function snapshotSetupState(state: GameState): SetupStateSnapshot {
         hand: player.hand.map(snapshotCard),
         wizardProperties: player.wizardProperties.map(snapshotToken),
         statuses: player.statuses.map((status) => status.statusId),
-        ...(familiar === undefined ? {} : { unboughtFamiliar: familiar }),
+        unboughtFamiliars: player.unboughtFamiliars.map(snapshotCard),
       };
     }),
     mainMarket: state.common.market.map(snapshotCard),
@@ -900,12 +900,6 @@ function snapshotSetupState(state: GameState): SetupStateSnapshot {
     limpWandStackSize: state.common.limpWandStack.length,
     deadWizardTokenStackSize: state.common.deadWizardTokens.drawStack.length,
   };
-}
-
-function snapshotOptionalCard(
-  card: CardInstance | undefined
-): SetupCardSnapshot | undefined {
-  return card === undefined ? undefined : snapshotCard(card);
 }
 
 function snapshotCard(card: CardInstance): SetupCardSnapshot {

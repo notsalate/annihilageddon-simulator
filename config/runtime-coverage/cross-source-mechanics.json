@@ -304,10 +304,227 @@
       "id": "esw2_dbg__wizard_property_003",
       "objectKind": "wizardProperty",
       "primaryMechanicCluster": "ongoing-modifiers",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in ongoing-modifiers"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "При подготовке к игре оставь себе обоих фамильяров и выбери любого ничейного фамильяра третьим. Ты всегда можешь считать своих фамильяров ещё и легендами (например, можешь потратить на них чипсины)."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Это свойство применяется при подготовке к игре."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "field",
+              "path": "engine.playableInV0",
+              "value": true
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Игрок оставляет себе обоих своих фамильяров."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "field",
+              "path": "engine.playableInV0",
+              "value": true
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Игрок дополнительно выбирает любого ничейного фамильяра третьим."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "field",
+              "path": "engine.playableInV0",
+              "value": true
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Свои фамильяры могут считаться ещё и легендами."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Пример в тексте означает, что на фамильяров можно тратить чипсины так, как если бы они были легендами."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[5]",
+            "value": "Фактически, в течении хода можно сначала считать фамильяры обычным типом при каких-либо действиях, потом легендами, потом снова обычным типом, как пример"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[6]",
+            "value": "Считать легендой можно например 2 из 3 фамильяров, это не ограничивается"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[7]",
+            "value": "Если игрок (бот) выбирает фамильяра как легенду, то у него тип Легенда + Фамильяр, как у обычных Легенд-тварей, Легенд-волшебников и тд"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[8]",
+            "value": "В любой момент игры он может отозвать тип Легенды у Фамильяра"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__wizard_property_004",

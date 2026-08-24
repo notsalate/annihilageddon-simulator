@@ -8,6 +8,11 @@ import {
   type LoadedDataPack,
   type RuntimeEffect,
 } from "../src/index.js";
+import {
+  cardMatchesTypeForPlayer,
+  clearPlayerCardEffectiveType,
+  setPlayerCardEffectiveType,
+} from "../src/engine/card-type-runtime.js";
 import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
 import {
   markCardDefinitionId,
@@ -119,6 +124,127 @@ test("default setup choice policy records alwaysPickFirst", () => {
     assert.ok(candidates.length > 0);
     assert.equal(event.chosenDefinitionId, candidates[0]);
   }
+});
+
+test("wizard property 003 keeps two familiars, selects a third, and toggles effective types independently", () => {
+  const source = loadCurrentRuntimeDataPack(rootDir);
+  const wizardPropertyStack = source.tokenStacks.wizardProperties;
+  const familiarPool = source.decks.familiarPool;
+  assert.ok(wizardPropertyStack);
+  assert.ok(familiarPool);
+
+  const dataPack: LoadedDataPack = {
+    ...source,
+    decks: {
+      ...source.decks,
+      familiarPool: {
+        ...familiarPool,
+        entries: [{ cardId: "esw2_dbg__familiar_003", count: 24 }],
+      },
+    },
+    tokenStacks: {
+      ...source.tokenStacks,
+      wizardProperties: {
+        ...wizardPropertyStack,
+        entries: [{ tokenId: "esw2_dbg__wizard_property_003", count: 4 }],
+      },
+    },
+  };
+
+  const state = initializeGame({ dataPack, playerCount: 2, seed: 81203 });
+  const player = state.players[0];
+  const otherPlayer = state.players[1];
+  assert.ok(player);
+  assert.ok(otherPlayer);
+  assert.equal(player.unboughtFamiliars.length, 3);
+  assert.equal(otherPlayer.unboughtFamiliars.length, 3);
+  assert.ok(
+    player.unboughtFamiliars.every((card) => card.ownerId === player.playerId)
+  );
+  assert.ok(
+    otherPlayer.unboughtFamiliars.every(
+      (card) => card.ownerId === otherPlayer.playerId
+    )
+  );
+
+  const firstFamiliar = player.unboughtFamiliars[0];
+  const secondFamiliar = player.unboughtFamiliars[1];
+  const foreignFamiliar = otherPlayer.unboughtFamiliars[0];
+  assert.ok(firstFamiliar);
+  assert.ok(secondFamiliar);
+  assert.ok(foreignFamiliar);
+  const firstDefinition = state.cardDefinitions.get(firstFamiliar.definitionId);
+  const secondDefinition = state.cardDefinitions.get(
+    secondFamiliar.definitionId
+  );
+  const foreignDefinition = state.cardDefinitions.get(
+    foreignFamiliar.definitionId
+  );
+  assert.ok(firstDefinition);
+  assert.ok(secondDefinition);
+  assert.ok(foreignDefinition);
+
+  setPlayerCardEffectiveType(
+    state,
+    player.playerId,
+    firstFamiliar.instanceId,
+    "legend"
+  );
+  assert.equal(
+    cardMatchesTypeForPlayer(
+      state,
+      player.playerId,
+      firstDefinition,
+      "legend",
+      firstFamiliar
+    ),
+    true
+  );
+  assert.equal(
+    cardMatchesTypeForPlayer(
+      state,
+      player.playerId,
+      secondDefinition,
+      "legend",
+      secondFamiliar
+    ),
+    false
+  );
+  assert.equal(
+    cardMatchesTypeForPlayer(
+      state,
+      otherPlayer.playerId,
+      foreignDefinition,
+      "legend",
+      foreignFamiliar
+    ),
+    false
+  );
+
+  clearPlayerCardEffectiveType(
+    state,
+    player.playerId,
+    firstFamiliar.instanceId,
+    "legend"
+  );
+  assert.equal(
+    cardMatchesTypeForPlayer(
+      state,
+      player.playerId,
+      firstDefinition,
+      "legend",
+      firstFamiliar
+    ),
+    false
+  );
+  assert.throws(() =>
+    setPlayerCardEffectiveType(
+      state,
+      otherPlayer.playerId,
+      firstFamiliar.instanceId,
+      "legend"
+    )
+  );
 });
 
 test("wizard property setup effects update cards, trophies, life, and first player", () => {

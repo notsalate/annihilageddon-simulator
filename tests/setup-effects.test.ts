@@ -96,7 +96,8 @@ function player(): PlayerState {
     discard: [],
     playedThisTurn: [],
     permanents: [],
-    unboughtFamiliar: undefined,
+    unboughtFamiliars: [],
+    effectiveCardTypeSelections: [],
     deadWizardTokens: [],
     wizardProperties: [],
     statuses: [],
@@ -596,12 +597,14 @@ test("replace_starting_card replaces first matching card in zone order", () => {
 
 test("replace_starting_card replaces a matching unbought familiar", () => {
   const subject = player();
-  subject.unboughtFamiliar = {
-    instanceId: markCardInstanceId("fixture-familiar-source"),
-    definitionId: markCardDefinitionId("source"),
-    ownerId: subject.playerId,
-    marketChips: 0,
-  };
+  subject.unboughtFamiliars = [
+    {
+      instanceId: markCardInstanceId("fixture-familiar-source"),
+      definitionId: markCardDefinitionId("source"),
+      ownerId: subject.playerId,
+      marketChips: 0,
+    },
+  ];
 
   const result = tryExecuteSetupEffect(
     subject,
@@ -616,7 +619,7 @@ test("replace_starting_card replaces a matching unbought familiar", () => {
   );
 
   assert.deepEqual(result, { status: "executed" });
-  assert.equal(subject.unboughtFamiliar?.definitionId, "target");
+  assert.equal(subject.unboughtFamiliars[0]?.definitionId, "target");
 });
 
 test("replace_starting_card preserves the matching card owner", () => {

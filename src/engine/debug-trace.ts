@@ -85,8 +85,10 @@ function formatSetupPlayer(
     `deck ${player.deckSize}`,
     `wizard properties [${formatSetupTokens(player.wizardProperties, options)}]`,
   ];
-  if (player.unboughtFamiliar !== undefined) {
-    parts.push(`familiar ${formatSetupCard(player.unboughtFamiliar, options)}`);
+  if (player.unboughtFamiliars.length > 0) {
+    parts.push(
+      `familiars [${formatSetupCards(player.unboughtFamiliars, options)}]`
+    );
   }
   if (player.statuses.length > 0) {
     parts.push(`statuses [${player.statuses.join(", ")}]`);
@@ -529,8 +531,8 @@ function formatPlayerZoneName(zoneName: string): string {
   if (zoneName === "deckTop") {
     return "deck top";
   }
-  if (zoneName === "unboughtFamiliar") {
-    return "unbought familiar";
+  if (zoneName === "unboughtFamiliars") {
+    return "unbought familiars";
   }
   return zoneName;
 }

@@ -1279,11 +1279,9 @@ test("scoreGame counts owned player-zone cards without scoring common locations 
   state.common.market.push(
     createCardInstance("fixture-market-tower", tower.cardId, player.playerId)
   );
-  player.unboughtFamiliar = createCardInstance(
-    "fixture-familiar-tower",
-    tower.cardId,
-    player.playerId
-  );
+  player.unboughtFamiliars = [
+    createCardInstance("fixture-familiar-tower", tower.cardId, player.playerId),
+  ];
 
   const scoringCardIds = new Set(
     listOwnedScoringCards(state, player.playerId).map(
@@ -1291,7 +1289,10 @@ test("scoreGame counts owned player-zone cards without scoring common locations 
     )
   );
   assert.equal(scoringCardIds.has(controlledTower.instanceId), true);
-  assert.equal(scoringCardIds.has(player.unboughtFamiliar.instanceId), false);
+  assert.equal(
+    scoringCardIds.has(player.unboughtFamiliars[0]!.instanceId),
+    false
+  );
   assert.equal(
     scoringCardIds.has(state.common.market.at(-1)!.instanceId),
     false

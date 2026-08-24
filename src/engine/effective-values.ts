@@ -115,7 +115,8 @@ function applyEffectiveValueModifier(
 export function calculateEffectiveCardCost(
   state: GameState,
   playerId: PlayerId,
-  definition: CardDefinition
+  definition: CardDefinition,
+  card?: CardInstance
 ): number {
   return calculateEffectiveValue({
     state,
@@ -126,6 +127,7 @@ export function calculateEffectiveCardCost(
       definitionId: definition.cardId,
     },
     baseValue: definition.engine.cost,
+    ...(card === undefined ? {} : { scoredCard: card }),
   });
 }
 
@@ -262,7 +264,11 @@ function calculateEffectiveValue(options: {
       const scoringCards =
         options.scoringCards ??
         getOwnedScoringCards(options.state, options.playerId);
-      scoringCardTypeIndex = buildScoringCardTypeIndex(scoringCards);
+      scoringCardTypeIndex = buildScoringCardTypeIndex(
+        options.state,
+        options.playerId,
+        scoringCards
+      );
     }
     return scoringCardTypeIndex;
   };
@@ -286,7 +292,8 @@ function calculateEffectiveValue(options: {
               options.state,
               options.playerId,
               modifier.target,
-              options.target
+              options.target,
+              options.scoredCard
             )
           ) {
             return false;
@@ -569,11 +576,31 @@ function getWizardPropertyEffects(
 }
 
 function buildScoringCardTypeIndex(
+  state: GameState,
+  playerId: PlayerId,
   scoringCards: readonly ControlledCardObject[]
 ): ReadonlyMap<string, ReadonlySet<ControlledCardObject>> {
   const index = new Map<string, Set<ControlledCardObject>>();
+  const knownCardTypes = new Set<string>(["legend"]);
+  for (const definition of state.cardDefinitions.values()) {
+    for (const cardType of definition.engine.cardTypes) {
+      knownCardTypes.add(cardType);
+    }
+  }
+
   for (const object of scoringCards) {
-    for (const cardType of new Set(object.definition.engine.cardTypes)) {
+    for (const cardType of knownCardTypes) {
+      if (
+        !cardMatchesTypeForPlayer(
+          state,
+          playerId,
+          object.definition,
+          cardType,
+          object.card
+        )
+      ) {
+        continue;
+      }
       const cards = index.get(cardType) ?? new Set<ControlledCardObject>();
       cards.add(object);
       index.set(cardType, cards);
@@ -606,7 +633,8 @@ function matchesTarget(
   state: GameState,
   playerId: PlayerId,
   effectTarget: RuntimeEffectTarget | undefined,
-  target: EffectiveValueTarget
+  target: EffectiveValueTarget,
+  targetCard?: CardInstance
 ): boolean {
   if (effectTarget === undefined || !isRuntimeEffectTarget(effectTarget)) {
     return false;
@@ -646,7 +674,13 @@ function matchesTarget(
     return effectTarget.cardTypes.some((cardType) => {
       return (
         typeof cardType === "string" &&
-        cardMatchesTypeForPlayer(state, playerId, definition, cardType)
+        cardMatchesTypeForPlayer(
+          state,
+          playerId,
+          definition,
+          cardType,
+          targetCard
+        )
       );
     });
   }

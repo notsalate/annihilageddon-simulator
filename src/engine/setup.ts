@@ -53,6 +53,17 @@ export interface CardInstance {
   marketChips: number;
 }
 
+export interface EffectiveCardTypeSelection {
+  cardInstanceId: CardInstanceId;
+  cardType: string;
+}
+
+export interface GainedCardRecord {
+  playerId: PlayerId;
+  definitionId: CardDefinitionId;
+  cardInstanceId: CardInstanceId;
+}
+
 /** A card controlled outside permanent storage until the current turn ends. */
 export interface TemporaryCardControl {
   cardInstanceId: CardInstanceId;
@@ -86,7 +97,8 @@ export interface PlayerState {
   discard: CardInstance[];
   playedThisTurn: CardInstance[];
   permanents: CardInstance[];
-  unboughtFamiliar: CardInstance | undefined;
+  unboughtFamiliars: CardInstance[];
+  effectiveCardTypeSelections: EffectiveCardTypeSelection[];
   deadWizardTokens: TokenInstance[];
   wizardProperties: TokenInstance[];
   statuses: StatusInstance[];
@@ -815,18 +827,18 @@ export function initializeGame(options: InitializeGameOptions): GameState {
   const setupEvents: GameEvent[] = [];
 
   const players = createPlayers(playerCount, dataPack, factory, rng);
-  assignStartingFamiliars(
-    players,
-    dataPack,
-    factory,
-    createSeededRng(options.seed + 7919),
-    setupEvents
-  );
   assignStartingWizardProperties(
     players,
     dataPack,
     tokenFactory,
     rng,
+    setupEvents
+  );
+  assignStartingFamiliars(
+    players,
+    dataPack,
+    factory,
+    createSeededRng(options.seed + 7919),
     setupEvents
   );
   const forcedStartingPlayerId = applyWizardPropertySetupEffects(
@@ -1091,12 +1103,19 @@ function assignStartingFamiliars(
   }
 
   const setupPool = instantiateDeck(familiarPool, dataPack, factory, "common");
-  if (setupPool.length < players.length * 2) {
+  const playersRetainingBothFamiliars = players.filter((player) =>
+    player.wizardProperties.some(
+      (property) => property.definitionId === "esw2_dbg__wizard_property_003"
+    )
+  ).length;
+  const requiredSetupPoolSize =
+    players.length * 2 + playersRetainingBothFamiliars;
+  if (setupPool.length < requiredSetupPoolSize) {
     if (isIncompleteFullOnlyDataPack(dataPack)) {
       return;
     }
     throw new Error(
-      `Deck ${familiarPool.deckId} must include at least ${players.length * 2} familiar setup candidates`
+      `Deck ${familiarPool.deckId} must include at least ${requiredSetupPoolSize} familiar setup candidates`
     );
   }
 
@@ -1138,20 +1157,63 @@ function assignStartingFamiliars(
       eventLog
     );
 
-    player.unboughtFamiliar = factory.create(
-      selectedCandidate.definitionId,
-      player.playerId
+    player.unboughtFamiliars.push(
+      factory.create(selectedCandidate.definitionId, player.playerId)
     );
+
+    if (
+      player.wizardProperties.some(
+        (property) => property.definitionId === "esw2_dbg__wizard_property_003"
+      )
+    ) {
+      player.unboughtFamiliars.push(
+        factory.create(secondCandidate.definitionId, player.playerId)
+      );
+      const thirdCandidateOffset =
+        players.length * 2 +
+        players
+          .slice(0, index)
+          .filter((candidate) =>
+            candidate.wizardProperties.some(
+              (property) =>
+                property.definitionId === "esw2_dbg__wizard_property_003"
+            )
+          ).length;
+      const remainingCandidates = setupPool.slice(thirdCandidateOffset);
+      const thirdCandidate = alwaysPickFirstSetupChoice(
+        player,
+        "familiar",
+        remainingCandidates,
+        eventLog
+      );
+      const thirdDefinition = mustGetDefinition(
+        dataPack,
+        thirdCandidate.definitionId
+      );
+      if (thirdDefinition.engine.cardKind !== "familiar") {
+        throw new Error(
+          `Deck ${familiarPool.deckId} must contain only familiar cards`
+        );
+      }
+      player.unboughtFamiliars.push(
+        factory.create(thirdCandidate.definitionId, player.playerId)
+      );
+    }
   }
 }
 
 function alwaysPickFirstSetupChoice<TCandidate extends SetupCandidate<string>>(
   player: PlayerState,
   setupChoiceKind: "familiar" | "wizardProperty",
-  candidates: readonly [TCandidate, TCandidate],
+  candidates: readonly TCandidate[],
   eventLog: GameEvent[]
 ): TCandidate {
   const chosenCandidate = candidates[0];
+  if (chosenCandidate === undefined) {
+    throw new Error(
+      `Setup choice ${setupChoiceKind} has no candidates for ${player.playerId}`
+    );
+  }
   recordSetupChoiceSelected(eventLog, {
     type: "setupChoiceSelected",
     playerId: player.playerId,
@@ -1261,7 +1323,8 @@ function createPlayers(
       discard: [],
       playedThisTurn: [],
       permanents: [],
-      unboughtFamiliar: undefined,
+      unboughtFamiliars: [],
+      effectiveCardTypeSelections: [],
       deadWizardTokens: [],
       wizardProperties: [],
       statuses: [],
