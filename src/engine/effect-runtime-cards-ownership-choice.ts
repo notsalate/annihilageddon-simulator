@@ -87,6 +87,7 @@ export type PlayTopCardFromFoeDeckRuntimeEffect =
       targetSelector: "chosenFoe";
       nonOngoingCleanupDestination?: "ownerDiscard";
       ongoingOwnership?: "controller";
+      ongoingCleanupDestination?: "ownerDiscard";
     };
 export type WildMagicOption =
   | { effectId: "add_power"; amount: number }
@@ -321,6 +322,7 @@ export function createCardOwnershipChoiceEffectDecoders(
       targetSelector: required(literal("chosenFoe")),
       nonOngoingCleanupDestination: optional(literal("ownerDiscard")),
       ongoingOwnership: optional(literal("controller")),
+      ongoingCleanupDestination: optional(literal("ownerDiscard")),
     }),
     topdeck_gained_card: defineDecoder("topdeck_gained_card", {
       effectId: required(literal("topdeck_gained_card")),
@@ -769,7 +771,7 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler<
     };
     const playedResult = services.playResolvedCard(state, player, card, {
       nonOngoingDestination: ownerDiscardDestination,
-      ...(source.sourceType === "wizardProperty"
+      ...(effect.ongoingCleanupDestination === "ownerDiscard"
         ? { forceOngoingDiscard: ownerDiscardDestination }
         : { ongoingOwnerId: player.playerId }),
     });

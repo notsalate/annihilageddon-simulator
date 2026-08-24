@@ -31,7 +31,8 @@
                   "conditionId": "control_count",
                   "cardTypes": ["wizardCard", "spell"],
                   "minimumCount": 2
-                }
+                },
+                "ongoingCleanupDestination": "ownerDiscard"
               }
             }
           ],
@@ -58,7 +59,8 @@
                   "conditionId": "control_count",
                   "cardTypes": ["wizardCard", "spell"],
                   "minimumCount": 2
-                }
+                },
+                "ongoingCleanupDestination": "ownerDiscard"
               }
             }
           ],
@@ -85,7 +87,8 @@
                   "conditionId": "control_count",
                   "cardTypes": ["wizardCard", "spell"],
                   "minimumCount": 2
-                }
+                },
+                "ongoingCleanupDestination": "ownerDiscard"
               }
             }
           ],
@@ -112,7 +115,8 @@
                   "conditionId": "control_count",
                   "cardTypes": ["wizardCard", "spell"],
                   "minimumCount": 2
-                }
+                },
+                "ongoingCleanupDestination": "ownerDiscard"
               }
             }
           ],
@@ -139,7 +143,8 @@
                   "conditionId": "control_count",
                   "cardTypes": ["wizardCard", "spell"],
                   "minimumCount": 2
-                }
+                },
+                "ongoingCleanupDestination": "ownerDiscard"
               }
             }
           ],
@@ -166,7 +171,8 @@
                   "conditionId": "control_count",
                   "cardTypes": ["wizardCard", "spell"],
                   "minimumCount": 2
-                }
+                },
+                "ongoingCleanupDestination": "ownerDiscard"
               }
             }
           ],

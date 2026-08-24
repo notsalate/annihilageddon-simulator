@@ -12692,12 +12692,26 @@ test("ЖДК 001 считает реальные и fixture-легенды в с
   const effectiveLegendDefinition = createFixtureCardDefinition(
     "fixture-dwt001-effective-legend",
     [],
-    { cardTypes: ["legend"] }
+    { cardTypes: ["familiar"] }
+  );
+  const effectiveLegendProperty = createEffectiveCardTypeWizardProperty(
+    "fixture-dwt001-effective-legend-property",
+    "familiar",
+    "legend"
   );
   state.cardDefinitions = new Map([
     ...state.cardDefinitions,
     [effectiveLegendDefinition.cardId, effectiveLegendDefinition],
   ]);
+  state.tokenDefinitions = new Map([
+    ...state.tokenDefinitions,
+    [effectiveLegendProperty.tokenId, effectiveLegendProperty],
+  ]);
+  foe.wizardProperties.push({
+    instanceId: markTokenInstanceId("fixture-dwt001-effective-legend-property"),
+    definitionId: markTokenDefinitionId(effectiveLegendProperty.tokenId),
+    ownerId: foe.playerId,
+  });
   const effectiveLegend = createRuntimeCardInstance(
     foe,
     effectiveLegendDefinition.cardId,
