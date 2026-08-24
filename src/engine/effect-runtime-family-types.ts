@@ -4,6 +4,7 @@ import type {
   EffectRuntimeAfterPlayerAttackDamageOperationContext,
   EffectRuntimeControlledPowerOperationContext,
   EffectRuntimeEndTurnDrawModifierOperationContext,
+  EffectRuntimeBasicTrophyChipPayoutSuppressionOperationContext,
   EffectRuntimeHandlerOperationResult,
   EffectRuntimeOnPlayCardOperationContext,
   EffectRuntimeServices,
@@ -47,6 +48,10 @@ export interface EffectRuntimeHandler<
     effect: Effect,
     context: EffectRuntimeEndTurnDrawModifierOperationContext
   ): EffectRuntimeHandlerOperationResult<number>;
+  evaluateBasicTrophyChipPayoutSuppression?(
+    effect: Effect,
+    context: EffectRuntimeBasicTrophyChipPayoutSuppressionOperationContext
+  ): EffectRuntimeHandlerOperationResult<boolean>;
   evaluateControlledPower?(
     effect: Effect,
     context: EffectRuntimeControlledPowerOperationContext

@@ -506,6 +506,12 @@ export interface EffectRuntimeEndTurnDrawModifierOperationContext {
   readonly currentDrawCount: number;
 }
 
+export interface EffectRuntimeBasicTrophyChipPayoutSuppressionOperationContext {
+  readonly state: GameState;
+  readonly controller: PlayerState;
+  readonly source: EffectSourceContext;
+}
+
 export interface EffectRuntimeControlledPowerOperationContext {
   readonly state: GameState;
   readonly controller: PlayerState;
@@ -558,6 +564,10 @@ export interface EffectRuntimeCatalogOperationOverridesForTesting<
     effect: RuntimeEffectForId<Id>,
     context: EffectRuntimeEndTurnDrawModifierOperationContext
   ) => EffectRuntimeHandlerOperationResult<number>;
+  readonly evaluateBasicTrophyChipPayoutSuppression?: (
+    effect: RuntimeEffectForId<Id>,
+    context: EffectRuntimeBasicTrophyChipPayoutSuppressionOperationContext
+  ) => EffectRuntimeHandlerOperationResult<boolean>;
   readonly evaluateControlledPower?: (
     effect: RuntimeEffectForId<Id>,
     context: EffectRuntimeControlledPowerOperationContext
@@ -645,6 +655,11 @@ interface EffectRuntimeEntry<
     effect: VerifiedRuntimeEffectForId<EffectId>,
     context: EffectRuntimeEndTurnDrawModifierOperationContext
   ): EffectRuntimeOperationResult<number>;
+  evaluateBasicTrophyChipPayoutSuppressionVerified(
+    subjectId: string,
+    effect: VerifiedRuntimeEffectForId<EffectId>,
+    context: EffectRuntimeBasicTrophyChipPayoutSuppressionOperationContext
+  ): EffectRuntimeOperationResult<boolean>;
   evaluateControlledPowerVerified(
     subjectId: string,
     effect: VerifiedRuntimeEffectForId<EffectId>,
@@ -1004,6 +1019,24 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
           return evaluateEndTurnDrawModifier === undefined
             ? { status: "notApplicable" }
             : evaluateEndTurnDrawModifier(effect, context);
+        },
+      });
+    },
+    evaluateBasicTrophyChipPayoutSuppressionVerified(
+      subjectId,
+      effect,
+      context
+    ) {
+      return evaluateAtTimingVerified(subjectId, effect, {
+        source: context.source,
+        timing: "whileControlled",
+        evaluate(effect) {
+          const evaluateSuppression =
+            operationOverrides?.evaluateBasicTrophyChipPayoutSuppression ??
+            config.handler.evaluateBasicTrophyChipPayoutSuppression;
+          return evaluateSuppression === undefined
+            ? { status: "notApplicable" }
+            : evaluateSuppression(effect, context);
         },
       });
     },
@@ -2403,6 +2436,19 @@ export function evaluateRuntimeEffectEndTurnDrawModifier(
   return getVerifiedEffectRuntimeCatalogEntry(
     effect
   ).evaluateEndTurnDrawModifierVerified(
+    `Effect ${effect.effectId}`,
+    effect,
+    context
+  );
+}
+
+export function evaluateRuntimeEffectBasicTrophyChipPayoutSuppression(
+  effect: VerifiedRuntimeEffect,
+  context: EffectRuntimeBasicTrophyChipPayoutSuppressionOperationContext
+): EffectRuntimeOperationResult<boolean> {
+  return getVerifiedEffectRuntimeCatalogEntry(
+    effect
+  ).evaluateBasicTrophyChipPayoutSuppressionVerified(
     `Effect ${effect.effectId}`,
     effect,
     context

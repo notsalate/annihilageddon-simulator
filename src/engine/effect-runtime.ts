@@ -51,6 +51,7 @@ import {
   type EffectChoiceResolution,
   type EffectRuntimeHandlerOperationResult,
   evaluateRuntimeEffectAtTiming,
+  evaluateRuntimeEffectBasicTrophyChipPayoutSuppression,
   executeRuntimeEffect,
   executeRuntimeEffectAtTiming,
   resolveResurrectionLifeTotal,
@@ -1005,14 +1006,9 @@ export function isBasicTrophyChipPayoutSuppressed(
       tokenDefinitionId: definition.tokenId,
     };
     for (const effect of definition.effects) {
-      const result = evaluateRuntimeEffectAtTiming(
+      const result = evaluateRuntimeEffectBasicTrophyChipPayoutSuppression(
         requireVerifiedRuntimeEffect(effect),
-        source,
-        "whileControlled",
-        (decodedEffect) =>
-          decodedEffect.effectId === "suppress_basic_trophy_chip_payout"
-            ? { status: "resolved", result: true }
-            : { status: "notApplicable" }
+        { state, controller: player, source }
       );
       if (result.status === "error") {
         throw new Error(result.error);

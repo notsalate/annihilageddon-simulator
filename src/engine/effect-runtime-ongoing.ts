@@ -62,10 +62,6 @@ export interface OngoingFirstAttackDamageAddPowerRuntimeEffect extends TimedEffe
 }
 export interface OngoingHandRefillBonusRuntimeEffect
   extends TimedEffect<"ongoing_hand_refill_bonus", "endTurn">, PositiveAmount {}
-export interface SuppressBasicTrophyChipPayoutRuntimeEffect extends TimedEffect<
-  "suppress_basic_trophy_chip_payout",
-  "whileControlled"
-> {}
 export type OngoingStartTurnOptionalGainLimpWandToHandRuntimeEffect =
   TimedEffect<
     "ongoing_start_turn_optional_gain_limp_wand_to_hand",
@@ -83,7 +79,6 @@ export interface OngoingEffectPayloadMap {
   ongoing_add_power_when_playing_limp_wand: OngoingAddPowerWhenPlayingLimpWandRuntimeEffect;
   ongoing_first_attack_damage_add_power: OngoingFirstAttackDamageAddPowerRuntimeEffect;
   ongoing_hand_refill_bonus: OngoingHandRefillBonusRuntimeEffect;
-  suppress_basic_trophy_chip_payout: SuppressBasicTrophyChipPayoutRuntimeEffect;
   ongoing_start_turn_optional_gain_limp_wand_to_hand: OngoingStartTurnOptionalGainLimpWandToHandRuntimeEffect;
 }
 
@@ -95,7 +90,6 @@ export type OngoingEffectId =
   | "ongoing_add_power_when_playing_limp_wand"
   | "ongoing_first_attack_damage_add_power"
   | "ongoing_hand_refill_bonus"
-  | "suppress_basic_trophy_chip_payout"
   | "ongoing_start_turn_optional_gain_limp_wand_to_hand";
 
 export const ongoingEffectIds = [
@@ -105,7 +99,6 @@ export const ongoingEffectIds = [
   "ongoing_add_power_when_playing_limp_wand",
   "ongoing_first_attack_damage_add_power",
   "ongoing_hand_refill_bonus",
-  "suppress_basic_trophy_chip_payout",
   "ongoing_start_turn_optional_gain_limp_wand_to_hand",
 ] as const satisfies readonly OngoingEffectId[];
 
@@ -189,13 +182,6 @@ export function createOngoingEffectDecoders(
       timing: required(literal("endTurn")),
       amount: required(positiveInteger),
     }),
-    suppress_basic_trophy_chip_payout: defineDecoder(
-      "suppress_basic_trophy_chip_payout",
-      {
-        effectId: required(literal("suppress_basic_trophy_chip_payout")),
-        timing: required(literal("whileControlled")),
-      }
-    ),
     ongoing_start_turn_optional_gain_limp_wand_to_hand: defineDecoder(
       "ongoing_start_turn_optional_gain_limp_wand_to_hand",
       {
@@ -399,18 +385,6 @@ const ongoingHandRefillBonusHandler: EffectRuntimeHandler<
   },
 };
 
-const suppressBasicTrophyChipPayoutHandler: EffectRuntimeHandler<
-  RuntimeEffectForId<"suppress_basic_trophy_chip_payout">
-> = {
-  effectId: "suppress_basic_trophy_chip_payout",
-  execute() {
-    return {
-      ok: false,
-      error: "suppress_basic_trophy_chip_payout is a passive controlled effect",
-    };
-  },
-};
-
 export interface OngoingCatalogTools {
   bindRuntimeEffectDecoder<Id extends OngoingEffectId>(
     effectId: Id
@@ -505,16 +479,6 @@ export function createOngoingEffectDefinitions(tools: OngoingCatalogTools) {
       supportedModes,
       supportedSourceKinds,
       handler: ongoingHandRefillBonusHandler,
-    },
-    {
-      effectId: "suppress_basic_trophy_chip_payout",
-      decoder: bindRuntimeEffectDecoder("suppress_basic_trophy_chip_payout"),
-      supportedTimings: ["whileControlled"] as const,
-      supportedModes,
-      supportedSourceKinds: [
-        "deadWizardToken",
-      ] as const satisfies EffectRuntimeSupportedSourceKinds,
-      handler: suppressBasicTrophyChipPayoutHandler,
     },
     {
       effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand",

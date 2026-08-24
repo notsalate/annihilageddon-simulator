@@ -53,7 +53,6 @@ export type {
   OngoingEffectPayloadMap,
   OngoingFirstAttackDamageAddPowerRuntimeEffect,
   OngoingHandRefillBonusRuntimeEffect,
-  SuppressBasicTrophyChipPayoutRuntimeEffect,
   OngoingStartTurnOptionalGainLimpWandToHandRuntimeEffect,
 } from "./effect-runtime-ongoing.js";
 export type {
@@ -76,6 +75,7 @@ export type {
   DeadWizardTokenKillerOptionalRemoveDinglerRuntimeEffect,
   DeadWizardTokenLoseHalfChipsRuntimeEffect,
   DeadWizardTokenRewardKillerChipsRuntimeEffect,
+  DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect,
 } from "./effect-runtime-dead-wizard-token.js";
 
 export const effectTimings = [
