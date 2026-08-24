@@ -466,7 +466,7 @@ test("cross-source coverage applies complete evidence to cards", () => {
   writeJson(
     rootDir,
     `data/import/cards/main/drafts/${cardId}.json`,
-    createCardDraft(cardId, { textRu })
+    createCardDraft(cardId, { textRu, markers: ["ongoing"] })
   );
   writeJson(rootDir, `data/cards/main/${cardId}.json`, {
     schemaVersion: 1,
@@ -480,6 +480,7 @@ test("cross-source coverage applies complete evidence to cards", () => {
       cardTypes: ["spell"],
       cost: 3,
       victoryPoints: 1,
+      isOngoing: true,
       effects: [{ effectId: "gain_chips", timing: "onPlay", amount: 1 }],
       unsupportedMechanics: [],
     },
@@ -564,6 +565,18 @@ test("cross-source coverage applies complete evidence to cards", () => {
               },
             ],
           },
+          {
+            draftPoint: { path: "visible.markers", value: ["ongoing"] },
+            runtimeRefs: [
+              { kind: "field", path: "engine.isOngoing", value: true },
+            ],
+            testRefs: [
+              {
+                file: "tests/card-runtime.test.ts",
+                name: "gains a chip from the mapped card",
+              },
+            ],
+          },
         ],
         unresolvedMechanics: [],
       },
@@ -604,6 +617,11 @@ test("cross-source coverage applies complete evidence to cards", () => {
   assert.ok(
     itemWithoutCostMapping.crossSourceBlockers.includes(
       "unmapped canonical draft point: visible.cost"
+    )
+  );
+  assert.ok(
+    itemWithoutCostMapping.crossSourceBlockers.includes(
+      "unmapped canonical draft point: visible.markers"
     )
   );
 });

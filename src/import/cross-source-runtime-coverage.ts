@@ -484,6 +484,10 @@ function collectDraftSemanticPoints(draft: unknown): CrossSourceDraftPoint[] {
       points.push({ path: `visible.${field}`, value });
     }
   }
+  const markers = getRuntimeValue(visible["markers"]);
+  if (Array.isArray(markers) && markers.length > 0) {
+    points.push({ path: "visible.markers", value: markers });
+  }
   const notes = Array.isArray(record["notes"]) ? record["notes"] : [];
   notes.forEach((note, index) => {
     if (typeof note === "string" && note.trim() !== "") {

@@ -289,7 +289,7 @@ Runtime JSON должен быть самодостаточным для engine.
 `crossSourceComplete` возможен только когда:
 
 - отсутствуют `unresolvedMechanics`;
-- каждое значимое напечатанное поле canonical draft (стоимость, VP, card kind/types, текст) и каждый note сопоставлены с runtime effect (включая проверяемые поля payload) либо runtime field и именованным test case;
+- каждое значимое напечатанное поле canonical draft (стоимость, VP, card kind/types, markers, текст) и каждый note сопоставлены с runtime effect (включая проверяемые поля payload) либо runtime field и именованным test case;
 - runtime definition имеет effects, проходит policy `sourceKind × timing` и включён в правильный stack с canonical количеством;
 - runtime reference и test reference существуют.
 
