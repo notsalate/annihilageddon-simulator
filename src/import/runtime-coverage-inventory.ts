@@ -9,6 +9,13 @@ import {
 import path from "node:path";
 
 import { isPlainRecord } from "../common.js";
+import {
+  evaluateCrossSourceCoverage,
+  hasAppropriateRuntimeComposition,
+  readCrossSourceCoveragePlan,
+  type CrossSourceCoveragePlanEntry,
+} from "./cross-source-runtime-coverage.js";
+import { createCardRuntimeClusterReport } from "./card-runtime-clusters.js";
 
 export type RuntimeCoverageStatus =
   | "missingRuntime"
@@ -21,6 +28,14 @@ export type RuntimeCoverageObjectKind =
   | "card"
   | "wizardProperty"
   | "deadWizardToken";
+
+export type CardCompletionStatus =
+  | "cardComplete"
+  | "missingRuntime"
+  | "unavailable"
+  | "notApplicable";
+
+export type CrossSourceCoverageStatus = "blocked" | "crossSourceComplete";
 
 export interface RuntimeCoverageInventoryItem {
   id: string;
@@ -39,6 +54,10 @@ export interface RuntimeCoverageInventoryItem {
   mechanicSignals: string[];
   suspectedBlockers: string[];
   focusedTestRefs: string[];
+  cardCompletion: CardCompletionStatus;
+  crossSourceStatus: CrossSourceCoverageStatus;
+  primaryMechanicCluster: string | undefined;
+  crossSourceBlockers: string[];
 }
 
 export interface RuntimeCoverageMechanicCluster {
@@ -55,6 +74,11 @@ export interface RuntimeCoverageInventory {
   clusters: RuntimeCoverageMechanicCluster[];
   recommendedNextIssueOrder: string[];
   summary: Record<RuntimeCoverageStatus, number>;
+  crossSourceSummary: Record<
+    CrossSourceCoverageStatus | "cardComplete" | "missingRuntime",
+    number
+  >;
+  crossSourceIntegrityBlockers: string[];
   generatedAt: string;
 }
 
@@ -69,6 +93,7 @@ interface CompositionMembership {
   label: string;
   role: string | undefined;
   entryKind: "card" | "token";
+  count: number | undefined;
 }
 
 const draftSources: DraftSourceConfig[] = [
@@ -122,6 +147,8 @@ export function createRuntimeCoverageInventory(
   const runtimeById = collectRuntimeObjects(rootDir);
   const compositionsById = collectCompositionMembership(rootDir);
   const focusedTestRefsById = collectFocusedTestRefs(rootDir);
+  const crossSourcePlan = readCrossSourceCoveragePlan(rootDir);
+  const cardCompletionById = collectCardCompletionById(rootDir);
   const items = draftSources
     .flatMap((source) =>
       collectDraftItems(
@@ -129,18 +156,26 @@ export function createRuntimeCoverageInventory(
         source,
         runtimeById,
         compositionsById,
-        focusedTestRefsById
+        focusedTestRefsById,
+        crossSourcePlan,
+        cardCompletionById
       )
     )
     .sort((left, right) => left.id.localeCompare(right.id));
   const clusters = createMechanicClusters(items);
   const summary = summarizeStatuses(items);
+  const crossSourceIntegrityBlockers = collectCrossSourceIntegrityBlockers(
+    runtimeById,
+    compositionsById
+  );
 
   return {
     items,
     clusters,
     recommendedNextIssueOrder: clusters.map((cluster) => cluster.clusterId),
     summary,
+    crossSourceSummary: summarizeCrossSourceStatuses(items),
+    crossSourceIntegrityBlockers,
     generatedAt: new Date().toISOString(),
   };
 }
@@ -168,6 +203,21 @@ export function formatRuntimeCoverageInventoryMarkdown(
     lines.push(`- ${status}: ${report.summary[status]}`);
   }
 
+  lines.push("", "## Cross-Source Completion", "");
+  for (const status of [
+    "cardComplete",
+    "missingRuntime",
+    "blocked",
+    "crossSourceComplete",
+  ] as const) {
+    lines.push(
+      `- crossSourceStatus: ${status}: ${report.crossSourceSummary[status]}`
+    );
+  }
+  lines.push(
+    `- integrity blockers: ${report.crossSourceIntegrityBlockers.join("; ") || "none"}`
+  );
+
   lines.push("", "## Mechanic Clusters", "");
   for (const cluster of report.clusters) {
     lines.push(`### ${cluster.title}`, "");
@@ -190,9 +240,11 @@ export function formatRuntimeCoverageInventoryMarkdown(
 
   lines.push("", "## Inventory", "");
   lines.push(
-    "| stable ID | object kind | source group/token kind | draft | runtime | composition membership | legacy v0 facts | status | mechanic signals | suspected blockers |"
+    "| stable ID | object kind | source group/token kind | draft | runtime | composition membership | legacy v0 facts | status | card completion | cross-source status | primary mechanic cluster | cross-source blockers | mechanic signals | suspected blockers |"
   );
-  lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+  lines.push(
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+  );
 
   for (const item of report.items) {
     const legacyFacts = [
@@ -218,6 +270,12 @@ export function formatRuntimeCoverageInventoryMarkdown(
           : item.compositionMembership.map(code).join("<br>"),
         legacyFacts || "none",
         item.coverageStatus,
+        item.cardCompletion,
+        item.crossSourceStatus,
+        item.primaryMechanicCluster === undefined
+          ? "none"
+          : code(item.primaryMechanicCluster),
+        item.crossSourceBlockers.join("<br>") || "none",
         item.mechanicSignals.join("<br>") || "none",
         item.suspectedBlockers.join("<br>") || "none",
       ]
@@ -251,7 +309,9 @@ function collectDraftItems(
   source: DraftSourceConfig,
   runtimeById: Map<string, Record<string, unknown>>,
   compositionsById: Map<string, CompositionMembership[]>,
-  focusedTestRefsById: Map<string, string[]>
+  focusedTestRefsById: Map<string, string[]>,
+  crossSourcePlan: Map<string, CrossSourceCoveragePlanEntry>,
+  cardCompletionById: Map<string, CardCompletionStatus>
 ): RuntimeCoverageInventoryItem[] {
   return collectFiles(rootDir, [source.draftDir], ".json").map((draftPath) => {
     const draft = readJson(draftPath);
@@ -272,6 +332,16 @@ function collectDraftItems(
       suspectedBlockers
     );
     const visible = getRecord(getRecord(draft)["visible"]);
+    const crossSource = evaluateCrossSourceCoverage({
+      rootDir,
+      id,
+      objectKind: source.objectKind,
+      sourceGroupOrTokenKind: source.sourceGroupOrTokenKind,
+      draft,
+      runtime,
+      compositionMembership,
+      planEntry: crossSourcePlan.get(id),
+    });
 
     return {
       id,
@@ -302,6 +372,13 @@ function collectDraftItems(
       mechanicSignals,
       suspectedBlockers,
       focusedTestRefs,
+      cardCompletion:
+        source.objectKind === "card"
+          ? (cardCompletionById.get(id) ?? "unavailable")
+          : "notApplicable",
+      crossSourceStatus: crossSource.status,
+      primaryMechanicCluster: crossSource.primaryMechanicCluster,
+      crossSourceBlockers: crossSource.blockers,
     };
   });
 }
@@ -324,6 +401,36 @@ function collectRuntimeObjects(
   }
 
   return runtimeById;
+}
+
+function collectCardCompletionById(
+  rootDir: string
+): Map<string, CardCompletionStatus> {
+  try {
+    return new Map(
+      createCardRuntimeClusterReport(rootDir).items.map((item) => [
+        item.cardId,
+        item.runtimeStatus === "fullRuntime"
+          ? "cardComplete"
+          : "missingRuntime",
+      ])
+    );
+  } catch {
+    return new Map();
+  }
+}
+
+function collectCrossSourceIntegrityBlockers(
+  runtimeById: Map<string, Record<string, unknown>>,
+  compositionsById: Map<string, CompositionMembership[]>
+): string[] {
+  const blockers = new Set<string>();
+  for (const [id, memberships] of compositionsById) {
+    if (memberships.length > 0 && !runtimeById.has(id)) {
+      blockers.add(`composition reference has no runtime definition: ${id}`);
+    }
+  }
+  return Array.from(blockers).sort();
 }
 
 function collectCompositionMembership(
@@ -356,6 +463,7 @@ function collectCompositionMembership(
         label,
         role,
         entryKind: cardId === undefined ? "token" : "card",
+        count: getNumber(record["count"]),
       });
       memberships.set(id, current);
     }
@@ -385,6 +493,7 @@ function collectCompositionMembership(
         label: `replacement:${tokenId}`,
         role: "starterReplacement",
         entryKind: "card",
+        count: 1,
       });
       memberships.set(toDefinitionId, current);
     }
@@ -702,51 +811,43 @@ function summarizeStatuses(
   return summary;
 }
 
+function summarizeCrossSourceStatuses(
+  items: RuntimeCoverageInventoryItem[]
+): Record<
+  CrossSourceCoverageStatus | "cardComplete" | "missingRuntime",
+  number
+> {
+  const summary: Record<
+    CrossSourceCoverageStatus | "cardComplete" | "missingRuntime",
+    number
+  > = {
+    cardComplete: 0,
+    missingRuntime: 0,
+    blocked: 0,
+    crossSourceComplete: 0,
+  };
+
+  for (const item of items) {
+    if (item.cardCompletion === "cardComplete") {
+      summary.cardComplete += 1;
+    } else if (item.cardCompletion === "missingRuntime") {
+      summary.missingRuntime += 1;
+    }
+    summary[item.crossSourceStatus] += 1;
+  }
+
+  return summary;
+}
+
 function hasAppropriateComposition(
   source: DraftSourceConfig,
   compositionMembership: CompositionMembership[]
 ): boolean {
-  if (compositionMembership.length === 0) {
-    return false;
-  }
-
-  return compositionMembership.some((membership) => {
-    if (source.objectKind === "deadWizardToken") {
-      return (
-        membership.entryKind === "token" &&
-        membership.role === "deadWizardTokens"
-      );
-    }
-    if (source.objectKind === "wizardProperty") {
-      return (
-        membership.entryKind === "token" &&
-        membership.role === "wizardProperties"
-      );
-    }
-    if (source.sourceGroupOrTokenKind === "main") {
-      return membership.role === "mainDeck";
-    }
-    if (source.sourceGroupOrTokenKind === "legend") {
-      return membership.role === "legendDeck";
-    }
-    if (source.sourceGroupOrTokenKind === "starter") {
-      return (
-        membership.role === "starterDeck" ||
-        membership.role === "starterDeckTemplate" ||
-        membership.role === "starterReplacement"
-      );
-    }
-    if (source.sourceGroupOrTokenKind === "familiar") {
-      return membership.role === "familiarPool";
-    }
-    if (source.sourceGroupOrTokenKind === "special") {
-      return (
-        membership.role === "limpWandStack" ||
-        membership.role === "wildMagicStack"
-      );
-    }
-    return false;
-  });
+  return hasAppropriateRuntimeComposition(
+    source.objectKind,
+    source.sourceGroupOrTokenKind,
+    compositionMembership
+  );
 }
 
 function isWandAttackCandidate(
@@ -871,6 +972,12 @@ function getString(value: unknown): string | undefined {
 
 function getBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function getNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function getStringArray(value: unknown): string[] {

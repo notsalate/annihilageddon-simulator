@@ -106,6 +106,8 @@ export {
   writeCardRuntimeClusterMatrix,
 } from "./import/card-runtime-clusters.js";
 export type {
+  CardCompletionStatus,
+  CrossSourceCoverageStatus,
   RuntimeCoverageInventory,
   RuntimeCoverageInventoryItem,
   RuntimeCoverageMechanicCluster,

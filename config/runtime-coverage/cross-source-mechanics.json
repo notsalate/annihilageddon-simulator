@@ -1,0 +1,347 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "esw2_dbg__wizard_property_001",
+      "objectKind": "wizardProperty",
+      "primaryMechanicCluster": "dingler-status",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in dingler-status"
+      ]
+    },
+    {
+      "id": "esw2_dbg__wizard_property_002",
+      "objectKind": "wizardProperty",
+      "primaryMechanicCluster": "special-card-stack",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in special-card-stack"
+      ]
+    },
+    {
+      "id": "esw2_dbg__wizard_property_003",
+      "objectKind": "wizardProperty",
+      "primaryMechanicCluster": "ongoing-modifiers",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in ongoing-modifiers"
+      ]
+    },
+    {
+      "id": "esw2_dbg__wizard_property_004",
+      "objectKind": "wizardProperty",
+      "primaryMechanicCluster": "market-effects",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "focused runtime evidence pending in market-effects"
+      ]
+    },
+    {
+      "id": "esw2_dbg__wizard_property_005",
+      "objectKind": "wizardProperty",
+      "primaryMechanicCluster": "activation-effects",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in activation-effects"
+      ]
+    },
+    {
+      "id": "esw2_dbg__wizard_property_006",
+      "objectKind": "wizardProperty",
+      "primaryMechanicCluster": "card-movement",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in card-movement"
+      ]
+    },
+    {
+      "id": "esw2_dbg__wizard_property_007",
+      "objectKind": "wizardProperty",
+      "primaryMechanicCluster": "ongoing-modifiers",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in ongoing-modifiers"
+      ]
+    },
+    {
+      "id": "esw2_dbg__wizard_property_008",
+      "objectKind": "wizardProperty",
+      "primaryMechanicCluster": "ongoing-modifiers",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in ongoing-modifiers"
+      ]
+    },
+    {
+      "id": "esw2_dbg__wizard_property_009",
+      "objectKind": "wizardProperty",
+      "primaryMechanicCluster": "attack-effects",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in attack-effects"
+      ]
+    },
+    {
+      "id": "esw2_dbg__wizard_property_010",
+      "objectKind": "wizardProperty",
+      "primaryMechanicCluster": "life-total-effects",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in life-total-effects"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_001",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "special-card-stack",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in special-card-stack"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_002",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "scoring-effects",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in scoring-effects"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_003",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "scoring-effects",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in scoring-effects"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_005",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "activation-effects",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in activation-effects"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_006",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "card-movement",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in card-movement"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_007",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "dingler-status",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in dingler-status"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_008",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "card-movement",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in card-movement"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_009",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "special-card-stack",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in special-card-stack"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_010",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "card-movement",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in card-movement"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_011",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "attack-effects",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in attack-effects"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_012",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "chipsin-economy",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in chipsin-economy"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_013",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "life-total-effects",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in life-total-effects"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_014",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "life-total-effects",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in life-total-effects"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_015",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "chipsin-economy",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in chipsin-economy"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_016",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "ongoing-modifiers",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in ongoing-modifiers"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_017",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "chipsin-economy",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in chipsin-economy"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_018",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "special-card-stack",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in special-card-stack"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_019",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "life-total-effects",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in life-total-effects"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_020",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "ongoing-modifiers",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in ongoing-modifiers"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_021",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "chipsin-economy",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in chipsin-economy"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_022",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "dwt-interactions",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in dwt-interactions"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_023",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "dwt-interactions",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in dwt-interactions"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_024",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "card-movement",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in card-movement"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_025",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "life-total-effects",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in life-total-effects"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_026",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "dingler-status",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in dingler-status"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_027",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "dingler-status",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in dingler-status"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_028",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "dingler-status",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in dingler-status"
+      ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_029",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "scoring-effects",
+      "semanticMappings": [],
+      "unresolvedMechanics": [
+        "runtime and focused-test mapping pending in scoring-effects"
+      ]
+    }
+  ]
+}
