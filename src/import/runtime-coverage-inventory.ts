@@ -34,10 +34,7 @@ export type CardCompletionStatus =
   | "unavailable"
   | "notApplicable";
 
-export type CrossSourceCoverageStatus =
-  | "notTracked"
-  | "blocked"
-  | "crossSourceComplete";
+export type CrossSourceCoverageStatus = "blocked" | "crossSourceComplete";
 
 export interface RuntimeCoverageInventoryItem {
   id: string;
@@ -209,7 +206,6 @@ export function formatRuntimeCoverageInventoryMarkdown(
   for (const status of [
     "cardComplete",
     "missingRuntime",
-    "notTracked",
     "blocked",
     "crossSourceComplete",
   ] as const) {
@@ -335,22 +331,16 @@ function collectDraftItems(
       suspectedBlockers
     );
     const visible = getRecord(getRecord(draft)["visible"]);
-    const crossSource =
-      source.objectKind === "card"
-        ? {
-            status: "notTracked" as const,
-            primaryMechanicCluster: undefined,
-            blockers: [],
-          }
-        : evaluateCrossSourceCoverage({
-            rootDir,
-            id,
-            objectKind: source.objectKind,
-            draft,
-            runtime,
-            compositionMembership,
-            planEntry: crossSourcePlan.get(id),
-          });
+    const crossSource = evaluateCrossSourceCoverage({
+      rootDir,
+      id,
+      objectKind: source.objectKind,
+      sourceGroupOrTokenKind: source.sourceGroupOrTokenKind,
+      draft,
+      runtime,
+      compositionMembership,
+      planEntry: crossSourcePlan.get(id),
+    });
 
     return {
       id,
@@ -838,21 +828,15 @@ function summarizeCrossSourceStatuses(
   > = {
     cardComplete: 0,
     missingRuntime: 0,
-    notTracked: 0,
     blocked: 0,
     crossSourceComplete: 0,
   };
 
   for (const item of items) {
-    if (item.objectKind === "card") {
-      if (item.cardCompletion === "cardComplete") {
-        summary.cardComplete += 1;
-      } else if (item.cardCompletion === "missingRuntime") {
-        summary.missingRuntime += 1;
-      } else {
-        summary.notTracked += 1;
-      }
-      continue;
+    if (item.cardCompletion === "cardComplete") {
+      summary.cardComplete += 1;
+    } else if (item.cardCompletion === "missingRuntime") {
+      summary.missingRuntime += 1;
     }
     summary[item.crossSourceStatus] += 1;
   }

@@ -5,7 +5,10 @@ import { isPlainRecord } from "../common.js";
 import { validateRuntimeEffectCatalogPayload } from "../engine/effect-runtime-registry.js";
 import { isRuntimeEffectId } from "../engine/runtime-effect.js";
 
-export type CrossSourceObjectKind = "wizardProperty" | "deadWizardToken";
+export type CrossSourceObjectKind =
+  | "card"
+  | "wizardProperty"
+  | "deadWizardToken";
 
 export type CrossSourceCoverageStatus = "blocked" | "crossSourceComplete";
 
@@ -28,10 +31,30 @@ export interface CrossSourceDraftPoint {
   value: string | number;
 }
 
-export interface CrossSourceRuntimeRef {
+type CrossSourceRuntimeValue =
+  | null
+  | string
+  | number
+  | boolean
+  | CrossSourceRuntimeValue[]
+  | { [key: string]: CrossSourceRuntimeValue };
+
+export interface CrossSourceEffectRuntimeRef {
+  kind: "effect";
   effectId: string;
   timing: string;
+  fields: Record<string, CrossSourceRuntimeValue>;
 }
+
+export interface CrossSourceFieldRuntimeRef {
+  kind: "field";
+  path: string;
+  value: CrossSourceRuntimeValue;
+}
+
+export type CrossSourceRuntimeRef =
+  | CrossSourceEffectRuntimeRef
+  | CrossSourceFieldRuntimeRef;
 
 export interface CrossSourceTestRef {
   file: string;
@@ -78,6 +101,7 @@ export function evaluateCrossSourceCoverage(input: {
   rootDir: string;
   id: string;
   objectKind: CrossSourceObjectKind;
+  sourceGroupOrTokenKind: string;
   draft: unknown;
   runtime: Record<string, unknown> | undefined;
   compositionMembership: CrossSourceCompositionMembership[];
@@ -138,6 +162,50 @@ export function evaluateCrossSourceCoverage(input: {
     primaryMechanicCluster: planEntry.primaryMechanicCluster,
     blockers: Array.from(blockers).sort(),
   };
+}
+
+export function hasAppropriateRuntimeComposition(
+  objectKind: CrossSourceObjectKind,
+  sourceGroupOrTokenKind: string,
+  compositionMembership: readonly CrossSourceCompositionMembership[]
+): boolean {
+  return compositionMembership.some((membership) => {
+    if (objectKind === "deadWizardToken") {
+      return (
+        membership.entryKind === "token" &&
+        membership.role === "deadWizardTokens"
+      );
+    }
+    if (objectKind === "wizardProperty") {
+      return (
+        membership.entryKind === "token" &&
+        membership.role === "wizardProperties"
+      );
+    }
+    if (sourceGroupOrTokenKind === "main") {
+      return membership.role === "mainDeck";
+    }
+    if (sourceGroupOrTokenKind === "legend") {
+      return membership.role === "legendDeck";
+    }
+    if (sourceGroupOrTokenKind === "starter") {
+      return (
+        membership.role === "starterDeck" ||
+        membership.role === "starterDeckTemplate" ||
+        membership.role === "starterReplacement"
+      );
+    }
+    if (sourceGroupOrTokenKind === "familiar") {
+      return membership.role === "familiarPool";
+    }
+    if (sourceGroupOrTokenKind === "special") {
+      return (
+        membership.role === "limpWandStack" ||
+        membership.role === "wildMagicStack"
+      );
+    }
+    return false;
+  });
 }
 
 function decodePlanEntry(
@@ -211,11 +279,22 @@ function decodeDraftPoint(value: unknown): CrossSourceDraftPoint | undefined {
 
 function decodeRuntimeRef(value: unknown): CrossSourceRuntimeRef | undefined {
   const record = getRecord(value);
+  if (record["kind"] === "field") {
+    const path = getString(record["path"]);
+    const fieldValue = getRuntimeValue(record["value"]);
+    return path === undefined || fieldValue === undefined
+      ? undefined
+      : { kind: "field", path, value: fieldValue };
+  }
+  if (record["kind"] !== "effect") {
+    return undefined;
+  }
   const effectId = getString(record["effectId"]);
   const timing = getString(record["timing"]);
-  return effectId === undefined || timing === undefined
+  const fields = getRuntimeReferenceFields(record["fields"]);
+  return effectId === undefined || timing === undefined || fields === undefined
     ? undefined
-    : { effectId, timing };
+    : { kind: "effect", effectId, timing, fields };
 }
 
 function decodeTestRef(value: unknown): CrossSourceTestRef | undefined {
@@ -247,16 +326,36 @@ function validateSemanticMapping(
 
   const effects = getRawRuntimeEffects(input.runtime);
   for (const runtimeRef of mapping.runtimeRefs) {
-    const found = effects.some((effect) => {
+    if (runtimeRef.kind === "field") {
+      const actualValue = getRuntimeFieldValue(input.runtime, runtimeRef.path);
+      if (!matchesRuntimeValue(actualValue, runtimeRef.value)) {
+        blockers.add(
+          `runtime field ${runtimeRef.path} does not match ${JSON.stringify(runtimeRef.value)} for canonical draft point ${mapping.draftPoint.path}`
+        );
+      }
+      continue;
+    }
+
+    const matchingEffects = effects.filter((effect) => {
       const record = getRecord(effect);
       return (
         record["effectId"] === runtimeRef.effectId &&
         record["timing"] === runtimeRef.timing
       );
     });
-    if (!found) {
+    if (matchingEffects.length === 0) {
       blockers.add(
         `runtime effect ${runtimeRef.effectId}@${runtimeRef.timing} is missing for canonical draft point ${mapping.draftPoint.path}`
+      );
+      continue;
+    }
+    if (
+      !matchingEffects.some((effect) =>
+        hasExpectedRuntimeFields(getRecord(effect), runtimeRef.fields)
+      )
+    ) {
+      blockers.add(
+        `runtime effect ${runtimeRef.effectId}@${runtimeRef.timing} has mismatched fields for canonical draft point ${mapping.draftPoint.path}`
       );
     }
   }
@@ -272,6 +371,7 @@ function validateSemanticMapping(
 function validateComposition(
   input: {
     objectKind: CrossSourceObjectKind;
+    sourceGroupOrTokenKind: string;
     draft: unknown;
     compositionMembership: CrossSourceCompositionMembership[];
   },
@@ -282,11 +382,11 @@ function validateComposition(
   );
   const appropriateMemberships = input.compositionMembership.filter(
     (membership) =>
-      membership.entryKind === "token" &&
-      membership.role ===
-        (input.objectKind === "deadWizardToken"
-          ? "deadWizardTokens"
-          : "wizardProperties")
+      hasAppropriateRuntimeComposition(
+        input.objectKind,
+        input.sourceGroupOrTokenKind,
+        [membership]
+      )
   );
   if (appropriateMemberships.length === 0) {
     blockers.add("missing appropriate deck/stack/pool composition membership");
@@ -325,7 +425,16 @@ function validateRuntime(
     blockers.add("missing runtime mapping");
     return;
   }
-  if (getString(input.runtime["kind"]) !== input.objectKind) {
+  if (
+    input.objectKind === "card" &&
+    getString(input.runtime["cardId"]) !== input.id
+  ) {
+    blockers.add("runtime card ID does not match canonical card ID");
+  }
+  if (
+    input.objectKind !== "card" &&
+    getString(input.runtime["kind"]) !== input.objectKind
+  ) {
     blockers.add(
       `runtime kind ${getString(input.runtime["kind"]) ?? "missing"} does not match ${input.objectKind}`
     );
@@ -394,6 +503,27 @@ function getRawRuntimeEffects(
   return Array.isArray(engineEffects) ? engineEffects : [];
 }
 
+function hasExpectedRuntimeFields(
+  effect: Record<string, unknown>,
+  expectedFields: Record<string, CrossSourceRuntimeValue>
+): boolean {
+  return Object.entries(expectedFields).every(([fieldName, expectedValue]) =>
+    matchesRuntimeValue(effect[fieldName], expectedValue)
+  );
+}
+
+function getRuntimeFieldValue(
+  runtime: Record<string, unknown> | undefined,
+  fieldPath: string
+): unknown {
+  if (!/^[a-zA-Z][a-zA-Z0-9]*(?:\.[a-zA-Z][a-zA-Z0-9]*)*$/.test(fieldPath)) {
+    return undefined;
+  }
+  return fieldPath.split(".").reduce<unknown>((value, segment) => {
+    return getRecord(value)[segment];
+  }, runtime);
+}
+
 function hasFocusedTestReference(
   rootDir: string,
   id: string,
@@ -411,12 +541,35 @@ function hasFocusedTestReference(
     return false;
   }
   const text = readFileSync(absolutePath, "utf8");
+  const testBody = findNamedTestBody(text, testRef.name);
   return (
-    text.includes(id) &&
-    new RegExp(`\\btest\\s*\\(\\s*(["'])${escapeRegExp(testRef.name)}\\1`).test(
-      text
+    testBody !== undefined &&
+    testBody.includes(id) &&
+    /\bassert\s*\./.test(testBody) &&
+    /\b(applyAction|calculateEffectiveCardCost|calculateEffectiveCardVictoryPoints|calculateEffectivePlayerMaxLife|createRuntimeCoverageInventory|initializeGame|runMarketFlow|scoreGame)\s*\(/.test(
+      testBody
     )
   );
+}
+
+function findNamedTestBody(text: string, name: string): string | undefined {
+  const testStart = new RegExp(
+    `\\btest\\s*\\(\\s*(["'])${escapeRegExp(name)}\\1\\s*,\\s*(?:async\\s*)?\\([^)]*\\)\\s*=>\\s*\\{`,
+    "g"
+  ).exec(text);
+  if (testStart === null) {
+    return undefined;
+  }
+  const bodyStart = testStart.index + testStart[0].length - 1;
+  let depth = 0;
+  for (let index = bodyStart; index < text.length; index += 1) {
+    if (text[index] === "{") depth += 1;
+    if (text[index] === "}") depth -= 1;
+    if (depth === 0) {
+      return text.slice(bodyStart + 1, index);
+    }
+  }
+  return undefined;
 }
 
 function sameDraftPoint(
@@ -433,7 +586,9 @@ function draftPointKey(point: CrossSourceDraftPoint): string {
 function getCrossSourceObjectKind(
   value: unknown
 ): CrossSourceObjectKind | undefined {
-  return value === "wizardProperty" || value === "deadWizardToken"
+  return value === "card" ||
+    value === "wizardProperty" ||
+    value === "deadWizardToken"
     ? value
     : undefined;
 }
@@ -450,6 +605,86 @@ function getNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
+}
+
+function getRuntimeValue(value: unknown): CrossSourceRuntimeValue | undefined {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value))
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    const items: CrossSourceRuntimeValue[] = [];
+    for (const item of value) {
+      const decodedItem = getRuntimeValue(item);
+      if (decodedItem === undefined) {
+        return undefined;
+      }
+      items.push(decodedItem);
+    }
+    return items;
+  }
+  if (!isPlainRecord(value)) {
+    return undefined;
+  }
+  const decoded: Record<string, CrossSourceRuntimeValue> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const decodedItem = getRuntimeValue(item);
+    if (decodedItem === undefined) {
+      return undefined;
+    }
+    decoded[key] = decodedItem;
+  }
+  return decoded;
+}
+
+function getRuntimeReferenceFields(
+  value: unknown
+): Record<string, CrossSourceRuntimeValue> | undefined {
+  const record = getRecord(value);
+  const entries = Object.entries(record);
+  if (entries.length === 0) {
+    return undefined;
+  }
+  const fields: Record<string, CrossSourceRuntimeValue> = {};
+  for (const [fieldName, fieldValue] of entries) {
+    const decodedValue = getRuntimeValue(fieldValue);
+    if (decodedValue === undefined) {
+      return undefined;
+    }
+    fields[fieldName] = decodedValue;
+  }
+  return fields;
+}
+
+function matchesRuntimeValue(
+  actual: unknown,
+  expected: CrossSourceRuntimeValue
+): boolean {
+  if (
+    expected === null ||
+    typeof expected === "string" ||
+    typeof expected === "number" ||
+    typeof expected === "boolean"
+  ) {
+    return actual === expected;
+  }
+  if (Array.isArray(expected)) {
+    return (
+      Array.isArray(actual) &&
+      actual.length === expected.length &&
+      expected.every((item, index) => matchesRuntimeValue(actual[index], item))
+    );
+  }
+  if (!isPlainRecord(actual)) {
+    return false;
+  }
+  return Object.entries(expected).every(([key, value]) =>
+    matchesRuntimeValue(actual[key], value)
+  );
 }
 
 function getStringArray(value: unknown): string[] {

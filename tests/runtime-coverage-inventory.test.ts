@@ -212,7 +212,14 @@ test("cross-source coverage blocks an empty DWT runtime and ignores an ID-only t
               path: "visible.textRu",
               value: "Получи вялую палочку за каждую легенду в сбросе.",
             },
-            runtimeRefs: [{ effectId: "gain_card", timing: "onGain" }],
+            runtimeRefs: [
+              {
+                kind: "effect",
+                effectId: "gain_card",
+                timing: "onGain",
+                fields: { amount: 1 },
+              },
+            ],
             testRefs: [
               {
                 file: "tests/dead-wizard-token-runtime.test.ts",
@@ -228,7 +235,7 @@ test("cross-source coverage blocks an empty DWT runtime and ignores an ID-only t
   writeText(
     rootDir,
     "tests/dead-wizard-token-runtime.test.ts",
-    `const tokenId = "${tokenId}";\ntest("mentions token only", () => tokenId);\n`
+    `const tokenId = "${tokenId}";\ntest("resolves limp wand payout", () => { assert.ok(true); });\n`
   );
 
   const report = createRuntimeCoverageInventory(rootDir);
@@ -301,7 +308,14 @@ test("cross-source coverage requires matching runtime and focused test evidence 
         semanticMappings: [
           {
             draftPoint: { path: "visible.textRu", value: textRu },
-            runtimeRefs: [{ effectId: "gain_chips", timing: "activation" }],
+            runtimeRefs: [
+              {
+                kind: "effect",
+                effectId: "gain_chips",
+                timing: "activation",
+                fields: { amount: 1 },
+              },
+            ],
             testRefs: [
               {
                 file: "tests/wizard-property-runtime.test.ts",
@@ -317,7 +331,7 @@ test("cross-source coverage requires matching runtime and focused test evidence 
   writeText(
     rootDir,
     "tests/wizard-property-runtime.test.ts",
-    `const tokenId = "${tokenId}";\ntest("gains a chip while activated", () => tokenId);\n`
+    `test("gains a chip while activated", () => {\n  const tokenId = "${tokenId}";\n  const report = createRuntimeCoverageInventory(tokenId);\n  assert.ok(report);\n});\n`
   );
 
   const report = createRuntimeCoverageInventory(rootDir);
@@ -385,7 +399,15 @@ test("cross-source coverage blocks effects outside their source-kind policy", ()
           {
             draftPoint: { path: "visible.textRu", value: textRu },
             runtimeRefs: [
-              { effectId: "replace_starting_card", timing: "setup" },
+              {
+                kind: "effect",
+                effectId: "replace_starting_card",
+                timing: "setup",
+                fields: {
+                  fromDefinitionId: "esw2_dbg__starter_001",
+                  toDefinitionId: "esw2_dbg__starter_002",
+                },
+              },
             ],
             testRefs: [
               {
@@ -397,7 +419,11 @@ test("cross-source coverage blocks effects outside their source-kind policy", ()
           {
             draftPoint: { path: "visible.victoryPoints", value: -3 },
             runtimeRefs: [
-              { effectId: "replace_starting_card", timing: "setup" },
+              {
+                kind: "field",
+                path: "victoryPoints",
+                value: -3,
+              },
             ],
             testRefs: [
               {
@@ -414,7 +440,7 @@ test("cross-source coverage blocks effects outside their source-kind policy", ()
   writeText(
     rootDir,
     "tests/dead-wizard-token-runtime.test.ts",
-    `const tokenId = "${tokenId}";\ntest("rejects setup replacement on a DWT", () => tokenId);\n`
+    `test("rejects setup replacement on a DWT", () => {\n  const tokenId = "${tokenId}";\n  const report = createRuntimeCoverageInventory(tokenId);\n  assert.ok(report);\n});\n`
   );
 
   const item = createRuntimeCoverageInventory(rootDir).items.find(
@@ -426,6 +452,198 @@ test("cross-source coverage blocks effects outside their source-kind policy", ()
   assert.ok(
     item.crossSourceBlockers.some((blocker) =>
       blocker.includes("violates source/timing policy")
+    )
+  );
+});
+
+test("cross-source coverage applies complete evidence to cards", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-cross-source-card-")
+  );
+  const cardId = "esw2_dbg__main_001";
+  const textRu = "Получи 1 чипсину.";
+
+  writeJson(
+    rootDir,
+    `data/import/cards/main/drafts/${cardId}.json`,
+    createCardDraft(cardId, { textRu })
+  );
+  writeJson(rootDir, `data/cards/main/${cardId}.json`, {
+    schemaVersion: 1,
+    cardId,
+    visible: { victoryPoints: 1 },
+    engine: {
+      runtimeSchema: "krutagidon.cardDefinition.v0",
+      mappingStatus: "supported",
+      playableInV0: true,
+      effects: [{ effectId: "gain_chips", timing: "onPlay", amount: 1 }],
+      unsupportedMechanics: [],
+    },
+  });
+  writeJson(rootDir, "data/decks/main-deck.json", {
+    deckId: "main-deck",
+    role: "mainDeck",
+    entries: [{ cardId, count: 2 }],
+  });
+  writeJson(rootDir, "config/runtime-coverage/cross-source-mechanics.json", {
+    schemaVersion: 1,
+    entries: [
+      {
+        id: cardId,
+        objectKind: "card",
+        primaryMechanicCluster: "chipsin-economy",
+        semanticMappings: [
+          {
+            draftPoint: { path: "visible.textRu", value: textRu },
+            runtimeRefs: [
+              {
+                kind: "effect",
+                effectId: "gain_chips",
+                timing: "onPlay",
+                fields: { amount: 1 },
+              },
+            ],
+            testRefs: [
+              {
+                file: "tests/card-runtime.test.ts",
+                name: "gains a chip from the mapped card",
+              },
+            ],
+          },
+          {
+            draftPoint: { path: "visible.victoryPoints", value: 1 },
+            runtimeRefs: [
+              { kind: "field", path: "visible.victoryPoints", value: 1 },
+            ],
+            testRefs: [
+              {
+                file: "tests/card-runtime.test.ts",
+                name: "gains a chip from the mapped card",
+              },
+            ],
+          },
+        ],
+        unresolvedMechanics: [],
+      },
+    ],
+  });
+  writeText(
+    rootDir,
+    "tests/card-runtime.test.ts",
+    `test("gains a chip from the mapped card", () => {\n  const cardId = "${cardId}";\n  const report = createRuntimeCoverageInventory(cardId);\n  assert.ok(report);\n});\n`
+  );
+
+  const item = createRuntimeCoverageInventory(rootDir).items.find(
+    (candidate) => candidate.id === cardId
+  );
+
+  assert.ok(item);
+  assert.equal(item.crossSourceStatus, "crossSourceComplete");
+  assert.equal(item.primaryMechanicCluster, "chipsin-economy");
+});
+
+test("cross-source coverage compares effect payloads and runtime fields", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-cross-source-runtime-values-")
+  );
+  const tokenId = "esw2_dbg__dead_wizard_token_001";
+  const textRu = "Измени стоимость карты.";
+
+  writeJson(
+    rootDir,
+    `data/import/tokens/dead-wizard-token/drafts/${tokenId}.json`,
+    {
+      schemaVersion: 1,
+      draftKind: "deadWizardTokenDraft",
+      tokenId,
+      kind: "deadWizardToken",
+      source: { image: "assets/dead-wizard-token/DWT_001.png" },
+      visible: {
+        sourceLabel: textRu,
+        textRu,
+        victoryPoints: -3,
+        uncertainty: [],
+      },
+      notes: [],
+      composition: { quantity: 1 },
+    }
+  );
+  writeJson(rootDir, `data/tokens/dead-wizard/${tokenId}.json`, {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "deadWizardToken",
+    victoryPoints: -3,
+    effects: [
+      {
+        effectId: "modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "cardCost",
+        operation: "add",
+        amount: 1,
+        target: { targetType: "card", cardTypes: ["spell"] },
+      },
+    ],
+  });
+  writeJson(rootDir, "data/stacks/tokens/dead-wizard-tokens.json", {
+    stackId: "dead-wizard-tokens",
+    role: "deadWizardTokens",
+    entries: [{ tokenId, count: 1 }],
+  });
+  const testRef = {
+    file: "tests/dead-wizard-token-runtime.test.ts",
+    name: "checks exact DWT runtime values",
+  };
+  writeJson(rootDir, "config/runtime-coverage/cross-source-mechanics.json", {
+    schemaVersion: 1,
+    entries: [
+      {
+        id: tokenId,
+        objectKind: "deadWizardToken",
+        primaryMechanicCluster: "ongoing-modifiers",
+        semanticMappings: [
+          {
+            draftPoint: { path: "visible.textRu", value: textRu },
+            runtimeRefs: [
+              {
+                kind: "effect",
+                effectId: "modify_effective_value",
+                timing: "whileControlled",
+                fields: { amount: 2 },
+              },
+            ],
+            testRefs: [testRef],
+          },
+          {
+            draftPoint: { path: "visible.victoryPoints", value: -3 },
+            runtimeRefs: [{ kind: "field", path: "victoryPoints", value: -4 }],
+            testRefs: [testRef],
+          },
+        ],
+        unresolvedMechanics: [],
+      },
+    ],
+  });
+  writeText(
+    rootDir,
+    testRef.file,
+    `test("${testRef.name}", () => {\n  const tokenId = "${tokenId}";\n  const report = createRuntimeCoverageInventory(tokenId);\n  assert.ok(report);\n});\n`
+  );
+
+  const item = createRuntimeCoverageInventory(rootDir).items.find(
+    (candidate) => candidate.id === tokenId
+  );
+
+  assert.ok(item);
+  assert.equal(item.crossSourceStatus, "blocked");
+  assert.ok(
+    item.crossSourceBlockers.some((blocker) =>
+      blocker.includes("runtime effect modify_effective_value@whileControlled")
+    )
+  );
+  assert.ok(
+    item.crossSourceBlockers.some((blocker) =>
+      blocker.includes("runtime field victoryPoints")
     )
   );
 });
@@ -449,7 +667,7 @@ test("repository cross-source registry assigns every wizard property and DWT to 
       (item) => item.primaryMechanicCluster !== undefined
     )
   );
-  assert.equal(report.crossSourceSummary.blocked, 38);
+  assert.equal(report.crossSourceSummary.blocked, 172);
   assert.ok(firstDeadWizardToken);
   assert.equal(firstDeadWizardToken.crossSourceStatus, "blocked");
   assert.ok(
