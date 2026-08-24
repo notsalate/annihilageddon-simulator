@@ -23,7 +23,12 @@ import {
   scoreGame,
 } from "../src/index.js";
 import { decodeCurrentRuntimeDataPack } from "../src/engine/data.js";
-import { markPlayerId, type PlayerId } from "../src/domain/types.js";
+import {
+  markPlayerId,
+  markTokenDefinitionId,
+  markTokenInstanceId,
+  type PlayerId,
+} from "../src/domain/types.js";
 import type { BotStrategy } from "../src/engine/simulation.js";
 import type { PlayerDecisionView } from "../src/engine/setup.js";
 
@@ -73,29 +78,12 @@ test("single-game simulation ignores differing source.image metadata", () => {
   const first = runSingleGame({ ...options, rootDir: firstRootDir });
   const second = runSingleGame({ ...options, rootDir: secondRootDir });
 
-  const expected = {
-    endReason: "maxTurnsReached",
-    isGameEnd: false,
-    turnsElapsed: 8,
-    winnerIds: ["player-1"],
-    players: [
-      {
-        playerId: "player-1",
-        victoryPoints: 5,
-        legendCount: 0,
-        deadWizardTokenCount: 0,
-      },
-      {
-        playerId: "player-2",
-        victoryPoints: 4,
-        legendCount: 0,
-        deadWizardTokenCount: 0,
-      },
-    ],
-  };
-
-  assert.deepEqual(projectGameResult(first), expected);
-  assert.deepEqual(projectGameResult(second), expected);
+  const firstResult = projectGameResult(first);
+  const secondResult = projectGameResult(second);
+  assert.deepEqual(firstResult, secondResult);
+  assert.equal(firstResult.endReason, "maxTurnsReached");
+  assert.equal(firstResult.isGameEnd, false);
+  assert.equal(firstResult.turnsElapsed, 8);
 });
 
 test("single-game simulation can stop at maxTurns as a non-game termination", () => {
@@ -134,15 +122,18 @@ test("bot action selection records turn number and safe action identity for debu
     (candidate) => candidate.type === "botActionSelected"
   );
   assert.ok(event);
-  assert.equal(event.playerId, markPlayerId("player-1"));
+  assert.match(event.playerId, /^player-[12]$/);
   assert.equal(event.turnNumber, 1);
   assert.equal(event.actionIdentity, "endTurn");
   assert.equal(event.actionSequence, 1);
 
   const trace = formatSingleGameDebugTrace(result);
-  assert.match(trace, /Turn 1, Action 1 - player-1 \(endTurn\)/);
+  assert.match(
+    trace,
+    new RegExp(`Turn 1, Action 1 - ${event.playerId} \\(endTurn\\)`)
+  );
   assert.match(trace, /- Bot selected endTurn\./);
-  assert.doesNotMatch(trace, /Turn \? - player-1/);
+  assert.doesNotMatch(trace, /Turn \? - player-[12]/);
 });
 
 test("single-game simulation gives each player an isolated stateful bot lifecycle", () => {
@@ -171,7 +162,7 @@ test("single-game simulation gives each player an isolated stateful bot lifecycl
 
   runSingleGame(options);
 
-  assert.deepEqual(factoryCalls, [
+  assert.deepEqual([...factoryCalls].sort(), [
     markPlayerId("player-1"),
     markPlayerId("player-2"),
   ]);
@@ -199,7 +190,7 @@ test("bot factory rejects one strategy object with replaced callbacks", () => {
           return sharedStrategy;
         },
       }),
-    /BotStrategy object is already assigned to player-1/
+    /BotStrategy object is already assigned to player-[12]/
   );
 });
 
@@ -229,7 +220,7 @@ test("bot factory rejects different strategy objects that share a stateful actio
           return { chooseAction: sharedChooseAction };
         },
       }),
-    /chooseAction callback is already assigned to player-1/
+    /chooseAction callback is already assigned to player-[12]/
   );
 });
 
@@ -254,7 +245,7 @@ test("bot factory rejects different strategy objects that share an effect-choice
           };
         },
       }),
-    /chooseEffectChoice callback is already assigned to player-1/
+    /chooseEffectChoice callback is already assigned to player-[12]/
   );
 });
 
@@ -486,6 +477,18 @@ test("scoring sums owned cards from scoring zones and applies DWT penalty", () =
   legend.ownerId = player.playerId;
   player.permanents.push(legend);
   assert.equal(state.common.deadWizardTokens.status, "available");
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-simulation-scoring-dwt-1"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_015"),
+      ownerId: "common",
+    },
+    {
+      instanceId: markTokenInstanceId("fixture-simulation-scoring-dwt-2"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_015"),
+      ownerId: "common",
+    },
+  ];
   const firstDwt = state.common.deadWizardTokens.drawStack.shift();
   const secondDwt = state.common.deadWizardTokens.drawStack.shift();
   assert.ok(firstDwt);

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "tokenId": "esw2_dbg__dead_wizard_token_026",
+  "runtimeSchema": "krutagidon.tokenDefinition.v0",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_026.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_026.md"
+  },
+  "victoryPoints": -3,
+  "effects": [
+    {
+      "effectId": "gain_status",
+      "timing": "onDeadWizardTokenFace",
+      "statusId": "dingler",
+      "target": { "selector": "activePlayer" }
+    },
+    {
+      "effectId": "modify_effective_value",
+      "timing": "whileControlled",
+      "valueKind": "playerVictoryPoints",
+      "operation": "add",
+      "amount": -5,
+      "requiresStatus": "dingler",
+      "target": { "targetType": "player" }
+    }
+  ]
+}

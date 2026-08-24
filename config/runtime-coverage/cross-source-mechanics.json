@@ -5,9 +5,123 @@
       "id": "esw2_dbg__wizard_property_001",
       "objectKind": "wizardProperty",
       "primaryMechanicCluster": "dingler-status",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in dingler-status"
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Получив волшебника, получи 1 чипсину и, если ты лошара, можешь снова стать нормальным."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onGainCard",
+              "fields": { "cardTypes": ["wizardCard"], "amount": 1 }
+            },
+            {
+              "kind": "effect",
+              "effectId": "remove_status",
+              "timing": "onGainCard",
+              "fields": {
+                "statusId": "dingler",
+                "optional": true,
+                "cardTypes": ["wizardCard"],
+                "target": { "selector": "activePlayer" }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "свойство 001 после получения Волшебника даёт чипсину и позволяет лошаре снять статус"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "\"Получив волшебника\" означает: игрок получил карту-волшебника."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onGainCard",
+              "fields": { "cardTypes": ["wizardCard"], "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "свойство 001 после получения Волшебника даёт чипсину и позволяет лошаре снять статус"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Покупка карты-волшебника тоже считается получением."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onGainCard",
+              "fields": { "cardTypes": ["wizardCard"], "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "свойство 001 после получения Волшебника даёт чипсину и позволяет лошаре снять статус"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Это не означает получение самого стартового свойства."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onGainCard",
+              "fields": { "cardTypes": ["wizardCard"], "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "свойство 001 после получения Волшебника даёт чипсину и позволяет лошаре снять статус"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "\"Можешь снова стать нормальным\" означает: если игрок лошара, он может по желанию перестать быть лошарой."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "remove_status",
+              "timing": "onGainCard",
+              "fields": {
+                "statusId": "dingler",
+                "optional": true,
+                "cardTypes": ["wizardCard"],
+                "target": { "selector": "activePlayer" }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "свойство 001 после получения Волшебника даёт чипсину и позволяет лошаре снять статус"
+            }
+          ]
+        }
       ]
     },
     {
@@ -813,9 +927,127 @@
       "id": "esw2_dbg__dead_wizard_token_007",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "dingler-status",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in dingler-status"
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Если тебя убил лошара, он может стать нормальным."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_killer_optional_remove_dingler",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "statusId": "dingler" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 007 позволяет только убившему лошаре снять статус"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Эффект зависит от того, кто убил игрока."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_killer_optional_remove_dingler",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "statusId": "dingler" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 007 позволяет только убившему лошаре снять статус"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Если убийца был лошарой, он может перестать быть лошарой."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_killer_optional_remove_dingler",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "statusId": "dingler" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 007 позволяет только убившему лошаре снять статус"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Слово \"может\" означает необязательное действие для убийцы."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_killer_optional_remove_dingler",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "statusId": "dingler" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 007 позволяет только убившему лошаре снять статус"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Если убийца не согласен, то он может остаться лошарой"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_killer_optional_remove_dingler",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "statusId": "dingler" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 007 позволяет только убившему лошаре снять статус"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "\"Тебя\" относится к игроку, получившему этот ЖДК."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_killer_optional_remove_dingler",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "statusId": "dingler" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 007 позволяет только убившему лошаре снять статус"
+            }
+          ]
+        }
       ]
     },
     {
@@ -1383,27 +1615,303 @@
       "id": "esw2_dbg__dead_wizard_token_026",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "dingler-status",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in dingler-status"
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Стань лошарой. В КОНЦЕ ИГРЫ Удвой свои штрафные ПО за жетон лошары."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_status",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {
+                "statusId": "dingler",
+                "target": { "selector": "activePlayer" }
+              }
+            },
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "playerVictoryPoints",
+                "operation": "add",
+                "amount": -5,
+                "requiresStatus": "dingler",
+                "target": { "targetType": "player" }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "ЖДК 026 удваивает только активный штраф статуса лошары"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Игрок становится лошарой."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_status",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {
+                "statusId": "dingler",
+                "target": { "selector": "activePlayer" }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "ЖДК 026 удваивает только активный штраф статуса лошары"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Это также имеет end-game эффект."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "playerVictoryPoints",
+                "operation": "add",
+                "amount": -5,
+                "requiresStatus": "dingler",
+                "target": { "targetType": "player" }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "ЖДК 026 удваивает только активный штраф статуса лошары"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "В конце игры игрок удваивает свои штрафные ПО за жетон лошары."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "playerVictoryPoints",
+                "operation": "add",
+                "amount": -5,
+                "requiresStatus": "dingler",
+                "target": { "targetType": "player" }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "ЖДК 026 удваивает только активный штраф статуса лошары"
+            }
+          ]
+        }
       ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_027",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "dingler-status",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in dingler-status"
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Стань лошарой. Если ты и так лошара, получи 1 жетон дохлого колдуна из стопки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_gain_status_or_draw_face",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "statusId": "dingler" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 027 делает нормального лошарой, а лошаре полностью разрешает ещё один ЖДК"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Если игрок ещё не лошара, он становится лошарой."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_gain_status_or_draw_face",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "statusId": "dingler" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 027 делает нормального лошарой, а лошаре полностью разрешает ещё один ЖДК"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Если игрок уже лошара, он получает 1 ЖДК из стопки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_gain_status_or_draw_face",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "statusId": "dingler" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 027 делает нормального лошарой, а лошаре полностью разрешает ещё один ЖДК"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Получение еще одного ЖДК не является СМЕРТЬЮ"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_gain_status_or_draw_face",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "statusId": "dingler" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 027 делает нормального лошарой, а лошаре полностью разрешает ещё один ЖДК"
+            }
+          ]
+        }
       ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_028",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "dingler-status",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in dingler-status"
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Стань лошарой. Если ты и так лошара, стань нормальным."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "toggle_status",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {
+                "statusId": "dingler",
+                "target": { "selector": "activePlayer" }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 028 меняет исходный Dingler-статус получателя"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Если игрок ещё не лошара, он становится лошарой."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "toggle_status",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {
+                "statusId": "dingler",
+                "target": { "selector": "activePlayer" }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 028 меняет исходный Dingler-статус получателя"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Если игрок уже лошара, он становится нормальным."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "toggle_status",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {
+                "statusId": "dingler",
+                "target": { "selector": "activePlayer" }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 028 меняет исходный Dingler-статус получателя"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "\"Стать нормальным\" означает снять статус лошары."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "toggle_status",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {
+                "statusId": "dingler",
+                "target": { "selector": "activePlayer" }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 028 меняет исходный Dingler-статус получателя"
+            }
+          ]
+        }
       ]
     },
     {

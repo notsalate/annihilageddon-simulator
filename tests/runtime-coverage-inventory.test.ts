@@ -453,6 +453,108 @@ test("cross-source coverage accepts scoreGame with a stable DWT definition as fo
   assert.equal(item.crossSourceStatus, "crossSourceComplete");
 });
 
+test("cross-source coverage accepts gainDeadWizardToken with a stable DWT definition as focused evidence", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-cross-source-dwt-face-")
+  );
+  const tokenId = "esw2_dbg__dead_wizard_token_027";
+  const textRu = "Стань лошарой.";
+
+  writeJson(
+    rootDir,
+    `data/import/tokens/dead-wizard-token/drafts/${tokenId}.json`,
+    {
+      schemaVersion: 1,
+      draftKind: "deadWizardTokenDraft",
+      tokenId,
+      kind: "deadWizardToken",
+      source: { image: "assets/dead-wizard-token/DWT_027.png" },
+      visible: {
+        sourceLabel: textRu,
+        textRu,
+        victoryPoints: -3,
+        uncertainty: [],
+      },
+      notes: [],
+      composition: { quantity: 1 },
+    }
+  );
+  writeJson(rootDir, `data/tokens/dead-wizard/${tokenId}.json`, {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "deadWizardToken",
+    victoryPoints: -3,
+    effects: [
+      {
+        effectId: "dead_wizard_token_gain_status_or_draw_face",
+        timing: "onDeadWizardTokenFace",
+        statusId: "dingler",
+      },
+    ],
+  });
+  writeJson(rootDir, "data/stacks/tokens/dead-wizard-tokens.json", {
+    stackId: "dead-wizard-tokens",
+    role: "deadWizardTokens",
+    entries: [{ tokenId, count: 1 }],
+  });
+  const testRef = {
+    file: "tests/dead-wizard-token-runtime.test.ts",
+    name: "resolves DWT 027 through the public face action",
+  };
+  writeJson(rootDir, "config/runtime-coverage/cross-source-mechanics.json", {
+    schemaVersion: 1,
+    entries: [
+      {
+        id: tokenId,
+        objectKind: "deadWizardToken",
+        primaryMechanicCluster: "dingler-status",
+        semanticMappings: [
+          {
+            draftPoint: { path: "visible.textRu", value: textRu },
+            runtimeRefs: [
+              {
+                kind: "effect",
+                effectId: "dead_wizard_token_gain_status_or_draw_face",
+                timing: "onDeadWizardTokenFace",
+                fields: { statusId: "dingler" },
+              },
+            ],
+            testRefs: [testRef],
+          },
+          {
+            draftPoint: { path: "visible.victoryPoints", value: -3 },
+            runtimeRefs: [{ kind: "field", path: "victoryPoints", value: -3 }],
+            testRefs: [testRef],
+          },
+        ],
+        unresolvedMechanics: [],
+      },
+    ],
+  });
+  writeText(
+    rootDir,
+    testRef.file,
+    `test("${testRef.name}", () => {
+  const state = initializeGame({ rootDir });
+  state.common.deadWizardTokens.drawStack.push({
+    definitionId: markTokenDefinitionId("${tokenId}"),
+  });
+  gainDeadWizardToken(state, state.players[0]);
+  assert.equal(state.players[0].statuses.length, 1);
+});
+`
+  );
+
+  const item = createRuntimeCoverageInventory(rootDir).items.find(
+    (candidate) => candidate.id === tokenId
+  );
+
+  assert.ok(item);
+  assert.deepEqual(item.crossSourceBlockers, []);
+  assert.equal(item.crossSourceStatus, "crossSourceComplete");
+});
+
 test("cross-source coverage blocks effects outside their source-kind policy", () => {
   const rootDir = mkdtempSync(
     path.join(tmpdir(), "krutagidon-cross-source-policy-")
@@ -907,8 +1009,8 @@ test("repository cross-source registry assigns every wizard property and DWT to 
       (item) => item.primaryMechanicCluster !== undefined
     )
   );
-  assert.equal(report.crossSourceSummary.blocked, 161);
-  assert.equal(report.crossSourceSummary.crossSourceComplete, 11);
+  assert.equal(report.crossSourceSummary.blocked, 156);
+  assert.equal(report.crossSourceSummary.crossSourceComplete, 16);
   assert.ok(firstDeadWizardToken);
   assert.ok(wizardProperty004);
   assert.equal(wizardProperty004.crossSourceStatus, "crossSourceComplete");

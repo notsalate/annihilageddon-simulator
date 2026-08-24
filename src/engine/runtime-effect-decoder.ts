@@ -724,6 +724,8 @@ const runtimeEffectDecoders: {
       effectId: required(literal("remove_status")),
       timing: optionalTiming,
       statusId: required(literal("dingler")),
+      optional: optional(booleanValue),
+      cardTypes: optional(nonEmptyStringArray),
       target: optionalTarget,
       targetSelector: optionalTargetSelector,
     },

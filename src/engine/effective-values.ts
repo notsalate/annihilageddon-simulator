@@ -58,6 +58,7 @@ interface EffectiveValueModifierEvaluationContext {
   readonly countOwnedScoringCards: (
     countedCardTypes: readonly string[]
   ) => number;
+  readonly hasStatus: (statusId: "dingler") => boolean;
 }
 
 type EffectiveValueModifierApplicationResult =
@@ -72,6 +73,8 @@ function applyEffectiveValueModifier(
   if (
     effect.timing !== context.timing ||
     effect.valueKind !== context.valueKind ||
+    (effect.requiresStatus !== undefined &&
+      !context.hasStatus(effect.requiresStatus)) ||
     !context.targetMatches(effect)
   ) {
     return { status: "notApplicable" };
@@ -300,6 +303,8 @@ function calculateEffectiveValue(options: {
         },
         countOwnedScoringCards: (countedCardTypes) =>
           countOwnedScoringCards(getScoringCardTypeIndex(), countedCardTypes),
+        hasStatus: (statusId) =>
+          view.statuses.some((status) => status.statusId === statusId),
       },
       value
     );
