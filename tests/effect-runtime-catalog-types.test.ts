@@ -247,6 +247,7 @@ test("remaining Catalog families expose one local ID inventory each", () => {
     "mayhem_each_player_vote_dingler",
     "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
     "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+    "mega_mayhem_each_player_gain_limp_wands_to_hand",
     "mega_mayhem_each_player_toggle_dingler",
     "mega_mayhem_set_life",
   ]);
@@ -323,7 +324,7 @@ test("life and Dingler status effects use typed family payloads and policies", (
       payload: {
         effectId: "set_life",
         timing: "onMayhemResolve",
-        lifeTotal: 15,
+        lifeTotal: 0,
         targetSelector: "activePlayer",
       },
     },
@@ -368,6 +369,20 @@ test("life and Dingler status effects use typed family payloads and policies", (
       true
     );
   }
+
+  assert.equal(
+    validateRuntimeEffectCatalogPayload(
+      "Dead Wizard Token set life",
+      "set_life",
+      {
+        ...validCases[1].payload,
+        timing: "onDeadWizardTokenFace",
+      },
+      "combat",
+      "deadWizardToken"
+    ).ok,
+    true
+  );
 
   const invalidStatus = validateRuntimeEffectCatalogPayload(
     "Invalid status",
@@ -735,8 +750,10 @@ test("activation and ongoing families use exact timing and card-source policies"
   ] as const;
   const supportedEffectIds = [
     "ongoing_add_power_when_playing_wand",
+    "ongoing_add_power_when_playing_limp_wand",
     "ongoing_first_attack_damage_add_power",
     "ongoing_hand_refill_bonus",
+    "ongoing_start_turn_optional_gain_limp_wand_to_hand",
   ] as const;
 
   for (const { effectId, payload } of validCases) {
@@ -983,7 +1000,17 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         effectId: "mega_mayhem_set_life",
         timing: "onMayhemResolve",
         targetSelector: "eachPlayerClockwiseFromActive",
-        lifeTotal: 5,
+        lifeTotal: 0,
+      },
+    },
+    {
+      effectId: "mega_mayhem_each_player_gain_limp_wands_to_hand",
+      payload: {
+        effectId: "mega_mayhem_each_player_gain_limp_wands_to_hand",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        destination: "hand",
+        amount: 1,
       },
     },
   ] as const;

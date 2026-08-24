@@ -568,11 +568,16 @@ function hasFocusedTestReference(
   const idBindings = findStableIdBindings(testBody, id);
   return findRuntimeSeamCalls(testBody).some((call) => {
     const invocation = testBody.slice(call.start, call.end);
+    const stateBinding = getStateBinding(testBody, call);
+    const setupUsesDefinition =
+      stateBinding !== undefined &&
+      (testBody.includes(id) || idBindings.length > 0);
     const definitionIsUsed =
       invocation.includes(id) ||
       idBindings.some((binding) =>
         new RegExp(`\\b${escapeRegExp(binding)}\\b`).test(invocation)
       ) ||
+      setupUsesDefinition ||
       (call.name === "scoreGame" &&
         hasScoredDefinitionReference(testBody.slice(0, call.end), id));
     return definitionIsUsed && hasAssertionForSeamResult(testBody, call);

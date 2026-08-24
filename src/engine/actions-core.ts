@@ -1,6 +1,9 @@
 import {
   executeActivationEffects,
+  executeControlledCardAfterControllerPlaysCardEffects,
   executeControlledCardOnPlayCardEffects,
+  executeControlledCardStartOfControllerTurnEffects,
+  validateControlledCardStartOfControllerTurnEffects,
   executeOnPlayEffects,
   executeWizardPropertyOnPlayCardEffects,
   executeWizardPropertyActivationEffects,
@@ -8,6 +11,7 @@ import {
   getWizardPropertyActivationAvailability,
   hasExecutableWizardPropertyActivation,
   moveGainedCardToPlayerDestination,
+  resolveWithinDeadWizardTokenResolutionBoundary,
   validateActivationEffects,
   validateGainedCardEffects,
   validateOnPlayEffects,
@@ -206,7 +210,8 @@ export function preflightAction(
         const gainValidation = validateGainedCardEffects(
           state,
           activePlayer,
-          definition
+          definition,
+          card
         );
         if (!gainValidation.ok) {
           return gainValidation;
@@ -298,6 +303,15 @@ export function preflightAction(
       }
       case "endTurn": {
         calculateEndTurnDrawCount(state, activePlayer);
+        const nextActivePlayer = getNextPlayer(state, activePlayer);
+        const startOfTurnValidation =
+          validateControlledCardStartOfControllerTurnEffects(
+            state,
+            nextActivePlayer
+          );
+        if (!startOfTurnValidation.ok) {
+          return startOfTurnValidation;
+        }
         const marketValidation = validateMarketFlow(state, { mode: "turn" });
         if (!marketValidation.ok) {
           return marketValidation;
@@ -418,6 +432,17 @@ function endTurn(state: GameState): ActionResult {
     type: "turnStarted",
     playerId: state.activePlayerId,
   });
+
+  const startOfTurnResult = executeControlledCardStartOfControllerTurnEffects(
+    state,
+    nextActivePlayer
+  );
+  if (!startOfTurnResult.ok) {
+    return startOfTurnResult;
+  }
+  if (startOfTurnResult.gameEnd !== undefined) {
+    return gameEndActionResult(startOfTurnResult.gameEnd);
+  }
 
   return { ok: true };
 }
@@ -699,19 +724,24 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
 
   activePlayer.hand.splice(cardIndex, 1);
   const ownerBefore = card.ownerId;
-  const effectResult = resolveCardPlay(
+  const effectResult = resolveWithinDeadWizardTokenResolutionBoundary(
     state,
-    activePlayer,
-    card,
-    {
-      executeOnPlayEffects,
-      executeWizardPropertyOnPlayCardEffects,
-      executeControlledCardOnPlayCardEffects,
-    },
-    {
-      sourceZone: `${activePlayer.playerId}.hand`,
-      ownerBefore,
-    }
+    () =>
+      resolveCardPlay(
+        state,
+        activePlayer,
+        card,
+        {
+          executeOnPlayEffects,
+          executeWizardPropertyOnPlayCardEffects,
+          executeControlledCardOnPlayCardEffects,
+          executeControlledCardAfterControllerPlaysCardEffects,
+        },
+        {
+          sourceZone: `${activePlayer.playerId}.hand`,
+          ownerBefore,
+        }
+      )
   );
   if (!effectResult.ok) {
     return effectResult;

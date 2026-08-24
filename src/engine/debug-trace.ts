@@ -244,6 +244,13 @@ function formatEvent(
     return `- DWT: ${event.playerId} gains ${formatToken(event, options)}.`;
   }
 
+  if (
+    event.type === "deadWizardTokenFaceResolved" &&
+    event.playerId !== undefined
+  ) {
+    return `- DWT: ${formatToken(event, options)} resolves for ${event.playerId}.`;
+  }
+
   if (event.type === "playerResurrected" && event.playerId !== undefined) {
     return `- Resurrection: ${event.playerId} life ${event.lifeBefore} -> ${event.lifeAfter}.`;
   }

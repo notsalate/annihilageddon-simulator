@@ -1,6 +1,7 @@
 import type { CardDefinition } from "./data.js";
 import { buildControlledObjectView } from "./control-ledger.js";
 import { recordGameEvent } from "./event-recorder.js";
+import { transferUpToLimpWandsToPlayer } from "./effect-runtime-special-card-stack.js";
 import type {
   AttackReplacementProfile,
   DamageResult,
@@ -679,6 +680,41 @@ function attackGainStatusHandler(
   };
 }
 
+function attackGainLimpWandHandler(
+  collectAttackReplacementProfile: AttackReplacementCollector
+): EffectRuntimeHandler<RuntimeEffectForId<"attack_gain_limp_wand">> {
+  return {
+    effectId: "attack_gain_limp_wand",
+    execute(state, player, effect, source, services) {
+      const attackProfileResult = collectAttackReplacementProfile(
+        state,
+        player,
+        source
+      );
+      if (attackProfileResult.status !== "resolved") {
+        return {
+          ok: false,
+          error:
+            attackProfileResult.status === "error"
+              ? attackProfileResult.error
+              : "Attack replacement profile was not applicable",
+        };
+      }
+      const attackProfile = attackProfileResult.result;
+      return services.resolvePlayerControlledAttack({
+        state,
+        attackingPlayer: player,
+        source,
+        effectId: effect.effectId,
+        unavoidable: attackProfile.unavoidable,
+        attackProfile,
+        targetPlan: { kind: "runtimeSelector", effect },
+        impact: { kind: "effects", effects: [effect] },
+      });
+    },
+  };
+}
+
 function directionalChainAttackHandler(
   collectAttackReplacementProfile: AttackReplacementCollector
 ): EffectRuntimeHandler<RuntimeEffectForId<"directional_chain_attack">> {
@@ -808,6 +844,7 @@ export function executeAttackOutcomeBranch(
   source: EffectSourceContext,
   targetPlayer: PlayerState,
   attackResult: DamageResult,
+  attackEffectId: RuntimeEffectId,
   services: EffectRuntimeServices
 ): EffectExecutionResult {
   if (branch.effectId === "gain_chips") {
@@ -886,6 +923,18 @@ export function executeAttackOutcomeBranch(
       sourceType: source.sourceType,
     });
     return { ok: true };
+  }
+
+  if (branch.effectId === "transfer_limp_wands_to_killed_target") {
+    return transferUpToLimpWandsToPlayer(
+      state,
+      player,
+      targetPlayer,
+      branch.amount,
+      attackEffectId,
+      source,
+      services
+    );
   }
 
   if (branch.effectId === "gain_status" && branch.statusId === "dingler") {
@@ -1116,7 +1165,7 @@ export function createCombatAttackEffectDefinitions(
       supportedTimings: attackTimings,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
-      handler: createUnsupportedEffectHandler("attack_gain_limp_wand"),
+      handler: attackGainLimpWandHandler(collectAttackReplacementProfile),
     },
     {
       effectId: "attack_gain_status",

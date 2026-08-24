@@ -9,14 +9,17 @@ import {
   evaluateRuntimeEffectControlledPower,
   evaluateRuntimeEffectEndTurnDrawModifier,
   executeRuntimeEffectOnPlayCard,
+  isSupportedRuntimeEffectTiming,
   type EffectGameEnd,
   type EffectExecutionResult,
+  type EffectRuntimeOperationResult,
   type EffectSourceContext,
 } from "./effect-runtime-registry.js";
 import {
   requireVerifiedRuntimeEffect,
   type VerifiedRuntimeEffect,
 } from "./runtime-effect-verification.js";
+import type { RuntimeEffect } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export interface ControlledCardDispatchOperationMap {
@@ -35,6 +38,14 @@ export interface ControlledCardDispatchOperationMap {
     readonly damageDealt: number;
     readonly damageSource: EffectSourceContext;
   };
+  readonly afterControllerPlaysCard: {
+    readonly kind: "afterControllerPlaysCard";
+    readonly executeEffect: ControlledCardTimedEffectExecutor;
+  };
+  readonly startOfControllerTurn: {
+    readonly kind: "startOfControllerTurn";
+    readonly executeEffect: ControlledCardTimedEffectExecutor;
+  };
   readonly collectEndTurnDrawModifier: {
     readonly kind: "collectEndTurnDrawModifier";
     readonly currentBaseDrawCount: number;
@@ -48,6 +59,8 @@ export interface ControlledCardDispatchResultMap {
   readonly onPlayCard: EffectExecutionResult;
   readonly afterPlayerAttackDamage: EffectExecutionResult;
   readonly afterDamageDealt: EffectExecutionResult;
+  readonly afterControllerPlaysCard: EffectExecutionResult;
+  readonly startOfControllerTurn: EffectExecutionResult;
   readonly collectEndTurnDrawModifier:
     | { readonly ok: true; readonly drawCount: number }
     | { readonly ok: false; readonly error: string };
@@ -59,7 +72,9 @@ type ControlledCardDispatchOperation =
 type ControlledCardExecutionOperation =
   | ControlledCardDispatchOperationMap["onPlayCard"]
   | ControlledCardDispatchOperationMap["afterPlayerAttackDamage"]
-  | ControlledCardDispatchOperationMap["afterDamageDealt"];
+  | ControlledCardDispatchOperationMap["afterDamageDealt"]
+  | ControlledCardDispatchOperationMap["afterControllerPlaysCard"]
+  | ControlledCardDispatchOperationMap["startOfControllerTurn"];
 type ControlledCardDispatchResult =
   ControlledCardDispatchResultMap[keyof ControlledCardDispatchResultMap];
 
@@ -84,6 +99,12 @@ interface ControlledCardEntry {
   readonly card: CardInstance;
   readonly definition: CardDefinition;
 }
+
+export type ControlledCardTimedEffectExecutor = (
+  effect: VerifiedRuntimeEffect,
+  source: EffectSourceContext,
+  sourceDefinition: CardDefinition
+) => EffectRuntimeOperationResult<EffectExecutionResult>;
 
 /**
  * Runs one mutation that can change the active controller's passive power and
@@ -156,6 +177,18 @@ export function dispatchControlledCardOperation(
 export function dispatchControlledCardOperation(
   state: GameState,
   controller: PlayerState,
+  operation: ControlledCardDispatchOperationMap["afterControllerPlaysCard"]
+): ControlledCardDispatchResultMap["afterControllerPlaysCard"];
+// eslint-disable-next-line no-redeclare -- TypeScript overload signature.
+export function dispatchControlledCardOperation(
+  state: GameState,
+  controller: PlayerState,
+  operation: ControlledCardDispatchOperationMap["startOfControllerTurn"]
+): ControlledCardDispatchResultMap["startOfControllerTurn"];
+// eslint-disable-next-line no-redeclare -- TypeScript overload signature.
+export function dispatchControlledCardOperation(
+  state: GameState,
+  controller: PlayerState,
   operation: ControlledCardDispatchOperationMap["collectEndTurnDrawModifier"]
 ): ControlledCardDispatchResultMap["collectEndTurnDrawModifier"];
 // eslint-disable-next-line no-redeclare -- TypeScript overload signature.
@@ -175,10 +208,11 @@ export function dispatchControlledCardOperation(
   controller: PlayerState,
   operation: ControlledCardDispatchOperation
 ): ControlledCardDispatchResult {
-  const candidates =
-    operation.kind === "recalculateControlledPower"
-      ? discoverControlledOngoingCardEffects(state, controller)
-      : discoverControlledCardEffects(state, controller);
+  const candidates = discoverCandidatesForControlledCardOperation(
+    state,
+    controller,
+    operation
+  );
   if (operation.kind === "collectEndTurnDrawModifier") {
     return collectEndTurnDrawModifier(state, controller, operation, candidates);
   }
@@ -240,7 +274,8 @@ function discoverControlledCardEffects(
 
 function discoverControlledOngoingCardEffects(
   state: GameState,
-  controller: PlayerState
+  controller: PlayerState,
+  timing?: RuntimeEffect["timing"]
 ): ControlledCardEffectCandidate[] {
   const controlledCards: ControlledCardEntry[] = [];
   for (const card of getControlledOngoingCards(state, controller)) {
@@ -252,14 +287,16 @@ function discoverControlledOngoingCardEffects(
   return buildControlledCardEffectCandidates(
     state,
     controller,
-    controlledCards
+    controlledCards,
+    timing
   );
 }
 
 function buildControlledCardEffectCandidates(
   state: GameState,
   controller: PlayerState,
-  controlledCards: readonly ControlledCardEntry[]
+  controlledCards: readonly ControlledCardEntry[],
+  timing?: RuntimeEffect["timing"]
 ): ControlledCardEffectCandidate[] {
   const candidates: ControlledCardEffectCandidate[] = [];
 
@@ -276,8 +313,16 @@ function buildControlledCardEffectCandidates(
       definitionId: card.definitionId,
     };
     for (const effect of definition.engine.effects) {
+      const verifiedEffect = requireVerifiedRuntimeEffect(effect);
+      if (
+        timing !== undefined &&
+        verifiedEffect.timing !== timing &&
+        isSupportedRuntimeEffectTiming(verifiedEffect)
+      ) {
+        continue;
+      }
       candidates.push({
-        effect: requireVerifiedRuntimeEffect(effect),
+        effect: verifiedEffect,
         source,
         sourceDefinition: definition,
       });
@@ -285,6 +330,31 @@ function buildControlledCardEffectCandidates(
   }
 
   return candidates;
+}
+
+function discoverCandidatesForControlledCardOperation(
+  state: GameState,
+  controller: PlayerState,
+  operation: ControlledCardDispatchOperation
+): ControlledCardEffectCandidate[] {
+  if (operation.kind === "recalculateControlledPower") {
+    return discoverControlledOngoingCardEffects(state, controller);
+  }
+  if (operation.kind === "afterControllerPlaysCard") {
+    return discoverControlledOngoingCardEffects(
+      state,
+      controller,
+      "afterControllerPlaysCard"
+    );
+  }
+  if (operation.kind === "startOfControllerTurn") {
+    return discoverControlledOngoingCardEffects(
+      state,
+      controller,
+      "startOfControllerTurn"
+    );
+  }
+  return discoverControlledCardEffects(state, controller);
 }
 
 function executeControlledCardOperation(
@@ -295,32 +365,35 @@ function executeControlledCardOperation(
 ): EffectExecutionResult {
   for (const { effect, source, sourceDefinition } of candidates) {
     const result =
-      operation.kind === "onPlayCard"
-        ? executeRuntimeEffectOnPlayCard(effect, {
-            state,
-            controller,
-            source,
-            sourceDefinition,
-            playedCard: operation.playedCard,
-            playedDefinition: operation.playedDefinition,
-          })
-        : operation.kind === "afterPlayerAttackDamage"
-          ? applyRuntimeEffectAfterPlayerAttackDamage(effect, {
+      operation.kind === "afterControllerPlaysCard" ||
+      operation.kind === "startOfControllerTurn"
+        ? operation.executeEffect(effect, source, sourceDefinition)
+        : operation.kind === "onPlayCard"
+          ? executeRuntimeEffectOnPlayCard(effect, {
               state,
               controller,
               source,
               sourceDefinition,
-              totalDamageDealt: operation.totalDamageDealt,
-              attackSource: operation.attackSource,
+              playedCard: operation.playedCard,
+              playedDefinition: operation.playedDefinition,
             })
-          : applyRuntimeEffectAfterDamageDealt(effect, {
-              state,
-              controller,
-              source,
-              sourceDefinition,
-              damageDealt: operation.damageDealt,
-              damageSource: operation.damageSource,
-            });
+          : operation.kind === "afterPlayerAttackDamage"
+            ? applyRuntimeEffectAfterPlayerAttackDamage(effect, {
+                state,
+                controller,
+                source,
+                sourceDefinition,
+                totalDamageDealt: operation.totalDamageDealt,
+                attackSource: operation.attackSource,
+              })
+            : applyRuntimeEffectAfterDamageDealt(effect, {
+                state,
+                controller,
+                source,
+                sourceDefinition,
+                damageDealt: operation.damageDealt,
+                damageSource: operation.damageSource,
+              });
 
     if (result.status === "notApplicable") {
       continue;

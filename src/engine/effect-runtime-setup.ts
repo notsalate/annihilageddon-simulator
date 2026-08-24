@@ -375,6 +375,19 @@ const endgameFixedTokenVictoryPointsHandler: EffectRuntimeHandler<
   },
 };
 
+const endgameLimpWandsScorePositiveHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"endgame_limp_wands_score_positive">
+> = {
+  effectId: "endgame_limp_wands_score_positive",
+  execute() {
+    return {
+      ok: false,
+      error:
+        "endgame_limp_wands_score_positive is applied during effective value scoring",
+    };
+  },
+};
+
 export interface SetupCatalogTools {
   bindRuntimeEffectDecoder<Id extends SetupEffectId>(
     effectId: Id
@@ -504,9 +517,7 @@ export function createSetupEffectDefinitions(
       supportedTimings: scoringTiming,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["card", "wizardProperty"],
-      handler: createUnsupportedEffectHandler(
-        "endgame_limp_wands_score_positive"
-      ),
+      handler: endgameLimpWandsScorePositiveHandler,
     },
     {
       effectId: "endgame_vp_per_owned_legend",

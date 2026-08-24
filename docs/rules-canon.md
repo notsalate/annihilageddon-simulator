@@ -19,15 +19,15 @@ Runtime representation: the simulator is headless and bot-driven. During a game,
 
 ## Game Entities
 
-| Entity                       | Canon rule                                                                                                                                                                                                                                                                                               | Status                                  | Source        |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------- |
-| Колдун                       | Each participant is a player wizard. Turn order proceeds clockwise from a random first player.                                                                                                                                                                                                           | `executable`                            | p. 8          |
-| Life / lives                 | By default each player starts at `currentLife = 20` and `maxLife = 25`. The 25 value is only the healing/effect cap, not current life. Setup/token data may change starting life or max life. Dingler max is 15.                                                                                         | `executable`                            | pp. 4, 14, 16 |
-| Power / мощь                 | Turn-local currency produced by cards. Power can be spent across multiple purchases and is not lost until cleanup. Unspent power is lost during end-of-turn cleanup.                                                                                                                                     | `executable`                            | pp. 8-9, 20   |
-| Чипсины                      | Spendable tokens with no VP value. Chips reduce the power needed to buy cards of `карта легенды` at 1 chip = 1 power. They can also be spent only by mapped effects that explicitly spend chips. Spent chips move back to supply.                                                                        | `executable`                            | p. 15         |
-| Жетоны дохлых колдунов / ЖДК | Shuffled token stack with hidden/random draw order. Setup uses 4 tokens per player. A dying player gains the next token from the already shuffled hidden DWT draw stack, controls it, reveals it for effects/logging, then resurrects. Each token has at least -3 VP unless token data modifies scoring. | `executable`; faces are `data-required` | pp. 6, 14, 18 |
-| Главный приз                 | The player-controlled source that kills a foe gains control of the trophy. At the end of each controller turn, the trophy grants 1 chip. Self-kill, DWT kill, and unresolved market Mayhem/Mega Mayhem kill do not award the trophy.                                                                     | `executable`                            | p. 14         |
-| Лошара                       | Status represented by a token. A player can have at most one token, max life becomes 15, and the player has -5 VP at game end unless the status is removed.                                                                                                                                              | `executable`                            | p. 14         |
+| Entity                       | Canon rule                                                                                                                                                                                                                                                                                                                           | Status                                  | Source        |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- | ------------- |
+| Колдун                       | Each participant is a player wizard. Turn order proceeds clockwise from a random first player.                                                                                                                                                                                                                                       | `executable`                            | p. 8          |
+| Life / lives                 | By default each player starts at `currentLife = 20` and `maxLife = 25`. The 25 value is only the healing/effect cap, not current life. Setup/token data may change starting life or max life. Dingler max is 15.                                                                                                                     | `executable`                            | pp. 4, 14, 16 |
+| Power / мощь                 | Turn-local currency produced by cards. Power can be spent across multiple purchases and is not lost until cleanup. Unspent power is lost during end-of-turn cleanup.                                                                                                                                                                 | `executable`                            | pp. 8-9, 20   |
+| Чипсины                      | Spendable tokens with no VP value. Chips reduce the power needed to buy cards of `карта легенды` at 1 chip = 1 power. They can also be spent only by mapped effects that explicitly spend chips. Spent chips move back to supply.                                                                                                    | `executable`                            | p. 15         |
+| Жетоны дохлых колдунов / ЖДК | Shuffled token stack with hidden/random draw order. Setup uses 4 tokens per player. A dying player immediately resurrects, gains and reveals the next token from the already shuffled hidden DWT draw stack, then its face waits for the current source to finish. Each token has at least -3 VP unless token data modifies scoring. | `executable`; faces are `data-required` | pp. 6, 14, 18 |
+| Главный приз                 | The player-controlled source that kills a foe gains control of the trophy. At the end of each controller turn, the trophy grants 1 chip. Self-kill, DWT kill, and unresolved market Mayhem/Mega Mayhem kill do not award the trophy.                                                                                                 | `executable`                            | p. 14         |
+| Лошара                       | Status represented by a token. A player can have at most one token, max life becomes 15, and the player has -5 VP at game end unless the status is removed.                                                                                                                                                                          | `executable`                            | p. 14         |
 
 ## Card Kinds and Decks
 
@@ -436,18 +436,13 @@ Sources: pp. 14, 16-18.
 
 Death algorithm:
 
-1. When a player's life drops below 1, they die immediately.
-2. Excess damage has no extra effect.
-3. If a DWT is available, gain the next token from the already shuffled hidden DWT draw stack.
-4. If no DWT is available during death resolution, no DWT is gained; keep the DWT exhaustion state for the next start-of-turn check.
-5. If a DWT was gained, move it to that player's `deadWizardTokens`, mark it public, and mark it controlled by that player.
-6. Set player life to 20 unless DWT data changes the resurrection life value.
-7. Resolve mapped DWT effects:
-   - If the token has Ongoing, its effect persists.
-   - If not Ongoing and not an end-game modifier, resolve its immediate effect now.
-   - If DWT damage happens after resurrection, apply it after the 20-life reset.
-8. If life changes from DWT effects cause another death, repeat the death algorithm.
-9. If death resolution consumes the last DWT, continue the current turn; the next player's start-of-turn DWT check ends the game before that player takes actions.
+1. When a player's life drops below 1, they die immediately. Excess damage has no extra effect.
+2. Immediately set their life to 20 unless a controlled property changes the resurrection value, and record resurrection.
+3. If a DWT is available, gain the next token from the already shuffled hidden DWT draw stack, move it to `deadWizardTokens`, reveal it, and mark it controlled by that player. If no DWT is available, continue without a token and keep the exhaustion state for the next start-of-turn check.
+4. Put the gained token face into one FIFO resolution queue. The source card, attack, Mayhem, or token face that caused the death continues to resolve with the resurrected player and gained token already visible.
+5. Only after the outermost current source completes, resolve queued mapped DWT faces in gain order. An Ongoing or end-game face stays data-driven; an immediate mapped face runs from this queue.
+6. A death caused while resolving a DWT face immediately resurrects and gains its token, but its new face waits until the current face ends. Direct DWT gain without death does not resurrect a player and uses the same queue boundary.
+7. If death resolution consumes the last DWT, continue the current turn; the next player's start-of-turn DWT check ends the game before that player takes actions.
 
 Trophy:
 

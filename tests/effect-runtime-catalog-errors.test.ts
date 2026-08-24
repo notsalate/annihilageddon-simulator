@@ -374,7 +374,7 @@ test("Mayhem family rejects malformed payloads at intake", () => {
         effectId: "mega_mayhem_set_life",
         timing: "onMayhemResolve",
         targetSelector: "eachPlayerClockwiseFromActive",
-        lifeTotal: 0,
+        lifeTotal: -1,
       },
     },
   ] as const;
@@ -554,16 +554,6 @@ test("activation and ongoing families reject unsupported calls before handlers",
         timing: "activation" as const,
         amount: 1,
         activationLimit: "oncePerTurnWhileControlled" as const,
-      },
-    },
-    {
-      effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand" as const,
-      payload: {
-        effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand" as const,
-        timing: "startOfControllerTurn" as const,
-        destination: "hand" as const,
-        amount: 1,
-        chooser: "controller" as const,
       },
     },
   ];

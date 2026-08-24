@@ -19,7 +19,14 @@ import {
   getControlledCards,
   removeCardFromLocation,
 } from "./control-ledger.js";
+import {
+  beginDeadWizardTokenResolutionBoundary,
+  dequeueDeadWizardTokenFace,
+  endDeadWizardTokenResolutionBoundary,
+  enqueueDeadWizardTokenFace,
+} from "./dead-wizard-token-resolution.js";
 import { resolveMainMarketGainDestination } from "./effect-runtime-cards-ownership-choice.js";
+import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
 import {
   resolveCardPlay,
   type CardPlayResolutionServices,
@@ -39,6 +46,7 @@ import {
   type EffectRuntimeServices,
   type EffectSourceContext,
   type MayhemAttackPlanTarget,
+  type MayhemAttackImpact,
   type EffectChoiceResolution,
   type EffectRuntimeHandlerOperationResult,
   evaluateRuntimeEffectAtTiming,
@@ -156,8 +164,26 @@ export function validateWizardPropertyOnPlayCardEffects(
 export function validateGainedCardEffects(
   state: GameState,
   player: PlayerState,
-  definition: CardDefinition
+  definition: CardDefinition,
+  card: CardInstance
 ): EffectExecutionResult {
+  const ownGainValidation = validateEffectsAtTiming(
+    state,
+    player,
+    definition.engine.effects,
+    "onGain",
+    {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: player.playerId,
+      cardInstanceId: card.instanceId,
+      definitionId: definition.cardId,
+    }
+  );
+  if (!ownGainValidation.ok) {
+    return ownGainValidation;
+  }
+
   for (const token of player.wizardProperties) {
     const tokenDefinition = state.tokenDefinitions.get(token.definitionId);
     if (
@@ -297,12 +323,14 @@ export function executeActivationEffects(
   definition: CardDefinition,
   source: EffectSourceContext
 ): EffectExecutionResult {
-  return executeEffects(
-    state,
-    player,
-    definition.engine.effects,
-    "activation",
-    source
+  return resolveWithinDeadWizardTokenResolutionBoundary(state, () =>
+    executeEffects(
+      state,
+      player,
+      definition.engine.effects,
+      "activation",
+      source
+    )
   );
 }
 
@@ -315,13 +343,10 @@ export function executeWizardPropertyActivationEffects(
   if (definition.kind !== "wizardProperty" || definition.engine === undefined) {
     return { ok: true };
   }
+  const engine = definition.engine;
 
-  return executeEffects(
-    state,
-    player,
-    definition.engine.effects,
-    "activation",
-    source
+  return resolveWithinDeadWizardTokenResolutionBoundary(state, () =>
+    executeEffects(state, player, engine.effects, "activation", source)
   );
 }
 
@@ -446,6 +471,187 @@ export function executeControlledCardOnPlayCardEffects(
   });
 }
 
+export function executeControlledCardAfterControllerPlaysCardEffects(
+  state: GameState,
+  player: PlayerState,
+  playedCard: CardInstance
+): EffectExecutionResult {
+  const playedDefinition = state.cardDefinitions.get(playedCard.definitionId);
+  if (playedDefinition === undefined) {
+    return {
+      ok: false,
+      error: `Missing played card definition ${playedCard.definitionId}`,
+    };
+  }
+
+  return dispatchControlledCardOperation(state, player, {
+    kind: "afterControllerPlaysCard",
+    executeEffect(effect, source) {
+      return executeRuntimeEffectAtTiming(
+        state,
+        player,
+        effect,
+        "afterControllerPlaysCard",
+        source,
+        effectRuntimeServices,
+        (decodedEffect) =>
+          decodedEffect.effectId ===
+            "ongoing_add_power_when_playing_limp_wand" &&
+          playedDefinition.engine.cardKind === decodedEffect.cardKind
+      );
+    },
+  });
+}
+
+export function executeControlledCardStartOfControllerTurnEffects(
+  state: GameState,
+  player: PlayerState
+): EffectExecutionResult {
+  return dispatchControlledCardOperation(state, player, {
+    kind: "startOfControllerTurn",
+    executeEffect(effect, source) {
+      return executeRuntimeEffectAtTiming(
+        state,
+        player,
+        effect,
+        "startOfControllerTurn",
+        source,
+        effectRuntimeServices
+      );
+    },
+  });
+}
+
+export function validateControlledCardStartOfControllerTurnEffects(
+  state: GameState,
+  player: PlayerState
+): EffectExecutionResult {
+  return dispatchControlledCardOperation(state, player, {
+    kind: "startOfControllerTurn",
+    executeEffect(effect, source) {
+      let expectedFailure: string | undefined;
+      const result = evaluateRuntimeEffectAtTiming(
+        effect,
+        source,
+        "startOfControllerTurn",
+        (decodedEffect) => {
+          expectedFailure = getExpectedEffectFailure(
+            state,
+            player,
+            decodedEffect
+          );
+          return { status: "resolved", result: undefined };
+        }
+      );
+      if (result.status === "error") {
+        return result;
+      }
+      if (expectedFailure !== undefined) {
+        return {
+          status: "resolved",
+          result: { ok: false, error: expectedFailure },
+        };
+      }
+      return { status: "resolved", result: { ok: true } };
+    },
+  });
+}
+
+export function resolveWithinDeadWizardTokenResolutionBoundary(
+  state: GameState,
+  resolve: () => EffectExecutionResult
+): EffectExecutionResult {
+  beginDeadWizardTokenResolutionBoundary(state);
+  let result: EffectExecutionResult;
+  let isOutermostBoundary: boolean;
+  try {
+    result = resolve();
+  } finally {
+    isOutermostBoundary = endDeadWizardTokenResolutionBoundary(state);
+  }
+
+  if (!result.ok || result.gameEnd !== undefined) {
+    return result;
+  }
+  if (!isOutermostBoundary) {
+    return result;
+  }
+  return resolveQueuedDeadWizardTokenFaces(state);
+}
+
+function resolveQueuedDeadWizardTokenFaces(
+  state: GameState
+): EffectExecutionResult {
+  let face = dequeueDeadWizardTokenFace(state);
+  while (face !== undefined) {
+    const currentFace = face;
+    const player = state.players.find(
+      (candidate) => candidate.playerId === currentFace.playerId
+    );
+    if (player === undefined) {
+      return {
+        ok: false,
+        error: `Missing dead wizard token player ${currentFace.playerId}`,
+      };
+    }
+    const token = player.deadWizardTokens.find(
+      (candidate) => candidate.instanceId === currentFace.tokenInstanceId
+    );
+    if (
+      token === undefined ||
+      token.definitionId !== currentFace.tokenDefinitionId
+    ) {
+      return {
+        ok: false,
+        error: `Missing dead wizard token ${currentFace.tokenInstanceId}`,
+      };
+    }
+    const definition = state.tokenDefinitions.get(
+      currentFace.tokenDefinitionId
+    );
+    if (definition?.kind !== "deadWizardToken") {
+      return {
+        ok: false,
+        error: `Missing dead wizard token definition ${currentFace.tokenDefinitionId}`,
+      };
+    }
+
+    const source: EffectSourceContext = {
+      sourceType: "deadWizardToken",
+      runtimeMode: state.runtimeMode,
+      playerId: player.playerId,
+      cardInstanceId: token.instanceId,
+      definitionId: definition.tokenId,
+      tokenInstanceId: token.instanceId,
+      tokenDefinitionId: definition.tokenId,
+    };
+    beginDeadWizardTokenResolutionBoundary(state);
+    let result: EffectExecutionResult;
+    try {
+      result = executeEffects(
+        state,
+        player,
+        definition.effects,
+        "onDeadWizardTokenFace",
+        source
+      );
+    } finally {
+      endDeadWizardTokenResolutionBoundary(state);
+    }
+    if (!result.ok || result.gameEnd !== undefined) {
+      return result;
+    }
+    recordGameEvent(state, {
+      type: "deadWizardTokenFaceResolved",
+      playerId: player.playerId,
+      tokenInstanceId: token.instanceId,
+      tokenDefinitionId: token.definitionId,
+    });
+    face = dequeueDeadWizardTokenFace(state);
+  }
+  return { ok: true };
+}
+
 export function moveGainedCardToPlayerDestination(
   state: GameState,
   player: PlayerState,
@@ -509,7 +715,54 @@ export function moveGainedCardToPlayerDestination(
     ownerAfter: card.ownerId,
   });
 
+  const ownGainResult = executeGainedCardOnGainEffects(
+    state,
+    player,
+    card,
+    definition
+  );
+  if (!ownGainResult.ok) {
+    return ownGainResult;
+  }
+
   return { ok: true, destination };
+}
+
+function executeGainedCardOnGainEffects(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance,
+  definition: CardDefinition
+): EffectExecutionResult {
+  const source: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: card.instanceId,
+    definitionId: definition.cardId,
+  };
+
+  for (const effect of definition.engine.effects) {
+    const execution = executeRuntimeEffectAtTiming(
+      state,
+      player,
+      requireVerifiedRuntimeEffect(effect),
+      "onGain",
+      source,
+      effectRuntimeServices
+    );
+    if (execution.status === "error") {
+      return { ok: false, error: execution.error };
+    }
+    if (execution.status === "resolved") {
+      const result = execution.result;
+      if (!result.ok || result.gameEnd !== undefined) {
+        return result;
+      }
+    }
+  }
+
+  return { ok: true };
 }
 
 function runOnGainCardEffects(
@@ -697,12 +950,14 @@ export function executeMayhemEffects(
   definition: CardDefinition,
   source: EffectSourceContext
 ): EffectExecutionResult {
-  return executeEffects(
-    state,
-    player,
-    definition.engine.effects,
-    "onMayhemResolve",
-    source
+  return resolveWithinDeadWizardTokenResolutionBoundary(state, () =>
+    executeEffects(
+      state,
+      player,
+      definition.engine.effects,
+      "onMayhemResolve",
+      source
+    )
   );
 }
 
@@ -830,7 +1085,7 @@ function effectConditionMatches(
       return (
         definition !== undefined &&
         condition.cardTypes.some((cardType) =>
-          controlledCardMatchesType(definition, cardType)
+          cardMatchesTypeForPlayer(state, player.playerId, definition, cardType)
         )
       );
     }).length;
@@ -839,16 +1094,6 @@ function effectConditionMatches(
   }
 
   return false;
-}
-
-function controlledCardMatchesType(
-  definition: CardDefinition,
-  cardType: string
-): boolean {
-  return (
-    definition.engine.cardTypes.includes(cardType) ||
-    definition.engine.tags?.includes("counts_as_every_card_type") === true
-  );
 }
 
 function resolvePlayerControlledAttackWithRuntimeAdapters(
@@ -894,6 +1139,17 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
     );
   },
   executeOnHitEffect(state, _attackingPlayer, targetPlayer, effect, source) {
+    if (effect.effectId === "attack_gain_limp_wand") {
+      return gainLimpWandsFromCommonStack(
+        state,
+        targetPlayer,
+        effect.amount,
+        "discard",
+        effect.effectId,
+        source,
+        effectRuntimeServices
+      );
+    }
     if (
       effect.effectId === "attack_gain_status" &&
       effect["statusId"] === "dingler"
@@ -918,6 +1174,7 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
       context.source,
       targetPlayer,
       context,
+      context.effectId,
       effectRuntimeServices
     );
   },
@@ -985,7 +1242,8 @@ function resolveMayhemAttackPlan(
   sourcePlayer: PlayerState,
   targets: readonly MayhemAttackPlanTarget[],
   effectId: RuntimeEffectId,
-  source: EffectSourceContext
+  source: EffectSourceContext,
+  impact: MayhemAttackImpact = { kind: "damage" }
 ): EffectExecutionResult {
   const decisions: Array<MayhemAttackPlanTarget & { avoided: boolean }> = [];
   const firstAmount = targets[0]?.amount;
@@ -1077,6 +1335,13 @@ function resolveMayhemAttackPlan(
       amount: decision.amount,
       sourceType: source.sourceType,
     });
+    if (impact.kind === "effect") {
+      const result = impact.executeOnHit(decision.targetPlayer);
+      if (!result.ok || result.gameEnd !== undefined) {
+        return result;
+      }
+      continue;
+    }
     const damageResult = dealDamage(
       state,
       sourcePlayer,
@@ -1201,6 +1466,7 @@ const cardPlayResolutionServices: CardPlayResolutionServices = {
   executeOnPlayEffects,
   executeWizardPropertyOnPlayCardEffects,
   executeControlledCardOnPlayCardEffects,
+  executeControlledCardAfterControllerPlaysCardEffects,
 };
 
 function resolveStatusTargetPlayers(
@@ -1601,6 +1867,26 @@ function buildLegalTargetChoices(
       };
     }
 
+    if (targetSelector === "chosenLeftOrRightFoe") {
+      const foes = getOpponentsInSeatingOrder(state, player);
+      const adjacentFoes = [foes[0], foes.at(-1)].filter(
+        (candidate): candidate is PlayerState => candidate !== undefined
+      );
+      const distinctAdjacentFoes = adjacentFoes.filter(
+        (candidate, index) =>
+          adjacentFoes.findIndex(
+            (otherCandidate) => otherCandidate.playerId === candidate.playerId
+          ) === index
+      );
+      return {
+        ok: true,
+        choices: distinctAdjacentFoes.map((candidate) => ({
+          choiceType: "player" as const,
+          player: candidate,
+        })),
+      };
+    }
+
     if (targetSelector === "chosenPlayer") {
       return {
         ok: true,
@@ -1733,6 +2019,33 @@ function resolvePlayerDeath(
     );
   }
 
+  const resurrectionLifeTotal = getResurrectionLifeTotal(state, player);
+  const lifeBeforeResurrection = player.life.current;
+  player.life.current = resurrectionLifeTotal;
+  recordGameEvent(state, {
+    type: "playerResurrected",
+    playerId: player.playerId,
+    amount: resurrectionLifeTotal,
+    lifeBefore: lifeBeforeResurrection,
+    lifeAfter: resurrectionLifeTotal,
+  });
+
+  return issueDeadWizardToken(state, player);
+}
+
+export function gainDeadWizardToken(
+  state: GameState,
+  player: PlayerState
+): EffectExecutionResult {
+  return resolveWithinDeadWizardTokenResolutionBoundary(state, () =>
+    issueDeadWizardToken(state, player)
+  );
+}
+
+function issueDeadWizardToken(
+  state: GameState,
+  player: PlayerState
+): EffectExecutionResult {
   if (
     state.common.deadWizardTokens.status === "available" &&
     state.common.deadWizardTokens.drawStack.length > 0
@@ -1754,6 +2067,7 @@ function resolvePlayerDeath(
           tokenInstanceId: token.instanceId,
           tokenDefinitionId: token.definitionId,
         });
+        enqueueDeadWizardTokenFace(state, player, token);
         return token;
       }
     );
@@ -1764,17 +2078,6 @@ function resolvePlayerDeath(
       return { ok: true, gameEnd: mutationResult.gameEnd };
     }
   }
-
-  const resurrectionLifeTotal = getResurrectionLifeTotal(state, player);
-  const lifeBeforeResurrection = player.life.current;
-  player.life.current = resurrectionLifeTotal;
-  recordGameEvent(state, {
-    type: "playerResurrected",
-    playerId: player.playerId,
-    amount: resurrectionLifeTotal,
-    lifeBefore: lifeBeforeResurrection,
-    lifeAfter: resurrectionLifeTotal,
-  });
   return { ok: true };
 }
 
@@ -2086,7 +2389,8 @@ function moveCardToPlayerZone(
   destination: CardInstance[],
   destinationZone: string,
   effectId: RuntimeEffectId,
-  source: EffectSourceContext
+  source: EffectSourceContext,
+  placeOnTop = false
 ): boolean {
   const ownerBefore = card.ownerId;
   const sourceLocation = removeCardFromLocation(state, card.instanceId);
@@ -2097,7 +2401,11 @@ function moveCardToPlayerZone(
 
   moveMarketChipsToPlayer(state, player, card);
   card.ownerId = player.playerId;
-  destination.push(card);
+  if (placeOnTop) {
+    destination.unshift(card);
+  } else {
+    destination.push(card);
+  }
   recordCardMoved(state, player, card, {
     sourceZone,
     destinationZone,
@@ -2370,10 +2678,16 @@ function playResolvedCard(
       ownerId: PlayerState["playerId"];
     };
     ongoingOwnerId?: PlayerState["playerId"] | "common";
+    forceOngoingDiscard?: {
+      zone: "ownerDiscardAfterResolution";
+      ownerId: PlayerState["playerId"];
+    };
   } = {}
 ): EffectExecutionResult {
-  return resolveCardPlay(state, player, card, cardPlayResolutionServices, {
-    ...ownership,
-    ongoingOwnerId: ownership.ongoingOwnerId ?? player.playerId,
-  });
+  return resolveWithinDeadWizardTokenResolutionBoundary(state, () =>
+    resolveCardPlay(state, player, card, cardPlayResolutionServices, {
+      ...ownership,
+      ongoingOwnerId: ownership.ongoingOwnerId ?? player.playerId,
+    })
+  );
 }

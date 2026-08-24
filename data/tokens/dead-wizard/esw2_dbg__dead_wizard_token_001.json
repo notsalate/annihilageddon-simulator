@@ -8,5 +8,12 @@
     "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_001.md"
   },
   "victoryPoints": -3,
-  "effects": []
+  "effects": [
+    {
+      "effectId": "dead_wizard_token_gain_limp_wands_per_discard_legend",
+      "timing": "onDeadWizardTokenFace",
+      "countedCardType": "legend",
+      "destination": "discard"
+    }
+  ]
 }

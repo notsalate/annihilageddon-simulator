@@ -308,7 +308,45 @@ function calculateEffectiveValue(options: {
     }
   }
 
+  if (
+    options.valueKind === "cardVictoryPoints" &&
+    options.target.targetType === "card" &&
+    stateHasPositiveLimpWandScoring(
+      options.state,
+      options.target.definitionId,
+      options.scoringCards ??
+        getOwnedScoringCards(options.state, options.playerId)
+    )
+  ) {
+    value = Math.abs(value);
+  }
+
   return value;
+}
+
+function stateHasPositiveLimpWandScoring(
+  state: GameState,
+  scoredDefinitionId: CardDefinition["cardId"],
+  scoringCards: readonly ControlledCardObject[]
+): boolean {
+  if (
+    state.cardDefinitions.get(scoredDefinitionId)?.engine.cardKind !==
+    "limpWand"
+  ) {
+    return false;
+  }
+
+  return scoringCards.some((object) =>
+    object.definition.engine.effects.some((effect) => {
+      const verifiedEffect = requireVerifiedRuntimeEffect(effect);
+      return (
+        verifiedEffect.effectId === "endgame_limp_wands_score_positive" &&
+        verifiedEffect.timing === "scoring" &&
+        verifiedEffect.scoreMode === "absolutePositiveVictoryPoints" &&
+        verifiedEffect.appliesToOwnedCardKind === "limpWand"
+      );
+    })
+  );
 }
 
 export function getOwnedScoringCards(

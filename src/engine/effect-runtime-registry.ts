@@ -63,6 +63,11 @@ import {
   type CardTypeEffectPayloadMap,
 } from "./effect-runtime-card-type.js";
 import {
+  createDeadWizardTokenEffectDefinitions,
+  type DeadWizardTokenEffectId,
+  type DeadWizardTokenEffectPayloadMap,
+} from "./effect-runtime-dead-wizard-token.js";
+import {
   createControlledPowerEffectDefinitions,
   createOngoingEffectDefinitions,
 } from "./effect-runtime-ongoing.js";
@@ -154,6 +159,13 @@ export interface MayhemAttackPlanTarget {
   targetPlayer: PlayerState;
   amount: number;
 }
+
+export type MayhemAttackImpact =
+  | { kind: "damage" }
+  | {
+      kind: "effect";
+      executeOnHit(targetPlayer: PlayerState): EffectExecutionResult;
+    };
 
 export type SetupDirective = {
   kind: "forceStartingPlayer";
@@ -281,7 +293,8 @@ export interface EffectRuntimeServices {
     destination: CardInstance[],
     destinationZone: string,
     effectId: RuntimeEffectId,
-    source: EffectSourceContext
+    source: EffectSourceContext,
+    placeOnTop?: boolean
   ): boolean;
   moveCardToZonePreservingOwner(
     state: GameState,
@@ -391,7 +404,8 @@ export interface EffectRuntimeServices {
     sourcePlayer: PlayerState,
     targets: readonly MayhemAttackPlanTarget[],
     effectId: RuntimeEffectId,
-    source: EffectSourceContext
+    source: EffectSourceContext,
+    impact?: MayhemAttackImpact
   ): EffectExecutionResult;
   resolvePlayerDeath(
     state: GameState,
@@ -415,6 +429,10 @@ export interface EffectRuntimeServices {
         ownerId: PlayerState["playerId"];
       };
       ongoingOwnerId?: CardInstance["ownerId"];
+      forceOngoingDiscard?: {
+        zone: "ownerDiscardAfterResolution";
+        ownerId: PlayerState["playerId"];
+      };
     }
   ): EffectExecutionResult;
   isLegalWildMagicOption(
@@ -561,6 +579,7 @@ interface EffectRuntimeEntry<
   readonly supportedModes: EffectRuntimeSupportedModes;
   readonly supportedSourceKinds: EffectRuntimeSupportedSourceKinds;
   readonly unsupported: boolean;
+  supportsTiming(timing: EffectTiming): boolean;
   validateSourceTiming(
     subjectId: string,
     effect: RuntimeEffectForId<EffectId>,
@@ -873,6 +892,9 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     supportedModes: config.supportedModes,
     supportedSourceKinds: config.supportedSourceKinds,
     unsupported: config.handler.unsupported === true,
+    supportsTiming(timing) {
+      return config.supportedTimings.includes(timing);
+    },
     validateSourceTiming(subjectId, effect, sourceKind) {
       return getUnsupportedSourceTimingError(
         subjectId,
@@ -1249,6 +1271,9 @@ const setLifeHandler: EffectRuntimeHandler<RuntimeEffectForId<"set_life">> = {
       targetLifeAfter: lifeChange.lifeAfter,
       sourceType: source.sourceType,
     });
+    if (lifeChange.lifeAfter < 1) {
+      return services.resolvePlayerDeath(state, targetResult.choice.player);
+    }
     return { ok: true };
   },
 };
@@ -1661,6 +1686,13 @@ const cardTypeEntries = defineEffectRuntimeFamily(
   Pick<CardTypeEffectPayloadMap, CardTypeEffectId>
 >;
 
+const deadWizardTokenEntries = defineEffectRuntimeFamily(
+  "tokens/dead-wizard",
+  createDeadWizardTokenEffectDefinitions({ bindRuntimeEffectDecoder })
+) satisfies EffectRuntimeEntriesFor<
+  Pick<DeadWizardTokenEffectPayloadMap, DeadWizardTokenEffectId>
+>;
+
 const controlledPowerEntries = defineEffectRuntimeFamily(
   "values/controlled-power",
   createControlledPowerEffectDefinitions({ bindRuntimeEffectDecoder })
@@ -1677,6 +1709,11 @@ const resourceDrawEntries = defineEffectRuntimeFamily(
   createResourceDrawEffectDefinitions({ bindRuntimeEffectDecoder })
 );
 
+const setLifeSupportedTimings = [
+  ...immediateEffectTimings,
+  "onDeadWizardTokenFace",
+] as const satisfies EffectRuntimeSupportedTimings;
+
 const lifeStatusEntries = defineEffectRuntimeFamily("life/status", [
   {
     effectId: "heal",
@@ -1689,9 +1726,9 @@ const lifeStatusEntries = defineEffectRuntimeFamily("life/status", [
   {
     effectId: "set_life",
     decoder: bindRuntimeEffectDecoder("set_life"),
-    supportedTimings: immediateEffectTimings,
+    supportedTimings: setLifeSupportedTimings,
     supportedModes: allEffectRuntimeModes,
-    supportedSourceKinds: ["card", "wizardProperty"],
+    supportedSourceKinds: ["card", "wizardProperty", "deadWizardToken"],
     handler: setLifeHandler,
   },
   {
@@ -1952,6 +1989,7 @@ export function defineEffectRuntimeCatalogGroupsForTesting(
 const effectRuntimeCatalogDefinition = defineEffectRuntimeCatalog([
   setupEffectEntries,
   cardTypeEntries,
+  deadWizardTokenEntries,
   controlledPowerEntries,
   resourceDrawEntries,
   lifeStatusEntries,
@@ -2057,6 +2095,15 @@ export function evaluateRuntimeEffectAtTiming<Result>(
     `Effect ${effect.effectId}`,
     effect,
     { source, timing, evaluate }
+  );
+}
+
+/** Keeps fixture validation observable when a timed dispatch skips normal effects. */
+export function isSupportedRuntimeEffectTiming(
+  effect: VerifiedRuntimeEffect
+): boolean {
+  return getVerifiedEffectRuntimeCatalogEntry(effect).supportsTiming(
+    effect.timing
   );
 }
 

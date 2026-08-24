@@ -10,6 +10,7 @@ import type {
 } from "./effect-runtime-ongoing.js";
 import type { EffectiveValueModifierEffectPayloadMap } from "./effect-runtime-effective-value-modifier.js";
 import type { CardTypeEffectPayloadMap } from "./effect-runtime-card-type.js";
+import type { DeadWizardTokenEffectPayloadMap } from "./effect-runtime-dead-wizard-token.js";
 
 export type {
   ResourceDrawEffectPayloadMap,
@@ -64,6 +65,11 @@ export type {
   CardTypeEffectPayloadMap,
   OwnedCardsCountAsCardTypeRuntimeEffect,
 } from "./effect-runtime-card-type.js";
+export type {
+  DeadWizardTokenEffectPayloadMap,
+  DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect,
+  DeadWizardTokenGainLimpWandsPerDiscardLegendRuntimeEffect,
+} from "./effect-runtime-dead-wizard-token.js";
 
 export const effectTimings = [
   "activation",
@@ -76,6 +82,7 @@ export const effectTimings = [
   "onDefense",
   "onGain",
   "onGainCard",
+  "onDeadWizardTokenFace",
   "onMayhemResolve",
   "onPlay",
   "onPlayCard",
@@ -172,6 +179,7 @@ export type AttackOutcomeBranch =
   | { effectId: "gain_chips_equal_damage_dealt" }
   | { effectId: "heal_equal_damage_dealt" }
   | { effectId: "return_discard_to_hand"; amount: number }
+  | { effectId: "transfer_limp_wands_to_killed_target"; amount: number }
   | {
       effectId: "gain_status";
       statusId: "dingler";
@@ -205,6 +213,8 @@ export const knownRuntimeEffectIds = [
   "conditional_activation_gain_chips",
   "controls_other_card_type",
   "deal_damage",
+  "dead_wizard_token_gain_limp_wand_to_deck_top",
+  "dead_wizard_token_gain_limp_wands_per_discard_legend",
   "double_owned_attack_damage",
   "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
   "destroy_card",
@@ -249,6 +259,7 @@ export const knownRuntimeEffectIds = [
   "mayhem_each_player_vote_dingler",
   "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
   "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+  "mega_mayhem_each_player_gain_limp_wands_to_hand",
   "mega_mayhem_each_player_toggle_dingler",
   "mega_mayhem_set_life",
   "modify_effective_value",
@@ -757,6 +768,14 @@ export type MegaMayhemEachPlayerDestroyTopMainDeckDeathIfMayhemRuntimeEffect =
     };
     destroyedCardSource: "mainDeck";
   };
+export type MegaMayhemEachPlayerGainLimpWandsToHandRuntimeEffect = TimedEffect<
+  "mega_mayhem_each_player_gain_limp_wands_to_hand",
+  "onMayhemResolve"
+> & {
+  targetSelector: "eachPlayerClockwiseFromActive";
+  destination: "hand";
+  amount: number;
+};
 export type MegaMayhemEachPlayerToggleDinglerRuntimeEffect = TimedEffect<
   "mega_mayhem_each_player_toggle_dingler",
   "onMayhemResolve"
@@ -786,6 +805,7 @@ export interface MayhemEffectPayloadMap {
   mayhem_each_player_vote_dingler: MayhemEachPlayerVoteDinglerRuntimeEffect;
   mayhem_lowest_life_players_gain_dingler_and_set_to_max_life: MayhemLowestLifePlayersGainDinglerAndSetToMaxLifeRuntimeEffect;
   mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem: MegaMayhemEachPlayerDestroyTopMainDeckDeathIfMayhemRuntimeEffect;
+  mega_mayhem_each_player_gain_limp_wands_to_hand: MegaMayhemEachPlayerGainLimpWandsToHandRuntimeEffect;
   mega_mayhem_each_player_toggle_dingler: MegaMayhemEachPlayerToggleDinglerRuntimeEffect;
   mega_mayhem_set_life: MegaMayhemSetLifeRuntimeEffect;
 }
@@ -796,7 +816,8 @@ export type RuntimeEffectPayloadMap = SetupEffectPayloadMap &
   ActivationEffectPayloadMap &
   OngoingEffectPayloadMap &
   MayhemEffectPayloadMap &
-  CardTypeEffectPayloadMap;
+  CardTypeEffectPayloadMap &
+  DeadWizardTokenEffectPayloadMap;
 
 export type RuntimeEffectId = keyof RuntimeEffectPayloadMap;
 export type RuntimeEffectForId<Id extends RuntimeEffectId> =
