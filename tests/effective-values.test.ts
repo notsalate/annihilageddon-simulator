@@ -20,6 +20,7 @@ import {
 } from "../src/index.js";
 import { calculateEffectiveCardCost as calculateEffectiveCardCostFromDomain } from "../src/engine/effective-values.js";
 import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
+import { createRuntimeCoverageInventory } from "../src/import/runtime-coverage-inventory.js";
 import {
   buildControlledObjectView,
   grantTemporaryControl,
@@ -516,6 +517,118 @@ test("wizard property discount and scoring modifier apply to owned treasures", (
       ?.victoryPoints,
     3
   );
+});
+
+test("свойство колдуна 004 удешевляет обычное и легендарное сокровища и добавляет им ПО", () => {
+  const propertyId = "esw2_dbg__wizard_property_004";
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const wizardPropertyStack = dataPack.tokenStacks.wizardProperties;
+  assert.ok(wizardPropertyStack);
+  const state = initializeGame({
+    dataPack: {
+      ...dataPack,
+      tokenStacks: {
+        ...dataPack.tokenStacks,
+        wizardProperties: {
+          ...wizardPropertyStack,
+          entries: [{ tokenId: propertyId, count: 4 }],
+        },
+      },
+    },
+    seed: 60616,
+  });
+  const player = state.players.find(
+    (candidate) => candidate.playerId === state.activePlayerId
+  );
+  const treasure = state.cardDefinitions.get("esw2_dbg__main_015");
+  const legendTreasure = state.cardDefinitions.get("esw2_dbg__legend_025");
+  assert.ok(player);
+  assert.ok(treasure);
+  assert.ok(legendTreasure);
+  assert.equal(
+    state.players.find(
+      (candidate) => candidate.playerId === state.activePlayerId
+    )?.wizardProperties[0]?.definitionId,
+    propertyId
+  );
+
+  const ownedTreasure = createCardInstance(
+    "property-004-owned-treasure",
+    treasure.cardId,
+    player.playerId
+  );
+  const ownedLegendTreasure = createCardInstance(
+    "property-004-owned-legend-treasure",
+    legendTreasure.cardId,
+    player.playerId
+  );
+  state.common.market.splice(0, state.common.market.length, ownedTreasure);
+  state.common.legendMarket.splice(
+    0,
+    state.common.legendMarket.length,
+    ownedLegendTreasure
+  );
+  state.turn.power = treasure.engine.cost - 1;
+  assert.equal(
+    applyAction(state, {
+      type: "buyMarketCard",
+      source: "mainMarket",
+      cardInstanceId: ownedTreasure.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(state.turn.power, 0);
+  state.turn.power = legendTreasure.engine.cost - 1;
+  assert.equal(
+    applyAction(state, {
+      type: "buyMarketCard",
+      source: "legendMarket",
+      cardInstanceId: ownedLegendTreasure.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(state.turn.power, 0);
+  assert.equal(player.discard.includes(ownedTreasure), true);
+  assert.equal(player.discard.includes(ownedLegendTreasure), true);
+
+  assert.equal(
+    calculateEffectiveCardCost(state, player.playerId, treasure),
+    treasure.engine.cost - 1
+  );
+  assert.equal(
+    calculateEffectiveCardCost(state, player.playerId, legendTreasure),
+    legendTreasure.engine.cost - 1
+  );
+  assert.equal(
+    calculateEffectiveCardVictoryPoints(
+      state,
+      player.playerId,
+      treasure,
+      ownedTreasure
+    ),
+    treasure.engine.victoryPoints + 1
+  );
+  assert.equal(
+    calculateEffectiveCardVictoryPoints(
+      state,
+      player.playerId,
+      legendTreasure,
+      ownedLegendTreasure
+    ),
+    legendTreasure.engine.victoryPoints + 1
+  );
+  assert.equal(
+    scoreGame(state).find((score) => score.playerId === player.playerId)
+      ?.victoryPoints,
+    treasure.engine.victoryPoints + legendTreasure.engine.victoryPoints + 2
+  );
+
+  const coverage = createRuntimeCoverageInventory(rootDir).items.find(
+    (item) => item.id === propertyId
+  );
+  assert.ok(coverage);
+  assert.equal(coverage.crossSourceStatus, "crossSourceComplete");
+  assert.deepEqual(coverage.crossSourceBlockers, []);
 });
 
 test("non-executable wizard property effects fail instead of applying silently", () => {
