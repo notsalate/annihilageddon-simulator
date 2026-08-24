@@ -5394,6 +5394,12 @@ test("fixed-discard gain cannot be redirected by Wizard Property 008", () => {
   });
 
   assert.equal(result.ok, true);
+  assert.equal(
+    state.players
+      .find((candidate) => candidate.playerId === player.playerId)
+      ?.discard.includes(gainedCard),
+    true
+  );
   assert.equal(player.discard.includes(gainedCard), true);
   assert.equal(player.deck.includes(gainedCard), false);
 });
