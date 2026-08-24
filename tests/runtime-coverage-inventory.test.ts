@@ -785,6 +785,9 @@ test("repository cross-source registry assigns every wizard property and DWT to 
   const firstDeadWizardToken = deadWizardTokens.find(
     (item) => item.id === "esw2_dbg__dead_wizard_token_001"
   );
+  const wizardProperty004 = wizardProperties.find(
+    (item) => item.id === "esw2_dbg__wizard_property_004"
+  );
 
   assert.equal(wizardProperties.length, 10);
   assert.equal(deadWizardTokens.length, 28);
@@ -793,8 +796,12 @@ test("repository cross-source registry assigns every wizard property and DWT to 
       (item) => item.primaryMechanicCluster !== undefined
     )
   );
-  assert.equal(report.crossSourceSummary.blocked, 172);
+  assert.equal(report.crossSourceSummary.blocked, 171);
+  assert.equal(report.crossSourceSummary.crossSourceComplete, 1);
   assert.ok(firstDeadWizardToken);
+  assert.ok(wizardProperty004);
+  assert.equal(wizardProperty004.crossSourceStatus, "crossSourceComplete");
+  assert.deepEqual(wizardProperty004.crossSourceBlockers, []);
   assert.equal(firstDeadWizardToken.crossSourceStatus, "blocked");
   assert.ok(
     firstDeadWizardToken.crossSourceBlockers.includes("runtime has no effects")

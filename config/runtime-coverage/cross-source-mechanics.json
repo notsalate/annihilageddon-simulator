@@ -32,10 +32,219 @@
       "id": "esw2_dbg__wizard_property_004",
       "objectKind": "wizardProperty",
       "primaryMechanicCluster": "market-effects",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "focused runtime evidence pending in market-effects"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Ты платишь на 1 меньше при покупке сокровищ. В конце игры: каждое твоё сокровище приносит тебе +1 ПО."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardCost",
+                "operation": "add",
+                "amount": -1,
+                "target": {
+                  "targetType": "card",
+                  "cardTypes": ["treasure"]
+                }
+              }
+            },
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardVictoryPoints",
+                "operation": "add",
+                "amount": 1,
+                "target": {
+                  "targetType": "card",
+                  "cardTypes": ["treasure"]
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "свойство колдуна 004 удешевляет обычное и легендарное сокровища и добавляет им ПО"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Скидка применяется при покупке сокровищ."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardCost",
+                "operation": "add",
+                "amount": -1,
+                "target": {
+                  "targetType": "card",
+                  "cardTypes": ["treasure"]
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "свойство колдуна 004 удешевляет обычное и легендарное сокровища и добавляет им ПО"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "При покупке легенды-сокровищ также применяется скидка."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardCost",
+                "operation": "add",
+                "amount": -1,
+                "target": {
+                  "targetType": "card",
+                  "cardTypes": ["treasure"]
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "свойство колдуна 004 удешевляет обычное и легендарное сокровища и добавляет им ПО"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Стоимость покупки сокровища уменьшается на 1."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardCost",
+                "operation": "add",
+                "amount": -1,
+                "target": {
+                  "targetType": "card",
+                  "cardTypes": ["treasure"]
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "свойство колдуна 004 удешевляет обычное и легендарное сокровища и добавляет им ПО"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "В конце игры каждое сокровище игрока приносит дополнительно +1 ПО."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardVictoryPoints",
+                "operation": "add",
+                "amount": 1,
+                "target": {
+                  "targetType": "card",
+                  "cardTypes": ["treasure"]
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "свойство колдуна 004 удешевляет обычное и легендарное сокровища и добавляет им ПО"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "ПО означает победные очки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardVictoryPoints",
+                "operation": "add",
+                "amount": 1,
+                "target": {
+                  "targetType": "card",
+                  "cardTypes": ["treasure"]
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "свойство колдуна 004 удешевляет обычное и легендарное сокровища и добавляет им ПО"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[5]",
+            "value": "Можно со старта свойства считать, что сокровища под владениям игрока уже дают +1 ПО"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_effective_value",
+              "timing": "whileControlled",
+              "fields": {
+                "valueKind": "cardVictoryPoints",
+                "operation": "add",
+                "amount": 1,
+                "target": {
+                  "targetType": "card",
+                  "cardTypes": ["treasure"]
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "свойство колдуна 004 удешевляет обычное и легендарное сокровища и добавляет им ПО"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__wizard_property_005",
