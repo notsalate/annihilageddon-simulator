@@ -23,6 +23,7 @@ import type { EffectGameEnd } from "./effect-runtime-registry.js";
 import { assertNever } from "../common.js";
 import {
   getControlledCards,
+  listPhysicalCardLocations,
   releaseTemporaryControls,
 } from "./control-ledger.js";
 import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
@@ -962,6 +963,7 @@ function getCardEffectiveTypeActions(
   for (const card of [
     ...player.unboughtFamiliars,
     ...getControlledCards(state, player),
+    ...getOwnedFamiliarCards(state, player),
   ]) {
     cards.set(card.instanceId, card);
   }
@@ -993,7 +995,22 @@ function getCardEffectiveTypeActionCard(
   return [
     ...player.unboughtFamiliars,
     ...getControlledCards(state, player),
+    ...getOwnedFamiliarCards(state, player),
   ].find((card) => card.instanceId === cardInstanceId);
+}
+
+function getOwnedFamiliarCards(
+  state: GameState,
+  player: PlayerState
+): CardInstance[] {
+  return listPhysicalCardLocations(state)
+    .map((location) => location.card)
+    .filter(
+      (card) =>
+        card.ownerId === player.playerId &&
+        state.cardDefinitions.get(card.definitionId)?.engine.cardKind ===
+          "familiar"
+    );
 }
 
 function getBuyCard(

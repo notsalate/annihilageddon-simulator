@@ -5762,6 +5762,25 @@ test("свойство волшебника 003 позволяет считат�
     "familiar-effective-type"
   );
   player.unboughtFamiliars.push(familiar);
+  state.turn.power = familiarDefinition.engine.cost;
+  assert.deepEqual(
+    applyAction(state, {
+      type: "buyMarketCard",
+      cardInstanceId: familiar.instanceId,
+      source: "familiar",
+    }),
+    { ok: true }
+  );
+  assert.equal(player.discard.includes(familiar), true);
+  assert.ok(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "setCardEffectiveType" &&
+        action.cardInstanceId === familiar.instanceId &&
+        action.cardType === "legend" &&
+        action.enabled
+    )
+  );
   assert.deepEqual(
     applyAction(state, {
       type: "setCardEffectiveType",
@@ -5787,6 +5806,24 @@ test("свойство волшебника 003 позволяет считат�
       familiar
     ),
     familiarDefinition.engine.cost - 2
+  );
+  assert.deepEqual(
+    applyAction(state, {
+      type: "setCardEffectiveType",
+      cardInstanceId: familiar.instanceId,
+      cardType: "legend",
+      enabled: false,
+    }),
+    { ok: true }
+  );
+  assert.equal(
+    calculateEffectiveCardCost(
+      state,
+      player.playerId,
+      familiarDefinition,
+      familiar
+    ),
+    familiarDefinition.engine.cost
   );
 });
 
