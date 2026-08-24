@@ -973,7 +973,7 @@ test("PR workflow shards workloads and conditionally confirms regressions", () =
     pullRequestWorkload.slice(
       pullRequestWorkload.indexOf("actions/upload-artifact")
     ),
-    /docs\/benchmarks\/performance-calibration-e0-v1\.json/u
+    /docs\/benchmarks\/performance-calibration-e1-v1\.json/u
   );
   assert.match(
     pullRequestWorkload,
