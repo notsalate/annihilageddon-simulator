@@ -280,6 +280,21 @@ Runtime JSON должен быть самодостаточным для engine.
 - partial/unsupported runtime card JSON не должно использоваться как промежуточное покрытие для карт, если конкретное issue явно не разрешает это;
 - non-full runtime card JSON должно блокироваться guardrails, а не накапливаться как обычный промежуточный слой.
 
+## Cross-Source Runtime Coverage
+
+`npm run report:runtime-coverage` сохраняет отдельный карточный статус `cardComplete` из `npm run report:card-runtime-clusters` и проверяет final `crossSourceComplete` для свойств волшебников и жетонов дохлого волшебника.
+
+Реестр `config/runtime-coverage/cross-source-mechanics.json` для каждого token definition задаёт primary mechanic cluster, точные ссылки на canonical draft points, runtime effects и именованные focused tests. Это план и evidence для import tooling, а не executable engine input.
+
+`crossSourceComplete` возможен только когда:
+
+- отсутствуют `unresolvedMechanics`;
+- каждая видимая строка, VP и note из canonical draft сопоставлены с runtime effect и именованным test case;
+- runtime definition имеет effects, проходит policy `sourceKind × timing` и включён в правильный stack с canonical количеством;
+- runtime reference и test reference существуют.
+
+Пустой `effects: []`, упоминание stable ID без именованного теста, несовпавшее количество в stack или несуществующая composition reference всегда оставляют объект в статусе `blocked`.
+
 Ссылки `source.draft`, `source.text` и `source.image` в runtime JSON допустимы только как metadata/traceability для ревью и сверки. Движок не должен читать эти ссылки во время партии и не должен выводить из них поведение карты. Draft JSON из `data/import/**` также не является executable engine input.
 
 После runtime mapping объект должен быть включен в нужный `deck`, `stack`, `pool` и `pack`. Шаблоны лежат в:

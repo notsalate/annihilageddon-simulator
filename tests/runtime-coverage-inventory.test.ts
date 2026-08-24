@@ -161,6 +161,307 @@ test("runtime coverage inventory distinguishes planning statuses and proposes a 
   );
 });
 
+test("cross-source coverage blocks an empty DWT runtime and ignores an ID-only test mention", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-cross-source-runtime-")
+  );
+  const tokenId = "esw2_dbg__dead_wizard_token_001";
+
+  writeJson(
+    rootDir,
+    `data/import/tokens/dead-wizard-token/drafts/${tokenId}.json`,
+    {
+      schemaVersion: 1,
+      draftKind: "deadWizardTokenDraft",
+      tokenId,
+      kind: "deadWizardToken",
+      source: { image: "assets/dead-wizard-token/DWT_001.png" },
+      visible: {
+        sourceLabel: "Получи вялую палочку за каждую легенду в сбросе",
+        textRu: "Получи вялую палочку за каждую легенду в сбросе.",
+        victoryPoints: -3,
+        uncertainty: [],
+      },
+      notes: [],
+      composition: { quantity: 1 },
+    }
+  );
+  writeJson(rootDir, `data/tokens/dead-wizard/${tokenId}.json`, {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "deadWizardToken",
+    victoryPoints: -3,
+    effects: [],
+  });
+  writeJson(rootDir, "data/stacks/tokens/dead-wizard-tokens.json", {
+    stackId: "dead-wizard-tokens",
+    role: "deadWizardTokens",
+    entries: [{ tokenId, count: 1 }],
+  });
+  writeJson(rootDir, "config/runtime-coverage/cross-source-mechanics.json", {
+    schemaVersion: 1,
+    entries: [
+      {
+        id: tokenId,
+        objectKind: "deadWizardToken",
+        primaryMechanicCluster: "special-card-stack",
+        semanticMappings: [
+          {
+            draftPoint: {
+              path: "visible.textRu",
+              value: "Получи вялую палочку за каждую легенду в сбросе.",
+            },
+            runtimeRefs: [{ effectId: "gain_card", timing: "onGain" }],
+            testRefs: [
+              {
+                file: "tests/dead-wizard-token-runtime.test.ts",
+                name: "resolves limp wand payout",
+              },
+            ],
+          },
+        ],
+        unresolvedMechanics: [],
+      },
+    ],
+  });
+  writeText(
+    rootDir,
+    "tests/dead-wizard-token-runtime.test.ts",
+    `const tokenId = "${tokenId}";\ntest("mentions token only", () => tokenId);\n`
+  );
+
+  const report = createRuntimeCoverageInventory(rootDir);
+  const item = report.items.find((candidate) => candidate.id === tokenId);
+
+  assert.ok(item);
+  assert.equal(item.primaryMechanicCluster, "special-card-stack");
+  assert.equal(item.crossSourceStatus, "blocked");
+  assert.ok(
+    item.crossSourceBlockers.some((blocker) =>
+      blocker.includes("runtime effect gain_card@onGain is missing")
+    )
+  );
+  assert.ok(
+    item.crossSourceBlockers.some((blocker) =>
+      blocker.includes("focused test reference is missing")
+    )
+  );
+  assert.match(
+    formatRuntimeCoverageInventoryMarkdown(report),
+    /crossSourceStatus: blocked/
+  );
+});
+
+test("cross-source coverage requires matching runtime and focused test evidence for every draft point", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-cross-source-complete-")
+  );
+  const tokenId = "esw2_dbg__wizard_property_005";
+  const textRu = "☼: при активации получи 1 чипсину.";
+
+  writeJson(
+    rootDir,
+    `data/import/tokens/wizard-property/drafts/${tokenId}.json`,
+    {
+      schemaVersion: 1,
+      draftKind: "wizardPropertyDraft",
+      tokenId,
+      kind: "wizardProperty",
+      source: { image: "assets/wizard-property/wp_005.png" },
+      visible: { sourceLabel: "Свойство 5", textRu, uncertainty: [] },
+      notes: [],
+      composition: { quantity: 1 },
+    }
+  );
+  writeJson(rootDir, `data/tokens/wizard-property/${tokenId}.json`, {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "wizardProperty",
+    engine: {
+      mappingStatus: "mapped",
+      playableInV0: true,
+      effects: [{ effectId: "gain_chips", timing: "activation", amount: 1 }],
+      unsupportedMechanics: [],
+    },
+  });
+  writeJson(rootDir, "data/stacks/tokens/wizard-properties.json", {
+    stackId: "wizard-properties",
+    role: "wizardProperties",
+    entries: [{ tokenId, count: 1 }],
+  });
+  writeJson(rootDir, "config/runtime-coverage/cross-source-mechanics.json", {
+    schemaVersion: 1,
+    entries: [
+      {
+        id: tokenId,
+        objectKind: "wizardProperty",
+        primaryMechanicCluster: "activation-effects",
+        semanticMappings: [
+          {
+            draftPoint: { path: "visible.textRu", value: textRu },
+            runtimeRefs: [{ effectId: "gain_chips", timing: "activation" }],
+            testRefs: [
+              {
+                file: "tests/wizard-property-runtime.test.ts",
+                name: "gains a chip while activated",
+              },
+            ],
+          },
+        ],
+        unresolvedMechanics: [],
+      },
+    ],
+  });
+  writeText(
+    rootDir,
+    "tests/wizard-property-runtime.test.ts",
+    `const tokenId = "${tokenId}";\ntest("gains a chip while activated", () => tokenId);\n`
+  );
+
+  const report = createRuntimeCoverageInventory(rootDir);
+  const item = report.items.find((candidate) => candidate.id === tokenId);
+
+  assert.ok(item);
+  assert.equal(item.crossSourceStatus, "crossSourceComplete");
+  assert.deepEqual(item.crossSourceBlockers, []);
+});
+
+test("cross-source coverage blocks effects outside their source-kind policy", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-cross-source-policy-")
+  );
+  const tokenId = "esw2_dbg__dead_wizard_token_001";
+  const textRu = "Замени стартовую карту.";
+
+  writeJson(
+    rootDir,
+    `data/import/tokens/dead-wizard-token/drafts/${tokenId}.json`,
+    {
+      schemaVersion: 1,
+      draftKind: "deadWizardTokenDraft",
+      tokenId,
+      kind: "deadWizardToken",
+      source: { image: "assets/dead-wizard-token/DWT_001.png" },
+      visible: {
+        sourceLabel: textRu,
+        textRu,
+        victoryPoints: -3,
+        uncertainty: [],
+      },
+      notes: [],
+      composition: { quantity: 1 },
+    }
+  );
+  writeJson(rootDir, `data/tokens/dead-wizard/${tokenId}.json`, {
+    schemaVersion: 1,
+    tokenId,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "deadWizardToken",
+    victoryPoints: -3,
+    effects: [
+      {
+        effectId: "replace_starting_card",
+        timing: "setup",
+        fromDefinitionId: "esw2_dbg__starter_001",
+        toDefinitionId: "esw2_dbg__starter_002",
+      },
+    ],
+  });
+  writeJson(rootDir, "data/stacks/tokens/dead-wizard-tokens.json", {
+    stackId: "dead-wizard-tokens",
+    role: "deadWizardTokens",
+    entries: [{ tokenId, count: 1 }],
+  });
+  writeJson(rootDir, "config/runtime-coverage/cross-source-mechanics.json", {
+    schemaVersion: 1,
+    entries: [
+      {
+        id: tokenId,
+        objectKind: "deadWizardToken",
+        primaryMechanicCluster: "dwt-interactions",
+        semanticMappings: [
+          {
+            draftPoint: { path: "visible.textRu", value: textRu },
+            runtimeRefs: [
+              { effectId: "replace_starting_card", timing: "setup" },
+            ],
+            testRefs: [
+              {
+                file: "tests/dead-wizard-token-runtime.test.ts",
+                name: "rejects setup replacement on a DWT",
+              },
+            ],
+          },
+          {
+            draftPoint: { path: "visible.victoryPoints", value: -3 },
+            runtimeRefs: [
+              { effectId: "replace_starting_card", timing: "setup" },
+            ],
+            testRefs: [
+              {
+                file: "tests/dead-wizard-token-runtime.test.ts",
+                name: "rejects setup replacement on a DWT",
+              },
+            ],
+          },
+        ],
+        unresolvedMechanics: [],
+      },
+    ],
+  });
+  writeText(
+    rootDir,
+    "tests/dead-wizard-token-runtime.test.ts",
+    `const tokenId = "${tokenId}";\ntest("rejects setup replacement on a DWT", () => tokenId);\n`
+  );
+
+  const item = createRuntimeCoverageInventory(rootDir).items.find(
+    (candidate) => candidate.id === tokenId
+  );
+
+  assert.ok(item);
+  assert.equal(item.crossSourceStatus, "blocked");
+  assert.ok(
+    item.crossSourceBlockers.some((blocker) =>
+      blocker.includes("violates source/timing policy")
+    )
+  );
+});
+
+test("repository cross-source registry assigns every wizard property and DWT to a primary cluster", () => {
+  const report = createRuntimeCoverageInventory(process.cwd());
+  const wizardProperties = report.items.filter(
+    (item) => item.objectKind === "wizardProperty"
+  );
+  const deadWizardTokens = report.items.filter(
+    (item) => item.objectKind === "deadWizardToken"
+  );
+  const firstDeadWizardToken = deadWizardTokens.find(
+    (item) => item.id === "esw2_dbg__dead_wizard_token_001"
+  );
+
+  assert.equal(wizardProperties.length, 10);
+  assert.equal(deadWizardTokens.length, 28);
+  assert.ok(
+    [...wizardProperties, ...deadWizardTokens].every(
+      (item) => item.primaryMechanicCluster !== undefined
+    )
+  );
+  assert.equal(report.crossSourceSummary.blocked, 38);
+  assert.ok(firstDeadWizardToken);
+  assert.equal(firstDeadWizardToken.crossSourceStatus, "blocked");
+  assert.ok(
+    firstDeadWizardToken.crossSourceBlockers.includes("runtime has no effects")
+  );
+  assert.ok(
+    firstDeadWizardToken.crossSourceBlockers.includes(
+      "composition quantity 30 does not match canonical quantity 1"
+    )
+  );
+});
+
 function createCardDraft(
   cardId: string,
   visibleOverrides: Partial<{
