@@ -22,8 +22,10 @@ import { resolveCardPlay } from "./card-play-resolution.js";
 import type { EffectGameEnd } from "./effect-runtime-registry.js";
 import { assertNever } from "../common.js";
 import {
+  findPlayerUnboughtFamiliarCard,
   getControlledCards,
   listOwnedPlayerPhysicalCards,
+  listPlayerUnboughtFamiliarCards,
   releaseTemporaryControls,
 } from "./control-ledger.js";
 import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
@@ -984,7 +986,7 @@ function getFamiliarBuyAction(
   state: GameState,
   player: PlayerState
 ): BuyMarketCardAction[] {
-  return player.unboughtFamiliars
+  return listPlayerUnboughtFamiliarCards(player)
     .filter((familiar) => canAffordFamiliar(state, player, familiar))
     .map((familiar) => ({
       type: "buyMarketCard" as const,
@@ -1052,9 +1054,7 @@ function getBuyCard(
   action: BuyMarketCardAction
 ): CardInstance | undefined {
   if (action.source === "familiar") {
-    return activePlayer.unboughtFamiliars.find(
-      (familiar) => familiar.instanceId === action.cardInstanceId
-    );
+    return findPlayerUnboughtFamiliarCard(activePlayer, action.cardInstanceId);
   }
 
   return getBuySourceZone(state, action.source).find(

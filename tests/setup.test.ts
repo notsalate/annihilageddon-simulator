@@ -115,7 +115,7 @@ test("default setup choice policy records alwaysPickFirst", () => {
     (event) => event.type === "setupChoiceSelected"
   );
 
-  assert.equal(setupChoiceEvents.length, 2);
+  assert.equal(setupChoiceEvents.length, 4);
   for (const event of setupChoiceEvents) {
     const candidates = event.candidateDefinitionIds ?? [];
     assert.equal(event.policyId, "alwaysPickFirst");
@@ -289,6 +289,17 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
   if (!foreignResult.ok) {
     assert.match(foreignResult.error, /eligible effective-type target/);
   }
+});
+
+test("current runtime data makes wizard property 003 setup reachable", () => {
+  const state = initializeGame({ rootDir, seed: 2 });
+  const propertyOwner = state.players.find((player) =>
+    player.wizardProperties.some(
+      (property) => property.definitionId === "esw2_dbg__wizard_property_003"
+    )
+  );
+  assert.ok(propertyOwner);
+  assert.equal(propertyOwner.unboughtFamiliars.length, 3);
 });
 
 test("wizard property setup effects update cards, trophies, life, and first player", () => {

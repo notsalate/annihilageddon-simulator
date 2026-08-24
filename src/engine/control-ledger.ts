@@ -514,6 +514,23 @@ export function listOwnedPlayerPhysicalCards(
     .map((location) => location.card);
 }
 
+/** Lists the active player's unbought familiar slot cards through the Ledger. */
+export function listPlayerUnboughtFamiliarCards(
+  player: PlayerState
+): readonly CardInstance[] {
+  return player.unboughtFamiliars;
+}
+
+/** Finds one unbought familiar through the Ledger-owned slot. */
+export function findPlayerUnboughtFamiliarCard(
+  player: PlayerState,
+  cardInstanceId: string
+): CardInstance | undefined {
+  return listPlayerUnboughtFamiliarCards(player).find(
+    (card) => card.instanceId === cardInstanceId
+  );
+}
+
 /** Returns the current player's played cards through the Ledger-owned zone. */
 export function listPlayerPlayedThisTurnCards(
   player: PlayerState
