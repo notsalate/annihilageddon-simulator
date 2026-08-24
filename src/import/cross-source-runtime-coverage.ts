@@ -26,11 +26,6 @@ export interface CrossSourceSemanticMapping {
   testRefs: CrossSourceTestRef[];
 }
 
-export interface CrossSourceDraftPoint {
-  path: string;
-  value: string | number;
-}
-
 type CrossSourceRuntimeValue =
   | null
   | string
@@ -38,6 +33,11 @@ type CrossSourceRuntimeValue =
   | boolean
   | CrossSourceRuntimeValue[]
   | { [key: string]: CrossSourceRuntimeValue };
+
+export interface CrossSourceDraftPoint {
+  path: string;
+  value: CrossSourceRuntimeValue;
+}
 
 export interface CrossSourceEffectRuntimeRef {
   kind: "effect";
@@ -267,11 +267,8 @@ function decodeSemanticMapping(
 function decodeDraftPoint(value: unknown): CrossSourceDraftPoint | undefined {
   const record = getRecord(value);
   const pathValue = getString(record["path"]);
-  const valueValue = record["value"];
-  if (
-    pathValue === undefined ||
-    (typeof valueValue !== "string" && typeof valueValue !== "number")
-  ) {
+  const valueValue = getRuntimeValue(record["value"]);
+  if (pathValue === undefined || valueValue === undefined) {
     return undefined;
   }
   return { path: pathValue, value: valueValue };
@@ -481,6 +478,12 @@ function collectDraftSemanticPoints(draft: unknown): CrossSourceDraftPoint[] {
   if (victoryPoints !== undefined) {
     points.push({ path: "visible.victoryPoints", value: victoryPoints });
   }
+  for (const field of ["cost", "cardKind", "cardTypes"] as const) {
+    const value = getRuntimeValue(visible[field]);
+    if (value !== undefined) {
+      points.push({ path: `visible.${field}`, value });
+    }
+  }
   const notes = Array.isArray(record["notes"]) ? record["notes"] : [];
   notes.forEach((note, index) => {
     if (typeof note === "string" && note.trim() !== "") {
@@ -546,7 +549,7 @@ function hasFocusedTestReference(
     testBody !== undefined &&
     testBody.includes(id) &&
     /\bassert\s*\./.test(testBody) &&
-    /\b(applyAction|calculateEffectiveCardCost|calculateEffectiveCardVictoryPoints|calculateEffectivePlayerMaxLife|createRuntimeCoverageInventory|initializeGame|runMarketFlow|scoreGame)\s*\(/.test(
+    /\b(applyAction|calculateEffectiveCardCost|calculateEffectiveCardVictoryPoints|calculateEffectivePlayerMaxLife|initializeGame|runMarketFlow|scoreGame)\s*\(/.test(
       testBody
     )
   );
@@ -576,11 +579,13 @@ function sameDraftPoint(
   left: CrossSourceDraftPoint,
   right: CrossSourceDraftPoint
 ): boolean {
-  return left.path === right.path && left.value === right.value;
+  return (
+    left.path === right.path && matchesRuntimeValue(left.value, right.value)
+  );
 }
 
 function draftPointKey(point: CrossSourceDraftPoint): string {
-  return `${point.path}\u0000${String(point.value)}`;
+  return `${point.path}\u0000${JSON.stringify(point.value)}`;
 }
 
 function getCrossSourceObjectKind(

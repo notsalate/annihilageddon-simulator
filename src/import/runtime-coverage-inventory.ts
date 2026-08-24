@@ -11,6 +11,7 @@ import path from "node:path";
 import { isPlainRecord } from "../common.js";
 import {
   evaluateCrossSourceCoverage,
+  hasAppropriateRuntimeComposition,
   readCrossSourceCoveragePlan,
   type CrossSourceCoveragePlanEntry,
 } from "./cross-source-runtime-coverage.js";
@@ -425,13 +426,7 @@ function collectCrossSourceIntegrityBlockers(
 ): string[] {
   const blockers = new Set<string>();
   for (const [id, memberships] of compositionsById) {
-    const hasCrossSourceComposition = memberships.some(
-      (membership) =>
-        membership.entryKind === "token" &&
-        (membership.role === "deadWizardTokens" ||
-          membership.role === "wizardProperties")
-    );
-    if (hasCrossSourceComposition && !runtimeById.has(id)) {
+    if (memberships.length > 0 && !runtimeById.has(id)) {
       blockers.add(`composition reference has no runtime definition: ${id}`);
     }
   }
@@ -848,47 +843,11 @@ function hasAppropriateComposition(
   source: DraftSourceConfig,
   compositionMembership: CompositionMembership[]
 ): boolean {
-  if (compositionMembership.length === 0) {
-    return false;
-  }
-
-  return compositionMembership.some((membership) => {
-    if (source.objectKind === "deadWizardToken") {
-      return (
-        membership.entryKind === "token" &&
-        membership.role === "deadWizardTokens"
-      );
-    }
-    if (source.objectKind === "wizardProperty") {
-      return (
-        membership.entryKind === "token" &&
-        membership.role === "wizardProperties"
-      );
-    }
-    if (source.sourceGroupOrTokenKind === "main") {
-      return membership.role === "mainDeck";
-    }
-    if (source.sourceGroupOrTokenKind === "legend") {
-      return membership.role === "legendDeck";
-    }
-    if (source.sourceGroupOrTokenKind === "starter") {
-      return (
-        membership.role === "starterDeck" ||
-        membership.role === "starterDeckTemplate" ||
-        membership.role === "starterReplacement"
-      );
-    }
-    if (source.sourceGroupOrTokenKind === "familiar") {
-      return membership.role === "familiarPool";
-    }
-    if (source.sourceGroupOrTokenKind === "special") {
-      return (
-        membership.role === "limpWandStack" ||
-        membership.role === "wildMagicStack"
-      );
-    }
-    return false;
-  });
+  return hasAppropriateRuntimeComposition(
+    source.objectKind,
+    source.sourceGroupOrTokenKind,
+    compositionMembership
+  );
 }
 
 function isWandAttackCandidate(

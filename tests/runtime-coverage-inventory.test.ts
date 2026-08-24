@@ -331,7 +331,7 @@ test("cross-source coverage requires matching runtime and focused test evidence 
   writeText(
     rootDir,
     "tests/wizard-property-runtime.test.ts",
-    `test("gains a chip while activated", () => {\n  const tokenId = "${tokenId}";\n  const report = createRuntimeCoverageInventory(tokenId);\n  assert.ok(report);\n});\n`
+    `test("gains a chip while activated", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.ok(result);\n});\n`
   );
 
   const report = createRuntimeCoverageInventory(rootDir);
@@ -440,7 +440,7 @@ test("cross-source coverage blocks effects outside their source-kind policy", ()
   writeText(
     rootDir,
     "tests/dead-wizard-token-runtime.test.ts",
-    `test("rejects setup replacement on a DWT", () => {\n  const tokenId = "${tokenId}";\n  const report = createRuntimeCoverageInventory(tokenId);\n  assert.ok(report);\n});\n`
+    `test("rejects setup replacement on a DWT", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.ok(result);\n});\n`
   );
 
   const item = createRuntimeCoverageInventory(rootDir).items.find(
@@ -476,6 +476,10 @@ test("cross-source coverage applies complete evidence to cards", () => {
       runtimeSchema: "krutagidon.cardDefinition.v0",
       mappingStatus: "supported",
       playableInV0: true,
+      cardKind: "normal",
+      cardTypes: ["spell"],
+      cost: 3,
+      victoryPoints: 1,
       effects: [{ effectId: "gain_chips", timing: "onPlay", amount: 1 }],
       unsupportedMechanics: [],
     },
@@ -522,6 +526,44 @@ test("cross-source coverage applies complete evidence to cards", () => {
               },
             ],
           },
+          {
+            draftPoint: { path: "visible.cost", value: 3 },
+            runtimeRefs: [{ kind: "field", path: "engine.cost", value: 3 }],
+            testRefs: [
+              {
+                file: "tests/card-runtime.test.ts",
+                name: "gains a chip from the mapped card",
+              },
+            ],
+          },
+          {
+            draftPoint: { path: "visible.cardKind", value: "normal" },
+            runtimeRefs: [
+              { kind: "field", path: "engine.cardKind", value: "normal" },
+            ],
+            testRefs: [
+              {
+                file: "tests/card-runtime.test.ts",
+                name: "gains a chip from the mapped card",
+              },
+            ],
+          },
+          {
+            draftPoint: { path: "visible.cardTypes", value: ["spell"] },
+            runtimeRefs: [
+              {
+                kind: "field",
+                path: "engine.cardTypes",
+                value: ["spell"],
+              },
+            ],
+            testRefs: [
+              {
+                file: "tests/card-runtime.test.ts",
+                name: "gains a chip from the mapped card",
+              },
+            ],
+          },
         ],
         unresolvedMechanics: [],
       },
@@ -530,7 +572,7 @@ test("cross-source coverage applies complete evidence to cards", () => {
   writeText(
     rootDir,
     "tests/card-runtime.test.ts",
-    `test("gains a chip from the mapped card", () => {\n  const cardId = "${cardId}";\n  const report = createRuntimeCoverageInventory(cardId);\n  assert.ok(report);\n});\n`
+    `test("gains a chip from the mapped card", () => {\n  const cardId = "${cardId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId });\n  assert.ok(result);\n});\n`
   );
 
   const item = createRuntimeCoverageInventory(rootDir).items.find(
@@ -540,6 +582,30 @@ test("cross-source coverage applies complete evidence to cards", () => {
   assert.ok(item);
   assert.equal(item.crossSourceStatus, "crossSourceComplete");
   assert.equal(item.primaryMechanicCluster, "chipsin-economy");
+
+  writeJson(rootDir, "config/runtime-coverage/cross-source-mechanics.json", {
+    schemaVersion: 1,
+    entries: [
+      {
+        id: cardId,
+        objectKind: "card",
+        primaryMechanicCluster: "chipsin-economy",
+        semanticMappings: [],
+        unresolvedMechanics: [],
+      },
+    ],
+  });
+  const itemWithoutCostMapping = createRuntimeCoverageInventory(
+    rootDir
+  ).items.find((candidate) => candidate.id === cardId);
+
+  assert.ok(itemWithoutCostMapping);
+  assert.equal(itemWithoutCostMapping.crossSourceStatus, "blocked");
+  assert.ok(
+    itemWithoutCostMapping.crossSourceBlockers.includes(
+      "unmapped canonical draft point: visible.cost"
+    )
+  );
 });
 
 test("cross-source coverage compares effect payloads and runtime fields", () => {
@@ -627,7 +693,7 @@ test("cross-source coverage compares effect payloads and runtime fields", () => 
   writeText(
     rootDir,
     testRef.file,
-    `test("${testRef.name}", () => {\n  const tokenId = "${tokenId}";\n  const report = createRuntimeCoverageInventory(tokenId);\n  assert.ok(report);\n});\n`
+    `test("${testRef.name}", () => {\n  const tokenId = "${tokenId}";\n  const state = initializeGame({ rootDir });\n  const result = applyAction(state, { type: "playCard", cardId: tokenId });\n  assert.ok(result);\n});\n`
   );
 
   const item = createRuntimeCoverageInventory(rootDir).items.find(
@@ -646,6 +712,25 @@ test("cross-source coverage compares effect payloads and runtime fields", () => 
       blocker.includes("runtime field victoryPoints")
     )
   );
+});
+
+test("runtime coverage blocks every missing runtime definition from composition", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-runtime-coverage-composition-")
+  );
+  const missingCardId = "esw2_dbg__main_999";
+
+  writeJson(rootDir, "data/decks/main-deck.json", {
+    deckId: "main-deck",
+    role: "mainDeck",
+    entries: [{ cardId: missingCardId, count: 1 }],
+  });
+
+  const report = createRuntimeCoverageInventory(rootDir);
+
+  assert.deepEqual(report.crossSourceIntegrityBlockers, [
+    `composition reference has no runtime definition: ${missingCardId}`,
+  ]);
 });
 
 test("repository cross-source registry assigns every wizard property and DWT to a primary cluster", () => {

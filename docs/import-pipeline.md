@@ -289,11 +289,11 @@ Runtime JSON должен быть самодостаточным для engine.
 `crossSourceComplete` возможен только когда:
 
 - отсутствуют `unresolvedMechanics`;
-- каждая видимая строка, VP и note из canonical draft сопоставлены с runtime effect (включая проверяемые поля payload) либо runtime field и именованным test case;
+- каждое значимое напечатанное поле canonical draft (стоимость, VP, card kind/types, текст) и каждый note сопоставлены с runtime effect (включая проверяемые поля payload) либо runtime field и именованным test case;
 - runtime definition имеет effects, проходит policy `sourceKind × timing` и включён в правильный stack с canonical количеством;
 - runtime reference и test reference существуют.
 
-Пустой `effects: []`, упоминание stable ID вне тела именованного теста с assertion и публичным runtime seam, несовпавшее количество в stack или несуществующая composition reference всегда оставляют объект в статусе `blocked`.
+Пустой `effects: []`, упоминание stable ID вне тела именованного теста с assertion и публичным игровым runtime seam (не вызовом самого audit), несовпавшее количество в stack или любая composition reference без runtime definition всегда оставляют объект в статусе `blocked`.
 
 Ссылки `source.draft`, `source.text` и `source.image` в runtime JSON допустимы только как metadata/traceability для ревью и сверки. Движок не должен читать эти ссылки во время партии и не должен выводить из них поведение карты. Draft JSON из `data/import/**` также не является executable engine input.
 
