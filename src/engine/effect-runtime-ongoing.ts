@@ -512,8 +512,6 @@ export function createOngoingEffectDefinitions(tools: OngoingCatalogTools) {
       supportedTimings: ["whileControlled"] as const,
       supportedModes,
       supportedSourceKinds: [
-        "card",
-        "wizardProperty",
         "deadWizardToken",
       ] as const satisfies EffectRuntimeSupportedSourceKinds,
       handler: suppressBasicTrophyChipPayoutHandler,
