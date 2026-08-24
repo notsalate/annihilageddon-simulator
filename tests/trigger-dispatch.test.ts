@@ -221,6 +221,45 @@ test("controlled trigger dispatch preserves Control Ledger order and card source
   );
 });
 
+test("controlled timed dispatch discovers only effects for the requested timing", () => {
+  const scenario = createGameScenario({ rootDir, seed: 23010 });
+  const controller = scenario.activePlayer;
+  controller.permanents = [];
+  givenRuntimeCard(scenario, {
+    player: controller,
+    zone: "permanents",
+    cardId: "fixture-trigger-dispatch-timed-filter",
+    isOngoing: true,
+    effects: [
+      {
+        effectId: "ongoing_add_power",
+        timing: "whileControlled",
+        amount: 1,
+      },
+      {
+        effectId: "ongoing_add_power_when_playing_limp_wand",
+        timing: "afterControllerPlaysCard",
+        amount: 1,
+        cardKind: "limpWand",
+      },
+    ],
+  });
+  const executedEffectIds: string[] = [];
+
+  const result = dispatchControlledCardOperation(scenario.state, controller, {
+    kind: "afterControllerPlaysCard",
+    executeEffect(effect) {
+      executedEffectIds.push(effect.effectId);
+      return { status: "resolved", result: { ok: true } };
+    },
+  });
+
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(executedEffectIds, [
+    "ongoing_add_power_when_playing_limp_wand",
+  ]);
+});
+
 test("on-play compatibility wrapper leaves Wand applicability inside Trigger Dispatch and the catalog", () => {
   const scenario = createGameScenario({ rootDir, seed: 23003 });
   const state = scenario.state;

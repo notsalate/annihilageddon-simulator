@@ -579,6 +579,7 @@ interface EffectRuntimeEntry<
   readonly supportedModes: EffectRuntimeSupportedModes;
   readonly supportedSourceKinds: EffectRuntimeSupportedSourceKinds;
   readonly unsupported: boolean;
+  supportsTiming(timing: EffectTiming): boolean;
   validateSourceTiming(
     subjectId: string,
     effect: RuntimeEffectForId<EffectId>,
@@ -891,6 +892,9 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     supportedModes: config.supportedModes,
     supportedSourceKinds: config.supportedSourceKinds,
     unsupported: config.handler.unsupported === true,
+    supportsTiming(timing) {
+      return config.supportedTimings.includes(timing);
+    },
     validateSourceTiming(subjectId, effect, sourceKind) {
       return getUnsupportedSourceTimingError(
         subjectId,
@@ -2091,6 +2095,15 @@ export function evaluateRuntimeEffectAtTiming<Result>(
     `Effect ${effect.effectId}`,
     effect,
     { source, timing, evaluate }
+  );
+}
+
+/** Keeps fixture validation observable when a timed dispatch skips normal effects. */
+export function isSupportedRuntimeEffectTiming(
+  effect: VerifiedRuntimeEffect
+): boolean {
+  return getVerifiedEffectRuntimeCatalogEntry(effect).supportsTiming(
+    effect.timing
   );
 }
 

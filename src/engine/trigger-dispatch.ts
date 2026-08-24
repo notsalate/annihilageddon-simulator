@@ -9,6 +9,7 @@ import {
   evaluateRuntimeEffectControlledPower,
   evaluateRuntimeEffectEndTurnDrawModifier,
   executeRuntimeEffectOnPlayCard,
+  isSupportedRuntimeEffectTiming,
   type EffectGameEnd,
   type EffectExecutionResult,
   type EffectRuntimeOperationResult,
@@ -18,6 +19,7 @@ import {
   requireVerifiedRuntimeEffect,
   type VerifiedRuntimeEffect,
 } from "./runtime-effect-verification.js";
+import type { RuntimeEffect } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export interface ControlledCardDispatchOperationMap {
@@ -206,12 +208,11 @@ export function dispatchControlledCardOperation(
   controller: PlayerState,
   operation: ControlledCardDispatchOperation
 ): ControlledCardDispatchResult {
-  const candidates =
-    operation.kind === "recalculateControlledPower" ||
-    operation.kind === "afterControllerPlaysCard" ||
-    operation.kind === "startOfControllerTurn"
-      ? discoverControlledOngoingCardEffects(state, controller)
-      : discoverControlledCardEffects(state, controller);
+  const candidates = discoverCandidatesForControlledCardOperation(
+    state,
+    controller,
+    operation
+  );
   if (operation.kind === "collectEndTurnDrawModifier") {
     return collectEndTurnDrawModifier(state, controller, operation, candidates);
   }
@@ -273,7 +274,8 @@ function discoverControlledCardEffects(
 
 function discoverControlledOngoingCardEffects(
   state: GameState,
-  controller: PlayerState
+  controller: PlayerState,
+  timing?: RuntimeEffect["timing"]
 ): ControlledCardEffectCandidate[] {
   const controlledCards: ControlledCardEntry[] = [];
   for (const card of getControlledOngoingCards(state, controller)) {
@@ -285,14 +287,16 @@ function discoverControlledOngoingCardEffects(
   return buildControlledCardEffectCandidates(
     state,
     controller,
-    controlledCards
+    controlledCards,
+    timing
   );
 }
 
 function buildControlledCardEffectCandidates(
   state: GameState,
   controller: PlayerState,
-  controlledCards: readonly ControlledCardEntry[]
+  controlledCards: readonly ControlledCardEntry[],
+  timing?: RuntimeEffect["timing"]
 ): ControlledCardEffectCandidate[] {
   const candidates: ControlledCardEffectCandidate[] = [];
 
@@ -309,8 +313,16 @@ function buildControlledCardEffectCandidates(
       definitionId: card.definitionId,
     };
     for (const effect of definition.engine.effects) {
+      const verifiedEffect = requireVerifiedRuntimeEffect(effect);
+      if (
+        timing !== undefined &&
+        verifiedEffect.timing !== timing &&
+        isSupportedRuntimeEffectTiming(verifiedEffect)
+      ) {
+        continue;
+      }
       candidates.push({
-        effect: requireVerifiedRuntimeEffect(effect),
+        effect: verifiedEffect,
         source,
         sourceDefinition: definition,
       });
@@ -318,6 +330,31 @@ function buildControlledCardEffectCandidates(
   }
 
   return candidates;
+}
+
+function discoverCandidatesForControlledCardOperation(
+  state: GameState,
+  controller: PlayerState,
+  operation: ControlledCardDispatchOperation
+): ControlledCardEffectCandidate[] {
+  if (operation.kind === "recalculateControlledPower") {
+    return discoverControlledOngoingCardEffects(state, controller);
+  }
+  if (operation.kind === "afterControllerPlaysCard") {
+    return discoverControlledOngoingCardEffects(
+      state,
+      controller,
+      "afterControllerPlaysCard"
+    );
+  }
+  if (operation.kind === "startOfControllerTurn") {
+    return discoverControlledOngoingCardEffects(
+      state,
+      controller,
+      "startOfControllerTurn"
+    );
+  }
+  return discoverControlledCardEffects(state, controller);
 }
 
 function executeControlledCardOperation(
