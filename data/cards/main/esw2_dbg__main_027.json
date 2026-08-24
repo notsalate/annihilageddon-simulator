@@ -38,11 +38,10 @@
       {
         "effectId": "modify_effective_value",
         "timing": "whileScoring",
-        "valueKind": "tokenVictoryPoints",
+        "valueKind": "playerVictoryPoints",
         "operation": "invertNegative",
         "target": {
-          "targetType": "token",
-          "tokenKind": "deadWizardToken"
+          "targetType": "player"
         }
       }
     ],

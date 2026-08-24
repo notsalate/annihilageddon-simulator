@@ -27,6 +27,7 @@ import {
   requireVerifiedRuntimeEffect,
   type VerifiedRuntimeEffect,
 } from "./runtime-effect-verification.js";
+import type { RuntimeEffectForId } from "./runtime-effect.js";
 import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
 import { isOwnedCardsCountAsCardTypeRuntimeEffect } from "./effect-runtime-card-type.js";
 
@@ -81,6 +82,18 @@ function applyEffectiveValueModifier(
       status: "resolved",
       value: value < 0 ? Math.abs(value) : value,
     };
+  }
+
+  if (effect.operation === "multiply") {
+    const multiplier = effect.multiplier;
+    if (multiplier === undefined) {
+      throw new Error(`${effect.effectId}.multiplier must be a safe integer`);
+    }
+    const multipliedValue = value * multiplier;
+    if (!Number.isSafeInteger(multipliedValue)) {
+      throw new Error(`${effect.effectId} result must be a safe integer`);
+    }
+    return { status: "resolved", value: multipliedValue };
   }
 
   const amount =
@@ -150,9 +163,42 @@ export function calculateEffectiveTokenVictoryPoints(
       targetType: "token",
       definitionId: definition.tokenId,
     },
-    baseValue: definition.victoryPoints,
+    baseValue: getDeclaredDeadWizardTokenVictoryPoints(definition),
     scoringCards: getOwnedScoringCards(state, playerId),
   });
+}
+
+function getDeclaredDeadWizardTokenVictoryPoints(
+  definition: Extract<TokenDefinition, { kind: "deadWizardToken" }>
+): number {
+  const declaredEffects = definition.effects
+    .map(requireVerifiedRuntimeEffect)
+    .filter(isEndgameFixedTokenVictoryPointsEffect);
+  if (declaredEffects.length === 0) {
+    return definition.victoryPoints;
+  }
+  if (declaredEffects.length !== 1) {
+    throw new Error(
+      `Dead wizard token ${definition.tokenId} must declare at most one fixed scoring effect`
+    );
+  }
+  const declaredVictoryPoints = declaredEffects[0]!.victoryPoints;
+  if (declaredVictoryPoints !== definition.victoryPoints) {
+    throw new Error(
+      `Dead wizard token ${definition.tokenId} fixed scoring effect must match victoryPoints`
+    );
+  }
+  return declaredVictoryPoints;
+}
+
+function isEndgameFixedTokenVictoryPointsEffect(
+  effect: VerifiedRuntimeEffect
+): effect is VerifiedRuntimeEffect &
+  RuntimeEffectForId<"endgame_fixed_token_victory_points"> {
+  return (
+    effect.effectId === "endgame_fixed_token_victory_points" &&
+    effect.timing === "scoring"
+  );
 }
 
 export function calculateEffectivePlayerVictoryPoints(

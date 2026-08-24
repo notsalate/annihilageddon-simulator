@@ -73,7 +73,7 @@ export type EffectiveValueKind =
   | "tokenVictoryPoints"
   | "playerMaxLife"
   | "playerVictoryPoints";
-export type EffectiveValueOperation = "add" | "invertNegative";
+export type EffectiveValueOperation = "add" | "invertNegative" | "multiply";
 export type ModifyEffectiveValueRuntimeEffect<
   Id extends "modify_effective_value" | "fixture_modify_effective_value" =
     | "modify_effective_value"
@@ -84,6 +84,7 @@ export type ModifyEffectiveValueRuntimeEffect<
   amount?: number;
   amountPerOwnedCard?: number;
   countedCardTypes?: string[];
+  multiplier?: number;
   target: RuntimeEffectTarget;
 };
 export interface EffectiveValueModifierEffectPayloadMap {
@@ -143,10 +144,13 @@ export function createEffectiveValueModifierEffectDecoders(
             "playerVictoryPoints",
           ] as const)
         ),
-        operation: required(oneOfTools(["add", "invertNegative"] as const)),
+        operation: required(
+          oneOfTools(["add", "invertNegative", "multiply"] as const)
+        ),
         amount: optional(safeInteger),
         amountPerOwnedCard: optional(safeInteger),
         countedCardTypes: optional(nonEmptyStringArray),
+        multiplier: optional(safeInteger),
         target: required(runtimeTarget),
       },
       validateEffectiveValuePayload
@@ -167,10 +171,13 @@ export function createEffectiveValueModifierEffectDecoders(
             "playerVictoryPoints",
           ] as const)
         ),
-        operation: required(oneOfTools(["add", "invertNegative"] as const)),
+        operation: required(
+          oneOfTools(["add", "invertNegative", "multiply"] as const)
+        ),
         amount: optional(safeInteger),
         amountPerOwnedCard: optional(safeInteger),
         countedCardTypes: optional(nonEmptyStringArray),
+        multiplier: optional(safeInteger),
         target: required(runtimeTarget),
       },
       validateEffectiveValuePayload
@@ -227,6 +234,26 @@ function validateEffectiveValuePayload(
     effect.countedCardTypes !== undefined
   ) {
     errors.push(`${subjectId} uses invertNegative with countedCardTypes`);
+  }
+  if (
+    effect.operation === "invertNegative" &&
+    effect.multiplier !== undefined
+  ) {
+    errors.push(`${subjectId} uses invertNegative with multiplier`);
+  }
+  if (effect.operation === "add" && effect.multiplier !== undefined) {
+    errors.push(`${subjectId} uses add operation with multiplier`);
+  }
+  if (effect.operation === "multiply" && effect.multiplier === undefined) {
+    errors.push(`${subjectId} uses multiply operation without multiplier`);
+  }
+  if (
+    effect.operation === "multiply" &&
+    (effect.amount !== undefined ||
+      effect.amountPerOwnedCard !== undefined ||
+      effect.countedCardTypes !== undefined)
+  ) {
+    errors.push(`${subjectId} uses multiply with additive fields`);
   }
   if (
     effect.amountPerOwnedCard !== undefined &&
