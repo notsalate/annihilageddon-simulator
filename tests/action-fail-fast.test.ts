@@ -200,6 +200,13 @@ test("saved failure report replays its actions and choices through the CLI", () 
   assert.ok(
     failureReport.choices.some((event) => event.type === "effectChoiceSelected")
   );
+  assert.ok(
+    failureReport.choices.some(
+      (event) =>
+        event.type === "setupChoiceSelected" &&
+        event.setupChoiceKind === "familiar"
+    )
+  );
 
   const reportDirectory = mkdtempSync(
     path.join(tmpdir(), "krutagidon-replay-report-")

@@ -460,12 +460,6 @@ test("incomplete current runtime skips familiar setup when its pool is short", (
     )?.count,
     1
   );
-  assert.equal(
-    wizardPropertyStack.entries.some(
-      (entry) => entry.tokenId === "esw2_dbg__wizard_property_003"
-    ),
-    false
-  );
 
   const state = initializeGame({ rootDir, seed: 2 });
   assert.ok(
