@@ -1110,10 +1110,8 @@ function assignStartingWizardProperties(
       eventLog
     );
 
-    player.wizardProperties.push({
-      ...selectedCandidate,
-      ownerId: player.playerId,
-    });
+    selectedCandidate.ownerId = player.playerId;
+    player.wizardProperties.push(selectedCandidate);
   }
 }
 
@@ -1137,13 +1135,13 @@ function assignStartingFamiliars(
   }
 
   const setupPool = instantiateDeck(familiarPool, dataPack, factory, "common");
-  const playersRetainingBothFamiliars = new Set(
-    setupDirectives
-      .filter((directive) => directive.kind === "retainAndChooseThirdFamiliar")
-      .map((directive) => directive.playerId)
-  );
+  let playersRetainingBothFamiliars: Set<PlayerId> | undefined;
+  for (const directive of setupDirectives) {
+    if (directive.kind !== "retainAndChooseThirdFamiliar") continue;
+    (playersRetainingBothFamiliars ??= new Set()).add(directive.playerId);
+  }
   const requiredSetupPoolSize =
-    players.length * 2 + playersRetainingBothFamiliars.size;
+    players.length * 2 + (playersRetainingBothFamiliars?.size ?? 0);
   if (setupPool.length < requiredSetupPoolSize) {
     if (isIncompleteFullOnlyDataPack(dataPack)) {
       return;
@@ -1184,7 +1182,7 @@ function assignStartingFamiliars(
       );
     }
 
-    if (playersRetainingBothFamiliars.has(player.playerId)) {
+    if (playersRetainingBothFamiliars?.has(player.playerId) === true) {
       for (const candidate of [firstCandidate, secondCandidate]) {
         player.unboughtFamiliars.push(
           transferSetupCardToPlayer(candidate, player.playerId)
@@ -1231,7 +1229,8 @@ function transferSetupCardToPlayer(
   candidate: CardInstance,
   playerId: PlayerId
 ): CardInstance {
-  return { ...candidate, ownerId: playerId };
+  candidate.ownerId = playerId;
+  return candidate;
 }
 
 function selectFamiliarSetupChoice<
