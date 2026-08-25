@@ -215,6 +215,7 @@ test("remaining Catalog families expose one local ID inventory each", () => {
     "attack_damage_per_controlled_dead_wizard_token",
     "attack_gain_dead_wizard_tokens",
     "attack_transfer_controlled_dead_wizard_token",
+    "attack_kill_and_replace_dead_wizard_token",
     "attack_damage_equal_remembered_card_cost",
     "attack_damage_equal_to_controlled_card_cost",
     "attack_destroy_top_legend_deck_then_damage_equal_cost",

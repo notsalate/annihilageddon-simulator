@@ -281,8 +281,14 @@ export interface DamageResult {
   killed: boolean;
 }
 
+export type DeadWizardTokenDeathPolicy = "normal" | "skip";
+
 export type DamageCause =
-  | { kind: "playerControlled"; player: PlayerState }
+  | {
+      kind: "playerControlled";
+      player: PlayerState;
+      deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy;
+    }
   | { kind: "ownerless" };
 
 export interface EffectRuntimeServices {
@@ -371,6 +377,22 @@ export interface EffectRuntimeServices {
     source: EffectSourceContext,
     cause: DamageCause
   ): DamageApplicationResult;
+  killPlayer(
+    state: GameState,
+    sourcePlayer: PlayerState,
+    targetPlayer: PlayerState,
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext,
+    deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy
+  ): EffectExecutionResult;
+  replaceDeadWizardTokenAfterKill(
+    state: GameState,
+    killer: PlayerState,
+    targetPlayer: PlayerState,
+    amount: 3,
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext
+  ): EffectExecutionResult;
   healPlayer(
     state: GameState,
     sourcePlayer: PlayerState,

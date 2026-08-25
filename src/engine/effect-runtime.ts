@@ -54,6 +54,7 @@ import {
 } from "./event-recorder.js";
 import {
   type DamageCause,
+  type DeadWizardTokenDeathPolicy,
   type EffectChoice,
   type EffectExecutionResult,
   type EffectRuntimeServices,
@@ -1442,6 +1443,27 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
         source
       );
     }
+    if (effect.effectId === "attack_kill_and_replace_dead_wizard_token") {
+      const killResult = effectRuntimeServices.killPlayer(
+        state,
+        attackingPlayer,
+        targetPlayer,
+        effect.effectId,
+        source,
+        "skip"
+      );
+      if (!killResult.ok || killResult.gameEnd !== undefined) {
+        return killResult;
+      }
+      return effectRuntimeServices.replaceDeadWizardTokenAfterKill(
+        state,
+        attackingPlayer,
+        targetPlayer,
+        effect.amount,
+        effect.effectId,
+        source
+      );
+    }
     return {
       ok: false,
       error: `Unsupported player-controlled on-hit effect ${effect.effectId}`,
@@ -1720,6 +1742,8 @@ const effectRuntimeServices: EffectRuntimeServices = {
   recordEffectChoiceSelected,
   chooseEffectChoice,
   dealDamage,
+  killPlayer,
+  replaceDeadWizardTokenAfterKill,
   healPlayer,
   setPlayerLife,
   exchangePlayerLifeTotals,
@@ -2342,6 +2366,7 @@ function resolvePlayerDeath(
         killer: PlayerState;
         effectId: RuntimeEffectId;
         source: EffectSourceContext;
+        deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy;
       }
     | undefined
 ): EffectExecutionResult {
@@ -2372,6 +2397,9 @@ function resolvePlayerDeath(
     lifeAfter: resurrectionLifeTotal,
   });
 
+  if (killCredit?.deadWizardTokenPolicy === "skip") {
+    return { ok: true };
+  }
   return issueDeadWizardToken(state, player, killCredit?.killer.playerId);
 }
 
@@ -2918,6 +2946,9 @@ function dealDamage(
             killer: cause.player,
             effectId,
             source,
+            ...(cause.deadWizardTokenPolicy === undefined
+              ? {}
+              : { deadWizardTokenPolicy: cause.deadWizardTokenPolicy }),
           }
         : undefined
     );
@@ -2941,6 +2972,132 @@ function dealDamage(
     damageDealt,
     killed,
   };
+}
+
+function killPlayer(
+  state: GameState,
+  sourcePlayer: PlayerState,
+  targetPlayer: PlayerState,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext,
+  deadWizardTokenPolicy: DeadWizardTokenDeathPolicy = "normal"
+): EffectExecutionResult {
+  const result = dealDamage(
+    state,
+    sourcePlayer,
+    targetPlayer,
+    Math.max(1, targetPlayer.life.current),
+    effectId,
+    source,
+    {
+      kind: "playerControlled",
+      player: sourcePlayer,
+      deadWizardTokenPolicy,
+    }
+  );
+  return "damageDealt" in result ? { ok: true } : result;
+}
+
+function replaceDeadWizardTokenAfterKill(
+  state: GameState,
+  killer: PlayerState,
+  targetPlayer: PlayerState,
+  amount: 3,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext
+): EffectExecutionResult {
+  if (
+    state.common.deadWizardTokens.status !== "available" ||
+    state.common.deadWizardTokens.drawStack.length === 0
+  ) {
+    return { ok: true };
+  }
+
+  const available = state.common.deadWizardTokens.drawStack.slice(0, amount);
+  if (available.length === 0) {
+    return { ok: true };
+  }
+
+  const choice = chooseEffectChoice(
+    state,
+    killer,
+    source,
+    effectId,
+    available.map((token) => ({
+      choiceKind: "option" as const,
+      choiceId: getDeadWizardTokenChoiceId(token.instanceId),
+    }))
+  );
+  if (choice === undefined) {
+    return { ok: true };
+  }
+  const selectedIndex = available.findIndex(
+    (token) =>
+      choice.choiceKind === "option" &&
+      choice.choiceId === getDeadWizardTokenChoiceId(token.instanceId)
+  );
+  if (selectedIndex < 0) {
+    return {
+      ok: false,
+      error: "Invalid dead wizard token replacement choice",
+    };
+  }
+
+  const mutationResult = runControlledPowerMutation(
+    state,
+    () => state.activePlayerId,
+    () => {
+      const current = state.common.deadWizardTokens.drawStack;
+      const currentPrefix = current.slice(0, available.length);
+      const prefixMatches = currentPrefix.every(
+        (token, index) => token.instanceId === available[index]?.instanceId
+      );
+      if (!prefixMatches) {
+        return {
+          ok: false as const,
+          error: "Dead wizard token replacement stack changed before movement",
+        };
+      }
+
+      const selectedToken = currentPrefix[selectedIndex];
+      if (selectedToken === undefined) {
+        return {
+          ok: false as const,
+          error: "Dead wizard token replacement target disappeared",
+        };
+      }
+
+      state.common.deadWizardTokens.drawStack = [
+        ...currentPrefix.filter((_, index) => index !== selectedIndex),
+        ...current.slice(available.length),
+      ];
+      selectedToken.ownerId = targetPlayer.playerId;
+      targetPlayer.deadWizardTokens.push(selectedToken);
+      recordGameEvent(state, {
+        type: "deadWizardTokenGained",
+        playerId: targetPlayer.playerId,
+        tokenInstanceId: selectedToken.instanceId,
+        tokenDefinitionId: selectedToken.definitionId,
+      });
+      enqueueDeadWizardTokenFace(
+        state,
+        targetPlayer,
+        selectedToken,
+        killer.playerId
+      );
+      return { ok: true as const };
+    },
+    (result) => result.ok
+  );
+  if (!mutationResult.ok) {
+    return mutationResult;
+  }
+  if (!mutationResult.value.ok) {
+    return mutationResult.value;
+  }
+  return mutationResult.gameEnd === undefined
+    ? { ok: true }
+    : { ok: true, gameEnd: mutationResult.gameEnd };
 }
 
 function applyDamageDealtTriggers(

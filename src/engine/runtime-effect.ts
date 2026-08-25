@@ -233,6 +233,7 @@ export const knownRuntimeEffectIds = [
   "attack_damage_per_controlled_dead_wizard_token",
   "attack_gain_dead_wizard_tokens",
   "attack_transfer_controlled_dead_wizard_token",
+  "attack_kill_and_replace_dead_wizard_token",
   "attack_damage_equal_remembered_card_cost",
   "attack_damage_equal_to_controlled_card_cost",
   "attack_destroy_top_legend_deck_then_damage_equal_cost",
@@ -605,6 +606,11 @@ export type AttackTransferControlledDeadWizardTokenRuntimeEffect =
   EffectWithOptionalTiming<"attack_transfer_controlled_dead_wizard_token"> & {
     targetSelector: "chosenPlayer";
   };
+export type AttackKillAndReplaceDeadWizardTokenRuntimeEffect =
+  EffectWithOptionalTiming<"attack_kill_and_replace_dead_wizard_token"> & {
+    amount: 3;
+    targetSelector: "chosenFoe";
+  };
 export type AttackDamageEqualRememberedCardCostRuntimeEffect =
   EffectWithOptionalTiming<"attack_damage_equal_remembered_card_cost"> &
     Targetable &
@@ -727,6 +733,7 @@ export interface PlayerControlledAttackEffectPayloadMap {
   attack_damage_per_controlled_dead_wizard_token: AttackDamagePerControlledDeadWizardTokenRuntimeEffect;
   attack_gain_dead_wizard_tokens: AttackGainDeadWizardTokensRuntimeEffect;
   attack_transfer_controlled_dead_wizard_token: AttackTransferControlledDeadWizardTokenRuntimeEffect;
+  attack_kill_and_replace_dead_wizard_token: AttackKillAndReplaceDeadWizardTokenRuntimeEffect;
   attack_damage_equal_remembered_card_cost: AttackDamageEqualRememberedCardCostRuntimeEffect;
   attack_damage_equal_to_controlled_card_cost: AttackDamageEqualToControlledCardCostRuntimeEffect;
   attack_destroy_top_legend_deck_then_damage_equal_cost: AttackDestroyTopLegendDeckThenDamageEqualCostRuntimeEffect;

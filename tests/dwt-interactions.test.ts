@@ -613,6 +613,153 @@ test("Мескалито не предлагает обмен без ЖДК ат
   assert.equal(defender.hand.includes(drawnCard), true);
 });
 
+test("Мортал Комбо не убивает цель после успешной защиты и не меняет стопку ЖДК", () => {
+  const state = initializeGame({ rootDir, seed: 278001 });
+  const attacker = getActivePlayer(state);
+  const defender = state.players.find(
+    (candidate) => candidate.playerId !== attacker.playerId
+  );
+  assert.ok(defender);
+  attacker.hand = [];
+  defender.hand = [];
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf");
+  const stack = [
+    createDeadWizardTokenInStack("mortal-combo-avoid-1"),
+    createDeadWizardTokenInStack("mortal-combo-avoid-2"),
+  ];
+  state.common.deadWizardTokens.drawStack = [...stack];
+  state.turn.power = 13;
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (String(effectId) === "attack_kill_and_replace_dead_wizard_token") {
+      const targetChoice = choices.find(
+        (choice) =>
+          choice.choiceKind === "playerTarget" &&
+          choice.choiceId === defender.playerId
+      );
+      return targetChoice === undefined
+        ? undefined
+        : { choiceId: targetChoice.choiceId };
+    }
+    if (effectId === "avoid_attack") {
+      return { choiceId: defense.instanceId };
+    }
+    return undefined;
+  };
+  const card = addCardToHand(state, attacker, "esw2_dbg__legend_007");
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: card.instanceId }),
+    { ok: true }
+  );
+  assert.equal(defender.life.current, 20);
+  assert.deepEqual(
+    state.common.deadWizardTokens.drawStack.map((token) => token.instanceId),
+    stack.map((token) => token.instanceId)
+  );
+  assert.equal(defender.deadWizardTokens.length, 0);
+  assert.equal(defender.discard.includes(defense), true);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "playerDied"),
+    false
+  );
+});
+
+test("Мортал Комбо заменяет обычный ЖДК выбором из доступной тройки", () => {
+  for (const availableCount of [0, 1, 2, 3]) {
+    const state = initializeGame({
+      rootDir,
+      seed: 278010 + availableCount,
+    });
+    const attacker = getActivePlayer(state);
+    const defender = state.players.find(
+      (candidate) => candidate.playerId !== attacker.playerId
+    );
+    assert.ok(defender);
+    attacker.hand = [];
+    defender.hand = [];
+    attacker.chips = 0;
+    defender.chips = 0;
+    const stack = Array.from({ length: availableCount }, (_, index) =>
+      createDeadWizardTokenInStack(
+        `mortal-combo-${availableCount}-${index}`,
+        "esw2_dbg__dead_wizard_token_015"
+      )
+    );
+    state.common.deadWizardTokens.drawStack = [...stack];
+    state.turn.power = 13;
+    const selectedIndex =
+      availableCount === 0 ? undefined : Math.floor(availableCount / 2);
+    state.effectChoiceStrategy = ({ effectId, choices }) => {
+      if (String(effectId) !== "attack_kill_and_replace_dead_wizard_token") {
+        return undefined;
+      }
+      const targetChoice = choices.find(
+        (choice) =>
+          choice.choiceKind === "playerTarget" &&
+          choice.choiceId === defender.playerId
+      );
+      if (targetChoice !== undefined) {
+        return { choiceId: targetChoice.choiceId };
+      }
+      const selectedToken =
+        selectedIndex === undefined ? undefined : stack[selectedIndex];
+      const selectedTokenId = selectedToken?.instanceId;
+      const tokenChoice = choices.find(
+        (choice) =>
+          selectedTokenId !== undefined &&
+          choice.choiceId === `token:${selectedTokenId}`
+      );
+      return tokenChoice === undefined
+        ? undefined
+        : { choiceId: tokenChoice.choiceId };
+    };
+    const card = addCardToHand(state, attacker, "esw2_dbg__legend_007");
+
+    assert.deepEqual(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: card.instanceId,
+      }),
+      { ok: true }
+    );
+    assert.equal(defender.life.current, 20);
+    assert.equal(
+      defender.deadWizardTokens.length,
+      availableCount === 0 ? 0 : 1
+    );
+    if (selectedIndex !== undefined) {
+      const selectedToken = stack[selectedIndex];
+      assert.ok(selectedToken);
+      assert.equal(defender.deadWizardTokens[0], selectedToken);
+      assert.equal(selectedToken.ownerId, defender.playerId);
+      assert.equal(defender.chips, 1);
+      assert.equal(
+        state.eventLog.filter(
+          (event) =>
+            event.type === "deadWizardTokenFaceResolved" &&
+            event.tokenInstanceId === selectedToken.instanceId
+        ).length,
+        1
+      );
+      assert.deepEqual(
+        state.common.deadWizardTokens.drawStack.map(
+          (token) => token.instanceId
+        ),
+        stack
+          .filter((_, index) => index !== selectedIndex)
+          .map((token) => token.instanceId)
+      );
+    } else {
+      assert.deepEqual(state.common.deadWizardTokens.drawStack, []);
+      assert.equal(defender.chips, 0);
+    }
+    assert.equal(
+      state.eventLog.filter((event) => event.type === "playerDied").length,
+      1
+    );
+  }
+});
+
 function chooseFamiliarDefenseAndExchange(
   state: GameState,
   defender: PlayerState,
@@ -690,6 +837,17 @@ function createDeadWizardTokenWithSuffix(
     ),
     definitionId: markTokenDefinitionId(definitionId),
     ownerId: player.playerId,
+  };
+}
+
+function createDeadWizardTokenInStack(
+  suffix: string,
+  definitionId = "esw2_dbg__dead_wizard_token_001"
+): TokenInstance {
+  return {
+    instanceId: markTokenInstanceId(`dwt-interactions-stack-token-${suffix}`),
+    definitionId: markTokenDefinitionId(definitionId),
+    ownerId: "common",
   };
 }
 
