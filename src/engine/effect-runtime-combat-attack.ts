@@ -664,10 +664,16 @@ type PlayerControlledDeadWizardTokenEffectAttack =
   | RuntimeEffectForId<"attack_gain_dead_wizard_tokens">
   | RuntimeEffectForId<"attack_transfer_controlled_dead_wizard_token">;
 
-function resolvePlayerControlledDeadWizardTokenEffectAttack(
+type PlayerControlledEffectsAttackEffect =
+  | PlayerControlledDeadWizardTokenEffectAttack
+  | RuntimeEffectForId<"attack_gain_limp_wand">
+  | RuntimeEffectForId<"attack_gain_status">
+  | RuntimeEffectForId<"attack_kill_and_replace_dead_wizard_token">;
+
+function resolvePlayerControlledEffectsAttack(
   state: GameState,
   player: PlayerState,
-  effect: PlayerControlledDeadWizardTokenEffectAttack,
+  effect: PlayerControlledEffectsAttackEffect,
   source: EffectSourceContext,
   services: EffectRuntimeServices,
   collectAttackReplacementProfile: AttackReplacementCollector
@@ -774,68 +780,16 @@ function attackGainStatusHandler(
   return {
     effectId: "attack_gain_status",
     execute(state, player, effect, source, services) {
-      const attackProfileResult = collectAttackReplacementProfile(
+      return resolvePlayerControlledEffectsAttack(
         state,
         player,
-        source
-      );
-      if (attackProfileResult.status !== "resolved") {
-        return {
-          ok: false,
-          error:
-            attackProfileResult.status === "error"
-              ? attackProfileResult.error
-              : "Attack replacement profile was not applicable",
-        };
-      }
-      const attackProfile = attackProfileResult.result;
-      return services.resolvePlayerControlledAttack({
-        state,
-        attackingPlayer: player,
+        effect,
         source,
-        effectId: effect.effectId,
-        unavoidable: attackProfile.unavoidable,
-        attackProfile,
-        targetPlan: { kind: "runtimeSelector", effect },
-        impact: { kind: "effects", effects: [effect] },
-      });
+        services,
+        collectAttackReplacementProfile
+      );
     },
   };
-}
-
-function resolvePlayerControlledKillAndReplaceDeadWizardTokenAttack(
-  state: GameState,
-  player: PlayerState,
-  effect: RuntimeEffectForId<"attack_kill_and_replace_dead_wizard_token">,
-  source: EffectSourceContext,
-  services: EffectRuntimeServices,
-  collectAttackReplacementProfile: AttackReplacementCollector
-): EffectExecutionResult {
-  const attackProfileResult = collectAttackReplacementProfile(
-    state,
-    player,
-    source
-  );
-  if (attackProfileResult.status !== "resolved") {
-    return {
-      ok: false,
-      error:
-        attackProfileResult.status === "error"
-          ? attackProfileResult.error
-          : "Attack replacement profile was not applicable",
-    };
-  }
-  const attackProfile = attackProfileResult.result;
-  return services.resolvePlayerControlledAttack({
-    state,
-    attackingPlayer: player,
-    source,
-    effectId: effect.effectId,
-    unavoidable: attackProfile.unavoidable,
-    attackProfile,
-    targetPlan: { kind: "runtimeSelector", effect },
-    impact: { kind: "effects", effects: [effect] },
-  });
 }
 
 function attackGainLimpWandHandler(
@@ -844,31 +798,14 @@ function attackGainLimpWandHandler(
   return {
     effectId: "attack_gain_limp_wand",
     execute(state, player, effect, source, services) {
-      const attackProfileResult = collectAttackReplacementProfile(
+      return resolvePlayerControlledEffectsAttack(
         state,
         player,
-        source
-      );
-      if (attackProfileResult.status !== "resolved") {
-        return {
-          ok: false,
-          error:
-            attackProfileResult.status === "error"
-              ? attackProfileResult.error
-              : "Attack replacement profile was not applicable",
-        };
-      }
-      const attackProfile = attackProfileResult.result;
-      return services.resolvePlayerControlledAttack({
-        state,
-        attackingPlayer: player,
+        effect,
         source,
-        effectId: effect.effectId,
-        unavoidable: attackProfile.unavoidable,
-        attackProfile,
-        targetPlan: { kind: "runtimeSelector", effect },
-        impact: { kind: "effects", effects: [effect] },
-      });
+        services,
+        collectAttackReplacementProfile
+      );
     },
   };
 }
@@ -1268,7 +1205,7 @@ export function createCombatAttackEffectDefinitions(
   > = {
     effectId: "attack_gain_dead_wizard_tokens",
     execute(state, player, effect, source, services) {
-      return resolvePlayerControlledDeadWizardTokenEffectAttack(
+      return resolvePlayerControlledEffectsAttack(
         state,
         player,
         effect,
@@ -1283,7 +1220,7 @@ export function createCombatAttackEffectDefinitions(
   > = {
     effectId: "attack_transfer_controlled_dead_wizard_token",
     execute(state, player, effect, source, services) {
-      return resolvePlayerControlledDeadWizardTokenEffectAttack(
+      return resolvePlayerControlledEffectsAttack(
         state,
         player,
         effect,
@@ -1298,7 +1235,7 @@ export function createCombatAttackEffectDefinitions(
   > = {
     effectId: "attack_kill_and_replace_dead_wizard_token",
     execute(state, player, effect, source, services) {
-      return resolvePlayerControlledKillAndReplaceDeadWizardTokenAttack(
+      return resolvePlayerControlledEffectsAttack(
         state,
         player,
         effect,
