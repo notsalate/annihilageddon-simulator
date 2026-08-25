@@ -74,12 +74,88 @@ test("card movement: main_019 lets the active player and another wizard draw", (
     if (String(request.effectId) !== "draw_cards_for_self_and_chosen_foe") {
       return undefined;
     }
+    assert.equal(
+      request.choices.some(
+        (choice) => choice.choiceId === scenario.activePlayer.playerId
+      ),
+      false
+    );
     return { choiceId: foe.playerId };
   });
 
   assert.deepEqual(play(scenario, source), { ok: true });
   assert.equal(scenario.activePlayer.hand.includes(activeDraw), true);
   assert.equal(foe.hand.includes(foeDraw), true);
+
+  const reshuffleScenario = createGameScenario({
+    rootDir,
+    seed: 280020,
+    playerCount: 2,
+  });
+  const reshuffleFoe = reshuffleScenario.foes[0];
+  assert.ok(reshuffleFoe);
+  reshuffleScenario.activePlayer.hand.splice(0);
+  reshuffleFoe.hand.splice(0);
+  reshuffleScenario.activePlayer.deck.splice(0);
+  reshuffleFoe.deck.splice(0);
+  reshuffleScenario.activePlayer.discard.splice(0);
+  reshuffleFoe.discard.splice(0);
+  const reshuffleSource = givenRuntimeCard(reshuffleScenario, {
+    definitionId: "esw2_dbg__main_019",
+  });
+  const activeDiscardDraw = givenRuntimeCard(reshuffleScenario, {
+    zone: "discard",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  const foeDiscardDraw = givenRuntimeCard(reshuffleScenario, {
+    player: reshuffleFoe,
+    zone: "discard",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  chooseEffect(reshuffleScenario, (request) =>
+    request.effectId === "draw_cards_for_self_and_chosen_foe"
+      ? { choiceId: reshuffleFoe.playerId }
+      : undefined
+  );
+
+  assert.deepEqual(play(reshuffleScenario, reshuffleSource), { ok: true });
+  assert.equal(
+    reshuffleScenario.activePlayer.hand.includes(activeDiscardDraw),
+    true
+  );
+  assert.equal(reshuffleFoe.hand.includes(foeDiscardDraw), true);
+
+  const emptyScenario = createGameScenario({
+    rootDir,
+    seed: 280021,
+    playerCount: 2,
+  });
+  const emptyFoe = emptyScenario.foes[0];
+  assert.ok(emptyFoe);
+  emptyScenario.activePlayer.hand.splice(0);
+  emptyFoe.hand.splice(0);
+  emptyScenario.activePlayer.deck.splice(0);
+  emptyFoe.deck.splice(0);
+  emptyScenario.activePlayer.discard.splice(0);
+  emptyFoe.discard.splice(0);
+  const emptySource = givenRuntimeCard(emptyScenario, {
+    definitionId: "esw2_dbg__main_019",
+  });
+  chooseEffect(emptyScenario, (request) =>
+    request.effectId === "draw_cards_for_self_and_chosen_foe"
+      ? { choiceId: emptyFoe.playerId }
+      : undefined
+  );
+
+  assert.deepEqual(play(emptyScenario, emptySource), { ok: true });
+  assert.equal(emptyScenario.activePlayer.hand.length, 0);
+  assert.equal(emptyFoe.hand.length, 0);
+  assert.deepEqual(
+    emptyScenario.state.eventLog
+      .filter((event) => event.type === "effectDrawCardsApplied")
+      .map((event) => event.amount),
+    [0, 0]
+  );
 });
 
 test("card movement: main_058 resets the hand only when played first", () => {
@@ -106,6 +182,37 @@ test("card movement: main_058 resets the hand only when played first", () => {
   assert.deepEqual(play(scenario, source), { ok: true });
   assert.equal(scenario.activePlayer.hand.includes(retained), false);
   assert.equal(scenario.activePlayer.hand.length, 4);
+
+  const laterScenario = createGameScenario({ rootDir, seed: 280059 });
+  laterScenario.state.turn.power = 100;
+  const firstCard = givenRuntimeCard(laterScenario, {
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  const laterSource = givenRuntimeCard(laterScenario, {
+    definitionId: "esw2_dbg__main_058",
+  });
+  const laterRetained = givenRuntimeCard(laterScenario, {
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  for (let index = 0; index < 4; index += 1) {
+    givenRuntimeCard(laterScenario, {
+      zone: "deck",
+      effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+    });
+  }
+  let laterChoiceRequests = 0;
+  chooseEffect(laterScenario, (request) => {
+    if (request.effectId !== "discard_hand_then_draw_cards") {
+      return undefined;
+    }
+    laterChoiceRequests += 1;
+    return { choiceId: "apply" };
+  });
+
+  assert.deepEqual(play(laterScenario, firstCard), { ok: true });
+  assert.deepEqual(play(laterScenario, laterSource), { ok: true });
+  assert.equal(laterScenario.activePlayer.hand.includes(laterRetained), true);
+  assert.equal(laterChoiceRequests, 0);
 });
 
 test("card movement: familiar_008 discards itself and can return every Wand", () => {
@@ -238,6 +345,28 @@ test("card movement: main_057 pays one chip only with a valid hand or discard de
   noChipScenario.activePlayer.chips = 0;
   assert.deepEqual(play(noChipScenario, noChipSource), { ok: true });
   assert.equal(noChipScenario.activePlayer.discard.includes(retained), true);
+
+  const handScenario = createGameScenario({ rootDir, seed: 281059 });
+  const handSource = givenRuntimeCard(handScenario, {
+    definitionId: "esw2_dbg__main_057",
+  });
+  const handTarget = givenRuntimeCard(handScenario, {
+    zone: "hand",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  handScenario.activePlayer.chips = 1;
+  chooseEffect(handScenario, (request) =>
+    request.effectId === "optional_spend_chip_destroy_own_cards"
+      ? { choiceId: `destroy_${handTarget.instanceId}` }
+      : undefined
+  );
+
+  assert.deepEqual(play(handScenario, handSource), { ok: true });
+  assert.equal(handScenario.activePlayer.chips, 0);
+  assert.equal(
+    handScenario.state.common.destroyedPile.includes(handTarget),
+    true
+  );
 });
 
 test("card movement: main_067 destroys one card clockwise and charges Dingler life", () => {
@@ -343,6 +472,60 @@ test("card movement: main_067 destroys one card clockwise and charges Dingler li
   );
   assert.equal(unaffordable.activePlayer.discard.includes(retained), true);
   assert.equal(unaffordable.activePlayer.life.current, 3);
+
+  const declined = createGameScenario({ rootDir, seed: 282069 });
+  const declinedSource = givenRuntimeCard(declined, {
+    definitionId: "esw2_dbg__main_067",
+  });
+  const declinedTarget = givenRuntimeCard(declined, {
+    zone: "discard",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  declined.activePlayer.statuses.push({
+    instanceId: `fixture-dingler-${declined.activePlayer.playerId}`,
+    statusId: "dingler",
+    ownerId: declined.activePlayer.playerId,
+    effects: [],
+  });
+  declined.activePlayer.life.current = 4;
+  chooseEffect(declined, (request) =>
+    request.effectId === "mayhem_each_player_optional_destroy_own_card"
+      ? { choiceId: "decline" }
+      : undefined
+  );
+
+  assert.equal(
+    resolveMayhemThroughMarket(declined, declinedSource, "mainDeck").ok,
+    true
+  );
+  assert.equal(declined.activePlayer.discard.includes(declinedTarget), true);
+  assert.equal(declined.activePlayer.life.current, 4);
+
+  const empty = createGameScenario({ rootDir, seed: 282070 });
+  const emptySource = givenRuntimeCard(empty, {
+    definitionId: "esw2_dbg__main_067",
+  });
+  empty.activePlayer.statuses.push({
+    instanceId: `fixture-dingler-${empty.activePlayer.playerId}`,
+    statusId: "dingler",
+    ownerId: empty.activePlayer.playerId,
+    effects: [],
+  });
+  empty.activePlayer.life.current = 4;
+  let emptyChoiceRequests = 0;
+  chooseEffect(empty, (request) => {
+    if (request.effectId === "mayhem_each_player_optional_destroy_own_card") {
+      emptyChoiceRequests += 1;
+    }
+    return undefined;
+  });
+
+  assert.equal(
+    resolveMayhemThroughMarket(empty, emptySource, "mainDeck").ok,
+    true
+  );
+  assert.equal(empty.activePlayer.life.current, 4);
+  assert.equal(emptyChoiceRequests, empty.state.players.length);
 });
 
 test("card movement: main_076 charges floor-half chips, including zero and one", () => {
@@ -401,6 +584,52 @@ test("card movement: main_076 charges floor-half chips, including zero and one",
     ).length,
     1
   );
+
+  const declined = createGameScenario({ rootDir, seed: 282077 });
+  const declinedSource = givenRuntimeCard(declined, {
+    definitionId: "esw2_dbg__main_076",
+  });
+  const declinedTarget = givenRuntimeCard(declined, {
+    zone: "discard",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  declined.activePlayer.chips = 4;
+  chooseEffect(declined, (request) =>
+    request.effectId ===
+    "mayhem_each_player_optional_destroy_own_card_for_half_chips"
+      ? { choiceId: "decline" }
+      : undefined
+  );
+
+  assert.equal(
+    resolveMayhemThroughMarket(declined, declinedSource, "mainDeck").ok,
+    true
+  );
+  assert.equal(declined.activePlayer.chips, 4);
+  assert.equal(declined.activePlayer.discard.includes(declinedTarget), true);
+
+  const empty = createGameScenario({ rootDir, seed: 282078 });
+  const emptySource = givenRuntimeCard(empty, {
+    definitionId: "esw2_dbg__main_076",
+  });
+  empty.activePlayer.chips = 4;
+  let emptyChoiceRequests = 0;
+  chooseEffect(empty, (request) => {
+    if (
+      request.effectId ===
+      "mayhem_each_player_optional_destroy_own_card_for_half_chips"
+    ) {
+      emptyChoiceRequests += 1;
+    }
+    return undefined;
+  });
+
+  assert.equal(
+    resolveMayhemThroughMarket(empty, emptySource, "mainDeck").ok,
+    true
+  );
+  assert.equal(empty.activePlayer.chips, 4);
+  assert.equal(emptyChoiceRequests, empty.state.players.length);
 });
 
 test("card movement: mega_007 gives Dingler one choice and normal wizards two zone choices", () => {
@@ -471,6 +700,63 @@ test("card movement: mega_007 gives Dingler one choice and normal wizards two zo
       [foe.playerId, 2],
     ]
   );
+
+  const declined = createGameScenario({
+    rootDir,
+    seed: 282008,
+    playerCount: 2,
+  });
+  const declinedFoe = declined.foes[0];
+  assert.ok(declinedFoe);
+  const declinedSource = givenRuntimeCard(declined, {
+    definitionId: "esw2_dbg__mega_mayhem_007",
+  });
+  const declinedHand = givenRuntimeCard(declined, {
+    zone: "hand",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  const declinedDiscard = givenRuntimeCard(declined, {
+    player: declinedFoe,
+    zone: "discard",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  chooseEffect(declined, (request) =>
+    request.effectId === "mega_mayhem_each_player_optional_destroy_own_cards"
+      ? { choiceId: "decline" }
+      : undefined
+  );
+
+  assert.equal(
+    resolveMayhemThroughMarket(declined, declinedSource, "legendDeck").ok,
+    true
+  );
+  assert.equal(declined.activePlayer.hand.includes(declinedHand), true);
+  assert.equal(declinedFoe.discard.includes(declinedDiscard), true);
+
+  const empty = createGameScenario({
+    rootDir,
+    seed: 282009,
+    playerCount: 2,
+  });
+  const emptySource = givenRuntimeCard(empty, {
+    definitionId: "esw2_dbg__mega_mayhem_007",
+  });
+  let emptyChoiceRequests = 0;
+  chooseEffect(empty, (request) => {
+    if (
+      request.effectId === "mega_mayhem_each_player_optional_destroy_own_cards"
+    ) {
+      emptyChoiceRequests += 1;
+    }
+    return undefined;
+  });
+
+  assert.equal(
+    resolveMayhemThroughMarket(empty, emptySource, "legendDeck").ok,
+    true
+  );
+  assert.equal(empty.state.common.destroyedPile.length, 0);
+  assert.equal(emptyChoiceRequests, empty.state.players.length);
 });
 
 test("card movement: main_001 keeps the revealed card or adds its effective cost", () => {
@@ -759,6 +1045,84 @@ test("card movement: main_010 does not grant the optional Mayhem bonus when decl
   assert.equal(scenario.state.common.destroyedMayhem.includes(mayhem), true);
 });
 
+test("card movement: main_010 handles multiple Mayhem cards and an empty main deck", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 284012,
+    playerCount: 2,
+  });
+  scenario.state.turn.power = 0;
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_010",
+  });
+  const selectedMayhem = givenRuntimeCard(scenario, {
+    cardId: "fixture-main-010-selected-mayhem",
+    cardKind: "mayhem",
+    effects: [
+      {
+        effectId: "mayhem_attack",
+        timing: "onMayhemResolve",
+        amount: 1,
+        target: { selector: "allPlayers" },
+      },
+    ],
+  });
+  const unselectedMayhem = givenRuntimeCard(scenario, {
+    cardId: "fixture-main-010-unselected-mayhem",
+    cardKind: "mayhem",
+    effects: [],
+  });
+  const normal = givenRuntimeCard(scenario, {
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  for (const card of [normal, unselectedMayhem, selectedMayhem]) {
+    putOnCommonDeck(scenario, card, "mainDeck");
+  }
+  chooseEffect(scenario, (request) =>
+    request.effectId === "destroy_top_main_deck_cards_then_optional_play_mayhem"
+      ? { choiceId: selectedMayhem.instanceId }
+      : undefined
+  );
+
+  assert.deepEqual(play(scenario, source), { ok: true });
+  assert.equal(scenario.state.turn.power, 6);
+  assert.equal(
+    scenario.state.common.destroyedMayhem.includes(selectedMayhem),
+    true
+  );
+  assert.equal(
+    scenario.state.common.destroyedMayhem.includes(unselectedMayhem),
+    true
+  );
+  assert.deepEqual(
+    scenario.state.eventLog
+      .filter((event) => event.type === "mayhemResolved")
+      .map((event) => event.cardInstanceId),
+    [selectedMayhem.instanceId]
+  );
+
+  const emptyScenario = createGameScenario({ rootDir, seed: 284013 });
+  emptyScenario.state.turn.power = 0;
+  emptyScenario.state.common.mainDeck.splice(0);
+  const emptySource = givenRuntimeCard(emptyScenario, {
+    definitionId: "esw2_dbg__main_010",
+  });
+  let emptyChoiceRequests = 0;
+  chooseEffect(emptyScenario, (request) => {
+    if (
+      request.effectId ===
+      "destroy_top_main_deck_cards_then_optional_play_mayhem"
+    ) {
+      emptyChoiceRequests += 1;
+    }
+    return undefined;
+  });
+
+  assert.deepEqual(play(emptyScenario, emptySource), { ok: true });
+  assert.equal(emptyScenario.state.turn.power, 3);
+  assert.equal(emptyChoiceRequests, 0);
+});
+
 test("card movement: main_022 destroys the legend top only after a successful defense window", () => {
   const scenario = createGameScenario({ rootDir, seed: 284022 });
   const foe = scenario.foes[0];
@@ -851,6 +1215,35 @@ test("card movement: main_022 destroys Mega Mayhem for zero damage", () => {
     scenario.state.common.destroyedMegaMayhem.includes(megaMayhem),
     true
   );
+
+  const emptyScenario = createGameScenario({
+    rootDir,
+    seed: 284025,
+  });
+  const emptyFoe = emptyScenario.foes[0];
+  assert.ok(emptyFoe);
+  emptyFoe.life.current = 10;
+  emptyScenario.state.common.legendDeck.splice(0);
+  const emptySource = givenRuntimeCard(emptyScenario, {
+    definitionId: "esw2_dbg__main_022",
+  });
+  let emptyTargetChoices = 0;
+  chooseEffect(emptyScenario, (request) => {
+    if (
+      request.effectId ===
+      "attack_destroy_top_legend_deck_then_damage_equal_cost"
+    ) {
+      emptyTargetChoices += 1;
+    }
+    return request.effectId ===
+      "attack_destroy_top_legend_deck_then_damage_equal_cost"
+      ? { choiceId: emptyFoe.playerId }
+      : undefined;
+  });
+
+  assert.deepEqual(play(emptyScenario, emptySource), { ok: true });
+  assert.equal(emptyFoe.life.current, 10);
+  assert.equal(emptyTargetChoices, 1);
 });
 
 test("card movement: mega_mayhem_006 defends each wizard before destroying in stable order", () => {
@@ -941,5 +1334,25 @@ test("card movement: mega_mayhem_006 defends each wizard before destroying in st
         event.type === "playerDied" && event.playerId === secondFoe.playerId
     ),
     true
+  );
+
+  const emptyScenario = createGameScenario({
+    rootDir,
+    seed: 284007,
+    playerCount: 3,
+  });
+  emptyScenario.state.common.mainDeck.splice(0);
+  const emptySource = givenRuntimeCard(emptyScenario, {
+    definitionId: "esw2_dbg__mega_mayhem_006",
+  });
+
+  assert.equal(
+    resolveMayhemThroughMarket(emptyScenario, emptySource, "legendDeck").ok,
+    true
+  );
+  assert.equal(emptyScenario.state.common.destroyedPile.length, 0);
+  assert.equal(
+    emptyScenario.state.eventLog.some((event) => event.type === "playerDied"),
+    false
   );
 });
