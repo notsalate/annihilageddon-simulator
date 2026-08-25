@@ -5,7 +5,10 @@ import {
   type LoadedDataPack,
   type TokenDefinition,
 } from "./data.js";
-import type { EffectRuntimeEndTurnDrawModifierOperationContext } from "./effect-runtime-registry.js";
+import type {
+  EffectRuntimeEndTurnDrawModifierOperationContext,
+  SetupPoolRequirement,
+} from "./effect-runtime-registry.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 import {
   createUnsupportedEffectHandler,
@@ -18,7 +21,11 @@ import type {
   ValueDecoder,
 } from "./effect-runtime-family-support.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
-import type { EffectTiming, RuntimeEffectForId } from "./runtime-effect.js";
+import type {
+  EffectTiming,
+  RuntimeEffect,
+  RuntimeEffectForId,
+} from "./runtime-effect.js";
 import {
   allEffectRuntimeModes,
   immediateEffectTimings,
@@ -69,22 +76,29 @@ export const setupEffectIds = [
 export function filterWizardPropertySetupPoolForFamiliarCapacity(
   setupPool: TokenInstance[],
   playerCount: number,
-  dataPack: Pick<LoadedDataPack, "manifest" | "decks" | "tokenDefinitions">
+  dataPack: Pick<LoadedDataPack, "manifest" | "decks" | "tokenDefinitions">,
+  resolveSetupPoolRequirement: (
+    effect: RuntimeEffect
+  ) => SetupPoolRequirement | undefined
 ): TokenInstance[] {
+  const additionalFamiliarCandidateCounts = setupPool.map((candidate) =>
+    getAdditionalFamiliarCandidateCount(
+      dataPack.tokenDefinitions.get(candidate.definitionId),
+      resolveSetupPoolRequirement
+    )
+  );
+  const requiredAdditionalFamiliarCount = additionalFamiliarCandidateCounts
+    .sort((left, right) => right - left)
+    .slice(0, playerCount)
+    .reduce((total, count) => total + count, 0);
   const familiarPoolSize =
     dataPack.decks.familiarPool?.entries.reduce(
       (total, entry) => total + entry.count,
       0
     ) ?? 0;
-  const thirdFamiliarPropertyCount = setupPool.filter((candidate) =>
-    hasThirdFamiliarSetupEffect(
-      dataPack.tokenDefinitions.get(candidate.definitionId)
-    )
-  ).length;
   if (
     !isIncompleteFullOnlyDataPack(dataPack) ||
-    familiarPoolSize >=
-      playerCount * 2 + Math.min(playerCount, thirdFamiliarPropertyCount)
+    familiarPoolSize >= playerCount * 2 + requiredAdditionalFamiliarCount
   ) {
     return setupPool;
   }
@@ -93,20 +107,34 @@ export function filterWizardPropertySetupPoolForFamiliarCapacity(
   // requirement cannot be satisfied by the available physical pool.
   const filtered = setupPool.filter((candidate) => {
     const definition = dataPack.tokenDefinitions.get(candidate.definitionId);
-    return !hasThirdFamiliarSetupEffect(definition);
+    return (
+      getAdditionalFamiliarCandidateCount(
+        definition,
+        resolveSetupPoolRequirement
+      ) === 0
+    );
   });
   return filtered.length >= playerCount * 2 ? filtered : setupPool;
 }
 
-function hasThirdFamiliarSetupEffect(
-  definition: TokenDefinition | undefined
-): boolean {
-  return (
-    definition?.kind === "wizardProperty" &&
-    definition.engine?.effects.some(
-      (effect) => effect.effectId === "setup_retain_and_choose_third_familiar"
-    ) === true
-  );
+function getAdditionalFamiliarCandidateCount(
+  definition: TokenDefinition | undefined,
+  resolveSetupPoolRequirement: (
+    effect: RuntimeEffect
+  ) => SetupPoolRequirement | undefined
+): number {
+  if (
+    definition?.kind !== "wizardProperty" ||
+    definition.engine === undefined
+  ) {
+    return 0;
+  }
+  return definition.engine.effects.reduce((total, effect) => {
+    const requirement = resolveSetupPoolRequirement(effect);
+    return requirement?.kind === "additionalFamiliarCandidates"
+      ? total + requirement.amount
+      : total;
+  }, 0);
 }
 
 export interface SetupEffectDecoderTools {
@@ -357,6 +385,9 @@ const setupRetainAndChooseThirdFamiliarHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"setup_retain_and_choose_third_familiar">
 > = {
   effectId: "setup_retain_and_choose_third_familiar",
+  getSetupPoolRequirement() {
+    return { kind: "additionalFamiliarCandidates", amount: 1 };
+  },
   execute() {
     return setupOnlyExecutionError("setup_retain_and_choose_third_familiar");
   },

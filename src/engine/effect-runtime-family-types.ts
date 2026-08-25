@@ -11,6 +11,7 @@ import type {
   EffectRuntimeSetupServices,
   EffectSourceContext,
   SetupDirective,
+  SetupPoolRequirement,
   SetupEffectSourceContext,
 } from "./effect-runtime-registry.js";
 import type {
@@ -62,6 +63,7 @@ export interface EffectRuntimeHandler<
     source: SetupEffectSourceContext,
     services: EffectRuntimeSetupServices
   ): { ok: true; directive?: SetupDirective } | { ok: false; error: string };
+  getSetupPoolRequirement?(effect: Effect): SetupPoolRequirement | undefined;
 }
 
 export type EffectRuntimeFamilyHandler<Id extends RuntimeEffectId> =

@@ -10,6 +10,7 @@ import {
   markTokenInstanceId,
 } from "../src/domain/types.js";
 import {
+  getSetupEffectPoolRequirement,
   tryExecuteSetupEffect as executeVerifiedSetupEffect,
   validateRuntimeEffectCatalogPayload,
   type EffectRuntimeSetupServices,
@@ -172,6 +173,18 @@ test("setup catalog emits the additional-familiar directive", () => {
       kind: "retainAndChooseThirdFamiliar",
       playerId: source.playerId,
     },
+  });
+});
+
+test("setup catalog exposes a typed familiar-capacity requirement", () => {
+  const effect = verifiedTestRuntimeEffect({
+    effectId: "setup_retain_and_choose_third_familiar",
+    timing: "setup",
+  });
+
+  assert.deepEqual(getSetupEffectPoolRequirement(effect), {
+    kind: "additionalFamiliarCandidates",
+    amount: 1,
   });
 });
 

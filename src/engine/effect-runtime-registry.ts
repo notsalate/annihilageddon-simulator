@@ -176,6 +176,11 @@ export type SetupDirective = {
   playerId: PlayerState["playerId"];
 };
 
+export type SetupPoolRequirement = {
+  readonly kind: "additionalFamiliarCandidates";
+  readonly amount: number;
+};
+
 export type SetupEffectExecutionResult =
   | { status: "executed"; directive?: SetupDirective }
   | { status: "error"; error: string };
@@ -641,6 +646,10 @@ interface EffectRuntimeEntry<
     source: SetupEffectSourceContext,
     services: EffectRuntimeSetupServices
   ): SetupEffectExecutionResult;
+  getSetupPoolRequirementVerified(
+    subjectId: string,
+    effect: VerifiedRuntimeEffectForId<EffectId>
+  ): SetupPoolRequirement | undefined;
   applyAfterPlayerAttackDamageVerified(
     subjectId: string,
     effect: VerifiedRuntimeEffectForId<EffectId>,
@@ -974,6 +983,9 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
               : { directive: result.directive }),
           }
         : { status: "error", error: result.error };
+    },
+    getSetupPoolRequirementVerified(_subjectId, effect) {
+      return config.handler.getSetupPoolRequirement?.(effect);
     },
     applyAfterPlayerAttackDamageVerified(subjectId, effect, context) {
       return evaluateAtTimingVerified(subjectId, effect, {
@@ -2505,4 +2517,12 @@ export function tryExecuteSetupEffect(
     source,
     services
   );
+}
+
+export function getSetupEffectPoolRequirement(
+  effect: VerifiedRuntimeEffect
+): SetupPoolRequirement | undefined {
+  return getVerifiedEffectRuntimeCatalogEntry(
+    effect
+  ).getSetupPoolRequirementVerified(`Setup effect ${effect.effectId}`, effect);
 }

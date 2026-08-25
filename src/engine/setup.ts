@@ -23,6 +23,7 @@ import {
   recordSetupChoiceSelected,
 } from "./event-recorder.js";
 import {
+  getSetupEffectPoolRequirement,
   tryExecuteSetupEffect,
   type EffectRuntimeMode,
   type EffectRuntimeSetupServices,
@@ -1061,7 +1062,9 @@ function assignStartingWizardProperties(
   const setupCandidates = filterWizardPropertySetupPoolForFamiliarCapacity(
     setupPool,
     players.length,
-    dataPack
+    dataPack,
+    (effect) =>
+      getSetupEffectPoolRequirement(requireVerifiedRuntimeEffect(effect))
   );
   assertSetupPoolSize(
     setupCandidates.length,
