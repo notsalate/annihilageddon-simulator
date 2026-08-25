@@ -304,7 +304,8 @@ export interface CombatAttackCatalogTools {
   calculateEffectiveCardCost(
     state: GameState,
     playerId: PlayerState["playerId"],
-    definition: CardDefinition
+    definition: CardDefinition,
+    card?: CardInstance
   ): number;
 }
 
@@ -540,8 +541,8 @@ function resolveControlledCardCost(
     return {
       ok: true,
       amount: Math.max(
-        ...cards.map(({ definition }) =>
-          calculateEffectiveCardCost(state, player.playerId, definition)
+        ...cards.map(({ card, definition }) =>
+          calculateEffectiveCardCost(state, player.playerId, definition, card)
         )
       ),
     };
@@ -552,7 +553,12 @@ function resolveControlledCardCost(
       choiceKind: "cardTarget" as const,
       choiceId: card.instanceId,
       cards: [card],
-      amount: calculateEffectiveCardCost(state, player.playerId, definition),
+      amount: calculateEffectiveCardCost(
+        state,
+        player.playerId,
+        definition,
+        card
+      ),
     }));
     const choice = services.chooseEffectChoice(
       state,

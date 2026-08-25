@@ -30,6 +30,7 @@ import {
   calculateEffectiveCardCost as calculateEffectiveCardCostCore,
   calculateEffectivePlayerMaxLife as calculateEffectivePlayerMaxLifeCore,
 } from "./effective-values.js";
+import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
 import {
   allEffectRuntimeModes,
   fixtureEffectTimings,
@@ -1854,8 +1855,14 @@ const combatAttackEffectEntries = defineEffectRuntimeFamily(
   createCombatAttackEffectDefinitions({
     bindRuntimeEffectDecoder,
     collectAttackReplacementProfile,
-    calculateEffectiveCardCost: (state, playerId, definition) =>
-      calculateEffectiveCardCostCore(state, playerId, definition),
+    calculateEffectiveCardCost: (state, playerId, definition, card) =>
+      calculateEffectiveCardCostCore(
+        state,
+        playerId,
+        definition,
+        card,
+        cardMatchesTypeForPlayer
+      ),
   })
 );
 

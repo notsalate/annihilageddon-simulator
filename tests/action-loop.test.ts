@@ -5830,6 +5830,79 @@ test("свойство волшебника 003 позволяет считат�
   );
 });
 
+test("атака по стоимости контролируемой карты учитывает выбранный effective type фамильяра", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (candidate) => candidate.playerId !== player.playerId
+  );
+  assert.ok(targetPlayer);
+
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_003");
+  assert.ok(property);
+  player.hand = [];
+  player.permanents = [];
+  player.playedThisTurn = [];
+  player.wizardProperties = [
+    {
+      instanceId: markTokenInstanceId("fixture-wp003-attack-cost"),
+      definitionId: markTokenDefinitionId(property.tokenId),
+      ownerId: player.playerId,
+    },
+  ];
+
+  const familiarDefinition = state.cardDefinitions.get(
+    "esw2_dbg__familiar_007"
+  );
+  assert.ok(familiarDefinition);
+  const familiar = createRuntimeCardInstance(
+    player,
+    familiarDefinition.cardId,
+    "effective-type-attack-cost-familiar"
+  );
+  player.permanents.push(familiar);
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "setCardEffectiveType",
+      cardInstanceId: familiar.instanceId,
+      cardType: "legend",
+      enabled: true,
+    }),
+    { ok: true }
+  );
+
+  const attack = addFixtureDefinitionToActiveHand(
+    state,
+    createFixtureCardDefinition("fixture-effective-type-cost-attack", [
+      {
+        effectId: "attack_damage_equal_to_controlled_card_cost",
+        timing: "onPlay",
+        costMode: "highest",
+        target: { selector: "opponentPlayer" },
+      },
+    ])
+  );
+  const targetLifeBefore = targetPlayer.life.current;
+
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: attack.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(targetPlayer.life.current, targetLifeBefore - 4);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.effectId === "attack_damage_equal_to_controlled_card_cost" &&
+        event.amount === 4
+    )
+  );
+});
+
 test("Wizard Property 006 and 008 apply topdecking after the player chooses apply", () => {
   const cases = [
     {
