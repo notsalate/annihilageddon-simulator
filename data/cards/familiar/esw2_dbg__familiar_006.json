@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__familiar_006",
+  "source": {
+    "draft": "data/import/cards/familiar/drafts/esw2_dbg__familiar_006.json",
+    "image": "assets/cards/familiar/Фамильяр. Никчемухажёры.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_006.md"
+  },
+  "visible": {
+    "nameRu": "Никчемухажёры",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "textRu": "+2 мощи\nВозьми 1 карту.\nЗащита: можешь раскрыть эту карту и сбросить другую случайную карту с руки, чтобы избежать атаки.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "cost": 6,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 2 },
+      { "effectId": "draw_cards", "timing": "onPlay", "amount": 1 },
+      {
+        "effectId": "avoid_attack",
+        "timing": "onDefense",
+        "destination": "keep",
+        "costs": [
+          {
+            "costId": "discard_other_hand_card",
+            "amount": 1,
+            "rng": "seeded"
+          }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

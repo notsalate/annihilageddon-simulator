@@ -8124,6 +8124,11 @@ test("Palochka-Shlepalocka gains no chips when its attack is defended", () => {
 test("Palochka-Shlepalocka uses life-limited actual damage for its chip transfer", () => {
   const { state, activePlayer, targetPlayer, wand } =
     setupShlepalockaTestState();
+  const neutralDeadWizardToken = state.common.deadWizardTokens.drawStack.find(
+    (token) => token.definitionId === "esw2_dbg__dead_wizard_token_neutral"
+  );
+  assert.ok(neutralDeadWizardToken);
+  state.common.deadWizardTokens.drawStack = [neutralDeadWizardToken];
   targetPlayer.life.current = 1;
   targetPlayer.chips = 5;
   const result = applyAction(state, {
@@ -14471,4 +14476,294 @@ test("#269 defense optionally destroys a hand card", () => {
   assert.equal(defender.discard.includes(defenseCard), true);
   assert.equal(defender.hand.includes(destroyedCard), false);
   assert.equal(state.common.destroyedPile.includes(destroyedCard), true);
+});
+
+test("#270 familiar defense keeps itself and discards one seeded-random other card", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const familiarDefinition = currentRuntimeDataPack.cardDefinitions.get(
+    "esw2_dbg__familiar_006"
+  );
+  assert.ok(familiarDefinition);
+  assert.deepEqual(
+    currentRuntimeDataPack.decks.familiarPool?.entries.find(
+      (entry) => entry.cardId === "esw2_dbg__familiar_006"
+    ),
+    { cardId: "esw2_dbg__familiar_006", count: 1 }
+  );
+
+  const resolve = (seed: number) => {
+    const state = initializeGame({
+      rootDir,
+      dataPackPath: playableRuntimeDataPackPath,
+      seed,
+    });
+    state.cardDefinitions = new Map([
+      ...state.cardDefinitions,
+      [familiarDefinition.cardId, familiarDefinition],
+    ]);
+    const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+    const defender = mustGetPlayer(state, markPlayerId("player-2"));
+    state.activePlayerId = attacker.playerId;
+    defender.hand = [];
+    defender.discard = [];
+    const defenseCard = addRuntimeCardToHand(
+      state,
+      defender,
+      familiarDefinition.cardId
+    );
+    const otherCards = [
+      addRuntimeCardToHand(state, defender, "esw2_dbg__main_013"),
+      addRuntimeCardToHand(state, defender, "esw2_dbg__main_013"),
+    ];
+    const [firstOtherCard, secondOtherCard] = otherCards;
+    assert.ok(firstOtherCard);
+    assert.ok(secondOtherCard);
+    state.effectChoiceStrategy = ({ effectId }) =>
+      effectId === "avoid_attack"
+        ? { choiceId: defenseCard.instanceId }
+        : undefined;
+    const attack = addFixtureCardToActiveHand(state, {
+      effectId: "attack_damage",
+      timing: "onPlay",
+      amount: 5,
+      target: { selector: "opponentPlayer" },
+    });
+    const defenderLifeBefore = defender.life.current;
+
+    assert.deepEqual(
+      applyAction(state, { type: "playCard", cardInstanceId: attack }),
+      { ok: true }
+    );
+    const discardedOtherCard = otherCards.find((card) =>
+      defender.discard.includes(card)
+    );
+    assert.ok(discardedOtherCard);
+    assert.equal(defender.hand.includes(defenseCard), true);
+    assert.notEqual(
+      defender.hand.includes(firstOtherCard),
+      defender.hand.includes(secondOtherCard)
+    );
+    assert.equal(defender.discard.includes(defenseCard), false);
+    assert.equal(defender.life.current, defenderLifeBefore);
+    assert.equal(
+      state.eventLog.some(
+        (event) =>
+          event.type === "defenseCostPaid" &&
+          event.effectId === "discard_other_hand_card" &&
+          event.targetCardInstanceId === discardedOtherCard.instanceId
+      ),
+      true
+    );
+    return discardedOtherCard.instanceId;
+  };
+
+  assert.equal(resolve(270001), resolve(270001));
+});
+
+test("#270 cards preserve their independent play effects", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const cases = [
+    { definitionId: "esw2_dbg__familiar_006", power: 2, draw: 1 },
+    { definitionId: "esw2_dbg__main_003", power: 1, draw: 0 },
+  ] as const;
+
+  for (const [index, cardCase] of cases.entries()) {
+    const definition = currentRuntimeDataPack.cardDefinitions.get(
+      cardCase.definitionId
+    );
+    assert.ok(definition);
+    const state = initializeGame({
+      rootDir,
+      dataPackPath: playableRuntimeDataPackPath,
+      seed: 270010 + index,
+    });
+    state.cardDefinitions = new Map([
+      ...state.cardDefinitions,
+      [definition.cardId, definition],
+    ]);
+    const player = mustGetPlayer(state, markPlayerId("player-1"));
+    state.activePlayerId = player.playerId;
+    player.hand = [];
+    const powerBefore = state.turn.power;
+    const deckBefore = player.deck.length;
+    const card = addRuntimeCardToHand(state, player, definition.cardId);
+
+    assert.deepEqual(
+      applyAction(state, { type: "playCard", cardInstanceId: card.instanceId }),
+      { ok: true }
+    );
+    assert.equal(state.turn.power, powerBefore + cardCase.power);
+    assert.equal(player.deck.length, deckBefore - cardCase.draw);
+    assert.equal(player.hand.length, cardCase.draw);
+  }
+});
+
+test("#270 familiar defense is unavailable without another hand card", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const familiarDefinition = currentRuntimeDataPack.cardDefinitions.get(
+    "esw2_dbg__familiar_006"
+  );
+  assert.ok(familiarDefinition);
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 270002,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [familiarDefinition.cardId, familiarDefinition],
+  ]);
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const defender = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  const defenseCard = addRuntimeCardToHand(
+    state,
+    defender,
+    familiarDefinition.cardId
+  );
+  state.effectChoiceStrategy = ({ effectId }) =>
+    effectId === "avoid_attack"
+      ? { choiceId: defenseCard.instanceId }
+      : undefined;
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 5,
+    target: { selector: "opponentPlayer" },
+  });
+  const defenderLifeBefore = defender.life.current;
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }),
+    { ok: true }
+  );
+  assert.equal(defender.life.current, defenderLifeBefore - 5);
+  assert.equal(defender.hand.includes(defenseCard), true);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
+    false
+  );
+});
+
+test("#270 main treasure defense pays chip and nonlethal life while staying in hand", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const defenseDefinition =
+    currentRuntimeDataPack.cardDefinitions.get("esw2_dbg__main_003");
+  assert.ok(defenseDefinition);
+  assert.deepEqual(
+    currentRuntimeDataPack.decks.mainDeck?.entries.find(
+      (entry) => entry.cardId === "esw2_dbg__main_003"
+    ),
+    { cardId: "esw2_dbg__main_003", count: 2 }
+  );
+
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 270003,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [defenseDefinition.cardId, defenseDefinition],
+  ]);
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const defender = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  defender.chips = 1;
+  defender.life.current = 3;
+  const defenseCard = addRuntimeCardToHand(
+    state,
+    defender,
+    defenseDefinition.cardId
+  );
+  state.effectChoiceStrategy = ({ effectId }) =>
+    effectId === "avoid_attack"
+      ? { choiceId: defenseCard.instanceId }
+      : undefined;
+
+  const playAttack = () => {
+    const attack = addFixtureCardToActiveHand(state, {
+      effectId: "attack_damage",
+      timing: "onPlay",
+      amount: 5,
+      target: { selector: "opponentPlayer" },
+    });
+    assert.deepEqual(
+      applyAction(state, { type: "playCard", cardInstanceId: attack }),
+      { ok: true }
+    );
+  };
+
+  playAttack();
+  assert.equal(defender.life.current, 2);
+  assert.equal(defender.chips, 0);
+  assert.equal(defender.hand.includes(defenseCard), true);
+
+  defender.chips = 1;
+  playAttack();
+  assert.equal(defender.life.current, 1);
+  assert.equal(defender.chips, 0);
+  assert.equal(defender.hand.includes(defenseCard), true);
+  assert.equal(
+    state.eventLog.filter((event) => event.type === "defenseChoiceSelected")
+      .length,
+    2
+  );
+});
+
+test("#270 main treasure defense cannot spend the last life", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const defenseDefinition =
+    currentRuntimeDataPack.cardDefinitions.get("esw2_dbg__main_003");
+  assert.ok(defenseDefinition);
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 270004,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [defenseDefinition.cardId, defenseDefinition],
+  ]);
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const defender = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  defender.chips = 1;
+  defender.life.current = 1;
+  const defenseCard = addRuntimeCardToHand(
+    state,
+    defender,
+    defenseDefinition.cardId
+  );
+  state.effectChoiceStrategy = ({ effectId }) =>
+    effectId === "avoid_attack"
+      ? { choiceId: defenseCard.instanceId }
+      : undefined;
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 1,
+    target: { selector: "opponentPlayer" },
+  });
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }),
+    { ok: true }
+  );
+  assert.equal(defender.hand.includes(defenseCard), true);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
+    false
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.targetPlayerId === defender.playerId
+    ),
+    true
+  );
 });

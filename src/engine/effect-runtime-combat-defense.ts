@@ -73,7 +73,9 @@ export function createCombatDefenseEffectDecoders(
     avoid_attack: defineDecoder("avoid_attack", {
       effectId: required(literal("avoid_attack")),
       timing: required(literal("onDefense")),
-      destination: required(oneOf(["discardSelf", "topdeckSelf"] as const)),
+      destination: required(
+        oneOf(["discardSelf", "topdeckSelf", "keep"] as const)
+      ),
       redirectAttack: optional(booleanValue),
       costs: optionalCosts,
       branchEffects: optionalRuntimeEffectArray,

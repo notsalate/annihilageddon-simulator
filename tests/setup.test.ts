@@ -476,7 +476,9 @@ test("incomplete current runtime skips familiar setup when its pool is short", (
       familiarPool: {
         ...familiarPool,
         entries: familiarPool.entries.filter(
-          (entry) => entry.cardId !== "esw2_dbg__familiar_001"
+          (entry) =>
+            entry.cardId !== "esw2_dbg__familiar_001" &&
+            entry.cardId !== "esw2_dbg__familiar_006"
         ),
       },
     },

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_003",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_003.json",
+    "image": "assets/cards/treasure/Сокровище. Стаканчик из Царьбакса.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_003.md"
+  },
+  "visible": {
+    "nameRu": "Стаканчик из Царьбакса",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "textRu": "+1 мощь\nМожешь раскрыть эту карту с руки и потратить 1 жизнь и 1 чипсину, чтобы избежать атаки.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "cost": 3,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 1 },
+      {
+        "effectId": "avoid_attack",
+        "timing": "onDefense",
+        "destination": "keep",
+        "costs": [
+          { "costId": "spend_chips", "amount": 1 },
+          { "costId": "pay_life", "amount": 1 }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

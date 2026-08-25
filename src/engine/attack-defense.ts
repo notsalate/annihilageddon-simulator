@@ -51,6 +51,7 @@ export type DefensePaymentStep =
   | {
       readonly kind: "discardOtherHandCard";
       readonly cardInstanceId: CardInstance["instanceId"];
+      readonly selection?: "seeded";
     }
   | {
       readonly kind: "spendChips";
@@ -79,7 +80,7 @@ export type DefensePaymentPlanResult =
 
 interface LegalDefense {
   readonly card: CardInstance;
-  readonly destination: "discardSelf" | "topdeckSelf";
+  readonly destination: "discardSelf" | "topdeckSelf" | "keep";
   readonly effect: AvoidAttackRuntimeEffect;
   readonly paymentPlan: DefensePaymentPlan;
 }
@@ -438,9 +439,12 @@ function moveDefenseCard(
   defendingPlayer: PlayerState,
   defense: {
     card: CardInstance;
-    destination: "discardSelf" | "topdeckSelf";
+    destination: "discardSelf" | "topdeckSelf" | "keep";
   }
 ): boolean {
+  if (defense.destination === "keep") {
+    return true;
+  }
   const destinationZoneName =
     defense.destination === "discardSelf"
       ? `${defendingPlayer.playerId}.discard`
@@ -559,6 +563,7 @@ export function buildDefensePaymentPlan(
           Object.freeze({
             kind: "discardOtherHandCard",
             cardInstanceId: card.instanceId,
+            ...(cost.rng === "seeded" ? { selection: "seeded" as const } : {}),
           })
         );
         break;
@@ -634,12 +639,28 @@ function commitDefensePaymentPlan(
     return { ok: false, error: validationError };
   }
 
+  const paidCardInstanceIds = new Set<CardInstance["instanceId"]>();
   for (const step of plan.steps) {
     switch (step.kind) {
       case "discardOtherHandCard": {
+        const paidCardInstanceId =
+          step.selection === "seeded"
+            ? selectSeededDefensePaymentCard(
+                state,
+                defendingPlayer,
+                defenseCard,
+                paidCardInstanceIds
+              )
+            : step.cardInstanceId;
+        if (paidCardInstanceId === undefined) {
+          return {
+            ok: false,
+            error: "Defense payment plan could not select a hand card",
+          };
+        }
         const moveResult = movePhysicalCard(
           state,
-          step.cardInstanceId,
+          paidCardInstanceId,
           `${defendingPlayer.playerId}.discard`,
           "back",
           `${defendingPlayer.playerId}.hand`
@@ -651,6 +672,7 @@ function commitDefensePaymentPlan(
           };
         }
         const paidCard = moveResult.move.card;
+        paidCardInstanceIds.add(paidCard.instanceId);
         recordGameEvent(state, {
           type: "defenseCostPaid",
           playerId: defendingPlayer.playerId,
@@ -692,6 +714,24 @@ function commitDefensePaymentPlan(
   }
 
   return { ok: true };
+}
+
+function selectSeededDefensePaymentCard(
+  state: GameState,
+  defendingPlayer: PlayerState,
+  defenseCard: CardInstance,
+  paidCardInstanceIds: ReadonlySet<CardInstance["instanceId"]>
+): CardInstance["instanceId"] | undefined {
+  const candidates = defendingPlayer.hand.filter(
+    (card) =>
+      card.instanceId !== defenseCard.instanceId &&
+      !paidCardInstanceIds.has(card.instanceId)
+  );
+  if (candidates.length === 0) {
+    return undefined;
+  }
+  const selected = candidates[state.rng.nextInt(candidates.length)];
+  return selected?.instanceId;
 }
 
 function validateDefensePaymentPlan(

@@ -279,9 +279,12 @@ const runtimeCondition: ValueDecoder<RuntimeEffectCondition> = (label, raw) => {
 const runtimeCost: ValueDecoder<RuntimeEffectCost> = (label, raw) => {
   if (!isPlainRecord(raw)) return failure(`${label} must be an object`);
   if (raw["costId"] === "discard_other_hand_card") {
-    return decodeObject(label, raw, {
+    return decodeObject<
+      Extract<RuntimeEffectCost, { costId: "discard_other_hand_card" }>
+    >(label, raw, {
       costId: required(literal("discard_other_hand_card")),
       amount: required(literal(1)),
+      rng: optional(literal("seeded")),
     });
   }
   if (raw["costId"] === "spend_chips") {

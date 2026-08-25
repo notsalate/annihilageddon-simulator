@@ -177,6 +177,7 @@ export type RuntimeEffectCondition =
 export interface DiscardOtherHandCardRuntimeEffectCost {
   costId: "discard_other_hand_card";
   amount: 1;
+  rng?: "seeded";
 }
 
 export interface SpendChipsRuntimeEffectCost {
@@ -594,7 +595,7 @@ export interface AvoidAttackRuntimeEffect extends TimedEffect<
   "avoid_attack",
   "onDefense"
 > {
-  destination: "discardSelf" | "topdeckSelf";
+  destination: "discardSelf" | "topdeckSelf" | "keep";
   redirectAttack?: boolean;
   costs?: RuntimeEffectCost[];
   branchEffects?: RuntimeEffect[];
@@ -908,7 +909,8 @@ export function isAvoidAttackRuntimeEffect(
     effect.effectId === "avoid_attack" &&
     effect.timing === "onDefense" &&
     (effect.destination === "discardSelf" ||
-      effect.destination === "topdeckSelf") &&
+      effect.destination === "topdeckSelf" ||
+      effect.destination === "keep") &&
     (effect.redirectAttack === undefined ||
       typeof effect.redirectAttack === "boolean")
   );
@@ -1026,7 +1028,11 @@ export function isRuntimeEffectCost(
 ): value is RuntimeEffectCost {
   if (!isRuntimeEffectTargetRecord(value)) return false;
   if (value["costId"] === "discard_other_hand_card") {
-    return hasExactKeys(value, ["costId", "amount"]) && value["amount"] === 1;
+    return (
+      hasExactKeys(value, ["costId", "amount", "rng"]) &&
+      value["amount"] === 1 &&
+      (value["rng"] === undefined || value["rng"] === "seeded")
+    );
   }
   return (
     (value["costId"] === "spend_chips" || value["costId"] === "pay_life") &&
