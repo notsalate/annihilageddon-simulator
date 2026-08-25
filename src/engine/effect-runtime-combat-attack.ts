@@ -7,7 +7,10 @@ import { countControlledCardsOfType } from "./card-type-runtime.js";
 import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
 import { recordGameEvent } from "./event-recorder.js";
 import { transferUpToLimpWandsToPlayer } from "./effect-runtime-special-card-stack.js";
-import { executeReturnDiscardToHand } from "./effect-runtime-cards-ownership-choice.js";
+import {
+  destroyOwnedCard,
+  executeReturnDiscardToHand,
+} from "./effect-runtime-cards-ownership-choice.js";
 import type {
   AttackReplacementProfile,
   DamageResult,
@@ -1205,37 +1208,14 @@ export function createCombatAttackEffectDefinitions(
                 error: "Legend top card changed before destruction",
               };
             }
-            const destination = services.getDestroyDestination(
-              stateBeforeDamage,
-              currentLegendCard
-            );
-            if (!destination.ok) return destination;
-            const moved = services.moveCardToZonePreservingOwner(
+            return destroyOwnedCard(
               stateBeforeDamage,
               targetPlayer,
               currentLegendCard,
-              destination.zone,
-              destination.zoneName,
               effect.effectId,
-              attackSource
+              attackSource,
+              services
             );
-            if (!moved) {
-              return {
-                ok: false,
-                error: `Cannot destroy legend card ${currentLegendCard.instanceId}`,
-              };
-            }
-            recordGameEvent(stateBeforeDamage, {
-              type: "effectCardDestroyed",
-              playerId: targetPlayer.playerId,
-              cardInstanceId: attackSource.cardInstanceId,
-              definitionId: attackSource.definitionId,
-              targetCardInstanceId: currentLegendCard.instanceId,
-              targetDefinitionId: currentLegendCard.definitionId,
-              effectId: effect.effectId,
-              sourceType: attackSource.sourceType,
-            });
-            return { ok: true };
           },
         },
       });
