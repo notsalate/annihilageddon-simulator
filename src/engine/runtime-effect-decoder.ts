@@ -543,6 +543,7 @@ const deadWizardTokenEffectDecoders = createDeadWizardTokenEffectDecoders({
   defineDecoder,
   required,
   literal,
+  selectorTarget,
 });
 
 const setupEffectDecoders = createSetupEffectDecoders({

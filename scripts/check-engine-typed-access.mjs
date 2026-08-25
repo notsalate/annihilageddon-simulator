@@ -84,9 +84,9 @@ const configuredAllowedViolations = [
   ["src/engine/data.ts", 2064, 3, "validateRuntimeEffectDefinition"],
   ["src/engine/data.ts", 2085, 43, "isEffectRecord"],
   ["src/engine/runtime-effect-decoder.ts", 74, 9, "decodeObject"],
-  ["src/engine/runtime-effect-decoder.ts", 849, 41, "isPlainRecord"],
-    ["src/engine/runtime-effect.ts", 1021, 4, "isRuntimeEffectTargetRecord"],
-    ["src/engine/runtime-effect.ts", 1026, 3, "hasExactKeys"],
+  ["src/engine/runtime-effect-decoder.ts", 850, 41, "isPlainRecord"],
+    ["src/engine/runtime-effect.ts", 1029, 4, "isRuntimeEffectTargetRecord"],
+    ["src/engine/runtime-effect.ts", 1034, 3, "hasExactKeys"],
 ];
 
 const typedEffectBoundaryViolations = [];
@@ -178,6 +178,7 @@ approvedValueImporters.set(
     "tests/action-loop.test.ts",
     "tests/benchmark.test.ts",
     "tests/effective-values.test.ts",
+    "tests/life-total-effects.test.ts",
     "tests/runtime-data-intake.test.ts",
     "tests/runtime-image-metadata.test.ts",
     "tests/runtime-regression.test.ts",

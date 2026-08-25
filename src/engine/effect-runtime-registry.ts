@@ -375,6 +375,13 @@ export interface EffectRuntimeServices {
     player: PlayerState,
     lifeTotal: number
   ): { lifeAfter: number; lifeBefore: number };
+  exchangePlayerLifeTotals(
+    state: GameState,
+    player: PlayerState,
+    targetPlayer: PlayerState,
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext
+  ): void;
   resolveStatusTargetPlayers(
     state: GameState,
     player: PlayerState,
@@ -1460,18 +1467,13 @@ function exchangeLifeAndOrDinglerStatus(
 
   const targetPlayer = targetResult.choice.player;
   if (exchangeLife) {
-    const playerLife = player.life.current;
-    player.life.current = targetPlayer.life.current;
-    targetPlayer.life.current = playerLife;
-    recordGameEvent(state, {
-      type: "effectLifeExchanged",
-      playerId: player.playerId,
-      targetPlayerId: targetPlayer.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
+    services.exchangePlayerLifeTotals(
+      state,
+      player,
+      targetPlayer,
       effectId,
-      sourceType: source.sourceType,
-    });
+      source
+    );
   }
 
   if (exchangeDinglerStatus) {

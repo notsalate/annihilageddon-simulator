@@ -12,6 +12,7 @@ import {
   type RuntimeEffect,
   type RuntimeEffectId,
 } from "../../src/index.js";
+import type { LoadedDataPack } from "../../src/engine/data.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -19,12 +20,27 @@ import {
 import { grantTemporaryControl } from "../../src/engine/control-ledger.js";
 import { verifiedTestRuntimeEffect } from "./verified-runtime-effect.js";
 
-export interface CreateGameScenarioOptions {
-  rootDir: string;
+export type CreateGameScenarioOptions = {
   seed: number;
-  dataPackPath?: string;
   playerCount?: number;
-}
+} & (
+  | {
+      rootDir: string;
+      dataPackPath?: string;
+      dataPack?: never;
+    }
+  | {
+      rootDir?: never;
+      dataPackPath?: never;
+      dataPack: LoadedDataPack;
+    }
+  | {
+      rootDir?: never;
+      dataPackPath?: never;
+      dataPack?: never;
+      state: GameState;
+    }
+);
 
 export interface GameScenario {
   readonly state: GameState;
@@ -81,16 +97,27 @@ type GivenRuntimeCardWithEffects = Extract<
 export function createGameScenario(
   options: CreateGameScenarioOptions
 ): GameScenario {
-  const state = initializeGame({
-    rootDir: options.rootDir,
-    seed: options.seed,
-    ...(options.dataPackPath === undefined
-      ? {}
-      : { dataPackPath: options.dataPackPath }),
-    ...(options.playerCount === undefined
-      ? {}
-      : { playerCount: options.playerCount }),
-  });
+  const state =
+    "state" in options
+      ? options.state
+      : "dataPack" in options
+        ? initializeGame({
+            dataPack: options.dataPack,
+            seed: options.seed,
+            ...(options.playerCount === undefined
+              ? {}
+              : { playerCount: options.playerCount }),
+          })
+        : initializeGame({
+            rootDir: options.rootDir,
+            seed: options.seed,
+            ...(options.dataPackPath === undefined
+              ? {}
+              : { dataPackPath: options.dataPackPath }),
+            ...(options.playerCount === undefined
+              ? {}
+              : { playerCount: options.playerCount }),
+          });
 
   return {
     state,

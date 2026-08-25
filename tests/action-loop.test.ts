@@ -6653,7 +6653,7 @@ test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affec
   );
 });
 
-test("wizard property resurrection life override respects loser-status exception", () => {
+test("wizard property resurrection life override respects Dingler cap", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -6693,10 +6693,19 @@ test("wizard property resurrection life override respects loser-status exception
   assert.equal(propertyOwner.life.current, 25);
 
   propertyOwner.statuses.push({
-    instanceId: markCardInstanceId("fixture-loser-status"),
-    statusId: "loser",
+    instanceId: markCardInstanceId("fixture-dingler-status"),
+    statusId: "dingler",
     ownerId: propertyOwner.playerId,
-    effects: [],
+    effects: [
+      verifiedTestRuntimeEffect({
+        effectId: "modify_effective_value",
+        timing: "whileControlled",
+        valueKind: "playerMaxLife",
+        operation: "add",
+        amount: -10,
+        target: { targetType: "player" },
+      }),
+    ],
   });
   propertyOwner.life.current = 1;
   const secondFixtureCardId = addFixtureCardToActiveHand(state, {
@@ -6714,7 +6723,7 @@ test("wizard property resurrection life override respects loser-status exception
   });
 
   assert.equal(secondResult.ok, true);
-  assert.equal(propertyOwner.life.current, 20);
+  assert.equal(propertyOwner.life.current, 15);
 });
 
 test("heal uses effective max life and logs clamping without mutating base max life", () => {
@@ -13553,7 +13562,7 @@ test("ЖДК 021 отнимает половину чипсин, округля�
   }
 });
 
-test("ЖДК 017 выдаёт две чипсины убийце после остальных эффектов карты", () => {
+test("ЖДК 017 выдаёт две чипсины убийце до следующего эффекта карты", () => {
   const state = initializeGame({ rootDir, seed: 304017 });
   const killer = mustGetPlayer(state, state.activePlayerId);
   const defeatedPlayer = getOpponentsInSeatingOrder(state, killer)[0];
@@ -13607,14 +13616,14 @@ test("ЖДК 017 выдаёт две чипсины убийце после ос
   assertEventOrder(state, [
     (event) =>
       event.type === "effectChipsGained" &&
-      event.definitionId === attack.definitionId &&
-      event.effectId === "gain_chips",
-    (event) =>
-      event.type === "effectChipsGained" &&
       event.definitionId === "esw2_dbg__dead_wizard_token_017" &&
       event.effectId === "dead_wizard_token_reward_killer_chips" &&
       event.playerId === killer.playerId &&
       event.amount === 2,
+    (event) =>
+      event.type === "effectChipsGained" &&
+      event.definitionId === attack.definitionId &&
+      event.effectId === "gain_chips",
   ]);
 });
 
