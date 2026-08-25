@@ -260,7 +260,11 @@ export function enumerateTurnLines(
   const initialTurnNumber = source.turn.number;
   const lines: AnalyzedTurnLine[] = [];
 
-  const visit = (state: GameState, steps: AnalysisActionStep[]): void => {
+  const visit = (
+    state: GameState,
+    steps: AnalysisActionStep[],
+    visitedPositions: ReadonlySet<string>
+  ): void => {
     for (const [legalActionIndex, action] of listLegalActions(
       state
     ).entries()) {
@@ -321,12 +325,20 @@ export function enumerateTurnLines(
           continue;
         }
 
-        visit(branch.resultingState, nextSteps);
+        const nextPosition = getAnalysisPositionFingerprint(
+          branch.resultingState
+        );
+        if (visitedPositions.has(nextPosition)) {
+          continue;
+        }
+        const nextVisitedPositions = new Set(visitedPositions);
+        nextVisitedPositions.add(nextPosition);
+        visit(branch.resultingState, nextSteps, nextVisitedPositions);
       }
     }
   };
 
-  visit(source, []);
+  visit(source, [], new Set([getAnalysisPositionFingerprint(source)]));
   return lines;
 }
 
@@ -403,6 +415,17 @@ function cloneAnalyzedTurnLine(line: AnalyzedTurnLine): AnalyzedTurnLine {
       : { winnerPlayerId: line.winnerPlayerId }),
     terminalState: forkGameState(line.terminalState),
   };
+}
+
+function getAnalysisPositionFingerprint(state: GameState): string {
+  const {
+    cardDefinitions: _cardDefinitions,
+    tokenDefinitions: _tokenDefinitions,
+    eventLog: _eventLog,
+    effectChoiceStrategy: _effectChoiceStrategy,
+    ...position
+  } = state;
+  return JSON.stringify(position) ?? "<unserializable-analysis-position>";
 }
 
 function assertFiniteEvaluation(

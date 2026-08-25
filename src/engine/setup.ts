@@ -341,7 +341,9 @@ interface GameEventPayload {
   sourceType?: GameEventSourceType;
   setupChoiceKind?: "familiar" | "wizardProperty";
   policyId?: SetupChoicePolicyId;
+  candidateInstanceIds?: string[];
   candidateDefinitionIds?: string[];
+  chosenInstanceId?: string;
   chosenDefinitionId?: string;
 }
 
@@ -408,7 +410,11 @@ type GameEventOptionalFields<TType extends GameEventType> = TType extends
                                       ?
                                           | "targetCardInstanceId"
                                           | "targetDefinitionId"
-                                      : never;
+                                      : TType extends "setupChoiceSelected"
+                                        ?
+                                            | "candidateInstanceIds"
+                                            | "chosenInstanceId"
+                                        : never;
 
 type GameEventShape<
   TType extends GameEventType,
@@ -1182,14 +1188,6 @@ function assignStartingFamiliars(
       );
     }
 
-    const selectedPairChoice = selectFamiliarSetupChoice(
-      player,
-      "startingPair",
-      [firstCandidate, secondCandidate],
-      familiarSetupChoicePolicy,
-      eventLog
-    );
-
     if (playersRetainingBothFamiliars.has(player.playerId)) {
       for (const candidate of [firstCandidate, secondCandidate]) {
         player.unboughtFamiliars.push(
@@ -1219,6 +1217,13 @@ function assignStartingFamiliars(
         factory.create(thirdCandidate.definitionId, player.playerId)
       );
     } else {
+      const selectedPairChoice = selectFamiliarSetupChoice(
+        player,
+        "startingPair",
+        [firstCandidate, secondCandidate],
+        familiarSetupChoicePolicy,
+        eventLog
+      );
       player.unboughtFamiliars.push(
         factory.create(
           selectedPairChoice.candidate.definitionId,
@@ -1272,9 +1277,11 @@ function selectFamiliarSetupChoice<
     setupChoiceKind: "familiar",
     policyId:
       requestedInstanceId === undefined ? "alwaysPickFirst" : "provided",
+    candidateInstanceIds: candidates.map((candidate) => candidate.instanceId),
     candidateDefinitionIds: candidates.map(
       (candidate) => candidate.definitionId
     ),
+    chosenInstanceId: chosenCandidate.instanceId,
     chosenDefinitionId: chosenCandidate.definitionId,
   });
   return { candidate: chosenCandidate, index: selectedIndex };
@@ -1297,9 +1304,11 @@ function alwaysPickFirstSetupChoice<TCandidate extends SetupCandidate<string>>(
     playerId: player.playerId,
     setupChoiceKind,
     policyId: "alwaysPickFirst",
+    candidateInstanceIds: candidates.map((candidate) => candidate.instanceId),
     candidateDefinitionIds: candidates.map(
       (candidate) => candidate.definitionId
     ),
+    chosenInstanceId: chosenCandidate.instanceId,
     chosenDefinitionId: chosenCandidate.definitionId,
   });
   return chosenCandidate;

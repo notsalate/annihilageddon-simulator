@@ -117,9 +117,12 @@ test("default setup choice policy records alwaysPickFirst", () => {
   assert.equal(setupChoiceEvents.length, 4);
   for (const event of setupChoiceEvents) {
     const candidates = event.candidateDefinitionIds ?? [];
+    const candidateInstanceIds = event.candidateInstanceIds ?? [];
     assert.equal(event.policyId, "alwaysPickFirst");
     assert.ok(candidates.length > 0);
+    assert.equal(candidateInstanceIds.length, candidates.length);
     assert.equal(event.chosenDefinitionId, candidates[0]);
+    assert.equal(event.chosenInstanceId, candidateInstanceIds[0]);
   }
 });
 
@@ -171,12 +174,7 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
   assert.ok(otherPlayer);
   assert.equal(state.activePlayerId, player.playerId);
   assert.equal(state.players.length, 2);
-  assert.deepEqual(setupChoicePhases, [
-    "startingPair",
-    "thirdFamiliar",
-    "startingPair",
-    "thirdFamiliar",
-  ]);
+  assert.deepEqual(setupChoicePhases, ["thirdFamiliar", "thirdFamiliar"]);
   assert.equal(player.unboughtFamiliars.length, 3);
   assert.equal(otherPlayer.unboughtFamiliars.length, 3);
   assert.ok(
