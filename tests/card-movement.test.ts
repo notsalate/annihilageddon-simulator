@@ -154,6 +154,26 @@ test("card movement: main_058 resets the hand only when played first", () => {
   assert.equal(scenario.activePlayer.hand.includes(retained), false);
   assert.equal(scenario.activePlayer.hand.length, 4);
 
+  const declinedScenario = createGameScenario({ rootDir, seed: 280057 });
+  declinedScenario.state.turn.power = 100;
+  const declinedSource = givenRuntimeCard(declinedScenario, {
+    definitionId: "esw2_dbg__main_058",
+  });
+  const declinedRetained = givenRuntimeCard(declinedScenario, {
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  chooseEffect(declinedScenario, (request) =>
+    request.effectId === "discard_hand_then_draw_cards"
+      ? { choiceId: "decline" }
+      : undefined
+  );
+
+  assert.deepEqual(play(declinedScenario, declinedSource), { ok: true });
+  assert.equal(
+    declinedScenario.activePlayer.hand.includes(declinedRetained),
+    true
+  );
+
   const laterScenario = createGameScenario({ rootDir, seed: 280059 });
   laterScenario.state.turn.power = 100;
   const firstCard = givenRuntimeCard(laterScenario, {
