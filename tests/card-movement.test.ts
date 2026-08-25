@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { runMarketFlow } from "../src/index.js";
 import {
   createGameScenario,
   givenRuntimeCard,
@@ -9,6 +10,25 @@ import {
 import { chooseEffect } from "./helpers/game-scenario.js";
 
 const rootDir = process.cwd();
+
+function resolveMayhemThroughMarket(
+  scenario: ReturnType<typeof createGameScenario>,
+  source: ReturnType<typeof givenRuntimeCard>,
+  deck: "mainDeck" | "legendDeck"
+) {
+  const sourceIndex = scenario.activePlayer.hand.indexOf(source);
+  assert.ok(sourceIndex >= 0);
+  scenario.activePlayer.hand.splice(sourceIndex, 1);
+  source.ownerId = "common";
+  const sourceDeck = scenario.state.common[deck];
+  sourceDeck.splice(0, sourceDeck.length, source);
+  const market =
+    deck === "mainDeck"
+      ? scenario.state.common.market
+      : scenario.state.common.legendMarket;
+  market.splice(0);
+  return runMarketFlow(scenario.state, { mode: "turn" });
+}
 
 test("card movement: main_019 lets the active player and another wizard draw", () => {
   const scenario = createGameScenario({
@@ -204,4 +224,223 @@ test("card movement: main_057 pays one chip only with a valid hand or discard de
   noChipScenario.activePlayer.chips = 0;
   assert.deepEqual(play(noChipScenario, noChipSource), { ok: true });
   assert.equal(noChipScenario.activePlayer.discard.includes(retained), true);
+});
+
+test("card movement: main_067 destroys one card clockwise and charges Dingler life", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 282067,
+    playerCount: 3,
+  });
+  const players = [scenario.activePlayer, ...scenario.foes];
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_067",
+  });
+  const cards = players.map((player, index) =>
+    givenRuntimeCard(scenario, {
+      player,
+      zone: "discard",
+      instanceId: `fixture-282067-target-${index}`,
+      effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+    })
+  );
+  scenario.activePlayer.statuses.push({
+    instanceId: `fixture-dingler-${scenario.activePlayer.playerId}`,
+    statusId: "dingler",
+    ownerId: scenario.activePlayer.playerId,
+    effects: [],
+  });
+  scenario.activePlayer.life.current = 4;
+  const choiceOrder: string[] = [];
+  chooseEffect(scenario, (request) => {
+    if (request.effectId !== "mayhem_each_player_optional_destroy_own_card") {
+      return undefined;
+    }
+    choiceOrder.push(request.player.playerId);
+    const target = cards.find(
+      (card) => card.ownerId === request.player.playerId
+    );
+    return target === undefined
+      ? { choiceId: "decline" }
+      : { choiceId: `destroy_${target.instanceId}` };
+  });
+
+  assert.equal(
+    resolveMayhemThroughMarket(scenario, source, "mainDeck").ok,
+    true
+  );
+  assert.deepEqual(
+    choiceOrder,
+    players.map((player) => player.playerId)
+  );
+  assert.equal(scenario.activePlayer.life.current, 1);
+  assert.ok(
+    cards.every((card) => scenario.state.common.destroyedPile.includes(card))
+  );
+  assert.deepEqual(
+    scenario.state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectCostPaid" &&
+          event.effectId === "mayhem_each_player_optional_destroy_own_card"
+      )
+      .map((event) => ({ playerId: event.playerId, amount: event.amount })),
+    [{ playerId: scenario.activePlayer.playerId, amount: 3 }]
+  );
+
+  const unaffordable = createGameScenario({ rootDir, seed: 282068 });
+  const unaffordableSource = givenRuntimeCard(unaffordable, {
+    definitionId: "esw2_dbg__main_067",
+  });
+  const retained = givenRuntimeCard(unaffordable, {
+    zone: "discard",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  unaffordable.activePlayer.statuses.push({
+    instanceId: `fixture-dingler-${unaffordable.activePlayer.playerId}`,
+    statusId: "dingler",
+    ownerId: unaffordable.activePlayer.playerId,
+    effects: [],
+  });
+  unaffordable.activePlayer.life.current = 3;
+  chooseEffect(unaffordable, (request) =>
+    request.effectId === "mayhem_each_player_optional_destroy_own_card"
+      ? { choiceId: `destroy_${retained.instanceId}` }
+      : undefined
+  );
+
+  assert.equal(
+    resolveMayhemThroughMarket(unaffordable, unaffordableSource, "mainDeck").ok,
+    true
+  );
+  assert.equal(unaffordable.activePlayer.discard.includes(retained), true);
+  assert.equal(unaffordable.activePlayer.life.current, 3);
+});
+
+test("card movement: main_076 charges floor-half chips, including zero and one", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 282076,
+    playerCount: 3,
+  });
+  const players = [scenario.activePlayer, ...scenario.foes];
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_076",
+  });
+  const cards = players.map((player, index) =>
+    givenRuntimeCard(scenario, {
+      player,
+      zone: "discard",
+      instanceId: `fixture-282076-target-${index}`,
+      effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+    })
+  );
+  players.forEach((player, index) => {
+    player.chips = [0, 1, 3][index] ?? 0;
+  });
+  chooseEffect(scenario, (request) => {
+    if (
+      request.effectId !==
+      "mayhem_each_player_optional_destroy_own_card_for_half_chips"
+    ) {
+      return undefined;
+    }
+    const target = cards.find(
+      (card) => card.ownerId === request.player.playerId
+    );
+    return target === undefined
+      ? { choiceId: "decline" }
+      : { choiceId: `destroy_${target.instanceId}` };
+  });
+
+  assert.equal(
+    resolveMayhemThroughMarket(scenario, source, "mainDeck").ok,
+    true
+  );
+  assert.deepEqual(
+    players.map((player) => player.chips),
+    [0, 1, 2]
+  );
+  assert.ok(
+    cards.every((card) => scenario.state.common.destroyedPile.includes(card))
+  );
+  assert.equal(
+    scenario.state.eventLog.filter(
+      (event) =>
+        event.type === "effectCostPaid" &&
+        event.effectId ===
+          "mayhem_each_player_optional_destroy_own_card_for_half_chips"
+    ).length,
+    1
+  );
+});
+
+test("card movement: mega_007 gives Dingler one choice and normal wizards two zone choices", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 282007,
+    playerCount: 2,
+  });
+  const foe = scenario.foes[0];
+  assert.ok(foe);
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__mega_mayhem_007",
+  });
+  const activeHand = givenRuntimeCard(scenario, {
+    zone: "hand",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  const activeDiscard = givenRuntimeCard(scenario, {
+    zone: "discard",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  const foeHand = givenRuntimeCard(scenario, {
+    player: foe,
+    zone: "hand",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  const foeDiscard = givenRuntimeCard(scenario, {
+    player: foe,
+    zone: "discard",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  scenario.activePlayer.statuses.push({
+    instanceId: `fixture-dingler-${scenario.activePlayer.playerId}`,
+    statusId: "dingler",
+    ownerId: scenario.activePlayer.playerId,
+    effects: [],
+  });
+  const requests = new Map<string, number>();
+  chooseEffect(scenario, (request) => {
+    if (
+      request.effectId !== "mega_mayhem_each_player_optional_destroy_own_cards"
+    ) {
+      return undefined;
+    }
+    const requestNumber = requests.get(request.player.playerId) ?? 0;
+    requests.set(request.player.playerId, requestNumber + 1);
+    const target =
+      request.player.playerId === scenario.activePlayer.playerId
+        ? activeHand
+        : requestNumber === 0
+          ? foeHand
+          : foeDiscard;
+    return { choiceId: `destroy_${target.instanceId}` };
+  });
+
+  assert.equal(
+    resolveMayhemThroughMarket(scenario, source, "legendDeck").ok,
+    true
+  );
+  assert.equal(scenario.state.common.destroyedPile.includes(activeHand), true);
+  assert.equal(scenario.activePlayer.discard.includes(activeDiscard), true);
+  assert.equal(scenario.state.common.destroyedPile.includes(foeHand), true);
+  assert.equal(scenario.state.common.destroyedPile.includes(foeDiscard), true);
+  assert.deepEqual(
+    [...requests.entries()],
+    [
+      [scenario.activePlayer.playerId, 1],
+      [foe.playerId, 2],
+    ]
+  );
 });

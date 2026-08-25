@@ -251,11 +251,14 @@ test("remaining Catalog families expose one local ID inventory each", () => {
     "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
     "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
     "mayhem_each_player_discard_deck_then_destroy_from_discard",
+    "mayhem_each_player_optional_destroy_own_card",
+    "mayhem_each_player_optional_destroy_own_card_for_half_chips",
     "mayhem_each_player_gain_chips_then_attack_for_current_chips",
     "mayhem_each_player_reduce_life_to_gain_chips",
     "mayhem_each_player_vote_dingler",
     "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
     "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+    "mega_mayhem_each_player_optional_destroy_own_cards",
     "mega_mayhem_each_player_gain_limp_wands_to_hand",
     "mega_mayhem_each_player_toggle_dingler",
     "mega_mayhem_set_life",
@@ -965,6 +968,25 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
       },
     },
     {
+      effectId: "mayhem_each_player_optional_destroy_own_card",
+      payload: {
+        effectId: "mayhem_each_player_optional_destroy_own_card",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        lifeCost: 3,
+      },
+    },
+    {
+      effectId: "mayhem_each_player_optional_destroy_own_card_for_half_chips",
+      payload: {
+        effectId: "mayhem_each_player_optional_destroy_own_card_for_half_chips",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+      },
+    },
+    {
       effectId: "mayhem_each_player_gain_chips_then_attack_for_current_chips",
       payload: {
         effectId: "mayhem_each_player_gain_chips_then_attack_for_current_chips",
@@ -1015,6 +1037,15 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
           cardKind: "mayhem",
         },
         destroyedCardSource: "mainDeck",
+      },
+    },
+    {
+      effectId: "mega_mayhem_each_player_optional_destroy_own_cards",
+      payload: {
+        effectId: "mega_mayhem_each_player_optional_destroy_own_cards",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
       },
     },
     {

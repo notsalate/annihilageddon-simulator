@@ -10,9 +10,11 @@ import {
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import { recordEffectChipsChanged } from "./effect-runtime-resources-draw.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
+import { destroyOwnedCard } from "./effect-runtime-cards-ownership-choice.js";
 import type {
   EffectChoice,
   EffectGameEnd,
+  EffectExecutionResult,
   EffectRuntimeServices,
   EffectSourceContext,
   MayhemAttackPlanTarget,
@@ -23,6 +25,7 @@ import type {
   EffectTiming,
   MayhemHandRedrawOption,
   RuntimeEffectForId,
+  RuntimeEffectId,
   RuntimeEffectTargetSelector,
 } from "./runtime-effect.js";
 import {
@@ -37,7 +40,7 @@ import type {
   RequiredField,
   ValueDecoder,
 } from "./effect-runtime-family-support.js";
-import type { GameState, PlayerState } from "./setup.js";
+import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export type MayhemEffectId =
   | "mayhem_attack"
@@ -51,11 +54,14 @@ export type MayhemEffectId =
   | "mayhem_each_player_choose_discard_hand_draw_or_take_damage"
   | "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none"
   | "mayhem_each_player_discard_deck_then_destroy_from_discard"
+  | "mayhem_each_player_optional_destroy_own_card"
+  | "mayhem_each_player_optional_destroy_own_card_for_half_chips"
   | "mayhem_each_player_gain_chips_then_attack_for_current_chips"
   | "mayhem_each_player_reduce_life_to_gain_chips"
   | "mayhem_each_player_vote_dingler"
   | "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life"
   | "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem"
+  | "mega_mayhem_each_player_optional_destroy_own_cards"
   | "mega_mayhem_each_player_gain_limp_wands_to_hand"
   | "mega_mayhem_each_player_toggle_dingler"
   | "mega_mayhem_set_life";
@@ -72,11 +78,14 @@ export const mayhemEffectIds = [
   "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
   "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
   "mayhem_each_player_discard_deck_then_destroy_from_discard",
+  "mayhem_each_player_optional_destroy_own_card",
+  "mayhem_each_player_optional_destroy_own_card_for_half_chips",
   "mayhem_each_player_gain_chips_then_attack_for_current_chips",
   "mayhem_each_player_reduce_life_to_gain_chips",
   "mayhem_each_player_vote_dingler",
   "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
   "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+  "mega_mayhem_each_player_optional_destroy_own_cards",
   "mega_mayhem_each_player_gain_limp_wands_to_hand",
   "mega_mayhem_each_player_toggle_dingler",
   "mega_mayhem_set_life",
@@ -273,6 +282,29 @@ export function createMayhemEffectDecoders(
         discardSourceZone: required(literal("deck")),
       }
     ),
+    mayhem_each_player_optional_destroy_own_card: defineDecoder(
+      "mayhem_each_player_optional_destroy_own_card",
+      {
+        effectId: required(
+          literal("mayhem_each_player_optional_destroy_own_card")
+        ),
+        timing: required(literal("onMayhemResolve")),
+        targetSelector: required(literal("eachPlayerClockwiseFromActive")),
+        chooser: required(literal("affectedPlayer")),
+        lifeCost: required(positiveInteger),
+      }
+    ),
+    mayhem_each_player_optional_destroy_own_card_for_half_chips: defineDecoder(
+      "mayhem_each_player_optional_destroy_own_card_for_half_chips",
+      {
+        effectId: required(
+          literal("mayhem_each_player_optional_destroy_own_card_for_half_chips")
+        ),
+        timing: required(literal("onMayhemResolve")),
+        targetSelector: required(literal("eachPlayerClockwiseFromActive")),
+        chooser: required(literal("affectedPlayer")),
+      }
+    ),
     mayhem_each_player_gain_chips_then_attack_for_current_chips: defineDecoder(
       "mayhem_each_player_gain_chips_then_attack_for_current_chips",
       {
@@ -338,6 +370,17 @@ export function createMayhemEffectDecoders(
           destroyedCardSource: required(literal("mainDeck")),
         }
       ),
+    mega_mayhem_each_player_optional_destroy_own_cards: defineDecoder(
+      "mega_mayhem_each_player_optional_destroy_own_cards",
+      {
+        effectId: required(
+          literal("mega_mayhem_each_player_optional_destroy_own_cards")
+        ),
+        timing: required(literal("onMayhemResolve")),
+        targetSelector: required(literal("eachPlayerClockwiseFromActive")),
+        chooser: required(literal("affectedPlayer")),
+      }
+    ),
     mega_mayhem_each_player_gain_limp_wands_to_hand: defineDecoder(
       "mega_mayhem_each_player_gain_limp_wands_to_hand",
       {
@@ -719,6 +762,193 @@ const mayhemEachPlayerDiscardDeckDestroyHandler: EffectRuntimeHandler<
       });
     }
     return { ok: true };
+  },
+};
+
+type MayhemDestroyCost =
+  | { kind: "pay_life"; amount: number }
+  | { kind: "spend_chips"; amount: number };
+
+function chooseAndDestroyMayhemCard(
+  state: GameState,
+  targetPlayer: PlayerState,
+  source: EffectSourceContext,
+  effectId: RuntimeEffectId,
+  candidates: readonly CardInstance[],
+  services: EffectRuntimeServices,
+  cost?: MayhemDestroyCost
+): EffectExecutionResult {
+  if (candidates.length === 0) return { ok: true };
+  const choices: EffectChoice[] = [
+    { choiceKind: "option", choiceId: "decline" },
+    ...candidates.map(
+      (card): EffectChoice => ({
+        choiceKind: "cardTarget",
+        choiceId: `destroy_${card.instanceId}`,
+        cards: [card],
+        amount: 1,
+      })
+    ),
+  ];
+  const choice = services.chooseEffectChoice(
+    state,
+    targetPlayer,
+    source,
+    effectId,
+    choices
+  );
+  if (choice?.choiceKind !== "cardTarget") return { ok: true };
+  const selectedId = choice.cards[0]?.instanceId;
+  const selected = candidates.find((card) => card.instanceId === selectedId);
+  if (selected === undefined) {
+    return {
+      ok: false,
+      error: "Selected Mayhem destruction card is no longer available",
+    };
+  }
+  const destroyed = destroyOwnedCard(
+    state,
+    targetPlayer,
+    selected,
+    effectId,
+    source,
+    services
+  );
+  if (!destroyed.ok) return destroyed;
+  if (cost !== undefined && cost.amount > 0) {
+    if (cost.kind === "pay_life") {
+      targetPlayer.life.current -= cost.amount;
+    } else {
+      targetPlayer.chips -= cost.amount;
+    }
+    recordGameEvent(state, {
+      type: "effectCostPaid",
+      playerId: targetPlayer.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      costId: cost.kind,
+      amount: cost.amount,
+      sourceType: source.sourceType,
+    });
+  }
+  return { ok: true };
+}
+
+function executeMayhemOptionalDestroyOwnCards(
+  state: GameState,
+  source: EffectSourceContext,
+  effectId: RuntimeEffectId,
+  services: EffectRuntimeServices,
+  mode: "dinglerPaysLife" | "halfChips" | "nonDinglerMayDestroyBothZones",
+  lifeCost = 0
+): EffectExecutionResult {
+  for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+    const combinedCandidates = [...targetPlayer.hand, ...targetPlayer.discard];
+    if (combinedCandidates.length === 0) continue;
+
+    if (mode === "nonDinglerMayDestroyBothZones") {
+      if (services.hasDinglerStatus(targetPlayer)) {
+        const result = chooseAndDestroyMayhemCard(
+          state,
+          targetPlayer,
+          source,
+          effectId,
+          combinedCandidates,
+          services
+        );
+        if (!result.ok) return result;
+        continue;
+      }
+
+      const handResult = chooseAndDestroyMayhemCard(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        [...targetPlayer.hand],
+        services
+      );
+      if (!handResult.ok) return handResult;
+      const discardResult = chooseAndDestroyMayhemCard(
+        state,
+        targetPlayer,
+        source,
+        effectId,
+        [...targetPlayer.discard],
+        services
+      );
+      if (!discardResult.ok) return discardResult;
+      continue;
+    }
+
+    let cost: MayhemDestroyCost | undefined;
+    if (mode === "dinglerPaysLife" && services.hasDinglerStatus(targetPlayer)) {
+      if (targetPlayer.life.current - lifeCost < 1) continue;
+      cost = { kind: "pay_life", amount: lifeCost };
+    } else if (mode === "halfChips") {
+      cost = {
+        kind: "spend_chips",
+        amount: Math.floor(targetPlayer.chips / 2),
+      };
+    }
+    const result = chooseAndDestroyMayhemCard(
+      state,
+      targetPlayer,
+      source,
+      effectId,
+      combinedCandidates,
+      services,
+      cost
+    );
+    if (!result.ok) return result;
+  }
+  return { ok: true };
+}
+
+const mayhemEachPlayerOptionalDestroyOwnCardHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_each_player_optional_destroy_own_card">
+> = {
+  effectId: "mayhem_each_player_optional_destroy_own_card",
+  execute(state, _player, effect, source, services) {
+    return executeMayhemOptionalDestroyOwnCards(
+      state,
+      source,
+      effect.effectId,
+      services,
+      "dinglerPaysLife",
+      effect.lifeCost
+    );
+  },
+};
+
+const mayhemEachPlayerOptionalDestroyOwnCardForHalfChipsHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_each_player_optional_destroy_own_card_for_half_chips">
+> = {
+  effectId: "mayhem_each_player_optional_destroy_own_card_for_half_chips",
+  execute(state, _player, _effect, source, services) {
+    return executeMayhemOptionalDestroyOwnCards(
+      state,
+      source,
+      "mayhem_each_player_optional_destroy_own_card_for_half_chips",
+      services,
+      "halfChips"
+    );
+  },
+};
+
+const megaMayhemEachPlayerOptionalDestroyOwnCardsHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mega_mayhem_each_player_optional_destroy_own_cards">
+> = {
+  effectId: "mega_mayhem_each_player_optional_destroy_own_cards",
+  execute(state, _player, _effect, source, services) {
+    return executeMayhemOptionalDestroyOwnCards(
+      state,
+      source,
+      "mega_mayhem_each_player_optional_destroy_own_cards",
+      services,
+      "nonDinglerMayDestroyBothZones"
+    );
   },
 };
 
@@ -1470,6 +1700,16 @@ export function createMayhemEffectDefinitions(
       mayhemEachPlayerDiscardDeckDestroyHandler
     ),
     definition(
+      "mayhem_each_player_optional_destroy_own_card",
+      mayhemResolveTimings,
+      mayhemEachPlayerOptionalDestroyOwnCardHandler
+    ),
+    definition(
+      "mayhem_each_player_optional_destroy_own_card_for_half_chips",
+      mayhemResolveTimings,
+      mayhemEachPlayerOptionalDestroyOwnCardForHalfChipsHandler
+    ),
+    definition(
       "mayhem_each_player_gain_chips_then_attack_for_current_chips",
       mayhemResolveTimings,
       mayhemEachPlayerGainChipsThenAttackHandler
@@ -1495,6 +1735,11 @@ export function createMayhemEffectDefinitions(
       "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
       mayhemResolveTimings,
       megaMayhemEachPlayerDestroyTopMainDeckHandler
+    ),
+    definition(
+      "mega_mayhem_each_player_optional_destroy_own_cards",
+      mayhemResolveTimings,
+      megaMayhemEachPlayerOptionalDestroyOwnCardsHandler
     ),
     definition(
       "mega_mayhem_each_player_gain_limp_wands_to_hand",

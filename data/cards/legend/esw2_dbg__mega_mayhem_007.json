@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__mega_mayhem_007",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__mega_mayhem_007.json",
+    "image": "assets/cards/mega-mayhem/МегаБеспредел. MG.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__mega_mayhem_007.md"
+  },
+  "visible": {
+    "nameRu": "МегаБеспредел MG",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "МегаБеспредел",
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун может уничтожить 1 карту с руки или из своей стопки сброса.\nЕсли ты не лошара, можешь сделать и то и другое.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mega_mayhem_each_player_optional_destroy_own_cards",
+        "timing": "onMayhemResolve",
+        "targetSelector": "eachPlayerClockwiseFromActive",
+        "chooser": "affectedPlayer"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

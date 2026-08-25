@@ -316,11 +316,14 @@ export const knownRuntimeEffectIds = [
   "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
   "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
   "mayhem_each_player_discard_deck_then_destroy_from_discard",
+  "mayhem_each_player_optional_destroy_own_card",
+  "mayhem_each_player_optional_destroy_own_card_for_half_chips",
   "mayhem_each_player_gain_chips_then_attack_for_current_chips",
   "mayhem_each_player_reduce_life_to_gain_chips",
   "mayhem_each_player_vote_dingler",
   "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
   "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+  "mega_mayhem_each_player_optional_destroy_own_cards",
   "mega_mayhem_each_player_gain_limp_wands_to_hand",
   "mega_mayhem_each_player_toggle_dingler",
   "mega_mayhem_set_life",
@@ -843,6 +846,30 @@ export type MayhemEachPlayerDiscardDeckThenDestroyFromDiscardRuntimeEffect =
     destroySourceZone: "discard";
     discardSourceZone: "deck";
   };
+export type MayhemEachPlayerOptionalDestroyOwnCardRuntimeEffect = TimedEffect<
+  "mayhem_each_player_optional_destroy_own_card",
+  "onMayhemResolve"
+> & {
+  targetSelector: "eachPlayerClockwiseFromActive";
+  chooser: "affectedPlayer";
+  lifeCost: number;
+};
+export type MayhemEachPlayerOptionalDestroyOwnCardForHalfChipsRuntimeEffect =
+  TimedEffect<
+    "mayhem_each_player_optional_destroy_own_card_for_half_chips",
+    "onMayhemResolve"
+  > & {
+    targetSelector: "eachPlayerClockwiseFromActive";
+    chooser: "affectedPlayer";
+  };
+export type MegaMayhemEachPlayerOptionalDestroyOwnCardsRuntimeEffect =
+  TimedEffect<
+    "mega_mayhem_each_player_optional_destroy_own_cards",
+    "onMayhemResolve"
+  > & {
+    targetSelector: "eachPlayerClockwiseFromActive";
+    chooser: "affectedPlayer";
+  };
 export type MayhemEachPlayerGainChipsThenAttackForCurrentChipsRuntimeEffect =
   TimedEffect<
     "mayhem_each_player_gain_chips_then_attack_for_current_chips",
@@ -918,11 +945,14 @@ export interface MayhemEffectPayloadMap {
   mayhem_each_player_choose_discard_hand_draw_or_take_damage: MayhemEachPlayerChooseDiscardHandDrawOrTakeDamageRuntimeEffect;
   mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none: MayhemEachPlayerDiscardTopDeckCardsChooseDestroyAllOrNoneRuntimeEffect;
   mayhem_each_player_discard_deck_then_destroy_from_discard: MayhemEachPlayerDiscardDeckThenDestroyFromDiscardRuntimeEffect;
+  mayhem_each_player_optional_destroy_own_card: MayhemEachPlayerOptionalDestroyOwnCardRuntimeEffect;
+  mayhem_each_player_optional_destroy_own_card_for_half_chips: MayhemEachPlayerOptionalDestroyOwnCardForHalfChipsRuntimeEffect;
   mayhem_each_player_gain_chips_then_attack_for_current_chips: MayhemEachPlayerGainChipsThenAttackForCurrentChipsRuntimeEffect;
   mayhem_each_player_reduce_life_to_gain_chips: MayhemEachPlayerReduceLifeToGainChipsRuntimeEffect;
   mayhem_each_player_vote_dingler: MayhemEachPlayerVoteDinglerRuntimeEffect;
   mayhem_lowest_life_players_gain_dingler_and_set_to_max_life: MayhemLowestLifePlayersGainDinglerAndSetToMaxLifeRuntimeEffect;
   mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem: MegaMayhemEachPlayerDestroyTopMainDeckDeathIfMayhemRuntimeEffect;
+  mega_mayhem_each_player_optional_destroy_own_cards: MegaMayhemEachPlayerOptionalDestroyOwnCardsRuntimeEffect;
   mega_mayhem_each_player_gain_limp_wands_to_hand: MegaMayhemEachPlayerGainLimpWandsToHandRuntimeEffect;
   mega_mayhem_each_player_toggle_dingler: MegaMayhemEachPlayerToggleDinglerRuntimeEffect;
   mega_mayhem_set_life: MegaMayhemSetLifeRuntimeEffect;
