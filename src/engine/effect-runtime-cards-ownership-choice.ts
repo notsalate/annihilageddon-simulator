@@ -18,6 +18,7 @@ import type {
   EffectTiming,
   RuntimeEffectCondition,
   RuntimeEffectForId,
+  RuntimeEffectId,
   RuntimeEffectTarget,
   RuntimeEffectTargetSelector,
 } from "./runtime-effect.js";
@@ -71,8 +72,9 @@ export type DestroyCardRuntimeEffect =
 export type DestroyOwnCardsRuntimeEffect =
   EffectWithOptionalTiming<"destroy_own_cards"> & {
     amount?: number;
-    sourceZones?: "hand" | ("hand" | "discard")[];
+    sourceZones?: "hand" | "discard" | ("hand" | "discard")[];
     chooser?: "controller" | "defendingPlayer";
+    repeatUntilDeclined?: true;
   };
 export type DestroyRandomLegendMarketCardRuntimeEffect = {
   effectId: "destroy_random_legend_market_card";
@@ -225,7 +227,9 @@ export interface CardOwnershipChoiceEffectDecoderTools {
     NonNullable<RuntimeEffectForId<"gain_card">["targetSelector"]>
   >;
   booleanValue: ValueDecoder<boolean>;
-  destroyOwnCardsSourceZones: ValueDecoder<"hand" | ("hand" | "discard")[]>;
+  destroyOwnCardsSourceZones: ValueDecoder<
+    "hand" | "discard" | ("hand" | "discard")[]
+  >;
   requireNestedTargetSelector(
     label: string,
     selector: "mainMarketCard" | "activePlayerHandCard"
@@ -318,6 +322,7 @@ export function createCardOwnershipChoiceEffectDecoders(
       amount: optional(nonNegativeInteger),
       sourceZones: optional(destroyOwnCardsSourceZones),
       chooser: optional(oneOfTools(["controller", "defendingPlayer"] as const)),
+      repeatUntilDeclined: optional(literal(true)),
     }),
     destroy_random_legend_market_card: defineDecoder(
       "destroy_random_legend_market_card",
@@ -971,6 +976,44 @@ function chooseCardCombinations(
   return combinations;
 }
 
+export function destroyOwnedCard(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): EffectExecutionResult {
+  const destination = services.getDestroyDestination(state, card);
+  if (!destination.ok) return destination;
+  const moved = services.moveCardToZonePreservingOwner(
+    state,
+    player,
+    card,
+    destination.zone,
+    destination.zoneName,
+    effectId,
+    source
+  );
+  if (!moved) {
+    return {
+      ok: false,
+      error: `Cannot destroy card ${card.instanceId}`,
+    };
+  }
+  recordGameEvent(state, {
+    type: "effectCardDestroyed",
+    playerId: player.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    targetCardInstanceId: card.instanceId,
+    targetDefinitionId: card.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+  return { ok: true };
+}
+
 const destroyOwnCardsHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"destroy_own_cards">
 > = {
@@ -985,6 +1028,51 @@ const destroyOwnCardsHandler: EffectRuntimeHandler<
     const candidates = sourceZones.flatMap((zone) =>
       zone === "hand" ? player.hand : player.discard
     );
+    if (effect.repeatUntilDeclined) {
+      let available = [...candidates];
+      while (available.length > 0) {
+        const choices: EffectChoice[] = [
+          { choiceKind: "option", choiceId: "decline" },
+          ...available.map(
+            (card): EffectChoice => ({
+              choiceKind: "cardTarget",
+              choiceId: `destroy_${card.instanceId}`,
+              cards: [card],
+              amount: 1,
+            })
+          ),
+        ];
+        const choice = services.chooseEffectChoice(
+          state,
+          player,
+          source,
+          effect.effectId,
+          choices
+        );
+        if (choice?.choiceKind !== "cardTarget") return { ok: true };
+        const card = choice.cards[0];
+        if (card === undefined || !available.includes(card)) {
+          return {
+            ok: false,
+            error: "Selected card is no longer available for destruction",
+          };
+        }
+        const destroyed = destroyOwnedCard(
+          state,
+          player,
+          card,
+          effect.effectId,
+          source,
+          services
+        );
+        if (!destroyed.ok) return destroyed;
+        available = available.filter(
+          (candidate) => candidate.instanceId !== card.instanceId
+        );
+      }
+      return { ok: true };
+    }
+
     const amount = Math.min(effect.amount ?? 1, candidates.length);
     const choices: EffectChoice[] = [
       { choiceKind: "option", choiceId: "decline" },
@@ -1020,33 +1108,15 @@ const destroyOwnCardsHandler: EffectRuntimeHandler<
           error: `Selected card ${card.instanceId} is no longer available for destruction`,
         };
       }
-      const destination = services.getDestroyDestination(state, card);
-      if (!destination.ok) return destination;
-      const moved = services.moveCardToZonePreservingOwner(
+      const destroyed = destroyOwnedCard(
         state,
         player,
         card,
-        destination.zone,
-        destination.zoneName,
         effect.effectId,
-        source
+        source,
+        services
       );
-      if (!moved) {
-        return {
-          ok: false,
-          error: `Cannot destroy card ${card.instanceId}`,
-        };
-      }
-      recordGameEvent(state, {
-        type: "effectCardDestroyed",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        targetCardInstanceId: card.instanceId,
-        targetDefinitionId: card.definitionId,
-        effectId: effect.effectId,
-        sourceType: source.sourceType,
-      });
+      if (!destroyed.ok) return destroyed;
     }
     return { ok: true };
   },

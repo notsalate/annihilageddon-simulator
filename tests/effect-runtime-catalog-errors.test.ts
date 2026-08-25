@@ -543,7 +543,7 @@ test("catalog applies unsupported policy only after operation timing matches", (
   assert.equal(evaluated, false);
 });
 
-test("activation and ongoing families reject unsupported calls before handlers", () => {
+test("supported activation effects reach their handlers after intake", () => {
   const scenario = createGameScenario({ rootDir, seed: 23025 });
   const subject = scenario.activePlayer;
   const cases = [
@@ -580,10 +580,8 @@ test("activation and ongoing families reject unsupported calls before handlers",
         )
     );
 
-    assert.equal(result.ok, false);
-    if (result.ok) continue;
-    assert.match(result.error, /uses unsupported effect/);
-    assert.equal(handlerCalled, false);
+    assert.equal(result.ok, true);
+    assert.equal(handlerCalled, true);
   }
 });
 

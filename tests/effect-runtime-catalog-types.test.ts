@@ -789,6 +789,7 @@ test("activation and ongoing families use exact timing and card-source policies"
     "activation_destroy_self_then_destroy_own_cards",
     "conditional_activation_destroy_own_cards",
     "conditional_activation_gain_chips",
+    "optional_spend_chip_destroy_own_cards",
     "ongoing_add_power_when_playing_wand",
     "ongoing_add_power_when_playing_limp_wand",
     "ongoing_first_attack_damage_add_power",
@@ -804,18 +805,8 @@ test("activation and ongoing families use exact timing and card-source policies"
       "combat",
       "card"
     );
-    assert.equal(
-      decoded.ok,
-      supportedEffectIds.includes(
-        effectId as (typeof supportedEffectIds)[number]
-      )
-    );
-    if (
-      !decoded.ok &&
-      !supportedEffectIds.includes(
-        effectId as (typeof supportedEffectIds)[number]
-      )
-    ) {
+    assert.equal(decoded.ok, supportedEffectIds.includes(effectId));
+    if (!decoded.ok && !supportedEffectIds.includes(effectId)) {
       assert.match(decoded.errors.join("\n"), /uses unsupported effect/);
     }
   }
