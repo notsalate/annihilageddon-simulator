@@ -19,6 +19,7 @@ import {
   getControlledCards,
   findCardLocation,
   removeCardFromLocation,
+  reorderPhysicalCard,
 } from "./control-ledger.js";
 import {
   beginDeadWizardTokenResolutionBoundary,
@@ -75,7 +76,10 @@ import {
   requireVerifiedRuntimeEffect,
   type VerifiedRuntimeEffect,
 } from "./runtime-effect-verification.js";
-import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
+import {
+  cardMatchesTypeForPlayer,
+  runtimeEffectConditionMatches,
+} from "./card-type-runtime.js";
 import type {
   EffectChoiceRequest,
   ChoiceSelection,
@@ -244,9 +248,15 @@ function validateEffectsAtTiming(
       source,
       timing,
       (decodedEffect) => {
-        const applicability =
-          isApplicable?.(decodedEffect) ??
-          ({ status: "resolved", result: undefined } as const);
+        const applicability = effectConditionMatches(
+          state,
+          player,
+          decodedEffect,
+          source.sourceType === "card" ? source.cardInstanceId : undefined
+        )
+          ? (isApplicable?.(decodedEffect) ??
+            ({ status: "resolved", result: undefined } as const))
+          : ({ status: "notApplicable" } as const);
         if (applicability.status === "resolved") {
           expectedFailure = getExpectedEffectFailure(
             state,
@@ -336,6 +346,33 @@ export function executeActivationEffects(
   );
 }
 
+export function hasExecutableCardActivation(
+  state: GameState,
+  player: PlayerState,
+  definition: CardDefinition,
+  source: EffectSourceContext
+): boolean {
+  for (const effect of definition.engine.effects) {
+    const result = evaluateRuntimeEffectAtTiming(
+      requireVerifiedRuntimeEffect(effect),
+      source,
+      "activation",
+      (decodedEffect) =>
+        effectConditionMatches(
+          state,
+          player,
+          decodedEffect,
+          source.cardInstanceId
+        )
+          ? { status: "resolved", result: true }
+          : { status: "notApplicable" }
+    );
+    if (result.status === "resolved") return true;
+    if (result.status === "error") return false;
+  }
+  return false;
+}
+
 export function executeWizardPropertyActivationEffects(
   state: GameState,
   player: PlayerState,
@@ -410,6 +447,78 @@ export function hasExecutableWizardPropertyActivation(
     definition
   );
   return availability.ok && availability.executable;
+}
+
+export type DeadWizardTokenActivationAvailability =
+  | { readonly ok: true; readonly executable: boolean }
+  | { readonly ok: false; readonly error: string };
+
+export function getDeadWizardTokenActivationAvailability(
+  state: GameState,
+  player: PlayerState,
+  definition: TokenDefinition,
+  source?: EffectSourceContext
+): DeadWizardTokenActivationAvailability {
+  if (definition.kind !== "deadWizardToken") {
+    return { ok: true, executable: false };
+  }
+
+  const operationSource: EffectSourceContext = source ?? {
+    sourceType: "deadWizardToken",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: definition.tokenId,
+    definitionId: definition.tokenId,
+    tokenDefinitionId: definition.tokenId,
+  };
+  let executable = false;
+  for (const effect of definition.effects) {
+    const verifiedEffect = requireVerifiedRuntimeEffect(effect);
+    const result = evaluateRuntimeEffectAtTiming(
+      verifiedEffect,
+      operationSource,
+      "activation",
+      (decodedEffect) => {
+        if (!effectConditionMatches(state, player, decodedEffect)) {
+          return { status: "notApplicable" };
+        }
+        if (
+          decodedEffect.effectId ===
+            "dead_wizard_token_self_destroy_for_chips" &&
+          player.chips < decodedEffect.chipCost
+        ) {
+          return { status: "notApplicable" };
+        }
+        return { status: "resolved", result: true };
+      }
+    );
+    if (result.status === "error") {
+      return { ok: false, error: result.error };
+    }
+    if (result.status === "resolved") {
+      executable = true;
+    }
+  }
+
+  return { ok: true, executable };
+}
+
+export function executeDeadWizardTokenActivationEffects(
+  state: GameState,
+  player: PlayerState,
+  definition: TokenDefinition,
+  source: EffectSourceContext
+): EffectExecutionResult {
+  if (definition.kind !== "deadWizardToken") {
+    return { ok: true };
+  }
+  return executeEffects(
+    state,
+    player,
+    definition.effects,
+    "activation",
+    source
+  );
 }
 
 export function executeWizardPropertyOnPlayCardEffects(
@@ -1068,7 +1177,12 @@ function executeEffects(
       source,
       effectRuntimeServices,
       (decodedEffect) =>
-        effectConditionMatches(state, player, decodedEffect) &&
+        effectConditionMatches(
+          state,
+          player,
+          decodedEffect,
+          source.sourceType === "card" ? source.cardInstanceId : undefined
+        ) &&
         (isApplicable?.(decodedEffect) ?? true)
     );
     if (operationResult.status === "error") {
@@ -1211,34 +1325,19 @@ export function getEffectExecutionError(errors: readonly string[]): string {
 function effectConditionMatches(
   state: GameState,
   player: PlayerState,
-  effect: RuntimeEffectPayload
+  effect: RuntimeEffectPayload,
+  excludedCardInstanceId?: string
 ): boolean {
   const condition = "condition" in effect ? effect.condition : undefined;
-  if (condition === undefined) {
-    return true;
-  }
-
-  if ("conditionId" in condition) {
-    const matchingCount = getControlledCards(state, player).filter((card) => {
-      const definition = state.cardDefinitions.get(card.definitionId);
-      return (
-        definition !== undefined &&
-        condition.cardTypes.some((cardType) =>
-          cardMatchesTypeForPlayer(
-            state,
-            player.playerId,
-            definition,
-            cardType,
-            card
-          )
-        )
-      );
-    }).length;
-
-    return matchingCount >= condition.minimumCount;
-  }
-
-  return false;
+  return (
+    condition === undefined ||
+    runtimeEffectConditionMatches(
+      state,
+      player,
+      condition,
+      excludedCardInstanceId
+    )
+  );
 }
 
 function resolvePlayerControlledAttackWithRuntimeAdapters(
@@ -2045,6 +2144,40 @@ function buildLegalTargetChoices(
       };
     }
 
+    if (targetSelector === "activePlayer") {
+      const activePlayer = state.players.find(
+        (candidate) => candidate.playerId === state.activePlayerId
+      );
+      return activePlayer === undefined
+        ? { ok: false, error: `Missing active player ${state.activePlayerId}` }
+        : {
+            ok: true,
+            choices: [{ choiceType: "player" as const, player: activePlayer }],
+          };
+    }
+
+    if (targetSelector === "opponentPlayer") {
+      return {
+        ok: true,
+        choices: state.players
+          .filter((candidate) => candidate.playerId !== player.playerId)
+          .map((candidate) => ({
+            choiceType: "player" as const,
+            player: candidate,
+          })),
+      };
+    }
+
+    if (targetSelector === "anyPlayer") {
+      return {
+        ok: true,
+        choices: state.players.map((candidate) => ({
+          choiceType: "player" as const,
+          player: candidate,
+        })),
+      };
+    }
+
     return {
       ok: false,
       error: `Unsupported target selector ${asString(targetSelector)}`,
@@ -2637,16 +2770,47 @@ function moveCardToZonePreservingOwner(
   destination: CardInstance[],
   destinationZone: string,
   effectId: RuntimeEffectId,
-  source: EffectSourceContext
+  source: EffectSourceContext,
+  placeOnTop = false
 ): boolean {
   const ownerBefore = card.ownerId;
-  const sourceLocation = removeCardFromLocation(state, card.instanceId);
+  const sourceLocation = findCardLocation(state, card.instanceId);
   if (sourceLocation === undefined) {
     return false;
   }
-  const sourceZone = sourceLocation.zoneName;
 
-  destination.push(card);
+  if (sourceLocation.zoneName === destinationZone) {
+    const reordered = reorderPhysicalCard(
+      state,
+      card.instanceId,
+      destinationZone,
+      placeOnTop ? "front" : "back"
+    );
+    if (!reordered.ok) {
+      return false;
+    }
+    recordCardMoved(state, player, card, {
+      sourceZone: sourceLocation.zoneName,
+      destinationZone,
+      ownerBefore,
+      ownerAfter: card.ownerId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+    return true;
+  }
+
+  const removedLocation = removeCardFromLocation(state, card.instanceId);
+  if (removedLocation === undefined) {
+    return false;
+  }
+  const sourceZone = removedLocation.zoneName;
+
+  if (placeOnTop) {
+    destination.unshift(card);
+  } else {
+    destination.push(card);
+  }
   recordCardMoved(state, player, card, {
     sourceZone,
     destinationZone,

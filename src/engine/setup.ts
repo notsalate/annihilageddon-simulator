@@ -207,6 +207,7 @@ export type GameEventType =
   | "cardPlayed"
   | "deadWizardTokenFaceResolved"
   | "deadWizardTokenGained"
+  | "deadWizardTokenDestroyed"
   | "defenseCardMoved"
   | "defenseChoiceSelected"
   | "defenseCostPaid"
@@ -690,6 +691,14 @@ type GameEventPayloadUnion =
       | "deadWizardTokenGained"
       | "wizardPropertyActivated",
       "playerId" | "tokenInstanceId" | "tokenDefinitionId"
+    >
+  | GameEventOf<
+      "deadWizardTokenDestroyed",
+      | "playerId"
+      | "tokenInstanceId"
+      | "tokenDefinitionId"
+      | "effectId"
+      | "sourceType"
     >
   | GameEventOf<
       "defenseChoiceSelected",

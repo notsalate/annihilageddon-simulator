@@ -260,6 +260,12 @@ const runtimeCondition: ValueDecoder<RuntimeEffectCondition> = (label, raw) => {
       minimumCount: required(nonNegativeInteger),
     });
   }
+  if (raw["conditionId"] === "controlled_card_count") {
+    return decodeObject(label, raw, {
+      conditionId: required(literal("controlled_card_count")),
+      minimumCount: required(nonNegativeInteger),
+    });
+  }
   if (raw["effectId"] === "controls_other_card_type") {
     return decodeObject(label, raw, {
       effectId: required(literal("controls_other_card_type")),
@@ -460,6 +466,7 @@ const optionalTiming = optional(effectTiming);
 const optionalTarget = optional(runtimeTarget);
 const optionalTargetSelector = optional(targetSelector);
 const optionalCondition = optional(runtimeCondition);
+const requiredCondition = required(runtimeCondition);
 const optionalCosts = optional(runtimeCosts);
 const optionalAttackBranches = optional(attackBranches);
 
@@ -498,7 +505,9 @@ const activationEffectDecoders = createActivationEffectDecoders({
   optional,
   literal,
   positiveInteger,
+  nonEmptyString,
   optionalCondition,
+  requiredCondition,
   handOrDiscardZones,
   optionalTiming,
 });
@@ -543,6 +552,7 @@ const deadWizardTokenEffectDecoders = createDeadWizardTokenEffectDecoders({
   defineDecoder,
   required,
   literal,
+  positiveInteger,
   selectorTarget,
 });
 
@@ -573,6 +583,7 @@ const combatAttackEffectDecoders = createCombatAttackEffectDecoders({
   optional,
   literal,
   booleanValue,
+  nonEmptyString,
   positiveInteger,
   optionalCondition,
   optionalTiming,

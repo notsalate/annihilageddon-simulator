@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_006",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_006.json",
+    "image": "assets/cards/wizard-card/Волшебник. Мармеладный архимаг.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_006.md"
+  },
+  "visible": {
+    "nameRu": "Мармеладный архимаг",
+    "cost": 2,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "textRu": "Постоянка:\n[символ активации]: уничтожь эту карту: если ты лошара, можешь стать нормальным. Затем накрути 7 жизней.",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "cost": 2,
+    "victoryPoints": 1,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "activation_destroy_self_then_destroy_own_cards",
+        "timing": "activation",
+        "chooser": "controller",
+        "activationLimit": "oncePerTurnWhileControlled",
+        "sourceZones": "hand",
+        "minAmount": 0,
+        "maxAmount": 0,
+        "destroySelf": true
+      },
+      {
+        "effectId": "remove_status",
+        "timing": "activation",
+        "statusId": "dingler",
+        "optional": true,
+        "target": { "selector": "activePlayer" }
+      },
+      {
+        "effectId": "heal",
+        "timing": "activation",
+        "amount": 7,
+        "target": { "selector": "activePlayer" }
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

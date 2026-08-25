@@ -548,12 +548,14 @@ test("activation and ongoing families reject unsupported calls before handlers",
   const subject = scenario.activePlayer;
   const cases = [
     {
-      effectId: "conditional_activation_gain_chips" as const,
+      effectId: "optional_spend_chip_destroy_own_cards" as const,
       payload: {
-        effectId: "conditional_activation_gain_chips" as const,
-        timing: "activation" as const,
+        effectId: "optional_spend_chip_destroy_own_cards" as const,
+        timing: "onPlay" as const,
+        chipCost: 1,
         amount: 1,
-        activationLimit: "oncePerTurnWhileControlled" as const,
+        sourceZones: ["hand"] as Array<"hand" | "discard">,
+        chooser: "controller" as const,
       },
     },
   ];

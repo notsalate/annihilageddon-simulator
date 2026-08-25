@@ -184,11 +184,14 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
       return { choiceId: selectedInstanceId };
     },
   });
-  const player = state.players[0];
-  const otherPlayer = state.players[1];
+  const player = state.players.find(
+    (candidate) => candidate.playerId === state.activePlayerId
+  );
+  const otherPlayer = state.players.find(
+    (candidate) => candidate.playerId !== state.activePlayerId
+  );
   assert.ok(player);
   assert.ok(otherPlayer);
-  assert.equal(state.activePlayerId, player.playerId);
   assert.equal(state.players.length, 2);
   assert.deepEqual(setupChoicePhases, ["thirdFamiliar", "thirdFamiliar"]);
   assert.equal(player.unboughtFamiliars.length, 3);

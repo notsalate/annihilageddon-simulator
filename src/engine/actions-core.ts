@@ -7,8 +7,11 @@ import {
   executeOnPlayEffects,
   executeWizardPropertyOnPlayCardEffects,
   executeWizardPropertyActivationEffects,
+  executeDeadWizardTokenActivationEffects,
   calculateEndTurnDrawCount,
+  getDeadWizardTokenActivationAvailability,
   getWizardPropertyActivationAvailability,
+  hasExecutableCardActivation,
   hasExecutableWizardPropertyActivation,
   isBasicTrophyChipPayoutSuppressed,
   moveGainedCardToPlayerDestination,
@@ -56,6 +59,7 @@ export type LegalAction =
   | BuyMarketCardAction
   | ActivatePermanentAction
   | ActivateWizardPropertyAction
+  | ActivateDeadWizardTokenAction
   | SetCardEffectiveTypeAction
   | EndTurnAction;
 export type GameAction = LegalAction;
@@ -84,6 +88,11 @@ export interface ActivatePermanentAction {
 
 export interface ActivateWizardPropertyAction {
   type: "activateWizardProperty";
+  tokenInstanceId: string;
+}
+
+export interface ActivateDeadWizardTokenAction {
+  type: "activateDeadWizardToken";
   tokenInstanceId: string;
 }
 
@@ -155,6 +164,12 @@ export function listLegalActions(state: GameState): LegalAction[] {
       .filter((token) => canActivateWizardProperty(state, activePlayer, token))
       .map((token) => ({
         type: "activateWizardProperty" as const,
+        tokenInstanceId: token.instanceId,
+      })),
+    ...activePlayer.deadWizardTokens
+      .filter((token) => canActivateDeadWizardToken(state, activePlayer, token))
+      .map((token) => ({
+        type: "activateDeadWizardToken" as const,
         tokenInstanceId: token.instanceId,
       })),
     ...getCardEffectiveTypeActions(state, activePlayer),
@@ -322,6 +337,40 @@ export function preflightAction(
         }
         return undefined;
       }
+      case "activateDeadWizardToken": {
+        const token = activePlayer.deadWizardTokens.find(
+          (candidate) => candidate.instanceId === action.tokenInstanceId
+        );
+        if (token === undefined || token.ownerId !== activePlayer.playerId) {
+          return {
+            ok: false,
+            error: "Token is not controlled by the active player",
+          };
+        }
+        const definition = state.tokenDefinitions.get(token.definitionId);
+        if (definition === undefined) {
+          return {
+            ok: false,
+            error: `Missing token definition ${token.definitionId}`,
+          };
+        }
+        const availability = getDeadWizardTokenActivationAvailability(
+          state,
+          activePlayer,
+          definition,
+          createDeadWizardTokenSource(state, activePlayer, token)
+        );
+        if (!availability.ok) {
+          return availability;
+        }
+        if (!availability.executable) {
+          return {
+            ok: false,
+            error: "Dead wizard token cannot be activated",
+          };
+        }
+        return undefined;
+      }
       case "setCardEffectiveType": {
         const card = getCardEffectiveTypeActionCard(
           state,
@@ -401,6 +450,8 @@ export function applyAction(
       return activatePermanent(state, action.cardInstanceId);
     case "activateWizardProperty":
       return activateWizardProperty(state, action.tokenInstanceId);
+    case "activateDeadWizardToken":
+      return activateDeadWizardToken(state, action.tokenInstanceId);
     case "setCardEffectiveType":
       return setCardEffectiveType(state, action);
     case "endTurn":
@@ -628,6 +679,72 @@ function activateWizardProperty(
     tokenInstanceId: token.instanceId,
     tokenDefinitionId: token.definitionId,
   });
+
+  return { ok: true };
+}
+
+function activateDeadWizardToken(
+  state: GameState,
+  tokenInstanceId: string
+): ActionResult {
+  const activePlayer = mustGetActivePlayer(state);
+  const token = activePlayer.deadWizardTokens.find(
+    (candidate) => candidate.instanceId === tokenInstanceId
+  );
+  if (token === undefined || token.ownerId !== activePlayer.playerId) {
+    return {
+      ok: false,
+      error: "Token is not controlled by the active player",
+    };
+  }
+
+  const definition = state.tokenDefinitions.get(token.definitionId);
+  if (definition === undefined) {
+    return {
+      ok: false,
+      error: `Missing token definition ${token.definitionId}`,
+    };
+  }
+
+  const source = createDeadWizardTokenSource(state, activePlayer, token);
+  const availability = getDeadWizardTokenActivationAvailability(
+    state,
+    activePlayer,
+    definition,
+    source
+  );
+  if (!availability.ok) {
+    return availability;
+  }
+  if (!availability.executable) {
+    return {
+      ok: false,
+      error: "Dead wizard token cannot be activated",
+    };
+  }
+
+  const mutationResult = runControlledPowerMutation(
+    state,
+    activePlayer.playerId,
+    () =>
+      executeDeadWizardTokenActivationEffects(
+        state,
+        activePlayer,
+        definition,
+        source
+      ),
+    (result) => result.ok && result.gameEnd === undefined
+  );
+  if (!mutationResult.ok) {
+    return mutationResult;
+  }
+  const effectResult = mutationResult.value;
+  if (!effectResult.ok) {
+    return effectResult;
+  }
+  if (effectResult.gameEnd !== undefined) {
+    return gameEndActionResult(effectResult.gameEnd);
+  }
 
   return { ok: true };
 }
@@ -933,7 +1050,7 @@ function canUseChipsForPurchase(
 
 function canActivatePermanent(
   state: GameState,
-  _player: PlayerState,
+  player: PlayerState,
   card: CardInstance
 ): boolean {
   if (state.turn.activatedCardIds.includes(card.instanceId)) {
@@ -941,8 +1058,12 @@ function canActivatePermanent(
   }
 
   const definition = mustGetDefinition(state, card.definitionId);
-  return definition.engine.effects.some((effect) => {
-    return effect.timing === "activation";
+  return hasExecutableCardActivation(state, player, definition, {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: card.instanceId,
+    definitionId: card.definitionId,
   });
 }
 
@@ -961,6 +1082,29 @@ function canActivateWizardProperty(
   }
 
   return hasExecutableWizardPropertyActivation(state, player, definition);
+}
+
+function canActivateDeadWizardToken(
+  state: GameState,
+  player: PlayerState,
+  token: TokenInstance
+): boolean {
+  if (token.ownerId !== player.playerId) {
+    return false;
+  }
+
+  const definition = state.tokenDefinitions.get(token.definitionId);
+  if (definition === undefined) {
+    return false;
+  }
+
+  const availability = getDeadWizardTokenActivationAvailability(
+    state,
+    player,
+    definition,
+    createDeadWizardTokenSource(state, player, token)
+  );
+  return availability.ok && availability.executable;
 }
 
 function getWildMagicBuyAction(state: GameState): BuyMarketCardAction[] {
@@ -1155,6 +1299,22 @@ function createWizardPropertySource(
 ) {
   return {
     sourceType: "wizardProperty" as const,
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: token.instanceId,
+    definitionId: token.definitionId,
+    tokenInstanceId: token.instanceId,
+    tokenDefinitionId: token.definitionId,
+  };
+}
+
+function createDeadWizardTokenSource(
+  state: GameState,
+  player: PlayerState,
+  token: TokenInstance
+) {
+  return {
+    sourceType: "deadWizardToken" as const,
     runtimeMode: state.runtimeMode,
     playerId: player.playerId,
     cardInstanceId: token.instanceId,

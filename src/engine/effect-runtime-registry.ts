@@ -313,7 +313,8 @@ export interface EffectRuntimeServices {
     destination: CardInstance[],
     destinationZone: string,
     effectId: RuntimeEffectId,
-    source: EffectSourceContext
+    source: EffectSourceContext,
+    placeOnTop?: boolean
   ): boolean;
   discardTopDeckCards(
     state: GameState,

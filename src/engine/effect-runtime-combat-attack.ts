@@ -1,5 +1,6 @@
 import type { CardDefinition } from "./data.js";
 import { buildControlledObjectView } from "./control-ledger.js";
+import { countControlledCardsOfType } from "./card-type-runtime.js";
 import { recordGameEvent } from "./event-recorder.js";
 import { transferUpToLimpWandsToPlayer } from "./effect-runtime-special-card-stack.js";
 import type {
@@ -46,6 +47,7 @@ export type CombatAttackEffectId =
   | "attack_discard_cards"
   | "attack_gain_limp_wand"
   | "attack_gain_status"
+  | "activation_attack_damage_per_controlled_card_type"
   | "conditional_activation_attack_damage"
   | "directional_chain_attack"
   | "multi_target_attack"
@@ -59,6 +61,7 @@ export const combatAttackEffectIds = [
   "attack_discard_cards",
   "attack_gain_limp_wand",
   "attack_gain_status",
+  "activation_attack_damage_per_controlled_card_type",
   "conditional_activation_attack_damage",
   "directional_chain_attack",
   "multi_target_attack",
@@ -82,6 +85,7 @@ export interface CombatAttackEffectDecoderTools {
     expected: Value
   ): ValueDecoder<Value>;
   booleanValue: ValueDecoder<boolean>;
+  nonEmptyString: ValueDecoder<string>;
   positiveInteger: ValueDecoder<number>;
   optionalCondition: OptionalField<RuntimeEffectCondition>;
   optionalTiming: OptionalField<EffectTiming>;
@@ -117,6 +121,7 @@ export function createCombatAttackEffectDecoders(
     optional,
     literal,
     booleanValue,
+    nonEmptyString,
     positiveInteger,
     optionalCondition,
     optionalTiming,
@@ -218,7 +223,7 @@ export function createCombatAttackEffectDecoders(
       "attack_gain_status",
       {
         effectId: required(literal("attack_gain_status")),
-        timing: required(literal("onPlay")),
+        timing: required(oneOf(["activation", "onPlay"] as const)),
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         statusId: required(literal("dingler")),
@@ -239,6 +244,18 @@ export function createCombatAttackEffectDecoders(
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         condition: optionalCondition,
+      }
+    ),
+    activation_attack_damage_per_controlled_card_type: defineDecoder(
+      "activation_attack_damage_per_controlled_card_type",
+      {
+        effectId: required(
+          literal("activation_attack_damage_per_controlled_card_type")
+        ),
+        timing: required(literal("activation")),
+        amountPerCard: required(positiveInteger),
+        cardType: required(nonEmptyString),
+        targetSelector: required(literal("eachFoe")),
       }
     ),
     directional_chain_attack: defineDecoder(
@@ -584,7 +601,9 @@ type PlayerControlledDamageAttackEffect =
   | RuntimeEffectForId<"attack_damage">
   | RuntimeEffectForId<"optional_spend_chip_attack_damage">
   | RuntimeEffectForId<"attack_damage_equal_remembered_card_cost">
-  | RuntimeEffectForId<"attack_damage_equal_to_controlled_card_cost">;
+  | RuntimeEffectForId<"attack_damage_equal_to_controlled_card_cost">
+  | RuntimeEffectForId<"conditional_activation_attack_damage">
+  | RuntimeEffectForId<"activation_attack_damage_per_controlled_card_type">;
 
 function resolvePlayerControlledDamageAttack(
   state: GameState,
@@ -621,8 +640,9 @@ function resolvePlayerControlledDamageAttack(
       kind: "damage",
       baseAmount: amount,
       sourceOwnerModifierAmount: attackProfile.damageBonus,
-      onDamageDealt: effect.onDamageDealt ?? [],
-      onKill: effect.onKill ?? [],
+      onDamageDealt:
+        "onDamageDealt" in effect ? (effect.onDamageDealt ?? []) : [],
+      onKill: "onKill" in effect ? (effect.onKill ?? []) : [],
     },
   });
 }
@@ -1115,6 +1135,41 @@ export function createCombatAttackEffectDefinitions(
       );
     },
   };
+  const conditionalActivationAttackDamageHandler: EffectRuntimeHandler<
+    RuntimeEffectForId<"conditional_activation_attack_damage">
+  > = {
+    effectId: "conditional_activation_attack_damage",
+    execute(state, player, effect, source, services) {
+      return resolvePlayerControlledDamageAttack(
+        state,
+        player,
+        effect,
+        source,
+        services,
+        effect.amount,
+        collectAttackReplacementProfile
+      );
+    },
+  };
+  const activationAttackDamagePerControlledCardTypeHandler: EffectRuntimeHandler<
+    RuntimeEffectForId<"activation_attack_damage_per_controlled_card_type">
+  > = {
+    effectId: "activation_attack_damage_per_controlled_card_type",
+    execute(state, player, effect, source, services) {
+      const amount =
+        countControlledCardsOfType(state, player, effect.cardType) *
+        effect.amountPerCard;
+      return resolvePlayerControlledDamageAttack(
+        state,
+        player,
+        effect,
+        source,
+        services,
+        amount,
+        collectAttackReplacementProfile
+      );
+    },
+  };
 
   return [
     {
@@ -1176,10 +1231,20 @@ export function createCombatAttackEffectDefinitions(
     {
       effectId: "attack_gain_status",
       decoder: bindRuntimeEffectDecoder("attack_gain_status"),
-      supportedTimings: ["onPlay"],
+      supportedTimings: ["activation", "onPlay"],
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
       handler: attackGainStatusHandler(collectAttackReplacementProfile),
+    },
+    {
+      effectId: "activation_attack_damage_per_controlled_card_type",
+      decoder: bindRuntimeEffectDecoder(
+        "activation_attack_damage_per_controlled_card_type"
+      ),
+      supportedTimings: ["activation"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: activationAttackDamagePerControlledCardTypeHandler,
     },
     {
       effectId: "conditional_activation_attack_damage",
@@ -1187,9 +1252,7 @@ export function createCombatAttackEffectDefinitions(
       supportedTimings: attackTimings,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
-      handler: createUnsupportedEffectHandler(
-        "conditional_activation_attack_damage"
-      ),
+      handler: conditionalActivationAttackDamageHandler,
     },
     {
       effectId: "directional_chain_attack",

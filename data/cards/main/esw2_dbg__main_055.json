@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_055",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_055.json",
+    "image": "assets/cards/creature/Тварь. Трахангутан.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_055.md"
+  },
+  "visible": {
+    "nameRu": "Трахангутан",
+    "cost": 7,
+    "victoryPoints": 2,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "textRu": "[символ активации:]: +3 мощи за каждую тварь под твоим контролем.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "cost": 7,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "activation_add_power_per_controlled_card_type",
+        "timing": "activation",
+        "cardType": "creature",
+        "amountPerCard": 3,
+        "activationLimit": "oncePerTurnWhileControlled"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_034",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_034.json",
+    "image": "assets/cards/creature/Тварь. Испанский стыд.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_034.md"
+  },
+  "visible": {
+    "nameRu": "Испанский стыд",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "textRu": "+2 мощи\n[символ активации:]: Атака: если под твоим контролем есть ещё хотя бы 1 тварь, нанеси 9 урона выбранному врагу.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "cost": 4,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 2
+      },
+      {
+        "effectId": "conditional_activation_attack_damage",
+        "timing": "activation",
+        "condition": {
+          "effectId": "controls_other_card_type",
+          "minimum": 1,
+          "cardType": "creature"
+        },
+        "amount": 9,
+        "targetSelector": "chosenFoe"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

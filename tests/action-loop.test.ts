@@ -7982,7 +7982,24 @@ test("Losharocka Wand can self-target and makes the killed target a Dingler", ()
   state.activePlayerId = activePlayer.playerId;
   activePlayer.wizardProperties = [];
   activePlayer.life.current = 5;
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-losharocka-neutral-dwt"),
+      definitionId: markTokenDefinitionId(
+        "esw2_dbg__dead_wizard_token_neutral"
+      ),
+      ownerId: "common",
+    },
+  ];
   const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_030");
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? {
+          choiceId:
+            choices.find((choice) => choice.choiceId === activePlayer.playerId)
+              ?.choiceId ?? "",
+        }
+      : undefined;
 
   const result = applyAction(state, {
     type: "playCard",
@@ -8552,8 +8569,11 @@ test("Sweet Smurfinier heals only actual attack damage dealt", () => {
   assert.ok(targetPlayer);
   activePlayer.wizardProperties = [];
   targetPlayer.wizardProperties = [];
+  targetPlayer.statuses = [];
   targetPlayer.hand = [];
+  state.common.deadWizardTokens.drawStack.splice(0);
   activePlayer.life.current = 10;
+  targetPlayer.life.max = 20;
   targetPlayer.life.current = 1;
   const card = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_046");
 
@@ -12900,10 +12920,20 @@ test("set_life до нуля проводит смерть через общий
   const state = initializeGame({ rootDir, seed: 301003 });
   const player = mustGetPlayer(state, state.activePlayerId);
   player.wizardProperties = [];
+  player.life.max = 20;
+  player.life.current = 20;
   for (const targetPlayer of state.players) {
     targetPlayer.wizardProperties = [];
   }
-  state.common.deadWizardTokens.drawStack.splice(1);
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-set-life-neutral-dwt"),
+      definitionId: markTokenDefinitionId(
+        "esw2_dbg__dead_wizard_token_neutral"
+      ),
+      ownerId: "common",
+    },
+  ];
   const setLife = addFixtureCardToActiveHand(state, {
     effectId: "set_life",
     timing: "onPlay",
@@ -12937,7 +12967,15 @@ test("МегаБеспредел с set_life до нуля использует 
   for (const targetPlayer of state.players) {
     targetPlayer.wizardProperties = [];
   }
-  state.common.deadWizardTokens.drawStack.splice(state.players.length);
+  state.common.deadWizardTokens.drawStack = state.players.map(
+    (_targetPlayer, index) => ({
+      instanceId: markTokenInstanceId(`fixture-set-life-mega-dwt-${index}`),
+      definitionId: markTokenDefinitionId(
+        "esw2_dbg__dead_wizard_token_neutral"
+      ),
+      ownerId: "common" as const,
+    })
+  );
   const definition = createFixtureCardDefinition(
     "fixture-mega-mayhem-set-life-zero",
     [

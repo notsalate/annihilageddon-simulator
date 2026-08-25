@@ -38,7 +38,10 @@ export type {
   WildMagicOption,
 } from "./effect-runtime-cards-ownership-choice.js";
 export type {
+  ActivationAddPowerPerControlledCardTypeRuntimeEffect,
   ActivationDestroySelfThenDestroyOwnCardsRuntimeEffect,
+  ActivationDoubleTurnPowerRuntimeEffect,
+  ActivationLookChooseReorderLegendDeckRuntimeEffect,
   ActivationEffectPayloadMap,
   ConditionalActivationDestroyOwnCardsRuntimeEffect,
   ConditionalActivationGainChipsRuntimeEffect,
@@ -155,6 +158,11 @@ export interface ControlCountEffectCondition {
   minimumCount: number;
 }
 
+export interface ControlledCardCountEffectCondition {
+  conditionId: "controlled_card_count";
+  minimumCount: number;
+}
+
 export interface ControlsOtherCardTypeEffectCondition {
   effectId: "controls_other_card_type";
   minimum: number;
@@ -163,6 +171,7 @@ export interface ControlsOtherCardTypeEffectCondition {
 
 export type RuntimeEffectCondition =
   | ControlCountEffectCondition
+  | ControlledCardCountEffectCondition
   | ControlsOtherCardTypeEffectCondition;
 
 export interface DiscardOtherHandCardRuntimeEffectCost {
@@ -205,7 +214,10 @@ export type MayhemHandRedrawOption =
   | { effectId: "take_damage"; amount: 5 };
 
 export const knownRuntimeEffectIds = [
+  "activation_add_power_per_controlled_card_type",
   "activation_destroy_self_then_destroy_own_cards",
+  "activation_double_turn_power",
+  "activation_look_choose_reorder_legend_deck",
   "add_power",
   "add_power_if_player_has_status",
   "add_power_per_controlled_object",
@@ -218,6 +230,7 @@ export const knownRuntimeEffectIds = [
   "attack_discard_cards",
   "attack_gain_limp_wand",
   "attack_gain_status",
+  "activation_attack_damage_per_controlled_card_type",
   "avoid_attack",
   "conditional_activation_attack_damage",
   "conditional_activation_destroy_own_cards",
@@ -236,6 +249,7 @@ export const knownRuntimeEffectIds = [
   "dead_wizard_token_damage_per_discard_legend",
   "dead_wizard_token_exchange_life",
   "dead_wizard_token_reward_killer_chips",
+  "dead_wizard_token_self_destroy_for_chips",
   "double_owned_attack_damage",
   "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
   "destroy_card",
@@ -573,7 +587,7 @@ export type AttackGainLimpWandRuntimeEffect =
     };
 export type AttackGainStatusRuntimeEffect = TimedEffect<
   "attack_gain_status",
-  "onPlay"
+  "activation" | "onPlay"
 > &
   Targetable & { statusId: "dingler" };
 export interface AvoidAttackRuntimeEffect extends TimedEffect<
@@ -590,6 +604,15 @@ export type ConditionalActivationAttackDamageRuntimeEffect =
     PositiveAmount &
     Targetable &
     Conditioned;
+export type ActivationAttackDamagePerControlledCardTypeRuntimeEffect =
+  TimedEffect<
+    "activation_attack_damage_per_controlled_card_type",
+    "activation"
+  > & {
+    amountPerCard: number;
+    cardType: string;
+    targetSelector: "eachFoe";
+  };
 export type DirectionalChainAttackRuntimeEffect =
   EffectWithOptionalTiming<"directional_chain_attack"> &
     PositiveAmount &
@@ -651,6 +674,7 @@ export interface PlayerControlledAttackEffectPayloadMap {
   attack_gain_status: AttackGainStatusRuntimeEffect;
   avoid_attack: AvoidAttackRuntimeEffect;
   conditional_activation_attack_damage: ConditionalActivationAttackDamageRuntimeEffect;
+  activation_attack_damage_per_controlled_card_type: ActivationAttackDamagePerControlledCardTypeRuntimeEffect;
   directional_chain_attack: DirectionalChainAttackRuntimeEffect;
   multi_target_attack: MultiTargetAttackRuntimeEffect;
   optional_spend_chip_attack_damage: OptionalSpendChipAttackDamageRuntimeEffect;
@@ -980,6 +1004,12 @@ export function isRuntimeEffectCondition(
       hasExactKeys(value, ["conditionId", "cardTypes", "minimumCount"]) &&
       Array.isArray(value["cardTypes"]) &&
       value["cardTypes"].every(isString) &&
+      isNonNegativeSafeInteger(value["minimumCount"])
+    );
+  }
+  if (value["conditionId"] === "controlled_card_count") {
+    return (
+      hasExactKeys(value, ["conditionId", "minimumCount"]) &&
       isNonNegativeSafeInteger(value["minimumCount"])
     );
   }
