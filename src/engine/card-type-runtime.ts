@@ -14,7 +14,7 @@ import {
   evaluateRuntimeEffectAtTiming,
   type EffectSourceContext,
 } from "./effect-runtime-registry.js";
-import type { RuntimeEffectForId } from "./runtime-effect.js";
+import type { RuntimeEffect, RuntimeEffectForId } from "./runtime-effect.js";
 import { requireVerifiedRuntimeEffect } from "./runtime-effect-verification.js";
 
 type CardTypeEffectResolution =
@@ -29,6 +29,14 @@ type CardTypeCapabilityMode = "always" | "perCard";
 const cardTypeEffectResolutionCache = new WeakMap<
   object,
   Map<string, CardTypeEffectResolution>
+>();
+const cardTypeCapabilitiesCache = new WeakMap<
+  object,
+  Map<string, readonly OwnedCardsCountAsCardTypeRuntimeEffect[]>
+>();
+const cardTypePerCardCapabilityCache = new WeakMap<
+  object,
+  Map<string, boolean>
 >();
 const cardTypeOptionsCache = new WeakMap<GameState, Map<string, string[]>>();
 
@@ -113,28 +121,26 @@ export function getCardEffectiveTypeOptions(
         : undefined;
     if (effects === undefined) continue;
 
-    const source = {
-      sourceType: "wizardProperty" as const,
-      runtimeMode: state.runtimeMode,
-      playerId,
-      cardInstanceId: property.instanceId,
-      definitionId: property.definitionId,
-      tokenInstanceId: property.instanceId,
-      tokenDefinitionId: property.definitionId,
-    };
-    for (const effect of effects) {
-      if (!isOwnedCardsCountAsCardTypeRuntimeEffect(effect)) continue;
-      const resolvedEffect = resolveCardTypeEffect(effect, source);
-      if (resolvedEffect.status === "error") {
-        throw new Error(resolvedEffect.error);
-      }
+    const capabilities = getCardTypeCapabilities(
+      {
+        sourceType: "wizardProperty",
+        runtimeMode: state.runtimeMode,
+        playerId,
+        cardInstanceId: property.instanceId,
+        definitionId: property.definitionId,
+        tokenInstanceId: property.instanceId,
+        tokenDefinitionId: property.definitionId,
+      },
+      effects
+    );
+    for (const capability of capabilities) {
       if (
-        resolvedEffect.effect.selectionMode === "perCard" &&
-        resolvedEffect.effect.sourceCardTypes.some((sourceCardType) =>
+        capability.selectionMode === "perCard" &&
+        capability.sourceCardTypes.some((sourceCardType) =>
           definition.engine.cardTypes.includes(sourceCardType)
         )
       ) {
-        options.add(resolvedEffect.effect.countedAsCardType);
+        options.add(capability.countedAsCardType);
       }
     }
   }
@@ -160,22 +166,36 @@ export function hasPlayerPerCardEffectiveTypeEffects(
         : undefined;
     if (effects === undefined) continue;
 
-    const source = {
-      sourceType: "wizardProperty" as const,
-      runtimeMode: state.runtimeMode,
-      playerId,
-      cardInstanceId: property.instanceId,
-      definitionId: property.definitionId,
-      tokenInstanceId: property.instanceId,
-      tokenDefinitionId: property.definitionId,
-    };
-    for (const effect of effects) {
-      if (!isOwnedCardsCountAsCardTypeRuntimeEffect(effect)) continue;
-      const resolvedEffect = resolveCardTypeEffect(effect, source);
-      if (resolvedEffect.status === "error") {
-        throw new Error(resolvedEffect.error);
-      }
-      if (resolvedEffect.effect.selectionMode === "perCard") return true;
+    const cachedPerCardCapability = Object.isFrozen(effects)
+      ? cardTypePerCardCapabilityCache.get(effects)?.get(state.runtimeMode)
+      : undefined;
+    if (cachedPerCardCapability !== undefined) {
+      if (cachedPerCardCapability) return true;
+      continue;
+    }
+
+    const capabilities = getCardTypeCapabilities(
+      {
+        sourceType: "wizardProperty",
+        runtimeMode: state.runtimeMode,
+        playerId,
+        cardInstanceId: property.instanceId,
+        definitionId: property.definitionId,
+        tokenInstanceId: property.instanceId,
+        tokenDefinitionId: property.definitionId,
+      },
+      effects
+    );
+    const hasPerCardCapability = capabilities.some(
+      (capability) => capability.selectionMode === "perCard"
+    );
+    if (Object.isFrozen(effects)) {
+      const cache = cardTypePerCardCapabilityCache.get(effects) ?? new Map();
+      cache.set(state.runtimeMode, hasPerCardCapability);
+      cardTypePerCardCapabilityCache.set(effects, cache);
+    }
+    if (hasPerCardCapability) {
+      return true;
     }
   }
   return false;
@@ -288,22 +308,45 @@ function wizardPropertyCountsDefinitionAsType(
     tokenInstanceId,
     tokenDefinitionId,
   };
+  for (const capability of getCardTypeCapabilities(source, effects)) {
+    if (
+      capability.countedAsCardType === cardType &&
+      capability.sourceCardTypes.some((sourceCardType) =>
+        definition.engine.cardTypes.includes(sourceCardType)
+      )
+    ) {
+      return capability.selectionMode ?? "always";
+    }
+  }
+  return undefined;
+}
+
+function getCardTypeCapabilities(
+  source: EffectSourceContext,
+  effects: readonly RuntimeEffect[]
+): readonly OwnedCardsCountAsCardTypeRuntimeEffect[] {
+  const cacheable = Object.isFrozen(effects);
+  const cached = cacheable
+    ? cardTypeCapabilitiesCache.get(effects)?.get(source.runtimeMode)
+    : undefined;
+  if (cached !== undefined) return cached;
+
+  const capabilities: OwnedCardsCountAsCardTypeRuntimeEffect[] = [];
   for (const effect of effects) {
     if (!isOwnedCardsCountAsCardTypeRuntimeEffect(effect)) continue;
     const resolvedEffect = resolveCardTypeEffect(effect, source);
     if (resolvedEffect.status === "error") {
       throw new Error(resolvedEffect.error);
     }
-    if (
-      resolvedEffect.effect.countedAsCardType === cardType &&
-      resolvedEffect.effect.sourceCardTypes.some((sourceCardType) =>
-        definition.engine.cardTypes.includes(sourceCardType)
-      )
-    ) {
-      return resolvedEffect.effect.selectionMode ?? "always";
-    }
+    capabilities.push(resolvedEffect.effect);
   }
-  return undefined;
+
+  if (cacheable) {
+    const cache = cardTypeCapabilitiesCache.get(effects) ?? new Map();
+    cache.set(source.runtimeMode, capabilities);
+    cardTypeCapabilitiesCache.set(effects, cache);
+  }
+  return capabilities;
 }
 
 function resolveCardTypeEffect(

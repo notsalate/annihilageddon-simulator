@@ -66,6 +66,7 @@ const effectiveValueEffectCache = new WeakMap<
   object,
   readonly (VerifiedRuntimeEffect & EffectiveValueModifierEffect)[]
 >();
+const knownCardTypesCache = new WeakMap<object, readonly string[]>();
 
 interface EffectiveValueModifierEvaluationContext {
   readonly timing: "whileControlled" | "whileScoring";
@@ -611,17 +612,27 @@ function buildScoringCardTypeIndex(
   cardTypeMatcher: CardTypeMatcher
 ): ReadonlyMap<string, ReadonlySet<ControlledCardObject>> {
   const index = new Map<string, Set<ControlledCardObject>>();
-  const knownCardTypes = new Set<string>(["legend"]);
-  for (const definition of state.cardDefinitions.values()) {
-    for (const cardType of definition.engine.cardTypes) {
-      knownCardTypes.add(cardType);
-    }
-  }
+  const knownCardTypes = getKnownCardTypes(state);
 
   for (const object of scoringCards) {
+    const declaredCardTypes = object.definition.engine.cardTypes;
+    const isEveryCardType =
+      object.definition.engine.tags?.includes("counts_as_every_card_type") ===
+      true;
+    for (const cardType of isEveryCardType
+      ? knownCardTypes
+      : declaredCardTypes) {
+      addScoringCardType(index, cardType, object);
+    }
+
+    if (isEveryCardType || cardTypeMatcher === matchesDeclaredCardType) {
+      continue;
+    }
+
     for (const cardType of knownCardTypes) {
+      if (declaredCardTypes.includes(cardType)) continue;
       if (
-        !cardTypeMatcher(
+        cardTypeMatcher(
           state,
           playerId,
           object.definition,
@@ -629,14 +640,36 @@ function buildScoringCardTypeIndex(
           object.card
         )
       ) {
-        continue;
+        addScoringCardType(index, cardType, object);
       }
-      const cards = index.get(cardType) ?? new Set<ControlledCardObject>();
-      cards.add(object);
-      index.set(cardType, cards);
     }
   }
   return index;
+}
+
+function getKnownCardTypes(state: GameState): readonly string[] {
+  const cached = knownCardTypesCache.get(state.cardDefinitions);
+  if (cached !== undefined) return cached;
+
+  const knownCardTypes = new Set<string>(["legend"]);
+  for (const definition of state.cardDefinitions.values()) {
+    for (const cardType of definition.engine.cardTypes) {
+      knownCardTypes.add(cardType);
+    }
+  }
+  const result = Array.from(knownCardTypes);
+  knownCardTypesCache.set(state.cardDefinitions, result);
+  return result;
+}
+
+function addScoringCardType(
+  index: Map<string, Set<ControlledCardObject>>,
+  cardType: string,
+  object: ControlledCardObject
+): void {
+  const cards = index.get(cardType) ?? new Set<ControlledCardObject>();
+  cards.add(object);
+  index.set(cardType, cards);
 }
 
 function countOwnedScoringCards(

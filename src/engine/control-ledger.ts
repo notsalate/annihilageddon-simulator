@@ -11,6 +11,11 @@ import type {
 } from "./setup.js";
 import { copyRuntimeEffectVerification } from "./runtime-effect-verification.js";
 
+const physicalCardZoneDescriptorCache = new WeakMap<
+  object,
+  readonly PhysicalCardZoneDescriptor[]
+>();
+
 export interface ControlledObjectView {
   playerId: PlayerId;
   cards: readonly ControlledCardObject[];
@@ -266,7 +271,12 @@ function listPlayerPhysicalCardZoneDescriptors(
 export function listPhysicalCardZoneDescriptors(
   state: Pick<GameState, "players" | "common">
 ): readonly PhysicalCardZoneDescriptor[] {
-  return listBuiltinPhysicalCardZoneDescriptors(state);
+  const cached = physicalCardZoneDescriptorCache.get(state);
+  if (cached !== undefined) return cached;
+
+  const descriptors = listBuiltinPhysicalCardZoneDescriptors(state);
+  physicalCardZoneDescriptorCache.set(state, descriptors);
+  return descriptors;
 }
 
 function listBuiltinPhysicalCardZoneDescriptors(
