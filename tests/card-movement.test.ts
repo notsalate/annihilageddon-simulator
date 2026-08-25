@@ -542,11 +542,8 @@ test("card movement: main_076 charges floor-half chips, including zero and one",
     [0, 1, 2]
   );
   assert.ok(
-    cards
-      .slice(1)
-      .every((card) => scenario.state.common.destroyedPile.includes(card))
+    cards.every((card) => scenario.state.common.destroyedPile.includes(card))
   );
-  assert.equal(scenario.activePlayer.discard.includes(cards[0]!), true);
   assert.equal(
     scenario.state.eventLog.filter(
       (event) =>
@@ -581,6 +578,10 @@ test("card movement: main_076 charges floor-half chips, including zero and one",
   assert.equal(declined.activePlayer.discard.includes(declinedTarget), true);
 
   const empty = createGameScenario({ rootDir, seed: 282078 });
+  for (const player of empty.state.players) {
+    player.hand.splice(0);
+    player.discard.splice(0);
+  }
   const emptySource = givenRuntimeCard(empty, {
     definitionId: "esw2_dbg__main_076",
   });
@@ -601,10 +602,7 @@ test("card movement: main_076 charges floor-half chips, including zero and one",
     true
   );
   assert.equal(empty.activePlayer.chips, 4);
-  assert.equal(
-    emptyChoiceRequests,
-    empty.state.players.filter((player) => player.chips > 0).length
-  );
+  assert.equal(emptyChoiceRequests, 0);
 });
 
 test("card movement: mega_007 gives Dingler one choice and normal wizards two zone choices", () => {
