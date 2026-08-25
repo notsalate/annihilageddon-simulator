@@ -40,7 +40,8 @@
             "timing": "onDefense",
             "amount": 1,
             "cardTypes": ["creature"],
-            "excludeSource": true
+            "excludeSource": true,
+            "required": true
           }
         ]
       }

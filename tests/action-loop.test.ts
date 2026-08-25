@@ -14377,11 +14377,13 @@ test("#269 defense returns another creature from discard and excludes itself", (
   );
   defender.hand.splice(defender.hand.indexOf(otherCreature), 1);
   defender.discard.push(otherCreature);
+  let returnChoiceIds: readonly string[] = [];
   state.effectChoiceStrategy = ({ effectId, choices }) => {
     if (effectId === "avoid_attack") {
       return { choiceId: defenseCard.instanceId };
     }
     if (effectId === "return_discard_to_hand") {
+      returnChoiceIds = choices.map((choice) => choice.choiceId);
       return {
         choiceId:
           choices.find(
@@ -14407,6 +14409,59 @@ test("#269 defense returns another creature from discard and excludes itself", (
   assert.equal(defender.discard.includes(defenseCard), true);
   assert.equal(defender.hand.includes(otherCreature), true);
   assert.equal(defender.discard.includes(otherCreature), false);
+  assert.equal(returnChoiceIds.includes("return_0"), false);
+});
+
+test("#269 defense remains successful when no other creature is in discard", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const defenseDefinition =
+    currentRuntimeDataPack.cardDefinitions.get("esw2_dbg__main_043");
+  assert.ok(defenseDefinition);
+
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 269005,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [defenseDefinition.cardId, defenseDefinition],
+  ]);
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const defender = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  defender.discard = [];
+  const defenseCard = addRuntimeCardToHand(
+    state,
+    defender,
+    defenseDefinition.cardId
+  );
+  state.effectChoiceStrategy = ({ effectId }) =>
+    effectId === "avoid_attack"
+      ? { choiceId: defenseCard.instanceId }
+      : undefined;
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 5,
+    target: { selector: "opponentPlayer" },
+  });
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }),
+    { ok: true }
+  );
+  assert.equal(defender.discard.includes(defenseCard), true);
+  assert.equal(attacker.life.current, 20);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSkipped" &&
+        event.effectId === "return_discard_to_hand" &&
+        event.legalChoiceCount === 0
+    )
+  );
 });
 
 test("#269 defense optionally destroys a hand card", () => {

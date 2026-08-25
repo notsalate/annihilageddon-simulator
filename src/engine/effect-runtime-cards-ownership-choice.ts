@@ -84,6 +84,7 @@ export type ReturnDiscardToHandRuntimeEffect =
     PositiveAmount & {
       cardTypes?: string[];
       excludeSource?: true;
+      required?: true;
     };
 export type RevealTopCardRuntimeEffect =
   EffectWithOptionalTiming<"reveal_top_card"> & {
@@ -330,6 +331,7 @@ export function createCardOwnershipChoiceEffectDecoders(
       amount: required(positiveInteger),
       cardTypes: optional(nonEmptyStringArray),
       excludeSource: optional(literal(true)),
+      required: optional(literal(true)),
     }),
     reveal_top_card: defineDecoder("reveal_top_card", {
       effectId: required(literal("reveal_top_card")),
@@ -755,6 +757,7 @@ export function executeReturnDiscardToHand(
   options: {
     cardTypes?: readonly string[];
     excludeSource?: boolean;
+    required?: boolean;
   } = {}
 ): EffectExecutionResult {
   const eligibleCards = player.discard.filter((card) => {
@@ -775,7 +778,11 @@ export function executeReturnDiscardToHand(
     player,
     source,
     "return_discard_to_hand",
-    buildDiscardReturnChoices(eligibleCards, amount)
+    buildDiscardReturnChoices(
+      eligibleCards,
+      amount,
+      options.required === true ? 1 : 0
+    )
   );
   const returned =
     choice?.choiceKind === "cardTarget" ? choice.cards : readonlyEmptyCards;
@@ -818,11 +825,16 @@ const readonlyEmptyCards: readonly CardInstance[] = [];
 
 function buildDiscardReturnChoices(
   discard: readonly CardInstance[],
-  maxAmount: number
+  maxAmount: number,
+  minimumAmount = 0
 ): EffectChoice[] {
   const cappedAmount = Math.min(maxAmount, discard.length);
   const choices: EffectChoice[] = [];
-  for (let amount = cappedAmount; amount >= 1; amount -= 1) {
+  for (
+    let amount = cappedAmount;
+    amount >= Math.max(1, minimumAmount);
+    amount -= 1
+  ) {
     for (const cards of chooseCardCombinations(discard, amount)) {
       choices.push({
         choiceKind: "cardTarget",
@@ -834,12 +846,14 @@ function buildDiscardReturnChoices(
       });
     }
   }
-  choices.push({
-    choiceKind: "cardTarget",
-    choiceId: "return_0",
-    amount: 0,
-    cards: [],
-  });
+  if (minimumAmount === 0) {
+    choices.push({
+      choiceKind: "cardTarget",
+      choiceId: "return_0",
+      amount: 0,
+      cards: [],
+    });
+  }
   return choices;
 }
 
@@ -1148,6 +1162,7 @@ const returnDiscardToHandHandler: EffectRuntimeHandler<
           ? {}
           : { cardTypes: effect.cardTypes }),
         excludeSource: effect.excludeSource === true,
+        required: effect.required === true,
       }
     );
   },
