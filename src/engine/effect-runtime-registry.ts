@@ -31,6 +31,7 @@ import {
   calculateEffectivePlayerMaxLife as calculateEffectivePlayerMaxLifeCore,
 } from "./effective-values.js";
 import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
+import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
 import {
   allEffectRuntimeModes,
   fixtureEffectTimings,
@@ -1157,6 +1158,32 @@ const addPowerPerPlayerWithStatusHandler: EffectRuntimeHandler<
   },
 };
 
+const addPowerPerControlledDeadWizardTokenHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"add_power_per_controlled_dead_wizard_token">
+> = {
+  effectId: "add_power_per_controlled_dead_wizard_token",
+  execute(state, player, effect, source) {
+    const amount =
+      getControlledDeadWizardTokenCount(state, player) *
+      effect.amountPerDeadWizardToken;
+    if (amount === 0) {
+      return { ok: true };
+    }
+
+    const powerBefore = state.turn.power;
+    state.turn.power += amount;
+    recordTurnPowerChanged(
+      state,
+      player,
+      source,
+      effect.effectId,
+      powerBefore,
+      state.turn.power
+    );
+    return { ok: true };
+  },
+};
+
 const dealDamageHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"deal_damage">
 > = {
@@ -1917,6 +1944,16 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: addPowerPerControlledObjectHandler,
+  },
+  {
+    effectId: "add_power_per_controlled_dead_wizard_token",
+    decoder: bindRuntimeEffectDecoder(
+      "add_power_per_controlled_dead_wizard_token"
+    ),
+    supportedTimings: ["onPlay"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card", "wizardProperty"],
+    handler: addPowerPerControlledDeadWizardTokenHandler,
   },
   {
     effectId: "add_power_per_controlled_permanent",

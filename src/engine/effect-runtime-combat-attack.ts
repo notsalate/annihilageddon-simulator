@@ -1,6 +1,7 @@
 import type { CardDefinition } from "./data.js";
 import { buildControlledObjectView } from "./control-ledger.js";
 import { countControlledCardsOfType } from "./card-type-runtime.js";
+import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
 import { recordGameEvent } from "./event-recorder.js";
 import { transferUpToLimpWandsToPlayer } from "./effect-runtime-special-card-stack.js";
 import { executeReturnDiscardToHand } from "./effect-runtime-cards-ownership-choice.js";
@@ -42,6 +43,7 @@ import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export type CombatAttackEffectId =
   | "attack_damage"
+  | "attack_damage_per_controlled_dead_wizard_token"
   | "attack_damage_equal_remembered_card_cost"
   | "attack_damage_equal_to_controlled_card_cost"
   | "attack_destroy_top_legend_deck_then_damage_equal_cost"
@@ -56,6 +58,7 @@ export type CombatAttackEffectId =
 
 export const combatAttackEffectIds = [
   "attack_damage",
+  "attack_damage_per_controlled_dead_wizard_token",
   "attack_damage_equal_remembered_card_cost",
   "attack_damage_equal_to_controlled_card_cost",
   "attack_destroy_top_legend_deck_then_damage_equal_cost",
@@ -154,6 +157,19 @@ export function createCombatAttackEffectDecoders(
         "chosenPlayer",
         "eachFoe",
       ])
+    ),
+    attack_damage_per_controlled_dead_wizard_token: defineDecoder(
+      "attack_damage_per_controlled_dead_wizard_token",
+      {
+        effectId: required(
+          literal("attack_damage_per_controlled_dead_wizard_token")
+        ),
+        timing: optionalTiming,
+        amountPerDeadWizardToken: required(positiveInteger),
+        targetSelector: required(literal("eachFoe")),
+        onDamageDealt: optionalAttackBranches,
+        onKill: optionalAttackBranches,
+      }
     ),
     attack_damage_equal_remembered_card_cost: defineDecoder(
       "attack_damage_equal_remembered_card_cost",
@@ -600,6 +616,7 @@ function resolveControlledCardCost(
 
 type PlayerControlledDamageAttackEffect =
   | RuntimeEffectForId<"attack_damage">
+  | RuntimeEffectForId<"attack_damage_per_controlled_dead_wizard_token">
   | RuntimeEffectForId<"optional_spend_chip_attack_damage">
   | RuntimeEffectForId<"attack_damage_equal_remembered_card_cost">
   | RuntimeEffectForId<"attack_damage_equal_to_controlled_card_cost">
@@ -1110,6 +1127,28 @@ export function createCombatAttackEffectDefinitions(
       );
     },
   };
+  const attackDamagePerControlledDeadWizardTokenHandler: EffectRuntimeHandler<
+    RuntimeEffectForId<"attack_damage_per_controlled_dead_wizard_token">
+  > = {
+    effectId: "attack_damage_per_controlled_dead_wizard_token",
+    execute(state, player, effect, source, services) {
+      const amount =
+        getControlledDeadWizardTokenCount(state, player) *
+        effect.amountPerDeadWizardToken;
+      if (amount === 0) {
+        return { ok: true };
+      }
+      return resolvePlayerControlledDamageAttack(
+        state,
+        player,
+        effect,
+        source,
+        services,
+        amount,
+        collectAttackReplacementProfile
+      );
+    },
+  };
 
   return [
     {
@@ -1119,6 +1158,16 @@ export function createCombatAttackEffectDefinitions(
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
       handler: attackDamageHandler,
+    },
+    {
+      effectId: "attack_damage_per_controlled_dead_wizard_token",
+      decoder: bindRuntimeEffectDecoder(
+        "attack_damage_per_controlled_dead_wizard_token"
+      ),
+      supportedTimings: attackTimings,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: attackDamagePerControlledDeadWizardTokenHandler,
     },
     {
       effectId: "attack_damage_equal_remembered_card_cost",

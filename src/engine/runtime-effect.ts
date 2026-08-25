@@ -225,9 +225,11 @@ export const knownRuntimeEffectIds = [
   "add_power",
   "add_power_if_player_has_status",
   "add_power_per_controlled_object",
+  "add_power_per_controlled_dead_wizard_token",
   "add_power_per_controlled_permanent",
   "add_power_per_player_with_status",
   "attack_damage",
+  "attack_damage_per_controlled_dead_wizard_token",
   "attack_damage_equal_remembered_card_cost",
   "attack_damage_equal_to_controlled_card_cost",
   "attack_destroy_top_legend_deck_then_damage_equal_cost",
@@ -479,6 +481,13 @@ export type AddPowerPerControlledObjectRuntimeEffect = TimedEffect<
 > &
   PositiveAmount;
 
+export type AddPowerPerControlledDeadWizardTokenRuntimeEffect = TimedEffect<
+  "add_power_per_controlled_dead_wizard_token",
+  "onPlay"
+> & {
+  amountPerDeadWizardToken: number;
+};
+
 export type AddPowerPerControlledPermanentRuntimeEffect = TimedEffect<
   "add_power_per_controlled_permanent",
   "onPlay"
@@ -539,6 +548,7 @@ export interface ImmediateEffectPayloadMap
   add_power: AddPowerRuntimeEffect;
   add_power_if_player_has_status: AddPowerIfPlayerHasStatusRuntimeEffect;
   add_power_per_controlled_object: AddPowerPerControlledObjectRuntimeEffect;
+  add_power_per_controlled_dead_wizard_token: AddPowerPerControlledDeadWizardTokenRuntimeEffect;
   add_power_per_controlled_permanent: AddPowerPerControlledPermanentRuntimeEffect;
   add_power_per_player_with_status: AddPowerPerPlayerWithStatusRuntimeEffect;
   gain_chips_equal_damage_dealt: GainChipsEqualDamageDealtRuntimeEffect;
@@ -560,6 +570,13 @@ export type AttackDamageRuntimeEffect =
     Targetable &
     Costed &
     AttackBranches;
+export type AttackDamagePerControlledDeadWizardTokenRuntimeEffect =
+  EffectWithOptionalTiming<
+    "attack_damage_per_controlled_dead_wizard_token"
+  > & {
+    amountPerDeadWizardToken: number;
+    targetSelector: "eachFoe";
+  } & AttackBranches;
 export type AttackDamageEqualRememberedCardCostRuntimeEffect =
   EffectWithOptionalTiming<"attack_damage_equal_remembered_card_cost"> &
     Targetable &
@@ -673,6 +690,7 @@ export interface PreventDefenseAgainstOwnedWandAttacksRuntimeEffect extends Time
 
 export interface PlayerControlledAttackEffectPayloadMap {
   attack_damage: AttackDamageRuntimeEffect;
+  attack_damage_per_controlled_dead_wizard_token: AttackDamagePerControlledDeadWizardTokenRuntimeEffect;
   attack_damage_equal_remembered_card_cost: AttackDamageEqualRememberedCardCostRuntimeEffect;
   attack_damage_equal_to_controlled_card_cost: AttackDamageEqualToControlledCardCostRuntimeEffect;
   attack_destroy_top_legend_deck_then_damage_equal_cost: AttackDestroyTopLegendDeckThenDamageEqualCostRuntimeEffect;

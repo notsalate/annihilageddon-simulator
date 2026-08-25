@@ -662,6 +662,16 @@ const runtimeEffectDecoders: {
       amount: required(positiveInteger),
     }
   ),
+  add_power_per_controlled_dead_wizard_token: defineDecoder(
+    "add_power_per_controlled_dead_wizard_token",
+    {
+      effectId: required(
+        literal("add_power_per_controlled_dead_wizard_token")
+      ),
+      timing: required(literal("onPlay")),
+      amountPerDeadWizardToken: required(positiveInteger),
+    }
+  ),
   add_power_per_controlled_permanent: defineDecoder(
     "add_power_per_controlled_permanent",
     {
