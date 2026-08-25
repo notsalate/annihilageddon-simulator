@@ -1153,10 +1153,15 @@ function assignStartingFamiliars(
 
   shuffleDeck(setupPool, rng);
 
+  const startingPairs: Array<{
+    player: PlayerState;
+    candidates: readonly [CardInstance, CardInstance];
+    retainsBothFamiliars: boolean;
+  }> = [];
   for (let index = 0; index < players.length; index += 1) {
     const player = players[index];
-    const firstCandidate = setupPool[(index * 2) % setupPool.length];
-    const secondCandidate = setupPool[(index * 2 + 1) % setupPool.length];
+    const firstCandidate = setupPool[index * 2];
+    const secondCandidate = setupPool[index * 2 + 1];
     if (
       player === undefined ||
       firstCandidate === undefined ||
@@ -1182,46 +1187,65 @@ function assignStartingFamiliars(
       );
     }
 
-    if (playersRetainingBothFamiliars?.has(player.playerId) === true) {
-      for (const candidate of [firstCandidate, secondCandidate]) {
+    startingPairs.push({
+      player,
+      candidates: [firstCandidate, secondCandidate],
+      retainsBothFamiliars:
+        playersRetainingBothFamiliars?.has(player.playerId) === true,
+    });
+  }
+
+  const assignedInstanceIds = new Set<CardInstanceId>();
+  for (const { player, candidates, retainsBothFamiliars } of startingPairs) {
+    if (retainsBothFamiliars) {
+      for (const candidate of candidates) {
         player.unboughtFamiliars.push(
           transferSetupCardToPlayer(candidate, player.playerId)
         );
+        assignedInstanceIds.add(candidate.instanceId);
       }
-      const familiarPairCount = players.length * 2;
-      const thirdCandidateChoice = selectFamiliarSetupChoice(
-        player,
-        "thirdFamiliar",
-        setupPool.slice(familiarPairCount),
-        familiarSetupChoicePolicy,
-        eventLog
-      );
-      const thirdCandidate = thirdCandidateChoice.candidate;
-      setupPool.splice(familiarPairCount + thirdCandidateChoice.index, 1);
-      const thirdDefinition = mustGetDefinition(
-        dataPack,
-        thirdCandidate.definitionId
-      );
-      if (thirdDefinition.engine.cardKind !== "familiar") {
-        throw new Error(
-          `Deck ${familiarPool.deckId} must contain only familiar cards`
-        );
-      }
-      player.unboughtFamiliars.push(
-        transferSetupCardToPlayer(thirdCandidate, player.playerId)
-      );
     } else {
       const selectedPairChoice = selectFamiliarSetupChoice(
         player,
         "startingPair",
-        [firstCandidate, secondCandidate],
+        candidates,
         familiarSetupChoicePolicy,
         eventLog
       );
       player.unboughtFamiliars.push(
         transferSetupCardToPlayer(selectedPairChoice.candidate, player.playerId)
       );
+      assignedInstanceIds.add(selectedPairChoice.candidate.instanceId);
     }
+  }
+
+  for (const { player, retainsBothFamiliars } of startingPairs) {
+    if (!retainsBothFamiliars) continue;
+
+    const thirdCandidates = setupPool.filter(
+      (candidate) => !assignedInstanceIds.has(candidate.instanceId)
+    );
+    const thirdCandidateChoice = selectFamiliarSetupChoice(
+      player,
+      "thirdFamiliar",
+      thirdCandidates,
+      familiarSetupChoicePolicy,
+      eventLog
+    );
+    const thirdCandidate = thirdCandidateChoice.candidate;
+    const thirdDefinition = mustGetDefinition(
+      dataPack,
+      thirdCandidate.definitionId
+    );
+    if (thirdDefinition.engine.cardKind !== "familiar") {
+      throw new Error(
+        `Deck ${familiarPool.deckId} must contain only familiar cards`
+      );
+    }
+    player.unboughtFamiliars.push(
+      transferSetupCardToPlayer(thirdCandidate, player.playerId)
+    );
+    assignedInstanceIds.add(thirdCandidate.instanceId);
   }
 }
 

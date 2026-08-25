@@ -15,6 +15,7 @@ import {
   markCardDefinitionId,
   markCardInstanceId,
   markPlayerId,
+  type CardInstanceId,
 } from "../src/domain/types.js";
 
 const rootDir = process.cwd();
@@ -311,6 +312,79 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
   if (!foreignResult.ok) {
     assert.match(foreignResult.error, /eligible effective-type target/);
   }
+});
+
+test("wizard property 003 can choose an unselected ordinary familiar", () => {
+  const source = loadCurrentRuntimeDataPack(rootDir);
+  const wizardPropertyStack = source.tokenStacks.wizardProperties;
+  const familiarPool = source.decks.familiarPool;
+  assert.ok(wizardPropertyStack);
+  assert.ok(familiarPool);
+
+  const dataPack: LoadedDataPack = {
+    ...source,
+    decks: {
+      ...source.decks,
+      familiarPool: {
+        ...familiarPool,
+        entries: [{ cardId: "esw2_dbg__familiar_003", count: 24 }],
+      },
+    },
+    tokenStacks: {
+      ...source.tokenStacks,
+      wizardProperties: {
+        ...wizardPropertyStack,
+        entries: [
+          { tokenId: "esw2_dbg__wizard_property_003", count: 2 },
+          { tokenId: "esw2_dbg__wizard_property_004", count: 2 },
+        ],
+      },
+    },
+  };
+
+  let ordinaryUnselectedId: CardInstanceId | undefined;
+  let thirdChoiceSawOrdinaryUnselected = false;
+  const state = initializeGame({
+    dataPack,
+    playerCount: 2,
+    seed: 80001,
+    familiarSetupChoicePolicy: ({ phase, candidateInstanceIds }) => {
+      if (phase === "startingPair" && ordinaryUnselectedId === undefined) {
+        ordinaryUnselectedId = candidateInstanceIds[1];
+      }
+      if (
+        phase === "thirdFamiliar" &&
+        ordinaryUnselectedId !== undefined &&
+        candidateInstanceIds.includes(ordinaryUnselectedId)
+      ) {
+        thirdChoiceSawOrdinaryUnselected = true;
+        return ordinaryUnselectedId;
+      }
+      return candidateInstanceIds[0];
+    },
+  });
+
+  const ordinaryPlayer = state.players.find((player) =>
+    player.wizardProperties.some(
+      (property) => property.definitionId === "esw2_dbg__wizard_property_004"
+    )
+  );
+  const retainingPlayer = state.players.find((player) =>
+    player.wizardProperties.some(
+      (property) => property.definitionId === "esw2_dbg__wizard_property_003"
+    )
+  );
+  assert.ok(ordinaryPlayer);
+  assert.ok(retainingPlayer);
+  assert.ok(ordinaryUnselectedId);
+  assert.equal(thirdChoiceSawOrdinaryUnselected, true);
+  assert.equal(ordinaryPlayer.unboughtFamiliars.length, 1);
+  assert.equal(retainingPlayer.unboughtFamiliars.length, 3);
+  assert.ok(
+    retainingPlayer.unboughtFamiliars.some(
+      (card) => card.instanceId === ordinaryUnselectedId
+    )
+  );
 });
 
 test("invalid familiar setup choice falls back to the first candidate", () => {
