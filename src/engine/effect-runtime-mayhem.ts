@@ -1142,10 +1142,11 @@ function executeMayhemOptionalDestroyOwnCards(
       if (targetPlayer.life.current - lifeCost < 1) continue;
       cost = { kind: "pay_life", amount: lifeCost };
     } else if (mode === "halfChips") {
-      if (targetPlayer.chips === 0) continue;
+      const amount = Math.floor(targetPlayer.chips / 2);
+      if (amount <= 0) continue;
       cost = {
         kind: "spend_chips",
-        amount: Math.floor(targetPlayer.chips / 2),
+        amount,
       };
     }
     const result = chooseAndDestroyMayhemCard(

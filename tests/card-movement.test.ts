@@ -572,7 +572,7 @@ test("card movement: main_067 destroys one card clockwise and charges Dingler li
   assert.equal(emptyChoiceRequests, 0);
 });
 
-test("card movement: main_076 charges floor-half chips, including zero and one", () => {
+test("card movement: main_076 requires a positive floor-half chip cost", () => {
   const scenario = createGameScenario({
     rootDir,
     seed: 282076,
@@ -616,12 +616,9 @@ test("card movement: main_076 charges floor-half chips, including zero and one",
     players.map((player) => player.chips),
     [0, 1, 2]
   );
-  assert.ok(
-    cards
-      .slice(1)
-      .every((card) => scenario.state.common.destroyedPile.includes(card))
-  );
-  assert.equal(scenario.activePlayer.discard.includes(cards[0]!), true);
+  assert.equal(players[0]?.discard.includes(cards[0]!), true);
+  assert.equal(players[1]?.discard.includes(cards[1]!), true);
+  assert.equal(scenario.state.common.destroyedPile.includes(cards[2]!), true);
   assert.equal(
     scenario.state.eventLog.filter(
       (event) =>
