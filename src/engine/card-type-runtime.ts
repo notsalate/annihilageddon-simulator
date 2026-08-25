@@ -122,15 +122,12 @@ export function getCardEffectiveTypeOptions(
     if (effects === undefined) continue;
 
     const capabilities = getCardTypeCapabilities(
-      {
-        sourceType: "wizardProperty",
-        runtimeMode: state.runtimeMode,
+      createWizardPropertyEffectSource(
+        state,
         playerId,
-        cardInstanceId: property.instanceId,
-        definitionId: property.definitionId,
-        tokenInstanceId: property.instanceId,
-        tokenDefinitionId: property.definitionId,
-      },
+        property.instanceId,
+        property.definitionId
+      ),
       effects
     );
     for (const capability of capabilities) {
@@ -175,15 +172,12 @@ export function hasPlayerPerCardEffectiveTypeEffects(
     }
 
     const capabilities = getCardTypeCapabilities(
-      {
-        sourceType: "wizardProperty",
-        runtimeMode: state.runtimeMode,
+      createWizardPropertyEffectSource(
+        state,
         playerId,
-        cardInstanceId: property.instanceId,
-        definitionId: property.definitionId,
-        tokenInstanceId: property.instanceId,
-        tokenDefinitionId: property.definitionId,
-      },
+        property.instanceId,
+        property.definitionId
+      ),
       effects
     );
     const hasPerCardCapability = capabilities.some(
@@ -284,6 +278,23 @@ function requirePlayer(state: GameState, playerId: PlayerId) {
   return player;
 }
 
+function createWizardPropertyEffectSource(
+  state: GameState,
+  playerId: PlayerId,
+  tokenInstanceId: TokenInstance["instanceId"],
+  tokenDefinitionId: TokenDefinition["tokenId"]
+): EffectSourceContext {
+  return {
+    sourceType: "wizardProperty",
+    runtimeMode: state.runtimeMode,
+    playerId,
+    cardInstanceId: tokenInstanceId,
+    definitionId: tokenDefinitionId,
+    tokenInstanceId,
+    tokenDefinitionId,
+  };
+}
+
 function wizardPropertyCountsDefinitionAsType(
   state: GameState,
   playerId: PlayerId,
@@ -299,15 +310,12 @@ function wizardPropertyCountsDefinitionAsType(
       : undefined;
   if (effects === undefined) return undefined;
 
-  const source = {
-    sourceType: "wizardProperty" as const,
-    runtimeMode: state.runtimeMode,
+  const source = createWizardPropertyEffectSource(
+    state,
     playerId,
-    cardInstanceId: tokenInstanceId,
-    definitionId: tokenDefinitionId,
     tokenInstanceId,
-    tokenDefinitionId,
-  };
+    tokenDefinitionId
+  );
   for (const capability of getCardTypeCapabilities(source, effects)) {
     if (
       capability.countedAsCardType === cardType &&
