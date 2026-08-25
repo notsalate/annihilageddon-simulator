@@ -1729,3 +1729,281 @@ test("card movement: mega_mayhem_006 collects defenses before destroying in stab
     false
   );
 });
+
+test("card movement: legend_032 reveals four foe cards and cleans up the borrowed play", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 286032,
+    playerCount: 2,
+  });
+  const foe = scenario.foes[0];
+  assert.ok(foe);
+  scenario.state.turn.power = 0;
+  foe.deck.splice(0);
+  foe.discard.splice(0);
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__legend_032",
+  });
+  const first = givenRuntimeCard(scenario, {
+    player: foe,
+    zone: "deck",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  const selected = givenRuntimeCard(scenario, {
+    player: foe,
+    zone: "deck",
+    isOngoing: true,
+    effects: [
+      { effectId: "add_power", timing: "onPlay", amount: 5 },
+      {
+        effectId: "add_power_per_controlled_object",
+        timing: "onPlay",
+        amount: 1,
+      },
+    ],
+  });
+  const third = givenRuntimeCard(scenario, {
+    player: foe,
+    zone: "deck",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  const fourth = givenRuntimeCard(scenario, {
+    player: foe,
+    zone: "deck",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  let revealedChoiceIds: readonly string[] | undefined;
+  chooseEffect(scenario, (request) => {
+    if (String(request.effectId) !== "attack_reveal_and_play_foe_deck_card") {
+      return undefined;
+    }
+    if (
+      request.choices.some((choice) => choice.choiceKind === "playerTarget")
+    ) {
+      return { choiceId: foe.playerId };
+    }
+    const cardChoices = request.choices.filter(
+      (choice) => choice.choiceKind === "cardTarget"
+    );
+    revealedChoiceIds = cardChoices.flatMap((choice) =>
+      choice.choiceKind === "cardTarget" ? choice.targetCardInstanceIds : []
+    );
+    return { choiceId: selected.instanceId };
+  });
+
+  assert.deepEqual(play(scenario, source), { ok: true });
+  assert.deepEqual(revealedChoiceIds, [
+    first.instanceId,
+    selected.instanceId,
+    third.instanceId,
+    fourth.instanceId,
+  ]);
+  assert.equal(scenario.state.turn.power, 10);
+  assert.deepEqual(foe.deck, []);
+  assert.deepEqual(
+    foe.discard.map((card) => card.instanceId).sort(),
+    [first, selected, third, fourth].map((card) => card.instanceId).sort()
+  );
+  assert.equal(foe.permanents.includes(selected), false);
+  assert.equal(scenario.activePlayer.playedThisTurn.includes(selected), false);
+  assert.equal(
+    getControlledCards(scenario.state, scenario.activePlayer).some(
+      (card) => card.instanceId === selected.instanceId
+    ),
+    false
+  );
+});
+
+test("card movement: legend_032 respects defense and short or empty foe decks", () => {
+  const defendedScenario = createGameScenario({
+    rootDir,
+    seed: 286033,
+    playerCount: 2,
+  });
+  const defendedFoe = defendedScenario.foes[0];
+  assert.ok(defendedFoe);
+  defendedFoe.deck.splice(0);
+  defendedFoe.discard.splice(0);
+  const defendedSource = givenRuntimeCard(defendedScenario, {
+    definitionId: "esw2_dbg__legend_032",
+  });
+  const defendedCard = givenRuntimeCard(defendedScenario, {
+    player: defendedFoe,
+    zone: "deck",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  const defense = addFixtureDefenseCardToHand(
+    defendedScenario.state,
+    defendedFoe,
+    "discardSelf"
+  );
+  let defendedCardChoiceRequests = 0;
+  chooseEffect(defendedScenario, (request) => {
+    if (String(request.effectId) !== "attack_reveal_and_play_foe_deck_card") {
+      return request.effectId === "avoid_attack"
+        ? { choiceId: defense.instanceId }
+        : undefined;
+    }
+    if (
+      request.choices.some((choice) => choice.choiceKind === "playerTarget")
+    ) {
+      return { choiceId: defendedFoe.playerId };
+    }
+    defendedCardChoiceRequests += 1;
+    return { choiceId: defendedCard.instanceId };
+  });
+
+  assert.deepEqual(play(defendedScenario, defendedSource), { ok: true });
+  assert.deepEqual(defendedFoe.deck, [defendedCard]);
+  assert.equal(defendedFoe.discard.includes(defendedCard), false);
+  assert.equal(defendedCardChoiceRequests, 0);
+
+  const shortScenario = createGameScenario({
+    rootDir,
+    seed: 286034,
+    playerCount: 2,
+  });
+  const shortFoe = shortScenario.foes[0];
+  assert.ok(shortFoe);
+  shortFoe.deck.splice(0);
+  shortFoe.discard.splice(0);
+  const shortSource = givenRuntimeCard(shortScenario, {
+    definitionId: "esw2_dbg__legend_032",
+  });
+  const shortFirst = givenRuntimeCard(shortScenario, {
+    player: shortFoe,
+    zone: "deck",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  const shortSelected = givenRuntimeCard(shortScenario, {
+    player: shortFoe,
+    zone: "deck",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  chooseEffect(shortScenario, (request) => {
+    if (String(request.effectId) !== "attack_reveal_and_play_foe_deck_card") {
+      return undefined;
+    }
+    if (
+      request.choices.some((choice) => choice.choiceKind === "playerTarget")
+    ) {
+      return { choiceId: shortFoe.playerId };
+    }
+    assert.deepEqual(
+      request.choices.flatMap((choice) =>
+        choice.choiceKind === "cardTarget" ? choice.targetCardInstanceIds : []
+      ),
+      [shortFirst.instanceId, shortSelected.instanceId]
+    );
+    return { choiceId: shortSelected.instanceId };
+  });
+
+  assert.deepEqual(play(shortScenario, shortSource), { ok: true });
+  assert.deepEqual(shortFoe.deck, []);
+  assert.deepEqual(
+    shortFoe.discard.map((card) => card.instanceId).sort(),
+    [shortFirst, shortSelected].map((card) => card.instanceId).sort()
+  );
+
+  const emptyScenario = createGameScenario({
+    rootDir,
+    seed: 286035,
+    playerCount: 2,
+  });
+  const emptyFoe = emptyScenario.foes[0];
+  assert.ok(emptyFoe);
+  emptyFoe.deck.splice(0);
+  emptyFoe.discard.splice(0);
+  const emptySource = givenRuntimeCard(emptyScenario, {
+    definitionId: "esw2_dbg__legend_032",
+  });
+  let emptyCardChoiceRequests = 0;
+  chooseEffect(emptyScenario, (request) => {
+    if (String(request.effectId) !== "attack_reveal_and_play_foe_deck_card") {
+      return undefined;
+    }
+    if (
+      request.choices.some((choice) => choice.choiceKind === "playerTarget")
+    ) {
+      return { choiceId: emptyFoe.playerId };
+    }
+    emptyCardChoiceRequests += 1;
+    return undefined;
+  });
+
+  assert.deepEqual(play(emptyScenario, emptySource), { ok: true });
+  assert.equal(emptyCardChoiceRequests, 0);
+  assert.deepEqual(emptyFoe.deck, []);
+  assert.deepEqual(emptyFoe.discard, []);
+});
+
+test("card movement: legend_032 cleans all revealed cards after a nested death", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 286036,
+    playerCount: 2,
+  });
+  const foe = scenario.foes[0];
+  assert.ok(foe);
+  foe.deck.splice(0);
+  foe.discard.splice(0);
+  foe.life.current = 20;
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__legend_032",
+  });
+  const first = givenRuntimeCard(scenario, {
+    player: foe,
+    zone: "deck",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  const lethal = givenRuntimeCard(scenario, {
+    player: foe,
+    zone: "deck",
+    effects: [
+      {
+        effectId: "set_life",
+        timing: "onPlay",
+        lifeTotal: 0,
+        targetSelector: "chosenFoe",
+      },
+    ],
+  });
+  const third = givenRuntimeCard(scenario, {
+    player: foe,
+    zone: "deck",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  chooseEffect(scenario, (request) => {
+    if (String(request.effectId) === "set_life") {
+      return { choiceId: foe.playerId };
+    }
+    if (String(request.effectId) !== "attack_reveal_and_play_foe_deck_card") {
+      return undefined;
+    }
+    if (
+      request.choices.some((choice) => choice.choiceKind === "playerTarget")
+    ) {
+      return { choiceId: foe.playerId };
+    }
+    return { choiceId: lethal.instanceId };
+  });
+
+  const result = play(scenario, source);
+  assert.equal(result.ok, true);
+  assert.equal(
+    scenario.state.eventLog.some(
+      (event) => event.type === "playerDied" && event.playerId === foe.playerId
+    ),
+    true
+  );
+  assert.deepEqual(
+    foe.discard.map((card) => card.instanceId).sort(),
+    [first, lethal, third].map((card) => card.instanceId).sort()
+  );
+  assert.equal(
+    scenario.state.turn.temporaryCardControls.some(
+      (control) => control.cardInstanceId === lethal.instanceId
+    ),
+    false
+  );
+});

@@ -12574,6 +12574,13 @@ test("ТА САМАЯ Вялая Палочка позволяет отказа�
   const expectedWand = state.common.limpWandStack[0];
   assert.ok(expectedWand);
   state.common.limpWandStack.splice(1);
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-limp-wand-death-dwt"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_015"),
+      ownerId: "common",
+    },
+  ];
   state.effectChoiceStrategy = ({ effectId, choices }) => {
     if (effectId !== "attack_damage") {
       return undefined;

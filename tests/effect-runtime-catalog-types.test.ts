@@ -221,6 +221,7 @@ test("remaining Catalog families expose one local ID inventory each", () => {
     "attack_damage_equal_to_controlled_card_cost",
     "attack_destroy_top_legend_deck_then_damage_equal_cost",
     "attack_discard_cards",
+    "attack_reveal_and_play_foe_deck_card",
     "attack_gain_limp_wand",
     "attack_gain_status",
     "activation_attack_damage_per_controlled_card_type",

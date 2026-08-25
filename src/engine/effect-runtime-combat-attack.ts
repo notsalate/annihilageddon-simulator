@@ -57,6 +57,7 @@ export type CombatAttackEffectId =
   | "attack_damage_equal_to_controlled_card_cost"
   | "attack_destroy_top_legend_deck_then_damage_equal_cost"
   | "attack_discard_cards"
+  | "attack_reveal_and_play_foe_deck_card"
   | "attack_gain_limp_wand"
   | "attack_gain_status"
   | "activation_attack_damage_per_controlled_card_type"
@@ -75,6 +76,7 @@ export const combatAttackEffectIds = [
   "attack_damage_equal_to_controlled_card_cost",
   "attack_destroy_top_legend_deck_then_damage_equal_cost",
   "attack_discard_cards",
+  "attack_reveal_and_play_foe_deck_card",
   "attack_gain_limp_wand",
   "attack_gain_status",
   "activation_attack_damage_per_controlled_card_type",
@@ -272,6 +274,15 @@ export function createCombatAttackEffectDecoders(
       chooser: required(literal("target")),
       sourceZone: required(literal("hand")),
     }),
+    attack_reveal_and_play_foe_deck_card: defineDecoder(
+      "attack_reveal_and_play_foe_deck_card",
+      {
+        effectId: required(literal("attack_reveal_and_play_foe_deck_card")),
+        timing: optionalTiming,
+        amount: required(positiveInteger),
+        targetSelector: required(literal("chosenFoe")),
+      }
+    ),
     attack_gain_limp_wand: defineDecoder("attack_gain_limp_wand", {
       effectId: required(literal("attack_gain_limp_wand")),
       timing: optionalTiming,
@@ -681,6 +692,7 @@ type PlayerControlledEffectsAttackEffect =
   | PlayerControlledDeadWizardTokenEffectAttack
   | RuntimeEffectForId<"attack_gain_limp_wand">
   | RuntimeEffectForId<"attack_gain_status">
+  | RuntimeEffectForId<"attack_reveal_and_play_foe_deck_card">
   | RuntimeEffectForId<"attack_kill_and_replace_dead_wizard_token">;
 
 function resolvePlayerControlledEffectsAttack(
@@ -1362,6 +1374,21 @@ export function createCombatAttackEffectDefinitions(
       );
     },
   };
+  const attackRevealAndPlayFoeDeckCardHandler: EffectRuntimeHandler<
+    RuntimeEffectForId<"attack_reveal_and_play_foe_deck_card">
+  > = {
+    effectId: "attack_reveal_and_play_foe_deck_card",
+    execute(state, player, effect, source, services) {
+      return resolvePlayerControlledEffectsAttack(
+        state,
+        player,
+        effect,
+        source,
+        services,
+        collectAttackReplacementProfile
+      );
+    },
+  };
 
   return [
     {
@@ -1447,6 +1474,14 @@ export function createCombatAttackEffectDefinitions(
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
       handler: createUnsupportedEffectHandler("attack_discard_cards"),
+    },
+    {
+      effectId: "attack_reveal_and_play_foe_deck_card",
+      decoder: bindRuntimeEffectDecoder("attack_reveal_and_play_foe_deck_card"),
+      supportedTimings: attackTimings,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: attackRevealAndPlayFoeDeckCardHandler,
     },
     {
       effectId: "attack_gain_limp_wand",

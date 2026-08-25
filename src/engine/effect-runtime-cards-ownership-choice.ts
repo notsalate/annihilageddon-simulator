@@ -5,10 +5,12 @@ import {
   recordTurnPowerChanged,
 } from "./event-recorder.js";
 import {
+  findCardLocation,
   findPlayerPlayedThisTurnCard,
   listLegendMarketCards,
   movePhysicalCard,
   peekMainDeckCard,
+  removeCardFromLocation,
   removeTemporaryCardControl,
 } from "./control-ledger.js";
 import type { CardDefinition, CardKind } from "./data.js";
@@ -1705,6 +1707,143 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler<
     return { ok: true };
   },
 };
+
+export function executeRevealAndPlayFoeDeckCard(
+  state: GameState,
+  player: PlayerState,
+  foe: PlayerState,
+  effect: RuntimeEffectForId<"attack_reveal_and_play_foe_deck_card">,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): EffectExecutionResult {
+  const revealedCards: CardInstance[] = [];
+  for (let index = 0; index < effect.amount; index += 1) {
+    const card = foe.deck[0];
+    if (card === undefined) {
+      break;
+    }
+    const moved = services.moveCardToZonePreservingOwner(
+      state,
+      player,
+      card,
+      foe.discard,
+      `${foe.playerId}.discard`,
+      effect.effectId,
+      source
+    );
+    if (!moved) {
+      return {
+        ok: false,
+        error: `Cannot reveal foe deck card ${card.instanceId}`,
+      };
+    }
+    revealedCards.push(card);
+  }
+  for (const card of revealedCards) {
+    recordGameEvent(state, {
+      type: "effectCardRevealed",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      targetCardInstanceId: card.instanceId,
+      targetDefinitionId: card.definitionId,
+      effectId: effect.effectId,
+      sourceType: source.sourceType,
+    });
+  }
+
+  const ownerDiscardDestination = `${foe.playerId}.discard`;
+  const cleanup = (): EffectExecutionResult => {
+    for (const card of revealedCards) {
+      const location = findCardLocation(state, card.instanceId);
+      if (location === undefined) {
+        foe.discard.push(card);
+        removeTemporaryCardControl(state, card.instanceId);
+        continue;
+      }
+      if (location.zoneName !== ownerDiscardDestination) {
+        const moved = services.moveCardToZonePreservingOwner(
+          state,
+          player,
+          card,
+          foe.discard,
+          ownerDiscardDestination,
+          effect.effectId,
+          source
+        );
+        if (!moved) {
+          return {
+            ok: false,
+            error: `Cannot discard revealed foe card ${card.instanceId}`,
+          };
+        }
+      }
+      removeTemporaryCardControl(state, card.instanceId);
+    }
+    return { ok: true };
+  };
+
+  if (revealedCards.length === 0) {
+    return cleanup();
+  }
+
+  const choice = services.chooseEffectChoice(
+    state,
+    player,
+    source,
+    effect.effectId,
+    revealedCards.map((card) => ({
+      choiceKind: "cardTarget" as const,
+      choiceId: card.instanceId,
+      cards: [card],
+      amount: 0,
+    }))
+  );
+  const selectedCard =
+    choice?.choiceKind === "cardTarget"
+      ? revealedCards.find((card) => card.instanceId === choice.choiceId)
+      : undefined;
+
+  let playedResult: EffectExecutionResult = { ok: true };
+  if (selectedCard !== undefined) {
+    const removed = removeCardFromLocation(state, selectedCard.instanceId);
+    if (removed === undefined) {
+      playedResult = {
+        ok: false,
+        error: `Cannot play revealed foe card ${selectedCard.instanceId}`,
+      };
+    }
+    const ownerDiscard = {
+      zone: "ownerDiscardAfterResolution" as const,
+      ownerId: foe.playerId,
+    };
+    if (removed !== undefined) {
+      playedResult = services.playResolvedCard(state, player, selectedCard, {
+        nonOngoingDestination: ownerDiscard,
+        forceOngoingDiscard: ownerDiscard,
+      });
+    }
+    if (playedResult.ok) {
+      recordGameEvent(state, {
+        type: "effectFoeDeckCardPlayed",
+        playerId: player.playerId,
+        targetPlayerId: foe.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        targetCardInstanceId: selectedCard.instanceId,
+        targetDefinitionId: selectedCard.definitionId,
+        effectId: effect.effectId,
+        sourceType: source.sourceType,
+      });
+    }
+  }
+
+  const cleanupResult = cleanup();
+  if (!cleanupResult.ok) {
+    return cleanupResult;
+  }
+  return playedResult;
+}
 
 const returnDiscardToHandHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"return_discard_to_hand">

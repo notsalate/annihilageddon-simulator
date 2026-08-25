@@ -34,7 +34,10 @@ import {
   endDeadWizardTokenResolutionBoundary,
   enqueueDeadWizardTokenFace,
 } from "./dead-wizard-token-resolution.js";
-import { resolveMainMarketGainDestination } from "./effect-runtime-cards-ownership-choice.js";
+import {
+  executeRevealAndPlayFoeDeckCard,
+  resolveMainMarketGainDestination,
+} from "./effect-runtime-cards-ownership-choice.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
 import {
   resolveCardPlay,
@@ -1401,6 +1404,16 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
     );
   },
   executeOnHitEffect(state, attackingPlayer, targetPlayer, effect, source) {
+    if (effect.effectId === "attack_reveal_and_play_foe_deck_card") {
+      return executeRevealAndPlayFoeDeckCard(
+        state,
+        attackingPlayer,
+        targetPlayer,
+        effect,
+        source,
+        effectRuntimeServices
+      );
+    }
     if (effect.effectId === "attack_gain_limp_wand") {
       return gainLimpWandsFromCommonStack(
         state,
