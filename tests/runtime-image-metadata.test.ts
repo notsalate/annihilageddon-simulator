@@ -20,7 +20,7 @@ const rootDir = process.cwd();
 
 test("current runtime cards preserve source.image metadata", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
-  assert.equal(dataPack.cardDefinitions.size, 95);
+  assert.equal(dataPack.cardDefinitions.size, 96);
 
   for (const [cardId, definition] of dataPack.cardDefinitions) {
     assert.equal(typeof definition.source.image, "string");

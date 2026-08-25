@@ -1741,6 +1741,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   prepareEffectChoice,
   recordEffectChoiceSelected,
   chooseEffectChoice,
+  runControlledPowerMutation,
   dealDamage,
   killPlayer,
   replaceDeadWizardTokenAfterKill,
@@ -2400,7 +2401,110 @@ function resolvePlayerDeath(
   if (killCredit?.deadWizardTokenPolicy === "skip") {
     return { ok: true };
   }
+  if (killCredit !== undefined) {
+    const replacementResult = resolveDeadWizardTokenKillReplacement(
+      state,
+      killCredit,
+      player
+    );
+    if (replacementResult !== undefined) {
+      return replacementResult;
+    }
+  }
   return issueDeadWizardToken(state, player, killCredit?.killer.playerId);
+}
+
+function resolveDeadWizardTokenKillReplacement(
+  state: GameState,
+  killCredit: {
+    killer: PlayerState;
+    effectId: RuntimeEffectId;
+    source: EffectSourceContext;
+    deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy;
+  },
+  defeatedPlayer: PlayerState
+): EffectExecutionResult | undefined {
+  const pending = state.turn.deadWizardTokenKillReplacement;
+  if (
+    pending === undefined ||
+    pending.playerId !== killCredit.killer.playerId ||
+    pending.playerId === defeatedPlayer.playerId
+  ) {
+    return undefined;
+  }
+
+  state.turn.deadWizardTokenKillReplacement = undefined;
+  const replacementSource: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: pending.playerId,
+    cardInstanceId: pending.cardInstanceId,
+    definitionId: pending.definitionId,
+  };
+  const replacementChoice = chooseEffectChoice(
+    state,
+    killCredit.killer,
+    replacementSource,
+    "arm_dead_wizard_token_kill_replacement",
+    [
+      { choiceKind: "option", choiceId: "decline" },
+      { choiceKind: "option", choiceId: "apply" },
+    ]
+  );
+  if (replacementChoice?.choiceId !== "apply") {
+    return issueDeadWizardToken(
+      state,
+      defeatedPlayer,
+      killCredit.killer.playerId
+    );
+  }
+
+  const killerTokenResult = issueDeadWizardToken(state, killCredit.killer);
+  if (!killerTokenResult.ok || killerTokenResult.gameEnd !== undefined) {
+    return killerTokenResult;
+  }
+
+  const legendChoices: EffectChoice[] = state.common.legendMarket.map(
+    (card) => ({
+      choiceKind: "cardTarget" as const,
+      choiceId: card.instanceId,
+      cards: [card],
+      amount: 1,
+    })
+  );
+  if (legendChoices.length === 0) {
+    return { ok: true };
+  }
+
+  const legendChoice = chooseEffectChoice(
+    state,
+    killCredit.killer,
+    replacementSource,
+    "arm_dead_wizard_token_kill_replacement",
+    legendChoices
+  );
+  if (legendChoice?.choiceKind !== "cardTarget") {
+    return { ok: true };
+  }
+  const legend = state.common.legendMarket.find(
+    (card) => card.instanceId === legendChoice.cards[0]?.instanceId
+  );
+  if (legend === undefined) {
+    return {
+      ok: false,
+      error: "Chosen legend disappeared before Bratality reward",
+    };
+  }
+  const gainResult = moveGainedCardToPlayerDestination(
+    state,
+    killCredit.killer,
+    legend,
+    "discard"
+  );
+  if (!gainResult.ok) {
+    return gainResult;
+  }
+  return { ok: true };
 }
 
 export function gainDeadWizardToken(
@@ -2457,20 +2561,36 @@ function transferControlledDeadWizardTokenLike(
           error: `Dead wizard token ${tokenInstanceId} disappeared before transfer`,
         };
       }
-      const token = removeDeadWizardToken(
-        player,
-        tokenBeforeRemoval.instanceId
+      const movementResult = runControlledPowerMutation(
+        state,
+        () => state.activePlayerId,
+        () => {
+          const token = removeDeadWizardToken(
+            player,
+            tokenBeforeRemoval.instanceId
+          );
+          if (token === undefined) {
+            return {
+              ok: false as const,
+              error: `Dead wizard token ${tokenInstanceId} disappeared before transfer`,
+            };
+          }
+          token.ownerId = targetPlayer.playerId;
+          targetPlayer.deadWizardTokens.push(token);
+          enqueueDeadWizardTokenFace(state, targetPlayer, token);
+          return { ok: true as const };
+        },
+        (result) => result.ok
       );
-      if (token === undefined) {
-        return {
-          ok: false,
-          error: `Dead wizard token ${tokenInstanceId} disappeared before transfer`,
-        };
+      if (!movementResult.ok) {
+        return movementResult;
       }
-      token.ownerId = targetPlayer.playerId;
-      targetPlayer.deadWizardTokens.push(token);
-      enqueueDeadWizardTokenFace(state, targetPlayer, token);
-      return { ok: true };
+      if (!movementResult.value.ok) {
+        return movementResult.value;
+      }
+      return movementResult.gameEnd === undefined
+        ? { ok: true }
+        : { ok: true, gameEnd: movementResult.gameEnd };
     }
 
     if (choice.choiceKind !== "cardTarget") {
@@ -2489,23 +2609,39 @@ function transferControlledDeadWizardTokenLike(
           "Controlled dead wizard token-like card disappeared before transfer",
       };
     }
-    const moved = moveCardToPlayerZone(
+    const movementResult = runControlledPowerMutation(
       state,
-      card,
-      targetPlayer,
-      targetPlayer.permanents,
-      `${targetPlayer.playerId}.permanents`,
-      effectId,
-      source
+      () => state.activePlayerId,
+      () => {
+        const moved = moveCardToPlayerZone(
+          state,
+          card,
+          targetPlayer,
+          targetPlayer.permanents,
+          `${targetPlayer.playerId}.permanents`,
+          effectId,
+          source
+        );
+        if (!moved) {
+          return {
+            ok: false as const,
+            error: `Cannot transfer controlled dead wizard token-like card ${card.instanceId}`,
+          };
+        }
+        removeTemporaryCardControl(state, card.instanceId);
+        return { ok: true as const };
+      },
+      (result) => result.ok
     );
-    if (!moved) {
-      return {
-        ok: false,
-        error: `Cannot transfer controlled dead wizard token-like card ${card.instanceId}`,
-      };
+    if (!movementResult.ok) {
+      return movementResult;
     }
-    removeTemporaryCardControl(state, card.instanceId);
-    return { ok: true };
+    if (!movementResult.value.ok) {
+      return movementResult.value;
+    }
+    return movementResult.gameEnd === undefined
+      ? { ok: true }
+      : { ok: true, gameEnd: movementResult.gameEnd };
   });
 }
 

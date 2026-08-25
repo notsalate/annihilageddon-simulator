@@ -10,8 +10,17 @@ import type {
 } from "./effect-runtime-ongoing.js";
 import type { EffectiveValueModifierEffectPayloadMap } from "./effect-runtime-effective-value-modifier.js";
 import type { CardTypeEffectPayloadMap } from "./effect-runtime-card-type.js";
+import type { DwtInteractionEffectPayloadMap } from "./effect-runtime-dwt-interactions.js";
 import type { DeadWizardTokenEffectPayloadMap } from "./effect-runtime-dead-wizard-token.js";
 
+export type {
+  AddPowerIfNoControlledDeadWizardTokenRuntimeEffect,
+  AddPowerPerControlledDeadWizardTokenRuntimeEffect,
+  ArmDeadWizardTokenKillReplacementRuntimeEffect,
+  DwtInteractionEffectPayloadMap,
+  DwtInteractionEffectId,
+  OptionalDestroyControlledDeadWizardTokenRuntimeEffect,
+} from "./effect-runtime-dwt-interactions.js";
 export type {
   ResourceDrawEffectPayloadMap,
   GainChipsRuntimeEffect,
@@ -227,6 +236,7 @@ export const knownRuntimeEffectIds = [
   "add_power_per_controlled_object",
   "add_power_per_controlled_dead_wizard_token",
   "add_power_if_no_controlled_dead_wizard_token",
+  "arm_dead_wizard_token_kill_replacement",
   "add_power_per_controlled_permanent",
   "add_power_per_player_with_status",
   "attack_damage",
@@ -487,26 +497,6 @@ export type AddPowerPerControlledObjectRuntimeEffect = TimedEffect<
 > &
   PositiveAmount;
 
-export type AddPowerPerControlledDeadWizardTokenRuntimeEffect = TimedEffect<
-  "add_power_per_controlled_dead_wizard_token",
-  "onPlay"
-> & {
-  amountPerDeadWizardToken: number;
-};
-
-export type AddPowerIfNoControlledDeadWizardTokenRuntimeEffect = TimedEffect<
-  "add_power_if_no_controlled_dead_wizard_token",
-  "onPlay"
-> &
-  PositiveAmount;
-
-export type OptionalDestroyControlledDeadWizardTokenRuntimeEffect = TimedEffect<
-  "optional_destroy_controlled_dead_wizard_token",
-  "onPlay"
-> & {
-  optional: true;
-};
-
 export type AddPowerPerControlledPermanentRuntimeEffect = TimedEffect<
   "add_power_per_controlled_permanent",
   "onPlay"
@@ -563,13 +553,13 @@ export type FixtureAddPowerEqualToTargetCostRuntimeEffect =
     Targetable & { emptyChoice?: "fail" };
 
 export interface ImmediateEffectPayloadMap
-  extends ResourceDrawEffectPayloadMap, CardOwnershipChoiceEffectPayloadMap {
+  extends
+    ResourceDrawEffectPayloadMap,
+    CardOwnershipChoiceEffectPayloadMap,
+    DwtInteractionEffectPayloadMap {
   add_power: AddPowerRuntimeEffect;
   add_power_if_player_has_status: AddPowerIfPlayerHasStatusRuntimeEffect;
   add_power_per_controlled_object: AddPowerPerControlledObjectRuntimeEffect;
-  add_power_per_controlled_dead_wizard_token: AddPowerPerControlledDeadWizardTokenRuntimeEffect;
-  add_power_if_no_controlled_dead_wizard_token: AddPowerIfNoControlledDeadWizardTokenRuntimeEffect;
-  optional_destroy_controlled_dead_wizard_token: OptionalDestroyControlledDeadWizardTokenRuntimeEffect;
   add_power_per_controlled_permanent: AddPowerPerControlledPermanentRuntimeEffect;
   add_power_per_player_with_status: AddPowerPerPlayerWithStatusRuntimeEffect;
   gain_chips_equal_damage_dealt: GainChipsEqualDamageDealtRuntimeEffect;

@@ -21,6 +21,10 @@ export function forkGameState(source: GameState): GameState {
       ],
       rememberedDestroyedLegendCost: source.turn.rememberedDestroyedLegendCost,
       damagingAttackPlayerIds: [...source.turn.damagingAttackPlayerIds],
+      deadWizardTokenKillReplacement:
+        source.turn.deadWizardTokenKillReplacement === undefined
+          ? undefined
+          : { ...source.turn.deadWizardTokenKillReplacement },
       temporaryCardControls: ledger.temporaryCardControls,
     },
     players: ledger.players,

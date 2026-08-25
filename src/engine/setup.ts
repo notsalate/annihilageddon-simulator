@@ -174,6 +174,13 @@ export interface GameState {
     mainMarketCardHandReplacementSourceCardIds: string[];
     rememberedDestroyedLegendCost?: number | undefined;
     damagingAttackPlayerIds: PlayerId[];
+    deadWizardTokenKillReplacement?:
+      | {
+          playerId: PlayerId;
+          cardInstanceId: CardInstanceId;
+          definitionId: CardDefinitionId;
+        }
+      | undefined;
     temporaryCardControls: TemporaryCardControl[];
   };
   players: PlayerState[];
@@ -963,6 +970,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       mainMarketCardHandReplacementSourceCardIds: [],
       rememberedDestroyedLegendCost: undefined,
       damagingAttackPlayerIds: [],
+      deadWizardTokenKillReplacement: undefined,
       temporaryCardControls: [],
     },
     players,

@@ -17,6 +17,7 @@ import { createActivationEffectDecoders } from "./effect-runtime-activation.js";
 import { createCardOwnershipChoiceEffectDecoders } from "./effect-runtime-cards-ownership-choice.js";
 import { createCardTypeEffectDecoders } from "./effect-runtime-card-type.js";
 import { createDeadWizardTokenEffectDecoders } from "./effect-runtime-dead-wizard-token.js";
+import { createDwtInteractionEffectDecoders } from "./effect-runtime-dwt-interactions.js";
 import { createEffectiveValueModifierEffectDecoders } from "./effect-runtime-effective-value-modifier.js";
 import { createOngoingEffectDecoders } from "./effect-runtime-ongoing.js";
 import { createResourceDrawEffectDecoders } from "./effect-runtime-resources-draw.js";
@@ -564,6 +565,13 @@ const deadWizardTokenEffectDecoders = createDeadWizardTokenEffectDecoders({
   selectorTarget,
 });
 
+const dwtInteractionEffectDecoders = createDwtInteractionEffectDecoders({
+  defineDecoder,
+  required,
+  literal,
+  positiveInteger,
+});
+
 const setupEffectDecoders = createSetupEffectDecoders({
   defineDecoder,
   required,
@@ -659,34 +667,6 @@ const runtimeEffectDecoders: {
       effectId: required(literal("add_power_per_controlled_object")),
       timing: required(literal("onPlay")),
       amount: required(positiveInteger),
-    }
-  ),
-  add_power_per_controlled_dead_wizard_token: defineDecoder(
-    "add_power_per_controlled_dead_wizard_token",
-    {
-      effectId: required(literal("add_power_per_controlled_dead_wizard_token")),
-      timing: required(literal("onPlay")),
-      amountPerDeadWizardToken: required(positiveInteger),
-    }
-  ),
-  add_power_if_no_controlled_dead_wizard_token: defineDecoder(
-    "add_power_if_no_controlled_dead_wizard_token",
-    {
-      effectId: required(
-        literal("add_power_if_no_controlled_dead_wizard_token")
-      ),
-      timing: required(literal("onPlay")),
-      amount: required(positiveInteger),
-    }
-  ),
-  optional_destroy_controlled_dead_wizard_token: defineDecoder(
-    "optional_destroy_controlled_dead_wizard_token",
-    {
-      effectId: required(
-        literal("optional_destroy_controlled_dead_wizard_token")
-      ),
-      timing: required(literal("onPlay")),
-      optional: required(literal(true)),
     }
   ),
   add_power_per_controlled_permanent: defineDecoder(
@@ -831,6 +811,7 @@ const runtimeEffectDecoders: {
   ),
   ...cardOwnershipChoiceEffectDecoders,
   ...cardTypeEffectDecoders,
+  ...dwtInteractionEffectDecoders,
   ...deadWizardTokenEffectDecoders,
   fixture_add_power_equal_to_target_cost: defineDecoder(
     "fixture_add_power_equal_to_target_cost",

@@ -513,6 +513,7 @@ function endTurn(state: GameState): ActionResult {
   state.turn.mainMarketCardHandReplacementSourceCardIds = [];
   state.turn.rememberedDestroyedLegendCost = undefined;
   state.turn.damagingAttackPlayerIds = [];
+  state.turn.deadWizardTokenKillReplacement = undefined;
   state.turn.number += 1;
   const nextActivePlayer = getNextPlayer(state, activePlayer);
   const transitionResult = runControlledPowerMutation(

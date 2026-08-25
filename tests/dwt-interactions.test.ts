@@ -16,6 +16,7 @@ import {
   markTokenDefinitionId,
   markTokenInstanceId,
 } from "../src/domain/types.js";
+import { dispatchControlledCardOperation } from "../src/engine/trigger-dispatch.js";
 import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
@@ -267,7 +268,18 @@ test("Жница Любви передаёт физический ЖДК выб�
   );
   player.deadWizardTokens = [token];
   target.chips = 0;
-  state.turn.power = 1;
+  state.turn.power = 0;
+  state.turn.controlledPowerBonus = 0;
+  const passivePowerCard = addCardToHand(state, player, "esw2_dbg__legend_025");
+  player.hand = [];
+  player.permanents = [passivePowerCard];
+  assert.deepEqual(
+    dispatchControlledCardOperation(state, player, {
+      kind: "recalculateControlledPower",
+    }),
+    { ok: true }
+  );
+  assert.equal(state.turn.power, 1);
   state.effectChoiceStrategy = (request) => {
     const effectId = String(request.effectId);
     const choices = request.choices;
@@ -295,7 +307,7 @@ test("Жница Любви передаёт физический ЖДК выб�
     applyAction(state, { type: "playCard", cardInstanceId: card.instanceId }),
     { ok: true }
   );
-  assert.equal(state.turn.power, 5);
+  assert.equal(state.turn.power, 4);
   assert.equal(player.deadWizardTokens.includes(token), false);
   assert.equal(target.deadWizardTokens.includes(token), true);
   assert.equal(token.ownerId, target.playerId);
@@ -760,6 +772,260 @@ test("Мортал Комбо заменяет обычный ЖДК выбор�
   }
 });
 
+test("Браталити заменяет следующее обычное убийство и переносит награду убийце", () => {
+  const state = initializeGame({ rootDir, seed: 279001 });
+  const attacker = getActivePlayer(state);
+  const defender = state.players.find(
+    (candidate) => candidate.playerId !== attacker.playerId
+  );
+  assert.ok(defender);
+  attacker.hand = [];
+  defender.hand = [];
+  attacker.deadWizardTokens = [];
+  defender.deadWizardTokens = [];
+  defender.life.current = 5;
+  state.turn.power = 0;
+  const replacementToken = createDeadWizardTokenInStack(
+    "bratality-reward",
+    "esw2_dbg__dead_wizard_token_001"
+  );
+  state.common.deadWizardTokens.drawStack = [replacementToken];
+  const legend = state.common.legendMarket[0];
+  assert.ok(legend);
+  legend.marketChips = 2;
+
+  const replacementCard = addCardToHand(state, attacker, "esw2_dbg__main_032");
+  const attackCard = addCardToHand(state, attacker, "esw2_dbg__main_030");
+  state.effectChoiceStrategy = ({ effectId }) => {
+    if (effectId === "attack_damage") {
+      return { choiceId: defender.playerId };
+    }
+    if (effectId === "arm_dead_wizard_token_kill_replacement") {
+      return { choiceId: "apply" };
+    }
+    if (effectId === "dead_wizard_token_gain_limp_wands_per_discard_legend") {
+      return undefined;
+    }
+    return undefined;
+  };
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: replacementCard.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(state.turn.power, 4);
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: attackCard.instanceId,
+    }),
+    { ok: true }
+  );
+
+  assert.equal(defender.life.current, 15);
+  assert.deepEqual(defender.deadWizardTokens, []);
+  assert.deepEqual(attacker.deadWizardTokens, [replacementToken]);
+  assert.equal(attacker.chips, 2);
+  assert.equal(attacker.discard.includes(legend), true);
+  assert.equal(state.common.legendMarket.includes(legend), false);
+  assert.equal(state.turn.deadWizardTokenKillReplacement, undefined);
+  assert.equal(
+    state.eventLog.filter((event) => event.type === "playerDied").length,
+    1
+  );
+});
+
+test("Браталити расходует окно при отказе и не влияет на второе убийство", () => {
+  const state = initializeGame({ rootDir, seed: 279002 });
+  const attacker = getActivePlayer(state);
+  const defender = state.players.find(
+    (candidate) => candidate.playerId !== attacker.playerId
+  );
+  assert.ok(defender);
+  attacker.hand = [];
+  defender.hand = [];
+  attacker.deadWizardTokens = [];
+  defender.deadWizardTokens = [];
+  defender.life.current = 5;
+  state.turn.power = 0;
+  const stackTokens = [
+    createDeadWizardTokenInStack(
+      "bratality-decline-first",
+      "esw2_dbg__dead_wizard_token_001"
+    ),
+    createDeadWizardTokenInStack(
+      "bratality-decline-second",
+      "esw2_dbg__dead_wizard_token_001"
+    ),
+  ];
+  state.common.deadWizardTokens.drawStack = [...stackTokens];
+  const replacementCard = addCardToHand(state, attacker, "esw2_dbg__main_032");
+  const firstAttack = addCardToHandWithSuffix(
+    state,
+    attacker,
+    "esw2_dbg__main_030",
+    "first"
+  );
+  const secondAttack = addCardToHandWithSuffix(
+    state,
+    attacker,
+    "esw2_dbg__main_030",
+    "second"
+  );
+  let replacementChoices = 0;
+  state.effectChoiceStrategy = ({ effectId }) => {
+    if (effectId === "attack_damage") {
+      return { choiceId: defender.playerId };
+    }
+    if (effectId === "arm_dead_wizard_token_kill_replacement") {
+      replacementChoices += 1;
+      return { choiceId: "decline" };
+    }
+    return undefined;
+  };
+
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: replacementCard.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: firstAttack.instanceId,
+    }).ok,
+    true
+  );
+
+  assert.equal(replacementChoices, 1);
+  assert.equal(defender.deadWizardTokens.length, 1);
+  assert.equal(attacker.deadWizardTokens.length, 0);
+  assert.equal(state.turn.deadWizardTokenKillReplacement, undefined);
+
+  defender.life.current = 5;
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: secondAttack.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(replacementChoices, 1);
+  assert.equal(defender.deadWizardTokens.length, 2);
+  assert.equal(attacker.deadWizardTokens.length, 0);
+});
+
+test("Браталити выдаёт доступную часть награды при пустой стопке или рынке", () => {
+  for (const rewardCase of ["legendOnly", "tokenOnly"] as const) {
+    const state = initializeGame({
+      rootDir,
+      seed: rewardCase === "legendOnly" ? 279003 : 279004,
+    });
+    const attacker = getActivePlayer(state);
+    const defender = state.players.find(
+      (candidate) => candidate.playerId !== attacker.playerId
+    );
+    assert.ok(defender);
+    attacker.hand = [];
+    defender.hand = [];
+    attacker.deadWizardTokens = [];
+    defender.deadWizardTokens = [];
+    attacker.chips = 0;
+    defender.life.current = 5;
+    state.turn.power = 0;
+
+    const legend = state.common.legendMarket[0];
+    assert.ok(legend);
+    legend.marketChips = 2;
+    if (rewardCase === "legendOnly") {
+      state.common.deadWizardTokens.drawStack = [];
+    } else {
+      state.common.legendMarket = [];
+      state.common.deadWizardTokens.drawStack = [
+        createDeadWizardTokenInStack(
+          "bratality-token-only",
+          "esw2_dbg__dead_wizard_token_015"
+        ),
+      ];
+    }
+
+    const replacementCard = addCardToHand(
+      state,
+      attacker,
+      "esw2_dbg__main_032"
+    );
+    const attackCard = addCardToHand(state, attacker, "esw2_dbg__main_030");
+    state.effectChoiceStrategy = ({ effectId, choices }) => {
+      if (effectId === "attack_damage") {
+        return { choiceId: defender.playerId };
+      }
+      if (effectId !== "arm_dead_wizard_token_kill_replacement") {
+        return undefined;
+      }
+      const applyChoice = choices.find((choice) => choice.choiceId === "apply");
+      if (applyChoice !== undefined) {
+        return { choiceId: applyChoice.choiceId };
+      }
+      const legendChoice = choices.find(
+        (choice) => choice.choiceKind === "cardTarget"
+      );
+      return legendChoice === undefined
+        ? undefined
+        : { choiceId: legendChoice.choiceId };
+    };
+
+    assert.equal(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: replacementCard.instanceId,
+      }).ok,
+      true
+    );
+    assert.equal(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: attackCard.instanceId,
+      }).ok,
+      true
+    );
+
+    if (rewardCase === "legendOnly") {
+      assert.equal(attacker.deadWizardTokens.length, 0);
+      assert.equal(attacker.chips, 2);
+      assert.equal(attacker.discard.includes(legend), true);
+    } else {
+      assert.equal(attacker.deadWizardTokens.length, 1);
+      assert.equal(attacker.chips, 1);
+      assert.equal(attacker.discard.length, 0);
+    }
+    assert.equal(defender.deadWizardTokens.length, 0);
+    assert.equal(state.turn.deadWizardTokenKillReplacement, undefined);
+  }
+});
+
+test("Браталити истекает в конце хода", () => {
+  const state = initializeGame({ rootDir, seed: 279003 });
+  const attacker = getActivePlayer(state);
+  attacker.hand = [];
+  state.turn.power = 0;
+  const replacementCard = addCardToHand(state, attacker, "esw2_dbg__main_032");
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: replacementCard.instanceId,
+    }).ok,
+    true
+  );
+  assert.ok(state.turn.deadWizardTokenKillReplacement);
+  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+  assert.equal(state.turn.deadWizardTokenKillReplacement, undefined);
+});
+
 function chooseFamiliarDefenseAndExchange(
   state: GameState,
   defender: PlayerState,
@@ -810,6 +1076,25 @@ function addCardToHand(
   assert.ok(state.cardDefinitions.has(definitionId));
   const card: CardInstance = {
     instanceId: markCardInstanceId(`dwt-interactions-${definitionId}`),
+    definitionId: markCardDefinitionId(definitionId),
+    ownerId: player.playerId,
+    marketChips: 0,
+  };
+  player.hand.push(card);
+  return card;
+}
+
+function addCardToHandWithSuffix(
+  state: GameState,
+  player: PlayerState,
+  definitionId: string,
+  suffix: string
+): CardInstance {
+  assert.ok(state.cardDefinitions.has(definitionId));
+  const card: CardInstance = {
+    instanceId: markCardInstanceId(
+      `dwt-interactions-${definitionId}-${suffix}`
+    ),
     definitionId: markCardDefinitionId(definitionId),
     ownerId: player.playerId,
     marketChips: 0,
