@@ -126,6 +126,40 @@ test("failed defense branch restores committed payment, events, usage, and RNG",
   );
 });
 
+test("failed face-up topdeck defense restores the card without its transient marker", () => {
+  const state = initializeGame({ rootDir, seed: 47506 });
+  const attacker = mustGetPlayer(state, 0);
+  const defender = mustGetPlayer(state, 1);
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    defender,
+    "topdeckSelfFaceUp",
+    { branchEffects: rollbackBranchEffects }
+  );
+  const attack = redirectableAttack(attacker);
+  const services: AttackDefenseServices = {
+    chooseEffectChoice(_state, _player, _source, _effectId, choices) {
+      return choices.find(
+        (choice) =>
+          choice.choiceKind === "defense" && choice.card === defenseCard
+      );
+    },
+    executeDefenseEffects() {
+      return { ok: false, error: "fixture face-up branch failure" };
+    },
+  };
+
+  assert.deepEqual(resolveDefenseWindow(state, defender, attack, services), {
+    ok: false,
+    error: "fixture face-up branch failure",
+  });
+  assert.equal(defender.hand.includes(defenseCard), true);
+  assert.equal(defender.deck.includes(defenseCard), false);
+  assert.equal(defenseCard.faceUp, undefined);
+});
+
 test("declining defense avoids rollback snapshot and preserves observable state and RNG", () => {
   const state = createScenario(47500);
   const control = createScenario(47500);

@@ -3,6 +3,7 @@ import {
   listPhysicalCardLocations,
   movePhysicalCard,
 } from "./control-ledger.js";
+import { clearFaceUpState } from "./deck-lifecycle.js";
 import { installGameEventLog } from "./game-events.js";
 import { recordGameEvent } from "./event-recorder.js";
 import {
@@ -80,7 +81,11 @@ export type DefensePaymentPlanResult =
 
 interface LegalDefense {
   readonly card: CardInstance;
-  readonly destination: "discardSelf" | "topdeckSelf" | "keep";
+  readonly destination:
+    | "discardSelf"
+    | "topdeckSelf"
+    | "topdeckSelfFaceUp"
+    | "keep";
   readonly effect: AvoidAttackRuntimeEffect;
   readonly paymentPlan: DefensePaymentPlan;
 }
@@ -186,6 +191,7 @@ function restoreDefenseMutationSnapshot(
   snapshot: DefenseMutationSnapshot
 ): { readonly ok: true } | { readonly ok: false; readonly error: string } {
   for (const mutableObject of snapshot.mutableObjects) {
+    clearFaceUpState(mutableObject.object);
     Object.assign(mutableObject.object, structuredClone(mutableObject.value));
   }
   state.activePlayerId = snapshot.activePlayerId;
@@ -439,7 +445,7 @@ function moveDefenseCard(
   defendingPlayer: PlayerState,
   defense: {
     card: CardInstance;
-    destination: "discardSelf" | "topdeckSelf" | "keep";
+    destination: "discardSelf" | "topdeckSelf" | "topdeckSelfFaceUp" | "keep";
   }
 ): boolean {
   if (defense.destination === "keep") {
@@ -448,7 +454,8 @@ function moveDefenseCard(
   const destinationZoneName =
     defense.destination === "discardSelf"
       ? `${defendingPlayer.playerId}.discard`
-      : defense.destination === "topdeckSelf"
+      : defense.destination === "topdeckSelf" ||
+          defense.destination === "topdeckSelfFaceUp"
         ? `${defendingPlayer.playerId}.deck`
         : undefined;
   if (destinationZoneName === undefined) {
@@ -473,6 +480,10 @@ function moveDefenseCard(
       destination: "discard",
     });
     return true;
+  }
+
+  if (defense.destination === "topdeckSelfFaceUp") {
+    moveResult.move.card.faceUp = true;
   }
 
   recordGameEvent(state, {

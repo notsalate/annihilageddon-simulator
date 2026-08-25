@@ -5,6 +5,7 @@ import {
   applyAction,
   calculateEffectiveCardCost,
   calculateEffectivePlayerMaxLife,
+  forkGameState,
   initializeGame,
   listLegalActions,
   runMarketFlow,
@@ -47,8 +48,10 @@ import {
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 import {
   buildControlledObjectView,
+  movePhysicalCard,
   removeCardFromLocation,
 } from "../src/engine/control-ledger.js";
+import { drawDeckCard, shuffleDeck } from "../src/engine/deck-lifecycle.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -14766,4 +14769,149 @@ test("#270 main treasure defense cannot spend the last life", () => {
     ),
     true
   );
+});
+
+test("#271 main spell grants three power without entering the defense branch", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const definition =
+    currentRuntimeDataPack.cardDefinitions.get("esw2_dbg__main_042");
+  assert.ok(definition);
+  assert.deepEqual(
+    currentRuntimeDataPack.decks.mainDeck?.entries.find(
+      (entry) => entry.cardId === "esw2_dbg__main_042"
+    ),
+    { cardId: "esw2_dbg__main_042", count: 2 }
+  );
+
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 271001,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const player = mustGetPlayer(state, markPlayerId("player-1"));
+  state.activePlayerId = player.playerId;
+  player.hand = [];
+  const card = addRuntimeCardToHand(state, player, definition.cardId);
+  const powerBefore = state.turn.power;
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: card.instanceId }),
+    { ok: true }
+  );
+  assert.equal(state.turn.power, powerBefore + 3);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
+    false
+  );
+});
+
+test("#271 defense topdecks an observable face-up card and clears it after forked movement, shuffle, and draw", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const definition =
+    currentRuntimeDataPack.cardDefinitions.get("esw2_dbg__main_042");
+  assert.ok(definition);
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 271002,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const defender = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  defender.discard = [];
+  const defenseCard = addRuntimeCardToHand(state, defender, definition.cardId);
+  const defenderLifeBefore = defender.life.current;
+  state.effectChoiceStrategy = ({ effectId }) =>
+    effectId === "avoid_attack"
+      ? { choiceId: defenseCard.instanceId }
+      : undefined;
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 5,
+    target: { selector: "opponentPlayer" },
+  });
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }),
+    { ok: true }
+  );
+  assert.equal(defender.life.current, defenderLifeBefore);
+  assert.equal(defender.deck[0], defenseCard);
+  assert.equal(defenseCard.faceUp, true);
+  assert.equal(defender.hand.includes(defenseCard), false);
+
+  const fork = forkGameState(state);
+  const forkDefender = mustGetPlayer(fork, defender.playerId);
+  const forkDefenseCard = forkDefender.deck[0];
+  assert.ok(forkDefenseCard);
+  assert.notEqual(forkDefenseCard, defenseCard);
+  assert.equal(forkDefenseCard.faceUp, true);
+
+  const moved = movePhysicalCard(
+    fork,
+    forkDefenseCard.instanceId,
+    `${forkDefender.playerId}.discard`,
+    "back"
+  );
+  assert.equal(moved.ok, true);
+  assert.equal(forkDefenseCard.faceUp, undefined);
+
+  const shuffledFork = forkGameState(state);
+  const shuffledDefender = mustGetPlayer(shuffledFork, defender.playerId);
+  const shuffledDefenseCard = shuffledDefender.deck[0];
+  assert.ok(shuffledDefenseCard);
+  shuffleDeck(shuffledDefender.deck, shuffledFork.rng);
+  assert.equal(shuffledDefenseCard.faceUp, undefined);
+
+  const drawResult = drawDeckCard(defender.deck, defender.discard, state.rng);
+  assert.equal(drawResult.card, defenseCard);
+  assert.equal(defenseCard.faceUp, undefined);
+});
+
+test("#271 declining the face-up defense leaves hand and deck unchanged", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const definition =
+    currentRuntimeDataPack.cardDefinitions.get("esw2_dbg__main_042");
+  assert.ok(definition);
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 271003,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const defender = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  const defenseCard = addRuntimeCardToHand(state, defender, definition.cardId);
+  const deckBefore = [...defender.deck];
+  state.effectChoiceStrategy = ({ effectId }) =>
+    effectId === "avoid_attack" ? { choiceId: "decline" } : undefined;
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 1,
+    target: { selector: "opponentPlayer" },
+  });
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }),
+    { ok: true }
+  );
+  assert.equal(defender.hand.includes(defenseCard), true);
+  assert.deepEqual(defender.deck, deckBefore);
+  assert.equal(defenseCard.faceUp, undefined);
 });

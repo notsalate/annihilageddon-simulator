@@ -58,7 +58,7 @@ export function selectFixtureDefenseByInstanceId(
 export function addFixtureDefenseCardToHand(
   state: GameState,
   player: PlayerState,
-  destination: "discardSelf" | "topdeckSelf",
+  destination: "discardSelf" | "topdeckSelf" | "topdeckSelfFaceUp",
   options: FixtureDefenseOptions = {}
 ): CardInstance {
   const sequence = getNextFixtureDefenseSequence(state);

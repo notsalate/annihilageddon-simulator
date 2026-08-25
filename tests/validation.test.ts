@@ -3570,7 +3570,9 @@ test("executable data-pack validation rejects redirect defense branches", () => 
     result.errors.some((error) => {
       return (
         error.includes("fixture-unsupported-redirect-defense") &&
-        error.includes("destination must be one of discardSelf, topdeckSelf")
+        error.includes(
+          "destination must be one of discardSelf, topdeckSelf, topdeckSelfFaceUp"
+        )
       );
     })
   );

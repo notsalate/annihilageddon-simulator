@@ -34,7 +34,11 @@ import {
   type CardPlayResolutionServices,
 } from "./card-play-resolution.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-value-runtime.js";
-import { drawDeckCard, refillDeckFromDiscard } from "./deck-lifecycle.js";
+import {
+  clearFaceUpState,
+  drawDeckCard,
+  refillDeckFromDiscard,
+} from "./deck-lifecycle.js";
 import {
   recordCardMoved,
   recordDeckReshuffle,
@@ -823,6 +827,7 @@ export function moveGainedCardToPlayerDestination(
     return destinationResult;
   }
   const destination = destinationResult.destination;
+  clearFaceUpState(card);
 
   if (destination === "deckTop") {
     player.deck.unshift(card);

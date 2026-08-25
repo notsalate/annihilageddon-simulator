@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_042",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_042.json",
+    "image": "assets/cards/spell/Заклинание. Ламповое желание.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_042.md"
+  },
+  "visible": {
+    "nameRu": "Ламповое желание",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": ["spell"],
+    "textRu": "+3 мощь\nЗащита: можешь положить эту карту на верх своей колоды лицевой стороной вверх, чтобы избежать атак",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["spell"],
+    "cost": 5,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 3 },
+      {
+        "effectId": "avoid_attack",
+        "timing": "onDefense",
+        "destination": "topdeckSelfFaceUp"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}
