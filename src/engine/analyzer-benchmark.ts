@@ -10,6 +10,7 @@ import {
   getBestMovePolicy,
   type BestMoveCriterionId,
 } from "./best-move-policies.js";
+import { stableAction } from "./action-format.js";
 import type { LoadedDataPack } from "./data.js";
 import {
   elapsedMs,
@@ -22,7 +23,6 @@ import {
   type BenchmarkEnvironmentFingerprint,
 } from "./benchmark-support.js";
 import { initializeGame } from "./setup.js";
-import type { LegalAction } from "./actions.js";
 import { PERFORMANCE_EPOCH } from "./performance-epoch.js";
 import { intakeRuntimeData } from "./runtime-data-intake.js";
 
@@ -512,31 +512,6 @@ function toAnalyzerLineFingerprint(
       ),
     })),
   };
-}
-
-function stableAction(action: LegalAction): Record<string, string> {
-  switch (action.type) {
-    case "playCard":
-    case "activatePermanent":
-      return { type: action.type, cardInstanceId: action.cardInstanceId };
-    case "activateWizardProperty":
-      return { type: action.type, tokenInstanceId: action.tokenInstanceId };
-    case "setCardEffectiveType":
-      return {
-        type: action.type,
-        cardInstanceId: action.cardInstanceId,
-        cardType: action.cardType,
-        enabled: action.enabled ? "true" : "false",
-      };
-    case "buyMarketCard":
-      return {
-        type: action.type,
-        cardInstanceId: action.cardInstanceId,
-        source: action.source,
-      };
-    case "endTurn":
-      return { type: action.type };
-  }
 }
 
 function medianAnalyzerMetrics(
