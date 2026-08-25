@@ -2071,6 +2071,40 @@ function buildLegalTargetChoices(
       };
     }
 
+    if (targetSelector === "activePlayer") {
+      const activePlayer = state.players.find(
+        (candidate) => candidate.playerId === state.activePlayerId
+      );
+      return activePlayer === undefined
+        ? { ok: false, error: `Missing active player ${state.activePlayerId}` }
+        : {
+            ok: true,
+            choices: [{ choiceType: "player" as const, player: activePlayer }],
+          };
+    }
+
+    if (targetSelector === "opponentPlayer") {
+      return {
+        ok: true,
+        choices: state.players
+          .filter((candidate) => candidate.playerId !== player.playerId)
+          .map((candidate) => ({
+            choiceType: "player" as const,
+            player: candidate,
+          })),
+      };
+    }
+
+    if (targetSelector === "anyPlayer") {
+      return {
+        ok: true,
+        choices: state.players.map((candidate) => ({
+          choiceType: "player" as const,
+          player: candidate,
+        })),
+      };
+    }
+
     return {
       ok: false,
       error: `Unsupported target selector ${asString(targetSelector)}`,

@@ -12903,10 +12903,20 @@ test("set_life до нуля проводит смерть через общий
   const state = initializeGame({ rootDir, seed: 301003 });
   const player = mustGetPlayer(state, state.activePlayerId);
   player.wizardProperties = [];
+  player.life.max = 20;
+  player.life.current = 20;
   for (const targetPlayer of state.players) {
     targetPlayer.wizardProperties = [];
   }
-  state.common.deadWizardTokens.drawStack.splice(1);
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-set-life-neutral-dwt"),
+      definitionId: markTokenDefinitionId(
+        "esw2_dbg__dead_wizard_token_neutral"
+      ),
+      ownerId: "common",
+    },
+  ];
   const setLife = addFixtureCardToActiveHand(state, {
     effectId: "set_life",
     timing: "onPlay",

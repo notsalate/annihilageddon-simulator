@@ -561,6 +561,16 @@ test("attack, defense and replacement effects use exact family policies", () => 
       sourceKind: "card",
     },
     {
+      effectId: "attack_gain_status",
+      payload: {
+        effectId: "attack_gain_status",
+        timing: "activation",
+        statusId: "dingler",
+        targetSelector: "anyPlayer",
+      },
+      sourceKind: "card",
+    },
+    {
       effectId: "avoid_attack",
       payload: {
         effectId: "avoid_attack",
@@ -758,6 +768,7 @@ test("activation and ongoing families use exact timing and card-source policies"
     },
   ] as const;
   const supportedEffectIds = [
+    "activation_destroy_self_then_destroy_own_cards",
     "conditional_activation_destroy_own_cards",
     "conditional_activation_gain_chips",
     "ongoing_add_power_when_playing_wand",

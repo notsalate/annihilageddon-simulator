@@ -1,5 +1,6 @@
 import { createUnsupportedEffectHandler } from "./effect-runtime-family-support.js";
 import { countControlledCardsOfType } from "./card-type-runtime.js";
+import { getControlledCards } from "./control-ledger.js";
 import {
   recordEffectChipsChanged,
   recordGameEvent,
@@ -11,6 +12,7 @@ import type {
   RuntimeEffectCondition,
   RuntimeEffectForId,
 } from "./runtime-effect.js";
+import type { CardInstance } from "./setup.js";
 import type { EffectChoice } from "./effect-runtime-registry.js";
 import {
   allEffectRuntimeModes,
@@ -174,7 +176,11 @@ export function createActivationEffectDecoders(
             ? { ok: true, value: raw }
             : { ok: false, errors: [`${label} must be a non-negative integer`] }
         ),
-        maxAmount: required(positiveInteger),
+        maxAmount: required((label, raw) =>
+          typeof raw === "number" && Number.isSafeInteger(raw) && raw >= 0
+            ? { ok: true, value: raw }
+            : { ok: false, errors: [`${label} must be a non-negative integer`] }
+        ),
         destroySelf: required(literal(true)),
       }
     ),
@@ -279,6 +285,132 @@ export function createActivationEffectDefinitions(
         return { ok: true };
       },
     };
+  const activationDestroySelfThenDestroyOwnCardsHandler: EffectRuntimeHandler<ActivationDestroySelfThenDestroyOwnCardsRuntimeEffect> =
+    {
+      effectId: "activation_destroy_self_then_destroy_own_cards",
+      execute(state, player, effect, source, services) {
+        const sourceCard = getControlledCards(state, player).find(
+          (card) => card.instanceId === source.cardInstanceId
+        );
+        if (sourceCard === undefined) {
+          return {
+            ok: false,
+            error: `Cannot find source card ${source.cardInstanceId} for self-destruction`,
+          };
+        }
+
+        const destroyCard = (card: CardInstance) => {
+          const destination = services.getDestroyDestination(state, card);
+          if (!destination.ok) return destination;
+          const moved = services.moveCardToZonePreservingOwner(
+            state,
+            player,
+            card,
+            destination.zone,
+            destination.zoneName,
+            effect.effectId,
+            source
+          );
+          if (!moved) {
+            return {
+              ok: false as const,
+              error: `Cannot move card ${card.instanceId}`,
+            };
+          }
+          recordGameEvent(state, {
+            type: "effectCardDestroyed",
+            playerId: player.playerId,
+            cardInstanceId: source.cardInstanceId,
+            definitionId: source.definitionId,
+            targetCardInstanceId: card.instanceId,
+            targetDefinitionId: card.definitionId,
+            effectId: effect.effectId,
+            sourceType: source.sourceType,
+          });
+          return { ok: true as const };
+        };
+
+        const sourceDestroyed = destroyCard(sourceCard);
+        if (!sourceDestroyed.ok) return sourceDestroyed;
+
+        const maximumAvailable = Math.min(effect.maxAmount, player.hand.length);
+        if (effect.minAmount > maximumAvailable) {
+          return {
+            ok: false,
+            error: `Cannot destroy at least ${effect.minAmount} hand cards`,
+          };
+        }
+        const handOrder = [...player.hand];
+        let lastSelectedHandOrderIndex = -1;
+
+        const amountChoices: EffectChoice[] = Array.from(
+          { length: maximumAvailable - effect.minAmount + 1 },
+          (_, index) => ({
+            choiceKind: "option" as const,
+            choiceId: `amount_${effect.minAmount + index}`,
+          })
+        );
+        const amountChoice = services.chooseEffectChoice(
+          state,
+          player,
+          source,
+          effect.effectId,
+          amountChoices
+        );
+        const amount = Number.parseInt(
+          amountChoice?.choiceId.slice("amount_".length) ??
+            `amount_${effect.minAmount}`,
+          10
+        );
+        if (!Number.isSafeInteger(amount) || amount < effect.minAmount) {
+          return {
+            ok: false,
+            error: `Invalid hand destruction amount ${amountChoice?.choiceId ?? "undefined"}`,
+          };
+        }
+
+        for (let index = 0; index < amount; index += 1) {
+          const cardChoices: EffectChoice[] = handOrder
+            .map((card, handIndex) => ({ card, handIndex }))
+            .filter(
+              ({ card, handIndex }) =>
+                handIndex > lastSelectedHandOrderIndex &&
+                player.hand.includes(card)
+            )
+            .map(({ card }) => ({
+              choiceKind: "cardTarget" as const,
+              choiceId: `destroy_${card.instanceId}`,
+              cards: [card],
+              amount: 1,
+            }));
+          const cardChoice = services.chooseEffectChoice(
+            state,
+            player,
+            source,
+            effect.effectId,
+            cardChoices
+          );
+          if (cardChoice?.choiceKind !== "cardTarget") {
+            return {
+              ok: false,
+              error: "A hand card must be selected for destruction",
+            };
+          }
+          const target = cardChoice.cards[0];
+          if (target === undefined || !player.hand.includes(target)) {
+            return {
+              ok: false,
+              error: "Selected hand card is no longer available",
+            };
+          }
+          lastSelectedHandOrderIndex = handOrder.indexOf(target);
+          const targetDestroyed = destroyCard(target);
+          if (!targetDestroyed.ok) return targetDestroyed;
+        }
+
+        return { ok: true };
+      },
+    };
   const activationDoubleTurnPowerHandler: EffectRuntimeHandler<ActivationDoubleTurnPowerRuntimeEffect> =
     {
       effectId: "activation_double_turn_power",
@@ -374,9 +506,7 @@ export function createActivationEffectDefinitions(
       supportedTimings,
       supportedModes,
       supportedSourceKinds,
-      handler: createUnsupportedEffectHandler(
-        "activation_destroy_self_then_destroy_own_cards"
-      ),
+      handler: activationDestroySelfThenDestroyOwnCardsHandler,
     },
     {
       effectId: "activation_double_turn_power",

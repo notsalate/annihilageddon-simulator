@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_033",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_033.json",
+    "image": "assets/cards/spell/Заклинание. Волшебные отходы.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_033.md"
+  },
+  "visible": {
+    "nameRu": "Волшебные отходы",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": ["spell"],
+    "textRu": "Постоянка:\n[Символ активации]: Уничтожь эту карту: уничтожь 2 или меньше карт с руки.",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["spell"],
+    "cost": 3,
+    "victoryPoints": 1,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "activation_destroy_self_then_destroy_own_cards",
+        "timing": "activation",
+        "chooser": "controller",
+        "activationLimit": "oncePerTurnWhileControlled",
+        "sourceZones": "hand",
+        "minAmount": 0,
+        "maxAmount": 2,
+        "destroySelf": true
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_031",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_031.json",
+    "image": "assets/cards/creature/Тварь. Баклажаб.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_031.md"
+  },
+  "visible": {
+    "nameRu": "Баклажаб",
+    "cost": 2,
+    "victoryPoints": 2,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "textRu": "Постоянка:\n[Символ активации]: Уничтожь эту карту: атака: выбранный колдун становится лошарой.",
+    "markers": ["attack", "ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "cost": 2,
+    "victoryPoints": 2,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "activation_destroy_self_then_destroy_own_cards",
+        "timing": "activation",
+        "chooser": "controller",
+        "activationLimit": "oncePerTurnWhileControlled",
+        "sourceZones": "hand",
+        "minAmount": 0,
+        "maxAmount": 0,
+        "destroySelf": true
+      },
+      {
+        "effectId": "attack_gain_status",
+        "timing": "activation",
+        "statusId": "dingler",
+        "targetSelector": "anyPlayer"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

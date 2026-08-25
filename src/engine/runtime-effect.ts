@@ -578,7 +578,7 @@ export type AttackGainLimpWandRuntimeEffect =
     };
 export type AttackGainStatusRuntimeEffect = TimedEffect<
   "attack_gain_status",
-  "onPlay"
+  "activation" | "onPlay"
 > &
   Targetable & { statusId: "dingler" };
 export interface AvoidAttackRuntimeEffect extends TimedEffect<

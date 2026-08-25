@@ -223,7 +223,7 @@ export function createCombatAttackEffectDecoders(
       "attack_gain_status",
       {
         effectId: required(literal("attack_gain_status")),
-        timing: required(literal("onPlay")),
+        timing: required(oneOf(["activation", "onPlay"] as const)),
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         statusId: required(literal("dingler")),
@@ -1231,7 +1231,7 @@ export function createCombatAttackEffectDefinitions(
     {
       effectId: "attack_gain_status",
       decoder: bindRuntimeEffectDecoder("attack_gain_status"),
-      supportedTimings: ["onPlay"],
+      supportedTimings: ["activation", "onPlay"],
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
       handler: attackGainStatusHandler(collectAttackReplacementProfile),

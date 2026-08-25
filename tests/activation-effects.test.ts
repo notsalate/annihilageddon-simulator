@@ -7,6 +7,10 @@ import {
   type CardInstance,
 } from "../src/index.js";
 import {
+  addFixtureDefenseCardToHand,
+  selectFirstFixtureDefense,
+} from "./helpers/defense-fixtures.js";
+import {
   createGameScenario,
   givenRuntimeCard,
   play,
@@ -238,5 +242,198 @@ test("activation-effects #265 attacks every foe for each controlled effective cr
         event.amount === 6
     ).length,
     scenario.foes.length
+  );
+});
+
+test("activation-effects #266 destroys the source before choosing up to two hand cards", () => {
+  const scenario = createGameScenario({ rootDir, seed: 266033 });
+  scenario.activePlayer.hand = [];
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_033",
+  });
+  const firstTarget = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_012",
+  });
+  const secondTarget = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_014",
+  });
+  const untouchedTarget = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_034",
+  });
+
+  assert.equal(play(scenario, source).ok, true);
+  scenario.state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId !== "activation_destroy_self_then_destroy_own_cards") {
+      return undefined;
+    }
+    const amountChoice = choices.find(
+      (choice) => choice.choiceId === "amount_2"
+    );
+    if (amountChoice !== undefined) {
+      return { choiceId: amountChoice.choiceId };
+    }
+    const target = [firstTarget, secondTarget].find((candidate) =>
+      choices.some(
+        (choice) =>
+          choice.choiceKind === "cardTarget" &&
+          choice.targetCardInstanceIds.includes(candidate.instanceId)
+      )
+    );
+    const targetChoice = choices.find(
+      (choice) =>
+        choice.choiceKind === "cardTarget" &&
+        target !== undefined &&
+        choice.targetCardInstanceIds.includes(target.instanceId)
+    );
+    return targetChoice === undefined
+      ? undefined
+      : { choiceId: targetChoice.choiceId };
+  };
+
+  assert.equal(
+    applyAction(scenario.state, {
+      type: "activatePermanent",
+      cardInstanceId: source.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(scenario.state.common.destroyedPile.includes(source), true);
+  assert.equal(scenario.state.common.destroyedPile.includes(firstTarget), true);
+  assert.equal(
+    scenario.state.common.destroyedPile.includes(secondTarget),
+    true
+  );
+  assert.equal(scenario.activePlayer.hand.includes(untouchedTarget), true);
+  assert.equal(findActivation(scenario, source), undefined);
+  assert.equal(
+    applyAction(scenario.state, {
+      type: "activatePermanent",
+      cardInstanceId: source.instanceId,
+    }).ok,
+    false
+  );
+});
+
+test("activation-effects #266 heals after declined status removal and caps at effective max life", () => {
+  const declinedScenario = createGameScenario({ rootDir, seed: 266006 });
+  declinedScenario.activePlayer.hand = [];
+  const declinedSource = givenRuntimeCard(declinedScenario, {
+    definitionId: "esw2_dbg__main_006",
+  });
+  declinedScenario.activePlayer.statuses.push({
+    instanceId: "fixture-dingler-declined",
+    statusId: "dingler",
+    ownerId: declinedScenario.activePlayer.playerId,
+    effects: [],
+  });
+  declinedScenario.activePlayer.life.current = 10;
+  assert.equal(play(declinedScenario, declinedSource).ok, true);
+  declinedScenario.state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "remove_status"
+      ? {
+          choiceId:
+            choices.find((choice) => choice.choiceId === "decline")?.choiceId ??
+            "",
+        }
+      : undefined;
+  assert.equal(
+    applyAction(declinedScenario.state, {
+      type: "activatePermanent",
+      cardInstanceId: declinedSource.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(declinedScenario.activePlayer.life.current, 17);
+  assert.equal(declinedScenario.activePlayer.statuses.length, 1);
+
+  const cappedScenario = createGameScenario({ rootDir, seed: 266007 });
+  cappedScenario.activePlayer.hand = [];
+  const cappedSource = givenRuntimeCard(cappedScenario, {
+    definitionId: "esw2_dbg__main_006",
+  });
+  cappedScenario.activePlayer.statuses.push({
+    instanceId: "fixture-dingler-applied",
+    statusId: "dingler",
+    ownerId: cappedScenario.activePlayer.playerId,
+    effects: [],
+  });
+  cappedScenario.activePlayer.life.max = 20;
+  cappedScenario.activePlayer.life.current = 18;
+  assert.equal(play(cappedScenario, cappedSource).ok, true);
+  cappedScenario.state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "remove_status"
+      ? {
+          choiceId:
+            choices.find((choice) => choice.choiceId === "apply")?.choiceId ??
+            "",
+        }
+      : undefined;
+  assert.equal(
+    applyAction(cappedScenario.state, {
+      type: "activatePermanent",
+      cardInstanceId: cappedSource.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(cappedScenario.activePlayer.life.current, 20);
+  assert.equal(cappedScenario.activePlayer.statuses.length, 0);
+});
+
+test("activation-effects #266 applies Dingler only after an unavoided attack and allows the active wizard", () => {
+  const selfTargetScenario = createGameScenario({ rootDir, seed: 266031 });
+  selfTargetScenario.activePlayer.hand = [];
+  selfTargetScenario.activePlayer.permanents = [];
+  const selfTargetSource = givenRuntimeCard(selfTargetScenario, {
+    definitionId: "esw2_dbg__main_031",
+  });
+  assert.equal(play(selfTargetScenario, selfTargetSource).ok, true);
+  selfTargetScenario.state.effectChoiceStrategy = ({ effectId }) =>
+    effectId === "attack_gain_status"
+      ? { choiceId: selfTargetScenario.activePlayer.playerId }
+      : undefined;
+  assert.equal(
+    applyAction(selfTargetScenario.state, {
+      type: "activatePermanent",
+      cardInstanceId: selfTargetSource.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(selfTargetScenario.activePlayer.statuses.length, 1);
+  assert.equal(
+    selfTargetScenario.state.common.destroyedPile.includes(selfTargetSource),
+    true
+  );
+
+  const avoidedScenario = createGameScenario({ rootDir, seed: 266032 });
+  avoidedScenario.activePlayer.hand = [];
+  const avoidedSource = givenRuntimeCard(avoidedScenario, {
+    definitionId: "esw2_dbg__main_031",
+  });
+  const target = avoidedScenario.foes[0];
+  assert.ok(target);
+  target.hand = [];
+  target.permanents = [];
+  addFixtureDefenseCardToHand(avoidedScenario.state, target, "discardSelf");
+  assert.equal(play(avoidedScenario, avoidedSource).ok, true);
+  avoidedScenario.state.effectChoiceStrategy = (request) => {
+    if (request.effectId === "attack_gain_status") {
+      return { choiceId: target.playerId };
+    }
+    if (request.effectId === "avoid_attack") {
+      return selectFirstFixtureDefense(request);
+    }
+    return undefined;
+  };
+  assert.equal(
+    applyAction(avoidedScenario.state, {
+      type: "activatePermanent",
+      cardInstanceId: avoidedSource.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(target.statuses.length, 0);
+  assert.equal(
+    avoidedScenario.state.common.destroyedPile.includes(avoidedSource),
+    true
   );
 });
