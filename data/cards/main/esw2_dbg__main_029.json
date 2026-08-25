@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_029",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_029.json",
+    "image": "assets/cards/wizard-card/Волшебник. Шериф Мухтар.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_029.md"
+  },
+  "visible": {
+    "nameRu": "Шериф Мухтар",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "textRu": "Возьми 2 карты\nЗащита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 2 карты.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "cost": 6,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "draw_cards", "timing": "onPlay", "amount": 2 },
+      {
+        "effectId": "avoid_attack",
+        "timing": "onDefense",
+        "destination": "discardSelf",
+        "branchEffects": [
+          { "effectId": "draw_cards", "timing": "onDefense", "amount": 2 }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

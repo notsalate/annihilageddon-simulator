@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_013",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_013.json",
+    "image": "assets/cards/treasure/Сокровище. Идол счастливой сучки.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_013.md"
+  },
+  "visible": {
+    "nameRu": "Идол счастливой сучки",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "textRu": "+2 мощи\nЗащита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 1 карту и получи 1 чипсину",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "cost": 4,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 2 },
+      {
+        "effectId": "avoid_attack",
+        "timing": "onDefense",
+        "destination": "discardSelf",
+        "branchEffects": [
+          { "effectId": "draw_cards", "timing": "onDefense", "amount": 1 },
+          { "effectId": "gain_chips", "timing": "onDefense", "amount": 1 }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

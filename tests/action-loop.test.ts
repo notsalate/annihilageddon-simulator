@@ -14098,3 +14098,110 @@ test("ownerless Market Flow не назначает убийцу для ЖДК 0
     false
   );
 });
+
+test("#268 runtime defenses preserve play effects and resolve defense rewards", () => {
+  const cases = [
+    {
+      definitionId: "esw2_dbg__main_013",
+      playPower: 2,
+      playDraw: 0,
+      playChips: 0,
+      defenseDraw: 1,
+      defenseChips: 1,
+    },
+    {
+      definitionId: "esw2_dbg__main_029",
+      playPower: 0,
+      playDraw: 2,
+      playChips: 0,
+      defenseDraw: 2,
+      defenseChips: 0,
+    },
+    {
+      definitionId: "esw2_dbg__main_054",
+      playPower: 1,
+      playDraw: 0,
+      playChips: 0,
+      defenseDraw: 0,
+      defenseChips: 2,
+    },
+    {
+      definitionId: "esw2_dbg__legend_022",
+      playPower: 0,
+      playDraw: 2,
+      playChips: 2,
+      defenseDraw: 2,
+      defenseChips: 2,
+    },
+  ] as const;
+
+  for (const [index, cardCase] of cases.entries()) {
+    const state = initializeGame({ rootDir, seed: 268000 + index });
+    const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+    const defender = mustGetPlayer(state, markPlayerId("player-2"));
+    state.activePlayerId = attacker.playerId;
+
+    const powerBeforePlay = state.turn.power;
+    const attackerHandBeforePlay = attacker.hand.length;
+    const attackerDeckBeforePlay = attacker.deck.length;
+    const attackerChipsBeforePlay = attacker.chips;
+    const playCard = addRuntimeCardToHand(
+      state,
+      attacker,
+      cardCase.definitionId
+    );
+    assert.deepEqual(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: playCard.instanceId,
+      }),
+      { ok: true }
+    );
+    assert.equal(state.turn.power, powerBeforePlay + cardCase.playPower);
+    assert.equal(
+      attacker.deck.length,
+      attackerDeckBeforePlay - cardCase.playDraw
+    );
+    assert.equal(
+      attacker.hand.length,
+      attackerHandBeforePlay + cardCase.playDraw
+    );
+    assert.equal(attacker.chips, attackerChipsBeforePlay + cardCase.playChips);
+
+    defender.hand.splice(0);
+    const defenseCard = addRuntimeCardToHand(
+      state,
+      defender,
+      cardCase.definitionId
+    );
+    const defenderDeckBeforeDefense = defender.deck.length;
+    const defenderChipsBeforeDefense = defender.chips;
+    const defenderLifeBeforeDefense = defender.life.current;
+    state.effectChoiceStrategy = ({ effectId }) =>
+      effectId === "avoid_attack"
+        ? { choiceId: defenseCard.instanceId }
+        : undefined;
+    const attackCardId = addFixtureCardToActiveHand(state, {
+      effectId: "attack_damage",
+      timing: "onPlay",
+      amount: 5,
+      target: { selector: "opponentPlayer" },
+    });
+
+    assert.deepEqual(
+      applyAction(state, { type: "playCard", cardInstanceId: attackCardId }),
+      { ok: true }
+    );
+    assert.equal(defender.life.current, defenderLifeBeforeDefense);
+    assert.equal(defender.discard.includes(defenseCard), true);
+    assert.equal(
+      defender.deck.length,
+      defenderDeckBeforeDefense - cardCase.defenseDraw
+    );
+    assert.equal(defender.hand.length, cardCase.defenseDraw);
+    assert.equal(
+      defender.chips,
+      defenderChipsBeforeDefense + cardCase.defenseChips
+    );
+  }
+});
