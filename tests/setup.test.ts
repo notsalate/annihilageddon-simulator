@@ -10,7 +10,6 @@ import {
   type LoadedDataPack,
   type RuntimeEffect,
 } from "../src/index.js";
-import { cardMatchesTypeForPlayer } from "../src/engine/card-type-runtime.js";
 import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
 import {
   markCardDefinitionId,
@@ -154,9 +153,16 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
     dataPack,
     playerCount: 2,
     seed: 81203,
-    familiarSetupChoicePolicy: ({ phase, candidateDefinitionIds }) => {
+    familiarSetupChoicePolicy: ({ phase, candidateInstanceIds }) => {
       setupChoicePhases.push(phase);
-      return phase === "thirdFamiliar" ? candidateDefinitionIds.length - 1 : 1;
+      const selectedInstanceId =
+        phase === "thirdFamiliar"
+          ? candidateInstanceIds[candidateInstanceIds.length - 1]
+          : candidateInstanceIds[1];
+      if (selectedInstanceId === undefined) {
+        throw new Error("Expected a familiar setup choice candidate");
+      }
+      return selectedInstanceId;
     },
   });
   const player = state.players[0];
@@ -188,18 +194,6 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
   assert.ok(firstFamiliar);
   assert.ok(secondFamiliar);
   assert.ok(foreignFamiliar);
-  const firstDefinition = state.cardDefinitions.get(firstFamiliar.definitionId);
-  const secondDefinition = state.cardDefinitions.get(
-    secondFamiliar.definitionId
-  );
-  const foreignDefinition = state.cardDefinitions.get(
-    foreignFamiliar.definitionId
-  );
-  const perCardDefinition = state.cardDefinitions.get("esw2_dbg__familiar_003");
-  assert.ok(firstDefinition);
-  assert.ok(secondDefinition);
-  assert.ok(foreignDefinition);
-  assert.ok(perCardDefinition);
 
   assert.equal(
     listLegalActions(state).some(
@@ -220,45 +214,50 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
     }),
     { ok: true }
   );
+  assert.ok(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "setCardEffectiveType" &&
+        action.cardInstanceId === secondFamiliar.instanceId &&
+        action.cardType === "legend" &&
+        action.enabled
+    )
+  );
+  const familiarDefinition = state.cardDefinitions.get(
+    firstFamiliar.definitionId
+  );
+  assert.ok(familiarDefinition);
+  state.turn.power = 0;
+  player.chips = familiarDefinition.engine.cost;
   assert.equal(
-    cardMatchesTypeForPlayer(
-      state,
-      player.playerId,
-      firstDefinition,
-      "legend",
-      firstFamiliar
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "buyMarketCard" &&
+        action.source === "familiar" &&
+        action.cardInstanceId === firstFamiliar.instanceId
     ),
     true
   );
   assert.equal(
-    cardMatchesTypeForPlayer(
-      state,
-      player.playerId,
-      secondDefinition,
-      "legend",
-      secondFamiliar
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "buyMarketCard" &&
+        action.source === "familiar" &&
+        action.cardInstanceId === secondFamiliar.instanceId
     ),
     false
   );
-  assert.equal(
-    cardMatchesTypeForPlayer(
-      state,
-      player.playerId,
-      perCardDefinition,
-      "legend"
-    ),
-    false
+  assert.deepEqual(
+    applyAction(state, {
+      type: "buyMarketCard",
+      cardInstanceId: firstFamiliar.instanceId,
+      source: "familiar",
+    }),
+    { ok: true }
   );
-  assert.equal(
-    cardMatchesTypeForPlayer(
-      state,
-      otherPlayer.playerId,
-      foreignDefinition,
-      "legend",
-      foreignFamiliar
-    ),
-    false
-  );
+  assert.equal(player.discard.includes(firstFamiliar), true);
+  assert.equal(state.turn.power, 0);
+  assert.equal(player.chips, 0);
 
   assert.deepEqual(
     applyAction(state, {
@@ -269,15 +268,14 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
     }),
     { ok: true }
   );
-  assert.equal(
-    cardMatchesTypeForPlayer(
-      state,
-      player.playerId,
-      firstDefinition,
-      "legend",
-      firstFamiliar
-    ),
-    false
+  assert.ok(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "setCardEffectiveType" &&
+        action.cardInstanceId === firstFamiliar.instanceId &&
+        action.cardType === "legend" &&
+        action.enabled
+    )
   );
   const foreignResult = applyAction(state, {
     type: "setCardEffectiveType",

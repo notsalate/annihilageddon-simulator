@@ -286,12 +286,13 @@ export type FamiliarSetupChoicePhase = "startingPair" | "thirdFamiliar";
 export interface FamiliarSetupChoiceRequest {
   readonly playerId: PlayerId;
   readonly phase: FamiliarSetupChoicePhase;
+  readonly candidateInstanceIds: readonly CardInstanceId[];
   readonly candidateDefinitionIds: readonly CardDefinitionId[];
 }
 
 export type FamiliarSetupChoicePolicy = (
   request: FamiliarSetupChoiceRequest
-) => number | undefined;
+) => CardInstanceId | undefined;
 
 export interface GameEventMetadata {
   eventSequence?: number;
@@ -828,7 +829,11 @@ interface TokenInstanceFactory {
   ): TokenInstance;
 }
 
-interface SetupCandidate<TDefinitionId extends string> {
+interface SetupCandidate<
+  TDefinitionId extends string,
+  TInstanceId extends string = string,
+> {
+  instanceId: TInstanceId;
   definitionId: TDefinitionId;
 }
 
@@ -1225,7 +1230,7 @@ function assignStartingFamiliars(
 }
 
 function selectFamiliarSetupChoice<
-  TCandidate extends SetupCandidate<CardDefinitionId>,
+  TCandidate extends SetupCandidate<CardDefinitionId, CardInstanceId>,
 >(
   player: PlayerState,
   phase: FamiliarSetupChoicePhase,
@@ -1238,21 +1243,23 @@ function selectFamiliarSetupChoice<
       `Setup choice familiar has no candidates for ${player.playerId}`
     );
   }
-  const requestedIndex = policy?.({
+  const requestedInstanceId = policy?.({
     playerId: player.playerId,
     phase,
+    candidateInstanceIds: candidates.map((candidate) => candidate.instanceId),
     candidateDefinitionIds: candidates.map(
       (candidate) => candidate.definitionId
     ),
   });
-  const selectedIndex = requestedIndex ?? 0;
-  if (
-    !Number.isSafeInteger(selectedIndex) ||
-    selectedIndex < 0 ||
-    selectedIndex >= candidates.length
-  ) {
+  const selectedIndex =
+    requestedInstanceId === undefined
+      ? 0
+      : candidates.findIndex(
+          (candidate) => candidate.instanceId === requestedInstanceId
+        );
+  if (selectedIndex < 0) {
     throw new Error(
-      `Familiar setup choice for ${player.playerId} returned invalid candidate index ${String(selectedIndex)}`
+      `Familiar setup choice for ${player.playerId} returned unknown candidate instance ID ${String(requestedInstanceId)}`
     );
   }
   const chosenCandidate = candidates[selectedIndex];
@@ -1263,7 +1270,8 @@ function selectFamiliarSetupChoice<
     type: "setupChoiceSelected",
     playerId: player.playerId,
     setupChoiceKind: "familiar",
-    policyId: requestedIndex === undefined ? "alwaysPickFirst" : "provided",
+    policyId:
+      requestedInstanceId === undefined ? "alwaysPickFirst" : "provided",
     candidateDefinitionIds: candidates.map(
       (candidate) => candidate.definitionId
     ),
