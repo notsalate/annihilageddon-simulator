@@ -1,10 +1,12 @@
 import { createUnsupportedEffectHandler } from "./effect-runtime-family-support.js";
+import { recordEffectChipsChanged, recordGameEvent } from "./event-recorder.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
 import type {
   EffectTiming,
   RuntimeEffectCondition,
   RuntimeEffectForId,
 } from "./runtime-effect.js";
+import type { EffectChoice } from "./effect-runtime-registry.js";
 import {
   allEffectRuntimeModes,
   type EffectRuntimeSupportedModes,
@@ -17,6 +19,7 @@ import type {
   RequiredField,
   ValueDecoder,
 } from "./effect-runtime-family-support.js";
+import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 
 type TimedEffect<Id extends string, Timing extends EffectTiming> = {
   effectId: Id;
@@ -192,6 +195,82 @@ export function createActivationEffectDefinitions(
   const supportedSourceKinds = [
     "card",
   ] as const satisfies EffectRuntimeSupportedSourceKinds;
+  const conditionalActivationGainChipsHandler: EffectRuntimeHandler<ConditionalActivationGainChipsRuntimeEffect> =
+    {
+      effectId: "conditional_activation_gain_chips",
+      execute(state, player, effect, source) {
+        const chipsBefore = player.chips;
+        player.chips += effect.amount;
+        recordEffectChipsChanged(
+          state,
+          player,
+          source,
+          effect.effectId,
+          chipsBefore,
+          player.chips
+        );
+        return { ok: true };
+      },
+    };
+  const conditionalActivationDestroyOwnCardsHandler: EffectRuntimeHandler<ConditionalActivationDestroyOwnCardsRuntimeEffect> =
+    {
+      effectId: "conditional_activation_destroy_own_cards",
+      execute(state, player, effect, source, services) {
+        const cards = effect.sourceZones.flatMap((zone) =>
+          zone === "hand" ? player.hand : player.discard
+        );
+        const choices = [
+          { choiceKind: "option" as const, choiceId: "decline" },
+          ...cards.map(
+            (card): EffectChoice => ({
+              choiceKind: "cardTarget",
+              choiceId: `destroy_${card.instanceId}`,
+              cards: [card],
+              amount: 1,
+            })
+          ),
+        ];
+        const choice = services.chooseEffectChoice(
+          state,
+          player,
+          source,
+          effect.effectId,
+          choices
+        );
+        if (choice?.choiceKind !== "cardTarget") return { ok: true };
+
+        const target = choice.cards[0];
+        if (target === undefined) return { ok: true };
+        const destination = services.getDestroyDestination(state, target);
+        if (!destination.ok) return destination;
+        const moved = services.moveCardToZonePreservingOwner(
+          state,
+          player,
+          target,
+          destination.zone,
+          destination.zoneName,
+          effect.effectId,
+          source
+        );
+        if (!moved) {
+          return {
+            ok: false,
+            error: `Cannot move card ${target.instanceId}`,
+          };
+        }
+        recordGameEvent(state, {
+          type: "effectCardDestroyed",
+          playerId: player.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          targetCardInstanceId: target.instanceId,
+          targetDefinitionId: target.definitionId,
+          effectId: effect.effectId,
+          sourceType: source.sourceType,
+        });
+        return { ok: true };
+      },
+    };
   return [
     {
       effectId: "activation_destroy_self_then_destroy_own_cards",
@@ -213,9 +292,7 @@ export function createActivationEffectDefinitions(
       supportedTimings,
       supportedModes,
       supportedSourceKinds,
-      handler: createUnsupportedEffectHandler(
-        "conditional_activation_destroy_own_cards"
-      ),
+      handler: conditionalActivationDestroyOwnCardsHandler,
     },
     {
       effectId: "conditional_activation_gain_chips",
@@ -223,9 +300,7 @@ export function createActivationEffectDefinitions(
       supportedTimings,
       supportedModes,
       supportedSourceKinds,
-      handler: createUnsupportedEffectHandler(
-        "conditional_activation_gain_chips"
-      ),
+      handler: conditionalActivationGainChipsHandler,
     },
     {
       effectId: "optional_spend_chip_destroy_own_cards",

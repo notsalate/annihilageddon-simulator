@@ -75,7 +75,10 @@ import {
   requireVerifiedRuntimeEffect,
   type VerifiedRuntimeEffect,
 } from "./runtime-effect-verification.js";
-import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
+import {
+  cardMatchesTypeForPlayer,
+  runtimeEffectConditionMatches,
+} from "./card-type-runtime.js";
 import type {
   EffectChoiceRequest,
   ChoiceSelection,
@@ -244,9 +247,15 @@ function validateEffectsAtTiming(
       source,
       timing,
       (decodedEffect) => {
-        const applicability =
-          isApplicable?.(decodedEffect) ??
-          ({ status: "resolved", result: undefined } as const);
+        const applicability = effectConditionMatches(
+          state,
+          player,
+          decodedEffect,
+          source.sourceType === "card" ? source.cardInstanceId : undefined
+        )
+          ? (isApplicable?.(decodedEffect) ??
+            ({ status: "resolved", result: undefined } as const))
+          : ({ status: "notApplicable" } as const);
         if (applicability.status === "resolved") {
           expectedFailure = getExpectedEffectFailure(
             state,
@@ -334,6 +343,33 @@ export function executeActivationEffects(
     "activation",
     source
   );
+}
+
+export function hasExecutableCardActivation(
+  state: GameState,
+  player: PlayerState,
+  definition: CardDefinition,
+  source: EffectSourceContext
+): boolean {
+  for (const effect of definition.engine.effects) {
+    const result = evaluateRuntimeEffectAtTiming(
+      requireVerifiedRuntimeEffect(effect),
+      source,
+      "activation",
+      (decodedEffect) =>
+        effectConditionMatches(
+          state,
+          player,
+          decodedEffect,
+          source.cardInstanceId
+        )
+          ? { status: "resolved", result: true }
+          : { status: "notApplicable" }
+    );
+    if (result.status === "resolved") return true;
+    if (result.status === "error") return false;
+  }
+  return false;
 }
 
 export function executeWizardPropertyActivationEffects(
@@ -1068,7 +1104,12 @@ function executeEffects(
       source,
       effectRuntimeServices,
       (decodedEffect) =>
-        effectConditionMatches(state, player, decodedEffect) &&
+        effectConditionMatches(
+          state,
+          player,
+          decodedEffect,
+          source.sourceType === "card" ? source.cardInstanceId : undefined
+        ) &&
         (isApplicable?.(decodedEffect) ?? true)
     );
     if (operationResult.status === "error") {
@@ -1211,34 +1252,19 @@ export function getEffectExecutionError(errors: readonly string[]): string {
 function effectConditionMatches(
   state: GameState,
   player: PlayerState,
-  effect: RuntimeEffectPayload
+  effect: RuntimeEffectPayload,
+  excludedCardInstanceId?: string
 ): boolean {
   const condition = "condition" in effect ? effect.condition : undefined;
-  if (condition === undefined) {
-    return true;
-  }
-
-  if ("conditionId" in condition) {
-    const matchingCount = getControlledCards(state, player).filter((card) => {
-      const definition = state.cardDefinitions.get(card.definitionId);
-      return (
-        definition !== undefined &&
-        condition.cardTypes.some((cardType) =>
-          cardMatchesTypeForPlayer(
-            state,
-            player.playerId,
-            definition,
-            cardType,
-            card
-          )
-        )
-      );
-    }).length;
-
-    return matchingCount >= condition.minimumCount;
-  }
-
-  return false;
+  return (
+    condition === undefined ||
+    runtimeEffectConditionMatches(
+      state,
+      player,
+      condition,
+      excludedCardInstanceId
+    )
+  );
 }
 
 function resolvePlayerControlledAttackWithRuntimeAdapters(

@@ -755,6 +755,8 @@ test("activation and ongoing families use exact timing and card-source policies"
     },
   ] as const;
   const supportedEffectIds = [
+    "conditional_activation_destroy_own_cards",
+    "conditional_activation_gain_chips",
     "ongoing_add_power_when_playing_wand",
     "ongoing_add_power_when_playing_limp_wand",
     "ongoing_first_attack_damage_add_power",

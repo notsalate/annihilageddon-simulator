@@ -3,9 +3,10 @@ import type {
   CardInstance,
   GameState,
   PlayerId,
+  PlayerState,
   TokenInstance,
 } from "./setup.js";
-import { findCardLocation } from "./control-ledger.js";
+import { findCardLocation, getControlledCards } from "./control-ledger.js";
 import {
   isOwnedCardsCountAsCardTypeRuntimeEffect,
   type OwnedCardsCountAsCardTypeRuntimeEffect,
@@ -14,7 +15,11 @@ import {
   evaluateRuntimeEffectAtTiming,
   type EffectSourceContext,
 } from "./effect-runtime-registry.js";
-import type { RuntimeEffect, RuntimeEffectForId } from "./runtime-effect.js";
+import type {
+  RuntimeEffect,
+  RuntimeEffectCondition,
+  RuntimeEffectForId,
+} from "./runtime-effect.js";
 import { requireVerifiedRuntimeEffect } from "./runtime-effect-verification.js";
 
 type CardTypeEffectResolution =
@@ -85,6 +90,61 @@ export function cardMatchesTypeForPlayer(
     (selection) =>
       selection.cardInstanceId === card.instanceId &&
       selection.cardType === cardType
+  );
+}
+
+export function runtimeEffectConditionMatches(
+  state: GameState,
+  player: PlayerId | PlayerState,
+  condition: RuntimeEffectCondition,
+  excludedCardInstanceId?: string
+): boolean {
+  const playerId = typeof player === "string" ? player : player.playerId;
+  const playerState =
+    typeof player === "string"
+      ? state.players.find((candidate) => candidate.playerId === player)
+      : player;
+  if (playerState === undefined) return false;
+
+  const controlledCards = getControlledCards(state, playerState).filter(
+    (card) =>
+      "conditionId" in condition || card.instanceId !== excludedCardInstanceId
+  );
+
+  if ("conditionId" in condition) {
+    return (
+      controlledCards.filter((card) => {
+        const definition = state.cardDefinitions.get(card.definitionId);
+        return (
+          definition !== undefined &&
+          condition.cardTypes.some((cardType) =>
+            cardMatchesTypeForPlayer(
+              state,
+              playerId,
+              definition,
+              cardType,
+              card
+            )
+          )
+        );
+      }).length >= condition.minimumCount
+    );
+  }
+
+  return (
+    controlledCards.filter((card) => {
+      const definition = state.cardDefinitions.get(card.definitionId);
+      return (
+        definition !== undefined &&
+        cardMatchesTypeForPlayer(
+          state,
+          playerId,
+          definition,
+          condition.cardType,
+          card
+        )
+      );
+    }).length >= condition.minimum
   );
 }
 

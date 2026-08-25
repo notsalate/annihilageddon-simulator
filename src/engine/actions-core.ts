@@ -9,6 +9,7 @@ import {
   executeWizardPropertyActivationEffects,
   calculateEndTurnDrawCount,
   getWizardPropertyActivationAvailability,
+  hasExecutableCardActivation,
   hasExecutableWizardPropertyActivation,
   isBasicTrophyChipPayoutSuppressed,
   moveGainedCardToPlayerDestination,
@@ -933,7 +934,7 @@ function canUseChipsForPurchase(
 
 function canActivatePermanent(
   state: GameState,
-  _player: PlayerState,
+  player: PlayerState,
   card: CardInstance
 ): boolean {
   if (state.turn.activatedCardIds.includes(card.instanceId)) {
@@ -941,8 +942,12 @@ function canActivatePermanent(
   }
 
   const definition = mustGetDefinition(state, card.definitionId);
-  return definition.engine.effects.some((effect) => {
-    return effect.timing === "activation";
+  return hasExecutableCardActivation(state, player, definition, {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: card.instanceId,
+    definitionId: card.definitionId,
   });
 }
 

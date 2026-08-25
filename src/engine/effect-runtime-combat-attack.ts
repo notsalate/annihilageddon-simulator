@@ -584,7 +584,8 @@ type PlayerControlledDamageAttackEffect =
   | RuntimeEffectForId<"attack_damage">
   | RuntimeEffectForId<"optional_spend_chip_attack_damage">
   | RuntimeEffectForId<"attack_damage_equal_remembered_card_cost">
-  | RuntimeEffectForId<"attack_damage_equal_to_controlled_card_cost">;
+  | RuntimeEffectForId<"attack_damage_equal_to_controlled_card_cost">
+  | RuntimeEffectForId<"conditional_activation_attack_damage">;
 
 function resolvePlayerControlledDamageAttack(
   state: GameState,
@@ -621,8 +622,9 @@ function resolvePlayerControlledDamageAttack(
       kind: "damage",
       baseAmount: amount,
       sourceOwnerModifierAmount: attackProfile.damageBonus,
-      onDamageDealt: effect.onDamageDealt ?? [],
-      onKill: effect.onKill ?? [],
+      onDamageDealt:
+        "onDamageDealt" in effect ? (effect.onDamageDealt ?? []) : [],
+      onKill: "onKill" in effect ? (effect.onKill ?? []) : [],
     },
   });
 }
@@ -1115,6 +1117,22 @@ export function createCombatAttackEffectDefinitions(
       );
     },
   };
+  const conditionalActivationAttackDamageHandler: EffectRuntimeHandler<
+    RuntimeEffectForId<"conditional_activation_attack_damage">
+  > = {
+    effectId: "conditional_activation_attack_damage",
+    execute(state, player, effect, source, services) {
+      return resolvePlayerControlledDamageAttack(
+        state,
+        player,
+        effect,
+        source,
+        services,
+        effect.amount,
+        collectAttackReplacementProfile
+      );
+    },
+  };
 
   return [
     {
@@ -1187,9 +1205,7 @@ export function createCombatAttackEffectDefinitions(
       supportedTimings: attackTimings,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
-      handler: createUnsupportedEffectHandler(
-        "conditional_activation_attack_damage"
-      ),
+      handler: conditionalActivationAttackDamageHandler,
     },
     {
       effectId: "directional_chain_attack",
