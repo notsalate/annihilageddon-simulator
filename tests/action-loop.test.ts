@@ -306,6 +306,7 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
   );
   assert.equal(activePlayer.hand.length, handBeforePlay + 1);
 
+  const powerBeforeConditionalCard = state.turn.power;
   const conditionalCardId = addFixtureCardToActiveHand(state, {
     effectId: "add_power",
     timing: "onPlay",
@@ -321,7 +322,7 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
       .ok,
     true
   );
-  assert.equal(state.turn.power, 1);
+  assert.equal(state.turn.power, powerBeforeConditionalCard + 1);
 
   const playedIndex = activePlayer.playedThisTurn.findIndex(
     (card) => card.instanceId === familiar.instanceId
@@ -12259,7 +12260,27 @@ test("Вялая башня при получении переносит две 
 });
 
 test("Нарывка раздаёт палочки врагам по порядку, пока не исчерпает общий стек", () => {
-  const state = initializeGame({ rootDir, seed: 243001, playerCount: 5 });
+  const source = loadCurrentRuntimeDataPack(rootDir);
+  const wizardPropertyStack = source.tokenStacks.wizardProperties;
+  assert.ok(wizardPropertyStack);
+  const dataPack: LoadedDataPack = {
+    ...source,
+    tokenStacks: {
+      ...source.tokenStacks,
+      wizardProperties: {
+        ...wizardPropertyStack,
+        entries: [
+          ...wizardPropertyStack.entries,
+          { tokenId: "esw2_dbg__wizard_property_003", count: 1 },
+        ],
+      },
+    },
+  };
+  const state = initializeGame({
+    dataPack,
+    seed: 243001,
+    playerCount: 5,
+  });
   const player = mustGetPlayer(state, state.activePlayerId);
   const foes = getOpponentsInSeatingOrder(state, player);
   player.wizardProperties = [];

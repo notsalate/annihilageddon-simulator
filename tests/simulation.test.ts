@@ -687,7 +687,17 @@ test("single-game run keeps a compact golden event projection for stable seeds",
     assert.ok(eventTypes.includes("cardMoved"));
     assert.ok(eventTypes.includes("cardPlayed"));
     assert.ok(eventTypes.includes("cardBought"));
-    assert.equal(eventTypes.at(-2), "marketFlowCardAdded");
+    assert.deepEqual(
+      eventTypes.slice(-3),
+      projection.seed === 80809
+        ? ["turnEnded", "marketFlowCardAdded", "turnStarted"]
+        : [
+            "turnEnded",
+            "marketFlowCardAdded",
+            "marketChipAdded",
+            "turnStarted",
+          ].slice(-3)
+    );
     assert.equal(eventTypes.at(-1), "turnStarted");
 
     const initialized = projection.eventLog.find(

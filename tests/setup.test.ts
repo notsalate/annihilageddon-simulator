@@ -432,12 +432,20 @@ test("invalid familiar setup choice falls back to the first candidate", () => {
 test("incomplete current runtime skips familiar setup when its pool is short", () => {
   const source = loadCurrentRuntimeDataPack(rootDir);
   const familiarPool = source.decks.familiarPool;
+  const wizardPropertyStack = source.tokenStacks.wizardProperties;
   assert.ok(familiarPool);
+  assert.ok(wizardPropertyStack);
   assert.equal(
     familiarPool.entries.find(
       (entry) => entry.cardId === "esw2_dbg__familiar_003"
     )?.count,
     1
+  );
+  assert.equal(
+    wizardPropertyStack.entries.some(
+      (entry) => entry.tokenId === "esw2_dbg__wizard_property_003"
+    ),
+    false
   );
 
   const state = initializeGame({ rootDir, seed: 2 });
