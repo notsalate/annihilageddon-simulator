@@ -19,8 +19,12 @@ import {
   markCardInstanceId,
 } from "../../src/domain/types.js";
 import {
+  findCardLocation,
   grantTemporaryControl,
+  listPhysicalCardLocations,
   movePhysicalCard,
+  removeCardFromLocation,
+  setCardOwner,
 } from "../../src/engine/control-ledger.js";
 import { verifiedTestRuntimeEffect } from "./verified-runtime-effect.js";
 
@@ -226,23 +230,22 @@ export function resolveMayhemThroughMarket(
   source: CardInstance,
   deck: "mainDeck" | "legendDeck"
 ) {
-  const sourceZone = `${scenario.activePlayer.playerId}.hand`;
-  scenario.state.common[deck].splice(0);
+  const sourceLocation = findCardLocation(scenario.state, source.instanceId);
+  assert.ok(sourceLocation);
+  clearPhysicalCardZone(scenario, deck);
   const moved = movePhysicalCard(
     scenario.state,
     source.instanceId,
     deck,
     "front",
-    sourceZone
+    sourceLocation.zoneName
   );
   assert.deepEqual(moved.ok, true);
-  scenario.state.common[deck].splice(1);
-  source.ownerId = "common";
-  const market =
-    deck === "mainDeck"
-      ? scenario.state.common.market
-      : scenario.state.common.legendMarket;
-  market.splice(0);
+  clearPhysicalCardZone(
+    scenario,
+    deck === "mainDeck" ? "mainMarket" : "legendMarket"
+  );
+  setCardOwner(source, "common");
   return runMarketFlow(scenario.state, { mode: "turn" });
 }
 
@@ -251,25 +254,26 @@ export function putOnCommonDeck(
   card: CardInstance,
   deck: "mainDeck" | "legendDeck"
 ): void {
-  const owner = scenario.state.players.find(
-    (player) => player.playerId === card.ownerId
-  );
-  assert.ok(owner);
-  const sourceZone = owner.hand.includes(card)
-    ? `${owner.playerId}.hand`
-    : owner.discard.includes(card)
-      ? `${owner.playerId}.discard`
-      : undefined;
-  assert.ok(sourceZone);
+  const sourceLocation = findCardLocation(scenario.state, card.instanceId);
+  assert.ok(sourceLocation);
   const moved = movePhysicalCard(
     scenario.state,
     card.instanceId,
     deck,
     "front",
-    sourceZone
+    sourceLocation.zoneName
   );
   assert.deepEqual(moved.ok, true);
-  card.ownerId = "common";
+  setCardOwner(card, "common");
+}
+
+function clearPhysicalCardZone(scenario: GameScenario, zoneName: string): void {
+  const cards = listPhysicalCardLocations(scenario.state)
+    .filter((location) => location.zoneName === zoneName)
+    .map((location) => location.card);
+  for (const card of cards) {
+    assert.ok(removeCardFromLocation(scenario.state, card.instanceId));
+  }
 }
 
 export function play(

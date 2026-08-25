@@ -120,6 +120,14 @@ export function grantTemporaryControl(
   state.turn.temporaryCardControls.push({ cardInstanceId, controllerId });
 }
 
+/** Assigns the scoring owner of a card through the Ledger ownership seam. */
+export function setCardOwner(
+  card: CardInstance,
+  ownerId: CardInstance["ownerId"]
+): void {
+  card.ownerId = ownerId;
+}
+
 export function releaseTemporaryControls(state: GameState): void {
   state.turn.temporaryCardControls = [];
 }
