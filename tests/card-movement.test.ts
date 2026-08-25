@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { applyAction } from "../src/index.js";
 import { getControlledCards } from "../src/engine/control-ledger.js";
 import {
   createGameScenario,
@@ -54,7 +55,13 @@ test("card movement: main_019 lets the active player and another wizard draw", (
     return { choiceId: foe.playerId };
   });
 
-  assert.deepEqual(play(scenario, source), { ok: true });
+  assert.deepEqual(
+    applyAction(scenario.state, {
+      type: "playCard",
+      cardInstanceId: source.instanceId,
+    }),
+    { ok: true }
+  );
   assert.equal(scenario.activePlayer.hand.includes(activeDraw), true);
   assert.equal(foe.hand.includes(foeDraw), true);
 
