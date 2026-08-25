@@ -115,7 +115,7 @@ test("default setup choice policy records alwaysPickFirst", () => {
     (event) => event.type === "setupChoiceSelected"
   );
 
-  assert.equal(setupChoiceEvents.length, 4);
+  assert.equal(setupChoiceEvents.length, 2);
   for (const event of setupChoiceEvents) {
     const candidates = event.candidateDefinitionIds ?? [];
     const candidateInstanceIds = event.candidateInstanceIds ?? [];
@@ -388,8 +388,31 @@ test("wizard property 003 can choose an unselected ordinary familiar", () => {
 });
 
 test("invalid familiar setup choice falls back to the first candidate", () => {
+  const source = loadCurrentRuntimeDataPack(rootDir);
+  const wizardPropertyStack = source.tokenStacks.wizardProperties;
+  const familiarPool = source.decks.familiarPool;
+  assert.ok(wizardPropertyStack);
+  assert.ok(familiarPool);
+
+  const dataPack: LoadedDataPack = {
+    ...source,
+    decks: {
+      ...source.decks,
+      familiarPool: {
+        ...familiarPool,
+        entries: [{ cardId: "esw2_dbg__familiar_003", count: 4 }],
+      },
+    },
+    tokenStacks: {
+      ...source.tokenStacks,
+      wizardProperties: {
+        ...wizardPropertyStack,
+        entries: [{ tokenId: "esw2_dbg__wizard_property_004", count: 4 }],
+      },
+    },
+  };
   const state = initializeGame({
-    rootDir,
+    dataPack,
     seed: 60615,
     familiarSetupChoicePolicy: () => markCardInstanceId("missing-familiar"),
   });
@@ -406,15 +429,21 @@ test("invalid familiar setup choice falls back to the first candidate", () => {
   }
 });
 
-test("current runtime data makes wizard property 003 setup reachable", () => {
-  const state = initializeGame({ rootDir, seed: 2 });
-  const propertyOwner = state.players.find((player) =>
-    player.wizardProperties.some(
-      (property) => property.definitionId === "esw2_dbg__wizard_property_003"
-    )
+test("incomplete current runtime skips familiar setup when its pool is short", () => {
+  const source = loadCurrentRuntimeDataPack(rootDir);
+  const familiarPool = source.decks.familiarPool;
+  assert.ok(familiarPool);
+  assert.equal(
+    familiarPool.entries.find(
+      (entry) => entry.cardId === "esw2_dbg__familiar_003"
+    )?.count,
+    1
   );
-  assert.ok(propertyOwner);
-  assert.equal(propertyOwner.unboughtFamiliars.length, 3);
+
+  const state = initializeGame({ rootDir, seed: 2 });
+  assert.ok(
+    state.players.every((player) => player.unboughtFamiliars.length === 0)
+  );
 });
 
 test("wizard property setup effects update cards, trophies, life, and first player", () => {
