@@ -10,7 +10,29 @@ export interface DeckDrawCardsResult<Card> {
   reshuffleCount: number;
 }
 
+interface FaceUpState {
+  faceUp?: true;
+}
+
+function isFaceUpState(value: unknown): value is FaceUpState {
+  return typeof value === "object" && value !== null && "faceUp" in value;
+}
+
+/** Clear a transient open-card marker whenever a value leaves its observed position. */
+export function clearFaceUpState(value: unknown): void {
+  if (isFaceUpState(value)) {
+    delete value.faceUp;
+  }
+}
+
+export function clearFaceUpStates<T>(values: readonly T[]): void {
+  for (const value of values) {
+    clearFaceUpState(value);
+  }
+}
+
 export function shuffleDeck<T>(items: T[], rng: RandomSource): void {
+  clearFaceUpStates(items);
   for (let index = items.length - 1; index > 0; index -= 1) {
     const swapIndex = rng.nextInt(index + 1);
     const item = items[index];
@@ -44,8 +66,10 @@ export function drawDeckCard<T>(
   rng: RandomSource
 ): DeckDrawResult<T> {
   const reshuffled = refillDeckFromDiscard(deck, discard, rng);
+  const card = deck.shift();
+  clearFaceUpState(card);
   return {
-    card: deck.shift(),
+    card,
     reshuffled,
   };
 }

@@ -127,6 +127,7 @@ export interface EffectSourceContext {
   sourceType: EffectRuntimeSourceKind;
   runtimeMode: EffectRuntimeMode;
   playerId: PlayerState["playerId"];
+  currentAttackerPlayerId?: PlayerState["playerId"];
   cardInstanceId: string;
   definitionId: string;
   tokenInstanceId?: TokenInstance["instanceId"];

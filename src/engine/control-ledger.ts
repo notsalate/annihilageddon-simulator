@@ -9,6 +9,7 @@ import type {
   TemporaryCardControl,
   TrophyLikeInstance,
 } from "./setup.js";
+import { clearFaceUpState } from "./deck-lifecycle.js";
 import { copyRuntimeEffectVerification } from "./runtime-effect-verification.js";
 
 const physicalCardZoneDescriptorCache = new WeakMap<
@@ -663,6 +664,7 @@ export function removeCardFromLocation(
     if (card === undefined) {
       continue;
     }
+    clearFaceUpState(card);
     descriptor.replace([...cards.slice(0, index), ...cards.slice(index + 1)]);
     return { card, zoneName: descriptor.zoneName };
   }
@@ -695,6 +697,7 @@ export function reorderPhysicalCard(
     ...cards.slice(0, cardIndex),
     ...cards.slice(cardIndex + 1),
   ];
+  clearFaceUpState(card);
   descriptor.replace(
     placement === "front" ? [card, ...remaining] : [...remaining, card]
   );
@@ -802,6 +805,7 @@ export function movePhysicalCard(
     placement === "front"
       ? [card, ...destinationCards]
       : [...destinationCards, card];
+  clearFaceUpState(card);
   source.descriptor.replace(sourceAfter);
   destination.replace(destinationAfter);
 

@@ -290,6 +290,7 @@ test("effect runtime catalog returns the validated concrete payload", () => {
     timing: "onDefense",
     destination: "discardSelf",
     redirectAttack: true,
+    redirectAttackIf: "dingler",
   } as const;
   const resolution = validateRuntimeEffectCatalogPayload(
     "Fixture defense",
@@ -307,6 +308,7 @@ test("effect runtime catalog returns the validated concrete payload", () => {
   const narrowed: RuntimeEffectForId<"avoid_attack"> = resolution.value;
   assert.equal(narrowed.destination, "discardSelf");
   assert.equal(narrowed.redirectAttack, true);
+  assert.equal(narrowed.redirectAttackIf, "dingler");
 });
 
 test("effect runtime catalog rejects malformed touched payloads before narrowing", () => {
@@ -326,6 +328,15 @@ test("effect runtime catalog rejects malformed touched payloads before narrowing
         timing: "onDefense",
         destination: "discardSelf",
         redirectAttack: "yes",
+      },
+    },
+    {
+      effectId: "avoid_attack",
+      effect: {
+        effectId: "avoid_attack",
+        timing: "onDefense",
+        destination: "discardSelf",
+        redirectAttackIf: "always",
       },
     },
     {
@@ -3570,7 +3581,9 @@ test("executable data-pack validation rejects redirect defense branches", () => 
     result.errors.some((error) => {
       return (
         error.includes("fixture-unsupported-redirect-defense") &&
-        error.includes("destination must be one of discardSelf, topdeckSelf")
+        error.includes(
+          "destination must be one of discardSelf, topdeckSelf, topdeckSelfFaceUp"
+        )
       );
     })
   );

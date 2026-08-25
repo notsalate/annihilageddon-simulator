@@ -34,7 +34,11 @@ import {
   type CardPlayResolutionServices,
 } from "./card-play-resolution.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-value-runtime.js";
-import { drawDeckCard, refillDeckFromDiscard } from "./deck-lifecycle.js";
+import {
+  clearFaceUpState,
+  drawDeckCard,
+  refillDeckFromDiscard,
+} from "./deck-lifecycle.js";
 import {
   recordCardMoved,
   recordDeckReshuffle,
@@ -262,7 +266,8 @@ function validateEffectsAtTiming(
             state,
             player,
             decodedEffect,
-            excludedCardInstanceId
+            excludedCardInstanceId,
+            source
           );
         }
         return applicability;
@@ -283,7 +288,8 @@ function getExpectedEffectFailure(
   state: GameState,
   player: PlayerState,
   effect: RuntimeEffectPayload,
-  excludedCardInstanceId?: CardInstance["instanceId"]
+  excludedCardInstanceId?: CardInstance["instanceId"],
+  source?: EffectSourceContext
 ): string | undefined {
   if (
     effect.effectId === "attack_damage" &&
@@ -301,7 +307,7 @@ function getExpectedEffectFailure(
     return undefined;
   }
 
-  const choices = buildLegalTargetChoices(state, player, effect);
+  const choices = buildLegalTargetChoices(state, player, effect, source);
   if (!choices.ok) {
     return choices.error;
   }
@@ -647,7 +653,9 @@ export function validateControlledCardStartOfControllerTurnEffects(
           expectedFailure = getExpectedEffectFailure(
             state,
             player,
-            decodedEffect
+            decodedEffect,
+            undefined,
+            source
           );
           return { status: "resolved", result: undefined };
         }
@@ -823,6 +831,7 @@ export function moveGainedCardToPlayerDestination(
     return destinationResult;
   }
   const destination = destinationResult.destination;
+  clearFaceUpState(card);
 
   if (destination === "deckTop") {
     player.deck.unshift(card);
@@ -1762,7 +1771,7 @@ function resolveTargetChoice(
   effect: RuntimeEffectPayload,
   source: EffectSourceContext
 ): TargetChoiceResult {
-  const choicesResult = buildLegalTargetChoices(state, player, effect);
+  const choicesResult = buildLegalTargetChoices(state, player, effect, source);
   if (!choicesResult.ok) {
     return choicesResult;
   }
@@ -2096,7 +2105,8 @@ function readChoiceIndex(selection: unknown): number | undefined {
 function buildLegalTargetChoices(
   state: GameState,
   player: PlayerState,
-  effect: RuntimeEffectPayload
+  effect: RuntimeEffectPayload,
+  source?: EffectSourceContext
 ): { ok: true; choices: TargetChoice[] } | { ok: false; error: string } {
   const target = "target" in effect ? effect.target : undefined;
   if (!isRuntimeEffectSelectorTarget(target)) {
@@ -2142,6 +2152,27 @@ function buildLegalTargetChoices(
           player: candidate,
         })),
       };
+    }
+
+    if (targetSelector === "currentAttacker") {
+      const currentAttackerPlayerId = source?.currentAttackerPlayerId;
+      if (currentAttackerPlayerId === undefined) {
+        return { ok: true, choices: [] };
+      }
+      const currentAttacker = state.players.find(
+        (candidate) => candidate.playerId === currentAttackerPlayerId
+      );
+      return currentAttacker === undefined
+        ? {
+            ok: false,
+            error: `Missing current attacker ${currentAttackerPlayerId}`,
+          }
+        : {
+            ok: true,
+            choices: [
+              { choiceType: "player" as const, player: currentAttacker },
+            ],
+          };
     }
 
     if (targetSelector === "activePlayer") {

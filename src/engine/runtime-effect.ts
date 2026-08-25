@@ -21,6 +21,7 @@ export type {
 export type {
   CardOwnershipChoiceEffectPayloadMap,
   DiscardCardRuntimeEffect,
+  DiscardRandomHandCardsRuntimeEffect,
   DiscardHandThenDrawCardsRuntimeEffect,
   DiscardSelfRuntimeEffect,
   DestroyCardRuntimeEffect,
@@ -147,6 +148,7 @@ export type RuntimeEffectTargetSelector =
   | "chosenFoe"
   | "chosenLeftOrRightFoe"
   | "chosenPlayer"
+  | "currentAttacker"
   | "eachFoe"
   | "eachPlayerClockwiseFromActive"
   | "leftOrRightFoe"
@@ -177,6 +179,7 @@ export type RuntimeEffectCondition =
 export interface DiscardOtherHandCardRuntimeEffectCost {
   costId: "discard_other_hand_card";
   amount: 1;
+  rng?: "seeded";
 }
 
 export interface SpendChipsRuntimeEffectCost {
@@ -258,6 +261,7 @@ export const knownRuntimeEffectIds = [
   "destroyed_card_kind_is",
   "directional_chain_attack",
   "discard_card",
+  "discard_random_hand_cards",
   "discard_hand_then_draw_cards",
   "discard_self",
   "draw_cards",
@@ -594,8 +598,9 @@ export interface AvoidAttackRuntimeEffect extends TimedEffect<
   "avoid_attack",
   "onDefense"
 > {
-  destination: "discardSelf" | "topdeckSelf";
+  destination: "discardSelf" | "topdeckSelf" | "topdeckSelfFaceUp" | "keep";
   redirectAttack?: boolean;
+  redirectAttackIf?: "dingler";
   costs?: RuntimeEffectCost[];
   branchEffects?: RuntimeEffect[];
 }
@@ -908,9 +913,13 @@ export function isAvoidAttackRuntimeEffect(
     effect.effectId === "avoid_attack" &&
     effect.timing === "onDefense" &&
     (effect.destination === "discardSelf" ||
-      effect.destination === "topdeckSelf") &&
+      effect.destination === "topdeckSelf" ||
+      effect.destination === "topdeckSelfFaceUp" ||
+      effect.destination === "keep") &&
     (effect.redirectAttack === undefined ||
-      typeof effect.redirectAttack === "boolean")
+      typeof effect.redirectAttack === "boolean") &&
+    (effect.redirectAttackIf === undefined ||
+      effect.redirectAttackIf === "dingler")
   );
 }
 
@@ -958,6 +967,7 @@ export function isRuntimeEffectTargetSelector(
     value === "chosenFoe" ||
     value === "chosenLeftOrRightFoe" ||
     value === "chosenPlayer" ||
+    value === "currentAttacker" ||
     value === "eachFoe" ||
     value === "eachPlayerClockwiseFromActive" ||
     value === "leftOrRightFoe" ||
@@ -1026,7 +1036,11 @@ export function isRuntimeEffectCost(
 ): value is RuntimeEffectCost {
   if (!isRuntimeEffectTargetRecord(value)) return false;
   if (value["costId"] === "discard_other_hand_card") {
-    return hasExactKeys(value, ["costId", "amount"]) && value["amount"] === 1;
+    return (
+      hasExactKeys(value, ["costId", "amount", "rng"]) &&
+      value["amount"] === 1 &&
+      (value["rng"] === undefined || value["rng"] === "seeded")
+    );
   }
   return (
     (value["costId"] === "spend_chips" || value["costId"] === "pay_life") &&

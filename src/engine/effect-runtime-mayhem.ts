@@ -1,4 +1,4 @@
-import { drawDeckCards } from "./deck-lifecycle.js";
+import { clearFaceUpStates, drawDeckCards } from "./deck-lifecycle.js";
 import { createAttackDefenseUsage } from "./attack-resolution.js";
 import {
   listLegendMarketCards,
@@ -675,7 +675,9 @@ const mayhemEachPlayerDiscardDeckDestroyHandler: EffectRuntimeHandler<
   execute(state, _player, effect, source, services) {
     for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
       const discardedCount = targetPlayer.deck.length;
-      targetPlayer.discard.push(...targetPlayer.deck.splice(0));
+      const discardedCards = targetPlayer.deck.splice(0);
+      clearFaceUpStates(discardedCards);
+      targetPlayer.discard.push(...discardedCards);
       const destroyTarget = targetPlayer.discard[0];
       if (destroyTarget !== undefined) {
         const destination = services.getDestroyDestination(

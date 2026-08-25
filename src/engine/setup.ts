@@ -58,6 +58,7 @@ export interface CardInstance {
   definitionId: CardDefinitionId;
   ownerId: PlayerId | CommonOwner;
   marketChips: number;
+  faceUp?: true;
 }
 
 export interface EffectiveCardTypeSelection {

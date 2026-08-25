@@ -276,6 +276,7 @@ test("card, activation, ongoing and modifier IDs belong to family modules", () =
   assert.deepEqual(cardOwnershipChoiceEffectIds, [
     "gain_card",
     "discard_card",
+    "discard_random_hand_cards",
     "discard_self",
     "discard_hand_then_draw_cards",
     "destroy_card",

@@ -49,3 +49,14 @@ test("deck lifecycle bulk draw counts a discard refill and stops at exhaustion",
   assert.deepEqual(deck, []);
   assert.deepEqual(discard, []);
 });
+
+test("deck lifecycle clears transient face-up state during draw and shuffle", () => {
+  const drawnCard: { faceUp?: true } = { faceUp: true };
+  const drawResult = drawDeckCard([drawnCard], [], createSeededRng(60615));
+  assert.equal(drawResult.card, drawnCard);
+  assert.equal(drawnCard.faceUp, undefined);
+
+  const shuffledCard: { faceUp?: true } = { faceUp: true };
+  shuffleDeck([shuffledCard], createSeededRng(60615));
+  assert.equal(shuffledCard.faceUp, undefined);
+});

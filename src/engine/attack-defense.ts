@@ -3,6 +3,7 @@ import {
   listPhysicalCardLocations,
   movePhysicalCard,
 } from "./control-ledger.js";
+import { clearFaceUpState } from "./deck-lifecycle.js";
 import { installGameEventLog } from "./game-events.js";
 import { recordGameEvent } from "./event-recorder.js";
 import {
@@ -51,6 +52,7 @@ export type DefensePaymentStep =
   | {
       readonly kind: "discardOtherHandCard";
       readonly cardInstanceId: CardInstance["instanceId"];
+      readonly selection?: "seeded";
     }
   | {
       readonly kind: "spendChips";
@@ -79,7 +81,11 @@ export type DefensePaymentPlanResult =
 
 interface LegalDefense {
   readonly card: CardInstance;
-  readonly destination: "discardSelf" | "topdeckSelf";
+  readonly destination:
+    | "discardSelf"
+    | "topdeckSelf"
+    | "topdeckSelfFaceUp"
+    | "keep";
   readonly effect: AvoidAttackRuntimeEffect;
   readonly paymentPlan: DefensePaymentPlan;
 }
@@ -185,6 +191,7 @@ function restoreDefenseMutationSnapshot(
   snapshot: DefenseMutationSnapshot
 ): { readonly ok: true } | { readonly ok: false; readonly error: string } {
   for (const mutableObject of snapshot.mutableObjects) {
+    clearFaceUpState(mutableObject.object);
     Object.assign(mutableObject.object, structuredClone(mutableObject.value));
   }
   state.activePlayerId = snapshot.activePlayerId;
@@ -330,12 +337,21 @@ export function resolveDefenseWindow(
   attack.defenseUsage.defendedPlayerIds.add(defendingPlayer.playerId);
   attack.defenseUsage.usedDefenseCardInstanceIds.add(defense.card.instanceId);
 
-  const redirectsAttack = defense.effect.redirectAttack === true;
+  const redirectsAttack =
+    defense.effect.redirectAttack === true ||
+    (defense.effect.redirectAttackIf === "dingler" &&
+      attack.kind === "redirectable" &&
+      attack.attackingPlayer.statuses.some(
+        (status) => status.statusId === "dingler"
+      ));
 
   const defenseSource: EffectSourceContext = {
     sourceType: "card",
     runtimeMode: state.runtimeMode,
     playerId: defendingPlayer.playerId,
+    ...(attack.kind === "redirectable"
+      ? { currentAttackerPlayerId: attack.attackingPlayer.playerId }
+      : {}),
     cardInstanceId: defense.card.instanceId,
     definitionId: defense.card.definitionId,
   };
@@ -438,13 +454,17 @@ function moveDefenseCard(
   defendingPlayer: PlayerState,
   defense: {
     card: CardInstance;
-    destination: "discardSelf" | "topdeckSelf";
+    destination: "discardSelf" | "topdeckSelf" | "topdeckSelfFaceUp" | "keep";
   }
 ): boolean {
+  if (defense.destination === "keep") {
+    return true;
+  }
   const destinationZoneName =
     defense.destination === "discardSelf"
       ? `${defendingPlayer.playerId}.discard`
-      : defense.destination === "topdeckSelf"
+      : defense.destination === "topdeckSelf" ||
+          defense.destination === "topdeckSelfFaceUp"
         ? `${defendingPlayer.playerId}.deck`
         : undefined;
   if (destinationZoneName === undefined) {
@@ -469,6 +489,10 @@ function moveDefenseCard(
       destination: "discard",
     });
     return true;
+  }
+
+  if (defense.destination === "topdeckSelfFaceUp") {
+    moveResult.move.card.faceUp = true;
   }
 
   recordGameEvent(state, {
@@ -559,6 +583,7 @@ export function buildDefensePaymentPlan(
           Object.freeze({
             kind: "discardOtherHandCard",
             cardInstanceId: card.instanceId,
+            ...(cost.rng === "seeded" ? { selection: "seeded" as const } : {}),
           })
         );
         break;
@@ -634,12 +659,28 @@ function commitDefensePaymentPlan(
     return { ok: false, error: validationError };
   }
 
+  const paidCardInstanceIds = new Set<CardInstance["instanceId"]>();
   for (const step of plan.steps) {
     switch (step.kind) {
       case "discardOtherHandCard": {
+        const paidCardInstanceId =
+          step.selection === "seeded"
+            ? selectSeededDefensePaymentCard(
+                state,
+                defendingPlayer,
+                defenseCard,
+                paidCardInstanceIds
+              )
+            : step.cardInstanceId;
+        if (paidCardInstanceId === undefined) {
+          return {
+            ok: false,
+            error: "Defense payment plan could not select a hand card",
+          };
+        }
         const moveResult = movePhysicalCard(
           state,
-          step.cardInstanceId,
+          paidCardInstanceId,
           `${defendingPlayer.playerId}.discard`,
           "back",
           `${defendingPlayer.playerId}.hand`
@@ -651,6 +692,7 @@ function commitDefensePaymentPlan(
           };
         }
         const paidCard = moveResult.move.card;
+        paidCardInstanceIds.add(paidCard.instanceId);
         recordGameEvent(state, {
           type: "defenseCostPaid",
           playerId: defendingPlayer.playerId,
@@ -692,6 +734,24 @@ function commitDefensePaymentPlan(
   }
 
   return { ok: true };
+}
+
+function selectSeededDefensePaymentCard(
+  state: GameState,
+  defendingPlayer: PlayerState,
+  defenseCard: CardInstance,
+  paidCardInstanceIds: ReadonlySet<CardInstance["instanceId"]>
+): CardInstance["instanceId"] | undefined {
+  const candidates = defendingPlayer.hand.filter(
+    (card) =>
+      card.instanceId !== defenseCard.instanceId &&
+      !paidCardInstanceIds.has(card.instanceId)
+  );
+  if (candidates.length === 0) {
+    return undefined;
+  }
+  const selected = candidates[state.rng.nextInt(candidates.length)];
+  return selected?.instanceId;
 }
 
 function validateDefensePaymentPlan(
