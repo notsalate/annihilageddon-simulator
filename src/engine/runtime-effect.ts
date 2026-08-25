@@ -26,6 +26,7 @@ export type {
   GainChipsRuntimeEffect,
   GainChipsPerPlayerWithStatusRuntimeEffect,
   DrawCardsRuntimeEffect,
+  DrawCardsForSelfAndChosenFoeRuntimeEffect,
   GainChipsPerControlledDeadWizardTokenRuntimeEffect,
 } from "./effect-runtime-resources-draw.js";
 export type {
@@ -284,6 +285,7 @@ export const knownRuntimeEffectIds = [
   "discard_hand_then_draw_cards",
   "discard_self",
   "draw_cards",
+  "draw_cards_for_self_and_chosen_foe",
   "endgame_fixed_token_victory_points",
   "endgame_remove_matching_dead_wizard_tokens",
   "endgame_limp_wands_score_positive",

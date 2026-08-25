@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__familiar_008",
+  "source": {
+    "draft": "data/import/cards/familiar/drafts/esw2_dbg__familiar_008.json",
+    "image": "assets/cards/familiar/Фамильяр. Мальчий, который выжрал.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_008.md"
+  },
+  "visible": {
+    "nameRu": "Мальчик, который выжрал",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "textRu": "+3 мощи\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, можешь взять все «Палочки» из своей стопки сброса на руку.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "cost": 6,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 3 },
+      {
+        "effectId": "avoid_attack",
+        "timing": "onDefense",
+        "destination": "discardSelf",
+        "branchEffects": [
+          {
+            "effectId": "return_discard_to_hand",
+            "timing": "onDefense",
+            "amount": 1,
+            "cardTypes": ["wand"],
+            "allMatching": true
+          }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

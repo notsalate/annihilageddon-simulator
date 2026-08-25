@@ -6,6 +6,10 @@
   "mappingStatus": "incomplete-full-only",
   "entries": [
     {
+      "cardId": "esw2_dbg__main_019",
+      "count": 2
+    },
+    {
       "cardId": "esw2_dbg__main_002",
       "count": 1
     },
@@ -172,6 +176,10 @@
     {
       "cardId": "esw2_dbg__main_056",
       "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_058",
+      "count": 1
     },
     {
       "cardId": "esw2_dbg__main_038",

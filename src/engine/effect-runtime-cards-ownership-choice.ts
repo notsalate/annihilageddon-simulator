@@ -1,4 +1,5 @@
-import { recordGameEvent } from "./event-recorder.js";
+import { clearFaceUpStates, drawDeckCards } from "./deck-lifecycle.js";
+import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import {
   findPlayerPlayedThisTurnCard,
   listLegendMarketCards,
@@ -63,6 +64,7 @@ export type DiscardSelfRuntimeEffect = EffectWithOptionalTiming<"discard_self">;
 export type DiscardHandThenDrawCardsRuntimeEffect =
   EffectWithOptionalTiming<"discard_hand_then_draw_cards"> & {
     drawAmount: number;
+    firstCardOfTurn?: true;
   };
 export type DestroyCardRuntimeEffect =
   EffectWithOptionalTiming<"destroy_card"> & Targetable;
@@ -85,6 +87,7 @@ export type ReturnDiscardToHandRuntimeEffect =
       cardTypes?: string[];
       excludeSource?: true;
       required?: true;
+      allMatching?: true;
     };
 export type RevealTopCardRuntimeEffect =
   EffectWithOptionalTiming<"reveal_top_card"> & {
@@ -296,6 +299,7 @@ export function createCardOwnershipChoiceEffectDecoders(
         effectId: required(literal("discard_hand_then_draw_cards")),
         timing: optionalTiming,
         drawAmount: required(positiveInteger),
+        firstCardOfTurn: optional(literal(true)),
       }
     ),
     destroy_card: defineDecoder(
@@ -332,6 +336,7 @@ export function createCardOwnershipChoiceEffectDecoders(
       cardTypes: optional(nonEmptyStringArray),
       excludeSource: optional(literal(true)),
       required: optional(literal(true)),
+      allMatching: optional(literal(true)),
     }),
     reveal_top_card: defineDecoder("reveal_top_card", {
       effectId: required(literal("reveal_top_card")),
@@ -697,6 +702,54 @@ const discardRandomHandCardsHandler: EffectRuntimeHandler<
   },
 };
 
+const discardHandThenDrawCardsHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"discard_hand_then_draw_cards">
+> = {
+  effectId: "discard_hand_then_draw_cards",
+  execute(state, player, effect, source, services) {
+    if (
+      effect.firstCardOfTurn === true &&
+      player.playedThisTurn[0]?.instanceId !== source.cardInstanceId
+    ) {
+      return { ok: true };
+    }
+
+    const choice = services.chooseEffectChoice(
+      state,
+      player,
+      source,
+      effect.effectId,
+      [
+        { choiceKind: "option", choiceId: "apply" },
+        { choiceKind: "option", choiceId: "decline" },
+      ]
+    );
+    if (choice?.choiceId !== "apply") return { ok: true };
+
+    const discardedCards = player.hand.splice(0);
+    clearFaceUpStates(discardedCards);
+    player.discard.push(...discardedCards);
+    const drawResult = drawDeckCards(
+      player.deck,
+      player.discard,
+      effect.drawAmount,
+      state.rng,
+      () => recordDeckReshuffle(state, player.playerId)
+    );
+    player.hand.push(...drawResult.cards);
+    recordGameEvent(state, {
+      type: "effectDrawCardsApplied",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId: effect.effectId,
+      amount: drawResult.cards.length,
+      sourceType: source.sourceType,
+    });
+    return { ok: true };
+  },
+};
+
 const destroyCardHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"destroy_card">
 > = {
@@ -758,6 +811,7 @@ export function executeReturnDiscardToHand(
     cardTypes?: readonly string[];
     excludeSource?: boolean;
     required?: boolean;
+    allMatching?: boolean;
   } = {}
 ): EffectExecutionResult {
   const eligibleCards = player.discard.filter((card) => {
@@ -768,11 +822,54 @@ export function executeReturnDiscardToHand(
     const definition = state.cardDefinitions.get(card.definitionId);
     return (
       definition !== undefined &&
-      options.cardTypes.some((cardType) =>
-        definition.engine.cardTypes.includes(cardType)
+      options.cardTypes.some(
+        (cardType) =>
+          definition.engine.cardTypes.includes(cardType) ||
+          (cardType === "wand" && definition.engine.cardKind === "limpWand")
       )
     );
   });
+  if (options.allMatching === true) {
+    if (eligibleCards.length === 0) return { ok: true };
+    const choice = services.chooseEffectChoice(
+      state,
+      player,
+      source,
+      "return_discard_to_hand",
+      [
+        { choiceKind: "option", choiceId: "apply" },
+        { choiceKind: "option", choiceId: "decline" },
+      ]
+    );
+    if (choice?.choiceId !== "apply") return { ok: true };
+    for (const card of eligibleCards) {
+      const moved = services.moveCardToPlayerZone(
+        state,
+        card,
+        player,
+        player.hand,
+        `${player.playerId}.hand`,
+        "return_discard_to_hand",
+        source
+      );
+      if (!moved) {
+        return {
+          ok: false,
+          error: `Cannot return discard card ${card.instanceId} to hand`,
+        };
+      }
+    }
+    recordGameEvent(state, {
+      type: "effectCardsReturnedToHand",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId: "return_discard_to_hand",
+      amount: eligibleCards.length,
+      sourceType: source.sourceType,
+    });
+    return { ok: true };
+  }
   const choice = services.chooseEffectChoice(
     state,
     player,
@@ -1163,6 +1260,7 @@ const returnDiscardToHandHandler: EffectRuntimeHandler<
           : { cardTypes: effect.cardTypes }),
         excludeSource: effect.excludeSource === true,
         required: effect.required === true,
+        allMatching: effect.allMatching === true,
       }
     );
   },
@@ -1217,7 +1315,7 @@ export function createCardOwnershipChoiceEffectDefinitions(
       supportedTimings: immediateEffectTimings,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["card", "wizardProperty"],
-      handler: createUnsupportedEffectHandler("discard_hand_then_draw_cards"),
+      handler: discardHandThenDrawCardsHandler,
     },
     {
       effectId: "destroy_card",

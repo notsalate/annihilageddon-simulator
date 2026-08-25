@@ -206,6 +206,7 @@ test("resource and draw IDs belong to one family module", () => {
     "gain_chips_per_player_with_status",
     "gain_chips_per_controlled_dead_wizard_token",
     "draw_cards",
+    "draw_cards_for_self_and_chosen_foe",
   ]);
 });
 
