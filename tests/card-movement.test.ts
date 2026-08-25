@@ -1335,7 +1335,7 @@ test("card movement: main_022 destroys Mega Mayhem for zero damage", () => {
   assert.equal(emptyTargetChoices, 1);
 });
 
-test("card movement: mega_mayhem_006 defends each wizard before destroying in stable order", () => {
+test("card movement: mega_mayhem_006 collects defenses before destroying in stable order", () => {
   const scenario = createGameScenario({
     rootDir,
     seed: 284006,
@@ -1405,11 +1405,11 @@ test("card movement: mega_mayhem_006 defends each wizard before destroying in st
       ),
     [
       ["decision", active.playerId],
-      ["destroy", active.playerId],
       ["decision", firstFoe.playerId],
       ["decision", secondFoe.playerId],
-      ["destroy", secondFoe.playerId],
       ["decision", lastFoe.playerId],
+      ["destroy", active.playerId],
+      ["destroy", secondFoe.playerId],
       ["destroy", lastFoe.playerId],
     ]
   );
