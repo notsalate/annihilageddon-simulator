@@ -40,7 +40,7 @@ test("current runtime cards preserve source.image metadata", () => {
 
 test("current runtime tokens preserve canonical source.image metadata", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
-  assert.equal(dataPack.tokenDefinitions.size, 30);
+  assert.equal(dataPack.tokenDefinitions.size, 31);
 
   for (const definition of dataPack.tokenDefinitions.values()) {
     const source = (definition as { source?: { image?: unknown } }).source;

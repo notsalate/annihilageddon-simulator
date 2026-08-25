@@ -249,6 +249,7 @@ export const knownRuntimeEffectIds = [
   "dead_wizard_token_damage_per_discard_legend",
   "dead_wizard_token_exchange_life",
   "dead_wizard_token_reward_killer_chips",
+  "dead_wizard_token_self_destroy_for_chips",
   "double_owned_attack_damage",
   "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
   "destroy_card",

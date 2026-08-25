@@ -552,6 +552,7 @@ const deadWizardTokenEffectDecoders = createDeadWizardTokenEffectDecoders({
   defineDecoder,
   required,
   literal,
+  positiveInteger,
   selectorTarget,
 });
 

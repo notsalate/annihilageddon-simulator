@@ -186,6 +186,7 @@ export { assertGameStateInvariants } from "./engine/invariants.js";
 export type {
   ActionExecutionContext,
   ActionResult,
+  ActivateDeadWizardTokenAction,
   GameAction,
   LegalAction,
 } from "./engine/actions.js";

@@ -1064,6 +1064,11 @@ function isLegalAction(
           legalAction.type === "activateWizardProperty" &&
           legalAction.tokenInstanceId === action.tokenInstanceId
         );
+      case "activateDeadWizardToken":
+        return (
+          legalAction.type === "activateDeadWizardToken" &&
+          legalAction.tokenInstanceId === action.tokenInstanceId
+        );
       case "setCardEffectiveType":
         return (
           legalAction.type === "setCardEffectiveType" &&

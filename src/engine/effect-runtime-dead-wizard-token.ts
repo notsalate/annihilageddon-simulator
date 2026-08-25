@@ -1,4 +1,5 @@
 import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
+import { removeDeadWizardToken } from "./control-ledger.js";
 import { changePlayerChips } from "./effect-runtime-resources-draw.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
 import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
@@ -40,6 +41,7 @@ export const deadWizardTokenEffectIds = [
   "dead_wizard_token_damage_per_discard_legend",
   "dead_wizard_token_exchange_life",
   "dead_wizard_token_reward_killer_chips",
+  "dead_wizard_token_self_destroy_for_chips",
   "suppress_basic_trophy_chip_payout",
 ] as const;
 
@@ -93,6 +95,12 @@ export type DeadWizardTokenRewardKillerChipsRuntimeEffect = {
   amount: 2;
 };
 
+export type DeadWizardTokenSelfDestroyForChipsRuntimeEffect = {
+  effectId: "dead_wizard_token_self_destroy_for_chips";
+  timing: "activation";
+  chipCost: number;
+};
+
 export type DeadWizardTokenKillerOptionalRemoveDinglerRuntimeEffect = {
   effectId: "dead_wizard_token_killer_optional_remove_dingler";
   timing: "onDeadWizardTokenFace";
@@ -137,6 +145,7 @@ export interface DeadWizardTokenEffectPayloadMap {
   dead_wizard_token_damage_per_discard_legend: DeadWizardTokenDamagePerDiscardLegendRuntimeEffect;
   dead_wizard_token_exchange_life: DeadWizardTokenExchangeLifeRuntimeEffect;
   dead_wizard_token_reward_killer_chips: DeadWizardTokenRewardKillerChipsRuntimeEffect;
+  dead_wizard_token_self_destroy_for_chips: DeadWizardTokenSelfDestroyForChipsRuntimeEffect;
   suppress_basic_trophy_chip_payout: DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect;
 }
 
@@ -153,6 +162,7 @@ export interface DeadWizardTokenDecoderTools {
   literal<const Value extends string | number | boolean>(
     expected: Value
   ): ValueDecoder<Value>;
+  positiveInteger: ValueDecoder<number>;
   selectorTarget<Selector extends RuntimeEffectTargetSelector>(
     selector: Selector
   ): ValueDecoder<{ selector: Selector }>;
@@ -161,7 +171,8 @@ export interface DeadWizardTokenDecoderTools {
 export function createDeadWizardTokenEffectDecoders(
   tools: DeadWizardTokenDecoderTools
 ): { [Id in DeadWizardTokenEffectId]: RuntimeEffectDecoder<Id> } {
-  const { defineDecoder, required, literal, selectorTarget } = tools;
+  const { defineDecoder, required, literal, positiveInteger, selectorTarget } =
+    tools;
   return {
     dead_wizard_token_each_foe_gain_chips: defineDecoder(
       "dead_wizard_token_each_foe_gain_chips",
@@ -229,6 +240,14 @@ export function createDeadWizardTokenEffectDecoders(
         effectId: required(literal("dead_wizard_token_reward_killer_chips")),
         timing: required(literal("onDeadWizardTokenFace")),
         amount: required(literal(2)),
+      }
+    ),
+    dead_wizard_token_self_destroy_for_chips: defineDecoder(
+      "dead_wizard_token_self_destroy_for_chips",
+      {
+        effectId: required(literal("dead_wizard_token_self_destroy_for_chips")),
+        timing: required(literal("activation")),
+        chipCost: required(positiveInteger),
       }
     ),
     dead_wizard_token_killer_optional_remove_dingler: defineDecoder(
@@ -514,6 +533,77 @@ const rewardKillerChipsHandler: EffectRuntimeHandler<DeadWizardTokenRewardKiller
     },
   };
 
+const selfDestroyForChipsHandler: EffectRuntimeHandler<DeadWizardTokenSelfDestroyForChipsRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_self_destroy_for_chips",
+    execute(state, player, effect, source) {
+      if (source.sourceType !== "deadWizardToken") {
+        return {
+          ok: false,
+          error:
+            "dead_wizard_token_self_destroy_for_chips requires a DWT source",
+        };
+      }
+      if (source.tokenInstanceId === undefined) {
+        return {
+          ok: false,
+          error:
+            "dead_wizard_token_self_destroy_for_chips requires a token instance",
+        };
+      }
+      const token = player.deadWizardTokens.find(
+        (candidate) =>
+          candidate.instanceId === source.tokenInstanceId &&
+          candidate.definitionId === source.tokenDefinitionId &&
+          candidate.ownerId === player.playerId
+      );
+      if (token === undefined) {
+        return {
+          ok: false,
+          error: "Dead wizard token is not controlled by the active player",
+        };
+      }
+      if (player.chips < effect.chipCost) {
+        return {
+          ok: false,
+          error: `Dead wizard token requires ${effect.chipCost} chips`,
+        };
+      }
+
+      const removedToken = removeDeadWizardToken(
+        player,
+        source.tokenInstanceId
+      );
+      if (removedToken === undefined) {
+        return {
+          ok: false,
+          error: "Dead wizard token disappeared before destruction",
+        };
+      }
+
+      player.chips -= effect.chipCost;
+      recordGameEvent(state, {
+        type: "effectCostPaid",
+        playerId: player.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        effectId: effect.effectId,
+        costId: "spend_chips",
+        amount: effect.chipCost,
+        sourceType: source.sourceType,
+      });
+      recordGameEvent(state, {
+        type: "deadWizardTokenDestroyed",
+        playerId: player.playerId,
+        tokenInstanceId: removedToken.instanceId,
+        tokenDefinitionId: removedToken.definitionId,
+        effectId: effect.effectId,
+        sourceType: source.sourceType,
+      });
+      return { ok: true };
+    },
+  };
+
 const killerOptionalRemoveDinglerHandler: EffectRuntimeHandler<DeadWizardTokenKillerOptionalRemoveDinglerRuntimeEffect> =
   {
     effectId: "dead_wizard_token_killer_optional_remove_dingler",
@@ -615,6 +705,9 @@ export function createDeadWizardTokenEffectDefinitions(
   const supportedTimings = [
     "onDeadWizardTokenFace",
   ] as const satisfies EffectRuntimeSupportedTimings;
+  const activationTimings = [
+    "activation",
+  ] as const satisfies EffectRuntimeSupportedTimings;
   const suppressionTimings = [
     "whileControlled",
   ] as const satisfies EffectRuntimeSupportedTimings;
@@ -692,6 +785,16 @@ export function createDeadWizardTokenEffectDefinitions(
       supportedModes,
       supportedSourceKinds,
       handler: rewardKillerChipsHandler,
+    },
+    {
+      effectId: "dead_wizard_token_self_destroy_for_chips",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_self_destroy_for_chips"
+      ),
+      supportedTimings: activationTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: selfDestroyForChipsHandler,
     },
     {
       effectId: "dead_wizard_token_killer_optional_remove_dingler",

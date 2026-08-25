@@ -14,6 +14,7 @@ export { listLegalActions } from "./actions-core.js";
 export { ActionExecutionError } from "./action-errors.js";
 export type { ActionExecutionContext } from "./action-errors.js";
 export type {
+  ActivateDeadWizardTokenAction,
   ActivatePermanentAction,
   ActivateWizardPropertyAction,
   ActionResult,

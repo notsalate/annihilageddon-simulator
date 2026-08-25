@@ -4,11 +4,15 @@ import test from "node:test";
 import {
   applyAction,
   listLegalActions,
+  scoreGame,
   type CardInstance,
+  type TokenInstance,
 } from "../src/index.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
+  markTokenDefinitionId,
+  markTokenInstanceId,
 } from "../src/domain/types.js";
 import {
   addFixtureDefenseCardToHand,
@@ -48,6 +52,39 @@ function givenLegendDeckCard(
   };
   scenario.state.common.legendDeck.push(card);
   return card;
+}
+
+function givenWizardProperty(
+  scenario: ReturnType<typeof createGameScenario>,
+  definitionId: string,
+  sequence: number
+): TokenInstance {
+  const token: TokenInstance = {
+    instanceId: markTokenInstanceId(
+      `fixture-activation-token-${scenario.seed}-${sequence}`
+    ),
+    definitionId: markTokenDefinitionId(definitionId),
+    ownerId: scenario.activePlayer.playerId,
+  };
+  scenario.activePlayer.wizardProperties.push(token);
+  return token;
+}
+
+function givenDeadWizardToken(
+  scenario: ReturnType<typeof createGameScenario>,
+  definitionId: string,
+  sequence: number,
+  player = scenario.activePlayer
+): TokenInstance {
+  const token: TokenInstance = {
+    instanceId: markTokenInstanceId(
+      `fixture-activation-dwt-${scenario.seed}-${sequence}`
+    ),
+    definitionId: markTokenDefinitionId(definitionId),
+    ownerId: player.playerId,
+  };
+  player.deadWizardTokens.push(token);
+  return token;
 }
 
 test("activation-effects #264 excludes the source and counts an effective creature", () => {
@@ -592,4 +629,134 @@ test("activation-effects #267 preserves all legend cards when fewer than five ar
       )
     );
   }
+});
+
+test("activation-effects #311 activates wizard property 005 for mixed effective types once per turn", () => {
+  const scenario = createGameScenario({ rootDir, seed: 311005 });
+  const property = givenWizardProperty(
+    scenario,
+    "esw2_dbg__wizard_property_005",
+    1
+  );
+  givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_015",
+    zone: "permanents",
+  });
+  givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_014",
+    zone: "permanents",
+  });
+
+  const activation = listLegalActions(scenario.state).find(
+    (action) =>
+      action.type === "activateWizardProperty" &&
+      action.tokenInstanceId === property.instanceId
+  );
+  assert.ok(activation);
+  assert.equal(scenario.activePlayer.chips, 0);
+  assert.equal(applyAction(scenario.state, activation).ok, true);
+  assert.equal(scenario.activePlayer.chips, 1);
+  assert.equal(
+    listLegalActions(scenario.state).some(
+      (action) =>
+        action.type === "activateWizardProperty" &&
+        action.tokenInstanceId === property.instanceId
+    ),
+    false
+  );
+});
+
+test("activation-effects #311 exposes DWT 005 as an atomic five-chip self-destroy action", () => {
+  const scenario = createGameScenario({ rootDir, seed: 311006 });
+  const token = givenDeadWizardToken(
+    scenario,
+    "esw2_dbg__dead_wizard_token_005",
+    1
+  );
+  scenario.activePlayer.chips = 4;
+  const scoreBefore = scoreGame(scenario.state).find(
+    (score) => score.playerId === scenario.activePlayer.playerId
+  );
+  assert.equal(scoreBefore?.victoryPoints, -8);
+  assert.equal(
+    listLegalActions(scenario.state).some(
+      (action) =>
+        action.type === "activateDeadWizardToken" &&
+        action.tokenInstanceId === token.instanceId
+    ),
+    false
+  );
+  assert.equal(
+    applyAction(scenario.state, {
+      type: "activateDeadWizardToken",
+      tokenInstanceId: token.instanceId,
+    }).ok,
+    false
+  );
+  assert.equal(scenario.activePlayer.chips, 4);
+  assert.equal(scenario.activePlayer.deadWizardTokens.includes(token), true);
+
+  scenario.activePlayer.chips = 5;
+  assert.equal(
+    listLegalActions(scenario.state).some(
+      (action) =>
+        action.type === "activateDeadWizardToken" &&
+        action.tokenInstanceId === token.instanceId
+    ),
+    true
+  );
+  assert.equal(
+    applyAction(scenario.state, {
+      type: "activateDeadWizardToken",
+      tokenInstanceId: token.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(scenario.activePlayer.chips, 0);
+  assert.equal(scenario.activePlayer.deadWizardTokens.includes(token), false);
+  assert.equal(token.ownerId, "common");
+  assert.equal(
+    listLegalActions(scenario.state).some(
+      (action) =>
+        action.type === "activateDeadWizardToken" &&
+        action.tokenInstanceId === token.instanceId
+    ),
+    false
+  );
+  const scoreAfter = scoreGame(scenario.state).find(
+    (score) => score.playerId === scenario.activePlayer.playerId
+  );
+  assert.equal(scoreAfter?.victoryPoints, 0);
+  assert.equal(scoreAfter?.deadWizardTokenCount, 0);
+});
+
+test("activation-effects #311 keeps a DWT action unavailable for a foreign controller", () => {
+  const scenario = createGameScenario({ rootDir, seed: 311007 });
+  const foe = scenario.foes[0];
+  assert.ok(foe);
+  const token = givenDeadWizardToken(
+    scenario,
+    "esw2_dbg__dead_wizard_token_005",
+    1,
+    foe
+  );
+  scenario.activePlayer.chips = 5;
+
+  assert.equal(
+    listLegalActions(scenario.state).some(
+      (action) =>
+        action.type === "activateDeadWizardToken" &&
+        action.tokenInstanceId === token.instanceId
+    ),
+    false
+  );
+  assert.equal(
+    applyAction(scenario.state, {
+      type: "activateDeadWizardToken",
+      tokenInstanceId: token.instanceId,
+    }).ok,
+    false
+  );
+  assert.equal(scenario.activePlayer.chips, 5);
+  assert.equal(foe.deadWizardTokens.includes(token), true);
 });

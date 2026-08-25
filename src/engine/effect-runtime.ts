@@ -449,6 +449,78 @@ export function hasExecutableWizardPropertyActivation(
   return availability.ok && availability.executable;
 }
 
+export type DeadWizardTokenActivationAvailability =
+  | { readonly ok: true; readonly executable: boolean }
+  | { readonly ok: false; readonly error: string };
+
+export function getDeadWizardTokenActivationAvailability(
+  state: GameState,
+  player: PlayerState,
+  definition: TokenDefinition,
+  source?: EffectSourceContext
+): DeadWizardTokenActivationAvailability {
+  if (definition.kind !== "deadWizardToken") {
+    return { ok: true, executable: false };
+  }
+
+  const operationSource: EffectSourceContext = source ?? {
+    sourceType: "deadWizardToken",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: definition.tokenId,
+    definitionId: definition.tokenId,
+    tokenDefinitionId: definition.tokenId,
+  };
+  let executable = false;
+  for (const effect of definition.effects) {
+    const verifiedEffect = requireVerifiedRuntimeEffect(effect);
+    const result = evaluateRuntimeEffectAtTiming(
+      verifiedEffect,
+      operationSource,
+      "activation",
+      (decodedEffect) => {
+        if (!effectConditionMatches(state, player, decodedEffect)) {
+          return { status: "notApplicable" };
+        }
+        if (
+          decodedEffect.effectId ===
+            "dead_wizard_token_self_destroy_for_chips" &&
+          player.chips < decodedEffect.chipCost
+        ) {
+          return { status: "notApplicable" };
+        }
+        return { status: "resolved", result: true };
+      }
+    );
+    if (result.status === "error") {
+      return { ok: false, error: result.error };
+    }
+    if (result.status === "resolved") {
+      executable = true;
+    }
+  }
+
+  return { ok: true, executable };
+}
+
+export function executeDeadWizardTokenActivationEffects(
+  state: GameState,
+  player: PlayerState,
+  definition: TokenDefinition,
+  source: EffectSourceContext
+): EffectExecutionResult {
+  if (definition.kind !== "deadWizardToken") {
+    return { ok: true };
+  }
+  return executeEffects(
+    state,
+    player,
+    definition.effects,
+    "activation",
+    source
+  );
+}
+
 export function executeWizardPropertyOnPlayCardEffects(
   state: GameState,
   player: PlayerState,

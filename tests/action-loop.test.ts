@@ -7982,7 +7982,24 @@ test("Losharocka Wand can self-target and makes the killed target a Dingler", ()
   state.activePlayerId = activePlayer.playerId;
   activePlayer.wizardProperties = [];
   activePlayer.life.current = 5;
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-losharocka-neutral-dwt"),
+      definitionId: markTokenDefinitionId(
+        "esw2_dbg__dead_wizard_token_neutral"
+      ),
+      ownerId: "common",
+    },
+  ];
   const wand = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_030");
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "attack_damage"
+      ? {
+          choiceId:
+            choices.find((choice) => choice.choiceId === activePlayer.playerId)
+              ?.choiceId ?? "",
+        }
+      : undefined;
 
   const result = applyAction(state, {
     type: "playCard",

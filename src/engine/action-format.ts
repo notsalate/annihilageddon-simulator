@@ -7,6 +7,7 @@ export function stableAction(action: LegalAction): Record<string, string> {
     case "activatePermanent":
       return { type: action.type, cardInstanceId: action.cardInstanceId };
     case "activateWizardProperty":
+    case "activateDeadWizardToken":
       return { type: action.type, tokenInstanceId: action.tokenInstanceId };
     case "setCardEffectiveType":
       return {
