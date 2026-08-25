@@ -6,6 +6,7 @@ import {
   getGameEndReason,
   initializeGame,
   runMarketFlow,
+  scoreGame,
   type CardInstance,
   type GameState,
   type PlayerState,
@@ -51,6 +52,11 @@ test("ЖДК-дохляки считают себя ЖДК при розыгры
         (permanent) => permanent.instanceId === card.instanceId
       ),
       true
+    );
+    assert.equal(
+      scoreGame(state).find((score) => score.playerId === player.playerId)
+        ?.victoryPoints,
+      1
     );
   }
 });
