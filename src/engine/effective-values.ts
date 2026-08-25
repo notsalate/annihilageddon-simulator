@@ -28,6 +28,7 @@ import {
   type VerifiedRuntimeEffect,
 } from "./runtime-effect-verification.js";
 import type { RuntimeEffectForId } from "./runtime-effect.js";
+import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
 import { isOwnedCardsCountAsCardTypeRuntimeEffect } from "./effect-runtime-card-type.js";
 
 type EffectiveValueTarget =
@@ -52,6 +53,8 @@ export type CardTypeMatcher = (
   cardType: string,
   card?: CardInstance
 ) => boolean;
+
+const playerCardTypeMatcher: CardTypeMatcher = cardMatchesTypeForPlayer;
 
 const matchesDeclaredCardType: CardTypeMatcher = (
   _state,
@@ -270,6 +273,73 @@ export function calculateEffectivePlayerMaxLife(
     baseValue: player.life.max,
     cardTypeMatcher,
   });
+}
+
+export function calculateEffectiveCardCostForPlayer(
+  state: GameState,
+  playerId: PlayerId,
+  definition: CardDefinition,
+  card?: CardInstance
+): number {
+  return calculateEffectiveCardCost(
+    state,
+    playerId,
+    definition,
+    card,
+    playerCardTypeMatcher
+  );
+}
+
+export function calculateEffectiveCardVictoryPointsForPlayer(
+  state: GameState,
+  playerId: PlayerId,
+  definition: CardDefinition,
+  card: CardInstance | undefined
+): number {
+  return calculateEffectiveCardVictoryPoints(
+    state,
+    playerId,
+    definition,
+    card,
+    playerCardTypeMatcher
+  );
+}
+
+export function calculateEffectiveTokenVictoryPointsForPlayer(
+  state: GameState,
+  playerId: PlayerId,
+  definition: TokenDefinition
+): number {
+  return calculateEffectiveTokenVictoryPoints(
+    state,
+    playerId,
+    definition,
+    playerCardTypeMatcher
+  );
+}
+
+export function calculateEffectivePlayerVictoryPointsForPlayer(
+  state: GameState,
+  playerId: PlayerId,
+  baseValue: number
+): number {
+  return calculateEffectivePlayerVictoryPoints(
+    state,
+    playerId,
+    baseValue,
+    playerCardTypeMatcher
+  );
+}
+
+export function calculateEffectivePlayerMaxLifeForPlayer(
+  state: GameState,
+  playerId: PlayerId
+): number {
+  return calculateEffectivePlayerMaxLife(
+    state,
+    playerId,
+    playerCardTypeMatcher
+  );
 }
 
 function calculateEffectiveValue(options: {
