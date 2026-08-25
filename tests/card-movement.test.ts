@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { getControlledCards } from "../src/engine/control-ledger.js";
 import {
   createGameScenario,
   givenRuntimeCard,
+  givenTemporaryControl,
   play,
   chooseEffect,
   putOnCommonDeck,
@@ -335,6 +337,48 @@ test("card movement: main_057 pays one chip only with a valid hand or discard de
   assert.equal(
     handScenario.state.common.destroyedPile.includes(handTarget),
     true
+  );
+
+  const controlScenario = createGameScenario({
+    rootDir,
+    seed: 281060,
+    playerCount: 2,
+  });
+  const controlController = controlScenario.foes[0];
+  assert.ok(controlController);
+  const controlSource = givenRuntimeCard(controlScenario, {
+    definitionId: "esw2_dbg__main_057",
+  });
+  const controlledCard = givenRuntimeCard(controlScenario, {
+    zone: "discard",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  controlScenario.activePlayer.chips = 1;
+  givenTemporaryControl(controlScenario, controlledCard, controlController);
+  assert.equal(
+    getControlledCards(controlScenario.state, controlController).includes(
+      controlledCard
+    ),
+    true
+  );
+  chooseEffect(controlScenario, (request) =>
+    request.effectId === "optional_spend_chip_destroy_own_cards"
+      ? { choiceId: `destroy_${controlledCard.instanceId}` }
+      : undefined
+  );
+
+  assert.deepEqual(play(controlScenario, controlSource), { ok: true });
+  assert.equal(
+    getControlledCards(controlScenario.state, controlController).includes(
+      controlledCard
+    ),
+    false
+  );
+  assert.equal(
+    controlScenario.state.turn.temporaryCardControls.some(
+      (control) => control.cardInstanceId === controlledCard.instanceId
+    ),
+    false
   );
 });
 

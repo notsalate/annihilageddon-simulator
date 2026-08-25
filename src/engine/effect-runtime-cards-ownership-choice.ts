@@ -9,6 +9,7 @@ import {
   listLegendMarketCards,
   movePhysicalCard,
   peekMainDeckCard,
+  removeTemporaryCardControl,
 } from "./control-ledger.js";
 import type { CardDefinition, CardKind } from "./data.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
@@ -1063,6 +1064,7 @@ export function destroyOwnedCard(
       error: `Cannot destroy card ${card.instanceId}`,
     };
   }
+  removeTemporaryCardControl(state, card.instanceId);
   recordGameEvent(state, {
     type: "effectCardDestroyed",
     playerId: player.playerId,
