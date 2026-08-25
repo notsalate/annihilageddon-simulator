@@ -64,6 +64,7 @@ import {
   type EffectChoiceResolution,
   type EffectRuntimeHandlerOperationResult,
   type EffectRuntimeOperationResult,
+  collectAttackReplacementProfile,
   evaluateRuntimeEffectAtTiming,
   evaluateRuntimeEffectBasicTrophyChipPayoutSuppression,
   executeRuntimeEffect,
@@ -1755,6 +1756,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   gainDeadWizardToken,
   transferControlledDeadWizardTokenLike,
   exchangeControlledDeadWizardTokenLikes,
+  collectAttackReplacementProfile,
   resolvePlayerControlledAttack:
     resolvePlayerControlledAttackWithRuntimeAdapters,
   resolveDefenseWindow,

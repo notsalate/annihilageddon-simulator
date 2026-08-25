@@ -464,6 +464,11 @@ export interface EffectRuntimeServices {
     effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): EffectExecutionResult;
+  collectAttackReplacementProfile(
+    state: GameState,
+    attackingPlayer: PlayerState,
+    source: EffectSourceContext
+  ): EffectRuntimeOperationResult<AttackReplacementProfile>;
   resolvePlayerControlledAttack(
     intent: PlayerControlledAttackIntent
   ): EffectExecutionResult;

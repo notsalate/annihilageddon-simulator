@@ -271,7 +271,21 @@ test("card movement: main_067 destroys one card clockwise and charges Dingler li
   );
   assert.deepEqual(
     choiceOrder,
-    players.map((player) => player.playerId)
+    scenario.state.players
+      .slice(
+        scenario.state.players.findIndex(
+          (player) => player.playerId === scenario.state.activePlayerId
+        )
+      )
+      .concat(
+        scenario.state.players.slice(
+          0,
+          scenario.state.players.findIndex(
+            (player) => player.playerId === scenario.state.activePlayerId
+          )
+        )
+      )
+      .map((player) => player.playerId)
   );
   assert.equal(scenario.activePlayer.life.current, 1);
   assert.ok(
@@ -443,4 +457,203 @@ test("card movement: mega_007 gives Dingler one choice and normal wizards two zo
       [foe.playerId, 2],
     ]
   );
+});
+
+test("card movement: main_001 keeps the revealed card or adds its effective cost", () => {
+  const powerScenario = createGameScenario({ rootDir, seed: 283001 });
+  powerScenario.state.turn.power = 0;
+  powerScenario.activePlayer.deck.splice(0);
+  powerScenario.activePlayer.discard.splice(0);
+  const powerSource = givenRuntimeCard(powerScenario, {
+    definitionId: "esw2_dbg__main_001",
+  });
+  const powerTarget = givenRuntimeCard(powerScenario, {
+    zone: "deck",
+    cost: 4,
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  let powerChoiceRequests = 0;
+  chooseEffect(powerScenario, (request) => {
+    if (request.effectId !== "reveal_top_card_choose_destroy_or_power") {
+      return undefined;
+    }
+    powerChoiceRequests += 1;
+    return { choiceId: "decline" };
+  });
+
+  assert.deepEqual(play(powerScenario, powerSource), { ok: true });
+  assert.equal(powerScenario.state.turn.power, 4);
+  assert.equal(powerScenario.activePlayer.deck[0], powerTarget);
+  assert.equal(powerChoiceRequests, 1);
+
+  const destroyScenario = createGameScenario({ rootDir, seed: 283002 });
+  destroyScenario.state.turn.power = 0;
+  destroyScenario.activePlayer.deck.splice(0);
+  destroyScenario.activePlayer.discard.splice(0);
+  const destroySource = givenRuntimeCard(destroyScenario, {
+    definitionId: "esw2_dbg__main_001",
+  });
+  const destroyTarget = givenRuntimeCard(destroyScenario, {
+    zone: "deck",
+    cost: 2,
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  chooseEffect(destroyScenario, (request) =>
+    request.effectId === "reveal_top_card_choose_destroy_or_power"
+      ? { choiceId: `destroy_${destroyTarget.instanceId}` }
+      : undefined
+  );
+
+  assert.deepEqual(play(destroyScenario, destroySource), { ok: true });
+  assert.equal(destroyScenario.state.turn.power, 0);
+  assert.equal(
+    destroyScenario.state.common.destroyedPile.includes(destroyTarget),
+    true
+  );
+  assert.equal(
+    destroyScenario.activePlayer.deck.includes(destroyTarget),
+    false
+  );
+
+  const emptyScenario = createGameScenario({ rootDir, seed: 283003 });
+  emptyScenario.state.turn.power = 0;
+  emptyScenario.activePlayer.deck.splice(0);
+  emptyScenario.activePlayer.discard.splice(0);
+  const emptySource = givenRuntimeCard(emptyScenario, {
+    definitionId: "esw2_dbg__main_001",
+  });
+  let emptyChoiceRequests = 0;
+  chooseEffect(emptyScenario, (request) => {
+    if (request.effectId === "reveal_top_card_choose_destroy_or_power") {
+      emptyChoiceRequests += 1;
+    }
+    return undefined;
+  });
+
+  assert.deepEqual(play(emptyScenario, emptySource), { ok: true });
+  assert.equal(emptyScenario.state.turn.power, 0);
+  assert.equal(emptyChoiceRequests, 0);
+});
+
+test("card movement: main_007 attacks for the revealed cost or destroys it", () => {
+  const attackScenario = createGameScenario({ rootDir, seed: 283007 });
+  const attackFoe = attackScenario.foes[0];
+  assert.ok(attackFoe);
+  attackScenario.state.turn.power = 0;
+  attackScenario.activePlayer.deck.splice(0);
+  attackScenario.activePlayer.discard.splice(0);
+  attackFoe.life.current = 3;
+  const attackSource = givenRuntimeCard(attackScenario, {
+    definitionId: "esw2_dbg__main_007",
+  });
+  const attackTarget = givenRuntimeCard(attackScenario, {
+    zone: "deck",
+    cost: 3,
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  chooseEffect(attackScenario, (request) => {
+    if (
+      request.effectId !== "reveal_top_card_choose_destroy_or_attack_equal_cost"
+    ) {
+      return undefined;
+    }
+    return request.choices.some(
+      (choice) => choice.choiceId === attackFoe.playerId
+    )
+      ? { choiceId: attackFoe.playerId }
+      : { choiceId: "decline" };
+  });
+
+  const attackResult = play(attackScenario, attackSource);
+  assert.equal(attackResult.ok, true);
+  assert.equal(attackScenario.state.turn.power, 1);
+  assert.equal(
+    attackScenario.state.eventLog.some(
+      (event) =>
+        event.type === "playerDied" && event.playerId === attackFoe.playerId
+    ),
+    true
+  );
+  assert.equal(attackScenario.activePlayer.deck[0], attackTarget);
+
+  const differentCostScenario = createGameScenario({
+    rootDir,
+    seed: 283008,
+  });
+  const differentCostFoe = differentCostScenario.foes[0];
+  assert.ok(differentCostFoe);
+  differentCostFoe.life.current = 10;
+  differentCostScenario.activePlayer.deck.splice(0);
+  differentCostScenario.activePlayer.discard.splice(0);
+  const differentCostSource = givenRuntimeCard(differentCostScenario, {
+    definitionId: "esw2_dbg__main_007",
+  });
+  givenRuntimeCard(differentCostScenario, {
+    zone: "deck",
+    cost: 5,
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  chooseEffect(differentCostScenario, (request) => {
+    if (
+      request.effectId !== "reveal_top_card_choose_destroy_or_attack_equal_cost"
+    ) {
+      return undefined;
+    }
+    return request.choices.some(
+      (choice) => choice.choiceId === differentCostFoe.playerId
+    )
+      ? { choiceId: differentCostFoe.playerId }
+      : { choiceId: "decline" };
+  });
+
+  assert.equal(play(differentCostScenario, differentCostSource).ok, true);
+  assert.equal(differentCostFoe.life.current, 5);
+
+  const destroyScenario = createGameScenario({ rootDir, seed: 283009 });
+  const destroyFoe = destroyScenario.foes[0];
+  assert.ok(destroyFoe);
+  destroyFoe.life.current = 10;
+  destroyScenario.activePlayer.deck.splice(0);
+  destroyScenario.activePlayer.discard.splice(0);
+  const destroySource = givenRuntimeCard(destroyScenario, {
+    definitionId: "esw2_dbg__main_007",
+  });
+  const destroyTarget = givenRuntimeCard(destroyScenario, {
+    zone: "deck",
+    cost: 5,
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  chooseEffect(destroyScenario, (request) =>
+    request.effectId === "reveal_top_card_choose_destroy_or_attack_equal_cost"
+      ? { choiceId: `destroy_${destroyTarget.instanceId}` }
+      : undefined
+  );
+
+  assert.equal(play(destroyScenario, destroySource).ok, true);
+  assert.equal(destroyScenario.state.turn.power, 1);
+  assert.equal(destroyFoe.life.current, 10);
+  assert.equal(
+    destroyScenario.state.common.destroyedPile.includes(destroyTarget),
+    true
+  );
+
+  const emptyScenario = createGameScenario({ rootDir, seed: 283010 });
+  emptyScenario.activePlayer.deck.splice(0);
+  emptyScenario.activePlayer.discard.splice(0);
+  const emptySource = givenRuntimeCard(emptyScenario, {
+    definitionId: "esw2_dbg__main_007",
+  });
+  let emptyTargetChoices = 0;
+  chooseEffect(emptyScenario, (request) => {
+    if (
+      request.effectId === "reveal_top_card_choose_destroy_or_attack_equal_cost"
+    ) {
+      emptyTargetChoices += 1;
+    }
+    return undefined;
+  });
+
+  assert.equal(play(emptyScenario, emptySource).ok, true);
+  assert.equal(emptyScenario.state.turn.power, 1);
+  assert.equal(emptyTargetChoices, 0);
 });
