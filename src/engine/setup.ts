@@ -1057,21 +1057,28 @@ function assignStartingWizardProperties(
       `Token stack ${tokenStack.stackId} must include at least one wizard property`
     );
   }
+  const setupCandidates = filterUnsatisfiedFamiliarSetupProperties(
+    setupPool,
+    players.length,
+    dataPack
+  );
   assertSetupPoolSize(
-    setupPool.length,
+    setupCandidates.length,
     players.length * 2,
     "Wizard property setup pool",
     players.length
   );
 
-  shuffleDeck(setupPool, rng);
+  shuffleDeck(setupCandidates, rng);
 
   for (let index = 0; index < players.length; index += 1) {
     const player = players[index];
     const candidateOffset =
-      players.length * 2 <= setupPool.length ? index * 2 : index;
-    const firstCandidate = setupPool[candidateOffset % setupPool.length];
-    const secondCandidate = setupPool[(candidateOffset + 1) % setupPool.length];
+      players.length * 2 <= setupCandidates.length ? index * 2 : index;
+    const firstCandidate =
+      setupCandidates[candidateOffset % setupCandidates.length];
+    const secondCandidate =
+      setupCandidates[(candidateOffset + 1) % setupCandidates.length];
     if (
       player === undefined ||
       firstCandidate === undefined ||
@@ -1105,6 +1112,49 @@ function assignStartingWizardProperties(
     selectedCandidate.ownerId = player.playerId;
     player.wizardProperties.push(selectedCandidate);
   }
+}
+
+function filterUnsatisfiedFamiliarSetupProperties(
+  setupPool: TokenInstance[],
+  playerCount: number,
+  dataPack: LoadedDataPack
+): TokenInstance[] {
+  const familiarPoolSize =
+    dataPack.decks.familiarPool?.entries.reduce(
+      (total, entry) => total + entry.count,
+      0
+    ) ?? 0;
+  const thirdFamiliarPropertyCount = setupPool.filter((candidate) =>
+    hasThirdFamiliarSetupEffect(
+      dataPack.tokenDefinitions.get(candidate.definitionId)
+    )
+  ).length;
+  if (
+    !isIncompleteFullOnlyDataPack(dataPack) ||
+    familiarPoolSize >=
+      playerCount * 2 + Math.min(playerCount, thirdFamiliarPropertyCount)
+  ) {
+    return setupPool;
+  }
+
+  // In an incomplete pack, do not deal a setup property whose familiar
+  // requirement cannot be satisfied by the available physical pool.
+  const filtered = setupPool.filter((candidate) => {
+    const definition = dataPack.tokenDefinitions.get(candidate.definitionId);
+    return !hasThirdFamiliarSetupEffect(definition);
+  });
+  return filtered.length >= playerCount * 2 ? filtered : setupPool;
+}
+
+function hasThirdFamiliarSetupEffect(
+  definition: TokenDefinition | undefined
+): boolean {
+  return (
+    definition?.kind === "wizardProperty" &&
+    definition.engine?.effects.some(
+      (effect) => effect.effectId === "setup_retain_and_choose_third_familiar"
+    ) === true
+  );
 }
 
 function assignStartingFamiliars(

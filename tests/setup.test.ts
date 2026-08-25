@@ -452,8 +452,13 @@ test("incomplete current runtime skips familiar setup when its pool is short", (
   const source = loadCurrentRuntimeDataPack(rootDir);
   const familiarPool = source.decks.familiarPool;
   const wizardPropertyStack = source.tokenStacks.wizardProperties;
+  const wizardProperty003 = source.tokenDefinitions.get(
+    "esw2_dbg__wizard_property_003"
+  );
   assert.ok(familiarPool);
   assert.ok(wizardPropertyStack);
+  assert.equal(wizardProperty003?.kind, "wizardProperty");
+  assert.equal(wizardProperty003.engine?.playableInV0, true);
   assert.equal(
     familiarPool.entries.find(
       (entry) => entry.cardId === "esw2_dbg__familiar_003"
@@ -464,6 +469,14 @@ test("incomplete current runtime skips familiar setup when its pool is short", (
   const state = initializeGame({ rootDir, seed: 2 });
   assert.ok(
     state.players.every((player) => player.unboughtFamiliars.length === 0)
+  );
+  assert.equal(
+    state.players.some((player) =>
+      player.wizardProperties.some(
+        (property) => property.definitionId === "esw2_dbg__wizard_property_003"
+      )
+    ),
+    false
   );
 });
 
