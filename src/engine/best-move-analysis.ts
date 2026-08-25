@@ -263,7 +263,7 @@ export function enumerateTurnLines(
   const visit = (
     state: GameState,
     steps: AnalysisActionStep[],
-    visitedPositions: ReadonlySet<string>
+    visitedEffectiveTypeSelections: ReadonlySet<string> | undefined
   ): void => {
     for (const [legalActionIndex, action] of listLegalActions(
       state
@@ -325,20 +325,30 @@ export function enumerateTurnLines(
           continue;
         }
 
-        const nextPosition = getAnalysisPositionFingerprint(
-          branch.resultingState
-        );
-        if (visitedPositions.has(nextPosition)) {
+        // Effective-type changes are the only reversible non-terminal action;
+        // track only their contiguous run so cycle protection stays cheap.
+        if (action.type !== "setCardEffectiveType") {
+          visit(branch.resultingState, nextSteps, undefined);
           continue;
         }
-        const nextVisitedPositions = new Set(visitedPositions);
-        nextVisitedPositions.add(nextPosition);
-        visit(branch.resultingState, nextSteps, nextVisitedPositions);
+
+        const currentSelectionKey = getEffectiveTypeSelectionKey(state);
+        const nextSelectionKey = getEffectiveTypeSelectionKey(
+          branch.resultingState
+        );
+        const currentPathSelections =
+          visitedEffectiveTypeSelections ?? new Set([currentSelectionKey]);
+        if (currentPathSelections.has(nextSelectionKey)) {
+          continue;
+        }
+        const nextPathSelections = new Set(currentPathSelections);
+        nextPathSelections.add(nextSelectionKey);
+        visit(branch.resultingState, nextSteps, nextPathSelections);
       }
     }
   };
 
-  visit(source, [], new Set([getAnalysisPositionFingerprint(source)]));
+  visit(source, [], undefined);
   return lines;
 }
 
@@ -417,15 +427,24 @@ function cloneAnalyzedTurnLine(line: AnalyzedTurnLine): AnalyzedTurnLine {
   };
 }
 
-function getAnalysisPositionFingerprint(state: GameState): string {
-  const {
-    cardDefinitions: _cardDefinitions,
-    tokenDefinitions: _tokenDefinitions,
-    eventLog: _eventLog,
-    effectChoiceStrategy: _effectChoiceStrategy,
-    ...position
-  } = state;
-  return JSON.stringify(position) ?? "<unserializable-analysis-position>";
+function getEffectiveTypeSelectionKey(state: GameState): string {
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  if (activePlayer === undefined) {
+    return "<missing-active-player>";
+  }
+  const selections: Array<[string, string]> =
+    activePlayer.effectiveCardTypeSelections.map(
+      ({ cardInstanceId, cardType }) => [cardInstanceId, cardType]
+    );
+  return JSON.stringify(
+    selections.sort(([leftCardId, leftType], [rightCardId, rightType]) =>
+      leftCardId === rightCardId
+        ? leftType.localeCompare(rightType)
+        : leftCardId.localeCompare(rightCardId)
+    )
+  );
 }
 
 function assertFiniteEvaluation(
