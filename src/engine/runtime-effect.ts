@@ -347,6 +347,7 @@ export const knownRuntimeEffectIds = [
   "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
   "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
   "mayhem_each_player_discard_deck_then_destroy_from_discard",
+  "mayhem_each_player_reveal_random_hand_card_destroy_or_pay_life_to_reroll",
   "mayhem_each_player_optional_destroy_own_card",
   "mayhem_each_player_optional_destroy_own_card_for_half_chips",
   "mayhem_each_player_gain_chips_then_attack_for_current_chips",

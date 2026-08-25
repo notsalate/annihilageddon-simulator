@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_061",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_061.json",
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2S.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_061.md"
+  },
+  "visible": {
+    "nameRu": "2S",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун сбрасывает 2 верхние карты своей колоды и выбирает: уничтожить обе или не уничтожать ни одной.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
+        "timing": "onMayhemResolve",
+        "targetSelector": "eachPlayerClockwiseFromActive",
+        "chooser": "affectedPlayer",
+        "choice": "destroyBothOrDestroyNone",
+        "amount": 2,
+        "sourceZone": "deck"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

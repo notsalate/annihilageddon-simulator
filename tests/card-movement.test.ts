@@ -680,6 +680,264 @@ test("card movement: main_076 requires a positive floor-half chip cost", () => {
   assert.equal(emptyChoiceRequests, 0);
 });
 
+test("card movement: main_061 destroys the complete available reveal set", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 285061,
+    playerCount: 3,
+  });
+  const players = [scenario.activePlayer, ...scenario.foes];
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_061",
+  });
+  const cardsByPlayer = players.map((player, playerIndex) => {
+    player.deck.splice(0);
+    player.discard.splice(0);
+    return Array.from({ length: playerIndex }, (_, cardIndex) =>
+      givenRuntimeCard(scenario, {
+        player,
+        zone: "deck",
+        instanceId: `fixture-285061-${playerIndex}-${cardIndex}`,
+        effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+      })
+    );
+  });
+  const requests: string[] = [];
+  chooseEffect(scenario, (request) => {
+    if (
+      request.effectId !==
+      "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none"
+    ) {
+      return undefined;
+    }
+    requests.push(request.player.playerId);
+    const playerIndex = players.findIndex(
+      (player) => player.playerId === request.player.playerId
+    );
+    const revealed = cardsByPlayer[playerIndex] ?? [];
+    if (revealed.length > 0) {
+      assert.equal(players[playerIndex]?.discard.includes(revealed[0]!), true);
+    }
+    return { choiceId: "destroy_both" };
+  });
+
+  assert.equal(
+    resolveMayhemThroughMarket(scenario, source, "mainDeck").ok,
+    true
+  );
+  const activeIndex = scenario.state.players.findIndex(
+    (player) => player.playerId === scenario.state.activePlayerId
+  );
+  const activeOrder = [
+    ...scenario.state.players.slice(activeIndex),
+    ...scenario.state.players.slice(0, activeIndex),
+  ];
+  assert.deepEqual(
+    requests,
+    activeOrder
+      .filter((player) =>
+        cardsByPlayer.some((cards) => cards[0]?.ownerId === player.playerId)
+      )
+      .map((player) => player.playerId)
+  );
+  assert.equal(cardsByPlayer[0]?.length, 0);
+  assert.equal(
+    scenario.state.common.destroyedPile.includes(cardsByPlayer[1]?.[0]!),
+    true
+  );
+  assert.equal(
+    scenario.state.common.destroyedPile.includes(cardsByPlayer[2]?.[0]!),
+    true
+  );
+  assert.equal(
+    scenario.state.common.destroyedPile.includes(cardsByPlayer[2]?.[1]!),
+    true
+  );
+  assert.deepEqual(
+    players.map((player) => player.discard.length),
+    [0, 0, 0]
+  );
+});
+
+test("card movement: main_068 chooses one card from each non-empty final discard", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 285068,
+    playerCount: 3,
+  });
+  const players = [scenario.activePlayer, ...scenario.foes];
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_068",
+  });
+  const cardsByPlayer = players.map((player, playerIndex) => {
+    player.deck.splice(0);
+    player.discard.splice(0);
+    return Array.from({ length: playerIndex === 2 ? 0 : 2 }, (_, cardIndex) =>
+      givenRuntimeCard(scenario, {
+        player,
+        zone: "deck",
+        instanceId: `fixture-285068-${playerIndex}-${cardIndex}`,
+        effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+      })
+    );
+  });
+  const requests: string[] = [];
+  chooseEffect(scenario, (request) => {
+    if (
+      request.effectId !==
+      "mayhem_each_player_discard_deck_then_destroy_from_discard"
+    ) {
+      return undefined;
+    }
+    requests.push(request.player.playerId);
+    const playerIndex = players.findIndex(
+      (player) => player.playerId === request.player.playerId
+    );
+    const target = cardsByPlayer[playerIndex]?.[1];
+    return target === undefined
+      ? undefined
+      : { choiceId: `destroy_${target.instanceId}` };
+  });
+
+  assert.equal(
+    resolveMayhemThroughMarket(scenario, source, "mainDeck").ok,
+    true
+  );
+  assert.deepEqual(
+    requests,
+    players.slice(0, 2).map((player) => player.playerId)
+  );
+  for (const cards of cardsByPlayer.slice(0, 2)) {
+    assert.equal(scenario.state.common.destroyedPile.includes(cards[1]!), true);
+    assert.equal(
+      cards[0] && scenario.state.common.destroyedPile.includes(cards[0]),
+      false
+    );
+  }
+  assert.deepEqual(
+    players.map((player) => player.discard.length),
+    [1, 1, 0]
+  );
+});
+
+test("card movement: main_077 rerolls with seeded life payments and destroys at two life", () => {
+  const run = (seed: number) => {
+    const scenario = createGameScenario({
+      rootDir,
+      seed,
+      playerCount: 3,
+    });
+    const [active, foe, empty] = [scenario.activePlayer, ...scenario.foes];
+    assert.ok(foe);
+    assert.ok(empty);
+    for (const player of [active, foe, empty]) {
+      player.hand.splice(0);
+      player.deck.splice(0);
+      player.discard.splice(0);
+    }
+    active.life.current = 6;
+    foe.life.current = 2;
+    const source = givenRuntimeCard(scenario, {
+      definitionId: "esw2_dbg__main_077",
+    });
+    const activeCards = [0, 1].map((cardIndex) =>
+      givenRuntimeCard(scenario, {
+        player: active,
+        instanceId: `fixture-285077-active-${cardIndex}`,
+        effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+      })
+    );
+    const foeCard = givenRuntimeCard(scenario, {
+      player: foe,
+      instanceId: "fixture-285077-foe",
+      effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+    });
+    const requestCounts = new Map<string, number>();
+    chooseEffect(scenario, (request) => {
+      if (
+        request.effectId !==
+        "mayhem_each_player_reveal_random_hand_card_destroy_or_pay_life_to_reroll"
+      ) {
+        return undefined;
+      }
+      const requestNumber = requestCounts.get(request.player.playerId) ?? 0;
+      requestCounts.set(request.player.playerId, requestNumber + 1);
+      if (request.player.playerId === active.playerId && requestNumber === 0) {
+        return { choiceId: "reroll" };
+      }
+      return {
+        choiceId:
+          request.choices.find((choice) =>
+            choice.choiceId.startsWith("destroy_")
+          )?.choiceId ?? "destroy_none",
+      };
+    });
+
+    assert.equal(
+      resolveMayhemThroughMarket(scenario, source, "mainDeck").ok,
+      true
+    );
+    const targetIds = new Set([
+      activeCards[0]!.instanceId,
+      activeCards[1]!.instanceId,
+      foeCard.instanceId,
+    ]);
+    return {
+      activeId: active.playerId,
+      foeId: foe.playerId,
+      activeLife: active.life.current,
+      foeLife: foe.life.current,
+      requests: [...requestCounts.entries()],
+      reveals: scenario.state.eventLog
+        .filter(
+          (event) =>
+            event.type === "effectCardRevealed" &&
+            event.effectId ===
+              "mayhem_each_player_reveal_random_hand_card_destroy_or_pay_life_to_reroll"
+        )
+        .map((event) => {
+          assert.ok(event.playerId !== undefined);
+          assert.ok(event.targetCardInstanceId !== undefined);
+          return `${event.playerId}:${event.targetCardInstanceId}`;
+        }),
+      payments: scenario.state.eventLog
+        .filter(
+          (event) =>
+            event.type === "effectCostPaid" &&
+            event.effectId ===
+              "mayhem_each_player_reveal_random_hand_card_destroy_or_pay_life_to_reroll"
+        )
+        .map((event) => {
+          assert.ok(event.playerId !== undefined);
+          assert.ok(event.amount !== undefined);
+          return `${event.playerId}:${event.amount}`;
+        }),
+      destroyed: scenario.state.common.destroyedPile
+        .filter((card) => targetIds.has(card.instanceId))
+        .map((card) => card.instanceId),
+      remainingActiveCards: active.hand
+        .filter((card) => targetIds.has(card.instanceId))
+        .map((card) => card.instanceId),
+      emptyRequests: requestCounts.get(empty.playerId) ?? 0,
+    };
+  };
+
+  const first = run(285077);
+  const second = run(285077);
+  assert.deepEqual(second, first);
+  assert.equal(first.activeLife, 4);
+  assert.equal(first.foeLife, 2);
+  assert.deepEqual(first.requests, [
+    [first.activeId, 2],
+    [first.foeId, 1],
+  ]);
+  assert.equal(first.reveals.length, 3);
+  assert.deepEqual(first.payments, [`${first.activeId}:2`]);
+  assert.equal(first.destroyed.length, 2);
+  assert.equal(first.remainingActiveCards.length, 1);
+  assert.equal(first.emptyRequests, 0);
+});
+
 test("card movement: mega_007 gives Dingler one choice and normal wizards two zone choices", () => {
   const scenario = createGameScenario({
     rootDir,
