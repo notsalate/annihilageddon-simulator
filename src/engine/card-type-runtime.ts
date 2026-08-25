@@ -148,6 +148,26 @@ export function runtimeEffectConditionMatches(
   );
 }
 
+export function countControlledCardsOfType(
+  state: GameState,
+  player: PlayerState,
+  cardType: string
+): number {
+  return getControlledCards(state, player).filter((card) => {
+    const definition = state.cardDefinitions.get(card.definitionId);
+    return (
+      definition !== undefined &&
+      cardMatchesTypeForPlayer(
+        state,
+        player.playerId,
+        definition,
+        cardType,
+        card
+      )
+    );
+  }).length;
+}
+
 export function getCardEffectiveTypeOptions(
   state: GameState,
   playerId: PlayerId,

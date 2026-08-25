@@ -38,7 +38,9 @@ export type {
   WildMagicOption,
 } from "./effect-runtime-cards-ownership-choice.js";
 export type {
+  ActivationAddPowerPerControlledCardTypeRuntimeEffect,
   ActivationDestroySelfThenDestroyOwnCardsRuntimeEffect,
+  ActivationDoubleTurnPowerRuntimeEffect,
   ActivationEffectPayloadMap,
   ConditionalActivationDestroyOwnCardsRuntimeEffect,
   ConditionalActivationGainChipsRuntimeEffect,
@@ -205,7 +207,9 @@ export type MayhemHandRedrawOption =
   | { effectId: "take_damage"; amount: 5 };
 
 export const knownRuntimeEffectIds = [
+  "activation_add_power_per_controlled_card_type",
   "activation_destroy_self_then_destroy_own_cards",
+  "activation_double_turn_power",
   "add_power",
   "add_power_if_player_has_status",
   "add_power_per_controlled_object",
@@ -218,6 +222,7 @@ export const knownRuntimeEffectIds = [
   "attack_discard_cards",
   "attack_gain_limp_wand",
   "attack_gain_status",
+  "activation_attack_damage_per_controlled_card_type",
   "avoid_attack",
   "conditional_activation_attack_damage",
   "conditional_activation_destroy_own_cards",
@@ -590,6 +595,15 @@ export type ConditionalActivationAttackDamageRuntimeEffect =
     PositiveAmount &
     Targetable &
     Conditioned;
+export type ActivationAttackDamagePerControlledCardTypeRuntimeEffect =
+  TimedEffect<
+    "activation_attack_damage_per_controlled_card_type",
+    "activation"
+  > & {
+    amountPerCard: number;
+    cardType: string;
+    targetSelector: "eachFoe";
+  };
 export type DirectionalChainAttackRuntimeEffect =
   EffectWithOptionalTiming<"directional_chain_attack"> &
     PositiveAmount &
@@ -651,6 +665,7 @@ export interface PlayerControlledAttackEffectPayloadMap {
   attack_gain_status: AttackGainStatusRuntimeEffect;
   avoid_attack: AvoidAttackRuntimeEffect;
   conditional_activation_attack_damage: ConditionalActivationAttackDamageRuntimeEffect;
+  activation_attack_damage_per_controlled_card_type: ActivationAttackDamagePerControlledCardTypeRuntimeEffect;
   directional_chain_attack: DirectionalChainAttackRuntimeEffect;
   multi_target_attack: MultiTargetAttackRuntimeEffect;
   optional_spend_chip_attack_damage: OptionalSpendChipAttackDamageRuntimeEffect;

@@ -217,6 +217,7 @@ test("remaining Catalog families expose one local ID inventory each", () => {
     "attack_discard_cards",
     "attack_gain_limp_wand",
     "attack_gain_status",
+    "activation_attack_damage_per_controlled_card_type",
     "conditional_activation_attack_damage",
     "directional_chain_attack",
     "multi_target_attack",
@@ -289,7 +290,9 @@ test("card, activation, ongoing and modifier IDs belong to family modules", () =
     "on_gain_self_gain_limp_wands",
   ]);
   assert.deepEqual(activationEffectIds, [
+    "activation_add_power_per_controlled_card_type",
     "activation_destroy_self_then_destroy_own_cards",
+    "activation_double_turn_power",
     "conditional_activation_destroy_own_cards",
     "conditional_activation_gain_chips",
     "optional_spend_chip_destroy_own_cards",

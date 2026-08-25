@@ -162,3 +162,81 @@ test("activation-effects #264 resolves the selected attack through normal defens
     )
   );
 });
+
+test("activation-effects #265 doubles the accumulated power at activation time", () => {
+  const scenario = createGameScenario({ rootDir, seed: 265005 });
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__legend_005",
+  });
+
+  assert.equal(play(scenario, source).ok, true);
+  scenario.state.turn.power = 7;
+  assert.ok(findActivation(scenario, source));
+  assert.equal(
+    applyAction(scenario.state, {
+      type: "activatePermanent",
+      cardInstanceId: source.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(scenario.state.turn.power, 14);
+  assert.equal(findActivation(scenario, source), undefined);
+});
+
+test("activation-effects #265 counts the source and effective creatures for power", () => {
+  const scenario = createGameScenario({ rootDir, seed: 265055 });
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_055",
+  });
+  givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__familiar_005",
+    zone: "permanents",
+  });
+
+  assert.equal(play(scenario, source).ok, true);
+  assert.equal(
+    applyAction(scenario.state, {
+      type: "activatePermanent",
+      cardInstanceId: source.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(scenario.state.turn.power, 6);
+});
+
+test("activation-effects #265 attacks every foe for each controlled effective creature", () => {
+  const scenario = createGameScenario({ rootDir, seed: 265048 });
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_048",
+  });
+  givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__familiar_005",
+    zone: "permanents",
+  });
+  for (const foe of scenario.foes) {
+    foe.life.current = 20;
+    foe.hand = [];
+    foe.permanents = [];
+  }
+
+  assert.equal(play(scenario, source).ok, true);
+  assert.equal(
+    applyAction(scenario.state, {
+      type: "activatePermanent",
+      cardInstanceId: source.instanceId,
+    }).ok,
+    true
+  );
+  for (const foe of scenario.foes) {
+    assert.equal(foe.life.current, 14);
+  }
+  assert.equal(
+    scenario.state.eventLog.filter(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.cardInstanceId === source.instanceId &&
+        event.amount === 6
+    ).length,
+    scenario.foes.length
+  );
+});

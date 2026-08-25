@@ -1,5 +1,10 @@
 import { createUnsupportedEffectHandler } from "./effect-runtime-family-support.js";
-import { recordEffectChipsChanged, recordGameEvent } from "./event-recorder.js";
+import { countControlledCardsOfType } from "./card-type-runtime.js";
+import {
+  recordEffectChipsChanged,
+  recordGameEvent,
+  recordTurnPowerChanged,
+} from "./event-recorder.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
 import type {
   EffectTiming,
@@ -55,6 +60,18 @@ export type ConditionalActivationGainChipsRuntimeEffect = TimedEffect<
 > &
   PositiveAmount &
   Conditioned & { activationLimit: "oncePerTurnWhileControlled" };
+export type ActivationAddPowerPerControlledCardTypeRuntimeEffect = TimedEffect<
+  "activation_add_power_per_controlled_card_type",
+  "activation"
+> & {
+  cardType: string;
+  amountPerCard: number;
+  activationLimit: "oncePerTurnWhileControlled";
+};
+export type ActivationDoubleTurnPowerRuntimeEffect = TimedEffect<
+  "activation_double_turn_power",
+  "activation"
+> & { activationLimit: "oncePerTurnWhileControlled" };
 export type OptionalSpendChipDestroyOwnCardsRuntimeEffect = TimedEffect<
   "optional_spend_chip_destroy_own_cards",
   "onPlay"
@@ -66,20 +83,26 @@ export type OptionalSpendChipDestroyOwnCardsRuntimeEffect = TimedEffect<
 };
 
 export interface ActivationEffectPayloadMap {
+  activation_add_power_per_controlled_card_type: ActivationAddPowerPerControlledCardTypeRuntimeEffect;
   activation_destroy_self_then_destroy_own_cards: ActivationDestroySelfThenDestroyOwnCardsRuntimeEffect;
+  activation_double_turn_power: ActivationDoubleTurnPowerRuntimeEffect;
   conditional_activation_destroy_own_cards: ConditionalActivationDestroyOwnCardsRuntimeEffect;
   conditional_activation_gain_chips: ConditionalActivationGainChipsRuntimeEffect;
   optional_spend_chip_destroy_own_cards: OptionalSpendChipDestroyOwnCardsRuntimeEffect;
 }
 
 export type ActivationEffectId =
+  | "activation_add_power_per_controlled_card_type"
   | "activation_destroy_self_then_destroy_own_cards"
+  | "activation_double_turn_power"
   | "conditional_activation_destroy_own_cards"
   | "conditional_activation_gain_chips"
   | "optional_spend_chip_destroy_own_cards";
 
 export const activationEffectIds = [
+  "activation_add_power_per_controlled_card_type",
   "activation_destroy_self_then_destroy_own_cards",
+  "activation_double_turn_power",
   "conditional_activation_destroy_own_cards",
   "conditional_activation_gain_chips",
   "optional_spend_chip_destroy_own_cards",
@@ -96,6 +119,7 @@ export interface ActivationEffectDecoderTools {
     expected: Value
   ): ValueDecoder<Value>;
   positiveInteger: ValueDecoder<number>;
+  nonEmptyString: ValueDecoder<string>;
   optionalCondition: OptionalField<
     NonNullable<
       RuntimeEffectForId<"conditional_activation_destroy_own_cards">["condition"]
@@ -117,11 +141,24 @@ export function createActivationEffectDecoders(
     required,
     literal,
     positiveInteger,
+    nonEmptyString,
     optionalCondition,
     handOrDiscardZones,
   } = tools;
 
   return {
+    activation_add_power_per_controlled_card_type: defineDecoder(
+      "activation_add_power_per_controlled_card_type",
+      {
+        effectId: required(
+          literal("activation_add_power_per_controlled_card_type")
+        ),
+        timing: required(literal("activation")),
+        cardType: required(nonEmptyString),
+        amountPerCard: required(positiveInteger),
+        activationLimit: required(literal("oncePerTurnWhileControlled")),
+      }
+    ),
     activation_destroy_self_then_destroy_own_cards: defineDecoder(
       "activation_destroy_self_then_destroy_own_cards",
       {
@@ -139,6 +176,14 @@ export function createActivationEffectDecoders(
         ),
         maxAmount: required(positiveInteger),
         destroySelf: required(literal(true)),
+      }
+    ),
+    activation_double_turn_power: defineDecoder(
+      "activation_double_turn_power",
+      {
+        effectId: required(literal("activation_double_turn_power")),
+        timing: required(literal("activation")),
+        activationLimit: required(literal("oncePerTurnWhileControlled")),
       }
     ),
     conditional_activation_destroy_own_cards: defineDecoder(
@@ -212,6 +257,45 @@ export function createActivationEffectDefinitions(
         return { ok: true };
       },
     };
+  const activationAddPowerPerControlledCardTypeHandler: EffectRuntimeHandler<ActivationAddPowerPerControlledCardTypeRuntimeEffect> =
+    {
+      effectId: "activation_add_power_per_controlled_card_type",
+      execute(state, player, effect, source) {
+        const amount =
+          countControlledCardsOfType(state, player, effect.cardType) *
+          effect.amountPerCard;
+        if (amount === 0) return { ok: true };
+
+        const powerBefore = state.turn.power;
+        state.turn.power += amount;
+        recordTurnPowerChanged(
+          state,
+          player,
+          source,
+          effect.effectId,
+          powerBefore,
+          state.turn.power
+        );
+        return { ok: true };
+      },
+    };
+  const activationDoubleTurnPowerHandler: EffectRuntimeHandler<ActivationDoubleTurnPowerRuntimeEffect> =
+    {
+      effectId: "activation_double_turn_power",
+      execute(state, player, effect, source) {
+        const powerBefore = state.turn.power;
+        state.turn.power *= 2;
+        recordTurnPowerChanged(
+          state,
+          player,
+          source,
+          effect.effectId,
+          powerBefore,
+          state.turn.power
+        );
+        return { ok: true };
+      },
+    };
   const conditionalActivationDestroyOwnCardsHandler: EffectRuntimeHandler<ConditionalActivationDestroyOwnCardsRuntimeEffect> =
     {
       effectId: "conditional_activation_destroy_own_cards",
@@ -273,6 +357,16 @@ export function createActivationEffectDefinitions(
     };
   return [
     {
+      effectId: "activation_add_power_per_controlled_card_type",
+      decoder: bindRuntimeEffectDecoder(
+        "activation_add_power_per_controlled_card_type"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: activationAddPowerPerControlledCardTypeHandler,
+    },
+    {
       effectId: "activation_destroy_self_then_destroy_own_cards",
       decoder: bindRuntimeEffectDecoder(
         "activation_destroy_self_then_destroy_own_cards"
@@ -283,6 +377,14 @@ export function createActivationEffectDefinitions(
       handler: createUnsupportedEffectHandler(
         "activation_destroy_self_then_destroy_own_cards"
       ),
+    },
+    {
+      effectId: "activation_double_turn_power",
+      decoder: bindRuntimeEffectDecoder("activation_double_turn_power"),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: activationDoubleTurnPowerHandler,
     },
     {
       effectId: "conditional_activation_destroy_own_cards",

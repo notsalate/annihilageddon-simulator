@@ -8552,8 +8552,11 @@ test("Sweet Smurfinier heals only actual attack damage dealt", () => {
   assert.ok(targetPlayer);
   activePlayer.wizardProperties = [];
   targetPlayer.wizardProperties = [];
+  targetPlayer.statuses = [];
   targetPlayer.hand = [];
+  state.common.deadWizardTokens.drawStack.splice(0);
   activePlayer.life.current = 10;
+  targetPlayer.life.max = 20;
   targetPlayer.life.current = 1;
   const card = addRuntimeCardToHand(state, activePlayer, "esw2_dbg__main_046");
 
