@@ -18,6 +18,7 @@ import {
 import {
   getControlledCards,
   findCardLocation,
+  insertDetachedCard,
   removeCardFromLocation,
   removeDeadWizardToken,
   removeTemporaryCardControl,
@@ -1750,6 +1751,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   moveGainedCardToPlayerDestination,
   moveCardToPlayerZone,
   moveCardToZonePreservingOwner,
+  restoreDetachedCardToZone,
   discardTopDeckCards,
   getDestroyDestination,
   getOpponentsInSeatingOrder,
@@ -3545,6 +3547,36 @@ function moveCardToZonePreservingOwner(
   }
   recordCardMoved(state, player, card, {
     sourceZone,
+    destinationZone,
+    ownerBefore,
+    ownerAfter: card.ownerId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+  return true;
+}
+
+function restoreDetachedCardToZone(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance,
+  destinationZone: string,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext,
+  placeOnTop = false
+): boolean {
+  const ownerBefore = card.ownerId;
+  const restored = insertDetachedCard(
+    state,
+    card,
+    destinationZone,
+    placeOnTop ? "front" : "back"
+  );
+  if (!restored.ok) {
+    return false;
+  }
+  recordCardMoved(state, player, card, {
+    sourceZone: restored.move.sourceZoneName,
     destinationZone,
     ownerBefore,
     ownerAfter: card.ownerId,

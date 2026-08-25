@@ -1757,7 +1757,20 @@ export function executeRevealAndPlayFoeDeckCard(
     for (const card of revealedCards) {
       const location = findCardLocation(state, card.instanceId);
       if (location === undefined) {
-        foe.discard.push(card);
+        const restored = services.restoreDetachedCardToZone(
+          state,
+          player,
+          card,
+          ownerDiscardDestination,
+          effect.effectId,
+          source
+        );
+        if (!restored) {
+          return {
+            ok: false,
+            error: `Cannot restore detached revealed foe card ${card.instanceId}`,
+          };
+        }
         removeTemporaryCardControl(state, card.instanceId);
         continue;
       }

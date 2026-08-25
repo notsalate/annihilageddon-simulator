@@ -328,6 +328,15 @@ export interface EffectRuntimeServices {
     source: EffectSourceContext,
     placeOnTop?: boolean
   ): boolean;
+  restoreDetachedCardToZone(
+    state: GameState,
+    player: PlayerState,
+    card: CardInstance,
+    destinationZone: string,
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext,
+    placeOnTop?: boolean
+  ): boolean;
   discardTopDeckCards(
     state: GameState,
     player: PlayerState,
