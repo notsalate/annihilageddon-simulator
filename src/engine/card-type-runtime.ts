@@ -30,6 +30,7 @@ const cardTypeEffectResolutionCache = new WeakMap<
   object,
   Map<string, CardTypeEffectResolution>
 >();
+const cardTypeOptionsCache = new WeakMap<GameState, Map<string, string[]>>();
 
 export function cardMatchesTypeForPlayer(
   state: GameState,
@@ -89,6 +90,18 @@ export function getCardEffectiveTypeOptions(
   const definition = state.cardDefinitions.get(card.definitionId);
   if (definition === undefined) return [];
 
+  const cacheKey = JSON.stringify([
+    state.runtimeMode,
+    playerId,
+    player.wizardProperties.map(({ instanceId, definitionId }) => [
+      instanceId,
+      definitionId,
+    ]),
+    card.definitionId,
+  ]);
+  const cachedOptions = cardTypeOptionsCache.get(state)?.get(cacheKey);
+  if (cachedOptions !== undefined) return cachedOptions;
+
   const options = new Set<string>();
   for (const property of player.wizardProperties) {
     const propertyDefinition = state.tokenDefinitions.get(
@@ -125,7 +138,11 @@ export function getCardEffectiveTypeOptions(
       }
     }
   }
-  return Array.from(options).sort();
+  const sortedOptions = Array.from(options).sort();
+  const stateCache = cardTypeOptionsCache.get(state) ?? new Map();
+  stateCache.set(cacheKey, sortedOptions);
+  cardTypeOptionsCache.set(state, stateCache);
+  return sortedOptions;
 }
 
 export function isPlayerCardEffectiveTypeSelected(

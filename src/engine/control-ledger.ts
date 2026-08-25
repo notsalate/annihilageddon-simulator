@@ -514,6 +514,20 @@ export function listOwnedPlayerPhysicalCards(
     .map((location) => location.card);
 }
 
+/** Lists one player's owned physical cards without scanning other Ledger zones. */
+export function listPlayerOwnedPhysicalCards(
+  player: PlayerState
+): readonly CardInstance[] {
+  return [
+    ...player.deck,
+    ...player.hand,
+    ...player.discard,
+    ...player.playedThisTurn,
+    ...player.permanents,
+    ...player.unboughtFamiliars,
+  ].filter((card) => card.ownerId === player.playerId);
+}
+
 /** Lists the active player's unbought familiar slot cards through the Ledger. */
 export function listPlayerUnboughtFamiliarCards(
   player: PlayerState

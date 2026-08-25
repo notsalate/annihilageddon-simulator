@@ -24,7 +24,7 @@ import { assertNever } from "../common.js";
 import {
   findPlayerUnboughtFamiliarCard,
   getControlledCards,
-  listOwnedPlayerPhysicalCards,
+  listPlayerOwnedPhysicalCards,
   listPlayerUnboughtFamiliarCards,
   releaseTemporaryControls,
 } from "./control-ledger.js";
@@ -999,15 +999,9 @@ function getCardEffectiveTypeActions(
   state: GameState,
   player: PlayerState
 ): SetCardEffectiveTypeAction[] {
-  const cards = new Map<string, CardInstance>();
-  for (const card of [
-    ...getControlledCards(state, player),
-    ...getOwnedFamiliarCards(state, player),
-  ]) {
-    cards.set(card.instanceId, card);
-  }
+  const cards = getCardEffectiveTypeActionCards(state, player);
 
-  return Array.from(cards.values()).flatMap((card) =>
+  return cards.flatMap((card) =>
     getCardEffectiveTypeOptions(state, player.playerId, card).flatMap(
       (cardType) => [
         {
@@ -1026,22 +1020,35 @@ function getCardEffectiveTypeActions(
   );
 }
 
+function getCardEffectiveTypeActionCards(
+  state: GameState,
+  player: PlayerState
+): CardInstance[] {
+  const cards = new Map<string, CardInstance>();
+  for (const card of [
+    ...getControlledCards(state, player),
+    ...getOwnedFamiliarCards(state, player),
+  ]) {
+    cards.set(card.instanceId, card);
+  }
+  return Array.from(cards.values());
+}
+
 function getCardEffectiveTypeActionCard(
   state: GameState,
   player: PlayerState,
   cardInstanceId: string
 ): CardInstance | undefined {
-  return [
-    ...getControlledCards(state, player),
-    ...getOwnedFamiliarCards(state, player),
-  ].find((card) => card.instanceId === cardInstanceId);
+  return getCardEffectiveTypeActionCards(state, player).find(
+    (card) => card.instanceId === cardInstanceId
+  );
 }
 
 function getOwnedFamiliarCards(
   state: GameState,
   player: PlayerState
 ): CardInstance[] {
-  return listOwnedPlayerPhysicalCards(state, player.playerId).filter(
+  return listPlayerOwnedPhysicalCards(player).filter(
     (card) =>
       state.cardDefinitions.get(card.definitionId)?.engine.cardKind ===
       "familiar"
