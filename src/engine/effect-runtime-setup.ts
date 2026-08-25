@@ -1,5 +1,10 @@
 import { markCardDefinitionId } from "../domain/types.js";
 import { replaceOwnedCardDefinitionInPlayerZones } from "./control-ledger.js";
+import {
+  isIncompleteFullOnlyDataPack,
+  type LoadedDataPack,
+  type TokenDefinition,
+} from "./data.js";
 import type { EffectRuntimeEndTurnDrawModifierOperationContext } from "./effect-runtime-registry.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 import {
@@ -21,7 +26,7 @@ import {
   type EffectRuntimeSupportedSourceKinds,
   type EffectRuntimeSupportedTimings,
 } from "./effect-runtime-catalog-shared.js";
-import type { GameState, PlayerState } from "./setup.js";
+import type { GameState, PlayerState, TokenInstance } from "./setup.js";
 
 type DecodedPayloadValidator<Id extends SetupEffectId> = (
   subjectId: string,
@@ -60,6 +65,49 @@ export const setupEffectIds = [
   "controls_other_card_type",
   "destroyed_card_kind_is",
 ] as const satisfies readonly SetupEffectId[];
+
+export function filterWizardPropertySetupPoolForFamiliarCapacity(
+  setupPool: TokenInstance[],
+  playerCount: number,
+  dataPack: Pick<LoadedDataPack, "manifest" | "decks" | "tokenDefinitions">
+): TokenInstance[] {
+  const familiarPoolSize =
+    dataPack.decks.familiarPool?.entries.reduce(
+      (total, entry) => total + entry.count,
+      0
+    ) ?? 0;
+  const thirdFamiliarPropertyCount = setupPool.filter((candidate) =>
+    hasThirdFamiliarSetupEffect(
+      dataPack.tokenDefinitions.get(candidate.definitionId)
+    )
+  ).length;
+  if (
+    !isIncompleteFullOnlyDataPack(dataPack) ||
+    familiarPoolSize >=
+      playerCount * 2 + Math.min(playerCount, thirdFamiliarPropertyCount)
+  ) {
+    return setupPool;
+  }
+
+  // In an incomplete pack, do not deal a setup property whose familiar
+  // requirement cannot be satisfied by the available physical pool.
+  const filtered = setupPool.filter((candidate) => {
+    const definition = dataPack.tokenDefinitions.get(candidate.definitionId);
+    return !hasThirdFamiliarSetupEffect(definition);
+  });
+  return filtered.length >= playerCount * 2 ? filtered : setupPool;
+}
+
+function hasThirdFamiliarSetupEffect(
+  definition: TokenDefinition | undefined
+): boolean {
+  return (
+    definition?.kind === "wizardProperty" &&
+    definition.engine?.effects.some(
+      (effect) => effect.effectId === "setup_retain_and_choose_third_familiar"
+    ) === true
+  );
+}
 
 export interface SetupEffectDecoderTools {
   defineDecoder<Id extends SetupEffectId>(
