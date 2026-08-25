@@ -313,6 +313,25 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
   }
 });
 
+test("invalid familiar setup choice falls back to the first candidate", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 60615,
+    familiarSetupChoicePolicy: () => markCardInstanceId("missing-familiar"),
+  });
+  const familiarChoiceEvents = state.eventLog.filter(
+    (event) =>
+      event.type === "setupChoiceSelected" &&
+      event.setupChoiceKind === "familiar"
+  );
+
+  assert.equal(familiarChoiceEvents.length, state.players.length);
+  for (const event of familiarChoiceEvents) {
+    assert.ok(event.candidateInstanceIds);
+    assert.equal(event.chosenInstanceId, event.candidateInstanceIds[0]);
+  }
+});
+
 test("current runtime data makes wizard property 003 setup reachable", () => {
   const state = initializeGame({ rootDir, seed: 2 });
   const propertyOwner = state.players.find((player) =>

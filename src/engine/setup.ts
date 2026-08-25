@@ -1255,17 +1255,13 @@ function selectFamiliarSetupChoice<
       (candidate) => candidate.definitionId
     ),
   });
-  const selectedIndex =
+  const requestedIndex =
     requestedInstanceId === undefined
       ? 0
       : candidates.findIndex(
           (candidate) => candidate.instanceId === requestedInstanceId
         );
-  if (selectedIndex < 0) {
-    throw new Error(
-      `Familiar setup choice for ${player.playerId} returned unknown candidate instance ID ${String(requestedInstanceId)}`
-    );
-  }
+  const selectedIndex = requestedIndex < 0 ? 0 : requestedIndex;
   const chosenCandidate = candidates[selectedIndex];
   if (chosenCandidate === undefined) {
     throw new Error("Unexpected sparse array during familiar setup choice");
