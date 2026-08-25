@@ -7,6 +7,10 @@ import {
   type CardInstance,
 } from "../src/index.js";
 import {
+  markCardDefinitionId,
+  markCardInstanceId,
+} from "../src/domain/types.js";
+import {
   addFixtureDefenseCardToHand,
   selectFirstFixtureDefense,
 } from "./helpers/defense-fixtures.js";
@@ -27,6 +31,23 @@ function findActivation(
       action.type === "activatePermanent" &&
       action.cardInstanceId === card.instanceId
   );
+}
+
+function givenLegendDeckCard(
+  scenario: ReturnType<typeof createGameScenario>,
+  definitionId: string,
+  sequence: number
+): CardInstance {
+  const card: CardInstance = {
+    instanceId: markCardInstanceId(
+      `fixture-activation-legend-${scenario.seed}-${sequence}`
+    ),
+    definitionId: markCardDefinitionId(definitionId),
+    ownerId: "common",
+    marketChips: 0,
+  };
+  scenario.state.common.legendDeck.push(card);
+  return card;
 }
 
 test("activation-effects #264 excludes the source and counts an effective creature", () => {
@@ -436,4 +457,139 @@ test("activation-effects #266 applies Dingler only after an unavoided attack and
     avoidedScenario.state.common.destroyedPile.includes(avoidedSource),
     true
   );
+});
+
+test("activation-effects #267 checks the unified controlled-card threshold", () => {
+  const scenario = createGameScenario({ rootDir, seed: 267018 });
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__legend_018",
+  });
+  for (let index = 0; index < 9; index += 1) {
+    givenRuntimeCard(scenario, {
+      definitionId: "esw2_dbg__main_012",
+      zone: "permanents",
+    });
+  }
+
+  assert.equal(play(scenario, source).ok, true);
+  assert.equal(findActivation(scenario, source), undefined);
+
+  givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_012",
+    zone: "permanents",
+  });
+  assert.ok(findActivation(scenario, source));
+});
+
+test("activation-effects #267 selects one legend and returns the rest in chosen order", () => {
+  const scenario = createGameScenario({ rootDir, seed: 267019 });
+  scenario.activePlayer.deck = [];
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__legend_018",
+  });
+  for (let index = 0; index < 10; index += 1) {
+    givenRuntimeCard(scenario, {
+      definitionId: "esw2_dbg__main_012",
+      zone: "permanents",
+    });
+  }
+  scenario.state.common.legendDeck.splice(
+    0,
+    scenario.state.common.legendDeck.length
+  );
+  const lookedCards = [
+    givenLegendDeckCard(scenario, "esw2_dbg__legend_001", 1),
+    givenLegendDeckCard(scenario, "esw2_dbg__legend_002", 2),
+    givenLegendDeckCard(scenario, "esw2_dbg__legend_004", 3),
+    givenLegendDeckCard(scenario, "esw2_dbg__legend_005", 4),
+    givenLegendDeckCard(scenario, "esw2_dbg__legend_014", 5),
+  ];
+  const tailCard = givenLegendDeckCard(scenario, "esw2_dbg__legend_021", 6);
+  const selected = lookedCards[2];
+  assert.ok(selected);
+  const returnedOrder = [
+    lookedCards[4],
+    lookedCards[0],
+    lookedCards[3],
+    lookedCards[1],
+  ];
+
+  assert.equal(play(scenario, source).ok, true);
+  let choiceIndex = 0;
+  scenario.state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId !== "activation_look_choose_reorder_legend_deck") {
+      return undefined;
+    }
+    const target = [selected, ...returnedOrder][choiceIndex];
+    choiceIndex += 1;
+    if (target === undefined) return undefined;
+    const choice = choices.find(
+      (candidate) =>
+        candidate.choiceKind === "cardTarget" &&
+        candidate.targetCardInstanceIds.includes(target.instanceId)
+    );
+    return choice === undefined ? undefined : { choiceId: choice.choiceId };
+  };
+
+  assert.equal(
+    applyAction(scenario.state, {
+      type: "activatePermanent",
+      cardInstanceId: source.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(scenario.activePlayer.deck[0], selected);
+  assert.deepEqual(scenario.state.common.legendDeck, [
+    ...returnedOrder,
+    tailCard,
+  ]);
+  assert.equal(new Set(scenario.activePlayer.deck).size, 1);
+  assert.equal(findActivation(scenario, source), undefined);
+});
+
+test("activation-effects #267 preserves all legend cards when fewer than five are available", () => {
+  for (const availableCount of [0, 4]) {
+    const scenario = createGameScenario({
+      rootDir,
+      seed: 267020 + availableCount,
+    });
+    scenario.activePlayer.deck = [];
+    const source = givenRuntimeCard(scenario, {
+      definitionId: "esw2_dbg__legend_018",
+    });
+    for (let index = 0; index < 10; index += 1) {
+      givenRuntimeCard(scenario, {
+        definitionId: "esw2_dbg__main_012",
+        zone: "permanents",
+      });
+    }
+    scenario.state.common.legendDeck.splice(
+      0,
+      scenario.state.common.legendDeck.length
+    );
+    const available = Array.from({ length: availableCount }, (_, index) =>
+      givenLegendDeckCard(scenario, "esw2_dbg__legend_001", index + 1)
+    );
+
+    assert.equal(play(scenario, source).ok, true);
+    assert.equal(
+      applyAction(scenario.state, {
+        type: "activatePermanent",
+        cardInstanceId: source.instanceId,
+      }).ok,
+      true
+    );
+    const movedCards = [
+      ...scenario.activePlayer.deck,
+      ...scenario.state.common.legendDeck,
+    ].filter((card) => available.includes(card));
+    assert.deepEqual(
+      movedCards.sort((left, right) =>
+        left.instanceId.localeCompare(right.instanceId)
+      ),
+      [...available].sort((left, right) =>
+        left.instanceId.localeCompare(right.instanceId)
+      )
+    );
+  }
 });

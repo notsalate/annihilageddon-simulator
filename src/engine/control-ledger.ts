@@ -650,6 +650,44 @@ export function removeCardFromLocation(
   return undefined;
 }
 
+/** Reorders one card inside its current descriptor-owned physical zone. */
+export function reorderPhysicalCard(
+  state: GameState,
+  cardInstanceId: CardInstance["instanceId"],
+  zoneName: string,
+  placement: "front" | "back"
+): PhysicalCardMoveResult {
+  const descriptor = listPhysicalCardZoneDescriptors(state).find(
+    (candidate) => candidate.zoneName === zoneName
+  );
+  if (descriptor === undefined) {
+    return { ok: false, reason: `Missing destination zone ${zoneName}` };
+  }
+  const cards = descriptor.read();
+  const cardIndex = cards.findIndex(
+    (card) => card.instanceId === cardInstanceId
+  );
+  const card = cards[cardIndex];
+  if (card === undefined) {
+    return { ok: false, reason: `Missing card ${cardInstanceId}` };
+  }
+  const remaining = [
+    ...cards.slice(0, cardIndex),
+    ...cards.slice(cardIndex + 1),
+  ];
+  descriptor.replace(
+    placement === "front" ? [card, ...remaining] : [...remaining, card]
+  );
+  return {
+    ok: true,
+    move: {
+      card,
+      sourceZoneName: zoneName,
+      destinationZoneName: zoneName,
+    },
+  };
+}
+
 /** Moves one physical card through descriptor-owned source and destination zones. */
 export function movePhysicalCard(
   state: GameState,

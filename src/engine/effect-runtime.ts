@@ -19,6 +19,7 @@ import {
   getControlledCards,
   findCardLocation,
   removeCardFromLocation,
+  reorderPhysicalCard,
 } from "./control-ledger.js";
 import {
   beginDeadWizardTokenResolutionBoundary,
@@ -2697,16 +2698,47 @@ function moveCardToZonePreservingOwner(
   destination: CardInstance[],
   destinationZone: string,
   effectId: RuntimeEffectId,
-  source: EffectSourceContext
+  source: EffectSourceContext,
+  placeOnTop = false
 ): boolean {
   const ownerBefore = card.ownerId;
-  const sourceLocation = removeCardFromLocation(state, card.instanceId);
+  const sourceLocation = findCardLocation(state, card.instanceId);
   if (sourceLocation === undefined) {
     return false;
   }
-  const sourceZone = sourceLocation.zoneName;
 
-  destination.push(card);
+  if (sourceLocation.zoneName === destinationZone) {
+    const reordered = reorderPhysicalCard(
+      state,
+      card.instanceId,
+      destinationZone,
+      placeOnTop ? "front" : "back"
+    );
+    if (!reordered.ok) {
+      return false;
+    }
+    recordCardMoved(state, player, card, {
+      sourceZone: sourceLocation.zoneName,
+      destinationZone,
+      ownerBefore,
+      ownerAfter: card.ownerId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+    return true;
+  }
+
+  const removedLocation = removeCardFromLocation(state, card.instanceId);
+  if (removedLocation === undefined) {
+    return false;
+  }
+  const sourceZone = removedLocation.zoneName;
+
+  if (placeOnTop) {
+    destination.unshift(card);
+  } else {
+    destination.push(card);
+  }
   recordCardMoved(state, player, card, {
     sourceZone,
     destinationZone,

@@ -111,7 +111,14 @@ export function runtimeEffectConditionMatches(
       "conditionId" in condition || card.instanceId !== excludedCardInstanceId
   );
 
-  if ("conditionId" in condition) {
+  if (
+    "conditionId" in condition &&
+    condition.conditionId === "controlled_card_count"
+  ) {
+    return controlledCards.length >= condition.minimumCount;
+  }
+
+  if ("conditionId" in condition && condition.conditionId === "control_count") {
     return (
       controlledCards.filter((card) => {
         const definition = state.cardDefinitions.get(card.definitionId);

@@ -12950,7 +12950,15 @@ test("МегаБеспредел с set_life до нуля использует 
   for (const targetPlayer of state.players) {
     targetPlayer.wizardProperties = [];
   }
-  state.common.deadWizardTokens.drawStack.splice(state.players.length);
+  state.common.deadWizardTokens.drawStack = state.players.map(
+    (_targetPlayer, index) => ({
+      instanceId: markTokenInstanceId(`fixture-set-life-mega-dwt-${index}`),
+      definitionId: markTokenDefinitionId(
+        "esw2_dbg__dead_wizard_token_neutral"
+      ),
+      ownerId: "common" as const,
+    })
+  );
   const definition = createFixtureCardDefinition(
     "fixture-mega-mayhem-set-life-zero",
     [

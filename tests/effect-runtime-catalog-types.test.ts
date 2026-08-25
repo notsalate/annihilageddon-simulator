@@ -293,6 +293,7 @@ test("card, activation, ongoing and modifier IDs belong to family modules", () =
     "activation_add_power_per_controlled_card_type",
     "activation_destroy_self_then_destroy_own_cards",
     "activation_double_turn_power",
+    "activation_look_choose_reorder_legend_deck",
     "conditional_activation_destroy_own_cards",
     "conditional_activation_gain_chips",
     "optional_spend_chip_destroy_own_cards",

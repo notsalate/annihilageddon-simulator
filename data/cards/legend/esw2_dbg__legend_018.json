@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_018",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_018.json",
+    "image": "assets/cards/legend/spell/Легенда-Заклинание. Надёжный план.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_018.md"
+  },
+  "visible": {
+    "nameRu": "Надёжный план",
+    "cost": 16,
+    "victoryPoints": 6,
+    "typeRu": "Легенда — Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "Возьми 2 карты.\n[символ активации]: если ты контролируешь 11 карт или больше, посмотри 5 верхних карт колоды легенд. Положи 1 из них на верх своей колоды, а остальные верни обратно в любом порядке.",
+    "markers": ["activate"]
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "cost": 16,
+    "victoryPoints": 6,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "draw_cards",
+        "timing": "onPlay",
+        "amount": 2
+      },
+      {
+        "effectId": "activation_look_choose_reorder_legend_deck",
+        "timing": "activation",
+        "condition": {
+          "conditionId": "controlled_card_count",
+          "minimumCount": 11
+        },
+        "lookAmount": 5,
+        "activationLimit": "oncePerTurnWhileControlled"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

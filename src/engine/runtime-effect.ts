@@ -41,6 +41,7 @@ export type {
   ActivationAddPowerPerControlledCardTypeRuntimeEffect,
   ActivationDestroySelfThenDestroyOwnCardsRuntimeEffect,
   ActivationDoubleTurnPowerRuntimeEffect,
+  ActivationLookChooseReorderLegendDeckRuntimeEffect,
   ActivationEffectPayloadMap,
   ConditionalActivationDestroyOwnCardsRuntimeEffect,
   ConditionalActivationGainChipsRuntimeEffect,
@@ -157,6 +158,11 @@ export interface ControlCountEffectCondition {
   minimumCount: number;
 }
 
+export interface ControlledCardCountEffectCondition {
+  conditionId: "controlled_card_count";
+  minimumCount: number;
+}
+
 export interface ControlsOtherCardTypeEffectCondition {
   effectId: "controls_other_card_type";
   minimum: number;
@@ -165,6 +171,7 @@ export interface ControlsOtherCardTypeEffectCondition {
 
 export type RuntimeEffectCondition =
   | ControlCountEffectCondition
+  | ControlledCardCountEffectCondition
   | ControlsOtherCardTypeEffectCondition;
 
 export interface DiscardOtherHandCardRuntimeEffectCost {
@@ -210,6 +217,7 @@ export const knownRuntimeEffectIds = [
   "activation_add_power_per_controlled_card_type",
   "activation_destroy_self_then_destroy_own_cards",
   "activation_double_turn_power",
+  "activation_look_choose_reorder_legend_deck",
   "add_power",
   "add_power_if_player_has_status",
   "add_power_per_controlled_object",
@@ -995,6 +1003,12 @@ export function isRuntimeEffectCondition(
       hasExactKeys(value, ["conditionId", "cardTypes", "minimumCount"]) &&
       Array.isArray(value["cardTypes"]) &&
       value["cardTypes"].every(isString) &&
+      isNonNegativeSafeInteger(value["minimumCount"])
+    );
+  }
+  if (value["conditionId"] === "controlled_card_count") {
+    return (
+      hasExactKeys(value, ["conditionId", "minimumCount"]) &&
       isNonNegativeSafeInteger(value["minimumCount"])
     );
   }

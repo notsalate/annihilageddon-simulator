@@ -74,6 +74,14 @@ export type ActivationDoubleTurnPowerRuntimeEffect = TimedEffect<
   "activation_double_turn_power",
   "activation"
 > & { activationLimit: "oncePerTurnWhileControlled" };
+export type ActivationLookChooseReorderLegendDeckRuntimeEffect = TimedEffect<
+  "activation_look_choose_reorder_legend_deck",
+  "activation"
+> & {
+  condition: RuntimeEffectCondition;
+  lookAmount: number;
+  activationLimit: "oncePerTurnWhileControlled";
+};
 export type OptionalSpendChipDestroyOwnCardsRuntimeEffect = TimedEffect<
   "optional_spend_chip_destroy_own_cards",
   "onPlay"
@@ -88,6 +96,7 @@ export interface ActivationEffectPayloadMap {
   activation_add_power_per_controlled_card_type: ActivationAddPowerPerControlledCardTypeRuntimeEffect;
   activation_destroy_self_then_destroy_own_cards: ActivationDestroySelfThenDestroyOwnCardsRuntimeEffect;
   activation_double_turn_power: ActivationDoubleTurnPowerRuntimeEffect;
+  activation_look_choose_reorder_legend_deck: ActivationLookChooseReorderLegendDeckRuntimeEffect;
   conditional_activation_destroy_own_cards: ConditionalActivationDestroyOwnCardsRuntimeEffect;
   conditional_activation_gain_chips: ConditionalActivationGainChipsRuntimeEffect;
   optional_spend_chip_destroy_own_cards: OptionalSpendChipDestroyOwnCardsRuntimeEffect;
@@ -97,6 +106,7 @@ export type ActivationEffectId =
   | "activation_add_power_per_controlled_card_type"
   | "activation_destroy_self_then_destroy_own_cards"
   | "activation_double_turn_power"
+  | "activation_look_choose_reorder_legend_deck"
   | "conditional_activation_destroy_own_cards"
   | "conditional_activation_gain_chips"
   | "optional_spend_chip_destroy_own_cards";
@@ -105,6 +115,7 @@ export const activationEffectIds = [
   "activation_add_power_per_controlled_card_type",
   "activation_destroy_self_then_destroy_own_cards",
   "activation_double_turn_power",
+  "activation_look_choose_reorder_legend_deck",
   "conditional_activation_destroy_own_cards",
   "conditional_activation_gain_chips",
   "optional_spend_chip_destroy_own_cards",
@@ -127,6 +138,7 @@ export interface ActivationEffectDecoderTools {
       RuntimeEffectForId<"conditional_activation_destroy_own_cards">["condition"]
     >
   >;
+  requiredCondition: RequiredField<RuntimeEffectCondition>;
   handOrDiscardZones: ValueDecoder<("hand" | "discard")[]>;
   optionalTiming: OptionalField<EffectTiming>;
 }
@@ -145,6 +157,7 @@ export function createActivationEffectDecoders(
     positiveInteger,
     nonEmptyString,
     optionalCondition,
+    requiredCondition,
     handOrDiscardZones,
   } = tools;
 
@@ -189,6 +202,18 @@ export function createActivationEffectDecoders(
       {
         effectId: required(literal("activation_double_turn_power")),
         timing: required(literal("activation")),
+        activationLimit: required(literal("oncePerTurnWhileControlled")),
+      }
+    ),
+    activation_look_choose_reorder_legend_deck: defineDecoder(
+      "activation_look_choose_reorder_legend_deck",
+      {
+        effectId: required(
+          literal("activation_look_choose_reorder_legend_deck")
+        ),
+        timing: required(literal("activation")),
+        condition: requiredCondition,
+        lookAmount: required(positiveInteger),
         activationLimit: required(literal("oncePerTurnWhileControlled")),
       }
     ),
@@ -428,6 +453,117 @@ export function createActivationEffectDefinitions(
         return { ok: true };
       },
     };
+  const activationLookChooseReorderLegendDeckHandler: EffectRuntimeHandler<ActivationLookChooseReorderLegendDeckRuntimeEffect> =
+    {
+      effectId: "activation_look_choose_reorder_legend_deck",
+      execute(state, player, effect, source, services) {
+        const lookedCards = state.common.legendDeck.slice(
+          0,
+          Math.min(effect.lookAmount, state.common.legendDeck.length)
+        );
+        if (lookedCards.length === 0) return { ok: true };
+
+        const cardChoices = (cards: readonly CardInstance[]): EffectChoice[] =>
+          cards.map((card) => ({
+            choiceKind: "cardTarget" as const,
+            choiceId: `choose_${card.instanceId}`,
+            cards: [card],
+            amount: 1,
+          }));
+        const selectedChoice = services.chooseEffectChoice(
+          state,
+          player,
+          source,
+          effect.effectId,
+          cardChoices(lookedCards)
+        );
+        if (selectedChoice?.choiceKind !== "cardTarget") {
+          return {
+            ok: false,
+            error: "A legend deck card must be selected",
+          };
+        }
+        const selected = selectedChoice.cards[0];
+        if (selected === undefined || !lookedCards.includes(selected)) {
+          return {
+            ok: false,
+            error: "Selected legend deck card is no longer available",
+          };
+        }
+
+        const remaining = lookedCards.filter((card) => card !== selected);
+        const returned: CardInstance[] = [];
+        while (remaining.length > 0) {
+          const orderChoice = services.chooseEffectChoice(
+            state,
+            player,
+            source,
+            effect.effectId,
+            cardChoices(remaining)
+          );
+          if (orderChoice?.choiceKind !== "cardTarget") {
+            return {
+              ok: false,
+              error: "A remaining legend deck card must be ordered",
+            };
+          }
+          const card = orderChoice.cards[0];
+          if (card === undefined) {
+            return {
+              ok: false,
+              error: "A remaining legend deck card must be selected",
+            };
+          }
+          const index = remaining.indexOf(card);
+          if (index < 0) {
+            return {
+              ok: false,
+              error: "Selected legend deck card is not available for ordering",
+            };
+          }
+          returned.push(card);
+          remaining.splice(index, 1);
+        }
+
+        const selectedMoved = services.moveCardToPlayerZone(
+          state,
+          selected,
+          player,
+          player.deck,
+          `${player.playerId}.deckTop`,
+          effect.effectId,
+          source,
+          true
+        );
+        if (!selectedMoved) {
+          return {
+            ok: false,
+            error: `Cannot move selected legend deck card ${selected.instanceId}`,
+          };
+        }
+
+        for (const card of [...returned].reverse()) {
+          const returnedCard = services.moveCardToZonePreservingOwner(
+            state,
+            player,
+            card,
+            state.common.legendDeck,
+            "legendDeck",
+            effect.effectId,
+            source,
+            true
+          );
+          if (!returnedCard) {
+            return {
+              ok: false,
+              error: `Cannot return legend deck card ${card.instanceId}`,
+            };
+          }
+        }
+
+        return { ok: true };
+      },
+    };
   const conditionalActivationDestroyOwnCardsHandler: EffectRuntimeHandler<ConditionalActivationDestroyOwnCardsRuntimeEffect> =
     {
       effectId: "conditional_activation_destroy_own_cards",
@@ -515,6 +651,16 @@ export function createActivationEffectDefinitions(
       supportedModes,
       supportedSourceKinds,
       handler: activationDoubleTurnPowerHandler,
+    },
+    {
+      effectId: "activation_look_choose_reorder_legend_deck",
+      decoder: bindRuntimeEffectDecoder(
+        "activation_look_choose_reorder_legend_deck"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: activationLookChooseReorderLegendDeckHandler,
     },
     {
       effectId: "conditional_activation_destroy_own_cards",
