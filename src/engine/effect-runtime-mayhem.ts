@@ -998,8 +998,28 @@ const mayhemEachPlayerDiscardDeckDestroyHandler: EffectRuntimeHandler<
               effect.effectId,
               discardChoices
             );
+      if (
+        discardChoices.length > 0 &&
+        (choice?.choiceKind !== "cardTarget" ||
+          !discardChoices.some(
+            (candidate) => candidate.choiceId === choice.choiceId
+          ))
+      ) {
+        return {
+          ok: false,
+          error:
+            "Mayhem discard resolution requires choosing one card to destroy",
+        };
+      }
       const destroyTarget =
         choice?.choiceKind === "cardTarget" ? choice.cards[0] : undefined;
+      if (discardChoices.length > 0 && destroyTarget === undefined) {
+        return {
+          ok: false,
+          error:
+            "Mayhem discard resolution requires choosing one card to destroy",
+        };
+      }
       if (destroyTarget !== undefined) {
         const destroyed = destroyOwnedCard(
           state,

@@ -3,6 +3,8 @@ import {
   getCardEffectiveTypeOptions,
 } from "./card-type-runtime.js";
 import {
+  findCardLocation,
+  getControlledCards,
   removeDeadWizardToken,
   removeTemporaryCardControl,
 } from "./control-ledger.js";
@@ -831,8 +833,11 @@ const shuffleOwnedPermanentsHandler: EffectRuntimeHandler<DeadWizardTokenShuffle
   {
     effectId: "dead_wizard_token_shuffle_owned_permanents",
     execute(state, player, effect, source, services) {
-      const ownedPermanents = player.permanents.filter(
-        (card) => card.ownerId === player.playerId
+      const ownedPermanents = getControlledCards(state, player).filter(
+        (card) =>
+          card.ownerId === player.playerId &&
+          findCardLocation(state, card.instanceId)?.zoneName ===
+            `${player.playerId}.permanents`
       );
       if (ownedPermanents.length === 0) return { ok: true };
 

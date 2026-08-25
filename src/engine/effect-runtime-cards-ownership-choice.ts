@@ -1,4 +1,4 @@
-import { clearFaceUpStates, drawDeckCards } from "./deck-lifecycle.js";
+import { shuffleDeck } from "./deck-lifecycle.js";
 import {
   recordDeckReshuffle,
   recordGameEvent,
@@ -796,24 +796,74 @@ const discardHandThenDrawCardsHandler: EffectRuntimeHandler<
     );
     if (choice?.choiceId !== "apply") return { ok: true };
 
-    const discardedCards = player.hand.splice(0);
-    clearFaceUpStates(discardedCards);
-    player.discard.push(...discardedCards);
-    const drawResult = drawDeckCards(
-      player.deck,
-      player.discard,
-      effect.drawAmount,
-      state.rng,
-      () => recordDeckReshuffle(state, player.playerId)
-    );
-    player.hand.push(...drawResult.cards);
+    for (const card of [...player.hand]) {
+      const moved = services.moveCardToZonePreservingOwner(
+        state,
+        player,
+        card,
+        player.discard,
+        `${player.playerId}.discard`,
+        effect.effectId,
+        source
+      );
+      if (!moved) {
+        return {
+          ok: false,
+          error: `Cannot discard hand card ${card.instanceId}`,
+        };
+      }
+    }
+
+    let drawnAmount = 0;
+    for (let index = 0; index < effect.drawAmount; index += 1) {
+      if (player.deck.length === 0 && player.discard.length > 0) {
+        for (const card of [...player.discard]) {
+          const moved = services.moveCardToZonePreservingOwner(
+            state,
+            player,
+            card,
+            player.deck,
+            `${player.playerId}.deck`,
+            effect.effectId,
+            source
+          );
+          if (!moved) {
+            return {
+              ok: false,
+              error: `Cannot reshuffle discard card ${card.instanceId}`,
+            };
+          }
+        }
+        shuffleDeck(player.deck, state.rng);
+        recordDeckReshuffle(state, player.playerId);
+      }
+
+      const card = player.deck[0];
+      if (card === undefined) break;
+      const moved = services.moveCardToZonePreservingOwner(
+        state,
+        player,
+        card,
+        player.hand,
+        `${player.playerId}.hand`,
+        effect.effectId,
+        source
+      );
+      if (!moved) {
+        return {
+          ok: false,
+          error: `Cannot draw card ${card.instanceId}`,
+        };
+      }
+      drawnAmount += 1;
+    }
     recordGameEvent(state, {
       type: "effectDrawCardsApplied",
       playerId: player.playerId,
       cardInstanceId: source.cardInstanceId,
       definitionId: source.definitionId,
       effectId: effect.effectId,
-      amount: drawResult.cards.length,
+      amount: drawnAmount,
       sourceType: source.sourceType,
     });
     return { ok: true };
@@ -1817,38 +1867,45 @@ export function executeRevealAndPlayFoeDeckCard(
       ? revealedCards.find((card) => card.instanceId === choice.choiceId)
       : undefined;
 
-  let playedResult: EffectExecutionResult = { ok: true };
-  if (selectedCard !== undefined) {
-    const removed = removeCardFromLocation(state, selectedCard.instanceId);
-    if (removed === undefined) {
-      playedResult = {
-        ok: false,
-        error: `Cannot play revealed foe card ${selectedCard.instanceId}`,
-      };
-    }
-    const ownerDiscard = {
-      zone: "ownerDiscardAfterResolution" as const,
-      ownerId: foe.playerId,
+  if (selectedCard === undefined) {
+    const cleanupResult = cleanup();
+    if (!cleanupResult.ok) return cleanupResult;
+    return {
+      ok: false,
+      error: "Foe deck reveal requires choosing one revealed card to play",
     };
-    if (removed !== undefined) {
-      playedResult = services.playResolvedCard(state, player, selectedCard, {
-        nonOngoingDestination: ownerDiscard,
-        forceOngoingDiscard: ownerDiscard,
-      });
-    }
-    if (playedResult.ok) {
-      recordGameEvent(state, {
-        type: "effectFoeDeckCardPlayed",
-        playerId: player.playerId,
-        targetPlayerId: foe.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        targetCardInstanceId: selectedCard.instanceId,
-        targetDefinitionId: selectedCard.definitionId,
-        effectId: effect.effectId,
-        sourceType: source.sourceType,
-      });
-    }
+  }
+
+  let playedResult: EffectExecutionResult = { ok: true };
+  const removed = removeCardFromLocation(state, selectedCard.instanceId);
+  if (removed === undefined) {
+    playedResult = {
+      ok: false,
+      error: `Cannot play revealed foe card ${selectedCard.instanceId}`,
+    };
+  }
+  const ownerDiscard = {
+    zone: "ownerDiscardAfterResolution" as const,
+    ownerId: foe.playerId,
+  };
+  if (removed !== undefined) {
+    playedResult = services.playResolvedCard(state, player, selectedCard, {
+      nonOngoingDestination: ownerDiscard,
+      forceOngoingDiscard: ownerDiscard,
+    });
+  }
+  if (playedResult.ok) {
+    recordGameEvent(state, {
+      type: "effectFoeDeckCardPlayed",
+      playerId: player.playerId,
+      targetPlayerId: foe.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      targetCardInstanceId: selectedCard.instanceId,
+      targetDefinitionId: selectedCard.definitionId,
+      effectId: effect.effectId,
+      sourceType: source.sourceType,
+    });
   }
 
   const cleanupResult = cleanup();
