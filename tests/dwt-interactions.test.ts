@@ -17,6 +17,7 @@ import {
   markTokenDefinitionId,
   markTokenInstanceId,
 } from "../src/domain/types.js";
+import { getControlledDeadWizardTokenCount } from "../src/engine/dead-wizard-token-like.js";
 import { dispatchControlledCardOperation } from "../src/engine/trigger-dispatch.js";
 import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
@@ -52,6 +53,26 @@ test("ЖДК-дохляки считают себя ЖДК при розыгры
       true
     );
   }
+});
+
+test("ЖДК-подобная карта определяется mappingStatus, а не legacy-флагом", () => {
+  const state = initializeGame({ rootDir, seed: 274000 });
+  const player = getActivePlayer(state);
+  const definition = state.cardDefinitions.get("esw2_dbg__main_049");
+  assert.ok(definition);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [
+      definition.cardId,
+      {
+        ...definition,
+        engine: { ...definition.engine, playableInV0: false },
+      },
+    ],
+  ]);
+  player.permanents = [createDohlakPermanent(player)];
+
+  assert.equal(getControlledDeadWizardTokenCount(state, player), 1);
 });
 
 test("ЖДК-дохляк получает чипсину за физический ЖДК и за себя", () => {

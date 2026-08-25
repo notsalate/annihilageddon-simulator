@@ -25,7 +25,7 @@ export function isDeadWizardTokenLikeCard(
   definition: CardDefinition | undefined
 ): boolean {
   return (
-    definition?.engine.playableInV0 === true &&
+    definition?.engine.mappingStatus === "supported" &&
     definition.engine.tags?.includes(deadWizardTokenLikeCardTag) === true
   );
 }

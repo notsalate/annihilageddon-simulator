@@ -410,6 +410,27 @@ test("game end reason is dead wizard token exhaustion when the DWT stack is empt
   assert.equal(getGameEndReason(state), "deadWizardTokensExhausted");
 });
 
+test("game end reason can defer DWT exhaustion until the next start of turn", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60616,
+  });
+  state.common.deadWizardTokens = {
+    status: "available",
+    drawStack: [],
+  };
+
+  assert.equal(
+    getGameEndReason(state, { checkDeadWizardTokenExhaustion: false }),
+    undefined
+  );
+  assert.equal(
+    getGameEndReason(state, { checkDeadWizardTokenExhaustion: true }),
+    "deadWizardTokensExhausted"
+  );
+});
+
 test("game end reason does not infer market exhaustion outside Market Flow", () => {
   const state = initializeGame({
     rootDir,
