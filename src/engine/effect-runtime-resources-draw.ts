@@ -240,27 +240,36 @@ const gainChipsPerControlledDeadWizardTokenHandler: EffectRuntimeHandler<GainChi
     },
   };
 
+function drawCardsForPlayer(
+  state: GameState,
+  player: PlayerState,
+  amount: number,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext
+): void {
+  const drawResult = drawDeckCards(
+    player.deck,
+    player.discard,
+    amount,
+    state.rng,
+    () => recordDeckReshuffle(state, player.playerId)
+  );
+  player.hand.push(...drawResult.cards);
+  recordGameEvent(state, {
+    type: "effectDrawCardsApplied",
+    playerId: player.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    amount: drawResult.cards.length,
+    sourceType: source.sourceType,
+  });
+}
+
 const drawCardsHandler: EffectRuntimeHandler<DrawCardsRuntimeEffect> = {
   effectId: "draw_cards",
   execute(state, player, effect, source) {
-    const drawResult = drawDeckCards(
-      player.deck,
-      player.discard,
-      effect.amount,
-      state.rng,
-      () => recordDeckReshuffle(state, player.playerId)
-    );
-    player.hand.push(...drawResult.cards);
-    recordGameEvent(state, {
-      type: "effectDrawCardsApplied",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: "draw_cards",
-      amount: drawResult.cards.length,
-      sourceType: source.sourceType,
-    });
-
+    drawCardsForPlayer(state, player, effect.amount, effect.effectId, source);
     return { ok: true };
   },
 };
@@ -281,23 +290,13 @@ const drawCardsForSelfAndChosenFoeHandler: EffectRuntimeHandler<DrawCardsForSelf
       }
 
       for (const recipient of [player, targetResult.choice.player]) {
-        const drawResult = drawDeckCards(
-          recipient.deck,
-          recipient.discard,
+        drawCardsForPlayer(
+          state,
+          recipient,
           effect.amount,
-          state.rng,
-          () => recordDeckReshuffle(state, recipient.playerId)
+          effect.effectId,
+          source
         );
-        recipient.hand.push(...drawResult.cards);
-        recordGameEvent(state, {
-          type: "effectDrawCardsApplied",
-          playerId: player.playerId,
-          cardInstanceId: source.cardInstanceId,
-          definitionId: source.definitionId,
-          effectId: effect.effectId,
-          amount: drawResult.cards.length,
-          sourceType: source.sourceType,
-        });
       }
 
       return { ok: true };
