@@ -1,9 +1,21 @@
 import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
 import { changePlayerChips } from "./effect-runtime-resources-draw.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
+import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
+import { recordGameEvent } from "./event-recorder.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
+import type {
+  EffectExecutionResult,
+  EffectRuntimeServices,
+  EffectSourceContext,
+} from "./effect-runtime-registry.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
-import type { RuntimeEffectForId } from "./runtime-effect.js";
+import type {
+  RuntimeEffectForId,
+  RuntimeEffectId,
+  RuntimeEffectTargetSelector,
+} from "./runtime-effect.js";
+import type { GameState, PlayerState } from "./setup.js";
 import type {
   EffectRuntimeSupportedModes,
   EffectRuntimeSupportedSourceKinds,
@@ -17,12 +29,16 @@ import type {
 
 export const deadWizardTokenEffectIds = [
   "dead_wizard_token_each_foe_gain_chips",
+  "dead_wizard_token_damage_equal_chips",
+  "dead_wizard_token_damage_equal_highest_hand_cost",
   "dead_wizard_token_gain_chips",
   "dead_wizard_token_gain_limp_wands_per_discard_legend",
   "dead_wizard_token_gain_limp_wand_to_deck_top",
   "dead_wizard_token_gain_status_or_draw_face",
   "dead_wizard_token_killer_optional_remove_dingler",
   "dead_wizard_token_lose_half_chips",
+  "dead_wizard_token_damage_per_discard_legend",
+  "dead_wizard_token_exchange_life",
   "dead_wizard_token_reward_killer_chips",
   "suppress_basic_trophy_chip_payout",
 ] as const;
@@ -41,11 +57,34 @@ export type DeadWizardTokenEachFoeGainChipsRuntimeEffect = {
   amount: 1;
 };
 
+export type DeadWizardTokenDamageEqualChipsRuntimeEffect = {
+  effectId: "dead_wizard_token_damage_equal_chips";
+  timing: "onDeadWizardTokenFace";
+};
+
+export type DeadWizardTokenDamageEqualHighestHandCostRuntimeEffect = {
+  effectId: "dead_wizard_token_damage_equal_highest_hand_cost";
+  timing: "onDeadWizardTokenFace";
+};
+
 export type DeadWizardTokenLoseHalfChipsRuntimeEffect = {
   effectId: "dead_wizard_token_lose_half_chips";
   timing: "onDeadWizardTokenFace";
   loss: "half";
   rounding: "up";
+};
+
+export type DeadWizardTokenDamagePerDiscardLegendRuntimeEffect = {
+  effectId: "dead_wizard_token_damage_per_discard_legend";
+  timing: "onDeadWizardTokenFace";
+  countedCardType: "legend";
+  damagePerCard: 4;
+};
+
+export type DeadWizardTokenExchangeLifeRuntimeEffect = {
+  effectId: "dead_wizard_token_exchange_life";
+  timing: "onDeadWizardTokenFace";
+  target: { selector: "opponentPlayer" };
 };
 
 export type DeadWizardTokenRewardKillerChipsRuntimeEffect = {
@@ -87,12 +126,16 @@ export type DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect = {
 
 export interface DeadWizardTokenEffectPayloadMap {
   dead_wizard_token_each_foe_gain_chips: DeadWizardTokenEachFoeGainChipsRuntimeEffect;
+  dead_wizard_token_damage_equal_chips: DeadWizardTokenDamageEqualChipsRuntimeEffect;
+  dead_wizard_token_damage_equal_highest_hand_cost: DeadWizardTokenDamageEqualHighestHandCostRuntimeEffect;
   dead_wizard_token_gain_chips: DeadWizardTokenGainChipsRuntimeEffect;
   dead_wizard_token_gain_limp_wands_per_discard_legend: DeadWizardTokenGainLimpWandsPerDiscardLegendRuntimeEffect;
   dead_wizard_token_gain_limp_wand_to_deck_top: DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect;
   dead_wizard_token_killer_optional_remove_dingler: DeadWizardTokenKillerOptionalRemoveDinglerRuntimeEffect;
   dead_wizard_token_gain_status_or_draw_face: DeadWizardTokenGainStatusOrDrawFaceRuntimeEffect;
   dead_wizard_token_lose_half_chips: DeadWizardTokenLoseHalfChipsRuntimeEffect;
+  dead_wizard_token_damage_per_discard_legend: DeadWizardTokenDamagePerDiscardLegendRuntimeEffect;
+  dead_wizard_token_exchange_life: DeadWizardTokenExchangeLifeRuntimeEffect;
   dead_wizard_token_reward_killer_chips: DeadWizardTokenRewardKillerChipsRuntimeEffect;
   suppress_basic_trophy_chip_payout: DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect;
 }
@@ -110,12 +153,15 @@ export interface DeadWizardTokenDecoderTools {
   literal<const Value extends string | number | boolean>(
     expected: Value
   ): ValueDecoder<Value>;
+  selectorTarget<Selector extends RuntimeEffectTargetSelector>(
+    selector: Selector
+  ): ValueDecoder<{ selector: Selector }>;
 }
 
 export function createDeadWizardTokenEffectDecoders(
   tools: DeadWizardTokenDecoderTools
 ): { [Id in DeadWizardTokenEffectId]: RuntimeEffectDecoder<Id> } {
-  const { defineDecoder, required, literal } = tools;
+  const { defineDecoder, required, literal, selectorTarget } = tools;
   return {
     dead_wizard_token_each_foe_gain_chips: defineDecoder(
       "dead_wizard_token_each_foe_gain_chips",
@@ -123,6 +169,22 @@ export function createDeadWizardTokenEffectDecoders(
         effectId: required(literal("dead_wizard_token_each_foe_gain_chips")),
         timing: required(literal("onDeadWizardTokenFace")),
         amount: required(literal(1)),
+      }
+    ),
+    dead_wizard_token_damage_equal_chips: defineDecoder(
+      "dead_wizard_token_damage_equal_chips",
+      {
+        effectId: required(literal("dead_wizard_token_damage_equal_chips")),
+        timing: required(literal("onDeadWizardTokenFace")),
+      }
+    ),
+    dead_wizard_token_damage_equal_highest_hand_cost: defineDecoder(
+      "dead_wizard_token_damage_equal_highest_hand_cost",
+      {
+        effectId: required(
+          literal("dead_wizard_token_damage_equal_highest_hand_cost")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
       }
     ),
     dead_wizard_token_gain_chips: defineDecoder(
@@ -140,6 +202,25 @@ export function createDeadWizardTokenEffectDecoders(
         timing: required(literal("onDeadWizardTokenFace")),
         loss: required(literal("half")),
         rounding: required(literal("up")),
+      }
+    ),
+    dead_wizard_token_damage_per_discard_legend: defineDecoder(
+      "dead_wizard_token_damage_per_discard_legend",
+      {
+        effectId: required(
+          literal("dead_wizard_token_damage_per_discard_legend")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
+        countedCardType: required(literal("legend")),
+        damagePerCard: required(literal(4)),
+      }
+    ),
+    dead_wizard_token_exchange_life: defineDecoder(
+      "dead_wizard_token_exchange_life",
+      {
+        effectId: required(literal("dead_wizard_token_exchange_life")),
+        timing: required(literal("onDeadWizardTokenFace")),
+        target: required(selectorTarget("opponentPlayer")),
       }
     ),
     dead_wizard_token_reward_killer_chips: defineDecoder(
@@ -210,24 +291,164 @@ const gainLimpWandsPerDiscardLegendHandler: EffectRuntimeHandler<DeadWizardToken
   {
     effectId: "dead_wizard_token_gain_limp_wands_per_discard_legend",
     execute(state, player, effect, source, services) {
-      const amount = player.discard.filter((card) => {
-        const definition = state.cardDefinitions.get(card.definitionId);
-        return (
-          definition !== undefined &&
-          cardMatchesTypeForPlayer(
-            state,
-            player.playerId,
-            definition,
-            effect.countedCardType,
-            card
-          )
-        );
-      }).length;
+      const amount = countPlayerDiscardCardsMatchingType(
+        state,
+        player,
+        effect.countedCardType
+      );
       return gainLimpWandsFromCommonStack(
         state,
         player,
         amount,
         effect.destination,
+        effect.effectId,
+        source,
+        services
+      );
+    },
+  };
+
+function countPlayerDiscardCardsMatchingType(
+  state: GameState,
+  player: PlayerState,
+  cardType: string
+): number {
+  return player.discard.filter((card) => {
+    const definition = state.cardDefinitions.get(card.definitionId);
+    return (
+      definition !== undefined &&
+      cardMatchesTypeForPlayer(
+        state,
+        player.playerId,
+        definition,
+        cardType,
+        card
+      )
+    );
+  }).length;
+}
+
+function applyOwnerlessDamage(
+  state: GameState,
+  player: PlayerState,
+  amount: number,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): EffectExecutionResult {
+  const result = services.dealDamage(
+    state,
+    player,
+    player,
+    amount,
+    effectId,
+    source,
+    { kind: "ownerless" }
+  );
+  return "damageDealt" in result ? { ok: true as const } : result;
+}
+
+const damageEqualChipsHandler: EffectRuntimeHandler<DeadWizardTokenDamageEqualChipsRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_damage_equal_chips",
+    execute(state, player, effect, source, services) {
+      return applyOwnerlessDamage(
+        state,
+        player,
+        player.chips,
+        effect.effectId,
+        source,
+        services
+      );
+    },
+  };
+
+const damagePerDiscardLegendHandler: EffectRuntimeHandler<DeadWizardTokenDamagePerDiscardLegendRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_damage_per_discard_legend",
+    execute(state, player, effect, source, services) {
+      const legendCount = countPlayerDiscardCardsMatchingType(
+        state,
+        player,
+        effect.countedCardType
+      );
+      return applyOwnerlessDamage(
+        state,
+        player,
+        legendCount * effect.damagePerCard,
+        effect.effectId,
+        source,
+        services
+      );
+    },
+  };
+
+const exchangeLifeHandler: EffectRuntimeHandler<DeadWizardTokenExchangeLifeRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_exchange_life",
+    execute(state, player, effect, source, services) {
+      const targetResult = services.resolveTargetChoice(
+        state,
+        player,
+        effect,
+        source
+      );
+      if (!targetResult.ok) return targetResult;
+      if (targetResult.choice === undefined) {
+        return {
+          ok: false,
+          error: "DWT life exchange requires another player",
+        };
+      }
+      if (targetResult.choice.choiceType !== "player") {
+        return {
+          ok: false,
+          error: "DWT life exchange requires a player target",
+        };
+      }
+      services.exchangePlayerLifeTotals(
+        state,
+        player,
+        targetResult.choice.player,
+        effect.effectId,
+        source
+      );
+      return { ok: true };
+    },
+  };
+
+const damageEqualHighestHandCostHandler: EffectRuntimeHandler<DeadWizardTokenDamageEqualHighestHandCostRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_damage_equal_highest_hand_cost",
+    execute(state, player, effect, source, services) {
+      let highestCost = 0;
+      for (const card of player.hand) {
+        const definition = state.cardDefinitions.get(card.definitionId);
+        if (definition === undefined) {
+          return {
+            ok: false,
+            error: `Missing hand card definition ${card.definitionId}`,
+          };
+        }
+        recordGameEvent(state, {
+          type: "effectCardRevealed",
+          playerId: player.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          targetCardInstanceId: card.instanceId,
+          targetDefinitionId: card.definitionId,
+          effectId: effect.effectId,
+          sourceType: source.sourceType,
+        });
+        highestCost = Math.max(
+          highestCost,
+          calculateEffectiveCardCost(state, player.playerId, definition, card)
+        );
+      }
+      return applyOwnerlessDamage(
+        state,
+        player,
+        highestCost,
         effect.effectId,
         source,
         services
@@ -411,6 +632,24 @@ export function createDeadWizardTokenEffectDefinitions(
       handler: eachFoeGainChipsHandler,
     },
     {
+      effectId: "dead_wizard_token_damage_equal_chips",
+      decoder: bindRuntimeEffectDecoder("dead_wizard_token_damage_equal_chips"),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: damageEqualChipsHandler,
+    },
+    {
+      effectId: "dead_wizard_token_damage_equal_highest_hand_cost",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_damage_equal_highest_hand_cost"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: damageEqualHighestHandCostHandler,
+    },
+    {
       effectId: "dead_wizard_token_gain_chips",
       decoder: bindRuntimeEffectDecoder("dead_wizard_token_gain_chips"),
       supportedTimings,
@@ -425,6 +664,24 @@ export function createDeadWizardTokenEffectDefinitions(
       supportedModes,
       supportedSourceKinds,
       handler: loseHalfChipsHandler,
+    },
+    {
+      effectId: "dead_wizard_token_damage_per_discard_legend",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_damage_per_discard_legend"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: damagePerDiscardLegendHandler,
+    },
+    {
+      effectId: "dead_wizard_token_exchange_life",
+      decoder: bindRuntimeEffectDecoder("dead_wizard_token_exchange_life"),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: exchangeLifeHandler,
     },
     {
       effectId: "dead_wizard_token_reward_killer_chips",

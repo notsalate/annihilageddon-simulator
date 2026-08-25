@@ -50,10 +50,11 @@ import {
   type MayhemAttackImpact,
   type EffectChoiceResolution,
   type EffectRuntimeHandlerOperationResult,
+  type EffectRuntimeOperationResult,
   evaluateRuntimeEffectAtTiming,
   evaluateRuntimeEffectBasicTrophyChipPayoutSuppression,
   executeRuntimeEffect,
-  executeRuntimeEffectAtTiming,
+  executeRuntimeEffectAtTiming as executeRuntimeEffectAtTimingInCatalog,
   resolveResurrectionLifeTotal,
   type TargetChoice,
   type TargetChoiceResult,
@@ -72,6 +73,7 @@ import {
 import {
   markRuntimeEffectTreeVerified,
   requireVerifiedRuntimeEffect,
+  type VerifiedRuntimeEffect,
 } from "./runtime-effect-verification.js";
 import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
 import type {
@@ -325,14 +327,12 @@ export function executeActivationEffects(
   definition: CardDefinition,
   source: EffectSourceContext
 ): EffectExecutionResult {
-  return resolveWithinDeadWizardTokenResolutionBoundary(state, () =>
-    executeEffects(
-      state,
-      player,
-      definition.engine.effects,
-      "activation",
-      source
-    )
+  return executeEffects(
+    state,
+    player,
+    definition.engine.effects,
+    "activation",
+    source
   );
 }
 
@@ -347,9 +347,7 @@ export function executeWizardPropertyActivationEffects(
   }
   const engine = definition.engine;
 
-  return resolveWithinDeadWizardTokenResolutionBoundary(state, () =>
-    executeEffects(state, player, engine.effects, "activation", source)
-  );
+  return executeEffects(state, player, engine.effects, "activation", source);
 }
 
 export type WizardPropertyActivationAvailability =
@@ -1028,14 +1026,12 @@ export function executeMayhemEffects(
   definition: CardDefinition,
   source: EffectSourceContext
 ): EffectExecutionResult {
-  return resolveWithinDeadWizardTokenResolutionBoundary(state, () =>
-    executeEffects(
-      state,
-      player,
-      definition.engine.effects,
-      "onMayhemResolve",
-      source
-    )
+  return executeEffects(
+    state,
+    player,
+    definition.engine.effects,
+    "onMayhemResolve",
+    source
   );
 }
 
@@ -1089,6 +1085,58 @@ function executeEffects(
   }
 
   return { ok: true };
+}
+
+function executeRuntimeEffectAtTiming(
+  state: GameState,
+  player: PlayerState,
+  effect: VerifiedRuntimeEffect,
+  timing: RuntimeEffect["timing"],
+  source: EffectSourceContext,
+  services: EffectRuntimeServices,
+  isApplicable?: (effect: RuntimeEffectPayload) => boolean
+): EffectRuntimeOperationResult<EffectExecutionResult> {
+  let operationResult:
+    | EffectRuntimeOperationResult<EffectExecutionResult>
+    | undefined;
+  const boundaryResult = resolveWithinDeadWizardTokenResolutionBoundary(
+    state,
+    () => {
+      operationResult = executeRuntimeEffectAtTimingInCatalog(
+        state,
+        player,
+        effect,
+        timing,
+        source,
+        services,
+        isApplicable
+      );
+      if (operationResult.status === "error") {
+        return { ok: false, error: operationResult.error };
+      }
+      if (operationResult.status === "notApplicable") {
+        return { ok: true };
+      }
+      return operationResult.result;
+    }
+  );
+
+  if (!boundaryResult.ok) {
+    return { status: "error", error: boundaryResult.error };
+  }
+  if (operationResult === undefined) {
+    return {
+      status: "error",
+      error: `Effect ${effect.effectId} did not produce an execution result`,
+    };
+  }
+  if (operationResult.status === "notApplicable") {
+    return operationResult;
+  }
+  if (operationResult.status === "error") {
+    return operationResult;
+  }
+  return { status: "resolved", result: boundaryResult };
 }
 
 function cardTriggerMatches(
@@ -1538,6 +1586,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   dealDamage,
   healPlayer,
   setPlayerLife,
+  exchangePlayerLifeTotals,
   resolveStatusTargetPlayers,
   gainDinglerStatus,
   removeDinglerStatus,
@@ -2185,6 +2234,10 @@ function getResurrectionLifeTotal(
   state: GameState,
   player: PlayerState
 ): number {
+  const effectiveMaxLife = calculateEffectivePlayerMaxLife(
+    state,
+    player.playerId
+  );
   for (const token of player.wizardProperties) {
     const definition = state.tokenDefinitions.get(token.definitionId);
     if (
@@ -2214,12 +2267,12 @@ function getResurrectionLifeTotal(
         throw new Error(result.error);
       }
       if (result.status === "resolved") {
-        return result.result;
+        return Math.min(result.result, effectiveMaxLife);
       }
     }
   }
 
-  return 20;
+  return Math.min(20, effectiveMaxLife);
 }
 
 function awardBasicTrophyForKill(
@@ -2480,6 +2533,50 @@ function setPlayerLife(
     lifeBefore,
     lifeAfter: effectiveLifeTotal,
   };
+}
+
+function exchangePlayerLifeTotals(
+  state: GameState,
+  player: PlayerState,
+  targetPlayer: PlayerState,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext
+): void {
+  const playerLife = player.life.current;
+  const targetPlayerLife = targetPlayer.life.current;
+  const playerLifeAfter = Math.min(
+    targetPlayerLife,
+    calculateEffectivePlayerMaxLife(state, player.playerId)
+  );
+  const targetPlayerLifeAfter = Math.min(
+    playerLife,
+    calculateEffectivePlayerMaxLife(state, targetPlayer.playerId)
+  );
+  player.life.current = playerLifeAfter;
+  targetPlayer.life.current = targetPlayerLifeAfter;
+  if (playerLifeAfter < targetPlayerLife) {
+    recordGameEvent(state, {
+      type: "playerLifeClamped",
+      playerId: player.playerId,
+      amount: playerLifeAfter,
+    });
+  }
+  if (targetPlayerLifeAfter < playerLife) {
+    recordGameEvent(state, {
+      type: "playerLifeClamped",
+      playerId: targetPlayer.playerId,
+      amount: targetPlayerLifeAfter,
+    });
+  }
+  recordGameEvent(state, {
+    type: "effectLifeExchanged",
+    playerId: player.playerId,
+    targetPlayerId: targetPlayer.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
 }
 
 function moveCardToPlayerZone(
@@ -2784,10 +2881,8 @@ function playResolvedCard(
     };
   } = {}
 ): EffectExecutionResult {
-  return resolveWithinDeadWizardTokenResolutionBoundary(state, () =>
-    resolveCardPlay(state, player, card, cardPlayResolutionServices, {
-      ...ownership,
-      ongoingOwnerId: ownership.ongoingOwnerId ?? player.playerId,
-    })
-  );
+  return resolveCardPlay(state, player, card, cardPlayResolutionServices, {
+    ...ownership,
+    ongoingOwnerId: ownership.ongoingOwnerId ?? player.playerId,
+  });
 }

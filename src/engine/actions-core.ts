@@ -12,7 +12,6 @@ import {
   hasExecutableWizardPropertyActivation,
   isBasicTrophyChipPayoutSuppressed,
   moveGainedCardToPlayerDestination,
-  resolveWithinDeadWizardTokenResolutionBoundary,
   validateActivationEffects,
   validateGainedCardEffects,
   validateOnPlayEffects,
@@ -837,24 +836,20 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
 
   activePlayer.hand.splice(cardIndex, 1);
   const ownerBefore = card.ownerId;
-  const effectResult = resolveWithinDeadWizardTokenResolutionBoundary(
+  const effectResult = resolveCardPlay(
     state,
-    () =>
-      resolveCardPlay(
-        state,
-        activePlayer,
-        card,
-        {
-          executeOnPlayEffects,
-          executeWizardPropertyOnPlayCardEffects,
-          executeControlledCardOnPlayCardEffects,
-          executeControlledCardAfterControllerPlaysCardEffects,
-        },
-        {
-          sourceZone: `${activePlayer.playerId}.hand`,
-          ownerBefore,
-        }
-      )
+    activePlayer,
+    card,
+    {
+      executeOnPlayEffects,
+      executeWizardPropertyOnPlayCardEffects,
+      executeControlledCardOnPlayCardEffects,
+      executeControlledCardAfterControllerPlaysCardEffects,
+    },
+    {
+      sourceZone: `${activePlayer.playerId}.hand`,
+      ownerBefore,
+    }
   );
   if (!effectResult.ok) {
     return effectResult;
