@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   applyAction,
   initializeGame,
+  runMarketFlow,
   type ActionResult,
   type CardDefinition,
   type CardInstance,
@@ -17,7 +18,10 @@ import {
   markCardDefinitionId,
   markCardInstanceId,
 } from "../../src/domain/types.js";
-import { grantTemporaryControl } from "../../src/engine/control-ledger.js";
+import {
+  grantTemporaryControl,
+  movePhysicalCard,
+} from "../../src/engine/control-ledger.js";
 import { verifiedTestRuntimeEffect } from "./verified-runtime-effect.js";
 
 export type CreateGameScenarioOptions = {
@@ -215,6 +219,57 @@ export function chooseEffect(
   selector: ChoicePolicy
 ): void {
   scenario.state.effectChoiceStrategy = selector;
+}
+
+export function resolveMayhemThroughMarket(
+  scenario: GameScenario,
+  source: CardInstance,
+  deck: "mainDeck" | "legendDeck"
+) {
+  const sourceZone = `${scenario.activePlayer.playerId}.hand`;
+  scenario.state.common[deck].splice(0);
+  const moved = movePhysicalCard(
+    scenario.state,
+    source.instanceId,
+    deck,
+    "front",
+    sourceZone
+  );
+  assert.deepEqual(moved.ok, true);
+  scenario.state.common[deck].splice(1);
+  source.ownerId = "common";
+  const market =
+    deck === "mainDeck"
+      ? scenario.state.common.market
+      : scenario.state.common.legendMarket;
+  market.splice(0);
+  return runMarketFlow(scenario.state, { mode: "turn" });
+}
+
+export function putOnCommonDeck(
+  scenario: GameScenario,
+  card: CardInstance,
+  deck: "mainDeck" | "legendDeck"
+): void {
+  const owner = scenario.state.players.find(
+    (player) => player.playerId === card.ownerId
+  );
+  assert.ok(owner);
+  const sourceZone = owner.hand.includes(card)
+    ? `${owner.playerId}.hand`
+    : owner.discard.includes(card)
+      ? `${owner.playerId}.discard`
+      : undefined;
+  assert.ok(sourceZone);
+  const moved = movePhysicalCard(
+    scenario.state,
+    card.instanceId,
+    deck,
+    "front",
+    sourceZone
+  );
+  assert.deepEqual(moved.ok, true);
+  card.ownerId = "common";
 }
 
 export function play(

@@ -1,48 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runMarketFlow } from "../src/index.js";
 import {
   createGameScenario,
   givenRuntimeCard,
   play,
+  chooseEffect,
+  putOnCommonDeck,
+  resolveMayhemThroughMarket,
 } from "./helpers/game-scenario.js";
-import { chooseEffect } from "./helpers/game-scenario.js";
 import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 
 const rootDir = process.cwd();
-
-function resolveMayhemThroughMarket(
-  scenario: ReturnType<typeof createGameScenario>,
-  source: ReturnType<typeof givenRuntimeCard>,
-  deck: "mainDeck" | "legendDeck"
-) {
-  const sourceIndex = scenario.activePlayer.hand.indexOf(source);
-  assert.ok(sourceIndex >= 0);
-  scenario.activePlayer.hand.splice(sourceIndex, 1);
-  source.ownerId = "common";
-  const sourceDeck = scenario.state.common[deck];
-  sourceDeck.splice(0, sourceDeck.length, source);
-  const market =
-    deck === "mainDeck"
-      ? scenario.state.common.market
-      : scenario.state.common.legendMarket;
-  market.splice(0);
-  return runMarketFlow(scenario.state, { mode: "turn" });
-}
-
-function putOnCommonDeck(
-  scenario: ReturnType<typeof createGameScenario>,
-  card: ReturnType<typeof givenRuntimeCard>,
-  deck: "mainDeck" | "legendDeck"
-): void {
-  const handIndex = scenario.activePlayer.hand.indexOf(card);
-  if (handIndex >= 0) {
-    scenario.activePlayer.hand.splice(handIndex, 1);
-  }
-  card.ownerId = "common";
-  scenario.state.common[deck].unshift(card);
-}
 
 test("card movement: main_019 lets the active player and another wizard draw", () => {
   const scenario = createGameScenario({
@@ -573,8 +542,11 @@ test("card movement: main_076 charges floor-half chips, including zero and one",
     [0, 1, 2]
   );
   assert.ok(
-    cards.every((card) => scenario.state.common.destroyedPile.includes(card))
+    cards
+      .slice(1)
+      .every((card) => scenario.state.common.destroyedPile.includes(card))
   );
+  assert.equal(scenario.activePlayer.discard.includes(cards[0]!), true);
   assert.equal(
     scenario.state.eventLog.filter(
       (event) =>
@@ -629,7 +601,10 @@ test("card movement: main_076 charges floor-half chips, including zero and one",
     true
   );
   assert.equal(empty.activePlayer.chips, 4);
-  assert.equal(emptyChoiceRequests, empty.state.players.length);
+  assert.equal(
+    emptyChoiceRequests,
+    empty.state.players.filter((player) => player.chips > 0).length
+  );
 });
 
 test("card movement: mega_007 gives Dingler one choice and normal wizards two zone choices", () => {
