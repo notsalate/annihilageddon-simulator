@@ -21,10 +21,12 @@ import {
 
 export type CombatDefenseEffectId =
   | "avoid_attack"
+  | "exchange_controlled_dead_wizard_tokens"
   | "defense_discard_self_avoid_attack_then_optional_destroy_hand_card";
 
 export const combatDefenseEffectIds = [
   "avoid_attack",
+  "exchange_controlled_dead_wizard_tokens",
   "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
 ] as const satisfies readonly CombatDefenseEffectId[];
 
@@ -86,6 +88,14 @@ export function createCombatDefenseEffectDecoders(
       costs: optionalCosts,
       branchEffects: optionalRuntimeEffectArray,
     }),
+    exchange_controlled_dead_wizard_tokens: defineDecoder(
+      "exchange_controlled_dead_wizard_tokens",
+      {
+        effectId: required(literal("exchange_controlled_dead_wizard_tokens")),
+        timing: required(literal("onDefense")),
+        optional: required(literal(true)),
+      }
+    ),
     defense_discard_self_avoid_attack_then_optional_destroy_hand_card:
       defineDecoder(
         "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
@@ -124,6 +134,34 @@ const avoidAttackHandler: EffectRuntimeHandler<
   },
 };
 
+const exchangeControlledDeadWizardTokensHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"exchange_controlled_dead_wizard_tokens">
+> = {
+  effectId: "exchange_controlled_dead_wizard_tokens",
+  execute(state, player, effect, source, services) {
+    const attackerPlayerId = source.currentAttackerPlayerId;
+    if (attackerPlayerId === undefined) {
+      return { ok: true };
+    }
+    const attacker = state.players.find(
+      (candidate) => candidate.playerId === attackerPlayerId
+    );
+    if (attacker === undefined) {
+      return {
+        ok: false,
+        error: `Missing current attacker player ${attackerPlayerId}`,
+      };
+    }
+    return services.exchangeControlledDeadWizardTokenLikes(
+      state,
+      player,
+      attacker,
+      effect.effectId,
+      source
+    );
+  },
+};
+
 export interface CombatDefenseCatalogTools {
   bindRuntimeEffectDecoder<Id extends CombatDefenseEffectId>(
     effectId: Id
@@ -143,6 +181,7 @@ export function createCombatDefenseEffectDefinitions(
   tools: CombatDefenseCatalogTools
 ): readonly [
   CombatDefenseEffectDefinition<"avoid_attack">,
+  CombatDefenseEffectDefinition<"exchange_controlled_dead_wizard_tokens">,
   CombatDefenseEffectDefinition<"defense_discard_self_avoid_attack_then_optional_destroy_hand_card">,
 ] {
   return [
@@ -153,6 +192,16 @@ export function createCombatDefenseEffectDefinitions(
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["card"],
       handler: avoidAttackHandler,
+    },
+    {
+      effectId: "exchange_controlled_dead_wizard_tokens",
+      decoder: tools.bindRuntimeEffectDecoder(
+        "exchange_controlled_dead_wizard_tokens"
+      ),
+      supportedTimings: ["onDefense"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: exchangeControlledDeadWizardTokensHandler,
     },
     {
       effectId:

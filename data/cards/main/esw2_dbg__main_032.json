@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_032",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_032.json",
+    "image": "assets/cards/spell/Заклинание. Браталити.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_032.md"
+  },
+  "visible": {
+    "nameRu": "Браталити",
+    "cost": 7,
+    "victoryPoints": 2,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": ["spell"],
+    "textRu": "+4 мощи\nВ следующий раз, когда ты убьёшь врага в этот ход:\nможешь заставить убитого колдуна не получать жетон дохлого колдуна. Если заставил, получи 1 жетон дохлого колдуна и 1 легенду.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["spell"],
+    "cost": 7,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 4
+      },
+      {
+        "effectId": "arm_dead_wizard_token_kill_replacement",
+        "timing": "onPlay"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

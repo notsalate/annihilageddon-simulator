@@ -10,13 +10,23 @@ import type {
 } from "./effect-runtime-ongoing.js";
 import type { EffectiveValueModifierEffectPayloadMap } from "./effect-runtime-effective-value-modifier.js";
 import type { CardTypeEffectPayloadMap } from "./effect-runtime-card-type.js";
+import type { DwtInteractionEffectPayloadMap } from "./effect-runtime-dwt-interactions.js";
 import type { DeadWizardTokenEffectPayloadMap } from "./effect-runtime-dead-wizard-token.js";
 
+export type {
+  AddPowerIfNoControlledDeadWizardTokenRuntimeEffect,
+  AddPowerPerControlledDeadWizardTokenRuntimeEffect,
+  ArmDeadWizardTokenKillReplacementRuntimeEffect,
+  DwtInteractionEffectPayloadMap,
+  DwtInteractionEffectId,
+  OptionalDestroyControlledDeadWizardTokenRuntimeEffect,
+} from "./effect-runtime-dwt-interactions.js";
 export type {
   ResourceDrawEffectPayloadMap,
   GainChipsRuntimeEffect,
   GainChipsPerPlayerWithStatusRuntimeEffect,
   DrawCardsRuntimeEffect,
+  GainChipsPerControlledDeadWizardTokenRuntimeEffect,
 } from "./effect-runtime-resources-draw.js";
 export type {
   CardOwnershipChoiceEffectPayloadMap,
@@ -224,9 +234,16 @@ export const knownRuntimeEffectIds = [
   "add_power",
   "add_power_if_player_has_status",
   "add_power_per_controlled_object",
+  "add_power_per_controlled_dead_wizard_token",
+  "add_power_if_no_controlled_dead_wizard_token",
+  "arm_dead_wizard_token_kill_replacement",
   "add_power_per_controlled_permanent",
   "add_power_per_player_with_status",
   "attack_damage",
+  "attack_damage_per_controlled_dead_wizard_token",
+  "attack_gain_dead_wizard_tokens",
+  "attack_transfer_controlled_dead_wizard_token",
+  "attack_kill_and_replace_dead_wizard_token",
   "attack_damage_equal_remembered_card_cost",
   "attack_damage_equal_to_controlled_card_cost",
   "attack_destroy_top_legend_deck_then_damage_equal_cost",
@@ -251,6 +268,8 @@ export const knownRuntimeEffectIds = [
   "dead_wizard_token_lose_half_chips",
   "dead_wizard_token_damage_per_discard_legend",
   "dead_wizard_token_exchange_life",
+  "dead_wizard_token_reveal_main_deck_gain_if_mayhem",
+  "dead_wizard_token_reveal_player_deck_gain_if_legend",
   "dead_wizard_token_reward_killer_chips",
   "dead_wizard_token_self_destroy_for_chips",
   "double_owned_attack_damage",
@@ -269,6 +288,7 @@ export const knownRuntimeEffectIds = [
   "endgame_remove_matching_dead_wizard_tokens",
   "endgame_limp_wands_score_positive",
   "endgame_vp_per_owned_legend",
+  "exchange_controlled_dead_wizard_tokens",
   "exchange_life_and_dingler_status",
   "fixture_add_power_equal_to_target_cost",
   "fixture_modify_effective_value",
@@ -277,6 +297,7 @@ export const knownRuntimeEffectIds = [
   "gain_chips",
   "gain_chips_equal_damage_dealt",
   "gain_chips_per_player_with_status",
+  "gain_chips_per_controlled_dead_wizard_token",
   "gain_status",
   "heal",
   "heal_equal_damage_dealt",
@@ -310,6 +331,7 @@ export const knownRuntimeEffectIds = [
   "ongoing_add_power_per_dead_wizard_token",
   "ongoing_add_power_when_playing_limp_wand",
   "ongoing_first_attack_damage_add_power",
+  "optional_destroy_controlled_dead_wizard_token",
   "ongoing_hand_refill_bonus",
   "suppress_basic_trophy_chip_payout",
   "ongoing_start_turn_optional_gain_limp_wand_to_hand",
@@ -533,7 +555,10 @@ export type FixtureAddPowerEqualToTargetCostRuntimeEffect =
     Targetable & { emptyChoice?: "fail" };
 
 export interface ImmediateEffectPayloadMap
-  extends ResourceDrawEffectPayloadMap, CardOwnershipChoiceEffectPayloadMap {
+  extends
+    ResourceDrawEffectPayloadMap,
+    CardOwnershipChoiceEffectPayloadMap,
+    DwtInteractionEffectPayloadMap {
   add_power: AddPowerRuntimeEffect;
   add_power_if_player_has_status: AddPowerIfPlayerHasStatusRuntimeEffect;
   add_power_per_controlled_object: AddPowerPerControlledObjectRuntimeEffect;
@@ -558,6 +583,26 @@ export type AttackDamageRuntimeEffect =
     Targetable &
     Costed &
     AttackBranches;
+export type AttackDamagePerControlledDeadWizardTokenRuntimeEffect =
+  EffectWithOptionalTiming<"attack_damage_per_controlled_dead_wizard_token"> & {
+    amountPerDeadWizardToken: number;
+    targetSelector: "eachFoe";
+  } & AttackBranches;
+export type AttackGainDeadWizardTokensRuntimeEffect =
+  EffectWithOptionalTiming<"attack_gain_dead_wizard_tokens"> & {
+    amount: number;
+    targetSelector: "chosenFoe";
+    redirectPolicy: "ignoreOriginalAttacker";
+  };
+export type AttackTransferControlledDeadWizardTokenRuntimeEffect =
+  EffectWithOptionalTiming<"attack_transfer_controlled_dead_wizard_token"> & {
+    targetSelector: "chosenPlayer";
+  };
+export type AttackKillAndReplaceDeadWizardTokenRuntimeEffect =
+  EffectWithOptionalTiming<"attack_kill_and_replace_dead_wizard_token"> & {
+    amount: 3;
+    targetSelector: "chosenFoe";
+  };
 export type AttackDamageEqualRememberedCardCostRuntimeEffect =
   EffectWithOptionalTiming<"attack_damage_equal_remembered_card_cost"> &
     Targetable &
@@ -604,6 +649,12 @@ export interface AvoidAttackRuntimeEffect extends TimedEffect<
   costs?: RuntimeEffectCost[];
   branchEffects?: RuntimeEffect[];
 }
+export type ExchangeControlledDeadWizardTokensRuntimeEffect = TimedEffect<
+  "exchange_controlled_dead_wizard_tokens",
+  "onDefense"
+> & {
+  optional: true;
+};
 export type ConditionalActivationAttackDamageRuntimeEffect =
   EffectWithOptionalTiming<"conditional_activation_attack_damage"> &
     PositiveAmount &
@@ -671,6 +722,10 @@ export interface PreventDefenseAgainstOwnedWandAttacksRuntimeEffect extends Time
 
 export interface PlayerControlledAttackEffectPayloadMap {
   attack_damage: AttackDamageRuntimeEffect;
+  attack_damage_per_controlled_dead_wizard_token: AttackDamagePerControlledDeadWizardTokenRuntimeEffect;
+  attack_gain_dead_wizard_tokens: AttackGainDeadWizardTokensRuntimeEffect;
+  attack_transfer_controlled_dead_wizard_token: AttackTransferControlledDeadWizardTokenRuntimeEffect;
+  attack_kill_and_replace_dead_wizard_token: AttackKillAndReplaceDeadWizardTokenRuntimeEffect;
   attack_damage_equal_remembered_card_cost: AttackDamageEqualRememberedCardCostRuntimeEffect;
   attack_damage_equal_to_controlled_card_cost: AttackDamageEqualToControlledCardCostRuntimeEffect;
   attack_destroy_top_legend_deck_then_damage_equal_cost: AttackDestroyTopLegendDeckThenDamageEqualCostRuntimeEffect;
@@ -678,6 +733,7 @@ export interface PlayerControlledAttackEffectPayloadMap {
   attack_gain_limp_wand: AttackGainLimpWandRuntimeEffect;
   attack_gain_status: AttackGainStatusRuntimeEffect;
   avoid_attack: AvoidAttackRuntimeEffect;
+  exchange_controlled_dead_wizard_tokens: ExchangeControlledDeadWizardTokensRuntimeEffect;
   conditional_activation_attack_damage: ConditionalActivationAttackDamageRuntimeEffect;
   activation_attack_damage_per_controlled_card_type: ActivationAttackDamagePerControlledCardTypeRuntimeEffect;
   directional_chain_attack: DirectionalChainAttackRuntimeEffect;

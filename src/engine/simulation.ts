@@ -794,6 +794,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
   }
   const actionLimit = options.maxTurns * 200;
   let actionsApplied = 0;
+  let checkDeadWizardTokenExhaustion = true;
   const actionHistory: GameAction[] = [];
 
   while (true) {
@@ -801,7 +802,9 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       if (options.validateInvariants) {
         assertGameStateInvariants(state);
       }
-      const endReason = getGameEndReason(state);
+      const endReason = getGameEndReason(state, {
+        checkDeadWizardTokenExhaustion,
+      });
       if (endReason !== undefined) {
         return (
           rejectSuccessfulReplay(replayController) ??
@@ -853,6 +856,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
         );
       }
       actionsApplied += 1;
+      checkDeadWizardTokenExhaustion = selectedAction.type === "endTurn";
     } catch (error) {
       const replayFailure =
         replayController === undefined || error instanceof SimulationReplayError
@@ -1026,8 +1030,12 @@ function snapshotToken(token: TokenInstance): SetupTokenSnapshot {
   };
 }
 
-export function getGameEndReason(state: GameState): GameEndReason | undefined {
+export function getGameEndReason(
+  state: GameState,
+  options: { checkDeadWizardTokenExhaustion?: boolean } = {}
+): GameEndReason | undefined {
   if (
+    options.checkDeadWizardTokenExhaustion !== false &&
     state.common.deadWizardTokens.status === "available" &&
     state.common.deadWizardTokens.drawStack.length === 0
   ) {

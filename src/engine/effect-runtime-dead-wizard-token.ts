@@ -4,6 +4,7 @@ import { changePlayerChips } from "./effect-runtime-resources-draw.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
 import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
 import { recordGameEvent } from "./event-recorder.js";
+import type { CardDefinition } from "./data.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 import type {
   EffectExecutionResult,
@@ -16,7 +17,7 @@ import type {
   RuntimeEffectId,
   RuntimeEffectTargetSelector,
 } from "./runtime-effect.js";
-import type { GameState, PlayerState } from "./setup.js";
+import type { CardInstance, GameState, PlayerState } from "./setup.js";
 import type {
   EffectRuntimeSupportedModes,
   EffectRuntimeSupportedSourceKinds,
@@ -40,6 +41,8 @@ export const deadWizardTokenEffectIds = [
   "dead_wizard_token_lose_half_chips",
   "dead_wizard_token_damage_per_discard_legend",
   "dead_wizard_token_exchange_life",
+  "dead_wizard_token_reveal_main_deck_gain_if_mayhem",
+  "dead_wizard_token_reveal_player_deck_gain_if_legend",
   "dead_wizard_token_reward_killer_chips",
   "dead_wizard_token_self_destroy_for_chips",
   "suppress_basic_trophy_chip_payout",
@@ -87,6 +90,16 @@ export type DeadWizardTokenExchangeLifeRuntimeEffect = {
   effectId: "dead_wizard_token_exchange_life";
   timing: "onDeadWizardTokenFace";
   target: { selector: "opponentPlayer" };
+};
+
+export type DeadWizardTokenRevealMainDeckGainIfMayhemRuntimeEffect = {
+  effectId: "dead_wizard_token_reveal_main_deck_gain_if_mayhem";
+  timing: "onDeadWizardTokenFace";
+};
+
+export type DeadWizardTokenRevealPlayerDeckGainIfLegendRuntimeEffect = {
+  effectId: "dead_wizard_token_reveal_player_deck_gain_if_legend";
+  timing: "onDeadWizardTokenFace";
 };
 
 export type DeadWizardTokenRewardKillerChipsRuntimeEffect = {
@@ -144,6 +157,8 @@ export interface DeadWizardTokenEffectPayloadMap {
   dead_wizard_token_lose_half_chips: DeadWizardTokenLoseHalfChipsRuntimeEffect;
   dead_wizard_token_damage_per_discard_legend: DeadWizardTokenDamagePerDiscardLegendRuntimeEffect;
   dead_wizard_token_exchange_life: DeadWizardTokenExchangeLifeRuntimeEffect;
+  dead_wizard_token_reveal_main_deck_gain_if_mayhem: DeadWizardTokenRevealMainDeckGainIfMayhemRuntimeEffect;
+  dead_wizard_token_reveal_player_deck_gain_if_legend: DeadWizardTokenRevealPlayerDeckGainIfLegendRuntimeEffect;
   dead_wizard_token_reward_killer_chips: DeadWizardTokenRewardKillerChipsRuntimeEffect;
   dead_wizard_token_self_destroy_for_chips: DeadWizardTokenSelfDestroyForChipsRuntimeEffect;
   suppress_basic_trophy_chip_payout: DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect;
@@ -232,6 +247,24 @@ export function createDeadWizardTokenEffectDecoders(
         effectId: required(literal("dead_wizard_token_exchange_life")),
         timing: required(literal("onDeadWizardTokenFace")),
         target: required(selectorTarget("opponentPlayer")),
+      }
+    ),
+    dead_wizard_token_reveal_main_deck_gain_if_mayhem: defineDecoder(
+      "dead_wizard_token_reveal_main_deck_gain_if_mayhem",
+      {
+        effectId: required(
+          literal("dead_wizard_token_reveal_main_deck_gain_if_mayhem")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
+      }
+    ),
+    dead_wizard_token_reveal_player_deck_gain_if_legend: defineDecoder(
+      "dead_wizard_token_reveal_player_deck_gain_if_legend",
+      {
+        effectId: required(
+          literal("dead_wizard_token_reveal_player_deck_gain_if_legend")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
       }
     ),
     dead_wizard_token_reward_killer_chips: defineDecoder(
@@ -492,6 +525,90 @@ const eachFoeGainChipsHandler: EffectRuntimeHandler<DeadWizardTokenEachFoeGainCh
         changePlayerChips(state, foe, effect.amount, source, effect.effectId);
       }
       return { ok: true };
+    },
+  };
+
+function revealCardAndMaybeGainDeadWizardToken(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance | undefined,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext,
+  shouldGain: (definition: CardDefinition) => boolean,
+  services: EffectRuntimeServices
+): EffectExecutionResult {
+  if (card === undefined) {
+    recordGameEvent(state, {
+      type: "effectRevealSkipped",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+    return { ok: true };
+  }
+
+  recordGameEvent(state, {
+    type: "effectCardRevealed",
+    playerId: player.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    targetCardInstanceId: card.instanceId,
+    targetDefinitionId: card.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+
+  const definition = state.cardDefinitions.get(card.definitionId);
+  if (definition === undefined) {
+    return {
+      ok: false,
+      error: `Missing revealed card definition ${card.definitionId}`,
+    };
+  }
+  return shouldGain(definition)
+    ? services.gainDeadWizardToken(state, player)
+    : { ok: true };
+}
+
+const revealMainDeckGainIfMayhemHandler: EffectRuntimeHandler<DeadWizardTokenRevealMainDeckGainIfMayhemRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_reveal_main_deck_gain_if_mayhem",
+    execute(state, player, effect, source, services) {
+      return revealCardAndMaybeGainDeadWizardToken(
+        state,
+        player,
+        state.common.mainDeck[0],
+        effect.effectId,
+        source,
+        (definition) => definition.engine.cardKind === "mayhem",
+        services
+      );
+    },
+  };
+
+const revealPlayerDeckGainIfLegendHandler: EffectRuntimeHandler<DeadWizardTokenRevealPlayerDeckGainIfLegendRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_reveal_player_deck_gain_if_legend",
+    execute(state, player, effect, source, services) {
+      const card = services.peekTopDeckCard(player, state);
+      return revealCardAndMaybeGainDeadWizardToken(
+        state,
+        player,
+        card,
+        effect.effectId,
+        source,
+        (definition) =>
+          cardMatchesTypeForPlayer(
+            state,
+            player.playerId,
+            definition,
+            "legend",
+            card
+          ),
+        services
+      );
     },
   };
 
@@ -775,6 +892,26 @@ export function createDeadWizardTokenEffectDefinitions(
       supportedModes,
       supportedSourceKinds,
       handler: exchangeLifeHandler,
+    },
+    {
+      effectId: "dead_wizard_token_reveal_main_deck_gain_if_mayhem",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_reveal_main_deck_gain_if_mayhem"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: revealMainDeckGainIfMayhemHandler,
+    },
+    {
+      effectId: "dead_wizard_token_reveal_player_deck_gain_if_legend",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_reveal_player_deck_gain_if_legend"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: revealPlayerDeckGainIfLegendHandler,
     },
     {
       effectId: "dead_wizard_token_reward_killer_chips",

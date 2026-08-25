@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__familiar_009",
+  "source": {
+    "draft": "data/import/cards/familiar/drafts/esw2_dbg__familiar_009.json",
+    "image": "assets/cards/familiar/Месаклито, книжный червь.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_009.md"
+  },
+  "visible": {
+    "nameRu": "Мескалито, книжный червь",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "textRu": "Возьми 1 карту.\n+1 мощь за каждый жетон дохлого колдуна под твоим контролем.\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, возьми 1 карту и можешь обменять 1 свой жетон дохлого колдуна на 1 такой же жетон атакующего и применить эффекты обоих.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "cost": 6,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "draw_cards",
+        "timing": "onPlay",
+        "amount": 1
+      },
+      {
+        "effectId": "add_power_per_controlled_dead_wizard_token",
+        "timing": "onPlay",
+        "amountPerDeadWizardToken": 1
+      },
+      {
+        "effectId": "avoid_attack",
+        "timing": "onDefense",
+        "destination": "discardSelf",
+        "branchEffects": [
+          {
+            "effectId": "draw_cards",
+            "timing": "onDefense",
+            "amount": 1
+          },
+          {
+            "effectId": "exchange_controlled_dead_wizard_tokens",
+            "timing": "onDefense",
+            "optional": true
+          }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

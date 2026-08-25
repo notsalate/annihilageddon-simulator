@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_033",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_033.json",
+    "image": "assets/cards/legend/wizard-card/Легенда-Волшебник. Некроманка Гнилюся.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_033.md"
+  },
+  "visible": {
+    "nameRu": "Некроманка Гнилюся",
+    "cost": 9,
+    "victoryPoints": 3,
+    "typeRu": "Легенда — Волшебник",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "textRu": "+4 мощи\nАтака: нанеси 4 урона каждому врагу за каждый жетон дохлого колдуна под твоим контролем.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "cost": 9,
+    "victoryPoints": 3,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 4
+      },
+      {
+        "effectId": "attack_damage_per_controlled_dead_wizard_token",
+        "timing": "onPlay",
+        "amountPerDeadWizardToken": 4,
+        "targetSelector": "eachFoe"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

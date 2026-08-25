@@ -69,6 +69,10 @@ import {
   type DeadWizardTokenEffectPayloadMap,
 } from "./effect-runtime-dead-wizard-token.js";
 import {
+  createDwtInteractionEffectDefinitions,
+  type DwtInteractionEffectPayloadMap,
+} from "./effect-runtime-dwt-interactions.js";
+import {
   createControlledPowerEffectDefinitions,
   createOngoingEffectDefinitions,
 } from "./effect-runtime-ongoing.js";
@@ -274,8 +278,14 @@ export interface DamageResult {
   killed: boolean;
 }
 
+export type DeadWizardTokenDeathPolicy = "normal" | "skip";
+
 export type DamageCause =
-  | { kind: "playerControlled"; player: PlayerState }
+  | {
+      kind: "playerControlled";
+      player: PlayerState;
+      deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy;
+    }
   | { kind: "ownerless" };
 
 export interface EffectRuntimeServices {
@@ -355,6 +365,23 @@ export interface EffectRuntimeServices {
     effectId: RuntimeEffectId,
     choices: readonly EffectChoice[]
   ): EffectChoice | undefined;
+  runControlledPowerMutation<Value>(
+    state: GameState,
+    controller:
+      | PlayerState["playerId"]
+      | (() => PlayerState["playerId"] | undefined),
+    mutation: () => Value,
+    shouldRecalculate?: (value: Value) => boolean
+  ):
+    | {
+        readonly ok: true;
+        readonly value: Value;
+        readonly gameEnd?: EffectGameEnd;
+      }
+    | {
+        readonly ok: false;
+        readonly error: string;
+      };
   dealDamage(
     state: GameState,
     sourcePlayer: PlayerState,
@@ -364,6 +391,22 @@ export interface EffectRuntimeServices {
     source: EffectSourceContext,
     cause: DamageCause
   ): DamageApplicationResult;
+  killPlayer(
+    state: GameState,
+    sourcePlayer: PlayerState,
+    targetPlayer: PlayerState,
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext,
+    deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy
+  ): EffectExecutionResult;
+  replaceDeadWizardTokenAfterKill(
+    state: GameState,
+    killer: PlayerState,
+    targetPlayer: PlayerState,
+    amount: 3,
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext
+  ): EffectExecutionResult;
   healPlayer(
     state: GameState,
     sourcePlayer: PlayerState,
@@ -406,6 +449,20 @@ export interface EffectRuntimeServices {
   gainDeadWizardToken(
     state: GameState,
     player: PlayerState
+  ): EffectExecutionResult;
+  transferControlledDeadWizardTokenLike(
+    state: GameState,
+    player: PlayerState,
+    targetPlayer: PlayerState,
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext
+  ): EffectExecutionResult;
+  exchangeControlledDeadWizardTokenLikes(
+    state: GameState,
+    player: PlayerState,
+    targetPlayer: PlayerState,
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext
   ): EffectExecutionResult;
   resolvePlayerControlledAttack(
     intent: PlayerControlledAttackIntent
@@ -1901,6 +1958,11 @@ const mayhemEffectEntries = defineEffectRuntimeFamily(
   })
 );
 
+const dwtInteractionEffectEntries = defineEffectRuntimeFamily(
+  "dwt-interactions",
+  createDwtInteractionEffectDefinitions({ bindRuntimeEffectDecoder })
+) satisfies EffectRuntimeEntriesFor<DwtInteractionEffectPayloadMap>;
+
 const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   {
     effectId: "add_power",
@@ -1988,6 +2050,7 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
   Omit<
     ImmediateEffectPayloadMap,
     | "add_power_if_player_has_status"
+    | keyof DwtInteractionEffectPayloadMap
     | "wild_magic_choice"
     | keyof ResourceDrawEffectPayloadMap
     | LifeStatusEffectId
@@ -2081,6 +2144,7 @@ const effectRuntimeCatalogDefinition = defineEffectRuntimeCatalog([
   resourceDrawEntries,
   lifeStatusEntries,
   cardOwnershipChoiceEntries,
+  dwtInteractionEffectEntries,
   wildMagicEffectEntries,
   immediateEffectEntries,
   combatAttackEffectEntries,

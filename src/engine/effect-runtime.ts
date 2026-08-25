@@ -19,8 +19,15 @@ import {
   getControlledCards,
   findCardLocation,
   removeCardFromLocation,
+  removeDeadWizardToken,
+  removeTemporaryCardControl,
   reorderPhysicalCard,
 } from "./control-ledger.js";
+import {
+  getControlledDeadWizardTokenLikeCards,
+  getDeadWizardTokenChoiceId,
+  getDeadWizardTokenLikeCardChoiceId,
+} from "./dead-wizard-token-like.js";
 import {
   beginDeadWizardTokenResolutionBoundary,
   dequeueDeadWizardTokenFace,
@@ -47,6 +54,7 @@ import {
 } from "./event-recorder.js";
 import {
   type DamageCause,
+  type DeadWizardTokenDeathPolicy,
   type EffectChoice,
   type EffectExecutionResult,
   type EffectRuntimeServices,
@@ -1391,7 +1399,7 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
       { kind: "playerControlled", player: attackingPlayer }
     );
   },
-  executeOnHitEffect(state, _attackingPlayer, targetPlayer, effect, source) {
+  executeOnHitEffect(state, attackingPlayer, targetPlayer, effect, source) {
     if (effect.effectId === "attack_gain_limp_wand") {
       return gainLimpWandsFromCommonStack(
         state,
@@ -1411,6 +1419,48 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
         state,
         targetPlayer,
         "attack_gain_status",
+        source
+      );
+    }
+    if (effect.effectId === "attack_gain_dead_wizard_tokens") {
+      for (let index = 0; index < effect.amount; index += 1) {
+        const result = effectRuntimeServices.gainDeadWizardToken(
+          state,
+          targetPlayer
+        );
+        if (!result.ok || result.gameEnd !== undefined) {
+          return result;
+        }
+      }
+      return { ok: true };
+    }
+    if (effect.effectId === "attack_transfer_controlled_dead_wizard_token") {
+      return effectRuntimeServices.transferControlledDeadWizardTokenLike(
+        state,
+        attackingPlayer,
+        targetPlayer,
+        effect.effectId,
+        source
+      );
+    }
+    if (effect.effectId === "attack_kill_and_replace_dead_wizard_token") {
+      const killResult = effectRuntimeServices.killPlayer(
+        state,
+        attackingPlayer,
+        targetPlayer,
+        effect.effectId,
+        source,
+        "skip"
+      );
+      if (!killResult.ok || killResult.gameEnd !== undefined) {
+        return killResult;
+      }
+      return effectRuntimeServices.replaceDeadWizardTokenAfterKill(
+        state,
+        attackingPlayer,
+        targetPlayer,
+        effect.amount,
+        effect.effectId,
         source
       );
     }
@@ -1691,7 +1741,10 @@ const effectRuntimeServices: EffectRuntimeServices = {
   prepareEffectChoice,
   recordEffectChoiceSelected,
   chooseEffectChoice,
+  runControlledPowerMutation,
   dealDamage,
+  killPlayer,
+  replaceDeadWizardTokenAfterKill,
   healPlayer,
   setPlayerLife,
   exchangePlayerLifeTotals,
@@ -1700,6 +1753,8 @@ const effectRuntimeServices: EffectRuntimeServices = {
   removeDinglerStatus,
   hasDinglerStatus,
   gainDeadWizardToken,
+  transferControlledDeadWizardTokenLike,
+  exchangeControlledDeadWizardTokenLikes,
   resolvePlayerControlledAttack:
     resolvePlayerControlledAttackWithRuntimeAdapters,
   resolveDefenseWindow,
@@ -2312,6 +2367,7 @@ function resolvePlayerDeath(
         killer: PlayerState;
         effectId: RuntimeEffectId;
         source: EffectSourceContext;
+        deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy;
       }
     | undefined
 ): EffectExecutionResult {
@@ -2342,7 +2398,113 @@ function resolvePlayerDeath(
     lifeAfter: resurrectionLifeTotal,
   });
 
+  if (killCredit?.deadWizardTokenPolicy === "skip") {
+    return { ok: true };
+  }
+  if (killCredit !== undefined) {
+    const replacementResult = resolveDeadWizardTokenKillReplacement(
+      state,
+      killCredit,
+      player
+    );
+    if (replacementResult !== undefined) {
+      return replacementResult;
+    }
+  }
   return issueDeadWizardToken(state, player, killCredit?.killer.playerId);
+}
+
+function resolveDeadWizardTokenKillReplacement(
+  state: GameState,
+  killCredit: {
+    killer: PlayerState;
+    effectId: RuntimeEffectId;
+    source: EffectSourceContext;
+    deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy;
+  },
+  defeatedPlayer: PlayerState
+): EffectExecutionResult | undefined {
+  const pending = state.turn.deadWizardTokenKillReplacement;
+  if (
+    pending === undefined ||
+    pending.playerId !== killCredit.killer.playerId ||
+    pending.playerId === defeatedPlayer.playerId
+  ) {
+    return undefined;
+  }
+
+  state.turn.deadWizardTokenKillReplacement = undefined;
+  const replacementSource: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: pending.playerId,
+    cardInstanceId: pending.cardInstanceId,
+    definitionId: pending.definitionId,
+  };
+  const replacementChoice = chooseEffectChoice(
+    state,
+    killCredit.killer,
+    replacementSource,
+    "arm_dead_wizard_token_kill_replacement",
+    [
+      { choiceKind: "option", choiceId: "decline" },
+      { choiceKind: "option", choiceId: "apply" },
+    ]
+  );
+  if (replacementChoice?.choiceId !== "apply") {
+    return issueDeadWizardToken(
+      state,
+      defeatedPlayer,
+      killCredit.killer.playerId
+    );
+  }
+
+  const killerTokenResult = issueDeadWizardToken(state, killCredit.killer);
+  if (!killerTokenResult.ok || killerTokenResult.gameEnd !== undefined) {
+    return killerTokenResult;
+  }
+
+  const legendChoices: EffectChoice[] = state.common.legendMarket.map(
+    (card) => ({
+      choiceKind: "cardTarget" as const,
+      choiceId: card.instanceId,
+      cards: [card],
+      amount: 1,
+    })
+  );
+  if (legendChoices.length === 0) {
+    return { ok: true };
+  }
+
+  const legendChoice = chooseEffectChoice(
+    state,
+    killCredit.killer,
+    replacementSource,
+    "arm_dead_wizard_token_kill_replacement",
+    legendChoices
+  );
+  if (legendChoice?.choiceKind !== "cardTarget") {
+    return { ok: true };
+  }
+  const legend = state.common.legendMarket.find(
+    (card) => card.instanceId === legendChoice.cards[0]?.instanceId
+  );
+  if (legend === undefined) {
+    return {
+      ok: false,
+      error: "Chosen legend disappeared before Bratality reward",
+    };
+  }
+  const gainResult = moveGainedCardToPlayerDestination(
+    state,
+    killCredit.killer,
+    legend,
+    "discard"
+  );
+  if (!gainResult.ok) {
+    return gainResult;
+  }
+  return { ok: true };
 }
 
 export function gainDeadWizardToken(
@@ -2352,6 +2514,399 @@ export function gainDeadWizardToken(
   return resolveWithinDeadWizardTokenResolutionBoundary(state, () =>
     issueDeadWizardToken(state, player)
   );
+}
+
+function transferControlledDeadWizardTokenLike(
+  state: GameState,
+  player: PlayerState,
+  targetPlayer: PlayerState,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext
+): EffectExecutionResult {
+  return resolveWithinDeadWizardTokenResolutionBoundary(state, () => {
+    const cards = getControlledDeadWizardTokenLikeCards(state, player);
+    const choices: EffectChoice[] = [
+      ...player.deadWizardTokens.map((token) => ({
+        choiceKind: "option" as const,
+        choiceId: getDeadWizardTokenChoiceId(token.instanceId),
+      })),
+      ...cards.map((card) => ({
+        choiceKind: "cardTarget" as const,
+        choiceId: getDeadWizardTokenLikeCardChoiceId(card.instanceId),
+        cards: [card],
+        amount: 1,
+      })),
+    ];
+    const choice = chooseEffectChoice(state, player, source, effectId, choices);
+    if (choice === undefined) {
+      return { ok: true };
+    }
+
+    if (choice.choiceKind === "option") {
+      const tokenInstanceId = choice.choiceId.startsWith("token:")
+        ? choice.choiceId.slice("token:".length)
+        : undefined;
+      if (tokenInstanceId === undefined) {
+        return {
+          ok: false,
+          error: "Invalid dead wizard token transfer choice",
+        };
+      }
+      const tokenBeforeRemoval = player.deadWizardTokens.find(
+        (candidate) => candidate.instanceId === tokenInstanceId
+      );
+      if (tokenBeforeRemoval === undefined) {
+        return {
+          ok: false,
+          error: `Dead wizard token ${tokenInstanceId} disappeared before transfer`,
+        };
+      }
+      const movementResult = runControlledPowerMutation(
+        state,
+        () => state.activePlayerId,
+        () => {
+          const token = removeDeadWizardToken(
+            player,
+            tokenBeforeRemoval.instanceId
+          );
+          if (token === undefined) {
+            return {
+              ok: false as const,
+              error: `Dead wizard token ${tokenInstanceId} disappeared before transfer`,
+            };
+          }
+          token.ownerId = targetPlayer.playerId;
+          targetPlayer.deadWizardTokens.push(token);
+          enqueueDeadWizardTokenFace(state, targetPlayer, token);
+          return { ok: true as const };
+        },
+        (result) => result.ok
+      );
+      if (!movementResult.ok) {
+        return movementResult;
+      }
+      if (!movementResult.value.ok) {
+        return movementResult.value;
+      }
+      return movementResult.gameEnd === undefined
+        ? { ok: true }
+        : { ok: true, gameEnd: movementResult.gameEnd };
+    }
+
+    if (choice.choiceKind !== "cardTarget") {
+      return {
+        ok: false,
+        error: "Invalid dead wizard token transfer choice kind",
+      };
+    }
+    const card = cards.find(
+      (candidate) => candidate.instanceId === choice.cards[0]?.instanceId
+    );
+    if (card === undefined) {
+      return {
+        ok: false,
+        error:
+          "Controlled dead wizard token-like card disappeared before transfer",
+      };
+    }
+    const movementResult = runControlledPowerMutation(
+      state,
+      () => state.activePlayerId,
+      () => {
+        const moved = moveCardToPlayerZone(
+          state,
+          card,
+          targetPlayer,
+          targetPlayer.permanents,
+          `${targetPlayer.playerId}.permanents`,
+          effectId,
+          source
+        );
+        if (!moved) {
+          return {
+            ok: false as const,
+            error: `Cannot transfer controlled dead wizard token-like card ${card.instanceId}`,
+          };
+        }
+        removeTemporaryCardControl(state, card.instanceId);
+        return { ok: true as const };
+      },
+      (result) => result.ok
+    );
+    if (!movementResult.ok) {
+      return movementResult;
+    }
+    if (!movementResult.value.ok) {
+      return movementResult.value;
+    }
+    return movementResult.gameEnd === undefined
+      ? { ok: true }
+      : { ok: true, gameEnd: movementResult.gameEnd };
+  });
+}
+
+type ControlledDeadWizardTokenLikeSelection =
+  | {
+      kind: "token";
+      token: PlayerState["deadWizardTokens"][number];
+    }
+  | {
+      kind: "card";
+      card: CardInstance;
+    };
+
+function exchangeControlledDeadWizardTokenLikes(
+  state: GameState,
+  player: PlayerState,
+  targetPlayer: PlayerState,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext
+): EffectExecutionResult {
+  return resolveWithinDeadWizardTokenResolutionBoundary(state, () => {
+    const playerObjects = getControlledDeadWizardTokenLikeSelections(
+      state,
+      player
+    );
+    const targetObjects = getControlledDeadWizardTokenLikeSelections(
+      state,
+      targetPlayer
+    );
+    if (playerObjects.length === 0 || targetObjects.length === 0) {
+      return { ok: true };
+    }
+
+    const exchangeChoice = chooseEffectChoice(state, player, source, effectId, [
+      { choiceKind: "option", choiceId: "decline" },
+      { choiceKind: "option", choiceId: "exchange" },
+    ]);
+    if (exchangeChoice === undefined || exchangeChoice.choiceId === "decline") {
+      return { ok: true };
+    }
+    if (
+      exchangeChoice.choiceKind !== "option" ||
+      exchangeChoice.choiceId !== "exchange"
+    ) {
+      return { ok: false, error: "Invalid dead wizard token exchange option" };
+    }
+
+    const playerChoice = chooseEffectChoice(
+      state,
+      player,
+      source,
+      effectId,
+      createDeadWizardTokenLikeChoices(playerObjects)
+    );
+    if (playerChoice === undefined) {
+      return { ok: true };
+    }
+    const playerSelection = resolveDeadWizardTokenLikeSelection(
+      playerObjects,
+      playerChoice
+    );
+    if (playerSelection === undefined) {
+      return {
+        ok: false,
+        error: "Invalid own dead wizard token exchange choice",
+      };
+    }
+
+    const targetChoice = chooseEffectChoice(
+      state,
+      player,
+      source,
+      effectId,
+      createDeadWizardTokenLikeChoices(targetObjects)
+    );
+    if (targetChoice === undefined) {
+      return { ok: true };
+    }
+    const targetSelection = resolveDeadWizardTokenLikeSelection(
+      targetObjects,
+      targetChoice
+    );
+    if (targetSelection === undefined) {
+      return {
+        ok: false,
+        error: "Invalid attacker dead wizard token exchange choice",
+      };
+    }
+    if (
+      playerSelection.kind === "card" &&
+      targetSelection.kind === "card" &&
+      playerSelection.card.instanceId === targetSelection.card.instanceId
+    ) {
+      return {
+        ok: false,
+        error: "Dead wizard token exchange selected the same card twice",
+      };
+    }
+    if (
+      !isControlledDeadWizardTokenLikeSelectionAvailable(
+        state,
+        player,
+        playerSelection
+      ) ||
+      !isControlledDeadWizardTokenLikeSelectionAvailable(
+        state,
+        targetPlayer,
+        targetSelection
+      )
+    ) {
+      return {
+        ok: false,
+        error: "Dead wizard token exchange target disappeared before movement",
+      };
+    }
+
+    const movementResult = runControlledPowerMutation(
+      state,
+      () => state.activePlayerId,
+      () => {
+        const playerMovement = moveControlledDeadWizardTokenLike(
+          state,
+          player,
+          targetPlayer,
+          playerSelection,
+          effectId,
+          source
+        );
+        if (!playerMovement.ok) {
+          return playerMovement;
+        }
+        const targetMovement = moveControlledDeadWizardTokenLike(
+          state,
+          targetPlayer,
+          player,
+          targetSelection,
+          effectId,
+          source
+        );
+        if (!targetMovement.ok) {
+          return targetMovement;
+        }
+        return { ok: true } as const;
+      },
+      (result) => result.ok
+    );
+    if (!movementResult.ok) {
+      return movementResult;
+    }
+    if (!movementResult.value.ok) {
+      return movementResult.value;
+    }
+    return movementResult.gameEnd === undefined
+      ? { ok: true }
+      : { ok: true, gameEnd: movementResult.gameEnd };
+  });
+}
+
+function getControlledDeadWizardTokenLikeSelections(
+  state: GameState,
+  player: PlayerState
+): ControlledDeadWizardTokenLikeSelection[] {
+  return [
+    ...player.deadWizardTokens.map((token) => ({
+      kind: "token" as const,
+      token,
+    })),
+    ...getControlledDeadWizardTokenLikeCards(state, player).map((card) => ({
+      kind: "card" as const,
+      card,
+    })),
+  ];
+}
+
+function createDeadWizardTokenLikeChoices(
+  selections: readonly ControlledDeadWizardTokenLikeSelection[]
+): EffectChoice[] {
+  return selections.map((selection) =>
+    selection.kind === "token"
+      ? {
+          choiceKind: "option" as const,
+          choiceId: getDeadWizardTokenChoiceId(selection.token.instanceId),
+        }
+      : {
+          choiceKind: "cardTarget" as const,
+          choiceId: getDeadWizardTokenLikeCardChoiceId(
+            selection.card.instanceId
+          ),
+          cards: [selection.card],
+          amount: 1,
+        }
+  );
+}
+
+function resolveDeadWizardTokenLikeSelection(
+  selections: readonly ControlledDeadWizardTokenLikeSelection[],
+  choice: EffectChoice
+): ControlledDeadWizardTokenLikeSelection | undefined {
+  return selections.find((selection) =>
+    selection.kind === "token"
+      ? choice.choiceId ===
+        getDeadWizardTokenChoiceId(selection.token.instanceId)
+      : choice.choiceId ===
+        getDeadWizardTokenLikeCardChoiceId(selection.card.instanceId)
+  );
+}
+
+function isControlledDeadWizardTokenLikeSelectionAvailable(
+  state: GameState,
+  player: PlayerState,
+  selection: ControlledDeadWizardTokenLikeSelection
+): boolean {
+  if (selection.kind === "token") {
+    return player.deadWizardTokens.some(
+      (token) => token.instanceId === selection.token.instanceId
+    );
+  }
+
+  return (
+    findCardLocation(state, selection.card.instanceId) !== undefined &&
+    getControlledDeadWizardTokenLikeCards(state, player).some(
+      (card) => card.instanceId === selection.card.instanceId
+    )
+  );
+}
+
+function moveControlledDeadWizardTokenLike(
+  state: GameState,
+  player: PlayerState,
+  targetPlayer: PlayerState,
+  selection: ControlledDeadWizardTokenLikeSelection,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext
+): EffectExecutionResult {
+  if (selection.kind === "token") {
+    const token = removeDeadWizardToken(player, selection.token.instanceId);
+    if (token === undefined) {
+      return {
+        ok: false,
+        error: `Dead wizard token ${selection.token.instanceId} disappeared before exchange`,
+      };
+    }
+    token.ownerId = targetPlayer.playerId;
+    targetPlayer.deadWizardTokens.push(token);
+    enqueueDeadWizardTokenFace(state, targetPlayer, token);
+    return { ok: true };
+  }
+
+  const moved = moveCardToPlayerZone(
+    state,
+    selection.card,
+    targetPlayer,
+    targetPlayer.permanents,
+    `${targetPlayer.playerId}.permanents`,
+    effectId,
+    source
+  );
+  if (!moved) {
+    return {
+      ok: false,
+      error: `Cannot exchange controlled dead wizard token-like card ${selection.card.instanceId}`,
+    };
+  }
+  removeTemporaryCardControl(state, selection.card.instanceId);
+  return { ok: true };
 }
 
 function issueDeadWizardToken(
@@ -2527,6 +3082,9 @@ function dealDamage(
             killer: cause.player,
             effectId,
             source,
+            ...(cause.deadWizardTokenPolicy === undefined
+              ? {}
+              : { deadWizardTokenPolicy: cause.deadWizardTokenPolicy }),
           }
         : undefined
     );
@@ -2550,6 +3108,132 @@ function dealDamage(
     damageDealt,
     killed,
   };
+}
+
+function killPlayer(
+  state: GameState,
+  sourcePlayer: PlayerState,
+  targetPlayer: PlayerState,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext,
+  deadWizardTokenPolicy: DeadWizardTokenDeathPolicy = "normal"
+): EffectExecutionResult {
+  const result = dealDamage(
+    state,
+    sourcePlayer,
+    targetPlayer,
+    Math.max(1, targetPlayer.life.current),
+    effectId,
+    source,
+    {
+      kind: "playerControlled",
+      player: sourcePlayer,
+      deadWizardTokenPolicy,
+    }
+  );
+  return "damageDealt" in result ? { ok: true } : result;
+}
+
+function replaceDeadWizardTokenAfterKill(
+  state: GameState,
+  killer: PlayerState,
+  targetPlayer: PlayerState,
+  amount: 3,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext
+): EffectExecutionResult {
+  if (
+    state.common.deadWizardTokens.status !== "available" ||
+    state.common.deadWizardTokens.drawStack.length === 0
+  ) {
+    return { ok: true };
+  }
+
+  const available = state.common.deadWizardTokens.drawStack.slice(0, amount);
+  if (available.length === 0) {
+    return { ok: true };
+  }
+
+  const choice = chooseEffectChoice(
+    state,
+    killer,
+    source,
+    effectId,
+    available.map((token) => ({
+      choiceKind: "option" as const,
+      choiceId: getDeadWizardTokenChoiceId(token.instanceId),
+    }))
+  );
+  if (choice === undefined) {
+    return { ok: true };
+  }
+  const selectedIndex = available.findIndex(
+    (token) =>
+      choice.choiceKind === "option" &&
+      choice.choiceId === getDeadWizardTokenChoiceId(token.instanceId)
+  );
+  if (selectedIndex < 0) {
+    return {
+      ok: false,
+      error: "Invalid dead wizard token replacement choice",
+    };
+  }
+
+  const mutationResult = runControlledPowerMutation(
+    state,
+    () => state.activePlayerId,
+    () => {
+      const current = state.common.deadWizardTokens.drawStack;
+      const currentPrefix = current.slice(0, available.length);
+      const prefixMatches = currentPrefix.every(
+        (token, index) => token.instanceId === available[index]?.instanceId
+      );
+      if (!prefixMatches) {
+        return {
+          ok: false as const,
+          error: "Dead wizard token replacement stack changed before movement",
+        };
+      }
+
+      const selectedToken = currentPrefix[selectedIndex];
+      if (selectedToken === undefined) {
+        return {
+          ok: false as const,
+          error: "Dead wizard token replacement target disappeared",
+        };
+      }
+
+      state.common.deadWizardTokens.drawStack = [
+        ...currentPrefix.filter((_, index) => index !== selectedIndex),
+        ...current.slice(available.length),
+      ];
+      selectedToken.ownerId = targetPlayer.playerId;
+      targetPlayer.deadWizardTokens.push(selectedToken);
+      recordGameEvent(state, {
+        type: "deadWizardTokenGained",
+        playerId: targetPlayer.playerId,
+        tokenInstanceId: selectedToken.instanceId,
+        tokenDefinitionId: selectedToken.definitionId,
+      });
+      enqueueDeadWizardTokenFace(
+        state,
+        targetPlayer,
+        selectedToken,
+        killer.playerId
+      );
+      return { ok: true as const };
+    },
+    (result) => result.ok
+  );
+  if (!mutationResult.ok) {
+    return mutationResult;
+  }
+  if (!mutationResult.value.ok) {
+    return mutationResult.value;
+  }
+  return mutationResult.gameEnd === undefined
+    ? { ok: true }
+    : { ok: true, gameEnd: mutationResult.gameEnd };
 }
 
 function applyDamageDealtTriggers(

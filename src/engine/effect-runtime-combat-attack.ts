@@ -1,6 +1,7 @@
 import type { CardDefinition } from "./data.js";
 import { buildControlledObjectView } from "./control-ledger.js";
 import { countControlledCardsOfType } from "./card-type-runtime.js";
+import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
 import { recordGameEvent } from "./event-recorder.js";
 import { transferUpToLimpWandsToPlayer } from "./effect-runtime-special-card-stack.js";
 import { executeReturnDiscardToHand } from "./effect-runtime-cards-ownership-choice.js";
@@ -42,6 +43,10 @@ import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export type CombatAttackEffectId =
   | "attack_damage"
+  | "attack_damage_per_controlled_dead_wizard_token"
+  | "attack_gain_dead_wizard_tokens"
+  | "attack_transfer_controlled_dead_wizard_token"
+  | "attack_kill_and_replace_dead_wizard_token"
   | "attack_damage_equal_remembered_card_cost"
   | "attack_damage_equal_to_controlled_card_cost"
   | "attack_destroy_top_legend_deck_then_damage_equal_cost"
@@ -56,6 +61,10 @@ export type CombatAttackEffectId =
 
 export const combatAttackEffectIds = [
   "attack_damage",
+  "attack_damage_per_controlled_dead_wizard_token",
+  "attack_gain_dead_wizard_tokens",
+  "attack_transfer_controlled_dead_wizard_token",
+  "attack_kill_and_replace_dead_wizard_token",
   "attack_damage_equal_remembered_card_cost",
   "attack_damage_equal_to_controlled_card_cost",
   "attack_destroy_top_legend_deck_then_damage_equal_cost",
@@ -154,6 +163,50 @@ export function createCombatAttackEffectDecoders(
         "chosenPlayer",
         "eachFoe",
       ])
+    ),
+    attack_damage_per_controlled_dead_wizard_token: defineDecoder(
+      "attack_damage_per_controlled_dead_wizard_token",
+      {
+        effectId: required(
+          literal("attack_damage_per_controlled_dead_wizard_token")
+        ),
+        timing: optionalTiming,
+        amountPerDeadWizardToken: required(positiveInteger),
+        targetSelector: required(literal("eachFoe")),
+        onDamageDealt: optionalAttackBranches,
+        onKill: optionalAttackBranches,
+      }
+    ),
+    attack_gain_dead_wizard_tokens: defineDecoder(
+      "attack_gain_dead_wizard_tokens",
+      {
+        effectId: required(literal("attack_gain_dead_wizard_tokens")),
+        timing: optionalTiming,
+        amount: required(positiveInteger),
+        targetSelector: required(literal("chosenFoe")),
+        redirectPolicy: required(literal("ignoreOriginalAttacker")),
+      }
+    ),
+    attack_transfer_controlled_dead_wizard_token: defineDecoder(
+      "attack_transfer_controlled_dead_wizard_token",
+      {
+        effectId: required(
+          literal("attack_transfer_controlled_dead_wizard_token")
+        ),
+        timing: optionalTiming,
+        targetSelector: required(literal("chosenPlayer")),
+      }
+    ),
+    attack_kill_and_replace_dead_wizard_token: defineDecoder(
+      "attack_kill_and_replace_dead_wizard_token",
+      {
+        effectId: required(
+          literal("attack_kill_and_replace_dead_wizard_token")
+        ),
+        timing: optionalTiming,
+        amount: required(literal(3)),
+        targetSelector: required(literal("chosenFoe")),
+      }
     ),
     attack_damage_equal_remembered_card_cost: defineDecoder(
       "attack_damage_equal_remembered_card_cost",
@@ -600,11 +653,66 @@ function resolveControlledCardCost(
 
 type PlayerControlledDamageAttackEffect =
   | RuntimeEffectForId<"attack_damage">
+  | RuntimeEffectForId<"attack_damage_per_controlled_dead_wizard_token">
   | RuntimeEffectForId<"optional_spend_chip_attack_damage">
   | RuntimeEffectForId<"attack_damage_equal_remembered_card_cost">
   | RuntimeEffectForId<"attack_damage_equal_to_controlled_card_cost">
   | RuntimeEffectForId<"conditional_activation_attack_damage">
   | RuntimeEffectForId<"activation_attack_damage_per_controlled_card_type">;
+
+type PlayerControlledAttackBaseAmountResolver = (
+  state: GameState,
+  attackingPlayer: PlayerState,
+  targetPlayer: PlayerState
+) => number;
+
+type PlayerControlledDeadWizardTokenEffectAttack =
+  | RuntimeEffectForId<"attack_gain_dead_wizard_tokens">
+  | RuntimeEffectForId<"attack_transfer_controlled_dead_wizard_token">;
+
+type PlayerControlledEffectsAttackEffect =
+  | PlayerControlledDeadWizardTokenEffectAttack
+  | RuntimeEffectForId<"attack_gain_limp_wand">
+  | RuntimeEffectForId<"attack_gain_status">
+  | RuntimeEffectForId<"attack_kill_and_replace_dead_wizard_token">;
+
+function resolvePlayerControlledEffectsAttack(
+  state: GameState,
+  player: PlayerState,
+  effect: PlayerControlledEffectsAttackEffect,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices,
+  collectAttackReplacementProfile: AttackReplacementCollector
+): EffectExecutionResult {
+  const attackProfileResult = collectAttackReplacementProfile(
+    state,
+    player,
+    source
+  );
+  if (attackProfileResult.status !== "resolved") {
+    return {
+      ok: false,
+      error:
+        attackProfileResult.status === "error"
+          ? attackProfileResult.error
+          : "Attack replacement profile was not applicable",
+    };
+  }
+  const attackProfile = attackProfileResult.result;
+  return services.resolvePlayerControlledAttack({
+    state,
+    attackingPlayer: player,
+    source,
+    effectId: effect.effectId,
+    unavoidable: attackProfile.unavoidable,
+    attackProfile,
+    ...(effect.effectId === "attack_gain_dead_wizard_tokens"
+      ? { redirectPolicy: effect.redirectPolicy }
+      : {}),
+    targetPlan: { kind: "runtimeSelector", effect },
+    impact: { kind: "effects", effects: [effect] },
+  });
+}
 
 function resolvePlayerControlledDamageAttack(
   state: GameState,
@@ -613,7 +721,8 @@ function resolvePlayerControlledDamageAttack(
   source: EffectSourceContext,
   services: EffectRuntimeServices,
   amount: number,
-  collectAttackReplacementProfile: AttackReplacementCollector
+  collectAttackReplacementProfile: AttackReplacementCollector,
+  baseAmountForTarget?: PlayerControlledAttackBaseAmountResolver
 ): EffectExecutionResult {
   const attackProfileResult = collectAttackReplacementProfile(
     state,
@@ -640,6 +749,7 @@ function resolvePlayerControlledDamageAttack(
     impact: {
       kind: "damage",
       baseAmount: amount,
+      ...(baseAmountForTarget === undefined ? {} : { baseAmountForTarget }),
       sourceOwnerModifierAmount: attackProfile.damageBonus,
       onDamageDealt:
         "onDamageDealt" in effect ? (effect.onDamageDealt ?? []) : [],
@@ -678,31 +788,14 @@ function attackGainStatusHandler(
   return {
     effectId: "attack_gain_status",
     execute(state, player, effect, source, services) {
-      const attackProfileResult = collectAttackReplacementProfile(
+      return resolvePlayerControlledEffectsAttack(
         state,
         player,
-        source
-      );
-      if (attackProfileResult.status !== "resolved") {
-        return {
-          ok: false,
-          error:
-            attackProfileResult.status === "error"
-              ? attackProfileResult.error
-              : "Attack replacement profile was not applicable",
-        };
-      }
-      const attackProfile = attackProfileResult.result;
-      return services.resolvePlayerControlledAttack({
-        state,
-        attackingPlayer: player,
+        effect,
         source,
-        effectId: effect.effectId,
-        unavoidable: attackProfile.unavoidable,
-        attackProfile,
-        targetPlan: { kind: "runtimeSelector", effect },
-        impact: { kind: "effects", effects: [effect] },
-      });
+        services,
+        collectAttackReplacementProfile
+      );
     },
   };
 }
@@ -713,31 +806,14 @@ function attackGainLimpWandHandler(
   return {
     effectId: "attack_gain_limp_wand",
     execute(state, player, effect, source, services) {
-      const attackProfileResult = collectAttackReplacementProfile(
+      return resolvePlayerControlledEffectsAttack(
         state,
         player,
-        source
-      );
-      if (attackProfileResult.status !== "resolved") {
-        return {
-          ok: false,
-          error:
-            attackProfileResult.status === "error"
-              ? attackProfileResult.error
-              : "Attack replacement profile was not applicable",
-        };
-      }
-      const attackProfile = attackProfileResult.result;
-      return services.resolvePlayerControlledAttack({
-        state,
-        attackingPlayer: player,
+        effect,
         source,
-        effectId: effect.effectId,
-        unavoidable: attackProfile.unavoidable,
-        attackProfile,
-        targetPlan: { kind: "runtimeSelector", effect },
-        impact: { kind: "effects", effects: [effect] },
-      });
+        services,
+        collectAttackReplacementProfile
+      );
     },
   };
 }
@@ -1110,6 +1186,76 @@ export function createCombatAttackEffectDefinitions(
       );
     },
   };
+  const attackDamagePerControlledDeadWizardTokenHandler: EffectRuntimeHandler<
+    RuntimeEffectForId<"attack_damage_per_controlled_dead_wizard_token">
+  > = {
+    effectId: "attack_damage_per_controlled_dead_wizard_token",
+    execute(state, player, effect, source, services) {
+      const amount =
+        getControlledDeadWizardTokenCount(state, player) *
+        effect.amountPerDeadWizardToken;
+      if (amount === 0) {
+        return { ok: true };
+      }
+      return resolvePlayerControlledDamageAttack(
+        state,
+        player,
+        effect,
+        source,
+        services,
+        amount,
+        collectAttackReplacementProfile,
+        (_state, currentPlayer) =>
+          getControlledDeadWizardTokenCount(_state, currentPlayer) *
+          effect.amountPerDeadWizardToken
+      );
+    },
+  };
+  const attackGainDeadWizardTokensHandler: EffectRuntimeHandler<
+    RuntimeEffectForId<"attack_gain_dead_wizard_tokens">
+  > = {
+    effectId: "attack_gain_dead_wizard_tokens",
+    execute(state, player, effect, source, services) {
+      return resolvePlayerControlledEffectsAttack(
+        state,
+        player,
+        effect,
+        source,
+        services,
+        collectAttackReplacementProfile
+      );
+    },
+  };
+  const attackTransferControlledDeadWizardTokenHandler: EffectRuntimeHandler<
+    RuntimeEffectForId<"attack_transfer_controlled_dead_wizard_token">
+  > = {
+    effectId: "attack_transfer_controlled_dead_wizard_token",
+    execute(state, player, effect, source, services) {
+      return resolvePlayerControlledEffectsAttack(
+        state,
+        player,
+        effect,
+        source,
+        services,
+        collectAttackReplacementProfile
+      );
+    },
+  };
+  const attackKillAndReplaceDeadWizardTokenHandler: EffectRuntimeHandler<
+    RuntimeEffectForId<"attack_kill_and_replace_dead_wizard_token">
+  > = {
+    effectId: "attack_kill_and_replace_dead_wizard_token",
+    execute(state, player, effect, source, services) {
+      return resolvePlayerControlledEffectsAttack(
+        state,
+        player,
+        effect,
+        source,
+        services,
+        collectAttackReplacementProfile
+      );
+    },
+  };
 
   return [
     {
@@ -1121,6 +1267,16 @@ export function createCombatAttackEffectDefinitions(
       handler: attackDamageHandler,
     },
     {
+      effectId: "attack_damage_per_controlled_dead_wizard_token",
+      decoder: bindRuntimeEffectDecoder(
+        "attack_damage_per_controlled_dead_wizard_token"
+      ),
+      supportedTimings: attackTimings,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: attackDamagePerControlledDeadWizardTokenHandler,
+    },
+    {
       effectId: "attack_damage_equal_remembered_card_cost",
       decoder: bindRuntimeEffectDecoder(
         "attack_damage_equal_remembered_card_cost"
@@ -1129,6 +1285,34 @@ export function createCombatAttackEffectDefinitions(
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
       handler: attackDamageEqualRememberedCardCostHandler,
+    },
+    {
+      effectId: "attack_gain_dead_wizard_tokens",
+      decoder: bindRuntimeEffectDecoder("attack_gain_dead_wizard_tokens"),
+      supportedTimings: attackTimings,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: attackGainDeadWizardTokensHandler,
+    },
+    {
+      effectId: "attack_transfer_controlled_dead_wizard_token",
+      decoder: bindRuntimeEffectDecoder(
+        "attack_transfer_controlled_dead_wizard_token"
+      ),
+      supportedTimings: attackTimings,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: attackTransferControlledDeadWizardTokenHandler,
+    },
+    {
+      effectId: "attack_kill_and_replace_dead_wizard_token",
+      decoder: bindRuntimeEffectDecoder(
+        "attack_kill_and_replace_dead_wizard_token"
+      ),
+      supportedTimings: attackTimings,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: attackKillAndReplaceDeadWizardTokenHandler,
     },
     {
       effectId: "attack_damage_equal_to_controlled_card_cost",

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_027",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_027.json",
+    "image": "assets/cards/legend/wizard-card/Легенда-Волшебник. Хахатальер Злорадник.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_027.md"
+  },
+  "visible": {
+    "nameRu": "Хахатальер Злорадник",
+    "cost": 19,
+    "victoryPoints": 7,
+    "typeRu": "Легенда — Волшебник",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "textRu": "+5 мощи\nАтака: выбранный враг получает 2 жетона дохлых колдунов из стопки.\nЭту атаку нельзя перенаправить на тебя (но её можно избежать).",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "cost": 19,
+    "victoryPoints": 7,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 5
+      },
+      {
+        "effectId": "attack_gain_dead_wizard_tokens",
+        "timing": "onPlay",
+        "amount": 2,
+        "targetSelector": "chosenFoe",
+        "redirectPolicy": "ignoreOriginalAttacker"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

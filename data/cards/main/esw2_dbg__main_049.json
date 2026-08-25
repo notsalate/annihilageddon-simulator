@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_049",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_049.json",
+    "image": "assets/cards/treasure/Сокровище. Жак-Дохляк.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_049.md"
+  },
+  "visible": {
+    "nameRu": "Жак-Дохляк",
+    "cost": 1,
+    "victoryPoints": 1,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "textRu": "Сыграв эту карту, получи 1 чипсину за каждый свой жетон дохлого колдуна.\nПостоянка: эта карта считается жетоном дохлого колдуна",
+    "markers": ["ongoing"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "tags": ["deadWizardTokenLike"],
+    "cost": 1,
+    "victoryPoints": 1,
+    "isOngoing": true,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "gain_chips_per_controlled_dead_wizard_token",
+        "timing": "onPlay",
+        "amountPerDeadWizardToken": 1
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

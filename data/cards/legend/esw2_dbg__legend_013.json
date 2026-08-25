@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_013",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_013.json",
+    "image": "assets/cards/legend/spell/Легенда-Заклинание. Смерть от холестерина.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_013.md"
+  },
+  "visible": {
+    "nameRu": "Смерть от холестерина",
+    "cost": 14,
+    "victoryPoints": 5,
+    "typeRu": "Легенда — Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "Если у тебя нет жетонов дохлых колдунов, +7 мощи.\nЕсли есть, можешь уничтожить 1 свой жетон дохлого колдуна.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "cost": 14,
+    "victoryPoints": 5,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power_if_no_controlled_dead_wizard_token",
+        "timing": "onPlay",
+        "amount": 7
+      },
+      {
+        "effectId": "optional_destroy_controlled_dead_wizard_token",
+        "timing": "onPlay",
+        "optional": true
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_039",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_039.json",
+    "image": "assets/cards/treasure/Сокровище. Некрошест.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_039.md"
+  },
+  "visible": {
+    "nameRu": "Некрошест",
+    "cost": 7,
+    "victoryPoints": 2,
+    "typeRu": "Сокровище",
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "textRu": "+2 мощи за каждый жетон дохлого колдуна под твоим контролем.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["treasure"],
+    "cost": 7,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power_per_controlled_dead_wizard_token",
+        "timing": "onPlay",
+        "amountPerDeadWizardToken": 2
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

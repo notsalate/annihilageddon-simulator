@@ -17,6 +17,7 @@ import { createActivationEffectDecoders } from "./effect-runtime-activation.js";
 import { createCardOwnershipChoiceEffectDecoders } from "./effect-runtime-cards-ownership-choice.js";
 import { createCardTypeEffectDecoders } from "./effect-runtime-card-type.js";
 import { createDeadWizardTokenEffectDecoders } from "./effect-runtime-dead-wizard-token.js";
+import { createDwtInteractionEffectDecoders } from "./effect-runtime-dwt-interactions.js";
 import { createEffectiveValueModifierEffectDecoders } from "./effect-runtime-effective-value-modifier.js";
 import { createOngoingEffectDecoders } from "./effect-runtime-ongoing.js";
 import { createResourceDrawEffectDecoders } from "./effect-runtime-resources-draw.js";
@@ -469,6 +470,9 @@ function requireNestedTargetSelector(
 const optionalTiming = optional(effectTiming);
 const optionalTarget = optional(runtimeTarget);
 const optionalTargetSelector = optional(targetSelector);
+const optionalEachPlayerClockwiseFromActiveTargetSelector = optional(
+  literal("eachPlayerClockwiseFromActive")
+);
 const optionalCondition = optional(runtimeCondition);
 const requiredCondition = required(runtimeCondition);
 const optionalCosts = optional(runtimeCosts);
@@ -483,6 +487,7 @@ const resourceDrawEffectDecoders = createResourceDrawEffectDecoders({
   nonEmptyStringArray,
   optionalCondition,
   optionalTiming,
+  optionalTargetSelector: optionalEachPlayerClockwiseFromActiveTargetSelector,
 });
 
 const cardOwnershipChoiceEffectDecoders =
@@ -558,6 +563,13 @@ const deadWizardTokenEffectDecoders = createDeadWizardTokenEffectDecoders({
   literal,
   positiveInteger,
   selectorTarget,
+});
+
+const dwtInteractionEffectDecoders = createDwtInteractionEffectDecoders({
+  defineDecoder,
+  required,
+  literal,
+  positiveInteger,
 });
 
 const setupEffectDecoders = createSetupEffectDecoders({
@@ -799,6 +811,7 @@ const runtimeEffectDecoders: {
   ),
   ...cardOwnershipChoiceEffectDecoders,
   ...cardTypeEffectDecoders,
+  ...dwtInteractionEffectDecoders,
   ...deadWizardTokenEffectDecoders,
   fixture_add_power_equal_to_target_cost: defineDecoder(
     "fixture_add_power_equal_to_target_cost",

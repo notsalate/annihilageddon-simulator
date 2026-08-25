@@ -1,4 +1,5 @@
 import { recordTurnPowerChanged } from "./event-recorder.js";
+import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
 import type {
   EffectExecutionResult,
@@ -362,7 +363,9 @@ const ongoingAddPowerPerDeadWizardTokenHandler: EffectRuntimeHandler<
   evaluateControlledPower(effect, context) {
     return {
       status: "resolved",
-      result: context.controller.deadWizardTokens.length * effect.amount,
+      result:
+        getControlledDeadWizardTokenCount(context.state, context.controller) *
+        effect.amount,
     };
   },
 };

@@ -204,6 +204,7 @@ test("resource and draw IDs belong to one family module", () => {
   assert.deepEqual(resourceDrawEffectIds, [
     "gain_chips",
     "gain_chips_per_player_with_status",
+    "gain_chips_per_controlled_dead_wizard_token",
     "draw_cards",
   ]);
 });
@@ -211,6 +212,10 @@ test("resource and draw IDs belong to one family module", () => {
 test("remaining Catalog families expose one local ID inventory each", () => {
   assert.deepEqual(combatAttackEffectIds, [
     "attack_damage",
+    "attack_damage_per_controlled_dead_wizard_token",
+    "attack_gain_dead_wizard_tokens",
+    "attack_transfer_controlled_dead_wizard_token",
+    "attack_kill_and_replace_dead_wizard_token",
     "attack_damage_equal_remembered_card_cost",
     "attack_damage_equal_to_controlled_card_cost",
     "attack_destroy_top_legend_deck_then_damage_equal_cost",
@@ -225,6 +230,7 @@ test("remaining Catalog families expose one local ID inventory each", () => {
   ]);
   assert.deepEqual(combatDefenseEffectIds, [
     "avoid_attack",
+    "exchange_controlled_dead_wizard_tokens",
     "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
   ]);
   assert.deepEqual(combatReplacementEffectIds, [
@@ -578,6 +584,15 @@ test("attack, defense and replacement effects use exact family policies", () => 
         effectId: "avoid_attack",
         timing: "onDefense",
         destination: "discardSelf",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "exchange_controlled_dead_wizard_tokens",
+      payload: {
+        effectId: "exchange_controlled_dead_wizard_tokens",
+        timing: "onDefense",
+        optional: true,
       },
       sourceKind: "card",
     },

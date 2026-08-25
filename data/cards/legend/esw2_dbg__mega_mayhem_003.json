@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__mega_mayhem_003",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__mega_mayhem_003.json",
+    "image": "assets/cards/mega-mayhem/МегаБеспредел. MC.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__mega_mayhem_003.md"
+  },
+  "visible": {
+    "nameRu": "МегаБеспредел MC",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "МегаБеспредел",
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "textRu": "Каждый колдун получает 1 чипсину за каждый свой жетон дохлого колдуна.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "gain_chips_per_controlled_dead_wizard_token",
+        "timing": "onMayhemResolve",
+        "amountPerDeadWizardToken": 1,
+        "targetSelector": "eachPlayerClockwiseFromActive"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}
