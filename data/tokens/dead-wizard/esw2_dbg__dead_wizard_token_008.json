@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "tokenId": "esw2_dbg__dead_wizard_token_008",
+  "runtimeSchema": "krutagidon.tokenDefinition.v0",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT_008.png",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_008.md"
+  },
+  "victoryPoints": -3,
+  "effects": [
+    {
+      "effectId": "dead_wizard_token_shuffle_hand_legends",
+      "timing": "onDeadWizardTokenFace"
+    }
+  ]
+}

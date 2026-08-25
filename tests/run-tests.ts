@@ -14,6 +14,7 @@ const testSuites = [
   "setup.test.js",
   "setup-effects.test.js",
   "action-loop.test.js",
+  "card-movement.test.js",
   "dwt-interactions.test.js",
   "activation-effects.test.js",
   "life-total-effects.test.js",

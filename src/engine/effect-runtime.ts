@@ -18,6 +18,7 @@ import {
 import {
   getControlledCards,
   findCardLocation,
+  insertDetachedCard,
   removeCardFromLocation,
   removeDeadWizardToken,
   removeTemporaryCardControl,
@@ -34,7 +35,10 @@ import {
   endDeadWizardTokenResolutionBoundary,
   enqueueDeadWizardTokenFace,
 } from "./dead-wizard-token-resolution.js";
-import { resolveMainMarketGainDestination } from "./effect-runtime-cards-ownership-choice.js";
+import {
+  executeRevealAndPlayFoeDeckCard,
+  resolveMainMarketGainDestination,
+} from "./effect-runtime-cards-ownership-choice.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
 import {
   resolveCardPlay,
@@ -64,6 +68,7 @@ import {
   type EffectChoiceResolution,
   type EffectRuntimeHandlerOperationResult,
   type EffectRuntimeOperationResult,
+  collectAttackReplacementProfile,
   evaluateRuntimeEffectAtTiming,
   evaluateRuntimeEffectBasicTrophyChipPayoutSuppression,
   executeRuntimeEffect,
@@ -1400,6 +1405,16 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
     );
   },
   executeOnHitEffect(state, attackingPlayer, targetPlayer, effect, source) {
+    if (effect.effectId === "attack_reveal_and_play_foe_deck_card") {
+      return executeRevealAndPlayFoeDeckCard(
+        state,
+        attackingPlayer,
+        targetPlayer,
+        effect,
+        source,
+        effectRuntimeServices
+      );
+    }
     if (effect.effectId === "attack_gain_limp_wand") {
       return gainLimpWandsFromCommonStack(
         state,
@@ -1652,7 +1667,9 @@ function resolveMayhemAttackPlan(
       decision.amount,
       effectId,
       source,
-      { kind: "ownerless" }
+      source.playerControlledAttackPlayerId === undefined
+        ? { kind: "ownerless" }
+        : { kind: "playerControlled", player: sourcePlayer }
     );
     if (!("damageDealt" in damageResult)) {
       return damageResult;
@@ -1734,6 +1751,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   moveGainedCardToPlayerDestination,
   moveCardToPlayerZone,
   moveCardToZonePreservingOwner,
+  restoreDetachedCardToZone,
   discardTopDeckCards,
   getDestroyDestination,
   getOpponentsInSeatingOrder,
@@ -1755,6 +1773,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   gainDeadWizardToken,
   transferControlledDeadWizardTokenLike,
   exchangeControlledDeadWizardTokenLikes,
+  collectAttackReplacementProfile,
   resolvePlayerControlledAttack:
     resolvePlayerControlledAttackWithRuntimeAdapters,
   resolveDefenseWindow,
@@ -3528,6 +3547,36 @@ function moveCardToZonePreservingOwner(
   }
   recordCardMoved(state, player, card, {
     sourceZone,
+    destinationZone,
+    ownerBefore,
+    ownerAfter: card.ownerId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+  return true;
+}
+
+function restoreDetachedCardToZone(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance,
+  destinationZone: string,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext,
+  placeOnTop = false
+): boolean {
+  const ownerBefore = card.ownerId;
+  const restored = insertDetachedCard(
+    state,
+    card,
+    destinationZone,
+    placeOnTop ? "front" : "back"
+  );
+  if (!restored.ok) {
+    return false;
+  }
+  recordCardMoved(state, player, card, {
+    sourceZone: restored.move.sourceZoneName,
     destinationZone,
     ownerBefore,
     ownerAfter: card.ownerId,

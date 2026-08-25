@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_007",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_007.json",
+    "image": "assets/cards/spell/Заклинание. Пушка-Блевушка.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_007.md"
+  },
+  "visible": {
+    "nameRu": "Пушка-Блевушка",
+    "cost": 4,
+    "victoryPoints": 1,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": ["spell"],
+    "textRu": "+1 мощь\nРаскрой верхнюю карту своей колоды. Уничтожь её или проведи атаку: нанеси выбранному врагу столько урона какова еë стоимость.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["spell"],
+    "cost": 4,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 1
+      },
+      {
+        "effectId": "reveal_top_card_choose_destroy_or_attack_equal_cost",
+        "timing": "onPlay",
+        "source": "activePlayerDeck",
+        "targetSelector": "chosenFoe"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

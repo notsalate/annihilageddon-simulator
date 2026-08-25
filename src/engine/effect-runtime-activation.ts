@@ -1,6 +1,6 @@
-import { createUnsupportedEffectHandler } from "./effect-runtime-family-support.js";
 import { countControlledCardsOfType } from "./card-type-runtime.js";
 import { getControlledCards } from "./control-ledger.js";
+import { destroyOwnedCard } from "./effect-runtime-cards-ownership-choice.js";
 import {
   recordEffectChipsChanged,
   recordGameEvent,
@@ -324,36 +324,15 @@ export function createActivationEffectDefinitions(
           };
         }
 
-        const destroyCard = (card: CardInstance) => {
-          const destination = services.getDestroyDestination(state, card);
-          if (!destination.ok) return destination;
-          const moved = services.moveCardToZonePreservingOwner(
+        const destroyCard = (card: CardInstance) =>
+          destroyOwnedCard(
             state,
             player,
             card,
-            destination.zone,
-            destination.zoneName,
             effect.effectId,
-            source
+            source,
+            services
           );
-          if (!moved) {
-            return {
-              ok: false as const,
-              error: `Cannot move card ${card.instanceId}`,
-            };
-          }
-          recordGameEvent(state, {
-            type: "effectCardDestroyed",
-            playerId: player.playerId,
-            cardInstanceId: source.cardInstanceId,
-            definitionId: source.definitionId,
-            targetCardInstanceId: card.instanceId,
-            targetDefinitionId: card.definitionId,
-            effectId: effect.effectId,
-            sourceType: source.sourceType,
-          });
-          return { ok: true as const };
-        };
 
         const sourceDestroyed = destroyCard(sourceCard);
         if (!sourceDestroyed.ok) return sourceDestroyed;
@@ -593,31 +572,72 @@ export function createActivationEffectDefinitions(
 
         const target = choice.cards[0];
         if (target === undefined) return { ok: true };
-        const destination = services.getDestroyDestination(state, target);
-        if (!destination.ok) return destination;
-        const moved = services.moveCardToZonePreservingOwner(
+        return destroyOwnedCard(
           state,
           player,
           target,
-          destination.zone,
-          destination.zoneName,
           effect.effectId,
-          source
+          source,
+          services
         );
-        if (!moved) {
+      },
+    };
+  const optionalSpendChipDestroyOwnCardsHandler: EffectRuntimeHandler<OptionalSpendChipDestroyOwnCardsRuntimeEffect> =
+    {
+      effectId: "optional_spend_chip_destroy_own_cards",
+      execute(state, player, effect, source, services) {
+        if (player.chips < effect.chipCost) return { ok: true };
+        const candidates = effect.sourceZones.flatMap((zone) =>
+          zone === "hand" ? player.hand : player.discard
+        );
+        if (candidates.length === 0) return { ok: true };
+
+        const choices: EffectChoice[] = [
+          { choiceKind: "option", choiceId: "decline" },
+          ...candidates.map(
+            (card): EffectChoice => ({
+              choiceKind: "cardTarget",
+              choiceId: `destroy_${card.instanceId}`,
+              cards: [card],
+              amount: 1,
+            })
+          ),
+        ];
+        const choice = services.chooseEffectChoice(
+          state,
+          player,
+          source,
+          effect.effectId,
+          choices
+        );
+        if (choice?.choiceKind !== "cardTarget") return { ok: true };
+        const target = choice.cards[0];
+        if (target === undefined || !candidates.includes(target)) {
           return {
             ok: false,
-            error: `Cannot move card ${target.instanceId}`,
+            error: "Selected card is no longer available for destruction",
           };
         }
+
+        const destroyed = destroyOwnedCard(
+          state,
+          player,
+          target,
+          effect.effectId,
+          source,
+          services
+        );
+        if (!destroyed.ok) return destroyed;
+
+        player.chips -= effect.chipCost;
         recordGameEvent(state, {
-          type: "effectCardDestroyed",
+          type: "effectCostPaid",
           playerId: player.playerId,
           cardInstanceId: source.cardInstanceId,
           definitionId: source.definitionId,
-          targetCardInstanceId: target.instanceId,
-          targetDefinitionId: target.definitionId,
           effectId: effect.effectId,
+          costId: "spend_chips",
+          amount: effect.chipCost,
           sourceType: source.sourceType,
         });
         return { ok: true };
@@ -688,9 +708,7 @@ export function createActivationEffectDefinitions(
       supportedTimings: ["onPlay"] as const,
       supportedModes,
       supportedSourceKinds,
-      handler: createUnsupportedEffectHandler(
-        "optional_spend_chip_destroy_own_cards"
-      ),
+      handler: optionalSpendChipDestroyOwnCardsHandler,
     },
   ] as const;
 }

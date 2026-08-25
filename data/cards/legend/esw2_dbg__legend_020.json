@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_020",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_020.json",
+    "image": "assets/cards/legend/spell/Легенда-Заклинание. Сделка с Сотоной.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_020.md"
+  },
+  "visible": {
+    "nameRu": "Сделка с Сотоной",
+    "cost": 17,
+    "victoryPoints": 6,
+    "typeRu": "Легенда — Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "+6 мощи\nУничтожь любое количество карт в своей стопке сброса.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "cost": 17,
+    "victoryPoints": 6,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 6 },
+      {
+        "effectId": "destroy_own_cards",
+        "timing": "onPlay",
+        "sourceZones": "discard",
+        "repeatUntilDeclined": true
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

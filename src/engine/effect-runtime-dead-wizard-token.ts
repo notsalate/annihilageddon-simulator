@@ -1,7 +1,21 @@
-import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
-import { removeDeadWizardToken } from "./control-ledger.js";
+import {
+  cardMatchesTypeForPlayer,
+  getCardEffectiveTypeOptions,
+} from "./card-type-runtime.js";
+import {
+  findCardLocation,
+  getControlledCards,
+  removeDeadWizardToken,
+  removeTemporaryCardControl,
+} from "./control-ledger.js";
+import {
+  chooseCardCombinations,
+  chooseRevealedTopCardForDestruction,
+  destroyOwnedCard,
+} from "./effect-runtime-cards-ownership-choice.js";
 import { changePlayerChips } from "./effect-runtime-resources-draw.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
+import { shuffleDeck } from "./deck-lifecycle.js";
 import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
 import { recordGameEvent } from "./event-recorder.js";
 import type { CardDefinition } from "./data.js";
@@ -31,6 +45,12 @@ import type {
 
 export const deadWizardTokenEffectIds = [
   "dead_wizard_token_each_foe_gain_chips",
+  "dead_wizard_token_random_discard_to_chosen_foe",
+  "dead_wizard_token_each_foe_optional_transfer_sign",
+  "dead_wizard_token_shuffle_hand_legends",
+  "dead_wizard_token_shuffle_owned_permanents",
+  "dead_wizard_token_each_foe_optional_discard",
+  "dead_wizard_token_reveal_and_optional_destroy",
   "dead_wizard_token_damage_equal_chips",
   "dead_wizard_token_damage_equal_highest_hand_cost",
   "dead_wizard_token_gain_chips",
@@ -60,6 +80,37 @@ export type DeadWizardTokenEachFoeGainChipsRuntimeEffect = {
   effectId: "dead_wizard_token_each_foe_gain_chips";
   timing: "onDeadWizardTokenFace";
   amount: 1;
+};
+
+export type DeadWizardTokenRandomDiscardToChosenFoeRuntimeEffect = {
+  effectId: "dead_wizard_token_random_discard_to_chosen_foe";
+  timing: "onDeadWizardTokenFace";
+  targetSelector: "chosenFoe";
+};
+
+export type DeadWizardTokenEachFoeOptionalTransferSignRuntimeEffect = {
+  effectId: "dead_wizard_token_each_foe_optional_transfer_sign";
+  timing: "onDeadWizardTokenFace";
+};
+
+export type DeadWizardTokenShuffleHandLegendsRuntimeEffect = {
+  effectId: "dead_wizard_token_shuffle_hand_legends";
+  timing: "onDeadWizardTokenFace";
+};
+
+export type DeadWizardTokenShuffleOwnedPermanentsRuntimeEffect = {
+  effectId: "dead_wizard_token_shuffle_owned_permanents";
+  timing: "onDeadWizardTokenFace";
+};
+
+export type DeadWizardTokenEachFoeOptionalDiscardRuntimeEffect = {
+  effectId: "dead_wizard_token_each_foe_optional_discard";
+  timing: "onDeadWizardTokenFace";
+};
+
+export type DeadWizardTokenRevealAndOptionalDestroyRuntimeEffect = {
+  effectId: "dead_wizard_token_reveal_and_optional_destroy";
+  timing: "onDeadWizardTokenFace";
 };
 
 export type DeadWizardTokenDamageEqualChipsRuntimeEffect = {
@@ -147,6 +198,12 @@ export type DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect = {
 
 export interface DeadWizardTokenEffectPayloadMap {
   dead_wizard_token_each_foe_gain_chips: DeadWizardTokenEachFoeGainChipsRuntimeEffect;
+  dead_wizard_token_random_discard_to_chosen_foe: DeadWizardTokenRandomDiscardToChosenFoeRuntimeEffect;
+  dead_wizard_token_each_foe_optional_transfer_sign: DeadWizardTokenEachFoeOptionalTransferSignRuntimeEffect;
+  dead_wizard_token_shuffle_hand_legends: DeadWizardTokenShuffleHandLegendsRuntimeEffect;
+  dead_wizard_token_shuffle_owned_permanents: DeadWizardTokenShuffleOwnedPermanentsRuntimeEffect;
+  dead_wizard_token_each_foe_optional_discard: DeadWizardTokenEachFoeOptionalDiscardRuntimeEffect;
+  dead_wizard_token_reveal_and_optional_destroy: DeadWizardTokenRevealAndOptionalDestroyRuntimeEffect;
   dead_wizard_token_damage_equal_chips: DeadWizardTokenDamageEqualChipsRuntimeEffect;
   dead_wizard_token_damage_equal_highest_hand_cost: DeadWizardTokenDamageEqualHighestHandCostRuntimeEffect;
   dead_wizard_token_gain_chips: DeadWizardTokenGainChipsRuntimeEffect;
@@ -195,6 +252,59 @@ export function createDeadWizardTokenEffectDecoders(
         effectId: required(literal("dead_wizard_token_each_foe_gain_chips")),
         timing: required(literal("onDeadWizardTokenFace")),
         amount: required(literal(1)),
+      }
+    ),
+    dead_wizard_token_random_discard_to_chosen_foe: defineDecoder(
+      "dead_wizard_token_random_discard_to_chosen_foe",
+      {
+        effectId: required(
+          literal("dead_wizard_token_random_discard_to_chosen_foe")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
+        targetSelector: required(literal("chosenFoe")),
+      }
+    ),
+    dead_wizard_token_each_foe_optional_transfer_sign: defineDecoder(
+      "dead_wizard_token_each_foe_optional_transfer_sign",
+      {
+        effectId: required(
+          literal("dead_wizard_token_each_foe_optional_transfer_sign")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
+      }
+    ),
+    dead_wizard_token_shuffle_hand_legends: defineDecoder(
+      "dead_wizard_token_shuffle_hand_legends",
+      {
+        effectId: required(literal("dead_wizard_token_shuffle_hand_legends")),
+        timing: required(literal("onDeadWizardTokenFace")),
+      }
+    ),
+    dead_wizard_token_shuffle_owned_permanents: defineDecoder(
+      "dead_wizard_token_shuffle_owned_permanents",
+      {
+        effectId: required(
+          literal("dead_wizard_token_shuffle_owned_permanents")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
+      }
+    ),
+    dead_wizard_token_each_foe_optional_discard: defineDecoder(
+      "dead_wizard_token_each_foe_optional_discard",
+      {
+        effectId: required(
+          literal("dead_wizard_token_each_foe_optional_discard")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
+      }
+    ),
+    dead_wizard_token_reveal_and_optional_destroy: defineDecoder(
+      "dead_wizard_token_reveal_and_optional_destroy",
+      {
+        effectId: required(
+          literal("dead_wizard_token_reveal_and_optional_destroy")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
       }
     ),
     dead_wizard_token_damage_equal_chips: defineDecoder(
@@ -528,6 +638,343 @@ const eachFoeGainChipsHandler: EffectRuntimeHandler<DeadWizardTokenEachFoeGainCh
     },
   };
 
+const randomDiscardToChosenFoeHandler: EffectRuntimeHandler<DeadWizardTokenRandomDiscardToChosenFoeRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_random_discard_to_chosen_foe",
+    execute(state, player, effect, source, services) {
+      const targetResult = services.resolveTargetChoice(
+        state,
+        player,
+        effect,
+        source
+      );
+      if (!targetResult.ok) return targetResult;
+      if (targetResult.choice === undefined) return { ok: true };
+      if (targetResult.choice.choiceType !== "player") {
+        return {
+          ok: false,
+          error: "Random discard transfer requires a foe target",
+        };
+      }
+
+      const targetPlayer = targetResult.choice.player;
+      if (player.discard.length === 0) {
+        return { ok: true };
+      }
+      const card = player.discard[state.rng.nextInt(player.discard.length)];
+      if (card === undefined) return { ok: true };
+
+      const gained = services.moveGainedCardToPlayerDestination(
+        state,
+        targetPlayer,
+        card,
+        "discard"
+      );
+      if (!gained.ok) return gained;
+      recordGameEvent(state, {
+        type: "effectCardGained",
+        playerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        targetCardInstanceId: card.instanceId,
+        targetDefinitionId: card.definitionId,
+        effectId: effect.effectId,
+        destination: gained.destination,
+        sourceType: source.sourceType,
+      });
+      return { ok: true };
+    },
+  };
+
+const eachFoeOptionalTransferSignHandler: EffectRuntimeHandler<DeadWizardTokenEachFoeOptionalTransferSignRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_each_foe_optional_transfer_sign",
+    execute(state, player, effect, source, services) {
+      for (const foe of services.getOpponentsInSeatingOrder(state, player)) {
+        const eligibleCards = [...foe.hand, ...foe.discard].filter(
+          (card) => card.definitionId === "esw2_dbg__starter_001"
+        );
+        if (eligibleCards.length === 0) continue;
+
+        const choice = services.chooseEffectChoice(
+          state,
+          foe,
+          source,
+          effect.effectId,
+          [
+            { choiceKind: "option", choiceId: "decline" },
+            ...eligibleCards.map((card) => ({
+              choiceKind: "cardTarget" as const,
+              choiceId: card.instanceId,
+              cards: [card],
+              amount: 1,
+            })),
+          ]
+        );
+        if (choice?.choiceKind !== "cardTarget") continue;
+
+        const selectedCard = eligibleCards.find(
+          (card) => card.instanceId === choice.cards[0]?.instanceId
+        );
+        if (
+          selectedCard === undefined ||
+          (!foe.hand.includes(selectedCard) &&
+            !foe.discard.includes(selectedCard))
+        ) {
+          return {
+            ok: false,
+            error: "Selected Sign disappeared before transfer",
+          };
+        }
+
+        const moved = services.moveCardToPlayerZone(
+          state,
+          selectedCard,
+          player,
+          player.hand,
+          `${player.playerId}.hand`,
+          effect.effectId,
+          source
+        );
+        if (!moved) {
+          return {
+            ok: false,
+            error: `Cannot transfer Sign ${selectedCard.instanceId}`,
+          };
+        }
+        recordGameEvent(state, {
+          type: "effectCardGained",
+          playerId: player.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          targetCardInstanceId: selectedCard.instanceId,
+          targetDefinitionId: selectedCard.definitionId,
+          effectId: effect.effectId,
+          destination: "hand",
+          sourceType: source.sourceType,
+        });
+      }
+      return { ok: true };
+    },
+  };
+
+const shuffleHandLegendsHandler: EffectRuntimeHandler<DeadWizardTokenShuffleHandLegendsRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_shuffle_hand_legends",
+    execute(state, player, effect, source, services) {
+      const hand = [...player.hand];
+      const effectiveLegendCards = hand.filter((card) => {
+        return getCardEffectiveTypeOptions(
+          state,
+          player.playerId,
+          card
+        ).includes("legend");
+      });
+      const selectedEffectiveLegends = new Set<string>();
+
+      for (const card of effectiveLegendCards) {
+        const choice = services.chooseEffectChoice(
+          state,
+          player,
+          source,
+          effect.effectId,
+          [
+            {
+              choiceKind: "cardTarget",
+              choiceId: `count_as_legend_${card.instanceId}`,
+              cards: [card],
+              amount: 1,
+            },
+            { choiceKind: "option", choiceId: "decline" },
+          ]
+        );
+        if (
+          choice?.choiceKind === "cardTarget" &&
+          choice.cards.some((candidate) => candidate === card)
+        ) {
+          selectedEffectiveLegends.add(card.instanceId);
+        }
+      }
+
+      const cardsToMove = hand.filter((card) => {
+        const definition = state.cardDefinitions.get(card.definitionId);
+        return (
+          definition?.engine.cardTypes.includes("legend") === true ||
+          definition?.engine.tags?.includes("counts_as_every_card_type") ===
+            true ||
+          selectedEffectiveLegends.has(card.instanceId)
+        );
+      });
+      if (cardsToMove.length === 0) return { ok: true };
+
+      for (const card of cardsToMove) {
+        const moved = services.moveCardToPlayerZone(
+          state,
+          card,
+          player,
+          player.deck,
+          `${player.playerId}.deck`,
+          effect.effectId,
+          source
+        );
+        if (!moved) {
+          return {
+            ok: false,
+            error: `Cannot move legend card ${card.instanceId} to deck`,
+          };
+        }
+      }
+      shuffleDeck(player.deck, state.rng);
+      return { ok: true };
+    },
+  };
+
+const shuffleOwnedPermanentsHandler: EffectRuntimeHandler<DeadWizardTokenShuffleOwnedPermanentsRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_shuffle_owned_permanents",
+    execute(state, player, effect, source, services) {
+      const ownedPermanents = getControlledCards(state, player).filter(
+        (card) =>
+          card.ownerId === player.playerId &&
+          findCardLocation(state, card.instanceId)?.zoneName ===
+            `${player.playerId}.permanents`
+      );
+      if (ownedPermanents.length === 0) return { ok: true };
+
+      for (const card of ownedPermanents) {
+        const moved = services.moveCardToZonePreservingOwner(
+          state,
+          player,
+          card,
+          player.deck,
+          `${player.playerId}.deck`,
+          effect.effectId,
+          source
+        );
+        if (!moved) {
+          return {
+            ok: false,
+            error: `Cannot move permanent ${card.instanceId} to deck`,
+          };
+        }
+        removeTemporaryCardControl(state, card.instanceId);
+      }
+      shuffleDeck(player.deck, state.rng);
+      return { ok: true };
+    },
+  };
+
+const eachFoeOptionalDiscardHandler: EffectRuntimeHandler<DeadWizardTokenEachFoeOptionalDiscardRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_each_foe_optional_discard",
+    execute(state, player, effect, source, services) {
+      let yesCount = 0;
+      for (const foe of services.getOpponentsInSeatingOrder(state, player)) {
+        const choice = services.chooseEffectChoice(
+          state,
+          foe,
+          source,
+          effect.effectId,
+          [
+            { choiceKind: "option", choiceId: "apply" },
+            { choiceKind: "option", choiceId: "decline" },
+          ]
+        );
+        if (choice?.choiceId === "apply") yesCount += 1;
+      }
+
+      const amount = Math.min(yesCount, player.hand.length);
+      if (amount === 0) return { ok: true };
+
+      const cardChoices = chooseCardCombinations(player.hand, amount).map(
+        (cards) => ({
+          choiceKind: "cardTarget" as const,
+          choiceId: `discard_${amount}_${cards
+            .map((card) => card.instanceId)
+            .join("_")}`,
+          cards,
+          amount,
+        })
+      );
+      const choice = services.chooseEffectChoice(
+        state,
+        player,
+        source,
+        effect.effectId,
+        cardChoices
+      );
+      if (
+        choice?.choiceKind !== "cardTarget" ||
+        choice.cards.length !== amount
+      ) {
+        return {
+          ok: false,
+          error: `Must discard exactly ${amount} cards`,
+        };
+      }
+
+      for (const card of choice.cards) {
+        if (!player.hand.includes(card)) {
+          return {
+            ok: false,
+            error: `Selected hand card ${card.instanceId} is no longer available`,
+          };
+        }
+        const moved = services.moveCardToPlayerZone(
+          state,
+          card,
+          player,
+          player.discard,
+          `${player.playerId}.discard`,
+          effect.effectId,
+          source
+        );
+        if (!moved) {
+          return {
+            ok: false,
+            error: `Cannot discard hand card ${card.instanceId}`,
+          };
+        }
+        recordGameEvent(state, {
+          type: "effectCardDiscarded",
+          playerId: player.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          targetCardInstanceId: card.instanceId,
+          targetDefinitionId: card.definitionId,
+          effectId: effect.effectId,
+          sourceType: source.sourceType,
+        });
+      }
+      return { ok: true };
+    },
+  };
+
+const revealAndOptionalDestroyHandler: EffectRuntimeHandler<DeadWizardTokenRevealAndOptionalDestroyRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_reveal_and_optional_destroy",
+    execute(state, player, effect, source, services) {
+      const choice = chooseRevealedTopCardForDestruction(
+        state,
+        player,
+        source,
+        effect.effectId,
+        services
+      );
+      if (!choice.ok || choice.card === undefined || !choice.shouldDestroy) {
+        return choice.ok ? { ok: true } : choice;
+      }
+      return destroyOwnedCard(
+        state,
+        player,
+        choice.card,
+        effect.effectId,
+        source,
+        services
+      );
+    },
+  };
+
 function revealCardAndMaybeGainDeadWizardToken(
   state: GameState,
   player: PlayerState,
@@ -840,6 +1287,66 @@ export function createDeadWizardTokenEffectDefinitions(
       supportedModes,
       supportedSourceKinds,
       handler: eachFoeGainChipsHandler,
+    },
+    {
+      effectId: "dead_wizard_token_random_discard_to_chosen_foe",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_random_discard_to_chosen_foe"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: randomDiscardToChosenFoeHandler,
+    },
+    {
+      effectId: "dead_wizard_token_each_foe_optional_transfer_sign",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_each_foe_optional_transfer_sign"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: eachFoeOptionalTransferSignHandler,
+    },
+    {
+      effectId: "dead_wizard_token_shuffle_hand_legends",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_shuffle_hand_legends"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: shuffleHandLegendsHandler,
+    },
+    {
+      effectId: "dead_wizard_token_shuffle_owned_permanents",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_shuffle_owned_permanents"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: shuffleOwnedPermanentsHandler,
+    },
+    {
+      effectId: "dead_wizard_token_each_foe_optional_discard",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_each_foe_optional_discard"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: eachFoeOptionalDiscardHandler,
+    },
+    {
+      effectId: "dead_wizard_token_reveal_and_optional_destroy",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_reveal_and_optional_destroy"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: revealAndOptionalDestroyHandler,
     },
     {
       effectId: "dead_wizard_token_damage_equal_chips",

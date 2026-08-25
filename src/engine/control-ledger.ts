@@ -120,6 +120,14 @@ export function grantTemporaryControl(
   state.turn.temporaryCardControls.push({ cardInstanceId, controllerId });
 }
 
+/** Assigns the scoring owner of a card through the Ledger ownership seam. */
+export function setCardOwner(
+  card: CardInstance,
+  ownerId: CardInstance["ownerId"]
+): void {
+  card.ownerId = ownerId;
+}
+
 export function releaseTemporaryControls(state: GameState): void {
   state.turn.temporaryCardControls = [];
 }
@@ -823,6 +831,63 @@ export function movePhysicalCard(
     move: {
       card,
       sourceZoneName: source.descriptor.zoneName,
+      destinationZoneName,
+    },
+  };
+}
+
+/** Restores a card detached by a committed nested resolution into a Ledger zone. */
+export function insertDetachedCard(
+  state: GameState,
+  card: CardInstance,
+  destinationZoneName: string,
+  placement: "front" | "back"
+): PhysicalCardMoveResult {
+  const descriptors = listPhysicalCardZoneDescriptors(state);
+  if (findCardLocation(state, card.instanceId) !== undefined) {
+    return {
+      ok: false,
+      reason: `Card ${card.instanceId} is already registered in a physical zone`,
+    };
+  }
+
+  const destination = descriptors.find(
+    (descriptor) => descriptor.zoneName === destinationZoneName
+  );
+  if (destination === undefined) {
+    return {
+      ok: false,
+      reason: `Missing destination zone ${destinationZoneName}`,
+    };
+  }
+
+  let destinationCards: readonly CardInstance[];
+  try {
+    destinationCards = destination.read();
+  } catch (error) {
+    return {
+      ok: false,
+      reason: describePhysicalCardMoveError(error),
+    };
+  }
+  if (destination.cardinality === "zeroOrOne" && destinationCards.length > 0) {
+    return {
+      ok: false,
+      reason: `Destination zone ${destinationZoneName} is already occupied`,
+    };
+  }
+
+  clearFaceUpState(card);
+  destination.replace(
+    placement === "front"
+      ? [card, ...destinationCards]
+      : [...destinationCards, card]
+  );
+  return {
+    ok: true,
+    move: {
+      card,
+      sourceZoneName: "detached",
       destinationZoneName,
     },
   };

@@ -6,6 +6,26 @@
   "mappingStatus": "incomplete-full-only",
   "entries": [
     {
+      "cardId": "esw2_dbg__main_001",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_007",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_010",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_019",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_022",
+      "count": 2
+    },
+    {
       "cardId": "esw2_dbg__main_002",
       "count": 1
     },
@@ -88,6 +108,10 @@
     {
       "cardId": "esw2_dbg__main_032",
       "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_037",
+      "count": 2
     },
     {
       "cardId": "esw2_dbg__main_043",
@@ -174,6 +198,14 @@
       "count": 2
     },
     {
+      "cardId": "esw2_dbg__main_057",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_058",
+      "count": 1
+    },
+    {
       "cardId": "esw2_dbg__main_038",
       "count": 2
     },
@@ -187,6 +219,10 @@
     },
     {
       "cardId": "esw2_dbg__main_060",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_061",
       "count": 1
     },
     {
@@ -210,6 +246,14 @@
       "count": 1
     },
     {
+      "cardId": "esw2_dbg__main_067",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_068",
+      "count": 1
+    },
+    {
       "cardId": "esw2_dbg__main_071",
       "count": 1
     },
@@ -227,6 +271,14 @@
     },
     {
       "cardId": "esw2_dbg__main_075",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_076",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_077",
       "count": 1
     }
   ],

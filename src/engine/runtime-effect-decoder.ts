@@ -166,9 +166,11 @@ const nonEmptyStringArray = nonEmptyArrayOf(nonEmptyString);
 const handOrDiscardZone = oneOf(["hand", "discard"] as const);
 const handOrDiscardZones = nonEmptyArrayOf(handOrDiscardZone);
 const destroyOwnCardsSourceZones: ValueDecoder<
-  "hand" | ("hand" | "discard")[]
+  "hand" | "discard" | ("hand" | "discard")[]
 > = (label, raw) =>
-  raw === "hand" ? success("hand") : handOrDiscardZones(label, raw);
+  raw === "hand" || raw === "discard"
+    ? success(raw)
+    : handOrDiscardZones(label, raw);
 
 const targetSelector: ValueDecoder<RuntimeEffectTargetSelector> = oneOf([
   "activePlayer",

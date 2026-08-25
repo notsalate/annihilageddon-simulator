@@ -39,7 +39,8 @@ export type ResourceDrawEffectId =
   | "gain_chips"
   | "gain_chips_per_player_with_status"
   | "gain_chips_per_controlled_dead_wizard_token"
-  | "draw_cards";
+  | "draw_cards"
+  | "draw_cards_for_self_and_chosen_foe";
 
 export type GainChipsRuntimeEffect = EffectWithOptionalTiming<"gain_chips"> &
   PositiveAmount &
@@ -62,12 +63,18 @@ export type GainChipsPerControlledDeadWizardTokenRuntimeEffect =
 
 export type DrawCardsRuntimeEffect = EffectWithOptionalTiming<"draw_cards"> &
   PositiveAmount;
+export type DrawCardsForSelfAndChosenFoeRuntimeEffect =
+  EffectWithOptionalTiming<"draw_cards_for_self_and_chosen_foe"> & {
+    amount: number;
+    targetSelector: "chosenFoe";
+  };
 
 export interface ResourceDrawEffectPayloadMap {
   gain_chips: GainChipsRuntimeEffect;
   gain_chips_per_player_with_status: GainChipsPerPlayerWithStatusRuntimeEffect;
   gain_chips_per_controlled_dead_wizard_token: GainChipsPerControlledDeadWizardTokenRuntimeEffect;
   draw_cards: DrawCardsRuntimeEffect;
+  draw_cards_for_self_and_chosen_foe: DrawCardsForSelfAndChosenFoeRuntimeEffect;
 }
 
 export const resourceDrawEffectIds = [
@@ -75,6 +82,7 @@ export const resourceDrawEffectIds = [
   "gain_chips_per_player_with_status",
   "gain_chips_per_controlled_dead_wizard_token",
   "draw_cards",
+  "draw_cards_for_self_and_chosen_foe",
 ] as const satisfies readonly ResourceDrawEffectId[];
 
 export interface ResourceDrawDecoderTools {
@@ -92,9 +100,7 @@ export interface ResourceDrawDecoderTools {
   nonEmptyStringArray: ValueDecoder<string[]>;
   optionalCondition: OptionalField<RuntimeEffectCondition>;
   optionalTiming: OptionalField<EffectTiming>;
-  optionalTargetSelector: OptionalField<
-    "eachPlayerClockwiseFromActive"
-  >;
+  optionalTargetSelector: OptionalField<"eachPlayerClockwiseFromActive">;
 }
 
 export type ResourceDrawEffectDecoders = {
@@ -150,6 +156,15 @@ export function createResourceDrawEffectDecoders(
       timing: optionalTiming,
       amount: required(positiveInteger),
     }),
+    draw_cards_for_self_and_chosen_foe: defineDecoder(
+      "draw_cards_for_self_and_chosen_foe",
+      {
+        effectId: required(literal("draw_cards_for_self_and_chosen_foe")),
+        timing: optionalTiming,
+        amount: required(positiveInteger),
+        targetSelector: required(literal("chosenFoe")),
+      }
+    ),
   };
 }
 
@@ -196,60 +211,97 @@ const gainChipsPerPlayerWithStatusHandler: EffectRuntimeHandler<GainChipsPerPlay
     },
   };
 
-const gainChipsPerControlledDeadWizardTokenHandler: EffectRuntimeHandler<
-  GainChipsPerControlledDeadWizardTokenRuntimeEffect
-> = {
-  effectId: "gain_chips_per_controlled_dead_wizard_token",
-  execute(state, player, effect, source, services) {
-    const recipients =
-      effect.targetSelector === "eachPlayerClockwiseFromActive"
-        ? services.getPlayersInActiveOrder(state)
-        : [player];
+const gainChipsPerControlledDeadWizardTokenHandler: EffectRuntimeHandler<GainChipsPerControlledDeadWizardTokenRuntimeEffect> =
+  {
+    effectId: "gain_chips_per_controlled_dead_wizard_token",
+    execute(state, player, effect, source, services) {
+      const recipients =
+        effect.targetSelector === "eachPlayerClockwiseFromActive"
+          ? services.getPlayersInActiveOrder(state)
+          : [player];
 
-    for (const recipient of recipients) {
-      const amount =
-        getControlledDeadWizardTokenCount(state, recipient) *
-        effect.amountPerDeadWizardToken;
-      const chipsBefore = recipient.chips;
-      recipient.chips += amount;
-      recordEffectChipsChanged(
-        state,
-        recipient,
-        source,
-        effect.effectId,
-        chipsBefore,
-        recipient.chips
-      );
-    }
+      for (const recipient of recipients) {
+        const amount =
+          getControlledDeadWizardTokenCount(state, recipient) *
+          effect.amountPerDeadWizardToken;
+        const chipsBefore = recipient.chips;
+        recipient.chips += amount;
+        recordEffectChipsChanged(
+          state,
+          recipient,
+          source,
+          effect.effectId,
+          chipsBefore,
+          recipient.chips
+        );
+      }
 
-    return { ok: true };
-  },
-};
+      return { ok: true };
+    },
+  };
+
+function drawCardsForPlayer(
+  state: GameState,
+  player: PlayerState,
+  amount: number,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext
+): void {
+  const drawResult = drawDeckCards(
+    player.deck,
+    player.discard,
+    amount,
+    state.rng,
+    () => recordDeckReshuffle(state, player.playerId)
+  );
+  player.hand.push(...drawResult.cards);
+  recordGameEvent(state, {
+    type: "effectDrawCardsApplied",
+    playerId: player.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    amount: drawResult.cards.length,
+    sourceType: source.sourceType,
+  });
+}
 
 const drawCardsHandler: EffectRuntimeHandler<DrawCardsRuntimeEffect> = {
   effectId: "draw_cards",
   execute(state, player, effect, source) {
-    const drawResult = drawDeckCards(
-      player.deck,
-      player.discard,
-      effect.amount,
-      state.rng,
-      () => recordDeckReshuffle(state, player.playerId)
-    );
-    player.hand.push(...drawResult.cards);
-    recordGameEvent(state, {
-      type: "effectDrawCardsApplied",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: "draw_cards",
-      amount: drawResult.cards.length,
-      sourceType: source.sourceType,
-    });
-
+    drawCardsForPlayer(state, player, effect.amount, effect.effectId, source);
     return { ok: true };
   },
 };
+
+const drawCardsForSelfAndChosenFoeHandler: EffectRuntimeHandler<DrawCardsForSelfAndChosenFoeRuntimeEffect> =
+  {
+    effectId: "draw_cards_for_self_and_chosen_foe",
+    execute(state, player, effect, source, services) {
+      const targetResult = services.resolveTargetChoice(
+        state,
+        player,
+        effect,
+        source
+      );
+      if (!targetResult.ok) return targetResult;
+      if (targetResult.choice?.choiceType !== "player") {
+        return { ok: true };
+      }
+
+      for (const recipient of [player, targetResult.choice.player]) {
+        drawCardsForPlayer(
+          state,
+          recipient,
+          effect.amount,
+          effect.effectId,
+          source
+        );
+      }
+
+      return { ok: true };
+    },
+  };
 
 type ResourceDrawEffectDefinitionFor<Id extends ResourceDrawEffectId> = {
   readonly effectId: Id;
@@ -319,6 +371,14 @@ export function createResourceDrawEffectDefinitions(
       supportedModes,
       supportedSourceKinds,
       handler: drawCardsHandler,
+    },
+    {
+      effectId: "draw_cards_for_self_and_chosen_foe",
+      decoder: bindRuntimeEffectDecoder("draw_cards_for_self_and_chosen_foe"),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: drawCardsForSelfAndChosenFoeHandler,
     },
   ];
 }

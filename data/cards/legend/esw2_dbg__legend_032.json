@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_032",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_032.json",
+    "image": "assets/cards/legend/wizard-card/Легенда-Волшебник. Капитан Бартоломяу.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_032.md"
+  },
+  "visible": {
+    "nameRu": "Капитан Бартоломяу",
+    "cost": 9,
+    "victoryPoints": 3,
+    "typeRu": "Легенда — Волшебник",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "textRu": "+2 мощи\nАтака: раскрой 4 верхние карты колоды выбранного врага и сыграй 1 из них. Затем сбрось все 4 карты.\nВ этот ход считается, что ты контролируешь сыгранную карту.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "cost": 9,
+    "victoryPoints": 3,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 2 },
+      {
+        "effectId": "attack_reveal_and_play_foe_deck_card",
+        "timing": "onPlay",
+        "amount": 4,
+        "targetSelector": "chosenFoe"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

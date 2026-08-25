@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_019",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_019.json",
+    "image": "assets/cards/spell/Заклинание. Братство конца.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_019.md"
+  },
+  "visible": {
+    "nameRu": "Братство конца",
+    "cost": 2,
+    "victoryPoints": 4,
+    "typeRu": "Заклинание",
+    "cardKind": "normal",
+    "cardTypes": ["spell"],
+    "textRu": "Ты и любой другой колдун берёте по 1 карте.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["spell"],
+    "cost": 2,
+    "victoryPoints": 4,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "draw_cards_for_self_and_chosen_foe",
+        "timing": "onPlay",
+        "amount": 1,
+        "targetSelector": "chosenFoe"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

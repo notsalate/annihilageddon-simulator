@@ -12,6 +12,7 @@ import type { EffectiveValueModifierEffectPayloadMap } from "./effect-runtime-ef
 import type { CardTypeEffectPayloadMap } from "./effect-runtime-card-type.js";
 import type { DwtInteractionEffectPayloadMap } from "./effect-runtime-dwt-interactions.js";
 import type { DeadWizardTokenEffectPayloadMap } from "./effect-runtime-dead-wizard-token.js";
+import type { MayhemEffectPayloadMap } from "./effect-runtime-mayhem.js";
 
 export type {
   AddPowerIfNoControlledDeadWizardTokenRuntimeEffect,
@@ -26,6 +27,7 @@ export type {
   GainChipsRuntimeEffect,
   GainChipsPerPlayerWithStatusRuntimeEffect,
   DrawCardsRuntimeEffect,
+  DrawCardsForSelfAndChosenFoeRuntimeEffect,
   GainChipsPerControlledDeadWizardTokenRuntimeEffect,
 } from "./effect-runtime-resources-draw.js";
 export type {
@@ -37,6 +39,7 @@ export type {
   DestroyCardRuntimeEffect,
   DestroyOwnCardsRuntimeEffect,
   DestroyRandomLegendMarketCardRuntimeEffect,
+  DestroyTopMainDeckCardsThenOptionalPlayMayhemRuntimeEffect,
   GainCardRuntimeEffect,
   OnGainSelfGainLimpWandsRuntimeEffect,
   OptionalGainMarketCardsToHandThisTurnRuntimeEffect,
@@ -44,6 +47,8 @@ export type {
   PlayTopCardRuntimeEffect,
   ReturnDiscardToHandRuntimeEffect,
   RevealTopCardRuntimeEffect,
+  RevealTopCardChooseDestroyOrPowerRuntimeEffect,
+  RevealTopCardChooseDestroyOrAttackEqualCostRuntimeEffect,
   TopdeckGainedCardRuntimeEffect,
   WildMagicChoiceRuntimeEffect,
   WildMagicOption,
@@ -85,6 +90,8 @@ export type {
   DeadWizardTokenDamageEqualHighestHandCostRuntimeEffect,
   DeadWizardTokenDamagePerDiscardLegendRuntimeEffect,
   DeadWizardTokenEachFoeGainChipsRuntimeEffect,
+  DeadWizardTokenEachFoeOptionalDiscardRuntimeEffect,
+  DeadWizardTokenEachFoeOptionalTransferSignRuntimeEffect,
   DeadWizardTokenExchangeLifeRuntimeEffect,
   DeadWizardTokenGainChipsRuntimeEffect,
   DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect,
@@ -93,8 +100,38 @@ export type {
   DeadWizardTokenKillerOptionalRemoveDinglerRuntimeEffect,
   DeadWizardTokenLoseHalfChipsRuntimeEffect,
   DeadWizardTokenRewardKillerChipsRuntimeEffect,
+  DeadWizardTokenRandomDiscardToChosenFoeRuntimeEffect,
+  DeadWizardTokenShuffleHandLegendsRuntimeEffect,
+  DeadWizardTokenShuffleOwnedPermanentsRuntimeEffect,
   DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect,
+  DeadWizardTokenRevealAndOptionalDestroyRuntimeEffect,
 } from "./effect-runtime-dead-wizard-token.js";
+export type {
+  MayhemEffectId,
+  MayhemEffectPayloadMap,
+  MayhemAttackRuntimeEffect,
+  MayhemAddChipsToMainMarketRuntimeEffect,
+  MayhemEachDinglerChoosePayLifeOrChipToRemoveStatusRuntimeEffect,
+  MayhemEachPlayerChooseFoeGainChipsRuntimeEffect,
+  MayhemEachNonDinglerGainChipsRuntimeEffect,
+  MayhemEachPlayerGainChipsRuntimeEffect,
+  MayhemRefreshLegendMarketRuntimeEffect,
+  MayhemEachPlayerBattleHighestHandCostRuntimeEffect,
+  MayhemEachPlayerChooseDiscardHandDrawOrTakeDamageRuntimeEffect,
+  MayhemEachPlayerDiscardTopDeckCardsChooseDestroyAllOrNoneRuntimeEffect,
+  MayhemEachPlayerDiscardDeckThenDestroyFromDiscardRuntimeEffect,
+  MayhemEachPlayerOptionalDestroyOwnCardRuntimeEffect,
+  MayhemEachPlayerOptionalDestroyOwnCardForHalfChipsRuntimeEffect,
+  MegaMayhemEachPlayerOptionalDestroyOwnCardsRuntimeEffect,
+  MayhemEachPlayerGainChipsThenAttackForCurrentChipsRuntimeEffect,
+  MayhemEachPlayerReduceLifeToGainChipsRuntimeEffect,
+  MayhemEachPlayerVoteDinglerRuntimeEffect,
+  MayhemLowestLifePlayersGainDinglerAndSetToMaxLifeRuntimeEffect,
+  MegaMayhemEachPlayerDestroyTopMainDeckDeathIfMayhemRuntimeEffect,
+  MegaMayhemEachPlayerGainLimpWandsToHandRuntimeEffect,
+  MegaMayhemEachPlayerToggleDinglerRuntimeEffect,
+  MegaMayhemSetLifeRuntimeEffect,
+} from "./effect-runtime-mayhem.js";
 
 export const effectTimings = [
   "activation",
@@ -248,6 +285,7 @@ export const knownRuntimeEffectIds = [
   "attack_damage_equal_to_controlled_card_cost",
   "attack_destroy_top_legend_deck_then_damage_equal_cost",
   "attack_discard_cards",
+  "attack_reveal_and_play_foe_deck_card",
   "attack_gain_limp_wand",
   "attack_gain_status",
   "activation_attack_damage_per_controlled_card_type",
@@ -258,6 +296,12 @@ export const knownRuntimeEffectIds = [
   "controls_other_card_type",
   "deal_damage",
   "dead_wizard_token_each_foe_gain_chips",
+  "dead_wizard_token_random_discard_to_chosen_foe",
+  "dead_wizard_token_each_foe_optional_transfer_sign",
+  "dead_wizard_token_shuffle_hand_legends",
+  "dead_wizard_token_shuffle_owned_permanents",
+  "dead_wizard_token_each_foe_optional_discard",
+  "dead_wizard_token_reveal_and_optional_destroy",
   "dead_wizard_token_damage_equal_chips",
   "dead_wizard_token_damage_equal_highest_hand_cost",
   "dead_wizard_token_gain_chips",
@@ -277,6 +321,7 @@ export const knownRuntimeEffectIds = [
   "destroy_card",
   "destroy_own_cards",
   "destroy_random_legend_market_card",
+  "destroy_top_main_deck_cards_then_optional_play_mayhem",
   "destroyed_card_kind_is",
   "directional_chain_attack",
   "discard_card",
@@ -284,6 +329,7 @@ export const knownRuntimeEffectIds = [
   "discard_hand_then_draw_cards",
   "discard_self",
   "draw_cards",
+  "draw_cards_for_self_and_chosen_foe",
   "endgame_fixed_token_victory_points",
   "endgame_remove_matching_dead_wizard_tokens",
   "endgame_limp_wands_score_positive",
@@ -314,11 +360,15 @@ export const knownRuntimeEffectIds = [
   "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
   "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
   "mayhem_each_player_discard_deck_then_destroy_from_discard",
+  "mayhem_each_player_reveal_random_hand_card_destroy_or_pay_life_to_reroll",
+  "mayhem_each_player_optional_destroy_own_card",
+  "mayhem_each_player_optional_destroy_own_card_for_half_chips",
   "mayhem_each_player_gain_chips_then_attack_for_current_chips",
   "mayhem_each_player_reduce_life_to_gain_chips",
   "mayhem_each_player_vote_dingler",
   "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
   "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+  "mega_mayhem_each_player_optional_destroy_own_cards",
   "mega_mayhem_each_player_gain_limp_wands_to_hand",
   "mega_mayhem_each_player_toggle_dingler",
   "mega_mayhem_set_life",
@@ -347,6 +397,8 @@ export const knownRuntimeEffectIds = [
   "setup_retain_and_choose_third_familiar",
   "return_discard_to_hand",
   "reveal_top_card",
+  "reveal_top_card_choose_destroy_or_power",
+  "reveal_top_card_choose_destroy_or_attack_equal_cost",
   "set_life",
   "set_resurrection_life_total",
   "set_starting_life_total",
@@ -628,6 +680,11 @@ export type AttackDiscardCardsRuntimeEffect =
       chooser: "target";
       sourceZone: "hand";
     };
+export type AttackRevealAndPlayFoeDeckCardRuntimeEffect =
+  EffectWithOptionalTiming<"attack_reveal_and_play_foe_deck_card"> & {
+    amount: number;
+    targetSelector: "chosenFoe";
+  };
 export type AttackGainLimpWandRuntimeEffect =
   EffectWithOptionalTiming<"attack_gain_limp_wand"> &
     Targetable & {
@@ -730,6 +787,7 @@ export interface PlayerControlledAttackEffectPayloadMap {
   attack_damage_equal_to_controlled_card_cost: AttackDamageEqualToControlledCardCostRuntimeEffect;
   attack_destroy_top_legend_deck_then_damage_equal_cost: AttackDestroyTopLegendDeckThenDamageEqualCostRuntimeEffect;
   attack_discard_cards: AttackDiscardCardsRuntimeEffect;
+  attack_reveal_and_play_foe_deck_card: AttackRevealAndPlayFoeDeckCardRuntimeEffect;
   attack_gain_limp_wand: AttackGainLimpWandRuntimeEffect;
   attack_gain_status: AttackGainStatusRuntimeEffect;
   avoid_attack: AvoidAttackRuntimeEffect;
@@ -743,187 +801,6 @@ export interface PlayerControlledAttackEffectPayloadMap {
   modify_owned_wand_attack_damage: ModifyOwnedWandAttackDamageRuntimeEffect;
   double_owned_attack_damage: DoubleOwnedAttackDamageRuntimeEffect;
   prevent_defense_against_owned_wand_attacks: PreventDefenseAgainstOwnedWandAttacksRuntimeEffect;
-}
-
-export type MayhemAttackRuntimeEffect =
-  EffectWithOptionalTiming<"mayhem_attack"> &
-    PositiveAmount & {
-      target: RuntimeEffectSelectorTarget & { selector: "allPlayers" };
-    };
-export type MayhemAddChipsToMainMarketRuntimeEffect = TimedEffect<
-  "mayhem_add_chips_to_main_market",
-  "onMayhemResolve"
-> & {
-  market: "mainMarket";
-  amount: number;
-};
-export type MayhemEachDinglerChoosePayLifeOrChipToRemoveStatusRuntimeEffect =
-  TimedEffect<
-    "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
-    "onMayhemResolve"
-  > & {
-    targetSelector: "eachPlayerClockwiseFromActive";
-    chooser: "affectedPlayer";
-    statusId: "dingler";
-    lifeCost: number;
-    chipCost: number;
-  };
-export type MayhemEachPlayerChooseFoeGainChipsRuntimeEffect = TimedEffect<
-  "mayhem_each_player_choose_foe_gain_chips",
-  "onMayhemResolve"
-> & {
-  targetSelector: "eachPlayerClockwiseFromActive";
-  chipAmount: number;
-};
-export type MayhemEachNonDinglerGainChipsRuntimeEffect = TimedEffect<
-  "mayhem_each_non_dingler_gain_chips",
-  "onMayhemResolve"
-> & {
-  targetSelector: "eachPlayerClockwiseFromActive";
-  chipAmount: number;
-};
-export type MayhemEachPlayerGainChipsRuntimeEffect = TimedEffect<
-  "mayhem_each_player_gain_chips",
-  "onMayhemResolve"
-> & {
-  targetSelector: "eachPlayerClockwiseFromActive";
-  chipAmount: number;
-};
-export type MayhemRefreshLegendMarketRuntimeEffect = TimedEffect<
-  "mayhem_refresh_legend_market",
-  "onMayhemResolve"
-> & {
-  targetSize: number;
-  destroyMegaMayhem?: true;
-};
-export type MayhemEachPlayerBattleHighestHandCostRuntimeEffect = TimedEffect<
-  "mayhem_each_player_battle_highest_hand_cost",
-  "onMayhemResolve"
-> & {
-  targetSelector: "eachPlayerClockwiseFromActive";
-  chooser: "affectedPlayer";
-  winnerDrawAmount: number;
-};
-export type MayhemEachPlayerChooseDiscardHandDrawOrTakeDamageRuntimeEffect =
-  TimedEffect<
-    "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
-    "onMayhemResolve"
-  > & {
-    targetSelector: "eachPlayerClockwiseFromActive";
-    chooser: "affectedPlayer";
-    options: [
-      Extract<
-        MayhemHandRedrawOption,
-        { effectId: "discard_hand_then_draw_cards" }
-      >,
-      Extract<MayhemHandRedrawOption, { effectId: "take_damage" }>,
-    ];
-  };
-export type MayhemEachPlayerDiscardTopDeckCardsChooseDestroyAllOrNoneRuntimeEffect =
-  TimedEffect<
-    "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
-    "onMayhemResolve"
-  > & {
-    targetSelector: "eachPlayerClockwiseFromActive";
-    chooser: "affectedPlayer";
-    choice: "destroyBothOrDestroyNone";
-    amount: number;
-    sourceZone: "deck";
-  };
-export type MayhemEachPlayerDiscardDeckThenDestroyFromDiscardRuntimeEffect =
-  TimedEffect<
-    "mayhem_each_player_discard_deck_then_destroy_from_discard",
-    "onMayhemResolve"
-  > & {
-    targetSelector: "eachPlayerClockwiseFromActive";
-    chooser: "affectedPlayer";
-    destroyAmount: number;
-    destroySourceZone: "discard";
-    discardSourceZone: "deck";
-  };
-export type MayhemEachPlayerGainChipsThenAttackForCurrentChipsRuntimeEffect =
-  TimedEffect<
-    "mayhem_each_player_gain_chips_then_attack_for_current_chips",
-    "onMayhemResolve"
-  > & {
-    targetSelector: "eachPlayerClockwiseFromActive";
-    chipAmount: number;
-  };
-export type MayhemEachPlayerReduceLifeToGainChipsRuntimeEffect = TimedEffect<
-  "mayhem_each_player_reduce_life_to_gain_chips",
-  "onMayhemResolve"
-> & {
-  targetSelector: "eachPlayerClockwiseFromActive";
-  chooser: "affectedPlayer";
-  lifeTotal: number;
-  chipAmount: number;
-};
-export type MayhemEachPlayerVoteDinglerRuntimeEffect = TimedEffect<
-  "mayhem_each_player_vote_dingler",
-  "onMayhemResolve"
-> & {
-  targetSelector: "eachPlayerClockwiseFromActive";
-  chooser: "affectedPlayer";
-  voteTargetSelector: "anyPlayer";
-  statusId: "dingler";
-};
-export type MayhemLowestLifePlayersGainDinglerAndSetToMaxLifeRuntimeEffect =
-  TimedEffect<
-    "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
-    "onMayhemResolve"
-  > & { statusId: "dingler" };
-export type MegaMayhemEachPlayerDestroyTopMainDeckDeathIfMayhemRuntimeEffect =
-  TimedEffect<
-    "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
-    "onMayhemResolve"
-  > & {
-    targetSelector: "eachPlayerClockwiseFromActive";
-    deathCondition: {
-      effectId: "destroyed_card_kind_is";
-      cardKind: "mayhem";
-    };
-    destroyedCardSource: "mainDeck";
-  };
-export type MegaMayhemEachPlayerGainLimpWandsToHandRuntimeEffect = TimedEffect<
-  "mega_mayhem_each_player_gain_limp_wands_to_hand",
-  "onMayhemResolve"
-> & {
-  targetSelector: "eachPlayerClockwiseFromActive";
-  destination: "hand";
-  amount: number;
-};
-export type MegaMayhemEachPlayerToggleDinglerRuntimeEffect = TimedEffect<
-  "mega_mayhem_each_player_toggle_dingler",
-  "onMayhemResolve"
-> & { targetSelector: "eachPlayerClockwiseFromActive" };
-export type MegaMayhemSetLifeRuntimeEffect = TimedEffect<
-  "mega_mayhem_set_life",
-  "onMayhemResolve"
-> & {
-  targetSelector: "eachPlayerClockwiseFromActive";
-  lifeTotal: number;
-};
-
-export interface MayhemEffectPayloadMap {
-  mayhem_attack: MayhemAttackRuntimeEffect;
-  mayhem_add_chips_to_main_market: MayhemAddChipsToMainMarketRuntimeEffect;
-  mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status: MayhemEachDinglerChoosePayLifeOrChipToRemoveStatusRuntimeEffect;
-  mayhem_each_player_choose_foe_gain_chips: MayhemEachPlayerChooseFoeGainChipsRuntimeEffect;
-  mayhem_each_non_dingler_gain_chips: MayhemEachNonDinglerGainChipsRuntimeEffect;
-  mayhem_each_player_gain_chips: MayhemEachPlayerGainChipsRuntimeEffect;
-  mayhem_refresh_legend_market: MayhemRefreshLegendMarketRuntimeEffect;
-  mayhem_each_player_battle_highest_hand_cost: MayhemEachPlayerBattleHighestHandCostRuntimeEffect;
-  mayhem_each_player_choose_discard_hand_draw_or_take_damage: MayhemEachPlayerChooseDiscardHandDrawOrTakeDamageRuntimeEffect;
-  mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none: MayhemEachPlayerDiscardTopDeckCardsChooseDestroyAllOrNoneRuntimeEffect;
-  mayhem_each_player_discard_deck_then_destroy_from_discard: MayhemEachPlayerDiscardDeckThenDestroyFromDiscardRuntimeEffect;
-  mayhem_each_player_gain_chips_then_attack_for_current_chips: MayhemEachPlayerGainChipsThenAttackForCurrentChipsRuntimeEffect;
-  mayhem_each_player_reduce_life_to_gain_chips: MayhemEachPlayerReduceLifeToGainChipsRuntimeEffect;
-  mayhem_each_player_vote_dingler: MayhemEachPlayerVoteDinglerRuntimeEffect;
-  mayhem_lowest_life_players_gain_dingler_and_set_to_max_life: MayhemLowestLifePlayersGainDinglerAndSetToMaxLifeRuntimeEffect;
-  mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem: MegaMayhemEachPlayerDestroyTopMainDeckDeathIfMayhemRuntimeEffect;
-  mega_mayhem_each_player_gain_limp_wands_to_hand: MegaMayhemEachPlayerGainLimpWandsToHandRuntimeEffect;
-  mega_mayhem_each_player_toggle_dingler: MegaMayhemEachPlayerToggleDinglerRuntimeEffect;
-  mega_mayhem_set_life: MegaMayhemSetLifeRuntimeEffect;
 }
 
 export type RuntimeEffectPayloadMap = SetupEffectPayloadMap &

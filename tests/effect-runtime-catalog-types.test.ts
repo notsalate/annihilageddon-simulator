@@ -206,6 +206,7 @@ test("resource and draw IDs belong to one family module", () => {
     "gain_chips_per_player_with_status",
     "gain_chips_per_controlled_dead_wizard_token",
     "draw_cards",
+    "draw_cards_for_self_and_chosen_foe",
   ]);
 });
 
@@ -220,6 +221,7 @@ test("remaining Catalog families expose one local ID inventory each", () => {
     "attack_damage_equal_to_controlled_card_cost",
     "attack_destroy_top_legend_deck_then_damage_equal_cost",
     "attack_discard_cards",
+    "attack_reveal_and_play_foe_deck_card",
     "attack_gain_limp_wand",
     "attack_gain_status",
     "activation_attack_damage_per_controlled_card_type",
@@ -250,11 +252,15 @@ test("remaining Catalog families expose one local ID inventory each", () => {
     "mayhem_each_player_choose_discard_hand_draw_or_take_damage",
     "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
     "mayhem_each_player_discard_deck_then_destroy_from_discard",
+    "mayhem_each_player_reveal_random_hand_card_destroy_or_pay_life_to_reroll",
+    "mayhem_each_player_optional_destroy_own_card",
+    "mayhem_each_player_optional_destroy_own_card_for_half_chips",
     "mayhem_each_player_gain_chips_then_attack_for_current_chips",
     "mayhem_each_player_reduce_life_to_gain_chips",
     "mayhem_each_player_vote_dingler",
     "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
     "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+    "mega_mayhem_each_player_optional_destroy_own_cards",
     "mega_mayhem_each_player_gain_limp_wands_to_hand",
     "mega_mayhem_each_player_toggle_dingler",
     "mega_mayhem_set_life",
@@ -290,6 +296,9 @@ test("card, activation, ongoing and modifier IDs belong to family modules", () =
     "destroy_random_legend_market_card",
     "return_discard_to_hand",
     "reveal_top_card",
+    "reveal_top_card_choose_destroy_or_power",
+    "reveal_top_card_choose_destroy_or_attack_equal_cost",
+    "destroy_top_main_deck_cards_then_optional_play_mayhem",
     "play_top_card",
     "play_top_card_from_foe_deck",
     "topdeck_gained_card",
@@ -428,6 +437,36 @@ test("card ownership and choice effects use exact family policies", () => {
         effectId: "reveal_top_card",
         timing: "onPlay",
         source: "activePlayerDeck",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "reveal_top_card_choose_destroy_or_power",
+      payload: {
+        effectId: "reveal_top_card_choose_destroy_or_power",
+        timing: "onPlay",
+        source: "activePlayerDeck",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "reveal_top_card_choose_destroy_or_attack_equal_cost",
+      payload: {
+        effectId: "reveal_top_card_choose_destroy_or_attack_equal_cost",
+        timing: "onPlay",
+        source: "activePlayerDeck",
+        targetSelector: "chosenFoe",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "destroy_top_main_deck_cards_then_optional_play_mayhem",
+      payload: {
+        effectId: "destroy_top_main_deck_cards_then_optional_play_mayhem",
+        timing: "onPlay",
+        source: "mainDeck",
+        amount: 3,
+        mayhemBonusPower: 3,
       },
       sourceKind: "card",
     },
@@ -788,6 +827,7 @@ test("activation and ongoing families use exact timing and card-source policies"
     "activation_destroy_self_then_destroy_own_cards",
     "conditional_activation_destroy_own_cards",
     "conditional_activation_gain_chips",
+    "optional_spend_chip_destroy_own_cards",
     "ongoing_add_power_when_playing_wand",
     "ongoing_add_power_when_playing_limp_wand",
     "ongoing_first_attack_damage_add_power",
@@ -803,18 +843,8 @@ test("activation and ongoing families use exact timing and card-source policies"
       "combat",
       "card"
     );
-    assert.equal(
-      decoded.ok,
-      supportedEffectIds.includes(
-        effectId as (typeof supportedEffectIds)[number]
-      )
-    );
-    if (
-      !decoded.ok &&
-      !supportedEffectIds.includes(
-        effectId as (typeof supportedEffectIds)[number]
-      )
-    ) {
+    assert.equal(decoded.ok, supportedEffectIds.includes(effectId));
+    if (!decoded.ok && !supportedEffectIds.includes(effectId)) {
       assert.match(decoded.errors.join("\n"), /uses unsupported effect/);
     }
   }
@@ -973,6 +1003,25 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
       },
     },
     {
+      effectId: "mayhem_each_player_optional_destroy_own_card",
+      payload: {
+        effectId: "mayhem_each_player_optional_destroy_own_card",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+        lifeCost: 3,
+      },
+    },
+    {
+      effectId: "mayhem_each_player_optional_destroy_own_card_for_half_chips",
+      payload: {
+        effectId: "mayhem_each_player_optional_destroy_own_card_for_half_chips",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
+      },
+    },
+    {
       effectId: "mayhem_each_player_gain_chips_then_attack_for_current_chips",
       payload: {
         effectId: "mayhem_each_player_gain_chips_then_attack_for_current_chips",
@@ -1023,6 +1072,15 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
           cardKind: "mayhem",
         },
         destroyedCardSource: "mainDeck",
+      },
+    },
+    {
+      effectId: "mega_mayhem_each_player_optional_destroy_own_cards",
+      payload: {
+        effectId: "mega_mayhem_each_player_optional_destroy_own_cards",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
       },
     },
     {

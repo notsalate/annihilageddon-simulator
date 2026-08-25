@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   applyAction,
   initializeGame,
+  runMarketFlow,
   type ActionResult,
   type CardDefinition,
   type CardInstance,
@@ -17,7 +18,14 @@ import {
   markCardDefinitionId,
   markCardInstanceId,
 } from "../../src/domain/types.js";
-import { grantTemporaryControl } from "../../src/engine/control-ledger.js";
+import {
+  findCardLocation,
+  grantTemporaryControl,
+  listPhysicalCardLocations,
+  movePhysicalCard,
+  removeCardFromLocation,
+  setCardOwner,
+} from "../../src/engine/control-ledger.js";
 import { verifiedTestRuntimeEffect } from "./verified-runtime-effect.js";
 
 export type CreateGameScenarioOptions = {
@@ -215,6 +223,57 @@ export function chooseEffect(
   selector: ChoicePolicy
 ): void {
   scenario.state.effectChoiceStrategy = selector;
+}
+
+export function resolveMayhemThroughMarket(
+  scenario: GameScenario,
+  source: CardInstance,
+  deck: "mainDeck" | "legendDeck"
+) {
+  const sourceLocation = findCardLocation(scenario.state, source.instanceId);
+  assert.ok(sourceLocation);
+  clearPhysicalCardZone(scenario, deck);
+  const moved = movePhysicalCard(
+    scenario.state,
+    source.instanceId,
+    deck,
+    "front",
+    sourceLocation.zoneName
+  );
+  assert.deepEqual(moved.ok, true);
+  clearPhysicalCardZone(
+    scenario,
+    deck === "mainDeck" ? "mainMarket" : "legendMarket"
+  );
+  setCardOwner(source, "common");
+  return runMarketFlow(scenario.state, { mode: "turn" });
+}
+
+export function putOnCommonDeck(
+  scenario: GameScenario,
+  card: CardInstance,
+  deck: "mainDeck" | "legendDeck"
+): void {
+  const sourceLocation = findCardLocation(scenario.state, card.instanceId);
+  assert.ok(sourceLocation);
+  const moved = movePhysicalCard(
+    scenario.state,
+    card.instanceId,
+    deck,
+    "front",
+    sourceLocation.zoneName
+  );
+  assert.deepEqual(moved.ok, true);
+  setCardOwner(card, "common");
+}
+
+function clearPhysicalCardZone(scenario: GameScenario, zoneName: string): void {
+  const cards = listPhysicalCardLocations(scenario.state)
+    .filter((location) => location.zoneName === zoneName)
+    .map((location) => location.card);
+  for (const card of cards) {
+    assert.ok(removeCardFromLocation(scenario.state, card.instanceId));
+  }
 }
 
 export function play(

@@ -1,10 +1,19 @@
-import { recordGameEvent } from "./event-recorder.js";
+import { shuffleDeck } from "./deck-lifecycle.js";
 import {
+  recordDeckReshuffle,
+  recordGameEvent,
+  recordTurnPowerChanged,
+} from "./event-recorder.js";
+import {
+  findCardLocation,
   findPlayerPlayedThisTurnCard,
   listLegendMarketCards,
   movePhysicalCard,
+  peekMainDeckCard,
+  removeCardFromLocation,
+  removeTemporaryCardControl,
 } from "./control-ledger.js";
-import type { CardKind } from "./data.js";
+import type { CardDefinition, CardKind } from "./data.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 import type {
   EffectChoice,
@@ -17,6 +26,7 @@ import type {
   EffectTiming,
   RuntimeEffectCondition,
   RuntimeEffectForId,
+  RuntimeEffectId,
   RuntimeEffectTarget,
   RuntimeEffectTargetSelector,
 } from "./runtime-effect.js";
@@ -33,6 +43,8 @@ import type {
   ValueDecoder,
 } from "./effect-runtime-family-support.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import { calculateEffectiveCardCost } from "./effective-values.js";
+import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
 
 type EffectWithOptionalTiming<Id extends string> = {
   effectId: Id;
@@ -63,14 +75,16 @@ export type DiscardSelfRuntimeEffect = EffectWithOptionalTiming<"discard_self">;
 export type DiscardHandThenDrawCardsRuntimeEffect =
   EffectWithOptionalTiming<"discard_hand_then_draw_cards"> & {
     drawAmount: number;
+    firstCardOfTurn?: true;
   };
 export type DestroyCardRuntimeEffect =
   EffectWithOptionalTiming<"destroy_card"> & Targetable;
 export type DestroyOwnCardsRuntimeEffect =
   EffectWithOptionalTiming<"destroy_own_cards"> & {
     amount?: number;
-    sourceZones?: "hand" | ("hand" | "discard")[];
+    sourceZones?: "hand" | "discard" | ("hand" | "discard")[];
     chooser?: "controller" | "defendingPlayer";
+    repeatUntilDeclined?: true;
   };
 export type DestroyRandomLegendMarketCardRuntimeEffect = {
   effectId: "destroy_random_legend_market_card";
@@ -85,12 +99,28 @@ export type ReturnDiscardToHandRuntimeEffect =
       cardTypes?: string[];
       excludeSource?: true;
       required?: true;
+      allMatching?: true;
     };
 export type RevealTopCardRuntimeEffect =
   EffectWithOptionalTiming<"reveal_top_card"> & {
     source: "activePlayerDeck" | "mainDeck";
     optionalTakeToHand?: true;
     excludeCardKind?: Extract<CardKind, "mayhem">;
+  };
+export type RevealTopCardChooseDestroyOrPowerRuntimeEffect =
+  EffectWithOptionalTiming<"reveal_top_card_choose_destroy_or_power"> & {
+    source: "activePlayerDeck";
+  };
+export type RevealTopCardChooseDestroyOrAttackEqualCostRuntimeEffect =
+  EffectWithOptionalTiming<"reveal_top_card_choose_destroy_or_attack_equal_cost"> & {
+    source: "activePlayerDeck";
+    targetSelector: "chosenFoe";
+  };
+export type DestroyTopMainDeckCardsThenOptionalPlayMayhemRuntimeEffect =
+  EffectWithOptionalTiming<"destroy_top_main_deck_cards_then_optional_play_mayhem"> & {
+    source: "mainDeck";
+    amount: number;
+    mayhemBonusPower: number;
   };
 export type PlayTopCardRuntimeEffect =
   EffectWithOptionalTiming<"play_top_card"> & {
@@ -151,6 +181,9 @@ export interface CardOwnershipChoiceEffectPayloadMap {
   destroy_random_legend_market_card: DestroyRandomLegendMarketCardRuntimeEffect;
   return_discard_to_hand: ReturnDiscardToHandRuntimeEffect;
   reveal_top_card: RevealTopCardRuntimeEffect;
+  reveal_top_card_choose_destroy_or_power: RevealTopCardChooseDestroyOrPowerRuntimeEffect;
+  reveal_top_card_choose_destroy_or_attack_equal_cost: RevealTopCardChooseDestroyOrAttackEqualCostRuntimeEffect;
+  destroy_top_main_deck_cards_then_optional_play_mayhem: DestroyTopMainDeckCardsThenOptionalPlayMayhemRuntimeEffect;
   play_top_card: PlayTopCardRuntimeEffect;
   play_top_card_from_foe_deck: PlayTopCardFromFoeDeckRuntimeEffect;
   wild_magic_choice: WildMagicChoiceRuntimeEffect;
@@ -170,6 +203,9 @@ export type CardOwnershipChoiceEffectId =
   | "destroy_random_legend_market_card"
   | "return_discard_to_hand"
   | "reveal_top_card"
+  | "reveal_top_card_choose_destroy_or_power"
+  | "reveal_top_card_choose_destroy_or_attack_equal_cost"
+  | "destroy_top_main_deck_cards_then_optional_play_mayhem"
   | "play_top_card"
   | "play_top_card_from_foe_deck"
   | "topdeck_gained_card"
@@ -187,6 +223,9 @@ export const cardOwnershipChoiceEffectIds = [
   "destroy_random_legend_market_card",
   "return_discard_to_hand",
   "reveal_top_card",
+  "reveal_top_card_choose_destroy_or_power",
+  "reveal_top_card_choose_destroy_or_attack_equal_cost",
+  "destroy_top_main_deck_cards_then_optional_play_mayhem",
   "play_top_card",
   "play_top_card_from_foe_deck",
   "topdeck_gained_card",
@@ -222,7 +261,9 @@ export interface CardOwnershipChoiceEffectDecoderTools {
     NonNullable<RuntimeEffectForId<"gain_card">["targetSelector"]>
   >;
   booleanValue: ValueDecoder<boolean>;
-  destroyOwnCardsSourceZones: ValueDecoder<"hand" | ("hand" | "discard")[]>;
+  destroyOwnCardsSourceZones: ValueDecoder<
+    "hand" | "discard" | ("hand" | "discard")[]
+  >;
   requireNestedTargetSelector(
     label: string,
     selector: "mainMarketCard" | "activePlayerHandCard"
@@ -296,6 +337,7 @@ export function createCardOwnershipChoiceEffectDecoders(
         effectId: required(literal("discard_hand_then_draw_cards")),
         timing: optionalTiming,
         drawAmount: required(positiveInteger),
+        firstCardOfTurn: optional(literal(true)),
       }
     ),
     destroy_card: defineDecoder(
@@ -314,6 +356,7 @@ export function createCardOwnershipChoiceEffectDecoders(
       amount: optional(nonNegativeInteger),
       sourceZones: optional(destroyOwnCardsSourceZones),
       chooser: optional(oneOfTools(["controller", "defendingPlayer"] as const)),
+      repeatUntilDeclined: optional(literal(true)),
     }),
     destroy_random_legend_market_card: defineDecoder(
       "destroy_random_legend_market_card",
@@ -332,6 +375,7 @@ export function createCardOwnershipChoiceEffectDecoders(
       cardTypes: optional(nonEmptyStringArray),
       excludeSource: optional(literal(true)),
       required: optional(literal(true)),
+      allMatching: optional(literal(true)),
     }),
     reveal_top_card: defineDecoder("reveal_top_card", {
       effectId: required(literal("reveal_top_card")),
@@ -340,6 +384,37 @@ export function createCardOwnershipChoiceEffectDecoders(
       optionalTakeToHand: optional(literal(true)),
       excludeCardKind: optional(literal("mayhem")),
     }),
+    reveal_top_card_choose_destroy_or_power: defineDecoder(
+      "reveal_top_card_choose_destroy_or_power",
+      {
+        effectId: required(literal("reveal_top_card_choose_destroy_or_power")),
+        timing: optionalTiming,
+        source: required(literal("activePlayerDeck")),
+      }
+    ),
+    reveal_top_card_choose_destroy_or_attack_equal_cost: defineDecoder(
+      "reveal_top_card_choose_destroy_or_attack_equal_cost",
+      {
+        effectId: required(
+          literal("reveal_top_card_choose_destroy_or_attack_equal_cost")
+        ),
+        timing: optionalTiming,
+        source: required(literal("activePlayerDeck")),
+        targetSelector: required(literal("chosenFoe")),
+      }
+    ),
+    destroy_top_main_deck_cards_then_optional_play_mayhem: defineDecoder(
+      "destroy_top_main_deck_cards_then_optional_play_mayhem",
+      {
+        effectId: required(
+          literal("destroy_top_main_deck_cards_then_optional_play_mayhem")
+        ),
+        timing: optionalTiming,
+        source: required(literal("mainDeck")),
+        amount: required(positiveInteger),
+        mayhemBonusPower: required(positiveInteger),
+      }
+    ),
     play_top_card: defineDecoder("play_top_card", {
       effectId: required(literal("play_top_card")),
       timing: optionalTiming,
@@ -697,6 +772,104 @@ const discardRandomHandCardsHandler: EffectRuntimeHandler<
   },
 };
 
+const discardHandThenDrawCardsHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"discard_hand_then_draw_cards">
+> = {
+  effectId: "discard_hand_then_draw_cards",
+  execute(state, player, effect, source, services) {
+    if (
+      effect.firstCardOfTurn === true &&
+      player.playedThisTurn[0]?.instanceId !== source.cardInstanceId
+    ) {
+      return { ok: true };
+    }
+
+    const choice = services.chooseEffectChoice(
+      state,
+      player,
+      source,
+      effect.effectId,
+      [
+        { choiceKind: "option", choiceId: "apply" },
+        { choiceKind: "option", choiceId: "decline" },
+      ]
+    );
+    if (choice?.choiceId !== "apply") return { ok: true };
+
+    for (const card of [...player.hand]) {
+      const moved = services.moveCardToZonePreservingOwner(
+        state,
+        player,
+        card,
+        player.discard,
+        `${player.playerId}.discard`,
+        effect.effectId,
+        source
+      );
+      if (!moved) {
+        return {
+          ok: false,
+          error: `Cannot discard hand card ${card.instanceId}`,
+        };
+      }
+    }
+
+    let drawnAmount = 0;
+    for (let index = 0; index < effect.drawAmount; index += 1) {
+      if (player.deck.length === 0 && player.discard.length > 0) {
+        for (const card of [...player.discard]) {
+          const moved = services.moveCardToZonePreservingOwner(
+            state,
+            player,
+            card,
+            player.deck,
+            `${player.playerId}.deck`,
+            effect.effectId,
+            source
+          );
+          if (!moved) {
+            return {
+              ok: false,
+              error: `Cannot reshuffle discard card ${card.instanceId}`,
+            };
+          }
+        }
+        shuffleDeck(player.deck, state.rng);
+        recordDeckReshuffle(state, player.playerId);
+      }
+
+      const card = player.deck[0];
+      if (card === undefined) break;
+      const moved = services.moveCardToZonePreservingOwner(
+        state,
+        player,
+        card,
+        player.hand,
+        `${player.playerId}.hand`,
+        effect.effectId,
+        source
+      );
+      if (!moved) {
+        return {
+          ok: false,
+          error: `Cannot draw card ${card.instanceId}`,
+        };
+      }
+      drawnAmount += 1;
+    }
+    recordGameEvent(state, {
+      type: "effectDrawCardsApplied",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId: effect.effectId,
+      amount: drawnAmount,
+      sourceType: source.sourceType,
+    });
+    return { ok: true };
+  },
+};
+
 const destroyCardHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"destroy_card">
 > = {
@@ -758,6 +931,7 @@ export function executeReturnDiscardToHand(
     cardTypes?: readonly string[];
     excludeSource?: boolean;
     required?: boolean;
+    allMatching?: boolean;
   } = {}
 ): EffectExecutionResult {
   const eligibleCards = player.discard.filter((card) => {
@@ -768,11 +942,54 @@ export function executeReturnDiscardToHand(
     const definition = state.cardDefinitions.get(card.definitionId);
     return (
       definition !== undefined &&
-      options.cardTypes.some((cardType) =>
-        definition.engine.cardTypes.includes(cardType)
+      options.cardTypes.some(
+        (cardType) =>
+          definition.engine.cardTypes.includes(cardType) ||
+          (cardType === "wand" && definition.engine.cardKind === "limpWand")
       )
     );
   });
+  if (options.allMatching === true) {
+    if (eligibleCards.length === 0) return { ok: true };
+    const choice = services.chooseEffectChoice(
+      state,
+      player,
+      source,
+      "return_discard_to_hand",
+      [
+        { choiceKind: "option", choiceId: "apply" },
+        { choiceKind: "option", choiceId: "decline" },
+      ]
+    );
+    if (choice?.choiceId !== "apply") return { ok: true };
+    for (const card of eligibleCards) {
+      const moved = services.moveCardToPlayerZone(
+        state,
+        card,
+        player,
+        player.hand,
+        `${player.playerId}.hand`,
+        "return_discard_to_hand",
+        source
+      );
+      if (!moved) {
+        return {
+          ok: false,
+          error: `Cannot return discard card ${card.instanceId} to hand`,
+        };
+      }
+    }
+    recordGameEvent(state, {
+      type: "effectCardsReturnedToHand",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId: "return_discard_to_hand",
+      amount: eligibleCards.length,
+      sourceType: source.sourceType,
+    });
+    return { ok: true };
+  }
   const choice = services.chooseEffectChoice(
     state,
     player,
@@ -857,7 +1074,7 @@ function buildDiscardReturnChoices(
   return choices;
 }
 
-function chooseCardCombinations(
+export function chooseCardCombinations(
   cards: readonly CardInstance[],
   amount: number,
   startIndex = 0
@@ -874,6 +1091,93 @@ function chooseCardCombinations(
   return combinations;
 }
 
+export function destroyOwnedCard(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): EffectExecutionResult {
+  const destination = services.getDestroyDestination(state, card);
+  if (!destination.ok) return destination;
+  const moved = services.moveCardToZonePreservingOwner(
+    state,
+    player,
+    card,
+    destination.zone,
+    destination.zoneName,
+    effectId,
+    source
+  );
+  if (!moved) {
+    return {
+      ok: false,
+      error: `Cannot destroy card ${card.instanceId}`,
+    };
+  }
+  removeTemporaryCardControl(state, card.instanceId);
+  recordGameEvent(state, {
+    type: "effectCardDestroyed",
+    playerId: player.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    targetCardInstanceId: card.instanceId,
+    targetDefinitionId: card.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+  return { ok: true };
+}
+
+export function destroyTopMainDeckCard(
+  state: GameState,
+  player: PlayerState,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): { ok: true; card: CardInstance | undefined } | { ok: false; error: string } {
+  const card = peekMainDeckCard(state);
+  if (card === undefined) {
+    recordGameEvent(state, {
+      type: "effectDestroyTopMainDeckSkipped",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+    return { ok: true, card: undefined };
+  }
+
+  const destination = services.getDestroyDestination(state, card);
+  if (!destination.ok) return destination;
+  const moved = services.moveCardToZonePreservingOwner(
+    state,
+    player,
+    card,
+    destination.zone,
+    destination.zoneName,
+    effectId,
+    source
+  );
+  if (!moved) {
+    return { ok: false, error: `Cannot destroy card ${card.instanceId}` };
+  }
+
+  recordGameEvent(state, {
+    type: "effectTopMainDeckCardDestroyed",
+    playerId: player.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    targetCardInstanceId: card.instanceId,
+    targetDefinitionId: card.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+  return { ok: true, card };
+}
+
 const destroyOwnCardsHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"destroy_own_cards">
 > = {
@@ -888,6 +1192,51 @@ const destroyOwnCardsHandler: EffectRuntimeHandler<
     const candidates = sourceZones.flatMap((zone) =>
       zone === "hand" ? player.hand : player.discard
     );
+    if (effect.repeatUntilDeclined) {
+      let available = [...candidates];
+      while (available.length > 0) {
+        const choices: EffectChoice[] = [
+          { choiceKind: "option", choiceId: "decline" },
+          ...available.map(
+            (card): EffectChoice => ({
+              choiceKind: "cardTarget",
+              choiceId: `destroy_${card.instanceId}`,
+              cards: [card],
+              amount: 1,
+            })
+          ),
+        ];
+        const choice = services.chooseEffectChoice(
+          state,
+          player,
+          source,
+          effect.effectId,
+          choices
+        );
+        if (choice?.choiceKind !== "cardTarget") return { ok: true };
+        const card = choice.cards[0];
+        if (card === undefined || !available.includes(card)) {
+          return {
+            ok: false,
+            error: "Selected card is no longer available for destruction",
+          };
+        }
+        const destroyed = destroyOwnedCard(
+          state,
+          player,
+          card,
+          effect.effectId,
+          source,
+          services
+        );
+        if (!destroyed.ok) return destroyed;
+        available = available.filter(
+          (candidate) => candidate.instanceId !== card.instanceId
+        );
+      }
+      return { ok: true };
+    }
+
     const amount = Math.min(effect.amount ?? 1, candidates.length);
     const choices: EffectChoice[] = [
       { choiceKind: "option", choiceId: "decline" },
@@ -923,33 +1272,15 @@ const destroyOwnCardsHandler: EffectRuntimeHandler<
           error: `Selected card ${card.instanceId} is no longer available for destruction`,
         };
       }
-      const destination = services.getDestroyDestination(state, card);
-      if (!destination.ok) return destination;
-      const moved = services.moveCardToZonePreservingOwner(
+      const destroyed = destroyOwnedCard(
         state,
         player,
         card,
-        destination.zone,
-        destination.zoneName,
         effect.effectId,
-        source
+        source,
+        services
       );
-      if (!moved) {
-        return {
-          ok: false,
-          error: `Cannot destroy card ${card.instanceId}`,
-        };
-      }
-      recordGameEvent(state, {
-        type: "effectCardDestroyed",
-        playerId: player.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        targetCardInstanceId: card.instanceId,
-        targetDefinitionId: card.definitionId,
-        effectId: effect.effectId,
-        sourceType: source.sourceType,
-      });
+      if (!destroyed.ok) return destroyed;
     }
     return { ok: true };
   },
@@ -1038,6 +1369,287 @@ const revealTopCardHandler: EffectRuntimeHandler<
       destination: "hand",
       sourceType: source.sourceType,
     });
+    return { ok: true };
+  },
+};
+
+type RevealedTopCardDestructionChoice =
+  | { ok: true; card: undefined }
+  | {
+      ok: true;
+      card: CardInstance;
+      definition: CardDefinition;
+      shouldDestroy: boolean;
+    }
+  | { ok: false; error: string };
+
+export function chooseRevealedTopCardForDestruction(
+  state: GameState,
+  player: PlayerState,
+  source: EffectSourceContext,
+  effectId: RuntimeEffectId,
+  services: EffectRuntimeServices
+): RevealedTopCardDestructionChoice {
+  const card = services.peekTopDeckCard(player, state);
+  if (card === undefined) {
+    recordGameEvent(state, {
+      type: "effectRevealSkipped",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+    return { ok: true, card: undefined };
+  }
+
+  recordGameEvent(state, {
+    type: "effectCardRevealed",
+    playerId: player.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    targetCardInstanceId: card.instanceId,
+    targetDefinitionId: card.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+
+  const definition = state.cardDefinitions.get(card.definitionId);
+  if (definition === undefined) {
+    return {
+      ok: false,
+      error: `Missing revealed card definition ${card.definitionId}`,
+    };
+  }
+
+  const choice = services.chooseEffectChoice(state, player, source, effectId, [
+    { choiceKind: "option", choiceId: "decline" },
+    {
+      choiceKind: "cardTarget",
+      choiceId: `destroy_${card.instanceId}`,
+      cards: [card],
+      amount: 1,
+    },
+  ]);
+
+  return {
+    ok: true,
+    card,
+    definition,
+    shouldDestroy: choice?.choiceId === `destroy_${card.instanceId}`,
+  };
+}
+
+const revealTopCardChooseDestroyOrPowerHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"reveal_top_card_choose_destroy_or_power">
+> = {
+  effectId: "reveal_top_card_choose_destroy_or_power",
+  execute(state, player, _effect, source, services) {
+    const choice = chooseRevealedTopCardForDestruction(
+      state,
+      player,
+      source,
+      "reveal_top_card_choose_destroy_or_power",
+      services
+    );
+    if (!choice.ok) return choice;
+    if (choice.card === undefined) return { ok: true };
+    if (choice.shouldDestroy) {
+      return destroyOwnedCard(
+        state,
+        player,
+        choice.card,
+        "reveal_top_card_choose_destroy_or_power",
+        source,
+        services
+      );
+    }
+
+    const powerBefore = state.turn.power;
+    state.turn.power += calculateEffectiveCardCost(
+      state,
+      player.playerId,
+      choice.definition,
+      choice.card,
+      cardMatchesTypeForPlayer
+    );
+    recordTurnPowerChanged(
+      state,
+      player,
+      source,
+      "reveal_top_card_choose_destroy_or_power",
+      powerBefore,
+      state.turn.power
+    );
+    return { ok: true };
+  },
+};
+
+const revealTopCardChooseDestroyOrAttackEqualCostHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"reveal_top_card_choose_destroy_or_attack_equal_cost">
+> = {
+  effectId: "reveal_top_card_choose_destroy_or_attack_equal_cost",
+  execute(state, player, effect, source, services) {
+    const choice = chooseRevealedTopCardForDestruction(
+      state,
+      player,
+      source,
+      "reveal_top_card_choose_destroy_or_attack_equal_cost",
+      services
+    );
+    if (!choice.ok) return choice;
+    if (choice.card === undefined) return { ok: true };
+    if (choice.shouldDestroy) {
+      return destroyOwnedCard(
+        state,
+        player,
+        choice.card,
+        "reveal_top_card_choose_destroy_or_attack_equal_cost",
+        source,
+        services
+      );
+    }
+
+    const amount = calculateEffectiveCardCost(
+      state,
+      player.playerId,
+      choice.definition,
+      choice.card,
+      cardMatchesTypeForPlayer
+    );
+
+    const attackProfileResult = services.collectAttackReplacementProfile(
+      state,
+      player,
+      source
+    );
+    if (attackProfileResult.status !== "resolved") {
+      return {
+        ok: false,
+        error:
+          attackProfileResult.status === "error"
+            ? attackProfileResult.error
+            : "Attack replacement profile was not applicable",
+      };
+    }
+
+    return services.resolvePlayerControlledAttack({
+      state,
+      attackingPlayer: player,
+      source,
+      effectId: effect.effectId,
+      unavoidable: attackProfileResult.result.unavoidable,
+      attackProfile: attackProfileResult.result,
+      targetPlan: { kind: "runtimeSelector", effect },
+      impact: {
+        kind: "damage",
+        baseAmount: amount,
+        sourceOwnerModifierAmount: attackProfileResult.result.damageBonus,
+        onDamageDealt: [],
+        onKill: [],
+      },
+    });
+  },
+};
+
+const destroyTopMainDeckCardsThenOptionalPlayMayhemHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"destroy_top_main_deck_cards_then_optional_play_mayhem">
+> = {
+  effectId: "destroy_top_main_deck_cards_then_optional_play_mayhem",
+  execute(state, player, effect, source, services) {
+    const destroyedMayhemCards: CardInstance[] = [];
+    for (let index = 0; index < effect.amount; index += 1) {
+      const result = destroyTopMainDeckCard(
+        state,
+        player,
+        effect.effectId,
+        source,
+        services
+      );
+      if (!result.ok) return result;
+      if (result.card === undefined) continue;
+      const definition = state.cardDefinitions.get(result.card.definitionId);
+      if (definition === undefined) {
+        return {
+          ok: false,
+          error: `Missing destroyed card definition ${result.card.definitionId}`,
+        };
+      }
+      if (definition.engine.cardKind === "mayhem") {
+        destroyedMayhemCards.push(result.card);
+      }
+    }
+
+    if (destroyedMayhemCards.length === 0) return { ok: true };
+
+    const choices: EffectChoice[] = [
+      { choiceKind: "option", choiceId: "decline" },
+      ...destroyedMayhemCards.map((card) => ({
+        choiceKind: "cardTarget" as const,
+        choiceId: card.instanceId,
+        cards: [card],
+        amount: 1,
+      })),
+    ];
+    const choice = services.chooseEffectChoice(
+      state,
+      player,
+      source,
+      effect.effectId,
+      choices
+    );
+    if (choice?.choiceKind !== "cardTarget") return { ok: true };
+
+    const chosenMayhem = destroyedMayhemCards.find(
+      (card) => card.instanceId === choice.cards[0]?.instanceId
+    );
+    if (chosenMayhem === undefined) {
+      return {
+        ok: false,
+        error: "Chosen Mayhem disappeared before resolution",
+      };
+    }
+    const mayhemDefinition = state.cardDefinitions.get(
+      chosenMayhem.definitionId
+    );
+    if (mayhemDefinition === undefined) {
+      return {
+        ok: false,
+        error: `Missing chosen Mayhem definition ${chosenMayhem.definitionId}`,
+      };
+    }
+
+    const mayhemResult = services.executeMayhemEffects(
+      state,
+      player,
+      mayhemDefinition,
+      {
+        ...source,
+        cardInstanceId: chosenMayhem.instanceId,
+        definitionId: chosenMayhem.definitionId,
+        playerControlledAttackPlayerId: player.playerId,
+      }
+    );
+    if (!mayhemResult.ok || mayhemResult.gameEnd !== undefined) {
+      return mayhemResult;
+    }
+    recordGameEvent(state, {
+      type: "mayhemResolved",
+      playerId: player.playerId,
+      cardInstanceId: chosenMayhem.instanceId,
+      definitionId: chosenMayhem.definitionId,
+    });
+
+    const powerBefore = state.turn.power;
+    state.turn.power += effect.mayhemBonusPower;
+    recordTurnPowerChanged(
+      state,
+      player,
+      source,
+      effect.effectId,
+      powerBefore,
+      state.turn.power
+    );
     return { ok: true };
   },
 };
@@ -1146,6 +1758,163 @@ const playTopCardFromFoeDeckHandler: EffectRuntimeHandler<
   },
 };
 
+export function executeRevealAndPlayFoeDeckCard(
+  state: GameState,
+  player: PlayerState,
+  foe: PlayerState,
+  effect: RuntimeEffectForId<"attack_reveal_and_play_foe_deck_card">,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): EffectExecutionResult {
+  const revealedCards: CardInstance[] = [];
+  for (let index = 0; index < effect.amount; index += 1) {
+    const card = foe.deck[0];
+    if (card === undefined) {
+      break;
+    }
+    const moved = services.moveCardToZonePreservingOwner(
+      state,
+      player,
+      card,
+      foe.discard,
+      `${foe.playerId}.discard`,
+      effect.effectId,
+      source
+    );
+    if (!moved) {
+      return {
+        ok: false,
+        error: `Cannot reveal foe deck card ${card.instanceId}`,
+      };
+    }
+    revealedCards.push(card);
+  }
+  for (const card of revealedCards) {
+    recordGameEvent(state, {
+      type: "effectCardRevealed",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      targetCardInstanceId: card.instanceId,
+      targetDefinitionId: card.definitionId,
+      effectId: effect.effectId,
+      sourceType: source.sourceType,
+    });
+  }
+
+  const ownerDiscardDestination = `${foe.playerId}.discard`;
+  const cleanup = (): EffectExecutionResult => {
+    for (const card of revealedCards) {
+      const location = findCardLocation(state, card.instanceId);
+      if (location === undefined) {
+        const restored = services.restoreDetachedCardToZone(
+          state,
+          player,
+          card,
+          ownerDiscardDestination,
+          effect.effectId,
+          source
+        );
+        if (!restored) {
+          return {
+            ok: false,
+            error: `Cannot restore detached revealed foe card ${card.instanceId}`,
+          };
+        }
+        removeTemporaryCardControl(state, card.instanceId);
+        continue;
+      }
+      if (location.zoneName !== ownerDiscardDestination) {
+        const moved = services.moveCardToZonePreservingOwner(
+          state,
+          player,
+          card,
+          foe.discard,
+          ownerDiscardDestination,
+          effect.effectId,
+          source
+        );
+        if (!moved) {
+          return {
+            ok: false,
+            error: `Cannot discard revealed foe card ${card.instanceId}`,
+          };
+        }
+      }
+      removeTemporaryCardControl(state, card.instanceId);
+    }
+    return { ok: true };
+  };
+
+  if (revealedCards.length === 0) {
+    return cleanup();
+  }
+
+  const choice = services.chooseEffectChoice(
+    state,
+    player,
+    source,
+    effect.effectId,
+    revealedCards.map((card) => ({
+      choiceKind: "cardTarget" as const,
+      choiceId: card.instanceId,
+      cards: [card],
+      amount: 0,
+    }))
+  );
+  const selectedCard =
+    choice?.choiceKind === "cardTarget"
+      ? revealedCards.find((card) => card.instanceId === choice.choiceId)
+      : undefined;
+
+  if (selectedCard === undefined) {
+    const cleanupResult = cleanup();
+    if (!cleanupResult.ok) return cleanupResult;
+    return {
+      ok: false,
+      error: "Foe deck reveal requires choosing one revealed card to play",
+    };
+  }
+
+  let playedResult: EffectExecutionResult = { ok: true };
+  const removed = removeCardFromLocation(state, selectedCard.instanceId);
+  if (removed === undefined) {
+    playedResult = {
+      ok: false,
+      error: `Cannot play revealed foe card ${selectedCard.instanceId}`,
+    };
+  }
+  const ownerDiscard = {
+    zone: "ownerDiscardAfterResolution" as const,
+    ownerId: foe.playerId,
+  };
+  if (removed !== undefined) {
+    playedResult = services.playResolvedCard(state, player, selectedCard, {
+      nonOngoingDestination: ownerDiscard,
+      forceOngoingDiscard: ownerDiscard,
+    });
+  }
+  if (playedResult.ok) {
+    recordGameEvent(state, {
+      type: "effectFoeDeckCardPlayed",
+      playerId: player.playerId,
+      targetPlayerId: foe.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      targetCardInstanceId: selectedCard.instanceId,
+      targetDefinitionId: selectedCard.definitionId,
+      effectId: effect.effectId,
+      sourceType: source.sourceType,
+    });
+  }
+
+  const cleanupResult = cleanup();
+  if (!cleanupResult.ok) {
+    return cleanupResult;
+  }
+  return playedResult;
+}
+
 const returnDiscardToHandHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"return_discard_to_hand">
 > = {
@@ -1163,6 +1932,7 @@ const returnDiscardToHandHandler: EffectRuntimeHandler<
           : { cardTypes: effect.cardTypes }),
         excludeSource: effect.excludeSource === true,
         required: effect.required === true,
+        allMatching: effect.allMatching === true,
       }
     );
   },
@@ -1217,7 +1987,7 @@ export function createCardOwnershipChoiceEffectDefinitions(
       supportedTimings: immediateEffectTimings,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["card", "wizardProperty"],
-      handler: createUnsupportedEffectHandler("discard_hand_then_draw_cards"),
+      handler: discardHandThenDrawCardsHandler,
     },
     {
       effectId: "destroy_card",
@@ -1258,6 +2028,36 @@ export function createCardOwnershipChoiceEffectDefinitions(
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["card"],
       handler: revealTopCardHandler,
+    },
+    {
+      effectId: "reveal_top_card_choose_destroy_or_power",
+      decoder: bindRuntimeEffectDecoder(
+        "reveal_top_card_choose_destroy_or_power"
+      ),
+      supportedTimings: ["onPlay"] as const,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: revealTopCardChooseDestroyOrPowerHandler,
+    },
+    {
+      effectId: "reveal_top_card_choose_destroy_or_attack_equal_cost",
+      decoder: bindRuntimeEffectDecoder(
+        "reveal_top_card_choose_destroy_or_attack_equal_cost"
+      ),
+      supportedTimings: ["onPlay"] as const,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: revealTopCardChooseDestroyOrAttackEqualCostHandler,
+    },
+    {
+      effectId: "destroy_top_main_deck_cards_then_optional_play_mayhem",
+      decoder: bindRuntimeEffectDecoder(
+        "destroy_top_main_deck_cards_then_optional_play_mayhem"
+      ),
+      supportedTimings: ["onPlay"] as const,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: destroyTopMainDeckCardsThenOptionalPlayMayhemHandler,
     },
     {
       effectId: "play_top_card",

@@ -132,6 +132,7 @@ export interface EffectSourceContext {
   runtimeMode: EffectRuntimeMode;
   playerId: PlayerState["playerId"];
   currentAttackerPlayerId?: PlayerState["playerId"];
+  playerControlledAttackPlayerId?: PlayerState["playerId"];
   cardInstanceId: string;
   definitionId: string;
   tokenInstanceId?: TokenInstance["instanceId"];
@@ -327,6 +328,15 @@ export interface EffectRuntimeServices {
     source: EffectSourceContext,
     placeOnTop?: boolean
   ): boolean;
+  restoreDetachedCardToZone(
+    state: GameState,
+    player: PlayerState,
+    card: CardInstance,
+    destinationZone: string,
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext,
+    placeOnTop?: boolean
+  ): boolean;
   discardTopDeckCards(
     state: GameState,
     player: PlayerState,
@@ -464,6 +474,11 @@ export interface EffectRuntimeServices {
     effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): EffectExecutionResult;
+  collectAttackReplacementProfile(
+    state: GameState,
+    attackingPlayer: PlayerState,
+    source: EffectSourceContext
+  ): EffectRuntimeOperationResult<AttackReplacementProfile>;
   resolvePlayerControlledAttack(
     intent: PlayerControlledAttackIntent
   ): EffectExecutionResult;
