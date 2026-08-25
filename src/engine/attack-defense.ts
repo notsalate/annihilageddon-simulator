@@ -343,6 +343,9 @@ export function resolveDefenseWindow(
     sourceType: "card",
     runtimeMode: state.runtimeMode,
     playerId: defendingPlayer.playerId,
+    ...(attack.kind === "redirectable"
+      ? { currentAttackerPlayerId: attack.attackingPlayer.playerId }
+      : {}),
     cardInstanceId: defense.card.instanceId,
     definitionId: defense.card.definitionId,
   };

@@ -53,6 +53,12 @@ export type GainCardRuntimeEffect = EffectWithOptionalTiming<"gain_card"> &
 export type DiscardCardRuntimeEffect =
   EffectWithOptionalTiming<"discard_card"> &
     Targetable & { emptyChoice?: "fail" };
+export type DiscardRandomHandCardsRuntimeEffect =
+  EffectWithOptionalTiming<"discard_random_hand_cards"> & {
+    amount: number;
+    targetSelector: "chosenFoe";
+    rng: "seeded";
+  };
 export type DiscardSelfRuntimeEffect = EffectWithOptionalTiming<"discard_self">;
 export type DiscardHandThenDrawCardsRuntimeEffect =
   EffectWithOptionalTiming<"discard_hand_then_draw_cards"> & {
@@ -136,6 +142,7 @@ export type OnGainSelfGainLimpWandsRuntimeEffect = {
 export interface CardOwnershipChoiceEffectPayloadMap {
   gain_card: GainCardRuntimeEffect;
   discard_card: DiscardCardRuntimeEffect;
+  discard_random_hand_cards: DiscardRandomHandCardsRuntimeEffect;
   discard_self: DiscardSelfRuntimeEffect;
   discard_hand_then_draw_cards: DiscardHandThenDrawCardsRuntimeEffect;
   destroy_card: DestroyCardRuntimeEffect;
@@ -154,6 +161,7 @@ export interface CardOwnershipChoiceEffectPayloadMap {
 export type CardOwnershipChoiceEffectId =
   | "gain_card"
   | "discard_card"
+  | "discard_random_hand_cards"
   | "discard_self"
   | "discard_hand_then_draw_cards"
   | "destroy_card"
@@ -170,6 +178,7 @@ export type CardOwnershipChoiceEffectId =
 export const cardOwnershipChoiceEffectIds = [
   "gain_card",
   "discard_card",
+  "discard_random_hand_cards",
   "discard_self",
   "discard_hand_then_draw_cards",
   "destroy_card",
@@ -269,6 +278,13 @@ export function createCardOwnershipChoiceEffectDecoders(
       },
       requireNestedTargetSelector("discard", "activePlayerHandCard")
     ),
+    discard_random_hand_cards: defineDecoder("discard_random_hand_cards", {
+      effectId: required(literal("discard_random_hand_cards")),
+      timing: optionalTiming,
+      amount: required(positiveInteger),
+      targetSelector: required(literal("chosenFoe")),
+      rng: required(literal("seeded")),
+    }),
     discard_self: defineDecoder("discard_self", {
       effectId: required(literal("discard_self")),
       timing: optionalTiming,
@@ -617,6 +633,64 @@ const discardCardHandler: EffectRuntimeHandler<
       effectId: effect.effectId,
       sourceType: source.sourceType,
     });
+    return { ok: true };
+  },
+};
+
+const discardRandomHandCardsHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"discard_random_hand_cards">
+> = {
+  effectId: "discard_random_hand_cards",
+  execute(state, player, effect, source, services) {
+    const targetResult = services.resolveTargetChoice(
+      state,
+      player,
+      effect,
+      source
+    );
+    if (!targetResult.ok) return targetResult;
+    if (targetResult.choice === undefined) return { ok: true };
+    if (targetResult.choice.choiceType !== "player") {
+      return {
+        ok: false,
+        error: "Random hand discard requires a player target",
+      };
+    }
+
+    const targetPlayer = targetResult.choice.player;
+    for (let index = 0; index < effect.amount; index += 1) {
+      if (targetPlayer.hand.length === 0) break;
+      const card =
+        targetPlayer.hand[state.rng.nextInt(targetPlayer.hand.length)];
+      if (card === undefined) break;
+      const moved = services.moveCardToPlayerZone(
+        state,
+        card,
+        targetPlayer,
+        targetPlayer.discard,
+        `${targetPlayer.playerId}.discard`,
+        effect.effectId,
+        source
+      );
+      if (!moved) {
+        return {
+          ok: false,
+          error: `Cannot move card ${card.instanceId}`,
+        };
+      }
+
+      recordGameEvent(state, {
+        type: "effectCardDiscarded",
+        playerId: player.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        targetCardInstanceId: card.instanceId,
+        targetDefinitionId: card.definitionId,
+        effectId: effect.effectId,
+        sourceType: source.sourceType,
+      });
+    }
+
     return { ok: true };
   },
 };
@@ -1105,6 +1179,14 @@ export function createCardOwnershipChoiceEffectDefinitions(
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["card", "wizardProperty"],
       handler: discardCardHandler,
+    },
+    {
+      effectId: "discard_random_hand_cards",
+      decoder: bindRuntimeEffectDecoder("discard_random_hand_cards"),
+      supportedTimings: ["onPlay"] as const,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: discardRandomHandCardsHandler,
     },
     {
       effectId: "discard_self",

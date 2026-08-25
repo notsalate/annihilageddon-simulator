@@ -21,6 +21,7 @@ export type {
 export type {
   CardOwnershipChoiceEffectPayloadMap,
   DiscardCardRuntimeEffect,
+  DiscardRandomHandCardsRuntimeEffect,
   DiscardHandThenDrawCardsRuntimeEffect,
   DiscardSelfRuntimeEffect,
   DestroyCardRuntimeEffect,
@@ -147,6 +148,7 @@ export type RuntimeEffectTargetSelector =
   | "chosenFoe"
   | "chosenLeftOrRightFoe"
   | "chosenPlayer"
+  | "currentAttacker"
   | "eachFoe"
   | "eachPlayerClockwiseFromActive"
   | "leftOrRightFoe"
@@ -259,6 +261,7 @@ export const knownRuntimeEffectIds = [
   "destroyed_card_kind_is",
   "directional_chain_attack",
   "discard_card",
+  "discard_random_hand_cards",
   "discard_hand_then_draw_cards",
   "discard_self",
   "draw_cards",
@@ -961,6 +964,7 @@ export function isRuntimeEffectTargetSelector(
     value === "chosenFoe" ||
     value === "chosenLeftOrRightFoe" ||
     value === "chosenPlayer" ||
+    value === "currentAttacker" ||
     value === "eachFoe" ||
     value === "eachPlayerClockwiseFromActive" ||
     value === "leftOrRightFoe" ||

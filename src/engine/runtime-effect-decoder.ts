@@ -180,6 +180,7 @@ const targetSelector: ValueDecoder<RuntimeEffectTargetSelector> = oneOf([
   "chosenFoe",
   "chosenLeftOrRightFoe",
   "chosenPlayer",
+  "currentAttacker",
   "eachFoe",
   "eachPlayerClockwiseFromActive",
   "leftOrRightFoe",
@@ -790,7 +791,11 @@ const runtimeEffectDecoders: {
       target: optionalTarget,
       targetSelector: optionalTargetSelector,
     },
-    requireTargetSelector("damage", ["opponentPlayer", "activePlayer"])
+    requireTargetSelector("damage", [
+      "opponentPlayer",
+      "activePlayer",
+      "currentAttacker",
+    ])
   ),
   ...cardOwnershipChoiceEffectDecoders,
   ...cardTypeEffectDecoders,

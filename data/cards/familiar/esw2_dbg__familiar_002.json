@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__familiar_002",
+  "source": {
+    "draft": "data/import/cards/familiar/drafts/esw2_dbg__familiar_002.json",
+    "image": "assets/cards/familiar/Фамильяр. Зожложники.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_002.md"
+  },
+  "visible": {
+    "nameRu": "Зожложники",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "textRu": "+3 мощи\nВыбранный враг сбрасывает случайную карту.\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, возьми 1 карту и нанеси 6 урона атакующему.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "cost": 6,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 3 },
+      {
+        "effectId": "discard_random_hand_cards",
+        "timing": "onPlay",
+        "amount": 1,
+        "targetSelector": "chosenFoe",
+        "rng": "seeded"
+      },
+      {
+        "effectId": "avoid_attack",
+        "timing": "onDefense",
+        "destination": "discardSelf",
+        "branchEffects": [
+          { "effectId": "draw_cards", "timing": "onDefense", "amount": 1 },
+          {
+            "effectId": "deal_damage",
+            "timing": "onDefense",
+            "amount": 6,
+            "targetSelector": "currentAttacker"
+          }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}
