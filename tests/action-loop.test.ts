@@ -13561,6 +13561,364 @@ test("ЖДК 010 даёт врагам по очереди передавать 
   );
 });
 
+test("ЖДК 008 сначала спрашивает effective Legend для каждого Фамильяра", () => {
+  const state = initializeGame({
+    rootDir,
+    playerCount: 2,
+    seed: 310008,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_003");
+  assert.ok(property);
+  replaceFirstWizardProperty(state, player, property);
+  player.hand = [];
+  player.deck = [];
+  player.discard = [];
+  player.playedThisTurn = [];
+  player.permanents = [];
+  player.effectiveCardTypeSelections = [];
+
+  const deckCard = createRuntimeCardInstance(
+    player,
+    "esw2_dbg__main_001",
+    "dwt008-deck"
+  );
+  const realLegend = createRuntimeCardInstance(
+    player,
+    "esw2_dbg__legend_001",
+    "dwt008-real-legend"
+  );
+  const selectedFamiliar = createRuntimeCardInstance(
+    player,
+    "esw2_dbg__familiar_007",
+    "dwt008-selected-familiar"
+  );
+  const declinedFamiliar = createRuntimeCardInstance(
+    player,
+    "esw2_dbg__familiar_009",
+    "dwt008-declined-familiar"
+  );
+  const ordinaryCard = createRuntimeCardInstance(
+    player,
+    "esw2_dbg__main_001",
+    "dwt008-ordinary"
+  );
+  player.deck = [deckCard];
+  player.hand = [realLegend, selectedFamiliar, declinedFamiliar, ordinaryCard];
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt008"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_008"),
+      ownerId: "common",
+    },
+  ];
+
+  const expectedDeck = [deckCard, realLegend, selectedFamiliar];
+  const expectedRng = state.rng.fork();
+  shuffleDeck(expectedDeck, expectedRng);
+  const expectedNextRandomValue = expectedRng.next();
+  const choiceEvents: string[] = [];
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId !== "dead_wizard_token_shuffle_hand_legends") {
+      return undefined;
+    }
+    const selectedCardId =
+      choiceEvents.length === 0
+        ? selectedFamiliar.instanceId
+        : declinedFamiliar.instanceId;
+    choiceEvents.push(selectedCardId);
+    if (selectedCardId === declinedFamiliar.instanceId) {
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === "decline")
+      );
+    }
+    const selectedChoice = choices.find(
+      (choice) =>
+        choice.choiceKind === "cardTarget" &&
+        choice.targetCardInstanceIds.includes(selectedCardId)
+    );
+    return toChoiceSelection(
+      selectedChoice ?? choices.find((choice) => choice.choiceId === "decline")
+    );
+  };
+
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+
+  assert.deepEqual(choiceEvents, [
+    selectedFamiliar.instanceId,
+    declinedFamiliar.instanceId,
+  ]);
+  assert.deepEqual(player.deck, expectedDeck);
+  assert.equal(player.hand.includes(realLegend), false);
+  assert.equal(player.hand.includes(selectedFamiliar), false);
+  assert.equal(player.hand.includes(declinedFamiliar), true);
+  assert.equal(player.hand.includes(ordinaryCard), true);
+  assert.equal(realLegend.ownerId, player.playerId);
+  assert.equal(selectedFamiliar.ownerId, player.playerId);
+  assert.equal(state.rng.fork().next(), expectedNextRandomValue);
+  assertEventOrder(state, [
+    (event) =>
+      event.type === "effectChoiceSelected" &&
+      event.effectId === "dead_wizard_token_shuffle_hand_legends" &&
+      event.targetCardInstanceId === selectedFamiliar.instanceId,
+    (event) =>
+      event.type === "effectChoiceSelected" &&
+      event.effectId === "dead_wizard_token_shuffle_hand_legends" &&
+      event.choiceId === "decline" &&
+      event.choiceIds.includes(
+        `count_as_legend_${declinedFamiliar.instanceId}`
+      ),
+    (event) =>
+      event.type === "cardMoved" &&
+      event.cardInstanceId === realLegend.instanceId &&
+      event.destinationZone === `${player.playerId}.deck`,
+  ]);
+});
+
+test("ЖДК 008 не расходует RNG при пустом выборе легенд", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 3100081,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_003");
+  assert.ok(property);
+  replaceFirstWizardProperty(state, player, property);
+  player.hand = [
+    createRuntimeCardInstance(
+      player,
+      "esw2_dbg__familiar_007",
+      "dwt008-empty-selection"
+    ),
+  ];
+  const deckBefore = player.deck.slice();
+  const expectedNextRandomValue = state.rng.fork().next();
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt008-empty"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_008"),
+      ownerId: "common",
+    },
+  ];
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "dead_wizard_token_shuffle_hand_legends"
+      ? toChoiceSelection(
+          choices.find((choice) => choice.choiceId === "decline")
+        )
+      : undefined;
+
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+
+  assert.deepEqual(player.deck, deckBefore);
+  assert.equal(state.rng.fork().next(), expectedNextRandomValue);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "cardMoved" &&
+        event.effectId === "dead_wizard_token_shuffle_hand_legends"
+    ),
+    false
+  );
+});
+
+test("ЖДК 009 замешивает только свои активные постоянки", () => {
+  const state = initializeGame({
+    rootDir,
+    playerCount: 3,
+    seed: 310009,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const foreignOwner = getOpponentsInSeatingOrder(state, player)[0];
+  assert.ok(foreignOwner);
+  player.permanents = [];
+  player.deck = [];
+  player.hand = [];
+  player.discard = [];
+  const ownPermanent = createRuntimeCardInstance(
+    player,
+    "esw2_dbg__main_011",
+    "dwt009-own-permanent"
+  );
+  const foreignPermanent = createRuntimeCardInstance(
+    foreignOwner,
+    "esw2_dbg__main_005",
+    "dwt009-foreign-permanent"
+  );
+  const deckCard = createRuntimeCardInstance(
+    player,
+    "esw2_dbg__main_001",
+    "dwt009-deck"
+  );
+  player.permanents = [ownPermanent];
+  foreignOwner.permanents = [foreignPermanent];
+  player.deck = [deckCard];
+  state.turn.temporaryCardControls = [
+    { cardInstanceId: ownPermanent.instanceId, controllerId: player.playerId },
+    {
+      cardInstanceId: foreignPermanent.instanceId,
+      controllerId: player.playerId,
+    },
+  ];
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt009"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_009"),
+      ownerId: "common",
+    },
+  ];
+
+  const expectedDeck = [deckCard, ownPermanent];
+  const expectedRng = state.rng.fork();
+  shuffleDeck(expectedDeck, expectedRng);
+  const expectedNextRandomValue = expectedRng.next();
+
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+
+  assert.deepEqual(player.deck, expectedDeck);
+  assert.equal(player.permanents.includes(ownPermanent), false);
+  assert.equal(foreignOwner.permanents.includes(foreignPermanent), true);
+  assert.equal(ownPermanent.ownerId, player.playerId);
+  assert.equal(foreignPermanent.ownerId, foreignOwner.playerId);
+  assert.equal(
+    state.turn.temporaryCardControls.some(
+      (control) => control.cardInstanceId === ownPermanent.instanceId
+    ),
+    false
+  );
+  assert.equal(
+    state.turn.temporaryCardControls.some(
+      (control) => control.cardInstanceId === foreignPermanent.instanceId
+    ),
+    true
+  );
+  assert.equal(state.rng.fork().next(), expectedNextRandomValue);
+});
+
+test("ЖДК 011 сначала собирает решения врагов, затем требует сбросить точное число карт", () => {
+  const state = initializeGame({
+    rootDir,
+    playerCount: 4,
+    seed: 310011,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const foes = getOpponentsInSeatingOrder(state, player);
+  const firstFoe = foes[0];
+  const secondFoe = foes[1];
+  const thirdFoe = foes[2];
+  assert.ok(firstFoe);
+  assert.ok(secondFoe);
+  assert.ok(thirdFoe);
+  player.hand = [
+    createRuntimeCardInstance(player, "esw2_dbg__main_001", "dwt011-first"),
+    createRuntimeCardInstance(player, "esw2_dbg__main_001", "dwt011-second"),
+  ];
+  const [firstCard, secondCard] = player.hand;
+  assert.ok(firstCard);
+  assert.ok(secondCard);
+  const chooserIds: string[] = [];
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt011"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_011"),
+      ownerId: "common",
+    },
+  ];
+  state.effectChoiceStrategy = ({ effectId, player: chooser, choices }) => {
+    if (effectId !== "dead_wizard_token_each_foe_optional_discard") {
+      return undefined;
+    }
+    chooserIds.push(chooser.playerId);
+    if (chooser.playerId === player.playerId) {
+      return toChoiceSelection(
+        choices.find(
+          (choice) =>
+            choice.choiceKind === "cardTarget" &&
+            choice.amount === 2 &&
+            choice.targetCardInstanceIds.includes(firstCard.instanceId) &&
+            choice.targetCardInstanceIds.includes(secondCard.instanceId)
+        )
+      );
+    }
+    return toChoiceSelection(
+      choices.find(
+        (choice) =>
+          choice.choiceId ===
+          (chooser.playerId === secondFoe.playerId ? "decline" : "apply")
+      )
+    );
+  };
+
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+
+  assert.deepEqual(chooserIds, [
+    firstFoe.playerId,
+    secondFoe.playerId,
+    thirdFoe.playerId,
+    player.playerId,
+  ]);
+  assert.equal(player.hand.length, 0);
+  assert.deepEqual(player.discard.slice(-2), [firstCard, secondCard]);
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.effectId === "dead_wizard_token_each_foe_optional_discard"
+      )
+      .map((event) => event.playerId),
+    [firstFoe.playerId, secondFoe.playerId, thirdFoe.playerId, player.playerId]
+  );
+});
+
+test("ЖДК 011 не создаёт выбор сброса при пустой руке получателя", () => {
+  const state = initializeGame({
+    rootDir,
+    playerCount: 3,
+    seed: 3100111,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  player.hand = [];
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt011-empty"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_011"),
+      ownerId: "common",
+    },
+  ];
+  const chooserIds: string[] = [];
+  state.effectChoiceStrategy = ({ effectId, player: chooser }) => {
+    if (effectId !== "dead_wizard_token_each_foe_optional_discard") {
+      return undefined;
+    }
+    chooserIds.push(chooser.playerId);
+    return { choiceId: "apply" };
+  };
+
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+
+  assert.deepEqual(
+    chooserIds,
+    getOpponentsInSeatingOrder(state, player).map((foe) => foe.playerId)
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "dead_wizard_token_each_foe_optional_discard" &&
+        event.playerId === player.playerId
+    ),
+    false
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectCardDiscarded" &&
+        event.effectId === "dead_wizard_token_each_foe_optional_discard"
+    ),
+    false
+  );
+});
+
 test("ЖДК 001 считает реальные и fixture-легенды в сбросе, но не превышает остаток стопки палочек", () => {
   const state = initializeGame({ rootDir, seed: 310001 });
   const player = mustGetPlayer(state, state.activePlayerId);

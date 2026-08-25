@@ -1024,7 +1024,7 @@ function buildDiscardReturnChoices(
   return choices;
 }
 
-function chooseCardCombinations(
+export function chooseCardCombinations(
   cards: readonly CardInstance[],
   amount: number,
   startIndex = 0
