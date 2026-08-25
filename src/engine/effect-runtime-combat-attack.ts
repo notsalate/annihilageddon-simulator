@@ -3,6 +3,7 @@ import { buildControlledObjectView } from "./control-ledger.js";
 import { countControlledCardsOfType } from "./card-type-runtime.js";
 import { recordGameEvent } from "./event-recorder.js";
 import { transferUpToLimpWandsToPlayer } from "./effect-runtime-special-card-stack.js";
+import { executeReturnDiscardToHand } from "./effect-runtime-cards-ownership-choice.js";
 import type {
   AttackReplacementProfile,
   DamageResult,
@@ -925,30 +926,13 @@ export function executeAttackOutcomeBranch(
   }
 
   if (branch.effectId === "return_discard_to_hand") {
-    const returnChoice = services.chooseEffectChoice(
+    return executeReturnDiscardToHand(
       state,
       player,
+      branch.amount,
       source,
-      "return_discard_to_hand",
-      buildDiscardReturnChoices(player.discard, branch.amount)
+      services
     );
-    const returned =
-      returnChoice?.choiceKind === "cardTarget" ? returnChoice.cards : [];
-    for (const card of returned) {
-      const index = player.discard.indexOf(card);
-      if (index >= 0) player.discard.splice(index, 1);
-    }
-    player.hand.push(...returned);
-    recordGameEvent(state, {
-      type: "effectCardsReturnedToHand",
-      playerId: player.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
-      effectId: "return_discard_to_hand",
-      amount: returned.length,
-      sourceType: source.sourceType,
-    });
-    return { ok: true };
   }
 
   if (branch.effectId === "transfer_limp_wands_to_killed_target") {
@@ -976,50 +960,6 @@ export function executeAttackOutcomeBranch(
     ok: false,
     error: `Unsupported attack branch ${services.asString(branch.effectId)}`,
   };
-}
-
-function buildDiscardReturnChoices(
-  discard: readonly CardInstance[],
-  maxAmount: number
-): EffectChoice[] {
-  const cappedAmount = Math.min(maxAmount, discard.length);
-  const choices: EffectChoice[] = [];
-  for (let amount = cappedAmount; amount >= 1; amount -= 1) {
-    for (const cards of chooseCardCombinations(discard, amount)) {
-      choices.push({
-        choiceKind: "cardTarget",
-        choiceId: `return_${amount}_${cards
-          .map((card) => card.instanceId)
-          .join("_")}`,
-        amount,
-        cards,
-      });
-    }
-  }
-  choices.push({
-    choiceKind: "cardTarget",
-    choiceId: "return_0",
-    amount: 0,
-    cards: [],
-  });
-  return choices;
-}
-
-function chooseCardCombinations(
-  cards: readonly CardInstance[],
-  amount: number,
-  startIndex = 0
-): CardInstance[][] {
-  if (amount === 0) return [[]];
-  const combinations: CardInstance[][] = [];
-  for (let index = startIndex; index <= cards.length - amount; index += 1) {
-    const card = cards[index];
-    if (card === undefined) continue;
-    for (const tail of chooseCardCombinations(cards, amount - 1, index + 1)) {
-      combinations.push([card, ...tail]);
-    }
-  }
-  return combinations;
 }
 
 type CombatAttackEffectDefinition<Id extends CombatAttackEffectId> = {

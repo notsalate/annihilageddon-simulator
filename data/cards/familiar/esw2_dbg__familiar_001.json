@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__familiar_001",
+  "source": {
+    "draft": "data/import/cards/familiar/drafts/esw2_dbg__familiar_001.json",
+    "image": "assets/cards/familiar/Фамильяр. Поехавший нотариус.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_001.md"
+  },
+  "visible": {
+    "nameRu": "Поехавший нотариус",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "textRu": "+3 мощи\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, посмотри верхнюю карту основной колоды.\nМожешь взять её на руку, если это не беспредел.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "cost": 6,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 3 },
+      {
+        "effectId": "avoid_attack",
+        "timing": "onDefense",
+        "destination": "discardSelf",
+        "branchEffects": [
+          {
+            "effectId": "reveal_top_card",
+            "timing": "onDefense",
+            "source": "mainDeck",
+            "optionalTakeToHand": true,
+            "excludeCardKind": "mayhem"
+          }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

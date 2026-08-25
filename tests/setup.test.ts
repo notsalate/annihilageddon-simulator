@@ -115,7 +115,7 @@ test("default setup choice policy records alwaysPickFirst", () => {
     (event) => event.type === "setupChoiceSelected"
   );
 
-  assert.equal(setupChoiceEvents.length, 2);
+  assert.equal(setupChoiceEvents.length, 4);
   for (const event of setupChoiceEvents) {
     const candidates = event.candidateDefinitionIds ?? [];
     const candidateInstanceIds = event.candidateInstanceIds ?? [];
@@ -469,7 +469,19 @@ test("incomplete current runtime skips familiar setup when its pool is short", (
     1
   );
 
-  const state = initializeGame({ rootDir, seed: 2 });
+  const shortDataPack: LoadedDataPack = {
+    ...source,
+    decks: {
+      ...source.decks,
+      familiarPool: {
+        ...familiarPool,
+        entries: familiarPool.entries.filter(
+          (entry) => entry.cardId !== "esw2_dbg__familiar_001"
+        ),
+      },
+    },
+  };
+  const state = initializeGame({ dataPack: shortDataPack, seed: 2 });
   assert.ok(
     state.players.every((player) => player.unboughtFamiliars.length === 0)
   );

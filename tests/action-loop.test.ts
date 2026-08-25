@@ -14205,3 +14205,270 @@ test("#268 runtime defenses preserve play effects and resolve defense rewards", 
     );
   }
 });
+
+test("#269 familiar defense reveals the main deck and never takes Mayhem", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const familiarDefinition = currentRuntimeDataPack.cardDefinitions.get(
+    "esw2_dbg__familiar_001"
+  );
+  const normalDefinition =
+    currentRuntimeDataPack.cardDefinitions.get("esw2_dbg__main_013");
+  const mayhemDefinition =
+    currentRuntimeDataPack.cardDefinitions.get("esw2_dbg__main_059");
+  assert.ok(familiarDefinition);
+  assert.ok(normalDefinition);
+  assert.ok(mayhemDefinition);
+  assert.deepEqual(
+    currentRuntimeDataPack.decks.familiarPool?.entries.find(
+      (entry) => entry.cardId === "esw2_dbg__familiar_001"
+    ),
+    { cardId: "esw2_dbg__familiar_001", count: 1 }
+  );
+
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 269001,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [familiarDefinition.cardId, familiarDefinition],
+    [normalDefinition.cardId, normalDefinition],
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const defender = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  const defenseCard = addRuntimeCardToHand(
+    state,
+    defender,
+    familiarDefinition.cardId
+  );
+  const normalTopCard = createCommonRuntimeCard("esw2_dbg__main_013");
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, normalTopCard);
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "avoid_attack") {
+      return { choiceId: defenseCard.instanceId };
+    }
+    if (effectId === "reveal_top_card") {
+      assert.ok(choices.some((choice) => choice.choiceId === "take"));
+      return { choiceId: "take" };
+    }
+    return undefined;
+  };
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 5,
+    target: { selector: "opponentPlayer" },
+  });
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }),
+    { ok: true }
+  );
+  assert.equal(defender.discard.includes(defenseCard), true);
+  assert.equal(defender.hand.includes(normalTopCard), true);
+  assert.equal(state.common.mainDeck.includes(normalTopCard), false);
+
+  const mayhemState = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 269002,
+  });
+  mayhemState.cardDefinitions = new Map([
+    ...mayhemState.cardDefinitions,
+    [familiarDefinition.cardId, familiarDefinition],
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  const mayhemAttacker = mustGetPlayer(mayhemState, markPlayerId("player-1"));
+  const mayhemDefender = mustGetPlayer(mayhemState, markPlayerId("player-2"));
+  mayhemState.activePlayerId = mayhemAttacker.playerId;
+  mayhemDefender.hand = [];
+  const mayhemDefense = addRuntimeCardToHand(
+    mayhemState,
+    mayhemDefender,
+    familiarDefinition.cardId
+  );
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_059");
+  mayhemState.common.mainDeck.splice(
+    0,
+    mayhemState.common.mainDeck.length,
+    mayhem
+  );
+  mayhemState.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "avoid_attack") {
+      return { choiceId: mayhemDefense.instanceId };
+    }
+    if (effectId === "reveal_top_card") {
+      assert.equal(
+        choices.some((choice) => choice.choiceId === "take"),
+        false
+      );
+    }
+    return undefined;
+  };
+  const mayhemAttack = addFixtureCardToActiveHand(mayhemState, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 5,
+    target: { selector: "opponentPlayer" },
+  });
+
+  assert.deepEqual(
+    applyAction(mayhemState, {
+      type: "playCard",
+      cardInstanceId: mayhemAttack,
+    }),
+    { ok: true }
+  );
+  assert.equal(mayhemState.common.mainDeck[0], mayhem);
+  assert.equal(mayhemDefender.hand.includes(mayhem), false);
+});
+
+test("#269 defense returns another creature from discard and excludes itself", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const defenseDefinition =
+    currentRuntimeDataPack.cardDefinitions.get("esw2_dbg__main_043");
+  const creatureDefinition =
+    currentRuntimeDataPack.cardDefinitions.get("esw2_dbg__main_014");
+  assert.ok(defenseDefinition);
+  assert.ok(creatureDefinition);
+  assert.deepEqual(
+    currentRuntimeDataPack.decks.mainDeck?.entries.find(
+      (entry) => entry.cardId === "esw2_dbg__main_043"
+    ),
+    { cardId: "esw2_dbg__main_043", count: 2 }
+  );
+
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 269003,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [defenseDefinition.cardId, defenseDefinition],
+    [creatureDefinition.cardId, creatureDefinition],
+  ]);
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const defender = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  defender.discard = [];
+  const defenseCard = addRuntimeCardToHand(
+    state,
+    defender,
+    defenseDefinition.cardId
+  );
+  const otherCreature = addRuntimeCardToHand(
+    state,
+    defender,
+    creatureDefinition.cardId
+  );
+  defender.hand.splice(defender.hand.indexOf(otherCreature), 1);
+  defender.discard.push(otherCreature);
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "avoid_attack") {
+      return { choiceId: defenseCard.instanceId };
+    }
+    if (effectId === "return_discard_to_hand") {
+      return {
+        choiceId:
+          choices.find(
+            (choice) =>
+              choice.choiceKind === "cardTarget" &&
+              choice.targetCardInstanceIds?.includes(otherCreature.instanceId)
+          )?.choiceId ?? "return_0",
+      };
+    }
+    return undefined;
+  };
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 5,
+    target: { selector: "opponentPlayer" },
+  });
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }),
+    { ok: true }
+  );
+  assert.equal(defender.discard.includes(defenseCard), true);
+  assert.equal(defender.hand.includes(otherCreature), true);
+  assert.equal(defender.discard.includes(otherCreature), false);
+});
+
+test("#269 defense optionally destroys a hand card", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const defenseDefinition =
+    currentRuntimeDataPack.cardDefinitions.get("esw2_dbg__main_045");
+  const handDefinition =
+    currentRuntimeDataPack.cardDefinitions.get("esw2_dbg__main_014");
+  assert.ok(defenseDefinition);
+  assert.ok(handDefinition);
+  assert.deepEqual(
+    currentRuntimeDataPack.decks.mainDeck?.entries.find(
+      (entry) => entry.cardId === "esw2_dbg__main_045"
+    ),
+    { cardId: "esw2_dbg__main_045", count: 2 }
+  );
+
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 269004,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [defenseDefinition.cardId, defenseDefinition],
+    [handDefinition.cardId, handDefinition],
+  ]);
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const defender = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  defender.discard = [];
+  const defenseCard = addRuntimeCardToHand(
+    state,
+    defender,
+    defenseDefinition.cardId
+  );
+  const destroyedCard = addRuntimeCardToHand(
+    state,
+    defender,
+    handDefinition.cardId
+  );
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "avoid_attack") {
+      return { choiceId: defenseCard.instanceId };
+    }
+    if (effectId === "destroy_own_cards") {
+      return {
+        choiceId:
+          choices.find(
+            (choice) =>
+              choice.choiceKind === "cardTarget" &&
+              choice.targetCardInstanceIds?.includes(destroyedCard.instanceId)
+          )?.choiceId ?? "decline",
+      };
+    }
+    return undefined;
+  };
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 5,
+    target: { selector: "opponentPlayer" },
+  });
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }),
+    { ok: true }
+  );
+  assert.equal(defender.discard.includes(defenseCard), true);
+  assert.equal(defender.hand.includes(destroyedCard), false);
+  assert.equal(state.common.destroyedPile.includes(destroyedCard), true);
+});
