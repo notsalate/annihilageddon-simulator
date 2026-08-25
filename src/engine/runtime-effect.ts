@@ -268,6 +268,8 @@ export const knownRuntimeEffectIds = [
   "dead_wizard_token_lose_half_chips",
   "dead_wizard_token_damage_per_discard_legend",
   "dead_wizard_token_exchange_life",
+  "dead_wizard_token_reveal_main_deck_gain_if_mayhem",
+  "dead_wizard_token_reveal_player_deck_gain_if_legend",
   "dead_wizard_token_reward_killer_chips",
   "dead_wizard_token_self_destroy_for_chips",
   "double_owned_attack_damage",
