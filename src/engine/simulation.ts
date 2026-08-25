@@ -5,7 +5,12 @@ import {
   type LegalAction,
 } from "./actions.js";
 import { assertNever } from "../common.js";
-import type { ChoiceRequest, ChoiceSelection } from "./choice-policy.js";
+import type {
+  ChoicePolicy,
+  ChoiceRequest,
+  ChoiceSelection,
+  EffectChoiceRequest,
+} from "./choice-policy.js";
 import type {
   CardDefinition,
   LoadedDataPack,
@@ -66,7 +71,7 @@ export type BotDecisionAction =
 
 export interface BotStrategy {
   chooseAction(context: BotDecisionContext): GameAction;
-  chooseEffectChoice?(request: ChoiceRequest): ChoiceSelection | undefined;
+  chooseEffectChoice?: ChoicePolicy;
 }
 
 interface PlayerBotBinding {
@@ -507,7 +512,7 @@ class SimulationReplayError extends Error {
 
 interface SimulationReplayController {
   nextAction(): GameAction;
-  chooseEffectChoice(request: ChoiceRequest): ChoiceSelection | undefined;
+  chooseEffectChoice(request: EffectChoiceRequest): ChoiceSelection | undefined;
   getIncompleteHistoryError(): SimulationReplayError | undefined;
 }
 
@@ -528,7 +533,9 @@ function createSimulationReplayController(
       actionIndex += 1;
       return action;
     },
-    chooseEffectChoice(request: ChoiceRequest): ChoiceSelection | undefined {
+    chooseEffectChoice(
+      request: EffectChoiceRequest
+    ): ChoiceSelection | undefined {
       const expected = replay.choices[choiceIndex];
       if (expected === undefined) {
         throw new SimulationReplayError(
@@ -579,7 +586,9 @@ function createReplayBotFactory(
   return () => ({
     chooseAction: () => replayController.nextAction(),
     chooseEffectChoice: (request) =>
-      replayController.chooseEffectChoice(request),
+      request.requestKind === "setup"
+        ? undefined
+        : replayController.chooseEffectChoice(request),
   });
 }
 

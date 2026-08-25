@@ -40,7 +40,13 @@ import {
   type RuntimeDataPreloadedSource,
 } from "./runtime-data-intake.js";
 import type { RuntimeEffect } from "./runtime-effect.js";
-import type { ChoiceKind, ChoicePolicy } from "./choice-policy.js";
+import {
+  isChoiceSelection,
+  type ChoiceKind,
+  type ChoicePolicy,
+  type FamiliarSetupChoicePhase,
+} from "./choice-policy.js";
+import { createChoicePlayerView } from "./strategy-decision-view.js";
 
 export type { PlayerId } from "../domain/types.js";
 export type CommonOwner = "common";
@@ -279,19 +285,6 @@ export type GameEventDestination =
   | "discardSelf"
   | "topdeckSelf";
 export type SetupChoicePolicyId = "alwaysPickFirst" | "provided";
-
-export type FamiliarSetupChoicePhase = "startingPair" | "thirdFamiliar";
-
-export interface FamiliarSetupChoiceRequest {
-  readonly playerId: PlayerId;
-  readonly phase: FamiliarSetupChoicePhase;
-  readonly candidateInstanceIds: readonly CardInstanceId[];
-  readonly candidateDefinitionIds: readonly CardDefinitionId[];
-}
-
-export type FamiliarSetupChoicePolicy = (
-  request: FamiliarSetupChoiceRequest
-) => CardInstanceId | undefined;
 
 export interface GameEventMetadata {
   eventSequence?: number;
@@ -807,7 +800,6 @@ interface InitializeGameBaseOptions {
   seed: number;
   playerCount?: number;
   effectChoiceStrategy?: ChoicePolicy;
-  familiarSetupChoicePolicy?: FamiliarSetupChoicePolicy;
 }
 
 export type InitializeGameOptions =
@@ -883,7 +875,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     createSeededRng(options.seed + 7919),
     setupEvents,
     setupDirectives,
-    options.familiarSetupChoicePolicy
+    options.effectChoiceStrategy
   );
   const forcedStartingPlayerId = setupDirectives.find(
     (directive) => directive.kind === "forceStartingPlayer"
@@ -1122,7 +1114,7 @@ function assignStartingFamiliars(
   rng: RandomSource,
   eventLog: GameEvent[],
   setupDirectives: readonly SetupDirective[],
-  familiarSetupChoicePolicy?: FamiliarSetupChoicePolicy
+  choicePolicy?: ChoicePolicy
 ): void {
   const familiarPool = dataPack.decks.familiarPool;
   if (familiarPool === undefined) {
@@ -1209,7 +1201,7 @@ function assignStartingFamiliars(
         player,
         "startingPair",
         candidates,
-        familiarSetupChoicePolicy,
+        choicePolicy,
         eventLog
       );
       player.unboughtFamiliars.push(
@@ -1229,7 +1221,7 @@ function assignStartingFamiliars(
       player,
       "thirdFamiliar",
       thirdCandidates,
-      familiarSetupChoicePolicy,
+      choicePolicy,
       eventLog
     );
     const thirdCandidate = thirdCandidateChoice.candidate;
@@ -1263,7 +1255,7 @@ function selectFamiliarSetupChoice<
   player: PlayerState,
   phase: FamiliarSetupChoicePhase,
   candidates: readonly TCandidate[],
-  policy: FamiliarSetupChoicePolicy | undefined,
+  policy: ChoicePolicy | undefined,
   eventLog: GameEvent[]
 ): { candidate: TCandidate; index: number } {
   if (candidates.length === 0) {
@@ -1271,14 +1263,20 @@ function selectFamiliarSetupChoice<
       `Setup choice familiar has no candidates for ${player.playerId}`
     );
   }
-  const requestedInstanceId = policy?.({
-    playerId: player.playerId,
+  const selectedChoice = policy?.({
+    requestKind: "setup",
+    player: createChoicePlayerView(player),
+    setupChoiceKind: "familiar",
     phase,
-    candidateInstanceIds: candidates.map((candidate) => candidate.instanceId),
-    candidateDefinitionIds: candidates.map(
-      (candidate) => candidate.definitionId
-    ),
+    choices: candidates.map((candidate) => ({
+      choiceKind: "familiarSetup" as const,
+      choiceId: candidate.instanceId,
+      candidateDefinitionId: candidate.definitionId,
+    })),
   });
+  const requestedInstanceId = isChoiceSelection(selectedChoice)
+    ? selectedChoice.choiceId
+    : undefined;
   const requestedIndex =
     requestedInstanceId === undefined
       ? 0

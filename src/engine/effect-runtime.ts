@@ -75,7 +75,7 @@ import {
 } from "./runtime-effect-verification.js";
 import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
 import type {
-  ChoiceRequest,
+  EffectChoiceRequest,
   ChoiceSelection,
   ChoiceView,
 } from "./choice-policy.js";
@@ -1744,7 +1744,7 @@ function resolveEffectChoice(
   effectId: RuntimeEffectId,
   choices: readonly EffectChoice[]
 ): EffectChoiceResolution {
-  const decisionRequest: ChoiceRequest = structuredClone({
+  const decisionRequest: EffectChoiceRequest = structuredClone({
     player: createChoicePlayerView(player),
     effectId,
     sourceType: source.sourceType,

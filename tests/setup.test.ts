@@ -170,16 +170,18 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
     dataPack,
     playerCount: 2,
     seed: 81203,
-    familiarSetupChoicePolicy: ({ phase, candidateInstanceIds }) => {
-      setupChoicePhases.push(phase);
-      const selectedInstanceId =
-        phase === "thirdFamiliar"
-          ? candidateInstanceIds[candidateInstanceIds.length - 1]
-          : candidateInstanceIds[1];
+    effectChoiceStrategy: (request) => {
+      if (request.requestKind !== "setup") return undefined;
+      setupChoicePhases.push(request.phase);
+      const selectedChoice =
+        request.phase === "thirdFamiliar"
+          ? request.choices.at(-1)
+          : request.choices[1];
+      const selectedInstanceId = selectedChoice?.choiceId;
       if (selectedInstanceId === undefined) {
         throw new Error("Expected a familiar setup choice candidate");
       }
-      return selectedInstanceId;
+      return { choiceId: selectedInstanceId };
     },
   });
   const player = state.players[0];
@@ -348,19 +350,33 @@ test("wizard property 003 can choose an unselected ordinary familiar", () => {
     dataPack,
     playerCount: 2,
     seed: 80001,
-    familiarSetupChoicePolicy: ({ phase, candidateInstanceIds }) => {
-      if (phase === "startingPair" && ordinaryUnselectedId === undefined) {
-        ordinaryUnselectedId = candidateInstanceIds[1];
+    effectChoiceStrategy: (request) => {
+      if (request.requestKind !== "setup") return undefined;
+      const candidateInstanceIds = request.choices.map(
+        (choice) => choice.choiceId
+      );
+      if (
+        request.phase === "startingPair" &&
+        ordinaryUnselectedId === undefined
+      ) {
+        const ordinaryCandidateId = candidateInstanceIds[1];
+        ordinaryUnselectedId =
+          ordinaryCandidateId === undefined
+            ? undefined
+            : markCardInstanceId(ordinaryCandidateId);
       }
       if (
-        phase === "thirdFamiliar" &&
+        request.phase === "thirdFamiliar" &&
         ordinaryUnselectedId !== undefined &&
         candidateInstanceIds.includes(ordinaryUnselectedId)
       ) {
         thirdChoiceSawOrdinaryUnselected = true;
-        return ordinaryUnselectedId;
+        return { choiceId: ordinaryUnselectedId };
       }
-      return candidateInstanceIds[0];
+      const firstCandidateId = candidateInstanceIds[0];
+      return firstCandidateId === undefined
+        ? undefined
+        : { choiceId: firstCandidateId };
     },
   });
 
@@ -414,7 +430,10 @@ test("invalid familiar setup choice falls back to the first candidate", () => {
   const state = initializeGame({
     dataPack,
     seed: 60615,
-    familiarSetupChoicePolicy: () => markCardInstanceId("missing-familiar"),
+    effectChoiceStrategy: (request) =>
+      request.requestKind === "setup"
+        ? { choiceId: markCardInstanceId("missing-familiar") }
+        : undefined,
   });
   const familiarChoiceEvents = state.eventLog.filter(
     (event) =>

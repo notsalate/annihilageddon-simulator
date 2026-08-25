@@ -6,7 +6,7 @@ import {
   type LegalAction,
 } from "./actions.js";
 import { forkGameState } from "./game-state-fork.js";
-import type { ChoiceRequest } from "./choice-policy.js";
+import type { EffectChoiceRequest } from "./choice-policy.js";
 import type { GameState } from "./setup.js";
 
 export interface AnalysisLimits {
@@ -18,13 +18,13 @@ export interface AnalysisLimits {
 
 export interface AnalysisChoiceSelection {
   requestIndex: number;
-  effectId: ChoiceRequest["effectId"];
-  sourceType: ChoiceRequest["sourceType"];
+  effectId: EffectChoiceRequest["effectId"];
+  sourceType: EffectChoiceRequest["sourceType"];
   cardInstanceId: string;
   definitionId: string;
   choiceIndex: number;
   choiceId: string;
-  choiceKind: ChoiceRequest["choices"][number]["choiceKind"];
+  choiceKind: EffectChoiceRequest["choices"][number]["choiceKind"];
 }
 
 export interface CompletedActionBranch {
@@ -101,7 +101,7 @@ interface ChoicePrefix {
 class ExpandChoicePath extends Error {
   constructor(
     readonly requestIndex: number,
-    readonly request: ChoiceRequest
+    readonly request: EffectChoiceRequest
   ) {
     super("Analyzer choice path expansion");
   }
@@ -132,20 +132,26 @@ export function enumerateActionBranches(
     const consumed = new Set<number>();
     let requestIndex = 0;
     fork.effectChoiceStrategy = (request) => {
+      if (request.requestKind === "setup") {
+        throw new AnalysisError(
+          "Setup choice unexpectedly reached current-turn analysis"
+        );
+      }
+      const effectRequest: EffectChoiceRequest = request;
       const selection = prefix.selections.find(
         (candidate) => candidate.requestIndex === requestIndex
       );
       const currentRequestIndex = requestIndex;
       requestIndex += 1;
       if (selection === undefined) {
-        if (request.choices.length === 0) {
+        if (effectRequest.choices.length === 0) {
           return undefined;
         }
-        throw new ExpandChoicePath(currentRequestIndex, request);
+        throw new ExpandChoicePath(currentRequestIndex, effectRequest);
       }
       consumed.add(selection.requestIndex);
-      validateSelection(selection, request, action, currentRequestIndex);
-      const choice = request.choices[selection.choiceIndex];
+      validateSelection(selection, effectRequest, action, currentRequestIndex);
+      const choice = effectRequest.choices[selection.choiceIndex];
       if (choice === undefined) {
         throw replayError(
           action,
@@ -462,7 +468,7 @@ function assertFiniteEvaluation(
 
 function validateSelection(
   selection: AnalysisChoiceSelection,
-  request: ChoiceRequest,
+  request: EffectChoiceRequest,
   action: LegalAction,
   requestIndex: number
 ): void {
