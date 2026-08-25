@@ -957,6 +957,47 @@ test("card movement: main_007 attacks for the revealed cost or destroys it", () 
   assert.equal(play(differentCostScenario, differentCostSource).ok, true);
   assert.equal(differentCostFoe.life.current, 5);
 
+  const zeroCostScenario = createGameScenario({
+    rootDir,
+    seed: 2830081,
+  });
+  const zeroCostFoe = zeroCostScenario.foes[0];
+  assert.ok(zeroCostFoe);
+  zeroCostFoe.life.current = 10;
+  zeroCostScenario.activePlayer.deck.splice(0);
+  zeroCostScenario.activePlayer.discard.splice(0);
+  const zeroCostSource = givenRuntimeCard(zeroCostScenario, {
+    definitionId: "esw2_dbg__main_007",
+  });
+  givenRuntimeCard(zeroCostScenario, {
+    zone: "deck",
+    cost: 0,
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  let zeroCostTargetChoices = 0;
+  chooseEffect(zeroCostScenario, (request) => {
+    if (
+      request.effectId !== "reveal_top_card_choose_destroy_or_attack_equal_cost"
+    ) {
+      return undefined;
+    }
+    zeroCostTargetChoices += 1;
+    return { choiceId: zeroCostFoe.playerId };
+  });
+
+  assert.equal(play(zeroCostScenario, zeroCostSource).ok, true);
+  assert.ok(zeroCostTargetChoices > 0);
+  assert.equal(zeroCostFoe.life.current, 10);
+  assert.equal(
+    zeroCostScenario.state.eventLog.some(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.targetPlayerId === zeroCostFoe.playerId &&
+        event.amount === 0
+    ),
+    true
+  );
+
   const destroyScenario = createGameScenario({ rootDir, seed: 283009 });
   const destroyFoe = destroyScenario.foes[0];
   assert.ok(destroyFoe);

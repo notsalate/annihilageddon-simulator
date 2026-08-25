@@ -1465,7 +1465,6 @@ const revealTopCardChooseDestroyOrAttackEqualCostHandler: EffectRuntimeHandler<
       choice.card,
       cardMatchesTypeForPlayer
     );
-    if (amount <= 0) return { ok: true };
 
     const attackProfileResult = services.collectAttackReplacementProfile(
       state,
