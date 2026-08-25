@@ -144,6 +144,12 @@ export type PlayerControlledAttackImpact =
         targetPlayer: PlayerState
       ) => number;
       readonly sourceOwnerModifierAmount: number;
+      readonly beforeDamage?: (
+        state: GameState,
+        attackingPlayer: PlayerState,
+        targetPlayer: PlayerState,
+        source: EffectSourceContext
+      ) => EffectExecutionResult;
       readonly onDamageDealt: readonly AttackOutcomeBranch[];
       readonly onKill: readonly AttackOutcomeBranch[];
     }
@@ -568,6 +574,18 @@ function resolvePlayerControlledAttackTarget(
         ),
       requestedTargetKilled: false,
     };
+  }
+
+  const beforeDamageResult = impact.beforeDamage?.(
+    intent.state,
+    current.attackingPlayer,
+    current.targetPlayer,
+    current.source
+  );
+  if (beforeDamageResult !== undefined) {
+    if (!beforeDamageResult.ok || beforeDamageResult.gameEnd !== undefined) {
+      return beforeDamageResult;
+    }
   }
 
   const damageResult = adapters.dealAttackDamage(

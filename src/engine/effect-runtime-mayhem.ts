@@ -5,12 +5,14 @@ import {
   listMainMarketCards,
   movePhysicalCard,
   peekLegendDeckCard,
-  peekMainDeckCard,
 } from "./control-ledger.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import { recordEffectChipsChanged } from "./effect-runtime-resources-draw.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
-import { destroyOwnedCard } from "./effect-runtime-cards-ownership-choice.js";
+import {
+  destroyOwnedCard,
+  destroyTopMainDeckCard,
+} from "./effect-runtime-cards-ownership-choice.js";
 import type {
   EffectChoice,
   EffectGameEnd,
@@ -582,50 +584,43 @@ const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler<
 > = {
   effectId: "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
   execute(state, _player, effect, source, services) {
-    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
-      const destroyedCard = peekMainDeckCard(state);
-      if (destroyedCard === undefined) {
-        recordGameEvent(state, {
-          type: "effectDestroyTopMainDeckSkipped",
-          playerId: targetPlayer.playerId,
-          cardInstanceId: source.cardInstanceId,
-          definitionId: source.definitionId,
-          effectId: effect.effectId,
-          sourceType: source.sourceType,
-        });
-        continue;
-      }
-      const destination = services.getDestroyDestination(state, destroyedCard);
-      if (!destination.ok) return destination;
-      const moved = movePhysicalCard(
+    const decisionResult = collectMayhemAttackDefenseDecisions(
+      state,
+      services.getPlayersInActiveOrder(state),
+      effect.effectId,
+      source,
+      services
+    );
+    if (!decisionResult.ok) return decisionResult;
+    if (decisionResult.gameEnd !== undefined) {
+      return { ok: true, gameEnd: decisionResult.gameEnd };
+    }
+
+    let gameEnd: EffectGameEnd | undefined;
+    for (const { player: targetPlayer, avoided } of decisionResult.decisions) {
+      if (avoided) continue;
+      const destroyResult = destroyTopMainDeckCard(
         state,
-        destroyedCard.instanceId,
-        destination.zoneName,
-        "back",
-        "mainDeck"
+        targetPlayer,
+        effect.effectId,
+        source,
+        services
       );
-      if (!moved.ok) {
-        return { ok: false, error: moved.reason };
-      }
-      recordGameEvent(state, {
-        type: "effectTopMainDeckCardDestroyed",
-        playerId: targetPlayer.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        targetCardInstanceId: destroyedCard.instanceId,
-        targetDefinitionId: destroyedCard.definitionId,
-        effectId: effect.effectId,
-        sourceType: source.sourceType,
-      });
+      if (!destroyResult.ok) return destroyResult;
+      const destroyedCard = destroyResult.card;
+      if (destroyedCard === undefined) continue;
       const destroyedDefinition = state.cardDefinitions.get(
         destroyedCard.definitionId
       );
-      if (destroyedDefinition?.engine.cardKind === "mayhem") {
-        const deathResult = services.resolvePlayerDeath(state, targetPlayer);
-        if (!deathResult.ok) return deathResult;
+      if (destroyedDefinition?.engine.cardKind !== "mayhem") continue;
+
+      const deathResult = services.resolvePlayerDeath(state, targetPlayer);
+      if (!deathResult.ok) return deathResult;
+      if (deathResult.gameEnd !== undefined && gameEnd === undefined) {
+        gameEnd = deathResult.gameEnd;
       }
     }
-    return { ok: true };
+    return gameEnd === undefined ? { ok: true } : { ok: true, gameEnd };
   },
 };
 

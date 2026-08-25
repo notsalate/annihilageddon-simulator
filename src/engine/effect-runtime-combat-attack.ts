@@ -1,5 +1,8 @@
 import type { CardDefinition } from "./data.js";
-import { buildControlledObjectView } from "./control-ledger.js";
+import {
+  buildControlledObjectView,
+  peekLegendDeckCard,
+} from "./control-ledger.js";
 import { countControlledCardsOfType } from "./card-type-runtime.js";
 import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
 import { recordGameEvent } from "./event-recorder.js";
@@ -254,7 +257,8 @@ export function createCombatAttackEffectDecoders(
         onKill: optionalAttackBranches,
         damageUsesDestroyedCardCost: required(literal(true)),
         destroyedCardSource: required(literal("legendDeck")),
-      }
+      },
+      requireTargetSelector("attack", ["chosenFoe"])
     ),
     attack_discard_cards: defineDecoder("attack_discard_cards", {
       effectId: required(literal("attack_discard_cards")),
@@ -1115,6 +1119,128 @@ export function createCombatAttackEffectDefinitions(
       );
     },
   };
+  const attackDestroyTopLegendDeckThenDamageEqualCostHandler: EffectRuntimeHandler<
+    RuntimeEffectForId<"attack_destroy_top_legend_deck_then_damage_equal_cost">
+  > = {
+    effectId: "attack_destroy_top_legend_deck_then_damage_equal_cost",
+    execute(state, player, effect, source, services) {
+      const targetResult = services.resolveTargetChoice(
+        state,
+        player,
+        effect,
+        source
+      );
+      if (!targetResult.ok) return targetResult;
+      if (targetResult.choice === undefined) return { ok: true };
+      if (targetResult.choice.choiceType !== "player") {
+        return { ok: false, error: "Attack effect requires a player target" };
+      }
+
+      const legendCard = peekLegendDeckCard(state);
+      if (legendCard === undefined) return { ok: true };
+      const legendDefinition = state.cardDefinitions.get(
+        legendCard.definitionId
+      );
+      if (legendDefinition === undefined) {
+        return {
+          ok: false,
+          error: `Missing legend definition ${legendCard.definitionId}`,
+        };
+      }
+      const amount = tools.calculateEffectiveCardCost(
+        state,
+        player.playerId,
+        legendDefinition,
+        legendCard
+      );
+      const attackProfileResult = collectAttackReplacementProfile(
+        state,
+        player,
+        source
+      );
+      if (attackProfileResult.status !== "resolved") {
+        return {
+          ok: false,
+          error:
+            attackProfileResult.status === "error"
+              ? attackProfileResult.error
+              : "Attack replacement profile was not applicable",
+        };
+      }
+      const attackProfile = attackProfileResult.result;
+
+      return services.resolvePlayerControlledAttack({
+        state,
+        attackingPlayer: player,
+        source,
+        effectId: effect.effectId,
+        unavoidable: attackProfile.unavoidable,
+        attackProfile,
+        targetPlan: {
+          kind: "orderedPlayers",
+          players: [targetResult.choice.player],
+        },
+        impact: {
+          kind: "damage",
+          baseAmount: amount,
+          sourceOwnerModifierAmount: attackProfile.damageBonus,
+          onDamageDealt: effect.onDamageDealt ?? [],
+          onKill: effect.onKill ?? [],
+          beforeDamage(
+            stateBeforeDamage,
+            _attackingPlayer,
+            targetPlayer,
+            attackSource
+          ) {
+            const currentLegendCard = peekLegendDeckCard(stateBeforeDamage);
+            if (currentLegendCard === undefined) {
+              return {
+                ok: false,
+                error: "Legend card disappeared before destruction",
+              };
+            }
+            if (currentLegendCard.instanceId !== legendCard.instanceId) {
+              return {
+                ok: false,
+                error: "Legend top card changed before destruction",
+              };
+            }
+            const destination = services.getDestroyDestination(
+              stateBeforeDamage,
+              currentLegendCard
+            );
+            if (!destination.ok) return destination;
+            const moved = services.moveCardToZonePreservingOwner(
+              stateBeforeDamage,
+              targetPlayer,
+              currentLegendCard,
+              destination.zone,
+              destination.zoneName,
+              effect.effectId,
+              attackSource
+            );
+            if (!moved) {
+              return {
+                ok: false,
+                error: `Cannot destroy legend card ${currentLegendCard.instanceId}`,
+              };
+            }
+            recordGameEvent(stateBeforeDamage, {
+              type: "effectCardDestroyed",
+              playerId: targetPlayer.playerId,
+              cardInstanceId: attackSource.cardInstanceId,
+              definitionId: attackSource.definitionId,
+              targetCardInstanceId: currentLegendCard.instanceId,
+              targetDefinitionId: currentLegendCard.definitionId,
+              effectId: effect.effectId,
+              sourceType: attackSource.sourceType,
+            });
+            return { ok: true };
+          },
+        },
+      });
+    },
+  };
   const attackDamageEqualToControlledCardCostHandler: EffectRuntimeHandler<
     RuntimeEffectForId<"attack_damage_equal_to_controlled_card_cost">
   > = {
@@ -1332,9 +1458,7 @@ export function createCombatAttackEffectDefinitions(
       supportedTimings: attackTimings,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
-      handler: createUnsupportedEffectHandler(
-        "attack_destroy_top_legend_deck_then_damage_equal_cost"
-      ),
+      handler: attackDestroyTopLegendDeckThenDamageEqualCostHandler,
     },
     {
       effectId: "attack_discard_cards",

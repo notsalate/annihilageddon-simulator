@@ -132,6 +132,7 @@ export interface EffectSourceContext {
   runtimeMode: EffectRuntimeMode;
   playerId: PlayerState["playerId"];
   currentAttackerPlayerId?: PlayerState["playerId"];
+  playerControlledAttackPlayerId?: PlayerState["playerId"];
   cardInstanceId: string;
   definitionId: string;
   tokenInstanceId?: TokenInstance["instanceId"];

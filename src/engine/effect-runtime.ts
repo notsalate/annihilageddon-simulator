@@ -1653,7 +1653,9 @@ function resolveMayhemAttackPlan(
       decision.amount,
       effectId,
       source,
-      { kind: "ownerless" }
+      source.playerControlledAttackPlayerId === undefined
+        ? { kind: "ownerless" }
+        : { kind: "playerControlled", player: sourcePlayer }
     );
     if (!("damageDealt" in damageResult)) {
       return damageResult;

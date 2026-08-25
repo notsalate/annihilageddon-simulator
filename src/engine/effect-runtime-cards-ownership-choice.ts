@@ -8,6 +8,7 @@ import {
   findPlayerPlayedThisTurnCard,
   listLegendMarketCards,
   movePhysicalCard,
+  peekMainDeckCard,
 } from "./control-ledger.js";
 import type { CardDefinition, CardKind } from "./data.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
@@ -112,6 +113,12 @@ export type RevealTopCardChooseDestroyOrAttackEqualCostRuntimeEffect =
     source: "activePlayerDeck";
     targetSelector: "chosenFoe";
   };
+export type DestroyTopMainDeckCardsThenOptionalPlayMayhemRuntimeEffect =
+  EffectWithOptionalTiming<"destroy_top_main_deck_cards_then_optional_play_mayhem"> & {
+    source: "mainDeck";
+    amount: number;
+    mayhemBonusPower: number;
+  };
 export type PlayTopCardRuntimeEffect =
   EffectWithOptionalTiming<"play_top_card"> & {
     source: "activePlayerDeck";
@@ -173,6 +180,7 @@ export interface CardOwnershipChoiceEffectPayloadMap {
   reveal_top_card: RevealTopCardRuntimeEffect;
   reveal_top_card_choose_destroy_or_power: RevealTopCardChooseDestroyOrPowerRuntimeEffect;
   reveal_top_card_choose_destroy_or_attack_equal_cost: RevealTopCardChooseDestroyOrAttackEqualCostRuntimeEffect;
+  destroy_top_main_deck_cards_then_optional_play_mayhem: DestroyTopMainDeckCardsThenOptionalPlayMayhemRuntimeEffect;
   play_top_card: PlayTopCardRuntimeEffect;
   play_top_card_from_foe_deck: PlayTopCardFromFoeDeckRuntimeEffect;
   wild_magic_choice: WildMagicChoiceRuntimeEffect;
@@ -194,6 +202,7 @@ export type CardOwnershipChoiceEffectId =
   | "reveal_top_card"
   | "reveal_top_card_choose_destroy_or_power"
   | "reveal_top_card_choose_destroy_or_attack_equal_cost"
+  | "destroy_top_main_deck_cards_then_optional_play_mayhem"
   | "play_top_card"
   | "play_top_card_from_foe_deck"
   | "topdeck_gained_card"
@@ -213,6 +222,7 @@ export const cardOwnershipChoiceEffectIds = [
   "reveal_top_card",
   "reveal_top_card_choose_destroy_or_power",
   "reveal_top_card_choose_destroy_or_attack_equal_cost",
+  "destroy_top_main_deck_cards_then_optional_play_mayhem",
   "play_top_card",
   "play_top_card_from_foe_deck",
   "topdeck_gained_card",
@@ -388,6 +398,18 @@ export function createCardOwnershipChoiceEffectDecoders(
         timing: optionalTiming,
         source: required(literal("activePlayerDeck")),
         targetSelector: required(literal("chosenFoe")),
+      }
+    ),
+    destroy_top_main_deck_cards_then_optional_play_mayhem: defineDecoder(
+      "destroy_top_main_deck_cards_then_optional_play_mayhem",
+      {
+        effectId: required(
+          literal("destroy_top_main_deck_cards_then_optional_play_mayhem")
+        ),
+        timing: optionalTiming,
+        source: required(literal("mainDeck")),
+        amount: required(positiveInteger),
+        mayhemBonusPower: required(positiveInteger),
       }
     ),
     play_top_card: defineDecoder("play_top_card", {
@@ -1054,6 +1076,54 @@ export function destroyOwnedCard(
   return { ok: true };
 }
 
+export function destroyTopMainDeckCard(
+  state: GameState,
+  player: PlayerState,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): { ok: true; card: CardInstance | undefined } | { ok: false; error: string } {
+  const card = peekMainDeckCard(state);
+  if (card === undefined) {
+    recordGameEvent(state, {
+      type: "effectDestroyTopMainDeckSkipped",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+    return { ok: true, card: undefined };
+  }
+
+  const destination = services.getDestroyDestination(state, card);
+  if (!destination.ok) return destination;
+  const moved = services.moveCardToZonePreservingOwner(
+    state,
+    player,
+    card,
+    destination.zone,
+    destination.zoneName,
+    effectId,
+    source
+  );
+  if (!moved) {
+    return { ok: false, error: `Cannot destroy card ${card.instanceId}` };
+  }
+
+  recordGameEvent(state, {
+    type: "effectTopMainDeckCardDestroyed",
+    playerId: player.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    targetCardInstanceId: card.instanceId,
+    targetDefinitionId: card.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+  return { ok: true, card };
+}
+
 const destroyOwnCardsHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"destroy_own_cards">
 > = {
@@ -1429,6 +1499,108 @@ const revealTopCardChooseDestroyOrAttackEqualCostHandler: EffectRuntimeHandler<
   },
 };
 
+const destroyTopMainDeckCardsThenOptionalPlayMayhemHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"destroy_top_main_deck_cards_then_optional_play_mayhem">
+> = {
+  effectId: "destroy_top_main_deck_cards_then_optional_play_mayhem",
+  execute(state, player, effect, source, services) {
+    const destroyedMayhemCards: CardInstance[] = [];
+    for (let index = 0; index < effect.amount; index += 1) {
+      const result = destroyTopMainDeckCard(
+        state,
+        player,
+        effect.effectId,
+        source,
+        services
+      );
+      if (!result.ok) return result;
+      if (result.card === undefined) continue;
+      const definition = state.cardDefinitions.get(result.card.definitionId);
+      if (definition === undefined) {
+        return {
+          ok: false,
+          error: `Missing destroyed card definition ${result.card.definitionId}`,
+        };
+      }
+      if (definition.engine.cardKind === "mayhem") {
+        destroyedMayhemCards.push(result.card);
+      }
+    }
+
+    if (destroyedMayhemCards.length === 0) return { ok: true };
+
+    const choices: EffectChoice[] = [
+      { choiceKind: "option", choiceId: "decline" },
+      ...destroyedMayhemCards.map((card) => ({
+        choiceKind: "cardTarget" as const,
+        choiceId: card.instanceId,
+        cards: [card],
+        amount: 1,
+      })),
+    ];
+    const choice = services.chooseEffectChoice(
+      state,
+      player,
+      source,
+      effect.effectId,
+      choices
+    );
+    if (choice?.choiceKind !== "cardTarget") return { ok: true };
+
+    const chosenMayhem = destroyedMayhemCards.find(
+      (card) => card.instanceId === choice.cards[0]?.instanceId
+    );
+    if (chosenMayhem === undefined) {
+      return {
+        ok: false,
+        error: "Chosen Mayhem disappeared before resolution",
+      };
+    }
+    const mayhemDefinition = state.cardDefinitions.get(
+      chosenMayhem.definitionId
+    );
+    if (mayhemDefinition === undefined) {
+      return {
+        ok: false,
+        error: `Missing chosen Mayhem definition ${chosenMayhem.definitionId}`,
+      };
+    }
+
+    const mayhemResult = services.executeMayhemEffects(
+      state,
+      player,
+      mayhemDefinition,
+      {
+        ...source,
+        cardInstanceId: chosenMayhem.instanceId,
+        definitionId: chosenMayhem.definitionId,
+        playerControlledAttackPlayerId: player.playerId,
+      }
+    );
+    if (!mayhemResult.ok || mayhemResult.gameEnd !== undefined) {
+      return mayhemResult;
+    }
+    recordGameEvent(state, {
+      type: "mayhemResolved",
+      playerId: player.playerId,
+      cardInstanceId: chosenMayhem.instanceId,
+      definitionId: chosenMayhem.definitionId,
+    });
+
+    const powerBefore = state.turn.power;
+    state.turn.power += effect.mayhemBonusPower;
+    recordTurnPowerChanged(
+      state,
+      player,
+      source,
+      effect.effectId,
+      powerBefore,
+      state.turn.power
+    );
+    return { ok: true };
+  },
+};
+
 const playTopCardHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"play_top_card">
 > = {
@@ -1666,6 +1838,16 @@ export function createCardOwnershipChoiceEffectDefinitions(
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["card"],
       handler: revealTopCardChooseDestroyOrAttackEqualCostHandler,
+    },
+    {
+      effectId: "destroy_top_main_deck_cards_then_optional_play_mayhem",
+      decoder: bindRuntimeEffectDecoder(
+        "destroy_top_main_deck_cards_then_optional_play_mayhem"
+      ),
+      supportedTimings: ["onPlay"] as const,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["card"],
+      handler: destroyTopMainDeckCardsThenOptionalPlayMayhemHandler,
     },
     {
       effectId: "play_top_card",

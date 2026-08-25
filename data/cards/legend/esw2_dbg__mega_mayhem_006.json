@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__mega_mayhem_006",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__mega_mayhem_006.json",
+    "image": "assets/cards/mega-mayhem/МегаБеспредел. MF.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__mega_mayhem_006.md"
+  },
+  "visible": {
+    "nameRu": "МегаБеспредел MF",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "МегаБеспредел",
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "textRu": "Атака: каждый колдун уничтожает верхнюю карту основной колоды. Если колдун уничтожает беспредел, он подыхает.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "cost": null,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+        "timing": "onMayhemResolve",
+        "targetSelector": "eachPlayerClockwiseFromActive",
+        "deathCondition": {
+          "effectId": "destroyed_card_kind_is",
+          "cardKind": "mayhem"
+        },
+        "destroyedCardSource": "mainDeck"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

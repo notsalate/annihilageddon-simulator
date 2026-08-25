@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_010",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_010.json",
+    "image": "assets/cards/wizard-card/Волшебник. Сурковый агент.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_010.md"
+  },
+  "visible": {
+    "nameRu": "Сурковый агент",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "textRu": "+3 мощи\nУничтожь 3 верхние карты основной колоды. Если среди них были беспределы, можешь сыграть 1 из них и получить +3 мощи.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "cost": 6,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 3
+      },
+      {
+        "effectId": "destroy_top_main_deck_cards_then_optional_play_mayhem",
+        "timing": "onPlay",
+        "source": "mainDeck",
+        "amount": 3,
+        "mayhemBonusPower": 3
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

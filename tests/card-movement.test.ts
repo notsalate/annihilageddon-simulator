@@ -8,6 +8,7 @@ import {
   play,
 } from "./helpers/game-scenario.js";
 import { chooseEffect } from "./helpers/game-scenario.js";
+import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 
 const rootDir = process.cwd();
 
@@ -28,6 +29,19 @@ function resolveMayhemThroughMarket(
       : scenario.state.common.legendMarket;
   market.splice(0);
   return runMarketFlow(scenario.state, { mode: "turn" });
+}
+
+function putOnCommonDeck(
+  scenario: ReturnType<typeof createGameScenario>,
+  card: ReturnType<typeof givenRuntimeCard>,
+  deck: "mainDeck" | "legendDeck"
+): void {
+  const handIndex = scenario.activePlayer.hand.indexOf(card);
+  if (handIndex >= 0) {
+    scenario.activePlayer.hand.splice(handIndex, 1);
+  }
+  card.ownerId = "common";
+  scenario.state.common[deck].unshift(card);
 }
 
 test("card movement: main_019 lets the active player and another wizard draw", () => {
@@ -656,4 +670,276 @@ test("card movement: main_007 attacks for the revealed cost or destroys it", () 
   assert.equal(play(emptyScenario, emptySource).ok, true);
   assert.equal(emptyScenario.state.turn.power, 1);
   assert.equal(emptyTargetChoices, 0);
+});
+
+test("card movement: main_010 destroys up to three main cards and can resolve a found Mayhem", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 284010,
+    playerCount: 2,
+  });
+  const foe = scenario.foes[0];
+  assert.ok(foe);
+  foe.life.current = 1;
+  scenario.state.turn.power = 0;
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_010",
+  });
+  const normalA = givenRuntimeCard(scenario, {
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  const mayhem = givenRuntimeCard(scenario, {
+    cardId: "fixture-main-010-mayhem",
+    cardKind: "mayhem",
+    effects: [
+      {
+        effectId: "mayhem_attack",
+        timing: "onMayhemResolve",
+        amount: 2,
+        target: { selector: "allPlayers" },
+      },
+    ],
+  });
+  const normalB = givenRuntimeCard(scenario, {
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  for (const card of [normalB, mayhem, normalA]) {
+    putOnCommonDeck(scenario, card, "mainDeck");
+  }
+  chooseEffect(scenario, (request) =>
+    request.effectId === "destroy_top_main_deck_cards_then_optional_play_mayhem"
+      ? { choiceId: mayhem.instanceId }
+      : undefined
+  );
+
+  assert.deepEqual(play(scenario, source), { ok: true });
+  assert.equal(scenario.state.turn.power, 6);
+  assert.equal(scenario.state.common.destroyedMayhem.includes(mayhem), true);
+  assert.equal(scenario.state.common.destroyedPile.includes(normalA), true);
+  assert.equal(scenario.state.common.destroyedPile.includes(normalB), true);
+  assert.equal(
+    scenario.state.eventLog.some(
+      (event) =>
+        event.type === "trophyControlChanged" &&
+        event.playerId === scenario.activePlayer.playerId &&
+        event.effectId === "mayhem_attack"
+    ),
+    true
+  );
+  assert.equal(
+    scenario.state.eventLog.some(
+      (event) =>
+        event.type === "marketEventCardOpened" &&
+        event.cardInstanceId === mayhem.instanceId
+    ),
+    false
+  );
+});
+
+test("card movement: main_010 does not grant the optional Mayhem bonus when declined", () => {
+  const scenario = createGameScenario({ rootDir, seed: 284011 });
+  scenario.state.turn.power = 0;
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_010",
+  });
+  const mayhem = givenRuntimeCard(scenario, {
+    cardId: "fixture-main-010-declined-mayhem",
+    cardKind: "mayhem",
+    effects: [],
+  });
+  putOnCommonDeck(scenario, mayhem, "mainDeck");
+  chooseEffect(scenario, (request) =>
+    request.effectId === "destroy_top_main_deck_cards_then_optional_play_mayhem"
+      ? { choiceId: "decline" }
+      : undefined
+  );
+
+  assert.deepEqual(play(scenario, source), { ok: true });
+  assert.equal(scenario.state.turn.power, 3);
+  assert.equal(scenario.state.common.destroyedMayhem.includes(mayhem), true);
+});
+
+test("card movement: main_022 destroys the legend top only after a successful defense window", () => {
+  const scenario = createGameScenario({ rootDir, seed: 284022 });
+  const foe = scenario.foes[0];
+  assert.ok(foe);
+  foe.life.current = 10;
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_022",
+  });
+  const legend = givenRuntimeCard(scenario, {
+    cost: 4,
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  putOnCommonDeck(scenario, legend, "legendDeck");
+  chooseEffect(scenario, (request) => {
+    if (
+      request.effectId ===
+      "attack_destroy_top_legend_deck_then_damage_equal_cost"
+    ) {
+      return { choiceId: foe.playerId };
+    }
+    return undefined;
+  });
+
+  assert.equal(play(scenario, source).ok, true);
+  assert.equal(foe.life.current, 6);
+  assert.equal(scenario.state.common.destroyedPile.includes(legend), true);
+
+  const defendedScenario = createGameScenario({
+    rootDir,
+    seed: 284023,
+  });
+  const defendedFoe = defendedScenario.foes[0];
+  assert.ok(defendedFoe);
+  defendedFoe.life.current = 10;
+  const defendedSource = givenRuntimeCard(defendedScenario, {
+    definitionId: "esw2_dbg__main_022",
+  });
+  const defendedLegend = givenRuntimeCard(defendedScenario, {
+    cost: 4,
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  putOnCommonDeck(defendedScenario, defendedLegend, "legendDeck");
+  const defense = addFixtureDefenseCardToHand(
+    defendedScenario.state,
+    defendedFoe,
+    "discardSelf"
+  );
+  chooseEffect(defendedScenario, (request) => {
+    if (
+      request.effectId ===
+      "attack_destroy_top_legend_deck_then_damage_equal_cost"
+    ) {
+      return { choiceId: defendedFoe.playerId };
+    }
+    return request.effectId === "avoid_attack"
+      ? { choiceId: defense.instanceId }
+      : undefined;
+  });
+
+  assert.equal(play(defendedScenario, defendedSource).ok, true);
+  assert.equal(defendedFoe.life.current, 10);
+  assert.equal(
+    defendedScenario.state.common.legendDeck.includes(defendedLegend),
+    true
+  );
+});
+
+test("card movement: main_022 destroys Mega Mayhem for zero damage", () => {
+  const scenario = createGameScenario({ rootDir, seed: 284024 });
+  const foe = scenario.foes[0];
+  assert.ok(foe);
+  foe.life.current = 10;
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_022",
+  });
+  const megaMayhem = givenRuntimeCard(scenario, {
+    cardKind: "megaMayhem",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  putOnCommonDeck(scenario, megaMayhem, "legendDeck");
+  chooseEffect(scenario, (request) =>
+    request.effectId === "attack_destroy_top_legend_deck_then_damage_equal_cost"
+      ? { choiceId: foe.playerId }
+      : undefined
+  );
+
+  assert.equal(play(scenario, source).ok, true);
+  assert.equal(foe.life.current, 10);
+  assert.equal(
+    scenario.state.common.destroyedMegaMayhem.includes(megaMayhem),
+    true
+  );
+});
+
+test("card movement: mega_mayhem_006 defends each wizard before destroying in stable order", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 284006,
+    playerCount: 4,
+  });
+  const activeIndex = scenario.state.players.findIndex(
+    (player) => player.playerId === scenario.state.activePlayerId
+  );
+  const orderedPlayers = Array.from(
+    { length: scenario.state.players.length },
+    (_, offset) =>
+      scenario.state.players[
+        (activeIndex + offset) % scenario.state.players.length
+      ]
+  );
+  const [active, firstFoe, secondFoe, lastFoe] = orderedPlayers;
+  assert.ok(active);
+  assert.ok(firstFoe);
+  assert.ok(secondFoe);
+  assert.ok(lastFoe);
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__mega_mayhem_006",
+  });
+  const mayhem = givenRuntimeCard(scenario, {
+    cardId: "fixture-mega-006-mayhem",
+    cardKind: "mayhem",
+    effects: [],
+  });
+  const mayhemAfterDefense = givenRuntimeCard(scenario, {
+    cardId: "fixture-mega-006-mayhem-after-defense",
+    cardKind: "mayhem",
+    effects: [],
+  });
+  const normalLast = givenRuntimeCard(scenario, {
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  for (const card of [normalLast, mayhemAfterDefense, mayhem]) {
+    putOnCommonDeck(scenario, card, "mainDeck");
+  }
+  const defense = addFixtureDefenseCardToHand(
+    scenario.state,
+    firstFoe,
+    "discardSelf"
+  );
+  chooseEffect(scenario, (request) => {
+    if (request.effectId !== "avoid_attack") return undefined;
+    return request.player.playerId === firstFoe.playerId
+      ? { choiceId: defense.instanceId }
+      : undefined;
+  });
+
+  assert.equal(
+    resolveMayhemThroughMarket(scenario, source, "legendDeck").ok,
+    true
+  );
+  assert.deepEqual(
+    scenario.state.eventLog
+      .filter((event) => event.type === "mayhemDecisionStarted")
+      .map((event) => event.targetPlayerId),
+    [active.playerId, firstFoe.playerId, secondFoe.playerId, lastFoe.playerId]
+  );
+  assert.equal(scenario.state.common.destroyedMayhem.includes(mayhem), true);
+  assert.equal(
+    scenario.state.common.destroyedMayhem.includes(mayhemAfterDefense),
+    true
+  );
+  assert.equal(scenario.state.common.destroyedPile.includes(normalLast), true);
+  assert.equal(firstFoe.discard.includes(defense), true);
+  assert.deepEqual(
+    scenario.state.eventLog
+      .filter((event) => event.type === "effectTopMainDeckCardDestroyed")
+      .map((event) => event.playerId),
+    [active.playerId, secondFoe.playerId, lastFoe.playerId]
+  );
+  assert.equal(
+    scenario.state.eventLog.some(
+      (event) =>
+        event.type === "playerDied" && event.playerId === active.playerId
+    ),
+    true
+  );
+  assert.equal(
+    scenario.state.eventLog.some(
+      (event) =>
+        event.type === "playerDied" && event.playerId === secondFoe.playerId
+    ),
+    true
+  );
 });
