@@ -122,7 +122,20 @@ test("default setup choice policy records alwaysPickFirst", () => {
     assert.ok(candidates.length > 0);
     assert.equal(candidateInstanceIds.length, candidates.length);
     assert.equal(event.chosenDefinitionId, candidates[0]);
-    assert.equal(event.chosenInstanceId, candidateInstanceIds[0]);
+    const chosenInstanceId = event.chosenInstanceId;
+    assert.equal(chosenInstanceId, candidateInstanceIds[0]);
+    assert.ok(chosenInstanceId);
+    const owner = state.players.find(
+      (player) => player.playerId === event.playerId
+    );
+    assert.ok(owner);
+    const ownedSetupObjects =
+      event.setupChoiceKind === "wizardProperty"
+        ? owner.wizardProperties
+        : owner.unboughtFamiliars;
+    assert.ok(
+      ownedSetupObjects.some((object) => object.instanceId === chosenInstanceId)
+    );
   }
 });
 
@@ -177,6 +190,19 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
   assert.deepEqual(setupChoicePhases, ["thirdFamiliar", "thirdFamiliar"]);
   assert.equal(player.unboughtFamiliars.length, 3);
   assert.equal(otherPlayer.unboughtFamiliars.length, 3);
+  const familiarChoiceEvent = state.eventLog.find(
+    (event) =>
+      event.type === "setupChoiceSelected" &&
+      event.setupChoiceKind === "familiar" &&
+      event.playerId === player.playerId
+  );
+  assert.ok(familiarChoiceEvent);
+  assert.ok(familiarChoiceEvent.chosenInstanceId);
+  assert.ok(
+    player.unboughtFamiliars.some(
+      (card) => card.instanceId === familiarChoiceEvent.chosenInstanceId
+    )
+  );
   assert.ok(
     player.unboughtFamiliars.every((card) => card.ownerId === player.playerId)
   );

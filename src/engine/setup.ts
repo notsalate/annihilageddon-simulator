@@ -3,7 +3,6 @@ import {
   createPlayerId,
   createTokenInstanceId,
   markCardDefinitionId,
-  markTokenInstanceId,
   markTokenDefinitionId,
   type CardDefinitionId,
   type CardInstanceId,
@@ -1113,9 +1112,6 @@ function assignStartingWizardProperties(
 
     player.wizardProperties.push({
       ...selectedCandidate,
-      instanceId: markTokenInstanceId(
-        `starting-${selectedCandidate.instanceId}-player-${index + 1}`
-      ),
       ownerId: player.playerId,
     });
   }
@@ -1191,7 +1187,7 @@ function assignStartingFamiliars(
     if (playersRetainingBothFamiliars.has(player.playerId)) {
       for (const candidate of [firstCandidate, secondCandidate]) {
         player.unboughtFamiliars.push(
-          factory.create(candidate.definitionId, player.playerId)
+          transferSetupCardToPlayer(candidate, player.playerId)
         );
       }
       const familiarPairCount = players.length * 2;
@@ -1214,7 +1210,7 @@ function assignStartingFamiliars(
         );
       }
       player.unboughtFamiliars.push(
-        factory.create(thirdCandidate.definitionId, player.playerId)
+        transferSetupCardToPlayer(thirdCandidate, player.playerId)
       );
     } else {
       const selectedPairChoice = selectFamiliarSetupChoice(
@@ -1225,13 +1221,17 @@ function assignStartingFamiliars(
         eventLog
       );
       player.unboughtFamiliars.push(
-        factory.create(
-          selectedPairChoice.candidate.definitionId,
-          player.playerId
-        )
+        transferSetupCardToPlayer(selectedPairChoice.candidate, player.playerId)
       );
     }
   }
+}
+
+function transferSetupCardToPlayer(
+  candidate: CardInstance,
+  playerId: PlayerId
+): CardInstance {
+  return { ...candidate, ownerId: playerId };
 }
 
 function selectFamiliarSetupChoice<
