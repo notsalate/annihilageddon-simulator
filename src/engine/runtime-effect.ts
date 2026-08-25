@@ -17,6 +17,7 @@ export type {
   GainChipsRuntimeEffect,
   GainChipsPerPlayerWithStatusRuntimeEffect,
   DrawCardsRuntimeEffect,
+  GainChipsPerControlledDeadWizardTokenRuntimeEffect,
 } from "./effect-runtime-resources-draw.js";
 export type {
   CardOwnershipChoiceEffectPayloadMap,
@@ -277,6 +278,7 @@ export const knownRuntimeEffectIds = [
   "gain_chips",
   "gain_chips_equal_damage_dealt",
   "gain_chips_per_player_with_status",
+  "gain_chips_per_controlled_dead_wizard_token",
   "gain_status",
   "heal",
   "heal_equal_damage_dealt",

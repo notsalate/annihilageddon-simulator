@@ -1,4 +1,5 @@
 import { drawDeckCards } from "./deck-lifecycle.js";
+import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import type { EffectSourceContext } from "./effect-runtime-registry.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
@@ -37,6 +38,7 @@ type DecodedPayloadValidator<Id extends ResourceDrawEffectId> = (
 export type ResourceDrawEffectId =
   | "gain_chips"
   | "gain_chips_per_player_with_status"
+  | "gain_chips_per_controlled_dead_wizard_token"
   | "draw_cards";
 
 export type GainChipsRuntimeEffect = EffectWithOptionalTiming<"gain_chips"> &
@@ -52,18 +54,26 @@ export type GainChipsPerPlayerWithStatusRuntimeEffect =
     status: "dingler";
   };
 
+export type GainChipsPerControlledDeadWizardTokenRuntimeEffect =
+  EffectWithOptionalTiming<"gain_chips_per_controlled_dead_wizard_token"> & {
+    amountPerDeadWizardToken: number;
+    targetSelector?: "eachPlayerClockwiseFromActive";
+  };
+
 export type DrawCardsRuntimeEffect = EffectWithOptionalTiming<"draw_cards"> &
   PositiveAmount;
 
 export interface ResourceDrawEffectPayloadMap {
   gain_chips: GainChipsRuntimeEffect;
   gain_chips_per_player_with_status: GainChipsPerPlayerWithStatusRuntimeEffect;
+  gain_chips_per_controlled_dead_wizard_token: GainChipsPerControlledDeadWizardTokenRuntimeEffect;
   draw_cards: DrawCardsRuntimeEffect;
 }
 
 export const resourceDrawEffectIds = [
   "gain_chips",
   "gain_chips_per_player_with_status",
+  "gain_chips_per_controlled_dead_wizard_token",
   "draw_cards",
 ] as const satisfies readonly ResourceDrawEffectId[];
 
@@ -82,6 +92,9 @@ export interface ResourceDrawDecoderTools {
   nonEmptyStringArray: ValueDecoder<string[]>;
   optionalCondition: OptionalField<RuntimeEffectCondition>;
   optionalTiming: OptionalField<EffectTiming>;
+  optionalTargetSelector: OptionalField<
+    "eachPlayerClockwiseFromActive"
+  >;
 }
 
 export type ResourceDrawEffectDecoders = {
@@ -100,6 +113,7 @@ export function createResourceDrawEffectDecoders(
     nonEmptyStringArray,
     optionalCondition,
     optionalTiming,
+    optionalTargetSelector,
   } = tools;
 
   return {
@@ -118,6 +132,17 @@ export function createResourceDrawEffectDecoders(
         timing: optionalTiming,
         amountPerPlayer: required(positiveInteger),
         status: required(literal("dingler")),
+      }
+    ),
+    gain_chips_per_controlled_dead_wizard_token: defineDecoder(
+      "gain_chips_per_controlled_dead_wizard_token",
+      {
+        effectId: required(
+          literal("gain_chips_per_controlled_dead_wizard_token")
+        ),
+        timing: optionalTiming,
+        amountPerDeadWizardToken: required(positiveInteger),
+        targetSelector: optionalTargetSelector,
       }
     ),
     draw_cards: defineDecoder("draw_cards", {
@@ -170,6 +195,36 @@ const gainChipsPerPlayerWithStatusHandler: EffectRuntimeHandler<GainChipsPerPlay
       return { ok: true };
     },
   };
+
+const gainChipsPerControlledDeadWizardTokenHandler: EffectRuntimeHandler<
+  GainChipsPerControlledDeadWizardTokenRuntimeEffect
+> = {
+  effectId: "gain_chips_per_controlled_dead_wizard_token",
+  execute(state, player, effect, source, services) {
+    const recipients =
+      effect.targetSelector === "eachPlayerClockwiseFromActive"
+        ? services.getPlayersInActiveOrder(state)
+        : [player];
+
+    for (const recipient of recipients) {
+      const amount =
+        getControlledDeadWizardTokenCount(state, recipient) *
+        effect.amountPerDeadWizardToken;
+      const chipsBefore = recipient.chips;
+      recipient.chips += amount;
+      recordEffectChipsChanged(
+        state,
+        recipient,
+        source,
+        effect.effectId,
+        chipsBefore,
+        recipient.chips
+      );
+    }
+
+    return { ok: true };
+  },
+};
 
 const drawCardsHandler: EffectRuntimeHandler<DrawCardsRuntimeEffect> = {
   effectId: "draw_cards",
@@ -246,6 +301,16 @@ export function createResourceDrawEffectDefinitions(
       supportedModes,
       supportedSourceKinds,
       handler: gainChipsPerPlayerWithStatusHandler,
+    },
+    {
+      effectId: "gain_chips_per_controlled_dead_wizard_token",
+      decoder: bindRuntimeEffectDecoder(
+        "gain_chips_per_controlled_dead_wizard_token"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: gainChipsPerControlledDeadWizardTokenHandler,
     },
     {
       effectId: "draw_cards",

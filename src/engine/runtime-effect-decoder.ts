@@ -469,6 +469,9 @@ function requireNestedTargetSelector(
 const optionalTiming = optional(effectTiming);
 const optionalTarget = optional(runtimeTarget);
 const optionalTargetSelector = optional(targetSelector);
+const optionalEachPlayerClockwiseFromActiveTargetSelector = optional(
+  literal("eachPlayerClockwiseFromActive")
+);
 const optionalCondition = optional(runtimeCondition);
 const requiredCondition = required(runtimeCondition);
 const optionalCosts = optional(runtimeCosts);
@@ -483,6 +486,8 @@ const resourceDrawEffectDecoders = createResourceDrawEffectDecoders({
   nonEmptyStringArray,
   optionalCondition,
   optionalTiming,
+  optionalTargetSelector:
+    optionalEachPlayerClockwiseFromActiveTargetSelector,
 });
 
 const cardOwnershipChoiceEffectDecoders =
