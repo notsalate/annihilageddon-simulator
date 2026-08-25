@@ -21,6 +21,8 @@ type IsReadonly<Type, Key extends keyof Type> = Equal<
 >;
 
 type DecisionChoice = ChoiceRequest["choices"][number];
+type EffectChoiceRequest = Extract<ChoiceRequest, { requestKind: "effect" }>;
+type SetupChoiceRequest = Extract<ChoiceRequest, { requestKind: "setup" }>;
 type PlayerTargetChoice = Extract<
   DecisionChoice,
   { choiceKind: "playerTarget" }
@@ -62,12 +64,21 @@ type DecisionChoiceReadonlyAssertions = [
   Assert<IsReadonly<ChoiceSelection, "choiceId">>,
 ];
 
+type ChoiceRequestDiscriminatorAssertions = [
+  Assert<Equal<EffectChoiceRequest["requestKind"], "effect">>,
+  Assert<Equal<SetupChoiceRequest["requestKind"], "setup">>,
+];
+
 function assertDecisionChoiceViewsAreReadonly(
   _assertions?: DecisionChoiceReadonlyAssertions
 ): void {}
 
 function assertDecisionChoicesDoNotExposeHiddenState(
   _assertions?: DecisionChoiceDoesNotExposeHiddenStateAssertions
+): void {}
+
+function assertChoiceRequestDiscriminators(
+  _assertions?: ChoiceRequestDiscriminatorAssertions
 ): void {}
 
 test("decision choice views are immutable at the strategy boundary", () => {
@@ -77,6 +88,7 @@ test("decision choice views are immutable at the strategy boundary", () => {
 
 test("choice requests expose stable identifiers without hidden state", () => {
   assertDecisionChoicesDoNotExposeHiddenState();
+  assertChoiceRequestDiscriminators();
   assert.equal(true, true);
 });
 

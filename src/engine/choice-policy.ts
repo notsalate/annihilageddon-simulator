@@ -80,8 +80,7 @@ export interface ChoiceSelection {
 }
 
 export interface EffectChoiceRequest {
-  /** Omitted by older callers; effect requests are the default request kind. */
-  readonly requestKind?: "effect";
+  readonly requestKind: "effect";
   readonly player: ChoicePlayerView;
   readonly effectId: RuntimeEffectId;
   readonly sourceType: "card" | "wizardProperty" | "deadWizardToken";

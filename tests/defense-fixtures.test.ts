@@ -60,6 +60,7 @@ test("fixture defense selectors skip production cards and select an exact fixtur
     },
   ];
   const request = {
+    requestKind: "effect" as const,
     player: createChoicePlayerView(defender),
     effectId: "avoid_attack" as const,
     sourceType: "card" as const,

@@ -1745,6 +1745,7 @@ function resolveEffectChoice(
   choices: readonly EffectChoice[]
 ): EffectChoiceResolution {
   const decisionRequest: EffectChoiceRequest = structuredClone({
+    requestKind: "effect" as const,
     player: createChoicePlayerView(player),
     effectId,
     sourceType: source.sourceType,
