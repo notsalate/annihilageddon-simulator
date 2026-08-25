@@ -20,6 +20,7 @@ import {
   givenRuntimeCard,
 } from "./helpers/game-scenario.js";
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
+import { parseSimulationFailureReplayReport } from "../src/engine/simulation.js";
 
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
@@ -199,6 +200,13 @@ test("saved failure report replays its actions and choices through the CLI", () 
   assert.ok(
     failureReport.choices.some((event) => event.type === "effectChoiceSelected")
   );
+  assert.ok(
+    failureReport.choices.some(
+      (event) =>
+        event.type === "setupChoiceSelected" &&
+        event.setupChoiceKind === "familiar"
+    )
+  );
 
   const reportDirectory = mkdtempSync(
     path.join(tmpdir(), "krutagidon-replay-report-")
@@ -229,4 +237,37 @@ test("saved failure report replays its actions and choices through the CLI", () 
   );
   assert.notEqual(result.status, 0);
   assert.match(`${result.stdout}\n${result.stderr}`, /illegal action/);
+});
+
+test("simulation failure replay accepts setCardEffectiveType actions", () => {
+  const action = {
+    type: "setCardEffectiveType",
+    cardInstanceId: "fixture-familiar",
+    cardType: "legend",
+    enabled: true,
+  } as const;
+  const report = [
+    "runtimeData:",
+    "```json",
+    JSON.stringify({
+      manifest: {},
+      cardDefinitions: [],
+      tokenDefinitions: [],
+      decks: {},
+      tokenStacks: {},
+    }),
+    "```",
+    "actions:",
+    "```json",
+    JSON.stringify([action]),
+    "```",
+    "choices:",
+    "```json",
+    "[]",
+    "```",
+  ].join("\n");
+
+  const parsed = parseSimulationFailureReplayReport(report);
+
+  assert.deepEqual(parsed.replay.actions, [action]);
 });

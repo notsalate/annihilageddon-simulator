@@ -9,6 +9,7 @@ import {
   getBestMovePolicy,
   type BestMoveCriterionId,
 } from "../engine/best-move-policies.js";
+import { stableAction } from "../engine/action-format.js";
 import type { LegalAction } from "../engine/actions.js";
 
 export interface BestMoveArgs extends AnalysisLimits {
@@ -184,24 +185,6 @@ function formatLine(line: RankedLineInput): BestMoveLineSummary {
     })),
   };
 }
-function stableAction(action: LegalAction): Record<string, string> {
-  switch (action.type) {
-    case "playCard":
-    case "activatePermanent":
-      return { type: action.type, cardInstanceId: action.cardInstanceId };
-    case "activateWizardProperty":
-      return { type: action.type, tokenInstanceId: action.tokenInstanceId };
-    case "buyMarketCard":
-      return {
-        type: action.type,
-        cardInstanceId: action.cardInstanceId,
-        source: action.source,
-      };
-    case "endTurn":
-      return { type: action.type };
-  }
-}
-
 if (process.argv[1]?.endsWith("run-best-move-analysis.js")) {
   try {
     const args = parseBestMoveArgs(process.argv.slice(2));

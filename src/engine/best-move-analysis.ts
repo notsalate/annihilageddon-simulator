@@ -6,7 +6,7 @@ import {
   type LegalAction,
 } from "./actions.js";
 import { forkGameState } from "./game-state-fork.js";
-import type { ChoiceRequest } from "./choice-policy.js";
+import type { EffectChoiceRequest } from "./choice-policy.js";
 import type { GameState } from "./setup.js";
 
 export interface AnalysisLimits {
@@ -18,13 +18,13 @@ export interface AnalysisLimits {
 
 export interface AnalysisChoiceSelection {
   requestIndex: number;
-  effectId: ChoiceRequest["effectId"];
-  sourceType: ChoiceRequest["sourceType"];
+  effectId: EffectChoiceRequest["effectId"];
+  sourceType: EffectChoiceRequest["sourceType"];
   cardInstanceId: string;
   definitionId: string;
   choiceIndex: number;
   choiceId: string;
-  choiceKind: ChoiceRequest["choices"][number]["choiceKind"];
+  choiceKind: EffectChoiceRequest["choices"][number]["choiceKind"];
 }
 
 export interface CompletedActionBranch {
@@ -101,7 +101,7 @@ interface ChoicePrefix {
 class ExpandChoicePath extends Error {
   constructor(
     readonly requestIndex: number,
-    readonly request: ChoiceRequest
+    readonly request: EffectChoiceRequest
   ) {
     super("Analyzer choice path expansion");
   }
@@ -132,20 +132,26 @@ export function enumerateActionBranches(
     const consumed = new Set<number>();
     let requestIndex = 0;
     fork.effectChoiceStrategy = (request) => {
+      if (request.requestKind === "setup") {
+        throw new AnalysisError(
+          "Setup choice unexpectedly reached current-turn analysis"
+        );
+      }
+      const effectRequest: EffectChoiceRequest = request;
       const selection = prefix.selections.find(
         (candidate) => candidate.requestIndex === requestIndex
       );
       const currentRequestIndex = requestIndex;
       requestIndex += 1;
       if (selection === undefined) {
-        if (request.choices.length === 0) {
+        if (effectRequest.choices.length === 0) {
           return undefined;
         }
-        throw new ExpandChoicePath(currentRequestIndex, request);
+        throw new ExpandChoicePath(currentRequestIndex, effectRequest);
       }
       consumed.add(selection.requestIndex);
-      validateSelection(selection, request, action, currentRequestIndex);
-      const choice = request.choices[selection.choiceIndex];
+      validateSelection(selection, effectRequest, action, currentRequestIndex);
+      const choice = effectRequest.choices[selection.choiceIndex];
       if (choice === undefined) {
         throw replayError(
           action,
@@ -260,7 +266,11 @@ export function enumerateTurnLines(
   const initialTurnNumber = source.turn.number;
   const lines: AnalyzedTurnLine[] = [];
 
-  const visit = (state: GameState, steps: AnalysisActionStep[]): void => {
+  const visit = (
+    state: GameState,
+    steps: AnalysisActionStep[],
+    visitedEffectiveTypeSelections: ReadonlySet<string> | undefined
+  ): void => {
     for (const [legalActionIndex, action] of listLegalActions(
       state
     ).entries()) {
@@ -321,12 +331,30 @@ export function enumerateTurnLines(
           continue;
         }
 
-        visit(branch.resultingState, nextSteps);
+        // Effective-type changes are the only reversible non-terminal action;
+        // track only their contiguous run so cycle protection stays cheap.
+        if (action.type !== "setCardEffectiveType") {
+          visit(branch.resultingState, nextSteps, undefined);
+          continue;
+        }
+
+        const currentSelectionKey = getEffectiveTypeSelectionKey(state);
+        const nextSelectionKey = getEffectiveTypeSelectionKey(
+          branch.resultingState
+        );
+        const currentPathSelections =
+          visitedEffectiveTypeSelections ?? new Set([currentSelectionKey]);
+        if (currentPathSelections.has(nextSelectionKey)) {
+          continue;
+        }
+        const nextPathSelections = new Set(currentPathSelections);
+        nextPathSelections.add(nextSelectionKey);
+        visit(branch.resultingState, nextSteps, nextPathSelections);
       }
     }
   };
 
-  visit(source, []);
+  visit(source, [], undefined);
   return lines;
 }
 
@@ -405,6 +433,26 @@ function cloneAnalyzedTurnLine(line: AnalyzedTurnLine): AnalyzedTurnLine {
   };
 }
 
+function getEffectiveTypeSelectionKey(state: GameState): string {
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  if (activePlayer === undefined) {
+    return "<missing-active-player>";
+  }
+  const selections: Array<[string, string]> =
+    activePlayer.effectiveCardTypeSelections.map(
+      ({ cardInstanceId, cardType }) => [cardInstanceId, cardType]
+    );
+  return JSON.stringify(
+    selections.sort(([leftCardId, leftType], [rightCardId, rightType]) =>
+      leftCardId === rightCardId
+        ? leftType.localeCompare(rightType)
+        : leftCardId.localeCompare(rightCardId)
+    )
+  );
+}
+
 function assertFiniteEvaluation(
   policyId: string,
   enumerationIndex: number,
@@ -420,7 +468,7 @@ function assertFiniteEvaluation(
 
 function validateSelection(
   selection: AnalysisChoiceSelection,
-  request: ChoiceRequest,
+  request: EffectChoiceRequest,
   action: LegalAction,
   requestIndex: number
 ): void {

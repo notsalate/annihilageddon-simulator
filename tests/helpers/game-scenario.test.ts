@@ -127,6 +127,7 @@ test("player target choice adapter handles only the requested effect", () => {
     },
   ];
   const request = {
+    requestKind: "effect" as const,
     player: createChoicePlayerView(scenario.activePlayer),
     sourceType: "card" as const,
     cardInstanceId: "fixture-choice-source",

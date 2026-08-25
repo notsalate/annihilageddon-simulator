@@ -20,20 +20,21 @@
     "Фактически, в течении хода можно сначала считать фамильяры обычным типом при каких-либо действиях, потом легендами, потом снова обычным типом, как пример."
   ],
   "engine": {
-    "mappingStatus": "draft",
-    "playableInV0": false,
+    "mappingStatus": "mapped",
+    "playableInV0": true,
     "effects": [
+      {
+        "effectId": "setup_retain_and_choose_third_familiar",
+        "timing": "setup"
+      },
       {
         "effectId": "owned_cards_count_as_card_type",
         "timing": "whileControlled",
         "sourceCardTypes": ["familiar"],
-        "countedAsCardType": "legend"
+        "countedAsCardType": "legend",
+        "selectionMode": "perCard"
       }
     ],
-    "unsupportedMechanics": [
-      "wizard-property-setup-familiar-selection",
-      "third-unowned-familiar",
-      "dynamic-familiar-counts-as-legend"
-    ]
+    "unsupportedMechanics": []
   }
 }

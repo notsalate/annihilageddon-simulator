@@ -45,11 +45,17 @@ test("game state invariants accept repeated gained card definition ids", () => {
     seed: 60615,
   });
 
-  state.turn.gainedCardDefinitionIds.push(
-    markCardDefinitionId("repeated-definition-id")
-  );
-  state.turn.gainedCardDefinitionIds.push(
-    markCardDefinitionId("repeated-definition-id")
+  state.turn.gainedCards.push(
+    {
+      playerId: markPlayerId("player-1"),
+      definitionId: markCardDefinitionId("repeated-definition-id"),
+      cardInstanceId: markCardInstanceId("repeated-instance-1"),
+    },
+    {
+      playerId: markPlayerId("player-1"),
+      definitionId: markCardDefinitionId("repeated-definition-id"),
+      cardInstanceId: markCardInstanceId("repeated-instance-2"),
+    }
   );
 
   assert.doesNotThrow(() => assertGameStateInvariants(state));
@@ -106,12 +112,12 @@ test("game state invariants use descriptor owner metadata for player and common 
   const familiar = player.hand.shift();
   assert.ok(familiar);
   familiar.ownerId = "common";
-  player.unboughtFamiliar = familiar;
+  player.unboughtFamiliars = [familiar];
 
   assert.throws(
     () => assertGameStateInvariants(playerState),
     new RegExp(
-      `${familiar.instanceId} in ${player.playerId}\\.unboughtFamiliar must be owned by ${player.playerId}`
+      `${familiar.instanceId} in ${player.playerId}\\.unboughtFamiliars must be owned by ${player.playerId}`
     )
   );
 
@@ -162,14 +168,14 @@ test("game state invariants detect duplicates across singleton, destroyed, and a
   assert.ok(player);
   assert.ok(card);
 
-  player.unboughtFamiliar = card;
+  player.unboughtFamiliars = [card];
   state.common.destroyedMegaMayhem.push(card);
 
   assert.throws(
     () => assertGameStateInvariants(state),
     new RegExp(
       `card ${card.instanceId} appears in multiple zones: ` +
-        `${player.playerId}\\.hand, ${player.playerId}\\.unboughtFamiliar, destroyedMegaMayhem`
+        `${player.playerId}\\.hand, ${player.playerId}\\.unboughtFamiliars, destroyedMegaMayhem`
     )
   );
 });

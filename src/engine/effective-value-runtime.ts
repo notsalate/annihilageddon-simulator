@@ -1,8 +1,8 @@
 export {
-  calculateEffectiveCardCost,
-  calculateEffectiveCardVictoryPoints,
-  calculateEffectivePlayerMaxLife,
-  calculateEffectivePlayerVictoryPoints,
-  calculateEffectiveTokenVictoryPoints,
+  calculateEffectiveCardCostForPlayer as calculateEffectiveCardCost,
+  calculateEffectiveCardVictoryPointsForPlayer as calculateEffectiveCardVictoryPoints,
+  calculateEffectivePlayerMaxLifeForPlayer as calculateEffectivePlayerMaxLife,
+  calculateEffectivePlayerVictoryPointsForPlayer as calculateEffectivePlayerVictoryPoints,
+  calculateEffectiveTokenVictoryPointsForPlayer as calculateEffectiveTokenVictoryPoints,
   getOwnedScoringCards,
 } from "./effective-values.js";

@@ -35,7 +35,7 @@ const playerZoneSuffixes = [
   "discard",
   "playedThisTurn",
   "permanents",
-  "unboughtFamiliar",
+  "unboughtFamiliars",
 ] as const;
 const commonZoneNames = [
   "mainMarket",

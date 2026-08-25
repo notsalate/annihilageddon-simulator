@@ -17,6 +17,7 @@ import {
 } from "./attack-resolution.js";
 import {
   getControlledCards,
+  findCardLocation,
   removeCardFromLocation,
 } from "./control-ledger.js";
 import {
@@ -50,6 +51,7 @@ import {
   type EffectChoiceResolution,
   type EffectRuntimeHandlerOperationResult,
   evaluateRuntimeEffectAtTiming,
+  evaluateRuntimeEffectBasicTrophyChipPayoutSuppression,
   executeRuntimeEffect,
   executeRuntimeEffectAtTiming,
   resolveResurrectionLifeTotal,
@@ -73,7 +75,7 @@ import {
 } from "./runtime-effect-verification.js";
 import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
 import type {
-  ChoiceRequest,
+  EffectChoiceRequest,
   ChoiceSelection,
   ChoiceView,
 } from "./choice-policy.js";
@@ -209,7 +211,7 @@ export function validateGainedCardEffects(
         tokenDefinitionId: token.definitionId,
       },
       (effect) =>
-        cardTriggerMatches(effect, definition)
+        cardTriggerMatches(effect, definition, state, player, card)
           ? { status: "resolved", result: undefined }
           : { status: "notApplicable" }
     );
@@ -660,7 +662,8 @@ function resolveQueuedDeadWizardTokenFaces(
 export function moveGainedCardToPlayerDestination(
   state: GameState,
   player: PlayerState,
-  card: CardInstance
+  card: CardInstance,
+  fixedDestination?: "discard"
 ):
   | { ok: true; destination: "discard" | "deckTop" | "hand" }
   | { ok: false; error: string } {
@@ -684,18 +687,31 @@ export function moveGainedCardToPlayerDestination(
 
   moveMarketChipsToPlayer(state, player, card);
   card.ownerId = player.playerId;
-  state.turn.gainedCardDefinitionIds.push(card.definitionId);
-  const onGainCardResult = runOnGainCardEffects(state, player, definition);
+  state.turn.gainedCards.push({
+    playerId: player.playerId,
+    definitionId: card.definitionId,
+    cardInstanceId: card.instanceId,
+  });
+  const onGainCardResult = runOnGainCardEffects(
+    state,
+    player,
+    card,
+    definition,
+    fixedDestination
+  );
   if (!onGainCardResult.ok) {
     return onGainCardResult;
   }
-  const destinationResult = resolveMainMarketGainDestination(
-    state,
-    player,
-    sourceZone,
-    onGainCardResult.destination,
-    effectRuntimeServices
-  );
+  const destinationResult =
+    fixedDestination === undefined
+      ? resolveMainMarketGainDestination(
+          state,
+          player,
+          sourceZone,
+          onGainCardResult.destination,
+          effectRuntimeServices
+        )
+      : { ok: true as const, destination: fixedDestination };
   if (!destinationResult.ok) {
     return destinationResult;
   }
@@ -773,7 +789,9 @@ function executeGainedCardOnGainEffects(
 function runOnGainCardEffects(
   state: GameState,
   player: PlayerState,
-  gainedDefinition: CardDefinition
+  gainedCard: CardInstance,
+  gainedDefinition: CardDefinition,
+  fixedDestination?: "discard"
 ):
   | { ok: true; destination: "discard" | "deckTop" }
   | { ok: false; error: string } {
@@ -831,7 +849,13 @@ function runOnGainCardEffects(
         source,
         "onGainCard",
         (decodedEffect) =>
-          cardTriggerMatches(decodedEffect, gainedDefinition, state, player)
+          cardTriggerMatches(
+            decodedEffect,
+            gainedDefinition,
+            state,
+            player,
+            gainedCard
+          )
             ? { status: "resolved", result: decodedEffect }
             : { status: "notApplicable" }
       );
@@ -843,6 +867,9 @@ function runOnGainCardEffects(
       }
 
       if (applicability.result.effectId === "topdeck_gained_card") {
+        if (fixedDestination !== undefined) {
+          continue;
+        }
         if (applicability.result.optional === true) {
           const choice = chooseEffectChoice(
             state,
@@ -871,7 +898,13 @@ function runOnGainCardEffects(
         source,
         effectRuntimeServices,
         (decodedEffect) =>
-          cardTriggerMatches(decodedEffect, gainedDefinition, state, player)
+          cardTriggerMatches(
+            decodedEffect,
+            gainedDefinition,
+            state,
+            player,
+            gainedCard
+          )
       );
       if (execution.status === "error") {
         return { ok: false, error: execution.error };
@@ -925,7 +958,11 @@ export function calculateEndTurnDrawCount(
                 result:
                   drawCount +
                   decodedEffect.amount *
-                    countGainedCardsMatchingEffect(state, decodedEffect),
+                    countGainedCardsMatchingEffect(
+                      state,
+                      player,
+                      decodedEffect
+                    ),
               }
             : { status: "notApplicable" }
       );
@@ -947,6 +984,42 @@ export function calculateEndTurnDrawCount(
   }
 
   return controlledDrawResult.drawCount;
+}
+
+export function isBasicTrophyChipPayoutSuppressed(
+  state: GameState,
+  player: PlayerState
+): boolean {
+  for (const token of player.deadWizardTokens) {
+    const definition = state.tokenDefinitions.get(token.definitionId);
+    if (definition?.kind !== "deadWizardToken") {
+      continue;
+    }
+
+    const source: EffectSourceContext = {
+      sourceType: "deadWizardToken",
+      runtimeMode: state.runtimeMode,
+      playerId: player.playerId,
+      cardInstanceId: token.instanceId,
+      definitionId: definition.tokenId,
+      tokenInstanceId: token.instanceId,
+      tokenDefinitionId: definition.tokenId,
+    };
+    for (const effect of definition.effects) {
+      const result = evaluateRuntimeEffectBasicTrophyChipPayoutSuppression(
+        requireVerifiedRuntimeEffect(effect),
+        { state, controller: player, source }
+      );
+      if (result.status === "error") {
+        throw new Error(result.error);
+      }
+      if (result.status === "resolved" && result.result) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 export function executeMayhemEffects(
@@ -1022,7 +1095,8 @@ function cardTriggerMatches(
   effect: RuntimeEffectPayload,
   definition: CardDefinition,
   state?: GameState,
-  player?: PlayerState
+  player?: PlayerState,
+  card?: CardInstance
 ): boolean {
   const cardTypes = "cardTypes" in effect ? effect.cardTypes : undefined;
   const matchesType =
@@ -1030,7 +1104,13 @@ function cardTriggerMatches(
     cardTypes.some((cardType) =>
       state === undefined || player === undefined
         ? definition.engine.cardTypes.includes(cardType)
-        : cardMatchesTypeForPlayer(state, player.playerId, definition, cardType)
+        : cardMatchesTypeForPlayer(
+            state,
+            player.playerId,
+            definition,
+            cardType,
+            card
+          )
     );
   const matchesOngoing =
     "isOngoing" in effect &&
@@ -1047,11 +1127,17 @@ function cardTriggerMatches(
 
 function countGainedCardsMatchingEffect(
   state: GameState,
+  player: PlayerState,
   effect: RuntimeEffectPayload
 ): number {
-  return state.turn.gainedCardDefinitionIds.filter((definitionId) => {
-    const definition = state.cardDefinitions.get(definitionId);
-    return definition !== undefined && cardTriggerMatches(effect, definition);
+  return state.turn.gainedCards.filter((record) => {
+    if (record.playerId !== player.playerId) return false;
+    const definition = state.cardDefinitions.get(record.definitionId);
+    const card = findCardLocation(state, record.cardInstanceId)?.card;
+    return (
+      definition !== undefined &&
+      cardTriggerMatches(effect, definition, state, player, card)
+    );
   }).length;
 }
 
@@ -1090,7 +1176,13 @@ function effectConditionMatches(
       return (
         definition !== undefined &&
         condition.cardTypes.some((cardType) =>
-          cardMatchesTypeForPlayer(state, player.playerId, definition, cardType)
+          cardMatchesTypeForPlayer(
+            state,
+            player.playerId,
+            definition,
+            cardType,
+            card
+          )
         )
       );
     }).length;
@@ -1652,7 +1744,8 @@ function resolveEffectChoice(
   effectId: RuntimeEffectId,
   choices: readonly EffectChoice[]
 ): EffectChoiceResolution {
-  const decisionRequest: ChoiceRequest = structuredClone({
+  const decisionRequest: EffectChoiceRequest = structuredClone({
+    requestKind: "effect" as const,
     player: createChoicePlayerView(player),
     effectId,
     sourceType: source.sourceType,

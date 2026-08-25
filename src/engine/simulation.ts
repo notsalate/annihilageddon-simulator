@@ -5,7 +5,13 @@ import {
   type LegalAction,
 } from "./actions.js";
 import { assertNever } from "../common.js";
-import type { ChoiceRequest, ChoiceSelection } from "./choice-policy.js";
+import type {
+  ChoicePolicy,
+  ChoiceRequest,
+  ChoiceSelection,
+  EffectChoiceRequest,
+  SetupChoiceRequest,
+} from "./choice-policy.js";
 import type {
   CardDefinition,
   LoadedDataPack,
@@ -14,6 +20,11 @@ import type {
 import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
 import { recordBotActionSelected } from "./event-recorder.js";
 import { adjudicateGame, type AdjudicationResult } from "./adjudication.js";
+import {
+  findPlayerUnboughtFamiliarCard,
+  listLegendMarketCards,
+  listMainMarketCards,
+} from "./control-ledger.js";
 import {
   initializeGame,
   type CardInstance,
@@ -61,7 +72,7 @@ export type BotDecisionAction =
 
 export interface BotStrategy {
   chooseAction(context: BotDecisionContext): GameAction;
-  chooseEffectChoice?(request: ChoiceRequest): ChoiceSelection | undefined;
+  chooseEffectChoice?: ChoicePolicy;
 }
 
 interface PlayerBotBinding {
@@ -91,7 +102,7 @@ export interface SetupPlayerSnapshot {
   hand: SetupCardSnapshot[];
   wizardProperties: SetupTokenSnapshot[];
   statuses: string[];
-  unboughtFamiliar?: SetupCardSnapshot;
+  unboughtFamiliars: SetupCardSnapshot[];
 }
 
 export interface SetupStateSnapshot {
@@ -133,12 +144,24 @@ export interface SimulationFailureReproduction {
   args: readonly string[];
 }
 
-export interface SimulationFailureReplayChoice {
+export interface SimulationFailureReplayEffectChoice {
   readonly type: "effectChoiceSelected" | "effectChoiceSkipped";
   readonly playerId: string;
   readonly effectId: string;
   readonly choiceId?: string;
 }
+
+export interface SimulationFailureReplaySetupChoice {
+  readonly type: "setupChoiceSelected";
+  readonly playerId: string;
+  readonly setupChoiceKind: "familiar";
+  readonly policyId: string;
+  readonly chosenInstanceId: string;
+}
+
+export type SimulationFailureReplayChoice =
+  | SimulationFailureReplayEffectChoice
+  | SimulationFailureReplaySetupChoice;
 
 export interface SimulationFailureReplay {
   readonly actions: readonly GameAction[];
@@ -169,6 +192,8 @@ interface SimulationFailureRuntimeDataCandidate {
 interface GameActionCandidate {
   readonly type?: unknown;
   readonly cardInstanceId?: unknown;
+  readonly cardType?: unknown;
+  readonly enabled?: unknown;
   readonly tokenInstanceId?: unknown;
   readonly source?: unknown;
 }
@@ -178,6 +203,9 @@ interface SimulationFailureReplayChoiceCandidate {
   readonly playerId?: unknown;
   readonly effectId?: unknown;
   readonly choiceId?: unknown;
+  readonly setupChoiceKind?: unknown;
+  readonly policyId?: unknown;
+  readonly chosenInstanceId?: unknown;
 }
 
 export function createSimulationFailureReplay(
@@ -185,6 +213,22 @@ export function createSimulationFailureReplay(
 ): SimulationFailureReplay {
   const choices: SimulationFailureReplayChoice[] = [];
   for (const event of report.choices) {
+    if (event.type === "setupChoiceSelected") {
+      if (event.setupChoiceKind !== "familiar") {
+        continue;
+      }
+      if (event.chosenInstanceId === undefined) {
+        throw new Error("Familiar setup replay event is missing choiceId");
+      }
+      choices.push({
+        type: event.type,
+        playerId: event.playerId,
+        setupChoiceKind: event.setupChoiceKind,
+        policyId: event.policyId ?? "provided",
+        chosenInstanceId: event.chosenInstanceId,
+      });
+      continue;
+    }
     if (event.type === "effectChoiceSkipped") {
       choices.push({
         type: event.type,
@@ -292,6 +336,12 @@ function isGameAction(value: unknown): value is GameAction {
       return typeof record.cardInstanceId === "string";
     case "activateWizardProperty":
       return typeof record.tokenInstanceId === "string";
+    case "setCardEffectiveType":
+      return (
+        typeof record.cardInstanceId === "string" &&
+        typeof record.cardType === "string" &&
+        typeof record.enabled === "boolean"
+      );
     case "buyMarketCard":
       return (
         typeof record.cardInstanceId === "string" &&
@@ -316,6 +366,26 @@ function readReplayChoices(value: unknown): SimulationFailureReplay["choices"] {
       throw new Error("Report choice has an invalid shape");
     }
     const record = entry as SimulationFailureReplayChoiceCandidate;
+    if (record.type === "setupChoiceSelected") {
+      if (record.setupChoiceKind !== "familiar") {
+        continue;
+      }
+      if (
+        typeof record.playerId !== "string" ||
+        typeof record.policyId !== "string" ||
+        typeof record.chosenInstanceId !== "string"
+      ) {
+        throw new Error("Report familiar setup choice has an invalid shape");
+      }
+      choices.push({
+        type: "setupChoiceSelected",
+        playerId: record.playerId,
+        setupChoiceKind: "familiar",
+        policyId: record.policyId,
+        chosenInstanceId: record.chosenInstanceId,
+      });
+      continue;
+    }
     if (
       record.type !== "effectChoiceSelected" &&
       record.type !== "effectChoiceSkipped"
@@ -456,18 +526,24 @@ function getBuyActionCost(
   if (action.source === "wildMagicStack") {
     return 3;
   }
-  const card = [
-    ...state.common.market,
-    ...state.common.legendMarket,
-    activePlayer.unboughtFamiliar,
-  ].find((candidate) => candidate?.instanceId === action.cardInstanceId);
+  const card =
+    action.source === "mainMarket"
+      ? listMainMarketCards(state).find(
+          (candidate) => candidate.instanceId === action.cardInstanceId
+        )
+      : action.source === "legendMarket"
+        ? listLegendMarketCards(state).find(
+            (candidate) => candidate.instanceId === action.cardInstanceId
+          )
+        : findPlayerUnboughtFamiliarCard(activePlayer, action.cardInstanceId);
   if (card === undefined) {
     throw new Error(`Legal buy target ${action.cardInstanceId} is missing`);
   }
   return calculateEffectiveCardCost(
     state,
     activePlayer.playerId,
-    mustGetCardDefinition(state, card)
+    mustGetCardDefinition(state, card),
+    card
   );
 }
 
@@ -488,7 +564,8 @@ class SimulationReplayError extends Error {
 
 interface SimulationReplayController {
   nextAction(): GameAction;
-  chooseEffectChoice(request: ChoiceRequest): ChoiceSelection | undefined;
+  chooseSetupChoice(request: SetupChoiceRequest): ChoiceSelection | undefined;
+  chooseEffectChoice(request: EffectChoiceRequest): ChoiceSelection | undefined;
   getIncompleteHistoryError(): SimulationReplayError | undefined;
 }
 
@@ -509,9 +586,40 @@ function createSimulationReplayController(
       actionIndex += 1;
       return action;
     },
-    chooseEffectChoice(request: ChoiceRequest): ChoiceSelection | undefined {
+    chooseSetupChoice(
+      request: SetupChoiceRequest
+    ): ChoiceSelection | undefined {
       const expected = replay.choices[choiceIndex];
-      if (expected === undefined) {
+      if (
+        expected === undefined ||
+        expected.type !== "setupChoiceSelected" ||
+        expected.playerId !== request.player.playerId ||
+        expected.setupChoiceKind !== request.setupChoiceKind
+      ) {
+        throw new SimulationReplayError(
+          `Replay setup choice ${choiceIndex + 1} does not match ${request.setupChoiceKind} for ${request.player.playerId}`
+        );
+      }
+      choiceIndex += 1;
+      if (expected.policyId === "alwaysPickFirst") {
+        return undefined;
+      }
+      if (
+        !request.choices.some(
+          (choice) => choice.choiceId === expected.chosenInstanceId
+        )
+      ) {
+        throw new SimulationReplayError(
+          `Replay familiar setup choice ${expected.chosenInstanceId} is not legal for ${request.player.playerId}`
+        );
+      }
+      return { choiceId: expected.chosenInstanceId };
+    },
+    chooseEffectChoice(
+      request: EffectChoiceRequest
+    ): ChoiceSelection | undefined {
+      const expected = replay.choices[choiceIndex];
+      if (expected === undefined || expected.type === "setupChoiceSelected") {
         throw new SimulationReplayError(
           `Replay choice history ended before ${request.effectId}`
         );
@@ -560,7 +668,9 @@ function createReplayBotFactory(
   return () => ({
     chooseAction: () => replayController.nextAction(),
     chooseEffectChoice: (request) =>
-      replayController.chooseEffectChoice(request),
+      request.requestKind === "setup"
+        ? replayController.chooseSetupChoice(request)
+        : replayController.chooseEffectChoice(request),
   });
 }
 
@@ -878,7 +988,6 @@ function summarizeGame(
 function snapshotSetupState(state: GameState): SetupStateSnapshot {
   return {
     players: state.players.map((player) => {
-      const familiar = snapshotOptionalCard(player.unboughtFamiliar);
       return {
         playerId: player.playerId,
         handSize: player.hand.length,
@@ -889,7 +998,7 @@ function snapshotSetupState(state: GameState): SetupStateSnapshot {
         hand: player.hand.map(snapshotCard),
         wizardProperties: player.wizardProperties.map(snapshotToken),
         statuses: player.statuses.map((status) => status.statusId),
-        ...(familiar === undefined ? {} : { unboughtFamiliar: familiar }),
+        unboughtFamiliars: player.unboughtFamiliars.map(snapshotCard),
       };
     }),
     mainMarket: state.common.market.map(snapshotCard),
@@ -900,12 +1009,6 @@ function snapshotSetupState(state: GameState): SetupStateSnapshot {
     limpWandStackSize: state.common.limpWandStack.length,
     deadWizardTokenStackSize: state.common.deadWizardTokens.drawStack.length,
   };
-}
-
-function snapshotOptionalCard(
-  card: CardInstance | undefined
-): SetupCardSnapshot | undefined {
-  return card === undefined ? undefined : snapshotCard(card);
 }
 
 function snapshotCard(card: CardInstance): SetupCardSnapshot {
@@ -960,6 +1063,13 @@ function isLegalAction(
         return (
           legalAction.type === "activateWizardProperty" &&
           legalAction.tokenInstanceId === action.tokenInstanceId
+        );
+      case "setCardEffectiveType":
+        return (
+          legalAction.type === "setCardEffectiveType" &&
+          legalAction.cardInstanceId === action.cardInstanceId &&
+          legalAction.cardType === action.cardType &&
+          legalAction.enabled === action.enabled
         );
       case "endTurn":
         return legalAction.type === "endTurn";

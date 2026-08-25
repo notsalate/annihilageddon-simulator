@@ -10,6 +10,7 @@ import {
   calculateEndTurnDrawCount,
   getWizardPropertyActivationAvailability,
   hasExecutableWizardPropertyActivation,
+  isBasicTrophyChipPayoutSuppressed,
   moveGainedCardToPlayerDestination,
   resolveWithinDeadWizardTokenResolutionBoundary,
   validateActivationEffects,
@@ -21,12 +22,23 @@ import { resolveCardPlay } from "./card-play-resolution.js";
 import type { EffectGameEnd } from "./effect-runtime-registry.js";
 import { assertNever } from "../common.js";
 import {
+  findPlayerUnboughtFamiliarCard,
   getControlledCards,
+  listPlayerOwnedPhysicalCards,
+  listPlayerUnboughtFamiliarCards,
   releaseTemporaryControls,
 } from "./control-ledger.js";
 import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
 import { drawDeckCards } from "./deck-lifecycle.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
+import {
+  cardMatchesTypeForPlayer,
+  clearPlayerCardEffectiveType,
+  getCardEffectiveTypeOptions,
+  hasPlayerPerCardEffectiveTypeEffects,
+  isPlayerCardEffectiveTypeSelected,
+  setPlayerCardEffectiveType,
+} from "./card-type-runtime.js";
 import {
   runMarketFlow,
   validateMarketFlow,
@@ -45,6 +57,7 @@ export type LegalAction =
   | BuyMarketCardAction
   | ActivatePermanentAction
   | ActivateWizardPropertyAction
+  | SetCardEffectiveTypeAction
   | EndTurnAction;
 export type GameAction = LegalAction;
 
@@ -73,6 +86,13 @@ export interface ActivatePermanentAction {
 export interface ActivateWizardPropertyAction {
   type: "activateWizardProperty";
   tokenInstanceId: string;
+}
+
+export interface SetCardEffectiveTypeAction {
+  type: "setCardEffectiveType";
+  cardInstanceId: string;
+  cardType: string;
+  enabled: boolean;
 }
 
 export interface EndTurnAction {
@@ -138,6 +158,7 @@ export function listLegalActions(state: GameState): LegalAction[] {
         type: "activateWizardProperty" as const,
         tokenInstanceId: token.instanceId,
       })),
+    ...getCardEffectiveTypeActions(state, activePlayer),
     {
       type: "endTurn",
     },
@@ -219,10 +240,11 @@ export function preflightAction(
         const cost = calculateEffectiveCardCost(
           state,
           activePlayer.playerId,
-          definition
+          definition,
+          card
         );
         if (
-          calculatePayment(state, activePlayer, cost, action.source) ===
+          calculatePayment(state, activePlayer, cost, action.source, card) ===
           undefined
         ) {
           return {
@@ -301,6 +323,44 @@ export function preflightAction(
         }
         return undefined;
       }
+      case "setCardEffectiveType": {
+        const card = getCardEffectiveTypeActionCard(
+          state,
+          activePlayer,
+          action.cardInstanceId
+        );
+        if (card === undefined) {
+          return {
+            ok: false,
+            error: "Card is not an eligible effective-type target",
+          };
+        }
+        if (
+          !getCardEffectiveTypeOptions(
+            state,
+            activePlayer.playerId,
+            card
+          ).includes(action.cardType)
+        ) {
+          return {
+            ok: false,
+            error: `Card cannot be counted as ${action.cardType}`,
+          };
+        }
+        const selected = isPlayerCardEffectiveTypeSelected(
+          state,
+          activePlayer.playerId,
+          card.instanceId,
+          action.cardType
+        );
+        if (selected === action.enabled) {
+          return {
+            ok: false,
+            error: `Card effective type ${action.cardType} is already ${action.enabled ? "enabled" : "disabled"}`,
+          };
+        }
+        return undefined;
+      }
       case "endTurn": {
         calculateEndTurnDrawCount(state, activePlayer);
         const nextActivePlayer = getNextPlayer(state, activePlayer);
@@ -342,6 +402,8 @@ export function applyAction(
       return activatePermanent(state, action.cardInstanceId);
     case "activateWizardProperty":
       return activateWizardProperty(state, action.tokenInstanceId);
+    case "setCardEffectiveType":
+      return setCardEffectiveType(state, action);
     case "endTurn":
       return endTurn(state);
     default:
@@ -397,7 +459,7 @@ function endTurn(state: GameState): ActionResult {
   });
 
   releaseTemporaryControls(state);
-  state.turn.gainedCardDefinitionIds = [];
+  state.turn.gainedCards = [];
   state.turn.mainMarketCardHandReplacementSourceCardIds = [];
   state.turn.rememberedDestroyedLegendCost = undefined;
   state.turn.damagingAttackPlayerIds = [];
@@ -571,6 +633,49 @@ function activateWizardProperty(
   return { ok: true };
 }
 
+function setCardEffectiveType(
+  state: GameState,
+  action: SetCardEffectiveTypeAction
+): ActionResult {
+  const activePlayer = mustGetActivePlayer(state);
+  const card = getCardEffectiveTypeActionCard(
+    state,
+    activePlayer,
+    action.cardInstanceId
+  );
+  if (card === undefined) {
+    return {
+      ok: false,
+      error: "Card is not an eligible effective-type target",
+    };
+  }
+
+  if (action.enabled) {
+    setPlayerCardEffectiveType(
+      state,
+      activePlayer.playerId,
+      card.instanceId,
+      action.cardType
+    );
+  } else {
+    clearPlayerCardEffectiveType(
+      state,
+      activePlayer.playerId,
+      card.instanceId,
+      action.cardType
+    );
+  }
+  recordGameEvent(state, {
+    type: "cardEffectiveTypeChanged",
+    playerId: activePlayer.playerId,
+    cardInstanceId: card.instanceId,
+    definitionId: card.definitionId,
+    cardType: action.cardType,
+    enabled: action.enabled,
+  });
+  return { ok: true };
+}
+
 function grantBasicTrophyChipAtEndOfTurn(
   state: GameState,
   activePlayer: PlayerState
@@ -578,7 +683,8 @@ function grantBasicTrophyChipAtEndOfTurn(
   if (
     !activePlayer.trophyLikeObjects.some(
       (trophy) => trophy.trophyId === "basicTrophy"
-    )
+    ) ||
+    isBasicTrophyChipPayoutSuppressed(state, activePlayer)
   ) {
     return;
   }
@@ -609,11 +715,18 @@ function buyMarketCard(
   const cost = calculateEffectiveCardCost(
     state,
     activePlayer.playerId,
-    definition
+    definition,
+    card
   );
   const powerBefore = state.turn.power;
   const chipsBefore = activePlayer.chips;
-  const payment = calculatePayment(state, activePlayer, cost, action.source);
+  const payment = calculatePayment(
+    state,
+    activePlayer,
+    cost,
+    action.source,
+    card
+  );
   if (payment === undefined) {
     return {
       ok: false,
@@ -775,7 +888,7 @@ function canAfford(
 ): boolean {
   const definition = mustGetDefinition(state, card.definitionId);
   return (
-    calculateEffectiveCardCost(state, player.playerId, definition) <=
+    calculateEffectiveCardCost(state, player.playerId, definition, card) <=
     state.turn.power
   );
 }
@@ -787,8 +900,39 @@ function canAffordWithChips(
 ): boolean {
   const definition = mustGetDefinition(state, card.definitionId);
   return (
-    calculateEffectiveCardCost(state, player.playerId, definition) <=
+    calculateEffectiveCardCost(state, player.playerId, definition, card) <=
     state.turn.power + player.chips
+  );
+}
+
+function canAffordFamiliar(
+  state: GameState,
+  player: PlayerState,
+  familiar: CardInstance
+): boolean {
+  return canUseChipsForPurchase(state, player, familiar, "familiar")
+    ? canAffordWithChips(state, player, familiar)
+    : canAfford(state, player, familiar);
+}
+
+function canUseChipsForPurchase(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance,
+  source: BuySource
+): boolean {
+  if (source === "legendMarket") {
+    return true;
+  }
+  if (source !== "familiar") {
+    return false;
+  }
+  return cardMatchesTypeForPlayer(
+    state,
+    player.playerId,
+    mustGetDefinition(state, card.definitionId),
+    "legend",
+    card
   );
 }
 
@@ -843,18 +987,77 @@ function getFamiliarBuyAction(
   state: GameState,
   player: PlayerState
 ): BuyMarketCardAction[] {
-  const familiar = player.unboughtFamiliar;
-  if (familiar === undefined || !canAfford(state, player, familiar)) {
+  return listPlayerUnboughtFamiliarCards(player)
+    .filter((familiar) => canAffordFamiliar(state, player, familiar))
+    .map((familiar) => ({
+      type: "buyMarketCard" as const,
+      cardInstanceId: familiar.instanceId,
+      source: "familiar" as const,
+    }));
+}
+
+function getCardEffectiveTypeActions(
+  state: GameState,
+  player: PlayerState
+): SetCardEffectiveTypeAction[] {
+  if (!hasPlayerPerCardEffectiveTypeEffects(state, player.playerId)) {
     return [];
   }
 
-  return [
-    {
-      type: "buyMarketCard",
-      cardInstanceId: familiar.instanceId,
-      source: "familiar",
-    },
-  ];
+  const cards = getCardEffectiveTypeActionCards(state, player);
+
+  return cards.flatMap((card) =>
+    getCardEffectiveTypeOptions(state, player.playerId, card).flatMap(
+      (cardType) => [
+        {
+          type: "setCardEffectiveType" as const,
+          cardInstanceId: card.instanceId,
+          cardType,
+          enabled: !isPlayerCardEffectiveTypeSelected(
+            state,
+            player.playerId,
+            card.instanceId,
+            cardType
+          ),
+        },
+      ]
+    )
+  );
+}
+
+function getCardEffectiveTypeActionCards(
+  state: GameState,
+  player: PlayerState
+): CardInstance[] {
+  const cards = new Map<string, CardInstance>();
+  for (const card of [
+    ...getControlledCards(state, player),
+    ...getOwnedFamiliarCards(state, player),
+  ]) {
+    cards.set(card.instanceId, card);
+  }
+  return Array.from(cards.values());
+}
+
+function getCardEffectiveTypeActionCard(
+  state: GameState,
+  player: PlayerState,
+  cardInstanceId: string
+): CardInstance | undefined {
+  return getCardEffectiveTypeActionCards(state, player).find(
+    (card) => card.instanceId === cardInstanceId
+  );
+}
+
+function getOwnedFamiliarCards(
+  state: GameState,
+  player: PlayerState
+): CardInstance[] {
+  return listPlayerOwnedPhysicalCards(player).filter(
+    (card) =>
+      state.cardDefinitions.get(card.definitionId)?.engine.cardKind ===
+      "familiar"
+  );
 }
 
 function getBuyCard(
@@ -863,10 +1066,7 @@ function getBuyCard(
   action: BuyMarketCardAction
 ): CardInstance | undefined {
   if (action.source === "familiar") {
-    const familiar = activePlayer.unboughtFamiliar;
-    return familiar?.instanceId === action.cardInstanceId
-      ? familiar
-      : undefined;
+    return findPlayerUnboughtFamiliarCard(activePlayer, action.cardInstanceId);
   }
 
   return getBuySourceZone(state, action.source).find(
@@ -893,10 +1093,11 @@ function calculatePayment(
   state: GameState,
   player: PlayerState,
   cost: number,
-  source: BuySource
+  source: BuySource,
+  card: CardInstance
 ): PaymentResult | undefined {
   const payableCost = source === "wildMagicStack" ? 3 : cost;
-  if (source !== "legendMarket") {
+  if (!canUseChipsForPurchase(state, player, card, source)) {
     if (payableCost > state.turn.power) {
       return undefined;
     }

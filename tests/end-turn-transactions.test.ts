@@ -32,7 +32,13 @@ for (const eventKind of eventKinds) {
     state.turn.power = 7;
     state.turn.controlledPowerBonus = 3;
     state.turn.activatedCardIds = [playedCard.instanceId];
-    state.turn.gainedCardDefinitionIds = [cleanupCard.definitionId];
+    state.turn.gainedCards = [
+      {
+        playerId: activePlayer.playerId,
+        definitionId: cleanupCard.definitionId,
+        cardInstanceId: cleanupCard.instanceId,
+      },
+    ];
     state.turn.damagingAttackPlayerIds = [activePlayer.playerId];
 
     const { eventCard } = createTerminalMarketEventFixture({

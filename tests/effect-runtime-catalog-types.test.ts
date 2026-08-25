@@ -11,6 +11,7 @@ import {
 } from "../src/engine/effect-runtime-registry.js";
 import { activationEffectIds } from "../src/engine/effect-runtime-activation.js";
 import { cardOwnershipChoiceEffectIds } from "../src/engine/effect-runtime-cards-ownership-choice.js";
+import { deadWizardTokenEffectIds } from "../src/engine/effect-runtime-dead-wizard-token.js";
 import { ongoingEffectIds } from "../src/engine/effect-runtime-ongoing.js";
 import { effectiveValueModifierEffectIds } from "../src/engine/effect-runtime-effective-value-modifier.js";
 import { cardTypeEffectIds } from "../src/engine/effect-runtime-card-type.js";
@@ -254,6 +255,7 @@ test("remaining Catalog families expose one local ID inventory each", () => {
   assert.deepEqual(setupEffectIds, [
     "force_starting_player",
     "replace_starting_card",
+    "setup_retain_and_choose_third_familiar",
     "start_with_basic_trophy",
     "set_starting_life_total",
     "set_resurrection_life_total",
@@ -301,6 +303,10 @@ test("card, activation, ongoing and modifier IDs belong to family modules", () =
     "ongoing_hand_refill_bonus",
     "ongoing_start_turn_optional_gain_limp_wand_to_hand",
   ]);
+  assert.equal(
+    deadWizardTokenEffectIds.includes("suppress_basic_trophy_chip_payout"),
+    true
+  );
   assert.deepEqual(effectiveValueModifierEffectIds, [
     "modify_effective_value",
     "fixture_modify_effective_value",

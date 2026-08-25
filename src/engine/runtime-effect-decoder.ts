@@ -534,6 +534,7 @@ const effectiveValueModifierEffectDecoders =
 const cardTypeEffectDecoders = createCardTypeEffectDecoders({
   defineDecoder,
   required,
+  optional,
   literal,
   nonEmptyStringArray,
 });

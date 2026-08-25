@@ -24,6 +24,7 @@ export const deadWizardTokenEffectIds = [
   "dead_wizard_token_killer_optional_remove_dingler",
   "dead_wizard_token_lose_half_chips",
   "dead_wizard_token_reward_killer_chips",
+  "suppress_basic_trophy_chip_payout",
 ] as const;
 
 export type DeadWizardTokenEffectId = (typeof deadWizardTokenEffectIds)[number];
@@ -79,6 +80,11 @@ export type DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect = {
   destination: "deckTop";
 };
 
+export type DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect = {
+  effectId: "suppress_basic_trophy_chip_payout";
+  timing: "whileControlled";
+};
+
 export interface DeadWizardTokenEffectPayloadMap {
   dead_wizard_token_each_foe_gain_chips: DeadWizardTokenEachFoeGainChipsRuntimeEffect;
   dead_wizard_token_gain_chips: DeadWizardTokenGainChipsRuntimeEffect;
@@ -88,6 +94,7 @@ export interface DeadWizardTokenEffectPayloadMap {
   dead_wizard_token_gain_status_or_draw_face: DeadWizardTokenGainStatusOrDrawFaceRuntimeEffect;
   dead_wizard_token_lose_half_chips: DeadWizardTokenLoseHalfChipsRuntimeEffect;
   dead_wizard_token_reward_killer_chips: DeadWizardTokenRewardKillerChipsRuntimeEffect;
+  suppress_basic_trophy_chip_payout: DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect;
 }
 
 export interface DeadWizardTokenDecoderTools {
@@ -189,6 +196,13 @@ export function createDeadWizardTokenEffectDecoders(
           ? []
           : [`${subjectId} must gain exactly one Limp Wand`]
     ),
+    suppress_basic_trophy_chip_payout: defineDecoder(
+      "suppress_basic_trophy_chip_payout",
+      {
+        effectId: required(literal("suppress_basic_trophy_chip_payout")),
+        timing: required(literal("whileControlled")),
+      }
+    ),
   };
 }
 
@@ -204,7 +218,8 @@ const gainLimpWandsPerDiscardLegendHandler: EffectRuntimeHandler<DeadWizardToken
             state,
             player.playerId,
             definition,
-            effect.countedCardType
+            effect.countedCardType,
+            card
           )
         );
       }).length;
@@ -338,6 +353,21 @@ const gainLimpWandToDeckTopHandler: EffectRuntimeHandler<DeadWizardTokenGainLimp
     },
   };
 
+const suppressBasicTrophyChipPayoutHandler: EffectRuntimeHandler<DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect> =
+  {
+    effectId: "suppress_basic_trophy_chip_payout",
+    execute() {
+      return {
+        ok: false,
+        error:
+          "suppress_basic_trophy_chip_payout is a passive dead wizard token effect",
+      };
+    },
+    evaluateBasicTrophyChipPayoutSuppression() {
+      return { status: "resolved", result: true };
+    },
+  };
+
 type DeadWizardTokenEffectDefinitionFor<Id extends DeadWizardTokenEffectId> = {
   readonly effectId: Id;
   readonly decoder: RuntimeEffectDecoder<Id>;
@@ -363,6 +393,9 @@ export function createDeadWizardTokenEffectDefinitions(
   const { bindRuntimeEffectDecoder } = tools;
   const supportedTimings = [
     "onDeadWizardTokenFace",
+  ] as const satisfies EffectRuntimeSupportedTimings;
+  const suppressionTimings = [
+    "whileControlled",
   ] as const satisfies EffectRuntimeSupportedTimings;
   const supportedModes = ["combat", "fixture"] as const;
   const supportedSourceKinds = ["deadWizardToken"] as const;
@@ -442,6 +475,14 @@ export function createDeadWizardTokenEffectDefinitions(
       supportedModes,
       supportedSourceKinds,
       handler: gainLimpWandToDeckTopHandler,
+    },
+    {
+      effectId: "suppress_basic_trophy_chip_payout",
+      decoder: bindRuntimeEffectDecoder("suppress_basic_trophy_chip_payout"),
+      supportedTimings: suppressionTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: suppressBasicTrophyChipPayoutHandler,
     },
   ];
 }

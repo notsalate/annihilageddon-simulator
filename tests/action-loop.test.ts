@@ -280,7 +280,7 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
     (player) => player.playerId !== activePlayer.playerId
   );
   assert.ok(foe);
-  const familiar = activePlayer.unboughtFamiliar;
+  const familiar = activePlayer.unboughtFamiliars[0];
   assert.ok(familiar);
   familiar.definitionId = markCardDefinitionId(familiarDefinition.cardId);
 
@@ -306,6 +306,7 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
   );
   assert.equal(activePlayer.hand.length, handBeforePlay + 1);
 
+  const powerBeforeConditionalCard = state.turn.power;
   const conditionalCardId = addFixtureCardToActiveHand(state, {
     effectId: "add_power",
     timing: "onPlay",
@@ -321,7 +322,7 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
       .ok,
     true
   );
-  assert.equal(state.turn.power, 1);
+  assert.equal(state.turn.power, powerBeforeConditionalCard + 1);
 
   const playedIndex = activePlayer.playedThisTurn.findIndex(
     (card) => card.instanceId === familiar.instanceId
@@ -386,7 +387,7 @@ test("Кондуктор Жми-На-Тормоза is a one-copy familiar that 
   );
 });
 
-test("redirected foreign Wand does not inherit the redirecting player's wizard property", () => {
+test("redirected foreign Wand uses the redirecting player's DWT016 but not wizard property", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -401,6 +402,10 @@ test("redirected foreign Wand does not inherit the redirecting player's wizard p
   );
   assert.ok(redirectingPlayer);
   attackingPlayer.wizardProperties = [];
+  const scoreBeforeDwt = scoreGame(state).find(
+    (score) => score.playerId === redirectingPlayer.playerId
+  );
+  assert.ok(scoreBeforeDwt);
   replaceFirstWizardProperty(
     state,
     redirectingPlayer,
@@ -408,10 +413,15 @@ test("redirected foreign Wand does not inherit the redirecting player's wizard p
       "esw2_dbg__wizard_property_009"
     ) as TokenDefinition
   );
+  redirectingPlayer.deadWizardTokens.push({
+    instanceId: markTokenInstanceId("fixture-dwt016-redirect"),
+    definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_016"),
+    ownerId: redirectingPlayer.playerId,
+  });
   const wand = addRuntimeCardToHand(
     state,
     attackingPlayer,
-    "esw2_dbg__starter_004"
+    "esw2_dbg__starter_003"
   );
   addFixtureDefenseCardToHand(state, redirectingPlayer, "discardSelf", {
     redirectAttack: true,
@@ -441,6 +451,7 @@ test("redirected foreign Wand does not inherit the redirecting player's wizard p
   });
 
   assert.equal(result.ok, true);
+  assert.equal(state.activePlayerId, attackingPlayer.playerId);
   assert.equal(attackingPlayer.life.current, attackingLifeBefore);
   assert.equal(attackingPlayer.discard.includes(returnDefense), true);
   const redirectedAttack = state.eventLog.find(
@@ -451,7 +462,22 @@ test("redirected foreign Wand does not inherit the redirecting player's wizard p
   );
   assert.ok(redirectedAttack);
   assert.equal(redirectedAttack.cardInstanceId, wand.instanceId);
-  assert.equal(redirectedAttack.amount, 1);
+  assert.equal(redirectedAttack.amount, 5);
+  const attackStarts = state.eventLog.filter(
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.cardInstanceId === wand.instanceId
+  );
+  assert.deepEqual(
+    attackStarts.map((event) => event.amount),
+    [1, 5]
+  );
+  assert.equal(
+    scoreGame(state).find(
+      (score) => score.playerId === redirectingPlayer.playerId
+    )?.victoryPoints,
+    scoreBeforeDwt.victoryPoints - 7
+  );
 });
 
 test("Chipsychosis Arena doubles a redirected attack for the redirecting attacker", () => {
@@ -3766,13 +3792,18 @@ test("active player can buy and play their setup familiar", () => {
   );
   assert.ok(activePlayer);
   assert.ok(foe);
-  const familiar = activePlayer.unboughtFamiliar;
+  const familiar = activePlayer.unboughtFamiliars[0];
   assert.ok(familiar);
 
   assert.equal(familiar.definitionId, "esw2_dbg__familiar_001");
   assert.equal(familiar.ownerId, activePlayer.playerId);
   assert.equal(findOwnedCard(activePlayer, familiar.definitionId), undefined);
-  assert.equal(foe.unboughtFamiliar?.instanceId === familiar.instanceId, false);
+  assert.equal(
+    foe.unboughtFamiliars.some(
+      (candidate) => candidate.instanceId === familiar.instanceId
+    ),
+    false
+  );
   assert.equal(
     scoreGame(state).find((score) => score.playerId === activePlayer.playerId)
       ?.victoryPoints,
@@ -3800,7 +3831,7 @@ test("active player can buy and play their setup familiar", () => {
 
   const buyResult = applyAction(state, buyAction);
   assert.equal(buyResult.ok, true);
-  assert.equal(activePlayer.unboughtFamiliar, undefined);
+  assert.equal(activePlayer.unboughtFamiliars.includes(familiar), false);
   assert.equal(activePlayer.discard.includes(familiar), true);
   assert.equal(
     scoreGame(state).find((score) => score.playerId === activePlayer.playerId)
@@ -3833,11 +3864,13 @@ test("bought familiar can discard another hand card to avoid an attack", () => {
   );
   assert.ok(activePlayer);
   assert.ok(targetPlayer);
-  const familiar = targetPlayer.unboughtFamiliar;
+  const familiar = targetPlayer.unboughtFamiliars[0];
   assert.ok(familiar);
   const paidDiscard = targetPlayer.hand[0];
   assert.ok(paidDiscard);
-  targetPlayer.unboughtFamiliar = undefined;
+  targetPlayer.unboughtFamiliars = targetPlayer.unboughtFamiliars.filter(
+    (candidate) => candidate.instanceId !== familiar.instanceId
+  );
   familiar.ownerId = targetPlayer.playerId;
   targetPlayer.hand.push(familiar);
   chooseEffectChoiceWithFirstFixtureDefense(state, ({ effectId, choices }) =>
@@ -3926,10 +3959,12 @@ test("bought familiar cannot defend when no other hand card can pay its discard 
   );
   assert.ok(activePlayer);
   assert.ok(targetPlayer);
-  const familiar = targetPlayer.unboughtFamiliar;
+  const familiar = targetPlayer.unboughtFamiliars[0];
   assert.ok(familiar);
   targetPlayer.hand.splice(0);
-  targetPlayer.unboughtFamiliar = undefined;
+  targetPlayer.unboughtFamiliars = targetPlayer.unboughtFamiliars.filter(
+    (candidate) => candidate.instanceId !== familiar.instanceId
+  );
   familiar.ownerId = targetPlayer.playerId;
   targetPlayer.hand.push(familiar);
   targetPlayer.life.current = 10;
@@ -4569,6 +4604,37 @@ test("Basic Trophy grants a chip at the end of its controller's turn", () => {
   );
 });
 
+test("DWT 020 suppresses only its controller's Basic Trophy payout", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 62020,
+  });
+  const firstPlayer = mustGetPlayer(state, state.activePlayerId);
+  const secondPlayer = state.players.find(
+    (player) => player.playerId !== firstPlayer.playerId
+  );
+  assert.ok(secondPlayer);
+  firstPlayer.trophyLikeObjects.push(createBasicTrophy(firstPlayer.playerId));
+  firstPlayer.deadWizardTokens.push({
+    instanceId: markTokenInstanceId("fixture-dwt020"),
+    definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_020"),
+    ownerId: firstPlayer.playerId,
+  });
+
+  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+  assert.equal(state.turn.number, 2);
+  assert.equal(firstPlayer.chips, 0);
+
+  const trophy = firstPlayer.trophyLikeObjects.pop();
+  assert.ok(trophy);
+  trophy.ownerId = secondPlayer.playerId;
+  secondPlayer.trophyLikeObjects.push(trophy);
+  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+  assert.equal(state.turn.number, 3);
+  assert.equal(secondPlayer.chips, 1);
+});
+
 test("played permanents stay in the controlled permanent zone after cleanup", () => {
   const state = initializeGame({
     rootDir,
@@ -4840,6 +4906,68 @@ test("wizard property optional topdeck for gained cards runs before normal disca
   assert.equal(activePlayer.discard.includes(spell), true);
 });
 
+test("Wizard Property 007 counts only spells gained by its controller this turn", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 60707,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const otherPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(otherPlayer);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_007");
+  assert.ok(property);
+  assert.equal(property.kind, "wizardProperty");
+  replaceFirstWizardProperty(state, activePlayer, property);
+
+  const creature = addFixtureMarketCard(
+    state,
+    "fixture-wp007-active-creature",
+    ["creature"],
+    0
+  );
+  const foreignSpell = createCommonRuntimeCard("esw2_dbg__legend_014");
+  state.common.legendMarket.push(foreignSpell);
+  state.turn.power = 12;
+  assert.equal(
+    applyAction(state, {
+      type: "buyMarketCard",
+      source: "mainMarket",
+      cardInstanceId: creature.instanceId,
+    }).ok,
+    true
+  );
+
+  state.activePlayerId = otherPlayer.playerId;
+  state.turn.power = 12;
+  assert.equal(
+    applyAction(state, {
+      type: "buyMarketCard",
+      source: "legendMarket",
+      cardInstanceId: foreignSpell.instanceId,
+    }).ok,
+    true
+  );
+  assert.deepEqual(
+    state.turn.gainedCards.map((record) => record.playerId),
+    [activePlayer.playerId, otherPlayer.playerId]
+  );
+
+  state.activePlayerId = activePlayer.playerId;
+  const result = applyAction(state, { type: "endTurn" });
+
+  assert.equal(result.ok, true);
+  const drawEvent = [...state.eventLog]
+    .reverse()
+    .find(
+      (event) =>
+        event.type === "handDrawn" && event.playerId === activePlayer.playerId
+    );
+  assert.ok(drawEvent?.type === "handDrawn");
+  assert.equal(drawEvent.amount, 5);
+});
+
 test("свойство 001 после получения Волшебника даёт чипсину и позволяет лошаре снять статус", () => {
   for (const [choiceId, remainsDingler] of [
     ["apply", false],
@@ -5039,15 +5167,14 @@ test("temporary hand limit modifier counts cards gained this turn and resets aft
     }).ok,
     true
   );
-  assert.deepEqual(state.turn.gainedCardDefinitionIds, [
-    firstSpell.definitionId,
-    firstSpell.definitionId,
-    creature.definitionId,
-  ]);
+  assert.deepEqual(
+    state.turn.gainedCards.map((record) => record.definitionId),
+    [firstSpell.definitionId, firstSpell.definitionId, creature.definitionId]
+  );
   assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
 
   assert.equal(activePlayer.hand.length, 7);
-  assert.deepEqual(state.turn.gainedCardDefinitionIds, []);
+  assert.deepEqual(state.turn.gainedCards, []);
 });
 
 test("temporary hand limit modifier payload is rejected at Runtime Data Intake", () => {
@@ -5181,6 +5308,103 @@ test("gain_card moves the first legal market card into the active player's disca
   );
 });
 
+test("Wizard Property 008 grants one chip on first permanent play, not activation", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60808,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_008");
+  assert.ok(property);
+  assert.equal(property.kind, "wizardProperty");
+  replaceFirstWizardProperty(state, player, property);
+
+  const definition = createFixtureCardDefinition(
+    "fixture-wp008-activation",
+    [
+      { effectId: "add_power", timing: "onPlay", amount: 1 },
+      { effectId: "add_power", timing: "activation", amount: 2 },
+    ],
+    { isOngoing: true }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const card = addFixtureDefinitionToActiveHand(state, definition);
+
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: card.instanceId })
+      .ok,
+    true
+  );
+  assert.equal(player.chips, 1);
+  assert.equal(
+    applyAction(state, {
+      type: "activatePermanent",
+      cardInstanceId: card.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(player.chips, 1);
+  assert.equal(state.turn.power, 3);
+});
+
+test("fixed-discard gain cannot be redirected by Wizard Property 008", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60809,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_008");
+  assert.ok(property);
+  assert.equal(property.kind, "wizardProperty");
+  replaceFirstWizardProperty(state, player, property);
+  const gainedCard = addFixtureMarketCard(
+    state,
+    "fixture-wp008-fixed-discard-permanent",
+    [],
+    0
+  );
+  state.common.market.splice(0, state.common.market.length, gainedCard);
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [
+      gainedCard.definitionId,
+      createFixtureCardDefinition(gainedCard.definitionId, [], {
+        isOngoing: true,
+      }),
+    ],
+  ]);
+  state.effectChoiceStrategy = ({ effectId }) => {
+    assert.notEqual(effectId, "topdeck_gained_card");
+    return undefined;
+  };
+  const gainCardId = addFixtureCardToActiveHand(state, {
+    effectId: "gain_card",
+    timing: "onPlay",
+    target: { selector: "mainMarketCard" },
+    destination: "discard",
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: gainCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    state.players
+      .find((candidate) => candidate.playerId === player.playerId)
+      ?.discard.includes(gainedCard),
+    true
+  );
+  assert.equal(player.discard.includes(gainedCard), true);
+  assert.equal(player.deck.includes(gainedCard), false);
+});
+
 test("buying and gain_card share gained-card movement guarantees", () => {
   const buyState = initializeGame({
     rootDir,
@@ -5225,13 +5449,15 @@ test("buying and gain_card share gained-card movement guarantees", () => {
     buyState,
     bought.player,
     bought.card,
-    "cardBought"
+    "cardBought",
+    "deckTop"
   );
   assertGainedMovementGuarantees(
     gainState,
     gained.player,
     gained.card,
-    "effectCardGained"
+    "effectCardGained",
+    "discard"
   );
 });
 
@@ -5531,6 +5757,34 @@ test("свойство волшебника 003 позволяет считат�
     "esw2_dbg__familiar_007"
   );
   assert.ok(familiarDefinition);
+  const familiar = createRuntimeCardInstance(
+    player,
+    "esw2_dbg__familiar_007",
+    "familiar-effective-type"
+  );
+  player.unboughtFamiliars.push(familiar);
+  state.turn.power = 0;
+  player.chips = familiarDefinition.engine.cost;
+  assert.deepEqual(
+    applyAction(state, {
+      type: "setCardEffectiveType",
+      cardInstanceId: familiar.instanceId,
+      cardType: "legend",
+      enabled: true,
+    }),
+    { ok: true }
+  );
+  assert.deepEqual(
+    applyAction(state, {
+      type: "buyMarketCard",
+      cardInstanceId: familiar.instanceId,
+      source: "familiar",
+    }),
+    { ok: true }
+  );
+  assert.equal(player.discard.includes(familiar), true);
+  assert.equal(state.turn.power, 0);
+  assert.equal(player.chips, 0);
 
   assert.equal(
     applyAction(state, {
@@ -5540,8 +5794,113 @@ test("свойство волшебника 003 позволяет считат�
     true
   );
   assert.equal(
-    calculateEffectiveCardCost(state, player.playerId, familiarDefinition),
+    calculateEffectiveCardCost(
+      state,
+      player.playerId,
+      familiarDefinition,
+      familiar
+    ),
     familiarDefinition.engine.cost - 2
+  );
+  assert.deepEqual(
+    applyAction(state, {
+      type: "setCardEffectiveType",
+      cardInstanceId: familiar.instanceId,
+      cardType: "legend",
+      enabled: false,
+    }),
+    { ok: true }
+  );
+  assert.equal(
+    calculateEffectiveCardCost(
+      state,
+      player.playerId,
+      familiarDefinition,
+      familiar
+    ),
+    familiarDefinition.engine.cost
+  );
+  assert.ok(
+    listLegalActions(state).some(
+      (action) =>
+        action.type === "setCardEffectiveType" &&
+        action.cardInstanceId === familiar.instanceId &&
+        action.cardType === "legend" &&
+        action.enabled
+    )
+  );
+});
+
+test("атака по стоимости контролируемой карты учитывает выбранный effective type фамильяра", () => {
+  const state = initializeGame({ rootDir, seed: 60615 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (candidate) => candidate.playerId !== player.playerId
+  );
+  assert.ok(targetPlayer);
+
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_003");
+  assert.ok(property);
+  player.hand = [];
+  player.permanents = [];
+  player.playedThisTurn = [];
+  player.wizardProperties = [
+    {
+      instanceId: markTokenInstanceId("fixture-wp003-attack-cost"),
+      definitionId: markTokenDefinitionId(property.tokenId),
+      ownerId: player.playerId,
+    },
+  ];
+
+  const familiarDefinition = state.cardDefinitions.get(
+    "esw2_dbg__familiar_007"
+  );
+  assert.ok(familiarDefinition);
+  const familiar = createRuntimeCardInstance(
+    player,
+    familiarDefinition.cardId,
+    "effective-type-attack-cost-familiar"
+  );
+  player.permanents.push(familiar);
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "setCardEffectiveType",
+      cardInstanceId: familiar.instanceId,
+      cardType: "legend",
+      enabled: true,
+    }),
+    { ok: true }
+  );
+
+  const attack = addFixtureDefinitionToActiveHand(
+    state,
+    createFixtureCardDefinition("fixture-effective-type-cost-attack", [
+      {
+        effectId: "attack_damage_equal_to_controlled_card_cost",
+        timing: "onPlay",
+        costMode: "highest",
+        target: { selector: "opponentPlayer" },
+      },
+    ])
+  );
+  const targetLifeBefore = targetPlayer.life.current;
+
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: attack.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(targetPlayer.life.current, targetLifeBefore - 4);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.effectId === "attack_damage_equal_to_controlled_card_cost" &&
+        event.amount === 4
+    )
   );
 });
 
@@ -10746,11 +11105,22 @@ function assertGainedMovementGuarantees(
   state: GameState,
   player: PlayerState,
   card: CardInstance,
-  completionEventType: "cardBought" | "effectCardGained"
+  completionEventType: "cardBought" | "effectCardGained",
+  destination: "discard" | "deckTop"
 ): void {
   assert.equal(state.common.market.includes(card), false);
-  assert.equal(player.deck[0], card);
-  assert.equal(player.discard.includes(card), false);
+  assert.equal(
+    destination === "deckTop"
+      ? player.deck[0] === card
+      : player.discard.includes(card),
+    true
+  );
+  assert.equal(
+    destination === "deckTop"
+      ? player.discard.includes(card)
+      : player.deck.includes(card),
+    false
+  );
   assert.equal(card.ownerId, player.playerId);
   assert.equal(card.marketChips, 0);
   assert.equal(player.chips, 2);
@@ -10773,23 +11143,34 @@ function assertGainedMovementGuarantees(
         event.playerId === player.playerId &&
         event.cardInstanceId === card.instanceId &&
         event.sourceZone === "mainMarket" &&
-        event.destinationZone === `${player.playerId}.deckTop` &&
+        event.destinationZone === `${player.playerId}.${destination}` &&
         event.ownerBefore === "common" &&
         event.ownerAfter === player.playerId
       );
     })
   );
-  assert.ok(
-    state.eventLog.some((event) => {
-      return (
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
         event.type === "effectChoiceSelected" &&
         event.playerId === player.playerId &&
-        event.effectId === "topdeck_gained_card" &&
-        event.choiceId === "apply" &&
-        event.choiceIds.join(",") === "apply,decline"
-      );
-    })
+        event.effectId === "topdeck_gained_card"
+    ),
+    destination === "deckTop"
   );
+  if (destination === "deckTop") {
+    assert.ok(
+      state.eventLog.some((event) => {
+        return (
+          event.type === "effectChoiceSelected" &&
+          event.playerId === player.playerId &&
+          event.effectId === "topdeck_gained_card" &&
+          event.choiceId === "apply" &&
+          event.choiceIds.join(",") === "apply,decline"
+        );
+      })
+    );
+  }
   assert.ok(
     state.eventLog.some((event) => {
       return (
@@ -10797,7 +11178,7 @@ function assertGainedMovementGuarantees(
         event.playerId === player.playerId &&
         (event.cardInstanceId === card.instanceId ||
           event.targetCardInstanceId === card.instanceId) &&
-        event.destination === "deckTop"
+        event.destination === destination
       );
     })
   );
@@ -11879,7 +12260,27 @@ test("Вялая башня при получении переносит две 
 });
 
 test("Нарывка раздаёт палочки врагам по порядку, пока не исчерпает общий стек", () => {
-  const state = initializeGame({ rootDir, seed: 243001, playerCount: 5 });
+  const source = loadCurrentRuntimeDataPack(rootDir);
+  const wizardPropertyStack = source.tokenStacks.wizardProperties;
+  assert.ok(wizardPropertyStack);
+  const dataPack: LoadedDataPack = {
+    ...source,
+    tokenStacks: {
+      ...source.tokenStacks,
+      wizardProperties: {
+        ...wizardPropertyStack,
+        entries: [
+          ...wizardPropertyStack.entries,
+          { tokenId: "esw2_dbg__wizard_property_003", count: 1 },
+        ],
+      },
+    },
+  };
+  const state = initializeGame({
+    dataPack,
+    seed: 243001,
+    playerCount: 5,
+  });
   const player = mustGetPlayer(state, state.activePlayerId);
   const foes = getOpponentsInSeatingOrder(state, player);
   player.wizardProperties = [];
@@ -12794,7 +13195,18 @@ test("ЖДК 001 считает реальные и fixture-легенды в с
   const foe = getOpponentsInSeatingOrder(state, player)[0];
   assert.ok(foe);
   player.wizardProperties = [];
-  foe.wizardProperties = [];
+  const wizardProperty003 = state.tokenDefinitions.get(
+    "esw2_dbg__wizard_property_003"
+  );
+  assert.ok(wizardProperty003);
+  assert.equal(wizardProperty003.kind, "wizardProperty");
+  foe.wizardProperties = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt001-wizard-property-003"),
+      definitionId: markTokenDefinitionId(wizardProperty003.tokenId),
+      ownerId: foe.playerId,
+    },
+  ];
   foe.life.current = 1;
   const realLegend = createRuntimeCardInstance(
     foe,
@@ -12804,35 +13216,36 @@ test("ЖДК 001 считает реальные и fixture-легенды в с
   const effectiveLegendDefinition = createFixtureCardDefinition(
     "fixture-dwt001-effective-legend",
     [],
-    { cardTypes: ["familiar"] }
+    { cardKind: "familiar", cardTypes: ["familiar"] }
   );
-  const effectiveLegendProperty = createEffectiveCardTypeWizardProperty(
-    "fixture-dwt001-effective-legend-property",
-    "familiar",
-    "legend"
+  const unselectedFamiliarDefinition = createFixtureCardDefinition(
+    "fixture-dwt001-unselected-familiar",
+    [],
+    { cardKind: "familiar", cardTypes: ["familiar"] }
   );
   state.cardDefinitions = new Map([
     ...state.cardDefinitions,
     [effectiveLegendDefinition.cardId, effectiveLegendDefinition],
+    [unselectedFamiliarDefinition.cardId, unselectedFamiliarDefinition],
   ]);
-  state.tokenDefinitions = new Map([
-    ...state.tokenDefinitions,
-    [effectiveLegendProperty.tokenId, effectiveLegendProperty],
-  ]);
-  foe.wizardProperties.push({
-    instanceId: markTokenInstanceId("fixture-dwt001-effective-legend-property"),
-    definitionId: markTokenDefinitionId(effectiveLegendProperty.tokenId),
-    ownerId: foe.playerId,
-  });
   const effectiveLegend = createRuntimeCardInstance(
     foe,
     effectiveLegendDefinition.cardId,
     "fixture-dwt001-effective-legend"
   );
-  foe.discard = [realLegend, effectiveLegend];
+  const unselectedFamiliar = createRuntimeCardInstance(
+    foe,
+    unselectedFamiliarDefinition.cardId,
+    "fixture-dwt001-unselected-familiar"
+  );
+  foe.effectiveCardTypeSelections.push({
+    cardInstanceId: effectiveLegend.instanceId,
+    cardType: "legend",
+  });
+  foe.discard = [realLegend, effectiveLegend, unselectedFamiliar];
   const wand = state.common.limpWandStack[0];
   assert.ok(wand);
-  state.common.limpWandStack.splice(1);
+  state.common.limpWandStack.splice(3);
   state.common.deadWizardTokens.drawStack = [
     {
       instanceId: markTokenInstanceId("fixture-dwt001"),
@@ -12863,9 +13276,15 @@ test("ЖДК 001 считает реальные и fixture-легенды в с
     { ok: true }
   );
 
-  assert.equal(state.common.limpWandStack.length, 0);
-  assert.equal(foe.discard.includes(wand), true);
-  assert.equal(wand.ownerId, foe.playerId);
+  assert.equal(state.common.limpWandStack.length, 1);
+  const gainedWands = foe.discard.filter(
+    (card) => card.definitionId === wand.definitionId
+  );
+  assert.equal(gainedWands.length, 2);
+  assert.equal(
+    gainedWands.every((card) => card.ownerId === foe.playerId),
+    true
+  );
 });
 
 test("ЖДК 018 кладёт палочку наверх колоды и не меняет состояние при пустой special stack", () => {

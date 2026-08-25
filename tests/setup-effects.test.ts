@@ -10,6 +10,7 @@ import {
   markTokenInstanceId,
 } from "../src/domain/types.js";
 import {
+  getSetupEffectPoolRequirement,
   tryExecuteSetupEffect as executeVerifiedSetupEffect,
   validateRuntimeEffectCatalogPayload,
   type EffectRuntimeSetupServices,
@@ -96,7 +97,8 @@ function player(): PlayerState {
     discard: [],
     playedThisTurn: [],
     permanents: [],
-    unboughtFamiliar: undefined,
+    unboughtFamiliars: [],
+    effectiveCardTypeSelections: [],
     deadWizardTokens: [],
     wizardProperties: [],
     statuses: [],
@@ -152,6 +154,40 @@ test("setup catalog executor sets starting life total", () => {
   assert.equal(subject.life.max, 30);
 });
 
+test("setup catalog emits the additional-familiar directive", () => {
+  const subject = player();
+
+  const result = tryExecuteSetupEffect(
+    subject,
+    {
+      effectId: "setup_retain_and_choose_third_familiar",
+      timing: "setup",
+    },
+    source,
+    services()
+  );
+
+  assert.deepEqual(result, {
+    status: "executed",
+    directive: {
+      kind: "retainAndChooseThirdFamiliar",
+      playerId: source.playerId,
+    },
+  });
+});
+
+test("setup catalog exposes a typed familiar-capacity requirement", () => {
+  const effect = verifiedTestRuntimeEffect({
+    effectId: "setup_retain_and_choose_third_familiar",
+    timing: "setup",
+  });
+
+  assert.deepEqual(getSetupEffectPoolRequirement(effect), {
+    kind: "additionalFamiliarCandidates",
+    amount: 1,
+  });
+});
+
 test("setup catalog decodes before runtime-mode applicability", () => {
   const result = tryExecuteSetupEffect(
     player(),
@@ -200,6 +236,10 @@ test("setup catalog applies source and timing policies before its executor", () 
 test("setup catalog keeps the wizard-property source matrix explicit", () => {
   const setupEffects = [
     { effectId: "force_starting_player", timing: "setup" },
+    {
+      effectId: "setup_retain_and_choose_third_familiar",
+      timing: "setup",
+    },
     {
       effectId: "replace_starting_card",
       timing: "setup",
@@ -596,12 +636,14 @@ test("replace_starting_card replaces first matching card in zone order", () => {
 
 test("replace_starting_card replaces a matching unbought familiar", () => {
   const subject = player();
-  subject.unboughtFamiliar = {
-    instanceId: markCardInstanceId("fixture-familiar-source"),
-    definitionId: markCardDefinitionId("source"),
-    ownerId: subject.playerId,
-    marketChips: 0,
-  };
+  subject.unboughtFamiliars = [
+    {
+      instanceId: markCardInstanceId("fixture-familiar-source"),
+      definitionId: markCardDefinitionId("source"),
+      ownerId: subject.playerId,
+      marketChips: 0,
+    },
+  ];
 
   const result = tryExecuteSetupEffect(
     subject,
@@ -616,7 +658,7 @@ test("replace_starting_card replaces a matching unbought familiar", () => {
   );
 
   assert.deepEqual(result, { status: "executed" });
-  assert.equal(subject.unboughtFamiliar?.definitionId, "target");
+  assert.equal(subject.unboughtFamiliars[0]?.definitionId, "target");
 });
 
 test("replace_starting_card preserves the matching card owner", () => {

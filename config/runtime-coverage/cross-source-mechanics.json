@@ -304,10 +304,243 @@
       "id": "esw2_dbg__wizard_property_003",
       "objectKind": "wizardProperty",
       "primaryMechanicCluster": "ongoing-modifiers",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in ongoing-modifiers"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "При подготовке к игре оставь себе обоих фамильяров и выбери любого ничейного фамильяра третьим. Ты всегда можешь считать своих фамильяров ещё и легендами (например, можешь потратить на них чипсины)."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
+              }
+            },
+            {
+              "kind": "effect",
+              "effectId": "setup_retain_and_choose_third_familiar",
+              "timing": "setup",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Это свойство применяется при подготовке к игре."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "setup_retain_and_choose_third_familiar",
+              "timing": "setup",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Игрок оставляет себе обоих своих фамильяров."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "setup_retain_and_choose_third_familiar",
+              "timing": "setup",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Игрок дополнительно выбирает любого ничейного фамильяра третьим."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "setup_retain_and_choose_third_familiar",
+              "timing": "setup",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Свои фамильяры могут считаться ещё и легендами."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Пример в тексте означает, что на фамильяров можно тратить чипсины так, как если бы они были легендами."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[5]",
+            "value": "Фактически, в течении хода можно сначала считать фамильяры обычным типом при каких-либо действиях, потом легендами, потом снова обычным типом, как пример"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[6]",
+            "value": "Считать легендой можно например 2 из 3 фамильяров, это не ограничивается"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[7]",
+            "value": "Если игрок (бот) выбирает фамильяра как легенду, то у него тип Легенда + Фамильяр, как у обычных Легенд-тварей, Легенд-волшебников и тд"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[8]",
+            "value": "В любой момент игры он может отозвать тип Легенды у Фамильяра"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "owned_cards_count_as_card_type",
+              "timing": "whileControlled",
+              "fields": {
+                "sourceCardTypes": ["familiar"],
+                "countedAsCardType": "legend",
+                "selectionMode": "perCard"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/setup.test.ts",
+              "name": "wizard property 003 keeps two familiars, selects a third, and toggles effective types independently"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__wizard_property_004",
@@ -549,19 +782,363 @@
       "id": "esw2_dbg__wizard_property_007",
       "objectKind": "wizardProperty",
       "primaryMechanicCluster": "ongoing-modifiers",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in ongoing-modifiers"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "В конце твоего хода за каждое полученное в этот ход заклинание получи +1 к пределу руки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Свойство проверяется в конце хода игрока."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Легенда-заклинание подходит под условие"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Нужно посчитать заклинания, которые игрок получил именно в этот ход."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "За каждое такое заклинание игрок получает +1 к пределу руки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Например, игрок получил 3 заклинания за ход. Игрок берет 8 карт (5 + 3)"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[5]",
+            "value": "В следующем ходу увеличение руки сбрасывается. Чтобы заново сработало условие нужно покупать заклинания"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[6]",
+            "value": "Например, чтобы каждый ход брать 6 карт, игроку потребуется каждый ход покупать 1 заклинание"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "temporary_hand_limit_by_gained_card_type",
+              "timing": "endTurn",
+              "fields": { "amount": 1, "cardTypes": ["spell"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 007 counts only spells gained by its controller this turn"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__wizard_property_008",
       "objectKind": "wizardProperty",
       "primaryMechanicCluster": "ongoing-modifiers",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in ongoing-modifiers"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Каждый раз, когда ты играешь карту-постоянку, получай 1 чипсину. Каждый раз, когда ты получаешь карту-постоянку, можешь класть её на верх своей колоды."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onPlayCard",
+              "fields": { "isOngoing": true, "amount": 1 }
+            },
+            {
+              "kind": "effect",
+              "effectId": "topdeck_gained_card",
+              "timing": "onGainCard",
+              "fields": { "optional": true, "isOngoing": true }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 008 grants one chip on first permanent play, not activation"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Первая часть срабатывает каждый раз, когда игрок играет карту-постоянку."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onPlayCard",
+              "fields": { "isOngoing": true, "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 008 grants one chip on first permanent play, not activation"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Игрок сыграл карту-постоянку, когда в первый раз сыграл эту карту, точнее положил ее в поле для постоянок. Последущие применения свойств активируемой постоянки не подходят под условие свойства. Только если постоянка была каким-то образом сброшена, и позже, заново активирована"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onPlayCard",
+              "fields": { "isOngoing": true, "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 008 grants one chip on first permanent play, not activation"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Легенды со свойством \"Постоянка\" подходят под условие свойства"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onPlayCard",
+              "fields": { "isOngoing": true, "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 008 grants one chip on first permanent play, not activation"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "За каждую сыгранную карту-постоянку игрок получает 1 чипсину."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "onPlayCard",
+              "fields": { "isOngoing": true, "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 008 grants one chip on first permanent play, not activation"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Вторая часть срабатывает каждый раз, когда игрок получает карту-постоянку."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "topdeck_gained_card",
+              "timing": "onGainCard",
+              "fields": { "optional": true, "isOngoing": true }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "fixed-discard gain cannot be redirected by Wizard Property 008"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[5]",
+            "value": "Полученную карту-постоянку игрок может положить на верх своей колоды."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "topdeck_gained_card",
+              "timing": "onGainCard",
+              "fields": { "optional": true, "isOngoing": true }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 006 and 008 apply topdecking after the player chooses apply"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[6]",
+            "value": "Слово \"можешь\" означает, что размещение карты на верх колоды необязательно."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "topdeck_gained_card",
+              "timing": "onGainCard",
+              "fields": { "optional": true, "isOngoing": true }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "Wizard Property 008 lets the player decline topdecking a gained permanent"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[7]",
+            "value": "Постоянка купленная/полученная в \"сброс\" не может быть поставлена на верх колоды по свойству."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "topdeck_gained_card",
+              "timing": "onGainCard",
+              "fields": { "optional": true, "isOngoing": true }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "fixed-discard gain cannot be redirected by Wizard Property 008"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__wizard_property_009",
@@ -1224,10 +1801,161 @@
       "id": "esw2_dbg__dead_wizard_token_016",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "ongoing-modifiers",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in ongoing-modifiers"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "ПОСТОЯНКА. Ты наносишь дополнительно 4 урона палочками, которые наносят урон."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_owned_wand_attack_damage",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"], "amount": 4 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "redirected foreign Wand uses the redirecting player's DWT016 but not wizard property"
+            }
+          ]
+        },
+        {
+          "draftPoint": { "path": "visible.victoryPoints", "value": -4 },
+          "runtimeRefs": [
+            { "kind": "field", "path": "victoryPoints", "value": -7 }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "redirected foreign Wand uses the redirecting player's DWT016 but not wizard property"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "ЖДК имеет свойство ПОСТОЯНКА, как карты-постоянки, трофеи и прочие постоянки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_owned_wand_attack_damage",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"], "amount": 4 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "redirected foreign Wand uses the redirecting player's DWT016 but not wizard property"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Эффект увеличивает урон от палочек игрока."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_owned_wand_attack_damage",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"], "amount": 4 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "redirected foreign Wand uses the redirecting player's DWT016 but not wizard property"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Увеличение применяется только к палочкам, которые действительно наносят урон."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_owned_wand_attack_damage",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"], "amount": 4 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "redirected foreign Wand uses the redirecting player's DWT016 but not wizard property"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Значение -4 относится к штрафным ПО/VP этого жетона, если JSON mapping подтвердит это как scoring value."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_owned_wand_attack_damage",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"], "amount": 4 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "redirected foreign Wand uses the redirecting player's DWT016 but not wizard property"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Фактически, этот ЖДК дает -7 ПО в сумме."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_owned_wand_attack_damage",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"], "amount": 4 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "redirected foreign Wand uses the redirecting player's DWT016 but not wizard property"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[5]",
+            "value": "Дополнительный урон наносится независимо от владельца палочки, даже через шальную магию можно сыграть чужую палочку и нанести доп. урон."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_owned_wand_attack_damage",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"], "amount": 4 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "redirected foreign Wand uses the redirecting player's DWT016 but not wizard property"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_017",
@@ -1442,10 +2170,89 @@
       "id": "esw2_dbg__dead_wizard_token_020",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "ongoing-modifiers",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in ongoing-modifiers"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "ПОСТОЯНКА. Ты не получаешь бонус за контроль главного приза."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "suppress_basic_trophy_chip_payout",
+              "timing": "whileControlled",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "DWT 020 suppresses only its controller's Basic Trophy payout"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "ЖДК имеет свойство ПОСТОЯНКА, как карты-постоянки, трофеи и прочие постоянки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "suppress_basic_trophy_chip_payout",
+              "timing": "whileControlled",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "DWT 020 suppresses only its controller's Basic Trophy payout"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Пока эффект активен, игрок не получает бонус за контроль главного приза."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "suppress_basic_trophy_chip_payout",
+              "timing": "whileControlled",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "DWT 020 suppresses only its controller's Basic Trophy payout"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "То есть не получает чипсину каждый ход за главный приз"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "suppress_basic_trophy_chip_payout",
+              "timing": "whileControlled",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "DWT 020 suppresses only its controller's Basic Trophy payout"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_021",

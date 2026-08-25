@@ -46,10 +46,30 @@ type EffectiveValueTarget =
 
 type EffectiveValueSource = EffectiveValueModifierSource;
 
+export type CardTypeMatcher = (
+  state: GameState,
+  playerId: PlayerId,
+  definition: CardDefinition,
+  cardType: string,
+  card?: CardInstance
+) => boolean;
+
+const playerCardTypeMatcher: CardTypeMatcher = cardMatchesTypeForPlayer;
+
+const matchesDeclaredCardType: CardTypeMatcher = (
+  _state,
+  _playerId,
+  definition,
+  cardType
+) =>
+  definition.engine.cardTypes.includes(cardType) ||
+  definition.engine.tags?.includes("counts_as_every_card_type") === true;
+
 const effectiveValueEffectCache = new WeakMap<
   object,
   readonly (VerifiedRuntimeEffect & EffectiveValueModifierEffect)[]
 >();
+const knownCardTypesCache = new WeakMap<object, readonly string[]>();
 
 interface EffectiveValueModifierEvaluationContext {
   readonly timing: "whileControlled" | "whileScoring";
@@ -115,7 +135,9 @@ function applyEffectiveValueModifier(
 export function calculateEffectiveCardCost(
   state: GameState,
   playerId: PlayerId,
-  definition: CardDefinition
+  definition: CardDefinition,
+  card?: CardInstance,
+  cardTypeMatcher: CardTypeMatcher = matchesDeclaredCardType
 ): number {
   return calculateEffectiveValue({
     state,
@@ -126,6 +148,8 @@ export function calculateEffectiveCardCost(
       definitionId: definition.cardId,
     },
     baseValue: definition.engine.cost,
+    ...(card === undefined ? {} : { scoredCard: card }),
+    cardTypeMatcher,
   });
 }
 
@@ -133,7 +157,8 @@ export function calculateEffectiveCardVictoryPoints(
   state: GameState,
   playerId: PlayerId,
   definition: CardDefinition,
-  card: CardInstance | undefined
+  card: CardInstance | undefined,
+  cardTypeMatcher: CardTypeMatcher = matchesDeclaredCardType
 ): number {
   return calculateEffectiveValue({
     state,
@@ -146,13 +171,15 @@ export function calculateEffectiveCardVictoryPoints(
     baseValue: definition.engine.victoryPoints,
     scoringCards: getOwnedScoringCards(state, playerId),
     ...(card === undefined ? {} : { scoredCard: card }),
+    cardTypeMatcher,
   });
 }
 
 export function calculateEffectiveTokenVictoryPoints(
   state: GameState,
   playerId: PlayerId,
-  definition: TokenDefinition
+  definition: TokenDefinition,
+  cardTypeMatcher: CardTypeMatcher = matchesDeclaredCardType
 ): number {
   if (definition.kind !== "deadWizardToken") {
     throw new Error(`Token ${definition.tokenId} does not have victory points`);
@@ -168,6 +195,7 @@ export function calculateEffectiveTokenVictoryPoints(
     },
     baseValue: getDeclaredDeadWizardTokenVictoryPoints(definition),
     scoringCards: getOwnedScoringCards(state, playerId),
+    cardTypeMatcher,
   });
 }
 
@@ -207,7 +235,8 @@ function isEndgameFixedTokenVictoryPointsEffect(
 export function calculateEffectivePlayerVictoryPoints(
   state: GameState,
   playerId: PlayerId,
-  baseValue: number
+  baseValue: number,
+  cardTypeMatcher: CardTypeMatcher = matchesDeclaredCardType
 ): number {
   return calculateEffectiveValue({
     state,
@@ -218,12 +247,14 @@ export function calculateEffectivePlayerVictoryPoints(
     },
     baseValue,
     scoringCards: getOwnedScoringCards(state, playerId),
+    cardTypeMatcher,
   });
 }
 
 export function calculateEffectivePlayerMaxLife(
   state: GameState,
-  playerId: PlayerId
+  playerId: PlayerId,
+  cardTypeMatcher: CardTypeMatcher = matchesDeclaredCardType
 ): number {
   const player = state.players.find(
     (candidate) => candidate.playerId === playerId
@@ -240,7 +271,75 @@ export function calculateEffectivePlayerMaxLife(
       targetType: "player",
     },
     baseValue: player.life.max,
+    cardTypeMatcher,
   });
+}
+
+export function calculateEffectiveCardCostForPlayer(
+  state: GameState,
+  playerId: PlayerId,
+  definition: CardDefinition,
+  card?: CardInstance
+): number {
+  return calculateEffectiveCardCost(
+    state,
+    playerId,
+    definition,
+    card,
+    playerCardTypeMatcher
+  );
+}
+
+export function calculateEffectiveCardVictoryPointsForPlayer(
+  state: GameState,
+  playerId: PlayerId,
+  definition: CardDefinition,
+  card: CardInstance | undefined
+): number {
+  return calculateEffectiveCardVictoryPoints(
+    state,
+    playerId,
+    definition,
+    card,
+    playerCardTypeMatcher
+  );
+}
+
+export function calculateEffectiveTokenVictoryPointsForPlayer(
+  state: GameState,
+  playerId: PlayerId,
+  definition: TokenDefinition
+): number {
+  return calculateEffectiveTokenVictoryPoints(
+    state,
+    playerId,
+    definition,
+    playerCardTypeMatcher
+  );
+}
+
+export function calculateEffectivePlayerVictoryPointsForPlayer(
+  state: GameState,
+  playerId: PlayerId,
+  baseValue: number
+): number {
+  return calculateEffectivePlayerVictoryPoints(
+    state,
+    playerId,
+    baseValue,
+    playerCardTypeMatcher
+  );
+}
+
+export function calculateEffectivePlayerMaxLifeForPlayer(
+  state: GameState,
+  playerId: PlayerId
+): number {
+  return calculateEffectivePlayerMaxLife(
+    state,
+    playerId,
+    playerCardTypeMatcher
+  );
 }
 
 function calculateEffectiveValue(options: {
@@ -251,6 +350,7 @@ function calculateEffectiveValue(options: {
   baseValue: number;
   scoringCards?: readonly ControlledCardObject[];
   scoredCard?: CardInstance;
+  cardTypeMatcher: CardTypeMatcher;
 }): number {
   let value = options.baseValue;
   const view = buildControlledObjectView(options.state, options.playerId);
@@ -262,7 +362,12 @@ function calculateEffectiveValue(options: {
       const scoringCards =
         options.scoringCards ??
         getOwnedScoringCards(options.state, options.playerId);
-      scoringCardTypeIndex = buildScoringCardTypeIndex(scoringCards);
+      scoringCardTypeIndex = buildScoringCardTypeIndex(
+        options.state,
+        options.playerId,
+        scoringCards,
+        options.cardTypeMatcher
+      );
     }
     return scoringCardTypeIndex;
   };
@@ -286,7 +391,9 @@ function calculateEffectiveValue(options: {
               options.state,
               options.playerId,
               modifier.target,
-              options.target
+              options.target,
+              options.scoredCard,
+              options.cardTypeMatcher
             )
           ) {
             return false;
@@ -569,17 +676,70 @@ function getWizardPropertyEffects(
 }
 
 function buildScoringCardTypeIndex(
-  scoringCards: readonly ControlledCardObject[]
+  state: GameState,
+  playerId: PlayerId,
+  scoringCards: readonly ControlledCardObject[],
+  cardTypeMatcher: CardTypeMatcher
 ): ReadonlyMap<string, ReadonlySet<ControlledCardObject>> {
   const index = new Map<string, Set<ControlledCardObject>>();
+  const knownCardTypes = getKnownCardTypes(state);
+
   for (const object of scoringCards) {
-    for (const cardType of new Set(object.definition.engine.cardTypes)) {
-      const cards = index.get(cardType) ?? new Set<ControlledCardObject>();
-      cards.add(object);
-      index.set(cardType, cards);
+    const declaredCardTypes = object.definition.engine.cardTypes;
+    const isEveryCardType =
+      object.definition.engine.tags?.includes("counts_as_every_card_type") ===
+      true;
+    for (const cardType of isEveryCardType
+      ? knownCardTypes
+      : declaredCardTypes) {
+      addScoringCardType(index, cardType, object);
+    }
+
+    if (isEveryCardType || cardTypeMatcher === matchesDeclaredCardType) {
+      continue;
+    }
+
+    for (const cardType of knownCardTypes) {
+      if (declaredCardTypes.includes(cardType)) continue;
+      if (
+        cardTypeMatcher(
+          state,
+          playerId,
+          object.definition,
+          cardType,
+          object.card
+        )
+      ) {
+        addScoringCardType(index, cardType, object);
+      }
     }
   }
   return index;
+}
+
+function getKnownCardTypes(state: GameState): readonly string[] {
+  const cached = knownCardTypesCache.get(state.cardDefinitions);
+  if (cached !== undefined) return cached;
+
+  const knownCardTypes = new Set<string>(["legend"]);
+  for (const definition of state.cardDefinitions.values()) {
+    for (const cardType of definition.engine.cardTypes) {
+      knownCardTypes.add(cardType);
+    }
+  }
+  const result = Array.from(knownCardTypes);
+  knownCardTypesCache.set(state.cardDefinitions, result);
+  return result;
+}
+
+function addScoringCardType(
+  index: Map<string, Set<ControlledCardObject>>,
+  cardType: string,
+  object: ControlledCardObject
+): void {
+  const cards = index.get(cardType) ?? new Set<ControlledCardObject>();
+  cards.add(object);
+  index.set(cardType, cards);
 }
 
 function countOwnedScoringCards(
@@ -606,7 +766,9 @@ function matchesTarget(
   state: GameState,
   playerId: PlayerId,
   effectTarget: RuntimeEffectTarget | undefined,
-  target: EffectiveValueTarget
+  target: EffectiveValueTarget,
+  targetCard: CardInstance | undefined,
+  cardTypeMatcher: CardTypeMatcher
 ): boolean {
   if (effectTarget === undefined || !isRuntimeEffectTarget(effectTarget)) {
     return false;
@@ -646,7 +808,7 @@ function matchesTarget(
     return effectTarget.cardTypes.some((cardType) => {
       return (
         typeof cardType === "string" &&
-        cardMatchesTypeForPlayer(state, playerId, definition, cardType)
+        cardTypeMatcher(state, playerId, definition, cardType, targetCard)
       );
     });
   }

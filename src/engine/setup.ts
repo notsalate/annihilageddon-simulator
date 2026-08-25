@@ -3,7 +3,6 @@ import {
   createPlayerId,
   createTokenInstanceId,
   markCardDefinitionId,
-  markTokenInstanceId,
   markTokenDefinitionId,
   type CardDefinitionId,
   type CardInstanceId,
@@ -24,12 +23,14 @@ import {
   recordSetupChoiceSelected,
 } from "./event-recorder.js";
 import {
+  getSetupEffectPoolRequirement,
   tryExecuteSetupEffect,
   type EffectRuntimeMode,
   type EffectRuntimeSetupServices,
   type SetupDirective,
   type SetupEffectSourceContext,
 } from "./effect-runtime-registry.js";
+import { filterWizardPropertySetupPoolForFamiliarCapacity } from "./effect-runtime-setup.js";
 import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
@@ -41,7 +42,13 @@ import {
   type RuntimeDataPreloadedSource,
 } from "./runtime-data-intake.js";
 import type { RuntimeEffect } from "./runtime-effect.js";
-import type { ChoiceKind, ChoicePolicy } from "./choice-policy.js";
+import {
+  isChoiceSelection,
+  type ChoiceKind,
+  type ChoicePolicy,
+  type FamiliarSetupChoicePhase,
+} from "./choice-policy.js";
+import { createChoicePlayerView } from "./strategy-decision-view.js";
 
 export type { PlayerId } from "../domain/types.js";
 export type CommonOwner = "common";
@@ -51,6 +58,17 @@ export interface CardInstance {
   definitionId: CardDefinitionId;
   ownerId: PlayerId | CommonOwner;
   marketChips: number;
+}
+
+export interface EffectiveCardTypeSelection {
+  cardInstanceId: CardInstanceId;
+  cardType: string;
+}
+
+export interface GainedCardRecord {
+  playerId: PlayerId;
+  definitionId: CardDefinitionId;
+  cardInstanceId: CardInstanceId;
 }
 
 /** A card controlled outside permanent storage until the current turn ends. */
@@ -86,7 +104,8 @@ export interface PlayerState {
   discard: CardInstance[];
   playedThisTurn: CardInstance[];
   permanents: CardInstance[];
-  unboughtFamiliar: CardInstance | undefined;
+  unboughtFamiliars: CardInstance[];
+  effectiveCardTypeSelections: EffectiveCardTypeSelection[];
   deadWizardTokens: TokenInstance[];
   wizardProperties: TokenInstance[];
   statuses: StatusInstance[];
@@ -150,7 +169,7 @@ export interface GameState {
     power: number;
     controlledPowerBonus: number;
     activatedCardIds: string[];
-    gainedCardDefinitionIds: string[];
+    gainedCards: GainedCardRecord[];
     mainMarketCardHandReplacementSourceCardIds: string[];
     rememberedDestroyedLegendCost?: number | undefined;
     damagingAttackPlayerIds: PlayerId[];
@@ -183,6 +202,7 @@ export type GameEventType =
   | "buyMarketCard"
   | "cardActivated"
   | "cardBought"
+  | "cardEffectiveTypeChanged"
   | "cardMoved"
   | "cardPlayed"
   | "deadWizardTokenFaceResolved"
@@ -266,7 +286,7 @@ export type GameEventDestination =
   | "hand"
   | "discardSelf"
   | "topdeckSelf";
-export type SetupChoicePolicyId = "alwaysPickFirst";
+export type SetupChoicePolicyId = "alwaysPickFirst" | "provided";
 
 export interface GameEventMetadata {
   eventSequence?: number;
@@ -302,6 +322,8 @@ interface GameEventPayload {
   choiceId?: string;
   choiceKind?: ChoiceKind;
   choiceIds?: string[];
+  cardType?: string;
+  enabled?: boolean;
   direction?: "left" | "right";
   legalChoiceCount?: number;
   amount?: number;
@@ -313,7 +335,9 @@ interface GameEventPayload {
   sourceType?: GameEventSourceType;
   setupChoiceKind?: "familiar" | "wizardProperty";
   policyId?: SetupChoicePolicyId;
+  candidateInstanceIds?: string[];
   candidateDefinitionIds?: string[];
+  chosenInstanceId?: string;
   chosenDefinitionId?: string;
 }
 
@@ -380,7 +404,11 @@ type GameEventOptionalFields<TType extends GameEventType> = TType extends
                                       ?
                                           | "targetCardInstanceId"
                                           | "targetDefinitionId"
-                                      : never;
+                                      : TType extends "setupChoiceSelected"
+                                        ?
+                                            | "candidateInstanceIds"
+                                            | "chosenInstanceId"
+                                        : never;
 
 type GameEventShape<
   TType extends GameEventType,
@@ -640,6 +668,10 @@ type GameEventPayloadUnion =
       "playerId" | "cardInstanceId" | "definitionId"
     >
   | GameEventOf<
+      "cardEffectiveTypeChanged",
+      "playerId" | "cardInstanceId" | "definitionId" | "cardType" | "enabled"
+    >
+  | GameEventOf<
       "cardMoved",
       | "playerId"
       | "cardInstanceId"
@@ -796,7 +828,11 @@ interface TokenInstanceFactory {
   ): TokenInstance;
 }
 
-interface SetupCandidate<TDefinitionId extends string> {
+interface SetupCandidate<
+  TDefinitionId extends string,
+  TInstanceId extends string = string,
+> {
+  instanceId: TInstanceId;
   definitionId: TDefinitionId;
 }
 
@@ -815,13 +851,6 @@ export function initializeGame(options: InitializeGameOptions): GameState {
   const setupEvents: GameEvent[] = [];
 
   const players = createPlayers(playerCount, dataPack, factory, rng);
-  assignStartingFamiliars(
-    players,
-    dataPack,
-    factory,
-    createSeededRng(options.seed + 7919),
-    setupEvents
-  );
   assignStartingWizardProperties(
     players,
     dataPack,
@@ -829,7 +858,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     rng,
     setupEvents
   );
-  const forcedStartingPlayerId = applyWizardPropertySetupEffects(
+  const setupDirectives = applyWizardPropertySetupEffects(
     players,
     dataPack,
     runtimeMode,
@@ -841,6 +870,18 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       allowsMissingData: isIncompleteFullOnlyDataPack(dataPack),
     }
   );
+  assignStartingFamiliars(
+    players,
+    dataPack,
+    factory,
+    createSeededRng(options.seed + 7919),
+    setupEvents,
+    setupDirectives,
+    options.effectChoiceStrategy
+  );
+  const forcedStartingPlayerId = setupDirectives.find(
+    (directive) => directive.kind === "forceStartingPlayer"
+  )?.playerId;
   const mainDeck = instantiateDeck(
     dataPack.decks.mainDeck,
     dataPack,
@@ -908,7 +949,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       power: 0,
       controlledPowerBonus: 0,
       activatedCardIds: [],
-      gainedCardDefinitionIds: [],
+      gainedCards: [],
       mainMarketCardHandReplacementSourceCardIds: [],
       rememberedDestroyedLegendCost: undefined,
       damagingAttackPlayerIds: [],
@@ -1018,21 +1059,30 @@ function assignStartingWizardProperties(
       `Token stack ${tokenStack.stackId} must include at least one wizard property`
     );
   }
+  const setupCandidates = filterWizardPropertySetupPoolForFamiliarCapacity(
+    setupPool,
+    players.length,
+    dataPack,
+    (effect) =>
+      getSetupEffectPoolRequirement(requireVerifiedRuntimeEffect(effect))
+  );
   assertSetupPoolSize(
-    setupPool.length,
+    setupCandidates.length,
     players.length * 2,
     "Wizard property setup pool",
     players.length
   );
 
-  shuffleDeck(setupPool, rng);
+  shuffleDeck(setupCandidates, rng);
 
   for (let index = 0; index < players.length; index += 1) {
     const player = players[index];
     const candidateOffset =
-      players.length * 2 <= setupPool.length ? index * 2 : index;
-    const firstCandidate = setupPool[candidateOffset % setupPool.length];
-    const secondCandidate = setupPool[(candidateOffset + 1) % setupPool.length];
+      players.length * 2 <= setupCandidates.length ? index * 2 : index;
+    const firstCandidate =
+      setupCandidates[candidateOffset % setupCandidates.length];
+    const secondCandidate =
+      setupCandidates[(candidateOffset + 1) % setupCandidates.length];
     if (
       player === undefined ||
       firstCandidate === undefined ||
@@ -1063,13 +1113,8 @@ function assignStartingWizardProperties(
       eventLog
     );
 
-    player.wizardProperties.push({
-      ...selectedCandidate,
-      instanceId: markTokenInstanceId(
-        `starting-${selectedCandidate.instanceId}-player-${index + 1}`
-      ),
-      ownerId: player.playerId,
-    });
+    selectedCandidate.ownerId = player.playerId;
+    player.wizardProperties.push(selectedCandidate);
   }
 }
 
@@ -1078,7 +1123,9 @@ function assignStartingFamiliars(
   dataPack: LoadedDataPack,
   factory: InstanceFactory,
   rng: RandomSource,
-  eventLog: GameEvent[]
+  eventLog: GameEvent[],
+  setupDirectives: readonly SetupDirective[],
+  choicePolicy?: ChoicePolicy
 ): void {
   const familiarPool = dataPack.decks.familiarPool;
   if (familiarPool === undefined) {
@@ -1091,21 +1138,33 @@ function assignStartingFamiliars(
   }
 
   const setupPool = instantiateDeck(familiarPool, dataPack, factory, "common");
-  if (setupPool.length < players.length * 2) {
+  let playersRetainingBothFamiliars: Set<PlayerId> | undefined;
+  for (const directive of setupDirectives) {
+    if (directive.kind !== "retainAndChooseThirdFamiliar") continue;
+    (playersRetainingBothFamiliars ??= new Set()).add(directive.playerId);
+  }
+  const requiredSetupPoolSize =
+    players.length * 2 + (playersRetainingBothFamiliars?.size ?? 0);
+  if (setupPool.length < requiredSetupPoolSize) {
     if (isIncompleteFullOnlyDataPack(dataPack)) {
       return;
     }
     throw new Error(
-      `Deck ${familiarPool.deckId} must include at least ${players.length * 2} familiar setup candidates`
+      `Deck ${familiarPool.deckId} must include at least ${requiredSetupPoolSize} familiar setup candidates`
     );
   }
 
   shuffleDeck(setupPool, rng);
 
+  const startingPairs: Array<{
+    player: PlayerState;
+    candidates: readonly [CardInstance, CardInstance];
+    retainsBothFamiliars: boolean;
+  }> = [];
   for (let index = 0; index < players.length; index += 1) {
     const player = players[index];
-    const firstCandidate = setupPool[(index * 2) % setupPool.length];
-    const secondCandidate = setupPool[(index * 2 + 1) % setupPool.length];
+    const firstCandidate = setupPool[index * 2];
+    const secondCandidate = setupPool[index * 2 + 1];
     if (
       player === undefined ||
       firstCandidate === undefined ||
@@ -1131,35 +1190,153 @@ function assignStartingFamiliars(
       );
     }
 
-    const selectedCandidate = alwaysPickFirstSetupChoice(
+    startingPairs.push({
       player,
-      "familiar",
-      [firstCandidate, secondCandidate],
+      candidates: [firstCandidate, secondCandidate],
+      retainsBothFamiliars:
+        playersRetainingBothFamiliars?.has(player.playerId) === true,
+    });
+  }
+
+  const assignedInstanceIds = new Set<CardInstanceId>();
+  for (const { player, candidates, retainsBothFamiliars } of startingPairs) {
+    if (retainsBothFamiliars) {
+      for (const candidate of candidates) {
+        player.unboughtFamiliars.push(
+          transferSetupCardToPlayer(candidate, player.playerId)
+        );
+        assignedInstanceIds.add(candidate.instanceId);
+      }
+    } else {
+      const selectedPairChoice = selectFamiliarSetupChoice(
+        player,
+        "startingPair",
+        candidates,
+        choicePolicy,
+        eventLog
+      );
+      player.unboughtFamiliars.push(
+        transferSetupCardToPlayer(selectedPairChoice.candidate, player.playerId)
+      );
+      assignedInstanceIds.add(selectedPairChoice.candidate.instanceId);
+    }
+  }
+
+  for (const { player, retainsBothFamiliars } of startingPairs) {
+    if (!retainsBothFamiliars) continue;
+
+    const thirdCandidates = setupPool.filter(
+      (candidate) => !assignedInstanceIds.has(candidate.instanceId)
+    );
+    const thirdCandidateChoice = selectFamiliarSetupChoice(
+      player,
+      "thirdFamiliar",
+      thirdCandidates,
+      choicePolicy,
       eventLog
     );
+    const thirdCandidate = thirdCandidateChoice.candidate;
+    const thirdDefinition = mustGetDefinition(
+      dataPack,
+      thirdCandidate.definitionId
+    );
+    if (thirdDefinition.engine.cardKind !== "familiar") {
+      throw new Error(
+        `Deck ${familiarPool.deckId} must contain only familiar cards`
+      );
+    }
+    player.unboughtFamiliars.push(
+      transferSetupCardToPlayer(thirdCandidate, player.playerId)
+    );
+    assignedInstanceIds.add(thirdCandidate.instanceId);
+  }
+}
 
-    player.unboughtFamiliar = factory.create(
-      selectedCandidate.definitionId,
-      player.playerId
+function transferSetupCardToPlayer(
+  candidate: CardInstance,
+  playerId: PlayerId
+): CardInstance {
+  candidate.ownerId = playerId;
+  return candidate;
+}
+
+function selectFamiliarSetupChoice<
+  TCandidate extends SetupCandidate<CardDefinitionId, CardInstanceId>,
+>(
+  player: PlayerState,
+  phase: FamiliarSetupChoicePhase,
+  candidates: readonly TCandidate[],
+  policy: ChoicePolicy | undefined,
+  eventLog: GameEvent[]
+): { candidate: TCandidate; index: number } {
+  if (candidates.length === 0) {
+    throw new Error(
+      `Setup choice familiar has no candidates for ${player.playerId}`
     );
   }
+  const selectedChoice = policy?.({
+    requestKind: "setup",
+    player: createChoicePlayerView(player),
+    setupChoiceKind: "familiar",
+    phase,
+    choices: candidates.map((candidate) => ({
+      choiceKind: "familiarSetup" as const,
+      choiceId: candidate.instanceId,
+      candidateDefinitionId: candidate.definitionId,
+    })),
+  });
+  const requestedInstanceId = isChoiceSelection(selectedChoice)
+    ? selectedChoice.choiceId
+    : undefined;
+  const requestedIndex =
+    requestedInstanceId === undefined
+      ? 0
+      : candidates.findIndex(
+          (candidate) => candidate.instanceId === requestedInstanceId
+        );
+  const selectedIndex = requestedIndex < 0 ? 0 : requestedIndex;
+  const chosenCandidate = candidates[selectedIndex];
+  if (chosenCandidate === undefined) {
+    throw new Error("Unexpected sparse array during familiar setup choice");
+  }
+  recordSetupChoiceSelected(eventLog, {
+    type: "setupChoiceSelected",
+    playerId: player.playerId,
+    setupChoiceKind: "familiar",
+    policyId:
+      requestedInstanceId === undefined ? "alwaysPickFirst" : "provided",
+    candidateInstanceIds: candidates.map((candidate) => candidate.instanceId),
+    candidateDefinitionIds: candidates.map(
+      (candidate) => candidate.definitionId
+    ),
+    chosenInstanceId: chosenCandidate.instanceId,
+    chosenDefinitionId: chosenCandidate.definitionId,
+  });
+  return { candidate: chosenCandidate, index: selectedIndex };
 }
 
 function alwaysPickFirstSetupChoice<TCandidate extends SetupCandidate<string>>(
   player: PlayerState,
   setupChoiceKind: "familiar" | "wizardProperty",
-  candidates: readonly [TCandidate, TCandidate],
+  candidates: readonly TCandidate[],
   eventLog: GameEvent[]
 ): TCandidate {
   const chosenCandidate = candidates[0];
+  if (chosenCandidate === undefined) {
+    throw new Error(
+      `Setup choice ${setupChoiceKind} has no candidates for ${player.playerId}`
+    );
+  }
   recordSetupChoiceSelected(eventLog, {
     type: "setupChoiceSelected",
     playerId: player.playerId,
     setupChoiceKind,
     policyId: "alwaysPickFirst",
+    candidateInstanceIds: candidates.map((candidate) => candidate.instanceId),
     candidateDefinitionIds: candidates.map(
       (candidate) => candidate.definitionId
     ),
+    chosenInstanceId: chosenCandidate.instanceId,
     chosenDefinitionId: chosenCandidate.definitionId,
   });
   return chosenCandidate;
@@ -1183,8 +1360,8 @@ function applyWizardPropertySetupEffects(
   dataPack: LoadedDataPack,
   runtimeMode: "combat" | "fixture",
   services: EffectRuntimeSetupServices
-): PlayerId | undefined {
-  let forcedStartingPlayer: PlayerId | undefined;
+): SetupDirective[] {
+  const setupDirectives: SetupDirective[] = [];
   for (const player of players) {
     for (const property of player.wizardProperties) {
       const definition = dataPack.tokenDefinitions.get(property.definitionId);
@@ -1216,11 +1393,8 @@ function applyWizardPropertySetupEffects(
         );
         if (execution.status === "executed") {
           const directive: SetupDirective | undefined = execution.directive;
-          if (
-            forcedStartingPlayer === undefined &&
-            directive?.kind === "forceStartingPlayer"
-          ) {
-            forcedStartingPlayer = directive.playerId;
+          if (directive !== undefined) {
+            setupDirectives.push(directive);
           }
           continue;
         }
@@ -1231,7 +1405,7 @@ function applyWizardPropertySetupEffects(
       }
     }
   }
-  return forcedStartingPlayer;
+  return setupDirectives;
 }
 
 function isSetupEffect(effect: RuntimeEffect): boolean {
@@ -1261,7 +1435,8 @@ function createPlayers(
       discard: [],
       playedThisTurn: [],
       permanents: [],
-      unboughtFamiliar: undefined,
+      unboughtFamiliars: [],
+      effectiveCardTypeSelections: [],
       deadWizardTokens: [],
       wizardProperties: [],
       statuses: [],

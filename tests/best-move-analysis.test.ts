@@ -51,7 +51,7 @@ function rankingFixture(): {
   activePlayer.wizardProperties = [];
   activePlayer.statuses = [];
   activePlayer.trophyLikeObjects = [];
-  activePlayer.unboughtFamiliar = undefined;
+  activePlayer.unboughtFamiliars = [];
   activePlayer.deck = [];
   activePlayer.discard = [];
   addFixtureDefinitionToActiveHand(
@@ -239,7 +239,7 @@ function analysisFixtureState(seed: number): GameState {
     (player) => player.playerId === state.activePlayerId
   );
   if (activePlayer !== undefined) {
-    activePlayer.unboughtFamiliar = undefined;
+    activePlayer.unboughtFamiliars = [];
   }
   return state;
 }
@@ -396,7 +396,7 @@ test("enumerates every current-turn action history through endTurn", () => {
   activePlayer.wizardProperties = [];
   activePlayer.statuses = [];
   activePlayer.trophyLikeObjects = [];
-  activePlayer.unboughtFamiliar = undefined;
+  activePlayer.unboughtFamiliars = [];
   activePlayer.deck = [];
   activePlayer.discard = [];
   addFixtureDefinitionToActiveHand(
@@ -477,6 +477,40 @@ test("enumerates current-turn lines in stable depth-first order", () => {
     "endTurn",
   ]);
   assert.deepEqual(enumerateHistories(), enumerateHistories());
+});
+
+test("bounds reversible effective-type cycles while enumerating current-turn lines", () => {
+  const state = initializeGame({ rootDir, seed: 18 });
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  state.common.market = [];
+  state.common.legendMarket = [];
+  state.common.wildMagicStack = [];
+  state.common.mainDeck = [];
+  state.common.legendDeck = [];
+  state.common.limpWandStack = [];
+  state.turn.power = 0;
+  activePlayer.chips = 0;
+  activePlayer.hand = [];
+  activePlayer.deck = [];
+  activePlayer.discard = [];
+  activePlayer.playedThisTurn = [];
+  activePlayer.permanents = [];
+  activePlayer.statuses = [];
+  activePlayer.trophyLikeObjects = [];
+
+  const lines = enumerateTurnLines(state, {
+    maxChoiceDepth: 32,
+    maxBranchesPerAction: 32,
+    maxActionsPerLine: 20,
+    maxTurnLines: 5_000,
+  });
+
+  assert.ok(lines.length > 0);
+  assert.ok(lines.every((line) => line.terminalReason === "endTurn"));
+  assert.ok(lines.every((line) => line.steps.length <= 20));
 });
 
 test("keeps sibling game-ending ordinary actions and stops each winning line", () => {

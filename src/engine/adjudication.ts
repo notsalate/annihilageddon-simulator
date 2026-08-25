@@ -1,4 +1,5 @@
 import type { TokenDefinition } from "./data.js";
+import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
 import {
   calculateEffectiveCardVictoryPoints,
   calculateEffectivePlayerVictoryPoints,
@@ -36,7 +37,6 @@ export function scoreGame(state: GameState): PlayerScore[] {
     getRemovedDeadWizardTokenInstanceIdsForScoring(state);
   return state.players.map((player) => {
     const scoringCards = getOwnedScoringCards(state, player.playerId);
-    const cardDefinitions = scoringCards.map((object) => object.definition);
     const scoringDeadWizardTokens = player.deadWizardTokens.filter(
       (token) => !removedDeadWizardTokenInstanceIds.has(token.instanceId)
     );
@@ -69,8 +69,14 @@ export function scoreGame(state: GameState): PlayerScore[] {
           );
         }, 0) +
         calculateEffectivePlayerVictoryPoints(state, player.playerId, 0),
-      legendCount: cardDefinitions.filter(
-        (definition) => definition.engine.cardKind === "legend"
+      legendCount: scoringCards.filter((object) =>
+        cardMatchesTypeForPlayer(
+          state,
+          player.playerId,
+          object.definition,
+          "legend",
+          object.card
+        )
       ).length,
       deadWizardTokenCount: scoringDeadWizardTokens.length,
     };

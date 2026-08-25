@@ -1,6 +1,14 @@
 import { markCardDefinitionId } from "../domain/types.js";
 import { replaceOwnedCardDefinitionInPlayerZones } from "./control-ledger.js";
-import type { EffectRuntimeEndTurnDrawModifierOperationContext } from "./effect-runtime-registry.js";
+import {
+  isIncompleteFullOnlyDataPack,
+  type LoadedDataPack,
+  type TokenDefinition,
+} from "./data.js";
+import type {
+  EffectRuntimeEndTurnDrawModifierOperationContext,
+  SetupPoolRequirement,
+} from "./effect-runtime-registry.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 import {
   createUnsupportedEffectHandler,
@@ -13,7 +21,11 @@ import type {
   ValueDecoder,
 } from "./effect-runtime-family-support.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
-import type { EffectTiming, RuntimeEffectForId } from "./runtime-effect.js";
+import type {
+  EffectTiming,
+  RuntimeEffect,
+  RuntimeEffectForId,
+} from "./runtime-effect.js";
 import {
   allEffectRuntimeModes,
   immediateEffectTimings,
@@ -21,7 +33,7 @@ import {
   type EffectRuntimeSupportedSourceKinds,
   type EffectRuntimeSupportedTimings,
 } from "./effect-runtime-catalog-shared.js";
-import type { GameState, PlayerState } from "./setup.js";
+import type { GameState, PlayerState, TokenInstance } from "./setup.js";
 
 type DecodedPayloadValidator<Id extends SetupEffectId> = (
   subjectId: string,
@@ -31,6 +43,7 @@ type DecodedPayloadValidator<Id extends SetupEffectId> = (
 export type SetupEffectId =
   | "force_starting_player"
   | "replace_starting_card"
+  | "setup_retain_and_choose_third_familiar"
   | "start_with_basic_trophy"
   | "set_starting_life_total"
   | "set_resurrection_life_total"
@@ -46,6 +59,7 @@ export type SetupEffectId =
 export const setupEffectIds = [
   "force_starting_player",
   "replace_starting_card",
+  "setup_retain_and_choose_third_familiar",
   "start_with_basic_trophy",
   "set_starting_life_total",
   "set_resurrection_life_total",
@@ -58,6 +72,70 @@ export const setupEffectIds = [
   "controls_other_card_type",
   "destroyed_card_kind_is",
 ] as const satisfies readonly SetupEffectId[];
+
+export function filterWizardPropertySetupPoolForFamiliarCapacity(
+  setupPool: TokenInstance[],
+  playerCount: number,
+  dataPack: Pick<LoadedDataPack, "manifest" | "decks" | "tokenDefinitions">,
+  resolveSetupPoolRequirement: (
+    effect: RuntimeEffect
+  ) => SetupPoolRequirement | undefined
+): TokenInstance[] {
+  const additionalFamiliarCandidateCounts = setupPool.map((candidate) =>
+    getAdditionalFamiliarCandidateCount(
+      dataPack.tokenDefinitions.get(candidate.definitionId),
+      resolveSetupPoolRequirement
+    )
+  );
+  const requiredAdditionalFamiliarCount = additionalFamiliarCandidateCounts
+    .sort((left, right) => right - left)
+    .slice(0, playerCount)
+    .reduce((total, count) => total + count, 0);
+  const familiarPoolSize =
+    dataPack.decks.familiarPool?.entries.reduce(
+      (total, entry) => total + entry.count,
+      0
+    ) ?? 0;
+  if (
+    !isIncompleteFullOnlyDataPack(dataPack) ||
+    familiarPoolSize >= playerCount * 2 + requiredAdditionalFamiliarCount
+  ) {
+    return setupPool;
+  }
+
+  // In an incomplete pack, do not deal a setup property whose familiar
+  // requirement cannot be satisfied by the available physical pool.
+  const filtered = setupPool.filter((candidate) => {
+    const definition = dataPack.tokenDefinitions.get(candidate.definitionId);
+    return (
+      getAdditionalFamiliarCandidateCount(
+        definition,
+        resolveSetupPoolRequirement
+      ) === 0
+    );
+  });
+  return filtered.length >= playerCount * 2 ? filtered : setupPool;
+}
+
+function getAdditionalFamiliarCandidateCount(
+  definition: TokenDefinition | undefined,
+  resolveSetupPoolRequirement: (
+    effect: RuntimeEffect
+  ) => SetupPoolRequirement | undefined
+): number {
+  if (
+    definition?.kind !== "wizardProperty" ||
+    definition.engine === undefined
+  ) {
+    return 0;
+  }
+  return definition.engine.effects.reduce((total, effect) => {
+    const requirement = resolveSetupPoolRequirement(effect);
+    return requirement?.kind === "additionalFamiliarCandidates"
+      ? total + requirement.amount
+      : total;
+  }, 0);
+}
 
 export interface SetupEffectDecoderTools {
   defineDecoder<Id extends SetupEffectId>(
@@ -124,6 +202,13 @@ export function createSetupEffectDecoders(
             }
       ),
     }),
+    setup_retain_and_choose_third_familiar: defineDecoder(
+      "setup_retain_and_choose_third_familiar",
+      {
+        effectId: required(literal("setup_retain_and_choose_third_familiar")),
+        timing: required(literal("setup")),
+      }
+    ),
     start_with_basic_trophy: defineDecoder("start_with_basic_trophy", {
       effectId: required(literal("start_with_basic_trophy")),
       timing: required(literal("setup")),
@@ -296,6 +381,27 @@ const startWithBasicTrophyHandler: EffectRuntimeHandler<
   },
 };
 
+const setupRetainAndChooseThirdFamiliarHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"setup_retain_and_choose_third_familiar">
+> = {
+  effectId: "setup_retain_and_choose_third_familiar",
+  getSetupPoolRequirement() {
+    return { kind: "additionalFamiliarCandidates", amount: 1 };
+  },
+  execute() {
+    return setupOnlyExecutionError("setup_retain_and_choose_third_familiar");
+  },
+  executeSetup(_player, _effect, source) {
+    return {
+      ok: true,
+      directive: {
+        kind: "retainAndChooseThirdFamiliar",
+        playerId: source.playerId,
+      },
+    };
+  },
+};
+
 const setStartingLifeTotalHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"set_starting_life_total">
 > = {
@@ -450,6 +556,16 @@ export function createSetupEffectDefinitions(
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds: ["wizardProperty"],
       handler: startWithBasicTrophyHandler,
+    },
+    {
+      effectId: "setup_retain_and_choose_third_familiar",
+      decoder: bindRuntimeEffectDecoder(
+        "setup_retain_and_choose_third_familiar"
+      ),
+      supportedTimings: setupTiming,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds: ["wizardProperty"],
+      handler: setupRetainAndChooseThirdFamiliarHandler,
     },
     {
       effectId: "set_starting_life_total",

@@ -23,6 +23,7 @@ export type {
   GameAction,
   LegalAction,
   PlayCardAction,
+  SetCardEffectiveTypeAction,
 } from "./actions-core.js";
 
 /**

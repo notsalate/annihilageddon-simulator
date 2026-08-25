@@ -171,7 +171,7 @@ export function createCombatReplacementEffectDefinitions(
       ),
       supportedTimings: ["attackReplacement"],
       supportedModes: allEffectRuntimeModes,
-      supportedSourceKinds: ["card", "wizardProperty"],
+      supportedSourceKinds: ["card", "wizardProperty", "deadWizardToken"],
       handler: modifyOwnedWandAttackDamageHandler,
     },
     {

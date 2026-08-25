@@ -680,6 +680,7 @@ test("readable trace renders setup choices, setup market, card text, payment, cl
             },
           ],
           statuses: ["Dingler"],
+          unboughtFamiliars: [],
         },
       ],
       mainMarket: [

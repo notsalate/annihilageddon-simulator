@@ -14,6 +14,7 @@ import type {
 } from "./effect-runtime-catalog-shared.js";
 import type {
   ObjectFields,
+  OptionalField,
   RequiredField,
   ValueDecoder,
 } from "./effect-runtime-family-support.js";
@@ -28,6 +29,7 @@ export type OwnedCardsCountAsCardTypeRuntimeEffect = {
   timing: "whileControlled";
   sourceCardTypes: string[];
   countedAsCardType: string;
+  selectionMode?: "perCard";
 };
 
 export interface CardTypeEffectPayloadMap {
@@ -44,12 +46,14 @@ export interface CardTypeEffectDecoderTools {
     expected: Value
   ): ValueDecoder<Value>;
   nonEmptyStringArray: ValueDecoder<string[]>;
+  optional<T>(decode: ValueDecoder<T>): OptionalField<T>;
 }
 
 export function createCardTypeEffectDecoders(
   tools: CardTypeEffectDecoderTools
 ): { [Id in CardTypeEffectId]: RuntimeEffectDecoder<Id> } {
-  const { defineDecoder, required, literal, nonEmptyStringArray } = tools;
+  const { defineDecoder, required, literal, nonEmptyStringArray, optional } =
+    tools;
   return {
     owned_cards_count_as_card_type: defineDecoder(
       "owned_cards_count_as_card_type",
@@ -58,6 +62,7 @@ export function createCardTypeEffectDecoders(
         timing: required(literal("whileControlled")),
         sourceCardTypes: required(nonEmptyStringArray),
         countedAsCardType: required(nonEmptyStringArrayItem),
+        selectionMode: optional(literal("perCard")),
       }
     ),
   };

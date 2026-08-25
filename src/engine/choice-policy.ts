@@ -7,7 +7,8 @@ export type ChoiceKind =
   | "playerTarget"
   | "cardTarget"
   | "defense"
-  | "directionalPlayerTarget";
+  | "directionalPlayerTarget"
+  | "familiarSetup";
 
 /** The only player information available while resolving an effect choice. */
 export interface ChoicePlayerView {
@@ -59,19 +60,27 @@ export interface ChoiceDirectionalPlayerTargetView {
   readonly targetPlayerIds: readonly PlayerId[];
 }
 
+export interface ChoiceFamiliarSetupView {
+  readonly choiceKind: "familiarSetup";
+  readonly choiceId: string;
+  readonly candidateDefinitionId: string;
+}
+
 export type ChoiceView =
   | ChoiceOptionView
   | ChoicePlayerTargetView
   | ChoiceCardTargetView
   | ChoiceDefenseView
-  | ChoiceDirectionalPlayerTargetView;
+  | ChoiceDirectionalPlayerTargetView
+  | ChoiceFamiliarSetupView;
 
 /** A strategy returns only the stable identity of its selected legal choice. */
 export interface ChoiceSelection {
   readonly choiceId: string;
 }
 
-export interface ChoiceRequest {
+export interface EffectChoiceRequest {
+  readonly requestKind: "effect";
   readonly player: ChoicePlayerView;
   readonly effectId: RuntimeEffectId;
   readonly sourceType: "card" | "wizardProperty" | "deadWizardToken";
@@ -80,6 +89,39 @@ export interface ChoiceRequest {
   readonly choices: readonly ChoiceView[];
 }
 
+export type FamiliarSetupChoicePhase = "startingPair" | "thirdFamiliar";
+
+export interface SetupChoiceRequest {
+  readonly requestKind: "setup";
+  readonly player: ChoicePlayerView;
+  readonly setupChoiceKind: "familiar";
+  readonly phase: FamiliarSetupChoicePhase;
+  readonly choices: readonly ChoiceFamiliarSetupView[];
+  readonly effectId?: never;
+  readonly sourceType?: never;
+  readonly cardInstanceId?: never;
+  readonly definitionId?: never;
+}
+
+export type ChoiceRequest = EffectChoiceRequest | SetupChoiceRequest;
+
 export type ChoicePolicy = (
   request: ChoiceRequest
 ) => ChoiceSelection | undefined;
+
+export function isChoiceSelection(value: unknown): value is ChoiceSelection {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return false;
+  }
+  const keys = Reflect.ownKeys(value);
+  return (
+    keys.length === 1 &&
+    keys[0] === "choiceId" &&
+    typeof (value as { readonly choiceId?: unknown }).choiceId === "string"
+  );
+}

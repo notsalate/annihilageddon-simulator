@@ -4,12 +4,14 @@ import type {
   EffectRuntimeAfterPlayerAttackDamageOperationContext,
   EffectRuntimeControlledPowerOperationContext,
   EffectRuntimeEndTurnDrawModifierOperationContext,
+  EffectRuntimeBasicTrophyChipPayoutSuppressionOperationContext,
   EffectRuntimeHandlerOperationResult,
   EffectRuntimeOnPlayCardOperationContext,
   EffectRuntimeServices,
   EffectRuntimeSetupServices,
   EffectSourceContext,
   SetupDirective,
+  SetupPoolRequirement,
   SetupEffectSourceContext,
 } from "./effect-runtime-registry.js";
 import type {
@@ -47,6 +49,10 @@ export interface EffectRuntimeHandler<
     effect: Effect,
     context: EffectRuntimeEndTurnDrawModifierOperationContext
   ): EffectRuntimeHandlerOperationResult<number>;
+  evaluateBasicTrophyChipPayoutSuppression?(
+    effect: Effect,
+    context: EffectRuntimeBasicTrophyChipPayoutSuppressionOperationContext
+  ): EffectRuntimeHandlerOperationResult<boolean>;
   evaluateControlledPower?(
     effect: Effect,
     context: EffectRuntimeControlledPowerOperationContext
@@ -57,6 +63,7 @@ export interface EffectRuntimeHandler<
     source: SetupEffectSourceContext,
     services: EffectRuntimeSetupServices
   ): { ok: true; directive?: SetupDirective } | { ok: false; error: string };
+  getSetupPoolRequirement?(effect: Effect): SetupPoolRequirement | undefined;
 }
 
 export type EffectRuntimeFamilyHandler<Id extends RuntimeEffectId> =

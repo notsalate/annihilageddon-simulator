@@ -1279,11 +1279,9 @@ test("scoreGame counts owned player-zone cards without scoring common locations 
   state.common.market.push(
     createCardInstance("fixture-market-tower", tower.cardId, player.playerId)
   );
-  player.unboughtFamiliar = createCardInstance(
-    "fixture-familiar-tower",
-    tower.cardId,
-    player.playerId
-  );
+  player.unboughtFamiliars = [
+    createCardInstance("fixture-familiar-tower", tower.cardId, player.playerId),
+  ];
 
   const scoringCardIds = new Set(
     listOwnedScoringCards(state, player.playerId).map(
@@ -1291,7 +1289,10 @@ test("scoreGame counts owned player-zone cards without scoring common locations 
     )
   );
   assert.equal(scoringCardIds.has(controlledTower.instanceId), true);
-  assert.equal(scoringCardIds.has(player.unboughtFamiliar.instanceId), false);
+  assert.equal(
+    scoringCardIds.has(player.unboughtFamiliars[0]!.instanceId),
+    false
+  );
   assert.equal(
     scoringCardIds.has(state.common.market.at(-1)!.instanceId),
     false
@@ -1308,6 +1309,75 @@ test("scoreGame counts owned player-zone cards without scoring common locations 
       controllerId: otherPlayer.playerId,
     },
   ]);
+});
+
+test("scoreGame uses a selected familiar effective type in the legend tie-break", () => {
+  const state = initializeGame({ rootDir, seed: 60306 });
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  const otherPlayer = state.players.find(
+    (player) => player.playerId !== state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  assert.ok(otherPlayer);
+
+  for (const player of state.players) {
+    player.deck = [];
+    player.hand = [];
+    player.discard = [];
+    player.playedThisTurn = [];
+    player.permanents = [];
+    player.unboughtFamiliars = [];
+    player.deadWizardTokens = [];
+    player.statuses = [];
+    player.trophyLikeObjects = [];
+    player.wizardProperties = [];
+  }
+
+  activePlayer.wizardProperties = [
+    {
+      instanceId: markTokenInstanceId("fixture-wp003-scoring"),
+      definitionId: markTokenDefinitionId("esw2_dbg__wizard_property_003"),
+      ownerId: activePlayer.playerId,
+    },
+  ];
+  const selectedFamiliar = createCardInstance(
+    "fixture-wp003-selected-familiar",
+    "esw2_dbg__familiar_007",
+    activePlayer.playerId
+  );
+  const unselectedFamiliar = createCardInstance(
+    "fixture-wp003-unselected-familiar",
+    "esw2_dbg__familiar_007",
+    otherPlayer.playerId
+  );
+  activePlayer.discard.push(selectedFamiliar);
+  otherPlayer.discard.push(unselectedFamiliar);
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "setCardEffectiveType",
+      cardInstanceId: selectedFamiliar.instanceId,
+      cardType: "legend",
+      enabled: true,
+    }),
+    { ok: true }
+  );
+
+  const scores = scoreGame(state);
+  const activeScore = scores.find(
+    (score) => score.playerId === activePlayer.playerId
+  );
+  const otherScore = scores.find(
+    (score) => score.playerId === otherPlayer.playerId
+  );
+  assert.ok(activeScore);
+  assert.ok(otherScore);
+  assert.equal(activeScore.victoryPoints, otherScore.victoryPoints);
+  assert.equal(activeScore.legendCount, 1);
+  assert.equal(otherScore.legendCount, 0);
+  assert.deepEqual(determineWinnerIds(scores), [activePlayer.playerId]);
 });
 
 function createCostModifierStatus(

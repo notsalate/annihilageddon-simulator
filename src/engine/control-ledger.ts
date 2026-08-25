@@ -11,6 +11,11 @@ import type {
 } from "./setup.js";
 import { copyRuntimeEffectVerification } from "./runtime-effect-verification.js";
 
+const physicalCardZoneDescriptorCache = new WeakMap<
+  object,
+  readonly PhysicalCardZoneDescriptor[]
+>();
+
 export interface ControlledObjectView {
   playerId: PlayerId;
   cards: readonly ControlledCardObject[];
@@ -252,11 +257,11 @@ function listPlayerPhysicalCardZoneDescriptors(
       undefined,
       true
     ),
-    createSingletonCardZoneDescriptor(
-      `${player.playerId}.unboughtFamiliar`,
-      () => player.unboughtFamiliar,
+    createArrayCardZoneDescriptor(
+      `${player.playerId}.unboughtFamiliars`,
+      () => player.unboughtFamiliars,
       (card) => {
-        player.unboughtFamiliar = card;
+        player.unboughtFamiliars = card;
       },
       player.playerId
     ),
@@ -266,7 +271,12 @@ function listPlayerPhysicalCardZoneDescriptors(
 export function listPhysicalCardZoneDescriptors(
   state: Pick<GameState, "players" | "common">
 ): readonly PhysicalCardZoneDescriptor[] {
-  return listBuiltinPhysicalCardZoneDescriptors(state);
+  const cached = physicalCardZoneDescriptorCache.get(state);
+  if (cached !== undefined) return cached;
+
+  const descriptors = listBuiltinPhysicalCardZoneDescriptors(state);
+  physicalCardZoneDescriptorCache.set(state, descriptors);
+  return descriptors;
 }
 
 function listBuiltinPhysicalCardZoneDescriptors(
@@ -499,6 +509,52 @@ export function listPhysicalCardLocations(
   );
 }
 
+/** Lists owned cards in one player's Ledger-owned physical zones. */
+export function listOwnedPlayerPhysicalCards(
+  state: GameState,
+  playerId: PlayerId
+): readonly CardInstance[] {
+  const playerZonePrefix = `${playerId}.`;
+  return listPhysicalCardLocations(state)
+    .filter(
+      (location) =>
+        location.zoneName.startsWith(playerZonePrefix) &&
+        location.card.ownerId === playerId
+    )
+    .map((location) => location.card);
+}
+
+/** Lists one player's owned physical cards without scanning other Ledger zones. */
+export function listPlayerOwnedPhysicalCards(
+  player: PlayerState
+): readonly CardInstance[] {
+  return [
+    ...player.deck,
+    ...player.hand,
+    ...player.discard,
+    ...player.playedThisTurn,
+    ...player.permanents,
+    ...player.unboughtFamiliars,
+  ].filter((card) => card.ownerId === player.playerId);
+}
+
+/** Lists the active player's unbought familiar slot cards through the Ledger. */
+export function listPlayerUnboughtFamiliarCards(
+  player: PlayerState
+): readonly CardInstance[] {
+  return player.unboughtFamiliars;
+}
+
+/** Finds one unbought familiar through the Ledger-owned slot. */
+export function findPlayerUnboughtFamiliarCard(
+  player: PlayerState,
+  cardInstanceId: string
+): CardInstance | undefined {
+  return listPlayerUnboughtFamiliarCards(player).find(
+    (card) => card.instanceId === cardInstanceId
+  );
+}
+
 /** Returns the current player's played cards through the Ledger-owned zone. */
 export function listPlayerPlayedThisTurnCards(
   player: PlayerState
@@ -725,33 +781,6 @@ function createArrayCardZoneDescriptor(
     },
   };
   return descriptor;
-}
-
-function createSingletonCardZoneDescriptor(
-  zoneName: string,
-  readStorage: () => CardInstance | undefined,
-  replaceStorage: (card: CardInstance | undefined) => void,
-  expectedOwnerId?: CardInstance["ownerId"],
-  scoringEligible = false
-): PhysicalCardZoneDescriptor {
-  return {
-    zoneName,
-    cardinality: "zeroOrOne",
-    scoringEligible,
-    ...(expectedOwnerId === undefined ? {} : { expectedOwnerId }),
-    read() {
-      const card = readStorage();
-      return card === undefined ? [] : [card];
-    },
-    replace(cards) {
-      if (cards.length > 1) {
-        throw new Error(
-          `Physical card zone ${zoneName} accepts at most one card, received ${cards.length}`
-        );
-      }
-      replaceStorage(cards[0]);
-    },
-  };
 }
 
 function mustGetCardDefinition(

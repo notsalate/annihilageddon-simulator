@@ -30,6 +30,7 @@ import {
   calculateEffectiveCardCost as calculateEffectiveCardCostCore,
   calculateEffectivePlayerMaxLife as calculateEffectivePlayerMaxLifeCore,
 } from "./effective-values.js";
+import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
 import {
   allEffectRuntimeModes,
   fixtureEffectTimings,
@@ -136,6 +137,8 @@ export interface EffectSourceContext {
 export interface AttackReplacementProfile {
   readonly doublesOwnedAttackDamage: boolean;
   readonly damageBonus: number;
+  readonly controlledCardDamageBonus: number;
+  readonly deadWizardTokenDamageBonus: number;
   readonly unavoidable: boolean;
 }
 
@@ -169,8 +172,13 @@ export type MayhemAttackImpact =
     };
 
 export type SetupDirective = {
-  kind: "forceStartingPlayer";
+  kind: "forceStartingPlayer" | "retainAndChooseThirdFamiliar";
   playerId: PlayerState["playerId"];
+};
+
+export type SetupPoolRequirement = {
+  readonly kind: "additionalFamiliarCandidates";
+  readonly amount: number;
 };
 
 export type SetupEffectExecutionResult =
@@ -283,7 +291,8 @@ export interface EffectRuntimeServices {
   moveGainedCardToPlayerDestination(
     state: GameState,
     player: PlayerState,
-    card: CardInstance
+    card: CardInstance,
+    fixedDestination?: "discard"
   ):
     | { ok: true; destination: "discard" | "deckTop" | "hand" }
     | { ok: false; error: string };
@@ -503,6 +512,12 @@ export interface EffectRuntimeEndTurnDrawModifierOperationContext {
   readonly currentDrawCount: number;
 }
 
+export interface EffectRuntimeBasicTrophyChipPayoutSuppressionOperationContext {
+  readonly state: GameState;
+  readonly controller: PlayerState;
+  readonly source: EffectSourceContext;
+}
+
 export interface EffectRuntimeControlledPowerOperationContext {
   readonly state: GameState;
   readonly controller: PlayerState;
@@ -555,6 +570,10 @@ export interface EffectRuntimeCatalogOperationOverridesForTesting<
     effect: RuntimeEffectForId<Id>,
     context: EffectRuntimeEndTurnDrawModifierOperationContext
   ) => EffectRuntimeHandlerOperationResult<number>;
+  readonly evaluateBasicTrophyChipPayoutSuppression?: (
+    effect: RuntimeEffectForId<Id>,
+    context: EffectRuntimeBasicTrophyChipPayoutSuppressionOperationContext
+  ) => EffectRuntimeHandlerOperationResult<boolean>;
   readonly evaluateControlledPower?: (
     effect: RuntimeEffectForId<Id>,
     context: EffectRuntimeControlledPowerOperationContext
@@ -627,6 +646,10 @@ interface EffectRuntimeEntry<
     source: SetupEffectSourceContext,
     services: EffectRuntimeSetupServices
   ): SetupEffectExecutionResult;
+  getSetupPoolRequirementVerified(
+    subjectId: string,
+    effect: VerifiedRuntimeEffectForId<EffectId>
+  ): SetupPoolRequirement | undefined;
   applyAfterPlayerAttackDamageVerified(
     subjectId: string,
     effect: VerifiedRuntimeEffectForId<EffectId>,
@@ -642,6 +665,11 @@ interface EffectRuntimeEntry<
     effect: VerifiedRuntimeEffectForId<EffectId>,
     context: EffectRuntimeEndTurnDrawModifierOperationContext
   ): EffectRuntimeOperationResult<number>;
+  evaluateBasicTrophyChipPayoutSuppressionVerified(
+    subjectId: string,
+    effect: VerifiedRuntimeEffectForId<EffectId>,
+    context: EffectRuntimeBasicTrophyChipPayoutSuppressionOperationContext
+  ): EffectRuntimeOperationResult<boolean>;
   evaluateControlledPowerVerified(
     subjectId: string,
     effect: VerifiedRuntimeEffectForId<EffectId>,
@@ -956,6 +984,9 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
           }
         : { status: "error", error: result.error };
     },
+    getSetupPoolRequirementVerified(_subjectId, effect) {
+      return config.handler.getSetupPoolRequirement?.(effect);
+    },
     applyAfterPlayerAttackDamageVerified(subjectId, effect, context) {
       return evaluateAtTimingVerified(subjectId, effect, {
         source: context.source,
@@ -1001,6 +1032,24 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
           return evaluateEndTurnDrawModifier === undefined
             ? { status: "notApplicable" }
             : evaluateEndTurnDrawModifier(effect, context);
+        },
+      });
+    },
+    evaluateBasicTrophyChipPayoutSuppressionVerified(
+      subjectId,
+      effect,
+      context
+    ) {
+      return evaluateAtTimingVerified(subjectId, effect, {
+        source: context.source,
+        timing: "whileControlled",
+        evaluate(effect) {
+          const evaluateSuppression =
+            operationOverrides?.evaluateBasicTrophyChipPayoutSuppression ??
+            config.handler.evaluateBasicTrophyChipPayoutSuppression;
+          return evaluateSuppression === undefined
+            ? { status: "notApplicable" }
+            : evaluateSuppression(effect, context);
         },
       });
     },
@@ -1818,8 +1867,14 @@ const combatAttackEffectEntries = defineEffectRuntimeFamily(
   createCombatAttackEffectDefinitions({
     bindRuntimeEffectDecoder,
     collectAttackReplacementProfile,
-    calculateEffectiveCardCost: (state, playerId, definition) =>
-      calculateEffectiveCardCostCore(state, playerId, definition),
+    calculateEffectiveCardCost: (state, playerId, definition, card) =>
+      calculateEffectiveCardCostCore(
+        state,
+        playerId,
+        definition,
+        card,
+        cardMatchesTypeForPlayer
+      ),
   })
 );
 
@@ -2138,11 +2193,21 @@ export function isSupportedRuntimeEffectTiming(
 export function collectAttackReplacementProfile(
   state: GameState,
   attackingPlayer: PlayerState,
-  source: EffectSourceContext
+  source: EffectSourceContext,
+  options?: {
+    includeDeadWizardTokenModifiers?: boolean;
+    includeSourceOwnerModifiers?: boolean;
+  }
 ): EffectRuntimeOperationResult<AttackReplacementProfile> {
+  const includeDeadWizardTokenModifiers =
+    options?.includeDeadWizardTokenModifiers ?? false;
+  const includeSourceOwnerModifiers =
+    options?.includeSourceOwnerModifiers ?? true;
   const profile = {
     doublesOwnedAttackDamage: false,
     damageBonus: 0,
+    controlledCardDamageBonus: 0,
+    deadWizardTokenDamageBonus: 0,
     unavoidable: false,
   };
   const applyEffects = (
@@ -2166,6 +2231,14 @@ export function collectAttackReplacementProfile(
           }
           if (decoded.effectId === "modify_owned_wand_attack_damage") {
             profile.damageBonus += decoded.amount;
+            if (effectSource.sourceType === "deadWizardToken") {
+              profile.deadWizardTokenDamageBonus += decoded.amount;
+            } else if (
+              effectSource.sourceType === "card" &&
+              effectSource.playerId === attackingPlayer.playerId
+            ) {
+              profile.controlledCardDamageBonus += decoded.amount;
+            }
           }
           if (
             allowWandDefensePrevention &&
@@ -2198,7 +2271,28 @@ export function collectAttackReplacementProfile(
     if (result.status === "error") return result;
   }
 
-  if (source.sourceType !== "card")
+  if (includeDeadWizardTokenModifiers) {
+    for (const token of attackingPlayer.deadWizardTokens) {
+      const definition = state.tokenDefinitions.get(token.definitionId);
+      if (definition?.kind !== "deadWizardToken") continue;
+      const result = applyEffects(
+        definition.effects,
+        {
+          sourceType: "deadWizardToken",
+          runtimeMode: source.runtimeMode,
+          playerId: attackingPlayer.playerId,
+          cardInstanceId: token.instanceId,
+          definitionId: definition.tokenId,
+          tokenInstanceId: token.instanceId,
+          tokenDefinitionId: definition.tokenId,
+        },
+        false
+      );
+      if (result.status === "error") return result;
+    }
+  }
+
+  if (!includeSourceOwnerModifiers || source.sourceType !== "card")
     return { status: "resolved", result: profile };
   const sourceCard = findCardLocation(state, source.cardInstanceId)?.card;
   if (sourceCard === undefined || sourceCard.ownerId === "common") {
@@ -2367,6 +2461,19 @@ export function evaluateRuntimeEffectEndTurnDrawModifier(
   );
 }
 
+export function evaluateRuntimeEffectBasicTrophyChipPayoutSuppression(
+  effect: VerifiedRuntimeEffect,
+  context: EffectRuntimeBasicTrophyChipPayoutSuppressionOperationContext
+): EffectRuntimeOperationResult<boolean> {
+  return getVerifiedEffectRuntimeCatalogEntry(
+    effect
+  ).evaluateBasicTrophyChipPayoutSuppressionVerified(
+    `Effect ${effect.effectId}`,
+    effect,
+    context
+  );
+}
+
 export function evaluateRuntimeEffectControlledPower(
   effect: VerifiedRuntimeEffect,
   context: EffectRuntimeControlledPowerOperationContext
@@ -2410,4 +2517,12 @@ export function tryExecuteSetupEffect(
     source,
     services
   );
+}
+
+export function getSetupEffectPoolRequirement(
+  effect: VerifiedRuntimeEffect
+): SetupPoolRequirement | undefined {
+  return getVerifiedEffectRuntimeCatalogEntry(
+    effect
+  ).getSetupPoolRequirementVerified(`Setup effect ${effect.effectId}`, effect);
 }

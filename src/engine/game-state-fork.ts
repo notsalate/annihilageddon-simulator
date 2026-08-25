@@ -15,7 +15,7 @@ export function forkGameState(source: GameState): GameState {
       power: source.turn.power,
       controlledPowerBonus: source.turn.controlledPowerBonus,
       activatedCardIds: [...source.turn.activatedCardIds],
-      gainedCardDefinitionIds: [...source.turn.gainedCardDefinitionIds],
+      gainedCards: source.turn.gainedCards.map((record) => ({ ...record })),
       mainMarketCardHandReplacementSourceCardIds: [
         ...source.turn.mainMarketCardHandReplacementSourceCardIds,
       ],

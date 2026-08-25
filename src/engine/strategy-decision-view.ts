@@ -22,7 +22,7 @@ export function createChoicePlayerView(player: PlayerState): ChoicePlayerView {
     discardSize: player.discard.length,
     playedThisTurnSize: player.playedThisTurn.length,
     permanentsSize: player.permanents.length,
-    unboughtFamiliarPresent: player.unboughtFamiliar !== undefined,
+    unboughtFamiliarPresent: player.unboughtFamiliars.length > 0,
     deadWizardTokenCount: player.deadWizardTokens.length,
     wizardPropertyCount: player.wizardProperties.length,
     statusIds: player.statuses.map((status) => status.statusId),

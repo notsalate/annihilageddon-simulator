@@ -132,6 +132,7 @@ export type {
   ChoiceCardTargetView,
   ChoiceDefenseView,
   ChoiceDirectionalPlayerTargetView,
+  ChoiceFamiliarSetupView,
   ChoiceKind,
   ChoiceOptionView,
   ChoicePlayerTargetView,
@@ -140,6 +141,9 @@ export type {
   ChoiceRequest,
   ChoiceSelection,
   ChoiceView,
+  EffectChoiceRequest,
+  FamiliarSetupChoicePhase,
+  SetupChoiceRequest,
 } from "./engine/choice-policy.js";
 export type {
   CardInstance,

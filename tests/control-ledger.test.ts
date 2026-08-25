@@ -116,12 +116,12 @@ test("Control Ledger locates player singleton and common card zones", () => {
   const familiar = player.hand.shift();
   const marketCard = state.common.market[0];
   assert.ok(familiar);
-  player.unboughtFamiliar = familiar;
+  player.unboughtFamiliars = [familiar];
   assert.ok(marketCard);
 
   assert.equal(
     findCardLocation(state, familiar.instanceId)?.zoneName,
-    `${player.playerId}.unboughtFamiliar`
+    `${player.playerId}.unboughtFamiliars`
   );
   assert.equal(
     findCardLocation(state, marketCard.instanceId)?.zoneName,
