@@ -660,6 +660,12 @@ type PlayerControlledDamageAttackEffect =
   | RuntimeEffectForId<"conditional_activation_attack_damage">
   | RuntimeEffectForId<"activation_attack_damage_per_controlled_card_type">;
 
+type PlayerControlledAttackBaseAmountResolver = (
+  state: GameState,
+  attackingPlayer: PlayerState,
+  targetPlayer: PlayerState
+) => number;
+
 type PlayerControlledDeadWizardTokenEffectAttack =
   | RuntimeEffectForId<"attack_gain_dead_wizard_tokens">
   | RuntimeEffectForId<"attack_transfer_controlled_dead_wizard_token">;
@@ -715,7 +721,8 @@ function resolvePlayerControlledDamageAttack(
   source: EffectSourceContext,
   services: EffectRuntimeServices,
   amount: number,
-  collectAttackReplacementProfile: AttackReplacementCollector
+  collectAttackReplacementProfile: AttackReplacementCollector,
+  baseAmountForTarget?: PlayerControlledAttackBaseAmountResolver
 ): EffectExecutionResult {
   const attackProfileResult = collectAttackReplacementProfile(
     state,
@@ -742,6 +749,7 @@ function resolvePlayerControlledDamageAttack(
     impact: {
       kind: "damage",
       baseAmount: amount,
+      ...(baseAmountForTarget === undefined ? {} : { baseAmountForTarget }),
       sourceOwnerModifierAmount: attackProfile.damageBonus,
       onDamageDealt:
         "onDamageDealt" in effect ? (effect.onDamageDealt ?? []) : [],
@@ -1196,7 +1204,10 @@ export function createCombatAttackEffectDefinitions(
         source,
         services,
         amount,
-        collectAttackReplacementProfile
+        collectAttackReplacementProfile,
+        (_state, currentPlayer) =>
+          getControlledDeadWizardTokenCount(_state, currentPlayer) *
+          effect.amountPerDeadWizardToken
       );
     },
   };

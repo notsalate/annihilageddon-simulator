@@ -138,6 +138,11 @@ export type PlayerControlledAttackImpact =
   | {
       readonly kind: "damage";
       readonly baseAmount: number;
+      readonly baseAmountForTarget?: (
+        state: GameState,
+        attackingPlayer: PlayerState,
+        targetPlayer: PlayerState
+      ) => number;
       readonly sourceOwnerModifierAmount: number;
       readonly onDamageDealt: readonly AttackOutcomeBranch[];
       readonly onKill: readonly AttackOutcomeBranch[];
@@ -385,9 +390,18 @@ export function resolvePlayerControlledAttack(
     defenseUsage: createAttackDefenseUsage(),
     resolutions: [],
   };
+  const firstTarget = targetResult.players[0];
+  if (firstTarget === undefined) {
+    return { ok: true };
+  }
   const initialAmount =
     intent.impact.kind === "damage"
-      ? intent.impact.baseAmount + intent.impact.sourceOwnerModifierAmount
+      ? resolveBaseAmount(
+          intent.impact,
+          intent.state,
+          intent.attackingPlayer,
+          firstTarget
+        ) + intent.impact.sourceOwnerModifierAmount
       : undefined;
   const singleResolvedTarget =
     targetResult.players.length === 1 ? targetResult.players[0] : undefined;
@@ -418,7 +432,12 @@ export function resolvePlayerControlledAttack(
         amountComponents:
           intent.impact.kind === "damage"
             ? createAttackAmountState(
-                intent.impact.baseAmount,
+                resolveBaseAmount(
+                  intent.impact,
+                  intent.state,
+                  intent.attackingPlayer,
+                  targetPlayer
+                ),
                 intent.impact.sourceOwnerModifierAmount
               )
             : createAttackAmountState(0),
@@ -449,6 +468,18 @@ export function resolvePlayerControlledAttack(
   }
 
   return { ok: true };
+}
+
+function resolveBaseAmount(
+  impact: Extract<PlayerControlledAttackImpact, { kind: "damage" }>,
+  state: GameState,
+  attackingPlayer: PlayerState,
+  targetPlayer: PlayerState
+): number {
+  return (
+    impact.baseAmountForTarget?.(state, attackingPlayer, targetPlayer) ??
+    impact.baseAmount
+  );
 }
 
 interface CurrentAttackTargetContext {

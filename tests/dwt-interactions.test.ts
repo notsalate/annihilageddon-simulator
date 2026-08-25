@@ -142,6 +142,52 @@ test("Некроманка Гнилюся наносит урон каждому
   assert.equal(foe.life.current, 12);
 });
 
+test("Некроманка Гнилюся пересчитывает ЖДК перед следующей целью после смерти", () => {
+  const state = initializeGame({ rootDir, seed: 275004, playerCount: 3 });
+  const [player, firstFoe, secondFoe] = getPlayersInActiveOrder(state);
+  assert.ok(player);
+  assert.ok(firstFoe);
+  assert.ok(secondFoe);
+  player.hand = [];
+  player.permanents = [];
+  player.deadWizardTokens = [createDeadWizardToken(player)];
+  firstFoe.life.current = 1;
+  secondFoe.life.current = 20;
+  firstFoe.hand = [];
+  secondFoe.hand = [];
+  state.common.legendMarket = [];
+  state.turn.deadWizardTokenKillReplacement = {
+    playerId: player.playerId,
+    cardInstanceId: markCardInstanceId("dwt-interactions-legend-033"),
+    definitionId: markCardDefinitionId("esw2_dbg__legend_033"),
+  };
+  state.effectChoiceStrategy = ({ effectId }) =>
+    effectId === "arm_dead_wizard_token_kill_replacement"
+      ? { choiceId: "apply" }
+      : undefined;
+  state.turn.power = 9;
+
+  const card = addCardToHand(state, player, "esw2_dbg__legend_033");
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: card.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(player.deadWizardTokens.length, 2);
+  assert.equal(secondFoe.life.current, 12);
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "attackTargetStarted" &&
+          event.effectId === "attack_damage_per_controlled_dead_wizard_token"
+      )
+      .map((event) => event.amount),
+    [4, 8]
+  );
+});
+
 test("МегаБеспредел MC выдаёт чипсины каждому за его ЖДК", () => {
   const state = initializeGame({ rootDir, seed: 275003, playerCount: 3 });
   const orderedPlayers = getPlayersInActiveOrder(state);
