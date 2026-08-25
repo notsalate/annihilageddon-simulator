@@ -535,6 +535,10 @@ test("card movement: main_067 destroys one card clockwise and charges Dingler li
   assert.equal(declined.activePlayer.life.current, 4);
 
   const empty = createGameScenario({ rootDir, seed: 282070 });
+  for (const player of empty.state.players) {
+    player.hand.splice(0);
+    player.discard.splice(0);
+  }
   const emptySource = givenRuntimeCard(empty, {
     definitionId: "esw2_dbg__main_067",
   });
@@ -558,7 +562,7 @@ test("card movement: main_067 destroys one card clockwise and charges Dingler li
     true
   );
   assert.equal(empty.activePlayer.life.current, 4);
-  assert.equal(emptyChoiceRequests, empty.state.players.length);
+  assert.equal(emptyChoiceRequests, 0);
 });
 
 test("card movement: main_076 charges floor-half chips, including zero and one", () => {
@@ -778,6 +782,10 @@ test("card movement: mega_007 gives Dingler one choice and normal wizards two zo
     seed: 282009,
     playerCount: 2,
   });
+  for (const player of empty.state.players) {
+    player.hand.splice(0);
+    player.discard.splice(0);
+  }
   const emptySource = givenRuntimeCard(empty, {
     definitionId: "esw2_dbg__mega_mayhem_007",
   });
@@ -796,7 +804,7 @@ test("card movement: mega_007 gives Dingler one choice and normal wizards two zo
     true
   );
   assert.equal(empty.state.common.destroyedPile.length, 0);
-  assert.equal(emptyChoiceRequests, empty.state.players.length);
+  assert.equal(emptyChoiceRequests, 0);
 });
 
 test("card movement: main_001 keeps the revealed card or adds its effective cost", () => {
