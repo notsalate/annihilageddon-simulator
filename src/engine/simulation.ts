@@ -174,6 +174,8 @@ interface SimulationFailureRuntimeDataCandidate {
 interface GameActionCandidate {
   readonly type?: unknown;
   readonly cardInstanceId?: unknown;
+  readonly cardType?: unknown;
+  readonly enabled?: unknown;
   readonly tokenInstanceId?: unknown;
   readonly source?: unknown;
 }
@@ -297,6 +299,12 @@ function isGameAction(value: unknown): value is GameAction {
       return typeof record.cardInstanceId === "string";
     case "activateWizardProperty":
       return typeof record.tokenInstanceId === "string";
+    case "setCardEffectiveType":
+      return (
+        typeof record.cardInstanceId === "string" &&
+        typeof record.cardType === "string" &&
+        typeof record.enabled === "boolean"
+      );
     case "buyMarketCard":
       return (
         typeof record.cardInstanceId === "string" &&

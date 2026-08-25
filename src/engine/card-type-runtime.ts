@@ -160,13 +160,22 @@ export function hasPlayerPerCardEffectiveTypeEffects(
         : undefined;
     if (effects === undefined) continue;
 
+    const source = {
+      sourceType: "wizardProperty" as const,
+      runtimeMode: state.runtimeMode,
+      playerId,
+      cardInstanceId: property.instanceId,
+      definitionId: property.definitionId,
+      tokenInstanceId: property.instanceId,
+      tokenDefinitionId: property.definitionId,
+    };
     for (const effect of effects) {
-      if (
-        isOwnedCardsCountAsCardTypeRuntimeEffect(effect) &&
-        effect.selectionMode === "perCard"
-      ) {
-        return true;
+      if (!isOwnedCardsCountAsCardTypeRuntimeEffect(effect)) continue;
+      const resolvedEffect = resolveCardTypeEffect(effect, source);
+      if (resolvedEffect.status === "error") {
+        throw new Error(resolvedEffect.error);
       }
+      if (resolvedEffect.effect.selectionMode === "perCard") return true;
     }
   }
   return false;
