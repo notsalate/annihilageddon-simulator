@@ -90,6 +90,7 @@ export type {
   DeadWizardTokenDamageEqualHighestHandCostRuntimeEffect,
   DeadWizardTokenDamagePerDiscardLegendRuntimeEffect,
   DeadWizardTokenEachFoeGainChipsRuntimeEffect,
+  DeadWizardTokenEachFoeOptionalTransferSignRuntimeEffect,
   DeadWizardTokenExchangeLifeRuntimeEffect,
   DeadWizardTokenGainChipsRuntimeEffect,
   DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect,
@@ -98,6 +99,7 @@ export type {
   DeadWizardTokenKillerOptionalRemoveDinglerRuntimeEffect,
   DeadWizardTokenLoseHalfChipsRuntimeEffect,
   DeadWizardTokenRewardKillerChipsRuntimeEffect,
+  DeadWizardTokenRandomDiscardToChosenFoeRuntimeEffect,
   DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect,
 } from "./effect-runtime-dead-wizard-token.js";
 export type {
@@ -290,6 +292,8 @@ export const knownRuntimeEffectIds = [
   "controls_other_card_type",
   "deal_damage",
   "dead_wizard_token_each_foe_gain_chips",
+  "dead_wizard_token_random_discard_to_chosen_foe",
+  "dead_wizard_token_each_foe_optional_transfer_sign",
   "dead_wizard_token_damage_equal_chips",
   "dead_wizard_token_damage_equal_highest_hand_cost",
   "dead_wizard_token_gain_chips",

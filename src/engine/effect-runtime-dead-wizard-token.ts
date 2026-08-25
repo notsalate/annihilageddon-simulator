@@ -31,6 +31,8 @@ import type {
 
 export const deadWizardTokenEffectIds = [
   "dead_wizard_token_each_foe_gain_chips",
+  "dead_wizard_token_random_discard_to_chosen_foe",
+  "dead_wizard_token_each_foe_optional_transfer_sign",
   "dead_wizard_token_damage_equal_chips",
   "dead_wizard_token_damage_equal_highest_hand_cost",
   "dead_wizard_token_gain_chips",
@@ -60,6 +62,17 @@ export type DeadWizardTokenEachFoeGainChipsRuntimeEffect = {
   effectId: "dead_wizard_token_each_foe_gain_chips";
   timing: "onDeadWizardTokenFace";
   amount: 1;
+};
+
+export type DeadWizardTokenRandomDiscardToChosenFoeRuntimeEffect = {
+  effectId: "dead_wizard_token_random_discard_to_chosen_foe";
+  timing: "onDeadWizardTokenFace";
+  targetSelector: "chosenFoe";
+};
+
+export type DeadWizardTokenEachFoeOptionalTransferSignRuntimeEffect = {
+  effectId: "dead_wizard_token_each_foe_optional_transfer_sign";
+  timing: "onDeadWizardTokenFace";
 };
 
 export type DeadWizardTokenDamageEqualChipsRuntimeEffect = {
@@ -147,6 +160,8 @@ export type DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect = {
 
 export interface DeadWizardTokenEffectPayloadMap {
   dead_wizard_token_each_foe_gain_chips: DeadWizardTokenEachFoeGainChipsRuntimeEffect;
+  dead_wizard_token_random_discard_to_chosen_foe: DeadWizardTokenRandomDiscardToChosenFoeRuntimeEffect;
+  dead_wizard_token_each_foe_optional_transfer_sign: DeadWizardTokenEachFoeOptionalTransferSignRuntimeEffect;
   dead_wizard_token_damage_equal_chips: DeadWizardTokenDamageEqualChipsRuntimeEffect;
   dead_wizard_token_damage_equal_highest_hand_cost: DeadWizardTokenDamageEqualHighestHandCostRuntimeEffect;
   dead_wizard_token_gain_chips: DeadWizardTokenGainChipsRuntimeEffect;
@@ -195,6 +210,25 @@ export function createDeadWizardTokenEffectDecoders(
         effectId: required(literal("dead_wizard_token_each_foe_gain_chips")),
         timing: required(literal("onDeadWizardTokenFace")),
         amount: required(literal(1)),
+      }
+    ),
+    dead_wizard_token_random_discard_to_chosen_foe: defineDecoder(
+      "dead_wizard_token_random_discard_to_chosen_foe",
+      {
+        effectId: required(
+          literal("dead_wizard_token_random_discard_to_chosen_foe")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
+        targetSelector: required(literal("chosenFoe")),
+      }
+    ),
+    dead_wizard_token_each_foe_optional_transfer_sign: defineDecoder(
+      "dead_wizard_token_each_foe_optional_transfer_sign",
+      {
+        effectId: required(
+          literal("dead_wizard_token_each_foe_optional_transfer_sign")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
       }
     ),
     dead_wizard_token_damage_equal_chips: defineDecoder(
@@ -528,6 +562,126 @@ const eachFoeGainChipsHandler: EffectRuntimeHandler<DeadWizardTokenEachFoeGainCh
     },
   };
 
+const randomDiscardToChosenFoeHandler: EffectRuntimeHandler<DeadWizardTokenRandomDiscardToChosenFoeRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_random_discard_to_chosen_foe",
+    execute(state, player, effect, source, services) {
+      const targetResult = services.resolveTargetChoice(
+        state,
+        player,
+        effect,
+        source
+      );
+      if (!targetResult.ok) return targetResult;
+      if (targetResult.choice === undefined) return { ok: true };
+      if (targetResult.choice.choiceType !== "player") {
+        return {
+          ok: false,
+          error: "Random discard transfer requires a foe target",
+        };
+      }
+
+      const targetPlayer = targetResult.choice.player;
+      if (player.discard.length === 0) {
+        return { ok: true };
+      }
+      const card = player.discard[state.rng.nextInt(player.discard.length)];
+      if (card === undefined) return { ok: true };
+
+      const gained = services.moveGainedCardToPlayerDestination(
+        state,
+        targetPlayer,
+        card,
+        "discard"
+      );
+      if (!gained.ok) return gained;
+      recordGameEvent(state, {
+        type: "effectCardGained",
+        playerId: targetPlayer.playerId,
+        cardInstanceId: source.cardInstanceId,
+        definitionId: source.definitionId,
+        targetCardInstanceId: card.instanceId,
+        targetDefinitionId: card.definitionId,
+        effectId: effect.effectId,
+        destination: gained.destination,
+        sourceType: source.sourceType,
+      });
+      return { ok: true };
+    },
+  };
+
+const eachFoeOptionalTransferSignHandler: EffectRuntimeHandler<DeadWizardTokenEachFoeOptionalTransferSignRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_each_foe_optional_transfer_sign",
+    execute(state, player, effect, source, services) {
+      for (const foe of services.getOpponentsInSeatingOrder(state, player)) {
+        const eligibleCards = [...foe.hand, ...foe.discard].filter(
+          (card) => card.definitionId === "esw2_dbg__starter_001"
+        );
+        if (eligibleCards.length === 0) continue;
+
+        const choice = services.chooseEffectChoice(
+          state,
+          foe,
+          source,
+          effect.effectId,
+          [
+            { choiceKind: "option", choiceId: "decline" },
+            ...eligibleCards.map((card) => ({
+              choiceKind: "cardTarget" as const,
+              choiceId: card.instanceId,
+              cards: [card],
+              amount: 1,
+            })),
+          ]
+        );
+        if (choice?.choiceKind !== "cardTarget") continue;
+
+        const selectedCard = eligibleCards.find(
+          (card) => card.instanceId === choice.cards[0]?.instanceId
+        );
+        if (
+          selectedCard === undefined ||
+          (!foe.hand.includes(selectedCard) &&
+            !foe.discard.includes(selectedCard))
+        ) {
+          return {
+            ok: false,
+            error: "Selected Sign disappeared before transfer",
+          };
+        }
+
+        const moved = services.moveCardToPlayerZone(
+          state,
+          selectedCard,
+          player,
+          player.hand,
+          `${player.playerId}.hand`,
+          effect.effectId,
+          source
+        );
+        if (!moved) {
+          return {
+            ok: false,
+            error: `Cannot transfer Sign ${selectedCard.instanceId}`,
+          };
+        }
+        recordGameEvent(state, {
+          type: "effectCardGained",
+          playerId: player.playerId,
+          cardInstanceId: source.cardInstanceId,
+          definitionId: source.definitionId,
+          targetCardInstanceId: selectedCard.instanceId,
+          targetDefinitionId: selectedCard.definitionId,
+          effectId: effect.effectId,
+          destination: "hand",
+          sourceType: source.sourceType,
+        });
+      }
+      return { ok: true };
+    },
+  };
+
 function revealCardAndMaybeGainDeadWizardToken(
   state: GameState,
   player: PlayerState,
@@ -840,6 +994,26 @@ export function createDeadWizardTokenEffectDefinitions(
       supportedModes,
       supportedSourceKinds,
       handler: eachFoeGainChipsHandler,
+    },
+    {
+      effectId: "dead_wizard_token_random_discard_to_chosen_foe",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_random_discard_to_chosen_foe"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: randomDiscardToChosenFoeHandler,
+    },
+    {
+      effectId: "dead_wizard_token_each_foe_optional_transfer_sign",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_each_foe_optional_transfer_sign"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: eachFoeOptionalTransferSignHandler,
     },
     {
       effectId: "dead_wizard_token_damage_equal_chips",

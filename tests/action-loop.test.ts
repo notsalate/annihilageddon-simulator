@@ -5532,6 +5532,83 @@ test("Wizard Property 006 lets the player decline topdecking a gained creature",
   );
 });
 
+test("Wizard Property 006 topdecks a gained real Legend-Creature when applied", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 60616,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_006");
+  assert.ok(property);
+  assert.equal(property.kind, "wizardProperty");
+  replaceFirstWizardProperty(state, player, property);
+
+  const card = createCommonRuntimeCard("esw2_dbg__legend_005");
+  state.common.market.splice(0, state.common.market.length, card);
+  state.turn.power = 10;
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "topdeck_gained_card"
+      ? toChoiceSelection(choices.find((choice) => choice.choiceId === "apply"))
+      : undefined;
+
+  const result = applyAction(state, {
+    type: "buyMarketCard",
+    source: "mainMarket",
+    cardInstanceId: card.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(player.deck[0], card);
+  assert.equal(player.discard.includes(card), false);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "topdeck_gained_card" &&
+        event.playerId === player.playerId &&
+        event.choiceId === "apply"
+    )
+  );
+});
+
+test("Wizard Property 006 cannot redirect a fixed-discard gain of a real Legend-Creature", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 60617,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_006");
+  assert.ok(property);
+  assert.equal(property.kind, "wizardProperty");
+  replaceFirstWizardProperty(state, player, property);
+
+  const card = createCommonRuntimeCard("esw2_dbg__legend_005");
+  state.common.market.splice(0, state.common.market.length, card);
+  let topdeckChoiceRequested = false;
+  state.effectChoiceStrategy = ({ effectId }) => {
+    if (effectId === "topdeck_gained_card") {
+      topdeckChoiceRequested = true;
+    }
+    return undefined;
+  };
+  const gainCardId = addFixtureCardToActiveHand(state, {
+    effectId: "gain_card",
+    timing: "onPlay",
+    target: { selector: "mainMarketCard" },
+    destination: "discard",
+  });
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: gainCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(topdeckChoiceRequested, false);
+  assert.equal(player.discard.includes(card), true);
+  assert.equal(player.deck.includes(card), false);
+});
+
 test("Зад в будущее предлагает взять с обычной барахолки карту на руку", () => {
   const state = initializeGame({
     rootDir,
@@ -13248,6 +13325,239 @@ test("свойство 002 разыгрывает верхнюю постоян�
       tokenInstanceId: property.instanceId,
     }),
     { ok: false, error: "Wizard property cannot be activated" }
+  );
+});
+
+test("ЖДК 006 сначала выбирает врага и передаёт ему случайную карту из сброса", () => {
+  const state = initializeGame({
+    rootDir,
+    playerCount: 3,
+    seed: 310006,
+  });
+  const attacker = mustGetPlayer(state, state.activePlayerId);
+  const recipient = getOpponentsInSeatingOrder(state, attacker)[0];
+  assert.ok(recipient);
+  const chosenFoe = getOpponentsInSeatingOrder(state, recipient).find(
+    (player) => player.playerId !== attacker.playerId
+  );
+  assert.ok(chosenFoe);
+
+  for (const player of state.players) {
+    player.hand = [];
+    player.discard = [];
+  }
+  recipient.life.current = 1;
+  const transferredCard = createRuntimeCardInstance(
+    recipient,
+    "esw2_dbg__main_001",
+    "dwt006-random-discard"
+  );
+  recipient.discard = [transferredCard];
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt006"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_006"),
+      ownerId: "common",
+    },
+  ];
+
+  const expectedRng = state.rng.fork();
+  expectedRng.nextInt(recipient.discard.length);
+  const expectedNextRandomValue = expectedRng.next();
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 1,
+    targetSelector: "chosenFoe",
+  });
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "attack_damage") {
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === recipient.playerId)
+      );
+    }
+    if (effectId === "dead_wizard_token_random_discard_to_chosen_foe") {
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === chosenFoe.playerId)
+      );
+    }
+    return undefined;
+  };
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attack,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(recipient.discard.includes(transferredCard), false);
+  assert.equal(chosenFoe.discard.includes(transferredCard), true);
+  assert.equal(transferredCard.ownerId, chosenFoe.playerId);
+  assert.equal(state.rng.fork().next(), expectedNextRandomValue);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "dead_wizard_token_random_discard_to_chosen_foe" &&
+        event.playerId === recipient.playerId &&
+        event.targetPlayerId === chosenFoe.playerId
+    )
+  );
+});
+
+test("ЖДК 006 не расходует RNG при пустом собственном сбросе", () => {
+  const state = initializeGame({
+    rootDir,
+    playerCount: 3,
+    seed: 310007,
+  });
+  const attacker = mustGetPlayer(state, state.activePlayerId);
+  const recipient = getOpponentsInSeatingOrder(state, attacker)[0];
+  assert.ok(recipient);
+  const chosenFoe = getOpponentsInSeatingOrder(state, recipient)[0];
+  assert.ok(chosenFoe);
+
+  for (const player of state.players) {
+    player.hand = [];
+    player.discard = [];
+  }
+  recipient.life.current = 1;
+  const expectedNextRandomValue = state.rng.fork().next();
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt006-empty"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_006"),
+      ownerId: "common",
+    },
+  ];
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 1,
+    targetSelector: "chosenFoe",
+  });
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "attack_damage") {
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === recipient.playerId)
+      );
+    }
+    if (effectId === "dead_wizard_token_random_discard_to_chosen_foe") {
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === chosenFoe.playerId)
+      );
+    }
+    return undefined;
+  };
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attack,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(chosenFoe.discard.length, 0);
+  assert.equal(state.rng.fork().next(), expectedNextRandomValue);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectCardGained" &&
+        event.effectId === "dead_wizard_token_random_discard_to_chosen_foe"
+    ),
+    false
+  );
+});
+
+test("ЖДК 010 даёт врагам по очереди передавать Знак в руку получателя", () => {
+  const state = initializeGame({
+    rootDir,
+    playerCount: 4,
+    seed: 310010,
+  });
+  const attacker = mustGetPlayer(state, state.activePlayerId);
+  const recipient = getOpponentsInSeatingOrder(state, attacker)[0];
+  assert.ok(recipient);
+  const foes = getOpponentsInSeatingOrder(state, recipient);
+  const firstFoe = foes[0];
+  const secondFoe = foes[1];
+  const emptyFoe = foes[2];
+  assert.ok(firstFoe);
+  assert.ok(secondFoe);
+  assert.ok(emptyFoe);
+
+  for (const player of state.players) {
+    player.hand = [];
+    player.discard = [];
+  }
+  const signFromHand = createRuntimeCardInstance(
+    firstFoe,
+    "esw2_dbg__starter_001",
+    "dwt010-hand-sign"
+  );
+  const signFromDiscard = createRuntimeCardInstance(
+    secondFoe,
+    "esw2_dbg__starter_001",
+    "dwt010-discard-sign"
+  );
+  firstFoe.hand = [signFromHand];
+  secondFoe.discard = [signFromDiscard];
+  recipient.life.current = 1;
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt010"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_010"),
+      ownerId: "common",
+    },
+  ];
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 1,
+    targetSelector: "chosenFoe",
+  });
+  const chooserIds: string[] = [];
+  state.effectChoiceStrategy = ({ effectId, player, choices }) => {
+    if (effectId === "attack_damage") {
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === recipient.playerId)
+      );
+    }
+    if (effectId !== "dead_wizard_token_each_foe_optional_transfer_sign") {
+      return undefined;
+    }
+    chooserIds.push(player.playerId);
+    const selectedCard =
+      player.playerId === firstFoe.playerId
+        ? signFromHand
+        : player.playerId === secondFoe.playerId
+          ? signFromDiscard
+          : undefined;
+    return toChoiceSelection(
+      choices.find((choice) => choice.choiceId === selectedCard?.instanceId)
+    );
+  };
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: attack,
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(chooserIds, [firstFoe.playerId, secondFoe.playerId]);
+  assert.equal(recipient.hand.includes(signFromHand), true);
+  assert.equal(recipient.hand.includes(signFromDiscard), true);
+  assert.equal(signFromHand.ownerId, recipient.playerId);
+  assert.equal(signFromDiscard.ownerId, recipient.playerId);
+  assert.equal(emptyFoe.hand.length, 0);
+  assert.equal(emptyFoe.discard.length, 0);
+  const choiceEvents = state.eventLog.filter(
+    (event) =>
+      event.type === "effectChoiceSelected" &&
+      event.effectId === "dead_wizard_token_each_foe_optional_transfer_sign"
+  );
+  assert.deepEqual(
+    choiceEvents.map((event) => event.playerId),
+    [firstFoe.playerId, secondFoe.playerId]
   );
 });
 
