@@ -82,6 +82,7 @@ export function createCombatDefenseEffectDecoders(
         ] as const)
       ),
       redirectAttack: optional(booleanValue),
+      redirectAttackIf: optional(literal("dingler")),
       costs: optionalCosts,
       branchEffects: optionalRuntimeEffectArray,
     }),

@@ -337,7 +337,13 @@ export function resolveDefenseWindow(
   attack.defenseUsage.defendedPlayerIds.add(defendingPlayer.playerId);
   attack.defenseUsage.usedDefenseCardInstanceIds.add(defense.card.instanceId);
 
-  const redirectsAttack = defense.effect.redirectAttack === true;
+  const redirectsAttack =
+    defense.effect.redirectAttack === true ||
+    (defense.effect.redirectAttackIf === "dingler" &&
+      attack.kind === "redirectable" &&
+      attack.attackingPlayer.statuses.some(
+        (status) => status.statusId === "dingler"
+      ));
 
   const defenseSource: EffectSourceContext = {
     sourceType: "card",

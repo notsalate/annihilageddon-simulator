@@ -600,6 +600,7 @@ export interface AvoidAttackRuntimeEffect extends TimedEffect<
 > {
   destination: "discardSelf" | "topdeckSelf" | "topdeckSelfFaceUp" | "keep";
   redirectAttack?: boolean;
+  redirectAttackIf?: "dingler";
   costs?: RuntimeEffectCost[];
   branchEffects?: RuntimeEffect[];
 }
@@ -916,7 +917,9 @@ export function isAvoidAttackRuntimeEffect(
       effect.destination === "topdeckSelfFaceUp" ||
       effect.destination === "keep") &&
     (effect.redirectAttack === undefined ||
-      typeof effect.redirectAttack === "boolean")
+      typeof effect.redirectAttack === "boolean") &&
+    (effect.redirectAttackIf === undefined ||
+      effect.redirectAttackIf === "dingler")
   );
 }
 

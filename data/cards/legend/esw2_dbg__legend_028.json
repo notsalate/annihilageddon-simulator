@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_028",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_028.json",
+    "image": "assets/cards/legend/wizard-card/Легенда-Волшебник. Братья лошашные.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_028.md"
+  },
+  "visible": {
+    "nameRu": "Братья лошашные",
+    "cost": 12,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Волшебник",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "textRu": "+3 мощи\nЗащита: можешь сбросить эту карту, чтобы избежать атаки. Если сбросил, возьми 3 карты. Если тебя атаковал лошара, перенаправь атаку на него.",
+    "markers": ["defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "wizardCard"],
+    "cost": 12,
+    "victoryPoints": 4,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "add_power",
+        "timing": "onPlay",
+        "amount": 3
+      },
+      {
+        "effectId": "avoid_attack",
+        "timing": "onDefense",
+        "destination": "discardSelf",
+        "redirectAttackIf": "dingler",
+        "branchEffects": [
+          {
+            "effectId": "draw_cards",
+            "timing": "onDefense",
+            "amount": 3
+          }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

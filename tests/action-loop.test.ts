@@ -15225,3 +15225,373 @@ test("#272 ownerless defense draws but skips counter-damage", () => {
   );
   assert.equal(defenseChoiceCount, 1);
 });
+
+test("#273 legend028 gives power and redirects only against a Dingler", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const definition = currentRuntimeDataPack.cardDefinitions.get(
+    "esw2_dbg__legend_028"
+  );
+  assert.ok(definition);
+  assert.deepEqual(
+    currentRuntimeDataPack.decks.legendDeck?.entries.find(
+      (entry) => entry.cardId === definition.cardId
+    ),
+    { cardId: definition.cardId, count: 1 }
+  );
+
+  const playState = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 273001,
+  });
+  playState.cardDefinitions = new Map([
+    ...playState.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const playPlayer = mustGetPlayer(playState, markPlayerId("player-1"));
+  playPlayer.hand = [];
+  playPlayer.wizardProperties = [];
+  playState.activePlayerId = playPlayer.playerId;
+  playState.turn.power = 0;
+  const playedLegend = addRuntimeCardToHand(
+    playState,
+    playPlayer,
+    definition.cardId
+  );
+
+  assert.deepEqual(
+    applyAction(playState, {
+      type: "playCard",
+      cardInstanceId: playedLegend.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(playState.turn.power, 3);
+
+  const resolveDefense = (attackerIsDingler: boolean) => {
+    const state = initializeGame({
+      rootDir,
+      dataPackPath: playableRuntimeDataPackPath,
+      seed: attackerIsDingler ? 273002 : 273003,
+    });
+    state.cardDefinitions = new Map([
+      ...state.cardDefinitions,
+      [definition.cardId, definition],
+    ]);
+    const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+    const defender = mustGetPlayer(state, markPlayerId("player-2"));
+    state.activePlayerId = attacker.playerId;
+    for (const player of state.players) {
+      player.hand = [];
+      player.discard = [];
+      player.statuses = [];
+      player.wizardProperties = [];
+    }
+    if (attackerIsDingler) {
+      attacker.statuses.push(createDinglerStatus(attacker));
+    }
+    const drawnCards = defender.deck.slice(0, 3);
+    assert.equal(drawnCards.length, 3);
+    const defenseCard = addRuntimeCardToHand(
+      state,
+      defender,
+      definition.cardId
+    );
+    state.effectChoiceStrategy = ({ effectId }) =>
+      effectId === "avoid_attack"
+        ? { choiceId: defenseCard.instanceId }
+        : undefined;
+    const attack = addFixtureCardToActiveHand(state, {
+      effectId: "attack_damage",
+      timing: "onPlay",
+      amount: 5,
+      target: { selector: "opponentPlayer" },
+    });
+    const attackerLifeBefore = attacker.life.current;
+    const defenderLifeBefore = defender.life.current;
+
+    assert.deepEqual(
+      applyAction(state, { type: "playCard", cardInstanceId: attack }),
+      { ok: true }
+    );
+    assert.equal(defender.discard.includes(defenseCard), true);
+    for (const drawnCard of drawnCards) {
+      assert.equal(defender.hand.includes(drawnCard), true);
+    }
+    const attackStarts = state.eventLog.filter(
+      (event) =>
+        event.type === "attackTargetStarted" && event.cardInstanceId === attack
+    );
+    assert.equal(attackStarts.length, attackerIsDingler ? 2 : 1);
+    if (attackerIsDingler) {
+      assert.equal(attacker.life.current, attackerLifeBefore - 5);
+      assert.equal(defender.life.current, defenderLifeBefore);
+      assert.equal(attackStarts[1]?.playerId, defender.playerId);
+      assert.equal(attackStarts[1]?.targetPlayerId, attacker.playerId);
+    } else {
+      assert.equal(attacker.life.current, attackerLifeBefore);
+      assert.equal(defender.life.current, defenderLifeBefore);
+    }
+    assert.equal(state.activePlayerId, attacker.playerId);
+  };
+
+  resolveDefense(false);
+  resolveDefense(true);
+});
+
+test("#273 ownerless legend028 defense draws without redirecting", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const definition = currentRuntimeDataPack.cardDefinitions.get(
+    "esw2_dbg__legend_028"
+  );
+  assert.ok(definition);
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 273004,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const sourcePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = sourcePlayer.playerId;
+  targetPlayer.hand = [];
+  targetPlayer.discard = [];
+  targetPlayer.statuses = [createDinglerStatus(targetPlayer)];
+  const defenseCard = addRuntimeCardToHand(
+    state,
+    targetPlayer,
+    definition.cardId
+  );
+  const drawnCards = targetPlayer.deck.slice(0, 3);
+  assert.equal(drawnCards.length, 3);
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-ownerless-legend028-defense",
+    [
+      {
+        effectId: "mayhem_attack",
+        timing: "onMayhemResolve",
+        amount: 4,
+        target: { selector: "allPlayers" },
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  const mayhem: CardInstance = {
+    instanceId: markCardInstanceId("fixture-ownerless-legend028-instance"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
+    ownerId: "common",
+    marketChips: 0,
+  };
+  let defenseChoiceCount = 0;
+  state.effectChoiceStrategy = ({ effectId }) => {
+    if (effectId !== "avoid_attack") return undefined;
+    defenseChoiceCount += 1;
+    return { choiceId: defenseCard.instanceId };
+  };
+  const lifeBefore = targetPlayer.life.current;
+
+  assert.deepEqual(
+    executeMayhemEffects(state, sourcePlayer, mayhemDefinition, {
+      sourceType: "card",
+      runtimeMode: "fixture",
+      playerId: sourcePlayer.playerId,
+      cardInstanceId: mayhem.instanceId,
+      definitionId: mayhem.definitionId,
+    }),
+    { ok: true }
+  );
+  assert.equal(targetPlayer.life.current, lifeBefore);
+  assert.equal(targetPlayer.discard.includes(defenseCard), true);
+  for (const drawnCard of drawnCards) {
+    assert.equal(targetPlayer.hand.includes(drawnCard), true);
+  }
+  assert.equal(defenseChoiceCount, 1);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectDamageDealt" && event.effectId === "deal_damage"
+    ),
+    false
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.playerId === targetPlayer.playerId
+    ),
+    false
+  );
+});
+
+test("#273 Dingler-only legend028 defenses terminate a redirect chain", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const definition = currentRuntimeDataPack.cardDefinitions.get(
+    "esw2_dbg__legend_028"
+  );
+  assert.ok(definition);
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 273005,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const defender = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  for (const player of state.players) {
+    player.hand = [];
+    player.discard = [];
+    player.statuses = [createDinglerStatus(player)];
+    player.wizardProperties = [];
+  }
+  const attackerDefense = addRuntimeCardToHand(
+    state,
+    attacker,
+    definition.cardId
+  );
+  attackerDefense.instanceId = markCardInstanceId(
+    "fixture-legend028-attacker-defense"
+  );
+  const defenderDefense = addRuntimeCardToHand(
+    state,
+    defender,
+    definition.cardId
+  );
+  defenderDefense.instanceId = markCardInstanceId(
+    "fixture-legend028-defender-defense"
+  );
+  const attackerDrawnCards = attacker.deck.slice(0, 3);
+  const defenderDrawnCards = defender.deck.slice(0, 3);
+  assert.equal(attackerDrawnCards.length, 3);
+  assert.equal(defenderDrawnCards.length, 3);
+  let defenseChoiceCount = 0;
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId !== "avoid_attack") return undefined;
+    defenseChoiceCount += 1;
+    const choice = choices.find(
+      (candidate) => candidate.choiceId !== "decline"
+    );
+    assert.ok(choice);
+    return toChoiceSelection(choice);
+  };
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 5,
+    target: { selector: "opponentPlayer" },
+  });
+  const attackerLifeBefore = attacker.life.current;
+  const defenderLifeBefore = defender.life.current;
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }),
+    { ok: true }
+  );
+  assert.equal(defenseChoiceCount, 2);
+  assert.equal(attacker.life.current, attackerLifeBefore);
+  assert.equal(defender.life.current, defenderLifeBefore - 5);
+  assert.equal(attacker.discard.includes(attackerDefense), true);
+  assert.equal(defender.discard.includes(defenderDefense), true);
+  for (const card of attackerDrawnCards) {
+    assert.equal(attacker.hand.includes(card), true);
+  }
+  for (const card of defenderDrawnCards) {
+    assert.equal(defender.hand.includes(card), true);
+  }
+  const attackStarts = state.eventLog.filter(
+    (event) =>
+      event.type === "attackTargetStarted" && event.cardInstanceId === attack
+  );
+  assert.deepEqual(
+    attackStarts.map((event) => [
+      event.playerId,
+      event.targetPlayerId,
+      event.amount,
+    ]),
+    [
+      [attacker.playerId, defender.playerId, 5],
+      [defender.playerId, attacker.playerId, 5],
+      [attacker.playerId, defender.playerId, 5],
+    ]
+  );
+  assert.equal(state.activePlayerId, attacker.playerId);
+});
+
+test("#273 redirected legend028 damage gives the trophy for killing the original attacker", () => {
+  const currentRuntimeDataPack = loadCurrentRuntimeDataPack(rootDir);
+  const definition = currentRuntimeDataPack.cardDefinitions.get(
+    "esw2_dbg__legend_028"
+  );
+  assert.ok(definition);
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 273006,
+  });
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const defender = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  for (const player of state.players) {
+    player.hand = [];
+    player.discard = [];
+    player.statuses = [];
+    player.wizardProperties = [];
+    player.trophyLikeObjects = [];
+  }
+  attacker.statuses.push(createDinglerStatus(attacker));
+  attacker.life.current = 3;
+  attacker.trophyLikeObjects.push(createBasicTrophy(attacker.playerId));
+  const defenseCard = addRuntimeCardToHand(state, defender, definition.cardId);
+  state.effectChoiceStrategy = ({ effectId }) =>
+    effectId === "avoid_attack"
+      ? { choiceId: defenseCard.instanceId }
+      : undefined;
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 5,
+    target: { selector: "opponentPlayer" },
+  });
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attack }),
+    { ok: true }
+  );
+  assert.equal(attacker.life.current > 0, true);
+  assert.equal(attacker.deadWizardTokens.length, 1);
+  assert.equal(defender.discard.includes(defenseCard), true);
+  assert.equal(
+    defender.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    true
+  );
+  assert.equal(
+    attacker.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    ),
+    false
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "playerDied" && event.playerId === attacker.playerId
+    ),
+    true
+  );
+  assert.equal(state.activePlayerId, attacker.playerId);
+});
