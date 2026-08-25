@@ -421,6 +421,13 @@ export interface EffectRuntimeServices {
     effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): EffectExecutionResult;
+  exchangeControlledDeadWizardTokenLikes(
+    state: GameState,
+    player: PlayerState,
+    targetPlayer: PlayerState,
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext
+  ): EffectExecutionResult;
   resolvePlayerControlledAttack(
     intent: PlayerControlledAttackIntent
   ): EffectExecutionResult;

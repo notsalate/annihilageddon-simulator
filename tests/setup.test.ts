@@ -479,7 +479,8 @@ test("incomplete current runtime skips familiar setup when its pool is short", (
           (entry) =>
             entry.cardId !== "esw2_dbg__familiar_001" &&
             entry.cardId !== "esw2_dbg__familiar_002" &&
-            entry.cardId !== "esw2_dbg__familiar_006"
+            entry.cardId !== "esw2_dbg__familiar_006" &&
+            entry.cardId !== "esw2_dbg__familiar_009"
         ),
       },
     },

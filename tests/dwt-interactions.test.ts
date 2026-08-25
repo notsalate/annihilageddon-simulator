@@ -406,6 +406,247 @@ test("Хахатальер выдаёт ЖДК выбранному врагу, 
   assert.equal(target.hand.includes(drawnCard), true);
 });
 
+test("Мескалито добирает карту и получает мощь за физический и карточный ЖДК", () => {
+  const state = initializeGame({ rootDir, seed: 277001 });
+  const player = getActivePlayer(state);
+  player.hand = [];
+  player.permanents = [createDohlakPermanent(player)];
+  player.deadWizardTokens = [
+    createDeadWizardToken(
+      player,
+      "familiar009-normal",
+      "esw2_dbg__dead_wizard_token_015"
+    ),
+  ];
+  state.turn.power = 0;
+  const drawnCard = player.deck[0];
+  assert.ok(drawnCard);
+  const card = addCardToHand(state, player, "esw2_dbg__familiar_009");
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: card.instanceId }),
+    { ok: true }
+  );
+  assert.equal(state.turn.power, 2);
+  assert.equal(player.hand.includes(drawnCard), true);
+  assert.equal(player.playedThisTurn.includes(card), true);
+});
+
+test("Мескалито обменивает физические ЖДК при защите и применяет оба лица", () => {
+  const state = initializeGame({ rootDir, seed: 277002 });
+  const attacker = getActivePlayer(state);
+  const defender = state.players.find(
+    (candidate) => candidate.playerId !== attacker.playerId
+  );
+  assert.ok(defender);
+  attacker.hand = [];
+  defender.hand = [];
+  const attackerToken = createDeadWizardToken(
+    attacker,
+    "familiar009-attacker",
+    "esw2_dbg__dead_wizard_token_015"
+  );
+  const defenderToken = createDeadWizardToken(
+    defender,
+    "familiar009-defender",
+    "esw2_dbg__dead_wizard_token_015"
+  );
+  attacker.deadWizardTokens = [attackerToken];
+  defender.deadWizardTokens = [defenderToken];
+  const defense = addCardToHand(state, defender, "esw2_dbg__familiar_009");
+  const drawnCard = defender.deck[0];
+  assert.ok(drawnCard);
+  const attackCard = addCardToHand(state, attacker, "esw2_dbg__main_030");
+  chooseFamiliarDefenseAndExchange(state, defender, defense, [
+    `token:${defenderToken.instanceId}`,
+    `token:${attackerToken.instanceId}`,
+  ]);
+  const lifeBefore = defender.life.current;
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: attackCard.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(defender.life.current, lifeBefore);
+  assert.equal(defender.discard.includes(defense), true);
+  assert.equal(defender.hand.includes(drawnCard), true);
+  assert.deepEqual(defender.deadWizardTokens, [attackerToken]);
+  assert.deepEqual(attacker.deadWizardTokens, [defenderToken]);
+  assert.equal(attackerToken.ownerId, defender.playerId);
+  assert.equal(defenderToken.ownerId, attacker.playerId);
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "deadWizardTokenFaceResolved")
+      .map((event) => event.tokenInstanceId),
+    [defenderToken.instanceId, attackerToken.instanceId]
+  );
+  assert.equal(attacker.chips, 1);
+  assert.equal(defender.chips, 1);
+});
+
+test("Мескалито обменивает карты-Дохляки с постоянным контролем", () => {
+  const state = initializeGame({ rootDir, seed: 277003 });
+  const attacker = getActivePlayer(state);
+  const defender = state.players.find(
+    (candidate) => candidate.playerId !== attacker.playerId
+  );
+  assert.ok(defender);
+  attacker.hand = [];
+  defender.hand = [];
+  const attackerDohlak = createDohlakPermanent(attacker);
+  const defenderDohlak = createDohlakPermanent(defender);
+  attacker.permanents = [attackerDohlak];
+  defender.permanents = [defenderDohlak];
+  const defense = addCardToHand(state, defender, "esw2_dbg__familiar_009");
+  const attackCard = addCardToHand(state, attacker, "esw2_dbg__main_030");
+  chooseFamiliarDefenseAndExchange(state, defender, defense, [
+    `card:${defenderDohlak.instanceId}`,
+    `card:${attackerDohlak.instanceId}`,
+  ]);
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: attackCard.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.deepEqual(defender.permanents, [attackerDohlak]);
+  assert.deepEqual(attacker.permanents, [defenderDohlak]);
+  assert.equal(attackerDohlak.ownerId, defender.playerId);
+  assert.equal(defenderDohlak.ownerId, attacker.playerId);
+});
+
+test("Мескалито сохраняет защиту и добор при отказе от обмена", () => {
+  const state = initializeGame({ rootDir, seed: 277004 });
+  const attacker = getActivePlayer(state);
+  const defender = state.players.find(
+    (candidate) => candidate.playerId !== attacker.playerId
+  );
+  assert.ok(defender);
+  attacker.hand = [];
+  defender.hand = [];
+  const attackerToken = createDeadWizardToken(
+    attacker,
+    "familiar009-decline-attacker",
+    "esw2_dbg__dead_wizard_token_015"
+  );
+  const defenderToken = createDeadWizardToken(
+    defender,
+    "familiar009-decline-defender",
+    "esw2_dbg__dead_wizard_token_015"
+  );
+  attacker.deadWizardTokens = [attackerToken];
+  defender.deadWizardTokens = [defenderToken];
+  const defense = addCardToHand(state, defender, "esw2_dbg__familiar_009");
+  const drawnCard = defender.deck[0];
+  assert.ok(drawnCard);
+  const attackCard = addCardToHand(state, attacker, "esw2_dbg__main_030");
+  chooseFamiliarDefenseAndExchange(state, defender, defense, "decline");
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: attackCard.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.deepEqual(attacker.deadWizardTokens, [attackerToken]);
+  assert.deepEqual(defender.deadWizardTokens, [defenderToken]);
+  assert.equal(defender.discard.includes(defense), true);
+  assert.equal(defender.hand.includes(drawnCard), true);
+  assert.equal(
+    state.eventLog.some(
+      (event) => event.type === "deadWizardTokenFaceResolved"
+    ),
+    false
+  );
+});
+
+test("Мескалито не предлагает обмен без ЖДК атакующего", () => {
+  const state = initializeGame({ rootDir, seed: 277005 });
+  const attacker = getActivePlayer(state);
+  const defender = state.players.find(
+    (candidate) => candidate.playerId !== attacker.playerId
+  );
+  assert.ok(defender);
+  attacker.hand = [];
+  defender.hand = [];
+  const defenderToken = createDeadWizardToken(
+    defender,
+    "familiar009-empty-attacker",
+    "esw2_dbg__dead_wizard_token_015"
+  );
+  attacker.deadWizardTokens = [];
+  defender.deadWizardTokens = [defenderToken];
+  const defense = addCardToHand(state, defender, "esw2_dbg__familiar_009");
+  const drawnCard = defender.deck[0];
+  assert.ok(drawnCard);
+  const attackCard = addCardToHand(state, attacker, "esw2_dbg__main_030");
+  let exchangeRequests = 0;
+  state.effectChoiceStrategy = ({ effectId }) => {
+    if (effectId === "attack_damage") {
+      return { choiceId: defender.playerId };
+    }
+    if (effectId === "avoid_attack") {
+      return { choiceId: defense.instanceId };
+    }
+    if (effectId === "exchange_controlled_dead_wizard_tokens") {
+      exchangeRequests += 1;
+    }
+    return undefined;
+  };
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: attackCard.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(exchangeRequests, 0);
+  assert.deepEqual(defender.deadWizardTokens, [defenderToken]);
+  assert.equal(defender.discard.includes(defense), true);
+  assert.equal(defender.hand.includes(drawnCard), true);
+});
+
+function chooseFamiliarDefenseAndExchange(
+  state: GameState,
+  defender: PlayerState,
+  defense: CardInstance,
+  exchange: "decline" | readonly string[]
+): void {
+  let exchangeSelectionIndex = 0;
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "attack_damage") {
+      return { choiceId: defender.playerId };
+    }
+    if (effectId === "avoid_attack") {
+      return { choiceId: defense.instanceId };
+    }
+    if (effectId !== "exchange_controlled_dead_wizard_tokens") {
+      return undefined;
+    }
+    if (choices.some((choice) => choice.choiceId === "exchange")) {
+      return {
+        choiceId: exchange === "decline" ? "decline" : "exchange",
+      };
+    }
+    if (exchange === "decline") {
+      return undefined;
+    }
+    const choiceId = exchange[exchangeSelectionIndex];
+    exchangeSelectionIndex += 1;
+    return choiceId !== undefined &&
+      choices.some((choice) => choice.choiceId === choiceId)
+      ? { choiceId }
+      : undefined;
+  };
+}
+
 function getActivePlayer(state: GameState): PlayerState {
   const player = state.players.find(
     (candidate) => candidate.playerId === state.activePlayerId

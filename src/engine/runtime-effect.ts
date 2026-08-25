@@ -275,6 +275,7 @@ export const knownRuntimeEffectIds = [
   "endgame_remove_matching_dead_wizard_tokens",
   "endgame_limp_wands_score_positive",
   "endgame_vp_per_owned_legend",
+  "exchange_controlled_dead_wizard_tokens",
   "exchange_life_and_dingler_status",
   "fixture_add_power_equal_to_target_cost",
   "fixture_modify_effective_value",
@@ -650,6 +651,12 @@ export interface AvoidAttackRuntimeEffect extends TimedEffect<
   costs?: RuntimeEffectCost[];
   branchEffects?: RuntimeEffect[];
 }
+export type ExchangeControlledDeadWizardTokensRuntimeEffect = TimedEffect<
+  "exchange_controlled_dead_wizard_tokens",
+  "onDefense"
+> & {
+  optional: true;
+};
 export type ConditionalActivationAttackDamageRuntimeEffect =
   EffectWithOptionalTiming<"conditional_activation_attack_damage"> &
     PositiveAmount &
@@ -727,6 +734,7 @@ export interface PlayerControlledAttackEffectPayloadMap {
   attack_gain_limp_wand: AttackGainLimpWandRuntimeEffect;
   attack_gain_status: AttackGainStatusRuntimeEffect;
   avoid_attack: AvoidAttackRuntimeEffect;
+  exchange_controlled_dead_wizard_tokens: ExchangeControlledDeadWizardTokensRuntimeEffect;
   conditional_activation_attack_damage: ConditionalActivationAttackDamageRuntimeEffect;
   activation_attack_damage_per_controlled_card_type: ActivationAttackDamagePerControlledCardTypeRuntimeEffect;
   directional_chain_attack: DirectionalChainAttackRuntimeEffect;

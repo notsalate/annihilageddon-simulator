@@ -229,6 +229,7 @@ test("remaining Catalog families expose one local ID inventory each", () => {
   ]);
   assert.deepEqual(combatDefenseEffectIds, [
     "avoid_attack",
+    "exchange_controlled_dead_wizard_tokens",
     "defense_discard_self_avoid_attack_then_optional_destroy_hand_card",
   ]);
   assert.deepEqual(combatReplacementEffectIds, [
@@ -582,6 +583,15 @@ test("attack, defense and replacement effects use exact family policies", () => 
         effectId: "avoid_attack",
         timing: "onDefense",
         destination: "discardSelf",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "exchange_controlled_dead_wizard_tokens",
+      payload: {
+        effectId: "exchange_controlled_dead_wizard_tokens",
+        timing: "onDefense",
+        optional: true,
       },
       sourceKind: "card",
     },
