@@ -542,8 +542,11 @@ test("card movement: main_076 charges floor-half chips, including zero and one",
     [0, 1, 2]
   );
   assert.ok(
-    cards.every((card) => scenario.state.common.destroyedPile.includes(card))
+    cards
+      .slice(1)
+      .every((card) => scenario.state.common.destroyedPile.includes(card))
   );
+  assert.equal(scenario.activePlayer.discard.includes(cards[0]!), true);
   assert.equal(
     scenario.state.eventLog.filter(
       (event) =>
