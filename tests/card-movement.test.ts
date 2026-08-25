@@ -1279,6 +1279,28 @@ test("card movement: mega_mayhem_006 defends each wizard before destroying in st
   );
   assert.deepEqual(
     scenario.state.eventLog
+      .filter(
+        (event) =>
+          event.type === "mayhemDecisionStarted" ||
+          event.type === "effectTopMainDeckCardDestroyed"
+      )
+      .map((event) =>
+        event.type === "mayhemDecisionStarted"
+          ? ["decision", event.targetPlayerId]
+          : ["destroy", event.playerId]
+      ),
+    [
+      ["decision", active.playerId],
+      ["destroy", active.playerId],
+      ["decision", firstFoe.playerId],
+      ["decision", secondFoe.playerId],
+      ["destroy", secondFoe.playerId],
+      ["decision", lastFoe.playerId],
+      ["destroy", lastFoe.playerId],
+    ]
+  );
+  assert.deepEqual(
+    scenario.state.eventLog
       .filter((event) => event.type === "mayhemDecisionStarted")
       .map((event) => event.targetPlayerId),
     [active.playerId, firstFoe.playerId, secondFoe.playerId, lastFoe.playerId]

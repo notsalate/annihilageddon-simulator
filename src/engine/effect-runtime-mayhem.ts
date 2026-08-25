@@ -419,6 +419,79 @@ function sumHandCost(state: GameState, player: PlayerState): number {
   }, 0);
 }
 
+function recordMayhemDecisionPhaseStarted(
+  state: GameState,
+  effectId: MayhemEffectId,
+  source: EffectSourceContext
+): void {
+  recordGameEvent(state, {
+    type: "mayhemDecisionPhaseStarted",
+    playerId: source.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+}
+
+function recordMayhemResolutionPhaseStarted(
+  state: GameState,
+  effectId: MayhemEffectId,
+  source: EffectSourceContext
+): void {
+  recordGameEvent(state, {
+    type: "mayhemResolutionPhaseStarted",
+    playerId: source.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+}
+
+function resolveMayhemAttackDefenseDecision(
+  state: GameState,
+  targetPlayer: PlayerState,
+  effectId: MayhemEffectId,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+):
+  | { ok: true; avoided: boolean; gameEnd?: never }
+  | { ok: true; gameEnd: EffectGameEnd; avoided?: never }
+  | { ok: false; error: string } {
+  recordGameEvent(state, {
+    type: "mayhemDecisionStarted",
+    playerId: source.playerId,
+    targetPlayerId: targetPlayer.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+  const defenseResult = services.resolveDefenseWindow(state, targetPlayer, {
+    kind: "nonredirectable",
+    source,
+    defenseUsage: createAttackDefenseUsage(),
+  });
+  if (!defenseResult.ok) return defenseResult;
+  if (defenseResult.gameEnd !== undefined) {
+    return { ok: true, gameEnd: defenseResult.gameEnd };
+  }
+  const avoided = defenseResult.avoided;
+  if (avoided) {
+    recordGameEvent(state, {
+      type: "attackAvoided",
+      playerId: targetPlayer.playerId,
+      targetPlayerId: targetPlayer.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      effectId,
+      sourceType: source.sourceType,
+    });
+  }
+  return { ok: true, avoided };
+}
+
 function collectMayhemAttackDefenseDecisions(
   state: GameState,
   targets: readonly PlayerState[],
@@ -434,57 +507,24 @@ function collectMayhemAttackDefenseDecisions(
   | { ok: true; gameEnd: EffectGameEnd; decisions?: never }
   | { ok: false; error: string } {
   const decisions: Array<{ player: PlayerState; avoided: boolean }> = [];
-  recordGameEvent(state, {
-    type: "mayhemDecisionPhaseStarted",
-    playerId: source.playerId,
-    cardInstanceId: source.cardInstanceId,
-    definitionId: source.definitionId,
-    effectId,
-    sourceType: source.sourceType,
-  });
+  recordMayhemDecisionPhaseStarted(state, effectId, source);
 
   for (const targetPlayer of targets) {
-    recordGameEvent(state, {
-      type: "mayhemDecisionStarted",
-      playerId: source.playerId,
-      targetPlayerId: targetPlayer.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
+    const decisionResult = resolveMayhemAttackDefenseDecision(
+      state,
+      targetPlayer,
       effectId,
-      sourceType: source.sourceType,
-    });
-    const defenseResult = services.resolveDefenseWindow(state, targetPlayer, {
-      kind: "nonredirectable",
       source,
-      defenseUsage: createAttackDefenseUsage(),
-    });
-    if (!defenseResult.ok) return defenseResult;
-    if (defenseResult.gameEnd !== undefined) {
-      return { ok: true, gameEnd: defenseResult.gameEnd };
+      services
+    );
+    if (!decisionResult.ok) return decisionResult;
+    if (decisionResult.gameEnd !== undefined) {
+      return { ok: true, gameEnd: decisionResult.gameEnd };
     }
-    const avoided = defenseResult.avoided;
-    if (avoided) {
-      recordGameEvent(state, {
-        type: "attackAvoided",
-        playerId: targetPlayer.playerId,
-        targetPlayerId: targetPlayer.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
-        effectId,
-        sourceType: source.sourceType,
-      });
-    }
-    decisions.push({ player: targetPlayer, avoided });
+    decisions.push({ player: targetPlayer, avoided: decisionResult.avoided });
   }
 
-  recordGameEvent(state, {
-    type: "mayhemResolutionPhaseStarted",
-    playerId: source.playerId,
-    cardInstanceId: source.cardInstanceId,
-    definitionId: source.definitionId,
-    effectId,
-    sourceType: source.sourceType,
-  });
+  recordMayhemResolutionPhaseStarted(state, effectId, source);
   return { ok: true, decisions };
 }
 
@@ -584,21 +624,26 @@ const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler<
 > = {
   effectId: "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
   execute(state, _player, effect, source, services) {
-    const decisionResult = collectMayhemAttackDefenseDecisions(
-      state,
-      services.getPlayersInActiveOrder(state),
-      effect.effectId,
-      source,
-      services
-    );
-    if (!decisionResult.ok) return decisionResult;
-    if (decisionResult.gameEnd !== undefined) {
-      return { ok: true, gameEnd: decisionResult.gameEnd };
-    }
-
+    recordMayhemDecisionPhaseStarted(state, effect.effectId, source);
+    let resolutionPhaseStarted = false;
     let gameEnd: EffectGameEnd | undefined;
-    for (const { player: targetPlayer, avoided } of decisionResult.decisions) {
-      if (avoided) continue;
+    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+      const decisionResult = resolveMayhemAttackDefenseDecision(
+        state,
+        targetPlayer,
+        effect.effectId,
+        source,
+        services
+      );
+      if (!decisionResult.ok) return decisionResult;
+      if (decisionResult.gameEnd !== undefined) {
+        return { ok: true, gameEnd: decisionResult.gameEnd };
+      }
+      if (decisionResult.avoided) continue;
+      if (!resolutionPhaseStarted) {
+        recordMayhemResolutionPhaseStarted(state, effect.effectId, source);
+        resolutionPhaseStarted = true;
+      }
       const destroyResult = destroyTopMainDeckCard(
         state,
         targetPlayer,
@@ -619,6 +664,9 @@ const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler<
       if (deathResult.gameEnd !== undefined && gameEnd === undefined) {
         gameEnd = deathResult.gameEnd;
       }
+    }
+    if (!resolutionPhaseStarted) {
+      recordMayhemResolutionPhaseStarted(state, effect.effectId, source);
     }
     return gameEnd === undefined ? { ok: true } : { ok: true, gameEnd };
   },
