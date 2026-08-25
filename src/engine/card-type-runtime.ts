@@ -145,6 +145,33 @@ export function getCardEffectiveTypeOptions(
   return sortedOptions;
 }
 
+export function hasPlayerPerCardEffectiveTypeEffects(
+  state: GameState,
+  playerId: PlayerId
+): boolean {
+  const player = requirePlayer(state, playerId);
+  for (const property of player.wizardProperties) {
+    const propertyDefinition = state.tokenDefinitions.get(
+      property.definitionId
+    );
+    const effects =
+      propertyDefinition?.kind === "wizardProperty"
+        ? propertyDefinition.engine?.effects
+        : undefined;
+    if (effects === undefined) continue;
+
+    for (const effect of effects) {
+      if (
+        isOwnedCardsCountAsCardTypeRuntimeEffect(effect) &&
+        effect.selectionMode === "perCard"
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function isPlayerCardEffectiveTypeSelected(
   state: GameState,
   playerId: PlayerId,

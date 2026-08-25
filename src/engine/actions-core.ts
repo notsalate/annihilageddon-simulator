@@ -35,6 +35,7 @@ import {
   cardMatchesTypeForPlayer,
   clearPlayerCardEffectiveType,
   getCardEffectiveTypeOptions,
+  hasPlayerPerCardEffectiveTypeEffects,
   isPlayerCardEffectiveTypeSelected,
   setPlayerCardEffectiveType,
 } from "./card-type-runtime.js";
@@ -999,6 +1000,10 @@ function getCardEffectiveTypeActions(
   state: GameState,
   player: PlayerState
 ): SetCardEffectiveTypeAction[] {
+  if (!hasPlayerPerCardEffectiveTypeEffects(state, player.playerId)) {
+    return [];
+  }
+
   const cards = getCardEffectiveTypeActionCards(state, player);
 
   return cards.flatMap((card) =>
