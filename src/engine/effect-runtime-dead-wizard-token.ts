@@ -6,7 +6,11 @@ import {
   removeDeadWizardToken,
   removeTemporaryCardControl,
 } from "./control-ledger.js";
-import { chooseCardCombinations } from "./effect-runtime-cards-ownership-choice.js";
+import {
+  chooseCardCombinations,
+  chooseRevealedTopCardForDestruction,
+  destroyOwnedCard,
+} from "./effect-runtime-cards-ownership-choice.js";
 import { changePlayerChips } from "./effect-runtime-resources-draw.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
 import { shuffleDeck } from "./deck-lifecycle.js";
@@ -44,6 +48,7 @@ export const deadWizardTokenEffectIds = [
   "dead_wizard_token_shuffle_hand_legends",
   "dead_wizard_token_shuffle_owned_permanents",
   "dead_wizard_token_each_foe_optional_discard",
+  "dead_wizard_token_reveal_and_optional_destroy",
   "dead_wizard_token_damage_equal_chips",
   "dead_wizard_token_damage_equal_highest_hand_cost",
   "dead_wizard_token_gain_chips",
@@ -98,6 +103,11 @@ export type DeadWizardTokenShuffleOwnedPermanentsRuntimeEffect = {
 
 export type DeadWizardTokenEachFoeOptionalDiscardRuntimeEffect = {
   effectId: "dead_wizard_token_each_foe_optional_discard";
+  timing: "onDeadWizardTokenFace";
+};
+
+export type DeadWizardTokenRevealAndOptionalDestroyRuntimeEffect = {
+  effectId: "dead_wizard_token_reveal_and_optional_destroy";
   timing: "onDeadWizardTokenFace";
 };
 
@@ -191,6 +201,7 @@ export interface DeadWizardTokenEffectPayloadMap {
   dead_wizard_token_shuffle_hand_legends: DeadWizardTokenShuffleHandLegendsRuntimeEffect;
   dead_wizard_token_shuffle_owned_permanents: DeadWizardTokenShuffleOwnedPermanentsRuntimeEffect;
   dead_wizard_token_each_foe_optional_discard: DeadWizardTokenEachFoeOptionalDiscardRuntimeEffect;
+  dead_wizard_token_reveal_and_optional_destroy: DeadWizardTokenRevealAndOptionalDestroyRuntimeEffect;
   dead_wizard_token_damage_equal_chips: DeadWizardTokenDamageEqualChipsRuntimeEffect;
   dead_wizard_token_damage_equal_highest_hand_cost: DeadWizardTokenDamageEqualHighestHandCostRuntimeEffect;
   dead_wizard_token_gain_chips: DeadWizardTokenGainChipsRuntimeEffect;
@@ -281,6 +292,15 @@ export function createDeadWizardTokenEffectDecoders(
       {
         effectId: required(
           literal("dead_wizard_token_each_foe_optional_discard")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
+      }
+    ),
+    dead_wizard_token_reveal_and_optional_destroy: defineDecoder(
+      "dead_wizard_token_reveal_and_optional_destroy",
+      {
+        effectId: required(
+          literal("dead_wizard_token_reveal_and_optional_destroy")
         ),
         timing: required(literal("onDeadWizardTokenFace")),
       }
@@ -925,6 +945,31 @@ const eachFoeOptionalDiscardHandler: EffectRuntimeHandler<DeadWizardTokenEachFoe
     },
   };
 
+const revealAndOptionalDestroyHandler: EffectRuntimeHandler<DeadWizardTokenRevealAndOptionalDestroyRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_reveal_and_optional_destroy",
+    execute(state, player, effect, source, services) {
+      const choice = chooseRevealedTopCardForDestruction(
+        state,
+        player,
+        source,
+        effect.effectId,
+        services
+      );
+      if (!choice.ok || choice.card === undefined || !choice.shouldDestroy) {
+        return choice.ok ? { ok: true } : choice;
+      }
+      return destroyOwnedCard(
+        state,
+        player,
+        choice.card,
+        effect.effectId,
+        source,
+        services
+      );
+    },
+  };
+
 function revealCardAndMaybeGainDeadWizardToken(
   state: GameState,
   player: PlayerState,
@@ -1287,6 +1332,16 @@ export function createDeadWizardTokenEffectDefinitions(
       supportedModes,
       supportedSourceKinds,
       handler: eachFoeOptionalDiscardHandler,
+    },
+    {
+      effectId: "dead_wizard_token_reveal_and_optional_destroy",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_reveal_and_optional_destroy"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: revealAndOptionalDestroyHandler,
     },
     {
       effectId: "dead_wizard_token_damage_equal_chips",

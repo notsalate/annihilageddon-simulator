@@ -104,6 +104,7 @@ export type {
   DeadWizardTokenShuffleHandLegendsRuntimeEffect,
   DeadWizardTokenShuffleOwnedPermanentsRuntimeEffect,
   DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect,
+  DeadWizardTokenRevealAndOptionalDestroyRuntimeEffect,
 } from "./effect-runtime-dead-wizard-token.js";
 export type {
   MayhemEffectId,
@@ -300,6 +301,7 @@ export const knownRuntimeEffectIds = [
   "dead_wizard_token_shuffle_hand_legends",
   "dead_wizard_token_shuffle_owned_permanents",
   "dead_wizard_token_each_foe_optional_discard",
+  "dead_wizard_token_reveal_and_optional_destroy",
   "dead_wizard_token_damage_equal_chips",
   "dead_wizard_token_damage_equal_highest_hand_cost",
   "dead_wizard_token_gain_chips",

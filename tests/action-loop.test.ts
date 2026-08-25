@@ -13919,6 +13919,178 @@ test("ЖДК 011 не создаёт выбор сброса при пустой
   );
 });
 
+test("ЖДК 024 раскрывает верхнюю карту и уничтожает её по выбору", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 310024,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const revealedCard = createRuntimeCardInstance(
+    player,
+    "esw2_dbg__main_001",
+    "dwt024-destroy"
+  );
+  player.deck = [revealedCard];
+  player.discard = [];
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt024-destroy"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_024"),
+      ownerId: "common",
+    },
+  ];
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "dead_wizard_token_reveal_and_optional_destroy"
+      ? toChoiceSelection(
+          choices.find(
+            (choice) => choice.choiceId === `destroy_${revealedCard.instanceId}`
+          )
+        )
+      : undefined;
+
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+
+  assert.equal(player.deck.includes(revealedCard), false);
+  assert.equal(state.common.destroyedPile.includes(revealedCard), true);
+  assert.equal(revealedCard.ownerId, player.playerId);
+  assertEventOrder(state, [
+    (event) =>
+      event.type === "effectCardRevealed" &&
+      event.effectId === "dead_wizard_token_reveal_and_optional_destroy" &&
+      event.targetCardInstanceId === revealedCard.instanceId,
+    (event) =>
+      event.type === "effectChoiceSelected" &&
+      event.effectId === "dead_wizard_token_reveal_and_optional_destroy" &&
+      event.targetCardInstanceId === revealedCard.instanceId,
+    (event) =>
+      event.type === "cardMoved" &&
+      event.cardInstanceId === revealedCard.instanceId &&
+      event.destinationZone === "destroyedPile",
+  ]);
+});
+
+test("ЖДК 024 оставляет раскрытую карту наверху при отказе", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 3100241,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const revealedCard = createRuntimeCardInstance(
+    player,
+    "esw2_dbg__main_001",
+    "dwt024-decline"
+  );
+  player.deck = [revealedCard];
+  player.discard = [];
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt024-decline"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_024"),
+      ownerId: "common",
+    },
+  ];
+  state.effectChoiceStrategy = ({ effectId }) =>
+    effectId === "dead_wizard_token_reveal_and_optional_destroy"
+      ? { choiceId: "decline" }
+      : undefined;
+
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+
+  assert.deepEqual(player.deck, [revealedCard]);
+  assert.equal(state.common.destroyedPile.includes(revealedCard), false);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "cardMoved" &&
+        event.cardInstanceId === revealedCard.instanceId &&
+        event.effectId === "dead_wizard_token_reveal_and_optional_destroy"
+    ),
+    false
+  );
+});
+
+test("ЖДК 024 пополняет пустую колоду из сброса перед раскрытием", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 3100242,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const firstDiscardCard = createRuntimeCardInstance(
+    player,
+    "esw2_dbg__main_001",
+    "dwt024-refill-first"
+  );
+  const secondDiscardCard = createRuntimeCardInstance(
+    player,
+    "esw2_dbg__main_001",
+    "dwt024-refill-second"
+  );
+  player.deck = [];
+  player.discard = [firstDiscardCard, secondDiscardCard];
+  const expectedDeck = player.discard.slice();
+  const expectedRng = state.rng.fork();
+  shuffleDeck(expectedDeck, expectedRng);
+  const expectedNextRandomValue = expectedRng.next();
+  const revealedCard = expectedDeck[0];
+  assert.ok(revealedCard);
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt024-refill"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_024"),
+      ownerId: "common",
+    },
+  ];
+  state.effectChoiceStrategy = ({ effectId }) =>
+    effectId === "dead_wizard_token_reveal_and_optional_destroy"
+      ? { choiceId: "decline" }
+      : undefined;
+
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+
+  assert.deepEqual(player.deck, expectedDeck);
+  assert.equal(player.discard.length, 0);
+  assert.equal(player.deck[0], revealedCard);
+  assert.equal(state.rng.fork().next(), expectedNextRandomValue);
+});
+
+test("ЖДК 024 ничего не делает при пустых колоде и сбросе", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 3100243,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  player.deck = [];
+  player.discard = [];
+  const expectedNextRandomValue = state.rng.fork().next();
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt024-empty"),
+      definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_024"),
+      ownerId: "common",
+    },
+  ];
+  let choiceCount = 0;
+  state.effectChoiceStrategy = ({ effectId }) => {
+    if (effectId === "dead_wizard_token_reveal_and_optional_destroy") {
+      choiceCount += 1;
+    }
+    return undefined;
+  };
+
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+
+  assert.equal(choiceCount, 0);
+  assert.equal(state.rng.fork().next(), expectedNextRandomValue);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectRevealSkipped" &&
+        event.effectId === "dead_wizard_token_reveal_and_optional_destroy"
+    ),
+    true
+  );
+});
+
 test("ЖДК 001 считает реальные и fixture-легенды в сбросе, но не превышает остаток стопки палочек", () => {
   const state = initializeGame({ rootDir, seed: 310001 });
   const player = mustGetPlayer(state, state.activePlayerId);
