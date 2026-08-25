@@ -124,6 +124,15 @@ export function releaseTemporaryControls(state: GameState): void {
   state.turn.temporaryCardControls = [];
 }
 
+export function removeTemporaryCardControl(
+  state: GameState,
+  cardInstanceId: CardInstance["instanceId"]
+): void {
+  state.turn.temporaryCardControls = state.turn.temporaryCardControls.filter(
+    (control) => control.cardInstanceId !== cardInstanceId
+  );
+}
+
 /** Removes a controlled DWT and clears its ownership when it leaves play. */
 export function removeDeadWizardToken(
   player: PlayerState,

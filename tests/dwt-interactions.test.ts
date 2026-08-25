@@ -16,6 +16,8 @@ import {
   markTokenDefinitionId,
   markTokenInstanceId,
 } from "../src/domain/types.js";
+import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
+import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
 const rootDir = process.cwd();
 
@@ -156,6 +158,254 @@ test("МегаБеспредел MC выдаёт чипсины каждому �
   assert.equal(state.common.destroyedMegaMayhem.includes(megaMayhem), true);
 });
 
+test("Смерть от холестерина даёт +7 без ЖДК и уничтожает выбранный физический ЖДК", () => {
+  const emptyState = initializeGame({ rootDir, seed: 276001 });
+  const emptyPlayer = getActivePlayer(emptyState);
+  emptyPlayer.hand = [];
+  emptyState.turn.power = 1;
+  const emptyCard = addCardToHand(
+    emptyState,
+    emptyPlayer,
+    "esw2_dbg__legend_013"
+  );
+
+  assert.deepEqual(
+    applyAction(emptyState, {
+      type: "playCard",
+      cardInstanceId: emptyCard.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(emptyState.turn.power, 8);
+
+  const destroyState = initializeGame({ rootDir, seed: 276002 });
+  const destroyPlayer = getActivePlayer(destroyState);
+  destroyPlayer.hand = [];
+  destroyPlayer.deadWizardTokens = [
+    createDeadWizardToken(
+      destroyPlayer,
+      "legend013",
+      "esw2_dbg__dead_wizard_token_015"
+    ),
+  ];
+  destroyState.effectChoiceStrategy = (request) => {
+    const effectId = String(request.effectId);
+    return effectId === "optional_destroy_controlled_dead_wizard_token"
+      ? { choiceId: request.choices[1]?.choiceId ?? "decline" }
+      : undefined;
+  };
+  destroyState.turn.power = 1;
+  const destroyCard = addCardToHand(
+    destroyState,
+    destroyPlayer,
+    "esw2_dbg__legend_013"
+  );
+
+  assert.deepEqual(
+    applyAction(destroyState, {
+      type: "playCard",
+      cardInstanceId: destroyCard.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(destroyState.turn.power, 1);
+  assert.equal(destroyPlayer.deadWizardTokens.length, 0);
+  assert.equal(
+    destroyState.eventLog.some(
+      (event) =>
+        event.type === "deadWizardTokenDestroyed" &&
+        event.effectId === "optional_destroy_controlled_dead_wizard_token"
+    ),
+    true
+  );
+});
+
+test("Смерть от холестерина уничтожает контролируемого Дохляка", () => {
+  const state = initializeGame({ rootDir, seed: 276003 });
+  const player = getActivePlayer(state);
+  player.hand = [];
+  const dohlak = createDohlakPermanent(player);
+  player.permanents = [dohlak];
+  state.effectChoiceStrategy = (request) => {
+    const effectId = String(request.effectId);
+    return effectId === "optional_destroy_controlled_dead_wizard_token"
+      ? { choiceId: request.choices[1]?.choiceId ?? "decline" }
+      : undefined;
+  };
+  const card = addCardToHand(state, player, "esw2_dbg__legend_013");
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: card.instanceId }),
+    { ok: true }
+  );
+  assert.equal(player.permanents.includes(dohlak), false);
+  assert.equal(state.common.destroyedPile.includes(dohlak), true);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectCardDestroyed" &&
+        event.targetCardInstanceId === dohlak.instanceId &&
+        event.effectId === "optional_destroy_controlled_dead_wizard_token"
+    ),
+    true
+  );
+});
+
+test("Жница Любви передаёт физический ЖДК выбранному колдуну и применяет его лицо", () => {
+  const state = initializeGame({ rootDir, seed: 276004 });
+  const player = getActivePlayer(state);
+  const target = state.players.find(
+    (candidate) => candidate.playerId !== player.playerId
+  );
+  assert.ok(target);
+  player.hand = [];
+  target.hand = [];
+  const token = createDeadWizardToken(
+    player,
+    "legend006",
+    "esw2_dbg__dead_wizard_token_015"
+  );
+  player.deadWizardTokens = [token];
+  target.chips = 0;
+  state.turn.power = 1;
+  state.effectChoiceStrategy = (request) => {
+    const effectId = String(request.effectId);
+    const choices = request.choices;
+    if (effectId !== "attack_transfer_controlled_dead_wizard_token") {
+      return undefined;
+    }
+    const targetChoice = choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === target.playerId
+    );
+    if (targetChoice !== undefined) return { choiceId: targetChoice.choiceId };
+    const tokenChoice = choices.find(
+      (choice) =>
+        choice.choiceKind === "option" &&
+        choice.choiceId === `token:${token.instanceId}`
+    );
+    return tokenChoice === undefined
+      ? undefined
+      : { choiceId: tokenChoice.choiceId };
+  };
+  const card = addCardToHand(state, player, "esw2_dbg__legend_006");
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: card.instanceId }),
+    { ok: true }
+  );
+  assert.equal(state.turn.power, 5);
+  assert.equal(player.deadWizardTokens.includes(token), false);
+  assert.equal(target.deadWizardTokens.includes(token), true);
+  assert.equal(token.ownerId, target.playerId);
+  assert.equal(target.chips, 1);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "deadWizardTokenFaceResolved" &&
+        event.tokenInstanceId === token.instanceId &&
+        event.playerId === target.playerId
+    ),
+    true
+  );
+});
+
+test("Жница Любви передаёт Дохляка с постоянным контролем", () => {
+  const state = initializeGame({ rootDir, seed: 276005 });
+  const player = getActivePlayer(state);
+  const target = state.players.find(
+    (candidate) => candidate.playerId !== player.playerId
+  );
+  assert.ok(target);
+  player.hand = [];
+  target.hand = [];
+  const dohlak = createDohlakPermanent(player);
+  player.permanents = [dohlak];
+  state.effectChoiceStrategy = (request) => {
+    const effectId = String(request.effectId);
+    const choices = request.choices;
+    if (effectId !== "attack_transfer_controlled_dead_wizard_token") {
+      return undefined;
+    }
+    const playerChoice = choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === target.playerId
+    );
+    if (playerChoice !== undefined) return { choiceId: playerChoice.choiceId };
+    const cardChoice = choices.find(
+      (choice) =>
+        choice.choiceKind === "cardTarget" &&
+        choice.targetCardInstanceIds.includes(dohlak.instanceId)
+    );
+    return cardChoice === undefined
+      ? undefined
+      : { choiceId: cardChoice.choiceId };
+  };
+  const card = addCardToHand(state, player, "esw2_dbg__legend_006");
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: card.instanceId }),
+    { ok: true }
+  );
+  assert.equal(player.permanents.includes(dohlak), false);
+  assert.equal(target.permanents.includes(dohlak), true);
+  assert.equal(dohlak.ownerId, target.playerId);
+});
+
+test("Хахатальер выдаёт ЖДК выбранному врагу, а перенаправление на атакующего игнорирует только перенаправление", () => {
+  const state = initializeGame({ rootDir, seed: 276006 });
+  const player = getActivePlayer(state);
+  const target = state.players.find(
+    (candidate) => candidate.playerId !== player.playerId
+  );
+  assert.ok(target);
+  player.hand = [];
+  target.hand = [];
+  target.deadWizardTokens = [];
+  const defense = addFixtureDefenseCardToHand(state, target, "discardSelf", {
+    redirectAttack: true,
+    branchEffects: [
+      verifiedTestRuntimeEffect({
+        effectId: "draw_cards",
+        timing: "onDefense",
+        amount: 1,
+      }),
+    ],
+  });
+  const drawnCard = target.deck[0];
+  assert.ok(drawnCard);
+  const expectedTokens = state.common.deadWizardTokens.drawStack.slice(0, 2);
+  state.common.deadWizardTokens.drawStack.splice(2);
+  state.effectChoiceStrategy = (request) => {
+    const effectId = String(request.effectId);
+    const choices = request.choices;
+    if (effectId === "attack_gain_dead_wizard_tokens") {
+      const choice = choices.find(
+        (candidate) =>
+          candidate.choiceKind === "playerTarget" &&
+          candidate.choiceId === target.playerId
+      );
+      return choice === undefined ? undefined : { choiceId: choice.choiceId };
+    }
+    if (effectId === "avoid_attack") {
+      return { choiceId: defense.instanceId };
+    }
+    return undefined;
+  };
+  const card = addCardToHand(state, player, "esw2_dbg__legend_027");
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: card.instanceId }),
+    { ok: true }
+  );
+  assert.deepEqual(target.deadWizardTokens, expectedTokens);
+  assert.equal(player.deadWizardTokens.length, 0);
+  assert.equal(target.discard.includes(defense), true);
+  assert.equal(target.hand.includes(drawnCard), true);
+});
+
 function getActivePlayer(state: GameState): PlayerState {
   const player = state.players.find(
     (candidate) => candidate.playerId === state.activePlayerId
@@ -182,20 +432,22 @@ function addCardToHand(
 
 function createDeadWizardToken(
   player: PlayerState,
-  suffix = "default"
+  suffix = "default",
+  definitionId = "esw2_dbg__dead_wizard_token_001"
 ): TokenInstance {
-  return createDeadWizardTokenWithSuffix(player, suffix);
+  return createDeadWizardTokenWithSuffix(player, suffix, definitionId);
 }
 
 function createDeadWizardTokenWithSuffix(
   player: PlayerState,
-  suffix: string
+  suffix: string,
+  definitionId = "esw2_dbg__dead_wizard_token_001"
 ): TokenInstance {
   return {
-    instanceId: markTokenInstanceId(`dwt-interactions-physical-token-${suffix}`),
-    definitionId: markTokenDefinitionId(
-      "esw2_dbg__dead_wizard_token_001"
+    instanceId: markTokenInstanceId(
+      `dwt-interactions-physical-token-${suffix}`
     ),
+    definitionId: markTokenDefinitionId(definitionId),
     ownerId: player.playerId,
   };
 }

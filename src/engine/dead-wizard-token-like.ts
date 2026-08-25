@@ -1,8 +1,25 @@
 import type { CardDefinition } from "./data.js";
 import { getControlledCards } from "./control-ledger.js";
-import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import type {
+  CardInstance,
+  GameState,
+  PlayerState,
+  TokenInstance,
+} from "./setup.js";
 
 export const deadWizardTokenLikeCardTag = "deadWizardTokenLike";
+
+export function getDeadWizardTokenChoiceId(
+  tokenInstanceId: TokenInstance["instanceId"]
+): string {
+  return `token:${tokenInstanceId}`;
+}
+
+export function getDeadWizardTokenLikeCardChoiceId(
+  cardInstanceId: CardInstance["instanceId"]
+): string {
+  return `card:${cardInstanceId}`;
+}
 
 export function isDeadWizardTokenLikeCard(
   definition: CardDefinition | undefined

@@ -204,6 +204,7 @@ test("resource and draw IDs belong to one family module", () => {
   assert.deepEqual(resourceDrawEffectIds, [
     "gain_chips",
     "gain_chips_per_player_with_status",
+    "gain_chips_per_controlled_dead_wizard_token",
     "draw_cards",
   ]);
 });
@@ -211,6 +212,9 @@ test("resource and draw IDs belong to one family module", () => {
 test("remaining Catalog families expose one local ID inventory each", () => {
   assert.deepEqual(combatAttackEffectIds, [
     "attack_damage",
+    "attack_damage_per_controlled_dead_wizard_token",
+    "attack_gain_dead_wizard_tokens",
+    "attack_transfer_controlled_dead_wizard_token",
     "attack_damage_equal_remembered_card_cost",
     "attack_damage_equal_to_controlled_card_cost",
     "attack_destroy_top_legend_deck_then_damage_equal_cost",

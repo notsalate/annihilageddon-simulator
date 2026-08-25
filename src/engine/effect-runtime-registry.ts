@@ -25,13 +25,19 @@ import {
   buildControlledObjectView,
   findCardLocation,
   getControlledOngoingCards,
+  removeDeadWizardToken,
 } from "./control-ledger.js";
 import {
   calculateEffectiveCardCost as calculateEffectiveCardCostCore,
   calculateEffectivePlayerMaxLife as calculateEffectivePlayerMaxLifeCore,
 } from "./effective-values.js";
 import { cardMatchesTypeForPlayer } from "./card-type-runtime.js";
-import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
+import {
+  getControlledDeadWizardTokenCount,
+  getControlledDeadWizardTokenLikeCards,
+  getDeadWizardTokenChoiceId,
+  getDeadWizardTokenLikeCardChoiceId,
+} from "./dead-wizard-token-like.js";
 import {
   allEffectRuntimeModes,
   fixtureEffectTimings,
@@ -407,6 +413,13 @@ export interface EffectRuntimeServices {
   gainDeadWizardToken(
     state: GameState,
     player: PlayerState
+  ): EffectExecutionResult;
+  transferControlledDeadWizardTokenLike(
+    state: GameState,
+    player: PlayerState,
+    targetPlayer: PlayerState,
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext
   ): EffectExecutionResult;
   resolvePlayerControlledAttack(
     intent: PlayerControlledAttackIntent
@@ -1184,6 +1197,140 @@ const addPowerPerControlledDeadWizardTokenHandler: EffectRuntimeHandler<
   },
 };
 
+const addPowerIfNoControlledDeadWizardTokenHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"add_power_if_no_controlled_dead_wizard_token">
+> = {
+  effectId: "add_power_if_no_controlled_dead_wizard_token",
+  execute(state, player, effect, source) {
+    if (getControlledDeadWizardTokenCount(state, player) > 0) {
+      return { ok: true };
+    }
+
+    const powerBefore = state.turn.power;
+    state.turn.power += effect.amount;
+    recordTurnPowerChanged(
+      state,
+      player,
+      source,
+      effect.effectId,
+      powerBefore,
+      state.turn.power
+    );
+    return { ok: true };
+  },
+};
+
+const optionalDestroyControlledDeadWizardTokenHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"optional_destroy_controlled_dead_wizard_token">
+> = {
+  effectId: "optional_destroy_controlled_dead_wizard_token",
+  execute(state, player, effect, source, services) {
+    const cards = getControlledDeadWizardTokenLikeCards(state, player);
+    const choices: EffectChoice[] = [
+      { choiceKind: "option", choiceId: "decline" },
+      ...player.deadWizardTokens.map((token) => ({
+        choiceKind: "option" as const,
+        choiceId: getDeadWizardTokenChoiceId(token.instanceId),
+      })),
+      ...cards.map((card) => ({
+        choiceKind: "cardTarget" as const,
+        choiceId: getDeadWizardTokenLikeCardChoiceId(card.instanceId),
+        cards: [card],
+        amount: 1,
+      })),
+    ];
+    const choice = services.chooseEffectChoice(
+      state,
+      player,
+      source,
+      effect.effectId,
+      choices
+    );
+    if (choice === undefined || choice.choiceId === "decline") {
+      return { ok: true };
+    }
+
+    if (choice.choiceKind === "option") {
+      const tokenInstanceId = choice.choiceId.startsWith("token:")
+        ? choice.choiceId.slice("token:".length)
+        : undefined;
+      if (tokenInstanceId === undefined) {
+        return { ok: false, error: "Invalid dead wizard token choice" };
+      }
+      const tokenBeforeRemoval = player.deadWizardTokens.find(
+        (candidate) => candidate.instanceId === tokenInstanceId
+      );
+      if (tokenBeforeRemoval === undefined) {
+        return {
+          ok: false,
+          error: `Dead wizard token ${tokenInstanceId} disappeared before destruction`,
+        };
+      }
+      const token = removeDeadWizardToken(
+        player,
+        tokenBeforeRemoval.instanceId
+      );
+      if (token === undefined) {
+        return {
+          ok: false,
+          error: `Dead wizard token ${tokenInstanceId} disappeared before destruction`,
+        };
+      }
+      recordGameEvent(state, {
+        type: "deadWizardTokenDestroyed",
+        playerId: player.playerId,
+        tokenInstanceId: token.instanceId,
+        tokenDefinitionId: token.definitionId,
+        effectId: effect.effectId,
+        sourceType: source.sourceType,
+      });
+      return { ok: true };
+    }
+
+    if (choice.choiceKind !== "cardTarget") {
+      return { ok: false, error: "Invalid dead wizard token choice kind" };
+    }
+    const card = cards.find(
+      (candidate) => candidate.instanceId === choice.cards[0]?.instanceId
+    );
+    if (card === undefined) {
+      return {
+        ok: false,
+        error:
+          "Controlled dead wizard token-like card disappeared before destruction",
+      };
+    }
+    const destination = services.getDestroyDestination(state, card);
+    if (!destination.ok) return destination;
+    const moved = services.moveCardToZonePreservingOwner(
+      state,
+      player,
+      card,
+      destination.zone,
+      destination.zoneName,
+      effect.effectId,
+      source
+    );
+    if (!moved) {
+      return {
+        ok: false,
+        error: `Cannot destroy controlled dead wizard token-like card ${card.instanceId}`,
+      };
+    }
+    recordGameEvent(state, {
+      type: "effectCardDestroyed",
+      playerId: player.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      targetCardInstanceId: card.instanceId,
+      targetDefinitionId: card.definitionId,
+      effectId: effect.effectId,
+      sourceType: source.sourceType,
+    });
+    return { ok: true };
+  },
+};
+
 const dealDamageHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"deal_damage">
 > = {
@@ -1954,6 +2101,26 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: addPowerPerControlledDeadWizardTokenHandler,
+  },
+  {
+    effectId: "add_power_if_no_controlled_dead_wizard_token",
+    decoder: bindRuntimeEffectDecoder(
+      "add_power_if_no_controlled_dead_wizard_token"
+    ),
+    supportedTimings: ["onPlay"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card", "wizardProperty"],
+    handler: addPowerIfNoControlledDeadWizardTokenHandler,
+  },
+  {
+    effectId: "optional_destroy_controlled_dead_wizard_token",
+    decoder: bindRuntimeEffectDecoder(
+      "optional_destroy_controlled_dead_wizard_token"
+    ),
+    supportedTimings: ["onPlay"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card", "wizardProperty"],
+    handler: optionalDestroyControlledDeadWizardTokenHandler,
   },
   {
     effectId: "add_power_per_controlled_permanent",

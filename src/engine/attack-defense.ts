@@ -389,6 +389,15 @@ export function resolveDefenseWindow(
     }
   }
 
+  if (
+    redirectsAttack &&
+    attack.kind === "redirectable" &&
+    attack.redirectPolicy === "ignoreOriginalAttacker" &&
+    attack.attackingPlayer.playerId === attack.originalSource.playerId
+  ) {
+    return { ok: true, avoided: false };
+  }
+
   if (redirectsAttack && attack.kind === "redirectable") {
     if (resolveRedirectedAttack === undefined) {
       return rollbackDefenseFailure(

@@ -486,8 +486,7 @@ const resourceDrawEffectDecoders = createResourceDrawEffectDecoders({
   nonEmptyStringArray,
   optionalCondition,
   optionalTiming,
-  optionalTargetSelector:
-    optionalEachPlayerClockwiseFromActiveTargetSelector,
+  optionalTargetSelector: optionalEachPlayerClockwiseFromActiveTargetSelector,
 });
 
 const cardOwnershipChoiceEffectDecoders =
@@ -665,11 +664,29 @@ const runtimeEffectDecoders: {
   add_power_per_controlled_dead_wizard_token: defineDecoder(
     "add_power_per_controlled_dead_wizard_token",
     {
-      effectId: required(
-        literal("add_power_per_controlled_dead_wizard_token")
-      ),
+      effectId: required(literal("add_power_per_controlled_dead_wizard_token")),
       timing: required(literal("onPlay")),
       amountPerDeadWizardToken: required(positiveInteger),
+    }
+  ),
+  add_power_if_no_controlled_dead_wizard_token: defineDecoder(
+    "add_power_if_no_controlled_dead_wizard_token",
+    {
+      effectId: required(
+        literal("add_power_if_no_controlled_dead_wizard_token")
+      ),
+      timing: required(literal("onPlay")),
+      amount: required(positiveInteger),
+    }
+  ),
+  optional_destroy_controlled_dead_wizard_token: defineDecoder(
+    "optional_destroy_controlled_dead_wizard_token",
+    {
+      effectId: required(
+        literal("optional_destroy_controlled_dead_wizard_token")
+      ),
+      timing: required(literal("onPlay")),
+      optional: required(literal(true)),
     }
   ),
   add_power_per_controlled_permanent: defineDecoder(

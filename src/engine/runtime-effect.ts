@@ -226,10 +226,13 @@ export const knownRuntimeEffectIds = [
   "add_power_if_player_has_status",
   "add_power_per_controlled_object",
   "add_power_per_controlled_dead_wizard_token",
+  "add_power_if_no_controlled_dead_wizard_token",
   "add_power_per_controlled_permanent",
   "add_power_per_player_with_status",
   "attack_damage",
   "attack_damage_per_controlled_dead_wizard_token",
+  "attack_gain_dead_wizard_tokens",
+  "attack_transfer_controlled_dead_wizard_token",
   "attack_damage_equal_remembered_card_cost",
   "attack_damage_equal_to_controlled_card_cost",
   "attack_destroy_top_legend_deck_then_damage_equal_cost",
@@ -314,6 +317,7 @@ export const knownRuntimeEffectIds = [
   "ongoing_add_power_per_dead_wizard_token",
   "ongoing_add_power_when_playing_limp_wand",
   "ongoing_first_attack_damage_add_power",
+  "optional_destroy_controlled_dead_wizard_token",
   "ongoing_hand_refill_bonus",
   "suppress_basic_trophy_chip_payout",
   "ongoing_start_turn_optional_gain_limp_wand_to_hand",
@@ -488,6 +492,19 @@ export type AddPowerPerControlledDeadWizardTokenRuntimeEffect = TimedEffect<
   amountPerDeadWizardToken: number;
 };
 
+export type AddPowerIfNoControlledDeadWizardTokenRuntimeEffect = TimedEffect<
+  "add_power_if_no_controlled_dead_wizard_token",
+  "onPlay"
+> &
+  PositiveAmount;
+
+export type OptionalDestroyControlledDeadWizardTokenRuntimeEffect = TimedEffect<
+  "optional_destroy_controlled_dead_wizard_token",
+  "onPlay"
+> & {
+  optional: true;
+};
+
 export type AddPowerPerControlledPermanentRuntimeEffect = TimedEffect<
   "add_power_per_controlled_permanent",
   "onPlay"
@@ -549,6 +566,8 @@ export interface ImmediateEffectPayloadMap
   add_power_if_player_has_status: AddPowerIfPlayerHasStatusRuntimeEffect;
   add_power_per_controlled_object: AddPowerPerControlledObjectRuntimeEffect;
   add_power_per_controlled_dead_wizard_token: AddPowerPerControlledDeadWizardTokenRuntimeEffect;
+  add_power_if_no_controlled_dead_wizard_token: AddPowerIfNoControlledDeadWizardTokenRuntimeEffect;
+  optional_destroy_controlled_dead_wizard_token: OptionalDestroyControlledDeadWizardTokenRuntimeEffect;
   add_power_per_controlled_permanent: AddPowerPerControlledPermanentRuntimeEffect;
   add_power_per_player_with_status: AddPowerPerPlayerWithStatusRuntimeEffect;
   gain_chips_equal_damage_dealt: GainChipsEqualDamageDealtRuntimeEffect;
@@ -571,12 +590,20 @@ export type AttackDamageRuntimeEffect =
     Costed &
     AttackBranches;
 export type AttackDamagePerControlledDeadWizardTokenRuntimeEffect =
-  EffectWithOptionalTiming<
-    "attack_damage_per_controlled_dead_wizard_token"
-  > & {
+  EffectWithOptionalTiming<"attack_damage_per_controlled_dead_wizard_token"> & {
     amountPerDeadWizardToken: number;
     targetSelector: "eachFoe";
   } & AttackBranches;
+export type AttackGainDeadWizardTokensRuntimeEffect =
+  EffectWithOptionalTiming<"attack_gain_dead_wizard_tokens"> & {
+    amount: number;
+    targetSelector: "chosenFoe";
+    redirectPolicy: "ignoreOriginalAttacker";
+  };
+export type AttackTransferControlledDeadWizardTokenRuntimeEffect =
+  EffectWithOptionalTiming<"attack_transfer_controlled_dead_wizard_token"> & {
+    targetSelector: "chosenPlayer";
+  };
 export type AttackDamageEqualRememberedCardCostRuntimeEffect =
   EffectWithOptionalTiming<"attack_damage_equal_remembered_card_cost"> &
     Targetable &
@@ -691,6 +718,8 @@ export interface PreventDefenseAgainstOwnedWandAttacksRuntimeEffect extends Time
 export interface PlayerControlledAttackEffectPayloadMap {
   attack_damage: AttackDamageRuntimeEffect;
   attack_damage_per_controlled_dead_wizard_token: AttackDamagePerControlledDeadWizardTokenRuntimeEffect;
+  attack_gain_dead_wizard_tokens: AttackGainDeadWizardTokensRuntimeEffect;
+  attack_transfer_controlled_dead_wizard_token: AttackTransferControlledDeadWizardTokenRuntimeEffect;
   attack_damage_equal_remembered_card_cost: AttackDamageEqualRememberedCardCostRuntimeEffect;
   attack_damage_equal_to_controlled_card_cost: AttackDamageEqualToControlledCardCostRuntimeEffect;
   attack_destroy_top_legend_deck_then_damage_equal_cost: AttackDestroyTopLegendDeckThenDamageEqualCostRuntimeEffect;

@@ -115,6 +115,7 @@ export type DefenseAttackContext =
       source: EffectSourceContext;
       originalSource: EffectSourceContext;
       defenseUsage: AttackDefenseUsage;
+      redirectPolicy?: "ignoreOriginalAttacker";
     }
   | {
       kind: "nonredirectable";
@@ -157,6 +158,7 @@ export interface PlayerControlledAttackIntent {
   readonly source: EffectSourceContext;
   readonly effectId: RuntimeEffectId;
   readonly unavoidable: boolean;
+  readonly redirectPolicy?: "ignoreOriginalAttacker";
   readonly attackProfile?: PlayerControlledAttackProfile;
   readonly targetPlan: PlayerControlledAttackTargetPlan;
   readonly impact: PlayerControlledAttackImpact;
@@ -503,6 +505,9 @@ function resolvePlayerControlledAttackTarget(
           source: current.source,
           originalSource: context.originalSource,
           defenseUsage: context.defenseUsage,
+          ...(intent.redirectPolicy === undefined
+            ? {}
+            : { redirectPolicy: intent.redirectPolicy }),
         },
         (redirectedIntent) =>
           resolvePlayerControlledAttackTarget(intent, context, adapters, {
@@ -601,6 +606,9 @@ function resolvePlayerControlledEffectsAttackTarget(
           source: current.source,
           originalSource: context.originalSource,
           defenseUsage: context.defenseUsage,
+          ...(intent.redirectPolicy === undefined
+            ? {}
+            : { redirectPolicy: intent.redirectPolicy }),
         },
         (redirectedIntent) =>
           resolvePlayerControlledAttackTarget(intent, context, adapters, {
