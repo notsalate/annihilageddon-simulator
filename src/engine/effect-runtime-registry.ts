@@ -310,12 +310,6 @@ export interface EffectRuntimeServices {
     choice: TargetChoice,
     effectId: RuntimeEffectId
   ): { ok: true; card: CardInstance } | { ok: false; error: string };
-  validateGainedCardEffects(
-    state: GameState,
-    player: PlayerState,
-    definition: CardDefinition,
-    card: CardInstance
-  ): EffectExecutionResult;
   moveGainedCardToPlayerDestination(
     state: GameState,
     player: PlayerState,

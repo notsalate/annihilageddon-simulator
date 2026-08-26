@@ -60,6 +60,36 @@ export function refillDeckFromDiscard<T>(
   return true;
 }
 
+/** Returns the next deck card without changing the deck, discard, or RNG. */
+export function peekDeckCard<T>(
+  deck: readonly T[],
+  discard: readonly T[],
+  rng: RandomSource
+): T | undefined {
+  if (deck.length > 0) {
+    return deck[0];
+  }
+  if (discard.length === 0) {
+    return undefined;
+  }
+
+  const previewDeck = [...discard];
+  const previewRng = rng.fork();
+  for (let index = previewDeck.length - 1; index > 0; index -= 1) {
+    const swapIndex = previewRng.nextInt(index + 1);
+    const item = previewDeck[index];
+    const swapItem = previewDeck[swapIndex];
+    if (item === undefined || swapItem === undefined) {
+      throw new Error("Unexpected sparse array during peek");
+    }
+
+    previewDeck[index] = swapItem;
+    previewDeck[swapIndex] = item;
+  }
+
+  return previewDeck[0];
+}
+
 export function drawDeckCard<T>(
   deck: T[],
   discard: T[],

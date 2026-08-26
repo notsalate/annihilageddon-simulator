@@ -50,6 +50,7 @@ import { calculateEffectivePlayerMaxLife } from "./effective-value-runtime.js";
 import {
   clearFaceUpState,
   drawDeckCard,
+  peekDeckCard,
   refillDeckFromDiscard,
 } from "./deck-lifecycle.js";
 import {
@@ -244,6 +245,126 @@ export function validateGainedCardEffects(
     );
     if (!result.ok) {
       return result;
+    }
+  }
+
+  for (const controlledCard of getControlledCards(state, player)) {
+    const controlledDefinition = state.cardDefinitions.get(
+      controlledCard.definitionId
+    );
+    if (
+      controlledDefinition === undefined ||
+      !controlledDefinition.engine.playableInV0
+    ) {
+      continue;
+    }
+
+    const result = validateEffectsAtTiming(
+      state,
+      player,
+      controlledDefinition.engine.effects,
+      "onGainCard",
+      {
+        sourceType: "card",
+        runtimeMode: state.runtimeMode,
+        playerId: player.playerId,
+        cardInstanceId: controlledCard.instanceId,
+        definitionId: controlledDefinition.cardId,
+      },
+      (effect) =>
+        cardTriggerMatches(effect, definition, state, player, card)
+          ? { status: "resolved", result: undefined }
+          : { status: "notApplicable" }
+    );
+    if (!result.ok) {
+      return result;
+    }
+  }
+
+  return { ok: true };
+}
+
+export function validateRevealTopCardGainEffects(
+  state: GameState,
+  player: PlayerState,
+  playedCard: CardInstance,
+  playedDefinition: CardDefinition
+): EffectExecutionResult {
+  const source: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: playedCard.instanceId,
+    definitionId: playedDefinition.cardId,
+  };
+
+  for (const effect of playedDefinition.engine.effects) {
+    const revealResult = evaluateRuntimeEffectAtTiming(
+      requireVerifiedRuntimeEffect(effect),
+      source,
+      "onPlay",
+      (decodedEffect) => {
+        if (
+          decodedEffect.effectId !== "reveal_top_card" ||
+          decodedEffect.optionalTakeToHand !== true ||
+          !effectConditionMatches(
+            state,
+            player,
+            decodedEffect,
+            playedCard.instanceId
+          )
+        ) {
+          return { status: "notApplicable" };
+        }
+        return { status: "resolved", result: decodedEffect };
+      }
+    );
+    if (revealResult.status === "error") {
+      return { ok: false, error: revealResult.error };
+    }
+    if (revealResult.status !== "resolved") {
+      continue;
+    }
+
+    const card =
+      revealResult.result.source === "mainDeck"
+        ? state.common.mainDeck[0]
+        : peekDeckCard(player.deck, player.discard, state.rng);
+    if (card === undefined) {
+      continue;
+    }
+
+    const definition = state.cardDefinitions.get(card.definitionId);
+    if (definition === undefined) {
+      return {
+        ok: false,
+        error: `Missing revealed card definition ${card.definitionId}`,
+      };
+    }
+    const canTake =
+      revealResult.result.excludeCardKind === undefined ||
+      definition.engine.cardKind !== revealResult.result.excludeCardKind;
+    if (!canTake) {
+      continue;
+    }
+
+    const validationPlayer: PlayerState = {
+      ...player,
+      hand: [
+        ...player.hand.filter(
+          (candidate) => candidate.instanceId !== playedCard.instanceId
+        ),
+        card,
+      ],
+    };
+    const gainValidation = validateGainedCardEffects(
+      state,
+      validationPlayer,
+      definition,
+      card
+    );
+    if (!gainValidation.ok) {
+      return gainValidation;
     }
   }
 
@@ -1771,7 +1892,6 @@ function getPlayersInActiveOrder(state: GameState): PlayerState[] {
 const effectRuntimeServices: EffectRuntimeServices = {
   resolveTargetChoice,
   requireCardChoice,
-  validateGainedCardEffects,
   moveGainedCardToPlayerDestination,
   moveCardToPlayerZone,
   moveCardToZonePreservingOwner,

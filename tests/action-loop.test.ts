@@ -7718,12 +7718,15 @@ test("reveal_top_card validates gain hooks before taking the revealed card", () 
   const gainedCards = scenario.state.turn.gainedCards;
   const eventLog = scenario.state.eventLog;
 
-  assert.throws(
-    () => play(scenario, revealCard),
-    /timing.*onGain|does not support timing/
-  );
+  const result = play(scenario, revealCard);
+  assert.equal(result.ok, false);
+  if (result.ok) {
+    assert.fail("Expected reveal_top_card gain preflight to fail");
+  }
+  assert.match(result.error, /timing.*onGain|does not support timing/);
 
   assert.equal(choiceRequests, 0);
+  assert.equal(player.hand.includes(revealCard), true);
   assert.equal(player.deck[0], invalidGainCard);
   assert.equal(player.hand.includes(invalidGainCard), false);
   assert.equal(scenario.state.turn.gainedCards, gainedCards);
@@ -7737,6 +7740,56 @@ test("reveal_top_card validates gain hooks before taking the revealed card", () 
     ),
     false
   );
+  assert.equal(scenario.state.rng.next(), expectedNextRandom);
+});
+
+test("reveal_top_card preflight does not shuffle an empty deck on gain failure", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 337005,
+  });
+  const player = scenario.activePlayer;
+  player.hand.splice(0);
+  player.deck.splice(0);
+  player.discard.splice(0);
+  const invalidGainCard = givenRuntimeCard(scenario, {
+    zone: "discard",
+    effects: [
+      {
+        effectId: "discard_card",
+        timing: "onGain",
+        targetSelector: "activePlayerHandCard",
+        emptyChoice: "fail",
+      },
+    ],
+  });
+  player.discard.splice(player.discard.indexOf(invalidGainCard), 1);
+  player.discard.push(invalidGainCard);
+  const revealCard = givenRuntimeCard(scenario, {
+    effects: [
+      {
+        effectId: "reveal_top_card",
+        timing: "onPlay",
+        source: "activePlayerDeck",
+        optionalTakeToHand: true,
+      },
+    ],
+  });
+  const expectedNextRandom = scenario.state.rng.fork().next();
+  const discard = player.discard;
+  const deck = player.deck;
+  const eventLog = scenario.state.eventLog;
+
+  const result = play(scenario, revealCard);
+
+  assert.equal(result.ok, false);
+  assert.equal(player.hand.includes(revealCard), true);
+  assert.equal(player.deck, deck);
+  assert.equal(player.discard, discard);
+  assert.deepEqual(player.discard, [invalidGainCard]);
+  assert.deepEqual(player.deck, []);
+  assert.equal(scenario.state.eventLog, eventLog);
   assert.equal(scenario.state.rng.next(), expectedNextRandom);
 });
 

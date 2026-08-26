@@ -1319,17 +1319,6 @@ const revealTopCardHandler: EffectRuntimeHandler<
       canTake =
         effect.excludeCardKind === undefined ||
         definition.engine.cardKind !== effect.excludeCardKind;
-      if (canTake) {
-        const gainValidation = services.validateGainedCardEffects(
-          state,
-          player,
-          definition,
-          card
-        );
-        if (!gainValidation.ok) {
-          return gainValidation;
-        }
-      }
     }
     recordGameEvent(state, {
       type: "effectCardRevealed",
