@@ -171,6 +171,16 @@ test("resource and draw effects use the interactive Catalog timing policy", () =
       payload: { effectId: "draw_cards", timing: "onDefense", amount: 1 },
       sourceKind: "card",
     },
+    {
+      effectId: "draw_cards_for_each_player",
+      payload: {
+        effectId: "draw_cards_for_each_player",
+        timing: "onPlay",
+        amount: 2,
+        targetSelector: "eachPlayerClockwiseFromActive",
+      },
+      sourceKind: "card",
+    },
   ] as const;
 
   for (const { effectId, payload, sourceKind } of validCases) {
@@ -206,6 +216,7 @@ test("resource and draw IDs belong to one family module", () => {
     "gain_chips_per_player_with_status",
     "gain_chips_per_controlled_dead_wizard_token",
     "draw_cards",
+    "draw_cards_for_each_player",
     "draw_cards_for_self_and_chosen_foe",
   ]);
 });
@@ -221,6 +232,7 @@ test("remaining Catalog families expose one local ID inventory each", () => {
     "attack_damage_equal_to_controlled_card_cost",
     "attack_destroy_top_legend_deck_then_damage_equal_cost",
     "attack_discard_cards",
+    "attack_damage_equal_random_discarded_hand_cost",
     "attack_reveal_and_play_foe_deck_card",
     "attack_gain_limp_wand",
     "attack_gain_status",
@@ -597,6 +609,18 @@ test("attack, defense and replacement effects use exact family policies", () => 
         timing: "onPlay",
         amount: 2,
         targetSelector: "chosenPlayer",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "attack_damage_equal_random_discarded_hand_cost",
+      payload: {
+        effectId: "attack_damage_equal_random_discarded_hand_cost",
+        timing: "onPlay",
+        targetSelector: "eachFoe",
+        discardAmount: 2,
+        rng: "seeded",
+        unavoidable: true,
       },
       sourceKind: "card",
     },

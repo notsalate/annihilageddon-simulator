@@ -27,6 +27,7 @@ export type {
   GainChipsRuntimeEffect,
   GainChipsPerPlayerWithStatusRuntimeEffect,
   DrawCardsRuntimeEffect,
+  DrawCardsForEachPlayerRuntimeEffect,
   DrawCardsForSelfAndChosenFoeRuntimeEffect,
   GainChipsPerControlledDeadWizardTokenRuntimeEffect,
 } from "./effect-runtime-resources-draw.js";
@@ -295,6 +296,7 @@ export const knownRuntimeEffectIds = [
   "attack_damage_equal_to_controlled_card_cost",
   "attack_destroy_top_legend_deck_then_damage_equal_cost",
   "attack_discard_cards",
+  "attack_damage_equal_random_discarded_hand_cost",
   "attack_reveal_and_play_foe_deck_card",
   "attack_gain_limp_wand",
   "attack_gain_status",
@@ -342,6 +344,7 @@ export const knownRuntimeEffectIds = [
   "discard_hand_then_draw_cards",
   "discard_self",
   "draw_cards",
+  "draw_cards_for_each_player",
   "draw_cards_for_self_and_chosen_foe",
   "endgame_fixed_token_victory_points",
   "endgame_remove_matching_dead_wizard_tokens",
@@ -709,6 +712,13 @@ export type AttackDiscardCardsRuntimeEffect =
       chooser: "target";
       sourceZone: "hand";
     };
+export type AttackDamageEqualRandomDiscardedHandCostRuntimeEffect =
+  EffectWithOptionalTiming<"attack_damage_equal_random_discarded_hand_cost"> & {
+    targetSelector: "eachFoe";
+    discardAmount: number;
+    rng: "seeded";
+    unavoidable: true;
+  };
 export type AttackRevealAndPlayFoeDeckCardRuntimeEffect =
   EffectWithOptionalTiming<"attack_reveal_and_play_foe_deck_card"> & {
     amount: number;
@@ -832,6 +842,7 @@ export interface PlayerControlledAttackEffectPayloadMap {
   attack_damage_equal_to_controlled_card_cost: AttackDamageEqualToControlledCardCostRuntimeEffect;
   attack_destroy_top_legend_deck_then_damage_equal_cost: AttackDestroyTopLegendDeckThenDamageEqualCostRuntimeEffect;
   attack_discard_cards: AttackDiscardCardsRuntimeEffect;
+  attack_damage_equal_random_discarded_hand_cost: AttackDamageEqualRandomDiscardedHandCostRuntimeEffect;
   attack_reveal_and_play_foe_deck_card: AttackRevealAndPlayFoeDeckCardRuntimeEffect;
   attack_gain_limp_wand: AttackGainLimpWandRuntimeEffect;
   attack_gain_status: AttackGainStatusRuntimeEffect;

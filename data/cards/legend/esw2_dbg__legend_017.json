@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_017",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_017.json",
+    "image": "assets/cards/legend/spell/Легенда-Заклинание. Мальчишник в Р'льехе..png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_017.md"
+  },
+  "visible": {
+    "nameRu": "Мальчишник в Р'льехе",
+    "cost": 11,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "Каждый колдун берёт 2 карты.\nНеизбежная атака: каждый враг сбрасывает 2 случайные карты с руки и получает столько урона, какова их суммарная стоимость.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "cost": 11,
+    "victoryPoints": 4,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "draw_cards_for_each_player",
+        "timing": "onPlay",
+        "amount": 2,
+        "targetSelector": "eachPlayerClockwiseFromActive"
+      },
+      {
+        "effectId": "attack_damage_equal_random_discarded_hand_cost",
+        "timing": "onPlay",
+        "targetSelector": "eachFoe",
+        "discardAmount": 2,
+        "rng": "seeded",
+        "unavoidable": true
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

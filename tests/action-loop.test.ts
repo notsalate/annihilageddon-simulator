@@ -1833,6 +1833,287 @@ test("#293 current runtime cards execute their mapped global card-cost attacks",
   );
 });
 
+test("#294 legend_017 draws every wizard, randomly discards two cards, and attacks without defense", () => {
+  const createScenario = (seed: number) => {
+    const scenario = createGameScenario({
+      rootDir,
+      seed,
+      playerCount: 3,
+    });
+    const state = scenario.state;
+    state.activePlayerId = markPlayerId("player-1");
+    state.turn.power = 100;
+    const orderedPlayers = getPlayersInActiveOrder(state);
+    assert.equal(orderedPlayers.length, 3);
+
+    for (const player of orderedPlayers) {
+      player.hand = [];
+      player.deck = [];
+      player.discard = [];
+      player.permanents = [];
+      player.playedThisTurn = [];
+      player.wizardProperties = [];
+      player.statuses = [];
+      player.life.current = 20;
+    }
+
+    const drawDefinition = createFixtureCardDefinition(
+      "fixture-294-draw-card",
+      []
+    );
+    const lowCostDefinition = createFixtureCardDefinition(
+      "fixture-294-low-cost-card",
+      []
+    );
+    lowCostDefinition.engine.cost = 3;
+    lowCostDefinition.visible.cost = 3;
+    const highCostDefinition = createFixtureCardDefinition(
+      "fixture-294-high-cost-card",
+      []
+    );
+    highCostDefinition.engine.cost = 8;
+    highCostDefinition.visible.cost = 8;
+    state.cardDefinitions = new Map([
+      ...state.cardDefinitions,
+      [drawDefinition.cardId, drawDefinition],
+      [lowCostDefinition.cardId, lowCostDefinition],
+      [highCostDefinition.cardId, highCostDefinition],
+    ]);
+
+    const [activePlayer, firstFoe, secondFoe] = orderedPlayers;
+    assert.ok(activePlayer);
+    assert.ok(firstFoe);
+    assert.ok(secondFoe);
+    for (const player of orderedPlayers) {
+      player.deck.push(
+        ...createFixtureCardInstances(drawDefinition.cardId, player.playerId, 2)
+      );
+    }
+    firstFoe.hand.push(
+      ...createFixtureCardInstances(
+        lowCostDefinition.cardId,
+        firstFoe.playerId,
+        2
+      ),
+      ...createFixtureCardInstances(
+        highCostDefinition.cardId,
+        firstFoe.playerId,
+        1
+      )
+    );
+    secondFoe.hand.push(
+      ...createFixtureCardInstances(
+        highCostDefinition.cardId,
+        secondFoe.playerId,
+        2
+      ),
+      ...createFixtureCardInstances(
+        lowCostDefinition.cardId,
+        secondFoe.playerId,
+        1
+      )
+    );
+    addFixtureDefenseCardToHand(state, firstFoe, "discardSelf");
+
+    const attackCard = givenRuntimeCard(scenario, {
+      definitionId: "esw2_dbg__legend_017",
+    });
+    state.effectChoiceStrategy = (request) => {
+      assert.notEqual(
+        request.effectId,
+        "avoid_attack",
+        "an unavoidable attack must not open a defense choice"
+      );
+      return undefined;
+    };
+
+    return { scenario, attackCard, orderedPlayers };
+  };
+
+  const first = createScenario(294001);
+  assert.equal(play(first.scenario, first.attackCard).ok, true);
+  const second = createScenario(294001);
+  assert.equal(play(second.scenario, second.attackCard).ok, true);
+
+  const firstState = first.scenario.state;
+  const secondState = second.scenario.state;
+  const firstDrawEvents = firstState.eventLog.filter(
+    (event) =>
+      event.type === "effectDrawCardsApplied" &&
+      event.definitionId === "esw2_dbg__legend_017"
+  );
+  assert.deepEqual(
+    firstDrawEvents.map((event) => [event.playerId, event.amount]),
+    first.orderedPlayers.map((player) => [player.playerId, 2])
+  );
+
+  const firstDiscardEvents = firstState.eventLog.filter(
+    (event) =>
+      event.type === "effectCardDiscarded" &&
+      event.effectId === "attack_damage_equal_random_discarded_hand_cost" &&
+      event.cardInstanceId === first.attackCard.instanceId
+  );
+  assert.deepEqual(
+    firstDiscardEvents.map((event) => event.playerId),
+    first.orderedPlayers
+      .slice(1)
+      .flatMap((player) => [player.playerId, player.playerId])
+  );
+
+  const expectedDamageByPlayer = new Map<string, number>();
+  for (const event of firstDiscardEvents) {
+    assert.ok(event.playerId);
+    assert.ok(event.targetDefinitionId);
+    const definition = firstState.cardDefinitions.get(event.targetDefinitionId);
+    assert.ok(definition);
+    expectedDamageByPlayer.set(
+      event.playerId,
+      (expectedDamageByPlayer.get(event.playerId) ?? 0) + definition.engine.cost
+    );
+  }
+  const firstAttackEvents = firstState.eventLog.filter(
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.cardInstanceId === first.attackCard.instanceId
+  );
+  assert.deepEqual(
+    firstAttackEvents.map((event) => event.targetPlayerId),
+    first.orderedPlayers.slice(1).map((player) => player.playerId)
+  );
+  assert.deepEqual(
+    firstAttackEvents.map((event) => event.amount),
+    first.orderedPlayers
+      .slice(1)
+      .map((player) => expectedDamageByPlayer.get(player.playerId) ?? 0)
+  );
+  assert.equal(
+    firstState.eventLog.some(
+      (event) =>
+        event.type === "defenseChoiceSelected" &&
+        event.cardInstanceId === first.attackCard.instanceId
+    ),
+    false
+  );
+
+  const snapshot = (state: GameState, source: CardInstance) => ({
+    discarded: state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectCardDiscarded" &&
+          event.effectId === "attack_damage_equal_random_discarded_hand_cost" &&
+          event.cardInstanceId === source.instanceId
+      )
+      .map((event) => [event.playerId, event.targetCardInstanceId]),
+    attacks: state.eventLog
+      .filter(
+        (event) =>
+          event.type === "attackTargetStarted" &&
+          event.cardInstanceId === source.instanceId
+      )
+      .map((event) => [event.targetPlayerId, event.amount]),
+  });
+  assert.deepEqual(
+    snapshot(firstState, first.attackCard),
+    snapshot(secondState, second.attackCard)
+  );
+});
+
+test("#294 legend_017 handles empty and incomplete hands and can kill a foe", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 294002,
+    playerCount: 2,
+  });
+  const state = scenario.state;
+  state.activePlayerId = markPlayerId("player-1");
+  state.turn.power = 100;
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, foe] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(foe);
+  for (const player of orderedPlayers) {
+    player.hand = [];
+    player.deck = [];
+    player.discard = [];
+    player.permanents = [];
+    player.playedThisTurn = [];
+    player.wizardProperties = [];
+    player.statuses = [];
+  }
+  activePlayer.life.current = 20;
+  foe.life.current = 3;
+
+  const drawDefinition = createFixtureCardDefinition(
+    "fixture-294-incomplete-draw-card",
+    []
+  );
+  const lethalDefinition = createFixtureCardDefinition(
+    "fixture-294-lethal-discard-card",
+    []
+  );
+  lethalDefinition.engine.cost = 10;
+  lethalDefinition.visible.cost = 10;
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [drawDefinition.cardId, drawDefinition],
+    [lethalDefinition.cardId, lethalDefinition],
+  ]);
+  activePlayer.deck.push(
+    ...createFixtureCardInstances(
+      drawDefinition.cardId,
+      activePlayer.playerId,
+      2
+    )
+  );
+  foe.hand.push(
+    ...createFixtureCardInstances(lethalDefinition.cardId, foe.playerId, 1)
+  );
+  const attackCard = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__legend_017",
+  });
+  state.effectChoiceStrategy = (request) => {
+    assert.notEqual(request.effectId, "avoid_attack");
+    return undefined;
+  };
+
+  const result = play(scenario, attackCard);
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectDrawCardsApplied" &&
+          event.definitionId === "esw2_dbg__legend_017"
+      )
+      .map((event) => [event.playerId, event.amount]),
+    [
+      [activePlayer.playerId, 2],
+      [foe.playerId, 0],
+    ]
+  );
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "effectCardDiscarded" &&
+        event.effectId === "attack_damage_equal_random_discarded_hand_cost"
+    ).length,
+    1
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) => event.type === "playerDied" && event.playerId === foe.playerId
+    )
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "defenseChoiceSelected" &&
+        event.cardInstanceId === attackCard.instanceId
+    ),
+    false
+  );
+});
+
 test("#287 main_024 can defend by discarding itself and drawing one card", () => {
   const state = initializeGame({ rootDir, seed: 287003 });
   const attacker = mustGetPlayer(state, markPlayerId("player-1"));

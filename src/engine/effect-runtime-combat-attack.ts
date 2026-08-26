@@ -56,6 +56,7 @@ export type CombatAttackEffectId =
   | "attack_damage_equal_to_controlled_card_cost"
   | "attack_destroy_top_legend_deck_then_damage_equal_cost"
   | "attack_discard_cards"
+  | "attack_damage_equal_random_discarded_hand_cost"
   | "attack_reveal_and_play_foe_deck_card"
   | "attack_gain_limp_wand"
   | "attack_gain_status"
@@ -77,6 +78,7 @@ export const combatAttackEffectIds = [
   "attack_damage_equal_to_controlled_card_cost",
   "attack_destroy_top_legend_deck_then_damage_equal_cost",
   "attack_discard_cards",
+  "attack_damage_equal_random_discarded_hand_cost",
   "attack_reveal_and_play_foe_deck_card",
   "attack_gain_limp_wand",
   "attack_gain_status",
@@ -284,6 +286,19 @@ export function createCombatAttackEffectDecoders(
       chooser: required(literal("target")),
       sourceZone: required(literal("hand")),
     }),
+    attack_damage_equal_random_discarded_hand_cost: defineDecoder(
+      "attack_damage_equal_random_discarded_hand_cost",
+      {
+        effectId: required(
+          literal("attack_damage_equal_random_discarded_hand_cost")
+        ),
+        timing: optionalTiming,
+        targetSelector: required(literal("eachFoe")),
+        discardAmount: required(positiveInteger),
+        rng: required(literal("seeded")),
+        unavoidable: required(literal(true)),
+      }
+    ),
     attack_reveal_and_play_foe_deck_card: defineDecoder(
       "attack_reveal_and_play_foe_deck_card",
       {
@@ -894,6 +909,145 @@ function attackDiscardCardsHandler(
         services,
         collectAttackReplacementProfile
       );
+    },
+  };
+}
+
+type RandomDiscardDamagePlan = {
+  cards: readonly CardInstance[];
+  amount: number;
+};
+
+function createAttackDamageEqualRandomDiscardedHandCostHandler(
+  collectAttackReplacementProfile: AttackReplacementCollector,
+  calculateEffectiveCardCost: CombatAttackCatalogTools["calculateEffectiveCardCost"]
+): EffectRuntimeHandler<
+  RuntimeEffectForId<"attack_damage_equal_random_discarded_hand_cost">
+> {
+  return {
+    effectId: "attack_damage_equal_random_discarded_hand_cost",
+    execute(state, player, effect, source, services) {
+      const opponents = services.getOpponentsInSeatingOrder(state, player);
+      const plans = new Map<PlayerState["playerId"], RandomDiscardDamagePlan>();
+
+      for (const opponent of opponents) {
+        const available = [...opponent.hand];
+        const selectedCards: CardInstance[] = [];
+        let amount = 0;
+        while (selectedCards.length < effect.discardAmount) {
+          if (available.length === 0) break;
+          const selectedIndex = state.rng.nextInt(available.length);
+          const [card] = available.splice(selectedIndex, 1);
+          if (card === undefined) {
+            return {
+              ok: false,
+              error: "Seeded hand discard selected a missing card",
+            };
+          }
+          const definition = state.cardDefinitions.get(card.definitionId);
+          if (definition === undefined) {
+            return {
+              ok: false,
+              error: `Missing definition for randomly discarded card ${card.definitionId}`,
+            };
+          }
+          selectedCards.push(card);
+          amount += calculateEffectiveCardCost(
+            state,
+            opponent.playerId,
+            definition,
+            card
+          );
+        }
+        plans.set(opponent.playerId, { cards: selectedCards, amount });
+      }
+
+      const attackProfileResult = collectAttackReplacementProfile(
+        state,
+        player,
+        source
+      );
+      if (attackProfileResult.status !== "resolved") {
+        return {
+          ok: false,
+          error:
+            attackProfileResult.status === "error"
+              ? attackProfileResult.error
+              : "Attack replacement profile was not applicable",
+        };
+      }
+      const attackProfile = {
+        ...attackProfileResult.result,
+        unavoidable: true,
+      } as const;
+
+      return services.resolvePlayerControlledAttack({
+        state,
+        attackingPlayer: player,
+        source,
+        effectId: effect.effectId,
+        unavoidable: true,
+        attackProfile,
+        targetPlan: { kind: "orderedPlayers", players: opponents },
+        impact: {
+          kind: "damage",
+          baseAmount: 0,
+          baseAmountForTarget: (_state, _attackingPlayer, targetPlayer) =>
+            plans.get(targetPlayer.playerId)?.amount ?? 0,
+          sourceOwnerModifierAmount: attackProfile.damageBonus,
+          onDamageDealt: [],
+          onAvoided: [],
+          onKill: [],
+          beforeDamage(
+            stateBeforeDamage,
+            _attackingPlayer,
+            targetPlayer,
+            attackSource
+          ) {
+            const plan = plans.get(targetPlayer.playerId);
+            if (plan === undefined) {
+              return {
+                ok: false,
+                error: `Missing random discard plan for ${targetPlayer.playerId}`,
+              };
+            }
+            if (plan.cards.some((card) => !targetPlayer.hand.includes(card))) {
+              return {
+                ok: false,
+                error: `Random discard plan changed before attacking ${targetPlayer.playerId}`,
+              };
+            }
+            for (const card of plan.cards) {
+              const moved = services.moveCardToPlayerZone(
+                stateBeforeDamage,
+                card,
+                targetPlayer,
+                targetPlayer.discard,
+                `${targetPlayer.playerId}.discard`,
+                effect.effectId,
+                attackSource
+              );
+              if (!moved) {
+                return {
+                  ok: false,
+                  error: `Cannot move randomly discarded card ${card.instanceId}`,
+                };
+              }
+              recordGameEvent(stateBeforeDamage, {
+                type: "effectCardDiscarded",
+                playerId: targetPlayer.playerId,
+                cardInstanceId: attackSource.cardInstanceId,
+                definitionId: attackSource.definitionId,
+                targetCardInstanceId: card.instanceId,
+                targetDefinitionId: card.definitionId,
+                effectId: effect.effectId,
+                sourceType: attackSource.sourceType,
+              });
+            }
+            return { ok: true };
+          },
+        },
+      });
     },
   };
 }
@@ -1815,6 +1969,11 @@ export function createCombatAttackEffectDefinitions(
       );
     },
   };
+  const attackDamageEqualRandomDiscardedHandCostHandler =
+    createAttackDamageEqualRandomDiscardedHandCostHandler(
+      collectAttackReplacementProfile,
+      tools.calculateEffectiveCardCost
+    );
 
   return [
     {
@@ -1900,6 +2059,16 @@ export function createCombatAttackEffectDefinitions(
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
       handler: attackDiscardCardsHandler(collectAttackReplacementProfile),
+    },
+    {
+      effectId: "attack_damage_equal_random_discarded_hand_cost",
+      decoder: bindRuntimeEffectDecoder(
+        "attack_damage_equal_random_discarded_hand_cost"
+      ),
+      supportedTimings: ["onPlay"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: attackDamageEqualRandomDiscardedHandCostHandler,
     },
     {
       effectId: "attack_reveal_and_play_foe_deck_card",
