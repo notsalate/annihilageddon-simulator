@@ -2097,18 +2097,30 @@ const mayhemEachPlayerDiscardHalfControlledPermanentsHandler: EffectRuntimeHandl
             };
           }
 
-          for (const card of choice.cards) {
-            const result = discardControlledPermanent(
-              state,
-              targetPlayer,
-              card,
-              effect.effectId,
-              source,
-              services
-            );
-            if (!result.ok) return result;
-          }
-          return { ok: true };
+          const mutationResult = services.runControlledPowerMutation(
+            state,
+            targetPlayer.playerId,
+            () => {
+              for (const card of choice.cards) {
+                const result = discardControlledPermanent(
+                  state,
+                  targetPlayer,
+                  card,
+                  effect.effectId,
+                  source,
+                  services
+                );
+                if (!result.ok) return result;
+              }
+              return { ok: true } as const;
+            },
+            (result) => result.ok
+          );
+          if (!mutationResult.ok) return mutationResult;
+          if (!mutationResult.value.ok) return mutationResult.value;
+          return mutationResult.gameEnd === undefined
+            ? { ok: true }
+            : { ok: true, gameEnd: mutationResult.gameEnd };
         },
       }
     );

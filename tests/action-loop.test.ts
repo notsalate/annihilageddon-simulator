@@ -2266,10 +2266,18 @@ test("#295 main_069 preserves ownership and releases temporary control", () => {
     player: owner,
     zone: "playedThisTurn",
     cardId: "fixture-295-temporary-permanent",
-    effects: [],
+    effects: [
+      {
+        effectId: "ongoing_add_power",
+        timing: "whileControlled",
+        amount: 5,
+      },
+    ],
     isOngoing: true,
   });
   givenTemporaryControl(scenario, temporarilyControlled, activePlayer);
+  state.turn.power = 5;
+  state.turn.controlledPowerBonus = 5;
   const source = givenRuntimeCard(scenario, {
     player: activePlayer,
     zone: "playedThisTurn",
@@ -2311,6 +2319,8 @@ test("#295 main_069 preserves ownership and releases temporary control", () => {
     false
   );
   assert.equal(temporarilyControlled.ownerId, owner.playerId);
+  assert.equal(state.turn.power, 0);
+  assert.equal(state.turn.controlledPowerBonus, 0);
   assert.equal(
     state.turn.temporaryCardControls.some(
       (control) => control.cardInstanceId === temporarilyControlled.instanceId
