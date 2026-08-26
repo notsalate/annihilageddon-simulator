@@ -62,6 +62,7 @@ export type CombatAttackEffectId =
   | "activation_attack_damage_per_controlled_card_type"
   | "conditional_activation_attack_damage"
   | "directional_chain_attack"
+  | "distributed_attack_damage"
   | "multi_target_attack"
   | "optional_spend_chip_attack_damage";
 
@@ -81,6 +82,7 @@ export const combatAttackEffectIds = [
   "activation_attack_damage_per_controlled_card_type",
   "conditional_activation_attack_damage",
   "directional_chain_attack",
+  "distributed_attack_damage",
   "multi_target_attack",
   "optional_spend_chip_attack_damage",
 ] as const satisfies readonly CombatAttackEffectId[];
@@ -349,6 +351,20 @@ export function createCombatAttackEffectDecoders(
         onKill: optionalAttackBranches,
       },
       requireTargetSelector("directional attack", ["leftOrRightFoe"])
+    ),
+    distributed_attack_damage: defineDecoder(
+      "distributed_attack_damage",
+      {
+        effectId: required(literal("distributed_attack_damage")),
+        timing: optionalTiming,
+        amount: required(positiveInteger),
+        targetSelector: required(literal("eachFoe")),
+        condition: optionalCondition,
+        onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
+        onKill: optionalAttackBranches,
+      },
+      requireTargetSelector("distributed attack", ["eachFoe"])
     ),
     multi_target_attack: defineDecoder("multi_target_attack", {
       effectId: required(literal("multi_target_attack")),
@@ -1102,6 +1118,126 @@ function multiTargetAttackHandler(
   };
 }
 
+function buildPositiveIntegerDistributions(
+  total: number,
+  targetCount: number
+): number[][] {
+  if (targetCount < 1 || targetCount > total) {
+    return [];
+  }
+
+  const distributions: number[][] = [];
+  const current = Array.from({ length: targetCount }, () => 1);
+
+  function visit(index: number, remaining: number): void {
+    if (index === targetCount - 1) {
+      current[index] = remaining;
+      distributions.push([...current]);
+      return;
+    }
+
+    const minimumForRest = targetCount - index - 1;
+    for (let amount = 1; amount <= remaining - minimumForRest; amount += 1) {
+      current[index] = amount;
+      visit(index + 1, remaining - amount);
+    }
+  }
+
+  visit(0, total);
+  return distributions;
+}
+
+function distributedAttackDamageHandler(
+  collectAttackReplacementProfile: AttackReplacementCollector
+): EffectRuntimeHandler<RuntimeEffectForId<"distributed_attack_damage">> {
+  return {
+    effectId: "distributed_attack_damage",
+    execute(state, player, effect, source, services) {
+      const opponents = services.getOpponentsInSeatingOrder(state, player);
+      const distributions = buildPositiveIntegerDistributions(
+        effect.amount,
+        opponents.length
+      );
+      if (distributions.length === 0) {
+        return { ok: true };
+      }
+
+      const choices: EffectChoice[] = distributions.map((amounts) => ({
+        choiceKind: "damageDistribution",
+        choiceId: `distribution:${amounts.join(",")}`,
+        players: opponents,
+        amounts,
+        amount: effect.amount,
+      }));
+      const selectedChoice = services.chooseEffectChoice(
+        state,
+        player,
+        source,
+        effect.effectId,
+        choices
+      );
+      if (
+        selectedChoice?.choiceKind !== "damageDistribution" ||
+        selectedChoice.players.length !== opponents.length ||
+        selectedChoice.amounts.length !== opponents.length ||
+        selectedChoice.amount !== effect.amount ||
+        selectedChoice.amounts.some(
+          (amount) => !Number.isSafeInteger(amount) || amount < 1
+        ) ||
+        selectedChoice.amounts.reduce((total, amount) => total + amount, 0) !==
+          effect.amount
+      ) {
+        return {
+          ok: false,
+          error:
+            "Distributed attack choice must contain positive integer amounts summing to the attack total",
+        };
+      }
+
+      const attackProfileResult = collectAttackReplacementProfile(
+        state,
+        player,
+        source
+      );
+      if (attackProfileResult.status !== "resolved") {
+        return {
+          ok: false,
+          error:
+            attackProfileResult.status === "error"
+              ? attackProfileResult.error
+              : "Attack replacement profile was not applicable",
+        };
+      }
+      const amountsByPlayerId = new Map(
+        selectedChoice.players.map((targetPlayer, index) => [
+          targetPlayer.playerId,
+          selectedChoice.amounts[index] ?? 0,
+        ])
+      );
+      const attackProfile = attackProfileResult.result;
+      return services.resolvePlayerControlledAttack({
+        state,
+        attackingPlayer: player,
+        source,
+        effectId: effect.effectId,
+        unavoidable: attackProfile.unavoidable,
+        attackProfile,
+        targetPlan: { kind: "orderedPlayers", players: opponents },
+        impact: {
+          kind: "damage",
+          baseAmount: effect.amount,
+          baseAmountForTarget: (_state, _attackingPlayer, targetPlayer) =>
+            amountsByPlayerId.get(targetPlayer.playerId) ?? 0,
+          sourceOwnerModifierAmount: attackProfile.damageBonus,
+          onDamageDealt: effect.onDamageDealt ?? [],
+          onAvoided: effect.onAvoided ?? [],
+          onKill: effect.onKill ?? [],
+        },
+      });
+    },
+  };
+}
+
 export function executeAttackOutcomeBranch(
   state: GameState,
   player: PlayerState,
@@ -1698,6 +1834,14 @@ export function createCombatAttackEffectDefinitions(
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
       handler: directionalChainAttackHandler(collectAttackReplacementProfile),
+    },
+    {
+      effectId: "distributed_attack_damage",
+      decoder: bindRuntimeEffectDecoder("distributed_attack_damage"),
+      supportedTimings: attackTimings,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: distributedAttackDamageHandler(collectAttackReplacementProfile),
     },
     {
       effectId: "multi_target_attack",

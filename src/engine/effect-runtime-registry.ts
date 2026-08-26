@@ -254,12 +254,21 @@ interface EffectChoiceDirectionalPlayerTarget {
   players: readonly PlayerState[];
 }
 
+interface EffectChoiceDamageDistribution {
+  choiceKind: "damageDistribution";
+  choiceId: string;
+  players: readonly PlayerState[];
+  amounts: readonly number[];
+  amount: number;
+}
+
 export type EffectChoice =
   | EffectChoiceOption
   | EffectChoicePlayerTarget
   | EffectChoiceCardTarget
   | EffectChoiceDefense
-  | EffectChoiceDirectionalPlayerTarget;
+  | EffectChoiceDirectionalPlayerTarget
+  | EffectChoiceDamageDistribution;
 
 export type EffectChoiceResolution =
   | { status: "selected"; choice: EffectChoice }

@@ -335,6 +335,7 @@ export const knownRuntimeEffectIds = [
   "destroy_top_main_deck_cards_then_optional_play_mayhem",
   "destroyed_card_kind_is",
   "directional_chain_attack",
+  "distributed_attack_damage",
   "discard_card",
   "discard_random_hand_cards",
   "discard_hand_then_draw_cards",
@@ -757,6 +758,13 @@ export type DirectionalChainAttackRuntimeEffect =
     PositiveAmount &
     Targetable &
     AttackBranches;
+export type DistributedAttackDamageRuntimeEffect =
+  EffectWithOptionalTiming<"distributed_attack_damage"> &
+    PositiveAmount &
+    Conditioned &
+    AttackBranches & {
+      targetSelector: "eachFoe";
+    };
 export type MultiTargetAttackRuntimeEffect =
   EffectWithOptionalTiming<"multi_target_attack"> &
     PositiveAmount &
@@ -823,6 +831,7 @@ export interface PlayerControlledAttackEffectPayloadMap {
   conditional_activation_attack_damage: ConditionalActivationAttackDamageRuntimeEffect;
   activation_attack_damage_per_controlled_card_type: ActivationAttackDamagePerControlledCardTypeRuntimeEffect;
   directional_chain_attack: DirectionalChainAttackRuntimeEffect;
+  distributed_attack_damage: DistributedAttackDamageRuntimeEffect;
   multi_target_attack: MultiTargetAttackRuntimeEffect;
   optional_spend_chip_attack_damage: OptionalSpendChipAttackDamageRuntimeEffect;
   defense_discard_self_avoid_attack_then_optional_destroy_hand_card: DefenseDiscardSelfAvoidAttackThenOptionalDestroyHandCardRuntimeEffect;

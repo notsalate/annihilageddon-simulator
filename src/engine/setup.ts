@@ -333,6 +333,7 @@ interface GameEventPayload {
   choiceId?: string;
   choiceKind?: ChoiceKind;
   choiceIds?: string[];
+  amounts?: number[];
   cardType?: string;
   enabled?: boolean;
   direction?: "left" | "right";
@@ -477,6 +478,7 @@ type EffectChoiceSelectedTarget =
       targetCardInstanceIds?: never;
       targetDefinitionIds?: never;
       amount?: never;
+      amounts?: never;
       direction?: never;
     }
   | {
@@ -491,6 +493,7 @@ type EffectChoiceSelectedTarget =
       targetCardInstanceIds?: never;
       targetDefinitionIds?: never;
       amount?: never;
+      amounts?: never;
       direction?: never;
     }
   | {
@@ -505,6 +508,7 @@ type EffectChoiceSelectedTarget =
       targetCardInstanceIds?: never;
       targetDefinitionIds?: never;
       amount?: never;
+      amounts?: never;
       direction?: never;
     }
   | {
@@ -519,6 +523,7 @@ type EffectChoiceSelectedTarget =
       targetCardInstanceIds?: never;
       targetDefinitionIds?: never;
       amount?: never;
+      amounts?: never;
       direction?: never;
     }
   | {
@@ -533,6 +538,7 @@ type EffectChoiceSelectedTarget =
       targetPlayerIds?: never;
       targetCardInstanceId?: string;
       targetDefinitionId?: string;
+      amounts?: never;
       direction?: never;
     }
   | {
@@ -547,6 +553,7 @@ type EffectChoiceSelectedTarget =
       targetCardInstanceIds?: never;
       targetDefinitionIds?: never;
       amount?: never;
+      amounts?: never;
       direction?: never;
     }
   | {
@@ -562,6 +569,22 @@ type EffectChoiceSelectedTarget =
       targetCardInstanceIds?: never;
       targetDefinitionIds?: never;
       amount?: never;
+      amounts?: never;
+    }
+  | {
+      choiceKind: "damageDistribution";
+      choiceId: string;
+      choiceIds: string[];
+      legalChoiceCount: number;
+      targetPlayerIds: PlayerId[];
+      amount: number;
+      amounts: number[];
+      targetPlayerId?: never;
+      targetCardInstanceId?: never;
+      targetDefinitionId?: never;
+      targetCardInstanceIds?: never;
+      targetDefinitionIds?: never;
+      direction?: never;
     };
 
 type EffectChoiceSelectedEvent = GameEventShape<
@@ -578,6 +601,7 @@ type EffectChoiceSelectedEvent = GameEventShape<
   | "targetCardInstanceIds"
   | "targetDefinitionIds"
   | "amount"
+  | "amounts"
   | "direction"
   | "tokenInstanceId"
   | "tokenDefinitionId"

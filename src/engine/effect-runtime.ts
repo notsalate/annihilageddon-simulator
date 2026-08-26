@@ -2092,14 +2092,24 @@ function recordEffectChoiceSelected(
                       targetDefinitionId: choice.card.definitionId,
                     }),
               }
-            : {
-                ...choicePayloadBase,
-                choiceKind: "directionalPlayerTarget" as const,
-                direction: choice.direction,
-                targetPlayerIds: choice.players.map(
-                  (candidate) => candidate.playerId
-                ),
-              };
+            : choice.choiceKind === "damageDistribution"
+              ? {
+                  ...choicePayloadBase,
+                  choiceKind: "damageDistribution" as const,
+                  amount: choice.amount,
+                  amounts: [...choice.amounts],
+                  targetPlayerIds: choice.players.map(
+                    (candidate) => candidate.playerId
+                  ),
+                }
+              : {
+                  ...choicePayloadBase,
+                  choiceKind: "directionalPlayerTarget" as const,
+                  direction: choice.direction,
+                  targetPlayerIds: choice.players.map(
+                    (candidate) => candidate.playerId
+                  ),
+                };
 
   recordGameEvent(state, {
     type: "effectChoiceSelected",
@@ -2140,6 +2150,15 @@ function createChoiceView(choice: EffectChoice): ChoiceView {
         : {
             targetCardInstanceId: choice.card.instanceId,
           }),
+    };
+  }
+  if (choice.choiceKind === "damageDistribution") {
+    return {
+      choiceKind: choice.choiceKind,
+      choiceId: choice.choiceId,
+      targetPlayerIds: choice.players.map((player) => player.playerId),
+      amounts: [...choice.amounts],
+      amount: choice.amount,
     };
   }
   return {

@@ -9402,6 +9402,276 @@ test("#290 legend_016 prevents defense until the current turn ends", () => {
   assert.equal(target.discard.includes(defense), true);
 });
 
+test("#291 familiar_010 always grants power but attacks only with a controlled legend", () => {
+  const state = initializeGame({ rootDir, seed: 60629, playerCount: 2 });
+  const player = mustGetPlayer(state, markPlayerId("player-1"));
+  const foe = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = player.playerId;
+  for (const candidate of state.players) {
+    candidate.wizardProperties = [];
+    candidate.hand = [];
+  }
+  let distributionChoiceRequests = 0;
+  state.effectChoiceStrategy = ({ effectId }) => {
+    if (effectId === "distributed_attack_damage") {
+      distributionChoiceRequests += 1;
+    }
+    return undefined;
+  };
+
+  const familiar = addRuntimeCardToHand(
+    state,
+    player,
+    "esw2_dbg__familiar_010"
+  );
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: familiar.instanceId,
+    }),
+    { ok: true }
+  );
+
+  assert.equal(state.turn.power, 3);
+  assert.equal(foe.life.current, 20);
+  assert.equal(distributionChoiceRequests, 0);
+});
+
+test("#291 familiar_010 exposes only positive integer distributions summing to eight", () => {
+  const state = initializeGame({ rootDir, seed: 60630, playerCount: 3 });
+  const player = mustGetPlayer(state, markPlayerId("player-1"));
+  const foes = [
+    mustGetPlayer(state, markPlayerId("player-2")),
+    mustGetPlayer(state, markPlayerId("player-3")),
+  ];
+  const [firstFoe, secondFoe] = foes;
+  assert.ok(firstFoe);
+  assert.ok(secondFoe);
+  state.activePlayerId = player.playerId;
+  for (const candidate of state.players) {
+    candidate.wizardProperties = [];
+    candidate.hand = [];
+    candidate.life.current = 20;
+  }
+  player.permanents.push(
+    createRuntimeCardInstance(player, "esw2_dbg__legend_009", "legend-control")
+  );
+
+  let seenDistributionCount = 0;
+  state.effectChoiceStrategy = (request) => {
+    if (request.effectId !== "distributed_attack_damage") {
+      return undefined;
+    }
+    const choices = request.choices.filter(
+      (choice) => choice.choiceKind === "damageDistribution"
+    );
+    seenDistributionCount = choices.length;
+    assert.equal(choices.length, 7);
+    for (const choice of choices) {
+      assert.equal(choice.targetPlayerIds.length, foes.length);
+      assert.equal(choice.amounts.length, foes.length);
+      assert.equal(choice.amount, 8);
+      assert.equal(
+        choice.amounts.every(
+          (amount) => Number.isSafeInteger(amount) && amount > 0
+        ),
+        true
+      );
+      assert.equal(
+        choice.amounts.reduce((total, amount) => total + amount, 0),
+        8
+      );
+    }
+    const selected = choices.find(
+      (choice) =>
+        choice.amounts[0] === 3 &&
+        choice.amounts[1] === 5 &&
+        choice.targetPlayerIds[0] === firstFoe.playerId &&
+        choice.targetPlayerIds[1] === secondFoe.playerId
+    );
+    assert.ok(selected);
+    return { choiceId: selected.choiceId };
+  };
+
+  const familiar = addRuntimeCardToHand(
+    state,
+    player,
+    "esw2_dbg__familiar_010"
+  );
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: familiar.instanceId,
+    }),
+    { ok: true }
+  );
+
+  assert.equal(seenDistributionCount, 7);
+  assert.equal(state.turn.power, 3);
+  assert.equal(firstFoe.life.current, 17);
+  assert.equal(secondFoe.life.current, 15);
+});
+
+test("#291 familiar_010 rejects an invalid distribution selection by falling back to a legal one", () => {
+  const state = initializeGame({ rootDir, seed: 60631, playerCount: 2 });
+  const player = mustGetPlayer(state, markPlayerId("player-1"));
+  const foe = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = player.playerId;
+  for (const candidate of state.players) {
+    candidate.wizardProperties = [];
+    candidate.hand = [];
+    candidate.life.current = 20;
+  }
+  player.permanents.push(
+    createRuntimeCardInstance(player, "esw2_dbg__legend_009", "legend-control")
+  );
+  let distributionChoiceRequests = 0;
+  state.effectChoiceStrategy = ({ effectId }) => {
+    if (effectId === "distributed_attack_damage") {
+      distributionChoiceRequests += 1;
+      return { choiceId: "distribution:0,8" };
+    }
+    return undefined;
+  };
+
+  const familiar = addRuntimeCardToHand(
+    state,
+    player,
+    "esw2_dbg__familiar_010"
+  );
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: familiar.instanceId,
+    }),
+    { ok: true }
+  );
+
+  assert.equal(distributionChoiceRequests, 1);
+  assert.equal(state.turn.power, 3);
+  assert.equal(foe.life.current, 12);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "distributed_attack_damage" &&
+        event.choiceKind === "damageDistribution" &&
+        event.amount === 8 &&
+        event.amounts?.every((amount) => amount > 0) === true
+    )
+  );
+});
+
+test("#291 familiar_010 defense discards itself, draws one card, and avoids the distributed attack", () => {
+  const state = initializeGame({ rootDir, seed: 60632, playerCount: 2 });
+  const player = mustGetPlayer(state, markPlayerId("player-1"));
+  const foe = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = player.playerId;
+  for (const candidate of state.players) {
+    candidate.wizardProperties = [];
+    candidate.hand = [];
+    candidate.life.current = 20;
+  }
+  player.permanents.push(
+    createRuntimeCardInstance(player, "esw2_dbg__legend_009", "legend-control")
+  );
+  const drawnCard = foe.deck[0];
+  assert.ok(drawnCard);
+  const defense = addRuntimeCardToHand(state, foe, "esw2_dbg__familiar_010");
+  defense.instanceId = markCardInstanceId("fixture-familiar-010-defense");
+  state.effectChoiceStrategy = (request) => {
+    if (request.effectId === "distributed_attack_damage") {
+      const choice = request.choices.find(
+        (candidate) => candidate.choiceKind === "damageDistribution"
+      );
+      return choice === undefined ? undefined : { choiceId: choice.choiceId };
+    }
+    if (request.effectId === "avoid_attack") {
+      const choice = request.choices.find(
+        (candidate) =>
+          candidate.choiceKind === "defense" &&
+          candidate.targetCardInstanceId === defense.instanceId
+      );
+      return choice === undefined ? undefined : { choiceId: choice.choiceId };
+    }
+    return undefined;
+  };
+
+  const attackerCard = addRuntimeCardToHand(
+    state,
+    player,
+    "esw2_dbg__familiar_010"
+  );
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: attackerCard.instanceId,
+    }),
+    { ok: true }
+  );
+
+  assert.equal(state.turn.power, 3);
+  assert.equal(foe.life.current, 20);
+  assert.equal(foe.discard.includes(defense), true);
+  assert.equal(foe.hand.includes(drawnCard), true);
+});
+
+test("#291 familiar_010 skips the distributed attack when there are more than eight foes", () => {
+  const state = initializeGame({ rootDir, seed: 60633, playerCount: 2 });
+  const player = mustGetPlayer(state, markPlayerId("player-1"));
+  const template = mustGetPlayer(state, markPlayerId("player-2"));
+  for (let index = 3; index <= 10; index += 1) {
+    const extraPlayer = structuredClone(template);
+    extraPlayer.playerId = markPlayerId(`player-${index}`);
+    extraPlayer.hand = [];
+    extraPlayer.deck = [];
+    extraPlayer.discard = [];
+    extraPlayer.playedThisTurn = [];
+    extraPlayer.permanents = [];
+    extraPlayer.unboughtFamiliars = [];
+    extraPlayer.wizardProperties = [];
+    extraPlayer.statuses = [];
+    extraPlayer.trophyLikeObjects = [];
+    state.players.push(extraPlayer);
+  }
+  state.activePlayerId = player.playerId;
+  for (const candidate of state.players) {
+    candidate.wizardProperties = [];
+    candidate.hand = [];
+    candidate.life.current = 20;
+  }
+  player.permanents.push(
+    createRuntimeCardInstance(player, "esw2_dbg__legend_009", "legend-control")
+  );
+  let distributionChoiceRequests = 0;
+  state.effectChoiceStrategy = ({ effectId }) => {
+    if (effectId === "distributed_attack_damage") {
+      distributionChoiceRequests += 1;
+    }
+    return undefined;
+  };
+
+  const familiar = addRuntimeCardToHand(
+    state,
+    player,
+    "esw2_dbg__familiar_010"
+  );
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: familiar.instanceId,
+    }),
+    { ok: true }
+  );
+
+  assert.equal(state.turn.power, 3);
+  assert.equal(distributionChoiceRequests, 0);
+  assert.equal(
+    state.players.every((candidate) => candidate.life.current === 20),
+    true
+  );
+});
+
 test("Ultimate Tronado gains the actual total from a directional chain attack only once", () => {
   const state = initializeGame({
     rootDir,

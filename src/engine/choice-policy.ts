@@ -8,6 +8,7 @@ export type ChoiceKind =
   | "cardTarget"
   | "defense"
   | "directionalPlayerTarget"
+  | "damageDistribution"
   | "familiarSetup";
 
 /** The only player information available while resolving an effect choice. */
@@ -60,6 +61,14 @@ export interface ChoiceDirectionalPlayerTargetView {
   readonly targetPlayerIds: readonly PlayerId[];
 }
 
+export interface ChoiceDamageDistributionView {
+  readonly choiceKind: "damageDistribution";
+  readonly choiceId: string;
+  readonly targetPlayerIds: readonly PlayerId[];
+  readonly amounts: readonly number[];
+  readonly amount: number;
+}
+
 export interface ChoiceFamiliarSetupView {
   readonly choiceKind: "familiarSetup";
   readonly choiceId: string;
@@ -72,6 +81,7 @@ export type ChoiceView =
   | ChoiceCardTargetView
   | ChoiceDefenseView
   | ChoiceDirectionalPlayerTargetView
+  | ChoiceDamageDistributionView
   | ChoiceFamiliarSetupView;
 
 /** A strategy returns only the stable identity of its selected legal choice. */
