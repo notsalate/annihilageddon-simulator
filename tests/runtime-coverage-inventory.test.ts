@@ -8,6 +8,9 @@ import {
   createRuntimeCoverageInventory,
   formatRuntimeCoverageInventoryMarkdown,
 } from "../src/index.js";
+import type { RuntimeCoverageInventoryItem } from "../src/index.js";
+import { evaluateCrossSourceCoverage } from "../src/import/cross-source-runtime-coverage.js";
+import type { CrossSourceCoveragePlanEntry } from "../src/import/cross-source-runtime-coverage.js";
 
 test("runtime coverage inventory reports drafts, runtime, composition, legacy v0 facts, and review-needed status", () => {
   const rootDir = mkdtempSync(
@@ -1017,14 +1020,28 @@ test("repository cross-source registry assigns every wizard property and DWT to 
   assert.deepEqual(wizardProperty004.crossSourceBlockers, []);
   assert.equal(firstDeadWizardToken.crossSourceStatus, "blocked");
   assert.ok(
-    firstDeadWizardToken.crossSourceBlockers.includes(
-      "unresolved mechanic: source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+    firstDeadWizardToken.crossSourceBlockerCodes.some(
+      (blocker) =>
+        blocker.code === "unresolved-capability" &&
+        blocker.capabilityId ===
+          "capability:esw2-dbg-dead-wizard-token-001-unresolved-1"
     )
   );
 });
 
-const dwtLifecycleBlocker =
-  "unresolved mechanic: source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested";
+function assertUnresolvedDwtCapability(
+  item: RuntimeCoverageInventoryItem,
+  tokenNumber: string
+): void {
+  assert.ok(
+    item.crossSourceBlockerCodes.some(
+      (blocker) =>
+        blocker.code === "unresolved-capability" &&
+        blocker.capabilityId ===
+          `capability:esw2-dbg-dead-wizard-token-${tokenNumber}-unresolved-1`
+    )
+  );
+}
 
 test("activation evidence keeps property 005 complete and exposes the DWT 005 lifecycle gap", () => {
   const report = createRuntimeCoverageInventory(process.cwd());
@@ -1039,7 +1056,7 @@ test("activation evidence keeps property 005 complete and exposes the DWT 005 li
   assert.deepEqual(property.crossSourceBlockers, []);
   assert.ok(dwt);
   assert.equal(dwt.crossSourceStatus, "blocked");
-  assert.deepEqual(dwt.crossSourceBlockers, [dwtLifecycleBlocker]);
+  assertUnresolvedDwtCapability(dwt, "005");
 });
 
 test("dwt-interactions evidence remains mapped while DWT 022 and 023 await lifecycle support", () => {
@@ -1051,7 +1068,7 @@ test("dwt-interactions evidence remains mapped while DWT 022 and 023 await lifec
     const item = report.items.find((candidate) => candidate.id === id);
     assert.ok(item);
     assert.equal(item.crossSourceStatus, "blocked");
-    assert.deepEqual(item.crossSourceBlockers, [dwtLifecycleBlocker]);
+    assertUnresolvedDwtCapability(item, id.slice(-3));
   }
 });
 
@@ -1070,7 +1087,7 @@ test("card-movement evidence keeps property 006 complete while DWT 006 and 010 a
     const item = report.items.find((candidate) => candidate.id === id);
     assert.ok(item);
     assert.equal(item.crossSourceStatus, "blocked");
-    assert.deepEqual(item.crossSourceBlockers, [dwtLifecycleBlocker]);
+    assertUnresolvedDwtCapability(item, id.slice(-3));
   }
 });
 
@@ -1084,7 +1101,7 @@ test("card-movement evidence remains mapped while DWT 008, 009, and 011 await li
     const item = report.items.find((candidate) => candidate.id === id);
     assert.ok(item);
     assert.equal(item.crossSourceStatus, "blocked");
-    assert.deepEqual(item.crossSourceBlockers, [dwtLifecycleBlocker]);
+    assertUnresolvedDwtCapability(item, id.slice(-3));
   }
 });
 
@@ -1095,7 +1112,7 @@ test("card-movement evidence remains mapped while DWT 024 awaits lifecycle suppo
   );
   assert.ok(item);
   assert.equal(item.crossSourceStatus, "blocked");
-  assert.deepEqual(item.crossSourceBlockers, [dwtLifecycleBlocker]);
+  assertUnresolvedDwtCapability(item, "024");
 });
 
 test("attack-effects cross-source evidence covers wizard property 009", () => {
@@ -1106,6 +1123,147 @@ test("attack-effects cross-source evidence covers wizard property 009", () => {
   assert.ok(item);
   assert.equal(item.crossSourceStatus, "crossSourceComplete");
   assert.deepEqual(item.crossSourceBlockers, []);
+});
+
+test("semantic evidence rejects an ID that is present but not passed to the runtime seam", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-unused-id-")
+  );
+  const id = "esw2_dbg__main_001";
+  const testName = "runtime seam does not use the claimed card";
+
+  writeText(
+    rootDir,
+    "tests/semantic-evidence.test.ts",
+    `test("${testName}", () => {
+  const claimedId = "${id}";
+  const state = initializeGame({ rootDir });
+  const unrelatedDefinition = state.cardDefinitions.get("${id}");
+  applyAction(state, { type: "playCard", cardId: "esw2_dbg__main_002" });
+  assert.equal(state.players[0]?.chips, 1);
+});
+`
+  );
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "card",
+    sourceGroupOrTokenKind: "main",
+    draft: createSemanticEvidenceDraft(id),
+    runtime: createSemanticEvidenceRuntime(id),
+    compositionMembership: [{ role: "mainDeck", entryKind: "card", count: 1 }],
+    planEntry: createSemanticEvidencePlanEntry({
+      id,
+      testName,
+      testSubject: { kind: "binding", name: "claimedId" },
+    }),
+  });
+
+  assert.equal(evaluation.status, "blocked");
+  assert.ok(
+    evaluation.blockers.some((blocker) =>
+      blocker.includes("does not pass the claimed object to applyAction")
+    )
+  );
+});
+
+test("semantic evidence rejects a source kind declared for a foreign action path", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-source-kind-")
+  );
+  const id = "esw2_dbg__main_001";
+  const testName = "runtime seam uses the wrong source kind";
+
+  writeText(
+    rootDir,
+    "tests/semantic-evidence.test.ts",
+    `test("${testName}", () => {
+  const cardId = "${id}";
+  const state = initializeGame({ rootDir });
+  applyAction(state, { type: "playCard", cardId });
+  assert.equal(state.players[0]?.chips, 1);
+});
+`
+  );
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "card",
+    sourceGroupOrTokenKind: "main",
+    draft: createSemanticEvidenceDraft(id),
+    runtime: createSemanticEvidenceRuntime(id),
+    compositionMembership: [{ role: "mainDeck", entryKind: "card", count: 1 }],
+    planEntry: createSemanticEvidencePlanEntry({
+      id,
+      testName,
+      executionObjectKind: "deadWizardToken",
+      testSubject: { kind: "binding", name: "cardId" },
+    }),
+  });
+
+  assert.equal(evaluation.status, "blocked");
+  assert.ok(
+    evaluation.blockers.some((blocker) =>
+      blocker.includes(
+        "execution object kind deadWizardToken does not match card"
+      )
+    )
+  );
+  const mismatch = evaluation.blockerCodes.find(
+    (blocker) => blocker.code === "execution-object-kind-mismatch"
+  );
+  assert.equal(mismatch?.capabilityId, "capability:gain-chips");
+  assert.equal(mismatch?.evidenceId, "evidence:card-gain-chips");
+});
+
+test("semantic evidence keeps a required capability open when its evidence mapping is removed", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-capability-")
+  );
+  const id = "esw2_dbg__main_001";
+  const testName = "runtime seam proves one capability";
+
+  writeText(
+    rootDir,
+    "tests/semantic-evidence.test.ts",
+    `test("${testName}", () => {
+  const cardId = "${id}";
+  const state = initializeGame({ rootDir });
+  applyAction(state, { type: "playCard", cardId });
+  assert.equal(state.players[0]?.chips, 1);
+});
+`
+  );
+
+  const planEntry = createSemanticEvidencePlanEntry({
+    id,
+    testName,
+    testSubject: { kind: "binding", name: "cardId" },
+  });
+  planEntry.requiredCapabilities = [
+    "capability:gain-chips",
+    "capability:missing-after-edit",
+  ];
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "card",
+    sourceGroupOrTokenKind: "main",
+    draft: createSemanticEvidenceDraft(id),
+    runtime: createSemanticEvidenceRuntime(id),
+    compositionMembership: [{ role: "mainDeck", entryKind: "card", count: 1 }],
+    planEntry,
+  });
+
+  assert.equal(evaluation.status, "blocked");
+  assert.ok(
+    evaluation.blockerCodes.some(
+      (blocker) => blocker.code === "required-capability-uncovered"
+    )
+  );
 });
 
 function createCardDraft(
@@ -1139,6 +1297,85 @@ function createCardDraft(
     composition: {
       quantity: 2,
     },
+  };
+}
+
+function createSemanticEvidenceDraft(cardId: string) {
+  return {
+    schemaVersion: 1,
+    draftKind: "cardDraft",
+    cardId,
+    source: { image: "assets/cards/main/example.png" },
+    visible: {
+      nameRu: "Проверочная карта",
+      cost: 1,
+      victoryPoints: 1,
+      typeRu: "Заклинание",
+      cardKind: "normal",
+      cardTypes: ["spell"],
+      textRu: "Получи чипсину.",
+      markers: [],
+      uncertainty: [],
+    },
+    notes: [],
+    composition: { quantity: 1 },
+  };
+}
+
+function createSemanticEvidenceRuntime(cardId: string) {
+  return {
+    cardId,
+    engine: {
+      effects: [{ effectId: "gain_chips", timing: "onPlay", amount: 1 }],
+    },
+  };
+}
+
+function createSemanticEvidencePlanEntry(input: {
+  id: string;
+  testName: string;
+  executionObjectKind?: "card" | "wizardProperty" | "deadWizardToken";
+  testSubject: { kind: "binding"; name: string };
+}): CrossSourceCoveragePlanEntry {
+  return {
+    id: input.id,
+    objectKind: "card" as const,
+    primaryMechanicCluster: "scoring",
+    requiredCapabilities: ["capability:gain-chips"],
+    semanticMappings: [
+      {
+        capabilityId: "capability:gain-chips",
+        evidenceId: "evidence:card-gain-chips",
+        draftPoint: {
+          path: "visible.textRu",
+          value: "Получи чипсину.",
+        },
+        runtimeRefs: [
+          {
+            kind: "effect" as const,
+            effectId: "gain_chips",
+            timing: "onPlay",
+            fields: { amount: 1 },
+          },
+        ],
+        testRefs: [
+          {
+            file: "tests/semantic-evidence.test.ts",
+            name: input.testName,
+            execution: {
+              seam: "applyAction",
+              objectKind: input.executionObjectKind ?? "card",
+              subject: input.testSubject,
+            },
+            observation: {
+              kind: "assertion",
+              target: "state.players[0].chips",
+            },
+          },
+        ],
+      },
+    ],
+    unresolvedMechanics: [],
   };
 }
 

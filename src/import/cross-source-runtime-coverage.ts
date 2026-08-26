@@ -12,15 +12,98 @@ export type CrossSourceObjectKind =
 
 export type CrossSourceCoverageStatus = "blocked" | "crossSourceComplete";
 
+export type CrossSourceCapabilityId = `capability:${string}`;
+export type CrossSourceEvidenceId = `evidence:${string}`;
+
+export type CrossSourceExecutionSeam =
+  | "applyAction"
+  | "calculateEffectiveCardCost"
+  | "calculateEffectiveCardVictoryPoints"
+  | "calculateEffectivePlayerMaxLife"
+  | "createGameScenario"
+  | "gainDeadWizardToken"
+  | "initializeGame"
+  | "runMarketFlow"
+  | "scoreGame";
+
+export type CrossSourceBlockerCode =
+  | "missing-coverage-plan"
+  | "object-kind-mismatch"
+  | "missing-primary-mechanic-cluster"
+  | "legacy-unresolved-mechanic"
+  | "required-capability-uncovered"
+  | "unresolved-capability"
+  | "invalid-capability-id"
+  | "invalid-evidence-id"
+  | "duplicate-capability-id"
+  | "duplicate-evidence-id"
+  | "mapping-capability-unrequired"
+  | "unmapped-canonical-draft-point"
+  | "stale-canonical-draft-point"
+  | "missing-runtime-reference"
+  | "missing-focused-test-reference"
+  | "runtime-field-mismatch"
+  | "runtime-effect-missing"
+  | "runtime-effect-fields-mismatch"
+  | "focused-test-reference-invalid"
+  | "focused-test-not-found"
+  | "execution-evidence-missing"
+  | "execution-object-kind-mismatch"
+  | "execution-seam-missing"
+  | "execution-seam-not-allowed"
+  | "execution-subject-not-used"
+  | "observation-evidence-missing"
+  | "observation-assertion-missing"
+  | "missing-composition"
+  | "missing-canonical-quantity"
+  | "composition-count-missing"
+  | "composition-quantity-mismatch"
+  | "missing-runtime"
+  | "runtime-card-id-mismatch"
+  | "runtime-kind-mismatch"
+  | "runtime-no-effects"
+  | "invalid-runtime-effect-id"
+  | "runtime-source-timing-policy"
+  | "legacy-unclassified";
+
+export interface CrossSourceBlocker {
+  code: CrossSourceBlockerCode;
+  message: string;
+  capabilityId?: CrossSourceCapabilityId | undefined;
+  evidenceId?: CrossSourceEvidenceId | undefined;
+}
+
+export type CrossSourceTestSubject =
+  | { kind: "binding"; name: string }
+  | { kind: "literal"; value: string };
+
+export interface CrossSourceExecutionEvidence {
+  seam: CrossSourceExecutionSeam;
+  objectKind: CrossSourceObjectKind;
+  subject: CrossSourceTestSubject;
+}
+
+export interface CrossSourceObservationEvidence {
+  kind: "assertion";
+  target: string;
+}
+
 export interface CrossSourceCoveragePlanEntry {
   id: string;
   objectKind: CrossSourceObjectKind;
   primaryMechanicCluster: string;
   semanticMappings: CrossSourceSemanticMapping[];
-  unresolvedMechanics: string[];
+  requiredCapabilities?: CrossSourceCapabilityId[] | undefined;
+  unresolvedCapabilities?: CrossSourceCapabilityId[] | undefined;
+  /** @deprecated Only accepted for schemaVersion 1 fixture plans. */
+  unresolvedMechanics?: string[] | undefined;
+  /** @internal */
+  evidenceMode?: "legacy" | "typed" | undefined;
 }
 
 export interface CrossSourceSemanticMapping {
+  capabilityId?: CrossSourceCapabilityId | undefined;
+  evidenceId?: CrossSourceEvidenceId | undefined;
   draftPoint: CrossSourceDraftPoint;
   runtimeRefs: CrossSourceRuntimeRef[];
   testRefs: CrossSourceTestRef[];
@@ -59,6 +142,8 @@ export type CrossSourceRuntimeRef =
 export interface CrossSourceTestRef {
   file: string;
   name: string;
+  execution?: CrossSourceExecutionEvidence | undefined;
+  observation?: CrossSourceObservationEvidence | undefined;
 }
 
 export interface CrossSourceCompositionMembership {
@@ -71,6 +156,7 @@ export interface CrossSourceCoverageEvaluation {
   status: CrossSourceCoverageStatus;
   primaryMechanicCluster: string | undefined;
   blockers: string[];
+  blockerCodes: CrossSourceBlocker[];
 }
 
 const planPath = "config/runtime-coverage/cross-source-mechanics.json";
@@ -84,11 +170,12 @@ export function readCrossSourceCoveragePlan(
   }
 
   const parsed = getRecord(JSON.parse(readFileSync(absolutePath, "utf8")));
+  const typedEvidence = (getNumber(parsed["schemaVersion"]) ?? 0) >= 2;
   const entries = Array.isArray(parsed["entries"]) ? parsed["entries"] : [];
   const plan = new Map<string, CrossSourceCoveragePlanEntry>();
 
   for (const entry of entries) {
-    const decoded = decodePlanEntry(entry);
+    const decoded = decodePlanEntry(entry, typedEvidence);
     if (decoded !== undefined) {
       plan.set(decoded.id, decoded);
     }
@@ -109,14 +196,22 @@ export function evaluateCrossSourceCoverage(input: {
 }): CrossSourceCoverageEvaluation {
   const planEntry = input.planEntry;
   if (planEntry === undefined) {
+    const blockers = [
+      createBlocker(
+        "missing-coverage-plan",
+        "missing cross-source mechanic mapping"
+      ),
+    ];
     return {
       status: "blocked",
       primaryMechanicCluster: undefined,
       blockers: ["missing cross-source mechanic mapping"],
+      blockerCodes: blockers,
     };
   }
 
   const blockers = new Set<string>();
+  const typedBlockers: CrossSourceBlocker[] = [];
   if (planEntry.objectKind !== input.objectKind) {
     blockers.add(
       `cross-source mapping object kind ${planEntry.objectKind} does not match ${input.objectKind}`
@@ -125,8 +220,13 @@ export function evaluateCrossSourceCoverage(input: {
   if (planEntry.primaryMechanicCluster.trim() === "") {
     blockers.add("missing primary mechanic cluster");
   }
-  for (const mechanic of planEntry.unresolvedMechanics) {
+  for (const mechanic of planEntry.unresolvedMechanics ?? []) {
     blockers.add(`unresolved mechanic: ${mechanic}`);
+  }
+
+  const typedEvidence = isTypedEvidencePlan(planEntry);
+  if (typedEvidence) {
+    validateTypedPlanEntry(planEntry, input.objectKind, typedBlockers);
   }
 
   const draftPoints = collectDraftSemanticPoints(input.draft);
@@ -142,7 +242,13 @@ export function evaluateCrossSourceCoverage(input: {
       blockers.add(`unmapped canonical draft point: ${point.path}`);
       continue;
     }
-    validateSemanticMapping(input, mapping, blockers);
+    validateSemanticMapping(
+      input,
+      mapping,
+      blockers,
+      typedBlockers,
+      typedEvidence
+    );
   }
   for (const mapping of planEntry.semanticMappings) {
     if (
@@ -157,10 +263,34 @@ export function evaluateCrossSourceCoverage(input: {
   validateComposition(input, blockers);
   validateRuntime(input, blockers);
 
+  const blockerCodes = [
+    ...typedBlockers,
+    ...classifyLegacyBlockers(Array.from(blockers)),
+  ];
+  for (const blocker of typedBlockers) {
+    blockers.add(blocker.message);
+  }
+  const uniqueBlockerCodes = Array.from(
+    new Map(
+      blockerCodes.map((blocker) => [
+        `${blocker.code}\u0000${blocker.message}\u0000${blocker.capabilityId ?? ""}\u0000${blocker.evidenceId ?? ""}`,
+        blocker,
+      ])
+    ).values()
+  ).sort((left, right) =>
+    `${left.code}\u0000${left.message}`.localeCompare(
+      `${right.code}\u0000${right.message}`
+    )
+  );
+
   return {
-    status: blockers.size === 0 ? "crossSourceComplete" : "blocked",
+    status:
+      blockers.size === 0 && typedBlockers.length === 0
+        ? "crossSourceComplete"
+        : "blocked",
     primaryMechanicCluster: planEntry.primaryMechanicCluster,
     blockers: Array.from(blockers).sort(),
+    blockerCodes: uniqueBlockerCodes,
   };
 }
 
@@ -215,7 +345,8 @@ export function hasAppropriateRuntimeComposition(
 }
 
 function decodePlanEntry(
-  value: unknown
+  value: unknown,
+  typedEvidence: boolean
 ): CrossSourceCoveragePlanEntry | undefined {
   const record = getRecord(value);
   const id = getString(record["id"]);
@@ -231,12 +362,18 @@ function decodePlanEntry(
 
   const semanticMappings = Array.isArray(record["semanticMappings"])
     ? record["semanticMappings"]
-        .map(decodeSemanticMapping)
+        .map((mapping) => decodeSemanticMapping(mapping, typedEvidence))
         .filter(
           (mapping): mapping is CrossSourceSemanticMapping =>
             mapping !== undefined
         )
     : [];
+  const requiredCapabilities = decodeStableIdArray(
+    record["requiredCapabilities"]
+  );
+  const unresolvedCapabilities = decodeStableIdArray(
+    record["unresolvedCapabilities"]
+  );
   const unresolvedMechanics = getStringArray(record["unresolvedMechanics"]);
 
   return {
@@ -244,12 +381,16 @@ function decodePlanEntry(
     objectKind,
     primaryMechanicCluster,
     semanticMappings,
+    requiredCapabilities,
+    unresolvedCapabilities,
     unresolvedMechanics,
+    evidenceMode: typedEvidence ? "typed" : "legacy",
   };
 }
 
 function decodeSemanticMapping(
-  value: unknown
+  value: unknown,
+  typedEvidence: boolean
 ): CrossSourceSemanticMapping | undefined {
   const record = getRecord(value);
   const draftPoint = decodeDraftPoint(record["draftPoint"]);
@@ -263,11 +404,14 @@ function decodeSemanticMapping(
     : [];
   const testRefs = Array.isArray(record["testRefs"])
     ? record["testRefs"]
-        .map(decodeTestRef)
+        .map((testRef) => decodeTestRef(testRef, typedEvidence))
         .filter((ref): ref is CrossSourceTestRef => ref !== undefined)
     : [];
 
-  return { draftPoint, runtimeRefs, testRefs };
+  const capabilityId = decodeCapabilityId(record["capabilityId"]);
+  const evidenceId = decodeEvidenceId(record["evidenceId"]);
+
+  return { capabilityId, evidenceId, draftPoint, runtimeRefs, testRefs };
 }
 
 function decodeDraftPoint(value: unknown): CrossSourceDraftPoint | undefined {
@@ -300,11 +444,485 @@ function decodeRuntimeRef(value: unknown): CrossSourceRuntimeRef | undefined {
     : { kind: "effect", effectId, timing, fields };
 }
 
-function decodeTestRef(value: unknown): CrossSourceTestRef | undefined {
+function decodeTestRef(
+  value: unknown,
+  typedEvidence: boolean
+): CrossSourceTestRef | undefined {
   const record = getRecord(value);
   const file = getString(record["file"]);
   const name = getString(record["name"]);
-  return file === undefined || name === undefined ? undefined : { file, name };
+  if (file === undefined || name === undefined) {
+    return undefined;
+  }
+  return {
+    file,
+    name,
+    execution: typedEvidence
+      ? decodeExecutionEvidence(record["execution"])
+      : undefined,
+    observation: typedEvidence
+      ? decodeObservationEvidence(record["observation"])
+      : undefined,
+  };
+}
+
+function isTypedEvidencePlan(planEntry: CrossSourceCoveragePlanEntry): boolean {
+  return (
+    planEntry.evidenceMode === "typed" ||
+    planEntry.requiredCapabilities !== undefined ||
+    planEntry.unresolvedCapabilities !== undefined ||
+    planEntry.semanticMappings.some(
+      (mapping) =>
+        mapping.capabilityId !== undefined || mapping.evidenceId !== undefined
+    )
+  );
+}
+
+function validateTypedPlanEntry(
+  planEntry: CrossSourceCoveragePlanEntry,
+  objectKind: CrossSourceObjectKind,
+  blockers: CrossSourceBlocker[]
+): void {
+  const requiredCapabilities = planEntry.requiredCapabilities;
+  if (requiredCapabilities === undefined) {
+    blockers.push(
+      createBlocker(
+        "required-capability-uncovered",
+        "typed evidence plan does not declare required capabilities"
+      )
+    );
+  }
+
+  const required = new Set(requiredCapabilities ?? []);
+  const seenCapabilities = new Set<CrossSourceCapabilityId>();
+  const seenMappedCapabilities = new Set<CrossSourceCapabilityId>();
+  const seenEvidence = new Set<CrossSourceEvidenceId>();
+  const coveredCapabilities = new Set<CrossSourceCapabilityId>();
+
+  for (const capabilityId of requiredCapabilities ?? []) {
+    if (!isStableCoverageId(capabilityId, "capability")) {
+      blockers.push(
+        createBlocker(
+          "invalid-capability-id",
+          `invalid required capability ID ${capabilityId}`,
+          { capabilityId }
+        )
+      );
+    }
+    if (seenCapabilities.has(capabilityId)) {
+      blockers.push(
+        createBlocker(
+          "duplicate-capability-id",
+          `duplicate required capability ID ${capabilityId}`,
+          { capabilityId }
+        )
+      );
+    }
+    seenCapabilities.add(capabilityId);
+  }
+
+  for (const capabilityId of planEntry.unresolvedCapabilities ?? []) {
+    if (!isStableCoverageId(capabilityId, "capability")) {
+      blockers.push(
+        createBlocker(
+          "invalid-capability-id",
+          `invalid unresolved capability ID ${capabilityId}`,
+          { capabilityId }
+        )
+      );
+      continue;
+    }
+    blockers.push(
+      createBlocker(
+        "unresolved-capability",
+        `unresolved capability ${capabilityId}`,
+        { capabilityId }
+      )
+    );
+  }
+
+  for (const mapping of planEntry.semanticMappings) {
+    const capabilityId = mapping.capabilityId;
+    const evidenceId = mapping.evidenceId;
+    if (capabilityId === undefined) {
+      blockers.push(
+        createBlocker(
+          "invalid-capability-id",
+          `semantic mapping for ${mapping.draftPoint.path} has no capability ID`
+        )
+      );
+    } else {
+      if (!isStableCoverageId(capabilityId, "capability")) {
+        blockers.push(
+          createBlocker(
+            "invalid-capability-id",
+            `invalid semantic mapping capability ID ${capabilityId}`,
+            { capabilityId }
+          )
+        );
+      }
+      if (!required.has(capabilityId)) {
+        blockers.push(
+          createBlocker(
+            "mapping-capability-unrequired",
+            `semantic mapping references undeclared capability ${capabilityId}`,
+            { capabilityId }
+          )
+        );
+      }
+      if (seenMappedCapabilities.has(capabilityId)) {
+        blockers.push(
+          createBlocker(
+            "duplicate-capability-id",
+            `duplicate semantic capability ID ${capabilityId}`,
+            { capabilityId }
+          )
+        );
+      }
+      seenMappedCapabilities.add(capabilityId);
+      coveredCapabilities.add(capabilityId);
+    }
+
+    if (evidenceId === undefined) {
+      blockers.push(
+        createBlocker(
+          "invalid-evidence-id",
+          `semantic mapping for ${mapping.draftPoint.path} has no evidence ID`
+        )
+      );
+    } else {
+      if (!isStableCoverageId(evidenceId, "evidence")) {
+        blockers.push(
+          createBlocker(
+            "invalid-evidence-id",
+            `invalid semantic mapping evidence ID ${evidenceId}`,
+            { evidenceId }
+          )
+        );
+      }
+      if (seenEvidence.has(evidenceId)) {
+        blockers.push(
+          createBlocker(
+            "duplicate-evidence-id",
+            `duplicate semantic evidence ID ${evidenceId}`,
+            { evidenceId }
+          )
+        );
+      }
+      seenEvidence.add(evidenceId);
+    }
+  }
+
+  for (const capabilityId of required) {
+    if (!coveredCapabilities.has(capabilityId)) {
+      blockers.push(
+        createBlocker(
+          "required-capability-uncovered",
+          `required capability ${capabilityId} has no semantic evidence mapping`,
+          { capabilityId }
+        )
+      );
+    }
+  }
+
+  for (const mapping of planEntry.semanticMappings) {
+    for (const testRef of mapping.testRefs) {
+      if (
+        testRef.execution !== undefined &&
+        testRef.execution.objectKind !== objectKind
+      ) {
+        blockers.push(
+          createBlocker(
+            "execution-object-kind-mismatch",
+            `execution object kind ${testRef.execution.objectKind} does not match ${objectKind}`,
+            {
+              capabilityId: mapping.capabilityId,
+              evidenceId: mapping.evidenceId,
+            }
+          )
+        );
+      }
+    }
+  }
+}
+
+function decodeExecutionEvidence(
+  value: unknown
+): CrossSourceExecutionEvidence | undefined {
+  const record = getRecord(value);
+  const seam = getExecutionSeam(record["seam"]);
+  const objectKind = getCrossSourceObjectKind(record["objectKind"]);
+  const subject = decodeTestSubject(record["subject"]);
+  return seam === undefined || objectKind === undefined || subject === undefined
+    ? undefined
+    : { seam, objectKind, subject };
+}
+
+function decodeObservationEvidence(
+  value: unknown
+): CrossSourceObservationEvidence | undefined {
+  const record = getRecord(value);
+  const target = getString(record["target"]);
+  return record["kind"] === "assertion" && target !== undefined
+    ? { kind: "assertion", target }
+    : undefined;
+}
+
+function decodeTestSubject(value: unknown): CrossSourceTestSubject | undefined {
+  const record = getRecord(value);
+  if (record["kind"] === "binding") {
+    const name = getString(record["name"]);
+    return name === undefined ? undefined : { kind: "binding", name };
+  }
+  if (record["kind"] === "literal") {
+    const subjectValue = getString(record["value"]);
+    return subjectValue === undefined
+      ? undefined
+      : { kind: "literal", value: subjectValue };
+  }
+  return undefined;
+}
+
+function validateTypedTestReference(
+  rootDir: string,
+  id: string,
+  testRef: CrossSourceTestRef,
+  blockers: CrossSourceBlocker[],
+  metadata: Pick<CrossSourceBlocker, "capabilityId" | "evidenceId">
+): boolean {
+  const addBlocker = (code: CrossSourceBlockerCode, message: string): void => {
+    blockers.push(createBlocker(code, message, metadata));
+  };
+  let valid = true;
+  const execution = testRef.execution;
+  const observation = testRef.observation;
+  if (execution === undefined) {
+    addBlocker(
+      "execution-evidence-missing",
+      `focused test ${testRef.file}#${testRef.name} has no execution evidence`
+    );
+    valid = false;
+  }
+  if (observation === undefined) {
+    addBlocker(
+      "observation-evidence-missing",
+      `focused test ${testRef.file}#${testRef.name} has no observation evidence`
+    );
+    valid = false;
+  }
+  if (execution === undefined || observation === undefined) {
+    return false;
+  }
+
+  if (!isExecutionSeamAllowed(execution.objectKind, execution.seam)) {
+    addBlocker(
+      "execution-seam-not-allowed",
+      `execution seam ${execution.seam} is not allowed for ${execution.objectKind}`
+    );
+    valid = false;
+  }
+
+  if (
+    !testRef.file.startsWith("tests/") ||
+    testRef.file.includes("..") ||
+    !testRef.file.endsWith(".test.ts")
+  ) {
+    addBlocker(
+      "focused-test-reference-invalid",
+      `focused test file reference is invalid: ${testRef.file}`
+    );
+    return false;
+  }
+  const absolutePath = path.resolve(rootDir, testRef.file);
+  if (!existsSync(absolutePath)) {
+    addBlocker(
+      "focused-test-not-found",
+      `focused test file does not exist: ${testRef.file}`
+    );
+    return false;
+  }
+  const text = readFileSync(absolutePath, "utf8");
+  const testBody = findNamedTestBody(text, testRef.name);
+  if (testBody === undefined) {
+    addBlocker(
+      "focused-test-not-found",
+      `focused test is not named in ${testRef.file}: ${testRef.name}`
+    );
+    return false;
+  }
+
+  const calls = findRuntimeSeamCalls(testBody).filter(
+    (call) => call.name === execution.seam
+  );
+  if (calls.length === 0) {
+    addBlocker(
+      "execution-seam-missing",
+      `focused test ${testRef.file}#${testRef.name} does not call execution seam ${execution.seam}`
+    );
+    return false;
+  }
+
+  const subjectUsed = calls.some((call) =>
+    executionSubjectIsUsed(testBody, id, call, execution.subject)
+  );
+  if (!subjectUsed) {
+    addBlocker(
+      "execution-subject-not-used",
+      `focused test ${testRef.file}#${testRef.name} does not pass the claimed object to ${execution.seam}`
+    );
+    valid = false;
+  }
+
+  const observationTarget = observation.target.trim();
+  if (observation.kind !== "assertion" || observationTarget === "") {
+    addBlocker(
+      "observation-evidence-missing",
+      `focused test ${testRef.file}#${testRef.name} has an empty assertion target`
+    );
+    return false;
+  }
+  const normalizedTarget = normalizeSourceSnippet(observationTarget);
+  const observed = calls.some((call) =>
+    getAssertionsAfter(testBody, call.end).some((assertion) =>
+      normalizeSourceSnippet(assertion).includes(normalizedTarget)
+    )
+  );
+  if (!observed) {
+    addBlocker(
+      "observation-assertion-missing",
+      `focused test ${testRef.file}#${testRef.name} does not assert ${observationTarget} after ${execution.seam}`
+    );
+    valid = false;
+  }
+  return valid;
+}
+
+function executionSubjectIsUsed(
+  testBody: string,
+  id: string,
+  call: RuntimeSeamCall,
+  subject: CrossSourceTestSubject
+): boolean {
+  if (subject.kind === "literal") {
+    const idBindings = findStableIdBindings(testBody, id);
+    return (
+      subject.value === id &&
+      (call.invocation.includes(id) ||
+        idBindings.some((binding) =>
+          invocationUsesBinding(call.invocation, binding)
+        ) ||
+        (call.name === "scoreGame" &&
+          hasScoredDefinitionReference(testBody.slice(0, call.end), id)) ||
+        ((call.name === "initializeGame" ||
+          call.name === "createGameScenario") &&
+          hasKnownRuntimeDefinitionReference(testBody, id)))
+    );
+  }
+
+  if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/u.test(subject.name)) {
+    return false;
+  }
+  const boundIds = findStableIdBindings(testBody, id);
+  if (!boundIds.includes(subject.name)) {
+    return false;
+  }
+  return invocationUsesBinding(call.invocation, subject.name);
+}
+
+function hasKnownRuntimeDefinitionReference(
+  testBody: string,
+  id: string
+): boolean {
+  const setupCallNames = [
+    "givenWizardProperty",
+    "givenDeadWizardToken",
+    "givenRuntimeCard",
+    "createCardInstance",
+    "createToken",
+    "markCardDefinitionId",
+    "markTokenDefinitionId",
+    "tokenDefinitions.get",
+    "cardDefinitions.get",
+  ];
+  const escapedId = escapeRegExp(id);
+  const knownCallReference = setupCallNames.some((name) =>
+    new RegExp(
+      `${escapeRegExp(name)}\\s*\\([^;]*["']${escapedId}["']`,
+      "u"
+    ).test(testBody)
+  );
+  const knownLookupReference = [
+    "tokenDefinitions.get",
+    "cardDefinitions.get",
+  ].some((name) => {
+    const lookup = new RegExp(
+      `${escapeRegExp(name)}\\s*\\(\\s*[a-zA-Z_$][a-zA-Z0-9_$]*\\.([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*\\)`,
+      "u"
+    ).exec(testBody);
+    if (lookup?.[1] === undefined) {
+      return false;
+    }
+    return new RegExp(
+      `\\b${escapeRegExp(lookup[1])}\\s*:\\s*["']${escapedId}["']`,
+      "u"
+    ).test(testBody);
+  });
+  const knownSetupFieldReference = new RegExp(
+    `\\b(?:tokenId|cardId|definitionId)\\s*:\\s*["']${escapedId}["']`,
+    "u"
+  ).test(testBody);
+  return knownCallReference || knownLookupReference || knownSetupFieldReference;
+}
+
+function invocationUsesBinding(invocation: string, binding: string): boolean {
+  const escapedBinding = escapeRegExp(binding);
+  return new RegExp(
+    `(?:[,{(]\\s*|\\b[a-zA-Z_$][a-zA-Z0-9_$]*\\s*:\\s*)${escapedBinding}\\b`,
+    "u"
+  ).test(invocation);
+}
+
+const allowedExecutionSeams: Record<
+  CrossSourceObjectKind,
+  ReadonlySet<CrossSourceExecutionSeam>
+> = {
+  card: new Set([
+    "applyAction",
+    "calculateEffectiveCardCost",
+    "calculateEffectiveCardVictoryPoints",
+    "createGameScenario",
+    "initializeGame",
+    "runMarketFlow",
+    "scoreGame",
+  ]),
+  wizardProperty: new Set([
+    "applyAction",
+    "calculateEffectiveCardVictoryPoints",
+    "calculateEffectivePlayerMaxLife",
+    "createGameScenario",
+    "initializeGame",
+    "scoreGame",
+  ]),
+  deadWizardToken: new Set([
+    "applyAction",
+    "calculateEffectiveCardVictoryPoints",
+    "calculateEffectivePlayerMaxLife",
+    "createGameScenario",
+    "gainDeadWizardToken",
+    "initializeGame",
+    "scoreGame",
+  ]),
+};
+
+function isExecutionSeamAllowed(
+  objectKind: CrossSourceObjectKind,
+  seam: CrossSourceExecutionSeam
+): boolean {
+  return allowedExecutionSeams[objectKind].has(seam);
+}
+
+function normalizeSourceSnippet(value: string): string {
+  return value.replaceAll("?", "").replaceAll(/\s+/gu, "");
 }
 
 function validateSemanticMapping(
@@ -314,7 +932,9 @@ function validateSemanticMapping(
     runtime: Record<string, unknown> | undefined;
   },
   mapping: CrossSourceSemanticMapping,
-  blockers: Set<string>
+  blockers: Set<string>,
+  typedBlockers: CrossSourceBlocker[],
+  typedEvidence: boolean
 ): void {
   if (mapping.runtimeRefs.length === 0) {
     blockers.add(
@@ -363,7 +983,19 @@ function validateSemanticMapping(
     }
   }
   for (const testRef of mapping.testRefs) {
-    if (!hasFocusedTestReference(input.rootDir, input.id, testRef)) {
+    const focusedTestValid = typedEvidence
+      ? validateTypedTestReference(
+          input.rootDir,
+          input.id,
+          testRef,
+          typedBlockers,
+          {
+            capabilityId: mapping.capabilityId,
+            evidenceId: mapping.evidenceId,
+          }
+        )
+      : hasFocusedTestReference(input.rootDir, input.id, testRef);
+    if (!focusedTestValid) {
       blockers.add(
         `focused test reference is missing for canonical draft point ${mapping.draftPoint.path}: ${testRef.file}#${testRef.name}`
       );
@@ -599,7 +1231,7 @@ interface RuntimeSeamCall {
   invocation: string;
 }
 
-const runtimeSeamNames = [
+const runtimeSeamNames: readonly CrossSourceExecutionSeam[] = [
   "applyAction",
   "calculateEffectiveCardCost",
   "calculateEffectiveCardVictoryPoints",
@@ -779,6 +1411,144 @@ function sameDraftPoint(
 
 function draftPointKey(point: CrossSourceDraftPoint): string {
   return `${point.path}\u0000${JSON.stringify(point.value)}`;
+}
+
+function createBlocker(
+  code: CrossSourceBlockerCode,
+  message: string,
+  metadata: Pick<CrossSourceBlocker, "capabilityId" | "evidenceId"> = {}
+): CrossSourceBlocker {
+  return { code, message, ...metadata };
+}
+
+function classifyLegacyBlockers(
+  blockers: readonly string[]
+): CrossSourceBlocker[] {
+  return blockers.map((message) => {
+    if (message === "missing cross-source mechanic mapping") {
+      return createBlocker("missing-coverage-plan", message);
+    }
+    if (message.startsWith("cross-source mapping object kind ")) {
+      return createBlocker("object-kind-mismatch", message);
+    }
+    if (message === "missing primary mechanic cluster") {
+      return createBlocker("missing-primary-mechanic-cluster", message);
+    }
+    if (message.startsWith("unresolved mechanic: ")) {
+      return createBlocker("legacy-unresolved-mechanic", message);
+    }
+    if (message.startsWith("unmapped canonical draft point: ")) {
+      return createBlocker("unmapped-canonical-draft-point", message);
+    }
+    if (
+      message.startsWith(
+        "cross-source mapping references missing canonical draft point: "
+      )
+    ) {
+      return createBlocker("stale-canonical-draft-point", message);
+    }
+    if (message.endsWith("has no runtime reference")) {
+      return createBlocker("missing-runtime-reference", message);
+    }
+    if (message.endsWith("has no focused test reference")) {
+      return createBlocker("missing-focused-test-reference", message);
+    }
+    if (
+      message.includes("does not match") &&
+      message.startsWith("runtime field ")
+    ) {
+      return createBlocker("runtime-field-mismatch", message);
+    }
+    if (
+      message.startsWith("runtime effect ") &&
+      message.includes(" is missing for canonical draft point ")
+    ) {
+      return createBlocker("runtime-effect-missing", message);
+    }
+    if (
+      message.startsWith("runtime effect ") &&
+      message.includes("has mismatched fields")
+    ) {
+      return createBlocker("runtime-effect-fields-mismatch", message);
+    }
+    if (
+      message === "missing appropriate deck/stack/pool composition membership"
+    ) {
+      return createBlocker("missing-composition", message);
+    }
+    if (message === "missing canonical composition quantity") {
+      return createBlocker("missing-canonical-quantity", message);
+    }
+    if (message === "composition entry is missing count") {
+      return createBlocker("composition-count-missing", message);
+    }
+    if (message.startsWith("composition quantity ")) {
+      return createBlocker("composition-quantity-mismatch", message);
+    }
+    if (message === "missing runtime mapping") {
+      return createBlocker("missing-runtime", message);
+    }
+    if (message === "runtime card ID does not match canonical card ID") {
+      return createBlocker("runtime-card-id-mismatch", message);
+    }
+    if (message.startsWith("runtime kind ")) {
+      return createBlocker("runtime-kind-mismatch", message);
+    }
+    if (message === "runtime has no effects") {
+      return createBlocker("runtime-no-effects", message);
+    }
+    if (message.includes("has an invalid effect id")) {
+      return createBlocker("invalid-runtime-effect-id", message);
+    }
+    if (message.includes("violates source/timing policy")) {
+      return createBlocker("runtime-source-timing-policy", message);
+    }
+    return createBlocker("legacy-unclassified", message);
+  });
+}
+
+function decodeStableIdArray(
+  value: unknown
+): CrossSourceCapabilityId[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const decoded = value.map((candidate) =>
+    typeof candidate === "string" ? candidate : "<invalid-capability-id>"
+  );
+  return decoded as CrossSourceCapabilityId[];
+}
+
+function decodeStableId(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function decodeCapabilityId(
+  value: unknown
+): CrossSourceCapabilityId | undefined {
+  const id = decodeStableId(value);
+  return id === undefined ? undefined : (id as CrossSourceCapabilityId);
+}
+
+function decodeEvidenceId(value: unknown): CrossSourceEvidenceId | undefined {
+  const id = decodeStableId(value);
+  return id === undefined ? undefined : (id as CrossSourceEvidenceId);
+}
+
+function isStableCoverageId(
+  value: string,
+  prefix: "capability" | "evidence"
+): boolean {
+  return new RegExp(`^${prefix}:[a-z0-9][a-z0-9._-]*$`, "u").test(value);
+}
+
+function getExecutionSeam(
+  value: unknown
+): CrossSourceExecutionSeam | undefined {
+  return typeof value === "string" &&
+    runtimeSeamNames.includes(value as CrossSourceExecutionSeam)
+    ? (value as CrossSourceExecutionSeam)
+    : undefined;
 }
 
 function getCrossSourceObjectKind(

@@ -284,16 +284,16 @@ Runtime JSON должен быть самодостаточным для engine.
 
 `npm run report:runtime-coverage` сохраняет отдельный карточный статус `cardComplete` из `npm run report:card-runtime-clusters` и проверяет final `crossSourceComplete` для карт, свойств волшебников и жетонов дохлого волшебника.
 
-Реестр `config/runtime-coverage/cross-source-mechanics.json` для каждого объекта задаёт primary mechanic cluster, точные ссылки на canonical draft points, runtime effects и именованные focused tests. Это план и evidence для import tooling, а не executable engine input.
+Реестр `config/runtime-coverage/cross-source-mechanics.json` для каждого объекта задаёт primary mechanic cluster, стабильные `capability:*` и `evidence:*` IDs, точные ссылки на canonical draft points, runtime effects и именованные focused tests. Typed evidence дополнительно фиксирует публичный execution seam, source kind объекта и наблюдаемое assertion. Это план и evidence для import tooling, а не executable engine input.
 
 `crossSourceComplete` возможен только когда:
 
-- отсутствуют `unresolvedMechanics`;
+- каждая `requiredCapabilities` закрыта semantic mapping с уникальным `evidenceId`; явно перечисленные `unresolvedCapabilities` всегда блокируют завершение;
 - каждое значимое напечатанное поле canonical draft (стоимость, VP, card kind/types, markers, текст) и каждый note сопоставлены с runtime effect (включая полный payload) либо runtime field и именованным test case;
 - runtime definition имеет effects, проходит policy `sourceKind × timing` и включён в правильный stack с canonical количеством и подходящим видом entry (`card` или `token`);
 - runtime reference и test reference существуют.
 
-Пустой `effects: []`, stable ID, не переданный в вызов публичного игрового runtime seam и не связанный с assertion наблюдаемого результата, вызов самого audit вместо игрового seam, несовпавшее количество в stack или любая composition reference без runtime definition всегда оставляют объект в статусе `blocked`.
+Пустой `effects: []`, stable ID, не переданный в вызов публичного игрового runtime seam и не связанный с assertion наблюдаемого результата, execution evidence с чужим source kind или недопустимым seam, вызов самого audit вместо игрового seam, несовпавшее количество в stack или любая composition reference без runtime definition всегда оставляют объект в статусе `blocked`. Старый `schemaVersion: 1` разрешён только для fixture-планов во время миграции и не считается typed semantic evidence.
 
 Ссылки `source.draft`, `source.text` и `source.image` в runtime JSON допустимы только как metadata/traceability для ревью и сверки. Движок не должен читать эти ссылки во время партии и не должен выводить из них поведение карты. Draft JSON из `data/import/**` также не является executable engine input.
 
