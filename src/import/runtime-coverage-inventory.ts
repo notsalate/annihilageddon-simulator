@@ -13,6 +13,7 @@ import {
   evaluateCrossSourceCoverage,
   hasAppropriateRuntimeComposition,
   readCrossSourceCoveragePlan,
+  type CrossSourceBlocker,
   type CrossSourceCoveragePlanEntry,
 } from "./cross-source-runtime-coverage.js";
 import { createCardRuntimeClusterReport } from "./card-runtime-clusters.js";
@@ -58,6 +59,7 @@ export interface RuntimeCoverageInventoryItem {
   crossSourceStatus: CrossSourceCoverageStatus;
   primaryMechanicCluster: string | undefined;
   crossSourceBlockers: string[];
+  crossSourceBlockerCodes: CrossSourceBlocker[];
 }
 
 export interface RuntimeCoverageMechanicCluster {
@@ -240,10 +242,10 @@ export function formatRuntimeCoverageInventoryMarkdown(
 
   lines.push("", "## Inventory", "");
   lines.push(
-    "| stable ID | object kind | source group/token kind | draft | runtime | composition membership | legacy v0 facts | status | card completion | cross-source status | primary mechanic cluster | cross-source blockers | mechanic signals | suspected blockers |"
+    "| stable ID | object kind | source group/token kind | draft | runtime | composition membership | legacy v0 facts | status | card completion | cross-source status | primary mechanic cluster | cross-source blocker codes | cross-source blockers | mechanic signals | suspected blockers |"
   );
   lines.push(
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
   );
 
   for (const item of report.items) {
@@ -275,6 +277,15 @@ export function formatRuntimeCoverageInventoryMarkdown(
         item.primaryMechanicCluster === undefined
           ? "none"
           : code(item.primaryMechanicCluster),
+        item.crossSourceBlockerCodes.length === 0
+          ? "none"
+          : item.crossSourceBlockerCodes
+              .map((blocker) =>
+                code(
+                  `${blocker.code}${blocker.capabilityId === undefined ? "" : `:${blocker.capabilityId}`}`
+                )
+              )
+              .join("<br>"),
         item.crossSourceBlockers.join("<br>") || "none",
         item.mechanicSignals.join("<br>") || "none",
         item.suspectedBlockers.join("<br>") || "none",
@@ -379,6 +390,7 @@ function collectDraftItems(
       crossSourceStatus: crossSource.status,
       primaryMechanicCluster: crossSource.primaryMechanicCluster,
       crossSourceBlockers: crossSource.blockers,
+      crossSourceBlockerCodes: crossSource.blockerCodes,
     };
   });
 }

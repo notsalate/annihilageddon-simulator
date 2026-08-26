@@ -114,11 +114,33 @@ export type {
   RuntimeCoverageObjectKind,
   RuntimeCoverageStatus,
 } from "./import/runtime-coverage-inventory.js";
+export type {
+  CrossSourceBlocker,
+  CrossSourceBlockerCode,
+  CrossSourceCapabilityId,
+  CrossSourceCompositionMembership,
+  CrossSourceCoverageEvaluation,
+  CrossSourceCoveragePlanEntry,
+  CrossSourceDraftPoint,
+  CrossSourceEvidenceId,
+  CrossSourceExecutionEvidence,
+  CrossSourceExecutionSeam,
+  CrossSourceObservationEvidence,
+  CrossSourceRuntimeRef,
+  CrossSourceSemanticMapping,
+  CrossSourceTestRef,
+  CrossSourceTestSubject,
+} from "./import/cross-source-runtime-coverage.js";
 export {
   createRuntimeCoverageInventory,
   formatRuntimeCoverageInventoryMarkdown,
   writeRuntimeCoverageInventoryMarkdown,
 } from "./import/runtime-coverage-inventory.js";
+export {
+  evaluateCrossSourceCoverage,
+  hasAppropriateRuntimeComposition,
+  readCrossSourceCoveragePlan,
+} from "./import/cross-source-runtime-coverage.js";
 export type {
   DraftImportBlocker,
   DraftImportGeneratedFile,
