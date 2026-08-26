@@ -314,7 +314,7 @@ export interface EffectRuntimeServices {
     state: GameState,
     player: PlayerState,
     card: CardInstance,
-    fixedDestination?: "discard"
+    fixedDestination?: "discard" | "hand"
   ):
     | { ok: true; destination: "discard" | "deckTop" | "hand" }
     | { ok: false; error: string };

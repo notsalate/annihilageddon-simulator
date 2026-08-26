@@ -7605,6 +7605,183 @@ test("reveal_top_card shuffles discard into an empty deck before revealing", () 
   );
 });
 
+test("reveal_top_card taking a real Wizard runs the gain lifecycle once", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 337001,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_001");
+  assert.ok(property);
+  assert.equal(property.kind, "wizardProperty");
+  replaceFirstWizardProperty(state, player, property);
+  player.chips = 0;
+
+  const wizard = createCommonRuntimeCard("esw2_dbg__main_006");
+  player.deck.unshift(wizard);
+  const revealCardId = addFixtureCardToActiveHand(state, {
+    effectId: "reveal_top_card",
+    timing: "onPlay",
+    source: "activePlayerDeck",
+    optionalTakeToHand: true,
+  });
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "reveal_top_card"
+      ? toChoiceSelection(choices.find((choice) => choice.choiceId === "take"))
+      : undefined;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: revealCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(player.hand.filter((card) => card === wizard).length, 1);
+  assert.equal(player.deck.includes(wizard), false);
+  assert.equal(player.chips, 1);
+  assert.deepEqual(state.turn.gainedCards, [
+    {
+      playerId: player.playerId,
+      definitionId: wizard.definitionId,
+      cardInstanceId: wizard.instanceId,
+    },
+  ]);
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "effectChipsGained" &&
+        event.effectId === "gain_chips" &&
+        event.cardInstanceId === player.wizardProperties[0]?.instanceId &&
+        event.definitionId === property.tokenId &&
+        event.sourceType === "wizardProperty"
+    ).length,
+    1
+  );
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "effectCardGained" &&
+        event.effectId === "reveal_top_card" &&
+        event.targetCardInstanceId === wizard.instanceId
+    ).length,
+    1
+  );
+});
+
+test("reveal_top_card taking a real Spell contributes to the gained-card hand limit", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 337002,
+  });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_007");
+  assert.ok(property);
+  assert.equal(property.kind, "wizardProperty");
+  replaceFirstWizardProperty(state, player, property);
+  player.hand.splice(0);
+
+  const spell = createCommonRuntimeCard("esw2_dbg__main_001");
+  player.deck.unshift(spell);
+  const revealCardId = addFixtureCardToActiveHand(state, {
+    effectId: "reveal_top_card",
+    timing: "onPlay",
+    source: "activePlayerDeck",
+    optionalTakeToHand: true,
+  });
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === "reveal_top_card"
+      ? toChoiceSelection(choices.find((choice) => choice.choiceId === "take"))
+      : undefined;
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: revealCardId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(state.turn.gainedCards, [
+    {
+      playerId: player.playerId,
+      definitionId: spell.definitionId,
+      cardInstanceId: spell.instanceId,
+    },
+  ]);
+  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+  const drawEvent = [...state.eventLog]
+    .reverse()
+    .find(
+      (event) =>
+        event.type === "handDrawn" && event.playerId === player.playerId
+    );
+  assert.ok(drawEvent?.type === "handDrawn");
+  assert.equal(drawEvent.amount, 6);
+});
+
+test("reveal_top_card keeps the hand destination for real Creature and Ongoing cards", () => {
+  const cases = [
+    {
+      propertyId: "esw2_dbg__wizard_property_006",
+      cardId: "esw2_dbg__main_016",
+    },
+    {
+      propertyId: "esw2_dbg__wizard_property_008",
+      cardId: "esw2_dbg__main_006",
+    },
+  ] as const;
+
+  for (const [index, testCase] of cases.entries()) {
+    const state = initializeGame({
+      rootDir,
+      seed: 337003 + index,
+    });
+    const player = mustGetPlayer(state, state.activePlayerId);
+    const property = state.tokenDefinitions.get(testCase.propertyId);
+    assert.ok(property);
+    assert.equal(property.kind, "wizardProperty");
+    replaceFirstWizardProperty(state, player, property);
+
+    const card = createCommonRuntimeCard(testCase.cardId);
+    player.deck.unshift(card);
+    const revealCardId = addFixtureCardToActiveHand(state, {
+      effectId: "reveal_top_card",
+      timing: "onPlay",
+      source: "activePlayerDeck",
+      optionalTakeToHand: true,
+    });
+    let topdeckChoiceRequested = false;
+    state.effectChoiceStrategy = ({ effectId, choices }) => {
+      if (effectId === "topdeck_gained_card") {
+        topdeckChoiceRequested = true;
+      }
+      return effectId === "reveal_top_card"
+        ? toChoiceSelection(
+            choices.find((choice) => choice.choiceId === "take")
+          )
+        : undefined;
+    };
+
+    const result = applyAction(state, {
+      type: "playCard",
+      cardInstanceId: revealCardId,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(
+      player.hand.filter((candidate) => candidate === card).length,
+      1
+    );
+    assert.equal(player.deck.includes(card), false);
+    assert.deepEqual(state.turn.gainedCards, [
+      {
+        playerId: player.playerId,
+        definitionId: card.definitionId,
+        cardInstanceId: card.instanceId,
+      },
+    ]);
+    assert.equal(topdeckChoiceRequested, false);
+  }
+});
+
 test("play_top_card plays the active player's top deck card through on-play effects", () => {
   const state = initializeGame({
     rootDir,
@@ -16050,6 +16227,7 @@ test("ЖДК 010 даёт врагам по очереди передавать 
   assert.equal(signFromDiscard.ownerId, recipient.playerId);
   assert.equal(emptyFoe.hand.length, 0);
   assert.equal(emptyFoe.discard.length, 0);
+  assert.deepEqual(state.turn.gainedCards, []);
   assert.ok(
     state.eventLog.some(
       (event) =>

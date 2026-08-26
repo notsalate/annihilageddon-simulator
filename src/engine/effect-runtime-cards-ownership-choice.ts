@@ -1343,21 +1343,13 @@ const revealTopCardHandler: EffectRuntimeHandler<
     );
     if (choice?.choiceId !== "take") return { ok: true };
 
-    const moved = services.moveCardToPlayerZone(
+    const moved = services.moveGainedCardToPlayerDestination(
       state,
-      card,
       player,
-      player.hand,
-      `${player.playerId}.hand`,
-      effect.effectId,
-      source
+      card,
+      "hand"
     );
-    if (!moved) {
-      return {
-        ok: false,
-        error: `Cannot take revealed card ${card.instanceId} to hand`,
-      };
-    }
+    if (!moved.ok) return moved;
     recordGameEvent(state, {
       type: "effectCardGained",
       playerId: player.playerId,
@@ -1366,7 +1358,7 @@ const revealTopCardHandler: EffectRuntimeHandler<
       targetCardInstanceId: card.instanceId,
       targetDefinitionId: card.definitionId,
       effectId: effect.effectId,
-      destination: "hand",
+      destination: moved.destination,
       sourceType: source.sourceType,
     });
     return { ok: true };

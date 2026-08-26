@@ -795,7 +795,7 @@ export function moveGainedCardToPlayerDestination(
   state: GameState,
   player: PlayerState,
   card: CardInstance,
-  fixedDestination?: "discard"
+  fixedDestination?: "discard" | "hand"
 ):
   | { ok: true; destination: "discard" | "deckTop" | "hand" }
   | { ok: false; error: string } {
@@ -924,7 +924,7 @@ function runOnGainCardEffects(
   player: PlayerState,
   gainedCard: CardInstance,
   gainedDefinition: CardDefinition,
-  fixedDestination?: "discard"
+  fixedDestination?: "discard" | "hand"
 ):
   | { ok: true; destination: "discard" | "deckTop" }
   | { ok: false; error: string } {
