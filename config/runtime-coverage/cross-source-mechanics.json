@@ -3137,19 +3137,237 @@
       "id": "esw2_dbg__dead_wizard_token_022",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "dwt-interactions",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in dwt-interactions"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Раскрой верхнюю карту основной колоды. Если это беспредел, получи 1 жетон дохлого колдуна из стопки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reveal_main_deck_gain_if_mayhem",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "ЖДК 022 раскрывает верх Main Deck и ставит вложенное лицо в FIFO"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Игрок раскрывает верхнюю карту основной колоды."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reveal_main_deck_gain_if_mayhem",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "ЖДК 022 раскрывает верх Main Deck и ставит вложенное лицо в FIFO"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Если раскрытая карта является беспределом, игрок получает 1 ЖДК из стопки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reveal_main_deck_gain_if_mayhem",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "ЖДК 022 раскрывает верх Main Deck и ставит вложенное лицо в FIFO"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Получение еще одного ЖДК не является СМЕРТЬЮ"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reveal_main_deck_gain_if_mayhem",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "ЖДК 022 раскрывает верх Main Deck и ставит вложенное лицо в FIFO"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Раскрытая карта обратно закрывается в любом случае"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reveal_main_deck_gain_if_mayhem",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "ЖДК 022 раскрывает верх Main Deck и ставит вложенное лицо в FIFO"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_023",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "dwt-interactions",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in dwt-interactions"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Раскрой верхнюю карту своей колоды. Если это легенда, получи 1 жетон дохлого колдуна из стопки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reveal_player_deck_gain_if_legend",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и учитывает WP003"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Игрок раскрывает верхнюю карту своей колоды."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reveal_player_deck_gain_if_legend",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и учитывает WP003"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Если раскрытая карта является легендой, игрок получает 1 ЖДК из стопки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reveal_player_deck_gain_if_legend",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и учитывает WP003"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Получение еще одного ЖДК не является СМЕРТЬЮ"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reveal_player_deck_gain_if_legend",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и учитывает WP003"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Раскрытая карта обратно закрывается в любом случае"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reveal_player_deck_gain_if_legend",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и учитывает WP003"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Игрок получивший этот ЖДК и имеющий свойство [wp_003](../wizard-property-texts/wp_003.md), может решить считать раскрытый фамильяр (если раскрыт фамильяр) за легенду или нет"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_reveal_player_deck_gain_if_legend",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и учитывает WP003"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_024",
