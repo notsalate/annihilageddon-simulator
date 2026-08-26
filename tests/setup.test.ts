@@ -260,11 +260,11 @@ test("wizard property setup choices are preserved by failure replay", () => {
   ) {
     throw new Error("Expected wizard property replay choice");
   }
-  assert.ok(wizardPropertyReplayChoice.candidateInstanceIds.length > 0);
-  assert.equal(
-    wizardPropertyReplayChoice.candidateInstanceIds.length,
-    wizardPropertyReplayChoice.candidateDefinitionIds.length
-  );
+  const replayCandidates = wizardPropertyReplayChoice.candidates;
+  if (replayCandidates === undefined) {
+    throw new Error("Expected wizard property replay candidates");
+  }
+  assert.equal(replayCandidates.length, 2);
   assert.throws(
     () =>
       runSingleGame({
@@ -288,7 +288,15 @@ test("wizard property setup choices are preserved by failure replay", () => {
     ...replay,
     choices: replay.choices.map((choice) =>
       choice === wizardPropertyReplayChoice
-        ? { ...choice, candidateDefinitionIds: ["drifted-definition"] }
+        ? {
+            ...choice,
+            candidates: [
+              {
+                instanceId: "drifted-instance",
+                definitionId: "drifted-definition",
+              },
+            ],
+          }
         : choice
     ),
   };

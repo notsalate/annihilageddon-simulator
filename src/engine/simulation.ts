@@ -151,13 +151,17 @@ export interface SimulationFailureReplayEffectChoice {
   readonly choiceId?: string;
 }
 
+export interface SimulationFailureReplaySetupCandidate {
+  readonly instanceId: string;
+  readonly definitionId: string;
+}
+
 export interface SimulationFailureReplaySetupChoice {
   readonly type: "setupChoiceSelected";
   readonly playerId: string;
   readonly setupChoiceKind: "familiar" | "wizardProperty";
   readonly policyId: string;
-  readonly candidateInstanceIds: readonly string[];
-  readonly candidateDefinitionIds: readonly string[];
+  readonly candidates?: readonly SimulationFailureReplaySetupCandidate[];
   readonly chosenInstanceId: string;
 }
 
@@ -224,9 +228,10 @@ export function createSimulationFailureReplay(
       ) {
         continue;
       }
+      const candidates = getReplaySetupCandidates(event);
       if (
-        event.candidateInstanceIds === undefined ||
-        event.candidateDefinitionIds === undefined
+        event.setupChoiceKind === "wizardProperty" &&
+        candidates === undefined
       ) {
         throw new Error(
           `${event.setupChoiceKind} setup replay event is missing candidates`
@@ -242,8 +247,7 @@ export function createSimulationFailureReplay(
         playerId: event.playerId,
         setupChoiceKind: event.setupChoiceKind,
         policyId: event.policyId ?? "provided",
-        candidateInstanceIds: [...event.candidateInstanceIds],
-        candidateDefinitionIds: [...event.candidateDefinitionIds],
+        ...(candidates === undefined ? {} : { candidates }),
         chosenInstanceId: event.chosenInstanceId,
       });
       continue;
@@ -273,6 +277,29 @@ export function createSimulationFailureReplay(
     actions: [...report.actions],
     choices,
   };
+}
+
+function getReplaySetupCandidates(
+  event: Extract<GameEvent, { type: "setupChoiceSelected" }>
+): SimulationFailureReplaySetupCandidate[] | undefined {
+  const instanceIds = event.candidateInstanceIds;
+  const definitionIds = event.candidateDefinitionIds;
+  if (instanceIds === undefined && definitionIds === undefined) {
+    return undefined;
+  }
+  if (!isStringArray(instanceIds) || !isStringArray(definitionIds)) {
+    throw new Error("Setup replay event has invalid candidate metadata");
+  }
+  if (instanceIds.length !== definitionIds.length) {
+    throw new Error("Setup replay event has mismatched candidate metadata");
+  }
+  return instanceIds.map((instanceId, index) => {
+    const definitionId = definitionIds[index];
+    if (definitionId === undefined) {
+      throw new Error("Setup replay event has sparse candidate metadata");
+    }
+    return { instanceId, definitionId };
+  });
 }
 
 export function parseSimulationFailureReplayReport(reportText: string): {
@@ -401,12 +428,19 @@ function readReplayChoices(value: unknown): SimulationFailureReplay["choices"] {
       if (
         typeof record.playerId !== "string" ||
         typeof record.policyId !== "string" ||
-        !isStringArray(record.candidateInstanceIds) ||
-        !isStringArray(record.candidateDefinitionIds) ||
         typeof record.chosenInstanceId !== "string"
       ) {
         throw new Error(
           `Report ${record.setupChoiceKind} setup choice has an invalid shape`
+        );
+      }
+      const candidates = readReplaySetupCandidates(record);
+      if (
+        record.setupChoiceKind === "wizardProperty" &&
+        candidates === undefined
+      ) {
+        throw new Error(
+          `Report ${record.setupChoiceKind} setup choice has no candidates`
         );
       }
       choices.push({
@@ -414,8 +448,7 @@ function readReplayChoices(value: unknown): SimulationFailureReplay["choices"] {
         playerId: record.playerId,
         setupChoiceKind: record.setupChoiceKind,
         policyId: record.policyId,
-        candidateInstanceIds: record.candidateInstanceIds,
-        candidateDefinitionIds: record.candidateDefinitionIds,
+        ...(candidates === undefined ? {} : { candidates }),
         chosenInstanceId: record.chosenInstanceId,
       });
       continue;
@@ -451,6 +484,29 @@ function readReplayChoices(value: unknown): SimulationFailureReplay["choices"] {
     });
   }
   return choices;
+}
+
+function readReplaySetupCandidates(
+  record: SimulationFailureReplayChoiceCandidate
+): SimulationFailureReplaySetupCandidate[] | undefined {
+  const instanceIds = record.candidateInstanceIds;
+  const definitionIds = record.candidateDefinitionIds;
+  if (instanceIds === undefined && definitionIds === undefined) {
+    return undefined;
+  }
+  if (!isStringArray(instanceIds) || !isStringArray(definitionIds)) {
+    throw new Error("Report setup choice has invalid candidate metadata");
+  }
+  if (instanceIds.length !== definitionIds.length) {
+    throw new Error("Report setup choice has mismatched candidate metadata");
+  }
+  return instanceIds.map((instanceId, index) => {
+    const definitionId = definitionIds[index];
+    if (definitionId === undefined) {
+      throw new Error("Report setup choice has sparse candidate metadata");
+    }
+    return { instanceId, definitionId };
+  });
 }
 
 export function createLoadedDataPackFromSimulationFailureReport(
@@ -635,14 +691,8 @@ function createSimulationReplayController(
         );
       }
       if (
-        !sameStringArray(
-          request.choices.map((choice) => choice.choiceId),
-          expected.candidateInstanceIds
-        ) ||
-        !sameStringArray(
-          request.choices.map((choice) => choice.candidateDefinitionId),
-          expected.candidateDefinitionIds
-        )
+        expected.candidates !== undefined &&
+        !sameSetupCandidates(request.choices, expected.candidates)
       ) {
         throw new SimulationReplayError(
           `Replay ${request.setupChoiceKind} candidates do not match for ${request.player.playerId}`
@@ -710,13 +760,20 @@ function createSimulationReplayController(
   };
 }
 
-function sameStringArray(
-  first: readonly string[],
-  second: readonly string[]
+function sameSetupCandidates(
+  choices: readonly {
+    readonly choiceId: string;
+    readonly candidateDefinitionId: string;
+  }[],
+  candidates: readonly SimulationFailureReplaySetupCandidate[]
 ): boolean {
   return (
-    first.length === second.length &&
-    first.every((value, index) => value === second[index])
+    choices.length === candidates.length &&
+    choices.every(
+      (choice, index) =>
+        choice.choiceId === candidates[index]?.instanceId &&
+        choice.candidateDefinitionId === candidates[index]?.definitionId
+    )
   );
 }
 

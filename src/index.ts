@@ -252,6 +252,7 @@ export type {
   SimulationFailureReport,
   SimulationFailureReplay,
   SimulationFailureReplayChoice,
+  SimulationFailureReplaySetupCandidate,
   SimulationFailureReplaySetupChoice,
   SimulationFailureReproduction,
   SimulationFailureRuntimeData,
