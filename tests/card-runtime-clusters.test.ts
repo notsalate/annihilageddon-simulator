@@ -433,6 +433,67 @@ test("card runtime clusters mark fullRuntime when runtime has composition and fo
   assert.deepEqual(report.items[0]?.focusedTestRefs, ["tests/setup.test.ts"]);
 });
 
+test("card runtime clusters accept an explicit setup replacement as reachability", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-card-runtime-clusters-setup-replacement-")
+  );
+
+  writeCardDraft(rootDir, "starter", "esw2_dbg__starter_004", {
+    nameRu: "Тестовая палочка",
+    textRu: "Атака: нанеси 1 урон.",
+  });
+  writeJson(rootDir, "data/cards/starter/esw2_dbg__starter_004.json", {
+    schemaVersion: 1,
+    cardId: "esw2_dbg__starter_004",
+    engine: {
+      mappingStatus: "supported",
+      playableInV0: true,
+      needsEffectMapping: false,
+      unsupportedMechanics: [],
+      effects: [{ effectId: "attack_damage", timing: "onPlay", amount: 1 }],
+    },
+  });
+  writeJson(rootDir, "data/tokens/wizard-property/test-property.json", {
+    schemaVersion: 1,
+    tokenId: "test-property",
+    engine: {
+      effects: [
+        {
+          effectId: "replace_starting_card",
+          fromDefinitionId: "esw2_dbg__starter_001",
+          toDefinitionId: "esw2_dbg__starter_004",
+        },
+      ],
+    },
+  });
+  writeJson(
+    rootDir,
+    ".scratch/krutagidon-card-runtime-clusters/card-cluster-decisions.json",
+    {
+      schemaVersion: 1,
+      decisions: [
+        {
+          cardId: "esw2_dbg__starter_004",
+          status: "needsClusterDecision",
+        },
+      ],
+    }
+  );
+  writeText(
+    rootDir,
+    "tests/setup.test.ts",
+    'import { initializeGame } from "../src/index.js";\ninitializeGame({ rootDir: process.cwd(), seed: 1 });\nconst cardId = "esw2_dbg__starter_004";\n'
+  );
+
+  const report = createCardRuntimeClusterReport(rootDir);
+
+  assert.equal(report.summary.fullRuntime, 1);
+  assert.equal(report.summary.missingRuntime, 0);
+  assert.deepEqual(report.items[0]?.compositionMembership, [
+    "replacement:test-property",
+  ]);
+});
+
 test("card runtime clusters ignore non-runtime test mentions as focused evidence", () => {
   const rootDir = mkdtempSync(
     path.join(tmpdir(), "krutagidon-card-runtime-clusters-non-runtime-ref-")

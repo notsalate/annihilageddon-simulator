@@ -16,13 +16,13 @@ This folder contains runtime data consumed by the simulator and source import da
 - Use stable IDs as primary identifiers. Localized names are display/source fields only.
 - Keep runtime mappings separate from import drafts and extracted text.
 - Runtime card and token behavior must point at explicit typed handlers/effects, not natural-language parsing.
-- Update deck, stack, pool, and pack composition when a runtime object must become playable.
+- Update deck, stack, pool, and pack composition when a runtime object must become playable. A card reachable only through an explicit `replace_starting_card` setup effect is the exception: do not duplicate it in the canonical starter template; keep the replacement token/runtime path and focused coverage aligned.
 - Every runtime card, dead wizard token, and wizard property definition must include `source.image`, a non-empty path to an existing asset under `assets/`. Token image metadata is canonical only in `source.image`; `visible.sourceImage` is forbidden.
 
 ## Work Guidance
 
 - Prefer editing the smallest JSON object set needed for the issue.
-- Keep `data/cards` and `data/tokens` aligned with composition files when playability changes.
+- Keep `data/cards` and `data/tokens` aligned with composition files when playability changes; for an explicit setup replacement, the token effect is the composition path.
 - Use templates from `docs/templates/` when adding new runtime object shapes.
 
 ## Verification

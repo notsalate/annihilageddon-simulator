@@ -653,9 +653,15 @@ function getNonFullRuntimeReasons(
   const needsEffectMapping = getOptionalBoolean(engine["needsEffectMapping"]);
   const unsupportedMechanics = getStringArray(engine["unsupportedMechanics"]);
 
-  if (memberships.length === 0) {
+  const hasDirectCompositionMembership = memberships.some(
+    (membership) => !membership.derivedFromToken
+  );
+  const hasExplicitSetupReplacement = memberships.some(
+    (membership) => membership.derivedFromToken
+  );
+  if (!hasDirectCompositionMembership && !hasExplicitSetupReplacement) {
     reasons.push(
-      "missing current deck/stack/pool or setup-replacement composition membership"
+      "missing current deck/stack/pool or explicit setup-replacement membership"
     );
   }
   if (focusedTestRefs.length === 0) {
