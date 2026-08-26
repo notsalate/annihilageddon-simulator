@@ -2232,19 +2232,10 @@ function buildLegalTargetChoices(
       };
     }
 
-    if (targetSelector === "chosenLeftOrRightFoe") {
-      return {
-        ok: true,
-        choices: getDistinctAdjacentFoes(
-          getOpponentsInSeatingOrder(state, player)
-        ).map((candidate) => ({
-          choiceType: "player" as const,
-          player: candidate,
-        })),
-      };
-    }
-
-    if (targetSelector === "leftAndRightFoes") {
+    if (
+      targetSelector === "chosenLeftOrRightFoe" ||
+      targetSelector === "leftAndRightFoes"
+    ) {
       return {
         ok: true,
         choices: getDistinctAdjacentFoes(
