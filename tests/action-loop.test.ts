@@ -6666,6 +6666,14 @@ test("Wizard Property 006 cannot redirect a fixed-discard gain of a real Legend-
   assert.equal(topdeckChoiceRequested, false);
   assert.equal(player.discard.includes(card), true);
   assert.equal(player.deck.includes(card), false);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "topdeck_gained_card"
+    ),
+    false
+  );
 });
 
 test("Зад в будущее предлагает взять с обычной барахолки карту на руку", () => {
@@ -16020,6 +16028,13 @@ test("ЖДК 010 даёт врагам по очереди передавать 
   assert.equal(signFromDiscard.ownerId, recipient.playerId);
   assert.equal(emptyFoe.hand.length, 0);
   assert.equal(emptyFoe.discard.length, 0);
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.effectId === "dead_wizard_token_each_foe_optional_transfer_sign"
+    )
+  );
   const choiceEvents = state.eventLog.filter(
     (event) =>
       event.type === "effectChoiceSelected" &&

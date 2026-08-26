@@ -1009,8 +1009,8 @@ test("repository cross-source registry assigns every wizard property and DWT to 
       (item) => item.primaryMechanicCluster !== undefined
     )
   );
-  assert.equal(report.crossSourceSummary.blocked, 142);
-  assert.equal(report.crossSourceSummary.crossSourceComplete, 30);
+  assert.equal(report.crossSourceSummary.blocked, 135);
+  assert.equal(report.crossSourceSummary.crossSourceComplete, 37);
   assert.ok(firstDeadWizardToken);
   assert.ok(wizardProperty004);
   assert.equal(wizardProperty004.crossSourceStatus, "crossSourceComplete");
@@ -1043,6 +1043,44 @@ test("dwt-interactions cross-source evidence covers nested DWT faces 022 and 023
     assert.equal(item.crossSourceStatus, "crossSourceComplete");
     assert.deepEqual(item.crossSourceBlockers, []);
   }
+});
+
+test("card-movement cross-source evidence covers wizard property 006 and DWT 006/010", () => {
+  const report = createRuntimeCoverageInventory(process.cwd());
+  for (const id of [
+    "esw2_dbg__wizard_property_006",
+    "esw2_dbg__dead_wizard_token_006",
+    "esw2_dbg__dead_wizard_token_010",
+  ]) {
+    const item = report.items.find((candidate) => candidate.id === id);
+    assert.ok(item);
+    assert.equal(item.crossSourceStatus, "crossSourceComplete");
+    assert.deepEqual(item.crossSourceBlockers, []);
+  }
+});
+
+test("card-movement cross-source evidence covers DWT 008, 009, and 011", () => {
+  const report = createRuntimeCoverageInventory(process.cwd());
+  for (const id of [
+    "esw2_dbg__dead_wizard_token_008",
+    "esw2_dbg__dead_wizard_token_009",
+    "esw2_dbg__dead_wizard_token_011",
+  ]) {
+    const item = report.items.find((candidate) => candidate.id === id);
+    assert.ok(item);
+    assert.equal(item.crossSourceStatus, "crossSourceComplete");
+    assert.deepEqual(item.crossSourceBlockers, []);
+  }
+});
+
+test("card-movement cross-source evidence covers DWT 024 reveal and destroy", () => {
+  const report = createRuntimeCoverageInventory(process.cwd());
+  const item = report.items.find(
+    (candidate) => candidate.id === "esw2_dbg__dead_wizard_token_024"
+  );
+  assert.ok(item);
+  assert.equal(item.crossSourceStatus, "crossSourceComplete");
+  assert.deepEqual(item.crossSourceBlockers, []);
 });
 
 function createCardDraft(
