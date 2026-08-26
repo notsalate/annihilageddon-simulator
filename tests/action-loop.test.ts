@@ -3212,6 +3212,17 @@ test("Pokhotlivyi maiachok recalculates its controller power from controlled DWT
     seed: 60615,
   });
   const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const neutralTokens = state.common.deadWizardTokens.drawStack.filter(
+    (token) => token.definitionId === "esw2_dbg__dead_wizard_token_neutral"
+  );
+  assert.equal(neutralTokens.length >= 2, true);
+  state.common.deadWizardTokens.drawStack = [
+    ...neutralTokens.slice(0, 2),
+    ...state.common.deadWizardTokens.drawStack.filter(
+      (token) => token.definitionId !== "esw2_dbg__dead_wizard_token_neutral"
+    ),
+    ...neutralTokens.slice(2),
+  ];
   const beacon = addRuntimeCardToHand(
     state,
     activePlayer,
@@ -9247,6 +9258,148 @@ test("#289 main_025 does not draw on a hit or a death", () => {
       0
     );
   }
+});
+
+test("#290 familiar_004 makes only the next card attack unavoidable", () => {
+  const state = initializeGame({ rootDir, seed: 60627, playerCount: 2 });
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const target = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  attacker.wizardProperties = [];
+  target.wizardProperties = [];
+  target.life.current = 20;
+  state.turn.power = 0;
+
+  const defense = addFixtureDefenseCardToHand(state, target, "discardSelf");
+  let defenseChoiceCount = 0;
+  state.effectChoiceStrategy = (request) => {
+    if (request.effectId === "attack_damage") {
+      return { choiceId: target.playerId };
+    }
+    if (request.effectId === "avoid_attack") {
+      defenseChoiceCount += 1;
+      return { choiceId: defense.instanceId };
+    }
+    return undefined;
+  };
+
+  const familiar = addRuntimeCardToHand(
+    state,
+    attacker,
+    "esw2_dbg__familiar_004"
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: familiar.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(state.turn.nextAttackUnavoidablePlayerId, attacker.playerId);
+  assert.equal(state.turn.power, 3);
+
+  const firstAttack = addRuntimeCardToHand(
+    state,
+    attacker,
+    "esw2_dbg__main_024"
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: firstAttack.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(target.life.current, 14);
+  assert.equal(defenseChoiceCount, 0);
+  assert.equal(target.hand.includes(defense), true);
+  assert.equal(state.turn.nextAttackUnavoidablePlayerId, undefined);
+
+  const secondAttack = addRuntimeCardToHand(
+    state,
+    attacker,
+    "esw2_dbg__main_024"
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: secondAttack.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(target.life.current, 14);
+  assert.equal(defenseChoiceCount, 1);
+  assert.equal(target.discard.includes(defense), true);
+});
+
+test("#290 legend_016 prevents defense until the current turn ends", () => {
+  const state = initializeGame({ rootDir, seed: 60628, playerCount: 3 });
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const nextPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const target = mustGetPlayer(state, markPlayerId("player-3"));
+  state.activePlayerId = attacker.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+  }
+  target.life.current = 20;
+  const defense = addFixtureDefenseCardToHand(state, target, "discardSelf");
+  let defenseChoiceCount = 0;
+  state.effectChoiceStrategy = (request) => {
+    if (request.effectId === "prevent_defense_this_turn") {
+      return { choiceId: target.playerId };
+    }
+    if (request.effectId === "attack_damage") {
+      return { choiceId: target.playerId };
+    }
+    if (request.effectId === "avoid_attack") {
+      defenseChoiceCount += 1;
+      return { choiceId: defense.instanceId };
+    }
+    return undefined;
+  };
+
+  const legend = addRuntimeCardToHand(state, attacker, "esw2_dbg__legend_016");
+  assert.equal(
+    applyAction(state, { type: "playCard", cardInstanceId: legend.instanceId })
+      .ok,
+    true
+  );
+  assert.deepEqual(state.turn.defenseDisabledPlayerIds, [target.playerId]);
+
+  for (let index = 0; index < 2; index += 1) {
+    const attack = addRuntimeCardToHand(state, attacker, "esw2_dbg__main_024");
+    assert.equal(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: attack.instanceId,
+      }).ok,
+      true
+    );
+  }
+  assert.equal(target.life.current, 8);
+  assert.equal(defenseChoiceCount, 0);
+  assert.equal(target.hand.includes(defense), true);
+
+  assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
+  assert.equal(state.activePlayerId, nextPlayer.playerId);
+  assert.deepEqual(state.turn.defenseDisabledPlayerIds, []);
+  state.turn.power = 99;
+
+  const laterAttack = addRuntimeCardToHand(
+    state,
+    nextPlayer,
+    "esw2_dbg__main_024"
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: laterAttack.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(defenseChoiceCount, 1);
+  assert.equal(target.life.current, 8);
+  assert.equal(target.discard.includes(defense), true);
 });
 
 test("Ultimate Tronado gains the actual total from a directional chain attack only once", () => {

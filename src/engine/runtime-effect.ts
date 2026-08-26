@@ -299,6 +299,7 @@ export const knownRuntimeEffectIds = [
   "attack_gain_limp_wand",
   "attack_gain_status",
   "activation_attack_damage_per_controlled_card_type",
+  "arm_next_attack_unavoidable",
   "avoid_attack",
   "conditional_activation_attack_damage",
   "conditional_activation_destroy_own_cards",
@@ -401,6 +402,7 @@ export const knownRuntimeEffectIds = [
   "optional_spend_chip_destroy_own_cards",
   "play_top_card",
   "play_top_card_from_foe_deck",
+  "prevent_defense_this_turn",
   "prevent_defense_against_owned_wand_attacks",
   "remove_status",
   "replace_starting_card",
@@ -556,6 +558,17 @@ export type AddPowerRuntimeEffect = EffectWithOptionalTiming<"add_power"> &
     activationLimit?: "oncePerTurnWhileControlled";
   };
 
+export type ArmNextAttackUnavoidableRuntimeEffect = TimedEffect<
+  "arm_next_attack_unavoidable",
+  "onPlay"
+>;
+
+export type PreventDefenseThisTurnRuntimeEffect = TimedEffect<
+  "prevent_defense_this_turn",
+  "onPlay"
+> &
+  Targetable;
+
 export type AddPowerPerControlledObjectRuntimeEffect = TimedEffect<
   "add_power_per_controlled_object",
   "onPlay"
@@ -623,6 +636,7 @@ export interface ImmediateEffectPayloadMap
     CardOwnershipChoiceEffectPayloadMap,
     DwtInteractionEffectPayloadMap {
   add_power: AddPowerRuntimeEffect;
+  arm_next_attack_unavoidable: ArmNextAttackUnavoidableRuntimeEffect;
   add_power_if_player_has_status: AddPowerIfPlayerHasStatusRuntimeEffect;
   add_power_per_controlled_object: AddPowerPerControlledObjectRuntimeEffect;
   add_power_per_controlled_permanent: AddPowerPerControlledPermanentRuntimeEffect;
@@ -638,6 +652,7 @@ export interface ImmediateEffectPayloadMap
   exchange_life_and_dingler_status: ExchangeLifeAndDinglerStatusRuntimeEffect;
   deal_damage: DealDamageRuntimeEffect;
   fixture_add_power_equal_to_target_cost: FixtureAddPowerEqualToTargetCostRuntimeEffect;
+  prevent_defense_this_turn: PreventDefenseThisTurnRuntimeEffect;
 }
 
 export type AttackDamageRuntimeEffect =

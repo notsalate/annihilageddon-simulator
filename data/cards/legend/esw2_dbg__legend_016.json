@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_016",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_016.json",
+    "image": "assets/cards/legend/spell/Легенда-Заклинание. Восстание из зада.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_016.md"
+  },
+  "visible": {
+    "nameRu": "Восстание из зада",
+    "cost": 9,
+    "victoryPoints": 3,
+    "typeRu": "Легенда — Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "Возьми 2 карты.\nВыбери врага. Он не может использовать защиту в этот ход.",
+    "markers": [],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "cost": 9,
+    "victoryPoints": 3,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "draw_cards", "timing": "onPlay", "amount": 2 },
+      {
+        "effectId": "prevent_defense_this_turn",
+        "timing": "onPlay",
+        "targetSelector": "chosenFoe"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

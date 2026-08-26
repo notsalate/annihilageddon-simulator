@@ -701,6 +701,10 @@ const runtimeEffectDecoders: {
     condition: optionalCondition,
     activationLimit: optional(literal("oncePerTurnWhileControlled")),
   }),
+  arm_next_attack_unavoidable: defineDecoder("arm_next_attack_unavoidable", {
+    effectId: required(literal("arm_next_attack_unavoidable")),
+    timing: required(literal("onPlay")),
+  }),
   add_power_per_controlled_object: defineDecoder(
     "add_power_per_controlled_object",
     {
@@ -863,6 +867,16 @@ const runtimeEffectDecoders: {
       emptyChoice: optional(literal("fail")),
     },
     requireNestedTargetSelector("fixture target-cost power", "mainMarketCard")
+  ),
+  prevent_defense_this_turn: defineDecoder(
+    "prevent_defense_this_turn",
+    {
+      effectId: required(literal("prevent_defense_this_turn")),
+      timing: required(literal("onPlay")),
+      target: optionalTarget,
+      targetSelector: optionalTargetSelector,
+    },
+    requireTargetSelector("prevent-defense", ["chosenFoe"])
   ),
 
   ...activationEffectDecoders,

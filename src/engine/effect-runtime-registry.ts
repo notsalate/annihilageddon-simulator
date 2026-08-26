@@ -1216,6 +1216,43 @@ const addPowerHandler: EffectRuntimeHandler<AddPowerRuntimeEffect> = {
   },
 };
 
+const armNextAttackUnavoidableHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"arm_next_attack_unavoidable">
+> = {
+  effectId: "arm_next_attack_unavoidable",
+  execute(state, player) {
+    state.turn.nextAttackUnavoidablePlayerId = player.playerId;
+    return { ok: true };
+  },
+};
+
+const preventDefenseThisTurnHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"prevent_defense_this_turn">
+> = {
+  effectId: "prevent_defense_this_turn",
+  execute(state, player, effect, source, services) {
+    const targetResult = services.resolveStatusTargetPlayers(
+      state,
+      player,
+      effect,
+      source
+    );
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    for (const targetPlayer of targetResult.players) {
+      if (
+        !state.turn.defenseDisabledPlayerIds.includes(targetPlayer.playerId)
+      ) {
+        state.turn.defenseDisabledPlayerIds.push(targetPlayer.playerId);
+      }
+    }
+
+    return { ok: true };
+  },
+};
+
 const addPowerPerPlayerWithStatusHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"add_power_per_player_with_status">
 > = {
@@ -1997,6 +2034,14 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
     handler: addPowerHandler,
   },
   {
+    effectId: "arm_next_attack_unavoidable",
+    decoder: bindRuntimeEffectDecoder("arm_next_attack_unavoidable"),
+    supportedTimings: ["onPlay"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: armNextAttackUnavoidableHandler,
+  },
+  {
     effectId: "add_power_per_controlled_object",
     decoder: bindRuntimeEffectDecoder("add_power_per_controlled_object"),
     supportedTimings: ["onPlay"],
@@ -2069,6 +2114,14 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
     supportedModes: ["fixture"],
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: fixtureAddPowerEqualToTargetCostHandler,
+  },
+  {
+    effectId: "prevent_defense_this_turn",
+    decoder: bindRuntimeEffectDecoder("prevent_defense_this_turn"),
+    supportedTimings: ["onPlay"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: preventDefenseThisTurnHandler,
   },
 ] as const) satisfies EffectRuntimeEntriesFor<
   Omit<
@@ -2302,6 +2355,16 @@ export function collectAttackReplacementProfile(
     deadWizardTokenDamageBonus: 0,
     unavoidable: false,
   };
+  if (
+    options?.includeSourceOwnerModifiers !== false &&
+    source.sourceType === "card" &&
+    source.playerId === attackingPlayer.playerId &&
+    state.activePlayerId === attackingPlayer.playerId &&
+    state.turn.nextAttackUnavoidablePlayerId === attackingPlayer.playerId
+  ) {
+    profile.unavoidable = true;
+    state.turn.nextAttackUnavoidablePlayerId = undefined;
+  }
   const applyEffects = (
     effects: readonly RuntimeEffect[],
     effectSource: EffectSourceContext,
