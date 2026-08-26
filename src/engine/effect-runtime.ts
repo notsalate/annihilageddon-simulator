@@ -20,6 +20,9 @@ import {
   getControlledCards,
   findCardLocation,
   insertDetachedCard,
+  listMainDeckCards,
+  listPlayerDeckCards,
+  listPlayerDiscardCards,
   removeCardFromLocation,
   removeDeadWizardToken,
   removeTemporaryCardControl,
@@ -50,7 +53,7 @@ import { calculateEffectivePlayerMaxLife } from "./effective-value-runtime.js";
 import {
   clearFaceUpState,
   drawDeckCard,
-  peekDeckCard,
+  previewDeckCard,
   refillDeckFromDiscard,
 } from "./deck-lifecycle.js";
 import {
@@ -298,11 +301,66 @@ export function validateRevealTopCardGainEffects(
     definitionId: playedDefinition.cardId,
   };
 
-  for (const effect of playedDefinition.engine.effects) {
+  return validateRevealTopCardGainEffectsAtTiming(
+    state,
+    player,
+    playedDefinition.engine.effects,
+    "onPlay",
+    source,
+    playedCard.instanceId
+  );
+}
+
+export function validateDefenseEffects(
+  state: GameState,
+  player: PlayerState,
+  effects: readonly RuntimeEffect[],
+  source: EffectSourceContext,
+  excludedCardInstanceId: CardInstance["instanceId"]
+): EffectExecutionResult {
+  const effectValidation = validateEffectsAtTiming(
+    state,
+    player,
+    effects,
+    "onDefense",
+    source,
+    undefined,
+    excludedCardInstanceId
+  );
+  if (!effectValidation.ok) {
+    return effectValidation;
+  }
+
+  return validateRevealTopCardGainEffectsAtTiming(
+    state,
+    player,
+    effects,
+    "onDefense",
+    source,
+    excludedCardInstanceId
+  );
+}
+
+function validateRevealTopCardGainEffectsAtTiming(
+  state: GameState,
+  player: PlayerState,
+  effects: readonly RuntimeEffect[],
+  timing: RuntimeEffect["timing"],
+  source: EffectSourceContext,
+  excludedCardInstanceId: CardInstance["instanceId"]
+): EffectExecutionResult {
+  let activeDeckPreview = {
+    deck: [...listPlayerDeckCards(player)],
+    discard: [...listPlayerDiscardCards(player)],
+    rng: state.rng,
+  };
+  let mainDeckPreview = [...listMainDeckCards(state)];
+
+  for (const effect of effects) {
     const revealResult = evaluateRuntimeEffectAtTiming(
       requireVerifiedRuntimeEffect(effect),
       source,
-      "onPlay",
+      timing,
       (decodedEffect) => {
         if (
           decodedEffect.effectId !== "reveal_top_card" ||
@@ -311,7 +369,7 @@ export function validateRevealTopCardGainEffects(
             state,
             player,
             decodedEffect,
-            playedCard.instanceId
+            source.cardInstanceId
           )
         ) {
           return { status: "notApplicable" };
@@ -326,10 +384,18 @@ export function validateRevealTopCardGainEffects(
       continue;
     }
 
-    const card =
-      revealResult.result.source === "mainDeck"
-        ? state.common.mainDeck[0]
-        : peekDeckCard(player.deck, player.discard, state.rng);
+    let card: CardInstance | undefined;
+    if (revealResult.result.source === "mainDeck") {
+      card = mainDeckPreview[0];
+    } else {
+      const preview = previewDeckCard(
+        activeDeckPreview.deck,
+        activeDeckPreview.discard,
+        activeDeckPreview.rng
+      );
+      activeDeckPreview = preview;
+      card = preview.card;
+    }
     if (card === undefined) {
       continue;
     }
@@ -352,10 +418,13 @@ export function validateRevealTopCardGainEffects(
       ...player,
       hand: [
         ...player.hand.filter(
-          (candidate) => candidate.instanceId !== playedCard.instanceId
+          (candidate) => candidate.instanceId !== excludedCardInstanceId
         ),
         card,
       ],
+      permanents: player.permanents.filter(
+        (candidate) => candidate.instanceId !== excludedCardInstanceId
+      ),
     };
     const gainValidation = validateGainedCardEffects(
       state,
@@ -365,6 +434,12 @@ export function validateRevealTopCardGainEffects(
     );
     if (!gainValidation.ok) {
       return gainValidation;
+    }
+
+    if (revealResult.result.source === "mainDeck") {
+      mainDeckPreview.shift();
+    } else {
+      activeDeckPreview.deck.shift();
     }
   }
 
@@ -3476,6 +3551,7 @@ function applyAfterPlayerAttackDamage(
 
 const attackDefenseServices: AttackDefenseServices = {
   chooseEffectChoice,
+  validateDefenseEffects,
   executeDefenseEffects(state, player, effects, source) {
     return executeEffects(state, player, effects, "onDefense", source);
   },

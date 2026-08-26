@@ -7743,6 +7743,63 @@ test("reveal_top_card validates gain hooks before taking the revealed card", () 
   assert.equal(scenario.state.rng.next(), expectedNextRandom);
 });
 
+test("reveal_top_card preflight checks multiple taken reveals in deck order", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 337006,
+  });
+  const player = scenario.activePlayer;
+  player.hand.splice(0);
+  player.deck.splice(0);
+  player.discard.splice(0);
+  const firstGainCard = givenRuntimeCard(scenario, {
+    zone: "deck",
+    effects: [],
+  });
+  const invalidGainCard = givenRuntimeCard(scenario, {
+    zone: "deck",
+    effects: [
+      {
+        effectId: "discard_card",
+        timing: "onGain",
+        targetSelector: "activePlayerHandCard",
+        emptyChoice: "fail",
+      },
+    ],
+  });
+  const revealCard = givenRuntimeCard(scenario, {
+    effects: [
+      {
+        effectId: "reveal_top_card",
+        timing: "onPlay",
+        source: "activePlayerDeck",
+        optionalTakeToHand: true,
+      },
+      {
+        effectId: "reveal_top_card",
+        timing: "onPlay",
+        source: "activePlayerDeck",
+        optionalTakeToHand: true,
+      },
+    ],
+  });
+  scenario.state.effectChoiceStrategy = ({ effectId }) =>
+    effectId === "reveal_top_card" ? { choiceId: "take" } : undefined;
+  const expectedNextRandom = scenario.state.rng.fork().next();
+  const eventLog = scenario.state.eventLog;
+
+  const result = play(scenario, revealCard);
+
+  assert.equal(result.ok, false);
+  assert.equal(player.hand.includes(revealCard), true);
+  assert.deepEqual(player.deck, [firstGainCard, invalidGainCard]);
+  assert.deepEqual(player.discard, []);
+  assert.equal(scenario.state.eventLog, eventLog);
+  assert.deepEqual(scenario.state.turn.gainedCards, []);
+  assert.equal(scenario.state.rng.next(), expectedNextRandom);
+});
+
 test("reveal_top_card preflight does not shuffle an empty deck on gain failure", () => {
   const scenario = createGameScenario({
     rootDir,
@@ -7764,8 +7821,17 @@ test("reveal_top_card preflight does not shuffle an empty deck on gain failure",
       },
     ],
   });
-  player.discard.splice(player.discard.indexOf(invalidGainCard), 1);
-  player.discard.push(invalidGainCard);
+  const secondInvalidGainCard = givenRuntimeCard(scenario, {
+    zone: "discard",
+    effects: [
+      {
+        effectId: "discard_card",
+        timing: "onGain",
+        targetSelector: "activePlayerHandCard",
+        emptyChoice: "fail",
+      },
+    ],
+  });
   const revealCard = givenRuntimeCard(scenario, {
     effects: [
       {
@@ -7787,7 +7853,7 @@ test("reveal_top_card preflight does not shuffle an empty deck on gain failure",
   assert.equal(player.hand.includes(revealCard), true);
   assert.equal(player.deck, deck);
   assert.equal(player.discard, discard);
-  assert.deepEqual(player.discard, [invalidGainCard]);
+  assert.deepEqual(player.discard, [invalidGainCard, secondInvalidGainCard]);
   assert.deepEqual(player.deck, []);
   assert.equal(scenario.state.eventLog, eventLog);
   assert.equal(scenario.state.rng.next(), expectedNextRandom);
@@ -17990,6 +18056,84 @@ test("#269 familiar defense reveals the main deck and never takes Mayhem", () =>
   );
   assert.equal(mayhemState.common.mainDeck[0], mayhem);
   assert.equal(mayhemDefender.hand.includes(mayhem), false);
+});
+
+test("reveal_top_card onDefense validates gain hooks before defense mutation", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 337007,
+  });
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const defender = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  defender.hand = [];
+  const invalidDefinition = createFixtureCardDefinition(
+    "fixture-337-on-defense-invalid-gain",
+    [
+      {
+        effectId: "discard_card",
+        timing: "onGain",
+        targetSelector: "activePlayerHandCard",
+        emptyChoice: "fail",
+      },
+    ]
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [invalidDefinition.cardId, invalidDefinition],
+  ]);
+  const invalidCard = {
+    instanceId: markCardInstanceId("fixture-337-on-defense-invalid-card"),
+    definitionId: markCardDefinitionId(invalidDefinition.cardId),
+    ownerId: "common" as const,
+    marketChips: 0,
+  } satisfies CardInstance;
+  state.common.mainDeck.splice(0, state.common.mainDeck.length, invalidCard);
+  const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
+    branchEffects: [
+      {
+        effectId: "reveal_top_card",
+        timing: "onDefense",
+        source: "mainDeck",
+        optionalTakeToHand: true,
+      },
+    ],
+  });
+  const attack = addFixtureCardToActiveHand(state, {
+    effectId: "attack_damage",
+    timing: "onPlay",
+    amount: 5,
+    target: { selector: "opponentPlayer" },
+  });
+  state.effectChoiceStrategy = ({ effectId }) =>
+    effectId === "avoid_attack" ? { choiceId: defense.instanceId } : undefined;
+  const expectedNextRandom = state.rng.fork().next();
+  const eventLog = state.eventLog;
+
+  assert.throws(
+    () =>
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: attack,
+      }),
+    /timing.*onGain|does not support timing/
+  );
+
+  assert.equal(defender.hand.includes(defense), true);
+  assert.equal(state.common.mainDeck[0], invalidCard);
+  assert.equal(state.eventLog, eventLog);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "defenseChoiceSelected" ||
+        event.type === "effectCardRevealed" ||
+        event.type === "effectCardGained"
+    ),
+    false
+  );
+  assert.deepEqual(state.turn.gainedCards, []);
+  assert.equal(state.rng.next(), expectedNextRandom);
 });
 
 test("#269 defense returns another creature from discard and excludes itself", () => {

@@ -639,11 +639,32 @@ export function peekLegendDeckCard(
   return state.common.legendDeck[0];
 }
 
+/** Returns one player's draw pile through the Ledger-owned zone. */
+export function listPlayerDeckCards(
+  player: PlayerState
+): readonly CardInstance[] {
+  return player.deck;
+}
+
+/** Returns one player's discard pile through the Ledger-owned zone. */
+export function listPlayerDiscardCards(
+  player: PlayerState
+): readonly CardInstance[] {
+  return player.discard;
+}
+
 /** Returns the next main-deck card through the Ledger-owned zone. */
 export function peekMainDeckCard(
   state: Pick<GameState, "common">
 ): CardInstance | undefined {
   return state.common.mainDeck[0];
+}
+
+/** Returns the main-deck cards through the Ledger-owned zone. */
+export function listMainDeckCards(
+  state: Pick<GameState, "common">
+): readonly CardInstance[] {
+  return state.common.mainDeck;
 }
 
 /** Lists locations that can supply a voluntary Defense for one player. */
