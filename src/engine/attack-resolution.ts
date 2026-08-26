@@ -648,6 +648,41 @@ interface CurrentAttackTargetContext {
   readonly originalTargetPlayerId: PlayerState["playerId"];
 }
 
+function resolveRedirectedAttack(
+  intent: PlayerControlledAttackIntent,
+  context: PlayerControlledAttackContext,
+  adapters: PlayerControlledAttackAdapters,
+  current: CurrentAttackTargetContext,
+  redirectedIntent: RedirectedAttackIntent
+): AttackTargetResolutionResult {
+  const nextControlEpoch = current.application.controlEpoch + 1;
+  if (redirectedIntent.controlEpoch !== nextControlEpoch) {
+    return {
+      ok: false,
+      error: "Redirect control epoch is not sequential",
+    };
+  }
+  const redirectedSource = {
+    ...redirectedIntent.source,
+    attackId: context.instance.attackId,
+  };
+  current.application.controlEpoch = nextControlEpoch;
+  current.application.attackingPlayer = redirectedIntent.attackingPlayer;
+  current.application.targetPlayer = redirectedIntent.targetPlayer;
+  current.application.source = redirectedSource;
+  return resolvePlayerControlledAttackTarget(intent, context, adapters, {
+    application: current.application,
+    attackingPlayer: redirectedIntent.attackingPlayer,
+    targetPlayer: redirectedIntent.targetPlayer,
+    source: redirectedSource,
+    unavoidable: redirectedIntent.unavoidable ?? false,
+    carriedAmount: redirectedIntent.carriedAmount,
+    amountComponents: redirectedIntent.amountComponents,
+    controlEpoch: nextControlEpoch,
+    originalTargetPlayerId: current.originalTargetPlayerId,
+  });
+}
+
 function resolvePlayerControlledAttackTarget(
   intent: PlayerControlledAttackIntent,
   context: PlayerControlledAttackContext,
@@ -710,40 +745,14 @@ function resolvePlayerControlledAttackTarget(
             ? {}
             : { redirectPolicy: intent.redirectPolicy }),
         },
-        (redirectedIntent) => {
-          const nextControlEpoch = current.application.controlEpoch + 1;
-          if (redirectedIntent.controlEpoch !== nextControlEpoch) {
-            return {
-              ok: false,
-              error: "Redirect control epoch is not sequential",
-            };
-          }
-          const redirectedSource = {
-            ...redirectedIntent.source,
-            attackId: context.instance.attackId,
-          };
-          current.application.controlEpoch = nextControlEpoch;
-          current.application.attackingPlayer =
-            redirectedIntent.attackingPlayer;
-          current.application.targetPlayer = redirectedIntent.targetPlayer;
-          current.application.source = redirectedSource;
-          return resolvePlayerControlledAttackTarget(
+        (redirectedIntent) =>
+          resolveRedirectedAttack(
             intent,
             context,
             adapters,
-            {
-              application: current.application,
-              attackingPlayer: redirectedIntent.attackingPlayer,
-              targetPlayer: redirectedIntent.targetPlayer,
-              source: redirectedSource,
-              unavoidable: redirectedIntent.unavoidable ?? false,
-              carriedAmount: redirectedIntent.carriedAmount,
-              amountComponents: redirectedIntent.amountComponents,
-              controlEpoch: nextControlEpoch,
-              originalTargetPlayerId: current.originalTargetPlayerId,
-            }
-          );
-        }
+            current,
+            redirectedIntent
+          )
       );
   if (!defenseResult.ok) {
     return defenseResult;
@@ -867,40 +876,14 @@ function resolvePlayerControlledSharedAttackTarget(
             ? {}
             : { redirectPolicy: intent.redirectPolicy }),
         },
-        (redirectedIntent) => {
-          const nextControlEpoch = current.application.controlEpoch + 1;
-          if (redirectedIntent.controlEpoch !== nextControlEpoch) {
-            return {
-              ok: false,
-              error: "Redirect control epoch is not sequential",
-            };
-          }
-          const redirectedSource = {
-            ...redirectedIntent.source,
-            attackId: context.instance.attackId,
-          };
-          current.application.controlEpoch = nextControlEpoch;
-          current.application.attackingPlayer =
-            redirectedIntent.attackingPlayer;
-          current.application.targetPlayer = redirectedIntent.targetPlayer;
-          current.application.source = redirectedSource;
-          return resolvePlayerControlledAttackTarget(
+        (redirectedIntent) =>
+          resolveRedirectedAttack(
             intent,
             context,
             adapters,
-            {
-              application: current.application,
-              attackingPlayer: redirectedIntent.attackingPlayer,
-              targetPlayer: redirectedIntent.targetPlayer,
-              source: redirectedSource,
-              unavoidable: redirectedIntent.unavoidable ?? false,
-              carriedAmount: redirectedIntent.carriedAmount,
-              amountComponents: redirectedIntent.amountComponents,
-              controlEpoch: nextControlEpoch,
-              originalTargetPlayerId: current.originalTargetPlayerId,
-            }
-          );
-        }
+            current,
+            redirectedIntent
+          )
       );
   if (!defenseResult.ok) {
     return defenseResult;
@@ -976,40 +959,14 @@ function resolvePlayerControlledEffectsAttackTarget(
             ? {}
             : { redirectPolicy: intent.redirectPolicy }),
         },
-        (redirectedIntent) => {
-          const nextControlEpoch = current.application.controlEpoch + 1;
-          if (redirectedIntent.controlEpoch !== nextControlEpoch) {
-            return {
-              ok: false,
-              error: "Redirect control epoch is not sequential",
-            };
-          }
-          const redirectedSource = {
-            ...redirectedIntent.source,
-            attackId: context.instance.attackId,
-          };
-          current.application.controlEpoch = nextControlEpoch;
-          current.application.attackingPlayer =
-            redirectedIntent.attackingPlayer;
-          current.application.targetPlayer = redirectedIntent.targetPlayer;
-          current.application.source = redirectedSource;
-          return resolvePlayerControlledAttackTarget(
+        (redirectedIntent) =>
+          resolveRedirectedAttack(
             intent,
             context,
             adapters,
-            {
-              application: current.application,
-              attackingPlayer: redirectedIntent.attackingPlayer,
-              targetPlayer: redirectedIntent.targetPlayer,
-              source: redirectedSource,
-              unavoidable: redirectedIntent.unavoidable ?? false,
-              carriedAmount: redirectedIntent.carriedAmount,
-              amountComponents: redirectedIntent.amountComponents,
-              controlEpoch: nextControlEpoch,
-              originalTargetPlayerId: current.originalTargetPlayerId,
-            }
-          );
-        }
+            current,
+            redirectedIntent
+          )
       );
   if (!defenseResult.ok) {
     return defenseResult;
