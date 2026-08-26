@@ -594,6 +594,20 @@ test("normal multi-target attack finishes the first Defense result before starti
     "effectDamageDealt",
     "effectAddPowerApplied",
   ]);
+
+  const attackIds = state.eventLog
+    .filter(
+      (event) =>
+        event.type === "attackCreated" ||
+        event.type === "attackTargetStarted" ||
+        event.type === "attackAvoided"
+    )
+    .map((event) => event.attackId);
+  assert.equal(
+    attackIds.every((attackId) => attackId !== undefined),
+    true
+  );
+  assert.equal(new Set(attackIds).size, 1);
 });
 
 test("attack amount is recomputed after the previous target mutates current attacker state", () => {
@@ -702,6 +716,17 @@ test("redirect changes current attacker attribution while preserving original so
   assert.equal(attributions[0]?.source.playerId, defender.playerId);
   assert.equal(attributions[0]?.source.cardInstanceId, source.cardInstanceId);
   assert.equal(attributions[0]?.source.definitionId, source.definitionId);
+  const attackIds = state.eventLog
+    .filter(
+      (event) =>
+        event.type === "attackCreated" || event.type === "attackTargetStarted"
+    )
+    .map((event) => event.attackId);
+  assert.equal(
+    attackIds.every((attackId) => attackId !== undefined),
+    true
+  );
+  assert.equal(new Set(attackIds).size, 1);
 });
 
 test("per-target outcome branches complete before the next target and after-attack runs last", () => {

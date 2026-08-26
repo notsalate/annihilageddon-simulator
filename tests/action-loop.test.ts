@@ -11202,6 +11202,20 @@ test("#292 legend_023 chooses a fresh target for every attack and aggregates mul
     ).length,
     1
   );
+
+  const attackIds = state.eventLog
+    .filter(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.cardInstanceId === wand.instanceId
+    )
+    .map((event) => event.attackId);
+  assert.equal(attackIds.length, 4);
+  assert.equal(
+    attackIds.every((attackId) => attackId !== undefined),
+    true
+  );
+  assert.equal(new Set(attackIds).size, 4);
 });
 
 test("#292 legend_023 can target its controller for every attack", () => {

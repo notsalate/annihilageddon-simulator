@@ -2,6 +2,7 @@ export { assertNever, isPlainRecord } from "./common.js";
 export type {
   CardDefinitionId,
   CardInstanceId,
+  AttackId,
   PlayerId,
   TokenDefinitionId,
   TokenInstanceId,
@@ -9,11 +10,13 @@ export type {
 export {
   createCardDefinitionId,
   createCardInstanceId,
+  createAttackId,
   createPlayerId,
   createTokenDefinitionId,
   createTokenInstanceId,
   markCardDefinitionId,
   markCardInstanceId,
+  markAttackId,
   markPlayerId,
   markTokenDefinitionId,
   markTokenInstanceId,

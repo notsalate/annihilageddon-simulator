@@ -83,6 +83,7 @@ function createFixture(): GameState {
     seed: 124,
     runtimeMode: "fixture",
     rng: createSeededRng(124),
+    nextAttackId: 1,
     activePlayerId: playerId,
     turn: {
       number: 2,

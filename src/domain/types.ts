@@ -1,6 +1,7 @@
 declare const playerIdBrand: unique symbol;
 declare const cardDefinitionIdBrand: unique symbol;
 declare const cardInstanceIdBrand: unique symbol;
+declare const attackIdBrand: unique symbol;
 declare const tokenDefinitionIdBrand: unique symbol;
 declare const tokenInstanceIdBrand: unique symbol;
 
@@ -11,6 +12,7 @@ type Brand<TName extends symbol> = string & { readonly [K in TName]: true };
 export type PlayerId = `player-${number}` & Brand<typeof playerIdBrand>;
 export type CardDefinitionId = Brand<typeof cardDefinitionIdBrand>;
 export type CardInstanceId = Brand<typeof cardInstanceIdBrand>;
+export type AttackId = `attack-${number}` & Brand<typeof attackIdBrand>;
 export type TokenDefinitionId = Brand<typeof tokenDefinitionIdBrand>;
 export type TokenInstanceId = Brand<typeof tokenInstanceIdBrand>;
 
@@ -24,6 +26,10 @@ export function markCardDefinitionId(value: string): CardDefinitionId {
 
 export function markCardInstanceId(value: string): CardInstanceId {
   return value as CardInstanceId;
+}
+
+export function markAttackId(value: `attack-${number}`): AttackId {
+  return value as AttackId;
 }
 
 export function markTokenDefinitionId(value: string): TokenDefinitionId {
@@ -47,6 +53,11 @@ export function createCardDefinitionId(value: string): CardDefinitionId {
 export function createCardInstanceId(instanceNumber: number): CardInstanceId {
   assertPositiveSafeInteger(instanceNumber, "card instance number");
   return markCardInstanceId(`card-${instanceNumber}`);
+}
+
+export function createAttackId(attackNumber: number): AttackId {
+  assertPositiveSafeInteger(attackNumber, "attack number");
+  return markAttackId(`attack-${attackNumber}`);
 }
 
 export function createTokenDefinitionId(value: string): TokenDefinitionId {

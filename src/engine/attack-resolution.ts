@@ -1,4 +1,5 @@
 import { recordGameEvent } from "./event-recorder.js";
+import { createAttackId, type AttackId } from "../domain/types.js";
 import {
   collectAttackReplacementProfile,
   type DamageResult,
@@ -13,14 +14,52 @@ import type {
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export interface AttackDefenseUsage {
+  attackId?: AttackId;
   defendedPlayerIds: Set<PlayerState["playerId"]>;
   usedDefenseCardInstanceIds: Set<CardInstance["instanceId"]>;
 }
 
-export function createAttackDefenseUsage(): AttackDefenseUsage {
+export function createAttackDefenseUsage(
+  attackId?: AttackId
+): AttackDefenseUsage {
   return {
+    ...(attackId === undefined ? {} : { attackId }),
     defendedPlayerIds: new Set(),
     usedDefenseCardInstanceIds: new Set(),
+  };
+}
+
+export interface AttackApplication {
+  readonly originalTargetPlayerId: PlayerState["playerId"];
+  attackingPlayer: PlayerState;
+  targetPlayer: PlayerState;
+  source: EffectSourceContext;
+}
+
+export interface AttackInstance {
+  readonly attackId: AttackId;
+  readonly originalAttacker: PlayerState;
+  readonly originalSource: EffectSourceContext;
+  readonly source: EffectSourceContext;
+  readonly defenseUsage: AttackDefenseUsage;
+  readonly applications: AttackApplication[];
+}
+
+export function createAttackInstance(
+  state: GameState,
+  attackingPlayer: PlayerState,
+  source: EffectSourceContext
+): AttackInstance {
+  const attackId = createAttackId(state.nextAttackId);
+  state.nextAttackId += 1;
+  const attackSource = { ...source, attackId };
+  return {
+    attackId,
+    originalAttacker: attackingPlayer,
+    originalSource: source,
+    source: attackSource,
+    defenseUsage: createAttackDefenseUsage(attackId),
+    applications: [],
   };
 }
 
@@ -38,6 +77,7 @@ export interface AttackIntent {
 }
 
 export interface RedirectedAttackIntent {
+  readonly attackId?: AttackId;
   readonly attackingPlayer: PlayerState;
   readonly targetPlayer: PlayerState;
   readonly amountComponents: AttackAmountComponents;
@@ -49,6 +89,7 @@ export interface RedirectedAttackIntent {
 }
 
 export interface AttackResolution extends DamageResult {
+  attackId?: AttackId;
   avoided: boolean;
   amountComponents: AttackAmountComponents;
   attackingPlayer: PlayerState;
@@ -116,6 +157,7 @@ export type DefenseWindowResolutionResult =
 export type DefenseAttackContext =
   | {
       kind: "redirectable";
+      attackId?: AttackId;
       attackingPlayer: PlayerState;
       amountComponents: AttackAmountComponents;
       effectId: RuntimeEffectId;
@@ -126,6 +168,7 @@ export type DefenseAttackContext =
     }
   | {
       kind: "nonredirectable";
+      attackId?: AttackId;
       source: EffectSourceContext;
       defenseUsage: AttackDefenseUsage;
     };
@@ -185,6 +228,7 @@ export interface PlayerControlledAttackIntent {
 }
 
 export interface ResolvedAttackBranchContext {
+  readonly attackId?: AttackId;
   readonly effectId: RuntimeEffectId;
   readonly source: EffectSourceContext;
   readonly damageDealt: number;
@@ -243,9 +287,7 @@ export interface PlayerControlledAttackAdapters {
 }
 
 interface PlayerControlledAttackContext {
-  readonly originalAttacker: PlayerState;
-  readonly originalSource: EffectSourceContext;
-  readonly defenseUsage: AttackDefenseUsage;
+  readonly instance: AttackInstance;
   readonly resolutions: AttackResolution[];
 }
 
@@ -401,9 +443,11 @@ export function resolvePlayerControlledAttack(
   }
 
   const context: PlayerControlledAttackContext = {
-    originalAttacker: intent.attackingPlayer,
-    originalSource: intent.source,
-    defenseUsage: createAttackDefenseUsage(),
+    instance: createAttackInstance(
+      intent.state,
+      intent.attackingPlayer,
+      intent.source
+    ),
     resolutions: [],
   };
   const firstTarget = targetResult.players[0];
@@ -425,6 +469,7 @@ export function resolvePlayerControlledAttack(
   recordGameEvent(intent.state, {
     type: "attackCreated",
     playerId: intent.attackingPlayer.playerId,
+    attackId: context.instance.attackId,
     ...(singleResolvedTarget === undefined
       ? {}
       : { targetPlayerId: singleResolvedTarget.playerId }),
@@ -438,6 +483,13 @@ export function resolvePlayerControlledAttack(
   let requestedTargetKilled = false;
   let resolvedTargetKilled = false;
   for (const targetPlayer of targetResult.players) {
+    const application: AttackApplication = {
+      originalTargetPlayerId: targetPlayer.playerId,
+      attackingPlayer: intent.attackingPlayer,
+      targetPlayer,
+      source: context.instance.source,
+    };
+    context.instance.applications.push(application);
     const resolutionResult = resolvePlayerControlledAttackTarget(
       intent,
       context,
@@ -445,7 +497,7 @@ export function resolvePlayerControlledAttack(
       {
         attackingPlayer: intent.attackingPlayer,
         targetPlayer,
-        source: intent.source,
+        source: context.instance.source,
         unavoidable: intent.attackProfile?.unavoidable ?? intent.unavoidable,
         amountComponents:
           intent.impact.kind === "damage"
@@ -460,6 +512,7 @@ export function resolvePlayerControlledAttack(
               )
             : createAttackAmountState(0),
         originalTargetPlayerId: targetPlayer.playerId,
+        application,
       }
     );
     if (!resolutionResult.ok) {
@@ -511,6 +564,7 @@ function resolveBaseAmount(
 }
 
 interface CurrentAttackTargetContext {
+  readonly application: AttackApplication;
   readonly attackingPlayer: PlayerState;
   readonly targetPlayer: PlayerState;
   readonly source: EffectSourceContext;
@@ -542,7 +596,7 @@ function resolvePlayerControlledAttackTarget(
     current.targetPlayer,
     current.amountComponents,
     current.source,
-    context.originalSource
+    context.instance.originalSource
   );
   recordAttackTargetStarted(
     intent,
@@ -563,21 +617,37 @@ function resolvePlayerControlledAttackTarget(
           amountComponents: resolvedAmount.components,
           effectId: intent.effectId,
           source: current.source,
-          originalSource: context.originalSource,
-          defenseUsage: context.defenseUsage,
+          originalSource: context.instance.originalSource,
+          defenseUsage: context.instance.defenseUsage,
+          attackId: context.instance.attackId,
           ...(intent.redirectPolicy === undefined
             ? {}
             : { redirectPolicy: intent.redirectPolicy }),
         },
-        (redirectedIntent) =>
-          resolvePlayerControlledAttackTarget(intent, context, adapters, {
-            attackingPlayer: redirectedIntent.attackingPlayer,
-            targetPlayer: redirectedIntent.targetPlayer,
-            source: redirectedIntent.source,
-            unavoidable: redirectedIntent.unavoidable ?? false,
-            amountComponents: redirectedIntent.amountComponents,
-            originalTargetPlayerId: current.originalTargetPlayerId,
-          })
+        (redirectedIntent) => {
+          const redirectedSource = {
+            ...redirectedIntent.source,
+            attackId: context.instance.attackId,
+          };
+          current.application.attackingPlayer =
+            redirectedIntent.attackingPlayer;
+          current.application.targetPlayer = redirectedIntent.targetPlayer;
+          current.application.source = redirectedSource;
+          return resolvePlayerControlledAttackTarget(
+            intent,
+            context,
+            adapters,
+            {
+              application: current.application,
+              attackingPlayer: redirectedIntent.attackingPlayer,
+              targetPlayer: redirectedIntent.targetPlayer,
+              source: redirectedSource,
+              unavoidable: redirectedIntent.unavoidable ?? false,
+              amountComponents: redirectedIntent.amountComponents,
+              originalTargetPlayerId: current.originalTargetPlayerId,
+            }
+          );
+        }
       );
   if (!defenseResult.ok) {
     return defenseResult;
@@ -593,7 +663,7 @@ function resolvePlayerControlledAttackTarget(
       adapters,
       current,
       resolvedAmount.components,
-      context.originalSource
+      context.instance.originalSource
     );
     if (!avoidedBranchResult.ok || avoidedBranchResult.gameEnd !== undefined) {
       return avoidedBranchResult;
@@ -605,7 +675,7 @@ function resolvePlayerControlledAttackTarget(
         createAvoidedResolution(
           current,
           resolvedAmount.components,
-          context.originalSource
+          context.instance.originalSource
         ),
       requestedTargetKilled: false,
       resolvedTargetKilled: defenseResult.resolution?.killed ?? false,
@@ -644,7 +714,8 @@ function resolvePlayerControlledAttackTarget(
     currentAttackerId: current.attackingPlayer.playerId,
     targetPlayer: current.targetPlayer,
     source: current.source,
-    originalSource: context.originalSource,
+    attackId: context.instance.attackId,
+    originalSource: context.instance.originalSource,
   };
 
   const branchResult = executeResolvedAttackBranches(
@@ -691,21 +762,37 @@ function resolvePlayerControlledEffectsAttackTarget(
           amountComponents: current.amountComponents,
           effectId: intent.effectId,
           source: current.source,
-          originalSource: context.originalSource,
-          defenseUsage: context.defenseUsage,
+          originalSource: context.instance.originalSource,
+          defenseUsage: context.instance.defenseUsage,
+          attackId: context.instance.attackId,
           ...(intent.redirectPolicy === undefined
             ? {}
             : { redirectPolicy: intent.redirectPolicy }),
         },
-        (redirectedIntent) =>
-          resolvePlayerControlledAttackTarget(intent, context, adapters, {
-            attackingPlayer: redirectedIntent.attackingPlayer,
-            targetPlayer: redirectedIntent.targetPlayer,
-            source: redirectedIntent.source,
-            unavoidable: redirectedIntent.unavoidable ?? false,
-            amountComponents: redirectedIntent.amountComponents,
-            originalTargetPlayerId: current.originalTargetPlayerId,
-          })
+        (redirectedIntent) => {
+          const redirectedSource = {
+            ...redirectedIntent.source,
+            attackId: context.instance.attackId,
+          };
+          current.application.attackingPlayer =
+            redirectedIntent.attackingPlayer;
+          current.application.targetPlayer = redirectedIntent.targetPlayer;
+          current.application.source = redirectedSource;
+          return resolvePlayerControlledAttackTarget(
+            intent,
+            context,
+            adapters,
+            {
+              application: current.application,
+              attackingPlayer: redirectedIntent.attackingPlayer,
+              targetPlayer: redirectedIntent.targetPlayer,
+              source: redirectedSource,
+              unavoidable: redirectedIntent.unavoidable ?? false,
+              amountComponents: redirectedIntent.amountComponents,
+              originalTargetPlayerId: current.originalTargetPlayerId,
+            }
+          );
+        }
       );
   if (!defenseResult.ok) {
     return defenseResult;
@@ -720,7 +807,7 @@ function resolvePlayerControlledEffectsAttackTarget(
       resolution: createAvoidedResolution(
         current,
         current.amountComponents,
-        context.originalSource
+        context.instance.originalSource
       ),
       requestedTargetKilled: false,
       resolvedTargetKilled: false,
@@ -751,7 +838,8 @@ function resolvePlayerControlledEffectsAttackTarget(
       currentAttackerId: current.attackingPlayer.playerId,
       targetPlayer: current.targetPlayer,
       source: current.source,
-      originalSource: context.originalSource,
+      attackId: context.instance.attackId,
+      originalSource: context.instance.originalSource,
     },
     requestedTargetKilled: false,
     resolvedTargetKilled: false,
@@ -767,6 +855,9 @@ function executeResolvedAttackBranches(
 ): EffectExecutionResult {
   const branchContext: ResolvedAttackBranchContext = {
     effectId: intent.effectId,
+    ...(resolution.attackId === undefined
+      ? {}
+      : { attackId: resolution.attackId }),
     source: resolution.source,
     damageDealt: resolution.damageDealt,
     killed: resolution.killed,
@@ -822,6 +913,9 @@ function executeAvoidedAttackBranches(
 
   const branchContext: ResolvedAttackBranchContext = {
     effectId: intent.effectId,
+    ...(current.source.attackId === undefined
+      ? {}
+      : { attackId: current.source.attackId }),
     source: current.source,
     damageDealt: 0,
     killed: false,
@@ -857,6 +951,7 @@ function recordAttackTargetStarted(
   recordGameEvent(intent.state, {
     type: "attackTargetStarted",
     playerId: attackingPlayer.playerId,
+    ...(source.attackId === undefined ? {} : { attackId: source.attackId }),
     targetPlayerId: targetPlayer.playerId,
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
@@ -874,6 +969,7 @@ function recordAttackAvoided(
   recordGameEvent(intent.state, {
     type: "attackAvoided",
     playerId: targetPlayer.playerId,
+    ...(source.attackId === undefined ? {} : { attackId: source.attackId }),
     targetPlayerId: targetPlayer.playerId,
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
@@ -891,6 +987,9 @@ function createAvoidedResolution(
     avoided: true,
     damageDealt: 0,
     killed: false,
+    ...(current.source.attackId === undefined
+      ? {}
+      : { attackId: current.source.attackId }),
     amountComponents,
     attackingPlayer: current.attackingPlayer,
     currentAttackerId: current.attackingPlayer.playerId,

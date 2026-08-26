@@ -4,7 +4,7 @@ import {
   type AttackDefenseServices,
 } from "./attack-defense.js";
 import {
-  createAttackDefenseUsage,
+  createAttackInstance,
   resolvePlayerControlledAttack as resolvePlayerControlledAttackLifecycle,
   type AttackDamageAttribution,
   type AttackTargetResolutionResult,
@@ -1782,6 +1782,8 @@ function resolveMayhemAttackPlan(
   source: EffectSourceContext,
   impact: MayhemAttackImpact = { kind: "damage" }
 ): EffectExecutionResult {
+  const attackInstance = createAttackInstance(state, sourcePlayer, source);
+  const attackSource = attackInstance.source;
   const decisions: Array<MayhemAttackPlanTarget & { avoided: boolean }> = [];
   const firstAmount = targets[0]?.amount;
   const phaseAmount =
@@ -1793,28 +1795,31 @@ function resolveMayhemAttackPlan(
   recordGameEvent(state, {
     type: "mayhemDecisionPhaseStarted",
     playerId: sourcePlayer.playerId,
-    cardInstanceId: source.cardInstanceId,
-    definitionId: source.definitionId,
+    attackId: attackInstance.attackId,
+    cardInstanceId: attackSource.cardInstanceId,
+    definitionId: attackSource.definitionId,
     effectId,
     ...phaseAmount,
-    sourceType: source.sourceType,
+    sourceType: attackSource.sourceType,
   });
 
   for (const target of targets) {
     recordGameEvent(state, {
       type: "mayhemDecisionStarted",
       playerId: sourcePlayer.playerId,
+      attackId: attackInstance.attackId,
       targetPlayerId: target.targetPlayer.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
+      cardInstanceId: attackSource.cardInstanceId,
+      definitionId: attackSource.definitionId,
       effectId,
       amount: target.amount,
-      sourceType: source.sourceType,
+      sourceType: attackSource.sourceType,
     });
     const defenseResult = resolveDefenseWindow(state, target.targetPlayer, {
       kind: "nonredirectable",
-      source,
-      defenseUsage: createAttackDefenseUsage(),
+      attackId: attackInstance.attackId,
+      source: attackSource,
+      defenseUsage: attackInstance.defenseUsage,
     });
     if (!defenseResult.ok) {
       return defenseResult;
@@ -1827,11 +1832,12 @@ function resolveMayhemAttackPlan(
       recordGameEvent(state, {
         type: "attackAvoided",
         playerId: target.targetPlayer.playerId,
+        attackId: attackInstance.attackId,
         targetPlayerId: target.targetPlayer.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
+        cardInstanceId: attackSource.cardInstanceId,
+        definitionId: attackSource.definitionId,
         effectId,
-        sourceType: source.sourceType,
+        sourceType: attackSource.sourceType,
       });
     }
 
@@ -1841,11 +1847,12 @@ function resolveMayhemAttackPlan(
   recordGameEvent(state, {
     type: "mayhemResolutionPhaseStarted",
     playerId: sourcePlayer.playerId,
-    cardInstanceId: source.cardInstanceId,
-    definitionId: source.definitionId,
+    attackId: attackInstance.attackId,
+    cardInstanceId: attackSource.cardInstanceId,
+    definitionId: attackSource.definitionId,
     effectId,
     ...phaseAmount,
-    sourceType: source.sourceType,
+    sourceType: attackSource.sourceType,
   });
 
   for (const decision of decisions) {
@@ -1853,11 +1860,12 @@ function resolveMayhemAttackPlan(
       recordGameEvent(state, {
         type: "mayhemTargetSkipped",
         playerId: sourcePlayer.playerId,
+        attackId: attackInstance.attackId,
         targetPlayerId: decision.targetPlayer.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
+        cardInstanceId: attackSource.cardInstanceId,
+        definitionId: attackSource.definitionId,
         effectId,
-        sourceType: source.sourceType,
+        sourceType: attackSource.sourceType,
       });
       continue;
     }
@@ -1865,12 +1873,13 @@ function resolveMayhemAttackPlan(
     recordGameEvent(state, {
       type: "attackTargetStarted",
       playerId: sourcePlayer.playerId,
+      attackId: attackInstance.attackId,
       targetPlayerId: decision.targetPlayer.playerId,
-      cardInstanceId: source.cardInstanceId,
-      definitionId: source.definitionId,
+      cardInstanceId: attackSource.cardInstanceId,
+      definitionId: attackSource.definitionId,
       effectId,
       amount: decision.amount,
-      sourceType: source.sourceType,
+      sourceType: attackSource.sourceType,
     });
     if (impact.kind === "effect") {
       const result = impact.executeOnHit(decision.targetPlayer);
@@ -1885,8 +1894,8 @@ function resolveMayhemAttackPlan(
       decision.targetPlayer,
       decision.amount,
       effectId,
-      source,
-      source.playerControlledAttackPlayerId === undefined
+      attackSource,
+      attackSource.playerControlledAttackPlayerId === undefined
         ? { kind: "ownerless" }
         : { kind: "playerControlled", player: sourcePlayer }
     );
@@ -2623,12 +2632,14 @@ function resolvePlayerDeath(
         source: EffectSourceContext;
         deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy;
       }
-    | undefined
+    | undefined,
+  attackId?: EffectSourceContext["attackId"]
 ): EffectExecutionResult {
   recordGameEvent(state, {
     type: "playerDied",
     playerId: player.playerId,
     lifeAfter: lifeAfterDamage,
+    ...(attackId === undefined ? {} : { attackId }),
   });
 
   if (killCredit !== undefined) {
@@ -2650,6 +2661,7 @@ function resolvePlayerDeath(
     amount: resurrectionLifeTotal,
     lifeBefore: lifeBeforeResurrection,
     lifeAfter: resurrectionLifeTotal,
+    ...(attackId === undefined ? {} : { attackId }),
   });
 
   if (killCredit?.deadWizardTokenPolicy === "skip") {
@@ -3274,6 +3286,7 @@ function awardBasicTrophyForKill(
         type: "trophyControlChanged",
         playerId: killer.playerId,
         targetPlayerId: defeatedPlayer.playerId,
+        ...(source.attackId === undefined ? {} : { attackId: source.attackId }),
         cardInstanceId: source.cardInstanceId,
         definitionId: source.definitionId,
         effectId,
@@ -3293,6 +3306,7 @@ function awardBasicTrophyForKill(
     type: "trophyControlChanged",
     playerId: killer.playerId,
     targetPlayerId: defeatedPlayer.playerId,
+    ...(source.attackId === undefined ? {} : { attackId: source.attackId }),
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
     effectId,
@@ -3316,6 +3330,7 @@ function dealDamage(
     type: "effectDamageDealt",
     playerId: sourcePlayer.playerId,
     targetPlayerId: targetPlayer.playerId,
+    ...(source.attackId === undefined ? {} : { attackId: source.attackId }),
     cardInstanceId: source.cardInstanceId,
     definitionId: source.definitionId,
     effectId,
@@ -3340,7 +3355,8 @@ function dealDamage(
               ? {}
               : { deadWizardTokenPolicy: cause.deadWizardTokenPolicy }),
           }
-        : undefined
+        : undefined,
+      source.attackId
     );
     if (!deathResult.ok || deathResult.gameEnd !== undefined) {
       return deathResult;
