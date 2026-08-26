@@ -1903,11 +1903,15 @@ test("multi-target and Mayhem attacks require one nested target representation",
         targetSelector: selector,
       }).some((error) => error.includes("target is required"))
     );
+    const foreignTargetError =
+      effectId === "multi_target_attack"
+        ? "must use one of selectors"
+        : `must use selector ${selector}`;
     assert.ok(
       validateRawRuntimeEffect(effectId, "Fixture", {
         ...payload,
         target: { selector: foreignSelector },
-      }).some((error) => error.includes(`must use selector ${selector}`))
+      }).some((error) => error.includes(foreignTargetError))
     );
   }
 });

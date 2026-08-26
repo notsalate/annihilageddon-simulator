@@ -178,6 +178,7 @@ const targetSelector: ValueDecoder<RuntimeEffectTargetSelector> = oneOf([
   "allPlayers",
   "anyPlayer",
   "mainMarketCard",
+  "leftAndRightFoes",
   "opponentPlayer",
   "opponentPlayers",
   "chosenFoe",
@@ -201,6 +202,7 @@ const runtimeTarget: ValueDecoder<RuntimeEffectTarget> = (label, raw) => {
           "allPlayers",
           "anyPlayer",
           "mainMarketCard",
+          "leftAndRightFoes",
           "opponentPlayer",
           "opponentPlayers",
         ] as const)
@@ -252,6 +254,26 @@ function selectorTarget<Selector extends RuntimeEffectTargetSelector>(
       return success({ selector: expectedSelector });
     }
     return failure(`${label} must use selector ${expectedSelector}`);
+  };
+}
+
+function selectorTargetOneOf<
+  const Selectors extends readonly RuntimeEffectTargetSelector[],
+>(expectedSelectors: Selectors): ValueDecoder<{ selector: Selectors[number] }> {
+  return (label, raw) => {
+    const decoded = runtimeTarget(label, raw);
+    if (!decoded.ok) return decoded;
+    if (
+      "selector" in decoded.value &&
+      expectedSelectors.includes(decoded.value.selector)
+    ) {
+      return success({
+        selector: decoded.value.selector,
+      });
+    }
+    return failure(
+      `${label} must use one of selectors ${expectedSelectors.join(", ")}`
+    );
   };
 }
 
@@ -323,6 +345,13 @@ const attackOutcomeBranch: ValueDecoder<AttackOutcomeBranch> = (label, raw) => {
     case "heal_equal_damage_dealt":
       return decodeObject(label, raw, {
         effectId: required(literal("heal_equal_damage_dealt")),
+      });
+    case "attack_discard_cards":
+      return decodeObject(label, raw, {
+        effectId: required(literal("attack_discard_cards")),
+        amount: required(positiveInteger),
+        chooser: required(literal("target")),
+        sourceZone: required(literal("hand")),
       });
     case "return_discard_to_hand":
       return decodeObject(label, raw, {
@@ -609,7 +638,7 @@ const combatAttackEffectDecoders = createCombatAttackEffectDecoders({
   optionalTargetSelector,
   optionalCosts,
   optionalAttackBranches,
-  selectorTarget,
+  selectorTargetOneOf,
   requireTargetSelector,
   oneOf,
 });

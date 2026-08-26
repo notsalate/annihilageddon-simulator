@@ -165,6 +165,7 @@ export type TargetSelector =
   | "allPlayers"
   | "anyPlayer"
   | "mainMarketCard"
+  | "leftAndRightFoes"
   | "opponentPlayer"
   | "opponentPlayers";
 
@@ -198,6 +199,7 @@ export type RuntimeEffectTargetSelector =
   | "currentAttacker"
   | "eachFoe"
   | "eachPlayerClockwiseFromActive"
+  | "leftAndRightFoes"
   | "leftOrRightFoe"
   | "sameAsPreviousAttackTarget";
 
@@ -248,6 +250,12 @@ export type AttackOutcomeBranch =
   | { effectId: "gain_chips"; amount: number }
   | { effectId: "gain_chips_equal_damage_dealt" }
   | { effectId: "heal_equal_damage_dealt" }
+  | {
+      effectId: "attack_discard_cards";
+      amount: number;
+      chooser: "target";
+      sourceZone: "hand";
+    }
   | { effectId: "return_discard_to_hand"; amount: number }
   | { effectId: "transfer_limp_wands_to_killed_target"; amount: number }
   | {
@@ -735,7 +743,9 @@ export type MultiTargetAttackRuntimeEffect =
   EffectWithOptionalTiming<"multi_target_attack"> &
     PositiveAmount &
     AttackBranches & {
-      target: RuntimeEffectSelectorTarget & { selector: "opponentPlayers" };
+      target: RuntimeEffectSelectorTarget & {
+        selector: "leftAndRightFoes" | "opponentPlayers";
+      };
     };
 export type OptionalSpendChipAttackDamageRuntimeEffect =
   EffectWithOptionalTiming<"optional_spend_chip_attack_damage"> &
@@ -996,6 +1006,7 @@ function isTargetSelector(value: unknown): value is TargetSelector {
     value === "allPlayers" ||
     value === "anyPlayer" ||
     value === "mainMarketCard" ||
+    value === "leftAndRightFoes" ||
     value === "opponentPlayer" ||
     value === "opponentPlayers"
   );

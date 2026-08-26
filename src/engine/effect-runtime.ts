@@ -80,6 +80,7 @@ import {
 } from "./effect-runtime-registry.js";
 import {
   executeAttackOutcomeBranch,
+  executeAttackDiscardCards,
   validateAttackCostPrecondition,
 } from "./effect-runtime-combat-attack.js";
 import {
@@ -1427,6 +1428,15 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
         effectRuntimeServices
       );
     }
+    if (effect.effectId === "attack_discard_cards") {
+      return executeAttackDiscardCards(
+        state,
+        targetPlayer,
+        effect.amount,
+        source,
+        effectRuntimeServices
+      );
+    }
     if (
       effect.effectId === "attack_gain_status" &&
       effect["statusId"] === "dingler"
@@ -2201,6 +2211,26 @@ function buildLegalTargetChoices(
     }
 
     if (targetSelector === "chosenLeftOrRightFoe") {
+      const foes = getOpponentsInSeatingOrder(state, player);
+      const adjacentFoes = [foes[0], foes.at(-1)].filter(
+        (candidate): candidate is PlayerState => candidate !== undefined
+      );
+      const distinctAdjacentFoes = adjacentFoes.filter(
+        (candidate, index) =>
+          adjacentFoes.findIndex(
+            (otherCandidate) => otherCandidate.playerId === candidate.playerId
+          ) === index
+      );
+      return {
+        ok: true,
+        choices: distinctAdjacentFoes.map((candidate) => ({
+          choiceType: "player" as const,
+          player: candidate,
+        })),
+      };
+    }
+
+    if (targetSelector === "leftAndRightFoes") {
       const foes = getOpponentsInSeatingOrder(state, player);
       const adjacentFoes = [foes[0], foes.at(-1)].filter(
         (candidate): candidate is PlayerState => candidate !== undefined
