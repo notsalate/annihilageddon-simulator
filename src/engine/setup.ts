@@ -1335,34 +1335,13 @@ function selectFamiliarSetupChoice<
       candidateDefinitionId: candidate.definitionId,
     })),
   });
-  const requestedInstanceId = isChoiceSelection(selectedChoice)
-    ? selectedChoice.choiceId
-    : undefined;
-  const requestedIndex =
-    requestedInstanceId === undefined
-      ? 0
-      : candidates.findIndex(
-          (candidate) => candidate.instanceId === requestedInstanceId
-        );
-  const selectedIndex = requestedIndex < 0 ? 0 : requestedIndex;
-  const chosenCandidate = candidates[selectedIndex];
-  if (chosenCandidate === undefined) {
-    throw new Error("Unexpected sparse array during familiar setup choice");
-  }
-  recordSetupChoiceSelected(eventLog, {
-    type: "setupChoiceSelected",
-    playerId: player.playerId,
-    setupChoiceKind: "familiar",
-    policyId:
-      requestedInstanceId === undefined ? "alwaysPickFirst" : "provided",
-    candidateInstanceIds: candidates.map((candidate) => candidate.instanceId),
-    candidateDefinitionIds: candidates.map(
-      (candidate) => candidate.definitionId
-    ),
-    chosenInstanceId: chosenCandidate.instanceId,
-    chosenDefinitionId: chosenCandidate.definitionId,
-  });
-  return { candidate: chosenCandidate, index: selectedIndex };
+  return resolveSetupChoice(
+    player,
+    "familiar",
+    candidates,
+    selectedChoice,
+    eventLog
+  );
 }
 
 function selectWizardPropertySetupChoice<
@@ -1390,25 +1369,47 @@ function selectWizardPropertySetupChoice<
       candidateDefinitionId: candidate.definitionId,
     })),
   });
+  return resolveSetupChoice(
+    player,
+    "wizardProperty",
+    candidates,
+    selectedChoice,
+    eventLog
+  ).candidate;
+}
+
+function resolveSetupChoice<TCandidate extends SetupCandidate<string>>(
+  player: PlayerState,
+  setupChoiceKind: "familiar" | "wizardProperty",
+  candidates: readonly TCandidate[],
+  selectedChoice: unknown,
+  eventLog: GameEvent[]
+): { candidate: TCandidate; index: number } {
+  if (candidates.length === 0) {
+    throw new Error(
+      `Setup choice ${setupChoiceKind} has no candidates for ${player.playerId}`
+    );
+  }
   const requestedInstanceId = isChoiceSelection(selectedChoice)
     ? selectedChoice.choiceId
     : undefined;
-  const selectedIndex =
+  const requestedIndex =
     requestedInstanceId === undefined
       ? 0
       : candidates.findIndex(
           (candidate) => candidate.instanceId === requestedInstanceId
         );
-  const chosenCandidate = candidates[selectedIndex < 0 ? 0 : selectedIndex];
+  const selectedIndex = requestedIndex < 0 ? 0 : requestedIndex;
+  const chosenCandidate = candidates[selectedIndex];
   if (chosenCandidate === undefined) {
     throw new Error(
-      "Unexpected sparse array during wizard property setup choice"
+      `Unexpected sparse array during ${setupChoiceKind} setup choice`
     );
   }
   recordSetupChoiceSelected(eventLog, {
     type: "setupChoiceSelected",
     playerId: player.playerId,
-    setupChoiceKind: "wizardProperty",
+    setupChoiceKind,
     policyId:
       requestedInstanceId === undefined ? "alwaysPickFirst" : "provided",
     candidateInstanceIds: candidates.map((candidate) => candidate.instanceId),
@@ -1418,7 +1419,7 @@ function selectWizardPropertySetupChoice<
     chosenInstanceId: chosenCandidate.instanceId,
     chosenDefinitionId: chosenCandidate.definitionId,
   });
-  return chosenCandidate;
+  return { candidate: chosenCandidate, index: selectedIndex };
 }
 
 function assertSetupPoolSize(

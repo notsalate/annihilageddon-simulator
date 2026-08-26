@@ -12,6 +12,7 @@ import {
   type GameState,
   type LoadedDataPack,
   type RuntimeEffect,
+  type SimulationFailureReplaySetupChoice,
 } from "../src/index.js";
 import { loadCurrentRuntimeDataPack } from "../src/engine/data.js";
 import {
@@ -248,6 +249,22 @@ test("wizard property setup choices are preserved by failure replay", () => {
         choice.setupChoiceKind === "wizardProperty"
     )
   );
+  const wizardPropertyReplayChoice = replay.choices.find(
+    (choice): choice is SimulationFailureReplaySetupChoice =>
+      choice.type === "setupChoiceSelected"
+  );
+  if (
+    wizardPropertyReplayChoice === undefined ||
+    wizardPropertyReplayChoice.type !== "setupChoiceSelected" ||
+    wizardPropertyReplayChoice.setupChoiceKind !== "wizardProperty"
+  ) {
+    throw new Error("Expected wizard property replay choice");
+  }
+  assert.ok(wizardPropertyReplayChoice.candidateInstanceIds.length > 0);
+  assert.equal(
+    wizardPropertyReplayChoice.candidateInstanceIds.length,
+    wizardPropertyReplayChoice.candidateDefinitionIds.length
+  );
   assert.throws(
     () =>
       runSingleGame({
@@ -262,6 +279,32 @@ test("wizard property setup choices are preserved by failure replay", () => {
       assert.match(
         error.message,
         /Replay action history ended before action 1/
+      );
+      return true;
+    }
+  );
+
+  const driftedReplay = {
+    ...replay,
+    choices: replay.choices.map((choice) =>
+      choice === wizardPropertyReplayChoice
+        ? { ...choice, candidateDefinitionIds: ["drifted-definition"] }
+        : choice
+    ),
+  };
+  assert.throws(
+    () =>
+      runSingleGame({
+        rootDir,
+        dataPack,
+        seed: 24680,
+        maxTurns: 1,
+        replay: driftedReplay,
+      }),
+    (error: unknown) => {
+      assert.match(
+        error instanceof Error ? error.message : String(error),
+        /candidates do not match/
       );
       return true;
     }

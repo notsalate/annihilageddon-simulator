@@ -156,6 +156,8 @@ export interface SimulationFailureReplaySetupChoice {
   readonly playerId: string;
   readonly setupChoiceKind: "familiar" | "wizardProperty";
   readonly policyId: string;
+  readonly candidateInstanceIds: readonly string[];
+  readonly candidateDefinitionIds: readonly string[];
   readonly chosenInstanceId: string;
 }
 
@@ -205,6 +207,8 @@ interface SimulationFailureReplayChoiceCandidate {
   readonly choiceId?: unknown;
   readonly setupChoiceKind?: unknown;
   readonly policyId?: unknown;
+  readonly candidateInstanceIds?: unknown;
+  readonly candidateDefinitionIds?: unknown;
   readonly chosenInstanceId?: unknown;
 }
 
@@ -220,6 +224,14 @@ export function createSimulationFailureReplay(
       ) {
         continue;
       }
+      if (
+        event.candidateInstanceIds === undefined ||
+        event.candidateDefinitionIds === undefined
+      ) {
+        throw new Error(
+          `${event.setupChoiceKind} setup replay event is missing candidates`
+        );
+      }
       if (event.chosenInstanceId === undefined) {
         throw new Error(
           `${event.setupChoiceKind} setup replay event is missing choiceId`
@@ -230,6 +242,8 @@ export function createSimulationFailureReplay(
         playerId: event.playerId,
         setupChoiceKind: event.setupChoiceKind,
         policyId: event.policyId ?? "provided",
+        candidateInstanceIds: [...event.candidateInstanceIds],
+        candidateDefinitionIds: [...event.candidateDefinitionIds],
         chosenInstanceId: event.chosenInstanceId,
       });
       continue;
@@ -327,6 +341,12 @@ function isGameActionArray(value: unknown): value is GameAction[] {
   return Array.isArray(value) && value.every(isGameAction);
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === "string")
+  );
+}
+
 function isGameAction(value: unknown): value is GameAction {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
@@ -381,6 +401,8 @@ function readReplayChoices(value: unknown): SimulationFailureReplay["choices"] {
       if (
         typeof record.playerId !== "string" ||
         typeof record.policyId !== "string" ||
+        !isStringArray(record.candidateInstanceIds) ||
+        !isStringArray(record.candidateDefinitionIds) ||
         typeof record.chosenInstanceId !== "string"
       ) {
         throw new Error(
@@ -392,6 +414,8 @@ function readReplayChoices(value: unknown): SimulationFailureReplay["choices"] {
         playerId: record.playerId,
         setupChoiceKind: record.setupChoiceKind,
         policyId: record.policyId,
+        candidateInstanceIds: record.candidateInstanceIds,
+        candidateDefinitionIds: record.candidateDefinitionIds,
         chosenInstanceId: record.chosenInstanceId,
       });
       continue;
@@ -610,6 +634,20 @@ function createSimulationReplayController(
           `Replay setup choice ${choiceIndex + 1} does not match ${request.setupChoiceKind} for ${request.player.playerId}`
         );
       }
+      if (
+        !sameStringArray(
+          request.choices.map((choice) => choice.choiceId),
+          expected.candidateInstanceIds
+        ) ||
+        !sameStringArray(
+          request.choices.map((choice) => choice.candidateDefinitionId),
+          expected.candidateDefinitionIds
+        )
+      ) {
+        throw new SimulationReplayError(
+          `Replay ${request.setupChoiceKind} candidates do not match for ${request.player.playerId}`
+        );
+      }
       choiceIndex += 1;
       if (expected.policyId === "alwaysPickFirst") {
         return undefined;
@@ -670,6 +708,16 @@ function createSimulationReplayController(
       return undefined;
     },
   };
+}
+
+function sameStringArray(
+  first: readonly string[],
+  second: readonly string[]
+): boolean {
+  return (
+    first.length === second.length &&
+    first.every((value, index) => value === second[index])
+  );
 }
 
 function createReplayBotFactory(
