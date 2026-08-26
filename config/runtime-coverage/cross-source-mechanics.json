@@ -2326,19 +2326,197 @@
       "id": "esw2_dbg__dead_wizard_token_008",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "card-movement",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in card-movement"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Замешай все легенды с руки в колоду."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_shuffle_hand_legends",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 008 сначала спрашивает effective Legend для каждого Фамильяра"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Игрок замешивает все карты легенд из своей руки в свою колоду."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_shuffle_hand_legends",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 008 сначала спрашивает effective Legend для каждого Фамильяра"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Если у игрока свойство [wp_003](../wizard-property-texts/wp_003.md), то он может в этот момент не считать фамильяр легендами"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_shuffle_hand_legends",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 008 сначала спрашивает effective Legend для каждого Фамильяра"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Эффект касается только легенд в руке."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_shuffle_hand_legends",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 008 сначала спрашивает effective Legend для каждого Фамильяра"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Если в руке нет легенд, эффект ничего не перемещает."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_shuffle_hand_legends",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 008 не расходует RNG при пустом выборе легенд"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_009",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "special-card-stack",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in special-card-stack"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Замешай все свои карты-постоянки в свою колоду."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_shuffle_owned_permanents",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 009 замешивает только свои активные постоянки"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Игрок замешивает все свои карты-постоянки в свою колоду."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_shuffle_owned_permanents",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 009 замешивает только свои активные постоянки"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Замешиваются только АКТИВНЫЕ карты-постоянки (ни в руке, ни в колоде, ни в сбросе)"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_shuffle_owned_permanents",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 009 замешивает только свои активные постоянки"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Если у игрока нет карт-постоянок, эффект ничего не перемещает."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_shuffle_owned_permanents",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 009 замешивает только свои активные постоянки"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_010",
@@ -2472,10 +2650,149 @@
       "id": "esw2_dbg__dead_wizard_token_011",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "attack-effects",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in attack-effects"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Каждый враг может показать тебе средний палец. Сбрось 1 карту за каждого кто это сделал."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_each_foe_optional_discard",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 011 сначала собирает решения врагов, затем требует сбросить точное число карт"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "В симуляции никто не будет показывать средний палец, просто потверждать или нет сброс карты у игрока"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_each_foe_optional_discard",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 011 сначала собирает решения врагов, затем требует сбросить точное число карт"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "В качестве шутки можно назвать функцию такую по сбросам карт за каждого согласного игрока \"средний палец\" (на англ языке)"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_each_foe_optional_discard",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 011 сначала собирает решения врагов, затем требует сбросить точное число карт"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Каждый враг отдельно выбирает, делать ли это действие."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_each_foe_optional_discard",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 011 сначала собирает решения врагов, затем требует сбросить точное число карт"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "За каждого врага, который это сделал, игрок должен сбросить 1 карту."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_each_foe_optional_discard",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 011 сначала собирает решения врагов, затем требует сбросить точное число карт"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Если несколько врагов сделали это, количество сбрасываемых карт равно количеству таких врагов."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_each_foe_optional_discard",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 011 сначала собирает решения врагов, затем требует сбросить точное число карт"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[5]",
+            "value": "Если нужно сбросить 4 карты, а на руке меньше 4 карт, то на руке остаются 0 карт, так как случай с -1 или другим отрицательным числом карт невозможен"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_each_foe_optional_discard",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {}
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 011 не создаёт выбор сброса при пустой руке получателя"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_012",
