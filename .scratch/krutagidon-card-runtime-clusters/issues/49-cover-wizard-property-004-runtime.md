@@ -1,6 +1,8 @@
-Status: Todo
-Label: ready-for-agent
+Status: Done
+Label: done
 Type: AFK
+
+> Historical local copy of closed GitHub issue #300. It is not a current implementation task. The acceptance criteria below are retained as delivery history; docs/rules-canon.md and ADR-0008 supersede any conflicting rule or DWT timing.
 
 # Закрепить market-effects свойства колдуна 004 реальным тестом
 

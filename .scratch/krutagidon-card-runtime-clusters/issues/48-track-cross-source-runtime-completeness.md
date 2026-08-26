@@ -1,6 +1,8 @@
-Status: Todo
-Label: ready-for-agent
+Status: Done
+Label: done
 Type: AFK
+
+> Historical local copy of closed GitHub issue #299. It is not a current implementation task. The acceptance criteria below are retained as delivery history; docs/rules-canon.md and ADR-0008 supersede any conflicting rule or DWT timing.
 
 # Зафиксировать полноту runtime для карт, свойств и ЖДК
 

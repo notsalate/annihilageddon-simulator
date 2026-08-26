@@ -3770,6 +3770,46 @@
         },
         {
           "draftPoint": {
+            "path": "notes[1]",
+            "value": "При смерти от ATTACK контекст этого воскрешения сохраняется, но обмен жизнями ждёт завершения всей AttackInstance."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_exchange_life",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "target": { "selector": "opponentPlayer" } }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/life-total-effects.test.ts",
+              "name": "DWT 019 exchanges life with a different player without a pass option"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "При direct gain без текущего воскрешения эффект срывается окончательно и не ждёт будущей смерти."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_exchange_life",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "target": { "selector": "opponentPlayer" } }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/life-total-effects.test.ts",
+              "name": "DWT 019 exchanges life with a different player without a pass option"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
             "path": "notes[3]",
             "value": "Игрок выбирает любого другого колдуна."
           },
@@ -4619,6 +4659,29 @@
         },
         {
           "draftPoint": {
+            "path": "notes[1]",
+            "value": "Если ЖДК получен при смерти, становление лошарой учитывается до текущего reset: игрок сразу воскрешается максимум с 15 жизнями."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_status",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {
+                "statusId": "dingler",
+                "target": { "selector": "activePlayer" }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/effective-values.test.ts",
+              "name": "ЖДК 026 удваивает только активный штраф статуса лошары"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
             "path": "notes[2]",
             "value": "Это также имеет end-game эффект."
           },
@@ -4739,6 +4802,46 @@
               "name": "ЖДК 027 делает нормального лошарой, а лошаре полностью разрешает ещё один ЖДК"
             }
           ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Проверка `уже лошара` использует состояние в момент получения этого ЖДК. Нужное изменение статуса учитывается до текущего reset."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_gain_status_or_draw_face",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "statusId": "dingler" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 027 делает нормального лошарой, а лошаре полностью разрешает ещё один ЖДК"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Получение еще одного ЖДК не является СМЕРТЬЮ; новый ЖДК обрабатывается как direct gain в момент разрешения этого текста."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_gain_status_or_draw_face",
+              "timing": "onDeadWizardTokenFace",
+              "fields": { "statusId": "dingler" }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 027 делает нормального лошарой, а лошаре полностью разрешает ещё один ЖДК"
+            }
+          ]
         }
       ],
       "unresolvedMechanics": [
@@ -4802,6 +4905,29 @@
           "draftPoint": {
             "path": "notes[1]",
             "value": "Если игрок уже лошара, он становится нормальным."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "toggle_status",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {
+                "statusId": "dingler",
+                "target": { "selector": "activePlayer" }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "ЖДК 028 меняет исходный Dingler-статус получателя"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Проверка `уже лошара` использует состояние в момент получения ЖДК, а выбранное изменение статуса применяется до текущего reset и определяет его максимум жизней."
           },
           "runtimeRefs": [
             {
