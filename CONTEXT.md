@@ -232,29 +232,81 @@ _Avoid_: default empty-choice failure
 The shared rule layer that turns target descriptions such as self, all foes, chosen foe, left foe, right foe, strongest player, or weakest player into concrete player targets before an effect is applied.
 _Avoid_: target logic inside each effect handler
 
-**Immediate Death Resolution**:
-The rule that a player dies as soon as their life drops below 1. Death, DWT gain, resurrection, and DWT immediate effects are resolved before continuing the remaining effect sequence.
-_Avoid_: end-of-turn death check, delayed death
+**End-of-Turn Game Check**:
+The game-ending checkpoint after the current player has completed the turn and immediately before control would pass clockwise. Empty DWT ends the game at the current turn's checkpoint. Market-deck insufficiency is recorded only when this player's start-of-turn Market Flow actually fails after event replacements, so a failed refill after the previous player's purchases ends the game at the end of this player's turn. The official rules establish end-of-turn timing; this explicit discovery/checkpoint model is the deterministic project ruling.
+_Avoid_: immediate game end, predicting hidden Market Flow, empty-deck check without a failed refill
 
-**Sequential Target Resolution**:
-The rule that multi-target effects resolve one target at a time in seating order, with death and DWT effects fully resolved after each affected target before moving to the next target. Normal effects start from the applying player; Mayhem and Mega Mayhem effects start from the active player.
-_Avoid_: batch target resolution
+**ATTACK Ability**:
+The card ability introduced by the printed `ATTACK:` marker. Its complete ATTACK text can span several sentences and can create one or more separate Attack Instances.
+_Avoid_: treating every sentence as a separate ATTACK, treating the whole card as ATTACK text
 
-**Sequential Player Attack Resolution**:
-The rule that normal player-controlled attacks with several affected targets resolve one target at a time in seating order. For each target, the defense choice and the selected defense branch resolve completely before the attack continues; if the attack lands, damage, immediate death, DWT effects, and other immediate consequences also resolve before moving to the next target. There is no preliminary round in which all targets decide whether to defend.
-_Avoid_: collecting defense decisions before resolving targets, moving to the next target before the current defense or DWT effects finish, treating normal attacks like Mayhem wording
+**ATTACK Text**:
+All instructions that belong to one ATTACK ability until the card moves to a separate ability. Conditions such as "if that Wizard dies" remain ATTACK text even when `ATTACK:` is not repeated.
+_Avoid_: sentence-level ATTACK parsing, card-wide ATTACK text
 
-**State-Sensitive Attack Order**:
-The rule that state changes from one resolved target of a normal player-controlled attack can affect later targets of the same attack during the resolution phase, including modifiers, death, and DWT effects.
-_Avoid_: snapshotting normal attack state
+**Attack Instance**:
+One separately started ATTACK with one identity and one Defense quota per affected player. An Attack Instance may have several targets; an instruction to ATTACK again or ATTACK the next foe starts another instance after the current instance and its deferred DWT text finish.
+_Avoid_: card resolution, target branch, one attack per target
+
+**Attack Application**:
+The target-local branch of a multi-target Attack Instance. Redirect can change the current controller, attacker, and target of one application without transferring the other applications or creating a new Attack Instance.
+_Avoid_: separate redirected attack, global control transfer
+
+**Attack Chain**:
+A card-driven sequence in which the result of one completed Attack Instance starts another. The chain has no implicit once-per-target or once-per-round cap; each next instance uses current state and continues while its printed condition remains true. Empty DWT does not globally disable the chain or other ATTACKs; only a separately proven non-terminating continuation may receive the project's explicit cycle outcome.
+_Avoid_: one multi-target Attack Instance, visited-target suppression, empty-DWT ATTACK lock
+
+**Attack-Bound Consequence**:
+An effect triggered by the event or outcome of a specific Attack Instance, such as an on-damage, on-kill, or after-this-attack consequence. The instance closes only after its ATTACK text and attack-bound consequences finish.
+_Avoid_: independent card ability, card-wide aftermath
+
+**Independent Card Ability**:
+A card ability that is neither ATTACK text nor a consequence of a specific Attack Instance. Deferred DWT text from the preceding lethal ATTACK resolves before a later independent ability of the same card.
+_Avoid_: attack-bound consequence
+
+**Defense Window Mode**:
+The explicit ordering policy for a multi-target Attack Instance. `PER_TARGET` completes Defense and ATTACK text target by target; `COLLECT_ALL_FIRST` completes every Defense window before resolving one shared interactive ATTACK text.
+_Avoid_: inferring defense order from target count
+
+**Interactive Multi-Target ATTACK**:
+A semantic category whose ATTACK text cannot be resolved independently for one target without knowing which other players remain affected, such as passing cards among players. It uses `COLLECT_ALL_FIRST`; Mayhem uses the same broad phase order through its own special rule.
+_Avoid_: every multi-target attack, Mayhem as the generic implementation
+
+**Immediate Death Procedure**:
+When life drops below 1, the player is defeated immediately, DWT gain or replacement is processed, and life is reset even if no DWT is received. The timing of the DWT's ordinary text is a separate rule.
+_Avoid_: delaying defeat or respawn, treating DWT text as part of respawn
+
+**DWT Respawn Modifier**:
+A property of a newly revealed DWT, status, or ability that must be considered to calculate the current life reset. It applies before respawn; ordinary one-shot and Ongoing DWT text use their own timing.
+_Avoid_: activating all DWT text before respawn
+
+**Attack-Deferred DWT Text**:
+Ordinary one-shot and Ongoing text of a DWT gained because its recipient was defeated by an ATTACK. Gain, reveal, and respawn happen immediately, but this ordinary text waits for the complete Attack Instance, including all target applications, redirect chains, shared ATTACK text, and attack-bound consequences. After closure, deferred tokens begin in turn order; multiple tokens of the same player retain gain order.
+_Avoid_: waiting for the whole card, resolving between targets of one ATTACK
+
+**DWT Respawn Context**:
+The death and reset event attached to a DWT gained by its defeated recipient. A contextual one-shot can use this captured current context when deferred by an Attack Instance; direct gain without a current death/respawn does not create future eligibility.
+_Avoid_: registering one-shot DWT text as a future trigger
+
+**Direct DWT Resolution**:
+A DWT gained without the recipient's death applies its gain-time statuses/permanent rules, resolves applicable one-shot text, and activates ordinary Ongoing text immediately at gain, even inside an Attack Instance. It creates no respawn; a Dingler effect immediately changes and clamps the actual recipient's current state and affects future respawns. A one-shot whose current death or respawn prerequisite is absent fizzles permanently rather than becoming a future trigger.
+_Avoid_: attack-death defer for direct gain, future trigger registration
+
+**Nested DWT Resolution**:
+The depth-first rule for a non-ATTACK effect that causes death: gain, respawn, and applicable immediate DWT text resolve before returning to the interrupted effect. Only deaths caused by a concrete Attack Instance create its ordered deferred DWT queue.
+_Avoid_: one global FIFO DWT queue, outermost-source boundary
+
+**DWT Interception**:
+A replacement of who actually gains a DWT during another player's death. The actual recipient handles it as direct gain before the defeated victim resets, including immediate gain-time statuses and nested effects; the victim still respawns, and the intercepted token cannot modify that victim's reset.
+_Avoid_: transferring defeat or respawn to the interceptor, applying the intercepted token to the victim
 
 **Two-Phase Mayhem Attack Resolution**:
-The rule that Mayhem and Mega Mayhem attacks use two phases: they first collect defense decisions from affected players in seating order, then resolve the attack in seating order against targets that did not avoid it. This is separate from normal player-controlled multi-target attacks, which fully resolve each target's defense and immediate consequences before moving to the next target.
-_Avoid_: defend-and-resolve-per-target for Mayhem attacks, collapsing Mayhem wording into the generic attack rule
+The special Mayhem and Mega Mayhem rule: one event ATTACK remains one Attack Instance/DWT boundary, but first collects Defense decisions clockwise from the active player and then resolves the event clockwise. A defending player does not participate in ATTACK text, and Defense text that would affect an attacker, including redirect, does nothing.
+_Avoid_: generic redirectable COLLECT_ALL_FIRST, defend-and-resolve-per-target Mayhem
 
-**Minimal Defense Window**:
-The early supported defense workflow for attack resolution: an affected target may choose one legal defense from hand to avoid that attack instance, and the defense card moves according to mapped defense branch data. Redirects and complex extra defense effects can be added separately.
-_Avoid_: attacks without defense support
+**Defense Window**:
+The opportunity for one affected player to use at most one legal Defense against one Attack Instance. Ordinary Defense costs and non-ATTACK effects resolve inside that window; redirect changes the actual ATTACK through the Attack Instance lifecycle.
+_Avoid_: attacks without defense support, one defense per card resolution
 
 **Defense Branch**:
 The mapped effect sequence used when a defense card or defense-capable object is chosen during a defense window. A defense branch can both avoid the attack and perform additional supported effects through the shared effect runtime.
@@ -272,13 +324,21 @@ _Avoid_: free defense assumption
 The project rule that a player cannot pay a life cost if that payment would reduce their life below 1. Such a defense or effect option is not legal unless mapped data explicitly says otherwise.
 _Avoid_: paying life into death
 
-**Redirected Attack Source**:
-The rule that a redirected attack becomes an attack from the defending player who redirected it. That player receives attack credit, can receive Trophy credit for a resulting kill, and their attack modifiers can apply to the redirected attack.
-_Avoid_: redirect as target-only change
+**Redirected Attack Control**:
+The rule that the defender who redirects an Attack Application becomes that application's current controller and attacker. Controller-sensitive modifiers and kill credit can move with that application, while the original card play, other target applications, and card-specific damage source remain separate facts.
+_Avoid_: redirect as target-only change, global ownership transfer
+
+**Redirect Identity**:
+Redirect preserves the Attack Instance identity and changes one application's route. Defense quota is tracked by player and Attack Instance, so redirecting the same attack back to a player does not grant that player a second Defense.
+_Avoid_: new ATTACK per redirect, reset defense quota
+
+**Control Epoch**:
+One uninterrupted period in which a player controls a redirected Attack Application. Controller-sensitive modifiers apply once per new control epoch to the carried current value; returning control can therefore apply the same physical modifier in a later epoch.
+_Avoid_: recalculating from base after redirect, applying modifiers repeatedly without a control change
 
 **Redirect Boundaries**:
-The rule that redirect requires a current attacker. Against ownerless nonredirectable attacks, a redirect defense still pays its costs, avoids the attack, and resolves its other branches, but does not create a new attacker or target.
-_Avoid_: inventing an attacker for ownerless attacks
+Redirect requires a current attacker and affects only the defended application of a multi-target ATTACK. Against Mayhem or another explicitly ownerless nonredirectable attack, Defense still pays its costs, avoids the attack, and resolves ordinary branches, but attacker-facing text including redirect does nothing.
+_Avoid_: inventing an attacker for ownerless attacks, redirecting every target application
 
 **Basic Trophy Credit**:
 The rule that a player gains control of the Trophy when that player causes a foe to die. Self-kills, source-less deaths, DWT-caused deaths, and unowned Mayhem/Mega Mayhem deaths do not move the Trophy.

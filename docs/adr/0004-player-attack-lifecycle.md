@@ -1,15 +1,17 @@
 ---
 id: ADR-0004
 title: Жизненный цикл обычной атаки
-status: accepted
+status: superseded
 origin: restored
 recorded: 2026-08-21
 decision_date: unknown
 supersedes: none
-superseded_by: none
+superseded_by: ADR-0008
 ---
 
 # ADR-0004: Жизненный цикл обычной атаки
+
+Этот документ заменён [ADR-0008](0008-attack-instance-defense-and-dwt-boundary.md). Сохранены единый владелец жизненного цикла атаки и отдельный процесс Mayhem; прежние последовательная модель целей и граница немедленных последствий смерти больше не являются действующим решением.
 
 ## Контекст
 
