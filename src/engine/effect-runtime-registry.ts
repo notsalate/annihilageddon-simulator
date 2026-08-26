@@ -6,24 +6,16 @@ import {
   type PlayerControlledAttackIntent,
   type PlayerControlledAttackExecutionResult,
 } from "./attack-resolution.js";
-export {
-  createAttackDefenseUsage,
-  createAttackInstance,
-} from "./attack-resolution.js";
+export { createAttackDefenseUsage } from "./attack-resolution.js";
 export type {
   AttackAmountComponents,
-  AttackApplication,
   AttackDefenseUsage,
-  AttackInstance,
-  DefenseWindowMode,
   DamageApplicationResult,
   AttackIntent,
   AttackResolution,
   AttackTargetResolutionResult,
   DefenseAttackContext,
   DefenseWindowResolutionResult,
-  PlayerControlledSharedAttackImpact,
-  PlayerControlledSharedAttackResolver,
 } from "./attack-resolution.js";
 import {
   type AttackId,
