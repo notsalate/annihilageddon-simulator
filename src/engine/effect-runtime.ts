@@ -12,6 +12,7 @@ import {
   type DefenseAttackContext,
   type DefenseWindowResolutionResult,
   type PlayerControlledAttackAdapters,
+  type PlayerControlledAttackExecutionResult,
   type PlayerControlledAttackIntent,
   type RedirectedAttackIntent,
 } from "./attack-resolution.js";
@@ -1364,7 +1365,7 @@ function effectConditionMatches(
 
 function resolvePlayerControlledAttackWithRuntimeAdapters(
   intent: PlayerControlledAttackIntent
-): EffectExecutionResult {
+): PlayerControlledAttackExecutionResult {
   return resolvePlayerControlledAttackLifecycle(
     intent,
     playerControlledAttackAdapters
@@ -1774,6 +1775,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   transferControlledDeadWizardTokenLike,
   exchangeControlledDeadWizardTokenLikes,
   collectAttackReplacementProfile,
+  resolvePendingDeadWizardTokenFaces: resolveQueuedDeadWizardTokenFaces,
   resolvePlayerControlledAttack:
     resolvePlayerControlledAttackWithRuntimeAdapters,
   resolveDefenseWindow,

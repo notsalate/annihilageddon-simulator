@@ -1328,18 +1328,17 @@ test("active player can buy an affordable market card into discard", () => {
 test("market chip marker adds chips to every marked card in that market during Market Flow", () => {
   const state = initializeGame({
     rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
   });
   const markedInMarket: CardInstance = {
     instanceId: markCardInstanceId("fixture-marked-in-market"),
-    definitionId: markCardDefinitionId("esw2_dbg__main_012"),
+    definitionId: markCardDefinitionId("esw2_dbg__main_028"),
     ownerId: "common",
     marketChips: 0,
   };
   const markedMarketFlowCard: CardInstance = {
     instanceId: markCardInstanceId("fixture-marked-market-flow"),
-    definitionId: markCardDefinitionId("esw2_dbg__main_012"),
+    definitionId: markCardDefinitionId("esw2_dbg__main_028"),
     ownerId: "common",
     marketChips: 0,
   };
@@ -1389,6 +1388,208 @@ test("market chip marker adds chips to every marked card in that market during M
       );
     })
   );
+});
+
+test("#287 fixed attack cards use their printed power and damage", () => {
+  const cases = [
+    { definitionId: "esw2_dbg__main_023", power: 2, amount: 7 },
+    { definitionId: "esw2_dbg__main_028", power: 2, amount: 3 },
+    { definitionId: "esw2_dbg__legend_003", power: 0, amount: 20 },
+  ] as const;
+
+  for (const testCase of cases) {
+    const state = initializeGame({
+      rootDir,
+      seed: 287001,
+      playerCount: 3,
+    });
+    const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+    state.activePlayerId = attacker.playerId;
+    for (const player of state.players) {
+      player.wizardProperties = [];
+      player.life.current = testCase.amount === 20 ? 30 : 20;
+    }
+    state.turn.power = 0;
+    attacker.hand = [];
+    const attackCard = addRuntimeCardToHand(
+      state,
+      attacker,
+      testCase.definitionId
+    );
+
+    assert.deepEqual(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: attackCard.instanceId,
+      }),
+      { ok: true }
+    );
+    assert.equal(state.turn.power, testCase.power);
+    for (const target of state.players.filter(
+      (player) => player.playerId !== attacker.playerId
+    )) {
+      assert.equal(
+        target.life.current,
+        (testCase.amount === 20 ? 30 : 20) - testCase.amount
+      );
+    }
+    assert.equal(
+      state.eventLog.filter(
+        (event) =>
+          event.type === "attackTargetStarted" &&
+          event.cardInstanceId === attackCard.instanceId
+      ).length,
+      2
+    );
+  }
+});
+
+test("#287 main_070 collects every defense decision before resolving ownerless damage", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 287002,
+    playerCount: 3,
+  });
+  const mayhemIndex = state.common.mainDeck.findIndex(
+    (card) => card.definitionId === "esw2_dbg__main_070"
+  );
+  assert.notEqual(mayhemIndex, -1);
+  const [mayhem] = state.common.mainDeck.splice(mayhemIndex, 1);
+  assert.ok(mayhem);
+  state.common.mainDeck.unshift(mayhem);
+  state.common.market.splice(4);
+  for (const player of state.players) {
+    player.life.current = 20;
+    player.wizardProperties = [];
+  }
+
+  assert.deepEqual(runMarketFlow(state, { mode: "turn" }), { ok: true });
+  assert.equal(
+    state.players.every((player) => player.life.current === 15),
+    true
+  );
+  const decisionIndices = state.eventLog
+    .map((event, index) =>
+      event.type === "mayhemDecisionStarted" ? index : undefined
+    )
+    .filter((index): index is number => index !== undefined);
+  const damageIndices = state.eventLog
+    .map((event, index) =>
+      event.type === "attackTargetStarted" &&
+      event.definitionId === "esw2_dbg__main_070"
+        ? index
+        : undefined
+    )
+    .filter((index): index is number => index !== undefined);
+  assert.equal(decisionIndices.length, 3);
+  assert.equal(damageIndices.length, 3);
+  assert.ok(Math.max(...decisionIndices) < Math.min(...damageIndices));
+});
+
+test("#287 main_024 can defend by discarding itself and drawing one card", () => {
+  const state = initializeGame({ rootDir, seed: 287003 });
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const defender = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+  }
+  attacker.hand = [];
+  defender.hand = [];
+  defender.discard = [];
+  const defense = addRuntimeCardToHand(
+    state,
+    defender,
+    "esw2_dbg__main_024"
+  );
+  const drawnCard = defender.deck[0];
+  assert.ok(drawnCard);
+  const attackCard = createRuntimeCardInstance(
+    attacker,
+    "esw2_dbg__main_024",
+    "attack-main-024"
+  );
+  attacker.hand.push(attackCard);
+  state.effectChoiceStrategy = ({ effectId }) => {
+    if (effectId === "attack_damage") {
+      return { choiceId: defender.playerId };
+    }
+    if (effectId === "avoid_attack") {
+      return { choiceId: defense.instanceId };
+    }
+    return undefined;
+  };
+  const lifeBefore = defender.life.current;
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: attackCard.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(state.turn.power, 2);
+  assert.equal(defender.life.current, lifeBefore);
+  assert.equal(defender.discard.includes(defense), true);
+  assert.equal(defender.hand.includes(drawnCard), true);
+});
+
+test("#287 starter_004 returns discard cards before the gained DWT face", () => {
+  const state = initializeGame({ rootDir, seed: 287004 });
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  state.activePlayerId = attacker.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+  }
+  attacker.hand = [];
+  attacker.discard = [];
+  attacker.life.current = 1;
+  const returnedCards = attacker.deck.splice(0, 2);
+  attacker.discard.push(...returnedCards);
+  const token = {
+    instanceId: markTokenInstanceId("fixture-starter-004-dwt"),
+    definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_015"),
+    ownerId: "common" as const,
+  };
+  state.common.deadWizardTokens.drawStack = [token];
+  const wand = addRuntimeCardToHand(
+    state,
+    attacker,
+    "esw2_dbg__starter_004"
+  );
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "attack_damage") {
+      return { choiceId: attacker.playerId };
+    }
+    if (effectId === "return_discard_to_hand") {
+      const choice = choices.find(
+        (candidate) => candidate.choiceKind === "cardTarget" && candidate.amount === 2
+      );
+      return choice === undefined ? undefined : { choiceId: choice.choiceId };
+    }
+    return undefined;
+  };
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: wand.instanceId }),
+    { ok: true }
+  );
+  for (const card of returnedCards) {
+    assert.equal(attacker.hand.includes(card), true);
+  }
+  const returnIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "effectCardsReturnedToHand" &&
+      event.definitionId === "esw2_dbg__starter_004"
+  );
+  const faceIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "deadWizardTokenFaceResolved" &&
+      event.tokenDefinitionId === "esw2_dbg__dead_wizard_token_015"
+  );
+  assert.ok(returnIndex >= 0);
+  assert.ok(faceIndex >= 0);
+  assert.ok(returnIndex < faceIndex);
 });
 
 test("turn-start Market Flow adds a normal main-deck card to the main market", () => {
@@ -8584,6 +8785,41 @@ test("Potny's Buzzing Wand chooses left or right and chains in the chosen direct
   );
 });
 
+test("#287 directional chain stops after an unrecoverable kill", () => {
+  const state = initializeGame({ rootDir, seed: 60616, playerCount: 2 });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  targetPlayer.hand = [];
+  targetPlayer.discard = [];
+  targetPlayer.life.current = 1;
+  state.common.deadWizardTokens.drawStack = [];
+  state.turn.power = 99;
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_015"
+  );
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 20);
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.cardInstanceId === wand.instanceId
+    ).length,
+    1
+  );
+});
+
 test("Ultimate Tronado gains the actual total from a directional chain attack only once", () => {
   const state = initializeGame({
     rootDir,
@@ -8634,7 +8870,7 @@ test("Ultimate Tronado gains the actual total from a directional chain attack on
     true
   );
 
-  assert.equal(state.turn.power, 14);
+  assert.equal(state.turn.power, 4);
   assert.equal(
     state.eventLog.filter(
       (event) =>

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_028",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_028.json",
+    "image": "assets/cards/wizard-card/Волшебник. Члены банды.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_028.md"
+  },
+  "visible": {
+    "nameRu": "Члены банды",
+    "cost": 3,
+    "victoryPoints": 1,
+    "typeRu": "Волшебник",
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "textRu": "+2 мощи\nАтака: нанеси 3 урона каждому врагу.",
+    "markers": ["attack", "marketChipMarker"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "cardKind": "normal",
+    "cardTypes": ["wizardCard"],
+    "cost": 3,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": true,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 2 },
+      {
+        "effectId": "attack_damage",
+        "timing": "onPlay",
+        "amount": 3,
+        "targetSelector": "eachFoe"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

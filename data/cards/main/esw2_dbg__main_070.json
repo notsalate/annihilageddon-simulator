@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_070",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_070.json",
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2J.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_070.md"
+  },
+  "visible": {
+    "nameRu": "2J",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Атака: каждый колдун отхватывает 5 урона.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_attack",
+        "timing": "onMayhemResolve",
+        "amount": 5,
+        "target": { "selector": "allPlayers" }
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

@@ -869,49 +869,74 @@ function directionalChainAttackHandler(
         directionChoice?.choiceKind === "directionalPlayerTarget"
           ? directionChoice.players
           : [];
-      const attackedPlayerIds = new Set<PlayerState["playerId"]>();
-      const foes = chosenFoes.filter((targetPlayer) => {
-        if (attackedPlayerIds.has(targetPlayer.playerId)) {
-          return false;
-        }
-        attackedPlayerIds.add(targetPlayer.playerId);
-        return true;
-      });
-      const attackProfileResult = collectAttackReplacementProfile(
-        state,
-        player,
-        source
-      );
-      if (attackProfileResult.status !== "resolved") {
-        return {
-          ok: false,
-          error:
-            attackProfileResult.status === "error"
-              ? attackProfileResult.error
-              : "Attack replacement profile was not applicable",
-        };
+      if (chosenFoes.length === 0) {
+        return { ok: true };
       }
-      const attackProfile = attackProfileResult.result;
 
-      return services.resolvePlayerControlledAttack({
-        state,
-        attackingPlayer: player,
-        source,
-        effectId: effect.effectId,
-        unavoidable: attackProfile.unavoidable,
-        targetPlan: {
-          kind: "orderedPlayers",
-          players: foes,
-          continueWhile: "targetKilled",
-        },
-        impact: {
-          kind: "damage",
-          baseAmount: effect.amount,
-          sourceOwnerModifierAmount: attackProfile.damageBonus,
-          onDamageDealt: effect.onDamageDealt ?? [],
-          onKill: effect.onKill ?? [],
-        },
-      });
+      let targetIndex = 0;
+      while (true) {
+        const targetPlayer = chosenFoes[targetIndex % chosenFoes.length];
+        if (targetPlayer === undefined) {
+          return { ok: true };
+        }
+
+        const hadDeadWizardTokenAvailableBeforeAttack =
+          state.common.deadWizardTokens.status === "available" &&
+          state.common.deadWizardTokens.drawStack.length > 0;
+        const attackProfileResult = collectAttackReplacementProfile(
+          state,
+          player,
+          source
+        );
+        if (attackProfileResult.status !== "resolved") {
+          return {
+            ok: false,
+            error:
+              attackProfileResult.status === "error"
+                ? attackProfileResult.error
+                : "Attack replacement profile was not applicable",
+          };
+        }
+        const attackProfile = attackProfileResult.result;
+        const attackResult = services.resolvePlayerControlledAttack({
+          state,
+          attackingPlayer: player,
+          source,
+          effectId: effect.effectId,
+          unavoidable: attackProfile.unavoidable,
+          targetPlan: {
+            kind: "orderedPlayers",
+            players: [targetPlayer],
+            continueWhile: "targetKilled",
+          },
+          impact: {
+            kind: "damage",
+            baseAmount: effect.amount,
+            sourceOwnerModifierAmount: attackProfile.damageBonus,
+            onDamageDealt: effect.onDamageDealt ?? [],
+            onKill: effect.onKill ?? [],
+          },
+        });
+        if (!attackResult.ok || attackResult.gameEnd !== undefined) {
+          return attackResult;
+        }
+
+        const faceResult = services.resolvePendingDeadWizardTokenFaces(state);
+        if (!faceResult.ok || faceResult.gameEnd !== undefined) {
+          return faceResult;
+        }
+        if (!hadDeadWizardTokenAvailableBeforeAttack) {
+          return { ok: true };
+        }
+        if (targetPlayer.life.current < 1) {
+          return { ok: true };
+        }
+        if (attackResult.requestedTargetKilled !== true) {
+          return { ok: true };
+        }
+
+        targetIndex += 1;
+      }
     },
   };
 }

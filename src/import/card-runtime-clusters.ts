@@ -232,7 +232,7 @@ export function formatCardRuntimeClusterMarkdown(
     "# Card Runtime Cluster Matrix",
     "",
     "Generated from canonical card draft JSON, current runtime card JSON, current compositions, and manual card cluster decisions.",
-    "`fullRuntime` requires current runtime card JSON, direct current deck/stack/pool membership, and focused test refs.",
+    "`fullRuntime` requires current runtime card JSON, current deck/stack/pool or setup-replacement membership, and focused test refs.",
     "`missingRuntime` is normal backlog and is not a process error by itself.",
     "",
     "## Summary",
@@ -646,9 +646,6 @@ function getNonFullRuntimeReasons(
 ): string[] {
   const reasons: string[] = [];
   const engine = getRecord(runtimeCard["engine"]);
-  const directMemberships = memberships.filter(
-    (membership) => !membership.derivedFromToken
-  );
   const runtimeMappingStatus =
     getOptionalString(engine["mappingStatus"]) ??
     getOptionalString(runtimeCard["mappingStatus"]);
@@ -656,8 +653,10 @@ function getNonFullRuntimeReasons(
   const needsEffectMapping = getOptionalBoolean(engine["needsEffectMapping"]);
   const unsupportedMechanics = getStringArray(engine["unsupportedMechanics"]);
 
-  if (directMemberships.length === 0) {
-    reasons.push("missing current deck/stack/pool composition membership");
+  if (memberships.length === 0) {
+    reasons.push(
+      "missing current deck/stack/pool or setup-replacement composition membership"
+    );
   }
   if (focusedTestRefs.length === 0) {
     reasons.push("missing focused test refs");

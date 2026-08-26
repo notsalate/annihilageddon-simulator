@@ -1009,8 +1009,8 @@ test("repository cross-source registry assigns every wizard property and DWT to 
       (item) => item.primaryMechanicCluster !== undefined
     )
   );
-  assert.equal(report.crossSourceSummary.blocked, 146);
-  assert.equal(report.crossSourceSummary.crossSourceComplete, 26);
+  assert.equal(report.crossSourceSummary.blocked, 150);
+  assert.equal(report.crossSourceSummary.crossSourceComplete, 22);
   assert.ok(firstDeadWizardToken);
   assert.ok(wizardProperty004);
   assert.equal(wizardProperty004.crossSourceStatus, "crossSourceComplete");

@@ -4,6 +4,7 @@ import {
   type DefenseWindowResolutionResult,
   type DamageApplicationResult,
   type PlayerControlledAttackIntent,
+  type PlayerControlledAttackExecutionResult,
 } from "./attack-resolution.js";
 export { createAttackDefenseUsage } from "./attack-resolution.js";
 export type {
@@ -481,6 +482,9 @@ export interface EffectRuntimeServices {
   ): EffectRuntimeOperationResult<AttackReplacementProfile>;
   resolvePlayerControlledAttack(
     intent: PlayerControlledAttackIntent
+  ): PlayerControlledAttackExecutionResult;
+  resolvePendingDeadWizardTokenFaces(
+    state: GameState
   ): EffectExecutionResult;
   resolveDefenseWindow(
     state: GameState,
