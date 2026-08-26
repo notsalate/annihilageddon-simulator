@@ -383,6 +383,8 @@ function redirectableAttack(attacker: PlayerState): DefenseAttackContext {
     kind: "redirectable",
     attackingPlayer: attacker,
     amountComponents: createAttackAmountState(2),
+    carriedAmount: 2,
+    controlEpoch: 0,
     effectId: "attack_damage",
     source,
     originalSource: source,

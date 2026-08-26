@@ -3,7 +3,12 @@ import {
   buildControlledObjectView,
   peekLegendDeckCard,
 } from "./control-ledger.js";
-import type { ResolvedAttackBranchContext } from "./attack-resolution.js";
+import type {
+  AttackInstance,
+  PlayerControlledAttackAdapters,
+  PlayerControlledSharedAttackImpact,
+  ResolvedAttackBranchContext,
+} from "./attack-resolution.js";
 import { countControlledCardsOfType } from "./card-type-runtime.js";
 import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
 import { recordGameEvent, recordTurnPowerChanged } from "./event-recorder.js";
@@ -765,6 +770,34 @@ type PlayerControlledEffectsAttackEffect =
   | RuntimeEffectForId<"attack_reveal_and_play_foe_deck_card">
   | RuntimeEffectForId<"attack_kill_and_replace_dead_wizard_token">;
 
+function createSharedAttackEffectImpact(
+  effect: PlayerControlledEffectsAttackEffect
+): PlayerControlledSharedAttackImpact {
+  return {
+    kind: "shared" as const,
+    resolve(
+      state: GameState,
+      attack: AttackInstance,
+      adapters: PlayerControlledAttackAdapters
+    ): EffectExecutionResult {
+      const application = attack.applications[0];
+      if (application === undefined) {
+        return { ok: false, error: "Shared attack has no target application" };
+      }
+      if (application.resolution?.avoided === true) {
+        return { ok: true };
+      }
+      return adapters.executeOnHitEffect(
+        state,
+        application.attackingPlayer,
+        application.targetPlayer,
+        effect,
+        application.source
+      );
+    },
+  };
+}
+
 function resolvePlayerControlledEffectsAttack(
   state: GameState,
   player: PlayerState,
@@ -788,18 +821,26 @@ function resolvePlayerControlledEffectsAttack(
     };
   }
   const attackProfile = attackProfileResult.result;
+  const defenseWindowMode =
+    effect.effectId === "attack_transfer_controlled_dead_wizard_token"
+      ? "COLLECT_ALL_FIRST"
+      : "PER_TARGET";
   return services.resolvePlayerControlledAttack({
     state,
     attackingPlayer: player,
     source,
     effectId: effect.effectId,
+    defenseWindowMode,
     unavoidable: attackProfile.unavoidable,
     attackProfile,
     ...(effect.effectId === "attack_gain_dead_wizard_tokens"
       ? { redirectPolicy: effect.redirectPolicy }
       : {}),
     targetPlan: { kind: "runtimeSelector", effect },
-    impact: { kind: "effects", effects: [effect] },
+    impact:
+      effect.effectId === "attack_transfer_controlled_dead_wizard_token"
+        ? createSharedAttackEffectImpact(effect)
+        : { kind: "effects", effects: [effect] },
   });
 }
 
@@ -833,6 +874,7 @@ function resolvePlayerControlledDamageAttack(
     attackingPlayer: player,
     source,
     effectId: effect.effectId,
+    defenseWindowMode: "PER_TARGET",
     unavoidable: attackProfile.unavoidable,
     targetPlan: { kind: "runtimeSelector", effect },
     impact: {
@@ -999,6 +1041,7 @@ function createAttackDamageEqualRandomDiscardedHandCostHandler(
         attackingPlayer: player,
         source,
         effectId: effect.effectId,
+        defenseWindowMode: "PER_TARGET",
         unavoidable: true,
         attackProfile,
         targetPlan: { kind: "orderedPlayers", players: opponents },
@@ -1200,6 +1243,7 @@ function directionalChainAttackHandler(
           attackingPlayer: player,
           source,
           effectId: effect.effectId,
+          defenseWindowMode: "PER_TARGET",
           unavoidable: attackProfile.unavoidable,
           targetPlan: {
             kind: "orderedPlayers",
@@ -1287,6 +1331,7 @@ function sequentialAttackDamageHandler(
           attackingPlayer: player,
           source,
           effectId: effect.effectId,
+          defenseWindowMode: "PER_TARGET",
           unavoidable: attackProfile.unavoidable,
           attackProfile,
           reportResolvedTargetKilled: true,
@@ -1373,6 +1418,7 @@ function multiTargetAttackHandler<Id extends MultiTargetAttackEffectId>(
         attackingPlayer: player,
         source,
         effectId: effect.effectId,
+        defenseWindowMode: "PER_TARGET",
         unavoidable: attackProfile.unavoidable,
         targetPlan: {
           kind: "orderedPlayers",
@@ -1492,6 +1538,7 @@ function distributedAttackDamageHandler(
         attackingPlayer: player,
         source,
         effectId: effect.effectId,
+        defenseWindowMode: "PER_TARGET",
         unavoidable: attackProfile.unavoidable,
         attackProfile,
         targetPlan: { kind: "orderedPlayers", players: opponents },
@@ -1771,6 +1818,7 @@ export function createCombatAttackEffectDefinitions(
         attackingPlayer: player,
         source,
         effectId: effect.effectId,
+        defenseWindowMode: "PER_TARGET",
         unavoidable: attackProfile.unavoidable,
         attackProfile,
         targetPlan: {

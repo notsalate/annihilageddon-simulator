@@ -529,7 +529,7 @@ test("Chipsychosis Arena doubles a redirected attack for the redirecting attacke
   assert.equal(originalAttacker.life.current, 16);
 });
 
-test("Chipsychosis Arena of the original attacker does not double a redirected leg", () => {
+test("Chipsychosis Arena of the original attacker does not reapply on a redirected leg", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -574,7 +574,7 @@ test("Chipsychosis Arena of the original attacker does not double a redirected l
     true
   );
   assert.equal(redirector.life.current, 20);
-  assert.equal(originalAttacker.life.current, 18);
+  assert.equal(originalAttacker.life.current, 16);
 });
 
 test("Chipsychosis Arena doubles source-owner Wand modifiers only against foes", () => {
@@ -11202,6 +11202,20 @@ test("#292 legend_023 chooses a fresh target for every attack and aggregates mul
     ).length,
     1
   );
+
+  const attackIds = state.eventLog
+    .filter(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.cardInstanceId === wand.instanceId
+    )
+    .map((event) => event.attackId);
+  assert.equal(attackIds.length, 4);
+  assert.equal(
+    attackIds.every((attackId) => attackId !== undefined),
+    true
+  );
+  assert.equal(new Set(attackIds).size, 4);
 });
 
 test("#292 legend_023 can target its controller for every attack", () => {

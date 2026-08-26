@@ -1538,6 +1538,7 @@ const revealTopCardChooseDestroyOrAttackEqualCostHandler: EffectRuntimeHandler<
       attackingPlayer: player,
       source,
       effectId: effect.effectId,
+      defenseWindowMode: "PER_TARGET",
       unavoidable: attackProfileResult.result.unavoidable,
       attackProfile: attackProfileResult.result,
       targetPlan: { kind: "runtimeSelector", effect },

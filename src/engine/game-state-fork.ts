@@ -9,6 +9,7 @@ export function forkGameState(source: GameState): GameState {
     seed: source.seed,
     runtimeMode: source.runtimeMode,
     rng: source.rng.fork(),
+    nextAttackId: source.nextAttackId,
     activePlayerId: source.activePlayerId,
     turn: {
       number: source.turn.number,

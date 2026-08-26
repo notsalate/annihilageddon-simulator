@@ -2,6 +2,7 @@ import {
   createCardInstanceId,
   createPlayerId,
   createTokenInstanceId,
+  type AttackId,
   markCardDefinitionId,
   markTokenDefinitionId,
   type CardDefinitionId,
@@ -165,6 +166,7 @@ export interface GameState {
   seed: number;
   runtimeMode: EffectRuntimeMode;
   rng: RandomSource;
+  nextAttackId: number;
   activePlayerId: PlayerId;
   turn: {
     number: number;
@@ -309,6 +311,7 @@ export interface GameEventMetadata {
 
 interface GameEventPayload {
   playerId?: PlayerId;
+  attackId?: AttackId;
   targetPlayerId?: PlayerId;
   targetPlayerIds?: PlayerId[];
   powerBefore?: number;
@@ -430,10 +433,10 @@ type GameEventShape<
 > = GameEventMetadata & { type: TType } & Required<
     Pick<GameEventPayload, TRequiredFields>
   > &
-  Partial<Pick<GameEventPayload, TOptionalFields>> & {
+  Partial<Pick<GameEventPayload, TOptionalFields | "attackId">> & {
     [K in Exclude<
       keyof GameEventPayload,
-      TRequiredFields | TOptionalFields
+      TRequiredFields | TOptionalFields | "attackId"
     >]?: never;
   };
 
@@ -988,6 +991,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     seed: options.seed,
     runtimeMode,
     rng,
+    nextAttackId: 1,
     activePlayerId: activePlayer.playerId,
     turn: {
       number: 1,

@@ -351,9 +351,11 @@ export function resolveDefenseWindow(
     return mutationSnapshotResult;
   }
   const mutationSnapshot = mutationSnapshotResult.snapshot;
+  const attackId = attack.attackId ?? attack.defenseUsage.attackId;
   recordGameEvent(state, {
     type: "defenseChoiceSelected",
     playerId: defendingPlayer.playerId,
+    ...(attackId === undefined ? {} : { attackId }),
     cardInstanceId: defense.card.instanceId,
     definitionId: defense.card.definitionId,
     effectId: "avoid_attack",
@@ -439,9 +441,12 @@ export function resolveDefenseWindow(
       );
     }
     const redirectResult = resolveRedirectedAttack({
+      ...(attackId === undefined ? {} : { attackId }),
+      controlEpoch: attack.controlEpoch + 1,
       attackingPlayer: defendingPlayer,
       targetPlayer: attack.attackingPlayer,
       amountComponents: attack.amountComponents,
+      carriedAmount: attack.carriedAmount,
       effectId: attack.effectId,
       source: {
         ...attack.source,
@@ -473,9 +478,11 @@ export function resolveDefenseWindow(
     ok: true,
     avoided: true,
     resolution: {
+      ...(attackId === undefined ? {} : { attackId }),
       damageDealt: 0,
       killed: false,
       avoided: true,
+      controlEpoch: attack.controlEpoch,
       amountComponents: attack.amountComponents,
       attackingPlayer: attack.attackingPlayer,
       currentAttackerId: attack.attackingPlayer.playerId,

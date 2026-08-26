@@ -18,6 +18,7 @@ export type {
   DefenseWindowResolutionResult,
 } from "./attack-resolution.js";
 import {
+  type AttackId,
   type CardDefinitionId,
   type TokenDefinitionId,
   type TokenInstanceId,
@@ -132,6 +133,7 @@ export interface EffectSourceContext {
   sourceType: EffectRuntimeSourceKind;
   runtimeMode: EffectRuntimeMode;
   playerId: PlayerState["playerId"];
+  attackId?: AttackId;
   currentAttackerPlayerId?: PlayerState["playerId"];
   playerControlledAttackPlayerId?: PlayerState["playerId"];
   cardInstanceId: string;

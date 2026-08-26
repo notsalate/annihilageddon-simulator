@@ -126,6 +126,7 @@ function createRuntimeSelectedAttackIntent(
     attackingPlayer: attacker,
     source,
     effectId: "attack_damage",
+    defenseWindowMode: "PER_TARGET",
     unavoidable: false,
     targetPlan: {
       kind: "runtimeSelector",
