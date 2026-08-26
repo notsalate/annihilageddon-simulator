@@ -4,6 +4,7 @@ import {
   type DefenseWindowResolutionResult,
   type DamageApplicationResult,
   type PlayerControlledAttackIntent,
+  type PlayerControlledAttackExecutionResult,
 } from "./attack-resolution.js";
 export { createAttackDefenseUsage } from "./attack-resolution.js";
 export type {
@@ -253,12 +254,21 @@ interface EffectChoiceDirectionalPlayerTarget {
   players: readonly PlayerState[];
 }
 
+interface EffectChoiceDamageDistribution {
+  choiceKind: "damageDistribution";
+  choiceId: string;
+  players: readonly PlayerState[];
+  amounts: readonly number[];
+  amount: number;
+}
+
 export type EffectChoice =
   | EffectChoiceOption
   | EffectChoicePlayerTarget
   | EffectChoiceCardTarget
   | EffectChoiceDefense
-  | EffectChoiceDirectionalPlayerTarget;
+  | EffectChoiceDirectionalPlayerTarget
+  | EffectChoiceDamageDistribution;
 
 export type EffectChoiceResolution =
   | { status: "selected"; choice: EffectChoice }
@@ -342,6 +352,13 @@ export interface EffectRuntimeServices {
     player: PlayerState,
     count: number
   ): CardInstance[];
+  drawCards(
+    state: GameState,
+    player: PlayerState,
+    amount: number,
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext
+  ): void;
   getDestroyDestination(
     state: GameState,
     card: CardInstance
@@ -481,7 +498,8 @@ export interface EffectRuntimeServices {
   ): EffectRuntimeOperationResult<AttackReplacementProfile>;
   resolvePlayerControlledAttack(
     intent: PlayerControlledAttackIntent
-  ): EffectExecutionResult;
+  ): PlayerControlledAttackExecutionResult;
+  resolvePendingDeadWizardTokenFaces(state: GameState): EffectExecutionResult;
   resolveDefenseWindow(
     state: GameState,
     defendingPlayer: PlayerState,
@@ -1202,6 +1220,43 @@ const addPowerHandler: EffectRuntimeHandler<AddPowerRuntimeEffect> = {
       powerBefore,
       state.turn.power
     );
+
+    return { ok: true };
+  },
+};
+
+const armNextAttackUnavoidableHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"arm_next_attack_unavoidable">
+> = {
+  effectId: "arm_next_attack_unavoidable",
+  execute(state, player) {
+    state.turn.nextAttackUnavoidablePlayerId = player.playerId;
+    return { ok: true };
+  },
+};
+
+const preventDefenseThisTurnHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"prevent_defense_this_turn">
+> = {
+  effectId: "prevent_defense_this_turn",
+  execute(state, player, effect, source, services) {
+    const targetResult = services.resolveStatusTargetPlayers(
+      state,
+      player,
+      effect,
+      source
+    );
+    if (!targetResult.ok) {
+      return targetResult;
+    }
+
+    for (const targetPlayer of targetResult.players) {
+      if (
+        !state.turn.defenseDisabledPlayerIds.includes(targetPlayer.playerId)
+      ) {
+        state.turn.defenseDisabledPlayerIds.push(targetPlayer.playerId);
+      }
+    }
 
     return { ok: true };
   },
@@ -1968,6 +2023,14 @@ const mayhemEffectEntries = defineEffectRuntimeFamily(
   "events/mayhem",
   createMayhemEffectDefinitions({
     bindRuntimeEffectDecoder,
+    calculateEffectiveCardCost: (state, playerId, definition, card) =>
+      calculateEffectiveCardCostCore(
+        state,
+        playerId,
+        definition,
+        card,
+        cardMatchesTypeForPlayer
+      ),
     calculateEffectivePlayerMaxLife: (state, playerId) =>
       calculateEffectivePlayerMaxLifeCore(state, playerId),
   })
@@ -1986,6 +2049,14 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
     supportedModes: allEffectRuntimeModes,
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: addPowerHandler,
+  },
+  {
+    effectId: "arm_next_attack_unavoidable",
+    decoder: bindRuntimeEffectDecoder("arm_next_attack_unavoidable"),
+    supportedTimings: ["onPlay"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: armNextAttackUnavoidableHandler,
   },
   {
     effectId: "add_power_per_controlled_object",
@@ -2060,6 +2131,14 @@ const immediateEffectEntries = defineEffectRuntimeFamily("effects/general", [
     supportedModes: ["fixture"],
     supportedSourceKinds: ["card", "wizardProperty"],
     handler: fixtureAddPowerEqualToTargetCostHandler,
+  },
+  {
+    effectId: "prevent_defense_this_turn",
+    decoder: bindRuntimeEffectDecoder("prevent_defense_this_turn"),
+    supportedTimings: ["onPlay"],
+    supportedModes: allEffectRuntimeModes,
+    supportedSourceKinds: ["card"],
+    handler: preventDefenseThisTurnHandler,
   },
 ] as const) satisfies EffectRuntimeEntriesFor<
   Omit<
@@ -2293,6 +2372,16 @@ export function collectAttackReplacementProfile(
     deadWizardTokenDamageBonus: 0,
     unavoidable: false,
   };
+  if (
+    options?.includeSourceOwnerModifiers !== false &&
+    source.sourceType === "card" &&
+    source.playerId === attackingPlayer.playerId &&
+    state.activePlayerId === attackingPlayer.playerId &&
+    state.turn.nextAttackUnavoidablePlayerId === attackingPlayer.playerId
+  ) {
+    profile.unavoidable = true;
+    state.turn.nextAttackUnavoidablePlayerId = undefined;
+  }
   const applyEffects = (
     effects: readonly RuntimeEffect[],
     effectSource: EffectSourceContext,

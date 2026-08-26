@@ -260,6 +260,10 @@ export function resolveDefenseWindow(
   services: AttackDefenseServices,
   resolveRedirectedAttack?: ResolveRedirectedAttack
 ): DefenseWindowResolutionResult {
+  if (state.turn.defenseDisabledPlayerIds.includes(defendingPlayer.playerId)) {
+    return { ok: true, avoided: false };
+  }
+
   if (attack.defenseUsage.defendedPlayerIds.has(defendingPlayer.playerId)) {
     return { ok: true, avoided: false };
   }

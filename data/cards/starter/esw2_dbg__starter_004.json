@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__starter_004",
+  "source": {
+    "draft": "data/import/cards/starter/drafts/esw2_dbg__starter_004.json",
+    "image": "assets/cards/starter/Затравка. Палочка хреналочка.png",
+    "text": "data/import/cards/starter/texts/esw2_dbg__starter_004.md"
+  },
+  "visible": {
+    "nameRu": "Палочка-хреналочка",
+    "cost": 0,
+    "victoryPoints": 0,
+    "typeRu": "Затравка",
+    "cardKind": "starter",
+    "cardTypes": [],
+    "textRu": "+1 мощь\nАтака: нанеси 1 урон выбранному колдуну. Если он от этого помрёт, можешь вернуть 2 карты или меньше из своей стопки сброса себе на руку.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "cardKind": "starter",
+    "cardTypes": [],
+    "tags": ["wandCard", "wandAttackCard"],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 1 },
+      {
+        "effectId": "attack_damage",
+        "timing": "onPlay",
+        "amount": 1,
+        "targetSelector": "chosenPlayer",
+        "onKill": [
+          { "effectId": "return_discard_to_hand", "amount": 2 }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

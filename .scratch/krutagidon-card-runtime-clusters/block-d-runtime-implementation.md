@@ -11,7 +11,7 @@ Each Block D issue must select concrete cards from one mechanic cluster and make
 `fullRuntime` means:
 
 - current runtime card JSON exists;
-- the card is directly reachable from the corresponding current runtime composition so it participates in the game;
+- the card is directly reachable from the corresponding current runtime composition so it participates in the game, or an explicit valid setup replacement makes it reachable during setup;
 - printed behavior for the selected card is implemented, not only the cluster's headline mechanic;
 - focused tests cover the implemented behavior;
 - `npm run report:card-runtime-clusters` accepts the result.
@@ -293,4 +293,4 @@ Cards:
 
 Large or complex clusters may be split into smaller vertical slices, but a selected card must not be left partially implemented.
 
-Selected cards must be added to their matching current compositions, such as `main-deck`, `legend-deck`, or `starter-deck`.
+Selected cards must be added to their matching current compositions, such as `main-deck`, `legend-deck`, or `starter-deck`. Cards with a printed `replace_starting_card` effect use that runtime setup path and must not be duplicated in the canonical starter template.

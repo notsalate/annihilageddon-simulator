@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_024",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_024.json",
+    "image": "assets/cards/legend/treasure/Легенда-Сокровище. Палочка-Ушаталочка.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_024.md"
+  },
+  "visible": {
+    "nameRu": "Палочка-Ушаталочка",
+    "cost": 20,
+    "victoryPoints": 7,
+    "typeRu": "Легенда — Сокровище",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "textRu": "+8 мощи\nАтака: нанеси 1 урон выбранному врагу. Если он от этого подох, ты побеждаешь в игре (а все остальные могут лососнуть тунца).",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "treasure"],
+    "tags": ["wandCard", "wandAttackCard"],
+    "cost": 20,
+    "victoryPoints": 7,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 8 },
+      {
+        "effectId": "attack_damage",
+        "timing": "onPlay",
+        "amount": 1,
+        "targetSelector": "chosenFoe",
+        "onKill": [{ "effectId": "end_game_if_original_target_killed" }]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

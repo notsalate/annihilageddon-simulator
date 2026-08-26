@@ -12,6 +12,7 @@ import {
   type DefenseAttackContext,
   type DefenseWindowResolutionResult,
   type PlayerControlledAttackAdapters,
+  type PlayerControlledAttackExecutionResult,
   type PlayerControlledAttackIntent,
   type RedirectedAttackIntent,
 } from "./attack-resolution.js";
@@ -40,6 +41,7 @@ import {
   resolveMainMarketGainDestination,
 } from "./effect-runtime-cards-ownership-choice.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
+import { drawCardsForPlayer } from "./effect-runtime-resources-draw.js";
 import {
   resolveCardPlay,
   type CardPlayResolutionServices,
@@ -79,8 +81,10 @@ import {
 } from "./effect-runtime-registry.js";
 import {
   executeAttackOutcomeBranch,
+  executeAttackDiscardCards,
   validateAttackCostPrecondition,
 } from "./effect-runtime-combat-attack.js";
+import { getDistinctAdjacentFoes } from "./player-targets.js";
 import {
   isRuntimeEffectSelectorTarget,
   type RuntimeEffect,
@@ -1364,7 +1368,7 @@ function effectConditionMatches(
 
 function resolvePlayerControlledAttackWithRuntimeAdapters(
   intent: PlayerControlledAttackIntent
-): EffectExecutionResult {
+): PlayerControlledAttackExecutionResult {
   return resolvePlayerControlledAttackLifecycle(
     intent,
     playerControlledAttackAdapters
@@ -1422,6 +1426,15 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
         effect.amount,
         "discard",
         effect.effectId,
+        source,
+        effectRuntimeServices
+      );
+    }
+    if (effect.effectId === "attack_discard_cards") {
+      return executeAttackDiscardCards(
+        state,
+        targetPlayer,
+        effect.amount,
         source,
         effectRuntimeServices
       );
@@ -1753,6 +1766,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   moveCardToZonePreservingOwner,
   restoreDetachedCardToZone,
   discardTopDeckCards,
+  drawCards: drawCardsForPlayer,
   getDestroyDestination,
   getOpponentsInSeatingOrder,
   getPlayersInActiveOrder,
@@ -1774,6 +1788,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   transferControlledDeadWizardTokenLike,
   exchangeControlledDeadWizardTokenLikes,
   collectAttackReplacementProfile,
+  resolvePendingDeadWizardTokenFaces: resolveQueuedDeadWizardTokenFaces,
   resolvePlayerControlledAttack:
     resolvePlayerControlledAttackWithRuntimeAdapters,
   resolveDefenseWindow,
@@ -2078,14 +2093,24 @@ function recordEffectChoiceSelected(
                       targetDefinitionId: choice.card.definitionId,
                     }),
               }
-            : {
-                ...choicePayloadBase,
-                choiceKind: "directionalPlayerTarget" as const,
-                direction: choice.direction,
-                targetPlayerIds: choice.players.map(
-                  (candidate) => candidate.playerId
-                ),
-              };
+            : choice.choiceKind === "damageDistribution"
+              ? {
+                  ...choicePayloadBase,
+                  choiceKind: "damageDistribution" as const,
+                  amount: choice.amount,
+                  amounts: [...choice.amounts],
+                  targetPlayerIds: choice.players.map(
+                    (candidate) => candidate.playerId
+                  ),
+                }
+              : {
+                  ...choicePayloadBase,
+                  choiceKind: "directionalPlayerTarget" as const,
+                  direction: choice.direction,
+                  targetPlayerIds: choice.players.map(
+                    (candidate) => candidate.playerId
+                  ),
+                };
 
   recordGameEvent(state, {
     type: "effectChoiceSelected",
@@ -2126,6 +2151,15 @@ function createChoiceView(choice: EffectChoice): ChoiceView {
         : {
             targetCardInstanceId: choice.card.instanceId,
           }),
+    };
+  }
+  if (choice.choiceKind === "damageDistribution") {
+    return {
+      choiceKind: choice.choiceKind,
+      choiceId: choice.choiceId,
+      targetPlayerIds: choice.players.map((player) => player.playerId),
+      amounts: [...choice.amounts],
+      amount: choice.amount,
     };
   }
   return {
@@ -2198,20 +2232,15 @@ function buildLegalTargetChoices(
       };
     }
 
-    if (targetSelector === "chosenLeftOrRightFoe") {
-      const foes = getOpponentsInSeatingOrder(state, player);
-      const adjacentFoes = [foes[0], foes.at(-1)].filter(
-        (candidate): candidate is PlayerState => candidate !== undefined
-      );
-      const distinctAdjacentFoes = adjacentFoes.filter(
-        (candidate, index) =>
-          adjacentFoes.findIndex(
-            (otherCandidate) => otherCandidate.playerId === candidate.playerId
-          ) === index
-      );
+    if (
+      targetSelector === "chosenLeftOrRightFoe" ||
+      targetSelector === "leftAndRightFoes"
+    ) {
       return {
         ok: true,
-        choices: distinctAdjacentFoes.map((candidate) => ({
+        choices: getDistinctAdjacentFoes(
+          getOpponentsInSeatingOrder(state, player)
+        ).map((candidate) => ({
           choiceType: "player" as const,
           player: candidate,
         })),

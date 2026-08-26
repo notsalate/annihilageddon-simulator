@@ -171,6 +171,16 @@ test("resource and draw effects use the interactive Catalog timing policy", () =
       payload: { effectId: "draw_cards", timing: "onDefense", amount: 1 },
       sourceKind: "card",
     },
+    {
+      effectId: "draw_cards_for_each_player",
+      payload: {
+        effectId: "draw_cards_for_each_player",
+        timing: "onPlay",
+        amount: 2,
+        targetSelector: "eachPlayerClockwiseFromActive",
+      },
+      sourceKind: "card",
+    },
   ] as const;
 
   for (const { effectId, payload, sourceKind } of validCases) {
@@ -206,6 +216,7 @@ test("resource and draw IDs belong to one family module", () => {
     "gain_chips_per_player_with_status",
     "gain_chips_per_controlled_dead_wizard_token",
     "draw_cards",
+    "draw_cards_for_each_player",
     "draw_cards_for_self_and_chosen_foe",
   ]);
 });
@@ -221,13 +232,17 @@ test("remaining Catalog families expose one local ID inventory each", () => {
     "attack_damage_equal_to_controlled_card_cost",
     "attack_destroy_top_legend_deck_then_damage_equal_cost",
     "attack_discard_cards",
+    "attack_damage_equal_random_discarded_hand_cost",
     "attack_reveal_and_play_foe_deck_card",
     "attack_gain_limp_wand",
     "attack_gain_status",
     "activation_attack_damage_per_controlled_card_type",
     "conditional_activation_attack_damage",
     "directional_chain_attack",
+    "distributed_attack_damage",
+    "sequential_attack_damage",
     "multi_target_attack",
+    "multi_target_neighbor_attack",
     "optional_spend_chip_attack_damage",
   ]);
   assert.deepEqual(combatDefenseEffectIds, [
@@ -242,6 +257,8 @@ test("remaining Catalog families expose one local ID inventory each", () => {
   ]);
   assert.deepEqual(mayhemEffectIds, [
     "mayhem_attack",
+    "mayhem_attack_equal_highest_card_cost",
+    "mayhem_each_player_discard_half_controlled_permanents",
     "mayhem_add_chips_to_main_market",
     "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
     "mayhem_each_player_choose_foe_gain_chips",
@@ -594,6 +611,18 @@ test("attack, defense and replacement effects use exact family policies", () => 
         timing: "onPlay",
         amount: 2,
         targetSelector: "chosenPlayer",
+      },
+      sourceKind: "card",
+    },
+    {
+      effectId: "attack_damage_equal_random_discarded_hand_cost",
+      payload: {
+        effectId: "attack_damage_equal_random_discarded_hand_cost",
+        timing: "onPlay",
+        targetSelector: "eachFoe",
+        discardAmount: 2,
+        rng: "seeded",
+        unavoidable: true,
       },
       sourceKind: "card",
     },
@@ -1108,6 +1137,24 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         targetSelector: "eachPlayerClockwiseFromActive",
         destination: "hand",
         amount: 1,
+      },
+    },
+    {
+      effectId: "mayhem_attack_equal_highest_card_cost",
+      payload: {
+        effectId: "mayhem_attack_equal_highest_card_cost",
+        timing: "onMayhemResolve",
+        targetSelector: "allPlayers",
+        costSource: "legendMarket",
+      },
+    },
+    {
+      effectId: "mayhem_each_player_discard_half_controlled_permanents",
+      payload: {
+        effectId: "mayhem_each_player_discard_half_controlled_permanents",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        chooser: "affectedPlayer",
       },
     },
   ] as const;

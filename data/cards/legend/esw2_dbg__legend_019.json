@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__legend_019",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__legend_019.json",
+    "image": "assets/cards/legend/spell/Легенда-Заклинание. Орбитальная Евонная пушка.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__legend_019.md"
+  },
+  "visible": {
+    "nameRu": "Орбитальная Евонная пушка",
+    "cost": 12,
+    "victoryPoints": 4,
+    "typeRu": "Легенда — Заклинание",
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "textRu": "+5 мощи\nАтака: нанеси по 10 урона левому и правому врагу.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "cardKind": "legend",
+    "cardTypes": ["legend", "spell"],
+    "cost": 12,
+    "victoryPoints": 4,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 5 },
+      {
+        "effectId": "multi_target_neighbor_attack",
+        "timing": "onPlay",
+        "amount": 10,
+        "target": { "selector": "leftAndRightFoes" }
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

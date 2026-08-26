@@ -103,6 +103,8 @@ function createFixture(): GameState {
       ],
       mainMarketCardHandReplacementSourceCardIds: ["replacement-source"],
       damagingAttackPlayerIds: [],
+      nextAttackUnavoidablePlayerId: undefined,
+      defenseDisabledPlayerIds: [],
       temporaryCardControls: [
         {
           cardInstanceId: markCardInstanceId("played-card"),

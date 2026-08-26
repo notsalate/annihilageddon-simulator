@@ -178,6 +178,7 @@ const targetSelector: ValueDecoder<RuntimeEffectTargetSelector> = oneOf([
   "allPlayers",
   "anyPlayer",
   "mainMarketCard",
+  "leftAndRightFoes",
   "opponentPlayer",
   "opponentPlayers",
   "chosenFoe",
@@ -201,6 +202,7 @@ const runtimeTarget: ValueDecoder<RuntimeEffectTarget> = (label, raw) => {
           "allPlayers",
           "anyPlayer",
           "mainMarketCard",
+          "leftAndRightFoes",
           "opponentPlayer",
           "opponentPlayers",
         ] as const)
@@ -252,6 +254,26 @@ function selectorTarget<Selector extends RuntimeEffectTargetSelector>(
       return success({ selector: expectedSelector });
     }
     return failure(`${label} must use selector ${expectedSelector}`);
+  };
+}
+
+function selectorTargetOneOf<
+  const Selectors extends readonly RuntimeEffectTargetSelector[],
+>(expectedSelectors: Selectors): ValueDecoder<{ selector: Selectors[number] }> {
+  return (label, raw) => {
+    const decoded = runtimeTarget(label, raw);
+    if (!decoded.ok) return decoded;
+    if (
+      "selector" in decoded.value &&
+      expectedSelectors.includes(decoded.value.selector)
+    ) {
+      return success({
+        selector: decoded.value.selector,
+      });
+    }
+    return failure(
+      `${label} must use one of selectors ${expectedSelectors.join(", ")}`
+    );
   };
 }
 
@@ -311,6 +333,15 @@ const runtimeCosts = arrayOf(runtimeCost);
 const attackOutcomeBranch: ValueDecoder<AttackOutcomeBranch> = (label, raw) => {
   if (!isPlainRecord(raw)) return failure(`${label} must be an object`);
   switch (raw["effectId"]) {
+    case "draw_cards":
+      return decodeObject(label, raw, {
+        effectId: required(literal("draw_cards")),
+        amount: required(positiveInteger),
+      });
+    case "end_game_if_original_target_killed":
+      return decodeObject(label, raw, {
+        effectId: required(literal("end_game_if_original_target_killed")),
+      });
     case "gain_chips":
       return decodeObject(label, raw, {
         effectId: required(literal("gain_chips")),
@@ -323,6 +354,13 @@ const attackOutcomeBranch: ValueDecoder<AttackOutcomeBranch> = (label, raw) => {
     case "heal_equal_damage_dealt":
       return decodeObject(label, raw, {
         effectId: required(literal("heal_equal_damage_dealt")),
+      });
+    case "attack_discard_cards":
+      return decodeObject(label, raw, {
+        effectId: required(literal("attack_discard_cards")),
+        amount: required(positiveInteger),
+        chooser: required(literal("target")),
+        sourceZone: required(literal("hand")),
       });
     case "return_discard_to_hand":
       return decodeObject(label, raw, {
@@ -609,7 +647,7 @@ const combatAttackEffectDecoders = createCombatAttackEffectDecoders({
   optionalTargetSelector,
   optionalCosts,
   optionalAttackBranches,
-  selectorTarget,
+  selectorTargetOneOf,
   requireTargetSelector,
   oneOf,
 });
@@ -662,6 +700,10 @@ const runtimeEffectDecoders: {
     amount: required(positiveInteger),
     condition: optionalCondition,
     activationLimit: optional(literal("oncePerTurnWhileControlled")),
+  }),
+  arm_next_attack_unavoidable: defineDecoder("arm_next_attack_unavoidable", {
+    effectId: required(literal("arm_next_attack_unavoidable")),
+    timing: required(literal("onPlay")),
   }),
   add_power_per_controlled_object: defineDecoder(
     "add_power_per_controlled_object",
@@ -825,6 +867,16 @@ const runtimeEffectDecoders: {
       emptyChoice: optional(literal("fail")),
     },
     requireNestedTargetSelector("fixture target-cost power", "mainMarketCard")
+  ),
+  prevent_defense_this_turn: defineDecoder(
+    "prevent_defense_this_turn",
+    {
+      effectId: required(literal("prevent_defense_this_turn")),
+      timing: required(literal("onPlay")),
+      target: optionalTarget,
+      targetSelector: optionalTargetSelector,
+    },
+    requireTargetSelector("prevent-defense", ["chosenFoe"])
   ),
 
   ...activationEffectDecoders,

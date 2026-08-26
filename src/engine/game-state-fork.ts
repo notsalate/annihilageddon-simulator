@@ -21,6 +21,8 @@ export function forkGameState(source: GameState): GameState {
       ],
       rememberedDestroyedLegendCost: source.turn.rememberedDestroyedLegendCost,
       damagingAttackPlayerIds: [...source.turn.damagingAttackPlayerIds],
+      nextAttackUnavoidablePlayerId: source.turn.nextAttackUnavoidablePlayerId,
+      defenseDisabledPlayerIds: [...source.turn.defenseDisabledPlayerIds],
       deadWizardTokenKillReplacement:
         source.turn.deadWizardTokenKillReplacement === undefined
           ? undefined

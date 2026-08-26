@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_018",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_018.json",
+    "image": "assets/cards/creature/Тварь. Нечистая сила.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_018.md"
+  },
+  "visible": {
+    "nameRu": "Нечистая сила",
+    "cost": 5,
+    "victoryPoints": 1,
+    "typeRu": "Тварь",
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "textRu": "Возьми 1 карту\nАтака: нанеси по 7 урона левому и правому врагам.",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "cardKind": "normal",
+    "cardTypes": ["creature"],
+    "cost": 5,
+    "victoryPoints": 1,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "draw_cards", "timing": "onPlay", "amount": 1 },
+      {
+        "effectId": "multi_target_neighbor_attack",
+        "timing": "onPlay",
+        "amount": 7,
+        "target": { "selector": "leftAndRightFoes" }
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

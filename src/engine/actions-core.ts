@@ -513,6 +513,8 @@ function endTurn(state: GameState): ActionResult {
   state.turn.mainMarketCardHandReplacementSourceCardIds = [];
   state.turn.rememberedDestroyedLegendCost = undefined;
   state.turn.damagingAttackPlayerIds = [];
+  state.turn.nextAttackUnavoidablePlayerId = undefined;
+  state.turn.defenseDisabledPlayerIds = [];
   state.turn.deadWizardTokenKillReplacement = undefined;
   state.turn.number += 1;
   const nextActivePlayer = getNextPlayer(state, activePlayer);

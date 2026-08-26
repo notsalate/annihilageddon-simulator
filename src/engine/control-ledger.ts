@@ -128,6 +128,14 @@ export function setCardOwner(
   card.ownerId = ownerId;
 }
 
+/** Returns the player that owns a card through the Ledger ownership seam. */
+export function findCardOwner(
+  state: Pick<GameState, "players">,
+  card: Pick<CardInstance, "ownerId">
+): PlayerState | undefined {
+  return state.players.find((candidate) => candidate.playerId === card.ownerId);
+}
+
 export function releaseTemporaryControls(state: GameState): void {
   state.turn.temporaryCardControls = [];
 }

@@ -26,6 +26,10 @@
       "count": 2
     },
     {
+      "cardId": "esw2_dbg__main_023",
+      "count": 2
+    },
+    {
       "cardId": "esw2_dbg__main_002",
       "count": 1
     },
@@ -78,6 +82,10 @@
       "count": 2
     },
     {
+      "cardId": "esw2_dbg__main_018",
+      "count": 2
+    },
+    {
       "cardId": "esw2_dbg__main_016",
       "count": 2
     },
@@ -86,8 +94,24 @@
       "count": 2
     },
     {
+      "cardId": "esw2_dbg__main_021",
+      "count": 2
+    },
+    {
       "cardId": "esw2_dbg__main_026",
       "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_024",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_025",
+      "count": 2
+    },
+    {
+      "cardId": "esw2_dbg__main_028",
+      "count": 1
     },
     {
       "cardId": "esw2_dbg__main_027",
@@ -254,6 +278,14 @@
       "count": 1
     },
     {
+      "cardId": "esw2_dbg__main_069",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_070",
+      "count": 1
+    },
+    {
       "cardId": "esw2_dbg__main_071",
       "count": 1
     },
@@ -279,6 +311,10 @@
     },
     {
       "cardId": "esw2_dbg__main_077",
+      "count": 1
+    },
+    {
+      "cardId": "esw2_dbg__main_078",
       "count": 1
     }
   ],

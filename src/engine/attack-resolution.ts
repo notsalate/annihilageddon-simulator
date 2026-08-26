@@ -60,6 +60,11 @@ export interface AttackResolution extends DamageResult {
 
 export type DamageApplicationResult = DamageResult | EffectExecutionResult;
 
+export type PlayerControlledAttackExecutionResult = EffectExecutionResult & {
+  readonly requestedTargetKilled?: boolean;
+  readonly resolvedTargetKilled?: boolean;
+};
+
 export type AttackTargetResolutionResult =
   | { ok: true; resolution: AttackResolution; gameEnd?: never }
   | {
@@ -76,6 +81,7 @@ type PlayerControlledAttackTargetResolutionResult =
       ok: true;
       resolution: AttackResolution;
       requestedTargetKilled: boolean;
+      resolvedTargetKilled: boolean;
       gameEnd?: never;
     }
   | {
@@ -85,6 +91,7 @@ type PlayerControlledAttackTargetResolutionResult =
       >;
       resolution?: never;
       requestedTargetKilled?: never;
+      resolvedTargetKilled?: never;
     }
   | { ok: false; error: string };
 
@@ -151,6 +158,7 @@ export type PlayerControlledAttackImpact =
         source: EffectSourceContext
       ) => EffectExecutionResult;
       readonly onDamageDealt: readonly AttackOutcomeBranch[];
+      readonly onAvoided?: readonly AttackOutcomeBranch[];
       readonly onKill: readonly AttackOutcomeBranch[];
     }
   | {
@@ -171,6 +179,7 @@ export interface PlayerControlledAttackIntent {
   readonly unavoidable: boolean;
   readonly redirectPolicy?: "ignoreOriginalAttacker";
   readonly attackProfile?: PlayerControlledAttackProfile;
+  readonly reportResolvedTargetKilled?: boolean;
   readonly targetPlan: PlayerControlledAttackTargetPlan;
   readonly impact: PlayerControlledAttackImpact;
 }
@@ -183,6 +192,7 @@ export interface ResolvedAttackBranchContext {
   readonly avoided: boolean;
   readonly amountComponents: AttackAmountComponents;
   readonly originalSource: EffectSourceContext;
+  readonly originalTargetPlayerId: PlayerState["playerId"];
 }
 
 export interface PlayerControlledAttackAdapters {
@@ -381,7 +391,7 @@ export function summarizeAttackDamage<Source extends AttackSourceIdentity>(
 export function resolvePlayerControlledAttack(
   intent: PlayerControlledAttackIntent,
   adapters: PlayerControlledAttackAdapters
-): EffectExecutionResult {
+): PlayerControlledAttackExecutionResult {
   const targetResult = adapters.resolveTargets(intent);
   if (!targetResult.ok) {
     return targetResult;
@@ -425,6 +435,8 @@ export function resolvePlayerControlledAttack(
     sourceType: intent.source.sourceType,
   });
 
+  let requestedTargetKilled = false;
+  let resolvedTargetKilled = false;
   for (const targetPlayer of targetResult.players) {
     const resolutionResult = resolvePlayerControlledAttackTarget(
       intent,
@@ -447,6 +459,7 @@ export function resolvePlayerControlledAttack(
                 intent.impact.sourceOwnerModifierAmount
               )
             : createAttackAmountState(0),
+        originalTargetPlayerId: targetPlayer.playerId,
       }
     );
     if (!resolutionResult.ok) {
@@ -457,6 +470,8 @@ export function resolvePlayerControlledAttack(
     }
 
     context.resolutions.push(resolutionResult.resolution);
+    requestedTargetKilled = resolutionResult.requestedTargetKilled;
+    resolvedTargetKilled ||= resolutionResult.resolvedTargetKilled;
     if (
       intent.targetPlan.kind === "orderedPlayers" &&
       intent.targetPlan.continueWhile === "targetKilled" &&
@@ -473,7 +488,14 @@ export function resolvePlayerControlledAttack(
     }
   }
 
-  return { ok: true };
+  return {
+    ok: true,
+    ...(intent.reportResolvedTargetKilled ? { resolvedTargetKilled } : {}),
+    ...(intent.targetPlan.kind === "orderedPlayers" &&
+    intent.targetPlan.continueWhile === "targetKilled"
+      ? { requestedTargetKilled }
+      : {}),
+  };
 }
 
 function resolveBaseAmount(
@@ -494,6 +516,7 @@ interface CurrentAttackTargetContext {
   readonly source: EffectSourceContext;
   readonly unavoidable: boolean;
   readonly amountComponents: AttackAmountComponents;
+  readonly originalTargetPlayerId: PlayerState["playerId"];
 }
 
 function resolvePlayerControlledAttackTarget(
@@ -553,6 +576,7 @@ function resolvePlayerControlledAttackTarget(
             source: redirectedIntent.source,
             unavoidable: redirectedIntent.unavoidable ?? false,
             amountComponents: redirectedIntent.amountComponents,
+            originalTargetPlayerId: current.originalTargetPlayerId,
           })
       );
   if (!defenseResult.ok) {
@@ -563,6 +587,17 @@ function resolvePlayerControlledAttackTarget(
   }
   if (defenseResult.avoided) {
     recordAttackAvoided(intent, current.targetPlayer, current.source);
+    const avoidedBranchResult = executeAvoidedAttackBranches(
+      intent,
+      impact,
+      adapters,
+      current,
+      resolvedAmount.components,
+      context.originalSource
+    );
+    if (!avoidedBranchResult.ok || avoidedBranchResult.gameEnd !== undefined) {
+      return avoidedBranchResult;
+    }
     return {
       ok: true,
       resolution:
@@ -573,6 +608,7 @@ function resolvePlayerControlledAttackTarget(
           context.originalSource
         ),
       requestedTargetKilled: false,
+      resolvedTargetKilled: defenseResult.resolution?.killed ?? false,
     };
   }
 
@@ -615,7 +651,8 @@ function resolvePlayerControlledAttackTarget(
     intent,
     impact,
     adapters,
-    resolution
+    resolution,
+    current.originalTargetPlayerId
   );
   if (!branchResult.ok || branchResult.gameEnd !== undefined) {
     return branchResult;
@@ -625,6 +662,7 @@ function resolvePlayerControlledAttackTarget(
     ok: true,
     resolution,
     requestedTargetKilled: resolution.killed,
+    resolvedTargetKilled: resolution.killed,
   };
 }
 
@@ -666,6 +704,7 @@ function resolvePlayerControlledEffectsAttackTarget(
             source: redirectedIntent.source,
             unavoidable: redirectedIntent.unavoidable ?? false,
             amountComponents: redirectedIntent.amountComponents,
+            originalTargetPlayerId: current.originalTargetPlayerId,
           })
       );
   if (!defenseResult.ok) {
@@ -684,6 +723,7 @@ function resolvePlayerControlledEffectsAttackTarget(
         context.originalSource
       ),
       requestedTargetKilled: false,
+      resolvedTargetKilled: false,
     };
   }
 
@@ -714,6 +754,7 @@ function resolvePlayerControlledEffectsAttackTarget(
       originalSource: context.originalSource,
     },
     requestedTargetKilled: false,
+    resolvedTargetKilled: false,
   };
 }
 
@@ -721,7 +762,8 @@ function executeResolvedAttackBranches(
   intent: PlayerControlledAttackIntent,
   impact: Extract<PlayerControlledAttackImpact, { kind: "damage" }>,
   adapters: PlayerControlledAttackAdapters,
-  resolution: AttackResolution
+  resolution: AttackResolution,
+  originalTargetPlayerId: PlayerState["playerId"]
 ): EffectExecutionResult {
   const branchContext: ResolvedAttackBranchContext = {
     effectId: intent.effectId,
@@ -731,6 +773,7 @@ function executeResolvedAttackBranches(
     avoided: resolution.avoided,
     amountComponents: resolution.amountComponents,
     originalSource: resolution.originalSource,
+    originalTargetPlayerId,
   };
 
   for (const branch of impact.onDamageDealt) {
@@ -758,6 +801,46 @@ function executeResolvedAttackBranches(
       if (!result.ok || result.gameEnd !== undefined) {
         return result;
       }
+    }
+  }
+
+  return { ok: true };
+}
+
+function executeAvoidedAttackBranches(
+  intent: PlayerControlledAttackIntent,
+  impact: Extract<PlayerControlledAttackImpact, { kind: "damage" }>,
+  adapters: PlayerControlledAttackAdapters,
+  current: CurrentAttackTargetContext,
+  amountComponents: AttackAmountComponents,
+  originalSource: EffectSourceContext
+): EffectExecutionResult {
+  const branches = impact.onAvoided ?? [];
+  if (branches.length === 0) {
+    return { ok: true };
+  }
+
+  const branchContext: ResolvedAttackBranchContext = {
+    effectId: intent.effectId,
+    source: current.source,
+    damageDealt: 0,
+    killed: false,
+    avoided: true,
+    amountComponents,
+    originalSource,
+    originalTargetPlayerId: current.originalTargetPlayerId,
+  };
+
+  for (const branch of branches) {
+    const result = adapters.executeOutcomeBranch(
+      intent.state,
+      current.attackingPlayer,
+      current.targetPlayer,
+      branch,
+      branchContext
+    );
+    if (!result.ok || result.gameEnd !== undefined) {
+      return result;
     }
   }
 

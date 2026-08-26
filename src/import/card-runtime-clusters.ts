@@ -232,7 +232,7 @@ export function formatCardRuntimeClusterMarkdown(
     "# Card Runtime Cluster Matrix",
     "",
     "Generated from canonical card draft JSON, current runtime card JSON, current compositions, and manual card cluster decisions.",
-    "`fullRuntime` requires current runtime card JSON, direct current deck/stack/pool membership, and focused test refs.",
+    "`fullRuntime` requires current runtime card JSON, current deck/stack/pool or explicit valid setup-replacement membership, and focused test refs.",
     "`missingRuntime` is normal backlog and is not a process error by itself.",
     "",
     "## Summary",
@@ -491,6 +491,8 @@ function collectCompositionMembership(
   rootDir: string
 ): Map<string, CompositionMembership[]> {
   const memberships = new Map<string, CompositionMembership[]>();
+  const composedTokenIds = new Set<string>();
+  const starterDeckCardIds = new Set<string>();
   const compositionFiles = collectFiles(
     rootDir,
     ["data/decks", "data/stacks", "data/pools"],
@@ -501,21 +503,30 @@ function collectCompositionMembership(
     const parsed = getRecord(readJson(filePath));
     const label = `${getCompositionPrefix(filePath)}:${getOptionalString(parsed["deckId"]) ?? getOptionalString(parsed["stackId"]) ?? getOptionalString(parsed["poolId"]) ?? path.basename(filePath, ".json")}`;
     const entries = Array.isArray(parsed["entries"]) ? parsed["entries"] : [];
+    const isStarterDeck =
+      getOptionalString(parsed["role"]) === "starterDeckTemplate" ||
+      getOptionalString(parsed["deckId"]) === "starter-deck";
 
     for (const entry of entries) {
       const record = getRecord(entry);
       const cardId = getOptionalString(record["cardId"]);
-      if (cardId === undefined) {
-        continue;
+      if (cardId !== undefined) {
+        const current = memberships.get(cardId) ?? [];
+        current.push({
+          label,
+          filePath,
+          derivedFromToken: false,
+        });
+        memberships.set(cardId, current);
+        if (isStarterDeck) {
+          starterDeckCardIds.add(cardId);
+        }
       }
 
-      const current = memberships.get(cardId) ?? [];
-      current.push({
-        label,
-        filePath,
-        derivedFromToken: false,
-      });
-      memberships.set(cardId, current);
+      const tokenId = getOptionalString(record["tokenId"]);
+      if (tokenId !== undefined) {
+        composedTokenIds.add(tokenId);
+      }
     }
   }
 
@@ -523,18 +534,32 @@ function collectCompositionMembership(
     const parsed = getRecord(readJson(filePath));
     const tokenId =
       getOptionalString(parsed["tokenId"]) ?? path.basename(filePath, ".json");
+    if (
+      getOptionalString(parsed["kind"]) !== "wizardProperty" ||
+      !composedTokenIds.has(tokenId)
+    ) {
+      continue;
+    }
     const effects = Array.isArray(getRecord(parsed["engine"])["effects"])
       ? (getRecord(parsed["engine"])["effects"] as unknown[])
       : [];
 
     for (const effect of effects) {
       const record = getRecord(effect);
-      if (record["effectId"] !== "replace_starting_card") {
+      if (
+        record["effectId"] !== "replace_starting_card" ||
+        getOptionalString(record["timing"]) !== "setup"
+      ) {
         continue;
       }
 
+      const fromDefinitionId = getOptionalString(record["fromDefinitionId"]);
       const toDefinitionId = getOptionalString(record["toDefinitionId"]);
-      if (toDefinitionId === undefined) {
+      if (
+        fromDefinitionId === undefined ||
+        toDefinitionId === undefined ||
+        !starterDeckCardIds.has(fromDefinitionId)
+      ) {
         continue;
       }
 
@@ -646,9 +671,6 @@ function getNonFullRuntimeReasons(
 ): string[] {
   const reasons: string[] = [];
   const engine = getRecord(runtimeCard["engine"]);
-  const directMemberships = memberships.filter(
-    (membership) => !membership.derivedFromToken
-  );
   const runtimeMappingStatus =
     getOptionalString(engine["mappingStatus"]) ??
     getOptionalString(runtimeCard["mappingStatus"]);
@@ -656,8 +678,16 @@ function getNonFullRuntimeReasons(
   const needsEffectMapping = getOptionalBoolean(engine["needsEffectMapping"]);
   const unsupportedMechanics = getStringArray(engine["unsupportedMechanics"]);
 
-  if (directMemberships.length === 0) {
-    reasons.push("missing current deck/stack/pool composition membership");
+  const hasDirectCompositionMembership = memberships.some(
+    (membership) => !membership.derivedFromToken
+  );
+  const hasExplicitSetupReplacement = memberships.some(
+    (membership) => membership.derivedFromToken
+  );
+  if (!hasDirectCompositionMembership && !hasExplicitSetupReplacement) {
+    reasons.push(
+      "missing current deck/stack/pool or explicit setup-replacement membership"
+    );
   }
   if (focusedTestRefs.length === 0) {
     reasons.push("missing focused test refs");

@@ -3,9 +3,10 @@ import {
   buildControlledObjectView,
   peekLegendDeckCard,
 } from "./control-ledger.js";
+import type { ResolvedAttackBranchContext } from "./attack-resolution.js";
 import { countControlledCardsOfType } from "./card-type-runtime.js";
 import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
-import { recordGameEvent } from "./event-recorder.js";
+import { recordGameEvent, recordTurnPowerChanged } from "./event-recorder.js";
 import { transferUpToLimpWandsToPlayer } from "./effect-runtime-special-card-stack.js";
 import {
   destroyOwnedCard,
@@ -13,7 +14,6 @@ import {
 } from "./effect-runtime-cards-ownership-choice.js";
 import type {
   AttackReplacementProfile,
-  DamageResult,
   EffectChoice,
   EffectExecutionResult,
   EffectRuntimeOperationResult,
@@ -22,7 +22,6 @@ import type {
 } from "./effect-runtime-registry.js";
 import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 import {
-  createUnsupportedEffectHandler,
   type ObjectFields,
   type OptionalField,
   type RequiredField,
@@ -45,6 +44,7 @@ import {
   type EffectRuntimeSupportedSourceKinds,
   type EffectRuntimeSupportedTimings,
 } from "./effect-runtime-catalog-shared.js";
+import { getDistinctAdjacentFoes } from "./player-targets.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export type CombatAttackEffectId =
@@ -57,13 +57,17 @@ export type CombatAttackEffectId =
   | "attack_damage_equal_to_controlled_card_cost"
   | "attack_destroy_top_legend_deck_then_damage_equal_cost"
   | "attack_discard_cards"
+  | "attack_damage_equal_random_discarded_hand_cost"
   | "attack_reveal_and_play_foe_deck_card"
   | "attack_gain_limp_wand"
   | "attack_gain_status"
   | "activation_attack_damage_per_controlled_card_type"
   | "conditional_activation_attack_damage"
   | "directional_chain_attack"
+  | "distributed_attack_damage"
+  | "sequential_attack_damage"
   | "multi_target_attack"
+  | "multi_target_neighbor_attack"
   | "optional_spend_chip_attack_damage";
 
 export const combatAttackEffectIds = [
@@ -76,13 +80,17 @@ export const combatAttackEffectIds = [
   "attack_damage_equal_to_controlled_card_cost",
   "attack_destroy_top_legend_deck_then_damage_equal_cost",
   "attack_discard_cards",
+  "attack_damage_equal_random_discarded_hand_cost",
   "attack_reveal_and_play_foe_deck_card",
   "attack_gain_limp_wand",
   "attack_gain_status",
   "activation_attack_damage_per_controlled_card_type",
   "conditional_activation_attack_damage",
   "directional_chain_attack",
+  "distributed_attack_damage",
+  "sequential_attack_damage",
   "multi_target_attack",
+  "multi_target_neighbor_attack",
   "optional_spend_chip_attack_damage",
 ] as const satisfies readonly CombatAttackEffectId[];
 
@@ -111,9 +119,11 @@ export interface CombatAttackEffectDecoderTools {
   optionalTargetSelector: OptionalField<RuntimeEffectTargetSelector>;
   optionalCosts: OptionalField<RuntimeEffectCost[]>;
   optionalAttackBranches: OptionalField<AttackOutcomeBranch[]>;
-  selectorTarget<Selector extends RuntimeEffectTargetSelector>(
-    selector: Selector
-  ): ValueDecoder<{ selector: Selector }>;
+  selectorTargetOneOf<
+    const Selectors extends readonly RuntimeEffectTargetSelector[],
+  >(
+    selectors: Selectors
+  ): ValueDecoder<{ selector: Selectors[number] }>;
   requireTargetSelector(
     label: string,
     selectors: readonly RuntimeEffectTargetSelector[]
@@ -147,7 +157,7 @@ export function createCombatAttackEffectDecoders(
     optionalTargetSelector,
     optionalCosts,
     optionalAttackBranches,
-    selectorTarget,
+    selectorTargetOneOf,
     requireTargetSelector,
     oneOf,
   } = tools;
@@ -163,6 +173,7 @@ export function createCombatAttackEffectDecoders(
         costs: optionalCosts,
         optional: optional(booleanValue),
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
       },
       requireTargetSelector("attack", [
@@ -182,6 +193,7 @@ export function createCombatAttackEffectDecoders(
         amountPerDeadWizardToken: required(positiveInteger),
         targetSelector: required(literal("eachFoe")),
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
       }
     ),
@@ -224,6 +236,7 @@ export function createCombatAttackEffectDecoders(
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
         rememberedCard: required(literal("destroyedLegend")),
       }
@@ -238,6 +251,7 @@ export function createCombatAttackEffectDecoders(
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
         costMode: required(oneOf(["highest", "chosen"] as const)),
         excludeSource: optional(booleanValue),
@@ -259,6 +273,7 @@ export function createCombatAttackEffectDecoders(
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
         damageUsesDestroyedCardCost: required(literal(true)),
         destroyedCardSource: required(literal("legendDeck")),
@@ -274,6 +289,19 @@ export function createCombatAttackEffectDecoders(
       chooser: required(literal("target")),
       sourceZone: required(literal("hand")),
     }),
+    attack_damage_equal_random_discarded_hand_cost: defineDecoder(
+      "attack_damage_equal_random_discarded_hand_cost",
+      {
+        effectId: required(
+          literal("attack_damage_equal_random_discarded_hand_cost")
+        ),
+        timing: optionalTiming,
+        targetSelector: required(literal("eachFoe")),
+        discardAmount: required(positiveInteger),
+        rng: required(literal("seeded")),
+        unavoidable: required(literal(true)),
+      }
+    ),
     attack_reveal_and_play_foe_deck_card: defineDecoder(
       "attack_reveal_and_play_foe_deck_card",
       {
@@ -339,18 +367,58 @@ export function createCombatAttackEffectDecoders(
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
       },
       requireTargetSelector("directional attack", ["leftOrRightFoe"])
+    ),
+    distributed_attack_damage: defineDecoder(
+      "distributed_attack_damage",
+      {
+        effectId: required(literal("distributed_attack_damage")),
+        timing: optionalTiming,
+        amount: required(positiveInteger),
+        targetSelector: required(literal("eachFoe")),
+        condition: optionalCondition,
+        onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
+        onKill: optionalAttackBranches,
+      },
+      requireTargetSelector("distributed attack", ["eachFoe"])
+    ),
+    sequential_attack_damage: defineDecoder(
+      "sequential_attack_damage",
+      {
+        effectId: required(literal("sequential_attack_damage")),
+        timing: optionalTiming,
+        amount: required(positiveInteger),
+        attackCount: required(positiveInteger),
+        powerPerKill: required(positiveInteger),
+        targetSelector: required(oneOf(["chosenFoe", "chosenPlayer"] as const)),
+      },
+      requireTargetSelector("sequential attack", ["chosenFoe", "chosenPlayer"])
     ),
     multi_target_attack: defineDecoder("multi_target_attack", {
       effectId: required(literal("multi_target_attack")),
       timing: optionalTiming,
       amount: required(positiveInteger),
-      target: required(selectorTarget("opponentPlayers")),
+      target: required(selectorTargetOneOf(["opponentPlayers"] as const)),
       onDamageDealt: optionalAttackBranches,
+      onAvoided: optionalAttackBranches,
       onKill: optionalAttackBranches,
     }),
+    multi_target_neighbor_attack: defineDecoder(
+      "multi_target_neighbor_attack",
+      {
+        effectId: required(literal("multi_target_neighbor_attack")),
+        timing: optionalTiming,
+        amount: required(positiveInteger),
+        target: required(selectorTargetOneOf(["leftAndRightFoes"] as const)),
+        onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
+        onKill: optionalAttackBranches,
+      }
+    ),
     optional_spend_chip_attack_damage: defineDecoder(
       "optional_spend_chip_attack_damage",
       {
@@ -360,6 +428,7 @@ export function createCombatAttackEffectDecoders(
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
         chipCost: required(positiveInteger),
       },
@@ -690,6 +759,7 @@ type PlayerControlledDeadWizardTokenEffectAttack =
 
 type PlayerControlledEffectsAttackEffect =
   | PlayerControlledDeadWizardTokenEffectAttack
+  | RuntimeEffectForId<"attack_discard_cards">
   | RuntimeEffectForId<"attack_gain_limp_wand">
   | RuntimeEffectForId<"attack_gain_status">
   | RuntimeEffectForId<"attack_reveal_and_play_foe_deck_card">
@@ -772,6 +842,7 @@ function resolvePlayerControlledDamageAttack(
       sourceOwnerModifierAmount: attackProfile.damageBonus,
       onDamageDealt:
         "onDamageDealt" in effect ? (effect.onDamageDealt ?? []) : [],
+      onAvoided: "onAvoided" in effect ? (effect.onAvoided ?? []) : [],
       onKill: "onKill" in effect ? (effect.onKill ?? []) : [],
     },
   });
@@ -837,6 +908,235 @@ function attackGainLimpWandHandler(
   };
 }
 
+function attackDiscardCardsHandler(
+  collectAttackReplacementProfile: AttackReplacementCollector
+): EffectRuntimeHandler<RuntimeEffectForId<"attack_discard_cards">> {
+  return {
+    effectId: "attack_discard_cards",
+    execute(state, player, effect, source, services) {
+      return resolvePlayerControlledEffectsAttack(
+        state,
+        player,
+        effect,
+        source,
+        services,
+        collectAttackReplacementProfile
+      );
+    },
+  };
+}
+
+type RandomDiscardDamagePlan = {
+  cards: readonly CardInstance[];
+  amount: number;
+};
+
+function createAttackDamageEqualRandomDiscardedHandCostHandler(
+  collectAttackReplacementProfile: AttackReplacementCollector,
+  calculateEffectiveCardCost: CombatAttackCatalogTools["calculateEffectiveCardCost"]
+): EffectRuntimeHandler<
+  RuntimeEffectForId<"attack_damage_equal_random_discarded_hand_cost">
+> {
+  return {
+    effectId: "attack_damage_equal_random_discarded_hand_cost",
+    execute(state, player, effect, source, services) {
+      const opponents = services.getOpponentsInSeatingOrder(state, player);
+      const plans = new Map<PlayerState["playerId"], RandomDiscardDamagePlan>();
+
+      for (const opponent of opponents) {
+        const available = [...opponent.hand];
+        const selectedCards: CardInstance[] = [];
+        let amount = 0;
+        while (selectedCards.length < effect.discardAmount) {
+          if (available.length === 0) break;
+          const selectedIndex = state.rng.nextInt(available.length);
+          const [card] = available.splice(selectedIndex, 1);
+          if (card === undefined) {
+            return {
+              ok: false,
+              error: "Seeded hand discard selected a missing card",
+            };
+          }
+          const definition = state.cardDefinitions.get(card.definitionId);
+          if (definition === undefined) {
+            return {
+              ok: false,
+              error: `Missing definition for randomly discarded card ${card.definitionId}`,
+            };
+          }
+          selectedCards.push(card);
+          amount += calculateEffectiveCardCost(
+            state,
+            opponent.playerId,
+            definition,
+            card
+          );
+        }
+        plans.set(opponent.playerId, { cards: selectedCards, amount });
+      }
+
+      const attackProfileResult = collectAttackReplacementProfile(
+        state,
+        player,
+        source
+      );
+      if (attackProfileResult.status !== "resolved") {
+        return {
+          ok: false,
+          error:
+            attackProfileResult.status === "error"
+              ? attackProfileResult.error
+              : "Attack replacement profile was not applicable",
+        };
+      }
+      const attackProfile = {
+        ...attackProfileResult.result,
+        unavoidable: true,
+      } as const;
+
+      return services.resolvePlayerControlledAttack({
+        state,
+        attackingPlayer: player,
+        source,
+        effectId: effect.effectId,
+        unavoidable: true,
+        attackProfile,
+        targetPlan: { kind: "orderedPlayers", players: opponents },
+        impact: {
+          kind: "damage",
+          baseAmount: 0,
+          baseAmountForTarget: (_state, _attackingPlayer, targetPlayer) =>
+            plans.get(targetPlayer.playerId)?.amount ?? 0,
+          sourceOwnerModifierAmount: attackProfile.damageBonus,
+          onDamageDealt: [],
+          onAvoided: [],
+          onKill: [],
+          beforeDamage(
+            stateBeforeDamage,
+            _attackingPlayer,
+            targetPlayer,
+            attackSource
+          ) {
+            const plan = plans.get(targetPlayer.playerId);
+            if (plan === undefined) {
+              return {
+                ok: false,
+                error: `Missing random discard plan for ${targetPlayer.playerId}`,
+              };
+            }
+            if (plan.cards.some((card) => !targetPlayer.hand.includes(card))) {
+              return {
+                ok: false,
+                error: `Random discard plan changed before attacking ${targetPlayer.playerId}`,
+              };
+            }
+            for (const card of plan.cards) {
+              const moved = services.moveCardToPlayerZone(
+                stateBeforeDamage,
+                card,
+                targetPlayer,
+                targetPlayer.discard,
+                `${targetPlayer.playerId}.discard`,
+                effect.effectId,
+                attackSource
+              );
+              if (!moved) {
+                return {
+                  ok: false,
+                  error: `Cannot move randomly discarded card ${card.instanceId}`,
+                };
+              }
+              recordGameEvent(stateBeforeDamage, {
+                type: "effectCardDiscarded",
+                playerId: targetPlayer.playerId,
+                cardInstanceId: attackSource.cardInstanceId,
+                definitionId: attackSource.definitionId,
+                targetCardInstanceId: card.instanceId,
+                targetDefinitionId: card.definitionId,
+                effectId: effect.effectId,
+                sourceType: attackSource.sourceType,
+              });
+            }
+            return { ok: true };
+          },
+        },
+      });
+    },
+  };
+}
+
+export function executeAttackDiscardCards(
+  state: GameState,
+  targetPlayer: PlayerState,
+  amount: number,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): EffectExecutionResult {
+  for (let discarded = 0; discarded < amount; discarded += 1) {
+    const choices: EffectChoice[] = targetPlayer.hand.map((card) => ({
+      choiceKind: "cardTarget" as const,
+      choiceId: card.instanceId,
+      cards: [card],
+      amount: 1,
+    }));
+    if (choices.length === 0) {
+      return { ok: true };
+    }
+
+    const choice = services.chooseEffectChoice(
+      state,
+      targetPlayer,
+      source,
+      "attack_discard_cards",
+      choices
+    );
+    if (choice === undefined) {
+      return { ok: true };
+    }
+    if (choice.choiceKind !== "cardTarget" || choice.cards.length !== 1) {
+      return {
+        ok: false,
+        error: "Attack discard choice must contain exactly one hand card",
+      };
+    }
+    const card = choice.cards[0];
+    if (card === undefined || !targetPlayer.hand.includes(card)) {
+      return {
+        ok: false,
+        error: "Chosen attack discard card is no longer in the target hand",
+      };
+    }
+
+    const moved = services.moveCardToPlayerZone(
+      state,
+      card,
+      targetPlayer,
+      targetPlayer.discard,
+      `${targetPlayer.playerId}.discard`,
+      "attack_discard_cards",
+      source
+    );
+    if (!moved) {
+      return {
+        ok: false,
+        error: `Cannot move attack discard card ${card.instanceId}`,
+      };
+    }
+    recordGameEvent(state, {
+      type: "effectCardDiscarded",
+      playerId: targetPlayer.playerId,
+      cardInstanceId: source.cardInstanceId,
+      definitionId: source.definitionId,
+      targetCardInstanceId: card.instanceId,
+      targetDefinitionId: card.definitionId,
+      effectId: "attack_discard_cards",
+      sourceType: source.sourceType,
+    });
+  }
+
+  return { ok: true };
+}
+
 function directionalChainAttackHandler(
   collectAttackReplacementProfile: AttackReplacementCollector
 ): EffectRuntimeHandler<RuntimeEffectForId<"directional_chain_attack">> {
@@ -869,58 +1169,187 @@ function directionalChainAttackHandler(
         directionChoice?.choiceKind === "directionalPlayerTarget"
           ? directionChoice.players
           : [];
-      const attackedPlayerIds = new Set<PlayerState["playerId"]>();
-      const foes = chosenFoes.filter((targetPlayer) => {
-        if (attackedPlayerIds.has(targetPlayer.playerId)) {
-          return false;
-        }
-        attackedPlayerIds.add(targetPlayer.playerId);
-        return true;
-      });
-      const attackProfileResult = collectAttackReplacementProfile(
-        state,
-        player,
-        source
-      );
-      if (attackProfileResult.status !== "resolved") {
-        return {
-          ok: false,
-          error:
-            attackProfileResult.status === "error"
-              ? attackProfileResult.error
-              : "Attack replacement profile was not applicable",
-        };
+      if (chosenFoes.length === 0) {
+        return { ok: true };
       }
-      const attackProfile = attackProfileResult.result;
 
-      return services.resolvePlayerControlledAttack({
-        state,
-        attackingPlayer: player,
-        source,
-        effectId: effect.effectId,
-        unavoidable: attackProfile.unavoidable,
-        targetPlan: {
-          kind: "orderedPlayers",
-          players: foes,
-          continueWhile: "targetKilled",
-        },
-        impact: {
-          kind: "damage",
-          baseAmount: effect.amount,
-          sourceOwnerModifierAmount: attackProfile.damageBonus,
-          onDamageDealt: effect.onDamageDealt ?? [],
-          onKill: effect.onKill ?? [],
-        },
-      });
+      let targetIndex = 0;
+      while (true) {
+        const targetPlayer = chosenFoes[targetIndex];
+        if (targetPlayer === undefined) {
+          return { ok: true };
+        }
+
+        const attackProfileResult = collectAttackReplacementProfile(
+          state,
+          player,
+          source
+        );
+        if (attackProfileResult.status !== "resolved") {
+          return {
+            ok: false,
+            error:
+              attackProfileResult.status === "error"
+                ? attackProfileResult.error
+                : "Attack replacement profile was not applicable",
+          };
+        }
+        const attackProfile = attackProfileResult.result;
+        const attackResult = services.resolvePlayerControlledAttack({
+          state,
+          attackingPlayer: player,
+          source,
+          effectId: effect.effectId,
+          unavoidable: attackProfile.unavoidable,
+          targetPlan: {
+            kind: "orderedPlayers",
+            players: [targetPlayer],
+            continueWhile: "targetKilled",
+          },
+          impact: {
+            kind: "damage",
+            baseAmount: effect.amount,
+            sourceOwnerModifierAmount: attackProfile.damageBonus,
+            onDamageDealt: effect.onDamageDealt ?? [],
+            onKill: effect.onKill ?? [],
+          },
+        });
+        if (!attackResult.ok || attackResult.gameEnd !== undefined) {
+          return attackResult;
+        }
+
+        const faceResult = services.resolvePendingDeadWizardTokenFaces(state);
+        if (!faceResult.ok || faceResult.gameEnd !== undefined) {
+          return faceResult;
+        }
+        if (targetPlayer.life.current < 1) {
+          return { ok: true };
+        }
+        if (attackResult.requestedTargetKilled !== true) {
+          return { ok: true };
+        }
+
+        targetIndex = (targetIndex + 1) % chosenFoes.length;
+      }
     },
   };
 }
 
-function multiTargetAttackHandler(
+function sequentialAttackDamageHandler(
   collectAttackReplacementProfile: AttackReplacementCollector
-): EffectRuntimeHandler<RuntimeEffectForId<"multi_target_attack">> {
+): EffectRuntimeHandler<RuntimeEffectForId<"sequential_attack_damage">> {
   return {
-    effectId: "multi_target_attack",
+    effectId: "sequential_attack_damage",
+    execute(state, player, effect, source, services) {
+      let killedWizardCount = 0;
+
+      for (
+        let attackIndex = 0;
+        attackIndex < effect.attackCount;
+        attackIndex += 1
+      ) {
+        const targetResult = services.resolveTargetChoice(
+          state,
+          player,
+          effect,
+          source
+        );
+        if (!targetResult.ok) {
+          return targetResult;
+        }
+        if (targetResult.choice === undefined) {
+          continue;
+        }
+        if (targetResult.choice.choiceType !== "player") {
+          return {
+            ok: false,
+            error: "Sequential attack requires a player target",
+          };
+        }
+
+        const attackProfileResult = collectAttackReplacementProfile(
+          state,
+          player,
+          source
+        );
+        if (attackProfileResult.status !== "resolved") {
+          return {
+            ok: false,
+            error:
+              attackProfileResult.status === "error"
+                ? attackProfileResult.error
+                : "Attack replacement profile was not applicable",
+          };
+        }
+        const attackProfile = attackProfileResult.result;
+        const attackResult = services.resolvePlayerControlledAttack({
+          state,
+          attackingPlayer: player,
+          source,
+          effectId: effect.effectId,
+          unavoidable: attackProfile.unavoidable,
+          attackProfile,
+          reportResolvedTargetKilled: true,
+          targetPlan: {
+            kind: "orderedPlayers",
+            players: [targetResult.choice.player],
+            continueWhile: "targetKilled",
+          },
+          impact: {
+            kind: "damage",
+            baseAmount: effect.amount,
+            sourceOwnerModifierAmount: attackProfile.damageBonus,
+            onDamageDealt: [],
+            onAvoided: [],
+            onKill: [],
+          },
+        });
+        if (!attackResult.ok || attackResult.gameEnd !== undefined) {
+          return attackResult;
+        }
+        if (attackResult.resolvedTargetKilled === true) {
+          killedWizardCount += 1;
+        }
+
+        const faceResult = services.resolvePendingDeadWizardTokenFaces(state);
+        if (!faceResult.ok || faceResult.gameEnd !== undefined) {
+          return faceResult;
+        }
+      }
+
+      const rewardAmount = killedWizardCount * effect.powerPerKill;
+      if (rewardAmount === 0) {
+        return { ok: true };
+      }
+
+      const powerBefore = state.turn.power;
+      state.turn.power += rewardAmount;
+      recordTurnPowerChanged(
+        state,
+        player,
+        source,
+        effect.effectId,
+        powerBefore,
+        state.turn.power
+      );
+      return { ok: true };
+    },
+  };
+}
+
+type MultiTargetAttackEffectId =
+  | "multi_target_attack"
+  | "multi_target_neighbor_attack";
+
+function multiTargetAttackHandler<Id extends MultiTargetAttackEffectId>(
+  effectId: Id,
+  collectAttackReplacementProfile: AttackReplacementCollector,
+  resolveTargetPlayers: (
+    opponents: readonly PlayerState[]
+  ) => readonly PlayerState[]
+): EffectRuntimeHandler<RuntimeEffectForId<Id>> {
+  return {
+    effectId,
     execute(state, player, effect, source, services) {
       const attackProfileResult = collectAttackReplacementProfile(
         state,
@@ -937,6 +1366,8 @@ function multiTargetAttackHandler(
         };
       }
       const attackProfile = attackProfileResult.result;
+      const opponents = services.getOpponentsInSeatingOrder(state, player);
+      const targetPlayers = resolveTargetPlayers(opponents);
       return services.resolvePlayerControlledAttack({
         state,
         attackingPlayer: player,
@@ -945,7 +1376,7 @@ function multiTargetAttackHandler(
         unavoidable: attackProfile.unavoidable,
         targetPlan: {
           kind: "orderedPlayers",
-          players: services.getOpponentsInSeatingOrder(state, player),
+          players: targetPlayers,
         },
         impact: {
           kind: "damage",
@@ -959,16 +1390,167 @@ function multiTargetAttackHandler(
   };
 }
 
+function buildPositiveIntegerDistributions(
+  total: number,
+  targetCount: number
+): number[][] {
+  if (targetCount < 1 || targetCount > total) {
+    return [];
+  }
+
+  const distributions: number[][] = [];
+  const current = Array.from({ length: targetCount }, () => 1);
+
+  function visit(index: number, remaining: number): void {
+    if (index === targetCount - 1) {
+      current[index] = remaining;
+      distributions.push([...current]);
+      return;
+    }
+
+    const minimumForRest = targetCount - index - 1;
+    for (let amount = 1; amount <= remaining - minimumForRest; amount += 1) {
+      current[index] = amount;
+      visit(index + 1, remaining - amount);
+    }
+  }
+
+  visit(0, total);
+  return distributions;
+}
+
+function distributedAttackDamageHandler(
+  collectAttackReplacementProfile: AttackReplacementCollector
+): EffectRuntimeHandler<RuntimeEffectForId<"distributed_attack_damage">> {
+  return {
+    effectId: "distributed_attack_damage",
+    execute(state, player, effect, source, services) {
+      const opponents = services.getOpponentsInSeatingOrder(state, player);
+      const distributions = buildPositiveIntegerDistributions(
+        effect.amount,
+        opponents.length
+      );
+      if (distributions.length === 0) {
+        return { ok: true };
+      }
+
+      const choices: EffectChoice[] = distributions.map((amounts) => ({
+        choiceKind: "damageDistribution",
+        choiceId: `distribution:${amounts.join(",")}`,
+        players: opponents,
+        amounts,
+        amount: effect.amount,
+      }));
+      const selectedChoice = services.chooseEffectChoice(
+        state,
+        player,
+        source,
+        effect.effectId,
+        choices
+      );
+      if (
+        selectedChoice?.choiceKind !== "damageDistribution" ||
+        selectedChoice.players.length !== opponents.length ||
+        selectedChoice.amounts.length !== opponents.length ||
+        selectedChoice.amount !== effect.amount ||
+        selectedChoice.amounts.some(
+          (amount) => !Number.isSafeInteger(amount) || amount < 1
+        ) ||
+        selectedChoice.amounts.reduce((total, amount) => total + amount, 0) !==
+          effect.amount
+      ) {
+        return {
+          ok: false,
+          error:
+            "Distributed attack choice must contain positive integer amounts summing to the attack total",
+        };
+      }
+
+      const attackProfileResult = collectAttackReplacementProfile(
+        state,
+        player,
+        source
+      );
+      if (attackProfileResult.status !== "resolved") {
+        return {
+          ok: false,
+          error:
+            attackProfileResult.status === "error"
+              ? attackProfileResult.error
+              : "Attack replacement profile was not applicable",
+        };
+      }
+      const amountsByPlayerId = new Map(
+        selectedChoice.players.map((targetPlayer, index) => [
+          targetPlayer.playerId,
+          selectedChoice.amounts[index] ?? 0,
+        ])
+      );
+      const attackProfile = attackProfileResult.result;
+      return services.resolvePlayerControlledAttack({
+        state,
+        attackingPlayer: player,
+        source,
+        effectId: effect.effectId,
+        unavoidable: attackProfile.unavoidable,
+        attackProfile,
+        targetPlan: { kind: "orderedPlayers", players: opponents },
+        impact: {
+          kind: "damage",
+          baseAmount: effect.amount,
+          baseAmountForTarget: (_state, _attackingPlayer, targetPlayer) =>
+            amountsByPlayerId.get(targetPlayer.playerId) ?? 0,
+          sourceOwnerModifierAmount: attackProfile.damageBonus,
+          onDamageDealt: effect.onDamageDealt ?? [],
+          onAvoided: effect.onAvoided ?? [],
+          onKill: effect.onKill ?? [],
+        },
+      });
+    },
+  };
+}
+
 export function executeAttackOutcomeBranch(
   state: GameState,
   player: PlayerState,
   branch: AttackOutcomeBranch,
   source: EffectSourceContext,
   targetPlayer: PlayerState,
-  attackResult: DamageResult,
+  attackResult: ResolvedAttackBranchContext,
   attackEffectId: RuntimeEffectId,
   services: EffectRuntimeServices
 ): EffectExecutionResult {
+  if (branch.effectId === "draw_cards") {
+    services.drawCards(state, player, branch.amount, branch.effectId, source);
+    return { ok: true };
+  }
+
+  if (branch.effectId === "end_game_if_original_target_killed") {
+    if (
+      !attackResult.killed ||
+      targetPlayer.playerId !== attackResult.originalTargetPlayerId
+    ) {
+      return { ok: true };
+    }
+    return {
+      ok: true,
+      gameEnd: {
+        reason: "playerDefeated",
+        winnerPlayerId: player.playerId,
+      },
+    };
+  }
+
+  if (branch.effectId === "attack_discard_cards") {
+    return executeAttackDiscardCards(
+      state,
+      targetPlayer,
+      branch.amount,
+      source,
+      services
+    );
+  }
+
   if (branch.effectId === "gain_chips") {
     const amount = branch.amount;
     const chipsBefore = player.chips;
@@ -1389,6 +1971,11 @@ export function createCombatAttackEffectDefinitions(
       );
     },
   };
+  const attackDamageEqualRandomDiscardedHandCostHandler =
+    createAttackDamageEqualRandomDiscardedHandCostHandler(
+      collectAttackReplacementProfile,
+      tools.calculateEffectiveCardCost
+    );
 
   return [
     {
@@ -1473,7 +2060,17 @@ export function createCombatAttackEffectDefinitions(
       supportedTimings: attackTimings,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
-      handler: createUnsupportedEffectHandler("attack_discard_cards"),
+      handler: attackDiscardCardsHandler(collectAttackReplacementProfile),
+    },
+    {
+      effectId: "attack_damage_equal_random_discarded_hand_cost",
+      decoder: bindRuntimeEffectDecoder(
+        "attack_damage_equal_random_discarded_hand_cost"
+      ),
+      supportedTimings: ["onPlay"],
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: attackDamageEqualRandomDiscardedHandCostHandler,
     },
     {
       effectId: "attack_reveal_and_play_foe_deck_card",
@@ -1526,12 +2123,44 @@ export function createCombatAttackEffectDefinitions(
       handler: directionalChainAttackHandler(collectAttackReplacementProfile),
     },
     {
+      effectId: "distributed_attack_damage",
+      decoder: bindRuntimeEffectDecoder("distributed_attack_damage"),
+      supportedTimings: attackTimings,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: distributedAttackDamageHandler(collectAttackReplacementProfile),
+    },
+    {
+      effectId: "sequential_attack_damage",
+      decoder: bindRuntimeEffectDecoder("sequential_attack_damage"),
+      supportedTimings: attackTimings,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: sequentialAttackDamageHandler(collectAttackReplacementProfile),
+    },
+    {
       effectId: "multi_target_attack",
       decoder: bindRuntimeEffectDecoder("multi_target_attack"),
       supportedTimings: attackTimings,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
-      handler: multiTargetAttackHandler(collectAttackReplacementProfile),
+      handler: multiTargetAttackHandler(
+        "multi_target_attack",
+        collectAttackReplacementProfile,
+        (opponents) => opponents
+      ),
+    },
+    {
+      effectId: "multi_target_neighbor_attack",
+      decoder: bindRuntimeEffectDecoder("multi_target_neighbor_attack"),
+      supportedTimings: attackTimings,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: multiTargetAttackHandler(
+        "multi_target_neighbor_attack",
+        collectAttackReplacementProfile,
+        getDistinctAdjacentFoes
+      ),
     },
     {
       effectId: "optional_spend_chip_attack_damage",

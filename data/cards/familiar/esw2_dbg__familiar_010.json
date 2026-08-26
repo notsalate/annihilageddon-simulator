@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__familiar_010",
+  "source": {
+    "draft": "data/import/cards/familiar/drafts/esw2_dbg__familiar_010.json",
+    "image": "assets/cards/familiar/Фамильяр. Счастливый Виабу.png",
+    "text": "data/import/cards/familiar/texts/esw2_dbg__familiar_010.md"
+  },
+  "visible": {
+    "nameRu": "Счастливый Виабу",
+    "cost": 6,
+    "victoryPoints": 2,
+    "typeRu": "Фамильяр",
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "textRu": "+3 мощи\nЕсли у тебя под контролем легенда, то атака: нанеси 8 урона, распределив его по всем врагам.\nЗащита: можешь сбросить эту карту, чтобы избежать атаки.\nЕсли сбросил, возьми 1 карту.",
+    "markers": ["attack", "defense"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "familiar",
+    "cardTypes": ["familiar"],
+    "cost": 6,
+    "victoryPoints": 2,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      { "effectId": "add_power", "timing": "onPlay", "amount": 3 },
+      {
+        "effectId": "distributed_attack_damage",
+        "timing": "onPlay",
+        "amount": 8,
+        "targetSelector": "eachFoe",
+        "condition": {
+          "effectId": "controls_other_card_type",
+          "minimum": 1,
+          "cardType": "legend"
+        }
+      },
+      {
+        "effectId": "avoid_attack",
+        "timing": "onDefense",
+        "destination": "discardSelf",
+        "branchEffects": [
+          { "effectId": "draw_cards", "timing": "onDefense", "amount": 1 }
+        ]
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

@@ -27,6 +27,7 @@ export type {
   GainChipsRuntimeEffect,
   GainChipsPerPlayerWithStatusRuntimeEffect,
   DrawCardsRuntimeEffect,
+  DrawCardsForEachPlayerRuntimeEffect,
   DrawCardsForSelfAndChosenFoeRuntimeEffect,
   GainChipsPerControlledDeadWizardTokenRuntimeEffect,
 } from "./effect-runtime-resources-draw.js";
@@ -110,6 +111,7 @@ export type {
   MayhemEffectId,
   MayhemEffectPayloadMap,
   MayhemAttackRuntimeEffect,
+  MayhemEachPlayerDiscardHalfControlledPermanentsRuntimeEffect,
   MayhemAddChipsToMainMarketRuntimeEffect,
   MayhemEachDinglerChoosePayLifeOrChipToRemoveStatusRuntimeEffect,
   MayhemEachPlayerChooseFoeGainChipsRuntimeEffect,
@@ -165,6 +167,7 @@ export type TargetSelector =
   | "allPlayers"
   | "anyPlayer"
   | "mainMarketCard"
+  | "leftAndRightFoes"
   | "opponentPlayer"
   | "opponentPlayers";
 
@@ -198,6 +201,7 @@ export type RuntimeEffectTargetSelector =
   | "currentAttacker"
   | "eachFoe"
   | "eachPlayerClockwiseFromActive"
+  | "leftAndRightFoes"
   | "leftOrRightFoe"
   | "sameAsPreviousAttackTarget";
 
@@ -245,9 +249,17 @@ export type RuntimeEffectCost =
   | PayLifeRuntimeEffectCost;
 
 export type AttackOutcomeBranch =
+  | { effectId: "draw_cards"; amount: number }
+  | { effectId: "end_game_if_original_target_killed" }
   | { effectId: "gain_chips"; amount: number }
   | { effectId: "gain_chips_equal_damage_dealt" }
   | { effectId: "heal_equal_damage_dealt" }
+  | {
+      effectId: "attack_discard_cards";
+      amount: number;
+      chooser: "target";
+      sourceZone: "hand";
+    }
   | { effectId: "return_discard_to_hand"; amount: number }
   | { effectId: "transfer_limp_wands_to_killed_target"; amount: number }
   | {
@@ -285,10 +297,12 @@ export const knownRuntimeEffectIds = [
   "attack_damage_equal_to_controlled_card_cost",
   "attack_destroy_top_legend_deck_then_damage_equal_cost",
   "attack_discard_cards",
+  "attack_damage_equal_random_discarded_hand_cost",
   "attack_reveal_and_play_foe_deck_card",
   "attack_gain_limp_wand",
   "attack_gain_status",
   "activation_attack_damage_per_controlled_card_type",
+  "arm_next_attack_unavoidable",
   "avoid_attack",
   "conditional_activation_attack_damage",
   "conditional_activation_destroy_own_cards",
@@ -324,11 +338,14 @@ export const knownRuntimeEffectIds = [
   "destroy_top_main_deck_cards_then_optional_play_mayhem",
   "destroyed_card_kind_is",
   "directional_chain_attack",
+  "distributed_attack_damage",
+  "sequential_attack_damage",
   "discard_card",
   "discard_random_hand_cards",
   "discard_hand_then_draw_cards",
   "discard_self",
   "draw_cards",
+  "draw_cards_for_each_player",
   "draw_cards_for_self_and_chosen_foe",
   "endgame_fixed_token_victory_points",
   "endgame_remove_matching_dead_wizard_tokens",
@@ -350,6 +367,8 @@ export const knownRuntimeEffectIds = [
   "heal_equal_damage_dealt_on_own_turn",
   "increase_hand_limit_at_max_life",
   "mayhem_attack",
+  "mayhem_attack_equal_highest_card_cost",
+  "mayhem_each_player_discard_half_controlled_permanents",
   "mayhem_add_chips_to_main_market",
   "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
   "mayhem_each_player_choose_foe_gain_chips",
@@ -375,6 +394,7 @@ export const knownRuntimeEffectIds = [
   "modify_effective_value",
   "modify_owned_wand_attack_damage",
   "multi_target_attack",
+  "multi_target_neighbor_attack",
   "on_gain_self_gain_limp_wands",
   "ongoing_add_power",
   "ongoing_add_power_when_playing_wand",
@@ -391,6 +411,7 @@ export const knownRuntimeEffectIds = [
   "optional_spend_chip_destroy_own_cards",
   "play_top_card",
   "play_top_card_from_foe_deck",
+  "prevent_defense_this_turn",
   "prevent_defense_against_owned_wand_attacks",
   "remove_status",
   "replace_starting_card",
@@ -434,6 +455,7 @@ type Costed = {
 };
 type AttackBranches = {
   onDamageDealt?: AttackOutcomeBranch[];
+  onAvoided?: AttackOutcomeBranch[];
   onKill?: AttackOutcomeBranch[];
 };
 
@@ -545,6 +567,17 @@ export type AddPowerRuntimeEffect = EffectWithOptionalTiming<"add_power"> &
     activationLimit?: "oncePerTurnWhileControlled";
   };
 
+export type ArmNextAttackUnavoidableRuntimeEffect = TimedEffect<
+  "arm_next_attack_unavoidable",
+  "onPlay"
+>;
+
+export type PreventDefenseThisTurnRuntimeEffect = TimedEffect<
+  "prevent_defense_this_turn",
+  "onPlay"
+> &
+  Targetable;
+
 export type AddPowerPerControlledObjectRuntimeEffect = TimedEffect<
   "add_power_per_controlled_object",
   "onPlay"
@@ -612,6 +645,7 @@ export interface ImmediateEffectPayloadMap
     CardOwnershipChoiceEffectPayloadMap,
     DwtInteractionEffectPayloadMap {
   add_power: AddPowerRuntimeEffect;
+  arm_next_attack_unavoidable: ArmNextAttackUnavoidableRuntimeEffect;
   add_power_if_player_has_status: AddPowerIfPlayerHasStatusRuntimeEffect;
   add_power_per_controlled_object: AddPowerPerControlledObjectRuntimeEffect;
   add_power_per_controlled_permanent: AddPowerPerControlledPermanentRuntimeEffect;
@@ -627,6 +661,7 @@ export interface ImmediateEffectPayloadMap
   exchange_life_and_dingler_status: ExchangeLifeAndDinglerStatusRuntimeEffect;
   deal_damage: DealDamageRuntimeEffect;
   fixture_add_power_equal_to_target_cost: FixtureAddPowerEqualToTargetCostRuntimeEffect;
+  prevent_defense_this_turn: PreventDefenseThisTurnRuntimeEffect;
 }
 
 export type AttackDamageRuntimeEffect =
@@ -680,6 +715,13 @@ export type AttackDiscardCardsRuntimeEffect =
       chooser: "target";
       sourceZone: "hand";
     };
+export type AttackDamageEqualRandomDiscardedHandCostRuntimeEffect =
+  EffectWithOptionalTiming<"attack_damage_equal_random_discarded_hand_cost"> & {
+    targetSelector: "eachFoe";
+    discardAmount: number;
+    rng: "seeded";
+    unavoidable: true;
+  };
 export type AttackRevealAndPlayFoeDeckCardRuntimeEffect =
   EffectWithOptionalTiming<"attack_reveal_and_play_foe_deck_card"> & {
     amount: number;
@@ -731,11 +773,35 @@ export type DirectionalChainAttackRuntimeEffect =
     PositiveAmount &
     Targetable &
     AttackBranches;
+export type DistributedAttackDamageRuntimeEffect =
+  EffectWithOptionalTiming<"distributed_attack_damage"> &
+    PositiveAmount &
+    Conditioned &
+    AttackBranches & {
+      targetSelector: "eachFoe";
+    };
+export type SequentialAttackDamageRuntimeEffect =
+  EffectWithOptionalTiming<"sequential_attack_damage"> &
+    PositiveAmount & {
+      attackCount: number;
+      powerPerKill: number;
+      targetSelector: "chosenFoe" | "chosenPlayer";
+    };
 export type MultiTargetAttackRuntimeEffect =
   EffectWithOptionalTiming<"multi_target_attack"> &
     PositiveAmount &
     AttackBranches & {
-      target: RuntimeEffectSelectorTarget & { selector: "opponentPlayers" };
+      target: RuntimeEffectSelectorTarget & {
+        selector: "opponentPlayers";
+      };
+    };
+export type MultiTargetNeighborAttackRuntimeEffect =
+  EffectWithOptionalTiming<"multi_target_neighbor_attack"> &
+    PositiveAmount &
+    AttackBranches & {
+      target: RuntimeEffectSelectorTarget & {
+        selector: "leftAndRightFoes";
+      };
     };
 export type OptionalSpendChipAttackDamageRuntimeEffect =
   EffectWithOptionalTiming<"optional_spend_chip_attack_damage"> &
@@ -787,6 +853,7 @@ export interface PlayerControlledAttackEffectPayloadMap {
   attack_damage_equal_to_controlled_card_cost: AttackDamageEqualToControlledCardCostRuntimeEffect;
   attack_destroy_top_legend_deck_then_damage_equal_cost: AttackDestroyTopLegendDeckThenDamageEqualCostRuntimeEffect;
   attack_discard_cards: AttackDiscardCardsRuntimeEffect;
+  attack_damage_equal_random_discarded_hand_cost: AttackDamageEqualRandomDiscardedHandCostRuntimeEffect;
   attack_reveal_and_play_foe_deck_card: AttackRevealAndPlayFoeDeckCardRuntimeEffect;
   attack_gain_limp_wand: AttackGainLimpWandRuntimeEffect;
   attack_gain_status: AttackGainStatusRuntimeEffect;
@@ -795,7 +862,10 @@ export interface PlayerControlledAttackEffectPayloadMap {
   conditional_activation_attack_damage: ConditionalActivationAttackDamageRuntimeEffect;
   activation_attack_damage_per_controlled_card_type: ActivationAttackDamagePerControlledCardTypeRuntimeEffect;
   directional_chain_attack: DirectionalChainAttackRuntimeEffect;
+  distributed_attack_damage: DistributedAttackDamageRuntimeEffect;
+  sequential_attack_damage: SequentialAttackDamageRuntimeEffect;
   multi_target_attack: MultiTargetAttackRuntimeEffect;
+  multi_target_neighbor_attack: MultiTargetNeighborAttackRuntimeEffect;
   optional_spend_chip_attack_damage: OptionalSpendChipAttackDamageRuntimeEffect;
   defense_discard_self_avoid_attack_then_optional_destroy_hand_card: DefenseDiscardSelfAvoidAttackThenOptionalDestroyHandCardRuntimeEffect;
   modify_owned_wand_attack_damage: ModifyOwnedWandAttackDamageRuntimeEffect;
@@ -996,6 +1066,7 @@ function isTargetSelector(value: unknown): value is TargetSelector {
     value === "allPlayers" ||
     value === "anyPlayer" ||
     value === "mainMarketCard" ||
+    value === "leftAndRightFoes" ||
     value === "opponentPlayer" ||
     value === "opponentPlayers"
   );
