@@ -785,7 +785,7 @@ export type SequentialAttackDamageRuntimeEffect =
     PositiveAmount & {
       attackCount: number;
       powerPerKill: number;
-      targetSelector: "chosenFoe";
+      targetSelector: "chosenFoe" | "chosenPlayer";
     };
 export type MultiTargetAttackRuntimeEffect =
   EffectWithOptionalTiming<"multi_target_attack"> &

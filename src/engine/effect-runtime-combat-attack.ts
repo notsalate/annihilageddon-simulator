@@ -394,9 +394,9 @@ export function createCombatAttackEffectDecoders(
         amount: required(positiveInteger),
         attackCount: required(positiveInteger),
         powerPerKill: required(positiveInteger),
-        targetSelector: required(literal("chosenFoe")),
+        targetSelector: required(oneOf(["chosenFoe", "chosenPlayer"] as const)),
       },
-      requireTargetSelector("sequential attack", ["chosenFoe"])
+      requireTargetSelector("sequential attack", ["chosenFoe", "chosenPlayer"])
     ),
     multi_target_attack: defineDecoder("multi_target_attack", {
       effectId: required(literal("multi_target_attack")),

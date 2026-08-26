@@ -10806,6 +10806,47 @@ test("#292 legend_023 chooses a fresh target for every attack and aggregates mul
   );
 });
 
+test("#292 legend_023 can target its controller for every attack", () => {
+  const state = initializeGame({ rootDir, seed: 60638, playerCount: 2 });
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const foe = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+    player.permanents = [];
+    player.trophyLikeObjects = [];
+  }
+  attacker.life.current = 100;
+  foe.life.current = 20;
+  let selfWasLegal = false;
+  let targetChoiceCount = 0;
+  state.effectChoiceStrategy = (request) => {
+    if (String(request.effectId) !== "sequential_attack_damage") {
+      return undefined;
+    }
+    targetChoiceCount += 1;
+    selfWasLegal ||= request.choices.some(
+      (choice) => choice.choiceId === attacker.playerId
+    );
+    return { choiceId: attacker.playerId };
+  };
+
+  const wand = addRuntimeCardToHand(state, attacker, "esw2_dbg__legend_023");
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: wand.instanceId,
+    }),
+    { ok: true }
+  );
+
+  assert.equal(selfWasLegal, true);
+  assert.equal(targetChoiceCount, 4);
+  assert.equal(attacker.life.current, 72);
+  assert.equal(foe.life.current, 20);
+});
+
 test("#292 legend_023 keeps separate defense windows and skips an avoided attack", () => {
   const state = initializeGame({ rootDir, seed: 60635, playerCount: 2 });
   const attacker = mustGetPlayer(state, markPlayerId("player-1"));

@@ -35,7 +35,7 @@
         "amount": 7,
         "attackCount": 4,
         "powerPerKill": 3,
-        "targetSelector": "chosenFoe"
+        "targetSelector": "chosenPlayer"
       }
     ],
     "unsupportedMechanics": []
