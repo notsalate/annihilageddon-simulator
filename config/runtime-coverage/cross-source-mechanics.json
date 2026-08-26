@@ -764,10 +764,171 @@
       "id": "esw2_dbg__wizard_property_005",
       "objectKind": "wizardProperty",
       "primaryMechanicCluster": "activation-effects",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in activation-effects"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "☼: если ты контролируешь хотя бы 2 сокровища и/или твари, получи 1 чипсину."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "activation",
+              "fields": {
+                "amount": 1,
+                "condition": {
+                  "conditionId": "control_count",
+                  "cardTypes": ["treasure", "creature"],
+                  "minimumCount": 2
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/activation-effects.test.ts",
+              "name": "activation-effects #311 activates wizard property 005 for mixed effective types once per turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Значок ☼ означает значок активации: его можно использовать в любой момент своего хода один раз за ход."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "activation",
+              "fields": {
+                "amount": 1,
+                "condition": {
+                  "conditionId": "control_count",
+                  "cardTypes": ["treasure", "creature"],
+                  "minimumCount": 2
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/activation-effects.test.ts",
+              "name": "activation-effects #311 activates wizard property 005 for mixed effective types once per turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Это не автоматическое срабатывание по условию, а действие, которое игрок выбирает сам."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "activation",
+              "fields": {
+                "amount": 1,
+                "condition": {
+                  "conditionId": "control_count",
+                  "cardTypes": ["treasure", "creature"],
+                  "minimumCount": 2
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/activation-effects.test.ts",
+              "name": "activation-effects #311 activates wizard property 005 for mixed effective types once per turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Условие проверяет, что игрок контролирует хотя бы 2 подходящие карты: сокровища и/или твари."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "activation",
+              "fields": {
+                "amount": 1,
+                "condition": {
+                  "conditionId": "control_count",
+                  "cardTypes": ["treasure", "creature"],
+                  "minimumCount": 2
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/activation-effects.test.ts",
+              "name": "activation-effects #311 activates wizard property 005 for mixed effective types once per turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Например, условие выполняется при контроле 1 твари и 1 сокровища"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "activation",
+              "fields": {
+                "amount": 1,
+                "condition": {
+                  "conditionId": "control_count",
+                  "cardTypes": ["treasure", "creature"],
+                  "minimumCount": 2
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/activation-effects.test.ts",
+              "name": "activation-effects #311 activates wizard property 005 for mixed effective types once per turn"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "При выполнении условия игрок получает 1 чипсину."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "gain_chips",
+              "timing": "activation",
+              "fields": {
+                "amount": 1,
+                "condition": {
+                  "conditionId": "control_count",
+                  "cardTypes": ["treasure", "creature"],
+                  "minimumCount": 2
+                }
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/activation-effects.test.ts",
+              "name": "activation-effects #311 activates wizard property 005 for mixed effective types once per turn"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__wizard_property_006",
@@ -1661,10 +1822,131 @@
       "id": "esw2_dbg__dead_wizard_token_005",
       "objectKind": "deadWizardToken",
       "primaryMechanicCluster": "activation-effects",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in activation-effects"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "В свой ход можешь потратить 5 чипсин, чтобы уничтожить этот жетон."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_self_destroy_for_chips",
+              "timing": "activation",
+              "fields": { "chipCost": 5 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/activation-effects.test.ts",
+              "name": "activation-effects #311 exposes DWT 005 as an atomic five-chip self-destroy action"
+            }
+          ]
+        },
+        {
+          "draftPoint": { "path": "visible.victoryPoints", "value": -5 },
+          "runtimeRefs": [
+            { "kind": "field", "path": "victoryPoints", "value": -8 }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/activation-effects.test.ts",
+              "name": "activation-effects #311 exposes DWT 005 as an atomic five-chip self-destroy action"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "В свой ход игрок может потратить 5 чипсин."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_self_destroy_for_chips",
+              "timing": "activation",
+              "fields": { "chipCost": 5 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/activation-effects.test.ts",
+              "name": "activation-effects #311 exposes DWT 005 as an atomic five-chip self-destroy action"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Если игрок платит 5 чипсин, этот ЖДК уничтожается."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_self_destroy_for_chips",
+              "timing": "activation",
+              "fields": { "chipCost": 5 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/activation-effects.test.ts",
+              "name": "activation-effects #311 exposes DWT 005 as an atomic five-chip self-destroy action"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Слово \"можешь\" означает необязательное действие."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_self_destroy_for_chips",
+              "timing": "activation",
+              "fields": { "chipCost": 5 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/activation-effects.test.ts",
+              "name": "activation-effects #311 exposes DWT 005 as an atomic five-chip self-destroy action"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Значение -5 относится к штрафным ПО/VP этого жетона, если JSON mapping подтвердит это как scoring value."
+          },
+          "runtimeRefs": [
+            { "kind": "field", "path": "victoryPoints", "value": -8 }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/activation-effects.test.ts",
+              "name": "activation-effects #311 exposes DWT 005 as an atomic five-chip self-destroy action"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Значит, если ЖДК не уничтожен, он приносит -8 ПО, а не -3"
+          },
+          "runtimeRefs": [
+            { "kind": "field", "path": "victoryPoints", "value": -8 }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/activation-effects.test.ts",
+              "name": "activation-effects #311 exposes DWT 005 as an atomic five-chip self-destroy action"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__dead_wizard_token_006",
