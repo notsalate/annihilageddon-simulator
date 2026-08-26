@@ -2023,6 +2023,14 @@ const mayhemEffectEntries = defineEffectRuntimeFamily(
   "events/mayhem",
   createMayhemEffectDefinitions({
     bindRuntimeEffectDecoder,
+    calculateEffectiveCardCost: (state, playerId, definition, card) =>
+      calculateEffectiveCardCostCore(
+        state,
+        playerId,
+        definition,
+        card,
+        cardMatchesTypeForPlayer
+      ),
     calculateEffectivePlayerMaxLife: (state, playerId) =>
       calculateEffectivePlayerMaxLifeCore(state, playerId),
   })

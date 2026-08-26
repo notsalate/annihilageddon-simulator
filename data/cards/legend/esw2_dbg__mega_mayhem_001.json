@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__mega_mayhem_001",
+  "source": {
+    "draft": "data/import/cards/legend/drafts/esw2_dbg__mega_mayhem_001.json",
+    "image": "assets/cards/mega-mayhem/МегаБеспредел. MA.png",
+    "text": "data/import/cards/legend/texts/esw2_dbg__mega_mayhem_001.md"
+  },
+  "visible": {
+    "nameRu": "МегаБеспредел MA",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "МегаБеспредел",
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "textRu": "Атака: нанеси каждому колдуну столько урона, какова стоимость самой дорогой легенды на барахолке.",
+    "markers": ["attack"]
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "megaMayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_attack_equal_highest_card_cost",
+        "timing": "onMayhemResolve",
+        "targetSelector": "allPlayers",
+        "costSource": "legendMarket"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

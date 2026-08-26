@@ -363,6 +363,7 @@ export const knownRuntimeEffectIds = [
   "heal_equal_damage_dealt_on_own_turn",
   "increase_hand_limit_at_max_life",
   "mayhem_attack",
+  "mayhem_attack_equal_highest_card_cost",
   "mayhem_add_chips_to_main_market",
   "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
   "mayhem_each_player_choose_foe_gain_chips",

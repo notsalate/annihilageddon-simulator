@@ -43,10 +43,12 @@ import type {
   RequiredField,
   ValueDecoder,
 } from "./effect-runtime-family-support.js";
+import type { CardDefinition } from "./data.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export type MayhemEffectId =
   | "mayhem_attack"
+  | "mayhem_attack_equal_highest_card_cost"
   | "mayhem_add_chips_to_main_market"
   | "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status"
   | "mayhem_each_player_choose_foe_gain_chips"
@@ -72,6 +74,7 @@ export type MayhemEffectId =
 
 export const mayhemEffectIds = [
   "mayhem_attack",
+  "mayhem_attack_equal_highest_card_cost",
   "mayhem_add_chips_to_main_market",
   "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
   "mayhem_each_player_choose_foe_gain_chips",
@@ -113,6 +116,13 @@ export type MayhemAttackRuntimeEffect =
     PositiveAmount & {
       target: RuntimeEffectSelectorTarget & { selector: "allPlayers" };
     };
+export type MayhemAttackEqualHighestCardCostRuntimeEffect = TimedEffect<
+  "mayhem_attack_equal_highest_card_cost",
+  "onMayhemResolve"
+> & {
+  targetSelector: "allPlayers";
+  costSource: "legendMarket" | "targetHand";
+};
 export type MayhemAddChipsToMainMarketRuntimeEffect = TimedEffect<
   "mayhem_add_chips_to_main_market",
   "onMayhemResolve"
@@ -302,6 +312,7 @@ export type MegaMayhemSetLifeRuntimeEffect = TimedEffect<
 
 export interface MayhemEffectPayloadMap {
   mayhem_attack: MayhemAttackRuntimeEffect;
+  mayhem_attack_equal_highest_card_cost: MayhemAttackEqualHighestCardCostRuntimeEffect;
   mayhem_add_chips_to_main_market: MayhemAddChipsToMainMarketRuntimeEffect;
   mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status: MayhemEachDinglerChoosePayLifeOrChipToRemoveStatusRuntimeEffect;
   mayhem_each_player_choose_foe_gain_chips: MayhemEachPlayerChooseFoeGainChipsRuntimeEffect;
@@ -378,6 +389,23 @@ export function createMayhemEffectDecoders(
       amount: required(positiveInteger),
       target: required(selectorTarget("allPlayers")),
     }),
+    mayhem_attack_equal_highest_card_cost: defineDecoder(
+      "mayhem_attack_equal_highest_card_cost",
+      {
+        effectId: required(literal("mayhem_attack_equal_highest_card_cost")),
+        timing: required(literal("onMayhemResolve")),
+        targetSelector: required(literal("allPlayers")),
+        costSource: required((label: string, raw: unknown) => {
+          if (raw === "legendMarket" || raw === "targetHand") {
+            return { ok: true, value: raw };
+          }
+          return {
+            ok: false,
+            errors: [`${label} must be legendMarket or targetHand`],
+          };
+        }),
+      }
+    ),
     mayhem_add_chips_to_main_market: defineDecoder(
       "mayhem_add_chips_to_main_market",
       {
@@ -1930,6 +1958,80 @@ const mayhemAttackHandler: EffectRuntimeHandler<
   },
 };
 
+type HighestCardCostResult =
+  | { ok: true; amount: number }
+  | { ok: false; error: string };
+
+function calculateHighestEffectiveCardCost(
+  state: GameState,
+  playerId: PlayerState["playerId"],
+  cards: readonly CardInstance[],
+  calculateEffectiveCardCost: MayhemCatalogTools["calculateEffectiveCardCost"]
+): HighestCardCostResult {
+  let highestCost = 0;
+  for (const card of cards) {
+    const definition = state.cardDefinitions.get(card.definitionId);
+    if (definition === undefined) {
+      return {
+        ok: false,
+        error: `Missing card definition ${card.definitionId}`,
+      };
+    }
+    highestCost = Math.max(
+      highestCost,
+      calculateEffectiveCardCost(state, playerId, definition, card)
+    );
+  }
+  return { ok: true, amount: highestCost };
+}
+
+function createMayhemAttackEqualHighestCardCostHandler(
+  calculateEffectiveCardCost: MayhemCatalogTools["calculateEffectiveCardCost"]
+): EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_attack_equal_highest_card_cost">
+> {
+  return {
+    effectId: "mayhem_attack_equal_highest_card_cost",
+    execute(state, player, effect, source, services) {
+      const targetPlayers = services.getPlayersInActiveOrder(state);
+      let targets: MayhemAttackPlanTarget[];
+      if (effect.costSource === "legendMarket") {
+        const marketCost = calculateHighestEffectiveCardCost(
+          state,
+          player.playerId,
+          listLegendMarketCards(state),
+          calculateEffectiveCardCost
+        );
+        if (!marketCost.ok) return marketCost;
+        targets = targetPlayers.map((targetPlayer) => ({
+          targetPlayer,
+          amount: marketCost.amount,
+        }));
+      } else {
+        targets = [];
+        for (const targetPlayer of targetPlayers) {
+          const handCost = calculateHighestEffectiveCardCost(
+            state,
+            targetPlayer.playerId,
+            targetPlayer.hand,
+            calculateEffectiveCardCost
+          );
+          if (!handCost.ok) return handCost;
+          targets.push({ targetPlayer, amount: handCost.amount });
+        }
+      }
+
+      return services.resolveMayhemAttackPlan(
+        state,
+        player,
+        targets,
+        effect.effectId,
+        source
+      );
+    },
+  };
+}
+
 const megaMayhemEachPlayerGainLimpWandsToHandHandler: EffectRuntimeHandler<
   RuntimeEffectForId<"mega_mayhem_each_player_gain_limp_wands_to_hand">
 > = {
@@ -1966,6 +2068,12 @@ export interface MayhemCatalogTools {
   bindRuntimeEffectDecoder<Id extends MayhemEffectId>(
     effectId: Id
   ): RuntimeEffectDecoder<Id>;
+  calculateEffectiveCardCost(
+    state: GameState,
+    playerId: PlayerState["playerId"],
+    definition: CardDefinition,
+    card: CardInstance
+  ): number;
   calculateEffectivePlayerMaxLife(
     state: GameState,
     playerId: PlayerState["playerId"]
@@ -2013,6 +2121,13 @@ export function createMayhemEffectDefinitions(
   });
   return [
     definition("mayhem_attack", mayhemAttackTimings, mayhemAttackHandler),
+    definition(
+      "mayhem_attack_equal_highest_card_cost",
+      mayhemResolveTimings,
+      createMayhemAttackEqualHighestCardCostHandler(
+        tools.calculateEffectiveCardCost
+      )
+    ),
     definition(
       "mayhem_add_chips_to_main_market",
       mayhemResolveTimings,

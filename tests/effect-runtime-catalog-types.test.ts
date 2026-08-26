@@ -244,6 +244,7 @@ test("remaining Catalog families expose one local ID inventory each", () => {
   ]);
   assert.deepEqual(mayhemEffectIds, [
     "mayhem_attack",
+    "mayhem_attack_equal_highest_card_cost",
     "mayhem_add_chips_to_main_market",
     "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
     "mayhem_each_player_choose_foe_gain_chips",
@@ -1110,6 +1111,15 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         targetSelector: "eachPlayerClockwiseFromActive",
         destination: "hand",
         amount: 1,
+      },
+    },
+    {
+      effectId: "mayhem_attack_equal_highest_card_cost",
+      payload: {
+        effectId: "mayhem_attack_equal_highest_card_cost",
+        timing: "onMayhemResolve",
+        targetSelector: "allPlayers",
+        costSource: "legendMarket",
       },
     },
   ] as const;

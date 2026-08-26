@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_078",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_078.json",
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2A.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_078.md"
+  },
+  "visible": {
+    "nameRu": "2A",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Атака: каждый колдун отхватывает столько урона, какова стоимость самой дорогой карты у него на руке.",
+    "markers": ["attack"]
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_attack_equal_highest_card_cost",
+        "timing": "onMayhemResolve",
+        "targetSelector": "allPlayers",
+        "costSource": "targetHand"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}

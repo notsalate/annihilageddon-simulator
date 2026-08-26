@@ -1450,12 +1450,7 @@ test("#287 main_070 collects every defense decision before resolving ownerless d
     seed: 287002,
     playerCount: 3,
   });
-  const mayhemIndex = state.common.mainDeck.findIndex(
-    (card) => card.definitionId === "esw2_dbg__main_070"
-  );
-  assert.notEqual(mayhemIndex, -1);
-  const [mayhem] = state.common.mainDeck.splice(mayhemIndex, 1);
-  assert.ok(mayhem);
+  const mayhem = createCommonRuntimeCard("esw2_dbg__main_070");
   state.common.mainDeck.unshift(mayhem);
   state.common.market.splice(4);
   for (const player of state.players) {
@@ -1484,6 +1479,358 @@ test("#287 main_070 collects every defense decision before resolving ownerless d
   assert.equal(decisionIndices.length, 3);
   assert.equal(damageIndices.length, 3);
   assert.ok(Math.max(...decisionIndices) < Math.min(...damageIndices));
+});
+
+test("#293 mega Mayhem attacks for one snapshot of the highest legend market cost", () => {
+  const state = initializeGame({ rootDir, seed: 293001, playerCount: 3 });
+  state.activePlayerId = markPlayerId("player-2");
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  assert.equal(orderedPlayers.length, 3);
+  const [activePlayer, secondPlayer, thirdPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(thirdPlayer);
+  for (const player of orderedPlayers) {
+    player.life.current = 20;
+    player.hand = [];
+    player.wizardProperties = [];
+  }
+
+  const lowCostDefinition = createFixtureCardDefinition(
+    "fixture-mega-market-low-cost",
+    []
+  );
+  lowCostDefinition.engine.cost = 4;
+  lowCostDefinition.visible.cost = 4;
+  const highCostDefinition = createFixtureCardDefinition(
+    "fixture-mega-market-high-cost",
+    []
+  );
+  highCostDefinition.engine.cost = 9;
+  highCostDefinition.visible.cost = 9;
+  const megaMayhemDefinition = createFixtureCardDefinition(
+    "fixture-mega-highest-market-cost",
+    [
+      {
+        effectId: "mayhem_attack_equal_highest_card_cost",
+        timing: "onMayhemResolve",
+        targetSelector: "allPlayers",
+        costSource: "legendMarket",
+      },
+    ],
+    { cardKind: "megaMayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [lowCostDefinition.cardId, lowCostDefinition],
+    [highCostDefinition.cardId, highCostDefinition],
+    [megaMayhemDefinition.cardId, megaMayhemDefinition],
+  ]);
+  const lowCostCard: CardInstance = {
+    instanceId: markCardInstanceId("fixture-mega-market-low"),
+    definitionId: markCardDefinitionId(lowCostDefinition.cardId),
+    ownerId: "common",
+    marketChips: 0,
+  };
+  const highCostCard: CardInstance = {
+    instanceId: markCardInstanceId("fixture-mega-market-high"),
+    definitionId: markCardDefinitionId(highCostDefinition.cardId),
+    ownerId: "common",
+    marketChips: 99,
+  };
+  state.common.legendMarket.splice(
+    0,
+    state.common.legendMarket.length,
+    lowCostCard,
+    highCostCard
+  );
+  const megaMayhem: CardInstance = {
+    instanceId: markCardInstanceId("fixture-mega-highest-market-cost-card"),
+    definitionId: markCardDefinitionId(megaMayhemDefinition.cardId),
+    ownerId: "common",
+    marketChips: 0,
+  };
+
+  const result = executeMayhemEffects(
+    state,
+    activePlayer,
+    megaMayhemDefinition,
+    {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: activePlayer.playerId,
+      cardInstanceId: megaMayhem.instanceId,
+      definitionId: megaMayhem.definitionId,
+    }
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(
+    orderedPlayers.map((player) => player.life.current),
+    [11, 11, 11]
+  );
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "mayhemDecisionStarted" &&
+          event.effectId === "mayhem_attack_equal_highest_card_cost" &&
+          event.cardInstanceId === megaMayhem.instanceId
+      )
+      .map((event) => event.amount),
+    [9, 9, 9]
+  );
+
+  state.common.legendMarket.splice(0);
+  for (const player of orderedPlayers) {
+    player.life.current = 20;
+  }
+  const emptyResult = executeMayhemEffects(
+    state,
+    activePlayer,
+    megaMayhemDefinition,
+    {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: activePlayer.playerId,
+      cardInstanceId: megaMayhem.instanceId,
+      definitionId: megaMayhem.definitionId,
+    }
+  );
+
+  assert.deepEqual(emptyResult, { ok: true });
+  assert.deepEqual(
+    orderedPlayers.map((player) => player.life.current),
+    [20, 20, 20]
+  );
+});
+
+test("#293 main Mayhem uses each hand's highest cost and resolves all defenses first", () => {
+  const state = initializeGame({ rootDir, seed: 293002, playerCount: 3 });
+  state.activePlayerId = markPlayerId("player-2");
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  assert.equal(orderedPlayers.length, 3);
+  const [activePlayer, defendedPlayer, emptyHandPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(defendedPlayer);
+  assert.ok(emptyHandPlayer);
+  for (const player of orderedPlayers) {
+    player.life.current = 20;
+    player.hand = [];
+    player.wizardProperties = [];
+  }
+
+  const lowCostDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-hand-low-cost",
+    []
+  );
+  lowCostDefinition.engine.cost = 3;
+  lowCostDefinition.visible.cost = 3;
+  const highCostDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-hand-high-cost",
+    []
+  );
+  highCostDefinition.engine.cost = 8;
+  highCostDefinition.visible.cost = 8;
+  const mayhemDefinition = createFixtureCardDefinition(
+    "fixture-mayhem-highest-hand-cost",
+    [
+      {
+        effectId: "mayhem_attack_equal_highest_card_cost",
+        timing: "onMayhemResolve",
+        targetSelector: "allPlayers",
+        costSource: "targetHand",
+      },
+    ],
+    { cardKind: "mayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [lowCostDefinition.cardId, lowCostDefinition],
+    [highCostDefinition.cardId, highCostDefinition],
+    [mayhemDefinition.cardId, mayhemDefinition],
+  ]);
+  activePlayer.hand.push(
+    ...createFixtureCardInstances(
+      lowCostDefinition.cardId,
+      activePlayer.playerId,
+      1
+    )
+  );
+  defendedPlayer.hand.push(
+    ...createFixtureCardInstances(
+      highCostDefinition.cardId,
+      defendedPlayer.playerId,
+      1
+    )
+  );
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    defendedPlayer,
+    "discardSelf"
+  );
+  chooseFirstFixtureDefense(state);
+  const mayhem: CardInstance = {
+    instanceId: markCardInstanceId("fixture-mayhem-highest-hand-cost-card"),
+    definitionId: markCardDefinitionId(mayhemDefinition.cardId),
+    ownerId: "common",
+    marketChips: 0,
+  };
+
+  const result = executeMayhemEffects(state, activePlayer, mayhemDefinition, {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: activePlayer.playerId,
+    cardInstanceId: mayhem.instanceId,
+    definitionId: mayhem.definitionId,
+  });
+
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(
+    orderedPlayers.map((player) => player.life.current),
+    [17, 20, 20]
+  );
+  assert.equal(defendedPlayer.discard.includes(defenseCard), true);
+  const cardEvents = state.eventLog.filter(
+    (event) =>
+      event.effectId === "mayhem_attack_equal_highest_card_cost" &&
+      event.cardInstanceId === mayhem.instanceId
+  );
+  assert.deepEqual(
+    cardEvents
+      .filter((event) => event.type === "mayhemDecisionStarted")
+      .map((event) => [event.targetPlayerId, event.amount]),
+    [
+      [activePlayer.playerId, 3],
+      [defendedPlayer.playerId, 8],
+      [emptyHandPlayer.playerId, 0],
+    ]
+  );
+  const decisionIndices = state.eventLog
+    .map((event, index) =>
+      event.type === "mayhemDecisionStarted" &&
+      event.cardInstanceId === mayhem.instanceId
+        ? index
+        : undefined
+    )
+    .filter((index): index is number => index !== undefined);
+  const damageIndices = state.eventLog
+    .map((event, index) =>
+      event.type === "attackTargetStarted" &&
+      event.cardInstanceId === mayhem.instanceId
+        ? index
+        : undefined
+    )
+    .filter((index): index is number => index !== undefined);
+  assert.equal(decisionIndices.length, 3);
+  assert.equal(damageIndices.length, 2);
+  assert.ok(Math.max(...decisionIndices) < Math.min(...damageIndices));
+});
+
+test("#293 current runtime cards execute their mapped global card-cost attacks", () => {
+  const state = initializeGame({ rootDir, seed: 293003, playerCount: 3 });
+  state.activePlayerId = markPlayerId("player-2");
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  assert.equal(orderedPlayers.length, 3);
+  const [activePlayer, secondPlayer, emptyHandPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(secondPlayer);
+  assert.ok(emptyHandPlayer);
+  for (const player of orderedPlayers) {
+    player.life.current = 20;
+    player.hand = [];
+    player.wizardProperties = [];
+  }
+
+  const marketCostDefinition = createFixtureCardDefinition(
+    "fixture-runtime-mega-market-cost",
+    []
+  );
+  marketCostDefinition.engine.cost = 7;
+  marketCostDefinition.visible.cost = 7;
+  const lowHandCostDefinition = createFixtureCardDefinition(
+    "fixture-runtime-main-low-hand-cost",
+    []
+  );
+  lowHandCostDefinition.engine.cost = 2;
+  lowHandCostDefinition.visible.cost = 2;
+  const highHandCostDefinition = createFixtureCardDefinition(
+    "fixture-runtime-main-high-hand-cost",
+    []
+  );
+  highHandCostDefinition.engine.cost = 6;
+  highHandCostDefinition.visible.cost = 6;
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [marketCostDefinition.cardId, marketCostDefinition],
+    [lowHandCostDefinition.cardId, lowHandCostDefinition],
+    [highHandCostDefinition.cardId, highHandCostDefinition],
+  ]);
+  state.common.legendMarket.splice(0, state.common.legendMarket.length, {
+    instanceId: markCardInstanceId("fixture-runtime-mega-market-cost-card"),
+    definitionId: markCardDefinitionId(marketCostDefinition.cardId),
+    ownerId: "common",
+    marketChips: 100,
+  });
+
+  const megaMayhemDefinition = state.cardDefinitions.get(
+    "esw2_dbg__mega_mayhem_001"
+  );
+  assert.ok(megaMayhemDefinition);
+  const megaResult = executeMayhemEffects(
+    state,
+    activePlayer,
+    megaMayhemDefinition,
+    {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: activePlayer.playerId,
+      cardInstanceId: "fixture-runtime-mega-mayhem-001",
+      definitionId: megaMayhemDefinition.cardId,
+    }
+  );
+  assert.deepEqual(megaResult, { ok: true });
+  assert.deepEqual(
+    orderedPlayers.map((player) => player.life.current),
+    [13, 13, 13]
+  );
+
+  for (const player of orderedPlayers) {
+    player.life.current = 20;
+  }
+  activePlayer.hand.push(
+    ...createFixtureCardInstances(
+      lowHandCostDefinition.cardId,
+      activePlayer.playerId,
+      1
+    )
+  );
+  secondPlayer.hand.push(
+    ...createFixtureCardInstances(
+      highHandCostDefinition.cardId,
+      secondPlayer.playerId,
+      1
+    )
+  );
+  const mainMayhemDefinition = state.cardDefinitions.get("esw2_dbg__main_078");
+  assert.ok(mainMayhemDefinition);
+  const mainResult = executeMayhemEffects(
+    state,
+    activePlayer,
+    mainMayhemDefinition,
+    {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: activePlayer.playerId,
+      cardInstanceId: "fixture-runtime-main-078",
+      definitionId: mainMayhemDefinition.cardId,
+    }
+  );
+  assert.deepEqual(mainResult, { ok: true });
+  assert.deepEqual(
+    orderedPlayers.map((player) => player.life.current),
+    [18, 14, 20]
+  );
 });
 
 test("#287 main_024 can defend by discarding itself and drawing one card", () => {
