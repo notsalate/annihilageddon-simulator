@@ -98,6 +98,116 @@ test("wizard property 010 sets setup life/trophy/turn and caps resurrection for 
   assert.equal(resurrection?.amount, 15);
 });
 
+test("death projects the gained DWT status before respawn and resets without a token", () => {
+  const runDeath = (options: {
+    tokenDefinitionId?: string;
+    initialDingler?: boolean;
+    property010?: boolean;
+  }) => {
+    const scenario = createGameScenario({
+      rootDir,
+      dataPackPath: playableRuntimeDataPackPath,
+      seed: 30100 + (options.initialDingler ? 1 : 0),
+    });
+    const { state, activePlayer: killer } = scenario;
+    const defeated = scenario.foes[0];
+    assert.ok(defeated);
+    defeated.life.current = 1;
+    defeated.wizardProperties = options.property010
+      ? [
+          createToken(
+            "esw2_dbg__wizard_property_010",
+            "fixture-property-010-respawn"
+          ),
+        ]
+      : [];
+    defeated.statuses = options.initialDingler
+      ? [createDinglerStatus(defeated)]
+      : [];
+    state.common.deadWizardTokens.drawStack =
+      options.tokenDefinitionId === undefined
+        ? []
+        : [createToken(options.tokenDefinitionId, "fixture-dwt-respawn")];
+
+    const damageCard = givenRuntimeCard(scenario, {
+      player: killer,
+      effects: [
+        {
+          effectId: "deal_damage",
+          timing: "onPlay",
+          amount: 1,
+          target: { selector: "opponentPlayer" },
+        },
+      ],
+      instanceId: `fixture-respawn-${options.tokenDefinitionId ?? "empty"}`,
+    });
+    choosePlayerTargetForEffect(scenario, "deal_damage", defeated);
+
+    assert.equal(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: damageCard.instanceId,
+      }).ok,
+      true
+    );
+
+    return { state, defeated };
+  };
+
+  const newlyDingler = runDeath({
+    tokenDefinitionId: "esw2_dbg__dead_wizard_token_026",
+  });
+  assert.equal(newlyDingler.defeated.life.current, 15);
+  assert.equal(
+    newlyDingler.defeated.statuses.some(
+      (status) => status.statusId === "dingler"
+    ),
+    true
+  );
+  const newlyDinglerEvents = newlyDingler.state.eventLog;
+  const gainIndex = newlyDinglerEvents.findIndex(
+    (event) =>
+      event.type === "deadWizardTokenGained" &&
+      event.playerId === newlyDingler.defeated.playerId
+  );
+  const statusIndex = newlyDinglerEvents.findIndex(
+    (event) =>
+      event.type === "dinglerStatusGained" &&
+      event.playerId === newlyDingler.defeated.playerId
+  );
+  const respawnIndex = newlyDinglerEvents.findIndex(
+    (event) =>
+      event.type === "playerResurrected" &&
+      event.playerId === newlyDingler.defeated.playerId
+  );
+  assert.ok(gainIndex >= 0);
+  assert.ok(statusIndex > gainIndex);
+  assert.ok(respawnIndex > statusIndex);
+
+  const propertyCap = runDeath({
+    tokenDefinitionId: "esw2_dbg__dead_wizard_token_026",
+    property010: true,
+  });
+  assert.equal(propertyCap.defeated.life.current, 15);
+
+  const toggledNormal = runDeath({
+    tokenDefinitionId: "esw2_dbg__dead_wizard_token_028",
+    initialDingler: true,
+    property010: true,
+  });
+  assert.equal(toggledNormal.defeated.life.current, 25);
+  assert.equal(
+    toggledNormal.defeated.statuses.some(
+      (status) => status.statusId === "dingler"
+    ),
+    false
+  );
+
+  const emptyStack = runDeath({});
+  assert.equal(emptyStack.defeated.life.current, 20);
+  assert.equal(emptyStack.defeated.deadWizardTokens.length, 0);
+});
+
 test("DWT 013 applies ownerless chipsin damage and starts a recursive DWT cycle", () => {
   const scenario = createGameScenario({
     rootDir,

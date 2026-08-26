@@ -141,6 +141,8 @@ export interface EffectSourceContext {
   tokenInstanceId?: TokenInstance["instanceId"];
   tokenDefinitionId?: TokenDefinition["tokenId"];
   deadWizardTokenDeathKillerPlayerId?: PlayerState["playerId"];
+  deadWizardTokenWasDinglerAtGain?: boolean;
+  deadWizardTokenProjectionEffectIds?: readonly string[];
 }
 
 export interface AttackReplacementProfile {

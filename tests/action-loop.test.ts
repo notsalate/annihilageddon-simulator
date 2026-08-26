@@ -15822,7 +15822,7 @@ test("Виагрус считает вялые палочки положител
   assert.equal(score.victoryPoints, 10);
 });
 
-test("смерть в незавершённой карте сначала воскрешает и выдаёт ЖДК, а затем завершает карту", () => {
+test("смерть в незавершённой карте сначала выдаёт ЖДК, воскрешает и завершает карту", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -15878,9 +15878,9 @@ test("смерть в незавершённой карте сначала во�
   assertEventOrder(state, [
     (event) => event.type === "playerDied" && event.playerId === foe.playerId,
     (event) =>
-      event.type === "playerResurrected" && event.playerId === foe.playerId,
-    (event) =>
       event.type === "deadWizardTokenGained" && event.playerId === foe.playerId,
+    (event) =>
+      event.type === "playerResurrected" && event.playerId === foe.playerId,
     (event) =>
       event.type === "effectCardsReturnedToHand" &&
       event.playerId === player.playerId,
@@ -15928,10 +15928,10 @@ test("set_life до нуля проводит смерть через общий
     (event) =>
       event.type === "playerDied" && event.playerId === player.playerId,
     (event) =>
-      event.type === "playerResurrected" && event.playerId === player.playerId,
-    (event) =>
       event.type === "deadWizardTokenGained" &&
       event.playerId === player.playerId,
+    (event) =>
+      event.type === "playerResurrected" && event.playerId === player.playerId,
   ]);
 });
 
@@ -16023,18 +16023,18 @@ test("несколько смертей одной карты выдают ЖД�
     (event) =>
       event.type === "playerDied" && event.playerId === firstFoe.playerId,
     (event) =>
-      event.type === "playerResurrected" &&
+      event.type === "deadWizardTokenGained" &&
       event.playerId === firstFoe.playerId,
     (event) =>
-      event.type === "deadWizardTokenGained" &&
+      event.type === "playerResurrected" &&
       event.playerId === firstFoe.playerId,
     (event) =>
       event.type === "playerDied" && event.playerId === secondFoe.playerId,
     (event) =>
-      event.type === "playerResurrected" &&
+      event.type === "deadWizardTokenGained" &&
       event.playerId === secondFoe.playerId,
     (event) =>
-      event.type === "deadWizardTokenGained" &&
+      event.type === "playerResurrected" &&
       event.playerId === secondFoe.playerId,
     (event) =>
       event.type === "deadWizardTokenFaceResolved" &&

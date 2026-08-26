@@ -199,6 +199,8 @@ export interface GameState {
       tokenInstanceId: TokenInstanceId;
       tokenDefinitionId: TokenDefinitionId;
       deathKillerPlayerId?: PlayerId;
+      deadWizardTokenWasDinglerAtGain?: boolean;
+      deadWizardTokenProjectionEffectIds?: readonly string[];
     }>;
   };
   eventLog: GameEvent[];

@@ -19,13 +19,29 @@ export function enqueueDeadWizardTokenFace(
   state: GameState,
   player: PlayerState,
   token: TokenInstance,
-  deathKillerPlayerId?: PlayerState["playerId"]
+  deathKillerPlayerId?: PlayerState["playerId"],
+  metadata?: {
+    deadWizardTokenWasDinglerAtGain?: boolean;
+    deadWizardTokenProjectionEffectIds?: readonly string[];
+  }
 ): void {
   state.deadWizardTokenResolution.pendingFaces.push({
     playerId: player.playerId,
     tokenInstanceId: token.instanceId,
     tokenDefinitionId: token.definitionId,
     ...(deathKillerPlayerId === undefined ? {} : { deathKillerPlayerId }),
+    ...(metadata?.deadWizardTokenWasDinglerAtGain === undefined
+      ? {}
+      : {
+          deadWizardTokenWasDinglerAtGain:
+            metadata.deadWizardTokenWasDinglerAtGain,
+        }),
+    ...(metadata?.deadWizardTokenProjectionEffectIds === undefined
+      ? {}
+      : {
+          deadWizardTokenProjectionEffectIds:
+            metadata.deadWizardTokenProjectionEffectIds,
+        }),
   });
 }
 
@@ -35,6 +51,8 @@ export function dequeueDeadWizardTokenFace(state: GameState):
       tokenInstanceId: TokenInstance["instanceId"];
       tokenDefinitionId: TokenInstance["definitionId"];
       deathKillerPlayerId?: PlayerState["playerId"];
+      deadWizardTokenWasDinglerAtGain?: boolean;
+      deadWizardTokenProjectionEffectIds?: readonly string[];
     }
   | undefined {
   return state.deadWizardTokenResolution.pendingFaces.shift();

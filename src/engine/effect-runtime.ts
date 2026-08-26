@@ -110,7 +110,12 @@ import type {
   ChoiceSelection,
   ChoiceView,
 } from "./choice-policy.js";
-import type { CardInstance, GameState, PlayerState } from "./setup.js";
+import type {
+  CardInstance,
+  GameState,
+  PlayerState,
+  TokenInstance,
+} from "./setup.js";
 import { createChoicePlayerView } from "./strategy-decision-view.js";
 import {
   dispatchControlledCardOperation,
@@ -959,6 +964,18 @@ function resolveQueuedDeadWizardTokenFaces(
         : {
             deadWizardTokenDeathKillerPlayerId: currentFace.deathKillerPlayerId,
           }),
+      ...(currentFace.deadWizardTokenWasDinglerAtGain === undefined
+        ? {}
+        : {
+            deadWizardTokenWasDinglerAtGain:
+              currentFace.deadWizardTokenWasDinglerAtGain,
+          }),
+      ...(currentFace.deadWizardTokenProjectionEffectIds === undefined
+        ? {}
+        : {
+            deadWizardTokenProjectionEffectIds:
+              currentFace.deadWizardTokenProjectionEffectIds,
+          }),
     };
     beginDeadWizardTokenResolutionBoundary(state);
     let result: EffectExecutionResult;
@@ -968,7 +985,11 @@ function resolveQueuedDeadWizardTokenFaces(
         player,
         definition.effects,
         "onDeadWizardTokenFace",
-        source
+        source,
+        (decodedEffect) =>
+          !currentFace.deadWizardTokenProjectionEffectIds?.includes(
+            decodedEffect.effectId
+          )
       );
     } finally {
       endDeadWizardTokenResolutionBoundary(state);
@@ -2652,6 +2673,24 @@ function resolvePlayerDeath(
     );
   }
 
+  let issueResult: EffectExecutionResult = { ok: true };
+  const hasPendingReplacement =
+    killCredit !== undefined &&
+    state.turn.deadWizardTokenKillReplacement?.playerId ===
+      killCredit.killer.playerId &&
+    killCredit.killer.playerId !== player.playerId;
+  if (killCredit?.deadWizardTokenPolicy !== "skip" && !hasPendingReplacement) {
+    issueResult = issueDeadWizardToken(
+      state,
+      player,
+      killCredit?.killer.playerId,
+      { projectRespawn: true }
+    );
+    if (!issueResult.ok) {
+      return issueResult;
+    }
+  }
+
   const resurrectionLifeTotal = getResurrectionLifeTotal(state, player);
   const lifeBeforeResurrection = player.life.current;
   player.life.current = resurrectionLifeTotal;
@@ -2677,7 +2716,7 @@ function resolvePlayerDeath(
       return replacementResult;
     }
   }
-  return issueDeadWizardToken(state, player, killCredit?.killer.playerId);
+  return issueResult;
 }
 
 function resolveDeadWizardTokenKillReplacement(
@@ -3178,7 +3217,8 @@ function moveControlledDeadWizardTokenLike(
 function issueDeadWizardToken(
   state: GameState,
   player: PlayerState,
-  deathKillerPlayerId?: PlayerState["playerId"]
+  deathKillerPlayerId?: PlayerState["playerId"],
+  options?: { projectRespawn?: boolean }
 ): EffectExecutionResult {
   if (
     state.common.deadWizardTokens.status === "available" &&
@@ -3201,7 +3241,6 @@ function issueDeadWizardToken(
           tokenInstanceId: token.instanceId,
           tokenDefinitionId: token.definitionId,
         });
-        enqueueDeadWizardTokenFace(state, player, token, deathKillerPlayerId);
         return token;
       }
     );
@@ -3211,8 +3250,136 @@ function issueDeadWizardToken(
     if (mutationResult.gameEnd !== undefined) {
       return { ok: true, gameEnd: mutationResult.gameEnd };
     }
+    const token = mutationResult.value;
+    if (token !== undefined) {
+      const projection =
+        options?.projectRespawn === true
+          ? applyDeadWizardTokenRespawnProjection(
+              state,
+              player,
+              token,
+              deathKillerPlayerId
+            )
+          : {
+              ok: true as const,
+              deadWizardTokenWasDinglerAtGain: undefined,
+              deadWizardTokenProjectionEffectIds: undefined,
+            };
+      if (!projection.ok) {
+        return projection;
+      }
+      enqueueDeadWizardTokenFace(
+        state,
+        player,
+        token,
+        deathKillerPlayerId,
+        projection.deadWizardTokenWasDinglerAtGain === undefined &&
+          projection.deadWizardTokenProjectionEffectIds === undefined
+          ? undefined
+          : projection
+      );
+    }
   }
   return { ok: true };
+}
+
+function applyDeadWizardTokenRespawnProjection(
+  state: GameState,
+  player: PlayerState,
+  token: TokenInstance,
+  deathKillerPlayerId?: PlayerState["playerId"]
+):
+  | {
+      ok: true;
+      deadWizardTokenWasDinglerAtGain: boolean;
+      deadWizardTokenProjectionEffectIds: readonly string[];
+    }
+  | { ok: false; error: string } {
+  const definition = state.tokenDefinitions.get(token.definitionId);
+  if (definition?.kind !== "deadWizardToken") {
+    return {
+      ok: true,
+      deadWizardTokenWasDinglerAtGain: hasDinglerStatus(player),
+      deadWizardTokenProjectionEffectIds: [],
+    };
+  }
+
+  const deadWizardTokenWasDinglerAtGain = hasDinglerStatus(player);
+  const deadWizardTokenProjectionEffectIds: string[] = [];
+  const source: EffectSourceContext = {
+    sourceType: "deadWizardToken",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: token.instanceId,
+    definitionId: definition.tokenId,
+    tokenInstanceId: token.instanceId,
+    tokenDefinitionId: definition.tokenId,
+    ...(deathKillerPlayerId === undefined
+      ? {}
+      : { deadWizardTokenDeathKillerPlayerId: deathKillerPlayerId }),
+  };
+
+  for (const effect of definition.effects) {
+    const verifiedEffect = requireVerifiedRuntimeEffect(effect);
+    if (verifiedEffect.timing !== "onDeadWizardTokenFace") {
+      continue;
+    }
+
+    if (
+      verifiedEffect.effectId === "gain_status" &&
+      verifiedEffect.statusId === "dingler"
+    ) {
+      const result = gainDinglerStatus(
+        state,
+        player,
+        verifiedEffect.effectId,
+        source
+      );
+      if (!result.ok) {
+        return result;
+      }
+      deadWizardTokenProjectionEffectIds.push(verifiedEffect.effectId);
+      continue;
+    }
+
+    if (
+      verifiedEffect.effectId === "toggle_status" &&
+      verifiedEffect.statusId === "dingler"
+    ) {
+      const result = deadWizardTokenWasDinglerAtGain
+        ? removeDinglerStatus(state, player, verifiedEffect.effectId, source)
+        : gainDinglerStatus(state, player, verifiedEffect.effectId, source);
+      if (!result.ok) {
+        return result;
+      }
+      deadWizardTokenProjectionEffectIds.push(verifiedEffect.effectId);
+      continue;
+    }
+
+    if (
+      verifiedEffect.effectId ===
+        "dead_wizard_token_gain_status_or_draw_face" &&
+      verifiedEffect.statusId === "dingler" &&
+      !deadWizardTokenWasDinglerAtGain
+    ) {
+      const result = gainDinglerStatus(
+        state,
+        player,
+        verifiedEffect.effectId,
+        source
+      );
+      if (!result.ok) {
+        return result;
+      }
+      deadWizardTokenProjectionEffectIds.push(verifiedEffect.effectId);
+    }
+  }
+
+  return {
+    ok: true,
+    deadWizardTokenWasDinglerAtGain,
+    deadWizardTokenProjectionEffectIds,
+  };
 }
 
 function getResurrectionLifeTotal(
