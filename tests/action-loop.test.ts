@@ -8467,6 +8467,171 @@ test("wizard property applies to its owner's Wand through foreign control but no
   );
 });
 
+test("#316 wizard property 009 replaces a real starter and buffs its temporary controller's attack", () => {
+  const dataPack = createWizardPropertySetupEntriesDataPack(
+    createExpandedDeadWizardTokenSetupDataPack(
+      loadCurrentRuntimeDataPack(rootDir),
+      40
+    ),
+    [{ tokenId: "esw2_dbg__wizard_property_009", count: 4 }]
+  );
+  const scenario = createGameScenario({
+    dataPack,
+    seed: 316009,
+    playerCount: 2,
+  });
+  const state = scenario.state;
+  const propertyOwner = state.players.find((player) =>
+    player.wizardProperties.some(
+      (property) => property.definitionId === "esw2_dbg__wizard_property_009"
+    )
+  );
+  assert.ok(propertyOwner);
+  const controller = state.players.find(
+    (player) => player.playerId !== propertyOwner.playerId
+  );
+  assert.ok(controller);
+  const ownedCards = [
+    ...propertyOwner.hand,
+    ...propertyOwner.deck,
+    ...propertyOwner.discard,
+    ...propertyOwner.playedThisTurn,
+    ...propertyOwner.permanents,
+  ];
+  assert.equal(
+    ownedCards.filter((card) => card.definitionId === "esw2_dbg__starter_004")
+      .length,
+    1
+  );
+  assert.equal(
+    ownedCards.filter((card) => card.definitionId === "esw2_dbg__starter_001")
+      .length,
+    5
+  );
+
+  const wand = findOwnedCard(propertyOwner, "esw2_dbg__starter_004");
+  assert.ok(wand);
+  const moved = movePhysicalCard(
+    state,
+    wand.instanceId,
+    `${controller.playerId}.hand`,
+    "front"
+  );
+  assert.equal(moved.ok, true);
+  givenTemporaryControl(scenario, wand, controller);
+  propertyOwner.life.current = 20;
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    propertyOwner,
+    "discardSelf"
+  );
+  state.activePlayerId = controller.playerId;
+
+  assert.deepEqual(play(scenario, wand), { ok: true });
+  assert.equal(propertyOwner.life.current, 18);
+  assert.equal(propertyOwner.hand.includes(defenseCard), true);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
+    false
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "attackCreated" &&
+        event.effectId === "attack_damage" &&
+        event.amount === 2
+    ),
+    true
+  );
+});
+
+test("#316 wizard property 009 uses ownership and tags instead of names", () => {
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 316010,
+  });
+  const propertyOwner = mustGetPlayer(state, markPlayerId("player-2"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  state.activePlayerId = propertyOwner.playerId;
+  replaceFirstWizardProperty(
+    state,
+    propertyOwner,
+    state.tokenDefinitions.get(
+      "esw2_dbg__wizard_property_009"
+    ) as TokenDefinition
+  );
+
+  const foreignWand = addRuntimeCardToHand(
+    state,
+    targetPlayer,
+    "esw2_dbg__starter_004"
+  );
+  const movedForeignWand = movePhysicalCard(
+    state,
+    foreignWand.instanceId,
+    `${propertyOwner.playerId}.hand`,
+    "front"
+  );
+  assert.equal(movedForeignWand.ok, true);
+  const foreignDefense = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
+  chooseFirstFixtureDefense(state);
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: foreignWand.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(targetPlayer.life.current, 20);
+  assert.equal(targetPlayer.discard.includes(foreignDefense), true);
+
+  const nameOnlyDefinition = createFixtureCardDefinition(
+    "fixture-name-only-wand-attack",
+    [
+      {
+        effectId: "attack_damage",
+        timing: "onPlay",
+        amount: 1,
+        targetSelector: "chosenFoe",
+      },
+    ]
+  );
+  nameOnlyDefinition.visible.nameRu = "Палочка без устойчивого тега";
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [nameOnlyDefinition.cardId, nameOnlyDefinition],
+  ]);
+  const nameOnlyWand = createRuntimeCardInstance(
+    propertyOwner,
+    nameOnlyDefinition.cardId,
+    "fixture-name-only-wand"
+  );
+  propertyOwner.hand.push(nameOnlyWand);
+  const nameOnlyDefense = addFixtureDefenseCardToHand(
+    state,
+    targetPlayer,
+    "discardSelf"
+  );
+  chooseFirstFixtureDefense(state);
+  targetPlayer.life.current = 20;
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: nameOnlyWand.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(targetPlayer.life.current, 20);
+  assert.equal(targetPlayer.discard.includes(nameOnlyDefense), true);
+});
+
 test("Lubricating Dirty Stick permanently buffs each owned Wand attack and gains power once per Wand play", () => {
   const state = initializeGame({
     rootDir,
