@@ -282,24 +282,11 @@ export function createSimulationFailureReplay(
 function getReplaySetupCandidates(
   event: Extract<GameEvent, { type: "setupChoiceSelected" }>
 ): SimulationFailureReplaySetupCandidate[] | undefined {
-  const instanceIds = event.candidateInstanceIds;
-  const definitionIds = event.candidateDefinitionIds;
-  if (instanceIds === undefined && definitionIds === undefined) {
-    return undefined;
-  }
-  if (!isStringArray(instanceIds) || !isStringArray(definitionIds)) {
-    throw new Error("Setup replay event has invalid candidate metadata");
-  }
-  if (instanceIds.length !== definitionIds.length) {
-    throw new Error("Setup replay event has mismatched candidate metadata");
-  }
-  return instanceIds.map((instanceId, index) => {
-    const definitionId = definitionIds[index];
-    if (definitionId === undefined) {
-      throw new Error("Setup replay event has sparse candidate metadata");
-    }
-    return { instanceId, definitionId };
-  });
+  return parseReplaySetupCandidates(
+    event.candidateInstanceIds,
+    event.candidateDefinitionIds,
+    "Setup replay event"
+  );
 }
 
 export function parseSimulationFailureReplayReport(reportText: string): {
@@ -489,21 +476,31 @@ function readReplayChoices(value: unknown): SimulationFailureReplay["choices"] {
 function readReplaySetupCandidates(
   record: SimulationFailureReplayChoiceCandidate
 ): SimulationFailureReplaySetupCandidate[] | undefined {
-  const instanceIds = record.candidateInstanceIds;
-  const definitionIds = record.candidateDefinitionIds;
+  return parseReplaySetupCandidates(
+    record.candidateInstanceIds,
+    record.candidateDefinitionIds,
+    "Report setup choice"
+  );
+}
+
+function parseReplaySetupCandidates(
+  instanceIds: unknown,
+  definitionIds: unknown,
+  context: string
+): SimulationFailureReplaySetupCandidate[] | undefined {
   if (instanceIds === undefined && definitionIds === undefined) {
     return undefined;
   }
   if (!isStringArray(instanceIds) || !isStringArray(definitionIds)) {
-    throw new Error("Report setup choice has invalid candidate metadata");
+    throw new Error(`${context} has invalid candidate metadata`);
   }
   if (instanceIds.length !== definitionIds.length) {
-    throw new Error("Report setup choice has mismatched candidate metadata");
+    throw new Error(`${context} has mismatched candidate metadata`);
   }
   return instanceIds.map((instanceId, index) => {
     const definitionId = definitionIds[index];
     if (definitionId === undefined) {
-      throw new Error("Report setup choice has sparse candidate metadata");
+      throw new Error(`${context} has sparse candidate metadata`);
     }
     return { instanceId, definitionId };
   });
