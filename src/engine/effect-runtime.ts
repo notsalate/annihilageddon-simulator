@@ -84,6 +84,7 @@ import {
   executeAttackDiscardCards,
   validateAttackCostPrecondition,
 } from "./effect-runtime-combat-attack.js";
+import { getDistinctAdjacentFoes } from "./player-targets.js";
 import {
   isRuntimeEffectSelectorTarget,
   type RuntimeEffect,
@@ -2232,19 +2233,11 @@ function buildLegalTargetChoices(
     }
 
     if (targetSelector === "chosenLeftOrRightFoe") {
-      const foes = getOpponentsInSeatingOrder(state, player);
-      const adjacentFoes = [foes[0], foes.at(-1)].filter(
-        (candidate): candidate is PlayerState => candidate !== undefined
-      );
-      const distinctAdjacentFoes = adjacentFoes.filter(
-        (candidate, index) =>
-          adjacentFoes.findIndex(
-            (otherCandidate) => otherCandidate.playerId === candidate.playerId
-          ) === index
-      );
       return {
         ok: true,
-        choices: distinctAdjacentFoes.map((candidate) => ({
+        choices: getDistinctAdjacentFoes(
+          getOpponentsInSeatingOrder(state, player)
+        ).map((candidate) => ({
           choiceType: "player" as const,
           player: candidate,
         })),
@@ -2252,19 +2245,11 @@ function buildLegalTargetChoices(
     }
 
     if (targetSelector === "leftAndRightFoes") {
-      const foes = getOpponentsInSeatingOrder(state, player);
-      const adjacentFoes = [foes[0], foes.at(-1)].filter(
-        (candidate): candidate is PlayerState => candidate !== undefined
-      );
-      const distinctAdjacentFoes = adjacentFoes.filter(
-        (candidate, index) =>
-          adjacentFoes.findIndex(
-            (otherCandidate) => otherCandidate.playerId === candidate.playerId
-          ) === index
-      );
       return {
         ok: true,
-        choices: distinctAdjacentFoes.map((candidate) => ({
+        choices: getDistinctAdjacentFoes(
+          getOpponentsInSeatingOrder(state, player)
+        ).map((candidate) => ({
           choiceType: "player" as const,
           player: candidate,
         })),

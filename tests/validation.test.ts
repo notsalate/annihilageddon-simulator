@@ -1832,6 +1832,38 @@ test("supported executable multi-target attack passes executable effect validati
   assert.deepEqual(result, { ok: true });
 });
 
+test("supported executable neighboring attack accepts only adjacent foes", () => {
+  const card = createFixtureCard("fixture-supported-neighboring-attack-effect");
+  const dataPack = withOnlyFixtureCard({
+    ...card,
+    engine: {
+      ...card.engine,
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "multi_target_neighbor_attack",
+          timing: "onPlay",
+          amount: 4,
+          target: {
+            selector: "leftAndRightFoes",
+          },
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(validateExecutableDataPack(dataPack), { ok: true });
+  assert.notDeepEqual(
+    validateRawRuntimeEffect("multi_target_attack", "Fixture", {
+      effectId: "multi_target_attack",
+      timing: "onPlay",
+      amount: 4,
+      target: { selector: "leftAndRightFoes" },
+    }),
+    []
+  );
+});
+
 test("supported executable Mayhem attack passes executable effect validation", () => {
   const card = createFixtureCard("fixture-supported-mayhem-attack-effect");
   const dataPack = withOnlyFixtureCard({
@@ -1977,6 +2009,7 @@ test("combat effect decoders reject invalid concrete payloads", () => {
     "attack_damage",
     "attack_damage_equal_to_controlled_card_cost",
     "multi_target_attack",
+    "multi_target_neighbor_attack",
     "mayhem_attack",
   ] as const satisfies readonly RuntimeEffectId[];
 

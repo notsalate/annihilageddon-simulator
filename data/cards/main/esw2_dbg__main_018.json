@@ -30,7 +30,7 @@
     "effects": [
       { "effectId": "draw_cards", "timing": "onPlay", "amount": 1 },
       {
-        "effectId": "multi_target_attack",
+        "effectId": "multi_target_neighbor_attack",
         "timing": "onPlay",
         "amount": 7,
         "target": { "selector": "leftAndRightFoes" }

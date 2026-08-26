@@ -30,7 +30,7 @@
     "effects": [
       { "effectId": "add_power", "timing": "onPlay", "amount": 5 },
       {
-        "effectId": "multi_target_attack",
+        "effectId": "multi_target_neighbor_attack",
         "timing": "onPlay",
         "amount": 10,
         "target": { "selector": "leftAndRightFoes" }

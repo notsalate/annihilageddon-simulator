@@ -394,6 +394,7 @@ export const knownRuntimeEffectIds = [
   "modify_effective_value",
   "modify_owned_wand_attack_damage",
   "multi_target_attack",
+  "multi_target_neighbor_attack",
   "on_gain_self_gain_limp_wands",
   "ongoing_add_power",
   "ongoing_add_power_when_playing_wand",
@@ -791,7 +792,15 @@ export type MultiTargetAttackRuntimeEffect =
     PositiveAmount &
     AttackBranches & {
       target: RuntimeEffectSelectorTarget & {
-        selector: "leftAndRightFoes" | "opponentPlayers";
+        selector: "opponentPlayers";
+      };
+    };
+export type MultiTargetNeighborAttackRuntimeEffect =
+  EffectWithOptionalTiming<"multi_target_neighbor_attack"> &
+    PositiveAmount &
+    AttackBranches & {
+      target: RuntimeEffectSelectorTarget & {
+        selector: "leftAndRightFoes";
       };
     };
 export type OptionalSpendChipAttackDamageRuntimeEffect =
@@ -856,6 +865,7 @@ export interface PlayerControlledAttackEffectPayloadMap {
   distributed_attack_damage: DistributedAttackDamageRuntimeEffect;
   sequential_attack_damage: SequentialAttackDamageRuntimeEffect;
   multi_target_attack: MultiTargetAttackRuntimeEffect;
+  multi_target_neighbor_attack: MultiTargetNeighborAttackRuntimeEffect;
   optional_spend_chip_attack_damage: OptionalSpendChipAttackDamageRuntimeEffect;
   defense_discard_self_avoid_attack_then_optional_destroy_hand_card: DefenseDiscardSelfAvoidAttackThenOptionalDestroyHandCardRuntimeEffect;
   modify_owned_wand_attack_damage: ModifyOwnedWandAttackDamageRuntimeEffect;

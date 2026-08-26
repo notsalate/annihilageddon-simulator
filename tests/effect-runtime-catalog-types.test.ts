@@ -242,6 +242,7 @@ test("remaining Catalog families expose one local ID inventory each", () => {
     "distributed_attack_damage",
     "sequential_attack_damage",
     "multi_target_attack",
+    "multi_target_neighbor_attack",
     "optional_spend_chip_attack_damage",
   ]);
   assert.deepEqual(combatDefenseEffectIds, [

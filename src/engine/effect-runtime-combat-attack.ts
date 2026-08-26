@@ -44,6 +44,7 @@ import {
   type EffectRuntimeSupportedSourceKinds,
   type EffectRuntimeSupportedTimings,
 } from "./effect-runtime-catalog-shared.js";
+import { getDistinctAdjacentFoes } from "./player-targets.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export type CombatAttackEffectId =
@@ -66,6 +67,7 @@ export type CombatAttackEffectId =
   | "distributed_attack_damage"
   | "sequential_attack_damage"
   | "multi_target_attack"
+  | "multi_target_neighbor_attack"
   | "optional_spend_chip_attack_damage";
 
 export const combatAttackEffectIds = [
@@ -88,6 +90,7 @@ export const combatAttackEffectIds = [
   "distributed_attack_damage",
   "sequential_attack_damage",
   "multi_target_attack",
+  "multi_target_neighbor_attack",
   "optional_spend_chip_attack_damage",
 ] as const satisfies readonly CombatAttackEffectId[];
 
@@ -399,13 +402,23 @@ export function createCombatAttackEffectDecoders(
       effectId: required(literal("multi_target_attack")),
       timing: optionalTiming,
       amount: required(positiveInteger),
-      target: required(
-        selectorTargetOneOf(["leftAndRightFoes", "opponentPlayers"] as const)
-      ),
+      target: required(selectorTargetOneOf(["opponentPlayers"] as const)),
       onDamageDealt: optionalAttackBranches,
       onAvoided: optionalAttackBranches,
       onKill: optionalAttackBranches,
     }),
+    multi_target_neighbor_attack: defineDecoder(
+      "multi_target_neighbor_attack",
+      {
+        effectId: required(literal("multi_target_neighbor_attack")),
+        timing: optionalTiming,
+        amount: required(positiveInteger),
+        target: required(selectorTargetOneOf(["leftAndRightFoes"] as const)),
+        onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
+        onKill: optionalAttackBranches,
+      }
+    ),
     optional_spend_chip_attack_damage: defineDecoder(
       "optional_spend_chip_attack_damage",
       {
@@ -1330,11 +1343,19 @@ function sequentialAttackDamageHandler(
   };
 }
 
-function multiTargetAttackHandler(
-  collectAttackReplacementProfile: AttackReplacementCollector
-): EffectRuntimeHandler<RuntimeEffectForId<"multi_target_attack">> {
+type MultiTargetAttackEffectId =
+  | "multi_target_attack"
+  | "multi_target_neighbor_attack";
+
+function multiTargetAttackHandler<Id extends MultiTargetAttackEffectId>(
+  effectId: Id,
+  collectAttackReplacementProfile: AttackReplacementCollector,
+  resolveTargetPlayers: (
+    opponents: readonly PlayerState[]
+  ) => readonly PlayerState[]
+): EffectRuntimeHandler<RuntimeEffectForId<Id>> {
   return {
-    effectId: "multi_target_attack",
+    effectId,
     execute(state, player, effect, source, services) {
       const attackProfileResult = collectAttackReplacementProfile(
         state,
@@ -1352,20 +1373,7 @@ function multiTargetAttackHandler(
       }
       const attackProfile = attackProfileResult.result;
       const opponents = services.getOpponentsInSeatingOrder(state, player);
-      const targetPlayers =
-        effect.target.selector === "leftAndRightFoes"
-          ? [opponents[0], opponents.at(-1)]
-              .filter(
-                (candidate): candidate is PlayerState => candidate !== undefined
-              )
-              .filter(
-                (candidate, index, candidates) =>
-                  candidates.findIndex(
-                    (otherCandidate) =>
-                      otherCandidate.playerId === candidate.playerId
-                  ) === index
-              )
-          : opponents;
+      const targetPlayers = resolveTargetPlayers(opponents);
       return services.resolvePlayerControlledAttack({
         state,
         attackingPlayer: player,
@@ -2142,7 +2150,23 @@ export function createCombatAttackEffectDefinitions(
       supportedTimings: attackTimings,
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
-      handler: multiTargetAttackHandler(collectAttackReplacementProfile),
+      handler: multiTargetAttackHandler(
+        "multi_target_attack",
+        collectAttackReplacementProfile,
+        (opponents) => opponents
+      ),
+    },
+    {
+      effectId: "multi_target_neighbor_attack",
+      decoder: bindRuntimeEffectDecoder("multi_target_neighbor_attack"),
+      supportedTimings: attackTimings,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: multiTargetAttackHandler(
+        "multi_target_neighbor_attack",
+        collectAttackReplacementProfile,
+        getDistinctAdjacentFoes
+      ),
     },
     {
       effectId: "optional_spend_chip_attack_damage",
