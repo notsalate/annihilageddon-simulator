@@ -438,6 +438,18 @@ test("card runtime clusters accept an explicit setup replacement as reachability
     path.join(tmpdir(), "krutagidon-card-runtime-clusters-setup-replacement-")
   );
 
+  writeCardDraft(rootDir, "starter", "esw2_dbg__starter_001");
+  writeJson(rootDir, "data/cards/starter/esw2_dbg__starter_001.json", {
+    schemaVersion: 1,
+    cardId: "esw2_dbg__starter_001",
+    engine: {
+      mappingStatus: "supported",
+      playableInV0: true,
+      needsEffectMapping: false,
+      unsupportedMechanics: [],
+      effects: [{ effectId: "add_power", timing: "onPlay", amount: 1 }],
+    },
+  });
   writeCardDraft(rootDir, "starter", "esw2_dbg__starter_004", {
     nameRu: "Тестовая палочка",
     textRu: "Атака: нанеси 1 урон.",
@@ -456,10 +468,85 @@ test("card runtime clusters accept an explicit setup replacement as reachability
   writeJson(rootDir, "data/tokens/wizard-property/test-property.json", {
     schemaVersion: 1,
     tokenId: "test-property",
+    kind: "wizardProperty",
     engine: {
       effects: [
         {
           effectId: "replace_starting_card",
+          timing: "setup",
+          fromDefinitionId: "esw2_dbg__starter_001",
+          toDefinitionId: "esw2_dbg__starter_004",
+        },
+      ],
+    },
+  });
+  writeJson(rootDir, "data/decks/starter-deck.json", {
+    deckId: "starter-deck",
+    role: "starterDeckTemplate",
+    entries: [{ cardId: "esw2_dbg__starter_001", count: 1 }],
+  });
+  writeJson(rootDir, "data/stacks/tokens/wizard-property-stack.json", {
+    stackId: "wizard-property-stack",
+    entries: [{ tokenId: "test-property", count: 1 }],
+  });
+  writeJson(
+    rootDir,
+    ".scratch/krutagidon-card-runtime-clusters/card-cluster-decisions.json",
+    {
+      schemaVersion: 1,
+      decisions: [
+        {
+          cardId: "esw2_dbg__starter_001",
+          status: "needsClusterDecision",
+        },
+        {
+          cardId: "esw2_dbg__starter_004",
+          status: "needsClusterDecision",
+        },
+      ],
+    }
+  );
+  writeText(
+    rootDir,
+    "tests/setup.test.ts",
+    'import { initializeGame } from "../src/index.js";\ninitializeGame({ rootDir: process.cwd(), seed: 1 });\nconst cardId = "esw2_dbg__starter_001";\nconst replacementCardId = "esw2_dbg__starter_004";\n'
+  );
+
+  const report = createCardRuntimeClusterReport(rootDir);
+
+  assert.equal(report.summary.fullRuntime, 2);
+  assert.equal(report.summary.missingRuntime, 0);
+  assert.deepEqual(report.items[1]?.compositionMembership, [
+    "replacement:test-property",
+  ]);
+});
+
+test("card runtime clusters reject an unreachable setup replacement", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-card-runtime-clusters-invalid-replacement-")
+  );
+
+  writeCardDraft(rootDir, "starter", "esw2_dbg__starter_004");
+  writeJson(rootDir, "data/cards/starter/esw2_dbg__starter_004.json", {
+    schemaVersion: 1,
+    cardId: "esw2_dbg__starter_004",
+    engine: {
+      mappingStatus: "supported",
+      playableInV0: true,
+      needsEffectMapping: false,
+      unsupportedMechanics: [],
+      effects: [{ effectId: "add_power", timing: "onPlay", amount: 1 }],
+    },
+  });
+  writeJson(rootDir, "data/tokens/wizard-property/test-property.json", {
+    schemaVersion: 1,
+    tokenId: "test-property",
+    kind: "wizardProperty",
+    engine: {
+      effects: [
+        {
+          effectId: "replace_starting_card",
+          timing: "setup",
           fromDefinitionId: "esw2_dbg__starter_001",
           toDefinitionId: "esw2_dbg__starter_004",
         },
@@ -485,13 +572,10 @@ test("card runtime clusters accept an explicit setup replacement as reachability
     'import { initializeGame } from "../src/index.js";\ninitializeGame({ rootDir: process.cwd(), seed: 1 });\nconst cardId = "esw2_dbg__starter_004";\n'
   );
 
-  const report = createCardRuntimeClusterReport(rootDir);
-
-  assert.equal(report.summary.fullRuntime, 1);
-  assert.equal(report.summary.missingRuntime, 0);
-  assert.deepEqual(report.items[0]?.compositionMembership, [
-    "replacement:test-property",
-  ]);
+  assert.throws(
+    () => createCardRuntimeClusterReport(rootDir),
+    /Non-full runtime card JSON is blocked: esw2_dbg__starter_004 \(missing current deck\/stack\/pool or explicit setup-replacement membership/
+  );
 });
 
 test("card runtime clusters ignore non-runtime test mentions as focused evidence", () => {
