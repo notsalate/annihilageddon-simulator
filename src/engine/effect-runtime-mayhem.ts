@@ -1,6 +1,7 @@
 import { drawDeckCards } from "./deck-lifecycle.js";
 import { createAttackDefenseUsage } from "./attack-resolution.js";
 import {
+  findCardOwner,
   getControlledOngoingCards,
   listLegendMarketCards,
   listMainMarketCards,
@@ -1991,9 +1992,7 @@ function discardControlledPermanent(
   source: EffectSourceContext,
   services: EffectRuntimeServices
 ): EffectExecutionResult {
-  const owner = state.players.find(
-    (candidate) => candidate.playerId === card.ownerId
-  );
+  const owner = findCardOwner(state, card);
   if (owner === undefined) {
     return {
       ok: false,

@@ -1174,15 +1174,12 @@ function directionalChainAttackHandler(
       }
 
       let targetIndex = 0;
-      while (true) {
-        const targetPlayer = chosenFoes[targetIndex % chosenFoes.length];
+      while (targetIndex < chosenFoes.length) {
+        const targetPlayer = chosenFoes[targetIndex];
         if (targetPlayer === undefined) {
           return { ok: true };
         }
 
-        const hadDeadWizardTokenAvailableBeforeAttack =
-          state.common.deadWizardTokens.status === "available" &&
-          state.common.deadWizardTokens.drawStack.length > 0;
         const attackProfileResult = collectAttackReplacementProfile(
           state,
           player,
@@ -1225,9 +1222,6 @@ function directionalChainAttackHandler(
         if (!faceResult.ok || faceResult.gameEnd !== undefined) {
           return faceResult;
         }
-        if (!hadDeadWizardTokenAvailableBeforeAttack) {
-          return { ok: true };
-        }
         if (targetPlayer.life.current < 1) {
           return { ok: true };
         }
@@ -1237,6 +1231,8 @@ function directionalChainAttackHandler(
 
         targetIndex += 1;
       }
+
+      return { ok: true };
     },
   };
 }

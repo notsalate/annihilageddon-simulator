@@ -9798,17 +9798,20 @@ test("Potny's Buzzing Wand chooses left or right and chains in the chosen direct
   );
 });
 
-test("#287 directional chain stops after an unrecoverable kill", () => {
-  const state = initializeGame({ rootDir, seed: 60616, playerCount: 2 });
+test("#287 directional chain continues after a kill with an empty DWT stack", () => {
+  const state = initializeGame({ rootDir, seed: 60616, playerCount: 3 });
   const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
   const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const nextTargetPlayer = mustGetPlayer(state, markPlayerId("player-3"));
   state.activePlayerId = activePlayer.playerId;
-  activePlayer.wizardProperties = [];
-  targetPlayer.wizardProperties = [];
-  targetPlayer.life.current = 20;
-  targetPlayer.hand = [];
-  targetPlayer.discard = [];
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.life.current = 20;
+    player.hand = [];
+    player.discard = [];
+  }
   targetPlayer.life.current = 1;
+  nextTargetPlayer.life.current = 20;
   state.common.deadWizardTokens.drawStack = [];
   state.turn.power = 99;
   const wand = addRuntimeCardToHand(
@@ -9824,13 +9827,14 @@ test("#287 directional chain stops after an unrecoverable kill", () => {
 
   assert.equal(result.ok, true);
   assert.equal(targetPlayer.life.current, 20);
+  assert.equal(nextTargetPlayer.life.current, 10);
   assert.equal(
     state.eventLog.filter(
       (event) =>
         event.type === "attackTargetStarted" &&
         event.cardInstanceId === wand.instanceId
     ).length,
-    1
+    2
   );
 });
 
