@@ -85,8 +85,8 @@ const configuredAllowedViolations = [
   ["src/engine/data.ts", 2085, 43, "isEffectRecord"],
   ["src/engine/runtime-effect-decoder.ts", 75, 9, "decodeObject"],
   ["src/engine/runtime-effect-decoder.ts", 936, 41, "isPlainRecord"],
-  ["src/engine/runtime-effect.ts", 1044, 4, "isRuntimeEffectTargetRecord"],
-  ["src/engine/runtime-effect.ts", 1049, 3, "hasExactKeys"],
+  ["src/engine/runtime-effect.ts", 1053, 4, "isRuntimeEffectTargetRecord"],
+  ["src/engine/runtime-effect.ts", 1058, 3, "hasExactKeys"],
 ];
 
 const typedEffectBoundaryViolations = [];

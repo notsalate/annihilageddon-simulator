@@ -6,7 +6,7 @@ import {
 import type { ResolvedAttackBranchContext } from "./attack-resolution.js";
 import { countControlledCardsOfType } from "./card-type-runtime.js";
 import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
-import { recordGameEvent } from "./event-recorder.js";
+import { recordGameEvent, recordTurnPowerChanged } from "./event-recorder.js";
 import { transferUpToLimpWandsToPlayer } from "./effect-runtime-special-card-stack.js";
 import {
   destroyOwnedCard,
@@ -63,6 +63,7 @@ export type CombatAttackEffectId =
   | "conditional_activation_attack_damage"
   | "directional_chain_attack"
   | "distributed_attack_damage"
+  | "sequential_attack_damage"
   | "multi_target_attack"
   | "optional_spend_chip_attack_damage";
 
@@ -83,6 +84,7 @@ export const combatAttackEffectIds = [
   "conditional_activation_attack_damage",
   "directional_chain_attack",
   "distributed_attack_damage",
+  "sequential_attack_damage",
   "multi_target_attack",
   "optional_spend_chip_attack_damage",
 ] as const satisfies readonly CombatAttackEffectId[];
@@ -365,6 +367,18 @@ export function createCombatAttackEffectDecoders(
         onKill: optionalAttackBranches,
       },
       requireTargetSelector("distributed attack", ["eachFoe"])
+    ),
+    sequential_attack_damage: defineDecoder(
+      "sequential_attack_damage",
+      {
+        effectId: required(literal("sequential_attack_damage")),
+        timing: optionalTiming,
+        amount: required(positiveInteger),
+        attackCount: required(positiveInteger),
+        powerPerKill: required(positiveInteger),
+        targetSelector: required(literal("chosenFoe")),
+      },
+      requireTargetSelector("sequential attack", ["chosenFoe"])
     ),
     multi_target_attack: defineDecoder("multi_target_attack", {
       effectId: required(literal("multi_target_attack")),
@@ -1056,6 +1070,108 @@ function directionalChainAttackHandler(
 
         targetIndex += 1;
       }
+    },
+  };
+}
+
+function sequentialAttackDamageHandler(
+  collectAttackReplacementProfile: AttackReplacementCollector
+): EffectRuntimeHandler<RuntimeEffectForId<"sequential_attack_damage">> {
+  return {
+    effectId: "sequential_attack_damage",
+    execute(state, player, effect, source, services) {
+      let killedWizardCount = 0;
+
+      for (
+        let attackIndex = 0;
+        attackIndex < effect.attackCount;
+        attackIndex += 1
+      ) {
+        const targetResult = services.resolveTargetChoice(
+          state,
+          player,
+          effect,
+          source
+        );
+        if (!targetResult.ok) {
+          return targetResult;
+        }
+        if (targetResult.choice === undefined) {
+          continue;
+        }
+        if (targetResult.choice.choiceType !== "player") {
+          return {
+            ok: false,
+            error: "Sequential attack requires a player target",
+          };
+        }
+
+        const attackProfileResult = collectAttackReplacementProfile(
+          state,
+          player,
+          source
+        );
+        if (attackProfileResult.status !== "resolved") {
+          return {
+            ok: false,
+            error:
+              attackProfileResult.status === "error"
+                ? attackProfileResult.error
+                : "Attack replacement profile was not applicable",
+          };
+        }
+        const attackProfile = attackProfileResult.result;
+        const attackResult = services.resolvePlayerControlledAttack({
+          state,
+          attackingPlayer: player,
+          source,
+          effectId: effect.effectId,
+          unavoidable: attackProfile.unavoidable,
+          attackProfile,
+          reportResolvedTargetKilled: true,
+          targetPlan: {
+            kind: "orderedPlayers",
+            players: [targetResult.choice.player],
+            continueWhile: "targetKilled",
+          },
+          impact: {
+            kind: "damage",
+            baseAmount: effect.amount,
+            sourceOwnerModifierAmount: attackProfile.damageBonus,
+            onDamageDealt: [],
+            onAvoided: [],
+            onKill: [],
+          },
+        });
+        if (!attackResult.ok || attackResult.gameEnd !== undefined) {
+          return attackResult;
+        }
+        if (attackResult.resolvedTargetKilled === true) {
+          killedWizardCount += 1;
+        }
+
+        const faceResult = services.resolvePendingDeadWizardTokenFaces(state);
+        if (!faceResult.ok || faceResult.gameEnd !== undefined) {
+          return faceResult;
+        }
+      }
+
+      const rewardAmount = killedWizardCount * effect.powerPerKill;
+      if (rewardAmount === 0) {
+        return { ok: true };
+      }
+
+      const powerBefore = state.turn.power;
+      state.turn.power += rewardAmount;
+      recordTurnPowerChanged(
+        state,
+        player,
+        source,
+        effect.effectId,
+        powerBefore,
+        state.turn.power
+      );
+      return { ok: true };
     },
   };
 }
@@ -1842,6 +1958,14 @@ export function createCombatAttackEffectDefinitions(
       supportedModes: allEffectRuntimeModes,
       supportedSourceKinds,
       handler: distributedAttackDamageHandler(collectAttackReplacementProfile),
+    },
+    {
+      effectId: "sequential_attack_damage",
+      decoder: bindRuntimeEffectDecoder("sequential_attack_damage"),
+      supportedTimings: attackTimings,
+      supportedModes: allEffectRuntimeModes,
+      supportedSourceKinds,
+      handler: sequentialAttackDamageHandler(collectAttackReplacementProfile),
     },
     {
       effectId: "multi_target_attack",

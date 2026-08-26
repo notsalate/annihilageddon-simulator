@@ -9672,6 +9672,264 @@ test("#291 familiar_010 skips the distributed attack when there are more than ei
   );
 });
 
+test("#292 legend_023 chooses a fresh target for every attack and aggregates multiple deaths", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 60634,
+    playerCount: 5,
+  });
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const firstTarget = mustGetPlayer(state, markPlayerId("player-2"));
+  const secondTarget = mustGetPlayer(state, markPlayerId("player-3"));
+  const thirdTarget = mustGetPlayer(state, markPlayerId("player-4"));
+  const untouchedTarget = mustGetPlayer(state, markPlayerId("player-5"));
+  state.activePlayerId = attacker.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+    player.life.current = 20;
+    player.trophyLikeObjects = [];
+  }
+  firstTarget.life.current = 7;
+  secondTarget.life.current = 7;
+  thirdTarget.life.current = 7;
+  setNeutralDeadWizardTokenStack(state, 3, "legend-023-multiple-deaths");
+
+  const targets = [firstTarget, firstTarget, secondTarget, thirdTarget];
+  let targetChoiceIndex = 0;
+  state.effectChoiceStrategy = (request) => {
+    if (String(request.effectId) !== "sequential_attack_damage") {
+      return undefined;
+    }
+    const target = targets[targetChoiceIndex];
+    targetChoiceIndex += 1;
+    const choice = request.choices.find(
+      (candidate) =>
+        candidate.choiceKind === "playerTarget" &&
+        candidate.choiceId === target?.playerId
+    );
+    return toChoiceSelection(choice);
+  };
+
+  const wand = addRuntimeCardToHand(state, attacker, "esw2_dbg__legend_023");
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(targetChoiceIndex, 4);
+  assert.equal(firstTarget.life.current, 13);
+  assert.equal(secondTarget.life.current, 20);
+  assert.equal(thirdTarget.life.current, 20);
+  assert.equal(untouchedTarget.life.current, 20);
+  assert.equal(state.turn.power, 9);
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.cardInstanceId === wand.instanceId
+    ).length,
+    4
+  );
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "effectAddPowerApplied" &&
+        event.cardInstanceId === wand.instanceId &&
+        event.amount === 9
+    ).length,
+    1
+  );
+});
+
+test("#292 legend_023 keeps separate defense windows and skips an avoided attack", () => {
+  const state = initializeGame({ rootDir, seed: 60635, playerCount: 2 });
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const target = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+    player.trophyLikeObjects = [];
+  }
+  target.life.current = 20;
+  const defense = addFixtureDefenseCardToHand(state, target, "discardSelf");
+  setNeutralDeadWizardTokenStack(state, 1, "legend-023-avoid");
+  state.effectChoiceStrategy = (request) => {
+    if (String(request.effectId) === "sequential_attack_damage") {
+      return { choiceId: target.playerId };
+    }
+    if (request.effectId === "avoid_attack") {
+      return { choiceId: defense.instanceId };
+    }
+    return undefined;
+  };
+
+  const wand = addRuntimeCardToHand(state, attacker, "esw2_dbg__legend_023");
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: wand.instanceId,
+    }),
+    { ok: true }
+  );
+
+  assert.equal(target.life.current, 20);
+  assert.equal(state.turn.power, 3);
+  assert.equal(target.discard.includes(defense), true);
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.cardInstanceId === wand.instanceId
+    ).length,
+    4
+  );
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "attackAvoided" &&
+        event.cardInstanceId === wand.instanceId
+    ).length,
+    1
+  );
+});
+
+test("#292 legend_023 credits redirected deaths to the original card controller", () => {
+  const state = initializeGame({ rootDir, seed: 60636, playerCount: 2 });
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const redirectingTarget = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+    player.trophyLikeObjects = [];
+  }
+  attacker.life.current = 7;
+  redirectingTarget.life.current = 20;
+  const defenses = Array.from({ length: 4 }, () =>
+    addFixtureDefenseCardToHand(state, redirectingTarget, "discardSelf", {
+      redirectAttack: true,
+    })
+  );
+  setNeutralDeadWizardTokenStack(state, 2, "legend-023-redirect");
+  state.effectChoiceStrategy = (request) => {
+    if (String(request.effectId) === "sequential_attack_damage") {
+      return { choiceId: redirectingTarget.playerId };
+    }
+    if (request.effectId === "avoid_attack") {
+      const defense = defenses.find((card) =>
+        redirectingTarget.hand.includes(card)
+      );
+      return defense === undefined
+        ? undefined
+        : { choiceId: defense.instanceId };
+    }
+    return undefined;
+  };
+
+  const wand = addRuntimeCardToHand(state, attacker, "esw2_dbg__legend_023");
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: wand.instanceId,
+    }),
+    { ok: true }
+  );
+
+  assert.equal(state.turn.power, 6);
+  assert.equal(attacker.life.current, 20);
+  assert.equal(redirectingTarget.life.current, 20);
+  assert.equal(
+    defenses.every((defense) => redirectingTarget.discard.includes(defense)),
+    true
+  );
+  assert.ok(
+    redirectingTarget.trophyLikeObjects.some(
+      (trophy) => trophy.trophyId === "basicTrophy"
+    )
+  );
+  const rewards = state.eventLog.filter(
+    (event) =>
+      event.type === "effectAddPowerApplied" &&
+      event.cardInstanceId === wand.instanceId
+  );
+  assert.equal(rewards.length, 1);
+  assert.equal(rewards[0]?.playerId, attacker.playerId);
+  assert.equal(rewards[0]?.amount, 6);
+});
+
+test("#292 legend_023 stops its remaining attacks after an early game end", () => {
+  const state = initializeGame({ rootDir, seed: 60637, playerCount: 2 });
+  const attacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const target = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = attacker.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.hand = [];
+    player.discard = [];
+  }
+  target.life.current = 1;
+  const gameEndingDwt = createFixtureDeadWizardTokenDefinition(
+    "fixture-dwt-292-early-end",
+    [
+      {
+        effectId: "dead_wizard_token_gain_chips",
+        timing: "onDeadWizardTokenFace",
+        amount: 1,
+      },
+    ]
+  );
+  state.tokenDefinitions = new Map([
+    ...state.tokenDefinitions,
+    [gameEndingDwt.tokenId, gameEndingDwt],
+  ]);
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-dwt-292-early-end"),
+      definitionId: markTokenDefinitionId(gameEndingDwt.tokenId),
+      ownerId: "common",
+    },
+  ];
+  state.effectChoiceStrategy = (request) =>
+    String(request.effectId) === "sequential_attack_damage"
+      ? { choiceId: target.playerId }
+      : undefined;
+
+  const wand = addRuntimeCardToHand(state, attacker, "esw2_dbg__legend_023");
+  const result = withTemporaryEffectRuntimeOperations(
+    "dead_wizard_token_gain_chips",
+    {
+      execute(_state, player) {
+        return {
+          ok: true,
+          gameEnd: {
+            reason: "playerDefeated",
+            winnerPlayerId: player.playerId,
+          },
+        };
+      },
+    },
+    () =>
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: wand.instanceId,
+      })
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.gameEndReason, "playerDefeated");
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.cardInstanceId === wand.instanceId
+    ).length,
+    1
+  );
+});
+
 test("Ultimate Tronado gains the actual total from a directional chain attack only once", () => {
   const state = initializeGame({
     rootDir,
@@ -12671,6 +12929,23 @@ function createCommonRuntimeCard(definitionId: string): CardInstance {
     ownerId: "common",
     marketChips: 0,
   };
+}
+
+function setNeutralDeadWizardTokenStack(
+  state: GameState,
+  count: number,
+  label: string
+): void {
+  state.common.deadWizardTokens.drawStack = Array.from(
+    { length: count },
+    (_, index) => ({
+      instanceId: markTokenInstanceId(`fixture-${label}-${index + 1}`),
+      definitionId: markTokenDefinitionId(
+        "esw2_dbg__dead_wizard_token_neutral"
+      ),
+      ownerId: "common" as const,
+    })
+  );
 }
 
 function createDinglerStatus(player: PlayerState): StatusInstance {

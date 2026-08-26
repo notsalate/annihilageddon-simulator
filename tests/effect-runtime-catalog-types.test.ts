@@ -228,6 +228,7 @@ test("remaining Catalog families expose one local ID inventory each", () => {
     "conditional_activation_attack_damage",
     "directional_chain_attack",
     "distributed_attack_damage",
+    "sequential_attack_damage",
     "multi_target_attack",
     "optional_spend_chip_attack_damage",
   ]);

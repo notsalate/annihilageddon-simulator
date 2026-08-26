@@ -62,6 +62,7 @@ export type DamageApplicationResult = DamageResult | EffectExecutionResult;
 
 export type PlayerControlledAttackExecutionResult = EffectExecutionResult & {
   readonly requestedTargetKilled?: boolean;
+  readonly resolvedTargetKilled?: boolean;
 };
 
 export type AttackTargetResolutionResult =
@@ -80,6 +81,7 @@ type PlayerControlledAttackTargetResolutionResult =
       ok: true;
       resolution: AttackResolution;
       requestedTargetKilled: boolean;
+      resolvedTargetKilled: boolean;
       gameEnd?: never;
     }
   | {
@@ -89,6 +91,7 @@ type PlayerControlledAttackTargetResolutionResult =
       >;
       resolution?: never;
       requestedTargetKilled?: never;
+      resolvedTargetKilled?: never;
     }
   | { ok: false; error: string };
 
@@ -176,6 +179,7 @@ export interface PlayerControlledAttackIntent {
   readonly unavoidable: boolean;
   readonly redirectPolicy?: "ignoreOriginalAttacker";
   readonly attackProfile?: PlayerControlledAttackProfile;
+  readonly reportResolvedTargetKilled?: boolean;
   readonly targetPlan: PlayerControlledAttackTargetPlan;
   readonly impact: PlayerControlledAttackImpact;
 }
@@ -432,6 +436,7 @@ export function resolvePlayerControlledAttack(
   });
 
   let requestedTargetKilled = false;
+  let resolvedTargetKilled = false;
   for (const targetPlayer of targetResult.players) {
     const resolutionResult = resolvePlayerControlledAttackTarget(
       intent,
@@ -466,6 +471,7 @@ export function resolvePlayerControlledAttack(
 
     context.resolutions.push(resolutionResult.resolution);
     requestedTargetKilled = resolutionResult.requestedTargetKilled;
+    resolvedTargetKilled ||= resolutionResult.resolvedTargetKilled;
     if (
       intent.targetPlan.kind === "orderedPlayers" &&
       intent.targetPlan.continueWhile === "targetKilled" &&
@@ -484,6 +490,7 @@ export function resolvePlayerControlledAttack(
 
   return {
     ok: true,
+    ...(intent.reportResolvedTargetKilled ? { resolvedTargetKilled } : {}),
     ...(intent.targetPlan.kind === "orderedPlayers" &&
     intent.targetPlan.continueWhile === "targetKilled"
       ? { requestedTargetKilled }
@@ -601,6 +608,7 @@ function resolvePlayerControlledAttackTarget(
           context.originalSource
         ),
       requestedTargetKilled: false,
+      resolvedTargetKilled: defenseResult.resolution?.killed ?? false,
     };
   }
 
@@ -654,6 +662,7 @@ function resolvePlayerControlledAttackTarget(
     ok: true,
     resolution,
     requestedTargetKilled: resolution.killed,
+    resolvedTargetKilled: resolution.killed,
   };
 }
 
@@ -714,6 +723,7 @@ function resolvePlayerControlledEffectsAttackTarget(
         context.originalSource
       ),
       requestedTargetKilled: false,
+      resolvedTargetKilled: false,
     };
   }
 
@@ -744,6 +754,7 @@ function resolvePlayerControlledEffectsAttackTarget(
       originalSource: context.originalSource,
     },
     requestedTargetKilled: false,
+    resolvedTargetKilled: false,
   };
 }
 
