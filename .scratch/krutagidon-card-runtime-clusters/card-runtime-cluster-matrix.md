@@ -1,7 +1,7 @@
 # Card Runtime Cluster Matrix
 
 Generated from canonical card draft JSON, current runtime card JSON, current compositions, and manual card cluster decisions.
-`fullRuntime` requires current runtime card JSON, current deck/stack/pool or setup-replacement membership, and focused test refs.
+`fullRuntime` requires current runtime card JSON, current deck/stack/pool or explicit valid setup-replacement membership, and focused test refs.
 `missingRuntime` is normal backlog and is not a process error by itself.
 
 ## Summary

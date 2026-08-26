@@ -22,11 +22,13 @@
 ### Task 1: F1 — typed voluntary defense choice
 
 **Files:**
+
 - Modify: `src/engine/setup.ts`
 - Modify: `src/engine/effect-runtime.ts`
 - Test: `tests/action-loop.test.ts`
 
 **Interfaces:**
+
 - Produces: `RuntimeEffectChoice` variant `{ choiceKind: "defense"; choiceId: string; card: CardInstance | undefined }`.
 - Produces: legal choices with first entry `decline` and stable hand-order card entries.
 
@@ -39,10 +41,12 @@
 ### Task 2: F2 — atomic defense resolution
 
 **Files:**
+
 - Modify: `src/engine/effect-runtime.ts`
 - Test: `tests/action-loop.test.ts`
 
 **Interfaces:**
+
 - Produces: local `DefenseMutationSnapshot` that restores player hand/deck/discard, chips, life, event-log length and defense-usage sets.
 
 - [ ] Add a failing fixture defense whose branch returns an execution error after a payable cost; assert attack state and all paid resources are unchanged.
@@ -54,11 +58,13 @@
 ### Task 3: F3 — reusable defense fixture helper
 
 **Files:**
+
 - Create: `tests/helpers/defense-fixtures.ts`
 - Modify: `tests/action-loop.test.ts`
 - Modify: `tests/AGENTS.md`
 
 **Interfaces:**
+
 - Produces: `addFixtureDefenseCardToHand(state, player, destination, options): CardInstance`.
 
 - [ ] Move the existing builder and its typed options unchanged into `tests/helpers/defense-fixtures.ts`.
@@ -70,11 +76,13 @@
 ### Task 4: A1 — attack lifecycle context
 
 **Files:**
+
 - Modify: `src/engine/effect-runtime-registry.ts`
 - Modify: `src/engine/effect-runtime.ts`
 - Test: `tests/effect-runtime-applicability.test.ts`
 
 **Interfaces:**
+
 - Produces: `AttackIntent`, `AttackAmountState`, `AttackInstanceState`.
 - Changes: `resolveAttackTarget(state, intent, targetPlayer): AttackResolution`.
 
@@ -86,11 +94,13 @@
 ### Task 5: A2 — attack amount module
 
 **Files:**
+
 - Create: `src/engine/attack-resolution.ts`
 - Modify: `src/engine/effect-runtime.ts`
 - Test: `tests/attack-resolution.test.ts`
 
 **Interfaces:**
+
 - Produces: `createAttackAmountState(baseAmount, sourceOwnerBonus)` and `resolveAttackAmount(state, attacker, target, amountState)`.
 
 - [ ] Add failing focused tests for normal, doubled, self-targeted and redirected amounts.
@@ -101,11 +111,13 @@
 ### Task 6: A3 — defense and redirect module
 
 **Files:**
+
 - Modify: `src/engine/attack-resolution.ts`
 - Modify: `src/engine/effect-runtime.ts`
 - Test: `tests/attack-resolution.test.ts`
 
 **Interfaces:**
+
 - Produces: `resolveAttackInstance(context): AttackResolution` with injected choice, effect execution, damage and event adapters.
 
 - [ ] Add tests for decline, one defense per player, redirect back, ownerless nonredirectable attack and branch rollback.
@@ -116,11 +128,13 @@
 ### Task 7: A4 — normalized attribution
 
 **Files:**
+
 - Modify: `src/engine/attack-resolution.ts`
 - Modify: `src/engine/effect-runtime-registry.ts`
 - Test: `tests/attack-resolution.test.ts`
 
 **Interfaces:**
+
 - Produces: `summarizeAttackDamage(results): AttackDamageAttribution[]`.
 
 - [ ] Add failing aggregation tests for multi-target and redirected attacks.
@@ -131,11 +145,13 @@
 ### Task 8: C1 — Control Ledger queries
 
 **Files:**
+
 - Create: `src/engine/control-ledger.ts`
 - Modify: `src/engine/effective-values.ts`
 - Test: `tests/control-ledger.test.ts`
 
 **Interfaces:**
+
 - Produces: `getControlledCards`, `findCardLocation`, `buildControlledObjectView` adapter.
 
 - [ ] Add tests for permanent, played and owner-discard temporary control plus stale references.
@@ -146,6 +162,7 @@
 ### Task 9: C2 — temporary-control lifecycle
 
 **Files:**
+
 - Modify: `src/engine/control-ledger.ts`
 - Modify: `src/engine/actions.ts`
 - Modify: `src/engine/effect-runtime.ts`
@@ -153,6 +170,7 @@
 - Test: `tests/control-ledger.test.ts`
 
 **Interfaces:**
+
 - Produces: `grantTemporaryControl`, `releaseTemporaryControls`, `cloneTemporaryControls`.
 
 - [ ] Add failing lifecycle/fork tests.
@@ -163,6 +181,7 @@
 ### Task 10: C3 — move control consumers
 
 **Files:**
+
 - Modify: `src/engine/actions.ts`
 - Modify: `src/engine/controlled-power.ts`
 - Modify: `src/engine/effect-runtime.ts`
@@ -176,10 +195,12 @@
 ### Task 11: T1 — catalog-owned controlled trigger dispatcher
 
 **Files:**
+
 - Create: `src/engine/trigger-dispatch.ts`
 - Test: `tests/trigger-dispatch.test.ts`
 
 **Interfaces:**
+
 - Produces: `dispatchControlledCardOperation(state, controller, operation): ControlledCardOperationResult`.
 - Caller supplies only `GameState`, controller and a discriminated typed operation; the dispatcher owns `ControlledObjectView`, runtime mode, timing/ongoing policy, card source identity, catalog resolution and execution.
 
@@ -190,6 +211,7 @@
 ### Task 12: T2 — on-play and after-attack operations
 
 **Files:**
+
 - Modify: `src/engine/effect-runtime.ts`
 - Modify: `src/engine/effect-runtime-registry.ts`
 - Modify: `src/engine/trigger-dispatch.ts`
@@ -202,6 +224,7 @@
 ### Task 13: T3 — typed end-turn aggregate
 
 **Files:**
+
 - Modify: `src/engine/trigger-dispatch.ts`
 - Modify: `src/engine/effect-runtime.ts`
 - Modify: `src/engine/effect-runtime-registry.ts`
@@ -214,11 +237,13 @@
 ### Task 14: S1 — deterministic scenario builder
 
 **Files:**
+
 - Create: `tests/helpers/game-scenario.ts`
 - Modify: `tests/AGENTS.md`
 - Test: `tests/helpers/game-scenario.test.ts`
 
 **Interfaces:**
+
 - Produces: `createGameScenario`, `givenRuntimeCard`, `givenTemporaryControl`, `chooseEffect`, `choosePlayerTargetForEffect`, `play`, `endTurn`.
 - Generated definitions accept `tags?: string[]` and store a defensive copy in `definition.engine.tags`.
 
@@ -229,6 +254,7 @@
 ### Task 15: S2 — focused Attack Resolution suite
 
 **Files:**
+
 - Create/Modify: `tests/attack-resolution.test.ts`
 - Modify: `tests/action-loop.test.ts`
 
@@ -239,6 +265,7 @@
 ### Task 16: S3 — focused scenario migration
 
 **Files:**
+
 - Modify: `tests/controlled-power-ongoing.test.ts`
 - Modify: `tests/attack-replacement-ongoing.test.ts`
 - Modify: `tests/trigger-dispatch-ongoing.test.ts`
@@ -256,10 +283,12 @@
 ### Task 17: D1 — exhaustive concrete payload map
 
 **Files:**
+
 - Modify: `src/engine/runtime-effect.ts`
 - Test: `tests/validation.test.ts`
 
 **Interfaces:**
+
 - Produces: `RuntimeEffectPayloadMap` and exported `RuntimeEffectForId<Id>`.
 
 - [ ] Add type-level assignments for representative effect IDs and invalid `@ts-expect-error` cases.
@@ -269,6 +298,7 @@
 ### Task 18: D2 — exact decoder/catalog narrowing
 
 **Files:**
+
 - Create/Modify: `src/engine/runtime-effect-decoder.ts`
 - Modify: `src/engine/data.ts`
 - Modify: `src/engine/effect-runtime-registry.ts`
@@ -282,6 +312,7 @@
 ### Task 19: D3/D4 — typed handlers and DOX closeout
 
 **Files:**
+
 - Modify: `src/engine/effect-runtime-registry.ts`
 - Modify: `src/engine/AGENTS.md`
 - Modify: `src/index.ts`
@@ -298,6 +329,7 @@
 ### Task 20: Publish and independent review gate
 
 **Files:**
+
 - Modify documentation and PR metadata only after the current head is verified.
 
 - [ ] In a clean checkout run `npm ci --ignore-scripts`, `npm audit`, `npm run check`, `npm run report:card-runtime-clusters`, `git diff --check origin/master...HEAD`, `git diff --check` and `git status`.

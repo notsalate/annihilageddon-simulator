@@ -15,9 +15,11 @@ Rules:
 9. Do not allow new STDIO MCP servers without review.
 10. Do not auto-install MCP servers from untrusted sources.
 11. Pin package runners and images:
-   - `npx package@version`
-   - `uvx package==version`
-   - pinned container image tags or digests
+
+- `npx package@version`
+- `uvx package==version`
+- pinned container image tags or digests
+
 12. Require tool-call audit logging or equivalent session logs for sensitive MCP operations.
 13. Do not give one agent access to GitHub, filesystem, database, Jira, and shell unless necessary.
 14. Use one repo / one task / one scope per session.

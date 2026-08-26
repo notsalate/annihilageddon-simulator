@@ -3,7 +3,7 @@ name: scorecard
 on:
   branch_protection_rule:
   schedule:
-    - cron: '30 3 * * 1'
+    - cron: "30 3 * * 1"
   push:
     branches: [dev, main]
 

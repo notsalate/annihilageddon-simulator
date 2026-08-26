@@ -1,0 +1,33 @@
+Status: Done
+Label: done
+Type: AFK
+
+> Historical local copy of closed GitHub issue #316. It is not a current implementation task. The acceptance criteria below are retained as delivery history; docs/rules-canon.md and ADR-0008 supersede any conflicting rule or DWT timing.
+
+# Закончить attack-effects свойства колдуна 009
+
+## Parent
+
+- `.scratch/krutagidon-card-runtime-clusters/cross-source-mechanic-matrix.md`
+
+## What to build
+
+Добавить `esw2_dbg__wizard_property_009` в scope PR `attack-effects` и подтвердить его полное поведение на реальном определении.
+
+## Acceptance criteria
+
+- [ ] Setup заменяет стартовую палочку владельца свойства на `esw2_dbg__starter_004`, когда её runtime появится в этом же кластере.
+- [ ] Наносящая урон карта с устойчивым тегом `wandAttackCard`, принадлежащая владельцу свойства, получает ровно +1 урон независимо от временного контролёра.
+- [ ] Чужая палочка, сыгранная владельцем свойства, бонус не получает.
+- [ ] Атака такой палочкой полностью исключает defense window и не расходует защитные карты или эффекты.
+- [ ] Runtime не определяет палочки по русскому имени.
+- [ ] Тесты загружают настоящее свойство и покрывают собственную, чужую, временно контролируемую и неизбежную палочку.
+- [ ] Интеграционный тест настоящего `starter_004` из #287 подтверждает: self-kill → воскрешение → получение ЖДК → возврат 0–2 карт → лицо ЖДК.
+
+## Blocked by
+
+- `48-track-cross-source-runtime-completeness.md`
+
+## Delivery
+
+Этот issue входит в один PR `attack-effects` вместе с GitHub issues #287-295; аудит ограничений защиты выполняется рядом с #290.

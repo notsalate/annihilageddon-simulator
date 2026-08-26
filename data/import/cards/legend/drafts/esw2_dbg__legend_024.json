@@ -18,6 +18,7 @@
     "uncertainty": []
   },
   "notes": [
+    "Проверка победы остаётся частью ATTACK-текста: после немедленных DWT gain/reveal и respawn погибшей цели она выполняется до обычного текста полученного ЖДК.",
     "При создании runtime JSON эта карта обязана получить общие tags `wandCard` и `wandAttackCard`."
   ],
   "composition": {

@@ -18,4 +18,5 @@
 
 ## Classification / Разъяснения
 
+- Передача вялых палочек остаётся ATTACK-текстом: погибшая цель сначала проходит DWT gain/reveal и respawn, затем получает выбранные палочки; обычный текст её ЖДК ждёт полного конца AttackInstance.
 - При создании runtime JSON эта карта обязана получить общие tags `wandCard` и `wandAttackCard`.

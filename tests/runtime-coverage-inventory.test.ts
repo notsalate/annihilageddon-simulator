@@ -1009,30 +1009,40 @@ test("repository cross-source registry assigns every wizard property and DWT to 
       (item) => item.primaryMechanicCluster !== undefined
     )
   );
-  assert.equal(report.crossSourceSummary.blocked, 134);
-  assert.equal(report.crossSourceSummary.crossSourceComplete, 38);
+  assert.equal(report.crossSourceSummary.blocked, 159);
+  assert.equal(report.crossSourceSummary.crossSourceComplete, 13);
   assert.ok(firstDeadWizardToken);
   assert.ok(wizardProperty004);
   assert.equal(wizardProperty004.crossSourceStatus, "crossSourceComplete");
   assert.deepEqual(wizardProperty004.crossSourceBlockers, []);
-  assert.equal(firstDeadWizardToken.crossSourceStatus, "crossSourceComplete");
-  assert.deepEqual(firstDeadWizardToken.crossSourceBlockers, []);
+  assert.equal(firstDeadWizardToken.crossSourceStatus, "blocked");
+  assert.ok(
+    firstDeadWizardToken.crossSourceBlockers.includes(
+      "unresolved mechanic: source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+    )
+  );
 });
 
-test("activation-effects cross-source evidence covers the real property 005 and DWT 005", () => {
+const dwtLifecycleBlocker =
+  "unresolved mechanic: source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested";
+
+test("activation evidence keeps property 005 complete and exposes the DWT 005 lifecycle gap", () => {
   const report = createRuntimeCoverageInventory(process.cwd());
-  for (const id of [
-    "esw2_dbg__wizard_property_005",
-    "esw2_dbg__dead_wizard_token_005",
-  ]) {
-    const item = report.items.find((candidate) => candidate.id === id);
-    assert.ok(item);
-    assert.equal(item.crossSourceStatus, "crossSourceComplete");
-    assert.deepEqual(item.crossSourceBlockers, []);
-  }
+  const property = report.items.find(
+    (candidate) => candidate.id === "esw2_dbg__wizard_property_005"
+  );
+  const dwt = report.items.find(
+    (candidate) => candidate.id === "esw2_dbg__dead_wizard_token_005"
+  );
+  assert.ok(property);
+  assert.equal(property.crossSourceStatus, "crossSourceComplete");
+  assert.deepEqual(property.crossSourceBlockers, []);
+  assert.ok(dwt);
+  assert.equal(dwt.crossSourceStatus, "blocked");
+  assert.deepEqual(dwt.crossSourceBlockers, [dwtLifecycleBlocker]);
 });
 
-test("dwt-interactions cross-source evidence covers nested DWT faces 022 and 023", () => {
+test("dwt-interactions evidence remains mapped while DWT 022 and 023 await lifecycle support", () => {
   const report = createRuntimeCoverageInventory(process.cwd());
   for (const id of [
     "esw2_dbg__dead_wizard_token_022",
@@ -1040,26 +1050,31 @@ test("dwt-interactions cross-source evidence covers nested DWT faces 022 and 023
   ]) {
     const item = report.items.find((candidate) => candidate.id === id);
     assert.ok(item);
-    assert.equal(item.crossSourceStatus, "crossSourceComplete");
-    assert.deepEqual(item.crossSourceBlockers, []);
+    assert.equal(item.crossSourceStatus, "blocked");
+    assert.deepEqual(item.crossSourceBlockers, [dwtLifecycleBlocker]);
   }
 });
 
-test("card-movement cross-source evidence covers wizard property 006 and DWT 006/010", () => {
+test("card-movement evidence keeps property 006 complete while DWT 006 and 010 await lifecycle support", () => {
   const report = createRuntimeCoverageInventory(process.cwd());
+  const property = report.items.find(
+    (candidate) => candidate.id === "esw2_dbg__wizard_property_006"
+  );
+  assert.ok(property);
+  assert.equal(property.crossSourceStatus, "crossSourceComplete");
+  assert.deepEqual(property.crossSourceBlockers, []);
   for (const id of [
-    "esw2_dbg__wizard_property_006",
     "esw2_dbg__dead_wizard_token_006",
     "esw2_dbg__dead_wizard_token_010",
   ]) {
     const item = report.items.find((candidate) => candidate.id === id);
     assert.ok(item);
-    assert.equal(item.crossSourceStatus, "crossSourceComplete");
-    assert.deepEqual(item.crossSourceBlockers, []);
+    assert.equal(item.crossSourceStatus, "blocked");
+    assert.deepEqual(item.crossSourceBlockers, [dwtLifecycleBlocker]);
   }
 });
 
-test("card-movement cross-source evidence covers DWT 008, 009, and 011", () => {
+test("card-movement evidence remains mapped while DWT 008, 009, and 011 await lifecycle support", () => {
   const report = createRuntimeCoverageInventory(process.cwd());
   for (const id of [
     "esw2_dbg__dead_wizard_token_008",
@@ -1068,19 +1083,19 @@ test("card-movement cross-source evidence covers DWT 008, 009, and 011", () => {
   ]) {
     const item = report.items.find((candidate) => candidate.id === id);
     assert.ok(item);
-    assert.equal(item.crossSourceStatus, "crossSourceComplete");
-    assert.deepEqual(item.crossSourceBlockers, []);
+    assert.equal(item.crossSourceStatus, "blocked");
+    assert.deepEqual(item.crossSourceBlockers, [dwtLifecycleBlocker]);
   }
 });
 
-test("card-movement cross-source evidence covers DWT 024 reveal and destroy", () => {
+test("card-movement evidence remains mapped while DWT 024 awaits lifecycle support", () => {
   const report = createRuntimeCoverageInventory(process.cwd());
   const item = report.items.find(
     (candidate) => candidate.id === "esw2_dbg__dead_wizard_token_024"
   );
   assert.ok(item);
-  assert.equal(item.crossSourceStatus, "crossSourceComplete");
-  assert.deepEqual(item.crossSourceBlockers, []);
+  assert.equal(item.crossSourceStatus, "blocked");
+  assert.deepEqual(item.crossSourceBlockers, [dwtLifecycleBlocker]);
 });
 
 test("attack-effects cross-source evidence covers wizard property 009", () => {

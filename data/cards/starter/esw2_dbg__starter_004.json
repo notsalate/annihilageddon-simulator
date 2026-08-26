@@ -35,9 +35,7 @@
         "timing": "onPlay",
         "amount": 1,
         "targetSelector": "chosenPlayer",
-        "onKill": [
-          { "effectId": "return_discard_to_hand", "amount": 2 }
-        ]
+        "onKill": [{ "effectId": "return_discard_to_hand", "amount": 2 }]
       }
     ],
     "unsupportedMechanics": []

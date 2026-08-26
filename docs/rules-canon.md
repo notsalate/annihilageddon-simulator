@@ -10,24 +10,27 @@ Runtime representation: the simulator is headless and bot-driven. During a game,
 
 ## Scope Markers
 
-| Marker             | Meaning                                                                                                      |
-| ------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `executable`       | Global rule is specified enough for engine implementation.                                                   |
-| `data-required`    | Global algorithm is known, but exact branches/effects require imported card, token, deck, or component data. |
-| `project-decision` | Rulebook omits a final detail; project scope provides the implementation decision.                           |
-| `v0-slice`         | Required for the first runnable simulator slice.                                                             |
+| Marker                 | Meaning                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `executable`           | Global rule is specified enough for engine implementation.                                                   |
+| `data-required`        | Global algorithm is known, but exact branches/effects require imported card, token, deck, or component data. |
+| `project-decision`     | Rulebook omits a final detail; project scope provides the implementation decision.                           |
+| `runtime-fix-required` | Canon is specified, but current runtime behavior is known to differ and must not be treated as conforming.   |
+| `v0-slice`             | Required for the first runnable simulator slice.                                                             |
+
+These markers describe specification readiness. Except for the explicit `runtime-fix-required` warning, current implementation coverage is tracked only in [Mechanics Coverage](mechanics-coverage.md).
 
 ## Game Entities
 
-| Entity                       | Canon rule                                                                                                                                                                                                                                                                                                                           | Status                                  | Source        |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- | ------------- |
-| Колдун                       | Each participant is a player wizard. Turn order proceeds clockwise from a random first player.                                                                                                                                                                                                                                       | `executable`                            | p. 8          |
-| Life / lives                 | By default each player starts at `currentLife = 20` and `maxLife = 25`. The 25 value is only the healing/effect cap, not current life. Setup/token data may change starting life or max life. Dingler max is 15.                                                                                                                     | `executable`                            | pp. 4, 14, 16 |
-| Power / мощь                 | Turn-local currency produced by cards. Power can be spent across multiple purchases and is not lost until cleanup. Unspent power is lost during end-of-turn cleanup.                                                                                                                                                                 | `executable`                            | pp. 8-9, 20   |
-| Чипсины                      | Spendable tokens with no VP value. Chips reduce the power needed to buy cards of `карта легенды` at 1 chip = 1 power. They can also be spent only by mapped effects that explicitly spend chips. Spent chips move back to supply.                                                                                                    | `executable`                            | p. 15         |
-| Жетоны дохлых колдунов / ЖДК | Shuffled token stack with hidden/random draw order. Setup uses 4 tokens per player. A dying player immediately resurrects, gains and reveals the next token from the already shuffled hidden DWT draw stack, then its face waits for the current source to finish. Each token has at least -3 VP unless token data modifies scoring. | `executable`; faces are `data-required` | pp. 6, 14, 18 |
-| Главный приз                 | The player-controlled source that kills a foe gains control of the trophy. At the end of each controller turn, the trophy grants 1 chip. Self-kill, DWT kill, and unresolved market Mayhem/Mega Mayhem kill do not award the trophy.                                                                                                 | `executable`                            | p. 14         |
-| Лошара                       | Status represented by a token. A player can have at most one token, max life becomes 15, and the player has -5 VP at game end unless the status is removed.                                                                                                                                                                          | `executable`                            | p. 14         |
+| Entity                       | Canon rule                                                                                                                                                                                                                                                                                                                                                                                      | Status                                            | Source                             |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------- |
+| Колдун                       | Each participant is a player wizard. Turn order proceeds clockwise from a random first player.                                                                                                                                                                                                                                                                                                  | `executable`                                      | p. 8                               |
+| Life / lives                 | By default each player starts at `currentLife = 20` and `maxLife = 25`. The 25 value is only the healing/effect cap, not current life. Setup/token data may change starting life or max life. Dingler max is 15.                                                                                                                                                                                | `executable`                                      | pp. 4, 14, 16                      |
+| Power / мощь                 | Turn-local currency produced by cards. Power can be spent across multiple purchases and is not lost until cleanup. Unspent power is lost during end-of-turn cleanup.                                                                                                                                                                                                                            | `executable`                                      | pp. 8-9, 20                        |
+| Чипсины                      | Spendable tokens with no VP value. Chips reduce the power needed to buy cards of `карта легенды` at 1 chip = 1 power. They can also be spent only by mapped effects that explicitly spend chips. Spent chips move back to supply.                                                                                                                                                               | `executable`                                      | p. 15                              |
+| Жетоны дохлых колдунов / ЖДК | Shuffled token stack with hidden/random draw order. Setup uses 4 tokens per player. Death, DWT gain/replacement, respawn/reset, and ordinary DWT text are distinct stages. Attack-caused death defers ordinary DWT text to the end of that Attack Instance; direct gain and non-ATTACK death use immediate nested resolution. Each token has at least -3 VP unless token data modifies scoring. | `runtime-fix-required`; faces are `data-required` | pp. 6, 14, 18; [report](report.md) |
+| Главный приз                 | The player-controlled source that kills a foe gains control of the trophy. At the end of each controller turn, the trophy grants 1 chip. Self-kill, DWT kill, and unresolved market Mayhem/Mega Mayhem kill do not award the trophy.                                                                                                                                                            | `executable`                                      | p. 14                              |
+| Лошара                       | Status represented by a token. A player can have at most one token, max life becomes 15, and the player has -5 VP at game end unless the status is removed.                                                                                                                                                                                                                                     | `executable`                                      | p. 14                              |
 
 ## Card Kinds and Decks
 
@@ -124,24 +127,22 @@ Source: pp. 11-12, 14.
 
 Source: pp. 8-9, 20.
 
-1. Run Market Flow for the Legend market to restore it to 3 cards.
-2. Run Market Flow for the main market to restore it to 5 cards.
-3. Check the DWT draw stack.
-4. If any start-of-turn end condition is true, the game ends immediately before the active player takes start-of-turn effects or main-loop actions. Proceed to [End Conditions and Scoring](#end-conditions-and-scoring).
-5. Resolve effects labeled "at the start of turn" for the active player, using card/token data.
-6. Main action loop: in any order while legal, active player may:
+1. Run Market Flow for the main market to restore it to 5 cards.
+2. Run Market Flow for the Legend market to restore it to 3 cards.
+3. Resolve effects labeled "at the start of turn" for the active player, using card/token data.
+4. Main action loop: in any order while legal, active player may:
    - play a card from hand;
    - buy a card;
    - use an unused activation ability on a controlled card.
      Effects may also play cards from sources other than hand as part of resolving an action or card effect.
-7. Active player declares end of turn. No more voluntary main-loop actions may be taken.
-8. Discard all remaining hand cards to the player's discard.
-9. Resolve effects labeled "at the end of turn":
+5. Active player declares end of turn. No more voluntary main-loop actions may be taken.
+6. Discard all remaining hand cards to the player's discard.
+7. Resolve effects labeled "at the end of turn":
    - Include controlled Ongoing cards/tokens such as the trophy.
    - If the rulebook does not specify an order for multiple same-window effects controlled by the same player, use the baseline deterministic fallback from [Deterministic Choice and Ordering Policy](#deterministic-choice-and-ordering-policy).
-10. Move played non-Ongoing cards from `playedThisTurn` to their cleanup destinations. Default destination is the owner's discard. Ongoing cards remain in play. Unspent power is lost.
-11. Draw 5 cards, modified by effects if card/token data changes hand refill.
-12. Pass turn clockwise to the next player, who starts again at step 1.
+8. Move played non-Ongoing cards from `playedThisTurn` to their cleanup destinations. Default destination is the owner's discard. Ongoing cards remain in play. Unspent power is lost.
+9. Draw 5 cards, modified by effects if card/token data changes hand refill.
+10. Check the end conditions from [End Conditions and Scoring](#end-conditions-and-scoring). If this turn's Market Flow recorded a failed refill or the DWT stack is empty, end the game and score; otherwise pass turn clockwise to the next player, who starts again at step 1.
 
 ## Market Flow Algorithm
 
@@ -154,7 +155,7 @@ Use this algorithm for both setup market fill and turn-start Market Flow. During
    - Барахолка легенд target is 3; source deck is колода легенд; event card is мегабеспредел.
 2. If source deck has no card available when a market card is needed:
    - During setup, this is invalid setup/deck data.
-   - During turn-start Market Flow, the matching start-of-turn end condition is true; stop Market Flow and end the game before the active player takes actions.
+   - During normal Market Flow, leave the market incomplete, stop refilling that market, and record the matching end condition for this active player's end-of-turn check. Continue the remaining turn sequence. The active player still takes and completes this turn; the game ends during that player's end-of-turn procedure before the turn can pass.
 3. Reveal the top source-deck card.
 4. If card is беспредел/мегабеспредел:
    - Pause Market Flow.
@@ -210,6 +211,17 @@ Play context:
 4. Resolve secondary triggered effects after the played card is complete. If multiple simultaneous secondary triggers are controlled by the same player and card/token data does not specify order, use the baseline deterministic fallback from [Deterministic Choice and Ordering Policy](#deterministic-choice-and-ordering-policy).
 5. At end-of-turn cleanup, move non-Ongoing cards in `playedThisTurn` to their play-context destination unless an effect moved them earlier. Default destination is the owner's discard.
 
+Cards played from another player's hand by an effect:
+
+- The player instructed to play the card becomes its temporary controller for its complete resolution; the card keeps its original owner.
+- This permission is limited to the instructed card. It does not grant normal turn actions, purchases, or permission to play other cards.
+- An ATTACK on that card creates a separate nested Attack Instance with its own `AttackId` and Defense quotas. Finish that instance and its deferred DWT text before returning to the interrupted effect.
+- An explicit destination in the surrounding effect or on the played card takes priority. If neither names a destination, return the card to its owner's hand after resolution.
+- Ongoing does not transfer ownership by itself. Without an explicit Wild Magic-like ownership rule, the temporary controller does not keep the card as a permanent.
+- Power gained outside that player's turn exists during resolution but does not grant normal actions. Unspent Power is lost at the end of the current turn unless another effect explicitly allows it to be spent earlier.
+
+These rules are distinct from the printed Wild Magic ownership exception and are supported by the card-play clarifications collected in [the research report](report.md).
+
 Dual attack/defense cards:
 
 - If played by the active player on their turn, resolve the card's normal play/onPlay effects: power, draw, attack, and any other mapped play effects. The defense branch does not resolve.
@@ -252,9 +264,17 @@ Sources: pp. 10-13, 16-17.
 
 Terminology:
 
-- An attack card can contain one attack or several distinct attack instances, depending on mapped effect data.
-- Defense decisions are made per attack instance, not once for the whole card.
-- Mapped defense branch data controls whether the defense card is discarded, stays in hand, remains usable, or can defend again later.
+- An `ATTACK:` marker starts an ATTACK ability. Its ATTACK text can span several sentences until the card moves to a separate ability.
+- One separately started ATTACK creates one `AttackInstance` and one stable `AttackId`. One instance may affect one or many targets.
+- `ATTACK again`, `ATTACK the next foe`, or another separately started ATTACK creates a new instance. A new instance is not another target of the old instance.
+- An `AttackApplication` is the target-local branch of a multi-target instance. Redirect can change one application without changing the other applications.
+- An attack-bound consequence is triggered by the event or result of a concrete Attack Instance, such as on-damage, on-kill, or after-that-attack text. The instance ends only after these consequences finish.
+- A later independent ability of the same card is outside the Attack Instance. Deferred DWT text resolves before that later ability.
+- Defense decisions and the one-Defense quota are scoped to `AttackId`, not to the whole card or to each redirect.
+- `DefenseWindowMode` is explicit mapped data for each Attack Instance: attacks with independently resolvable target text select `PER_TARGET`; interactive attacks select `COLLECT_ALL_FIRST`; Mayhem uses its own special two-phase rule.
+- An ATTACK printed by Mayhem/Mega Mayhem still creates one Attack Instance with one `AttackId` and one deferred-DWT boundary. Only its Defense/resolution phase order is special.
+
+[The ATTACK/redirect/DWT research report](report.md) provides the official sources, direct clarifications, and RAW analysis for the core attack/redirect model and DWT boundary. Later project rulings are labeled explicitly in this canon and [ADR-0008](adr/0008-attack-instance-defense-and-dwt-boundary.md). Project terms do not claim to be printed rulebook terminology.
 
 ### Target Selection
 
@@ -279,47 +299,63 @@ Terminology:
 
 ### Defense Declaration
 
-1. Each affected target may use at most 1 defense card/effect from hand for that attack instance, even if the target is also the attacker.
-2. Defense protects only the defending player, not other targets.
-3. For a normal attack by a player:
-   - Resolve each target in the normal order, asking that target for a defense when its turn in the attack lifecycle is reached.
-   - Complete that target's defense/redirect, impact, damage, death, branches, and attribution before resolving the next target.
-   - Earlier resolved targets can still change later targets through death, modifiers, trophy movement, or other state changes before those later targets resolve.
-4. For a беспредел/мегабеспредел attack:
-   - Active player decides first.
-   - Continue defense decisions clockwise.
-   - Resolve only after every player had the opportunity to defend.
-5. Avoiding an attack instance does not cancel non-attack effects on the attacking card, such as power, and does not automatically avoid other attack instances from the same card.
-6. Defense effects that target the attacker do not work against беспредел/мегабеспредел because there is no attacker.
-7. Some defenses deal separate non-attack damage to the attacker. This is not redirecting the attack, but it is still damage caused by the defending player; if it kills the attacker, the defending player gains the trophy.
+1. Each affected player may use at most one Defense against one `AttackId`, even when redirect later returns that same attack to the player.
+2. Defense protects only the defending player's Attack Application. It does not cancel applications against other targets.
+3. A Defense window fully resolves the choice, costs/card use, ordinary non-ATTACK Defense effects, avoided state, and any redirect before the next scheduled Defense window.
+4. A separate non-ATTACK Defense effect that kills a player uses immediate nested DWT resolution. Merely executing inside an active attack does not make that damage part of the ATTACK.
+5. `PER_TARGET` completes each target before moving to the next:
+   - Defense and any redirect chain;
+   - ATTACK text for the final target of that application, in printed/mapped order;
+   - if an ATTACK instruction causes death, pause that text for immediate defeat, DWT gain/replacement, and respawn, then resume the remaining ATTACK text;
+   - attack-bound consequences;
+   - attribution.
+     Ordinary one-shot and Ongoing text of a DWT gained because of that ATTACK death remains deferred until the whole Attack Instance ends, so it cannot affect later targets of the same instance.
+6. `COLLECT_ALL_FIRST` is used only when shared ATTACK text cannot be resolved independently for one target without knowing which other players remain affected, such as passing cards among affected players:
+   - Fully resolve every Defense window first.
+   - Mutations from an earlier Defense, including costs, draws, ordinary effects, and nested non-ATTACK death/DWT resolution, are visible when later players choose Defense. Do not freeze or snapshot their hands, prices, or legal options for the whole collection phase.
+   - A redirect target's separate Defense window receives immediate priority after the current Defense closes, before continuing to later original targets.
+   - Do not execute the shared ATTACK text during Defense collection.
+   - After all windows and redirect chains, resolve the shared ATTACK text once against the final participant set.
+7. An ordinary multi-target damage ATTACK is not interactive merely because it has several targets; it normally uses `PER_TARGET`.
+8. Mayhem and Mega Mayhem always use their printed special collection and resolution order described below, not the generic interactive-attack implementation. Their ATTACK still has one Attack Instance/AttackId and defers ordinary text of DWTs caused by that ATTACK until the complete event ATTACK closes.
+9. Avoiding an Attack Instance does not cancel an independent ability on the same card and does not avoid another separately started Attack Instance.
+10. Some defenses deal separate non-ATTACK damage to the attacker. This is not redirect; if it kills the attacker, the defending player receives kill credit and Trophy as the immediate source owner.
 
 ### Redirected Attacks
 
-Redirect is a general data-driven familiar defense, not card-specific combat code. When a legal defense redirects an attack instance:
+Redirect carries the actual ATTACK that would have applied to the defending player. It is a change to one continuing Attack Application, not a new Attack Instance.
 
-1. The defending player becomes the current attack owner and attacker; the original attacker becomes the new target even when normally illegal.
-2. Carry the unresolved base amount and full attack effect forward. Keep modifiers already established by the source card's ownership, and recalculate only modifiers whose conditions depend on the current attack owner. For example, redirecting another player's Wand does not inherit the redirector's `prevent_defense_against_owned_wand_attacks`; an attack that was already unavoidable never opened the defense window needed for redirect. The original target's life and chips do not cap this attempt.
-3. Resolve success/on-damage branches once from the new owner against actual damage to the new target. The original attacker does not execute those branches.
-4. The new target may use one legal defense for this redirected instance unless that player already defended against the same instance. Track both defending players and used defense cards per instance so the attack cannot bounce indefinitely; a multi-attack card still opens independent windows per instance.
-5. A hand defense is neither played nor controlled unless its mapped branch says so. Ownerless Mayhem and Mega Mayhem use a nonredirectable context: a defense with redirect still pays its costs, avoids the attack, and resolves its other branch effects, but it does not create a new attacker or target.
+1. Preserve `AttackId`, original card/effect identity, and applications against every other original target.
+2. For the redirected application, the defender becomes `currentAttackController` and `currentAttacker`; the previous attacker becomes `currentTarget` even when that player was not a legal original target.
+3. Carry the complete ATTACK text applicable to the former target, including damage, discard, information, choices, and outcome branches. Preserve target-dependent values already calculated for the former target instead of recalculating them from the new target.
+4. Each successful redirect begins a new control epoch for that application. Apply eligible current-controller modifiers once to the carried current value for that epoch. Do not reapply them merely because the same state is inspected twice.
+5. The new target receives a Defense window before ATTACK text unless that player already used their one Defense against this `AttackId`. Redirect can continue, but it never refreshes Defense quota.
+6. In `PER_TARGET`, complete the redirect chain and final ATTACK text before moving to the next original application. In `COLLECT_ALL_FIRST`, complete the redirect chain's Defense windows immediately, but keep the shared ATTACK text deferred until all original Defense windows finish.
+7. Control and kill credit change only for the redirected application. Other target applications remain controlled by their previous controller.
+8. `damageSource` is not inferred universally from control or kill credit. A card-specific effect can retain the original damage source when its clarification requires that behavior.
+9. `activePlayerId` does not change. A redirected card played outside the redirector's turn does not grant normal turn actions.
+10. Against Mayhem/Mega Mayhem, a Defense still pays costs, avoids the event for that player, and resolves ordinary branches, but all attacker-facing text including redirect does nothing.
 
-The redirect changes the current attack owner but does not change `activePlayerId`; therefore current-owner effects such as Чипсихоз-Арена apply even outside the redirector's turn.
+The accepted project ruling for repeated controller doubling is one application per control epoch to the carried current value. Thus two matching doubling effects across `O → A → O` can produce `5 → 10 → 20 → 40`; this is a project ruling, not a direct designer example.
 
 ### Card-Resolution Identity
 
-Every attack instance retains the source card and effect identity of the card resolution that created it, separately from its current attacker. Redirect changes only the current attack owner and target. Trophy and kill credit use that current owner, while future card-level aggregate effects count every death caused by instances of the original card resolution, including a redirected instance that kills the original attacker. For example, a card that awards +3 power per such death receives +9 power from three deaths, regardless of redirects.
+Every Attack Instance retains the source card and effect identity of the card resolution that created it, separately from each application's current controller, attacker, target, card-specific damage source, and kill credit. Trophy and kill credit use the current controller of the lethal application unless a specific rule says otherwise. Card-level aggregate consequences still see deaths caused by applications of the original card resolution, including redirected applications.
 
 ### Resolution Order
 
-1. For effects that affect multiple players and where order matters, resolve targets clockwise starting with:
-   - the player applying the effect for normal card effects;
-   - the active player for беспредел/мегабеспредел effects.
-2. Targets who avoided the attack are skipped for the attack effect.
-3. For a беспредел attack where a player avoids or does not participate:
-   - That player is not affected by the attack effect.
-   - They do not perform the беспредел action.
-   - They do not pass, receive, discard, gain, or otherwise interact with objects through the беспредел effect.
-4. If damage or another effect causes death during resolution, run the rules in [Death, Resurrection, Trophy, and Dingler](#death-resurrection-trophy-and-dingler) immediately, then continue unresolved effect steps unless mapped effect data says the dead player cannot continue paying/finishing the effect.
+1. When order matters, normal effects start clockwise from the applying player; Mayhem/Mega Mayhem start from the active player.
+2. A normal non-ATTACK multi-target effect resolves target by target. A non-ATTACK death and its applicable DWT text resolve depth-first before the next target.
+3. A `PER_TARGET` Attack Instance resolves each application in order, but ordinary text of DWTs gained because of deaths from that ATTACK remains deferred until the entire instance ends.
+4. A `COLLECT_ALL_FIRST` Attack Instance first builds its final participant/application set, then resolves shared ATTACK text once.
+5. For a physical instruction such as passing a card to the player on the left, "left" remains the physical seating relation. A player who avoided the ATTACK neither sends nor receives through ATTACK text; a transfer aimed at that player fails rather than skipping to another participant. This is an accepted project ruling for ordinary interactive attacks.
+6. Close an Attack Instance only after all its applications, redirect chains, ATTACK text, and attack-bound consequences finish. Then activate/resolve ordinary text of every DWT deferred by deaths from that instance in turn order, regardless of the order in which its target applications produced the deaths. If one player gained more than one deferred DWT from that same instance, keep that player's tokens in gain order.
+7. If a deferred DWT item causes a non-ATTACK death, resolve that nested death and its DWT depth-first before returning to the current item and before moving to the next deferred item.
+8. Resolve deferred DWT text before a later independent ability of the same card or a separately started next ATTACK.
+9. An instruction to start a later ATTACK schedules only that next instance. After current deferred DWT text, create the new instance from current state and recalculate its legal target, damage, modifiers, and defenses; preserve only parameters the card explicitly carries forward, such as direction.
+10. A card played while resolving ATTACK text can start a separate nested Attack Instance. Finish that nested instance and its own deferred DWT text before returning to the outer ATTACK.
+
+An ATTACK chain has no implicit limit by round, unique target, or prior visit. If the printed continuation condition remains true, a later instance can revisit and kill the same foe again. Exhausting the DWT stack does not itself stop the current chain or prohibit other ATTACKs: it schedules the game to end during the current player's end-of-turn procedure, while defeated players still reset when no token is available. A state in which every next target necessarily dies and no Defense or other rules-relevant state change can interrupt the chain is therefore non-terminating under the printed rules. The project intends to stop only a proven non-terminating continuation, not deaths or ATTACKs generally; the exact cycle criterion remains tracked in [Rules Open Questions](rules-open-questions.md). Do not use DWT exhaustion as a global ATTACK lock or as an immediate end of the current turn.
 
 ## Беспредел and Мегабеспредел
 
@@ -331,6 +367,7 @@ Sources: pp. 6, 8, 12-13, 20.
 2. Pause the Market Flow that revealed it.
 3. Resolve the mapped беспредел effect.
 4. If it is an attack:
+   - Create one Attack Instance/AttackId for the complete Mayhem/Mega Mayhem ATTACK. Use its closure as the deferred-DWT boundary even though the event has a special Defense/resolution phase order.
    - Use the беспредел defense declaration order: active player first, then clockwise.
    - Use the беспредел resolution order: clockwise from active player after all defense decisions.
    - Defense effects that affect an attacker do nothing because there is no attacker.
@@ -341,7 +378,7 @@ Sources: pp. 6, 8, 12-13, 20.
 7. After the effect is fully resolved, move the беспредел/мегабеспредел to the matching public destroyed event pile, preserving order.
 8. Resume Market Flow by revealing a replacement from the same deck.
 9. If the replacement is another беспредел/мегабеспредел, repeat this algorithm.
-10. If the deck cannot provide enough non-event cards to reach target market size during turn-start Market Flow, the matching start-of-turn end condition is true; stop Market Flow and end the game before the active player takes actions.
+10. If the deck cannot provide enough non-event cards to reach target market size during turn-start Market Flow, record the matching end condition and leave that market incomplete. This can occur even when the deck initially contains as many cards as there are vacancies, because newly revealed Mayhem/Mega Mayhem cards consume replacements. The active player completes the turn; the game ends during that player's end-of-turn procedure.
 
 Gain attempts involving event cards use the buy/gain rule in [Buying and Gaining](#buying-and-gaining).
 
@@ -436,13 +473,43 @@ Sources: pp. 14, 16-18.
 
 Death algorithm:
 
-1. When a player's life drops below 1, they die immediately. Excess damage has no extra effect.
-2. Immediately set their life to 20 unless a controlled property changes the resurrection value, and record resurrection.
-3. If a DWT is available, gain the next token from the already shuffled hidden DWT draw stack, move it to `deadWizardTokens`, reveal it, and mark it controlled by that player. If no DWT is available, continue without a token and keep the exhaustion state for the next start-of-turn check.
-4. Put the gained token face into one FIFO resolution queue. The source card, attack, Mayhem, or token face that caused the death continues to resolve with the resurrected player and gained token already visible.
-5. Only after the outermost current source completes, resolve queued mapped DWT faces in gain order. An Ongoing or end-game face stays data-driven; an immediate mapped face runs from this queue.
-6. A death caused while resolving a DWT face immediately resurrects and gains its token, but its new face waits until the current face ends. Direct DWT gain without death does not resurrect a player and uses the same queue boundary.
-7. If death resolution consumes the last DWT, continue the current turn; the next player's start-of-turn DWT check ends the game before that player takes actions.
+Death, DWT gain, respawn, and ordinary DWT text are separate stages. Do not represent every DWT through one global FIFO queue.
+
+1. When a player's life drops below 1, mark them defeated immediately. Excess damage has no extra effect.
+2. Process DWT gain before life reset:
+   - Apply any gain replacement or interception.
+   - If a token is available, the actual recipient gains, reveals, and controls the next token from the already shuffled hidden DWT stack.
+   - If the actual recipient is not the defeated player, process that recipient's direct gain immediately according to step 6, including nested non-ATTACK deaths, before continuing the victim's reset.
+   - If no token is gained, the defeated player still proceeds to reset/respawn.
+3. For a token actually gained by the defeated player, inspect only properties needed to calculate this current reset, such as becoming Dingler or another explicit respawn value. Capture any gain-time prerequisite needed by later deferred text; do not reevaluate it after reset. Do not activate all ordinary Ongoing text merely because the token was revealed.
+4. Reset the defeated player's life to the applicable resurrection value and record respawn. The default is 20; Dingler is 15; a controlled property may specify another value.
+5. For a token gained by the defeated player, determine ordinary DWT timing from the immediate source:
+   - If the recipient was defeated by ATTACK text or an attack-bound consequence of a concrete Attack Instance, defer that token's applicable one-shot text and ordinary Ongoing activation until the entire same instance closes.
+   - The defer covers every target application, redirect chain, shared ATTACK text, and attack-bound consequence. It does not wait for a later independent ability of the card or a separately started next ATTACK.
+   - After the Attack Instance closes, all DWT items deferred by it begin in turn order, regardless of target/death order. Multiple deferred tokens belonging to the same player retain gain order.
+   - If one deferred item causes a non-ATTACK death, resolve the new death and its DWT depth-first before returning to the current item and before starting the next deferred item.
+   - If death came from a separate non-ATTACK effect, resolve applicable one-shot text and activate ordinary Ongoing text immediately and depth-first before returning to the interrupted effect. This includes separate Defense damage and damage from a DWT face even when an Attack Instance is currently active.
+6. Direct DWT gain without the recipient's death never causes respawn. Resolve its currently applicable one-shot text and activate ordinary Ongoing text immediately at gain, including during an Attack Instance.
+   - Apply any gain-time status or permanent rule belonging to the token to the actual recipient immediately. A direct-gain Dingler effect immediately gives that recipient Dingler status and clamps current life to 15; it affects future respawns but does not create a respawn now.
+7. A contextual one-shot DWT instruction is checked against the gain's current death/respawn context. If its prerequisite is absent, it fizzles permanently and is not registered as a future trigger. A deferred token from attack death retains the context of that death/respawn when its ordinary text later resolves.
+8. If a DWT contains only ordinary Ongoing text, attack-caused death defers its activation but creates no one-shot work item. A respawn modifier remains the only token property applied before the current reset.
+9. If death resolution consumes the last DWT, continue the current action and the rest of the active player's turn. The game ends during that player's end-of-turn procedure before the turn can pass.
+
+DWT interception is an accepted RAW-favored project ruling because no separate designer ruling establishes this micro-order:
+
+1. Mark the victim defeated.
+2. Apply the DWT gain replacement. The interceptor gains/reveals the token as a direct gain and owns its statuses and future effects.
+3. Apply the interceptor's gain-time statuses and permanent rules, then resolve applicable immediate text and activate ordinary Ongoing text now. A Dingler token immediately makes the interceptor Dingler and clamps that player's current life; it does not affect the victim's reset. Any non-ATTACK deaths caused here resolve depth-first.
+4. Return to the original death procedure and reset/respawn the defeated victim without applying the intercepted token to that victim.
+
+The victim remains defeated and respawns even when the token is intercepted or unavailable. A permanent status on the intercepted DWT affects the interceptor's current state and future respawns, not the victim's current respawn.
+
+Evidence status:
+
+- Immediate defeat, DWT gain/reveal, reset, and delayed ordinary DWT text after a lethal ATTACK come from the official rules and direct clarification collected in [the report](report.md).
+- Scoping the defer to the concrete Attack Instance is a strong RAW inference adopted by the project.
+- Immediate-source classification, the local deferred queue plus depth-first nesting, contextual one-shot fizzle, ordinary Ongoing timing, and interception micro-order are accepted project rulings.
+- Revisit these project rulings if a direct official clarification addresses the same micro-order; do not silently change them from an implementation PR.
 
 Trophy:
 
@@ -485,13 +552,19 @@ Source: p. 16.
 
 Source: pp. 9, 13-14, 20, plus project decision for the final unresolved tie.
 
-The game ends during start-of-turn checks, before the active player resolves start-of-turn effects or main-loop actions, if any of these conditions is true:
+The game ends during the current player's end-of-turn procedure, after that player has completed the turn and before the turn passes clockwise, if any of these conditions is true:
 
-| End condition                                                                                       | Status       |
-| --------------------------------------------------------------------------------------------------- | ------------ |
-| Legend deck cannot provide enough non-event cards to restore Legend market to 3 during Market Flow. | `executable` |
-| Main deck cannot provide enough non-event cards to restore main market to 5 during Market Flow.     | `executable` |
-| DWT stack is empty.                                                                                 | `executable` |
+| End condition                                                                   | Status                 |
+| ------------------------------------------------------------------------------- | ---------------------- |
+| This turn's Market Flow attempted but failed to restore the Legend market to 3. | `runtime-fix-required` |
+| This turn's Market Flow attempted but failed to restore the main market to 5.   | `runtime-fix-required` |
+| DWT stack is empty.                                                             | `executable`           |
+
+Meeting an end condition never interrupts the current action, card, ATTACK, or voluntary action loop. The active player completes the turn, including end-of-turn cleanup and effects, and then the game ends instead of passing to the next player.
+
+The condition list and end-of-current-turn timing are official. The rulebook does not place the check between the individual end-of-turn cleanup steps. The deterministic project checkpoint is after end-of-turn effects, cleanup, and hand refill, immediately before the turn would pass to the next player.
+
+Market-deck insufficiency is discovered only by the actual Market Flow at the start of a turn, after resolving and replacing every revealed Mayhem/Mega Mayhem. Do not predict this condition at the preceding player's end by counting cards or inspecting hidden card identities. If player A creates three market vacancies, player B begins the next turn and attempts the refill. If that attempt fails because the deck has too few cards or its remaining cards are events that consume their own replacements, player B completes the turn and the game ends during B's end-of-turn procedure. An empty market deck is not by itself an end condition while no refill is attempted.
 
 Before scoring:
 
@@ -519,31 +592,31 @@ Known global score modifiers:
 
 ## Machine-Oriented Mechanics Table
 
-| Mechanic id                 | Russian term                | Engine meaning                                                                                                                                                         | Status                                           | Source     |
-| --------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ---------- |
-| `power`                     | мощь                        | Turn-local buy resource; can accumulate across play/buy actions during the same turn; lost at cleanup.                                                                 | `executable`                                     | pp. 8-9    |
-| `victory_points`            | победные очки / ПО          | Numeric end-game score on cards and modifiers.                                                                                                                         | `executable`                                     | pp. 5, 9   |
-| `legend_count`              | количество карт легенд      | Tie-breaker count of owned cards with type `карта легенды` for tied players.                                                                                           | `executable`                                     | p. 9       |
-| `dead_wizard_token`         | жетон дохлого колдуна / ЖДК | Death token, controlled by player, base -3 VP, may have immediate/end/Ongoing effects.                                                                                 | `executable`; faces `data-required`              | pp. 14, 18 |
-| `ongoing`                   | Постоянка                   | Card/object attribute: when played or created in play, it uses the `permanents` zone and stays under control until removed; it is not discarded during normal cleanup. | `executable`                                     | pp. 11, 14 |
-| `activate`                  | активация                   | Mapped activation: the before-activation part resolves on play; the activation effect can be used once per turn while the card is controlled.                          | `executable`                                     | pp. 8, 16  |
-| `attack`                    | атака                       | Attack instance that affected players may avoid with defense. One card may define several attack instances through card mapping.                                       | `executable`                                     | pp. 10-11  |
-| `defense`                   | защита                      | Hand card/effect that avoids one attack instance for the defending player only. Mapped defense branch data controls whether the same card can defend later attacks.    | `executable`                                     | pp. 10-11  |
-| `redirect_attack`           | перенаправить атаку         | Defense effect can redirect attack to attacker even if attacker was not a legal original target.                                                                       | `executable`                                     | p. 17      |
-| `destroy`                   | уничтожить                  | Move card out of game to destroyed area; шальная магия and вялая палочка move to their stacks.                                                                         | `executable`                                     | pp. 12-13  |
-| `gain`                      | получить карту              | Take a specified/eligible card without paying and move it to discard unless mapped effect data changes the destination.                                                | `executable`                                     | p. 12      |
-| `discard`                   | сбросить карту              | Default source is hand unless another source is specified; deck-discard also counts as discard.                                                                        | `executable`                                     | p. 11      |
-| `reveal_from_deck`          | раскрыть карту из колоды    | If deck empty, shuffle discard first; card-specific effect decides destination.                                                                                        | `executable`; destination may be `data-required` | pp. 11, 20 |
-| `wild_magic`                | шальная магия               | Buyable stack card kind, cost 3, no main card type, choice on play between +2 power or playing top card of foe deck.                                                   | `executable`                                     | p. 12      |
-| `limp_wand`                 | вялая палочка               | Stack-gained junk card kind, no main card type, no effect, -1 VP.                                                                                                      | `executable`                                     | p. 13      |
-| `mayhem`                    | беспредел                   | Event card from main deck; resolves during Market Flow, then is destroyed and Market Flow continues.                                                                   | `executable`; effect `data-required`             | p. 13      |
-| `mega_mayhem`               | мегабеспредел               | Event card from Legend deck; resolves during Market Flow, then is destroyed and Market Flow continues.                                                                 | `executable`; effect `data-required`             | p. 13      |
-| `chip`                      | чипсина                     | Spendable token; reduces power cost 1:1 when buying cards of `карта легенды`, and can be spent by effects that explicitly say to spend chips.                          | `executable`                                     | p. 15      |
-| `market_chip_marker`        | символ чипсины              | When a marked card enters market, move 1 chip from supply onto every marked market card before continuing Market Flow.                                                 | `executable`                                     | p. 15      |
-| `dingler`                   | лошара                      | Status: max 15 life, -5 VP at end, only one token.                                                                                                                     | `executable`                                     | p. 14      |
-| `trophy`                    | главный приз Крутагидона    | Controlled Ongoing trophy awarded for killing a foe; grants 1 chip at end of controller's turn.                                                                        | `executable`                                     | p. 14      |
-| `heal`                      | накручивать жизни           | Increase life up to current max; usable even at max.                                                                                                                   | `executable`                                     | p. 16      |
-| `not_participate_in_mayhem` | не участвовать в беспределе | Player skips all беспредел attack/actions and interactions.                                                                                                            | `data-required`                                  | p. 13      |
+| Mechanic id                 | Russian term                | Engine meaning                                                                                                                                                                                                        | Status                                           | Source                          |
+| --------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------- |
+| `power`                     | мощь                        | Turn-local buy resource; can accumulate across play/buy actions during the same turn; lost at cleanup.                                                                                                                | `executable`                                     | pp. 8-9                         |
+| `victory_points`            | победные очки / ПО          | Numeric end-game score on cards and modifiers.                                                                                                                                                                        | `executable`                                     | pp. 5, 9                        |
+| `legend_count`              | количество карт легенд      | Tie-breaker count of owned cards with type `карта легенды` for tied players.                                                                                                                                          | `executable`                                     | p. 9                            |
+| `dead_wizard_token`         | жетон дохлого колдуна / ЖДК | Token with separate gain, respawn-modifier, one-shot, Ongoing, and scoring semantics. ATTACK death defers ordinary text to its Attack Instance; direct gain and non-ATTACK death resolve applicable text immediately. | `runtime-fix-required`; faces `data-required`    | pp. 14, 18; [report](report.md) |
+| `ongoing`                   | Постоянка                   | Card/object attribute: when played or created in play, it uses the `permanents` zone and stays under control until removed; it is not discarded during normal cleanup.                                                | `executable`                                     | pp. 11, 14                      |
+| `activate`                  | активация                   | Mapped activation: the before-activation part resolves on play; the activation effect can be used once per turn while the card is controlled.                                                                         | `executable`                                     | pp. 8, 16                       |
+| `attack`                    | атака                       | One separately started Attack Instance with a stable `AttackId`, one or more target applications, and explicit `PER_TARGET` or `COLLECT_ALL_FIRST` Defense-window ordering. One card may start several instances.     | `runtime-fix-required`                           | pp. 10-11; [report](report.md)  |
+| `defense`                   | защита                      | One Defense per affected player and `AttackId`. Each Defense window resolves fully; ATTACK text follows the instance's explicit Defense-window mode.                                                                  | `runtime-fix-required`                           | pp. 10-11; [report](report.md)  |
+| `redirect_attack`           | перенаправить атаку         | Redirect preserves `AttackId`, changes one target application and its controller, and opens a Defense window for the new target only if that target has unused quota.                                                 | `runtime-fix-required`                           | p. 17; [report](report.md)      |
+| `destroy`                   | уничтожить                  | Move card out of game to destroyed area; шальная магия and вялая палочка move to their stacks.                                                                                                                        | `executable`                                     | pp. 12-13                       |
+| `gain`                      | получить карту              | Take a specified/eligible card without paying and move it to discard unless mapped effect data changes the destination.                                                                                               | `executable`                                     | p. 12                           |
+| `discard`                   | сбросить карту              | Default source is hand unless another source is specified; deck-discard also counts as discard.                                                                                                                       | `executable`                                     | p. 11                           |
+| `reveal_from_deck`          | раскрыть карту из колоды    | If deck empty, shuffle discard first; card-specific effect decides destination.                                                                                                                                       | `executable`; destination may be `data-required` | pp. 11, 20                      |
+| `wild_magic`                | шальная магия               | Buyable stack card kind, cost 3, no main card type, choice on play between +2 power or playing top card of foe deck.                                                                                                  | `executable`                                     | p. 12                           |
+| `limp_wand`                 | вялая палочка               | Stack-gained junk card kind, no main card type, no effect, -1 VP.                                                                                                                                                     | `executable`                                     | p. 13                           |
+| `mayhem`                    | беспредел                   | Event card from main deck; resolves during Market Flow, then is destroyed and Market Flow continues. Its ATTACK uses the event-specific phase order but still has one Attack Instance/DWT boundary.                   | `runtime-fix-required`; effect `data-required`   | p. 13                           |
+| `mega_mayhem`               | мегабеспредел               | Event card from Legend deck; resolves during Market Flow, then is destroyed and Market Flow continues. Its ATTACK uses the event-specific phase order but still has one Attack Instance/DWT boundary.                 | `runtime-fix-required`; effect `data-required`   | p. 13                           |
+| `chip`                      | чипсина                     | Spendable token; reduces power cost 1:1 when buying cards of `карта легенды`, and can be spent by effects that explicitly say to spend chips.                                                                         | `executable`                                     | p. 15                           |
+| `market_chip_marker`        | символ чипсины              | When a marked card enters market, move 1 chip from supply onto every marked market card before continuing Market Flow.                                                                                                | `executable`                                     | p. 15                           |
+| `dingler`                   | лошара                      | Status: max 15 life, -5 VP at end, only one token.                                                                                                                                                                    | `executable`                                     | p. 14                           |
+| `trophy`                    | главный приз Крутагидона    | Controlled Ongoing trophy awarded for killing a foe; grants 1 chip at end of controller's turn.                                                                                                                       | `executable`                                     | p. 14                           |
+| `heal`                      | накручивать жизни           | Increase life up to current max; usable even at max.                                                                                                                                                                  | `executable`                                     | p. 16                           |
+| `not_participate_in_mayhem` | не участвовать в беспределе | Player skips all беспредел attack/actions and interactions.                                                                                                                                                           | `data-required`                                  | p. 13                           |
 
 ## Explicit v0 Implementation Set
 
@@ -560,7 +633,7 @@ The first runnable engine should implement these rules before full card-effect c
 - Shuffle discard into deck only on required draw/play/discard/reveal from empty deck.
 - Generic play-card movement and power accumulation for mapped cards.
 - Generic buy-card action, including gained cards to discard.
-- Turn-start Market Flow in order: Legend market first, then main market; main action loop; and end-turn cleanup.
+- Turn-start Market Flow in order: main market first, then Legend market; main action loop; and end-turn cleanup.
 - Ongoing cards remaining in play.
 - Real end conditions: main deck cannot restore the main market, Legend deck cannot restore the Legend market, DWT stack empty.
 - Scoring: VP, Legend count tie-breaker, DWT count tie-breaker, true tie fallback per project scope.

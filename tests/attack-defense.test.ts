@@ -18,12 +18,15 @@ import {
   type EffectChoice,
   type EffectSourceContext,
 } from "../src/engine/effect-runtime-registry.js";
-import type { CardInstance, GameState, PlayerState } from "../src/engine/setup.js";
+import type {
+  CardInstance,
+  GameState,
+  PlayerState,
+} from "../src/engine/setup.js";
 import { markPlayerId } from "../src/domain/types.js";
 import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 
 const rootDir = process.cwd();
-
 
 test("defense payment plan builds mixed cumulative steps in cost order", () => {
   const { state, defender } = createScenario();
@@ -61,7 +64,10 @@ test("defense payment plan builds mixed cumulative steps in cost order", () => {
   });
   assert.equal(Object.isFrozen(result.plan), true);
   assert.equal(Object.isFrozen(result.plan.steps), true);
-  assert.equal(result.plan.steps.every((step) => Object.isFrozen(step)), true);
+  assert.equal(
+    result.plan.steps.every((step) => Object.isFrozen(step)),
+    true
+  );
 });
 
 test("defense payment plan reserves duplicate discard costs in hand order", () => {
@@ -275,8 +281,6 @@ test("defense module excludes defenses requiring more other cards than are avail
   assert.deepEqual(defender.hand, [defense, otherCard]);
 });
 
-
-
 test("defense module commits exact planned cards and costs in event order", () => {
   const { state, attacker, defender, source } = createScenario();
   const defense = addFixtureDefenseCardToHand(state, defender, "discardSelf", {
@@ -288,7 +292,10 @@ test("defense module commits exact planned cards and costs in event order", () =
       { costId: "discard_other_hand_card", amount: 1 },
     ],
   });
-  const [firstCard, secondCard, untouchedCard] = moveDeckCardsToHand(defender, 3);
+  const [firstCard, secondCard, untouchedCard] = moveDeckCardsToHand(
+    defender,
+    3
+  );
   assert.ok(firstCard);
   assert.ok(secondCard);
   assert.ok(untouchedCard);
@@ -672,7 +679,6 @@ function createScenario(): {
   };
   return { state, attacker, defender, source };
 }
-
 
 function moveDeckCardsToHand(
   player: PlayerState,
