@@ -654,6 +654,67 @@ test("attack amount is recomputed after the previous target mutates current atta
   assert.deepEqual(dealtAmounts, [2, 4]);
 });
 
+test("COLLECT_ALL_FIRST resolves every Defense before shared attack text", () => {
+  const { state, attacker, targets, source } = createAttackResolutionHarness(
+    43008,
+    3
+  );
+  const [firstTarget, secondTarget] = targets;
+  assert.ok(firstTarget);
+  assert.ok(secondTarget);
+  const order: string[] = [];
+  let secondSawFirstDefenseMutation = false;
+  const secondChipsBefore = secondTarget.chips;
+  const adapters = createAttackAdapters({
+    resolveDefenseWindow(_state, defendingPlayer) {
+      order.push(`defense:${defendingPlayer.playerId}`);
+      if (defendingPlayer.playerId === firstTarget.playerId) {
+        secondTarget.chips += 1;
+      }
+      if (defendingPlayer.playerId === secondTarget.playerId) {
+        secondSawFirstDefenseMutation =
+          secondTarget.chips === secondChipsBefore + 1;
+      }
+      return { ok: true, avoided: false };
+    },
+  });
+
+  const result = resolvePlayerControlledAttack(
+    {
+      ...damageAttackIntent(
+        state,
+        attacker,
+        source,
+        [firstTarget, secondTarget],
+        1
+      ),
+      defenseWindowMode: "COLLECT_ALL_FIRST",
+      impact: {
+        kind: "shared",
+        resolve(_state, attack) {
+          order.push(`shared:${attack.attackId}`);
+          assert.equal(attack.defenseWindowMode, "COLLECT_ALL_FIRST");
+          assert.equal(attack.applications.length, 2);
+          assert.equal(
+            attack.applications.every(
+              (application) => application.avoided === false
+            ),
+            true
+          );
+          return { ok: true };
+        },
+      },
+    },
+    adapters
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(secondSawFirstDefenseMutation, true);
+  assert.equal(order[0], `defense:${firstTarget.playerId}`);
+  assert.equal(order[1], `defense:${secondTarget.playerId}`);
+  assert.match(order[2] ?? "", /^shared:attack-/);
+});
+
 test("redirect changes current attacker attribution while preserving original source identity", () => {
   const { state, attacker, targets, source } = createAttackResolutionHarness(
     43004,
@@ -866,6 +927,7 @@ test("non-damage player attack uses the same seam without damage attribution or 
     attackingPlayer: attacker,
     source,
     effectId: "attack_gain_status",
+    defenseWindowMode: "PER_TARGET",
     unavoidable: false,
     targetPlan: { kind: "orderedPlayers", players: [target] },
     impact: { kind: "effects", effects: [onHitEffect] },
@@ -927,6 +989,7 @@ function damageAttackIntent(
     attackingPlayer,
     source,
     effectId: "attack_damage",
+    defenseWindowMode: "PER_TARGET",
     unavoidable: false,
     targetPlan: { kind: "orderedPlayers", players },
     impact: {

@@ -793,6 +793,7 @@ function resolvePlayerControlledEffectsAttack(
     attackingPlayer: player,
     source,
     effectId: effect.effectId,
+    defenseWindowMode: "PER_TARGET",
     unavoidable: attackProfile.unavoidable,
     attackProfile,
     ...(effect.effectId === "attack_gain_dead_wizard_tokens"
@@ -833,6 +834,7 @@ function resolvePlayerControlledDamageAttack(
     attackingPlayer: player,
     source,
     effectId: effect.effectId,
+    defenseWindowMode: "PER_TARGET",
     unavoidable: attackProfile.unavoidable,
     targetPlan: { kind: "runtimeSelector", effect },
     impact: {
@@ -999,6 +1001,7 @@ function createAttackDamageEqualRandomDiscardedHandCostHandler(
         attackingPlayer: player,
         source,
         effectId: effect.effectId,
+        defenseWindowMode: "PER_TARGET",
         unavoidable: true,
         attackProfile,
         targetPlan: { kind: "orderedPlayers", players: opponents },
@@ -1200,6 +1203,7 @@ function directionalChainAttackHandler(
           attackingPlayer: player,
           source,
           effectId: effect.effectId,
+          defenseWindowMode: "PER_TARGET",
           unavoidable: attackProfile.unavoidable,
           targetPlan: {
             kind: "orderedPlayers",
@@ -1287,6 +1291,7 @@ function sequentialAttackDamageHandler(
           attackingPlayer: player,
           source,
           effectId: effect.effectId,
+          defenseWindowMode: "PER_TARGET",
           unavoidable: attackProfile.unavoidable,
           attackProfile,
           reportResolvedTargetKilled: true,
@@ -1373,6 +1378,7 @@ function multiTargetAttackHandler<Id extends MultiTargetAttackEffectId>(
         attackingPlayer: player,
         source,
         effectId: effect.effectId,
+        defenseWindowMode: "PER_TARGET",
         unavoidable: attackProfile.unavoidable,
         targetPlan: {
           kind: "orderedPlayers",
@@ -1492,6 +1498,7 @@ function distributedAttackDamageHandler(
         attackingPlayer: player,
         source,
         effectId: effect.effectId,
+        defenseWindowMode: "PER_TARGET",
         unavoidable: attackProfile.unavoidable,
         attackProfile,
         targetPlan: { kind: "orderedPlayers", players: opponents },
@@ -1771,6 +1778,7 @@ export function createCombatAttackEffectDefinitions(
         attackingPlayer: player,
         source,
         effectId: effect.effectId,
+        defenseWindowMode: "PER_TARGET",
         unavoidable: attackProfile.unavoidable,
         attackProfile,
         targetPlan: {

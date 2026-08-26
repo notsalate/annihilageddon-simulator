@@ -184,6 +184,18 @@ export type {
 } from "./engine/setup.js";
 export { initializeGame } from "./engine/setup.js";
 export { forkGameState } from "./engine/game-state-fork.js";
+export {
+  createAttackDefenseUsage,
+  createAttackInstance,
+} from "./engine/attack-resolution.js";
+export type {
+  AttackApplication,
+  AttackDefenseUsage,
+  AttackInstance,
+  DefenseWindowMode,
+  PlayerControlledSharedAttackImpact,
+  PlayerControlledSharedAttackResolver,
+} from "./engine/attack-resolution.js";
 export type {
   AnalysisChoiceSelection,
   AnalysisActionStep,
