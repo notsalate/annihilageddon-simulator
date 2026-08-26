@@ -154,7 +154,7 @@ export interface SimulationFailureReplayEffectChoice {
 export interface SimulationFailureReplaySetupChoice {
   readonly type: "setupChoiceSelected";
   readonly playerId: string;
-  readonly setupChoiceKind: "familiar";
+  readonly setupChoiceKind: "familiar" | "wizardProperty";
   readonly policyId: string;
   readonly chosenInstanceId: string;
 }
@@ -214,11 +214,16 @@ export function createSimulationFailureReplay(
   const choices: SimulationFailureReplayChoice[] = [];
   for (const event of report.choices) {
     if (event.type === "setupChoiceSelected") {
-      if (event.setupChoiceKind !== "familiar") {
+      if (
+        event.setupChoiceKind !== "familiar" &&
+        event.setupChoiceKind !== "wizardProperty"
+      ) {
         continue;
       }
       if (event.chosenInstanceId === undefined) {
-        throw new Error("Familiar setup replay event is missing choiceId");
+        throw new Error(
+          `${event.setupChoiceKind} setup replay event is missing choiceId`
+        );
       }
       choices.push({
         type: event.type,
@@ -367,7 +372,10 @@ function readReplayChoices(value: unknown): SimulationFailureReplay["choices"] {
     }
     const record = entry as SimulationFailureReplayChoiceCandidate;
     if (record.type === "setupChoiceSelected") {
-      if (record.setupChoiceKind !== "familiar") {
+      if (
+        record.setupChoiceKind !== "familiar" &&
+        record.setupChoiceKind !== "wizardProperty"
+      ) {
         continue;
       }
       if (
@@ -375,12 +383,14 @@ function readReplayChoices(value: unknown): SimulationFailureReplay["choices"] {
         typeof record.policyId !== "string" ||
         typeof record.chosenInstanceId !== "string"
       ) {
-        throw new Error("Report familiar setup choice has an invalid shape");
+        throw new Error(
+          `Report ${record.setupChoiceKind} setup choice has an invalid shape`
+        );
       }
       choices.push({
         type: "setupChoiceSelected",
         playerId: record.playerId,
-        setupChoiceKind: "familiar",
+        setupChoiceKind: record.setupChoiceKind,
         policyId: record.policyId,
         chosenInstanceId: record.chosenInstanceId,
       });
@@ -610,7 +620,7 @@ function createSimulationReplayController(
         )
       ) {
         throw new SimulationReplayError(
-          `Replay familiar setup choice ${expected.chosenInstanceId} is not legal for ${request.player.playerId}`
+          `Replay ${request.setupChoiceKind} choice ${expected.chosenInstanceId} is not legal for ${request.player.playerId}`
         );
       }
       return { choiceId: expected.chosenInstanceId };

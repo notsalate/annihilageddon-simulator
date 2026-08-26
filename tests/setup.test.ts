@@ -3,8 +3,11 @@ import test from "node:test";
 
 import {
   applyAction,
+  createSimulationFailureReplay,
   initializeGame,
   listLegalActions,
+  runSingleGame,
+  SimulationExecutionError,
   type CardInstance,
   type GameState,
   type LoadedDataPack,
@@ -140,6 +143,131 @@ test("default setup choice policy records alwaysPickFirst", () => {
   }
 });
 
+test("wizard property setup policy can choose the second candidate", () => {
+  const dataPack = createWizardPropertyChoiceDataPack();
+  const state = initializeGame({
+    dataPack,
+    playerCount: 2,
+    seed: 24680,
+    effectChoiceStrategy: (request) => {
+      if (
+        request.requestKind !== "setup" ||
+        request.setupChoiceKind !== "wizardProperty"
+      ) {
+        return undefined;
+      }
+      const selectedCandidate = request.choices[1];
+      assert.ok(selectedCandidate);
+      return { choiceId: selectedCandidate.choiceId };
+    },
+  });
+  const setupChoiceEvents = state.eventLog.filter(
+    (event) =>
+      event.type === "setupChoiceSelected" &&
+      event.setupChoiceKind === "wizardProperty"
+  );
+
+  assert.equal(setupChoiceEvents.length, state.players.length);
+  for (const event of setupChoiceEvents) {
+    const owner = state.players.find(
+      (player) => player.playerId === event.playerId
+    );
+    assert.ok(owner);
+    const selectedProperty = owner.wizardProperties[0];
+    assert.ok(selectedProperty);
+    assert.equal(selectedProperty.instanceId, event.chosenInstanceId);
+    assert.equal(selectedProperty.definitionId, event.chosenDefinitionId);
+    assert.equal(event.policyId, "provided");
+
+    const expectedLife =
+      event.chosenDefinitionId === "fixture-wizard-property-first" ? 27 : 31;
+    assert.equal(owner.life.current, expectedLife);
+    assert.equal(owner.life.max, expectedLife);
+  }
+});
+
+test("invalid wizard property setup choice falls back to the first candidate", () => {
+  const state = initializeGame({
+    dataPack: createWizardPropertyChoiceDataPack(),
+    seed: 24680,
+    effectChoiceStrategy: (request) =>
+      request.requestKind === "setup" &&
+      request.setupChoiceKind === "wizardProperty"
+        ? { choiceId: "missing-wizard-property" }
+        : undefined,
+  });
+  const setupChoiceEvents = state.eventLog.filter(
+    (event) =>
+      event.type === "setupChoiceSelected" &&
+      event.setupChoiceKind === "wizardProperty"
+  );
+
+  assert.equal(setupChoiceEvents.length, state.players.length);
+  for (const event of setupChoiceEvents) {
+    const owner = state.players.find(
+      (player) => player.playerId === event.playerId
+    );
+    assert.ok(owner);
+    const firstCandidateDefinitionId = (event.candidateDefinitionIds ?? [])[0];
+    assert.ok(firstCandidateDefinitionId);
+    assert.equal(event.policyId, "provided");
+    assert.equal(event.chosenDefinitionId, firstCandidateDefinitionId);
+    assert.equal(
+      owner.wizardProperties[0]?.definitionId,
+      firstCandidateDefinitionId
+    );
+  }
+});
+
+test("wizard property setup choices are preserved by failure replay", () => {
+  const dataPack = createWizardPropertyChoiceDataPack();
+  const setupState = initializeGame({
+    dataPack,
+    seed: 24680,
+    effectChoiceStrategy: (request) => {
+      if (
+        request.requestKind !== "setup" ||
+        request.setupChoiceKind !== "wizardProperty"
+      ) {
+        return undefined;
+      }
+      const selectedCandidate = request.choices[1];
+      assert.ok(selectedCandidate);
+      return { choiceId: selectedCandidate.choiceId };
+    },
+  });
+  const replay = createSimulationFailureReplay({
+    actions: [],
+    choices: setupState.eventLog,
+  });
+
+  assert.ok(
+    replay.choices.some(
+      (choice) =>
+        choice.type === "setupChoiceSelected" &&
+        choice.setupChoiceKind === "wizardProperty"
+    )
+  );
+  assert.throws(
+    () =>
+      runSingleGame({
+        rootDir,
+        dataPack,
+        seed: 24680,
+        maxTurns: 1,
+        replay,
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof SimulationExecutionError);
+      assert.match(
+        error.message,
+        /Replay action history ended before action 1/
+      );
+      return true;
+    }
+  );
+});
+
 test("wizard property 003 keeps two familiars, selects a third, and toggles effective types independently", () => {
   const source = loadCurrentRuntimeDataPack(rootDir);
   const wizardPropertyStack = source.tokenStacks.wizardProperties;
@@ -171,7 +299,12 @@ test("wizard property 003 keeps two familiars, selects a third, and toggles effe
     playerCount: 2,
     seed: 81203,
     effectChoiceStrategy: (request) => {
-      if (request.requestKind !== "setup") return undefined;
+      if (
+        request.requestKind !== "setup" ||
+        request.setupChoiceKind !== "familiar"
+      ) {
+        return undefined;
+      }
       setupChoicePhases.push(request.phase);
       const selectedChoice =
         request.phase === "thirdFamiliar"
@@ -354,7 +487,12 @@ test("wizard property 003 can choose an unselected ordinary familiar", () => {
     playerCount: 2,
     seed: 80001,
     effectChoiceStrategy: (request) => {
-      if (request.requestKind !== "setup") return undefined;
+      if (
+        request.requestKind !== "setup" ||
+        request.setupChoiceKind !== "familiar"
+      ) {
+        return undefined;
+      }
       const candidateInstanceIds = request.choices.map(
         (choice) => choice.choiceId
       );
@@ -434,7 +572,7 @@ test("invalid familiar setup choice falls back to the first candidate", () => {
     dataPack,
     seed: 60615,
     effectChoiceStrategy: (request) =>
-      request.requestKind === "setup"
+      request.requestKind === "setup" && request.setupChoiceKind === "familiar"
         ? { choiceId: markCardInstanceId("missing-familiar") }
         : undefined,
   });
@@ -596,6 +734,73 @@ function createSetupEffectsDataPack(): LoadedDataPack {
       wizardProperties: {
         ...wizardPropertyStack,
         entries: [{ tokenId: property.tokenId, count: 4 }],
+      },
+    },
+  };
+}
+
+function createWizardPropertyChoiceDataPack(): LoadedDataPack {
+  const dataPack = loadCurrentRuntimeDataPack(rootDir);
+  const sourceProperty = dataPack.tokenDefinitions.get(
+    "esw2_dbg__wizard_property_001"
+  );
+  const wizardPropertyStack = dataPack.tokenStacks.wizardProperties;
+  if (
+    sourceProperty?.kind !== "wizardProperty" ||
+    sourceProperty.engine === undefined ||
+    wizardPropertyStack === undefined
+  ) {
+    throw new Error("Current runtime data is missing setup choice fixtures");
+  }
+
+  const firstProperty = {
+    ...sourceProperty,
+    tokenId: "fixture-wizard-property-first",
+    engine: {
+      ...sourceProperty.engine,
+      mappingStatus: "fixture",
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "set_starting_life_total",
+          timing: "setup",
+          lifeTotal: 27,
+        } satisfies RuntimeEffect,
+      ],
+    },
+  };
+  const secondProperty = {
+    ...sourceProperty,
+    tokenId: "fixture-wizard-property-second",
+    engine: {
+      ...sourceProperty.engine,
+      mappingStatus: "fixture",
+      playableInV0: true,
+      effects: [
+        {
+          effectId: "set_starting_life_total",
+          timing: "setup",
+          lifeTotal: 31,
+        } satisfies RuntimeEffect,
+      ],
+    },
+  };
+
+  return {
+    ...dataPack,
+    tokenDefinitions: new Map([
+      ...dataPack.tokenDefinitions,
+      [firstProperty.tokenId, firstProperty],
+      [secondProperty.tokenId, secondProperty],
+    ]),
+    tokenStacks: {
+      ...dataPack.tokenStacks,
+      wizardProperties: {
+        ...wizardPropertyStack,
+        entries: [
+          { tokenId: firstProperty.tokenId, count: 2 },
+          { tokenId: secondProperty.tokenId, count: 2 },
+        ],
       },
     },
   };

@@ -163,9 +163,11 @@ export type {
   ChoiceRequest,
   ChoiceSelection,
   ChoiceView,
+  ChoiceWizardPropertySetupView,
   EffectChoiceRequest,
   FamiliarSetupChoicePhase,
   SetupChoiceRequest,
+  WizardPropertySetupChoicePhase,
 } from "./engine/choice-policy.js";
 export type {
   CardInstance,
