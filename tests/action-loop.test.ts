@@ -9848,6 +9848,46 @@ test("#287 directional chain continues after a kill with an empty DWT stack", ()
   );
 });
 
+test("#287 directional chain wraps after a full circle", () => {
+  const state = initializeGame({ rootDir, seed: 606161, playerCount: 3 });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const firstTarget = mustGetPlayer(state, markPlayerId("player-2"));
+  const secondTarget = mustGetPlayer(state, markPlayerId("player-3"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.life.current = 20;
+    player.hand = [];
+    player.discard = [];
+  }
+  firstTarget.life.current = 1;
+  secondTarget.life.current = 1;
+  state.common.deadWizardTokens.drawStack = [];
+  state.turn.power = 99;
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_015"
+  );
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(firstTarget.life.current, 10);
+  assert.equal(secondTarget.life.current, 20);
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.cardInstanceId === wand.instanceId
+    ).length,
+    3
+  );
+});
+
 test("#288 legend_019 attacks each unique adjacent foe with separate defense windows", () => {
   const state = initializeGame({
     rootDir,

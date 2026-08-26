@@ -1174,7 +1174,7 @@ function directionalChainAttackHandler(
       }
 
       let targetIndex = 0;
-      while (targetIndex < chosenFoes.length) {
+      while (true) {
         const targetPlayer = chosenFoes[targetIndex];
         if (targetPlayer === undefined) {
           return { ok: true };
@@ -1229,10 +1229,8 @@ function directionalChainAttackHandler(
           return { ok: true };
         }
 
-        targetIndex += 1;
+        targetIndex = (targetIndex + 1) % chosenFoes.length;
       }
-
-      return { ok: true };
     },
   };
 }
