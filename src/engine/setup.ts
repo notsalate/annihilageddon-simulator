@@ -47,6 +47,7 @@ import {
   type ChoiceKind,
   type ChoicePolicy,
   type FamiliarSetupChoicePhase,
+  type WizardPropertySetupChoicePhase,
 } from "./choice-policy.js";
 import { createChoicePlayerView } from "./strategy-decision-view.js";
 
@@ -899,7 +900,8 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     dataPack,
     tokenFactory,
     rng,
-    setupEvents
+    setupEvents,
+    options.effectChoiceStrategy
   );
   const setupDirectives = applyWizardPropertySetupEffects(
     players,
@@ -1079,7 +1081,8 @@ function assignStartingWizardProperties(
   dataPack: LoadedDataPack,
   factory: TokenInstanceFactory,
   rng: RandomSource,
-  eventLog: GameEvent[]
+  eventLog: GameEvent[],
+  choicePolicy?: ChoicePolicy
 ): void {
   const tokenStack = dataPack.tokenStacks.wizardProperties;
   if (tokenStack === undefined) {
@@ -1152,10 +1155,11 @@ function assignStartingWizardProperties(
       );
     }
 
-    const selectedCandidate = alwaysPickFirstSetupChoice(
+    const selectedCandidate = selectWizardPropertySetupChoice(
       player,
-      "wizardProperty",
+      "startingPair",
       [firstCandidate, secondCandidate],
+      choicePolicy,
       eventLog
     );
 
@@ -1331,6 +1335,61 @@ function selectFamiliarSetupChoice<
       candidateDefinitionId: candidate.definitionId,
     })),
   });
+  return resolveSetupChoice(
+    player,
+    "familiar",
+    candidates,
+    selectedChoice,
+    eventLog
+  );
+}
+
+function selectWizardPropertySetupChoice<
+  TCandidate extends SetupCandidate<TokenDefinitionId, TokenInstanceId>,
+>(
+  player: PlayerState,
+  phase: WizardPropertySetupChoicePhase,
+  candidates: readonly TCandidate[],
+  policy: ChoicePolicy | undefined,
+  eventLog: GameEvent[]
+): TCandidate {
+  if (candidates.length === 0) {
+    throw new Error(
+      `Setup choice wizardProperty has no candidates for ${player.playerId}`
+    );
+  }
+  const selectedChoice = policy?.({
+    requestKind: "setup",
+    player: createChoicePlayerView(player),
+    setupChoiceKind: "wizardProperty",
+    phase,
+    choices: candidates.map((candidate) => ({
+      choiceKind: "wizardPropertySetup" as const,
+      choiceId: candidate.instanceId,
+      candidateDefinitionId: candidate.definitionId,
+    })),
+  });
+  return resolveSetupChoice(
+    player,
+    "wizardProperty",
+    candidates,
+    selectedChoice,
+    eventLog
+  ).candidate;
+}
+
+function resolveSetupChoice<TCandidate extends SetupCandidate<string>>(
+  player: PlayerState,
+  setupChoiceKind: "familiar" | "wizardProperty",
+  candidates: readonly TCandidate[],
+  selectedChoice: unknown,
+  eventLog: GameEvent[]
+): { candidate: TCandidate; index: number } {
+  if (candidates.length === 0) {
+    throw new Error(
+      `Setup choice ${setupChoiceKind} has no candidates for ${player.playerId}`
+    );
+  }
   const requestedInstanceId = isChoiceSelection(selectedChoice)
     ? selectedChoice.choiceId
     : undefined;
@@ -1343,12 +1402,14 @@ function selectFamiliarSetupChoice<
   const selectedIndex = requestedIndex < 0 ? 0 : requestedIndex;
   const chosenCandidate = candidates[selectedIndex];
   if (chosenCandidate === undefined) {
-    throw new Error("Unexpected sparse array during familiar setup choice");
+    throw new Error(
+      `Unexpected sparse array during ${setupChoiceKind} setup choice`
+    );
   }
   recordSetupChoiceSelected(eventLog, {
     type: "setupChoiceSelected",
     playerId: player.playerId,
-    setupChoiceKind: "familiar",
+    setupChoiceKind,
     policyId:
       requestedInstanceId === undefined ? "alwaysPickFirst" : "provided",
     candidateInstanceIds: candidates.map((candidate) => candidate.instanceId),
@@ -1359,33 +1420,6 @@ function selectFamiliarSetupChoice<
     chosenDefinitionId: chosenCandidate.definitionId,
   });
   return { candidate: chosenCandidate, index: selectedIndex };
-}
-
-function alwaysPickFirstSetupChoice<TCandidate extends SetupCandidate<string>>(
-  player: PlayerState,
-  setupChoiceKind: "familiar" | "wizardProperty",
-  candidates: readonly TCandidate[],
-  eventLog: GameEvent[]
-): TCandidate {
-  const chosenCandidate = candidates[0];
-  if (chosenCandidate === undefined) {
-    throw new Error(
-      `Setup choice ${setupChoiceKind} has no candidates for ${player.playerId}`
-    );
-  }
-  recordSetupChoiceSelected(eventLog, {
-    type: "setupChoiceSelected",
-    playerId: player.playerId,
-    setupChoiceKind,
-    policyId: "alwaysPickFirst",
-    candidateInstanceIds: candidates.map((candidate) => candidate.instanceId),
-    candidateDefinitionIds: candidates.map(
-      (candidate) => candidate.definitionId
-    ),
-    chosenInstanceId: chosenCandidate.instanceId,
-    chosenDefinitionId: chosenCandidate.definitionId,
-  });
-  return chosenCandidate;
 }
 
 function assertSetupPoolSize(

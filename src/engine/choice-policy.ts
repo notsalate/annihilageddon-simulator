@@ -9,7 +9,8 @@ export type ChoiceKind =
   | "defense"
   | "directionalPlayerTarget"
   | "damageDistribution"
-  | "familiarSetup";
+  | "familiarSetup"
+  | "wizardPropertySetup";
 
 /** The only player information available while resolving an effect choice. */
 export interface ChoicePlayerView {
@@ -75,6 +76,12 @@ export interface ChoiceFamiliarSetupView {
   readonly candidateDefinitionId: string;
 }
 
+export interface ChoiceWizardPropertySetupView {
+  readonly choiceKind: "wizardPropertySetup";
+  readonly choiceId: string;
+  readonly candidateDefinitionId: string;
+}
+
 export type ChoiceView =
   | ChoiceOptionView
   | ChoicePlayerTargetView
@@ -82,7 +89,8 @@ export type ChoiceView =
   | ChoiceDefenseView
   | ChoiceDirectionalPlayerTargetView
   | ChoiceDamageDistributionView
-  | ChoiceFamiliarSetupView;
+  | ChoiceFamiliarSetupView
+  | ChoiceWizardPropertySetupView;
 
 /** A strategy returns only the stable identity of its selected legal choice. */
 export interface ChoiceSelection {
@@ -101,7 +109,9 @@ export interface EffectChoiceRequest {
 
 export type FamiliarSetupChoicePhase = "startingPair" | "thirdFamiliar";
 
-export interface SetupChoiceRequest {
+export type WizardPropertySetupChoicePhase = "startingPair";
+
+export interface FamiliarSetupChoiceRequest {
   readonly requestKind: "setup";
   readonly player: ChoicePlayerView;
   readonly setupChoiceKind: "familiar";
@@ -112,6 +122,22 @@ export interface SetupChoiceRequest {
   readonly cardInstanceId?: never;
   readonly definitionId?: never;
 }
+
+export interface WizardPropertySetupChoiceRequest {
+  readonly requestKind: "setup";
+  readonly player: ChoicePlayerView;
+  readonly setupChoiceKind: "wizardProperty";
+  readonly phase: WizardPropertySetupChoicePhase;
+  readonly choices: readonly ChoiceWizardPropertySetupView[];
+  readonly effectId?: never;
+  readonly sourceType?: never;
+  readonly cardInstanceId?: never;
+  readonly definitionId?: never;
+}
+
+export type SetupChoiceRequest =
+  | FamiliarSetupChoiceRequest
+  | WizardPropertySetupChoiceRequest;
 
 export type ChoiceRequest = EffectChoiceRequest | SetupChoiceRequest;
 
