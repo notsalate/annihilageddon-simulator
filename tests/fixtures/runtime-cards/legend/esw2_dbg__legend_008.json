@@ -28,7 +28,12 @@
     "victoryPoints": 5,
     "isOngoing": true,
     "marketChipMarker": false,
-    "effects": [{ "effectId": "double_owned_attack_damage", "timing": "attackReplacement" }],
+    "effects": [
+      {
+        "effectId": "double_owned_attack_damage",
+        "timing": "attackReplacement"
+      }
+    ],
     "unsupportedMechanics": []
   }
 }

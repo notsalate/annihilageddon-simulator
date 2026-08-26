@@ -21,6 +21,7 @@
 ### Task 1: Reproduce original review findings
 
 **Files:**
+
 - Create: `tests/trigger-dispatch-ongoing.test.ts`
 - Create: `tests/attack-replacement-ongoing.test.ts`
 - Create: `tests/controlled-power-ongoing.test.ts`
@@ -39,6 +40,7 @@
 ### Task 2: Add ongoing controlled-card boundary
 
 **Files:**
+
 - Modify: `src/engine/control-ledger.ts`
 - Modify: `src/engine/attack-resolution.ts`
 - Modify: `src/engine/controlled-power.ts`
@@ -52,6 +54,7 @@
 ### Task 3: Harden defense fixtures
 
 **Files:**
+
 - Modify: `tests/helpers/defense-fixtures.ts`
 
 - [x] Заменить `player.hand.length` на state-wide monotonic unique sequence.
@@ -61,6 +64,7 @@
 ### Task 4: Defer defense snapshot
 
 **Files:**
+
 - Modify: `src/engine/attack-defense.ts`
 
 - [x] Перенести `createDefenseMutationSnapshot` после identity validation выбранной defense card и до `defenseChoiceSelected`/cost mutation.
@@ -70,6 +74,7 @@
 ### Task 5: Preserve terminal Market Flow state
 
 **Files:**
+
 - Modify: `src/engine/market-flow.ts`
 - Create: `tests/market-flow-terminal.test.ts`
 
@@ -80,6 +85,7 @@
 ### Task 6: Centralize physical card zones
 
 **Files:**
+
 - Modify: `src/engine/control-ledger.ts`
 - Modify: `src/engine/effect-runtime.ts`
 - Create: `tests/control-ledger-zones.test.ts`
@@ -91,6 +97,7 @@
 ### Task 7: Align architecture documentation
 
 **Files:**
+
 - Modify: `docs/superpowers/specs/2026-07-20-engine-architecture-deepening-design.md`
 - Modify: `docs/superpowers/plans/2026-07-23-pr-137-review-follow-up.md`
 - Modify: `src/engine/AGENTS.md`
@@ -106,6 +113,7 @@
 ### Task 8: Migrate focused scenarios to the shared helper
 
 **Files:**
+
 - Modify: `tests/helpers/game-scenario.ts`
 - Modify: `tests/helpers/game-scenario.test.ts`
 - Modify: `tests/controlled-power-ongoing.test.ts`

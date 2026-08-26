@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { initializeGame, type GameState, type PlayerState } from "../src/index.js";
+import {
+  initializeGame,
+  type GameState,
+  type PlayerState,
+} from "../src/index.js";
 import {
   resolvePlayerControlledAttack,
   type PlayerControlledAttackAdapters,
@@ -50,7 +54,8 @@ test("runtime target choice is recorded before attack creation", () => {
       event.choiceKind === "playerTarget"
   );
   const attackCreatedIndex = scenario.state.eventLog.findIndex(
-    (event) => event.type === "attackCreated" && event.effectId === "attack_damage"
+    (event) =>
+      event.type === "attackCreated" && event.effectId === "attack_damage"
   );
   assert.notEqual(choiceIndex, -1);
   assert.notEqual(attackCreatedIndex, -1);

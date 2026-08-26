@@ -34,10 +34,7 @@ test("collects compiled test suites from nested directories", (context) => {
   mkdirSync(path.join(testsRoot, "nested", "deeper"), { recursive: true });
   writeFileSync(path.join(testsRoot, "root.test.js"), "");
   writeFileSync(path.join(testsRoot, "nested", "helper.js"), "");
-  writeFileSync(
-    path.join(testsRoot, "nested", "deeper", "child.test.js"),
-    ""
-  );
+  writeFileSync(path.join(testsRoot, "nested", "deeper", "child.test.js"), "");
 
   assert.deepEqual(collectCompiledTestSuites(testsRoot), [
     "nested/deeper/child.test.js",
@@ -82,12 +79,7 @@ test("clean-dist removes stale compiled tests", (context) => {
   const projectRoot = mkdtempSync(path.join(os.tmpdir(), "clean-dist-"));
   context.after(() => rmSync(projectRoot, { force: true, recursive: true }));
 
-  const staleTest = path.join(
-    projectRoot,
-    "dist",
-    "tests",
-    "obsolete.test.js"
-  );
+  const staleTest = path.join(projectRoot, "dist", "tests", "obsolete.test.js");
   mkdirSync(path.dirname(staleTest), { recursive: true });
   writeFileSync(staleTest, "");
 
@@ -106,7 +98,10 @@ test("npm test cleans dist before compiling", () => {
     readFileSync(path.join(repositoryRoot, "package.json"), "utf8")
   ) as PackageJson;
 
-  assert.equal(packageJson.scripts["clean:dist"], "node scripts/clean-dist.mjs");
+  assert.equal(
+    packageJson.scripts["clean:dist"],
+    "node scripts/clean-dist.mjs"
+  );
   assert.equal(
     packageJson.scripts["test"],
     "npm run clean:dist && npm run build -- --pretty false && node dist/tests/run-tests.js"
