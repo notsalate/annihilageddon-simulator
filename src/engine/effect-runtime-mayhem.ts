@@ -1,15 +1,18 @@
 import { drawDeckCards } from "./deck-lifecycle.js";
 import { createAttackDefenseUsage } from "./attack-resolution.js";
 import {
+  getControlledOngoingCards,
   listLegendMarketCards,
   listMainMarketCards,
   movePhysicalCard,
   peekLegendDeckCard,
+  removeTemporaryCardControl,
 } from "./control-ledger.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import { recordEffectChipsChanged } from "./effect-runtime-resources-draw.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
 import {
+  chooseCardCombinations,
   destroyOwnedCard,
   destroyTopMainDeckCard,
 } from "./effect-runtime-cards-ownership-choice.js";
@@ -49,6 +52,7 @@ import type { CardInstance, GameState, PlayerState } from "./setup.js";
 export type MayhemEffectId =
   | "mayhem_attack"
   | "mayhem_attack_equal_highest_card_cost"
+  | "mayhem_each_player_discard_half_controlled_permanents"
   | "mayhem_add_chips_to_main_market"
   | "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status"
   | "mayhem_each_player_choose_foe_gain_chips"
@@ -75,6 +79,7 @@ export type MayhemEffectId =
 export const mayhemEffectIds = [
   "mayhem_attack",
   "mayhem_attack_equal_highest_card_cost",
+  "mayhem_each_player_discard_half_controlled_permanents",
   "mayhem_add_chips_to_main_market",
   "mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status",
   "mayhem_each_player_choose_foe_gain_chips",
@@ -123,6 +128,14 @@ export type MayhemAttackEqualHighestCardCostRuntimeEffect = TimedEffect<
   targetSelector: "allPlayers";
   costSource: "legendMarket" | "targetHand";
 };
+export type MayhemEachPlayerDiscardHalfControlledPermanentsRuntimeEffect =
+  TimedEffect<
+    "mayhem_each_player_discard_half_controlled_permanents",
+    "onMayhemResolve"
+  > & {
+    targetSelector: "eachPlayerClockwiseFromActive";
+    chooser: "affectedPlayer";
+  };
 export type MayhemAddChipsToMainMarketRuntimeEffect = TimedEffect<
   "mayhem_add_chips_to_main_market",
   "onMayhemResolve"
@@ -313,6 +326,7 @@ export type MegaMayhemSetLifeRuntimeEffect = TimedEffect<
 export interface MayhemEffectPayloadMap {
   mayhem_attack: MayhemAttackRuntimeEffect;
   mayhem_attack_equal_highest_card_cost: MayhemAttackEqualHighestCardCostRuntimeEffect;
+  mayhem_each_player_discard_half_controlled_permanents: MayhemEachPlayerDiscardHalfControlledPermanentsRuntimeEffect;
   mayhem_add_chips_to_main_market: MayhemAddChipsToMainMarketRuntimeEffect;
   mayhem_each_dingler_choose_pay_life_or_chip_to_remove_status: MayhemEachDinglerChoosePayLifeOrChipToRemoveStatusRuntimeEffect;
   mayhem_each_player_choose_foe_gain_chips: MayhemEachPlayerChooseFoeGainChipsRuntimeEffect;
@@ -404,6 +418,17 @@ export function createMayhemEffectDecoders(
             errors: [`${label} must be legendMarket or targetHand`],
           };
         }),
+      }
+    ),
+    mayhem_each_player_discard_half_controlled_permanents: defineDecoder(
+      "mayhem_each_player_discard_half_controlled_permanents",
+      {
+        effectId: required(
+          literal("mayhem_each_player_discard_half_controlled_permanents")
+        ),
+        timing: required(literal("onMayhemResolve")),
+        targetSelector: required(literal("eachPlayerClockwiseFromActive")),
+        chooser: required(literal("affectedPlayer")),
       }
     ),
     mayhem_add_chips_to_main_market: defineDecoder(
@@ -1958,6 +1983,139 @@ const mayhemAttackHandler: EffectRuntimeHandler<
   },
 };
 
+function discardControlledPermanent(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance,
+  effectId: RuntimeEffectId,
+  source: EffectSourceContext,
+  services: EffectRuntimeServices
+): EffectExecutionResult {
+  const owner = state.players.find(
+    (candidate) => candidate.playerId === card.ownerId
+  );
+  if (owner === undefined) {
+    return {
+      ok: false,
+      error: `Cannot find owner for controlled permanent ${card.instanceId}`,
+    };
+  }
+  const moved = services.moveCardToZonePreservingOwner(
+    state,
+    player,
+    card,
+    owner.discard,
+    `${owner.playerId}.discard`,
+    effectId,
+    source
+  );
+  if (!moved) {
+    return {
+      ok: false,
+      error: `Cannot discard controlled permanent ${card.instanceId}`,
+    };
+  }
+  removeTemporaryCardControl(state, card.instanceId);
+  recordGameEvent(state, {
+    type: "effectCardDiscarded",
+    playerId: player.playerId,
+    cardInstanceId: source.cardInstanceId,
+    definitionId: source.definitionId,
+    targetCardInstanceId: card.instanceId,
+    targetDefinitionId: card.definitionId,
+    effectId,
+    sourceType: source.sourceType,
+  });
+  return { ok: true };
+}
+
+const mayhemEachPlayerDiscardHalfControlledPermanentsHandler: EffectRuntimeHandler<
+  RuntimeEffectForId<"mayhem_each_player_discard_half_controlled_permanents">
+> = {
+  effectId: "mayhem_each_player_discard_half_controlled_permanents",
+  execute(state, player, effect, source, services) {
+    const targets = services.getPlayersInActiveOrder(state).map(
+      (targetPlayer): MayhemAttackPlanTarget => ({
+        targetPlayer,
+        amount: Math.ceil(
+          getControlledOngoingCards(state, targetPlayer).length / 2
+        ),
+      })
+    );
+    return services.resolveMayhemAttackPlan(
+      state,
+      player,
+      targets,
+      effect.effectId,
+      source,
+      {
+        kind: "effect",
+        executeOnHit(targetPlayer) {
+          const candidates = getControlledOngoingCards(state, targetPlayer);
+          const amount = Math.ceil(candidates.length / 2);
+          if (amount === 0) return { ok: true };
+
+          const choices: EffectChoice[] = chooseCardCombinations(
+            candidates,
+            amount
+          ).map((cards) => ({
+            choiceKind: "cardTarget" as const,
+            choiceId: `discard_${amount}_${cards
+              .map((card) => card.instanceId)
+              .join("_")}`,
+            cards,
+            amount,
+          }));
+          const choice = services.chooseEffectChoice(
+            state,
+            targetPlayer,
+            source,
+            effect.effectId,
+            choices
+          );
+          if (choice?.choiceKind !== "cardTarget") {
+            return {
+              ok: false,
+              error: "Mayhem permanent discard requires an exact card choice",
+            };
+          }
+
+          const selectedIds = choice.cards.map((card) => card.instanceId);
+          const candidateIds = new Set(
+            candidates.map((card) => card.instanceId)
+          );
+          if (
+            choice.amount !== amount ||
+            choice.cards.length !== amount ||
+            new Set(selectedIds).size !== amount ||
+            selectedIds.some(
+              (cardInstanceId) => !candidateIds.has(cardInstanceId)
+            )
+          ) {
+            return {
+              ok: false,
+              error: "Selected Mayhem permanent discard cards are invalid",
+            };
+          }
+
+          for (const card of choice.cards) {
+            const result = discardControlledPermanent(
+              state,
+              targetPlayer,
+              card,
+              effect.effectId,
+              source,
+              services
+            );
+            if (!result.ok) return result;
+          }
+          return { ok: true };
+        },
+      }
+    );
+  },
+};
+
 type HighestCardCostResult =
   | { ok: true; amount: number }
   | { ok: false; error: string };
@@ -2127,6 +2285,11 @@ export function createMayhemEffectDefinitions(
       createMayhemAttackEqualHighestCardCostHandler(
         tools.calculateEffectiveCardCost
       )
+    ),
+    definition(
+      "mayhem_each_player_discard_half_controlled_permanents",
+      mayhemResolveTimings,
+      mayhemEachPlayerDiscardHalfControlledPermanentsHandler
     ),
     definition(
       "mayhem_add_chips_to_main_market",

@@ -42,6 +42,7 @@ import { replacePostSetupWizardPropertyFixture } from "./helpers/fixture-tokens.
 import {
   createGameScenario,
   givenRuntimeCard,
+  givenTemporaryControl,
   play,
   toChoiceSelection,
 } from "./helpers/game-scenario.js";
@@ -2111,6 +2112,221 @@ test("#294 legend_017 handles empty and incomplete hands and can kill a foe", ()
         event.cardInstanceId === attackCard.instanceId
     ),
     false
+  );
+});
+
+test("#295 main_069 collects all defenses before discarding half of controlled permanents", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 295001,
+    playerCount: 4,
+  });
+  const state = scenario.state;
+  const orderedPlayers = getPlayersInActiveOrder(state);
+  const [activePlayer, defendedPlayer, emptyPlayer, oddPlayer] = orderedPlayers;
+  assert.ok(activePlayer);
+  assert.ok(defendedPlayer);
+  assert.ok(emptyPlayer);
+  assert.ok(oddPlayer);
+  for (const player of orderedPlayers) {
+    player.hand = [];
+    player.deck = [];
+    player.discard = [];
+    player.permanents = [];
+    player.playedThisTurn = [];
+    player.wizardProperties = [];
+    player.statuses = [];
+  }
+
+  const addOngoing = (player: PlayerState, cardId: string): CardInstance =>
+    givenRuntimeCard(scenario, {
+      player,
+      zone: "permanents",
+      cardId,
+      effects: [],
+      isOngoing: true,
+    });
+  addOngoing(activePlayer, "fixture-295-active-permanent-1");
+  addOngoing(activePlayer, "fixture-295-active-permanent-2");
+  addOngoing(defendedPlayer, "fixture-295-defended-permanent-1");
+  addOngoing(defendedPlayer, "fixture-295-defended-permanent-2");
+  addOngoing(defendedPlayer, "fixture-295-defended-permanent-3");
+  addOngoing(oddPlayer, "fixture-295-odd-permanent-1");
+  addOngoing(oddPlayer, "fixture-295-odd-permanent-2");
+  addOngoing(oddPlayer, "fixture-295-odd-permanent-3");
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    defendedPlayer,
+    "discardSelf"
+  );
+  const source = givenRuntimeCard(scenario, {
+    player: activePlayer,
+    zone: "playedThisTurn",
+    definitionId: "esw2_dbg__main_069",
+  });
+  const definition = state.cardDefinitions.get("esw2_dbg__main_069");
+  assert.ok(definition);
+  const choiceRequests: Array<{
+    effectId: string;
+    playerId: string;
+  }> = [];
+  state.effectChoiceStrategy = (request) => {
+    if (request.requestKind !== "effect") return undefined;
+    choiceRequests.push({
+      effectId: request.effectId,
+      playerId: request.player.playerId,
+    });
+    if (
+      request.effectId === "avoid_attack" &&
+      request.player.playerId === defendedPlayer.playerId
+    ) {
+      return selectFirstFixtureDefense(request);
+    }
+    return undefined;
+  };
+
+  assert.deepEqual(
+    executeMayhemEffects(state, activePlayer, definition, {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: activePlayer.playerId,
+      cardInstanceId: source.instanceId,
+      definitionId: source.definitionId,
+    }),
+    { ok: true }
+  );
+
+  assert.equal(activePlayer.permanents.length, 1);
+  assert.equal(defendedPlayer.permanents.length, 3);
+  assert.equal(emptyPlayer.permanents.length, 0);
+  assert.equal(oddPlayer.permanents.length, 1);
+  assert.equal(defendedPlayer.discard.includes(defenseCard), true);
+  assert.deepEqual(
+    choiceRequests
+      .filter(
+        ({ effectId }) =>
+          effectId === "mayhem_each_player_discard_half_controlled_permanents"
+      )
+      .map(({ playerId }) => playerId),
+    [activePlayer.playerId, oddPlayer.playerId]
+  );
+  const decisionIndices = state.eventLog
+    .map((event, index) =>
+      event.type === "mayhemDecisionStarted" &&
+      event.effectId === "mayhem_each_player_discard_half_controlled_permanents"
+        ? index
+        : undefined
+    )
+    .filter((index): index is number => index !== undefined);
+  const resolutionIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "mayhemResolutionPhaseStarted" &&
+      event.effectId === "mayhem_each_player_discard_half_controlled_permanents"
+  );
+  const discardIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "effectCardDiscarded" &&
+      event.effectId === "mayhem_each_player_discard_half_controlled_permanents"
+  );
+  assert.equal(decisionIndices.length, 4);
+  assert.ok(Math.max(...decisionIndices) < resolutionIndex);
+  assert.ok(resolutionIndex < discardIndex);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "mayhemTargetSkipped" &&
+        event.targetPlayerId === defendedPlayer.playerId &&
+        event.effectId ===
+          "mayhem_each_player_discard_half_controlled_permanents"
+    ),
+    true
+  );
+});
+
+test("#295 main_069 preserves ownership and releases temporary control", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 295002,
+    playerCount: 2,
+  });
+  const state = scenario.state;
+  const [activePlayer, owner] = getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(owner);
+  for (const player of [activePlayer, owner]) {
+    player.hand = [];
+    player.deck = [];
+    player.discard = [];
+    player.permanents = [];
+    player.playedThisTurn = [];
+    player.wizardProperties = [];
+    player.statuses = [];
+  }
+  const temporarilyControlled = givenRuntimeCard(scenario, {
+    player: owner,
+    zone: "playedThisTurn",
+    cardId: "fixture-295-temporary-permanent",
+    effects: [],
+    isOngoing: true,
+  });
+  givenTemporaryControl(scenario, temporarilyControlled, activePlayer);
+  const source = givenRuntimeCard(scenario, {
+    player: activePlayer,
+    zone: "playedThisTurn",
+    definitionId: "esw2_dbg__main_069",
+  });
+  const definition = state.cardDefinitions.get("esw2_dbg__main_069");
+  assert.ok(definition);
+  state.effectChoiceStrategy = (request) => {
+    if (
+      request.effectId !==
+      "mayhem_each_player_discard_half_controlled_permanents"
+    ) {
+      return undefined;
+    }
+    const choice = request.choices.find(
+      (candidate) =>
+        candidate.choiceKind === "cardTarget" &&
+        candidate.targetCardInstanceIds.includes(
+          temporarilyControlled.instanceId
+        )
+    );
+    return choice === undefined ? undefined : { choiceId: choice.choiceId };
+  };
+
+  assert.deepEqual(
+    executeMayhemEffects(state, activePlayer, definition, {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: activePlayer.playerId,
+      cardInstanceId: source.instanceId,
+      definitionId: source.definitionId,
+    }),
+    { ok: true }
+  );
+
+  assert.equal(owner.discard.includes(temporarilyControlled), true);
+  assert.equal(
+    state.common.destroyedPile.includes(temporarilyControlled),
+    false
+  );
+  assert.equal(temporarilyControlled.ownerId, owner.playerId);
+  assert.equal(
+    state.turn.temporaryCardControls.some(
+      (control) => control.cardInstanceId === temporarilyControlled.instanceId
+    ),
+    false
+  );
+  assert.equal(owner.playedThisTurn.includes(temporarilyControlled), false);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectCardDiscarded" &&
+        event.effectId ===
+          "mayhem_each_player_discard_half_controlled_permanents" &&
+        event.targetCardInstanceId === temporarilyControlled.instanceId
+    ),
+    true
   );
 });
 
@@ -14121,6 +14337,9 @@ test("2E добавляет чипсину каждой текущей карт�
   const secondMarketCard = state.common.market[1];
   assert.ok(firstMarketCard);
   assert.ok(secondMarketCard);
+  for (const card of state.common.market) {
+    card.marketChips = 0;
+  }
   firstMarketCard.marketChips = 2;
 
   const result = executeMayhemEffects(state, player, mayhemDefinition, {

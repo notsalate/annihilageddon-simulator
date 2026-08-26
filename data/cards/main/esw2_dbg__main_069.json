@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "cardId": "esw2_dbg__main_069",
+  "source": {
+    "draft": "data/import/cards/main/drafts/esw2_dbg__main_069.json",
+    "image": "assets/cards/mayhem/БЕСПРЕДЕЛ. 2K.png",
+    "text": "data/import/cards/main/texts/esw2_dbg__main_069.md"
+  },
+  "visible": {
+    "nameRu": "2K",
+    "cost": null,
+    "victoryPoints": null,
+    "typeRu": "Беспредел",
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "textRu": "Атака: каждый колдун сбрасывает половину своих карт-постоянок (округляя вверх).",
+    "markers": ["attack"],
+    "uncertainty": []
+  },
+  "engine": {
+    "runtimeSchema": "krutagidon.cardDefinition.v0",
+    "mappingStatus": "supported",
+    "playableInV0": true,
+    "needsEffectMapping": false,
+    "cardKind": "mayhem",
+    "cardTypes": [],
+    "cost": 0,
+    "victoryPoints": 0,
+    "isOngoing": false,
+    "marketChipMarker": false,
+    "effects": [
+      {
+        "effectId": "mayhem_each_player_discard_half_controlled_permanents",
+        "timing": "onMayhemResolve",
+        "targetSelector": "eachPlayerClockwiseFromActive",
+        "chooser": "affectedPlayer"
+      }
+    ],
+    "unsupportedMechanics": []
+  }
+}
