@@ -247,6 +247,8 @@ export type RuntimeEffectCost =
   | PayLifeRuntimeEffectCost;
 
 export type AttackOutcomeBranch =
+  | { effectId: "draw_cards"; amount: number }
+  | { effectId: "end_game_if_original_target_killed" }
   | { effectId: "gain_chips"; amount: number }
   | { effectId: "gain_chips_equal_damage_dealt" }
   | { effectId: "heal_equal_damage_dealt" }
@@ -442,6 +444,7 @@ type Costed = {
 };
 type AttackBranches = {
   onDamageDealt?: AttackOutcomeBranch[];
+  onAvoided?: AttackOutcomeBranch[];
   onKill?: AttackOutcomeBranch[];
 };
 

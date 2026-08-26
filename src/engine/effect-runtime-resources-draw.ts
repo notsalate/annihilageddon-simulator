@@ -240,7 +240,7 @@ const gainChipsPerControlledDeadWizardTokenHandler: EffectRuntimeHandler<GainChi
     },
   };
 
-function drawCardsForPlayer(
+export function drawCardsForPlayer(
   state: GameState,
   player: PlayerState,
   amount: number,

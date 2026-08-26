@@ -343,6 +343,13 @@ export interface EffectRuntimeServices {
     player: PlayerState,
     count: number
   ): CardInstance[];
+  drawCards(
+    state: GameState,
+    player: PlayerState,
+    amount: number,
+    effectId: RuntimeEffectId,
+    source: EffectSourceContext
+  ): void;
   getDestroyDestination(
     state: GameState,
     card: CardInstance
@@ -483,9 +490,7 @@ export interface EffectRuntimeServices {
   resolvePlayerControlledAttack(
     intent: PlayerControlledAttackIntent
   ): PlayerControlledAttackExecutionResult;
-  resolvePendingDeadWizardTokenFaces(
-    state: GameState
-  ): EffectExecutionResult;
+  resolvePendingDeadWizardTokenFaces(state: GameState): EffectExecutionResult;
   resolveDefenseWindow(
     state: GameState,
     defendingPlayer: PlayerState,

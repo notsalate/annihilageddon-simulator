@@ -333,6 +333,15 @@ const runtimeCosts = arrayOf(runtimeCost);
 const attackOutcomeBranch: ValueDecoder<AttackOutcomeBranch> = (label, raw) => {
   if (!isPlainRecord(raw)) return failure(`${label} must be an object`);
   switch (raw["effectId"]) {
+    case "draw_cards":
+      return decodeObject(label, raw, {
+        effectId: required(literal("draw_cards")),
+        amount: required(positiveInteger),
+      });
+    case "end_game_if_original_target_killed":
+      return decodeObject(label, raw, {
+        effectId: required(literal("end_game_if_original_target_killed")),
+      });
     case "gain_chips":
       return decodeObject(label, raw, {
         effectId: required(literal("gain_chips")),

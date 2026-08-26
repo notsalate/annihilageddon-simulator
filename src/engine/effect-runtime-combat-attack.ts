@@ -3,6 +3,7 @@ import {
   buildControlledObjectView,
   peekLegendDeckCard,
 } from "./control-ledger.js";
+import type { ResolvedAttackBranchContext } from "./attack-resolution.js";
 import { countControlledCardsOfType } from "./card-type-runtime.js";
 import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
 import { recordGameEvent } from "./event-recorder.js";
@@ -13,7 +14,6 @@ import {
 } from "./effect-runtime-cards-ownership-choice.js";
 import type {
   AttackReplacementProfile,
-  DamageResult,
   EffectChoice,
   EffectExecutionResult,
   EffectRuntimeOperationResult,
@@ -164,6 +164,7 @@ export function createCombatAttackEffectDecoders(
         costs: optionalCosts,
         optional: optional(booleanValue),
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
       },
       requireTargetSelector("attack", [
@@ -183,6 +184,7 @@ export function createCombatAttackEffectDecoders(
         amountPerDeadWizardToken: required(positiveInteger),
         targetSelector: required(literal("eachFoe")),
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
       }
     ),
@@ -225,6 +227,7 @@ export function createCombatAttackEffectDecoders(
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
         rememberedCard: required(literal("destroyedLegend")),
       }
@@ -239,6 +242,7 @@ export function createCombatAttackEffectDecoders(
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
         costMode: required(oneOf(["highest", "chosen"] as const)),
         excludeSource: optional(booleanValue),
@@ -260,6 +264,7 @@ export function createCombatAttackEffectDecoders(
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
         damageUsesDestroyedCardCost: required(literal(true)),
         destroyedCardSource: required(literal("legendDeck")),
@@ -340,6 +345,7 @@ export function createCombatAttackEffectDecoders(
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
       },
       requireTargetSelector("directional attack", ["leftOrRightFoe"])
@@ -352,6 +358,7 @@ export function createCombatAttackEffectDecoders(
         selectorTargetOneOf(["leftAndRightFoes", "opponentPlayers"] as const)
       ),
       onDamageDealt: optionalAttackBranches,
+      onAvoided: optionalAttackBranches,
       onKill: optionalAttackBranches,
     }),
     optional_spend_chip_attack_damage: defineDecoder(
@@ -363,6 +370,7 @@ export function createCombatAttackEffectDecoders(
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         onDamageDealt: optionalAttackBranches,
+        onAvoided: optionalAttackBranches,
         onKill: optionalAttackBranches,
         chipCost: required(positiveInteger),
       },
@@ -776,6 +784,7 @@ function resolvePlayerControlledDamageAttack(
       sourceOwnerModifierAmount: attackProfile.damageBonus,
       onDamageDealt:
         "onDamageDealt" in effect ? (effect.onDamageDealt ?? []) : [],
+      onAvoided: "onAvoided" in effect ? (effect.onAvoided ?? []) : [],
       onKill: "onKill" in effect ? (effect.onKill ?? []) : [],
     },
   });
@@ -1099,10 +1108,31 @@ export function executeAttackOutcomeBranch(
   branch: AttackOutcomeBranch,
   source: EffectSourceContext,
   targetPlayer: PlayerState,
-  attackResult: DamageResult,
+  attackResult: ResolvedAttackBranchContext,
   attackEffectId: RuntimeEffectId,
   services: EffectRuntimeServices
 ): EffectExecutionResult {
+  if (branch.effectId === "draw_cards") {
+    services.drawCards(state, player, branch.amount, branch.effectId, source);
+    return { ok: true };
+  }
+
+  if (branch.effectId === "end_game_if_original_target_killed") {
+    if (
+      !attackResult.killed ||
+      targetPlayer.playerId !== attackResult.originalTargetPlayerId
+    ) {
+      return { ok: true };
+    }
+    return {
+      ok: true,
+      gameEnd: {
+        reason: "playerDefeated",
+        winnerPlayerId: player.playerId,
+      },
+    };
+  }
+
   if (branch.effectId === "attack_discard_cards") {
     return executeAttackDiscardCards(
       state,

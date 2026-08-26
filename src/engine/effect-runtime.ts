@@ -41,6 +41,7 @@ import {
   resolveMainMarketGainDestination,
 } from "./effect-runtime-cards-ownership-choice.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
+import { drawCardsForPlayer } from "./effect-runtime-resources-draw.js";
 import {
   resolveCardPlay,
   type CardPlayResolutionServices,
@@ -1764,6 +1765,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   moveCardToZonePreservingOwner,
   restoreDetachedCardToZone,
   discardTopDeckCards,
+  drawCards: drawCardsForPlayer,
   getDestroyDestination,
   getOpponentsInSeatingOrder,
   getPlayersInActiveOrder,

@@ -9045,6 +9045,210 @@ test("#288 main_021 cancels its discard on avoidance and discards the redirected
   assert.equal(redirectedAttacker.discard.includes(redirectedCard), true);
 });
 
+test("#289 legend_024 wins when its original target is killed", () => {
+  const state = initializeGame({ rootDir, seed: 60622, playerCount: 2 });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  targetPlayer.life.current = 1;
+  state.common.deadWizardTokens.drawStack = [];
+  state.turn.power = 99;
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_024"
+  );
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.gameEndReason, "playerDefeated");
+  assert.equal(result.winnerPlayerId, activePlayer.playerId);
+  assert.equal(targetPlayer.life.current, 20);
+});
+
+test("#289 legend_024 does not win when a redirect kills another wizard", () => {
+  const state = initializeGame({ rootDir, seed: 60623, playerCount: 2 });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  activePlayer.life.current = 1;
+  targetPlayer.life.current = 20;
+  state.common.deadWizardTokens.drawStack = [];
+  state.turn.power = 99;
+  addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf", {
+    redirectAttack: true,
+  });
+  state.effectChoiceStrategy = (request) => {
+    if (request.effectId === "attack_damage") {
+      return { choiceId: targetPlayer.playerId };
+    }
+    return selectFirstFixtureDefense(request);
+  };
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_024"
+  );
+
+  const result = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: wand.instanceId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.gameEndReason, undefined);
+  assert.equal(targetPlayer.life.current, 20);
+  assert.equal(activePlayer.life.current, 20);
+});
+
+test("#289 main_025 draws exactly once for an avoided original target", () => {
+  const avoidedState = initializeGame({
+    rootDir,
+    seed: 60624,
+    playerCount: 2,
+  });
+  const avoidedAttacker = mustGetPlayer(avoidedState, markPlayerId("player-1"));
+  const avoidedTarget = mustGetPlayer(avoidedState, markPlayerId("player-2"));
+  avoidedState.activePlayerId = avoidedAttacker.playerId;
+  avoidedAttacker.wizardProperties = [];
+  avoidedTarget.wizardProperties = [];
+  avoidedTarget.life.current = 20;
+  avoidedState.turn.power = 99;
+  addFixtureDefenseCardToHand(avoidedState, avoidedTarget, "discardSelf");
+  avoidedState.effectChoiceStrategy = (request) => {
+    if (request.effectId === "attack_damage") {
+      return { choiceId: avoidedTarget.playerId };
+    }
+    return selectFirstFixtureDefense(request);
+  };
+  const avoidedAttack = addRuntimeCardToHand(
+    avoidedState,
+    avoidedAttacker,
+    "esw2_dbg__main_025"
+  );
+
+  assert.equal(
+    applyAction(avoidedState, {
+      type: "playCard",
+      cardInstanceId: avoidedAttack.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(avoidedTarget.life.current, 20);
+  assert.equal(
+    avoidedState.eventLog.filter(
+      (event) =>
+        event.type === "effectDrawCardsApplied" &&
+        event.definitionId === "esw2_dbg__main_025"
+    ).length,
+    1
+  );
+
+  const redirectedState = initializeGame({
+    rootDir,
+    seed: 60625,
+    playerCount: 2,
+  });
+  const redirectedAttacker = mustGetPlayer(
+    redirectedState,
+    markPlayerId("player-1")
+  );
+  const redirectingTarget = mustGetPlayer(
+    redirectedState,
+    markPlayerId("player-2")
+  );
+  redirectedState.activePlayerId = redirectedAttacker.playerId;
+  redirectedAttacker.wizardProperties = [];
+  redirectingTarget.wizardProperties = [];
+  redirectedState.turn.power = 99;
+  addFixtureDefenseCardToHand(
+    redirectedState,
+    redirectingTarget,
+    "discardSelf",
+    {
+      redirectAttack: true,
+    }
+  );
+  redirectedState.effectChoiceStrategy = (request) => {
+    if (request.effectId === "attack_damage") {
+      return { choiceId: redirectingTarget.playerId };
+    }
+    return selectFirstFixtureDefense(request);
+  };
+  const redirectedAttack = addRuntimeCardToHand(
+    redirectedState,
+    redirectedAttacker,
+    "esw2_dbg__main_025"
+  );
+
+  assert.equal(
+    applyAction(redirectedState, {
+      type: "playCard",
+      cardInstanceId: redirectedAttack.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(
+    redirectedState.eventLog.filter(
+      (event) =>
+        event.type === "effectDrawCardsApplied" &&
+        event.definitionId === "esw2_dbg__main_025"
+    ).length,
+    1
+  );
+});
+
+test("#289 main_025 does not draw on a hit or a death", () => {
+  for (const targetLife of [20, 1]) {
+    const state = initializeGame({
+      rootDir,
+      seed: 60626 + targetLife,
+      playerCount: 2,
+    });
+    const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+    const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+    state.activePlayerId = activePlayer.playerId;
+    activePlayer.wizardProperties = [];
+    targetPlayer.wizardProperties = [];
+    targetPlayer.life.current = targetLife;
+    state.common.deadWizardTokens.drawStack = [];
+    state.turn.power = 99;
+    state.effectChoiceStrategy = (request) =>
+      request.effectId === "attack_damage"
+        ? { choiceId: targetPlayer.playerId }
+        : undefined;
+    const attack = addRuntimeCardToHand(
+      state,
+      activePlayer,
+      "esw2_dbg__main_025"
+    );
+
+    assert.equal(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: attack.instanceId,
+      }).ok,
+      true
+    );
+    assert.equal(
+      state.eventLog.filter(
+        (event) =>
+          event.type === "effectDrawCardsApplied" &&
+          event.definitionId === "esw2_dbg__main_025"
+      ).length,
+      0
+    );
+  }
+});
+
 test("Ultimate Tronado gains the actual total from a directional chain attack only once", () => {
   const state = initializeGame({
     rootDir,
