@@ -10,10 +10,13 @@ import {
   type TokenDefinition,
 } from "../src/index.js";
 import { calculateEffectivePlayerVictoryPoints } from "../src/engine/effective-values.js";
+import { createAttackInstance } from "../src/engine/attack-resolution.js";
+import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
 import { recordBotActionSelected } from "../src/engine/event-recorder.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
+  markAttackId,
   markPlayerId,
   markTokenDefinitionId,
   markTokenInstanceId,
@@ -240,6 +243,34 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
   assert.equal(fork.tokenDefinitions, source.tokenDefinitions);
   assert.equal(fork.effectChoiceStrategy, source.effectChoiceStrategy);
   assert.notEqual(fork.eventLog, source.eventLog);
+});
+
+test("fork preserves independent AttackId sequences", () => {
+  const source = createFixture();
+  const fork = forkGameState(source);
+  const sourcePlayer = source.players[0]!;
+  const forkPlayer = fork.players[0]!;
+  const attackSource = {
+    sourceType: "card",
+    runtimeMode: "fixture",
+    playerId: sourcePlayer.playerId,
+    cardInstanceId: "attack-card",
+    definitionId: "attack-definition",
+  } satisfies EffectSourceContext;
+
+  const sourceAttack = createAttackInstance(source, sourcePlayer, attackSource);
+  const forkAttack = createAttackInstance(fork, forkPlayer, attackSource);
+  const nextSourceAttack = createAttackInstance(
+    source,
+    sourcePlayer,
+    attackSource
+  );
+
+  assert.equal(sourceAttack.attackId, markAttackId("attack-1"));
+  assert.equal(forkAttack.attackId, markAttackId("attack-1"));
+  assert.equal(nextSourceAttack.attackId, markAttackId("attack-2"));
+  assert.equal(source.nextAttackId, 3);
+  assert.equal(fork.nextAttackId, 2);
 });
 
 test("fork preserves verified effects for Effective Value calculations", () => {
