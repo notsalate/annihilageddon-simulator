@@ -1983,7 +1983,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_002",
@@ -2314,7 +2316,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_006",
@@ -2422,7 +2426,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_007",
@@ -2549,6 +2555,9 @@
             }
           ]
         }
+      ],
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
       ]
     },
     {
@@ -2657,7 +2666,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_009",
@@ -2745,7 +2756,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_010",
@@ -2873,7 +2886,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_011",
@@ -3021,7 +3036,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_012",
@@ -3089,7 +3106,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_013",
@@ -3174,7 +3193,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_014",
@@ -3282,7 +3303,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_015",
@@ -3330,7 +3353,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_016",
@@ -3490,7 +3515,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_017",
@@ -3602,7 +3629,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_018",
@@ -3690,7 +3719,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_019",
@@ -3739,7 +3770,7 @@
         },
         {
           "draftPoint": {
-            "path": "notes[1]",
+            "path": "notes[3]",
             "value": "Игрок выбирает любого другого колдуна."
           },
           "runtimeRefs": [
@@ -3759,7 +3790,7 @@
         },
         {
           "draftPoint": {
-            "path": "notes[2]",
+            "path": "notes[4]",
             "value": "Игрок и выбранный колдун меняются текущими значениями жизней."
           },
           "runtimeRefs": [
@@ -3779,7 +3810,7 @@
         },
         {
           "draftPoint": {
-            "path": "notes[3]",
+            "path": "notes[5]",
             "value": "Допускается ситуация, когда игрок выбрал другого игрока, у которого такое же количество жизней, то есть ЖДК сработал, но у двух игроков жизни не изменились"
           },
           "runtimeRefs": [
@@ -3799,7 +3830,7 @@
         },
         {
           "draftPoint": {
-            "path": "notes[4]",
+            "path": "notes[6]",
             "value": "Самого себя выбрать запрещено"
           },
           "runtimeRefs": [
@@ -3818,7 +3849,10 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "DWT 019 from an ATTACK death waits for that AttackInstance before exchanging life",
+        "direct DWT 019 gain without a current respawn fizzles permanently"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_020",
@@ -3906,7 +3940,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_021",
@@ -4034,7 +4070,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_022",
@@ -4142,7 +4180,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_023",
@@ -4270,7 +4310,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_024",
@@ -4378,7 +4420,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_025",
@@ -4506,7 +4550,9 @@
           ]
         }
       ],
-      "unresolvedMechanics": []
+      "unresolvedMechanics": [
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
+      ]
     },
     {
       "id": "esw2_dbg__dead_wizard_token_026",
@@ -4573,7 +4619,7 @@
         },
         {
           "draftPoint": {
-            "path": "notes[1]",
+            "path": "notes[2]",
             "value": "Это также имеет end-game эффект."
           },
           "runtimeRefs": [
@@ -4599,7 +4645,7 @@
         },
         {
           "draftPoint": {
-            "path": "notes[2]",
+            "path": "notes[3]",
             "value": "В конце игры игрок удваивает свои штрафные ПО за жетон лошары."
           },
           "runtimeRefs": [
@@ -4623,6 +4669,10 @@
             }
           ]
         }
+      ],
+      "unresolvedMechanics": [
+        "DWT 026 applies its Dingler respawn projection before the current reset",
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
       ]
     },
     {
@@ -4689,27 +4739,12 @@
               "name": "ЖДК 027 делает нормального лошарой, а лошаре полностью разрешает ещё один ЖДК"
             }
           ]
-        },
-        {
-          "draftPoint": {
-            "path": "notes[2]",
-            "value": "Получение еще одного ЖДК не является СМЕРТЬЮ"
-          },
-          "runtimeRefs": [
-            {
-              "kind": "effect",
-              "effectId": "dead_wizard_token_gain_status_or_draw_face",
-              "timing": "onDeadWizardTokenFace",
-              "fields": { "statusId": "dingler" }
-            }
-          ],
-          "testRefs": [
-            {
-              "file": "tests/action-loop.test.ts",
-              "name": "ЖДК 027 делает нормального лошарой, а лошаре полностью разрешает ещё один ЖДК"
-            }
-          ]
         }
+      ],
+      "unresolvedMechanics": [
+        "DWT 027 evaluates and applies its status branch before the current reset",
+        "the nested DWT from DWT 027 is a direct gain resolved immediately depth-first",
+        "source-sensitive DWT lifecycle (AttackInstance-deferred versus direct/non-ATTACK depth-first resolution) is not implemented and focused-tested"
       ]
     },
     {
@@ -4788,7 +4823,7 @@
         },
         {
           "draftPoint": {
-            "path": "notes[2]",
+            "path": "notes[3]",
             "value": "\"Стать нормальным\" означает снять статус лошары."
           },
           "runtimeRefs": [
@@ -4809,6 +4844,9 @@
             }
           ]
         }
+      ],
+      "unresolvedMechanics": [
+        "DWT 028 evaluates and applies its status toggle before the current reset"
       ]
     },
     {
