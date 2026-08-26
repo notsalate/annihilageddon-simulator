@@ -604,6 +604,7 @@ const runtimeSeamNames = [
   "calculateEffectiveCardCost",
   "calculateEffectiveCardVictoryPoints",
   "calculateEffectivePlayerMaxLife",
+  "createGameScenario",
   "gainDeadWizardToken",
   "initializeGame",
   "runMarketFlow",
@@ -713,6 +714,19 @@ function getStateBinding(
   testBody: string,
   call: RuntimeSeamCall
 ): string | undefined {
+  if (call.name === "createGameScenario") {
+    const resultBinding =
+      /\b(?:const|let)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*$/.exec(
+        testBody.slice(0, call.start)
+      )?.[1];
+    if (resultBinding === undefined) {
+      return undefined;
+    }
+    const stateBinding = new RegExp(
+      `\\b(?:const|let)\\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*=\\s*${escapeRegExp(resultBinding)}\\.state\\b`
+    ).exec(testBody.slice(call.end));
+    return stateBinding?.[1] ?? resultBinding;
+  }
   if (call.name === "initializeGame") {
     const resultBinding =
       /\b(?:const|let)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*$/.exec(

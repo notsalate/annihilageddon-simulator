@@ -2385,12 +2385,26 @@ test("#287 main_024 can defend by discarding itself and drawing one card", () =>
 });
 
 test("#287 starter_004 returns discard cards before the gained DWT face", () => {
-  const state = initializeGame({ rootDir, seed: 287004 });
+  const dataPack = createWizardPropertySetupEntriesDataPack(
+    createExpandedDeadWizardTokenSetupDataPack(
+      loadCurrentRuntimeDataPack(rootDir),
+      40
+    ),
+    [{ tokenId: "esw2_dbg__wizard_property_009", count: 4 }]
+  );
+  const state = initializeGame({ dataPack, seed: 287004 });
   const attacker = mustGetPlayer(state, markPlayerId("player-1"));
   state.activePlayerId = attacker.playerId;
   for (const player of state.players) {
-    player.wizardProperties = [];
+    if (player.playerId !== attacker.playerId) {
+      player.wizardProperties = [];
+    }
   }
+  const wizardProperty009 = state.tokenDefinitions.get(
+    "esw2_dbg__wizard_property_009"
+  );
+  assert.ok(wizardProperty009);
+  replaceFirstWizardProperty(state, attacker, wizardProperty009);
   attacker.hand = [];
   attacker.discard = [];
   attacker.life.current = 1;
@@ -2420,6 +2434,10 @@ test("#287 starter_004 returns discard cards before the gained DWT face", () => 
   assert.deepEqual(
     applyAction(state, { type: "playCard", cardInstanceId: wand.instanceId }),
     { ok: true }
+  );
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
+    false
   );
   for (const card of returnedCards) {
     assert.equal(attacker.hand.includes(card), true);
@@ -8648,6 +8666,10 @@ test("#316 wizard property 009 uses ownership and tags instead of names", () => 
   );
   assert.equal(targetPlayer.life.current, 20);
   assert.equal(targetPlayer.discard.includes(nameOnlyDefense), true);
+  assert.equal(
+    state.eventLog.some((event) => event.type === "defenseChoiceSelected"),
+    true
+  );
 });
 
 test("Lubricating Dirty Stick permanently buffs each owned Wand attack and gains power once per Wand play", () => {

@@ -1444,10 +1444,239 @@
       "id": "esw2_dbg__wizard_property_009",
       "objectKind": "wizardProperty",
       "primaryMechanicCluster": "attack-effects",
-      "semanticMappings": [],
-      "unresolvedMechanics": [
-        "runtime and focused-test mapping pending in attack-effects"
-      ]
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Замени 1 из своих начальных карт знаков на палочку-хреналочку. Атаки твоих палочек наносят +1 урон, и их нельзя избежать."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "replace_starting_card",
+              "timing": "setup",
+              "fields": {
+                "fromDefinitionId": "esw2_dbg__starter_001",
+                "toDefinitionId": "esw2_dbg__starter_004"
+              }
+            },
+            {
+              "kind": "effect",
+              "effectId": "modify_owned_wand_attack_damage",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"], "amount": 1 }
+            },
+            {
+              "kind": "effect",
+              "effectId": "prevent_defense_against_owned_wand_attacks",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "#316 wizard property 009 replaces a real starter and buffs its temporary controller's attack"
+            },
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "#316 wizard property 009 uses ownership and tags instead of names"
+            },
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "#287 starter_004 returns discard cards before the gained DWT face"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Это свойство применяется при подготовке к игре."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "replace_starting_card",
+              "timing": "setup",
+              "fields": {
+                "fromDefinitionId": "esw2_dbg__starter_001",
+                "toDefinitionId": "esw2_dbg__starter_004"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "#316 wizard property 009 replaces a real starter and buffs its temporary controller's attack"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Игрок заменяет 1 из своих начальных карт знаков на карту \"палочка-хреналочка\"."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "replace_starting_card",
+              "timing": "setup",
+              "fields": {
+                "fromDefinitionId": "esw2_dbg__starter_001",
+                "toDefinitionId": "esw2_dbg__starter_004"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "#316 wizard property 009 replaces a real starter and buffs its temporary controller's attack"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Атаки палочек игрока наносят на 1 урон больше."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_owned_wand_attack_damage",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"], "amount": 1 }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "#316 wizard property 009 replaces a real starter and buffs its temporary controller's attack"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Атак палочек игрока нельзя избежать."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "prevent_defense_against_owned_wand_attacks",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "#316 wizard property 009 replaces a real starter and buffs its temporary controller's attack"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[4]",
+            "value": "Карта \"Хреналочка\" еще не добавлена в текущую версию игры"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "replace_starting_card",
+              "timing": "setup",
+              "fields": {
+                "fromDefinitionId": "esw2_dbg__starter_001",
+                "toDefinitionId": "esw2_dbg__starter_004"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "#316 wizard property 009 replaces a real starter and buffs its temporary controller's attack"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[5]",
+            "value": "Палочкой считается не только стартовые палочки \"Сырная палочка\". А также и другие карты с названием содержащей \"Палочку\", кроме Вялой Палочки и Постоянки"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_owned_wand_attack_damage",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"], "amount": 1 }
+            },
+            {
+              "kind": "effect",
+              "effectId": "prevent_defense_against_owned_wand_attacks",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "#316 wizard property 009 replaces a real starter and buffs its temporary controller's attack"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[6]",
+            "value": "Допустим, враг сыграл шальной магией сырную палочку игрока со свойством 9, тогда враг может нанести увеличенный урон без возможности защититься, т.к в свойстве четко прописано \"Атаки ТВОИХ палочек....\""
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_owned_wand_attack_damage",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"], "amount": 1 }
+            },
+            {
+              "kind": "effect",
+              "effectId": "prevent_defense_against_owned_wand_attacks",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "#316 wizard property 009 uses ownership and tags instead of names"
+            }
+          ]
+        },
+        {
+          "draftPoint": {
+            "path": "notes[7]",
+            "value": "Если игрок со свойством 9 сыграл шальную магию в другого игрока и достал чужую сырную или другую палочку, то свойство не применяется к этим палочкам, так как ими владеет другой игрок"
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "modify_owned_wand_attack_damage",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"], "amount": 1 }
+            },
+            {
+              "kind": "effect",
+              "effectId": "prevent_defense_against_owned_wand_attacks",
+              "timing": "attackReplacement",
+              "fields": { "cardTags": ["wandAttackCard"] }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/action-loop.test.ts",
+              "name": "#316 wizard property 009 uses ownership and tags instead of names"
+            }
+          ]
+        }
+      ],
+      "unresolvedMechanics": []
     },
     {
       "id": "esw2_dbg__wizard_property_010",

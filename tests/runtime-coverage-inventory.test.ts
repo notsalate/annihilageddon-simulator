@@ -1009,8 +1009,8 @@ test("repository cross-source registry assigns every wizard property and DWT to 
       (item) => item.primaryMechanicCluster !== undefined
     )
   );
-  assert.equal(report.crossSourceSummary.blocked, 135);
-  assert.equal(report.crossSourceSummary.crossSourceComplete, 37);
+  assert.equal(report.crossSourceSummary.blocked, 134);
+  assert.equal(report.crossSourceSummary.crossSourceComplete, 38);
   assert.ok(firstDeadWizardToken);
   assert.ok(wizardProperty004);
   assert.equal(wizardProperty004.crossSourceStatus, "crossSourceComplete");
@@ -1077,6 +1077,16 @@ test("card-movement cross-source evidence covers DWT 024 reveal and destroy", ()
   const report = createRuntimeCoverageInventory(process.cwd());
   const item = report.items.find(
     (candidate) => candidate.id === "esw2_dbg__dead_wizard_token_024"
+  );
+  assert.ok(item);
+  assert.equal(item.crossSourceStatus, "crossSourceComplete");
+  assert.deepEqual(item.crossSourceBlockers, []);
+});
+
+test("attack-effects cross-source evidence covers wizard property 009", () => {
+  const report = createRuntimeCoverageInventory(process.cwd());
+  const item = report.items.find(
+    (candidate) => candidate.id === "esw2_dbg__wizard_property_009"
   );
   assert.ok(item);
   assert.equal(item.crossSourceStatus, "crossSourceComplete");
