@@ -1009,8 +1009,8 @@ test("repository cross-source registry assigns every wizard property and DWT to 
       (item) => item.primaryMechanicCluster !== undefined
     )
   );
-  assert.equal(report.crossSourceSummary.blocked, 144);
-  assert.equal(report.crossSourceSummary.crossSourceComplete, 28);
+  assert.equal(report.crossSourceSummary.blocked, 142);
+  assert.equal(report.crossSourceSummary.crossSourceComplete, 30);
   assert.ok(firstDeadWizardToken);
   assert.ok(wizardProperty004);
   assert.equal(wizardProperty004.crossSourceStatus, "crossSourceComplete");
@@ -1024,6 +1024,19 @@ test("activation-effects cross-source evidence covers the real property 005 and 
   for (const id of [
     "esw2_dbg__wizard_property_005",
     "esw2_dbg__dead_wizard_token_005",
+  ]) {
+    const item = report.items.find((candidate) => candidate.id === id);
+    assert.ok(item);
+    assert.equal(item.crossSourceStatus, "crossSourceComplete");
+    assert.deepEqual(item.crossSourceBlockers, []);
+  }
+});
+
+test("dwt-interactions cross-source evidence covers nested DWT faces 022 and 023", () => {
+  const report = createRuntimeCoverageInventory(process.cwd());
+  for (const id of [
+    "esw2_dbg__dead_wizard_token_022",
+    "esw2_dbg__dead_wizard_token_023",
   ]) {
     const item = report.items.find((candidate) => candidate.id === id);
     assert.ok(item);
