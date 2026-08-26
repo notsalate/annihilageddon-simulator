@@ -206,6 +206,8 @@ test("обычная защита фиксирует оплату и перем�
     kind: "redirectable",
     attackingPlayer: attacker,
     amountComponents: createAttackAmountState(2),
+    carriedAmount: 2,
+    controlEpoch: 0,
     effectId: "attack_damage",
     source,
     originalSource: source,
@@ -257,6 +259,8 @@ test("redirect-защита откатывает оплату, перемеще�
     kind: "redirectable",
     attackingPlayer: attacker,
     amountComponents: createAttackAmountState(2),
+    carriedAmount: 2,
+    controlEpoch: 0,
     effectId: "attack_damage",
     source,
     originalSource: source,
@@ -715,6 +719,211 @@ test("COLLECT_ALL_FIRST resolves every Defense before shared attack text", () =>
   assert.match(order[2] ?? "", /^shared:attack-/);
 });
 
+test("redirect chains keep one Defense quota and carry damage across control epochs", () => {
+  const { state, attacker, targets, source } = createAttackResolutionHarness(
+    43009,
+    3
+  );
+  const [originalTarget, unaffectedTarget] = targets;
+  assert.ok(originalTarget);
+  assert.ok(unaffectedTarget);
+  attacker.permanents.push(createArena(attacker.playerId));
+  originalTarget.permanents.push(createArena(originalTarget.playerId));
+  const defenseCalls: string[] = [];
+  const dealt: Array<{ targetId: string; amount: number }> = [];
+  const adapters = createAttackAdapters({
+    resolveDefenseWindow(
+      _state,
+      defendingPlayer,
+      attack,
+      resolveRedirectedAttack
+    ) {
+      defenseCalls.push(defendingPlayer.playerId);
+      if (
+        attack.kind !== "redirectable" ||
+        attack.defenseUsage.defendedPlayerIds.has(defendingPlayer.playerId)
+      ) {
+        return { ok: true, avoided: false };
+      }
+      attack.defenseUsage.defendedPlayerIds.add(defendingPlayer.playerId);
+      if (
+        defendingPlayer.playerId !== originalTarget.playerId &&
+        defendingPlayer.playerId !== attacker.playerId
+      ) {
+        return { ok: true, avoided: false };
+      }
+      const redirected = resolveRedirectedAttack({
+        attackingPlayer: defendingPlayer,
+        targetPlayer:
+          defendingPlayer.playerId === originalTarget.playerId
+            ? attacker
+            : originalTarget,
+        amountComponents: attack.amountComponents,
+        carriedAmount: attack.carriedAmount,
+        controlEpoch: attack.controlEpoch + 1,
+        effectId: attack.effectId,
+        source: {
+          ...attack.source,
+          playerId: defendingPlayer.playerId,
+        },
+        originalSource: attack.originalSource,
+        defenseUsage: attack.defenseUsage,
+        unavoidable: false,
+      });
+      if (!redirected.ok) return redirected;
+      if (redirected.gameEnd !== undefined) {
+        return { ok: true, avoided: true, gameEnd: redirected.gameEnd };
+      }
+      return { ok: true, avoided: true, resolution: redirected.resolution };
+    },
+    dealAttackDamage(
+      currentState,
+      attackingPlayer,
+      targetPlayer,
+      amount,
+      effectId,
+      attackSource
+    ) {
+      dealt.push({ targetId: targetPlayer.playerId, amount });
+      return dealHarnessAttackDamage(
+        currentState,
+        attackingPlayer,
+        targetPlayer,
+        amount,
+        effectId,
+        attackSource
+      );
+    },
+  });
+
+  const result = resolvePlayerControlledAttack(
+    damageAttackIntent(
+      state,
+      attacker,
+      source,
+      [originalTarget, unaffectedTarget],
+      5
+    ),
+    adapters
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(defenseCalls, [
+    originalTarget.playerId,
+    attacker.playerId,
+    originalTarget.playerId,
+    unaffectedTarget.playerId,
+  ]);
+  assert.deepEqual(dealt, [
+    { targetId: originalTarget.playerId, amount: 40 },
+    { targetId: unaffectedTarget.playerId, amount: 10 },
+  ]);
+});
+
+test("redirect changes only one COLLECT_ALL_FIRST application and keeps shared text deferred", () => {
+  const { state, attacker, targets, source } = createAttackResolutionHarness(
+    43010,
+    3
+  );
+  const [originalTarget, unaffectedTarget] = targets;
+  assert.ok(originalTarget);
+  assert.ok(unaffectedTarget);
+  const order: string[] = [];
+  const adapters = createAttackAdapters({
+    resolveDefenseWindow(
+      _state,
+      defendingPlayer,
+      attack,
+      resolveRedirectedAttack
+    ) {
+      order.push(`defense:${defendingPlayer.playerId}`);
+      if (
+        defendingPlayer.playerId !== originalTarget.playerId ||
+        attack.kind !== "redirectable"
+      ) {
+        return { ok: true, avoided: false };
+      }
+      attack.defenseUsage.defendedPlayerIds.add(defendingPlayer.playerId);
+      const redirected = resolveRedirectedAttack({
+        attackingPlayer: defendingPlayer,
+        targetPlayer: attacker,
+        amountComponents: attack.amountComponents,
+        carriedAmount: attack.carriedAmount,
+        controlEpoch: attack.controlEpoch + 1,
+        effectId: attack.effectId,
+        source: {
+          ...attack.source,
+          playerId: defendingPlayer.playerId,
+        },
+        originalSource: attack.originalSource,
+        defenseUsage: attack.defenseUsage,
+        unavoidable: false,
+      });
+      if (!redirected.ok) return redirected;
+      if (redirected.gameEnd !== undefined) {
+        return { ok: true, avoided: true, gameEnd: redirected.gameEnd };
+      }
+      return { ok: true, avoided: true, resolution: redirected.resolution };
+    },
+  });
+
+  const result = resolvePlayerControlledAttack(
+    {
+      ...damageAttackIntent(
+        state,
+        attacker,
+        source,
+        [originalTarget, unaffectedTarget],
+        1
+      ),
+      defenseWindowMode: "COLLECT_ALL_FIRST",
+      impact: {
+        kind: "shared",
+        resolve(_state, attack) {
+          order.push(`shared:${attack.attackId}`);
+          const [redirectedApplication, unaffectedApplication] =
+            attack.applications;
+          assert.ok(redirectedApplication);
+          assert.ok(unaffectedApplication);
+          assert.equal(
+            redirectedApplication.targetPlayer.playerId,
+            attacker.playerId
+          );
+          assert.equal(
+            redirectedApplication.attackingPlayer.playerId,
+            originalTarget.playerId
+          );
+          assert.equal(redirectedApplication.controlEpoch, 1);
+          assert.equal(
+            unaffectedApplication.targetPlayer.playerId,
+            unaffectedTarget.playerId
+          );
+          assert.equal(
+            unaffectedApplication.attackingPlayer.playerId,
+            attacker.playerId
+          );
+          assert.equal(unaffectedApplication.controlEpoch, 0);
+          return { ok: true };
+        },
+      },
+    },
+    adapters
+  );
+
+  assert.deepEqual(result, { ok: true });
+  const attackCreated = state.eventLog.find(
+    (event) => event.type === "attackCreated"
+  );
+  assert.ok(attackCreated);
+  assert.ok(attackCreated.attackId);
+  assert.deepEqual(order, [
+    `defense:${originalTarget.playerId}`,
+    `defense:${attacker.playerId}`,
+    `defense:${unaffectedTarget.playerId}`,
+    `shared:${attackCreated.attackId}`,
+  ]);
+});
+
 test("redirect changes current attacker attribution while preserving original source identity", () => {
   const { state, attacker, targets, source } = createAttackResolutionHarness(
     43004,
@@ -745,6 +954,8 @@ test("redirect changes current attacker attribution while preserving original so
         attackingPlayer: defender,
         targetPlayer: attacker,
         amountComponents: attack.amountComponents,
+        carriedAmount: attack.carriedAmount,
+        controlEpoch: attack.controlEpoch + 1,
         effectId: attack.effectId,
         source: redirectedSource,
         originalSource: attack.originalSource,

@@ -529,7 +529,7 @@ test("Chipsychosis Arena doubles a redirected attack for the redirecting attacke
   assert.equal(originalAttacker.life.current, 16);
 });
 
-test("Chipsychosis Arena of the original attacker does not double a redirected leg", () => {
+test("Chipsychosis Arena of the original attacker does not reapply on a redirected leg", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -574,7 +574,7 @@ test("Chipsychosis Arena of the original attacker does not double a redirected l
     true
   );
   assert.equal(redirector.life.current, 20);
-  assert.equal(originalAttacker.life.current, 18);
+  assert.equal(originalAttacker.life.current, 16);
 });
 
 test("Chipsychosis Arena doubles source-owner Wand modifiers only against foes", () => {

@@ -442,9 +442,11 @@ export function resolveDefenseWindow(
     }
     const redirectResult = resolveRedirectedAttack({
       ...(attackId === undefined ? {} : { attackId }),
+      controlEpoch: attack.controlEpoch + 1,
       attackingPlayer: defendingPlayer,
       targetPlayer: attack.attackingPlayer,
       amountComponents: attack.amountComponents,
+      carriedAmount: attack.carriedAmount,
       effectId: attack.effectId,
       source: {
         ...attack.source,
@@ -480,6 +482,7 @@ export function resolveDefenseWindow(
       damageDealt: 0,
       killed: false,
       avoided: true,
+      controlEpoch: attack.controlEpoch,
       amountComponents: attack.amountComponents,
       attackingPlayer: attack.attackingPlayer,
       currentAttackerId: attack.attackingPlayer.playerId,

@@ -536,6 +536,8 @@ test("defense module transfers current attacker through redirect", () => {
   assert.ok(redirectedIntent);
   assert.equal(redirectedIntent.attackingPlayer, defender);
   assert.equal(redirectedIntent.targetPlayer, attacker);
+  assert.equal(redirectedIntent.controlEpoch, 1);
+  assert.equal(redirectedIntent.carriedAmount, 3);
   assert.equal(redirectedIntent.source.playerId, defender.playerId);
   assert.equal(redirectedIntent.originalSource, source);
 });
@@ -710,6 +712,8 @@ function redirectableAttack(
     kind: "redirectable",
     attackingPlayer: attacker,
     amountComponents: createAttackAmountState(2, 1),
+    carriedAmount: 3,
+    controlEpoch: 0,
     effectId: "attack_damage",
     source,
     originalSource: source,
@@ -742,6 +746,7 @@ function fakeResolution(
     damageDealt: 0,
     killed: false,
     avoided: true,
+    controlEpoch: 0,
     amountComponents: createAttackAmountState(2, 1),
     attackingPlayer: attacker,
     currentAttackerId: attacker.playerId,

@@ -33,6 +33,7 @@ export function createAttackDefenseUsage(
 
 export interface AttackApplication {
   readonly originalTargetPlayerId: PlayerState["playerId"];
+  controlEpoch: number;
   attackingPlayer: PlayerState;
   targetPlayer: PlayerState;
   source: EffectSourceContext;
@@ -85,9 +86,11 @@ export interface AttackIntent {
 
 export interface RedirectedAttackIntent {
   readonly attackId?: AttackId;
+  readonly controlEpoch: number;
   readonly attackingPlayer: PlayerState;
   readonly targetPlayer: PlayerState;
   readonly amountComponents: AttackAmountComponents;
+  readonly carriedAmount: number;
   readonly effectId: RuntimeEffectId;
   readonly source: EffectSourceContext;
   readonly originalSource: EffectSourceContext;
@@ -97,6 +100,7 @@ export interface RedirectedAttackIntent {
 
 export interface AttackResolution extends DamageResult {
   attackId?: AttackId;
+  controlEpoch: number;
   avoided: boolean;
   amountComponents: AttackAmountComponents;
   attackingPlayer: PlayerState;
@@ -165,8 +169,10 @@ export type DefenseAttackContext =
   | {
       kind: "redirectable";
       attackId?: AttackId;
+      controlEpoch: number;
       attackingPlayer: PlayerState;
       amountComponents: AttackAmountComponents;
+      carriedAmount: number;
       effectId: RuntimeEffectId;
       source: EffectSourceContext;
       originalSource: EffectSourceContext;
@@ -249,6 +255,7 @@ export interface PlayerControlledAttackIntent {
 
 export interface ResolvedAttackBranchContext {
   readonly attackId?: AttackId;
+  readonly controlEpoch: number;
   readonly effectId: RuntimeEffectId;
   readonly source: EffectSourceContext;
   readonly damageDealt: number;
@@ -341,10 +348,14 @@ export function resolveAttackAmount(
   targetPlayer: PlayerState,
   amountState: AttackAmountState,
   source?: EffectSourceContext,
-  originalSource?: EffectSourceContext
+  originalSource?: EffectSourceContext,
+  carriedAmount?: number
 ): ResolvedAttackAmount {
-  const unmodifiedAmount =
-    amountState.unresolvedBaseAmount + amountState.sourceOwnerModifierAmount;
+  const currentAmount =
+    carriedAmount ??
+    amountState.unresolvedBaseAmount +
+      amountState.sourceOwnerModifierAmount +
+      amountState.currentAttackerTargetModifierAmount;
   const attackReplacementProfile = collectAttackReplacementProfile(
     state,
     attackingPlayer,
@@ -379,16 +390,12 @@ export function resolveAttackAmount(
   const components: AttackAmountComponents = {
     ...amountState,
     currentAttackerTargetModifierAmount:
-      currentAttackerDamageBonus +
-      (doublesAgainstTarget ? unmodifiedAmount : 0),
+      currentAttackerDamageBonus + (doublesAgainstTarget ? currentAmount : 0),
   };
 
   return {
     components,
-    total:
-      components.unresolvedBaseAmount +
-      components.sourceOwnerModifierAmount +
-      components.currentAttackerTargetModifierAmount,
+    total: currentAmount + components.currentAttackerTargetModifierAmount,
   };
 }
 
@@ -523,6 +530,7 @@ export function resolvePlayerControlledAttack(
   for (const targetPlayer of targetResult.players) {
     const application: AttackApplication = {
       originalTargetPlayerId: targetPlayer.playerId,
+      controlEpoch: 0,
       attackingPlayer: intent.attackingPlayer,
       targetPlayer,
       source: context.instance.source,
@@ -537,6 +545,7 @@ export function resolvePlayerControlledAttack(
         targetPlayer,
         source: context.instance.source,
         unavoidable: intent.attackProfile?.unavoidable ?? intent.unavoidable,
+        controlEpoch: application.controlEpoch,
         amountComponents:
           intent.impact.kind === "damage"
             ? createAttackAmountState(
@@ -629,10 +638,12 @@ function resolveBaseAmount(
 
 interface CurrentAttackTargetContext {
   readonly application: AttackApplication;
+  readonly controlEpoch: number;
   readonly attackingPlayer: PlayerState;
   readonly targetPlayer: PlayerState;
   readonly source: EffectSourceContext;
   readonly unavoidable: boolean;
+  readonly carriedAmount?: number;
   readonly amountComponents: AttackAmountComponents;
   readonly originalTargetPlayerId: PlayerState["playerId"];
 }
@@ -668,7 +679,8 @@ function resolvePlayerControlledAttackTarget(
     current.targetPlayer,
     current.amountComponents,
     current.source,
-    context.instance.originalSource
+    context.instance.originalSource,
+    current.carriedAmount
   );
   recordAttackTargetStarted(
     intent,
@@ -685,8 +697,10 @@ function resolvePlayerControlledAttackTarget(
         current.targetPlayer,
         {
           kind: "redirectable",
+          controlEpoch: current.controlEpoch,
           attackingPlayer: current.attackingPlayer,
           amountComponents: resolvedAmount.components,
+          carriedAmount: resolvedAmount.total,
           effectId: intent.effectId,
           source: current.source,
           originalSource: context.instance.originalSource,
@@ -697,10 +711,18 @@ function resolvePlayerControlledAttackTarget(
             : { redirectPolicy: intent.redirectPolicy }),
         },
         (redirectedIntent) => {
+          const nextControlEpoch = current.application.controlEpoch + 1;
+          if (redirectedIntent.controlEpoch !== nextControlEpoch) {
+            return {
+              ok: false,
+              error: "Redirect control epoch is not sequential",
+            };
+          }
           const redirectedSource = {
             ...redirectedIntent.source,
             attackId: context.instance.attackId,
           };
+          current.application.controlEpoch = nextControlEpoch;
           current.application.attackingPlayer =
             redirectedIntent.attackingPlayer;
           current.application.targetPlayer = redirectedIntent.targetPlayer;
@@ -715,7 +737,9 @@ function resolvePlayerControlledAttackTarget(
               targetPlayer: redirectedIntent.targetPlayer,
               source: redirectedSource,
               unavoidable: redirectedIntent.unavoidable ?? false,
+              carriedAmount: redirectedIntent.carriedAmount,
               amountComponents: redirectedIntent.amountComponents,
+              controlEpoch: nextControlEpoch,
               originalTargetPlayerId: current.originalTargetPlayerId,
             }
           );
@@ -781,6 +805,7 @@ function resolvePlayerControlledAttackTarget(
   const resolution: AttackResolution = {
     ...damage,
     avoided: false,
+    controlEpoch: current.controlEpoch,
     amountComponents: resolvedAmount.components,
     attackingPlayer: current.attackingPlayer,
     currentAttackerId: current.attackingPlayer.playerId,
@@ -829,8 +854,10 @@ function resolvePlayerControlledSharedAttackTarget(
         current.targetPlayer,
         {
           kind: "redirectable",
+          controlEpoch: current.controlEpoch,
           attackingPlayer: current.attackingPlayer,
           amountComponents: current.amountComponents,
+          carriedAmount: current.carriedAmount ?? 0,
           effectId: intent.effectId,
           source: current.source,
           originalSource: context.instance.originalSource,
@@ -841,10 +868,18 @@ function resolvePlayerControlledSharedAttackTarget(
             : { redirectPolicy: intent.redirectPolicy }),
         },
         (redirectedIntent) => {
+          const nextControlEpoch = current.application.controlEpoch + 1;
+          if (redirectedIntent.controlEpoch !== nextControlEpoch) {
+            return {
+              ok: false,
+              error: "Redirect control epoch is not sequential",
+            };
+          }
           const redirectedSource = {
             ...redirectedIntent.source,
             attackId: context.instance.attackId,
           };
+          current.application.controlEpoch = nextControlEpoch;
           current.application.attackingPlayer =
             redirectedIntent.attackingPlayer;
           current.application.targetPlayer = redirectedIntent.targetPlayer;
@@ -859,7 +894,9 @@ function resolvePlayerControlledSharedAttackTarget(
               targetPlayer: redirectedIntent.targetPlayer,
               source: redirectedSource,
               unavoidable: redirectedIntent.unavoidable ?? false,
+              carriedAmount: redirectedIntent.carriedAmount,
               amountComponents: redirectedIntent.amountComponents,
+              controlEpoch: nextControlEpoch,
               originalTargetPlayerId: current.originalTargetPlayerId,
             }
           );
@@ -926,8 +963,10 @@ function resolvePlayerControlledEffectsAttackTarget(
         current.targetPlayer,
         {
           kind: "redirectable",
+          controlEpoch: current.controlEpoch,
           attackingPlayer: current.attackingPlayer,
           amountComponents: current.amountComponents,
+          carriedAmount: current.carriedAmount ?? 0,
           effectId: intent.effectId,
           source: current.source,
           originalSource: context.instance.originalSource,
@@ -938,10 +977,18 @@ function resolvePlayerControlledEffectsAttackTarget(
             : { redirectPolicy: intent.redirectPolicy }),
         },
         (redirectedIntent) => {
+          const nextControlEpoch = current.application.controlEpoch + 1;
+          if (redirectedIntent.controlEpoch !== nextControlEpoch) {
+            return {
+              ok: false,
+              error: "Redirect control epoch is not sequential",
+            };
+          }
           const redirectedSource = {
             ...redirectedIntent.source,
             attackId: context.instance.attackId,
           };
+          current.application.controlEpoch = nextControlEpoch;
           current.application.attackingPlayer =
             redirectedIntent.attackingPlayer;
           current.application.targetPlayer = redirectedIntent.targetPlayer;
@@ -956,7 +1003,9 @@ function resolvePlayerControlledEffectsAttackTarget(
               targetPlayer: redirectedIntent.targetPlayer,
               source: redirectedSource,
               unavoidable: redirectedIntent.unavoidable ?? false,
+              carriedAmount: redirectedIntent.carriedAmount,
               amountComponents: redirectedIntent.amountComponents,
+              controlEpoch: nextControlEpoch,
               originalTargetPlayerId: current.originalTargetPlayerId,
             }
           );
@@ -1001,6 +1050,7 @@ function resolvePlayerControlledEffectsAttackTarget(
       avoided: false,
       damageDealt: 0,
       killed: false,
+      controlEpoch: current.controlEpoch,
       amountComponents: current.amountComponents,
       attackingPlayer: current.attackingPlayer,
       currentAttackerId: current.attackingPlayer.playerId,
@@ -1023,6 +1073,7 @@ function executeResolvedAttackBranches(
 ): EffectExecutionResult {
   const branchContext: ResolvedAttackBranchContext = {
     effectId: intent.effectId,
+    controlEpoch: resolution.controlEpoch,
     ...(resolution.attackId === undefined
       ? {}
       : { attackId: resolution.attackId }),
@@ -1081,6 +1132,7 @@ function executeAvoidedAttackBranches(
 
   const branchContext: ResolvedAttackBranchContext = {
     effectId: intent.effectId,
+    controlEpoch: current.controlEpoch,
     ...(current.source.attackId === undefined
       ? {}
       : { attackId: current.source.attackId }),
@@ -1155,6 +1207,7 @@ function createAvoidedResolution(
     avoided: true,
     damageDealt: 0,
     killed: false,
+    controlEpoch: current.controlEpoch,
     ...(current.source.attackId === undefined
       ? {}
       : { attackId: current.source.attackId }),
@@ -1175,6 +1228,7 @@ function createDeferredResolution(
     avoided: false,
     damageDealt: 0,
     killed: false,
+    controlEpoch: current.controlEpoch,
     ...(current.source.attackId === undefined
       ? {}
       : { attackId: current.source.attackId }),
