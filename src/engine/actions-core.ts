@@ -18,6 +18,7 @@ import {
   validateActivationEffects,
   validateGainedCardEffects,
   validateOnPlayEffects,
+  validateRevealTopCardGainEffects,
   validateWizardPropertyOnPlayCardEffects,
 } from "./effect-runtime.js";
 import { resolveCardPlay } from "./card-play-resolution.js";
@@ -230,6 +231,15 @@ export function preflightAction(
           );
         if (!wizardPropertyValidation.ok) {
           return wizardPropertyValidation;
+        }
+        const revealGainValidation = validateRevealTopCardGainEffects(
+          state,
+          activePlayer,
+          card,
+          definition
+        );
+        if (!revealGainValidation.ok) {
+          return revealGainValidation;
         }
         return undefined;
       }

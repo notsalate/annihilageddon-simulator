@@ -20,6 +20,9 @@ import {
   getControlledCards,
   findCardLocation,
   insertDetachedCard,
+  listMainDeckCards,
+  listPlayerDeckCards,
+  listPlayerDiscardCards,
   removeCardFromLocation,
   removeDeadWizardToken,
   removeTemporaryCardControl,
@@ -50,6 +53,7 @@ import { calculateEffectivePlayerMaxLife } from "./effective-value-runtime.js";
 import {
   clearFaceUpState,
   drawDeckCard,
+  previewDeckCard,
   refillDeckFromDiscard,
 } from "./deck-lifecycle.js";
 import {
@@ -244,6 +248,198 @@ export function validateGainedCardEffects(
     );
     if (!result.ok) {
       return result;
+    }
+  }
+
+  for (const controlledCard of getControlledCards(state, player)) {
+    const controlledDefinition = state.cardDefinitions.get(
+      controlledCard.definitionId
+    );
+    if (
+      controlledDefinition === undefined ||
+      !controlledDefinition.engine.playableInV0
+    ) {
+      continue;
+    }
+
+    const result = validateEffectsAtTiming(
+      state,
+      player,
+      controlledDefinition.engine.effects,
+      "onGainCard",
+      {
+        sourceType: "card",
+        runtimeMode: state.runtimeMode,
+        playerId: player.playerId,
+        cardInstanceId: controlledCard.instanceId,
+        definitionId: controlledDefinition.cardId,
+      },
+      (effect) =>
+        cardTriggerMatches(effect, definition, state, player, card)
+          ? { status: "resolved", result: undefined }
+          : { status: "notApplicable" }
+    );
+    if (!result.ok) {
+      return result;
+    }
+  }
+
+  return { ok: true };
+}
+
+export function validateRevealTopCardGainEffects(
+  state: GameState,
+  player: PlayerState,
+  playedCard: CardInstance,
+  playedDefinition: CardDefinition
+): EffectExecutionResult {
+  const source: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: playedCard.instanceId,
+    definitionId: playedDefinition.cardId,
+  };
+
+  return validateRevealTopCardGainEffectsAtTiming(
+    state,
+    player,
+    playedDefinition.engine.effects,
+    "onPlay",
+    source,
+    playedCard.instanceId
+  );
+}
+
+export function validateDefenseEffects(
+  state: GameState,
+  player: PlayerState,
+  effects: readonly RuntimeEffect[],
+  source: EffectSourceContext,
+  excludedCardInstanceId: CardInstance["instanceId"]
+): EffectExecutionResult {
+  const effectValidation = validateEffectsAtTiming(
+    state,
+    player,
+    effects,
+    "onDefense",
+    source,
+    undefined,
+    excludedCardInstanceId
+  );
+  if (!effectValidation.ok) {
+    return effectValidation;
+  }
+
+  return validateRevealTopCardGainEffectsAtTiming(
+    state,
+    player,
+    effects,
+    "onDefense",
+    source,
+    excludedCardInstanceId
+  );
+}
+
+function validateRevealTopCardGainEffectsAtTiming(
+  state: GameState,
+  player: PlayerState,
+  effects: readonly RuntimeEffect[],
+  timing: RuntimeEffect["timing"],
+  source: EffectSourceContext,
+  excludedCardInstanceId: CardInstance["instanceId"]
+): EffectExecutionResult {
+  let activeDeckPreview = {
+    deck: [...listPlayerDeckCards(player)],
+    discard: [...listPlayerDiscardCards(player)],
+    rng: state.rng,
+  };
+  let mainDeckPreview = [...listMainDeckCards(state)];
+
+  for (const effect of effects) {
+    const revealResult = evaluateRuntimeEffectAtTiming(
+      requireVerifiedRuntimeEffect(effect),
+      source,
+      timing,
+      (decodedEffect) => {
+        if (
+          decodedEffect.effectId !== "reveal_top_card" ||
+          decodedEffect.optionalTakeToHand !== true ||
+          !effectConditionMatches(
+            state,
+            player,
+            decodedEffect,
+            source.cardInstanceId
+          )
+        ) {
+          return { status: "notApplicable" };
+        }
+        return { status: "resolved", result: decodedEffect };
+      }
+    );
+    if (revealResult.status === "error") {
+      return { ok: false, error: revealResult.error };
+    }
+    if (revealResult.status !== "resolved") {
+      continue;
+    }
+
+    let card: CardInstance | undefined;
+    if (revealResult.result.source === "mainDeck") {
+      card = mainDeckPreview[0];
+    } else {
+      const preview = previewDeckCard(
+        activeDeckPreview.deck,
+        activeDeckPreview.discard,
+        activeDeckPreview.rng
+      );
+      activeDeckPreview = preview;
+      card = preview.card;
+    }
+    if (card === undefined) {
+      continue;
+    }
+
+    const definition = state.cardDefinitions.get(card.definitionId);
+    if (definition === undefined) {
+      return {
+        ok: false,
+        error: `Missing revealed card definition ${card.definitionId}`,
+      };
+    }
+    const canTake =
+      revealResult.result.excludeCardKind === undefined ||
+      definition.engine.cardKind !== revealResult.result.excludeCardKind;
+    if (!canTake) {
+      continue;
+    }
+
+    const validationPlayer: PlayerState = {
+      ...player,
+      hand: [
+        ...player.hand.filter(
+          (candidate) => candidate.instanceId !== excludedCardInstanceId
+        ),
+        card,
+      ],
+      permanents: player.permanents.filter(
+        (candidate) => candidate.instanceId !== excludedCardInstanceId
+      ),
+    };
+    const gainValidation = validateGainedCardEffects(
+      state,
+      validationPlayer,
+      definition,
+      card
+    );
+    if (!gainValidation.ok) {
+      return gainValidation;
+    }
+
+    if (revealResult.result.source === "mainDeck") {
+      mainDeckPreview.shift();
+    } else {
+      activeDeckPreview.deck.shift();
     }
   }
 
@@ -795,7 +991,11 @@ export function moveGainedCardToPlayerDestination(
   state: GameState,
   player: PlayerState,
   card: CardInstance,
-  fixedDestination?: "discard"
+  fixedDestination?: "discard" | "hand",
+  movementSource?: {
+    effectId: RuntimeEffectId;
+    sourceType: EffectSourceContext["sourceType"];
+  }
 ):
   | { ok: true; destination: "discard" | "deckTop" | "hand" }
   | { ok: false; error: string } {
@@ -867,6 +1067,12 @@ export function moveGainedCardToPlayerDestination(
           : `${player.playerId}.discard`,
     ownerBefore,
     ownerAfter: card.ownerId,
+    ...(movementSource === undefined
+      ? {}
+      : {
+          effectId: movementSource.effectId,
+          sourceType: movementSource.sourceType,
+        }),
   });
 
   const ownGainResult = executeGainedCardOnGainEffects(
@@ -924,7 +1130,7 @@ function runOnGainCardEffects(
   player: PlayerState,
   gainedCard: CardInstance,
   gainedDefinition: CardDefinition,
-  fixedDestination?: "discard"
+  fixedDestination?: "discard" | "hand"
 ):
   | { ok: true; destination: "discard" | "deckTop" }
   | { ok: false; error: string } {
@@ -3345,6 +3551,7 @@ function applyAfterPlayerAttackDamage(
 
 const attackDefenseServices: AttackDefenseServices = {
   chooseEffectChoice,
+  validateDefenseEffects,
   executeDefenseEffects(state, player, effects, source) {
     return executeEffects(state, player, effects, "onDefense", source);
   },

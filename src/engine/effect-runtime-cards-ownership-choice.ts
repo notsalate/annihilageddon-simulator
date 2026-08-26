@@ -1306,6 +1306,20 @@ const revealTopCardHandler: EffectRuntimeHandler<
       });
       return { ok: true };
     }
+    let definition: CardDefinition | undefined;
+    let canTake = false;
+    if (effect.optionalTakeToHand === true) {
+      definition = state.cardDefinitions.get(card.definitionId);
+      if (definition === undefined) {
+        return {
+          ok: false,
+          error: `Missing revealed card definition ${card.definitionId}`,
+        };
+      }
+      canTake =
+        effect.excludeCardKind === undefined ||
+        definition.engine.cardKind !== effect.excludeCardKind;
+    }
     recordGameEvent(state, {
       type: "effectCardRevealed",
       playerId: player.playerId,
@@ -1320,16 +1334,6 @@ const revealTopCardHandler: EffectRuntimeHandler<
       return { ok: true };
     }
 
-    const definition = state.cardDefinitions.get(card.definitionId);
-    if (definition === undefined) {
-      return {
-        ok: false,
-        error: `Missing revealed card definition ${card.definitionId}`,
-      };
-    }
-    const canTake =
-      effect.excludeCardKind === undefined ||
-      definition.engine.cardKind !== effect.excludeCardKind;
     const choices: EffectChoice[] = [
       ...(canTake ? [{ choiceKind: "option" as const, choiceId: "take" }] : []),
       { choiceKind: "option", choiceId: "decline" },
@@ -1343,21 +1347,17 @@ const revealTopCardHandler: EffectRuntimeHandler<
     );
     if (choice?.choiceId !== "take") return { ok: true };
 
-    const moved = services.moveCardToPlayerZone(
+    const moved = services.moveGainedCardToPlayerDestination(
       state,
-      card,
       player,
-      player.hand,
-      `${player.playerId}.hand`,
-      effect.effectId,
-      source
+      card,
+      "hand",
+      {
+        effectId: effect.effectId,
+        sourceType: source.sourceType,
+      }
     );
-    if (!moved) {
-      return {
-        ok: false,
-        error: `Cannot take revealed card ${card.instanceId} to hand`,
-      };
-    }
+    if (!moved.ok) return moved;
     recordGameEvent(state, {
       type: "effectCardGained",
       playerId: player.playerId,
@@ -1366,7 +1366,7 @@ const revealTopCardHandler: EffectRuntimeHandler<
       targetCardInstanceId: card.instanceId,
       targetDefinitionId: card.definitionId,
       effectId: effect.effectId,
-      destination: "hand",
+      destination: moved.destination,
       sourceType: source.sourceType,
     });
     return { ok: true };

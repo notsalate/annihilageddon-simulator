@@ -40,6 +40,13 @@ export interface AttackDefenseServices {
     effectId: RuntimeEffectId,
     choices: readonly EffectChoice[]
   ): EffectChoice | undefined;
+  validateDefenseEffects?(
+    state: GameState,
+    player: PlayerState,
+    effects: readonly RuntimeEffect[],
+    source: EffectSourceContext,
+    excludedCardInstanceId: CardInstance["instanceId"]
+  ): EffectExecutionResult;
   executeDefenseEffects(
     state: GameState,
     player: PlayerState,
@@ -304,6 +311,35 @@ export function resolveDefenseWindow(
     return { ok: true, avoided: false };
   }
 
+  const defenseSource: EffectSourceContext = {
+    sourceType: "card",
+    runtimeMode: state.runtimeMode,
+    playerId: defendingPlayer.playerId,
+    ...(attack.kind === "redirectable"
+      ? { currentAttackerPlayerId: attack.attackingPlayer.playerId }
+      : {}),
+    cardInstanceId: defense.card.instanceId,
+    definitionId: defense.card.definitionId,
+  };
+  const branchEffects = defense.effect.branchEffects;
+  if (
+    branchEffects !== undefined &&
+    services.validateDefenseEffects !== undefined
+  ) {
+    const validationResult = services.validateDefenseEffects(
+      state,
+      defendingPlayer,
+      branchEffects,
+      defenseSource,
+      defense.card.instanceId
+    );
+    if (!validationResult.ok) {
+      state.eventLog.splice(eventLogLengthBeforeChoice);
+      installGameEventLog(state);
+      return validationResult;
+    }
+  }
+
   const mutationSnapshotResult = createDefenseMutationSnapshot(
     state,
     attack.defenseUsage,
@@ -349,17 +385,6 @@ export function resolveDefenseWindow(
         (status) => status.statusId === "dingler"
       ));
 
-  const defenseSource: EffectSourceContext = {
-    sourceType: "card",
-    runtimeMode: state.runtimeMode,
-    playerId: defendingPlayer.playerId,
-    ...(attack.kind === "redirectable"
-      ? { currentAttackerPlayerId: attack.attackingPlayer.playerId }
-      : {}),
-    cardInstanceId: defense.card.instanceId,
-    definitionId: defense.card.definitionId,
-  };
-
   if (!moveDefenseCard(state, defendingPlayer, defense)) {
     return rollbackDefenseFailure(
       state,
@@ -372,7 +397,6 @@ export function resolveDefenseWindow(
     );
   }
 
-  const branchEffects = defense.effect.branchEffects;
   if (branchEffects !== undefined) {
     const branchResult = services.executeDefenseEffects(
       state,
