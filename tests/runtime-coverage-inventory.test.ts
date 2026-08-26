@@ -1218,6 +1218,181 @@ test("semantic evidence rejects a source kind declared for a foreign action path
   assert.equal(mismatch?.evidenceId, "evidence:card-gain-chips");
 });
 
+test("semantic evidence rejects a DWT passed through the card action path", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-action-path-")
+  );
+  const id = "esw2_dbg__dead_wizard_token_001";
+  const textRu =
+    "Получи вялую палочку за каждую легенду в твоей стопке сброса.";
+  const testName = "does not play a dead wizard token as a card";
+
+  writeJson(rootDir, `data/import/tokens/dead-wizard-token/drafts/${id}.json`, {
+    schemaVersion: 1,
+    draftKind: "deadWizardTokenDraft",
+    tokenId: id,
+    kind: "deadWizardToken",
+    source: { image: "assets/dead-wizard-token/DWT_001.png" },
+    visible: { textRu, victoryPoints: -3, uncertainty: [] },
+    notes: [],
+    composition: { quantity: 1 },
+  });
+  writeJson(rootDir, `data/tokens/dead-wizard/${id}.json`, {
+    schemaVersion: 1,
+    tokenId: id,
+    runtimeSchema: "krutagidon.tokenDefinition.v0",
+    kind: "deadWizardToken",
+    victoryPoints: -3,
+    effects: [
+      {
+        effectId: "dead_wizard_token_gain_limp_wands_per_discard_legend",
+        timing: "onDeadWizardTokenFace",
+        countedCardType: "legend",
+        destination: "discard",
+      },
+    ],
+  });
+  writeJson(rootDir, "data/stacks/tokens/dead-wizard-tokens.json", {
+    stackId: "dead-wizard-tokens",
+    role: "deadWizardTokens",
+    entries: [{ tokenId: id, count: 1 }],
+  });
+  writeJson(rootDir, "config/runtime-coverage/cross-source-mechanics.json", {
+    schemaVersion: 2,
+    entries: [
+      {
+        id,
+        objectKind: "deadWizardToken",
+        primaryMechanicCluster: "special-card-stack",
+        requiredCapabilities: ["capability:dwt-face"],
+        unresolvedCapabilities: [],
+        semanticMappings: [
+          {
+            capabilityId: "capability:dwt-face",
+            evidenceId: "evidence:dwt-face",
+            draftPoint: { path: "visible.textRu", value: textRu },
+            runtimeRefs: [
+              {
+                kind: "effect",
+                effectId:
+                  "dead_wizard_token_gain_limp_wands_per_discard_legend",
+                timing: "onDeadWizardTokenFace",
+                fields: { countedCardType: "legend", destination: "discard" },
+              },
+            ],
+            testRefs: [
+              {
+                file: "tests/semantic-evidence.test.ts",
+                name: testName,
+                execution: {
+                  seam: "applyAction",
+                  objectKind: "deadWizardToken",
+                  subject: { kind: "binding", name: "tokenId" },
+                },
+                observation: {
+                  kind: "assertion",
+                  target: "state.players[0].chips",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  writeText(
+    rootDir,
+    "tests/semantic-evidence.test.ts",
+    `test("${testName}", () => {
+  const tokenId = "${id}";
+  const state = initializeGame({ rootDir });
+  applyAction(state, { type: "playCard", cardInstanceId: tokenId });
+  assert.equal(state.players[0]?.chips, 1);
+});
+`
+  );
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "deadWizardToken",
+    sourceGroupOrTokenKind: "deadWizardToken",
+    draft: {
+      draftKind: "deadWizardTokenDraft",
+      tokenId: id,
+      kind: "deadWizardToken",
+      visible: { textRu, victoryPoints: -3, uncertainty: [] },
+      notes: [],
+      composition: { quantity: 1 },
+    },
+    runtime: {
+      tokenId: id,
+      kind: "deadWizardToken",
+      victoryPoints: -3,
+      effects: [
+        {
+          effectId: "dead_wizard_token_gain_limp_wands_per_discard_legend",
+          timing: "onDeadWizardTokenFace",
+          countedCardType: "legend",
+          destination: "discard",
+        },
+      ],
+    },
+    compositionMembership: [
+      { role: "deadWizardTokens", entryKind: "token", count: 1 },
+    ],
+    planEntry: {
+      id,
+      objectKind: "deadWizardToken",
+      primaryMechanicCluster: "special-card-stack",
+      requiredCapabilities: ["capability:dwt-face"],
+      unresolvedCapabilities: [],
+      semanticMappings: [
+        {
+          capabilityId: "capability:dwt-face",
+          evidenceId: "evidence:dwt-face",
+          draftPoint: { path: "visible.textRu", value: textRu },
+          runtimeRefs: [
+            {
+              kind: "effect",
+              effectId: "dead_wizard_token_gain_limp_wands_per_discard_legend",
+              timing: "onDeadWizardTokenFace",
+              fields: { countedCardType: "legend", destination: "discard" },
+            },
+          ],
+          testRefs: [
+            {
+              file: "tests/semantic-evidence.test.ts",
+              name: testName,
+              execution: {
+                seam: "applyAction",
+                objectKind: "deadWizardToken",
+                subject: { kind: "binding", name: "tokenId" },
+              },
+              observation: {
+                kind: "assertion",
+                target: "state.players[0].chips",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  assert.equal(evaluation.status, "blocked");
+  assert.ok(
+    evaluation.blockerCodes.some(
+      (blocker) => blocker.code === "execution-action-path-not-allowed"
+    )
+  );
+  assert.ok(
+    evaluation.blockers.some((blocker) =>
+      blocker.includes("applyAction path playCard is not allowed")
+    )
+  );
+});
+
 test("semantic evidence keeps a required capability open when its evidence mapping is removed", () => {
   const rootDir = mkdtempSync(
     path.join(tmpdir(), "krutagidon-semantic-evidence-capability-")

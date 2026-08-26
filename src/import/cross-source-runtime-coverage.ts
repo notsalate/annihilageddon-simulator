@@ -51,6 +51,8 @@ export type CrossSourceBlockerCode =
   | "execution-object-kind-mismatch"
   | "execution-seam-missing"
   | "execution-seam-not-allowed"
+  | "execution-action-path-missing"
+  | "execution-action-path-not-allowed"
   | "execution-subject-not-used"
   | "observation-evidence-missing"
   | "observation-assertion-missing"
@@ -773,6 +775,22 @@ function validateTypedTestReference(
     valid = false;
   }
 
+  if (
+    execution.seam === "applyAction" &&
+    !calls.some(
+      (call) =>
+        executionSubjectIsUsed(testBody, id, call, execution.subject) &&
+        isApplyActionPathAllowed(
+          testBody,
+          call,
+          execution.objectKind,
+          (code, message) => addBlocker(code, message)
+        )
+    )
+  ) {
+    valid = false;
+  }
+
   const observationTarget = observation.target.trim();
   if (observation.kind !== "assertion" || observationTarget === "") {
     addBlocker(
@@ -880,6 +898,69 @@ function invocationUsesBinding(invocation: string, binding: string): boolean {
     `(?:[,{(]\\s*|\\b[a-zA-Z_$][a-zA-Z0-9_$]*\\s*:\\s*)${escapedBinding}\\b`,
     "u"
   ).test(invocation);
+}
+
+const applyActionObjectKinds: Readonly<
+  Record<string, CrossSourceObjectKind | undefined>
+> = {
+  playCard: "card",
+  buyMarketCard: "card",
+  activatePermanent: "card",
+  setCardEffectiveType: "card",
+  activateWizardProperty: "wizardProperty",
+  activateDeadWizardToken: "deadWizardToken",
+};
+
+function isApplyActionPathAllowed(
+  testBody: string,
+  call: RuntimeSeamCall,
+  objectKind: CrossSourceObjectKind,
+  addBlocker: (code: CrossSourceBlockerCode, message: string) => void
+): boolean {
+  const actionType = getApplyActionType(testBody, call);
+  if (actionType === undefined) {
+    addBlocker(
+      "execution-action-path-missing",
+      `focused test applyAction call does not expose a literal action path for ${objectKind}`
+    );
+    return false;
+  }
+  const expectedObjectKind = applyActionObjectKinds[actionType];
+  if (expectedObjectKind !== objectKind) {
+    addBlocker(
+      "execution-action-path-not-allowed",
+      `applyAction path ${actionType} is not allowed for ${objectKind}`
+    );
+    return false;
+  }
+  return true;
+}
+
+function getApplyActionType(
+  testBody: string,
+  call: RuntimeSeamCall
+): string | undefined {
+  const inlineType = /\btype\s*:\s*(["'])([a-zA-Z_$][a-zA-Z0-9_$]*)\1/u.exec(
+    call.invocation
+  )?.[2];
+  if (inlineType !== undefined) {
+    return inlineType;
+  }
+
+  const actionBinding =
+    /^[^(]+\(\s*[^,]+,\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\)/u.exec(
+      call.invocation
+    )?.[1];
+  if (actionBinding === undefined) {
+    return undefined;
+  }
+  const declaration = new RegExp(
+    `\\b(?:const|let|var)\\s+${escapeRegExp(actionBinding)}(?:\\s*:\\s*[^=;]+)?\\s*=\\s*\\{([\\s\\S]*?)\\}`,
+    "u"
+  ).exec(testBody.slice(0, call.start))?.[1];
+  return declaration === undefined
+    ? undefined
+    : /\btype\s*:\s*(["'])([a-zA-Z_$][a-zA-Z0-9_$]*)\1/u.exec(declaration)?.[2];
 }
 
 const allowedExecutionSeams: Record<
