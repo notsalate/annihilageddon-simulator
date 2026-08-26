@@ -7666,6 +7666,78 @@ test("reveal_top_card taking a real Wizard runs the gain lifecycle once", () => 
     ).length,
     1
   );
+  const move = state.eventLog.find(
+    (event) =>
+      event.type === "cardMoved" && event.cardInstanceId === wizard.instanceId
+  );
+  assert.ok(move?.type === "cardMoved");
+  assert.equal(move.effectId, "reveal_top_card");
+  assert.equal(move.sourceType, "card");
+});
+
+test("reveal_top_card validates gain hooks before taking the revealed card", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 337004,
+  });
+  const player = scenario.activePlayer;
+  player.hand.splice(0);
+  const invalidGainCard = givenRuntimeCard(scenario, {
+    zone: "deck",
+    effects: [
+      {
+        effectId: "discard_card",
+        timing: "onGain",
+        targetSelector: "activePlayerHandCard",
+        emptyChoice: "fail",
+      },
+    ],
+  });
+  player.deck.splice(player.deck.indexOf(invalidGainCard), 1);
+  player.deck.unshift(invalidGainCard);
+  const revealCard = givenRuntimeCard(scenario, {
+    effects: [
+      {
+        effectId: "reveal_top_card",
+        timing: "onPlay",
+        source: "activePlayerDeck",
+        optionalTakeToHand: true,
+      },
+    ],
+  });
+  let choiceRequests = 0;
+  scenario.state.effectChoiceStrategy = ({ effectId }) => {
+    if (effectId === "reveal_top_card") {
+      choiceRequests += 1;
+      return { choiceId: "take" };
+    }
+    return undefined;
+  };
+  const expectedNextRandom = scenario.state.rng.fork().next();
+  const gainedCards = scenario.state.turn.gainedCards;
+  const eventLog = scenario.state.eventLog;
+
+  assert.throws(
+    () => play(scenario, revealCard),
+    /timing.*onGain|does not support timing/
+  );
+
+  assert.equal(choiceRequests, 0);
+  assert.equal(player.deck[0], invalidGainCard);
+  assert.equal(player.hand.includes(invalidGainCard), false);
+  assert.equal(scenario.state.turn.gainedCards, gainedCards);
+  assert.deepEqual(gainedCards, []);
+  assert.equal(scenario.state.eventLog, eventLog);
+  assert.equal(
+    scenario.state.eventLog.some(
+      (event) =>
+        event.type === "effectCardRevealed" &&
+        event.targetCardInstanceId === invalidGainCard.instanceId
+    ),
+    false
+  );
+  assert.equal(scenario.state.rng.next(), expectedNextRandom);
 });
 
 test("reveal_top_card taking a real Spell contributes to the gained-card hand limit", () => {

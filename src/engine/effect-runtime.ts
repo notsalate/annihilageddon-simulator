@@ -795,7 +795,11 @@ export function moveGainedCardToPlayerDestination(
   state: GameState,
   player: PlayerState,
   card: CardInstance,
-  fixedDestination?: "discard" | "hand"
+  fixedDestination?: "discard" | "hand",
+  movementSource?: {
+    effectId: RuntimeEffectId;
+    sourceType: EffectSourceContext["sourceType"];
+  }
 ):
   | { ok: true; destination: "discard" | "deckTop" | "hand" }
   | { ok: false; error: string } {
@@ -867,6 +871,12 @@ export function moveGainedCardToPlayerDestination(
           : `${player.playerId}.discard`,
     ownerBefore,
     ownerAfter: card.ownerId,
+    ...(movementSource === undefined
+      ? {}
+      : {
+          effectId: movementSource.effectId,
+          sourceType: movementSource.sourceType,
+        }),
   });
 
   const ownGainResult = executeGainedCardOnGainEffects(
@@ -1761,6 +1771,7 @@ function getPlayersInActiveOrder(state: GameState): PlayerState[] {
 const effectRuntimeServices: EffectRuntimeServices = {
   resolveTargetChoice,
   requireCardChoice,
+  validateGainedCardEffects,
   moveGainedCardToPlayerDestination,
   moveCardToPlayerZone,
   moveCardToZonePreservingOwner,

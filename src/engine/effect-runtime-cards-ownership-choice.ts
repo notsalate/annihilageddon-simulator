@@ -1306,6 +1306,31 @@ const revealTopCardHandler: EffectRuntimeHandler<
       });
       return { ok: true };
     }
+    let definition: CardDefinition | undefined;
+    let canTake = false;
+    if (effect.optionalTakeToHand === true) {
+      definition = state.cardDefinitions.get(card.definitionId);
+      if (definition === undefined) {
+        return {
+          ok: false,
+          error: `Missing revealed card definition ${card.definitionId}`,
+        };
+      }
+      canTake =
+        effect.excludeCardKind === undefined ||
+        definition.engine.cardKind !== effect.excludeCardKind;
+      if (canTake) {
+        const gainValidation = services.validateGainedCardEffects(
+          state,
+          player,
+          definition,
+          card
+        );
+        if (!gainValidation.ok) {
+          return gainValidation;
+        }
+      }
+    }
     recordGameEvent(state, {
       type: "effectCardRevealed",
       playerId: player.playerId,
@@ -1320,16 +1345,6 @@ const revealTopCardHandler: EffectRuntimeHandler<
       return { ok: true };
     }
 
-    const definition = state.cardDefinitions.get(card.definitionId);
-    if (definition === undefined) {
-      return {
-        ok: false,
-        error: `Missing revealed card definition ${card.definitionId}`,
-      };
-    }
-    const canTake =
-      effect.excludeCardKind === undefined ||
-      definition.engine.cardKind !== effect.excludeCardKind;
     const choices: EffectChoice[] = [
       ...(canTake ? [{ choiceKind: "option" as const, choiceId: "take" }] : []),
       { choiceKind: "option", choiceId: "decline" },
@@ -1347,7 +1362,11 @@ const revealTopCardHandler: EffectRuntimeHandler<
       state,
       player,
       card,
-      "hand"
+      "hand",
+      {
+        effectId: effect.effectId,
+        sourceType: source.sourceType,
+      }
     );
     if (!moved.ok) return moved;
     recordGameEvent(state, {
