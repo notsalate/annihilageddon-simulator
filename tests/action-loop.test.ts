@@ -12973,6 +12973,92 @@ test("Mega Mayhem ME sets every wizard life to 5", () => {
   assert.equal(state.common.destroyedMegaMayhem.includes(megaMayhem), true);
 });
 
+test("Mega Mayhem ME resolves every Defense before setting life", () => {
+  const state = initializeGame({ rootDir, seed: 60616, playerCount: 3 });
+  state.activePlayerId = markPlayerId("player-2");
+  const [activePlayer, defendedPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(defendedPlayer);
+  assert.ok(thirdPlayer);
+  for (const player of state.players) {
+    player.life.current = 17;
+    player.wizardProperties = [];
+  }
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    defendedPlayer,
+    "discardSelf"
+  );
+  chooseFirstFixtureDefense(state);
+  const definition = state.cardDefinitions.get("esw2_dbg__mega_mayhem_005");
+  assert.ok(definition);
+
+  assert.deepEqual(
+    executeMayhemEffects(state, activePlayer, definition, {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: activePlayer.playerId,
+      cardInstanceId: markCardInstanceId("fixture-mega-mayhem-005-defense"),
+      definitionId: definition.cardId,
+    }),
+    { ok: true }
+  );
+
+  assert.deepEqual(
+    [
+      activePlayer.life.current,
+      defendedPlayer.life.current,
+      thirdPlayer.life.current,
+    ],
+    [5, 17, 5]
+  );
+  assert.equal(defendedPlayer.discard.includes(defenseCard), true);
+
+  const cardEvents = state.eventLog.filter(
+    (event) => event.definitionId === "esw2_dbg__mega_mayhem_005"
+  );
+  const attackIds = new Set(
+    cardEvents.flatMap((event) =>
+      "attackId" in event && event.attackId !== undefined
+        ? [event.attackId]
+        : []
+    )
+  );
+  assert.equal(attackIds.size, 1);
+  const decisionEvents = cardEvents.filter(
+    (event) => event.type === "mayhemDecisionStarted"
+  );
+  assert.deepEqual(
+    decisionEvents.map((event) => event.targetPlayerId),
+    [activePlayer.playerId, defendedPlayer.playerId, thirdPlayer.playerId]
+  );
+  const lifeSetEvents = cardEvents.filter(
+    (event) => event.type === "effectLifeSet"
+  );
+  assert.deepEqual(
+    lifeSetEvents.map((event) => event.targetPlayerId),
+    [activePlayer.playerId, thirdPlayer.playerId]
+  );
+  assertEventOrder(state, [
+    (event) =>
+      event.type === "mayhemDecisionPhaseStarted" &&
+      event.definitionId === "esw2_dbg__mega_mayhem_005",
+    (event) =>
+      event.type === "defenseChoiceSelected" &&
+      event.playerId === defendedPlayer.playerId,
+    (event) =>
+      event.type === "mayhemResolutionPhaseStarted" &&
+      event.definitionId === "esw2_dbg__mega_mayhem_005",
+    (event) =>
+      event.type === "effectLifeSet" &&
+      event.targetPlayerId === activePlayer.playerId,
+    (event) =>
+      event.type === "effectLifeSet" &&
+      event.targetPlayerId === thirdPlayer.playerId,
+  ]);
+});
+
 test("attack_damage kill awards Basic Trophy to the attacker", () => {
   const state = initializeGame({
     rootDir,

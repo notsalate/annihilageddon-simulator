@@ -902,7 +902,21 @@ const megaMayhemSetLifeHandler: EffectRuntimeHandler<
 > = {
   effectId: "mega_mayhem_set_life",
   execute(state, player, effect, source, services) {
-    for (const targetPlayer of services.getPlayersInActiveOrder(state)) {
+    const decisionResult = collectMayhemAttackDefenseDecisions(
+      state,
+      services.getPlayersInActiveOrder(state),
+      effect.effectId,
+      source,
+      services
+    );
+    if (!decisionResult.ok) return decisionResult;
+    if (decisionResult.gameEnd !== undefined) {
+      return { ok: true, gameEnd: decisionResult.gameEnd };
+    }
+    const attackInstance = decisionResult.attackInstance;
+    const attackSource = decisionResult.source;
+    for (const { player: targetPlayer, avoided } of decisionResult.decisions) {
+      if (avoided) continue;
       const lifeChange = services.setPlayerLife(
         state,
         targetPlayer,
@@ -912,22 +926,33 @@ const megaMayhemSetLifeHandler: EffectRuntimeHandler<
         type: "effectLifeSet",
         playerId: player.playerId,
         targetPlayerId: targetPlayer.playerId,
-        cardInstanceId: source.cardInstanceId,
-        definitionId: source.definitionId,
+        ...(attackSource.attackId === undefined
+          ? {}
+          : { attackId: attackSource.attackId }),
+        cardInstanceId: attackSource.cardInstanceId,
+        definitionId: attackSource.definitionId,
         effectId: effect.effectId,
         amount: effect.lifeTotal,
         targetLifeBefore: lifeChange.lifeBefore,
         targetLifeAfter: lifeChange.lifeAfter,
-        sourceType: source.sourceType,
+        sourceType: attackSource.sourceType,
       });
       if (lifeChange.lifeAfter < 1) {
-        const deathResult = services.resolvePlayerDeath(state, targetPlayer);
+        const deathResult = services.resolvePlayerDeath(
+          state,
+          targetPlayer,
+          attackSource
+        );
         if (!deathResult.ok || deathResult.gameEnd !== undefined) {
-          return deathResult;
+          return services.closeAttackInstance(
+            state,
+            attackInstance,
+            deathResult
+          );
         }
       }
     }
-    return { ok: true };
+    return services.closeAttackInstance(state, attackInstance, { ok: true });
   },
 };
 
