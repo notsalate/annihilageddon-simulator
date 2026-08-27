@@ -1265,6 +1265,9 @@ function createAttackAdapters(
       });
       return { ok: true };
     },
+    closeAttackInstance(_state, _attack, result) {
+      return result;
+    },
     ...overrides,
   };
 }

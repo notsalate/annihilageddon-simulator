@@ -32,6 +32,7 @@ import {
   type SetupEffectSourceContext,
 } from "./effect-runtime-registry.js";
 import { filterWizardPropertySetupPoolForFamiliarCapacity } from "./effect-runtime-setup.js";
+import type { RuntimeEffectId } from "./runtime-effect.js";
 import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
@@ -193,12 +194,17 @@ export interface GameState {
   cardDefinitions: ReadonlyMap<string, CardDefinition>;
   tokenDefinitions: ReadonlyMap<string, TokenDefinition>;
   deadWizardTokenResolution: {
-    boundaryDepth: number;
-    pendingFaces: Array<{
-      playerId: PlayerId;
-      tokenInstanceId: TokenInstanceId;
-      tokenDefinitionId: TokenDefinitionId;
-      deathKillerPlayerId?: PlayerId;
+    attackQueues: Array<{
+      attackId: AttackId;
+      faces: Array<{
+        playerId: PlayerId;
+        tokenInstanceId: TokenInstanceId;
+        tokenDefinitionId: TokenDefinitionId;
+        attackId?: AttackId;
+        deathKillerPlayerId?: PlayerId;
+        deadWizardTokenWasDinglerAtGain?: boolean;
+        deadWizardTokenProjectionEffectIds?: readonly RuntimeEffectId[];
+      }>;
     }>;
   };
   eventLog: GameEvent[];
@@ -1012,8 +1018,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     cardDefinitions: dataPack.cardDefinitions,
     tokenDefinitions: dataPack.tokenDefinitions,
     deadWizardTokenResolution: {
-      boundaryDepth: 0,
-      pendingFaces: [],
+      attackQueues: [],
     },
     eventLog: [...setupEvents],
     ...(options.effectChoiceStrategy === undefined

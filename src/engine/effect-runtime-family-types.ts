@@ -3,6 +3,7 @@ import type {
   EffectRuntimeAfterDamageDealtOperationContext,
   EffectRuntimeAfterPlayerAttackDamageOperationContext,
   EffectRuntimeControlledPowerOperationContext,
+  EffectRuntimeDeadWizardTokenFaceProjectionOperationContext,
   EffectRuntimeEndTurnDrawModifierOperationContext,
   EffectRuntimeBasicTrophyChipPayoutSuppressionOperationContext,
   EffectRuntimeHandlerOperationResult,
@@ -36,6 +37,10 @@ export interface EffectRuntimeHandler<
   executeOnPlayCard?(
     effect: Effect,
     context: EffectRuntimeOnPlayCardOperationContext
+  ): EffectRuntimeHandlerOperationResult<EffectExecutionResult>;
+  projectDeadWizardTokenFace?(
+    effect: Effect,
+    context: EffectRuntimeDeadWizardTokenFaceProjectionOperationContext
   ): EffectRuntimeHandlerOperationResult<EffectExecutionResult>;
   applyAfterPlayerAttackDamage?(
     effect: Effect,

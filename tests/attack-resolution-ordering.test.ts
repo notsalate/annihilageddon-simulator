@@ -167,6 +167,9 @@ function createEarlyExitAdapters(
     applyAfterAttackDamage() {
       return unreachable("applyAfterAttackDamage");
     },
+    closeAttackInstance(_state, _attack, result) {
+      return result;
+    },
   };
 }
 

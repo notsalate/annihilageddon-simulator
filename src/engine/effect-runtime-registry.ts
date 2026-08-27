@@ -3,6 +3,7 @@ import {
   type DefenseAttackContext,
   type DefenseWindowResolutionResult,
   type DamageApplicationResult,
+  type AttackInstance,
   type PlayerControlledAttackIntent,
   type PlayerControlledAttackExecutionResult,
 } from "./attack-resolution.js";
@@ -141,6 +142,9 @@ export interface EffectSourceContext {
   tokenInstanceId?: TokenInstance["instanceId"];
   tokenDefinitionId?: TokenDefinition["tokenId"];
   deadWizardTokenDeathKillerPlayerId?: PlayerState["playerId"];
+  deadWizardTokenWasDinglerAtGain?: boolean;
+  deadWizardTokenProjectionEffectIds?: readonly RuntimeEffectId[];
+  attackDeath?: boolean;
 }
 
 export interface AttackReplacementProfile {
@@ -298,8 +302,12 @@ export type DamageCause =
       kind: "playerControlled";
       player: PlayerState;
       deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy;
+      deadWizardTokenReplacement?: {
+        amount: number;
+      };
+      attackDeath?: boolean;
     }
-  | { kind: "ownerless" };
+  | { kind: "ownerless"; attackDeath?: boolean };
 
 export interface EffectRuntimeServices {
   resolveTargetChoice(
@@ -430,13 +438,16 @@ export interface EffectRuntimeServices {
     targetPlayer: PlayerState,
     effectId: RuntimeEffectId,
     source: EffectSourceContext,
-    deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy
+    deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy,
+    deadWizardTokenReplacement?: {
+      amount: number;
+    }
   ): EffectExecutionResult;
   replaceDeadWizardTokenAfterKill(
     state: GameState,
     killer: PlayerState,
     targetPlayer: PlayerState,
-    amount: 3,
+    amount: number,
     effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): EffectExecutionResult;
@@ -483,29 +494,51 @@ export interface EffectRuntimeServices {
     state: GameState,
     player: PlayerState
   ): EffectExecutionResult;
+  gainDeadWizardTokens(
+    state: GameState,
+    player: PlayerState,
+    amount: number
+  ): EffectExecutionResult;
+  reapplyDeadWizardTokenFace(
+    state: GameState,
+    player: PlayerState,
+    token: PlayerState["deadWizardTokens"][number],
+    source: EffectSourceContext
+  ): EffectExecutionResult;
   transferControlledDeadWizardTokenLike(
     state: GameState,
     player: PlayerState,
     targetPlayer: PlayerState,
     effectId: RuntimeEffectId,
-    source: EffectSourceContext
+    source: EffectSourceContext,
+    options?: { reapplyFace?: boolean }
   ): EffectExecutionResult;
   exchangeControlledDeadWizardTokenLikes(
     state: GameState,
     player: PlayerState,
     targetPlayer: PlayerState,
     effectId: RuntimeEffectId,
-    source: EffectSourceContext
+    source: EffectSourceContext,
+    options?: { reapplyFace?: boolean }
   ): EffectExecutionResult;
   collectAttackReplacementProfile(
     state: GameState,
     attackingPlayer: PlayerState,
     source: EffectSourceContext
   ): EffectRuntimeOperationResult<AttackReplacementProfile>;
+  openAttackInstance(
+    state: GameState,
+    attackingPlayer: PlayerState,
+    source: EffectSourceContext
+  ): AttackInstance;
+  closeAttackInstance(
+    state: GameState,
+    attack: AttackInstance,
+    result: EffectExecutionResult
+  ): EffectExecutionResult;
   resolvePlayerControlledAttack(
     intent: PlayerControlledAttackIntent
   ): PlayerControlledAttackExecutionResult;
-  resolvePendingDeadWizardTokenFaces(state: GameState): EffectExecutionResult;
   resolveDefenseWindow(
     state: GameState,
     defendingPlayer: PlayerState,
@@ -528,7 +561,8 @@ export interface EffectRuntimeServices {
   ): EffectExecutionResult;
   resolvePlayerDeath(
     state: GameState,
-    player: PlayerState
+    player: PlayerState,
+    source?: EffectSourceContext
   ): EffectExecutionResult;
   peekTopDeckCard(
     player: PlayerState,
@@ -590,6 +624,14 @@ export interface EffectRuntimeOnPlayCardOperationContext {
   readonly sourceDefinition: CardDefinition;
   readonly playedCard: CardInstance;
   readonly playedDefinition: CardDefinition;
+}
+
+export interface EffectRuntimeDeadWizardTokenFaceProjectionOperationContext {
+  readonly state: GameState;
+  readonly player: PlayerState;
+  readonly source: EffectSourceContext;
+  readonly services: EffectRuntimeServices;
+  readonly deadWizardTokenWasDinglerAtGain: boolean;
 }
 
 export interface EffectRuntimeAfterPlayerAttackDamageOperationContext {
@@ -662,6 +704,10 @@ export interface EffectRuntimeCatalogOperationOverridesForTesting<
   readonly executeOnPlayCard?: (
     effect: RuntimeEffectForId<Id>,
     context: EffectRuntimeOnPlayCardOperationContext
+  ) => EffectRuntimeHandlerOperationResult<EffectExecutionResult>;
+  readonly projectDeadWizardTokenFace?: (
+    effect: RuntimeEffectForId<Id>,
+    context: EffectRuntimeDeadWizardTokenFaceProjectionOperationContext
   ) => EffectRuntimeHandlerOperationResult<EffectExecutionResult>;
   readonly applyAfterPlayerAttackDamage?: (
     effect: RuntimeEffectForId<Id>,
@@ -738,6 +784,11 @@ interface EffectRuntimeEntry<
     subjectId: string,
     effect: VerifiedRuntimeEffectForId<EffectId>,
     context: EffectRuntimeTimedExecutionOperationContext
+  ): EffectRuntimeOperationResult<EffectExecutionResult>;
+  projectDeadWizardTokenFaceVerified(
+    subjectId: string,
+    effect: VerifiedRuntimeEffectForId<EffectId>,
+    context: EffectRuntimeDeadWizardTokenFaceProjectionOperationContext
   ): EffectRuntimeOperationResult<EffectExecutionResult>;
   executeOnPlayCardVerified(
     subjectId: string,
@@ -1046,6 +1097,20 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     executeVerified,
     evaluateAtTimingVerified,
     executeAtTimingVerified,
+    projectDeadWizardTokenFaceVerified(subjectId, effect, context) {
+      return evaluateAtTimingVerified(subjectId, effect, {
+        source: context.source,
+        timing: "onDeadWizardTokenFace",
+        evaluate(effect) {
+          const projectDeadWizardTokenFace =
+            operationOverrides?.projectDeadWizardTokenFace ??
+            config.handler.projectDeadWizardTokenFace;
+          return projectDeadWizardTokenFace === undefined
+            ? { status: "notApplicable" }
+            : projectDeadWizardTokenFace(effect, context);
+        },
+      });
+    },
     executeOnPlayCardVerified(subjectId, effect, context) {
       return evaluateAtTimingVerified(subjectId, effect, {
         source: context.source,
@@ -1468,7 +1533,11 @@ const setLifeHandler: EffectRuntimeHandler<RuntimeEffectForId<"set_life">> = {
       sourceType: source.sourceType,
     });
     if (lifeChange.lifeAfter < 1) {
-      return services.resolvePlayerDeath(state, targetResult.choice.player);
+      return services.resolvePlayerDeath(
+        state,
+        targetResult.choice.player,
+        source
+      );
     }
     return { ok: true };
   },
@@ -1688,6 +1757,20 @@ const gainStatusHandler: EffectRuntimeHandler<
 
     return { ok: true };
   },
+  projectDeadWizardTokenFace(effect, context) {
+    if (effect.statusId !== "dingler") {
+      return { status: "notApplicable" };
+    }
+    return {
+      status: "resolved",
+      result: context.services.gainDinglerStatus(
+        context.state,
+        context.player,
+        effect.effectId,
+        context.source
+      ),
+    };
+  },
 };
 
 const removeStatusHandler: EffectRuntimeHandler<
@@ -1779,6 +1862,25 @@ const toggleStatusHandler: EffectRuntimeHandler<
     }
 
     return { ok: true };
+  },
+  projectDeadWizardTokenFace(effect, context) {
+    if (effect.statusId !== "dingler") {
+      return { status: "notApplicable" };
+    }
+    const result = context.deadWizardTokenWasDinglerAtGain
+      ? context.services.removeDinglerStatus(
+          context.state,
+          context.player,
+          effect.effectId,
+          context.source
+        )
+      : context.services.gainDinglerStatus(
+          context.state,
+          context.player,
+          effect.effectId,
+          context.source
+        );
+    return { status: "resolved", result };
   },
 };
 
@@ -2590,6 +2692,19 @@ export function executeRuntimeEffectAtTiming(
       timing,
       ...(isApplicable === undefined ? {} : { isApplicable }),
     }
+  );
+}
+
+export function projectRuntimeEffectAtDeadWizardTokenFace(
+  effect: VerifiedRuntimeEffect,
+  context: EffectRuntimeDeadWizardTokenFaceProjectionOperationContext
+): EffectRuntimeOperationResult<EffectExecutionResult> {
+  return getVerifiedEffectRuntimeCatalogEntry(
+    effect
+  ).projectDeadWizardTokenFaceVerified(
+    `Effect ${effect.effectId}`,
+    effect,
+    context
   );
 }
 

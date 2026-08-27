@@ -26,7 +26,6 @@ import {
 import {
   executeMayhemEffects,
   gainDeadWizardToken,
-  resolveWithinDeadWizardTokenResolutionBoundary,
 } from "../src/engine/effect-runtime.js";
 import {
   validateRuntimeEffectCatalogPayload,
@@ -2717,6 +2716,16 @@ test("megaMayhem destroys top main deck cards in active-player order and kills p
     mayhemCard,
     thirdNormalCard
   );
+  const deathFace = {
+    instanceId: markTokenInstanceId("fixture-mega-mayhem-death-face"),
+    definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_015"),
+    ownerId: "common" as const,
+  };
+  state.common.deadWizardTokens.drawStack = [
+    deathFace,
+    ...state.common.deadWizardTokens.drawStack,
+  ];
+  const secondPlayerChipsBefore = secondPlayer.chips;
 
   const result = runMarketFlow(state, { mode: "turn" });
 
@@ -2761,6 +2770,35 @@ test("megaMayhem destroys top main deck cards in active-player order and kills p
         event.playerId === secondPlayer.playerId
     )
   );
+  const resolutionPhaseIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "mayhemResolutionPhaseStarted" &&
+      event.effectId ===
+        "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem"
+  );
+  const resurrectedIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "playerResurrected" &&
+      event.playerId === secondPlayer.playerId
+  );
+  const chipGainIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "effectChipsGained" &&
+      event.playerId === secondPlayer.playerId &&
+      event.cardInstanceId === deathFace.instanceId
+  );
+  const faceResolvedIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "deadWizardTokenFaceResolved" &&
+      event.playerId === secondPlayer.playerId &&
+      event.tokenInstanceId === deathFace.instanceId
+  );
+  assert.ok(resolutionPhaseIndex >= 0);
+  assert.ok(resurrectedIndex > resolutionPhaseIndex);
+  assert.ok(chipGainIndex > resurrectedIndex);
+  assert.ok(faceResolvedIndex > chipGainIndex);
+  assert.equal(secondPlayer.chips, secondPlayerChipsBefore + 1);
+  assert.deepEqual(state.deadWizardTokenResolution.attackQueues, []);
 });
 
 test("megaMayhem keeps a main-deck card when its destroy destination is invalid", () => {
@@ -15822,7 +15860,7 @@ test("Виагрус считает вялые палочки положител
   assert.equal(score.victoryPoints, 10);
 });
 
-test("смерть в незавершённой карте сначала воскрешает и выдаёт ЖДК, а затем завершает карту", () => {
+test("смерть в незавершённой карте сначала выдаёт ЖДК, воскрешает и завершает карту", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -15878,9 +15916,9 @@ test("смерть в незавершённой карте сначала во�
   assertEventOrder(state, [
     (event) => event.type === "playerDied" && event.playerId === foe.playerId,
     (event) =>
-      event.type === "playerResurrected" && event.playerId === foe.playerId,
-    (event) =>
       event.type === "deadWizardTokenGained" && event.playerId === foe.playerId,
+    (event) =>
+      event.type === "playerResurrected" && event.playerId === foe.playerId,
     (event) =>
       event.type === "effectCardsReturnedToHand" &&
       event.playerId === player.playerId,
@@ -15928,10 +15966,10 @@ test("set_life до нуля проводит смерть через общий
     (event) =>
       event.type === "playerDied" && event.playerId === player.playerId,
     (event) =>
-      event.type === "playerResurrected" && event.playerId === player.playerId,
-    (event) =>
       event.type === "deadWizardTokenGained" &&
       event.playerId === player.playerId,
+    (event) =>
+      event.type === "playerResurrected" && event.playerId === player.playerId,
   ]);
 });
 
@@ -15980,7 +16018,7 @@ test("МегаБеспредел с set_life до нуля использует 
   }
 });
 
-test("несколько смертей одной карты выдают ЖДК сразу, а их лица разрешают FIFO после карты", () => {
+test("несколько attack-death выдают ЖДК сразу, а лица ждут закрытия AttackInstance", () => {
   const state = initializeGame({ rootDir, seed: 301002, playerCount: 3 });
   const player = mustGetPlayer(state, state.activePlayerId);
   const [firstFoe, secondFoe] = getOpponentsInSeatingOrder(state, player);
@@ -16023,18 +16061,18 @@ test("несколько смертей одной карты выдают ЖД�
     (event) =>
       event.type === "playerDied" && event.playerId === firstFoe.playerId,
     (event) =>
-      event.type === "playerResurrected" &&
+      event.type === "deadWizardTokenGained" &&
       event.playerId === firstFoe.playerId,
     (event) =>
-      event.type === "deadWizardTokenGained" &&
+      event.type === "playerResurrected" &&
       event.playerId === firstFoe.playerId,
     (event) =>
       event.type === "playerDied" && event.playerId === secondFoe.playerId,
     (event) =>
-      event.type === "playerResurrected" &&
+      event.type === "deadWizardTokenGained" &&
       event.playerId === secondFoe.playerId,
     (event) =>
-      event.type === "deadWizardTokenGained" &&
+      event.type === "playerResurrected" &&
       event.playerId === secondFoe.playerId,
     (event) =>
       event.type === "deadWizardTokenFaceResolved" &&
@@ -16043,6 +16081,101 @@ test("несколько смертей одной карты выдают ЖД�
       event.type === "deadWizardTokenFaceResolved" &&
       event.playerId === secondFoe.playerId,
   ]);
+  const secondTargetIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.targetPlayerId === secondFoe.playerId
+  );
+  const firstFaceIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "deadWizardTokenFaceResolved" &&
+      event.playerId === firstFoe.playerId
+  );
+  assert.ok(secondTargetIndex >= 0);
+  assert.ok(firstFaceIndex > secondTargetIndex);
+  assert.deepEqual(state.deadWizardTokenResolution.attackQueues, []);
+});
+
+test("очередь attack-death сохраняет turn order, а non-ATTACK смерть лица разрешается depth-first", () => {
+  const state = initializeGame({ rootDir, seed: 301006, playerCount: 3 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const [firstFoe, secondFoe] = getOpponentsInSeatingOrder(state, player);
+  assert.ok(firstFoe);
+  assert.ok(secondFoe);
+  for (const candidate of state.players) {
+    candidate.wizardProperties = [];
+  }
+  firstFoe.life.current = 1;
+  secondFoe.life.current = 1;
+  const cascadingFace = createFixtureDeadWizardTokenDefinition(
+    "fixture-dwt-attack-queue-cascading",
+    [
+      {
+        effectId: "set_life",
+        timing: "onDeadWizardTokenFace",
+        lifeTotal: 0,
+        targetSelector: "chosenPlayer",
+      },
+    ]
+  );
+  const neutralFace = createFixtureDeadWizardTokenDefinition(
+    "fixture-dwt-attack-queue-neutral",
+    []
+  );
+  state.tokenDefinitions = new Map([
+    ...state.tokenDefinitions,
+    [cascadingFace.tokenId, cascadingFace],
+    [neutralFace.tokenId, neutralFace],
+  ]);
+  const firstToken = {
+    instanceId: markTokenInstanceId("fixture-dwt-attack-queue-first"),
+    definitionId: markTokenDefinitionId(cascadingFace.tokenId),
+    ownerId: "common" as const,
+  };
+  const secondToken = {
+    instanceId: markTokenInstanceId("fixture-dwt-attack-queue-second"),
+    definitionId: markTokenDefinitionId(neutralFace.tokenId),
+    ownerId: "common" as const,
+  };
+  const nestedToken = {
+    instanceId: markTokenInstanceId("fixture-dwt-attack-queue-nested"),
+    definitionId: markTokenDefinitionId(neutralFace.tokenId),
+    ownerId: "common" as const,
+  };
+  state.common.deadWizardTokens.drawStack = [
+    firstToken,
+    secondToken,
+    nestedToken,
+  ];
+  const attackId = addFixtureCardToActiveHand(state, {
+    effectId: "multi_target_attack",
+    timing: "onPlay",
+    amount: 1,
+    target: { selector: "opponentPlayers" },
+  });
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId !== "set_life") {
+      return undefined;
+    }
+    return toChoiceSelection(
+      choices.find((choice) => choice.choiceId === secondFoe.playerId)
+    );
+  };
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attackId }),
+    { ok: true }
+  );
+
+  const faceOrder = state.eventLog
+    .filter((event) => event.type === "deadWizardTokenFaceResolved")
+    .map((event) => event.tokenInstanceId);
+  assert.deepEqual(faceOrder, [
+    nestedToken.instanceId,
+    firstToken.instanceId,
+    secondToken.instanceId,
+  ]);
+  assert.deepEqual(state.deadWizardTokenResolution.attackQueues, []);
 });
 
 test("смерть от лица ЖДК выдаёт следующий жетон до завершения текущего лица", () => {
@@ -17056,12 +17189,22 @@ test("ЖДК 001 считает реальные и fixture-легенды в с
       },
     ])
   );
-  state.effectChoiceStrategy = ({ effectId, choices }) =>
-    effectId === "attack_damage"
-      ? toChoiceSelection(
-          choices.find((choice) => choice.choiceId === foe.playerId)
-        )
-      : undefined;
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "attack_damage") {
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === foe.playerId)
+      );
+    }
+    if (effectId === "dead_wizard_token_gain_limp_wands_per_discard_legend") {
+      return toChoiceSelection(
+        choices.find(
+          (choice) =>
+            choice.choiceId === `count_as_legend_${effectiveLegend.instanceId}`
+        ) ?? choices.find((choice) => choice.choiceId === "decline")
+      );
+    }
+    return undefined;
+  };
 
   assert.deepEqual(
     applyAction(state, { type: "playCard", cardInstanceId: attack.instanceId }),
@@ -17192,7 +17335,7 @@ test("endTurn проверяет start-of-turn эффекты следующег
   assert.deepEqual(state.eventLog, eventLog);
 });
 
-test("прямая выдача ЖДК не воскрешает игрока и ждёт границы источника", () => {
+test("прямая выдача ЖДК не воскрешает игрока и разрешает лицо сразу", () => {
   const state = initializeGame({ rootDir, seed: 301018 });
   const player = mustGetPlayer(state, state.activePlayerId);
   player.life.current = 3;
@@ -17208,14 +17351,12 @@ test("прямая выдача ЖДК не воскрешает игрока и
     },
   ];
 
-  const result = resolveWithinDeadWizardTokenResolutionBoundary(state, () => {
-    const gained = gainDeadWizardToken(state, player);
-    assert.deepEqual(gained, { ok: true });
-    assert.equal(player.life.current, 3);
-    assert.equal(player.deadWizardTokens.length, 1);
-    assert.equal(player.deck.includes(wand), false);
-    return { ok: true };
-  });
+  const gained = gainDeadWizardToken(state, player);
+  assert.deepEqual(gained, { ok: true });
+  assert.equal(player.life.current, 3);
+  assert.equal(player.deadWizardTokens.length, 1);
+  assert.equal(player.deck[0], wand);
+  const result = { ok: true };
 
   assert.deepEqual(result, { ok: true });
   assert.equal(player.deck[0], wand);
@@ -17240,7 +17381,7 @@ test("прямая выдача ЖДК не воскрешает игрока и
   );
 });
 
-test("ЖДК 015 выдаёт получателю одну чипсину после границы текущего источника", () => {
+test("ЖДК 015 выдаёт получателю одну чипсину сразу", () => {
   const state = initializeGame({ rootDir, seed: 303015 });
   const player = mustGetPlayer(state, state.activePlayerId);
   player.chips = 0;
@@ -17252,11 +17393,9 @@ test("ЖДК 015 выдаёт получателю одну чипсину по�
     },
   ];
 
-  const result = resolveWithinDeadWizardTokenResolutionBoundary(state, () => {
-    assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
-    assert.equal(player.chips, 0);
-    return { ok: true };
-  });
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+  assert.equal(player.chips, 1);
+  const result = { ok: true };
 
   assert.deepEqual(result, { ok: true });
   assert.equal(player.chips, 1);
@@ -17270,6 +17409,76 @@ test("ЖДК 015 выдаёт получателю одну чипсину по�
         event.definitionId === "esw2_dbg__dead_wizard_token_015"
     )
   );
+});
+
+test("не-ATTACK смерть лица ЖДК разрешает следующий gain вложенно", () => {
+  const state = initializeGame({ rootDir, seed: 301019 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  player.wizardProperties = [];
+  player.life.current = 20;
+  const deathFace = createFixtureDeadWizardTokenDefinition(
+    "fixture-dwt-direct-non-attack-death",
+    [
+      {
+        effectId: "set_life",
+        timing: "onDeadWizardTokenFace",
+        lifeTotal: 0,
+        target: { selector: "activePlayer" },
+      },
+    ]
+  );
+  const followupFace = createFixtureDeadWizardTokenDefinition(
+    "fixture-dwt-direct-non-attack-followup",
+    [
+      {
+        effectId: "dead_wizard_token_gain_chips",
+        timing: "onDeadWizardTokenFace",
+        amount: 1,
+      },
+    ]
+  );
+  state.tokenDefinitions = new Map([
+    ...state.tokenDefinitions,
+    [deathFace.tokenId, deathFace],
+    [followupFace.tokenId, followupFace],
+  ]);
+  const firstToken = {
+    instanceId: markTokenInstanceId("fixture-dwt-direct-non-attack-first"),
+    definitionId: markTokenDefinitionId(deathFace.tokenId),
+    ownerId: "common" as const,
+  };
+  const secondToken = {
+    instanceId: markTokenInstanceId("fixture-dwt-direct-non-attack-second"),
+    definitionId: markTokenDefinitionId(followupFace.tokenId),
+    ownerId: "common" as const,
+  };
+  state.common.deadWizardTokens.drawStack = [firstToken, secondToken];
+
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+  assert.equal(player.life.current, 20);
+  assert.equal(player.chips, 1);
+  assert.deepEqual(
+    player.deadWizardTokens.map((token) => token.instanceId),
+    [firstToken.instanceId, secondToken.instanceId]
+  );
+  assertEventOrder(state, [
+    (event) =>
+      event.type === "deadWizardTokenGained" &&
+      event.tokenInstanceId === firstToken.instanceId,
+    (event) =>
+      event.type === "playerDied" && event.playerId === player.playerId,
+    (event) =>
+      event.type === "deadWizardTokenGained" &&
+      event.tokenInstanceId === secondToken.instanceId,
+    (event) =>
+      event.type === "playerResurrected" && event.playerId === player.playerId,
+    (event) =>
+      event.type === "deadWizardTokenFaceResolved" &&
+      event.tokenInstanceId === secondToken.instanceId,
+    (event) =>
+      event.type === "deadWizardTokenFaceResolved" &&
+      event.tokenInstanceId === firstToken.instanceId,
+  ]);
 });
 
 test("ЖДК 012 выдаёт по одной чипсине противникам в порядке рассадки", () => {

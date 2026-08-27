@@ -1,8 +1,5 @@
 import { drawDeckCards } from "./deck-lifecycle.js";
-import {
-  createAttackInstance,
-  type AttackInstance,
-} from "./attack-resolution.js";
+import type { AttackInstance } from "./attack-resolution.js";
 import {
   findCardOwner,
   getControlledOngoingCards,
@@ -812,6 +809,7 @@ function collectMayhemAttackDefenseDecisions(
   | {
       ok: true;
       decisions: Array<{ player: PlayerState; avoided: boolean }>;
+      attackInstance: AttackInstance;
       source: EffectSourceContext;
       gameEnd?: never;
     }
@@ -827,7 +825,11 @@ function collectMayhemAttackDefenseDecisions(
       error: `Missing Mayhem source player ${source.playerId}`,
     };
   }
-  const attackInstance = createAttackInstance(state, sourcePlayer, source);
+  const attackInstance = services.openAttackInstance(
+    state,
+    sourcePlayer,
+    source
+  );
   recordMayhemDecisionPhaseStarted(state, effectId, attackInstance.source);
 
   for (const targetPlayer of targets) {
@@ -838,15 +840,24 @@ function collectMayhemAttackDefenseDecisions(
       attackInstance,
       services
     );
-    if (!decisionResult.ok) return decisionResult;
+    if (!decisionResult.ok) {
+      return services.closeAttackInstance(
+        state,
+        attackInstance,
+        decisionResult
+      );
+    }
     if (decisionResult.gameEnd !== undefined) {
-      return { ok: true, gameEnd: decisionResult.gameEnd };
+      return services.closeAttackInstance(state, attackInstance, {
+        ok: true,
+        gameEnd: decisionResult.gameEnd,
+      });
     }
     decisions.push({ player: targetPlayer, avoided: decisionResult.avoided });
   }
 
   recordMayhemResolutionPhaseStarted(state, effectId, attackInstance.source);
-  return { ok: true, decisions, source: attackInstance.source };
+  return { ok: true, decisions, attackInstance, source: attackInstance.source };
 }
 
 const mayhemAddChipsToMainMarketHandler: EffectRuntimeHandler<
@@ -919,6 +930,7 @@ const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler<
     if (decisionResult.gameEnd !== undefined) {
       return { ok: true, gameEnd: decisionResult.gameEnd };
     }
+    const attackInstance = decisionResult.attackInstance;
     const attackSource = decisionResult.source;
     for (const { player: targetPlayer, avoided } of decisionResult.decisions) {
       if (avoided) continue;
@@ -935,9 +947,11 @@ const megaMayhemEachPlayerToggleDinglerHandler: EffectRuntimeHandler<
             effect.effectId,
             attackSource
           );
-      if (!result.ok) return result;
+      if (!result.ok || result.gameEnd !== undefined) {
+        return services.closeAttackInstance(state, attackInstance, result);
+      }
     }
-    return { ok: true };
+    return services.closeAttackInstance(state, attackInstance, { ok: true });
   },
 };
 
@@ -957,6 +971,7 @@ const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler<
     if (decisionResult.gameEnd !== undefined) {
       return { ok: true, gameEnd: decisionResult.gameEnd };
     }
+    const attackInstance = decisionResult.attackInstance;
     const attackSource = decisionResult.source;
     let gameEnd: EffectGameEnd | undefined;
     for (const { player: targetPlayer, avoided } of decisionResult.decisions) {
@@ -968,7 +983,13 @@ const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler<
         attackSource,
         services
       );
-      if (!destroyResult.ok) return destroyResult;
+      if (!destroyResult.ok) {
+        return services.closeAttackInstance(
+          state,
+          attackInstance,
+          destroyResult
+        );
+      }
       const destroyedCard = destroyResult.card;
       if (destroyedCard === undefined) continue;
       const destroyedDefinition = state.cardDefinitions.get(
@@ -976,13 +997,23 @@ const megaMayhemEachPlayerDestroyTopMainDeckHandler: EffectRuntimeHandler<
       );
       if (destroyedDefinition?.engine.cardKind !== "mayhem") continue;
 
-      const deathResult = services.resolvePlayerDeath(state, targetPlayer);
-      if (!deathResult.ok) return deathResult;
+      const deathResult = services.resolvePlayerDeath(
+        state,
+        targetPlayer,
+        attackSource
+      );
+      if (!deathResult.ok) {
+        return services.closeAttackInstance(state, attackInstance, deathResult);
+      }
       if (deathResult.gameEnd !== undefined && gameEnd === undefined) {
         gameEnd = deathResult.gameEnd;
       }
     }
-    return gameEnd === undefined ? { ok: true } : { ok: true, gameEnd };
+    return services.closeAttackInstance(
+      state,
+      attackInstance,
+      gameEnd === undefined ? { ok: true } : { ok: true, gameEnd }
+    );
   },
 };
 
@@ -1957,6 +1988,7 @@ function createMayhemLowestLifeDinglerMaxLifeHandler(
       if (decisionResult.gameEnd !== undefined) {
         return { ok: true, gameEnd: decisionResult.gameEnd };
       }
+      const attackInstance = decisionResult.attackInstance;
       const attackSource = decisionResult.source;
       for (const {
         player: targetPlayer,
@@ -1969,7 +2001,13 @@ function createMayhemLowestLifeDinglerMaxLifeHandler(
           effect.effectId,
           attackSource
         );
-        if (!statusResult.ok) return statusResult;
+        if (!statusResult.ok || statusResult.gameEnd !== undefined) {
+          return services.closeAttackInstance(
+            state,
+            attackInstance,
+            statusResult
+          );
+        }
         const maxLife = calculateEffectivePlayerMaxLife(
           state,
           targetPlayer.playerId
@@ -1989,7 +2027,7 @@ function createMayhemLowestLifeDinglerMaxLifeHandler(
           sourceType: attackSource.sourceType,
         });
       }
-      return { ok: true };
+      return services.closeAttackInstance(state, attackInstance, { ok: true });
     },
   };
 }
