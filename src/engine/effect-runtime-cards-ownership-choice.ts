@@ -23,7 +23,9 @@ import type {
 } from "./effect-runtime-registry.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
 import type {
+  AttackSemantics,
   EffectTiming,
+  AttackSemanticMapping,
   RuntimeEffectCondition,
   RuntimeEffectForId,
   RuntimeEffectId,
@@ -112,10 +114,11 @@ export type RevealTopCardChooseDestroyOrPowerRuntimeEffect =
     source: "activePlayerDeck";
   };
 export type RevealTopCardChooseDestroyOrAttackEqualCostRuntimeEffect =
-  EffectWithOptionalTiming<"reveal_top_card_choose_destroy_or_attack_equal_cost"> & {
-    source: "activePlayerDeck";
-    targetSelector: "chosenFoe";
-  };
+  EffectWithOptionalTiming<"reveal_top_card_choose_destroy_or_attack_equal_cost"> &
+    AttackSemanticMapping & {
+      source: "activePlayerDeck";
+      targetSelector: "chosenFoe";
+    };
 export type DestroyTopMainDeckCardsThenOptionalPlayMayhemRuntimeEffect =
   EffectWithOptionalTiming<"destroy_top_main_deck_cards_then_optional_play_mayhem"> & {
     source: "mainDeck";
@@ -254,6 +257,11 @@ export interface CardOwnershipChoiceEffectDecoderTools {
     NonNullable<RuntimeEffectForId<"play_top_card_from_foe_deck">["condition"]>
   >;
   optionalTiming: OptionalField<EffectTiming>;
+  optionalAttackSemantics: OptionalField<
+    NonNullable<
+      RuntimeEffectForId<"exchange_life_and_dingler_status">["attackSemantics"]
+    >
+  >;
   optionalTarget: OptionalField<
     NonNullable<RuntimeEffectForId<"gain_card">["target"]>
   >;
@@ -290,6 +298,7 @@ export function createCardOwnershipChoiceEffectDecoders(
     nonEmptyStringArray,
     optionalCondition,
     optionalTiming,
+    optionalAttackSemantics,
     optionalTarget,
     optionalTargetSelector,
     booleanValue,
@@ -399,6 +408,7 @@ export function createCardOwnershipChoiceEffectDecoders(
           literal("reveal_top_card_choose_destroy_or_attack_equal_cost")
         ),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         source: required(literal("activePlayerDeck")),
         targetSelector: required(literal("chosenFoe")),
       }
@@ -1533,12 +1543,31 @@ const revealTopCardChooseDestroyOrAttackEqualCostHandler: EffectRuntimeHandler<
       };
     }
 
+    const attackSemantics: AttackSemantics = effect.attackSemantics ?? {
+      resolver: "playerControlled",
+      instanceMode: "single",
+      defenseWindowMode: "PER_TARGET",
+      targetApplications: "single",
+      attackText: "perTarget",
+      continuation: "none",
+    };
+    if (
+      attackSemantics.resolver !== "playerControlled" ||
+      attackSemantics.defenseWindowMode === "MAYHEM"
+    ) {
+      return {
+        ok: false,
+        error: `${effect.effectId} requires playerControlled AttackSemantics`,
+      };
+    }
+
     return services.resolvePlayerControlledAttack({
       state,
       attackingPlayer: player,
       source,
       effectId: effect.effectId,
-      defenseWindowMode: "PER_TARGET",
+      defenseWindowMode: attackSemantics.defenseWindowMode,
+      attackSemantics,
       unavoidable: attackProfileResult.result.unavoidable,
       attackProfile: attackProfileResult.result,
       targetPlan: { kind: "runtimeSelector", effect },

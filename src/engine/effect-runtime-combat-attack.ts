@@ -8,6 +8,7 @@ import type {
   PlayerControlledAttackAdapters,
   PlayerControlledSharedAttackImpact,
   ResolvedAttackBranchContext,
+  DefenseWindowMode,
 } from "./attack-resolution.js";
 import { createAttackChainRecurrenceKey } from "./attack-cycle.js";
 import { countControlledCardsOfType } from "./card-type-runtime.js";
@@ -41,9 +42,11 @@ import type {
   RuntimeEffectCost,
   RuntimeEffectForId,
   RuntimeEffectId,
+  AttackSemantics,
   RuntimeEffectTarget,
   RuntimeEffectTargetSelector,
 } from "./runtime-effect.js";
+import { validateAttackSemanticsForEffect } from "./runtime-effect.js";
 import {
   allEffectRuntimeModes,
   type EffectRuntimeSupportedModes,
@@ -121,6 +124,7 @@ export interface CombatAttackEffectDecoderTools {
   positiveInteger: ValueDecoder<number>;
   optionalCondition: OptionalField<RuntimeEffectCondition>;
   optionalTiming: OptionalField<EffectTiming>;
+  optionalAttackSemantics: OptionalField<AttackSemantics>;
   optionalTarget: OptionalField<RuntimeEffectTarget>;
   optionalTargetSelector: OptionalField<RuntimeEffectTargetSelector>;
   optionalCosts: OptionalField<RuntimeEffectCost[]>;
@@ -159,6 +163,7 @@ export function createCombatAttackEffectDecoders(
     positiveInteger,
     optionalCondition,
     optionalTiming,
+    optionalAttackSemantics,
     optionalTarget,
     optionalTargetSelector,
     optionalCosts,
@@ -173,6 +178,7 @@ export function createCombatAttackEffectDecoders(
       {
         effectId: required(literal("attack_damage")),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         amount: required(positiveInteger),
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
@@ -196,6 +202,7 @@ export function createCombatAttackEffectDecoders(
           literal("attack_damage_per_controlled_dead_wizard_token")
         ),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         amountPerDeadWizardToken: required(positiveInteger),
         targetSelector: required(literal("eachFoe")),
         onDamageDealt: optionalAttackBranches,
@@ -208,6 +215,7 @@ export function createCombatAttackEffectDecoders(
       {
         effectId: required(literal("attack_gain_dead_wizard_tokens")),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         amount: required(positiveInteger),
         targetSelector: required(literal("chosenFoe")),
         redirectPolicy: required(literal("ignoreOriginalAttacker")),
@@ -220,6 +228,7 @@ export function createCombatAttackEffectDecoders(
           literal("attack_transfer_controlled_dead_wizard_token")
         ),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         targetSelector: required(literal("chosenPlayer")),
       }
     ),
@@ -230,6 +239,7 @@ export function createCombatAttackEffectDecoders(
           literal("attack_kill_and_replace_dead_wizard_token")
         ),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         amount: required(literal(3)),
         targetSelector: required(literal("chosenFoe")),
       }
@@ -239,6 +249,7 @@ export function createCombatAttackEffectDecoders(
       {
         effectId: required(literal("attack_damage_equal_remembered_card_cost")),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         onDamageDealt: optionalAttackBranches,
@@ -254,6 +265,7 @@ export function createCombatAttackEffectDecoders(
           literal("attack_damage_equal_to_controlled_card_cost")
         ),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         onDamageDealt: optionalAttackBranches,
@@ -276,6 +288,7 @@ export function createCombatAttackEffectDecoders(
           literal("attack_destroy_top_legend_deck_then_damage_equal_cost")
         ),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         onDamageDealt: optionalAttackBranches,
@@ -302,6 +315,7 @@ export function createCombatAttackEffectDecoders(
           literal("attack_damage_equal_random_discarded_hand_cost")
         ),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         targetSelector: required(literal("eachFoe")),
         discardAmount: required(positiveInteger),
         rng: required(literal("seeded")),
@@ -313,6 +327,7 @@ export function createCombatAttackEffectDecoders(
       {
         effectId: required(literal("attack_reveal_and_play_foe_deck_card")),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         amount: required(positiveInteger),
         targetSelector: required(literal("chosenFoe")),
       }
@@ -320,6 +335,7 @@ export function createCombatAttackEffectDecoders(
     attack_gain_limp_wand: defineDecoder("attack_gain_limp_wand", {
       effectId: required(literal("attack_gain_limp_wand")),
       timing: optionalTiming,
+      attackSemantics: optionalAttackSemantics,
       target: optionalTarget,
       targetSelector: optionalTargetSelector,
       destination: required(literal("targetDiscard")),
@@ -330,6 +346,7 @@ export function createCombatAttackEffectDecoders(
       {
         effectId: required(literal("attack_gain_status")),
         timing: required(oneOf(["activation", "onPlay"] as const)),
+        attackSemantics: optionalAttackSemantics,
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
         statusId: required(literal("dingler")),
@@ -346,6 +363,7 @@ export function createCombatAttackEffectDecoders(
       {
         effectId: required(literal("conditional_activation_attack_damage")),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         amount: required(positiveInteger),
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
@@ -359,6 +377,7 @@ export function createCombatAttackEffectDecoders(
           literal("activation_attack_damage_per_controlled_card_type")
         ),
         timing: required(literal("activation")),
+        attackSemantics: optionalAttackSemantics,
         amountPerCard: required(positiveInteger),
         cardType: required(nonEmptyString),
         targetSelector: required(literal("eachFoe")),
@@ -369,6 +388,7 @@ export function createCombatAttackEffectDecoders(
       {
         effectId: required(literal("directional_chain_attack")),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         amount: required(positiveInteger),
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
@@ -383,6 +403,7 @@ export function createCombatAttackEffectDecoders(
       {
         effectId: required(literal("distributed_attack_damage")),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         amount: required(positiveInteger),
         targetSelector: required(literal("eachFoe")),
         condition: optionalCondition,
@@ -397,6 +418,7 @@ export function createCombatAttackEffectDecoders(
       {
         effectId: required(literal("sequential_attack_damage")),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         amount: required(positiveInteger),
         attackCount: required(positiveInteger),
         powerPerKill: required(positiveInteger),
@@ -407,6 +429,7 @@ export function createCombatAttackEffectDecoders(
     multi_target_attack: defineDecoder("multi_target_attack", {
       effectId: required(literal("multi_target_attack")),
       timing: optionalTiming,
+      attackSemantics: optionalAttackSemantics,
       amount: required(positiveInteger),
       target: required(selectorTargetOneOf(["opponentPlayers"] as const)),
       onDamageDealt: optionalAttackBranches,
@@ -418,6 +441,7 @@ export function createCombatAttackEffectDecoders(
       {
         effectId: required(literal("multi_target_neighbor_attack")),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         amount: required(positiveInteger),
         target: required(selectorTargetOneOf(["leftAndRightFoes"] as const)),
         onDamageDealt: optionalAttackBranches,
@@ -430,6 +454,7 @@ export function createCombatAttackEffectDecoders(
       {
         effectId: required(literal("optional_spend_chip_attack_damage")),
         timing: optionalTiming,
+        attackSemantics: optionalAttackSemantics,
         amount: required(positiveInteger),
         target: optionalTarget,
         targetSelector: optionalTargetSelector,
@@ -759,6 +784,54 @@ type PlayerControlledAttackBaseAmountResolver = (
   targetPlayer: PlayerState
 ) => number;
 
+function defaultPlayerControlledAttackSemantics(
+  targetApplications: AttackSemantics["targetApplications"] = "single"
+): AttackSemantics {
+  return {
+    resolver: "playerControlled",
+    instanceMode: "single",
+    defenseWindowMode: "PER_TARGET",
+    targetApplications,
+    attackText: "perTarget",
+    continuation: "none",
+  };
+}
+
+function resolvePlayerControlledAttackMapping(
+  effect: { effectId: RuntimeEffectId; attackSemantics?: AttackSemantics },
+  fallback: AttackSemantics
+):
+  | {
+      ok: true;
+      semantics: AttackSemantics;
+      defenseWindowMode: DefenseWindowMode;
+    }
+  | { ok: false; error: string } {
+  const semantics = effect.attackSemantics ?? fallback;
+  const errors = validateAttackSemanticsForEffect(
+    effect.effectId,
+    { attackSemantics: semantics },
+    `${effect.effectId}.attackSemantics`
+  );
+  if (errors.length > 0) {
+    return { ok: false, error: errors.join("; ") };
+  }
+  if (
+    semantics.resolver !== "playerControlled" ||
+    semantics.defenseWindowMode === "MAYHEM"
+  ) {
+    return {
+      ok: false,
+      error: `${effect.effectId} requires playerControlled AttackSemantics`,
+    };
+  }
+  return {
+    ok: true,
+    semantics,
+    defenseWindowMode: semantics.defenseWindowMode,
+  };
+}
+
 type PlayerControlledDeadWizardTokenEffectAttack =
   | RuntimeEffectForId<"attack_gain_dead_wizard_tokens">
   | RuntimeEffectForId<"attack_transfer_controlled_dead_wizard_token">;
@@ -822,16 +895,24 @@ function resolvePlayerControlledEffectsAttack(
     };
   }
   const attackProfile = attackProfileResult.result;
-  const defenseWindowMode =
+  const mappingResult = resolvePlayerControlledAttackMapping(
+    effect,
     effect.effectId === "attack_transfer_controlled_dead_wizard_token"
-      ? "COLLECT_ALL_FIRST"
-      : "PER_TARGET";
+      ? {
+          ...defaultPlayerControlledAttackSemantics(),
+          defenseWindowMode: "COLLECT_ALL_FIRST",
+          attackText: "shared",
+        }
+      : defaultPlayerControlledAttackSemantics()
+  );
+  if (!mappingResult.ok) return mappingResult;
   return services.resolvePlayerControlledAttack({
     state,
     attackingPlayer: player,
     source,
     effectId: effect.effectId,
-    defenseWindowMode,
+    defenseWindowMode: mappingResult.defenseWindowMode,
+    attackSemantics: mappingResult.semantics,
     unavoidable: attackProfile.unavoidable,
     attackProfile,
     ...(effect.effectId === "attack_gain_dead_wizard_tokens"
@@ -839,7 +920,7 @@ function resolvePlayerControlledEffectsAttack(
       : {}),
     targetPlan: { kind: "runtimeSelector", effect },
     impact:
-      effect.effectId === "attack_transfer_controlled_dead_wizard_token"
+      mappingResult.semantics.attackText === "shared"
         ? createSharedAttackEffectImpact(effect)
         : { kind: "effects", effects: [effect] },
   });
@@ -870,12 +951,18 @@ function resolvePlayerControlledDamageAttack(
     };
   }
   const attackProfile = attackProfileResult.result;
+  const mappingResult = resolvePlayerControlledAttackMapping(
+    effect,
+    defaultPlayerControlledAttackSemantics()
+  );
+  if (!mappingResult.ok) return mappingResult;
   return services.resolvePlayerControlledAttack({
     state,
     attackingPlayer: player,
     source,
     effectId: effect.effectId,
-    defenseWindowMode: "PER_TARGET",
+    defenseWindowMode: mappingResult.defenseWindowMode,
+    attackSemantics: mappingResult.semantics,
     unavoidable: attackProfile.unavoidable,
     targetPlan: { kind: "runtimeSelector", effect },
     impact: {
@@ -1036,13 +1123,19 @@ function createAttackDamageEqualRandomDiscardedHandCostHandler(
         ...attackProfileResult.result,
         unavoidable: true,
       } as const;
+      const mappingResult = resolvePlayerControlledAttackMapping(
+        effect,
+        defaultPlayerControlledAttackSemantics("allInOneInstance")
+      );
+      if (!mappingResult.ok) return mappingResult;
 
       return services.resolvePlayerControlledAttack({
         state,
         attackingPlayer: player,
         source,
         effectId: effect.effectId,
-        defenseWindowMode: "PER_TARGET",
+        defenseWindowMode: mappingResult.defenseWindowMode,
+        attackSemantics: mappingResult.semantics,
         unavoidable: true,
         attackProfile,
         targetPlan: { kind: "orderedPlayers", players: opponents },
@@ -1279,12 +1372,19 @@ function directionalChainAttackHandler(
           };
         }
         const attackProfile = attackProfileResult.result;
+        const mappingResult = resolvePlayerControlledAttackMapping(effect, {
+          ...defaultPlayerControlledAttackSemantics(),
+          instanceMode: "chain",
+          continuation: "onKill",
+        });
+        if (!mappingResult.ok) return mappingResult;
         const attackResult = services.resolvePlayerControlledAttack({
           state,
           attackingPlayer: player,
           source,
           effectId: effect.effectId,
-          defenseWindowMode: "PER_TARGET",
+          defenseWindowMode: mappingResult.defenseWindowMode,
+          attackSemantics: mappingResult.semantics,
           unavoidable: attackProfile.unavoidable,
           targetPlan: {
             kind: "orderedPlayers",
@@ -1303,9 +1403,6 @@ function directionalChainAttackHandler(
           return attackResult;
         }
 
-        if (targetPlayer.life.current < 1) {
-          return { ok: true };
-        }
         if (attackResult.requestedTargetKilled !== true) {
           return { ok: true };
         }
@@ -1363,12 +1460,19 @@ function sequentialAttackDamageHandler(
           };
         }
         const attackProfile = attackProfileResult.result;
+        const mappingResult = resolvePlayerControlledAttackMapping(effect, {
+          ...defaultPlayerControlledAttackSemantics(),
+          instanceMode: "sequential",
+          continuation: "fixedCount",
+        });
+        if (!mappingResult.ok) return mappingResult;
         const attackResult = services.resolvePlayerControlledAttack({
           state,
           attackingPlayer: player,
           source,
           effectId: effect.effectId,
-          defenseWindowMode: "PER_TARGET",
+          defenseWindowMode: mappingResult.defenseWindowMode,
+          attackSemantics: mappingResult.semantics,
           unavoidable: attackProfile.unavoidable,
           attackProfile,
           reportResolvedTargetKilled: true,
@@ -1445,12 +1549,18 @@ function multiTargetAttackHandler<Id extends MultiTargetAttackEffectId>(
       const attackProfile = attackProfileResult.result;
       const opponents = services.getOpponentsInSeatingOrder(state, player);
       const targetPlayers = resolveTargetPlayers(opponents);
+      const mappingResult = resolvePlayerControlledAttackMapping(
+        effect,
+        defaultPlayerControlledAttackSemantics("allInOneInstance")
+      );
+      if (!mappingResult.ok) return mappingResult;
       return services.resolvePlayerControlledAttack({
         state,
         attackingPlayer: player,
         source,
         effectId: effect.effectId,
-        defenseWindowMode: "PER_TARGET",
+        defenseWindowMode: mappingResult.defenseWindowMode,
+        attackSemantics: mappingResult.semantics,
         unavoidable: attackProfile.unavoidable,
         targetPlan: {
           kind: "orderedPlayers",
@@ -1565,12 +1675,18 @@ function distributedAttackDamageHandler(
         ])
       );
       const attackProfile = attackProfileResult.result;
+      const mappingResult = resolvePlayerControlledAttackMapping(
+        effect,
+        defaultPlayerControlledAttackSemantics("allInOneInstance")
+      );
+      if (!mappingResult.ok) return mappingResult;
       return services.resolvePlayerControlledAttack({
         state,
         attackingPlayer: player,
         source,
         effectId: effect.effectId,
-        defenseWindowMode: "PER_TARGET",
+        defenseWindowMode: mappingResult.defenseWindowMode,
+        attackSemantics: mappingResult.semantics,
         unavoidable: attackProfile.unavoidable,
         attackProfile,
         targetPlan: { kind: "orderedPlayers", players: opponents },
@@ -1844,13 +1960,19 @@ export function createCombatAttackEffectDefinitions(
         };
       }
       const attackProfile = attackProfileResult.result;
+      const mappingResult = resolvePlayerControlledAttackMapping(
+        effect,
+        defaultPlayerControlledAttackSemantics()
+      );
+      if (!mappingResult.ok) return mappingResult;
 
       return services.resolvePlayerControlledAttack({
         state,
         attackingPlayer: player,
         source,
         effectId: effect.effectId,
-        defenseWindowMode: "PER_TARGET",
+        defenseWindowMode: mappingResult.defenseWindowMode,
+        attackSemantics: mappingResult.semantics,
         unavoidable: attackProfile.unavoidable,
         attackProfile,
         targetPlan: {

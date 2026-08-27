@@ -33,6 +33,14 @@
       {
         "effectId": "attack_reveal_and_play_foe_deck_card",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "single",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "amount": 4,
         "targetSelector": "chosenFoe"
       }

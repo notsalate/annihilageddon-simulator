@@ -1,6 +1,8 @@
 import {
   effectTimings,
   knownRuntimeEffectIds,
+  validateAttackSemantics,
+  type AttackSemantics,
   type AttackOutcomeBranch,
   type EffectTiming,
   type MayhemHandRedrawOption,
@@ -387,6 +389,24 @@ const attackOutcomeBranch: ValueDecoder<AttackOutcomeBranch> = (label, raw) => {
 
 const attackBranches = arrayOf(attackOutcomeBranch);
 
+const attackSemantics: ValueDecoder<AttackSemantics> = (label, raw) => {
+  const decoded = decodeObject<AttackSemantics>(label, raw, {
+    resolver: required(oneOf(["playerControlled", "mayhem"] as const)),
+    instanceMode: required(oneOf(["single", "sequential", "chain"] as const)),
+    defenseWindowMode: required(
+      oneOf(["PER_TARGET", "COLLECT_ALL_FIRST", "MAYHEM"] as const)
+    ),
+    targetApplications: required(
+      oneOf(["single", "allInOneInstance"] as const)
+    ),
+    attackText: required(oneOf(["perTarget", "shared", "mayhem"] as const)),
+    continuation: required(oneOf(["none", "fixedCount", "onKill"] as const)),
+  });
+  if (!decoded.ok) return decoded;
+  const errors = validateAttackSemantics(decoded.value, label);
+  return errors.length === 0 ? decoded : { ok: false, errors };
+};
+
 const wildMagicOption: ValueDecoder<WildMagicOption> = (label, raw) => {
   if (!isPlainRecord(raw)) return failure(`${label} must be an object`);
   if (raw["effectId"] === "add_power") {
@@ -517,6 +537,7 @@ const optionalCondition = optional(runtimeCondition);
 const requiredCondition = required(runtimeCondition);
 const optionalCosts = optional(runtimeCosts);
 const optionalAttackBranches = optional(attackBranches);
+const optionalAttackSemantics = optional(attackSemantics);
 
 const resourceDrawEffectDecoders = createResourceDrawEffectDecoders({
   defineDecoder,
@@ -541,6 +562,7 @@ const cardOwnershipChoiceEffectDecoders =
     nonEmptyStringArray,
     optionalCondition,
     optionalTiming,
+    optionalAttackSemantics,
     optionalTarget,
     optionalTargetSelector,
     booleanValue,
@@ -647,6 +669,7 @@ const combatAttackEffectDecoders = createCombatAttackEffectDecoders({
   optionalTargetSelector,
   optionalCosts,
   optionalAttackBranches,
+  optionalAttackSemantics,
   selectorTargetOneOf,
   requireTargetSelector,
   oneOf,
@@ -682,6 +705,7 @@ const mayhemEffectDecoders = createMayhemEffectDecoders({
   positiveInteger,
   nonNegativeInteger,
   optionalTiming,
+  optionalAttackSemantics,
   selectorTarget,
   arrayOf,
   mayhemRedrawOption,
@@ -830,6 +854,7 @@ const runtimeEffectDecoders: {
     {
       effectId: required(literal("exchange_life_and_dingler_status")),
       timing: optionalTiming,
+      attackSemantics: optionalAttackSemantics,
       target: optionalTarget,
       targetSelector: optionalTargetSelector,
       optional: optional(booleanValue),

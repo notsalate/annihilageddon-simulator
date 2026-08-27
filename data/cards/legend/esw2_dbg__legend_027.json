@@ -37,6 +37,14 @@
       {
         "effectId": "attack_gain_dead_wizard_tokens",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "single",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "amount": 2,
         "targetSelector": "chosenFoe",
         "redirectPolicy": "ignoreOriginalAttacker"

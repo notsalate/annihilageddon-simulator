@@ -37,6 +37,14 @@
       {
         "effectId": "conditional_activation_attack_damage",
         "timing": "activation",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "single",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "condition": {
           "effectId": "controls_other_card_type",
           "minimum": 1,

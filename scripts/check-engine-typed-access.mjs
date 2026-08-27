@@ -83,10 +83,10 @@ const configuredAllowedViolations = [
   ["src/engine/data.ts", 2039, 3, "requireTokenKindField"],
   ["src/engine/data.ts", 2064, 3, "validateRuntimeEffectDefinition"],
   ["src/engine/data.ts", 2085, 43, "isEffectRecord"],
-  ["src/engine/runtime-effect-decoder.ts", 75, 9, "decodeObject"],
-  ["src/engine/runtime-effect-decoder.ts", 936, 41, "isPlainRecord"],
-  ["src/engine/runtime-effect.ts", 1079, 4, "isRuntimeEffectTargetRecord"],
-  ["src/engine/runtime-effect.ts", 1084, 3, "hasExactKeys"],
+  ["src/engine/runtime-effect-decoder.ts", 77, 9, "decodeObject"],
+  ["src/engine/runtime-effect-decoder.ts", 961, 41, "isPlainRecord"],
+  ["src/engine/runtime-effect.ts", 1441, 4, "isRuntimeEffectTargetRecord"],
+  ["src/engine/runtime-effect.ts", 1446, 3, "hasExactKeys"],
 ];
 
 const typedEffectBoundaryViolations = [];
@@ -176,6 +176,7 @@ approvedValueImporters.set(
   new Set([
     decoderModule,
     "tests/action-loop.test.ts",
+    "tests/attack-mappings.test.ts",
     "tests/benchmark.test.ts",
     "tests/effective-values.test.ts",
     "tests/life-total-effects.test.ts",

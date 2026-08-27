@@ -2447,13 +2447,38 @@ test("#287 starter_004 returns discard cards before the gained DWT face", () => 
       event.type === "effectCardsReturnedToHand" &&
       event.definitionId === "esw2_dbg__starter_004"
   );
+  const attackCreatedIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "attackCreated" &&
+      event.definitionId === "esw2_dbg__starter_004"
+  );
+  const attackId =
+    attackCreatedIndex >= 0
+      ? state.eventLog[attackCreatedIndex]?.type === "attackCreated"
+        ? state.eventLog[attackCreatedIndex].attackId
+        : undefined
+      : undefined;
   const faceIndex = state.eventLog.findIndex(
     (event) =>
       event.type === "deadWizardTokenFaceResolved" &&
       event.tokenDefinitionId === "esw2_dbg__dead_wizard_token_015"
   );
+  const attackTargetIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.definitionId === "esw2_dbg__starter_004"
+  );
   assert.ok(returnIndex >= 0);
+  assert.ok(attackCreatedIndex >= 0);
+  assert.ok(attackTargetIndex >= 0);
   assert.ok(faceIndex >= 0);
+  assert.equal(attackId !== undefined, true);
+  assert.equal(
+    state.eventLog[attackTargetIndex]?.type === "attackTargetStarted"
+      ? state.eventLog[attackTargetIndex].attackId
+      : undefined,
+    attackId
+  );
   assert.ok(returnIndex < faceIndex);
 });
 
@@ -10275,6 +10300,169 @@ test("#287 directional chain continues after a kill with an empty DWT stack", ()
   );
 });
 
+test("#354 directional chain does not cap continuation on post-close life state", () => {
+  const state = initializeGame({ rootDir, seed: 606166, playerCount: 2 });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+    player.hand = [];
+    player.life.current = 20;
+  }
+  targetPlayer.life.current = 1;
+  const dwt = createFixtureDeadWizardTokenDefinition(
+    "fixture-directional-chain-post-close-life",
+    [
+      {
+        effectId: "dead_wizard_token_gain_chips",
+        timing: "onDeadWizardTokenFace",
+        amount: 1,
+      },
+    ]
+  );
+  state.tokenDefinitions = new Map([
+    ...state.tokenDefinitions,
+    [dwt.tokenId, dwt],
+  ]);
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId(
+        "fixture-directional-chain-post-close-life"
+      ),
+      definitionId: markTokenDefinitionId(dwt.tokenId),
+      ownerId: "common",
+    },
+  ];
+  state.effectChoiceStrategy = (request) =>
+    request.effectId === "directional_chain_attack"
+      ? { choiceId: "left" }
+      : undefined;
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_015"
+  );
+  let mutatePostCloseLife = true;
+
+  const result = withTemporaryEffectRuntimeOperations(
+    "dead_wizard_token_gain_chips",
+    {
+      execute(_state, player) {
+        if (mutatePostCloseLife) {
+          player.life.current = 0;
+          mutatePostCloseLife = false;
+        }
+        return { ok: true };
+      },
+    },
+    () =>
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: wand.instanceId,
+      })
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(targetPlayer.life.current, 10);
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.cardInstanceId === wand.instanceId
+    ).length,
+    3
+  );
+});
+
+test("#354 sequential attacks resolve DWT state before the next AttackInstance", () => {
+  const state = initializeGame({ rootDir, seed: 606167, playerCount: 2 });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+    player.hand = [];
+    player.life.current = 20;
+  }
+  targetPlayer.life.current = 7;
+  const dwt = createFixtureDeadWizardTokenDefinition(
+    "fixture-sequential-attack-gain-status",
+    [
+      {
+        effectId: "gain_status",
+        timing: "onDeadWizardTokenFace",
+        statusId: "dingler",
+      },
+    ]
+  );
+  state.tokenDefinitions = new Map([
+    ...state.tokenDefinitions,
+    [dwt.tokenId, dwt],
+  ]);
+  const dwtToken = {
+    instanceId: markTokenInstanceId("fixture-sequential-attack-gain-status"),
+    definitionId: markTokenDefinitionId(dwt.tokenId),
+    ownerId: "common" as const,
+  };
+  state.common.deadWizardTokens.drawStack = [dwtToken];
+  state.effectChoiceStrategy = (request) =>
+    request.effectId === "sequential_attack_damage"
+      ? { choiceId: targetPlayer.playerId }
+      : undefined;
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_023"
+  );
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: wand.instanceId,
+    }),
+    { ok: true }
+  );
+
+  const attackCreatedIndices = state.eventLog.flatMap((event, index) =>
+    event.type === "attackCreated" && event.cardInstanceId === wand.instanceId
+      ? [index]
+      : []
+  );
+  const attackTargetIndices = state.eventLog.flatMap((event, index) =>
+    event.type === "attackTargetStarted" &&
+    event.cardInstanceId === wand.instanceId
+      ? [index]
+      : []
+  );
+  const statusIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "dinglerStatusGained" &&
+      event.playerId === targetPlayer.playerId
+  );
+  const faceIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "deadWizardTokenFaceResolved" &&
+      event.tokenInstanceId === dwtToken.instanceId
+  );
+
+  assert.equal(attackCreatedIndices.length, 4);
+  assert.equal(attackTargetIndices.length, 4);
+  const attackIds = attackCreatedIndices.map((index) => {
+    const event = state.eventLog[index];
+    return event?.type === "attackCreated" ? event.attackId : undefined;
+  });
+  assert.equal(new Set(attackIds).size, 4);
+  assert.ok(statusIndex >= 0);
+  assert.ok(faceIndex > statusIndex);
+  assert.ok(attackTargetIndices[1] !== undefined);
+  assert.ok(faceIndex < attackTargetIndices[1]);
+  assert.equal(targetPlayer.life.current, 15);
+  assert.equal(hasDinglerStatus(targetPlayer), true);
+});
+
 test("#287 directional chain wraps after a full circle", () => {
   const state = initializeGame({ rootDir, seed: 606161, playerCount: 3 });
   const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
@@ -11883,6 +12071,23 @@ test("Venerina Magolovka supports pass, life-only, Dingler-only, and full exchan
       hasDinglerStatus(targetPlayer),
       testCase.expectedTargetDingler
     );
+    const attackLifecycleEvents = state.eventLog.filter(
+      (event) =>
+        event.effectId === "exchange_life_and_dingler_status" &&
+        (event.type === "attackCreated" || event.type === "attackTargetStarted")
+    );
+    if (testCase.selectedChoiceId === "pass") {
+      assert.deepEqual(attackLifecycleEvents, []);
+    } else {
+      assert.deepEqual(
+        attackLifecycleEvents.map((event) => event.type),
+        ["attackCreated", "attackTargetStarted"]
+      );
+      const attackIds = attackLifecycleEvents.map((event) =>
+        "attackId" in event ? event.attackId : undefined
+      );
+      assert.equal(new Set(attackIds).size, 1);
+    }
     assert.ok(
       state.eventLog.some((event) => {
         return (
@@ -11899,6 +12104,66 @@ test("Venerina Magolovka supports pass, life-only, Dingler-only, and full exchan
       })
     );
   }
+});
+
+test("Venerina Magolovka does not exchange after an avoided AttackInstance", () => {
+  const state = initializeGame({ rootDir, seed: 60616 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  activePlayer.life.current = 7;
+  targetPlayer.life.current = 13;
+  addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf");
+  state.effectChoiceStrategy = (request) => {
+    if (request.effectId !== "exchange_life_and_dingler_status") {
+      return selectFirstFixtureDefense(request);
+    }
+    const option = request.choices.find(
+      (choice) => choice.choiceId === "exchange_life_only"
+    );
+    if (option !== undefined) return { choiceId: option.choiceId };
+    const targetChoice = request.choices.find(
+      (choice) => choice.choiceId === targetPlayer.playerId
+    );
+    return targetChoice === undefined
+      ? undefined
+      : { choiceId: targetChoice.choiceId };
+  };
+  const card = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_002"
+  );
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: card.instanceId }),
+    { ok: true }
+  );
+  assert.equal(activePlayer.life.current, 7);
+  assert.equal(targetPlayer.life.current, 13);
+  const attackEvents = state.eventLog.filter(
+    (event) =>
+      event.effectId === "exchange_life_and_dingler_status" &&
+      (event.type === "attackCreated" ||
+        event.type === "attackTargetStarted" ||
+        event.type === "attackAvoided")
+  );
+  assert.deepEqual(
+    attackEvents.map((event) => event.type),
+    ["attackCreated", "attackTargetStarted", "attackAvoided"]
+  );
+  assert.equal(
+    new Set(
+      attackEvents.map((event) =>
+        "attackId" in event ? event.attackId : undefined
+      )
+    ).size,
+    1
+  );
 });
 
 test("2H grants one chip to each non-Dingler in active-player order", () => {
@@ -12869,6 +13134,92 @@ test("Mega Mayhem ME sets every wizard life to 5", () => {
     true
   );
   assert.equal(state.common.destroyedMegaMayhem.includes(megaMayhem), true);
+});
+
+test("Mega Mayhem ME resolves every Defense before setting life", () => {
+  const state = initializeGame({ rootDir, seed: 60616, playerCount: 3 });
+  state.activePlayerId = markPlayerId("player-2");
+  const [activePlayer, defendedPlayer, thirdPlayer] =
+    getPlayersInActiveOrder(state);
+  assert.ok(activePlayer);
+  assert.ok(defendedPlayer);
+  assert.ok(thirdPlayer);
+  for (const player of state.players) {
+    player.life.current = 17;
+    player.wizardProperties = [];
+  }
+  const defenseCard = addFixtureDefenseCardToHand(
+    state,
+    defendedPlayer,
+    "discardSelf"
+  );
+  chooseFirstFixtureDefense(state);
+  const definition = state.cardDefinitions.get("esw2_dbg__mega_mayhem_005");
+  assert.ok(definition);
+
+  assert.deepEqual(
+    executeMayhemEffects(state, activePlayer, definition, {
+      sourceType: "card",
+      runtimeMode: state.runtimeMode,
+      playerId: activePlayer.playerId,
+      cardInstanceId: markCardInstanceId("fixture-mega-mayhem-005-defense"),
+      definitionId: definition.cardId,
+    }),
+    { ok: true }
+  );
+
+  assert.deepEqual(
+    [
+      activePlayer.life.current,
+      defendedPlayer.life.current,
+      thirdPlayer.life.current,
+    ],
+    [5, 17, 5]
+  );
+  assert.equal(defendedPlayer.discard.includes(defenseCard), true);
+
+  const cardEvents = state.eventLog.filter(
+    (event) => event.definitionId === "esw2_dbg__mega_mayhem_005"
+  );
+  const attackIds = new Set(
+    cardEvents.flatMap((event) =>
+      "attackId" in event && event.attackId !== undefined
+        ? [event.attackId]
+        : []
+    )
+  );
+  assert.equal(attackIds.size, 1);
+  const decisionEvents = cardEvents.filter(
+    (event) => event.type === "mayhemDecisionStarted"
+  );
+  assert.deepEqual(
+    decisionEvents.map((event) => event.targetPlayerId),
+    [activePlayer.playerId, defendedPlayer.playerId, thirdPlayer.playerId]
+  );
+  const lifeSetEvents = cardEvents.filter(
+    (event) => event.type === "effectLifeSet"
+  );
+  assert.deepEqual(
+    lifeSetEvents.map((event) => event.targetPlayerId),
+    [activePlayer.playerId, thirdPlayer.playerId]
+  );
+  assertEventOrder(state, [
+    (event) =>
+      event.type === "mayhemDecisionPhaseStarted" &&
+      event.definitionId === "esw2_dbg__mega_mayhem_005",
+    (event) =>
+      event.type === "defenseChoiceSelected" &&
+      event.playerId === defendedPlayer.playerId,
+    (event) =>
+      event.type === "mayhemResolutionPhaseStarted" &&
+      event.definitionId === "esw2_dbg__mega_mayhem_005",
+    (event) =>
+      event.type === "effectLifeSet" &&
+      event.targetPlayerId === activePlayer.playerId,
+    (event) =>
+      event.type === "effectLifeSet" &&
+      event.targetPlayerId === thirdPlayer.playerId,
+  ]);
 });
 
 test("attack_damage kill awards Basic Trophy to the attacker", () => {

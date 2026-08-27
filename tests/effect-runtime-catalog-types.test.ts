@@ -52,6 +52,29 @@ const negativeContracts: [AddPowerHasNoDefenseDestination] = [true];
 void negativeContracts;
 void addPowerOperations;
 
+const playerControlledPerTargetSingleAttackSemantics = {
+  resolver: "playerControlled",
+  instanceMode: "single",
+  defenseWindowMode: "PER_TARGET",
+  targetApplications: "single",
+  attackText: "perTarget",
+  continuation: "none",
+} as const;
+
+const playerControlledPerTargetAllAttackSemantics = {
+  ...playerControlledPerTargetSingleAttackSemantics,
+  targetApplications: "allInOneInstance",
+} as const;
+
+const mayhemAttackSemantics = {
+  resolver: "mayhem",
+  instanceMode: "single",
+  defenseWindowMode: "MAYHEM",
+  targetApplications: "allInOneInstance",
+  attackText: "mayhem",
+  continuation: "none",
+} as const;
+
 test("gameplay Catalog operations expose only the verified effect boundary", () => {
   const source = readFileSync(
     path.join(process.cwd(), "src", "engine", "effect-runtime-registry.ts"),
@@ -473,6 +496,7 @@ test("card ownership and choice effects use exact family policies", () => {
         timing: "onPlay",
         source: "activePlayerDeck",
         targetSelector: "chosenFoe",
+        attackSemantics: playerControlledPerTargetSingleAttackSemantics,
       },
       sourceKind: "card",
     },
@@ -611,6 +635,7 @@ test("attack, defense and replacement effects use exact family policies", () => 
         timing: "onPlay",
         amount: 2,
         targetSelector: "chosenPlayer",
+        attackSemantics: playerControlledPerTargetSingleAttackSemantics,
       },
       sourceKind: "card",
     },
@@ -623,6 +648,7 @@ test("attack, defense and replacement effects use exact family policies", () => 
         discardAmount: 2,
         rng: "seeded",
         unavoidable: true,
+        attackSemantics: playerControlledPerTargetAllAttackSemantics,
       },
       sourceKind: "card",
     },
@@ -633,6 +659,7 @@ test("attack, defense and replacement effects use exact family policies", () => 
         timing: "onPlay",
         statusId: "dingler",
         targetSelector: "anyPlayer",
+        attackSemantics: playerControlledPerTargetSingleAttackSemantics,
       },
       sourceKind: "card",
     },
@@ -643,6 +670,7 @@ test("attack, defense and replacement effects use exact family policies", () => 
         timing: "activation",
         statusId: "dingler",
         targetSelector: "anyPlayer",
+        attackSemantics: playerControlledPerTargetSingleAttackSemantics,
       },
       sourceKind: "card",
     },
@@ -913,6 +941,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         timing: "onPlay",
         amount: 4,
         target: { selector: "allPlayers" },
+        attackSemantics: mayhemAttackSemantics,
       },
     },
     {
@@ -931,6 +960,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         timing: "onMayhemResolve",
         amount: 4,
         target: { selector: "allPlayers" },
+        attackSemantics: mayhemAttackSemantics,
       },
     },
     {
@@ -1057,6 +1087,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         timing: "onMayhemResolve",
         targetSelector: "eachPlayerClockwiseFromActive",
         chipAmount: 1,
+        attackSemantics: mayhemAttackSemantics,
       },
     },
     {
@@ -1087,6 +1118,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         effectId: "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
         timing: "onMayhemResolve",
         statusId: "dingler",
+        attackSemantics: mayhemAttackSemantics,
       },
     },
     {
@@ -1101,6 +1133,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
           cardKind: "mayhem",
         },
         destroyedCardSource: "mainDeck",
+        attackSemantics: mayhemAttackSemantics,
       },
     },
     {
@@ -1118,6 +1151,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         effectId: "mega_mayhem_each_player_toggle_dingler",
         timing: "onMayhemResolve",
         targetSelector: "eachPlayerClockwiseFromActive",
+        attackSemantics: mayhemAttackSemantics,
       },
     },
     {
@@ -1127,6 +1161,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         timing: "onMayhemResolve",
         targetSelector: "eachPlayerClockwiseFromActive",
         lifeTotal: 0,
+        attackSemantics: mayhemAttackSemantics,
       },
     },
     {
@@ -1137,6 +1172,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         targetSelector: "eachPlayerClockwiseFromActive",
         destination: "hand",
         amount: 1,
+        attackSemantics: mayhemAttackSemantics,
       },
     },
     {
@@ -1146,6 +1182,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         timing: "onMayhemResolve",
         targetSelector: "allPlayers",
         costSource: "legendMarket",
+        attackSemantics: mayhemAttackSemantics,
       },
     },
     {
@@ -1155,6 +1192,7 @@ test("Mayhem and Mega Mayhem effects use exact family timing and source policies
         timing: "onMayhemResolve",
         targetSelector: "eachPlayerClockwiseFromActive",
         chooser: "affectedPlayer",
+        attackSemantics: mayhemAttackSemantics,
       },
     },
   ] as const;
@@ -1271,6 +1309,7 @@ test("public catalog validation accepts the canonical optional chip attack paylo
       amount: 10,
       targetSelector: "chosenPlayer",
       chipCost: 1,
+      attackSemantics: playerControlledPerTargetSingleAttackSemantics,
     },
     "combat",
     "card"

@@ -37,6 +37,14 @@
       {
         "effectId": "attack_gain_limp_wand",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "allInOneInstance",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "targetSelector": "eachFoe",
         "destination": "targetDiscard",
         "amount": 2

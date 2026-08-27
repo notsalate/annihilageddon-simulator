@@ -32,6 +32,14 @@
       {
         "effectId": "sequential_attack_damage",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "sequential",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "single",
+          "attackText": "perTarget",
+          "continuation": "fixedCount"
+        },
         "amount": 7,
         "attackCount": 4,
         "powerPerKill": 3,

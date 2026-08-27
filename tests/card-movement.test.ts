@@ -316,6 +316,48 @@ test("card movement: main_037 attacks every foe even when discard destruction is
   assert.ok(scenario.foes.every((foe) => foe.life.current === 5));
 });
 
+test("card movement: main_037 keeps its discard choice outside the attack boundary", () => {
+  const scenario = createGameScenario({ rootDir, seed: 281038 });
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_037",
+  });
+  const discardTarget = givenRuntimeCard(scenario, {
+    zone: "discard",
+    effects: [{ effectId: "add_power", timing: "onPlay", amount: 0 }],
+  });
+  for (const foe of scenario.foes) foe.life.current = 10;
+  chooseEffect(scenario, (request) =>
+    request.effectId === "destroy_own_cards"
+      ? { choiceId: `destroy_${discardTarget.instanceId}` }
+      : undefined
+  );
+
+  assert.deepEqual(play(scenario, source), { ok: true });
+  assert.equal(
+    scenario.state.common.destroyedPile.includes(discardTarget),
+    true
+  );
+  assert.ok(scenario.foes.every((foe) => foe.life.current === 5));
+
+  const destroyIndex = scenario.state.eventLog.findIndex(
+    (event) =>
+      event.type === "effectCardDestroyed" &&
+      event.effectId === "destroy_own_cards" &&
+      event.targetCardInstanceId === discardTarget.instanceId
+  );
+  const attackCreatedIndices = scenario.state.eventLog
+    .map((event, index) => ({ event, index }))
+    .filter(
+      ({ event }) =>
+        event.type === "attackCreated" &&
+        event.definitionId === "esw2_dbg__main_037"
+    )
+    .map(({ index }) => index);
+  assert.ok(destroyIndex >= 0);
+  assert.deepEqual(attackCreatedIndices.length, 1);
+  assert.ok(destroyIndex < attackCreatedIndices[0]!);
+});
+
 test("card movement: main_057 pays one chip only with a valid hand or discard destruction", () => {
   const scenario = createGameScenario({ rootDir, seed: 281057 });
   const source = givenRuntimeCard(scenario, {
@@ -1188,6 +1230,19 @@ test("card movement: main_007 attacks for the revealed cost or destroys it", () 
     ),
     true
   );
+  const attackCreated = attackScenario.state.eventLog.find(
+    (event) =>
+      event.type === "attackCreated" &&
+      event.effectId === "reveal_top_card_choose_destroy_or_attack_equal_cost"
+  );
+  const attackTargetStarted = attackScenario.state.eventLog.find(
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.effectId === "reveal_top_card_choose_destroy_or_attack_equal_cost"
+  );
+  assert.ok(attackCreated);
+  assert.ok(attackTargetStarted);
+  assert.equal(attackCreated.attackId, attackTargetStarted.attackId);
   assert.equal(attackScenario.activePlayer.deck[0], attackTarget);
 
   const differentCostScenario = createGameScenario({

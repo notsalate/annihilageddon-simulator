@@ -32,6 +32,14 @@
       {
         "effectId": "multi_target_neighbor_attack",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "allInOneInstance",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "amount": 7,
         "target": { "selector": "leftAndRightFoes" }
       }

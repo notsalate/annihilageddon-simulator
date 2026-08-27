@@ -32,6 +32,14 @@
       {
         "effectId": "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
         "timing": "onMayhemResolve",
+        "attackSemantics": {
+          "resolver": "mayhem",
+          "instanceMode": "single",
+          "defenseWindowMode": "MAYHEM",
+          "targetApplications": "allInOneInstance",
+          "attackText": "mayhem",
+          "continuation": "none"
+        },
         "statusId": "dingler"
       }
     ],

@@ -37,6 +37,14 @@
       {
         "effectId": "attack_destroy_top_legend_deck_then_damage_equal_cost",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "single",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "targetSelector": "chosenFoe",
         "damageUsesDestroyedCardCost": true,
         "destroyedCardSource": "legendDeck"

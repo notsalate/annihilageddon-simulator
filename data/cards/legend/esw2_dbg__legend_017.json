@@ -38,6 +38,14 @@
       {
         "effectId": "attack_damage_equal_random_discarded_hand_cost",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "allInOneInstance",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "targetSelector": "eachFoe",
         "discardAmount": 2,
         "rng": "seeded",

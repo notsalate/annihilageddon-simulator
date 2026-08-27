@@ -37,6 +37,14 @@
       {
         "effectId": "attack_damage_per_controlled_dead_wizard_token",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "allInOneInstance",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "amountPerDeadWizardToken": 4,
         "targetSelector": "eachFoe"
       }
