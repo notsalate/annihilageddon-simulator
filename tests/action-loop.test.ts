@@ -17477,6 +17477,77 @@ test("endTurn проверяет start-of-turn эффекты следующег
   assert.deepEqual(state.eventLog, eventLog);
 });
 
+test("empty DWT endTurn checkpoint precedes the next turn and its start effects", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 246031,
+    deadWizardTokenCount: 0,
+  });
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  const nextPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(nextPlayer);
+  const startEffect = {
+    effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand",
+    timing: "startOfControllerTurn",
+    destination: "hand",
+    amount: 1,
+    chooser: "controller",
+  } as const;
+  const definition = createFixtureCardDefinition(
+    "fixture-empty-dwt-start-of-turn",
+    [startEffect],
+    { isOngoing: true }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  nextPlayer.permanents.push({
+    instanceId: markCardInstanceId("fixture-empty-dwt-start-of-turn"),
+    definitionId: markCardDefinitionId(definition.cardId),
+    ownerId: nextPlayer.playerId,
+    marketChips: 0,
+  });
+  const limpWand = state.common.limpWandStack[0];
+  assert.ok(limpWand);
+  const nextHand = nextPlayer.hand.slice();
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === startEffect.effectId
+      ? toChoiceSelection(choices[0])
+      : undefined;
+
+  const result = applyAction(state, { type: "endTurn" });
+
+  assert.deepEqual(result, {
+    ok: true,
+    gameEndReason: "deadWizardTokensExhausted",
+  });
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(state.turn.number, 2);
+  assert.deepEqual(nextPlayer.hand, nextHand);
+  assert.equal(state.common.limpWandStack.includes(limpWand), true);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "turnStarted" && event.playerId === nextPlayer.playerId
+    ),
+    false
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.playerId === nextPlayer.playerId
+    ),
+    false
+  );
+});
+
 test("прямая выдача ЖДК не воскрешает игрока и разрешает лицо сразу", () => {
   const state = initializeGame({ rootDir, seed: 301018 });
   const player = mustGetPlayer(state, state.activePlayerId);

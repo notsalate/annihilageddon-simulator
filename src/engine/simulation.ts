@@ -39,9 +39,13 @@ import {
 import { assertGameStateInvariants } from "./invariants.js";
 import { createPlayerDecisionView } from "./strategy-decision-view.js";
 import { intakeRuntimeData } from "./runtime-data-intake.js";
+import {
+  DEAD_WIZARD_TOKENS_EXHAUSTED_REASON,
+  isDeadWizardTokenStackExhausted,
+} from "./end-conditions.js";
 
 export type GameEndReason =
-  | "deadWizardTokensExhausted"
+  | typeof DEAD_WIZARD_TOKENS_EXHAUSTED_REASON
   | "mainDeckExhausted"
   | "legendDeckExhausted"
   | "playerDefeated"
@@ -1244,10 +1248,9 @@ export function getGameEndReason(
 ): GameEndReason | undefined {
   if (
     options.checkDeadWizardTokenExhaustion !== false &&
-    state.common.deadWizardTokens.status === "available" &&
-    state.common.deadWizardTokens.drawStack.length === 0
+    isDeadWizardTokenStackExhausted(state)
   ) {
-    return "deadWizardTokensExhausted";
+    return DEAD_WIZARD_TOKENS_EXHAUSTED_REASON;
   }
 
   return undefined;
