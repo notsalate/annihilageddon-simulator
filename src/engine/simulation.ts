@@ -51,6 +51,7 @@ export interface RunSingleGameOptions {
   seed: number;
   maxTurns: number;
   playerCount?: number;
+  deadWizardTokenCount?: number;
   dataPackPath?: string;
   dataPack?: LoadedDataPack;
   bot?: BotStrategy;
@@ -121,6 +122,7 @@ export interface SimulationFailureSetup {
   seed: number;
   maxTurns: number;
   playerCount?: number;
+  deadWizardTokenCount?: number;
   dataPackPath?: string;
   initialState: SetupStateSnapshot;
 }
@@ -898,6 +900,9 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     ...(options.playerCount === undefined
       ? {}
       : { playerCount: options.playerCount }),
+    ...(options.deadWizardTokenCount === undefined
+      ? {}
+      : { deadWizardTokenCount: options.deadWizardTokenCount }),
     effectChoiceStrategy,
   });
   const setupState = snapshotSetupState(state);
@@ -1003,6 +1008,9 @@ function createSimulationExecutionError(
     ...(options.playerCount === undefined
       ? []
       : ["--playerCount", String(options.playerCount)]),
+    ...(options.deadWizardTokenCount === undefined
+      ? []
+      : ["--deadWizardTokenCount", String(options.deadWizardTokenCount)]),
     "--replayReport",
     "<report-path>",
   ];
@@ -1015,6 +1023,9 @@ function createSimulationExecutionError(
       ...(options.playerCount === undefined
         ? {}
         : { playerCount: options.playerCount }),
+      ...(options.deadWizardTokenCount === undefined
+        ? {}
+        : { deadWizardTokenCount: options.deadWizardTokenCount }),
       ...(options.dataPackPath === undefined
         ? {}
         : { dataPackPath: options.dataPackPath }),

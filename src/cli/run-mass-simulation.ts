@@ -4,6 +4,7 @@ interface CliOptions {
   firstSeed: number;
   gameCount: number;
   maxTurns: number;
+  deadWizardTokenCount?: number;
 }
 
 const options = parseArgs(process.argv.slice(2));
@@ -12,16 +13,46 @@ const result = runMassSimulation({
   firstSeed: options.firstSeed,
   gameCount: options.gameCount,
   maxTurns: options.maxTurns,
+  ...(options.deadWizardTokenCount === undefined
+    ? {}
+    : { deadWizardTokenCount: options.deadWizardTokenCount }),
 });
 
 console.log(JSON.stringify(result, null, 2));
 
 function parseArgs(args: string[]): CliOptions {
+  const deadWizardTokenCount = readOptionalNonNegativeSafeInteger(
+    args,
+    "--deadWizardTokenCount"
+  );
   return {
     firstSeed: readNumberOption(args, "--firstSeed", 60615),
     gameCount: readNumberOption(args, "--games", 10),
     maxTurns: readNumberOption(args, "--maxTurns", 200),
+    ...(deadWizardTokenCount === undefined ? {} : { deadWizardTokenCount }),
   };
+}
+
+function readOptionalNonNegativeSafeInteger(
+  args: string[],
+  optionName: string
+): number | undefined {
+  const optionIndex = args.indexOf(optionName);
+  if (optionIndex < 0) {
+    return undefined;
+  }
+
+  const value = args[optionIndex + 1];
+  if (value === undefined) {
+    throw new Error(`Missing value for ${optionName}`);
+  }
+
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error(`${optionName} must be a non-negative safe integer`);
+  }
+
+  return parsed;
 }
 
 function readNumberOption(

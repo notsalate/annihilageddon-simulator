@@ -855,6 +855,7 @@ export type GameEventDraftFor<TType extends GameEventType> = Extract<
 interface InitializeGameBaseOptions {
   seed: number;
   playerCount?: number;
+  deadWizardTokenCount?: number;
   effectChoiceStrategy?: ChoicePolicy;
 }
 
@@ -896,8 +897,13 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     throw new RangeError("playerCount must be a safe integer >= 2");
   }
 
-  const rng = createSeededRng(options.seed);
+  validateDeadWizardTokenCount(options.deadWizardTokenCount);
   const dataPack = intakeRuntimeData(options);
+  const deadWizardTokenCount = resolveDeadWizardTokenCount(
+    dataPack,
+    options.deadWizardTokenCount
+  );
+  const rng = createSeededRng(options.seed);
   const runtimeMode: EffectRuntimeMode =
     dataPack.manifest.mappingStatus === "fixture" ? "fixture" : "combat";
   const factory = createInstanceFactory();
@@ -976,7 +982,8 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       dataPack,
       tokenFactory,
       rng,
-      playerCount
+      playerCount,
+      deadWizardTokenCount
     ),
   };
 
@@ -1054,17 +1061,18 @@ function instantiateDeadWizardTokens(
   dataPack: LoadedDataPack,
   factory: TokenInstanceFactory,
   rng: RandomSource,
-  playerCount: number
+  playerCount: number,
+  requestedCount: number | undefined
 ): DeadWizardTokenState {
   const tokenStack = dataPack.tokenStacks.deadWizardTokens;
   if (tokenStack === undefined) {
     return {
-      status: "notInDataPack",
+      status: requestedCount === 0 ? "available" : "notInDataPack",
       drawStack: [],
     };
   }
 
-  const drawStackSize = 4 * playerCount;
+  const drawStackSize = requestedCount ?? 4 * playerCount;
   const setupPool = instantiateTokenStack(
     tokenStack,
     dataPack,
@@ -1084,6 +1092,36 @@ function instantiateDeadWizardTokens(
     status: "available",
     drawStack: setupPool.slice(0, drawStackSize),
   };
+}
+
+function validateDeadWizardTokenCount(value: number | undefined): void {
+  if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
+    throw new RangeError(
+      "deadWizardTokenCount must be a non-negative safe integer"
+    );
+  }
+}
+
+function resolveDeadWizardTokenCount(
+  dataPack: LoadedDataPack,
+  requestedCount: number | undefined
+): number | undefined {
+  if (requestedCount === undefined) {
+    return undefined;
+  }
+
+  const productionStackSize =
+    dataPack.tokenStacks.deadWizardTokens?.entries.reduce(
+      (total, entry) => total + entry.count,
+      0
+    ) ?? 0;
+  if (requestedCount > productionStackSize) {
+    throw new RangeError(
+      `deadWizardTokenCount ${requestedCount} exceeds production stack size ${productionStackSize}`
+    );
+  }
+
+  return requestedCount;
 }
 
 function assignStartingWizardProperties(

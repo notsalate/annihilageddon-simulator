@@ -768,6 +768,41 @@ test("mass simulation uses reproducible seed sequence and compact summaries", ()
   );
 });
 
+test("mass simulation forwards the configurable dead wizard token count to every game", () => {
+  const result = runMassSimulation({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    firstSeed: 349100,
+    gameCount: 2,
+    maxTurns: 10,
+    deadWizardTokenCount: 0,
+  });
+
+  assert.deepEqual(
+    result.games.map((game) => game.endReason),
+    ["deadWizardTokensExhausted", "deadWizardTokensExhausted"]
+  );
+  assert.equal(result.aggregate.endReasonCounts.deadWizardTokensExhausted, 2);
+
+  const fullFirst = runMassSimulation({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    firstSeed: 349103,
+    gameCount: 2,
+    maxTurns: 0,
+    deadWizardTokenCount: 30,
+  });
+  const fullSecond = runMassSimulation({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    firstSeed: 349103,
+    gameCount: 2,
+    maxTurns: 0,
+    deadWizardTokenCount: 30,
+  });
+  assert.deepEqual(fullFirst, fullSecond);
+});
+
 function projectMeaningfulEventLog(
   eventLog: ReturnType<typeof runSingleGame>["eventLog"]
 ): Array<Record<string, string | number>> {

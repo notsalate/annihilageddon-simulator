@@ -10,6 +10,7 @@ interface CliOptions {
   seed: number;
   maxTurns: number;
   playerCount?: number;
+  deadWizardTokenCount?: number;
   dataPackPath?: string;
   replayReport?: string;
 }
@@ -39,6 +40,9 @@ const result = runSingleGame({
   ...(options.playerCount === undefined
     ? {}
     : { playerCount: options.playerCount }),
+  ...(options.deadWizardTokenCount === undefined
+    ? {}
+    : { deadWizardTokenCount: options.deadWizardTokenCount }),
   ...dataSource,
 });
 
@@ -60,6 +64,10 @@ console.log(
 
 function parseArgs(args: string[]): CliOptions {
   const playerCount = readOptionalNumberOption(args, "--playerCount");
+  const deadWizardTokenCount = readOptionalNonNegativeSafeInteger(
+    args,
+    "--deadWizardTokenCount"
+  );
   const dataPackPath = readOptionalStringOption(args, "--dataPackPath");
   const replayReport = readOptionalStringOption(args, "--replayReport");
   if (dataPackPath !== undefined && replayReport !== undefined) {
@@ -71,9 +79,32 @@ function parseArgs(args: string[]): CliOptions {
     seed: readNumberOption(args, "--seed", 60615),
     maxTurns: readNumberOption(args, "--maxTurns", 200),
     ...(playerCount === undefined ? {} : { playerCount }),
+    ...(deadWizardTokenCount === undefined ? {} : { deadWizardTokenCount }),
     ...(dataPackPath === undefined ? {} : { dataPackPath }),
     ...(replayReport === undefined ? {} : { replayReport }),
   };
+}
+
+function readOptionalNonNegativeSafeInteger(
+  args: string[],
+  optionName: string
+): number | undefined {
+  const optionIndex = args.indexOf(optionName);
+  if (optionIndex < 0) {
+    return undefined;
+  }
+
+  const value = args[optionIndex + 1];
+  if (value === undefined) {
+    throw new Error(`Missing value for ${optionName}`);
+  }
+
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error(`${optionName} must be a non-negative safe integer`);
+  }
+
+  return parsed;
 }
 
 function readOptionalNumberOption(

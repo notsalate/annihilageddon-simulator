@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   applyAction,
   createSimulationFailureReplay,
+  getGameEndReason,
   initializeGame,
   listLegalActions,
   runSingleGame,
@@ -29,6 +30,75 @@ test("initial game setup is deterministic for the same seed", () => {
   const second = initializeGame({ rootDir, seed: 60615 });
 
   assert.deepEqual(snapshot(first), snapshot(second));
+});
+
+test("dead wizard token count defaults by player count and selects a deterministic subset", () => {
+  const defaultState = initializeGame({
+    rootDir,
+    seed: 349001,
+    playerCount: 2,
+  });
+  assert.equal(defaultState.common.deadWizardTokens.drawStack.length, 8);
+
+  const first = initializeGame({
+    rootDir,
+    seed: 349002,
+    playerCount: 2,
+    deadWizardTokenCount: 5,
+  });
+  const second = initializeGame({
+    rootDir,
+    seed: 349002,
+    playerCount: 2,
+    deadWizardTokenCount: 5,
+  });
+
+  assert.equal(first.common.deadWizardTokens.drawStack.length, 5);
+  assert.deepEqual(
+    first.common.deadWizardTokens.drawStack,
+    second.common.deadWizardTokens.drawStack
+  );
+
+  const fullFirst = initializeGame({
+    rootDir,
+    seed: 349007,
+    deadWizardTokenCount: 30,
+  });
+  const fullSecond = initializeGame({
+    rootDir,
+    seed: 349007,
+    deadWizardTokenCount: 30,
+  });
+  assert.equal(fullFirst.common.deadWizardTokens.drawStack.length, 30);
+  assert.deepEqual(
+    fullFirst.common.deadWizardTokens.drawStack,
+    fullSecond.common.deadWizardTokens.drawStack
+  );
+});
+
+test("zero dead wizard tokens creates an exhausted available stack and invalid counts fail", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 349003,
+    deadWizardTokenCount: 0,
+  });
+
+  assert.equal(state.common.deadWizardTokens.status, "available");
+  assert.deepEqual(state.common.deadWizardTokens.drawStack, []);
+  assert.equal(getGameEndReason(state), "deadWizardTokensExhausted");
+
+  assert.throws(
+    () => initializeGame({ rootDir, seed: 349004, deadWizardTokenCount: -1 }),
+    /deadWizardTokenCount must be a non-negative safe integer/
+  );
+  assert.throws(
+    () => initializeGame({ rootDir, seed: 349005, deadWizardTokenCount: 31 }),
+    /deadWizardTokenCount 31 exceeds production stack size 30/
+  );
+  assert.throws(
+    () => initializeGame({ rootDir, seed: 349006, deadWizardTokenCount: 1.5 }),
+    /deadWizardTokenCount must be a non-negative safe integer/
+  );
 });
 
 test("current runtime data pack uses current-runtime manifest", () => {

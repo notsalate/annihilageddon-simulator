@@ -81,6 +81,7 @@ test("simulation failure report contains deterministic reproduction context", ()
         dataPackPath: playableRuntimeDataPackPath,
         seed: 24902,
         maxTurns: 3,
+        deadWizardTokenCount: 3,
         botFactory: () => ({
           chooseAction: () => ({
             type: "playCard" as const,
@@ -92,6 +93,7 @@ test("simulation failure report contains deterministic reproduction context", ()
       assert.ok(error instanceof SimulationExecutionError);
       assert.equal(error.report.seed, 24902);
       assert.equal(error.report.setup.maxTurns, 3);
+      assert.equal(error.report.setup.deadWizardTokenCount, 3);
       assert.equal(error.report.turnNumber, 1);
       assert.equal(error.report.actions.length, 1);
       assert.deepEqual(error.report.actions[0], {
@@ -106,6 +108,13 @@ test("simulation failure report contains deterministic reproduction context", ()
       assert.match(error.report.error.message, /illegal action/);
       assert.ok(error.report.error.stack.length > 0);
       assert.match(error.report.reproduction.command, /--seed 24902/);
+      assert.match(
+        error.report.reproduction.command,
+        /--deadWizardTokenCount 3/
+      );
+      assert.ok(
+        error.report.reproduction.args.includes("--deadWizardTokenCount")
+      );
       assert.ok(error.report.eventLog.length > 0);
       return true;
     }
