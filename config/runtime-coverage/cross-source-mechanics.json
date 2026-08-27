@@ -3160,12 +3160,9 @@
         "capability:esw2-dbg-dead-wizard-token-001-point-2",
         "capability:esw2-dbg-dead-wizard-token-001-point-3",
         "capability:esw2-dbg-dead-wizard-token-001-point-4",
-        "capability:esw2-dbg-dead-wizard-token-001-point-5",
-        "capability:esw2-dbg-dead-wizard-token-001-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-001-point-5"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-001-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -3785,12 +3782,9 @@
         "capability:esw2-dbg-dead-wizard-token-005-point-4",
         "capability:esw2-dbg-dead-wizard-token-005-point-5",
         "capability:esw2-dbg-dead-wizard-token-005-point-6",
-        "capability:esw2-dbg-dead-wizard-token-005-point-7",
-        "capability:esw2-dbg-dead-wizard-token-005-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-005-point-7"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-005-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -4046,12 +4040,9 @@
         "capability:esw2-dbg-dead-wizard-token-006-point-2",
         "capability:esw2-dbg-dead-wizard-token-006-point-3",
         "capability:esw2-dbg-dead-wizard-token-006-point-4",
-        "capability:esw2-dbg-dead-wizard-token-006-point-5",
-        "capability:esw2-dbg-dead-wizard-token-006-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-006-point-5"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-006-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -4245,12 +4236,9 @@
         "capability:esw2-dbg-dead-wizard-token-007-point-3",
         "capability:esw2-dbg-dead-wizard-token-007-point-4",
         "capability:esw2-dbg-dead-wizard-token-007-point-5",
-        "capability:esw2-dbg-dead-wizard-token-007-point-6",
-        "capability:esw2-dbg-dead-wizard-token-007-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-007-point-6"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-007-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -4479,12 +4467,9 @@
         "capability:esw2-dbg-dead-wizard-token-008-point-2",
         "capability:esw2-dbg-dead-wizard-token-008-point-3",
         "capability:esw2-dbg-dead-wizard-token-008-point-4",
-        "capability:esw2-dbg-dead-wizard-token-008-point-5",
-        "capability:esw2-dbg-dead-wizard-token-008-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-008-point-5"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-008-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -4666,12 +4651,9 @@
         "capability:esw2-dbg-dead-wizard-token-009-point-1",
         "capability:esw2-dbg-dead-wizard-token-009-point-2",
         "capability:esw2-dbg-dead-wizard-token-009-point-3",
-        "capability:esw2-dbg-dead-wizard-token-009-point-4",
-        "capability:esw2-dbg-dead-wizard-token-009-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-009-point-4"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-009-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -4821,12 +4803,9 @@
         "capability:esw2-dbg-dead-wizard-token-010-point-3",
         "capability:esw2-dbg-dead-wizard-token-010-point-4",
         "capability:esw2-dbg-dead-wizard-token-010-point-5",
-        "capability:esw2-dbg-dead-wizard-token-010-point-6",
-        "capability:esw2-dbg-dead-wizard-token-010-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-010-point-6"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-010-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -5045,12 +5024,9 @@
         "capability:esw2-dbg-dead-wizard-token-011-point-4",
         "capability:esw2-dbg-dead-wizard-token-011-point-5",
         "capability:esw2-dbg-dead-wizard-token-011-point-6",
-        "capability:esw2-dbg-dead-wizard-token-011-point-7",
-        "capability:esw2-dbg-dead-wizard-token-011-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-011-point-7"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-011-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -5299,12 +5275,9 @@
       "requiredCapabilities": [
         "capability:esw2-dbg-dead-wizard-token-012-point-1",
         "capability:esw2-dbg-dead-wizard-token-012-point-2",
-        "capability:esw2-dbg-dead-wizard-token-012-point-3",
-        "capability:esw2-dbg-dead-wizard-token-012-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-012-point-3"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-012-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -5424,12 +5397,9 @@
         "capability:esw2-dbg-dead-wizard-token-013-point-1",
         "capability:esw2-dbg-dead-wizard-token-013-point-2",
         "capability:esw2-dbg-dead-wizard-token-013-point-3",
-        "capability:esw2-dbg-dead-wizard-token-013-point-4",
-        "capability:esw2-dbg-dead-wizard-token-013-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-013-point-4"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-013-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -5578,12 +5548,9 @@
         "capability:esw2-dbg-dead-wizard-token-014-point-2",
         "capability:esw2-dbg-dead-wizard-token-014-point-3",
         "capability:esw2-dbg-dead-wizard-token-014-point-4",
-        "capability:esw2-dbg-dead-wizard-token-014-point-5",
-        "capability:esw2-dbg-dead-wizard-token-014-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-014-point-5"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-014-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -5615,7 +5582,7 @@
               },
               "observation": {
                 "kind": "assertion",
-                "target": "typeResult"
+                "target": "player.life.current"
               }
             }
           ],
@@ -5652,7 +5619,7 @@
               },
               "observation": {
                 "kind": "assertion",
-                "target": "typeResult"
+                "target": "player.life.current"
               }
             }
           ],
@@ -5689,7 +5656,7 @@
               },
               "observation": {
                 "kind": "assertion",
-                "target": "typeResult"
+                "target": "player.life.current"
               }
             }
           ],
@@ -5726,7 +5693,7 @@
               },
               "observation": {
                 "kind": "assertion",
-                "target": "typeResult"
+                "target": "player.life.current"
               }
             }
           ],
@@ -5763,7 +5730,7 @@
               },
               "observation": {
                 "kind": "assertion",
-                "target": "typeResult"
+                "target": "player.life.current"
               }
             }
           ],
@@ -5778,12 +5745,9 @@
       "primaryMechanicCluster": "chipsin-economy",
       "requiredCapabilities": [
         "capability:esw2-dbg-dead-wizard-token-015-point-1",
-        "capability:esw2-dbg-dead-wizard-token-015-point-2",
-        "capability:esw2-dbg-dead-wizard-token-015-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-015-point-2"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-015-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -5803,7 +5767,7 @@
           "testRefs": [
             {
               "file": "tests/action-loop.test.ts",
-              "name": "ЖДК 015 выдаёт получателю одну чипсину после границы текущего источника",
+              "name": "ЖДК 015 выдаёт получателю одну чипсину сразу",
               "execution": {
                 "seam": "initializeGame",
                 "objectKind": "deadWizardToken",
@@ -5839,7 +5803,7 @@
           "testRefs": [
             {
               "file": "tests/action-loop.test.ts",
-              "name": "ЖДК 015 выдаёт получателю одну чипсину после границы текущего источника",
+              "name": "ЖДК 015 выдаёт получателю одну чипсину сразу",
               "execution": {
                 "seam": "initializeGame",
                 "objectKind": "deadWizardToken",
@@ -5871,12 +5835,9 @@
         "capability:esw2-dbg-dead-wizard-token-016-point-5",
         "capability:esw2-dbg-dead-wizard-token-016-point-6",
         "capability:esw2-dbg-dead-wizard-token-016-point-7",
-        "capability:esw2-dbg-dead-wizard-token-016-point-8",
-        "capability:esw2-dbg-dead-wizard-token-016-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-016-point-8"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-016-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -6181,12 +6142,9 @@
         "capability:esw2-dbg-dead-wizard-token-017-point-2",
         "capability:esw2-dbg-dead-wizard-token-017-point-3",
         "capability:esw2-dbg-dead-wizard-token-017-point-4",
-        "capability:esw2-dbg-dead-wizard-token-017-point-5",
-        "capability:esw2-dbg-dead-wizard-token-017-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-017-point-5"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-017-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -6394,12 +6352,9 @@
         "capability:esw2-dbg-dead-wizard-token-018-point-1",
         "capability:esw2-dbg-dead-wizard-token-018-point-2",
         "capability:esw2-dbg-dead-wizard-token-018-point-3",
-        "capability:esw2-dbg-dead-wizard-token-018-point-4",
-        "capability:esw2-dbg-dead-wizard-token-018-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-018-point-4"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-018-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -6563,14 +6518,9 @@
         "capability:esw2-dbg-dead-wizard-token-019-point-5",
         "capability:esw2-dbg-dead-wizard-token-019-point-6",
         "capability:esw2-dbg-dead-wizard-token-019-point-7",
-        "capability:esw2-dbg-dead-wizard-token-019-point-8",
-        "capability:esw2-dbg-dead-wizard-token-019-unresolved-1",
-        "capability:esw2-dbg-dead-wizard-token-019-unresolved-2"
+        "capability:esw2-dbg-dead-wizard-token-019-point-8"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-019-unresolved-1",
-        "capability:esw2-dbg-dead-wizard-token-019-unresolved-2"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -6886,12 +6836,9 @@
         "capability:esw2-dbg-dead-wizard-token-020-point-1",
         "capability:esw2-dbg-dead-wizard-token-020-point-2",
         "capability:esw2-dbg-dead-wizard-token-020-point-3",
-        "capability:esw2-dbg-dead-wizard-token-020-point-4",
-        "capability:esw2-dbg-dead-wizard-token-020-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-020-point-4"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-020-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -7041,12 +6988,9 @@
         "capability:esw2-dbg-dead-wizard-token-021-point-3",
         "capability:esw2-dbg-dead-wizard-token-021-point-4",
         "capability:esw2-dbg-dead-wizard-token-021-point-5",
-        "capability:esw2-dbg-dead-wizard-token-021-point-6",
-        "capability:esw2-dbg-dead-wizard-token-021-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-021-point-6"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-021-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -7281,12 +7225,9 @@
         "capability:esw2-dbg-dead-wizard-token-022-point-2",
         "capability:esw2-dbg-dead-wizard-token-022-point-3",
         "capability:esw2-dbg-dead-wizard-token-022-point-4",
-        "capability:esw2-dbg-dead-wizard-token-022-point-5",
-        "capability:esw2-dbg-dead-wizard-token-022-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-022-point-5"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-022-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -7304,7 +7245,7 @@
           "testRefs": [
             {
               "file": "tests/dwt-interactions.test.ts",
-              "name": "ЖДК 022 раскрывает верх Main Deck и ставит вложенное лицо в FIFO",
+              "name": "ЖДК 022 раскрывает верх Main Deck и разрешает вложенное лицо сразу",
               "execution": {
                 "seam": "initializeGame",
                 "objectKind": "deadWizardToken",
@@ -7338,7 +7279,7 @@
           "testRefs": [
             {
               "file": "tests/dwt-interactions.test.ts",
-              "name": "ЖДК 022 раскрывает верх Main Deck и ставит вложенное лицо в FIFO",
+              "name": "ЖДК 022 раскрывает верх Main Deck и разрешает вложенное лицо сразу",
               "execution": {
                 "seam": "initializeGame",
                 "objectKind": "deadWizardToken",
@@ -7372,7 +7313,7 @@
           "testRefs": [
             {
               "file": "tests/dwt-interactions.test.ts",
-              "name": "ЖДК 022 раскрывает верх Main Deck и ставит вложенное лицо в FIFO",
+              "name": "ЖДК 022 раскрывает верх Main Deck и разрешает вложенное лицо сразу",
               "execution": {
                 "seam": "initializeGame",
                 "objectKind": "deadWizardToken",
@@ -7406,7 +7347,7 @@
           "testRefs": [
             {
               "file": "tests/dwt-interactions.test.ts",
-              "name": "ЖДК 022 раскрывает верх Main Deck и ставит вложенное лицо в FIFO",
+              "name": "ЖДК 022 раскрывает верх Main Deck и разрешает вложенное лицо сразу",
               "execution": {
                 "seam": "initializeGame",
                 "objectKind": "deadWizardToken",
@@ -7440,7 +7381,7 @@
           "testRefs": [
             {
               "file": "tests/dwt-interactions.test.ts",
-              "name": "ЖДК 022 раскрывает верх Main Deck и ставит вложенное лицо в FIFO",
+              "name": "ЖДК 022 раскрывает верх Main Deck и разрешает вложенное лицо сразу",
               "execution": {
                 "seam": "initializeGame",
                 "objectKind": "deadWizardToken",
@@ -7470,12 +7411,9 @@
         "capability:esw2-dbg-dead-wizard-token-023-point-3",
         "capability:esw2-dbg-dead-wizard-token-023-point-4",
         "capability:esw2-dbg-dead-wizard-token-023-point-5",
-        "capability:esw2-dbg-dead-wizard-token-023-point-6",
-        "capability:esw2-dbg-dead-wizard-token-023-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-023-point-6"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-023-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -7493,7 +7431,7 @@
           "testRefs": [
             {
               "file": "tests/dwt-interactions.test.ts",
-              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и учитывает WP003",
+              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и сразу разрешает вложенное лицо",
               "execution": {
                 "seam": "initializeGame",
                 "objectKind": "deadWizardToken",
@@ -7527,7 +7465,7 @@
           "testRefs": [
             {
               "file": "tests/dwt-interactions.test.ts",
-              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и учитывает WP003",
+              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и сразу разрешает вложенное лицо",
               "execution": {
                 "seam": "initializeGame",
                 "objectKind": "deadWizardToken",
@@ -7561,7 +7499,7 @@
           "testRefs": [
             {
               "file": "tests/dwt-interactions.test.ts",
-              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и учитывает WP003",
+              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и сразу разрешает вложенное лицо",
               "execution": {
                 "seam": "initializeGame",
                 "objectKind": "deadWizardToken",
@@ -7595,7 +7533,7 @@
           "testRefs": [
             {
               "file": "tests/dwt-interactions.test.ts",
-              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и учитывает WP003",
+              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и сразу разрешает вложенное лицо",
               "execution": {
                 "seam": "initializeGame",
                 "objectKind": "deadWizardToken",
@@ -7629,7 +7567,7 @@
           "testRefs": [
             {
               "file": "tests/dwt-interactions.test.ts",
-              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и учитывает WP003",
+              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и сразу разрешает вложенное лицо",
               "execution": {
                 "seam": "initializeGame",
                 "objectKind": "deadWizardToken",
@@ -7663,7 +7601,7 @@
           "testRefs": [
             {
               "file": "tests/dwt-interactions.test.ts",
-              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и учитывает WP003",
+              "name": "ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и сразу разрешает вложенное лицо",
               "execution": {
                 "seam": "initializeGame",
                 "objectKind": "deadWizardToken",
@@ -7692,12 +7630,9 @@
         "capability:esw2-dbg-dead-wizard-token-024-point-2",
         "capability:esw2-dbg-dead-wizard-token-024-point-3",
         "capability:esw2-dbg-dead-wizard-token-024-point-4",
-        "capability:esw2-dbg-dead-wizard-token-024-point-5",
-        "capability:esw2-dbg-dead-wizard-token-024-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-024-point-5"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-024-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -7881,12 +7816,9 @@
         "capability:esw2-dbg-dead-wizard-token-025-point-3",
         "capability:esw2-dbg-dead-wizard-token-025-point-4",
         "capability:esw2-dbg-dead-wizard-token-025-point-5",
-        "capability:esw2-dbg-dead-wizard-token-025-point-6",
-        "capability:esw2-dbg-dead-wizard-token-025-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-025-point-6"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-025-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -8103,14 +8035,9 @@
         "capability:esw2-dbg-dead-wizard-token-026-point-2",
         "capability:esw2-dbg-dead-wizard-token-026-point-3",
         "capability:esw2-dbg-dead-wizard-token-026-point-4",
-        "capability:esw2-dbg-dead-wizard-token-026-point-5",
-        "capability:esw2-dbg-dead-wizard-token-026-unresolved-1",
-        "capability:esw2-dbg-dead-wizard-token-026-unresolved-2"
+        "capability:esw2-dbg-dead-wizard-token-026-point-5"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-026-unresolved-1",
-        "capability:esw2-dbg-dead-wizard-token-026-unresolved-2"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -8338,16 +8265,9 @@
         "capability:esw2-dbg-dead-wizard-token-027-point-2",
         "capability:esw2-dbg-dead-wizard-token-027-point-3",
         "capability:esw2-dbg-dead-wizard-token-027-point-4",
-        "capability:esw2-dbg-dead-wizard-token-027-point-5",
-        "capability:esw2-dbg-dead-wizard-token-027-unresolved-1",
-        "capability:esw2-dbg-dead-wizard-token-027-unresolved-2",
-        "capability:esw2-dbg-dead-wizard-token-027-unresolved-3"
+        "capability:esw2-dbg-dead-wizard-token-027-point-5"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-027-unresolved-1",
-        "capability:esw2-dbg-dead-wizard-token-027-unresolved-2",
-        "capability:esw2-dbg-dead-wizard-token-027-unresolved-3"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
@@ -8540,12 +8460,9 @@
         "capability:esw2-dbg-dead-wizard-token-028-point-2",
         "capability:esw2-dbg-dead-wizard-token-028-point-3",
         "capability:esw2-dbg-dead-wizard-token-028-point-4",
-        "capability:esw2-dbg-dead-wizard-token-028-point-5",
-        "capability:esw2-dbg-dead-wizard-token-028-unresolved-1"
+        "capability:esw2-dbg-dead-wizard-token-028-point-5"
       ],
-      "unresolvedCapabilities": [
-        "capability:esw2-dbg-dead-wizard-token-028-unresolved-1"
-      ],
+      "unresolvedCapabilities": [],
       "semanticMappings": [
         {
           "draftPoint": {
