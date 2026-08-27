@@ -193,14 +193,17 @@ export interface GameState {
   cardDefinitions: ReadonlyMap<string, CardDefinition>;
   tokenDefinitions: ReadonlyMap<string, TokenDefinition>;
   deadWizardTokenResolution: {
-    boundaryDepth: number;
-    pendingFaces: Array<{
-      playerId: PlayerId;
-      tokenInstanceId: TokenInstanceId;
-      tokenDefinitionId: TokenDefinitionId;
-      deathKillerPlayerId?: PlayerId;
-      deadWizardTokenWasDinglerAtGain?: boolean;
-      deadWizardTokenProjectionEffectIds?: readonly string[];
+    attackQueues: Array<{
+      attackId: AttackId;
+      faces: Array<{
+        playerId: PlayerId;
+        tokenInstanceId: TokenInstanceId;
+        tokenDefinitionId: TokenDefinitionId;
+        attackId?: AttackId;
+        deathKillerPlayerId?: PlayerId;
+        deadWizardTokenWasDinglerAtGain?: boolean;
+        deadWizardTokenProjectionEffectIds?: readonly string[];
+      }>;
     }>;
   };
   eventLog: GameEvent[];
@@ -1014,8 +1017,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
     cardDefinitions: dataPack.cardDefinitions,
     tokenDefinitions: dataPack.tokenDefinitions,
     deadWizardTokenResolution: {
-      boundaryDepth: 0,
-      pendingFaces: [],
+      attackQueues: [],
     },
     eventLog: [...setupEvents],
     ...(options.effectChoiceStrategy === undefined

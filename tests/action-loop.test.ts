@@ -15980,7 +15980,7 @@ test("МегаБеспредел с set_life до нуля использует 
   }
 });
 
-test("несколько смертей одной карты выдают ЖДК сразу, а их лица разрешают FIFO после карты", () => {
+test("несколько attack-death выдают ЖДК сразу, а лица ждут закрытия AttackInstance", () => {
   const state = initializeGame({ rootDir, seed: 301002, playerCount: 3 });
   const player = mustGetPlayer(state, state.activePlayerId);
   const [firstFoe, secondFoe] = getOpponentsInSeatingOrder(state, player);
@@ -16043,6 +16043,101 @@ test("несколько смертей одной карты выдают ЖД�
       event.type === "deadWizardTokenFaceResolved" &&
       event.playerId === secondFoe.playerId,
   ]);
+  const secondTargetIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.targetPlayerId === secondFoe.playerId
+  );
+  const firstFaceIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "deadWizardTokenFaceResolved" &&
+      event.playerId === firstFoe.playerId
+  );
+  assert.ok(secondTargetIndex >= 0);
+  assert.ok(firstFaceIndex > secondTargetIndex);
+  assert.deepEqual(state.deadWizardTokenResolution.attackQueues, []);
+});
+
+test("очередь attack-death сохраняет turn order, а non-ATTACK смерть лица разрешается depth-first", () => {
+  const state = initializeGame({ rootDir, seed: 301006, playerCount: 3 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  const [firstFoe, secondFoe] = getOpponentsInSeatingOrder(state, player);
+  assert.ok(firstFoe);
+  assert.ok(secondFoe);
+  for (const candidate of state.players) {
+    candidate.wizardProperties = [];
+  }
+  firstFoe.life.current = 1;
+  secondFoe.life.current = 1;
+  const cascadingFace = createFixtureDeadWizardTokenDefinition(
+    "fixture-dwt-attack-queue-cascading",
+    [
+      {
+        effectId: "set_life",
+        timing: "onDeadWizardTokenFace",
+        lifeTotal: 0,
+        targetSelector: "chosenPlayer",
+      },
+    ]
+  );
+  const neutralFace = createFixtureDeadWizardTokenDefinition(
+    "fixture-dwt-attack-queue-neutral",
+    []
+  );
+  state.tokenDefinitions = new Map([
+    ...state.tokenDefinitions,
+    [cascadingFace.tokenId, cascadingFace],
+    [neutralFace.tokenId, neutralFace],
+  ]);
+  const firstToken = {
+    instanceId: markTokenInstanceId("fixture-dwt-attack-queue-first"),
+    definitionId: markTokenDefinitionId(cascadingFace.tokenId),
+    ownerId: "common" as const,
+  };
+  const secondToken = {
+    instanceId: markTokenInstanceId("fixture-dwt-attack-queue-second"),
+    definitionId: markTokenDefinitionId(neutralFace.tokenId),
+    ownerId: "common" as const,
+  };
+  const nestedToken = {
+    instanceId: markTokenInstanceId("fixture-dwt-attack-queue-nested"),
+    definitionId: markTokenDefinitionId(neutralFace.tokenId),
+    ownerId: "common" as const,
+  };
+  state.common.deadWizardTokens.drawStack = [
+    firstToken,
+    secondToken,
+    nestedToken,
+  ];
+  const attackId = addFixtureCardToActiveHand(state, {
+    effectId: "multi_target_attack",
+    timing: "onPlay",
+    amount: 1,
+    target: { selector: "opponentPlayers" },
+  });
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId !== "set_life") {
+      return undefined;
+    }
+    return toChoiceSelection(
+      choices.find((choice) => choice.choiceId === secondFoe.playerId)
+    );
+  };
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: attackId }),
+    { ok: true }
+  );
+
+  const faceOrder = state.eventLog
+    .filter((event) => event.type === "deadWizardTokenFaceResolved")
+    .map((event) => event.tokenInstanceId);
+  assert.deepEqual(faceOrder, [
+    nestedToken.instanceId,
+    firstToken.instanceId,
+    secondToken.instanceId,
+  ]);
+  assert.deepEqual(state.deadWizardTokenResolution.attackQueues, []);
 });
 
 test("смерть от лица ЖДК выдаёт следующий жетон до завершения текущего лица", () => {

@@ -121,6 +121,7 @@ interface DefenseMutationSnapshot {
     deadWizardTokenStatus: GameState["common"]["deadWizardTokens"]["status"];
     deadWizardTokenDrawStack: GameState["common"]["deadWizardTokens"]["drawStack"];
   };
+  deadWizardTokenAttackQueues: GameState["deadWizardTokenResolution"]["attackQueues"];
   mutableObjects: DefenseObjectMutationSnapshot[];
   rng: GameState["rng"];
   eventLogLength: number;
@@ -165,6 +166,9 @@ function createDefenseMutationSnapshot(
         deadWizardTokenStatus: state.common.deadWizardTokens.status,
         deadWizardTokenDrawStack: [...state.common.deadWizardTokens.drawStack],
       },
+      deadWizardTokenAttackQueues: structuredClone(
+        state.deadWizardTokenResolution.attackQueues
+      ),
       mutableObjects,
       rng: state.rng.fork(),
       eventLogLength,
@@ -223,6 +227,9 @@ function restoreDefenseMutationSnapshot(
           status: snapshot.common.deadWizardTokenStatus,
           drawStack: [...snapshot.common.deadWizardTokenDrawStack],
         };
+  state.deadWizardTokenResolution.attackQueues = structuredClone(
+    snapshot.deadWizardTokenAttackQueues
+  );
   state.rng = snapshot.rng;
   state.eventLog.splice(snapshot.eventLogLength);
   installGameEventLog(state);

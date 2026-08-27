@@ -1262,10 +1262,6 @@ function directionalChainAttackHandler(
           return attackResult;
         }
 
-        const faceResult = services.resolvePendingDeadWizardTokenFaces(state);
-        if (!faceResult.ok || faceResult.gameEnd !== undefined) {
-          return faceResult;
-        }
         if (targetPlayer.life.current < 1) {
           return { ok: true };
         }
@@ -1354,11 +1350,6 @@ function sequentialAttackDamageHandler(
         }
         if (attackResult.resolvedTargetKilled === true) {
           killedWizardCount += 1;
-        }
-
-        const faceResult = services.resolvePendingDeadWizardTokenFaces(state);
-        if (!faceResult.ok || faceResult.gameEnd !== undefined) {
-          return faceResult;
         }
       }
 

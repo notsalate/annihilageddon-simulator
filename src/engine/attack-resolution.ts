@@ -1,5 +1,6 @@
 import { recordGameEvent } from "./event-recorder.js";
 import { createAttackId, type AttackId } from "../domain/types.js";
+import { registerDeadWizardTokenAttackInstance } from "./dead-wizard-token-resolution.js";
 import {
   collectAttackReplacementProfile,
   type DamageResult,
@@ -59,7 +60,8 @@ export function createAttackInstance(
 ): AttackInstance {
   const attackId = createAttackId(state.nextAttackId);
   state.nextAttackId += 1;
-  const attackSource = { ...source, attackId };
+  registerDeadWizardTokenAttackInstance(state, attackId);
+  const attackSource = { ...source, attackId, attackDeath: true };
   return {
     attackId,
     originalAttacker: attackingPlayer,
@@ -311,6 +313,12 @@ export interface PlayerControlledAttackAdapters {
     state: GameState,
     attribution: AttackDamageAttribution<EffectSourceContext>
   ): EffectExecutionResult;
+
+  closeAttackInstance?(
+    state: GameState,
+    attack: AttackInstance,
+    result: EffectExecutionResult
+  ): EffectExecutionResult;
 }
 
 interface PlayerControlledAttackContext {
@@ -495,9 +503,14 @@ export function resolvePlayerControlledAttack(
     ),
     resolutions: [],
   };
+  const finish = (
+    result: EffectExecutionResult
+  ): PlayerControlledAttackExecutionResult =>
+    adapters.closeAttackInstance?.(intent.state, context.instance, result) ??
+    result;
   const firstTarget = targetResult.players[0];
   if (firstTarget === undefined) {
-    return { ok: true };
+    return finish({ ok: true });
   }
   const initialAmount =
     intent.impact.kind === "damage"
@@ -563,10 +576,10 @@ export function resolvePlayerControlledAttack(
       }
     );
     if (!resolutionResult.ok) {
-      return resolutionResult;
+      return finish(resolutionResult);
     }
     if (resolutionResult.gameEnd !== undefined) {
-      return { ok: true, gameEnd: resolutionResult.gameEnd };
+      return finish({ ok: true, gameEnd: resolutionResult.gameEnd });
     }
 
     application.avoided = resolutionResult.resolution.avoided;
@@ -587,10 +600,10 @@ export function resolvePlayerControlledAttack(
 
   if (intent.defenseWindowMode === "COLLECT_ALL_FIRST") {
     if (intent.impact.kind !== "shared") {
-      return {
+      return finish({
         ok: false,
         error: "COLLECT_ALL_FIRST requires shared attack text",
-      };
+      });
     }
     const sharedResult = intent.impact.resolve(
       intent.state,
@@ -598,7 +611,7 @@ export function resolvePlayerControlledAttack(
       adapters
     );
     if (!sharedResult.ok || sharedResult.gameEnd !== undefined) {
-      return sharedResult;
+      return finish(sharedResult);
     }
     for (const application of context.instance.applications) {
       if (application.resolution !== undefined) {
@@ -610,18 +623,18 @@ export function resolvePlayerControlledAttack(
   for (const attribution of summarizeAttackDamage(context.resolutions)) {
     const result = adapters.applyAfterAttackDamage(intent.state, attribution);
     if (!result.ok || result.gameEnd !== undefined) {
-      return result;
+      return finish(result);
     }
   }
 
-  return {
+  return finish({
     ok: true,
     ...(intent.reportResolvedTargetKilled ? { resolvedTargetKilled } : {}),
     ...(intent.targetPlan.kind === "orderedPlayers" &&
     intent.targetPlan.continueWhile === "targetKilled"
       ? { requestedTargetKilled }
       : {}),
-  };
+  });
 }
 
 function resolveBaseAmount(

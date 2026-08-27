@@ -35,9 +35,20 @@ export function forkGameState(source: GameState): GameState {
     cardDefinitions: source.cardDefinitions,
     tokenDefinitions: source.tokenDefinitions,
     deadWizardTokenResolution: {
-      boundaryDepth: source.deadWizardTokenResolution.boundaryDepth,
-      pendingFaces: source.deadWizardTokenResolution.pendingFaces.map(
-        (face) => ({ ...face })
+      attackQueues: source.deadWizardTokenResolution.attackQueues.map(
+        (queue) => ({
+          attackId: queue.attackId,
+          faces: queue.faces.map((face) => ({
+            ...face,
+            ...(face.deadWizardTokenProjectionEffectIds === undefined
+              ? {}
+              : {
+                  deadWizardTokenProjectionEffectIds: [
+                    ...face.deadWizardTokenProjectionEffectIds,
+                  ],
+                }),
+          })),
+        })
       ),
     },
     eventLog: structuredClone([...source.eventLog]),

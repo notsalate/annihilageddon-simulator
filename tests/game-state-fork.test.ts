@@ -166,8 +166,7 @@ function createFixture(): GameState {
     cardDefinitions: new Map([[cardDefinition.cardId, cardDefinition]]),
     tokenDefinitions: new Map([[tokenDefinition.tokenId, tokenDefinition]]),
     deadWizardTokenResolution: {
-      boundaryDepth: 0,
-      pendingFaces: [],
+      attackQueues: [],
     },
     eventLog: [
       {

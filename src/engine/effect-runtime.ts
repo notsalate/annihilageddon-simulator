@@ -7,6 +7,7 @@ import {
   createAttackInstance,
   resolvePlayerControlledAttack as resolvePlayerControlledAttackLifecycle,
   type AttackDamageAttribution,
+  type AttackInstance,
   type AttackTargetResolutionResult,
   type DamageApplicationResult,
   type DefenseAttackContext,
@@ -34,10 +35,9 @@ import {
   getDeadWizardTokenLikeCardChoiceId,
 } from "./dead-wizard-token-like.js";
 import {
-  beginDeadWizardTokenResolutionBoundary,
-  dequeueDeadWizardTokenFace,
-  endDeadWizardTokenResolutionBoundary,
   enqueueDeadWizardTokenFace,
+  takeDeadWizardTokenAttackFaces,
+  type DeadWizardTokenFace,
 } from "./dead-wizard-token-resolution.js";
 import {
   executeRevealAndPlayFoeDeckCard,
@@ -893,45 +893,11 @@ export function validateControlledCardStartOfControllerTurnEffects(
 }
 
 export function resolveWithinDeadWizardTokenResolutionBoundary(
-  state: GameState,
+  _state: GameState,
   resolve: () => EffectExecutionResult
 ): EffectExecutionResult {
-  beginDeadWizardTokenResolutionBoundary(state);
-  let result: EffectExecutionResult;
-  let isOutermostBoundary: boolean;
-  try {
-    result = resolve();
-  } finally {
-    isOutermostBoundary = endDeadWizardTokenResolutionBoundary(state);
-  }
-
-  if (!result.ok || result.gameEnd !== undefined) {
-    return result;
-  }
-  if (!isOutermostBoundary) {
-    return result;
-  }
-  return resolveQueuedDeadWizardTokenFaces(state);
+  return resolve();
 }
-
-function resolveQueuedDeadWizardTokenFaces(
-  state: GameState
-): EffectExecutionResult {
-  let face = dequeueDeadWizardTokenFace(state);
-  while (face !== undefined) {
-    const result = resolveDeadWizardTokenFace(state, face);
-    if (!result.ok || result.gameEnd !== undefined) {
-      return result;
-    }
-    face = dequeueDeadWizardTokenFace(state);
-  }
-  return { ok: true };
-}
-
-type DeadWizardTokenFace =
-  ReturnType<typeof dequeueDeadWizardTokenFace> extends infer Face
-    ? Exclude<Face, undefined>
-    : never;
 
 function resolveDeadWizardTokenFace(
   state: GameState,
@@ -967,10 +933,12 @@ function resolveDeadWizardTokenFace(
     sourceType: "deadWizardToken",
     runtimeMode: state.runtimeMode,
     playerId: player.playerId,
+    ...(face.attackId === undefined ? {} : { attackId: face.attackId }),
     cardInstanceId: token.instanceId,
     definitionId: definition.tokenId,
     tokenInstanceId: token.instanceId,
     tokenDefinitionId: definition.tokenId,
+    attackDeath: false,
     ...(face.deathKillerPlayerId === undefined
       ? {}
       : { deadWizardTokenDeathKillerPlayerId: face.deathKillerPlayerId }),
@@ -986,23 +954,15 @@ function resolveDeadWizardTokenFace(
             face.deadWizardTokenProjectionEffectIds,
         }),
   };
-  beginDeadWizardTokenResolutionBoundary(state);
-  let result: EffectExecutionResult;
-  try {
-    result = executeEffects(
-      state,
-      player,
-      definition.effects,
-      "onDeadWizardTokenFace",
-      source,
-      (decodedEffect) =>
-        !face.deadWizardTokenProjectionEffectIds?.includes(
-          decodedEffect.effectId
-        )
-    );
-  } finally {
-    endDeadWizardTokenResolutionBoundary(state);
-  }
+  const result = executeEffects(
+    state,
+    player,
+    definition.effects,
+    "onDeadWizardTokenFace",
+    source,
+    (decodedEffect) =>
+      !face.deadWizardTokenProjectionEffectIds?.includes(decodedEffect.effectId)
+  );
   if (!result.ok || result.gameEnd !== undefined) {
     return result;
   }
@@ -1015,27 +975,55 @@ function resolveDeadWizardTokenFace(
   return result;
 }
 
-function resolveQueuedDeadWizardTokenFaceForToken(
+function closeAttackInstance(
   state: GameState,
-  playerId: PlayerState["playerId"],
-  tokenInstanceId: TokenInstance["instanceId"]
+  attack: AttackInstance,
+  result: EffectExecutionResult
 ): EffectExecutionResult {
-  const faceIndex = state.deadWizardTokenResolution.pendingFaces.findIndex(
-    (candidate) =>
-      candidate.playerId === playerId &&
-      candidate.tokenInstanceId === tokenInstanceId
-  );
-  if (faceIndex < 0) {
-    return { ok: true };
+  const faces = takeDeadWizardTokenAttackFaces(state, attack.attackId);
+  if (!result.ok || result.gameEnd !== undefined) {
+    return result;
   }
-  const [face] = state.deadWizardTokenResolution.pendingFaces.splice(
-    faceIndex,
-    1
-  );
-  if (face === undefined) {
-    return { ok: false, error: "Queued dead wizard token face disappeared" };
+  for (const face of faces) {
+    const faceResult = resolveDeadWizardTokenFace(state, face);
+    if (!faceResult.ok || faceResult.gameEnd !== undefined) {
+      return faceResult;
+    }
   }
-  return resolveDeadWizardTokenFace(state, face);
+  return result;
+}
+
+function createDeadWizardTokenFace(
+  player: PlayerState,
+  token: TokenInstance,
+  options?: {
+    attackId?: EffectSourceContext["attackId"];
+    deathKillerPlayerId?: PlayerState["playerId"];
+    deadWizardTokenWasDinglerAtGain?: boolean;
+    deadWizardTokenProjectionEffectIds?: readonly string[];
+  }
+): DeadWizardTokenFace {
+  return {
+    playerId: player.playerId,
+    tokenInstanceId: token.instanceId,
+    tokenDefinitionId: token.definitionId,
+    ...(options?.attackId === undefined ? {} : { attackId: options.attackId }),
+    ...(options?.deathKillerPlayerId === undefined
+      ? {}
+      : { deathKillerPlayerId: options.deathKillerPlayerId }),
+    ...(options?.deadWizardTokenWasDinglerAtGain === undefined
+      ? {}
+      : {
+          deadWizardTokenWasDinglerAtGain:
+            options.deadWizardTokenWasDinglerAtGain,
+        }),
+    ...(options?.deadWizardTokenProjectionEffectIds === undefined
+      ? {}
+      : {
+          deadWizardTokenProjectionEffectIds:
+            options.deadWizardTokenProjectionEffectIds,
+        }),
+  };
 }
 
 export function moveGainedCardToPlayerDestination(
@@ -1662,7 +1650,11 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
       amount,
       effectId,
       source,
-      { kind: "playerControlled", player: attackingPlayer }
+      {
+        kind: "playerControlled",
+        player: attackingPlayer,
+        attackDeath: true,
+      }
     );
   },
   executeOnHitEffect(state, attackingPlayer, targetPlayer, effect, source) {
@@ -1777,6 +1769,13 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
       attribution.source
     );
   },
+  closeAttackInstance(state, attack, result) {
+    const closeResult = closeAttackInstance(state, attack, result);
+    if (!closeResult.ok || closeResult.gameEnd !== undefined) {
+      return closeResult;
+    }
+    return result;
+  },
 };
 
 function resolvePlayerControlledAttackTargets(
@@ -1834,6 +1833,8 @@ function resolveMayhemAttackPlan(
   impact: MayhemAttackImpact = { kind: "damage" }
 ): EffectExecutionResult {
   const attackInstance = createAttackInstance(state, sourcePlayer, source);
+  const finish = (result: EffectExecutionResult): EffectExecutionResult =>
+    closeAttackInstance(state, attackInstance, result);
   const attackSource = attackInstance.source;
   const decisions: Array<MayhemAttackPlanTarget & { avoided: boolean }> = [];
   const firstAmount = targets[0]?.amount;
@@ -1873,10 +1874,10 @@ function resolveMayhemAttackPlan(
       defenseUsage: attackInstance.defenseUsage,
     });
     if (!defenseResult.ok) {
-      return defenseResult;
+      return finish(defenseResult);
     }
     if (defenseResult.gameEnd !== undefined) {
-      return { ok: true, gameEnd: defenseResult.gameEnd };
+      return finish({ ok: true, gameEnd: defenseResult.gameEnd });
     }
     const avoided = defenseResult.avoided;
     if (avoided) {
@@ -1935,7 +1936,7 @@ function resolveMayhemAttackPlan(
     if (impact.kind === "effect") {
       const result = impact.executeOnHit(decision.targetPlayer);
       if (!result.ok || result.gameEnd !== undefined) {
-        return result;
+        return finish(result);
       }
       continue;
     }
@@ -1947,15 +1948,19 @@ function resolveMayhemAttackPlan(
       effectId,
       attackSource,
       attackSource.playerControlledAttackPlayerId === undefined
-        ? { kind: "ownerless" }
-        : { kind: "playerControlled", player: sourcePlayer }
+        ? { kind: "ownerless", attackDeath: true }
+        : {
+            kind: "playerControlled",
+            player: sourcePlayer,
+            attackDeath: true,
+          }
     );
     if (!("damageDealt" in damageResult)) {
-      return damageResult;
+      return finish(damageResult);
     }
   }
 
-  return { ok: true };
+  return finish({ ok: true });
 }
 
 function resolveMayhemAttack(
@@ -2054,7 +2059,8 @@ const effectRuntimeServices: EffectRuntimeServices = {
   transferControlledDeadWizardTokenLike,
   exchangeControlledDeadWizardTokenLikes,
   collectAttackReplacementProfile,
-  resolvePendingDeadWizardTokenFaces: resolveQueuedDeadWizardTokenFaces,
+  openAttackInstance: createAttackInstance,
+  closeAttackInstance,
   resolvePlayerControlledAttack:
     resolvePlayerControlledAttackWithRuntimeAdapters,
   resolveDefenseWindow,
@@ -2713,20 +2719,28 @@ function resolvePlayerDeath(
   }
 
   let issueResult: EffectExecutionResult = { ok: true };
-  const tokenCountBeforeIssue = player.deadWizardTokens.length;
   const hasPendingReplacement =
     killCredit !== undefined &&
     state.turn.deadWizardTokenKillReplacement?.playerId ===
       killCredit.killer.playerId &&
     killCredit.killer.playerId !== player.playerId;
+  let gainedFace: DeadWizardTokenFace | undefined;
   if (killCredit?.deadWizardTokenPolicy !== "skip" && !hasPendingReplacement) {
+    const attackDeath =
+      killCredit?.attackDeath ?? deathSource?.attackDeath ?? false;
     issueResult = issueDeadWizardToken(
       state,
       player,
       killCredit?.killer.playerId,
       {
         projectRespawn: true,
-        resolveFaceImmediately: false,
+        attackId: attackDeath
+          ? (attackId ?? deathSource?.attackId ?? killCredit?.source.attackId)
+          : undefined,
+        deferFace: (face) => {
+          gainedFace = face;
+          return { ok: true };
+        },
       }
     );
     if (!issueResult.ok) {
@@ -2753,29 +2767,21 @@ function resolvePlayerDeath(
     const replacementResult = resolveDeadWizardTokenKillReplacement(
       state,
       killCredit,
-      player
+      player,
+      killCredit.attackDeath ?? deathSource?.attackDeath ?? false,
+      attackId ?? deathSource?.attackId ?? killCredit.source.attackId
     );
     if (replacementResult !== undefined) {
       return replacementResult;
     }
   }
 
-  const gainedToken =
-    !hasPendingReplacement &&
-    player.deadWizardTokens.length > tokenCountBeforeIssue
-      ? player.deadWizardTokens[tokenCountBeforeIssue]
-      : undefined;
   const attackDeath =
-    killCredit?.attackDeath ??
-    deathSource?.attackDeath ??
-    (deathSource?.sourceType !== "deadWizardToken" &&
-      deathSource?.attackId !== undefined);
-  if (!attackDeath && gainedToken !== undefined && issueResult.ok) {
-    return resolveQueuedDeadWizardTokenFaceForToken(
-      state,
-      player.playerId,
-      gainedToken.instanceId
-    );
+    killCredit?.attackDeath ?? deathSource?.attackDeath ?? false;
+  if (!attackDeath && issueResult.ok) {
+    if (gainedFace !== undefined) {
+      return resolveDeadWizardTokenFace(state, gainedFace);
+    }
   }
   return issueResult;
 }
@@ -2787,8 +2793,11 @@ function resolveDeadWizardTokenKillReplacement(
     effectId: RuntimeEffectId;
     source: EffectSourceContext;
     deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy;
+    attackDeath?: boolean;
   },
-  defeatedPlayer: PlayerState
+  defeatedPlayer: PlayerState,
+  attackDeath: boolean,
+  attackId?: EffectSourceContext["attackId"]
 ): EffectExecutionResult | undefined {
   const pending = state.turn.deadWizardTokenKillReplacement;
   if (
@@ -2821,7 +2830,10 @@ function resolveDeadWizardTokenKillReplacement(
     return issueDeadWizardToken(
       state,
       defeatedPlayer,
-      killCredit.killer.playerId
+      killCredit.killer.playerId,
+      {
+        attackId: attackDeath ? attackId : undefined,
+      }
     );
   }
 
@@ -2943,8 +2955,7 @@ function transferControlledDeadWizardTokenLike(
           }
           token.ownerId = targetPlayer.playerId;
           targetPlayer.deadWizardTokens.push(token);
-          enqueueDeadWizardTokenFace(state, targetPlayer, token);
-          return { ok: true as const };
+          return { ok: true as const, token };
         },
         (result) => result.ok
       );
@@ -2954,8 +2965,13 @@ function transferControlledDeadWizardTokenLike(
       if (!movementResult.value.ok) {
         return movementResult.value;
       }
+      const face = createDeadWizardTokenFace(
+        targetPlayer,
+        movementResult.value.token,
+        { attackId: source.attackId }
+      );
       return movementResult.gameEnd === undefined
-        ? { ok: true }
+        ? resolveDeadWizardTokenFace(state, face)
         : { ok: true, gameEnd: movementResult.gameEnd };
     }
 
@@ -3252,8 +3268,12 @@ function moveControlledDeadWizardTokenLike(
     }
     token.ownerId = targetPlayer.playerId;
     targetPlayer.deadWizardTokens.push(token);
-    enqueueDeadWizardTokenFace(state, targetPlayer, token);
-    return { ok: true };
+    return resolveDeadWizardTokenFace(
+      state,
+      createDeadWizardTokenFace(targetPlayer, token, {
+        attackId: source.attackId,
+      })
+    );
   }
 
   const moved = moveCardToPlayerZone(
@@ -3282,6 +3302,8 @@ function issueDeadWizardToken(
   options?: {
     projectRespawn?: boolean;
     resolveFaceImmediately?: boolean;
+    attackId?: EffectSourceContext["attackId"];
+    deferFace?: (face: DeadWizardTokenFace) => EffectExecutionResult;
   }
 ): EffectExecutionResult {
   if (
@@ -3332,10 +3354,10 @@ function issueDeadWizardToken(
       if (!projection.ok) {
         return projection;
       }
-      const face: DeadWizardTokenFace = {
-        playerId: player.playerId,
-        tokenInstanceId: token.instanceId,
-        tokenDefinitionId: token.definitionId,
+      const face = createDeadWizardTokenFace(player, token, {
+        ...(options?.attackId === undefined
+          ? {}
+          : { attackId: options.attackId }),
         ...(deathKillerPlayerId === undefined ? {} : { deathKillerPlayerId }),
         ...(projection.deadWizardTokenWasDinglerAtGain === undefined
           ? {}
@@ -3349,20 +3371,16 @@ function issueDeadWizardToken(
               deadWizardTokenProjectionEffectIds:
                 projection.deadWizardTokenProjectionEffectIds,
             }),
-      };
-      if (options?.resolveFaceImmediately === true) {
+      });
+      if (options?.attackId !== undefined) {
+        enqueueDeadWizardTokenFace(state, options.attackId, face);
+      } else if (options?.deferFace !== undefined) {
+        return options.deferFace(face);
+      } else if (options?.resolveFaceImmediately === true) {
+        return resolveDeadWizardTokenFace(state, face);
+      } else {
         return resolveDeadWizardTokenFace(state, face);
       }
-      enqueueDeadWizardTokenFace(
-        state,
-        player,
-        token,
-        deathKillerPlayerId,
-        projection.deadWizardTokenWasDinglerAtGain === undefined &&
-          projection.deadWizardTokenProjectionEffectIds === undefined
-          ? undefined
-          : projection
-      );
     }
   }
   return { ok: true };
@@ -3655,6 +3673,9 @@ function killPlayer(
       kind: "playerControlled",
       player: sourcePlayer,
       deadWizardTokenPolicy,
+      ...(source.attackDeath === undefined
+        ? {}
+        : { attackDeath: source.attackDeath }),
     }
   );
   return "damageDealt" in result ? { ok: true } : result;
@@ -3741,13 +3762,11 @@ function replaceDeadWizardTokenAfterKill(
         tokenInstanceId: selectedToken.instanceId,
         tokenDefinitionId: selectedToken.definitionId,
       });
-      enqueueDeadWizardTokenFace(
-        state,
-        targetPlayer,
-        selectedToken,
-        killer.playerId
-      );
-      return { ok: true as const };
+      const face = createDeadWizardTokenFace(targetPlayer, selectedToken, {
+        attackId: source.attackId,
+        deathKillerPlayerId: killer.playerId,
+      });
+      return { ok: true as const, face };
     },
     (result) => result.ok
   );
@@ -3756,6 +3775,13 @@ function replaceDeadWizardTokenAfterKill(
   }
   if (!mutationResult.value.ok) {
     return mutationResult.value;
+  }
+  const faceResult = resolveDeadWizardTokenFace(
+    state,
+    mutationResult.value.face
+  );
+  if (!faceResult.ok || faceResult.gameEnd !== undefined) {
+    return faceResult;
   }
   return mutationResult.gameEnd === undefined
     ? { ok: true }
