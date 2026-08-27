@@ -53,8 +53,6 @@ import {
 import { getDistinctAdjacentFoes } from "./player-targets.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
-const MAX_UNPROVEN_DIRECTIONAL_CHAIN_ITERATIONS = 1024;
-
 export type CombatAttackEffectId =
   | "attack_damage"
   | "attack_damage_per_controlled_dead_wizard_token"
@@ -1225,7 +1223,6 @@ function directionalChainAttackHandler(
           : "left";
       let targetIndex = 0;
       const seenRecurrences = new Set<string>();
-      let unprovenIterationCount = 0;
       while (true) {
         const targetPlayer = chosenFoes[targetIndex];
         if (targetPlayer === undefined) {
@@ -1236,16 +1233,7 @@ function directionalChainAttackHandler(
           state.effectChoiceStrategy === undefined
             ? null
             : state.effectChoiceStrategy.getState?.();
-        if (choicePolicyState === undefined) {
-          unprovenIterationCount += 1;
-          if (
-            unprovenIterationCount > MAX_UNPROVEN_DIRECTIONAL_CHAIN_ITERATIONS
-          ) {
-            throw new Error(
-              "Directional attack chain exceeded the diagnostic limit before its ChoicePolicy cycle state could be proven"
-            );
-          }
-        } else {
+        if (choicePolicyState !== undefined) {
           const recurrenceKey = createAttackChainRecurrenceKey(
             state,
             {
