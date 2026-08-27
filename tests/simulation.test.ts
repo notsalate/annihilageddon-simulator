@@ -103,6 +103,30 @@ test("single-game simulation can stop at maxTurns as a non-game termination", ()
   );
 });
 
+test("single-game simulation defers empty DWT until the active player's end checkpoint", () => {
+  const result = runSingleGame({
+    rootDir,
+    dataPackPath: playableRuntimeDataPackPath,
+    seed: 60617,
+    maxTurns: 1,
+    deadWizardTokenCount: 0,
+    botFactory() {
+      return {
+        chooseAction() {
+          return { type: "endTurn" };
+        },
+      };
+    },
+  });
+
+  assert.equal(result.endReason, "deadWizardTokensExhausted");
+  assert.equal(result.turnsElapsed, 1);
+  assert.equal(
+    result.eventLog.some((event) => event.type === "turnEnded"),
+    true
+  );
+});
+
 test("bot action selection records turn number and safe action identity for debug trace", () => {
   const result = runSingleGame({
     rootDir,

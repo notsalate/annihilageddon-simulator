@@ -1721,19 +1721,11 @@ export function executeAttackOutcomeBranch(
   }
 
   if (branch.effectId === "end_game_if_original_target_killed") {
-    if (
-      !attackResult.killed ||
-      targetPlayer.playerId !== attackResult.originalTargetPlayerId
-    ) {
+    if (!attackResult.killed) {
       return { ok: true };
     }
-    return {
-      ok: true,
-      gameEnd: {
-        reason: "playerDefeated",
-        winnerPlayerId: player.playerId,
-      },
-    };
+    state.turn.pendingSpecialWinnerPlayerId ??= player.playerId;
+    return { ok: true };
   }
 
   if (branch.effectId === "attack_discard_cards") {

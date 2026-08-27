@@ -124,6 +124,37 @@ test("failed turn-start refill still starts the next player's turn", () => {
   );
 });
 
+test("end-of-turn checkpoint returns all pending refill reasons in flow order", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 47705,
+    playerCount: 3,
+  });
+  const previousActivePlayerId = state.activePlayerId;
+  const nextPlayer = state.players.find(
+    (player) => player.playerId !== previousActivePlayerId
+  );
+  assert.ok(nextPlayer);
+  state.common.market.splice(0);
+  state.common.legendMarket.splice(0);
+  state.common.mainDeck.splice(0);
+  state.common.legendDeck.splice(0);
+
+  assert.deepEqual(applyAction(state, { type: "endTurn" }), { ok: true });
+  assert.equal(state.activePlayerId, nextPlayer.playerId);
+
+  assert.deepEqual(applyAction(state, { type: "endTurn" }), {
+    ok: true,
+    gameEndReason: "mainDeckExhausted",
+    gameEndReasons: ["mainDeckExhausted", "legendDeckExhausted"],
+  });
+  assert.equal(state.activePlayerId, nextPlayer.playerId);
+  assert.deepEqual(state.turn.pendingMarketFlowEndReasons, [
+    "mainDeckExhausted",
+    "legendDeckExhausted",
+  ]);
+});
+
 function runTerminalEventScenario(eventKind: "mayhem" | "megaMayhem"): void {
   const state = initializeGame({
     rootDir,

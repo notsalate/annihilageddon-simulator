@@ -10975,7 +10975,7 @@ test("#288 main_021 cancels its discard on avoidance and discards the redirected
   assert.equal(redirectedAttacker.discard.includes(redirectedCard), true);
 });
 
-test("#289 legend_024 wins when its original target is killed", () => {
+test("#356 legend_024 defers victory until the active player's end checkpoint", () => {
   const state = initializeGame({ rootDir, seed: 60622, playerCount: 2 });
   const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
   const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
@@ -10983,7 +10983,7 @@ test("#289 legend_024 wins when its original target is killed", () => {
   activePlayer.wizardProperties = [];
   targetPlayer.wizardProperties = [];
   targetPlayer.life.current = 1;
-  state.common.deadWizardTokens.drawStack = [];
+  setNeutralDeadWizardTokenStack(state, 2, "legend-024-pending");
   state.turn.power = 99;
   const wand = addRuntimeCardToHand(
     state,
@@ -10997,12 +10997,42 @@ test("#289 legend_024 wins when its original target is killed", () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.gameEndReason, "playerDefeated");
-  assert.equal(result.winnerPlayerId, activePlayer.playerId);
+  assert.equal(result.gameEndReason, undefined);
+  assert.equal(state.turn.pendingSpecialWinnerPlayerId, activePlayer.playerId);
   assert.equal(targetPlayer.life.current, 20);
+
+  const followUp = addFixtureDefinitionToActiveHand(
+    state,
+    createFixtureCardDefinition("fixture-legend-024-follow-up", [
+      { effectId: "add_power", timing: "onPlay", amount: 1 },
+    ])
+  );
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: followUp.instanceId,
+    }),
+    { ok: true }
+  );
+
+  state.turn.pendingMarketFlowEndReasons = [
+    "mainDeckExhausted",
+    "legendDeckExhausted",
+  ];
+  assert.deepEqual(applyAction(state, { type: "endTurn" }), {
+    ok: true,
+    gameEndReason: "playerDefeated",
+    gameEndReasons: [
+      "playerDefeated",
+      "mainDeckExhausted",
+      "legendDeckExhausted",
+    ],
+    winnerPlayerId: activePlayer.playerId,
+  });
+  assert.equal(state.activePlayerId, activePlayer.playerId);
 });
 
-test("#289 legend_024 does not win when a redirect kills another wizard", () => {
+test("#356 legend_024 credits a redirected lethal application to the redirector", () => {
   const state = initializeGame({ rootDir, seed: 60623, playerCount: 2 });
   const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
   const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
@@ -11011,7 +11041,7 @@ test("#289 legend_024 does not win when a redirect kills another wizard", () => 
   targetPlayer.wizardProperties = [];
   activePlayer.life.current = 1;
   targetPlayer.life.current = 20;
-  state.common.deadWizardTokens.drawStack = [];
+  setNeutralDeadWizardTokenStack(state, 2, "legend-024-redirect");
   state.turn.power = 99;
   addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf", {
     redirectAttack: true,
@@ -11035,8 +11065,15 @@ test("#289 legend_024 does not win when a redirect kills another wizard", () => 
 
   assert.equal(result.ok, true);
   assert.equal(result.gameEndReason, undefined);
+  assert.equal(state.turn.pendingSpecialWinnerPlayerId, targetPlayer.playerId);
   assert.equal(targetPlayer.life.current, 20);
   assert.equal(activePlayer.life.current, 20);
+
+  assert.deepEqual(applyAction(state, { type: "endTurn" }), {
+    ok: true,
+    gameEndReason: "playerDefeated",
+    winnerPlayerId: targetPlayer.playerId,
+  });
 });
 
 test("#289 main_025 draws exactly once for an avoided original target", () => {

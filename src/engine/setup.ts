@@ -178,6 +178,7 @@ export interface GameState {
     gainedCards: GainedCardRecord[];
     mainMarketCardHandReplacementSourceCardIds: string[];
     pendingMarketFlowEndReasons: MarketFlowEndReason[];
+    pendingSpecialWinnerPlayerId?: PlayerId | undefined;
     rememberedDestroyedLegendCost?: number | undefined;
     damagingAttackPlayerIds: PlayerId[];
     nextAttackUnavoidablePlayerId?: PlayerId | undefined;
@@ -1019,6 +1020,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       gainedCards: [],
       mainMarketCardHandReplacementSourceCardIds: [],
       pendingMarketFlowEndReasons: [],
+      pendingSpecialWinnerPlayerId: undefined,
       rememberedDestroyedLegendCost: undefined,
       damagingAttackPlayerIds: [],
       nextAttackUnavoidablePlayerId: undefined,

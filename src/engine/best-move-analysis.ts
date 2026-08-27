@@ -47,6 +47,7 @@ export interface AnalyzedTurnLine {
   steps: AnalysisActionStep[];
   terminalReason: "endTurn" | "gameEnd";
   gameEndReason?: Extract<ActionResult, { ok: true }>["gameEndReason"];
+  gameEndReasons?: Extract<ActionResult, { ok: true }>["gameEndReasons"];
   winnerPlayerId?: Extract<ActionResult, { ok: true }>["winnerPlayerId"];
   terminalState: GameState;
 }
@@ -323,6 +324,9 @@ export function enumerateTurnLines(
             ...(branch.result.gameEndReason === undefined
               ? {}
               : { gameEndReason: branch.result.gameEndReason }),
+            ...(branch.result.gameEndReasons === undefined
+              ? {}
+              : { gameEndReasons: [...branch.result.gameEndReasons] }),
             ...(branch.result.winnerPlayerId === undefined
               ? {}
               : { winnerPlayerId: branch.result.winnerPlayerId }),
@@ -426,6 +430,9 @@ function cloneAnalyzedTurnLine(line: AnalyzedTurnLine): AnalyzedTurnLine {
     ...(line.gameEndReason === undefined
       ? {}
       : { gameEndReason: line.gameEndReason }),
+    ...(line.gameEndReasons === undefined
+      ? {}
+      : { gameEndReasons: [...line.gameEndReasons] }),
     ...(line.winnerPlayerId === undefined
       ? {}
       : { winnerPlayerId: line.winnerPlayerId }),
