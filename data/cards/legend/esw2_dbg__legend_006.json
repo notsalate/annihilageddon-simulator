@@ -37,6 +37,14 @@
       {
         "effectId": "attack_transfer_controlled_dead_wizard_token",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "COLLECT_ALL_FIRST",
+          "targetApplications": "single",
+          "attackText": "shared",
+          "continuation": "none"
+        },
         "targetSelector": "chosenPlayer"
       }
     ],

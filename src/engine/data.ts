@@ -8,7 +8,12 @@ import {
   type EffectRuntimeSourceKind,
 } from "./effect-runtime-registry.js";
 import { markRuntimeEffectTreeVerified } from "./runtime-effect-verification.js";
-import { isRuntimeEffectId, type RuntimeEffect } from "./runtime-effect.js";
+import {
+  isAttackBearingRuntimeEffectId,
+  isRuntimeEffectId,
+  validateAttackSemantics,
+  type RuntimeEffect,
+} from "./runtime-effect.js";
 import { decodeTimedRuntimeEffect } from "./runtime-effect-decoder.js";
 
 type RuntimeJsonDecoder<T> = (value: unknown) => DecodeResult<T>;
@@ -414,6 +419,16 @@ export function validateExecutableDataPack(
       }
 
       errors.push(
+        ...validateAttackSemanticsMapping(
+          `Card ${definition.cardId}`,
+          effectId,
+          effect,
+          dataPack.manifest.mappingStatus !== "fixture" &&
+            definition.engine.mappingStatus === "supported"
+        )
+      );
+
+      errors.push(
         ...filterFixtureCatalogGaps(
           validateRuntimeEffectDefinition(
             `Card ${definition.cardId}`,
@@ -442,6 +457,15 @@ export function validateExecutableDataPack(
           );
           continue;
         }
+
+        errors.push(
+          ...validateAttackSemanticsMapping(
+            `Token ${definition.tokenId}`,
+            effectId,
+            effect,
+            dataPack.manifest.mappingStatus !== "fixture"
+          )
+        );
 
         errors.push(
           ...filterFixtureCatalogGaps(
@@ -487,6 +511,16 @@ export function validateExecutableDataPack(
       }
 
       errors.push(
+        ...validateAttackSemanticsMapping(
+          `Token ${definition.tokenId}`,
+          effectId,
+          effect,
+          dataPack.manifest.mappingStatus !== "fixture" &&
+            definition.engine.mappingStatus === "supported"
+        )
+      );
+
+      errors.push(
         ...filterFixtureCatalogGaps(
           validateRuntimeEffectDefinition(
             `Token ${definition.tokenId}`,
@@ -509,6 +543,29 @@ export function validateExecutableDataPack(
   }
 
   return { ok: true };
+}
+
+function validateAttackSemanticsMapping(
+  subjectId: string,
+  effectId: string,
+  effect: Record<string, unknown>,
+  required: boolean
+): string[] {
+  if (!required || !isAttackBearingRuntimeEffectId(effectId)) {
+    return [];
+  }
+
+  const semantics = effect["attackSemantics"];
+  if (semantics === undefined) {
+    return [
+      `${subjectId} attack effect ${effectId} must declare AttackSemantics`,
+    ];
+  }
+
+  return validateAttackSemantics(
+    semantics,
+    `${subjectId} effect ${effectId}.attackSemantics`
+  );
 }
 
 function filterFixtureCatalogGaps(

@@ -32,6 +32,14 @@
       {
         "effectId": "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
         "timing": "onMayhemResolve",
+        "attackSemantics": {
+          "resolver": "mayhem",
+          "instanceMode": "single",
+          "defenseWindowMode": "MAYHEM",
+          "targetApplications": "allInOneInstance",
+          "attackText": "mayhem",
+          "continuation": "none"
+        },
         "targetSelector": "eachPlayerClockwiseFromActive",
         "deathCondition": {
           "effectId": "destroyed_card_kind_is",

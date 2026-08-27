@@ -37,6 +37,14 @@
       {
         "effectId": "attack_kill_and_replace_dead_wizard_token",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "single",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "amount": 3,
         "targetSelector": "chosenFoe"
       }

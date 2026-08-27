@@ -11,6 +11,7 @@ import type {
   AttackOutcomeBranch,
   RuntimeEffectId,
   RuntimeEffectPayload,
+  AttackSemantics,
 } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
@@ -247,6 +248,7 @@ export interface PlayerControlledAttackIntent {
   readonly source: EffectSourceContext;
   readonly effectId: RuntimeEffectId;
   readonly defenseWindowMode: DefenseWindowMode;
+  readonly attackSemantics?: AttackSemantics;
   readonly unavoidable: boolean;
   readonly redirectPolicy?: "ignoreOriginalAttacker";
   readonly attackProfile?: PlayerControlledAttackProfile;
@@ -474,6 +476,17 @@ export function resolvePlayerControlledAttack(
       ok: false,
       error: "Attack mapping must declare a DefenseWindowMode",
     };
+  }
+  if (intent.attackSemantics !== undefined) {
+    if (
+      intent.attackSemantics.resolver !== "playerControlled" ||
+      intent.attackSemantics.defenseWindowMode !== intent.defenseWindowMode
+    ) {
+      return {
+        ok: false,
+        error: "Attack intent does not match its AttackSemantics",
+      };
+    }
   }
   if (
     (intent.defenseWindowMode === "COLLECT_ALL_FIRST" &&

@@ -42,6 +42,14 @@
       {
         "effectId": "attack_gain_status",
         "timing": "activation",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "single",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "statusId": "dingler",
         "targetSelector": "anyPlayer"
       }

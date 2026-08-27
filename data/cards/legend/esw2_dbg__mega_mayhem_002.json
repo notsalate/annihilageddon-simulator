@@ -32,6 +32,14 @@
       {
         "effectId": "mega_mayhem_each_player_gain_limp_wands_to_hand",
         "timing": "onMayhemResolve",
+        "attackSemantics": {
+          "resolver": "mayhem",
+          "instanceMode": "single",
+          "defenseWindowMode": "MAYHEM",
+          "targetApplications": "allInOneInstance",
+          "attackText": "mayhem",
+          "continuation": "none"
+        },
         "targetSelector": "eachPlayerClockwiseFromActive",
         "destination": "hand",
         "amount": 3

@@ -33,6 +33,14 @@
       {
         "effectId": "directional_chain_attack",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "chain",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "single",
+          "attackText": "perTarget",
+          "continuation": "onKill"
+        },
         "amount": 10,
         "targetSelector": "leftOrRightFoe"
       }

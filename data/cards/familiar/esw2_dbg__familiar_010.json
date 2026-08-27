@@ -33,6 +33,14 @@
       {
         "effectId": "distributed_attack_damage",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "allInOneInstance",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "amount": 8,
         "targetSelector": "eachFoe",
         "condition": {

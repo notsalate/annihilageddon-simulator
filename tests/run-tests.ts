@@ -44,6 +44,7 @@ const testSuites = [
   "import-completeness.test.js",
   "import-index-integrity.test.js",
   "runtime-coverage-inventory.test.js",
+  "attack-mappings.test.js",
   "runtime-image-metadata.test.js",
   "card-runtime-clusters.test.js",
   "engine-guards.test.js",

@@ -38,6 +38,14 @@
       {
         "effectId": "attack_damage",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "single",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "targetSelector": "chosenFoe",
         "amount": 7,
         "onKill": [

@@ -32,6 +32,14 @@
       {
         "effectId": "attack_damage_equal_to_controlled_card_cost",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "single",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "costMode": "chosen",
         "excludeSource": true,
         "targetSelector": "chosenFoe"

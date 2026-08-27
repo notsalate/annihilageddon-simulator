@@ -37,6 +37,14 @@
       {
         "effectId": "reveal_top_card_choose_destroy_or_attack_equal_cost",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "single",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "source": "activePlayerDeck",
         "targetSelector": "chosenFoe"
       }

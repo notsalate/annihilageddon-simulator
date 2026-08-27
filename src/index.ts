@@ -61,8 +61,21 @@ export type {
   RuntimeEffectSelectorTarget,
   RuntimeEffectTarget,
   RuntimeEffectTargetSelector,
+  AttackContinuation,
+  AttackDefenseWindowMode,
+  AttackInstanceMode,
+  AttackResolver,
+  AttackSemantics,
+  AttackTargetApplications,
+  AttackTextMode,
   WildMagicOption,
   TargetSelector,
+} from "./engine/runtime-effect.js";
+export {
+  attackBearingRuntimeEffectIds,
+  isAttackBearingRuntimeEffectId,
+  isAttackSemantics,
+  validateAttackSemantics,
 } from "./engine/runtime-effect.js";
 export {
   intakeRuntimeData,

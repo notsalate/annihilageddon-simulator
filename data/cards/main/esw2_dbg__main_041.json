@@ -40,6 +40,14 @@
         "targetSelector": "chosenPlayer",
         "chipCost": 1,
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "single",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "amount": 10
       }
     ],

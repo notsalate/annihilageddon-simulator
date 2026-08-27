@@ -32,6 +32,14 @@
       {
         "effectId": "mayhem_each_player_discard_half_controlled_permanents",
         "timing": "onMayhemResolve",
+        "attackSemantics": {
+          "resolver": "mayhem",
+          "instanceMode": "single",
+          "defenseWindowMode": "MAYHEM",
+          "targetApplications": "allInOneInstance",
+          "attackText": "mayhem",
+          "continuation": "none"
+        },
         "targetSelector": "eachPlayerClockwiseFromActive",
         "chooser": "affectedPlayer"
       }

@@ -33,6 +33,14 @@
       {
         "effectId": "attack_damage",
         "timing": "onPlay",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "single",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "amount": 1,
         "targetSelector": "chosenPlayer",
         "onKill": [{ "effectId": "return_discard_to_hand", "amount": 2 }]

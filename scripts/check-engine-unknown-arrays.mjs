@@ -11,7 +11,7 @@ export function runEngineUnknownArraysGuard(rootPath = process.cwd()) {
     const configuredAllowedViolations = [
       {
         filePath: "src/engine/data.ts",
-        line: 164,
+        line: 169,
         column: 15,
         source: "unknown[]",
         owner: "PropertySignature:needsData",
@@ -20,7 +20,7 @@ export function runEngineUnknownArraysGuard(rootPath = process.cwd()) {
       },
       {
         filePath: "src/engine/data.ts",
-        line: 1749,
+        line: 1806,
         column: 4,
         source: "unknown[]",
         owner: "FunctionDeclaration:requireArrayField",
@@ -29,7 +29,7 @@ export function runEngineUnknownArraysGuard(rootPath = process.cwd()) {
       },
       {
         filePath: "src/engine/data.ts",
-        line: 1806,
+        line: 1863,
         column: 51,
         source: "unknown[]",
         owner: "FunctionDeclaration:isUnknownArray",

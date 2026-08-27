@@ -31,6 +31,14 @@
       {
         "effectId": "mayhem_attack",
         "timing": "onMayhemResolve",
+        "attackSemantics": {
+          "resolver": "mayhem",
+          "instanceMode": "single",
+          "defenseWindowMode": "MAYHEM",
+          "targetApplications": "allInOneInstance",
+          "attackText": "mayhem",
+          "continuation": "none"
+        },
         "amount": 5,
         "target": { "selector": "allPlayers" }
       }

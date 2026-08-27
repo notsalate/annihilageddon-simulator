@@ -37,6 +37,14 @@
       {
         "effectId": "activation_attack_damage_per_controlled_card_type",
         "timing": "activation",
+        "attackSemantics": {
+          "resolver": "playerControlled",
+          "instanceMode": "single",
+          "defenseWindowMode": "PER_TARGET",
+          "targetApplications": "allInOneInstance",
+          "attackText": "perTarget",
+          "continuation": "none"
+        },
         "cardType": "creature",
         "amountPerCard": 3,
         "targetSelector": "eachFoe"

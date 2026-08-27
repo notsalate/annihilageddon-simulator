@@ -29,6 +29,7 @@ import type { EffectRuntimeHandler } from "./effect-runtime-family-types.js";
 import type { RuntimeEffectDecoder } from "./runtime-effect-decoder.js";
 import type {
   EffectTiming,
+  AttackSemanticMapping,
   MayhemHandRedrawOption,
   RuntimeEffectForId,
   RuntimeEffectId,
@@ -121,14 +122,14 @@ export type MayhemAttackRuntimeEffect =
   EffectWithOptionalTiming<"mayhem_attack"> &
     PositiveAmount & {
       target: RuntimeEffectSelectorTarget & { selector: "allPlayers" };
-    };
+    } & AttackSemanticMapping;
 export type MayhemAttackEqualHighestCardCostRuntimeEffect = TimedEffect<
   "mayhem_attack_equal_highest_card_cost",
   "onMayhemResolve"
 > & {
   targetSelector: "allPlayers";
   costSource: "legendMarket" | "targetHand";
-};
+} & AttackSemanticMapping;
 export type MayhemEachPlayerDiscardHalfControlledPermanentsRuntimeEffect =
   TimedEffect<
     "mayhem_each_player_discard_half_controlled_permanents",
@@ -136,7 +137,7 @@ export type MayhemEachPlayerDiscardHalfControlledPermanentsRuntimeEffect =
   > & {
     targetSelector: "eachPlayerClockwiseFromActive";
     chooser: "affectedPlayer";
-  };
+  } & AttackSemanticMapping;
 export type MayhemAddChipsToMainMarketRuntimeEffect = TimedEffect<
   "mayhem_add_chips_to_main_market",
   "onMayhemResolve"
@@ -268,7 +269,7 @@ export type MayhemEachPlayerGainChipsThenAttackForCurrentChipsRuntimeEffect =
   > & {
     targetSelector: "eachPlayerClockwiseFromActive";
     chipAmount: number;
-  };
+  } & AttackSemanticMapping;
 export type MayhemEachPlayerReduceLifeToGainChipsRuntimeEffect = TimedEffect<
   "mayhem_each_player_reduce_life_to_gain_chips",
   "onMayhemResolve"
@@ -291,7 +292,9 @@ export type MayhemLowestLifePlayersGainDinglerAndSetToMaxLifeRuntimeEffect =
   TimedEffect<
     "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
     "onMayhemResolve"
-  > & { statusId: "dingler" };
+  > &
+    AttackSemanticMapping & { statusId: "dingler" };
+
 export type MegaMayhemEachPlayerDestroyTopMainDeckDeathIfMayhemRuntimeEffect =
   TimedEffect<
     "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
@@ -303,7 +306,7 @@ export type MegaMayhemEachPlayerDestroyTopMainDeckDeathIfMayhemRuntimeEffect =
       cardKind: "mayhem";
     };
     destroyedCardSource: "mainDeck";
-  };
+  } & AttackSemanticMapping;
 export type MegaMayhemEachPlayerGainLimpWandsToHandRuntimeEffect = TimedEffect<
   "mega_mayhem_each_player_gain_limp_wands_to_hand",
   "onMayhemResolve"
@@ -311,18 +314,19 @@ export type MegaMayhemEachPlayerGainLimpWandsToHandRuntimeEffect = TimedEffect<
   targetSelector: "eachPlayerClockwiseFromActive";
   destination: "hand";
   amount: number;
-};
+} & AttackSemanticMapping;
 export type MegaMayhemEachPlayerToggleDinglerRuntimeEffect = TimedEffect<
   "mega_mayhem_each_player_toggle_dingler",
   "onMayhemResolve"
-> & { targetSelector: "eachPlayerClockwiseFromActive" };
+> &
+  AttackSemanticMapping & { targetSelector: "eachPlayerClockwiseFromActive" };
 export type MegaMayhemSetLifeRuntimeEffect = TimedEffect<
   "mega_mayhem_set_life",
   "onMayhemResolve"
 > & {
   targetSelector: "eachPlayerClockwiseFromActive";
   lifeTotal: number;
-};
+} & AttackSemanticMapping;
 
 export interface MayhemEffectPayloadMap {
   mayhem_attack: MayhemAttackRuntimeEffect;
@@ -365,6 +369,9 @@ export interface MayhemEffectDecoderTools {
   positiveInteger: ValueDecoder<number>;
   nonNegativeInteger: ValueDecoder<number>;
   optionalTiming: OptionalField<EffectTiming>;
+  optionalAttackSemantics: OptionalField<
+    NonNullable<RuntimeEffectForId<"mayhem_attack">["attackSemantics"]>
+  >;
   selectorTarget<Selector extends RuntimeEffectTargetSelector>(
     selector: Selector
   ): ValueDecoder<{ selector: Selector }>;
@@ -392,6 +399,7 @@ export function createMayhemEffectDecoders(
     positiveInteger,
     nonNegativeInteger,
     optionalTiming,
+    optionalAttackSemantics,
     selectorTarget,
     arrayOf,
     mayhemRedrawOption,
@@ -401,6 +409,7 @@ export function createMayhemEffectDecoders(
     mayhem_attack: defineDecoder("mayhem_attack", {
       effectId: required(literal("mayhem_attack")),
       timing: optionalTiming,
+      attackSemantics: optionalAttackSemantics,
       amount: required(positiveInteger),
       target: required(selectorTarget("allPlayers")),
     }),
@@ -409,6 +418,7 @@ export function createMayhemEffectDecoders(
       {
         effectId: required(literal("mayhem_attack_equal_highest_card_cost")),
         timing: required(literal("onMayhemResolve")),
+        attackSemantics: optionalAttackSemantics,
         targetSelector: required(literal("allPlayers")),
         costSource: required((label: string, raw: unknown) => {
           if (raw === "legendMarket" || raw === "targetHand") {
@@ -428,6 +438,7 @@ export function createMayhemEffectDecoders(
           literal("mayhem_each_player_discard_half_controlled_permanents")
         ),
         timing: required(literal("onMayhemResolve")),
+        attackSemantics: optionalAttackSemantics,
         targetSelector: required(literal("eachPlayerClockwiseFromActive")),
         chooser: required(literal("affectedPlayer")),
       }
@@ -616,6 +627,7 @@ export function createMayhemEffectDecoders(
           literal("mayhem_each_player_gain_chips_then_attack_for_current_chips")
         ),
         timing: required(literal("onMayhemResolve")),
+        attackSemantics: optionalAttackSemantics,
         targetSelector: required(literal("eachPlayerClockwiseFromActive")),
         chipAmount: required(positiveInteger),
       }
@@ -651,6 +663,7 @@ export function createMayhemEffectDecoders(
           literal("mayhem_lowest_life_players_gain_dingler_and_set_to_max_life")
         ),
         timing: required(literal("onMayhemResolve")),
+        attackSemantics: optionalAttackSemantics,
         statusId: required(literal("dingler")),
       }
     ),
@@ -664,6 +677,7 @@ export function createMayhemEffectDecoders(
             )
           ),
           timing: required(literal("onMayhemResolve")),
+          attackSemantics: optionalAttackSemantics,
           targetSelector: required(literal("eachPlayerClockwiseFromActive")),
           deathCondition: required((label, raw) =>
             decodeObject(label, raw, {
@@ -692,6 +706,7 @@ export function createMayhemEffectDecoders(
           literal("mega_mayhem_each_player_gain_limp_wands_to_hand")
         ),
         timing: required(literal("onMayhemResolve")),
+        attackSemantics: optionalAttackSemantics,
         targetSelector: required(literal("eachPlayerClockwiseFromActive")),
         destination: required(literal("hand")),
         amount: required(positiveInteger),
@@ -702,12 +717,14 @@ export function createMayhemEffectDecoders(
       {
         effectId: required(literal("mega_mayhem_each_player_toggle_dingler")),
         timing: required(literal("onMayhemResolve")),
+        attackSemantics: optionalAttackSemantics,
         targetSelector: required(literal("eachPlayerClockwiseFromActive")),
       }
     ),
     mega_mayhem_set_life: defineDecoder("mega_mayhem_set_life", {
       effectId: required(literal("mega_mayhem_set_life")),
       timing: required(literal("onMayhemResolve")),
+      attackSemantics: optionalAttackSemantics,
       targetSelector: required(literal("eachPlayerClockwiseFromActive")),
       lifeTotal: required(nonNegativeInteger),
     }),

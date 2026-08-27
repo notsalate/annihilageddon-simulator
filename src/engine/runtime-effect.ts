@@ -269,6 +269,25 @@ export type AttackOutcomeBranch =
       target?: "damagedPlayer";
     };
 
+export type AttackResolver = "playerControlled" | "mayhem";
+export type AttackInstanceMode = "single" | "sequential" | "chain";
+export type AttackDefenseWindowMode =
+  | "PER_TARGET"
+  | "COLLECT_ALL_FIRST"
+  | "MAYHEM";
+export type AttackTargetApplications = "single" | "allInOneInstance";
+export type AttackTextMode = "perTarget" | "shared" | "mayhem";
+export type AttackContinuation = "none" | "fixedCount" | "onKill";
+
+export interface AttackSemantics {
+  resolver: AttackResolver;
+  instanceMode: AttackInstanceMode;
+  defenseWindowMode: AttackDefenseWindowMode;
+  targetApplications: AttackTargetApplications;
+  attackText: AttackTextMode;
+  continuation: AttackContinuation;
+}
+
 export type MayhemHandRedrawOption =
   | {
       effectId: "discard_hand_then_draw_cards";
@@ -460,6 +479,7 @@ type AttackBranches = {
   onAvoided?: AttackOutcomeBranch[];
   onKill?: AttackOutcomeBranch[];
 };
+export type AttackSemanticMapping = { attackSemantics?: AttackSemantics };
 
 export type ForceStartingPlayerRuntimeEffect = TimedEffect<
   "force_starting_player",
@@ -629,7 +649,8 @@ export type ToggleStatusRuntimeEffect =
   } & Targetable;
 export type ExchangeLifeAndDinglerStatusRuntimeEffect =
   EffectWithOptionalTiming<"exchange_life_and_dingler_status"> &
-    Targetable & {
+    Targetable &
+    AttackSemanticMapping & {
       optional?: boolean;
       allowLifeExchange?: boolean;
       allowDinglerStatusExchange?: boolean;
@@ -671,42 +692,47 @@ export type AttackDamageRuntimeEffect =
     PositiveAmount &
     Targetable &
     Costed &
-    AttackBranches;
+    AttackBranches &
+    AttackSemanticMapping;
 export type AttackDamagePerControlledDeadWizardTokenRuntimeEffect =
   EffectWithOptionalTiming<"attack_damage_per_controlled_dead_wizard_token"> & {
     amountPerDeadWizardToken: number;
     targetSelector: "eachFoe";
-  } & AttackBranches;
+  } & AttackBranches &
+    AttackSemanticMapping;
 export type AttackGainDeadWizardTokensRuntimeEffect =
   EffectWithOptionalTiming<"attack_gain_dead_wizard_tokens"> & {
     amount: number;
     targetSelector: "chosenFoe";
     redirectPolicy: "ignoreOriginalAttacker";
-  };
+  } & AttackSemanticMapping;
 export type AttackTransferControlledDeadWizardTokenRuntimeEffect =
   EffectWithOptionalTiming<"attack_transfer_controlled_dead_wizard_token"> & {
     targetSelector: "chosenPlayer";
-  };
+  } & AttackSemanticMapping;
 export type AttackKillAndReplaceDeadWizardTokenRuntimeEffect =
   EffectWithOptionalTiming<"attack_kill_and_replace_dead_wizard_token"> & {
     amount: 3;
     targetSelector: "chosenFoe";
-  };
+  } & AttackSemanticMapping;
 export type AttackDamageEqualRememberedCardCostRuntimeEffect =
   EffectWithOptionalTiming<"attack_damage_equal_remembered_card_cost"> &
     Targetable &
-    AttackBranches & { rememberedCard: "destroyedLegend" };
+    AttackBranches &
+    AttackSemanticMapping & { rememberedCard: "destroyedLegend" };
 export type AttackDamageEqualToControlledCardCostRuntimeEffect =
   EffectWithOptionalTiming<"attack_damage_equal_to_controlled_card_cost"> &
     Targetable &
-    AttackBranches & {
+    AttackBranches &
+    AttackSemanticMapping & {
       costMode: "highest" | "chosen";
       excludeSource?: boolean;
     };
 export type AttackDestroyTopLegendDeckThenDamageEqualCostRuntimeEffect =
   EffectWithOptionalTiming<"attack_destroy_top_legend_deck_then_damage_equal_cost"> &
     Targetable &
-    AttackBranches & {
+    AttackBranches &
+    AttackSemanticMapping & {
       damageUsesDestroyedCardCost: true;
       destroyedCardSource: "legendDeck";
     };
@@ -723,15 +749,16 @@ export type AttackDamageEqualRandomDiscardedHandCostRuntimeEffect =
     discardAmount: number;
     rng: "seeded";
     unavoidable: true;
-  };
+  } & AttackSemanticMapping;
 export type AttackRevealAndPlayFoeDeckCardRuntimeEffect =
   EffectWithOptionalTiming<"attack_reveal_and_play_foe_deck_card"> & {
     amount: number;
     targetSelector: "chosenFoe";
-  };
+  } & AttackSemanticMapping;
 export type AttackGainLimpWandRuntimeEffect =
   EffectWithOptionalTiming<"attack_gain_limp_wand"> &
-    Targetable & {
+    Targetable &
+    AttackSemanticMapping & {
       destination: "targetDiscard";
       amount: number;
     };
@@ -739,7 +766,8 @@ export type AttackGainStatusRuntimeEffect = TimedEffect<
   "attack_gain_status",
   "activation" | "onPlay"
 > &
-  Targetable & { statusId: "dingler" };
+  Targetable &
+  AttackSemanticMapping & { statusId: "dingler" };
 export interface AvoidAttackRuntimeEffect extends TimedEffect<
   "avoid_attack",
   "onDefense"
@@ -760,7 +788,8 @@ export type ConditionalActivationAttackDamageRuntimeEffect =
   EffectWithOptionalTiming<"conditional_activation_attack_damage"> &
     PositiveAmount &
     Targetable &
-    Conditioned;
+    Conditioned &
+    AttackSemanticMapping;
 export type ActivationAttackDamagePerControlledCardTypeRuntimeEffect =
   TimedEffect<
     "activation_attack_damage_per_controlled_card_type",
@@ -769,22 +798,25 @@ export type ActivationAttackDamagePerControlledCardTypeRuntimeEffect =
     amountPerCard: number;
     cardType: string;
     targetSelector: "eachFoe";
-  };
+  } & AttackSemanticMapping;
 export type DirectionalChainAttackRuntimeEffect =
   EffectWithOptionalTiming<"directional_chain_attack"> &
     PositiveAmount &
     Targetable &
-    AttackBranches;
+    AttackBranches &
+    AttackSemanticMapping;
 export type DistributedAttackDamageRuntimeEffect =
   EffectWithOptionalTiming<"distributed_attack_damage"> &
     PositiveAmount &
     Conditioned &
-    AttackBranches & {
+    AttackBranches &
+    AttackSemanticMapping & {
       targetSelector: "eachFoe";
     };
 export type SequentialAttackDamageRuntimeEffect =
   EffectWithOptionalTiming<"sequential_attack_damage"> &
-    PositiveAmount & {
+    PositiveAmount &
+    AttackSemanticMapping & {
       attackCount: number;
       powerPerKill: number;
       targetSelector: "chosenFoe" | "chosenPlayer";
@@ -792,7 +824,8 @@ export type SequentialAttackDamageRuntimeEffect =
 export type MultiTargetAttackRuntimeEffect =
   EffectWithOptionalTiming<"multi_target_attack"> &
     PositiveAmount &
-    AttackBranches & {
+    AttackBranches &
+    AttackSemanticMapping & {
       target: RuntimeEffectSelectorTarget & {
         selector: "opponentPlayers";
       };
@@ -800,7 +833,8 @@ export type MultiTargetAttackRuntimeEffect =
 export type MultiTargetNeighborAttackRuntimeEffect =
   EffectWithOptionalTiming<"multi_target_neighbor_attack"> &
     PositiveAmount &
-    AttackBranches & {
+    AttackBranches &
+    AttackSemanticMapping & {
       target: RuntimeEffectSelectorTarget & {
         selector: "leftAndRightFoes";
       };
@@ -809,7 +843,8 @@ export type OptionalSpendChipAttackDamageRuntimeEffect =
   EffectWithOptionalTiming<"optional_spend_chip_attack_damage"> &
     PositiveAmount &
     Targetable &
-    AttackBranches & {
+    AttackBranches &
+    AttackSemanticMapping & {
       chipCost: number;
     };
 export type DefenseDiscardSelfAvoidAttackThenOptionalDestroyHandCardRuntimeEffect =
@@ -895,6 +930,165 @@ export type RuntimeEffect = {
       : EffectTiming;
   };
 }[RuntimeEffectId];
+
+export const attackBearingRuntimeEffectIds = [
+  "attack_damage",
+  "attack_damage_per_controlled_dead_wizard_token",
+  "attack_gain_dead_wizard_tokens",
+  "attack_transfer_controlled_dead_wizard_token",
+  "attack_kill_and_replace_dead_wizard_token",
+  "attack_damage_equal_remembered_card_cost",
+  "attack_damage_equal_to_controlled_card_cost",
+  "attack_destroy_top_legend_deck_then_damage_equal_cost",
+  "attack_damage_equal_random_discarded_hand_cost",
+  "attack_reveal_and_play_foe_deck_card",
+  "attack_gain_limp_wand",
+  "attack_gain_status",
+  "activation_attack_damage_per_controlled_card_type",
+  "conditional_activation_attack_damage",
+  "directional_chain_attack",
+  "distributed_attack_damage",
+  "sequential_attack_damage",
+  "multi_target_attack",
+  "multi_target_neighbor_attack",
+  "optional_spend_chip_attack_damage",
+  "exchange_life_and_dingler_status",
+  "reveal_top_card_choose_destroy_or_attack_equal_cost",
+  "mayhem_attack",
+  "mayhem_attack_equal_highest_card_cost",
+  "mayhem_each_player_discard_half_controlled_permanents",
+  "mayhem_each_player_gain_chips_then_attack_for_current_chips",
+  "mayhem_lowest_life_players_gain_dingler_and_set_to_max_life",
+  "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+  "mega_mayhem_each_player_gain_limp_wands_to_hand",
+  "mega_mayhem_each_player_toggle_dingler",
+  "mega_mayhem_set_life",
+] as const satisfies readonly RuntimeEffectId[];
+
+const attackBearingRuntimeEffectIdSet = new Set<string>(
+  attackBearingRuntimeEffectIds
+);
+
+export function isAttackBearingRuntimeEffectId(
+  value: string
+): value is (typeof attackBearingRuntimeEffectIds)[number] {
+  return attackBearingRuntimeEffectIdSet.has(value);
+}
+
+export function validateAttackSemantics(
+  value: unknown,
+  label = "AttackSemantics"
+): string[] {
+  if (!isRuntimeEffectTargetRecord(value)) {
+    return [`${label} must be an object`];
+  }
+
+  const errors: string[] = [];
+  const enumField = <Value extends string>(
+    key: string,
+    values: readonly Value[]
+  ): Value | undefined => {
+    const raw = value[key];
+    if (typeof raw !== "string" || !values.includes(raw as Value)) {
+      errors.push(`${label}.${key} must be one of ${values.join(", ")}`);
+      return undefined;
+    }
+    return raw as Value;
+  };
+
+  const resolver = enumField("resolver", [
+    "playerControlled",
+    "mayhem",
+  ] as const);
+  const instanceMode = enumField("instanceMode", [
+    "single",
+    "sequential",
+    "chain",
+  ] as const);
+  const defenseWindowMode = enumField("defenseWindowMode", [
+    "PER_TARGET",
+    "COLLECT_ALL_FIRST",
+    "MAYHEM",
+  ] as const);
+  const targetApplications = enumField("targetApplications", [
+    "single",
+    "allInOneInstance",
+  ] as const);
+  const attackText = enumField("attackText", [
+    "perTarget",
+    "shared",
+    "mayhem",
+  ] as const);
+  const continuation = enumField("continuation", [
+    "none",
+    "fixedCount",
+    "onKill",
+  ] as const);
+
+  if (
+    resolver === undefined ||
+    instanceMode === undefined ||
+    defenseWindowMode === undefined ||
+    targetApplications === undefined ||
+    attackText === undefined ||
+    continuation === undefined
+  ) {
+    return errors;
+  }
+
+  const contradictions: string[] = [];
+  if (resolver === "mayhem") {
+    if (instanceMode !== "single")
+      contradictions.push("Mayhem must use single instanceMode");
+    if (defenseWindowMode !== "MAYHEM")
+      contradictions.push("Mayhem must use MAYHEM defenseWindowMode");
+    if (targetApplications !== "allInOneInstance")
+      contradictions.push(
+        "Mayhem must keep all target applications in one instance"
+      );
+    if (attackText !== "mayhem")
+      contradictions.push("Mayhem must use mayhem attackText");
+    if (continuation !== "none")
+      contradictions.push("Mayhem cannot declare a continuation");
+  } else {
+    if (defenseWindowMode === "MAYHEM")
+      contradictions.push(
+        "playerControlled cannot use MAYHEM defenseWindowMode"
+      );
+    if (attackText === "mayhem")
+      contradictions.push("playerControlled cannot use mayhem attackText");
+    if (
+      (attackText === "shared" && defenseWindowMode !== "COLLECT_ALL_FIRST") ||
+      (attackText === "perTarget" && defenseWindowMode !== "PER_TARGET")
+    ) {
+      contradictions.push("attackText does not match defenseWindowMode");
+    }
+    if (instanceMode === "single" && continuation !== "none") {
+      contradictions.push("single instanceMode must not continue");
+    }
+    if (instanceMode === "sequential" && continuation !== "fixedCount") {
+      contradictions.push(
+        "sequential instanceMode must use fixedCount continuation"
+      );
+    }
+    if (instanceMode === "chain" && continuation !== "onKill") {
+      contradictions.push("chain instanceMode must use onKill continuation");
+    }
+    if (instanceMode !== "single" && targetApplications !== "single") {
+      contradictions.push(
+        "sequential and chain instances have one target application"
+      );
+    }
+  }
+
+  return contradictions.map(
+    (message) => `${label} is contradictory AttackSemantics: ${message}`
+  );
+}
+
+export function isAttackSemantics(value: unknown): value is AttackSemantics {
+  return validateAttackSemantics(value).length === 0;
+}
 
 const payloadMapIdsAreKnown: Exclude<
   RuntimeEffectId,

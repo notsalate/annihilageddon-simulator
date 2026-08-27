@@ -32,6 +32,14 @@
       {
         "effectId": "mega_mayhem_each_player_toggle_dingler",
         "timing": "onMayhemResolve",
+        "attackSemantics": {
+          "resolver": "mayhem",
+          "instanceMode": "single",
+          "defenseWindowMode": "MAYHEM",
+          "targetApplications": "allInOneInstance",
+          "attackText": "mayhem",
+          "continuation": "none"
+        },
         "targetSelector": "eachPlayerClockwiseFromActive"
       }
     ],
