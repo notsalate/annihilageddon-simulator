@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   applyAction,
-  getGameEndReason,
+  getEndOfTurnCheckpoint,
   intakeRuntimeData,
   initializeGame,
   runMarketFlow,
@@ -1984,7 +1984,10 @@ test("вложенный ЖДК не завершает игру сразу по
       .map((event) => event.tokenInstanceId),
     [outerToken.instanceId]
   );
-  assert.equal(getGameEndReason(state), "deadWizardTokensExhausted");
+  assert.equal(
+    getEndOfTurnCheckpoint(state)?.gameEndReason,
+    "deadWizardTokensExhausted"
+  );
 });
 
 function chooseFamiliarDefenseAndExchange(

@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   applyAction,
   createSimulationFailureReplay,
-  getGameEndReason,
   initializeGame,
   listLegalActions,
   runSingleGame,
@@ -85,7 +84,6 @@ test("zero dead wizard tokens creates an exhausted available stack and invalid c
 
   assert.equal(state.common.deadWizardTokens.status, "available");
   assert.deepEqual(state.common.deadWizardTokens.drawStack, []);
-  assert.equal(getGameEndReason(state), "deadWizardTokensExhausted");
 
   assert.throws(
     () => initializeGame({ rootDir, seed: 349004, deadWizardTokenCount: -1 }),

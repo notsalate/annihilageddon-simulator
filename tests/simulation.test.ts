@@ -15,7 +15,7 @@ import {
   baselineBot,
   determineWinnerIds,
   formatSingleGameDebugTrace,
-  getGameEndReason,
+  getEndOfTurnCheckpoint,
   initializeGame,
   runMarketFlow,
   runMassSimulation,
@@ -420,21 +420,7 @@ test("custom legacy bot fails before botFactory and strategy execution", () => {
   assert.equal(botFactoryCalled, false);
 });
 
-test("game end reason is dead wizard token exhaustion when the DWT stack is empty", () => {
-  const state = initializeGame({
-    rootDir,
-    dataPackPath: playableRuntimeDataPackPath,
-    seed: 60615,
-  });
-  state.common.deadWizardTokens = {
-    status: "available",
-    drawStack: [],
-  };
-
-  assert.equal(getGameEndReason(state), "deadWizardTokensExhausted");
-});
-
-test("game end reason can defer DWT exhaustion until the next start of turn", () => {
+test("end-of-turn checkpoint reports an exhausted DWT stack", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -445,14 +431,10 @@ test("game end reason can defer DWT exhaustion until the next start of turn", ()
     drawStack: [],
   };
 
-  assert.equal(
-    getGameEndReason(state, { checkDeadWizardTokenExhaustion: false }),
-    undefined
-  );
-  assert.equal(
-    getGameEndReason(state, { checkDeadWizardTokenExhaustion: true }),
-    "deadWizardTokensExhausted"
-  );
+  assert.deepEqual(getEndOfTurnCheckpoint(state), {
+    gameEndReason: "deadWizardTokensExhausted",
+    gameEndReasons: ["deadWizardTokensExhausted"],
+  });
 });
 
 test("game end reason does not infer market exhaustion outside Market Flow", () => {
@@ -464,12 +446,12 @@ test("game end reason does not infer market exhaustion outside Market Flow", () 
 
   state.common.market.pop();
   state.common.mainDeck.splice(0);
-  assert.equal(getGameEndReason(state), undefined);
+  assert.equal(getEndOfTurnCheckpoint(state), undefined);
 
   state.common.market.push(state.common.legendMarket[0]!);
   state.common.legendMarket.pop();
   state.common.legendDeck.splice(0);
-  assert.equal(getGameEndReason(state), undefined);
+  assert.equal(getEndOfTurnCheckpoint(state), undefined);
 });
 
 test("Market Flow reports main deck exhaustion directly", () => {

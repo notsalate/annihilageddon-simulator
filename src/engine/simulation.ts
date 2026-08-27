@@ -39,11 +39,7 @@ import {
 import { assertGameStateInvariants } from "./invariants.js";
 import { createPlayerDecisionView } from "./strategy-decision-view.js";
 import { intakeRuntimeData } from "./runtime-data-intake.js";
-import {
-  DEAD_WIZARD_TOKENS_EXHAUSTED_REASON,
-  type EndOfTurnGameEndReason,
-  isDeadWizardTokenStackExhausted,
-} from "./end-conditions.js";
+import type { EndOfTurnGameEndReason } from "./end-conditions.js";
 
 export type GameEndReason = EndOfTurnGameEndReason | "maxTurnsReached";
 
@@ -1271,20 +1267,6 @@ function snapshotToken(token: TokenInstance): SetupTokenSnapshot {
     instanceId: token.instanceId,
     definitionId: token.definitionId,
   };
-}
-
-export function getGameEndReason(
-  state: GameState,
-  options: { checkDeadWizardTokenExhaustion?: boolean } = {}
-): GameEndReason | undefined {
-  if (
-    options.checkDeadWizardTokenExhaustion !== false &&
-    isDeadWizardTokenStackExhausted(state)
-  ) {
-    return DEAD_WIZARD_TOKENS_EXHAUSTED_REASON;
-  }
-
-  return undefined;
 }
 
 function isLegalAction(
