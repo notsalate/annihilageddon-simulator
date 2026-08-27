@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { isPlainRecord } from "../common.js";
@@ -7,7 +7,10 @@ import {
   isAttackSemantics,
 } from "../engine/runtime-effect.js";
 import {
+  collectRuntimeCoverageFiles,
   createRuntimeCoverageInventory,
+  runtimeCoverageCompositionDirectories,
+  runtimeCoverageSources,
   type RuntimeCoverageInventory,
   type RuntimeCoverageInventoryItem,
   type RuntimeCoverageObjectKind,
@@ -136,40 +139,6 @@ const expectedCounts: Record<RuntimeCoverageObjectKind, number> = {
   wizardProperty: 10,
   deadWizardToken: 29,
 };
-
-const canonicalSources: ReadonlyArray<{
-  objectKind: RuntimeCoverageObjectKind;
-  directory: string;
-}> = [
-  { objectKind: "card", directory: "data/import/cards/main/drafts" },
-  { objectKind: "card", directory: "data/import/cards/legend/drafts" },
-  { objectKind: "card", directory: "data/import/cards/starter/drafts" },
-  { objectKind: "card", directory: "data/import/cards/familiar/drafts" },
-  { objectKind: "card", directory: "data/import/cards/special/drafts" },
-  {
-    objectKind: "wizardProperty",
-    directory: "data/import/tokens/wizard-property/drafts",
-  },
-  {
-    objectKind: "deadWizardToken",
-    directory: "data/import/tokens/dead-wizard-token/drafts",
-  },
-];
-
-const runtimeSources: ReadonlyArray<{
-  objectKind: RuntimeCoverageObjectKind;
-  directory: string;
-}> = [
-  { objectKind: "card", directory: "data/cards" },
-  { objectKind: "wizardProperty", directory: "data/tokens/wizard-property" },
-  { objectKind: "deadWizardToken", directory: "data/tokens/dead-wizard" },
-];
-
-const compositionDirectories = [
-  "data/decks",
-  "data/stacks",
-  "data/pools",
-] as const;
 
 const lifecycleEvidenceByDwt: Readonly<
   Record<string, readonly RuntimeLifecycleClass[]>
@@ -728,26 +697,39 @@ function collectProductionStackSummary(rootDir: string): {
 }
 
 function collectCanonicalRecords(rootDir: string): CanonicalRecord[] {
-  return canonicalSources.flatMap((source) =>
-    collectJsonFiles(rootDir, source.directory).flatMap((filePath) => {
-      const value = getRecord(readJson(filePath));
-      const id = getString(value["cardId"]) ?? getString(value["tokenId"]);
-      return id === undefined
-        ? []
-        : [{ id, objectKind: source.objectKind, filePath, value }];
-    })
+  return runtimeCoverageSources.flatMap((source) =>
+    collectRuntimeCoverageFiles(rootDir, [source.draftDir], ".json").flatMap(
+      (filePath) => {
+        const value = getRecord(readJson(filePath));
+        const id = getString(value["cardId"]) ?? getString(value["tokenId"]);
+        return id === undefined
+          ? []
+          : [{ id, objectKind: source.objectKind, filePath, value }];
+      }
+    )
   );
 }
 
 function collectRuntimeRecords(rootDir: string): RuntimeRecord[] {
-  return runtimeSources.flatMap((source) =>
-    collectJsonFiles(rootDir, source.directory).flatMap((filePath) => {
-      const value = getRecord(readJson(filePath));
-      const id = getString(value["cardId"]) ?? getString(value["tokenId"]);
-      return id === undefined
-        ? []
-        : [{ id, objectKind: source.objectKind, filePath, value }];
-    })
+  const runtimeDirectories = [
+    ...new Set(runtimeCoverageSources.flatMap((source) => source.runtimeDirs)),
+  ];
+  return runtimeDirectories.flatMap((directory) =>
+    collectRuntimeCoverageFiles(rootDir, [directory], ".json").flatMap(
+      (filePath) => {
+        const value = getRecord(readJson(filePath));
+        const id = getString(value["cardId"]) ?? getString(value["tokenId"]);
+        if (id === undefined) {
+          return [];
+        }
+        const objectKind = runtimeCoverageSources.find((source) =>
+          source.runtimeDirs.includes(directory)
+        )?.objectKind;
+        return objectKind === undefined
+          ? []
+          : [{ id, objectKind, filePath, value }];
+      }
+    )
   );
 }
 
@@ -756,17 +738,20 @@ function isNeutralRuntimeId(id: string): boolean {
 }
 
 function collectCompositionReferences(rootDir: string): CompositionReference[] {
-  return compositionDirectories.flatMap((directory) =>
-    collectJsonFiles(rootDir, directory).flatMap((filePath) => {
-      const value = getRecord(readJson(filePath));
-      return getArray(value["entries"]).flatMap((entry) => {
-        const record = getRecord(entry);
-        const id = getString(record["cardId"]) ?? getString(record["tokenId"]);
-        return id === undefined
-          ? []
-          : [{ id, count: getNumber(record["count"]), filePath }];
-      });
-    })
+  return runtimeCoverageCompositionDirectories.flatMap((directory) =>
+    collectRuntimeCoverageFiles(rootDir, [directory], ".json").flatMap(
+      (filePath) => {
+        const value = getRecord(readJson(filePath));
+        return getArray(value["entries"]).flatMap((entry) => {
+          const record = getRecord(entry);
+          const id =
+            getString(record["cardId"]) ?? getString(record["tokenId"]);
+          return id === undefined
+            ? []
+            : [{ id, count: getNumber(record["count"]), filePath }];
+        });
+      }
+    )
   );
 }
 
@@ -795,7 +780,11 @@ function collectActivePackData(rootDir: string): ActivePackData {
       );
       continue;
     }
-    for (const filePath of collectJsonFiles(rootDir, relativePath)) {
+    for (const filePath of collectRuntimeCoverageFiles(
+      rootDir,
+      [relativePath],
+      ".json"
+    )) {
       const value = getRecord(readJson(filePath));
       const id = getString(value["cardId"]) ?? getString(value["tokenId"]);
       if (id !== undefined) {
@@ -991,52 +980,6 @@ function uniqueBlockers(
       `${right.code}\u0000${right.id ?? ""}\u0000${right.message}`
     )
   );
-}
-
-function collectJsonFiles(
-  rootDir: string,
-  relativeDirectory: string
-): string[] {
-  const absoluteDirectory = path.resolve(rootDir, relativeDirectory);
-  if (
-    !existsSync(absoluteDirectory) ||
-    !statSync(absoluteDirectory).isDirectory()
-  ) {
-    return [];
-  }
-  return collectJsonOrSourceFiles(rootDir, relativeDirectory, ".json");
-}
-
-function collectJsonOrSourceFiles(
-  rootDir: string,
-  relativeDirectory: string,
-  extension: string
-): string[] {
-  const absoluteDirectory = path.resolve(rootDir, relativeDirectory);
-  if (
-    !existsSync(absoluteDirectory) ||
-    !statSync(absoluteDirectory).isDirectory()
-  ) {
-    return [];
-  }
-  return readdirSync(absoluteDirectory, { withFileTypes: true })
-    .flatMap((entry) => {
-      if (entry.name.startsWith("_")) {
-        return [];
-      }
-      const absolutePath = path.join(absoluteDirectory, entry.name);
-      if (entry.isDirectory()) {
-        return collectJsonOrSourceFiles(
-          rootDir,
-          path.relative(rootDir, absolutePath),
-          extension
-        );
-      }
-      return entry.isFile() && entry.name.endsWith(extension)
-        ? [absolutePath]
-        : [];
-    })
-    .sort();
 }
 
 function getArray(value: unknown): unknown[] {

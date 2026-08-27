@@ -84,7 +84,7 @@ export interface RuntimeCoverageInventory {
   generatedAt: string;
 }
 
-interface DraftSourceConfig {
+export interface RuntimeCoverageSource {
   objectKind: RuntimeCoverageObjectKind;
   sourceGroupOrTokenKind: string;
   draftDir: string;
@@ -98,7 +98,7 @@ interface CompositionMembership {
   count: number | undefined;
 }
 
-const draftSources: DraftSourceConfig[] = [
+export const runtimeCoverageSources: ReadonlyArray<RuntimeCoverageSource> = [
   {
     objectKind: "card",
     sourceGroupOrTokenKind: "main",
@@ -133,15 +133,21 @@ const draftSources: DraftSourceConfig[] = [
     objectKind: "wizardProperty",
     sourceGroupOrTokenKind: "wizardProperty",
     draftDir: "data/import/tokens/wizard-property/drafts",
-    runtimeDirs: ["data/tokens"],
+    runtimeDirs: ["data/tokens/wizard-property"],
   },
   {
     objectKind: "deadWizardToken",
     sourceGroupOrTokenKind: "deadWizardToken",
     draftDir: "data/import/tokens/dead-wizard-token/drafts",
-    runtimeDirs: ["data/tokens"],
+    runtimeDirs: ["data/tokens/dead-wizard"],
   },
 ];
+
+export const runtimeCoverageCompositionDirectories = [
+  "data/decks",
+  "data/stacks",
+  "data/pools",
+] as const;
 
 export function createRuntimeCoverageInventory(
   rootDir: string
@@ -151,7 +157,7 @@ export function createRuntimeCoverageInventory(
   const focusedTestRefsById = collectFocusedTestRefs(rootDir);
   const crossSourcePlan = readCrossSourceCoveragePlan(rootDir);
   const cardCompletionById = collectCardCompletionById(rootDir);
-  const items = draftSources
+  const items = runtimeCoverageSources
     .flatMap((source) =>
       collectDraftItems(
         rootDir,
@@ -317,82 +323,84 @@ export function writeRuntimeCoverageInventoryMarkdown(
 
 function collectDraftItems(
   rootDir: string,
-  source: DraftSourceConfig,
+  source: RuntimeCoverageSource,
   runtimeById: Map<string, Record<string, unknown>>,
   compositionsById: Map<string, CompositionMembership[]>,
   focusedTestRefsById: Map<string, string[]>,
   crossSourcePlan: Map<string, CrossSourceCoveragePlanEntry>,
   cardCompletionById: Map<string, CardCompletionStatus>
 ): RuntimeCoverageInventoryItem[] {
-  return collectFiles(rootDir, [source.draftDir], ".json").map((draftPath) => {
-    const draft = readJson(draftPath);
-    const id = getObjectId(draft) ?? path.basename(draftPath, ".json");
-    const runtime = runtimeById.get(id);
-    const compositionMembership = compositionsById.get(id) ?? [];
-    const focusedTestRefs = focusedTestRefsById.get(id) ?? [];
-    const mechanicSignals = collectMechanicSignals(draft, runtime);
-    const suspectedBlockers = collectSuspectedBlockers(
-      runtime,
-      compositionMembership,
-      source
-    );
-    const coverageStatus = classifyCoverage(
-      runtime,
-      compositionMembership,
-      focusedTestRefs,
-      suspectedBlockers
-    );
-    const visible = getRecord(getRecord(draft)["visible"]);
-    const crossSource = evaluateCrossSourceCoverage({
-      rootDir,
-      id,
-      objectKind: source.objectKind,
-      sourceGroupOrTokenKind: source.sourceGroupOrTokenKind,
-      draft,
-      runtime,
-      compositionMembership,
-      planEntry: crossSourcePlan.get(id),
-    });
+  return collectRuntimeCoverageFiles(rootDir, [source.draftDir], ".json").map(
+    (draftPath) => {
+      const draft = readJson(draftPath);
+      const id = getObjectId(draft) ?? path.basename(draftPath, ".json");
+      const runtime = runtimeById.get(id);
+      const compositionMembership = compositionsById.get(id) ?? [];
+      const focusedTestRefs = focusedTestRefsById.get(id) ?? [];
+      const mechanicSignals = collectMechanicSignals(draft, runtime);
+      const suspectedBlockers = collectSuspectedBlockers(
+        runtime,
+        compositionMembership,
+        source
+      );
+      const coverageStatus = classifyCoverage(
+        runtime,
+        compositionMembership,
+        focusedTestRefs,
+        suspectedBlockers
+      );
+      const visible = getRecord(getRecord(draft)["visible"]);
+      const crossSource = evaluateCrossSourceCoverage({
+        rootDir,
+        id,
+        objectKind: source.objectKind,
+        sourceGroupOrTokenKind: source.sourceGroupOrTokenKind,
+        draft,
+        runtime,
+        compositionMembership,
+        planEntry: crossSourcePlan.get(id),
+      });
 
-    return {
-      id,
-      objectKind: source.objectKind,
-      sourceGroupOrTokenKind: source.sourceGroupOrTokenKind,
-      draftPresence: "present",
-      runtimePresence: runtime === undefined ? "missing" : "present",
-      compositionMembership: compositionMembership
-        .map((membership) => membership.label)
-        .sort(),
-      missingAppropriateComposition: !hasAppropriateComposition(
-        source,
-        compositionMembership
-      ),
-      legacyRuntimeSchema:
-        getString(getRecord(runtime)["runtimeSchema"]) ??
-        getString(getRecord(getRecord(runtime)["engine"])["runtimeSchema"]),
-      legacyPlayableInV0: getBoolean(
-        getRecord(getRecord(runtime)["engine"])["playableInV0"]
-      ),
-      runtimeMappingStatus:
-        getString(getRecord(getRecord(runtime)["engine"])["mappingStatus"]) ??
-        getString(getRecord(runtime)["mappingStatus"]),
-      coverageStatus,
-      visibleNameRu:
-        getString(visible["nameRu"]) ?? getString(visible["sourceLabel"]),
-      visibleTextRu: getString(visible["textRu"]),
-      mechanicSignals,
-      suspectedBlockers,
-      focusedTestRefs,
-      cardCompletion:
-        source.objectKind === "card"
-          ? (cardCompletionById.get(id) ?? "unavailable")
-          : "notApplicable",
-      crossSourceStatus: crossSource.status,
-      primaryMechanicCluster: crossSource.primaryMechanicCluster,
-      crossSourceBlockers: crossSource.blockers,
-      crossSourceBlockerCodes: crossSource.blockerCodes,
-    };
-  });
+      return {
+        id,
+        objectKind: source.objectKind,
+        sourceGroupOrTokenKind: source.sourceGroupOrTokenKind,
+        draftPresence: "present",
+        runtimePresence: runtime === undefined ? "missing" : "present",
+        compositionMembership: compositionMembership
+          .map((membership) => membership.label)
+          .sort(),
+        missingAppropriateComposition: !hasAppropriateComposition(
+          source,
+          compositionMembership
+        ),
+        legacyRuntimeSchema:
+          getString(getRecord(runtime)["runtimeSchema"]) ??
+          getString(getRecord(getRecord(runtime)["engine"])["runtimeSchema"]),
+        legacyPlayableInV0: getBoolean(
+          getRecord(getRecord(runtime)["engine"])["playableInV0"]
+        ),
+        runtimeMappingStatus:
+          getString(getRecord(getRecord(runtime)["engine"])["mappingStatus"]) ??
+          getString(getRecord(runtime)["mappingStatus"]),
+        coverageStatus,
+        visibleNameRu:
+          getString(visible["nameRu"]) ?? getString(visible["sourceLabel"]),
+        visibleTextRu: getString(visible["textRu"]),
+        mechanicSignals,
+        suspectedBlockers,
+        focusedTestRefs,
+        cardCompletion:
+          source.objectKind === "card"
+            ? (cardCompletionById.get(id) ?? "unavailable")
+            : "notApplicable",
+        crossSourceStatus: crossSource.status,
+        primaryMechanicCluster: crossSource.primaryMechanicCluster,
+        crossSourceBlockers: crossSource.blockers,
+        crossSourceBlockerCodes: crossSource.blockerCodes,
+      };
+    }
+  );
 }
 
 function collectRuntimeObjects(
@@ -400,7 +408,7 @@ function collectRuntimeObjects(
 ): Map<string, Record<string, unknown>> {
   const runtimeById = new Map<string, Record<string, unknown>>();
 
-  for (const filePath of collectFiles(
+  for (const filePath of collectRuntimeCoverageFiles(
     rootDir,
     ["data/cards", "data/tokens"],
     ".json"
@@ -449,7 +457,7 @@ function collectCompositionMembership(
   rootDir: string
 ): Map<string, CompositionMembership[]> {
   const memberships = new Map<string, CompositionMembership[]>();
-  const compositionFiles = collectFiles(
+  const compositionFiles = collectRuntimeCoverageFiles(
     rootDir,
     ["data/decks", "data/stacks", "data/pools"],
     ".json"
@@ -481,7 +489,11 @@ function collectCompositionMembership(
     }
   }
 
-  const tokenFiles = collectFiles(rootDir, ["data/tokens"], ".json");
+  const tokenFiles = collectRuntimeCoverageFiles(
+    rootDir,
+    ["data/tokens"],
+    ".json"
+  );
   for (const filePath of tokenFiles) {
     const parsed = getRecord(readJson(filePath));
     const tokenId =
@@ -516,7 +528,7 @@ function collectCompositionMembership(
 
 function collectFocusedTestRefs(rootDir: string): Map<string, string[]> {
   const refs = new Map<string, string[]>();
-  const testFiles = collectFiles(rootDir, ["tests"], ".ts");
+  const testFiles = collectRuntimeCoverageFiles(rootDir, ["tests"], ".ts");
   const idPattern = /esw2_dbg__[a-z0-9_]+/g;
 
   for (const filePath of testFiles) {
@@ -645,7 +657,7 @@ function collectMechanicSignals(
 function collectSuspectedBlockers(
   runtime: Record<string, unknown> | undefined,
   compositionMembership: CompositionMembership[],
-  source: DraftSourceConfig
+  source: RuntimeCoverageSource
 ): string[] {
   const blockers = new Set<string>();
 
@@ -852,7 +864,7 @@ function summarizeCrossSourceStatuses(
 }
 
 function hasAppropriateComposition(
-  source: DraftSourceConfig,
+  source: RuntimeCoverageSource,
   compositionMembership: CompositionMembership[]
 ): boolean {
   return hasAppropriateRuntimeComposition(
@@ -897,9 +909,9 @@ function getRuntimeEffects(
     .filter((effectId): effectId is string => effectId !== undefined);
 }
 
-function collectFiles(
+export function collectRuntimeCoverageFiles(
   rootDir: string,
-  inputDirs: string[],
+  inputDirs: readonly string[],
   extension: string
 ): string[] {
   return inputDirs
