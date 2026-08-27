@@ -10,6 +10,8 @@ import {
   evaluateRuntimeEffectEndTurnDrawModifier,
   executeRuntimeEffectOnPlayCard,
   isSupportedRuntimeEffectTiming,
+  preserveEffectCycleOutcome,
+  type EffectCycleOutcome,
   type EffectGameEnd,
   type EffectExecutionResult,
   type EffectRuntimeOperationResult,
@@ -363,6 +365,7 @@ function executeControlledCardOperation(
   operation: ControlledCardExecutionOperation,
   candidates: readonly ControlledCardEffectCandidate[]
 ): EffectExecutionResult {
+  let cycleOutcome: EffectCycleOutcome | undefined;
   for (const { effect, source, sourceDefinition } of candidates) {
     const result =
       operation.kind === "afterControllerPlaysCard" ||
@@ -401,12 +404,16 @@ function executeControlledCardOperation(
     if (result.status === "error") {
       return { ok: false, error: result.error };
     }
-    if (!result.result.ok || result.result.gameEnd !== undefined) {
+    if (!result.result.ok) {
       return result.result;
+    }
+    cycleOutcome ??= result.result.cycleOutcome;
+    if (result.result.gameEnd !== undefined) {
+      return preserveEffectCycleOutcome(result.result, cycleOutcome);
     }
   }
 
-  return { ok: true };
+  return cycleOutcome === undefined ? { ok: true } : { ok: true, cycleOutcome };
 }
 
 function collectEndTurnDrawModifier(

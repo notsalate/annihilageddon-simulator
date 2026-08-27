@@ -10520,10 +10520,17 @@ test("#287 directional chain wraps after a full circle", () => {
 test("attack-chain recurrence key changes with rules-relevant state and RNG", () => {
   const state = initializeGame({ rootDir, seed: 606162, playerCount: 2 });
   const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const chainEffect = {
+    effectId: "directional_chain_attack" as const,
+    timing: "onPlay" as const,
+    amount: 10,
+    targetSelector: "leftOrRightFoe" as const,
+  };
   const cursor = {
     direction: "left" as const,
     targetIndex: 0,
     targetPlayerId: targetPlayer.playerId,
+    effect: chainEffect,
   };
 
   const baseline = createAttackChainRecurrenceKey(state, cursor);
@@ -10549,6 +10556,15 @@ test("attack-chain recurrence key changes with rules-relevant state and RNG", ()
   ];
   state.rng.next();
   assert.notEqual(createAttackChainRecurrenceKey(state, cursor), baseline);
+
+  const effectKey = createAttackChainRecurrenceKey(state, cursor);
+  assert.notEqual(
+    createAttackChainRecurrenceKey(state, {
+      ...cursor,
+      effect: { ...chainEffect, amount: 11 },
+    }),
+    effectKey
+  );
 });
 
 test("attack-chain recurrence key keeps distinct non-finite policy numbers distinct", () => {
@@ -10558,6 +10574,12 @@ test("attack-chain recurrence key keeps distinct non-finite policy numbers disti
     direction: "left" as const,
     targetIndex: 0,
     targetPlayerId: targetPlayer.playerId,
+    effect: {
+      effectId: "directional_chain_attack" as const,
+      timing: "onPlay" as const,
+      amount: 10,
+      targetSelector: "leftOrRightFoe" as const,
+    },
   };
   const policyStates = [
     0,
@@ -10661,7 +10683,13 @@ test("proven directional cycle does not skip later effects of the same card", ()
 
   const result = play(scenario, wand);
 
-  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(result, {
+    ok: true,
+    cycleOutcome: {
+      kind: "provenAttackChainCycle",
+      effectId: "directional_chain_attack",
+    },
+  });
   assert.equal(scenario.state.turn.power, 106);
   const cycleIndex = scenario.state.eventLog.findIndex(
     (event) => event.type === "attackChainCycleDetected"
@@ -10736,6 +10764,71 @@ test("directional chain does not infer a cycle from an opaque stateful choice po
     ).length,
     3
   );
+  assert.equal(
+    scenario.state.eventLog.filter(
+      (event) => event.type === "attackChainCycleDetected"
+    ).length,
+    0
+  );
+});
+
+test("directional chain includes published choice state before proving a cycle", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 606166,
+    playerCount: 2,
+  });
+  const activePlayer = scenario.activePlayer;
+  const targetPlayer = scenario.foes[0];
+  assert.ok(targetPlayer);
+  for (const player of scenario.state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+    player.hand = [];
+    player.life.current = 20;
+  }
+  targetPlayer.life.current = 1;
+  scenario.state.common.deadWizardTokens.drawStack = [];
+  scenario.state.turn.power = 99;
+  const defense = addFixtureDefenseCardToHand(
+    scenario.state,
+    targetPlayer,
+    "discardSelf"
+  );
+  givenRuntimeCard(scenario, {
+    player: activePlayer,
+    zone: "permanents",
+    definitionId: "esw2_dbg__legend_008",
+  });
+  const wand = givenRuntimeCard(scenario, {
+    player: activePlayer,
+    definitionId: "esw2_dbg__legend_015",
+  });
+  let defenseChoiceCount = 0;
+  const choicePolicy = Object.assign(
+    (
+      request: Parameters<NonNullable<GameState["effectChoiceStrategy"]>>[0]
+    ) => {
+      if (request.effectId === "directional_chain_attack") {
+        return { choiceId: "left" };
+      }
+      if (request.effectId !== "avoid_attack") {
+        return undefined;
+      }
+      defenseChoiceCount += 1;
+      return {
+        choiceId: defenseChoiceCount === 3 ? defense.instanceId : "decline",
+      };
+    },
+    { getState: () => ({ defenseChoiceCount }) }
+  );
+  scenario.state.effectChoiceStrategy = choicePolicy;
+
+  const result = play(scenario, wand);
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(defenseChoiceCount, 3);
+  assert.equal(targetPlayer.discard.includes(defense), true);
   assert.equal(
     scenario.state.eventLog.filter(
       (event) => event.type === "attackChainCycleDetected"

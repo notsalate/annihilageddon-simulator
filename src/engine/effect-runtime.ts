@@ -65,6 +65,7 @@ import {
 import {
   type DamageCause,
   type DeadWizardTokenDeathPolicy,
+  type EffectCycleOutcome,
   type EffectChoice,
   type EffectGameEnd,
   type EffectExecutionResult,
@@ -75,6 +76,7 @@ import {
   type EffectChoiceResolution,
   type EffectRuntimeHandlerOperationResult,
   type EffectRuntimeOperationResult,
+  preserveEffectCycleOutcome,
   collectAttackReplacementProfile,
   evaluateRuntimeEffectAtTiming,
   evaluateRuntimeEffectBasicTrophyChipPayoutSuppression,
@@ -752,6 +754,7 @@ export function executeWizardPropertyOnPlayCardEffects(
   player: PlayerState,
   playedDefinition: CardDefinition
 ): EffectExecutionResult {
+  let cycleOutcome: EffectCycleOutcome | undefined;
   for (const token of player.wizardProperties) {
     const definition = state.tokenDefinitions.get(token.definitionId);
     if (
@@ -778,12 +781,16 @@ export function executeWizardPropertyOnPlayCardEffects(
       },
       (effect) => cardTriggerMatches(effect, playedDefinition)
     );
-    if (!result.ok || result.gameEnd !== undefined) {
+    if (!result.ok) {
       return result;
+    }
+    cycleOutcome ??= result.cycleOutcome;
+    if (result.gameEnd !== undefined) {
+      return preserveEffectCycleOutcome(result, cycleOutcome);
     }
   }
 
-  return { ok: true };
+  return cycleOutcome === undefined ? { ok: true } : { ok: true, cycleOutcome };
 }
 
 export function executeControlledCardOnPlayCardEffects(
@@ -1440,6 +1447,7 @@ function executeEffects(
   source: EffectSourceContext,
   isApplicable?: (effect: RuntimeEffectPayload) => boolean
 ): EffectExecutionResult {
+  let cycleOutcome: EffectCycleOutcome | undefined;
   for (const effect of effects) {
     const verifiedEffect = requireVerifiedRuntimeEffect(effect);
     const operationResult = executeRuntimeEffectAtTiming(
@@ -1466,12 +1474,16 @@ function executeEffects(
     }
 
     const result = operationResult.result;
-    if (!result.ok || result.gameEnd !== undefined) {
+    if (!result.ok) {
       return result;
+    }
+    cycleOutcome ??= result.cycleOutcome;
+    if (result.gameEnd !== undefined) {
+      return preserveEffectCycleOutcome(result, cycleOutcome);
     }
   }
 
-  return { ok: true };
+  return cycleOutcome === undefined ? { ok: true } : { ok: true, cycleOutcome };
 }
 
 function executeRuntimeEffectAtTiming(

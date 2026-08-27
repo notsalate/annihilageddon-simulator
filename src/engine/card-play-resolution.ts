@@ -6,9 +6,11 @@ import {
 } from "./control-ledger.js";
 import { recordCardMoved } from "./event-recorder.js";
 import type {
+  EffectCycleOutcome,
   EffectExecutionResult,
   EffectSourceContext,
 } from "./effect-runtime-registry.js";
+import { preserveEffectCycleOutcome } from "./effect-runtime-registry.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 import { runControlledPowerMutation } from "./trigger-dispatch.js";
 
@@ -58,6 +60,7 @@ export function resolveCardPlay(
   services: CardPlayResolutionServices,
   options: CardPlayResolutionOptions = {}
 ): EffectExecutionResult {
+  let cycleOutcome: EffectCycleOutcome | undefined;
   const definition = state.cardDefinitions.get(card.definitionId);
   if (definition === undefined) {
     return {
@@ -112,14 +115,18 @@ export function resolveCardPlay(
   if (!effectResult.ok) {
     return effectResult;
   }
+  cycleOutcome ??= effectResult.cycleOutcome;
   if (effectResult.gameEnd !== undefined) {
-    return finishResolvedCard(
-      state,
-      player,
-      card,
-      definition,
-      options,
-      effectResult
+    return preserveEffectCycleOutcome(
+      finishResolvedCard(
+        state,
+        player,
+        card,
+        definition,
+        options,
+        effectResult
+      ),
+      cycleOutcome
     );
   }
 
@@ -131,6 +138,7 @@ export function resolveCardPlay(
   if (!wizardPropertyResult.ok) {
     return wizardPropertyResult;
   }
+  cycleOutcome ??= wizardPropertyResult.cycleOutcome;
 
   if (wizardPropertyResult.gameEnd === undefined) {
     const controlledCardResult =
@@ -138,14 +146,18 @@ export function resolveCardPlay(
     if (!controlledCardResult.ok) {
       return controlledCardResult;
     }
+    cycleOutcome ??= controlledCardResult.cycleOutcome;
     if (controlledCardResult.gameEnd !== undefined) {
-      return finishResolvedCard(
-        state,
-        player,
-        card,
-        definition,
-        options,
-        controlledCardResult
+      return preserveEffectCycleOutcome(
+        finishResolvedCard(
+          state,
+          player,
+          card,
+          definition,
+          options,
+          controlledCardResult
+        ),
+        cycleOutcome
       );
     }
     const afterControllerPlayResult =
@@ -157,14 +169,18 @@ export function resolveCardPlay(
     if (!afterControllerPlayResult.ok) {
       return afterControllerPlayResult;
     }
+    cycleOutcome ??= afterControllerPlayResult.cycleOutcome;
     if (afterControllerPlayResult.gameEnd !== undefined) {
-      return finishResolvedCard(
-        state,
-        player,
-        card,
-        definition,
-        options,
-        afterControllerPlayResult
+      return preserveEffectCycleOutcome(
+        finishResolvedCard(
+          state,
+          player,
+          card,
+          definition,
+          options,
+          afterControllerPlayResult
+        ),
+        cycleOutcome
       );
     }
   }
@@ -177,15 +193,7 @@ export function resolveCardPlay(
     options,
     wizardPropertyResult
   );
-  if (
-    !result.ok ||
-    result.gameEnd !== undefined ||
-    !definition.engine.isOngoing
-  ) {
-    return result;
-  }
-
-  return result;
+  return preserveEffectCycleOutcome(result, cycleOutcome);
 }
 
 function placeResolvedCard(
