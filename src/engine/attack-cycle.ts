@@ -186,7 +186,14 @@ function stableSerialize(value: unknown): string {
   if (value === null) return "null";
   if (value === undefined) return "undefined";
   if (typeof value === "string") return JSON.stringify(value);
-  if (typeof value === "number" || typeof value === "boolean") {
+  if (typeof value === "number") {
+    if (Object.is(value, -0)) return "number:-0";
+    if (Number.isNaN(value)) return "number:NaN";
+    if (value === Number.POSITIVE_INFINITY) return "number:+Infinity";
+    if (value === Number.NEGATIVE_INFINITY) return "number:-Infinity";
+    return JSON.stringify(value);
+  }
+  if (typeof value === "boolean") {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {

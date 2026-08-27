@@ -10349,6 +10349,29 @@ test("attack-chain recurrence key changes with rules-relevant state and RNG", ()
   assert.notEqual(createAttackChainRecurrenceKey(state, cursor), baseline);
 });
 
+test("attack-chain recurrence key keeps distinct non-finite policy numbers distinct", () => {
+  const state = initializeGame({ rootDir, seed: 606162, playerCount: 2 });
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const cursor = {
+    direction: "left" as const,
+    targetIndex: 0,
+    targetPlayerId: targetPlayer.playerId,
+  };
+  const policyStates = [
+    0,
+    -0,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+  ];
+
+  const keys = policyStates.map((choicePolicyState) =>
+    createAttackChainRecurrenceKey(state, { ...cursor, choicePolicyState })
+  );
+
+  assert.equal(new Set(keys).size, policyStates.length);
+});
+
 test("#358 stops only a proven two-player directional chain cycle", () => {
   const scenario = createGameScenario({
     rootDir,
