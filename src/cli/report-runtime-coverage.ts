@@ -3,6 +3,10 @@ import {
   formatRuntimeCoverageInventoryMarkdown,
   writeRuntimeCoverageInventoryMarkdown,
 } from "../import/runtime-coverage-inventory.js";
+import {
+  createRuntimeSemanticCompletionReport,
+  formatRuntimeSemanticCompletionMarkdown,
+} from "../import/runtime-semantic-completion.js";
 
 const outputIndex = process.argv.indexOf("--write");
 const outputPath =
@@ -20,6 +24,11 @@ if (outputPath !== undefined) {
   console.log(
     formatRuntimeCoverageInventoryMarkdown(
       createRuntimeCoverageInventory(process.cwd())
+    )
+  );
+  console.log(
+    formatRuntimeSemanticCompletionMarkdown(
+      createRuntimeSemanticCompletionReport(process.cwd())
     )
   );
 }
