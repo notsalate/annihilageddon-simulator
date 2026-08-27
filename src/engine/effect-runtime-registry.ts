@@ -302,6 +302,9 @@ export type DamageCause =
       kind: "playerControlled";
       player: PlayerState;
       deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy;
+      deadWizardTokenReplacement?: {
+        amount: number;
+      };
       attackDeath?: boolean;
     }
   | { kind: "ownerless"; attackDeath?: boolean };
@@ -435,13 +438,16 @@ export interface EffectRuntimeServices {
     targetPlayer: PlayerState,
     effectId: RuntimeEffectId,
     source: EffectSourceContext,
-    deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy
+    deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy,
+    deadWizardTokenReplacement?: {
+      amount: number;
+    }
   ): EffectExecutionResult;
   replaceDeadWizardTokenAfterKill(
     state: GameState,
     killer: PlayerState,
     targetPlayer: PlayerState,
-    amount: 3,
+    amount: number,
     effectId: RuntimeEffectId,
     source: EffectSourceContext
   ): EffectExecutionResult;

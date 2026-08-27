@@ -846,6 +846,67 @@ test("Мортал Комбо заменяет обычный ЖДК выбор�
   }
 });
 
+test("Мортал Комбо применяет проекцию выбранного ЖДК до воскрешения цели", () => {
+  const state = initializeGame({ rootDir, seed: 278014 });
+  const attacker = getActivePlayer(state);
+  const defender = state.players.find(
+    (candidate) => candidate.playerId !== attacker.playerId
+  );
+  assert.ok(defender);
+  attacker.hand = [];
+  defender.hand = [];
+  defender.life.current = 5;
+  state.turn.power = 13;
+  const selectedToken = createDeadWizardTokenInStack(
+    "mortal-combo-dingler",
+    "esw2_dbg__dead_wizard_token_027"
+  );
+  state.common.deadWizardTokens.drawStack = [selectedToken];
+  const card = addCardToHand(state, attacker, "esw2_dbg__legend_007");
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "attack_kill_and_replace_dead_wizard_token") {
+      const targetChoice = choices.find(
+        (choice) =>
+          choice.choiceKind === "playerTarget" &&
+          choice.choiceId === defender.playerId
+      );
+      if (targetChoice !== undefined)
+        return { choiceId: targetChoice.choiceId };
+      return { choiceId: `token:${selectedToken.instanceId}` };
+    }
+    return undefined;
+  };
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: card.instanceId }),
+    { ok: true }
+  );
+  assert.equal(defender.life.current, 15);
+  assert.equal(
+    defender.statuses.some((status) => status.statusId === "dingler"),
+    true
+  );
+  const projectionIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "dinglerStatusGained" &&
+      event.playerId === defender.playerId
+  );
+  const resurrectionIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "playerResurrected" && event.playerId === defender.playerId
+  );
+  assert.ok(projectionIndex >= 0);
+  assert.ok(resurrectionIndex > projectionIndex);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "deadWizardTokenFaceResolved" &&
+        event.tokenInstanceId === selectedToken.instanceId
+    ),
+    true
+  );
+});
+
 test("Браталити заменяет следующее обычное убийство и переносит награду убийце", () => {
   const state = initializeGame({ rootDir, seed: 279001 });
   const attacker = getActivePlayer(state);
@@ -910,6 +971,72 @@ test("Браталити заменяет следующее обычное уб
     state.eventLog.filter((event) => event.type === "playerDied").length,
     1
   );
+});
+
+test("Браталити разрешает перехваченный ЖДК до воскрешения жертвы", () => {
+  const state = initializeGame({ rootDir, seed: 279005 });
+  const attacker = getActivePlayer(state);
+  const defender = state.players.find(
+    (candidate) => candidate.playerId !== attacker.playerId
+  );
+  assert.ok(defender);
+  attacker.hand = [];
+  defender.hand = [];
+  defender.wizardProperties = [];
+  attacker.life.current = 20;
+  defender.life.current = 5;
+  state.turn.power = 0;
+  const replacementToken = createDeadWizardTokenInStack(
+    "bratality-dingler",
+    "esw2_dbg__dead_wizard_token_027"
+  );
+  state.common.deadWizardTokens.drawStack = [replacementToken];
+  const replacementCard = addCardToHand(state, attacker, "esw2_dbg__main_032");
+  const attackCard = addCardToHand(state, attacker, "esw2_dbg__main_030");
+  state.effectChoiceStrategy = ({ effectId }) => {
+    if (effectId === "attack_damage") {
+      return { choiceId: defender.playerId };
+    }
+    if (effectId === "arm_dead_wizard_token_kill_replacement") {
+      return { choiceId: "apply" };
+    }
+    return undefined;
+  };
+
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: replacementCard.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: attackCard.instanceId,
+    }).ok,
+    true
+  );
+  assert.equal(attacker.life.current, 15);
+  assert.equal(
+    state.eventLog.find(
+      (event) =>
+        event.type === "playerResurrected" &&
+        event.playerId === defender.playerId
+    )?.amount,
+    20
+  );
+  const statusIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "dinglerStatusGained" &&
+      event.playerId === attacker.playerId
+  );
+  const resurrectionIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "playerResurrected" && event.playerId === defender.playerId
+  );
+  assert.ok(statusIndex >= 0);
+  assert.ok(resurrectionIndex > statusIndex);
 });
 
 test("Браталити расходует окно при отказе и не влияет на второе убийство", () => {
