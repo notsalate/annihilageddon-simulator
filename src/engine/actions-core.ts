@@ -22,7 +22,11 @@ import {
   validateWizardPropertyOnPlayCardEffects,
 } from "./effect-runtime.js";
 import { resolveCardPlay } from "./card-play-resolution.js";
-import type { EffectGameEnd } from "./effect-runtime-registry.js";
+import type {
+  EffectCycleOutcome,
+  EffectExecutionResult,
+  EffectGameEnd,
+} from "./effect-runtime-registry.js";
 import { assertNever } from "../common.js";
 import {
   findPlayerUnboughtFamiliarCard,
@@ -115,6 +119,8 @@ export type ActionResult =
       gameEndReasons?: readonly EndOfTurnGameEndReason[];
       /** Present only when the action itself established a winner. */
       winnerPlayerId?: PlayerState["playerId"];
+      /** Present when a non-terminal AttackChain continuation was proven cyclic. */
+      cycleOutcome?: EffectCycleOutcome;
     }
   | {
       ok: false;
@@ -582,10 +588,10 @@ function endTurn(state: GameState): ActionResult {
     return startOfTurnResult;
   }
   if (startOfTurnResult.gameEnd !== undefined) {
-    return gameEndActionResult(startOfTurnResult.gameEnd);
+    return effectActionResult(startOfTurnResult);
   }
 
-  return { ok: true };
+  return effectActionResult(startOfTurnResult);
 }
 
 function activatePermanent(
@@ -627,7 +633,7 @@ function activatePermanent(
     return effectResult;
   }
   if (effectResult.gameEnd !== undefined) {
-    return gameEndActionResult(effectResult.gameEnd);
+    return effectActionResult(effectResult);
   }
 
   state.turn.activatedCardIds.push(card.instanceId);
@@ -638,7 +644,7 @@ function activatePermanent(
     definitionId: card.definitionId,
   });
 
-  return { ok: true };
+  return effectActionResult(effectResult);
 }
 
 function activateWizardProperty(
@@ -698,7 +704,7 @@ function activateWizardProperty(
     return effectResult;
   }
   if (effectResult.gameEnd !== undefined) {
-    return gameEndActionResult(effectResult.gameEnd);
+    return effectActionResult(effectResult);
   }
 
   state.turn.activatedCardIds.push(token.instanceId);
@@ -709,7 +715,7 @@ function activateWizardProperty(
     tokenDefinitionId: token.definitionId,
   });
 
-  return { ok: true };
+  return effectActionResult(effectResult);
 }
 
 function activateDeadWizardToken(
@@ -772,10 +778,10 @@ function activateDeadWizardToken(
     return effectResult;
   }
   if (effectResult.gameEnd !== undefined) {
-    return gameEndActionResult(effectResult.gameEnd);
+    return effectActionResult(effectResult);
   }
 
-  return { ok: true };
+  return effectActionResult(effectResult);
 }
 
 function setCardEffectiveType(
@@ -1001,7 +1007,7 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
     return effectResult;
   }
   if (effectResult.gameEnd !== undefined) {
-    return gameEndActionResult(effectResult.gameEnd);
+    return effectActionResult(effectResult);
   }
 
   recordGameEvent(state, {
@@ -1011,7 +1017,28 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
     definitionId: card.definitionId,
   });
 
-  return { ok: true };
+  return effectActionResult(effectResult);
+}
+
+function effectActionResult(
+  result: Extract<EffectExecutionResult, { ok: true }>
+): ActionResult {
+  if (result.gameEnd !== undefined) {
+    return {
+      ok: true,
+      gameEndReason: result.gameEnd.reason,
+      winnerPlayerId: result.gameEnd.winnerPlayerId,
+      ...(result.cycleOutcome === undefined
+        ? {}
+        : { cycleOutcome: result.cycleOutcome }),
+    };
+  }
+  return {
+    ok: true,
+    ...(result.cycleOutcome === undefined
+      ? {}
+      : { cycleOutcome: result.cycleOutcome }),
+  };
 }
 
 function gameEndActionResult(gameEnd: EffectGameEnd): ActionResult {

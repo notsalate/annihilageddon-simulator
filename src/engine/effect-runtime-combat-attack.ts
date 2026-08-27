@@ -1333,6 +1333,7 @@ function directionalChainAttackHandler(
               direction: chosenDirection,
               targetIndex,
               targetPlayerId: targetPlayer.playerId,
+              effect,
               choicePolicyState,
             },
             source

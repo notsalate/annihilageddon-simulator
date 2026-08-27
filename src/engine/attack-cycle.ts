@@ -9,6 +9,7 @@ import type {
   TokenInstance,
   TrophyLikeInstance,
 } from "./setup.js";
+import type { RuntimeEffectForId } from "./runtime-effect.js";
 
 export type AttackChainDirection = "left" | "right";
 
@@ -16,6 +17,7 @@ export interface AttackChainRecurrenceCursor {
   readonly direction: AttackChainDirection;
   readonly targetIndex: number;
   readonly targetPlayerId: PlayerState["playerId"];
+  readonly effect?: RuntimeEffectForId<"directional_chain_attack">;
   readonly choicePolicyState?: ChoicePolicyState;
 }
 

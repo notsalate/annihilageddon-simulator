@@ -185,6 +185,20 @@ export type EffectExecutionResult =
       error: string;
     };
 
+export function preserveEffectCycleOutcome(
+  result: EffectExecutionResult,
+  cycleOutcome: EffectCycleOutcome | undefined
+): EffectExecutionResult {
+  if (
+    !result.ok ||
+    cycleOutcome === undefined ||
+    result.cycleOutcome !== undefined
+  ) {
+    return result;
+  }
+  return { ...result, cycleOutcome };
+}
+
 export interface MayhemAttackPlanTarget {
   targetPlayer: PlayerState;
   amount: number;
