@@ -225,6 +225,11 @@ interface SimulationFailureReplayChoiceCandidate {
   readonly chosenInstanceId?: unknown;
 }
 
+interface SimulationFailureSetupCandidate {
+  readonly playerCount?: unknown;
+  readonly deadWizardTokenCount?: unknown;
+}
+
 export function createSimulationFailureReplay(
   report: Pick<SimulationFailureReport, "actions" | "choices">
 ): SimulationFailureReplay {
@@ -301,6 +306,7 @@ function getReplaySetupCandidates(
 export function parseSimulationFailureReplayReport(reportText: string): {
   runtimeData: SimulationFailureReport["runtimeData"];
   replay: SimulationFailureReplay;
+  playerCount?: number;
   deadWizardTokenCount?: number;
 } {
   const runtimeDataValue: unknown = JSON.parse(
@@ -315,7 +321,9 @@ export function parseSimulationFailureReplayReport(reportText: string): {
   if (!isGameActionArray(actionsValue)) {
     throw new Error("Report actions have an invalid shape");
   }
-  const deadWizardTokenCount = readReplayDeadWizardTokenCount(reportText);
+  const setupValue = readReplaySetup(reportText);
+  const playerCount = readReplayPlayerCount(setupValue);
+  const deadWizardTokenCount = readReplayDeadWizardTokenCount(setupValue);
   const choicesValue: unknown = JSON.parse(
     readJsonSection(reportText, "choices")
   );
@@ -325,24 +333,51 @@ export function parseSimulationFailureReplayReport(reportText: string): {
       actions: actionsValue,
       choices: readReplayChoices(choicesValue),
     },
+    ...(playerCount === undefined ? {} : { playerCount }),
     ...(deadWizardTokenCount === undefined ? {} : { deadWizardTokenCount }),
   };
 }
 
-function readReplayDeadWizardTokenCount(
+function readReplaySetup(
   reportText: string
-): number | undefined {
+): SimulationFailureSetupCandidate | undefined {
   const setupSection = readOptionalJsonSection(reportText, "setup");
   if (setupSection === undefined) {
     return undefined;
   }
 
   const setupValue: unknown = JSON.parse(setupSection);
-  if (!isPlainRecord(setupValue)) {
+  if (!isSimulationFailureSetupCandidate(setupValue)) {
     throw new Error("Report setup has an invalid shape");
   }
+  return setupValue;
+}
 
-  const value = setupValue["deadWizardTokenCount"];
+function readReplayPlayerCount(
+  setupValue: SimulationFailureSetupCandidate | undefined
+): number | undefined {
+  if (setupValue === undefined) {
+    return undefined;
+  }
+
+  const value = setupValue.playerCount;
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 2) {
+    throw new Error("Report setup playerCount has an invalid shape");
+  }
+  return value;
+}
+
+function readReplayDeadWizardTokenCount(
+  setupValue: SimulationFailureSetupCandidate | undefined
+): number | undefined {
+  if (setupValue === undefined) {
+    return undefined;
+  }
+
+  const value = setupValue.deadWizardTokenCount;
   if (value === undefined) {
     return undefined;
   }
@@ -350,6 +385,12 @@ function readReplayDeadWizardTokenCount(
     throw new Error("Report setup deadWizardTokenCount has an invalid shape");
   }
   return value;
+}
+
+function isSimulationFailureSetupCandidate(
+  value: unknown
+): value is SimulationFailureSetupCandidate {
+  return isPlainRecord(value);
 }
 
 function readOptionalJsonSection(
