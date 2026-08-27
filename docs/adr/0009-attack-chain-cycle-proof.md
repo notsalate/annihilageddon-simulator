@@ -22,9 +22,11 @@ superseded_by: none
 
 ## Решение
 
-Доказательство применяется только к продолжению
-`directional_chain_attack`. Перед каждым следующим Attack Instance runtime
-строит версию recurrence key 1 из:
+Доказательство применяется только к границе продолжения
+`directional_chain_attack`: предыдущий Attack Instance уже закрыт вместе с
+его attack-bound последствиями и отложенными DWT, а следующий ещё не создан.
+Перед каждым следующим Attack Instance runtime строит версию recurrence key 1
+из:
 
 - направления, индекса и стабильного ID текущей цели;
 - source identity (`sourceType`, режим runtime, игрок, card instance и
@@ -35,6 +37,39 @@ superseded_by: none
   данные их проекции;
 - текущей позиции seeded RNG;
 - состояния `ChoicePolicy`, если оно опубликовано как JSON-подобное значение.
+
+Формально ключ имеет следующий логический состав:
+
+```ts
+type AttackChainRecurrenceProjection = {
+  cursor: {
+    direction: "left" | "right";
+    targetIndex: number;
+    targetPlayerId: PlayerId;
+  };
+  source: {
+    sourceType: string;
+    runtimeMode: string;
+    playerId: PlayerId;
+    cardInstanceId: string;
+    definitionId: string;
+  };
+  rulesState: unknown;
+  pendingAttackBoundDwt: unknown;
+  rng: RandomSourceSnapshot;
+  choicePolicyState: ChoicePolicyState | null;
+};
+```
+
+`rulesState` — детерминированная проекция всех mutable-полей, от которых
+зависит следующий legal resolution; `unknown` здесь обозначает закрытый
+внутренний projection, а не разрешение на произвольный runtime-объект. В
+частности, в него входят игроки, common-зоны, turn modifiers, HP/max HP,
+контроль, статусы, DWT и pending work. Ключ сравнивается только после полного
+завершения предыдущей границы continuation. Поэтому изменение HP, max HP,
+Defense, DWT-лица или очереди, RNG, choice state либо любого другого поля
+проекции обязано дать другой ключ. Длинная цепь с разными ключами не является
+доказанным циклом.
 
 `eventLog` и `nextAttackId` не входят в ключ: это диагностическая история и
 счётчик идентичности, которые не влияют на следующий legal resolution. Все
@@ -50,9 +85,15 @@ replay публикуют свои состояния; стратегии, ко�
 
 Если одинаковый key встречается снова на той же границе продолжения, runtime
 возвращает typed non-error outcome `provenAttackChainCycle` и закрывает только
-эту бесконечную continuation. Outcome не объявляет победителя, не завершает
-текущий turn и не запрещает независимые ATTACK/actions; обычная end-of-turn
-adjudication продолжается как обычно.
+эту бесконечную continuation. Это outcome эффекта, а не `gameEnd`: оно не
+объявляет победителя, не завершает текущий turn и не запрещает независимые
+ATTACK/actions. Обычная end-of-turn adjudication продолжается как обычно.
+
+Пустой стек DWT не входит в доказательство как отдельная причина остановки.
+Он меняет end-of-turn checkpoint, но не legal resolution текущего ATTACK:
+одиночная атака и последующие независимые действия всё ещё разрешаются.
+Только повтор полного ключа на границе continuation доказывает, что именно
+продолжение не может закончиться по напечатанным правилам.
 
 ## Альтернативы
 
