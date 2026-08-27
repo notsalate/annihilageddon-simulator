@@ -2447,13 +2447,38 @@ test("#287 starter_004 returns discard cards before the gained DWT face", () => 
       event.type === "effectCardsReturnedToHand" &&
       event.definitionId === "esw2_dbg__starter_004"
   );
+  const attackCreatedIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "attackCreated" &&
+      event.definitionId === "esw2_dbg__starter_004"
+  );
+  const attackId =
+    attackCreatedIndex >= 0
+      ? state.eventLog[attackCreatedIndex]?.type === "attackCreated"
+        ? state.eventLog[attackCreatedIndex].attackId
+        : undefined
+      : undefined;
   const faceIndex = state.eventLog.findIndex(
     (event) =>
       event.type === "deadWizardTokenFaceResolved" &&
       event.tokenDefinitionId === "esw2_dbg__dead_wizard_token_015"
   );
+  const attackTargetIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.definitionId === "esw2_dbg__starter_004"
+  );
   assert.ok(returnIndex >= 0);
+  assert.ok(attackCreatedIndex >= 0);
+  assert.ok(attackTargetIndex >= 0);
   assert.ok(faceIndex >= 0);
+  assert.equal(attackId !== undefined, true);
+  assert.equal(
+    state.eventLog[attackTargetIndex]?.type === "attackTargetStarted"
+      ? state.eventLog[attackTargetIndex].attackId
+      : undefined,
+    attackId
+  );
   assert.ok(returnIndex < faceIndex);
 });
 
