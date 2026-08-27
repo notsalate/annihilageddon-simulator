@@ -125,6 +125,14 @@ const lifecycleEvidenceByDwt: Readonly<
   esw2_dbg__dead_wizard_token_028: ["direct", "deferred", "pre-respawn"],
 };
 
+const requiredLifecycleClassesByDwt: Readonly<
+  Record<string, readonly RuntimeLifecycleClass[]>
+> = {
+  esw2_dbg__dead_wizard_token_013: ["deferred", "contextual"],
+  esw2_dbg__dead_wizard_token_014: ["deferred", "contextual"],
+  esw2_dbg__dead_wizard_token_025: ["deferred", "contextual"],
+};
+
 function toStableRecord(
   record: RuntimeCoverageRawRecord
 ): Array<RuntimeCoverageRawRecord & { id: string }> {
@@ -438,14 +446,22 @@ function evaluateSemanticEvidence(input: {
     input.canonical.objectKind === "deadWizardToken"
       ? getDwtLifecycleClasses(input.canonical.id, input.runtime)
       : [];
+  const missingLifecycleClasses =
+    input.canonical.objectKind === "deadWizardToken"
+      ? (requiredLifecycleClassesByDwt[input.canonical.id] ?? []).filter(
+          (lifecycleClass) => !lifecycleClasses.includes(lifecycleClass)
+        )
+      : [];
   if (
     input.canonical.objectKind === "deadWizardToken" &&
-    lifecycleClasses.length === 0
+    (lifecycleClasses.length === 0 || missingLifecycleClasses.length > 0)
   ) {
     blockers.push(
       itemBlocker(
         "missing-lifecycle-evidence",
-        `DWT ${input.canonical.id} has no applicable lifecycle evidence`,
+        `DWT ${input.canonical.id} is missing lifecycle evidence: ${
+          missingLifecycleClasses.join(", ") || "applicable class"
+        }`,
         input.canonical
       )
     );

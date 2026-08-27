@@ -1443,7 +1443,7 @@ test("runtime semantic completion audit separates structural and semantic status
     expected: 29,
     actual: 29,
     structuralComplete: 29,
-    semanticComplete: 29,
+    semanticComplete: 26,
   });
   assert.deepEqual(report.productionStack, {
     expectedPhysicalCount: 30,
@@ -1477,8 +1477,27 @@ test("runtime semantic completion audit separates structural and semantic status
   );
   assert.ok(preRespawnDwt?.lifecycleClasses.includes("pre-respawn"));
   assert.ok(
-    report.blockers.every(
+    report.blockers.some(
       (blocker) => blocker.code === "false-semantic-evidence"
+    )
+  );
+  assert.deepEqual(
+    dwtItems
+      .filter((item) =>
+        [
+          "esw2_dbg__dead_wizard_token_013",
+          "esw2_dbg__dead_wizard_token_014",
+          "esw2_dbg__dead_wizard_token_025",
+        ].includes(item.id)
+      )
+      .map((item) => item.semanticStatus),
+    ["blocked", "blocked", "blocked"]
+  );
+  assert.ok(
+    report.blockers.some(
+      (blocker) =>
+        blocker.code === "missing-lifecycle-evidence" &&
+        blocker.message.includes("contextual")
     )
   );
 
