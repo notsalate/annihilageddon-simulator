@@ -1443,7 +1443,7 @@ test("runtime semantic completion audit separates structural and semantic status
     expected: 29,
     actual: 29,
     structuralComplete: 29,
-    semanticComplete: report.byKind.deadWizardToken.semanticComplete,
+    semanticComplete: 29,
   });
   assert.deepEqual(report.productionStack, {
     expectedPhysicalCount: 30,
@@ -1476,13 +1476,11 @@ test("runtime semantic completion audit separates structural and semantic status
     item.id.endsWith("dead_wizard_token_026")
   );
   assert.ok(preRespawnDwt?.lifecycleClasses.includes("pre-respawn"));
-  if (report.semanticStatus === "blocked") {
-    assert.ok(
-      report.blockers.some(
-        (blocker) => blocker.code === "required-capability-open"
-      )
-    );
-  }
+  assert.ok(
+    report.blockers.every(
+      (blocker) => blocker.code === "false-semantic-evidence"
+    )
+  );
 
   const markdown = formatRuntimeSemanticCompletionMarkdown(report);
   assert.match(markdown, /Structural status/);
