@@ -1,5 +1,4 @@
 import {
-  createRuntimeCoverageInventory,
   formatRuntimeCoverageInventoryMarkdown,
   writeRuntimeCoverageInventoryMarkdown,
 } from "../import/runtime-coverage-inventory.js";
@@ -21,14 +20,7 @@ if (outputPath !== undefined) {
   console.log(`items: ${report.items.length}`);
   console.log(`clusters: ${report.clusters.length}`);
 } else {
-  console.log(
-    formatRuntimeCoverageInventoryMarkdown(
-      createRuntimeCoverageInventory(process.cwd())
-    )
-  );
-  console.log(
-    formatRuntimeSemanticCompletionMarkdown(
-      createRuntimeSemanticCompletionReport(process.cwd())
-    )
-  );
+  const semanticReport = createRuntimeSemanticCompletionReport(process.cwd());
+  console.log(formatRuntimeCoverageInventoryMarkdown(semanticReport.inventory));
+  console.log(formatRuntimeSemanticCompletionMarkdown(semanticReport));
 }

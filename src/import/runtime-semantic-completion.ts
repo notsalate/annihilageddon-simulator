@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { isPlainRecord } from "../common.js";
@@ -7,18 +7,14 @@ import {
   isAttackSemantics,
 } from "../engine/runtime-effect.js";
 import {
-  collectRuntimeCoverageFiles,
   createRuntimeCoverageInventory,
-  runtimeCoverageCompositionDirectories,
-  runtimeCoverageSources,
+  getRuntimeCoverageSnapshot,
   type RuntimeCoverageInventory,
   type RuntimeCoverageInventoryItem,
+  type RuntimeCoverageRawRecord,
   type RuntimeCoverageObjectKind,
 } from "./runtime-coverage-inventory.js";
-import {
-  readCrossSourceCoveragePlan,
-  type CrossSourceCoveragePlanEntry,
-} from "./cross-source-runtime-coverage.js";
+import { type CrossSourceCoveragePlanEntry } from "./cross-source-runtime-coverage.js";
 
 export type RuntimeSemanticCompletionStatus = "PASS" | "BLOCKED";
 export type RuntimeSemanticObjectStatus = "complete" | "blocked";
@@ -107,32 +103,8 @@ export interface RuntimeSemanticCompletionReport {
   inventory: RuntimeCoverageInventory;
 }
 
-interface CanonicalRecord {
-  id: string;
-  objectKind: RuntimeCoverageObjectKind;
-  filePath: string;
-  value: Record<string, unknown>;
-}
-
-interface RuntimeRecord {
-  id: string;
-  objectKind: RuntimeCoverageObjectKind;
-  filePath: string;
-  value: Record<string, unknown>;
-}
-
-interface CompositionReference {
-  id: string;
-  count: number | undefined;
-  filePath: string;
-}
-
-interface ActivePackData {
-  packId: string | undefined;
-  reachableIds: Set<string>;
-  structuralStatus: RuntimeSemanticObjectStatus;
-  missingReferences: string[];
-}
+type CanonicalRecord = RuntimeCoverageRawRecord & { id: string };
+type RuntimeRecord = RuntimeCoverageRawRecord & { id: string };
 
 const expectedCounts: Record<RuntimeCoverageObjectKind, number> = {
   card: 134,
@@ -153,15 +125,24 @@ const lifecycleEvidenceByDwt: Readonly<
   esw2_dbg__dead_wizard_token_028: ["direct", "deferred", "pre-respawn"],
 };
 
+function toStableRecord(
+  record: RuntimeCoverageRawRecord
+): Array<RuntimeCoverageRawRecord & { id: string }> {
+  return record.id === undefined
+    ? []
+    : [record as RuntimeCoverageRawRecord & { id: string }];
+}
+
 export function createRuntimeSemanticCompletionReport(
   rootDir: string
 ): RuntimeSemanticCompletionReport {
   const inventory = createRuntimeCoverageInventory(rootDir);
-  const canonicalRecords = collectCanonicalRecords(rootDir);
-  const runtimeRecords = collectRuntimeRecords(rootDir);
-  const compositionReferences = collectCompositionReferences(rootDir);
-  const activePack = collectActivePackData(rootDir);
-  const plan = readCrossSourceCoveragePlan(rootDir);
+  const snapshot = getRuntimeCoverageSnapshot(inventory);
+  const canonicalRecords = snapshot.canonicalRecords.flatMap(toStableRecord);
+  const runtimeRecords = snapshot.runtimeRecords.flatMap(toStableRecord);
+  const compositionReferences = snapshot.compositionReferences;
+  const activePack = snapshot.activePack;
+  const plan = snapshot.crossSourcePlan;
   const blockers: RuntimeSemanticCompletionBlocker[] = [];
   const items: RuntimeSemanticCompletionItem[] = [];
 
@@ -696,134 +677,8 @@ function collectProductionStackSummary(rootDir: string): {
   };
 }
 
-function collectCanonicalRecords(rootDir: string): CanonicalRecord[] {
-  return runtimeCoverageSources.flatMap((source) =>
-    collectRuntimeCoverageFiles(rootDir, [source.draftDir], ".json").flatMap(
-      (filePath) => {
-        const value = getRecord(readJson(filePath));
-        const id = getString(value["cardId"]) ?? getString(value["tokenId"]);
-        return id === undefined
-          ? []
-          : [{ id, objectKind: source.objectKind, filePath, value }];
-      }
-    )
-  );
-}
-
-function collectRuntimeRecords(rootDir: string): RuntimeRecord[] {
-  const runtimeDirectories = [
-    ...new Set(runtimeCoverageSources.flatMap((source) => source.runtimeDirs)),
-  ];
-  return runtimeDirectories.flatMap((directory) =>
-    collectRuntimeCoverageFiles(rootDir, [directory], ".json").flatMap(
-      (filePath) => {
-        const value = getRecord(readJson(filePath));
-        const id = getString(value["cardId"]) ?? getString(value["tokenId"]);
-        if (id === undefined) {
-          return [];
-        }
-        const objectKind = runtimeCoverageSources.find((source) =>
-          source.runtimeDirs.includes(directory)
-        )?.objectKind;
-        return objectKind === undefined
-          ? []
-          : [{ id, objectKind, filePath, value }];
-      }
-    )
-  );
-}
-
 function isNeutralRuntimeId(id: string): boolean {
   return /(?:^|_)neutral$/iu.test(id);
-}
-
-function collectCompositionReferences(rootDir: string): CompositionReference[] {
-  return runtimeCoverageCompositionDirectories.flatMap((directory) =>
-    collectRuntimeCoverageFiles(rootDir, [directory], ".json").flatMap(
-      (filePath) => {
-        const value = getRecord(readJson(filePath));
-        return getArray(value["entries"]).flatMap((entry) => {
-          const record = getRecord(entry);
-          const id =
-            getString(record["cardId"]) ?? getString(record["tokenId"]);
-          return id === undefined
-            ? []
-            : [{ id, count: getNumber(record["count"]), filePath }];
-        });
-      }
-    )
-  );
-}
-
-function collectActivePackData(rootDir: string): ActivePackData {
-  const manifestPath = path.resolve(rootDir, "data/packs/current-runtime.json");
-  if (!existsSync(manifestPath)) {
-    return {
-      packId: undefined,
-      reachableIds: new Set(),
-      structuralStatus: "blocked",
-      missingReferences: ["active pack manifest is missing"],
-    };
-  }
-  const manifest = getRecord(readJson(manifestPath));
-  const reachableIds = new Set<string>();
-  const missingReferences: string[] = [];
-  const definitionPaths = [
-    ...getStringArray(manifest["cardDefinitionPaths"]),
-    ...getStringArray(manifest["tokenDefinitionPaths"]),
-  ];
-  for (const relativePath of definitionPaths) {
-    const absolutePath = path.resolve(rootDir, relativePath);
-    if (!existsSync(absolutePath) || !statSync(absolutePath).isDirectory()) {
-      missingReferences.push(
-        `active pack definition path is missing: ${relativePath}`
-      );
-      continue;
-    }
-    for (const filePath of collectRuntimeCoverageFiles(
-      rootDir,
-      [relativePath],
-      ".json"
-    )) {
-      const value = getRecord(readJson(filePath));
-      const id = getString(value["cardId"]) ?? getString(value["tokenId"]);
-      if (id !== undefined) {
-        reachableIds.add(id);
-      }
-    }
-  }
-  const compositionSections = [
-    "decks",
-    "cardStacks",
-    "tokenStacks",
-    "pools",
-  ] as const;
-  for (const sectionName of compositionSections) {
-    const section = getRecord(manifest[sectionName]);
-    for (const relativePath of getStringArray(Object.values(section))) {
-      const absolutePath = path.resolve(rootDir, relativePath);
-      if (!existsSync(absolutePath)) {
-        missingReferences.push(
-          `active pack composition path is missing: ${relativePath}`
-        );
-        continue;
-      }
-      const value = getRecord(readJson(absolutePath));
-      for (const entry of getArray(value["entries"])) {
-        const record = getRecord(entry);
-        const id = getString(record["cardId"]) ?? getString(record["tokenId"]);
-        if (id !== undefined) {
-          reachableIds.add(id);
-        }
-      }
-    }
-  }
-  return {
-    packId: getString(manifest["packId"]),
-    reachableIds,
-    structuralStatus: missingReferences.length === 0 ? "complete" : "blocked",
-    missingReferences,
-  };
 }
 
 function createKindSummaries(
