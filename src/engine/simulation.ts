@@ -694,6 +694,7 @@ interface SimulationReplayController {
   nextAction(): GameAction;
   chooseSetupChoice(request: SetupChoiceRequest): ChoiceSelection | undefined;
   chooseEffectChoice(request: EffectChoiceRequest): ChoiceSelection | undefined;
+  getChoicePolicyState(): ChoicePolicyState;
   getIncompleteHistoryError(): SimulationReplayError | undefined;
 }
 
@@ -782,6 +783,9 @@ function createSimulationReplayController(
       }
       return { choiceId: expected.choiceId };
     },
+    getChoicePolicyState(): ChoicePolicyState {
+      return { actionIndex, choiceIndex };
+    },
     getIncompleteHistoryError(): SimulationReplayError | undefined {
       if (actionIndex !== replay.actions.length) {
         return new SimulationReplayError(
@@ -820,6 +824,7 @@ function createReplayBotFactory(
 ): (playerId: PlayerId) => BotStrategy {
   return () => ({
     chooseAction: () => replayController.nextAction(),
+    getChoicePolicyState: () => replayController.getChoicePolicyState(),
     chooseEffectChoice: (request) =>
       request.requestKind === "setup"
         ? replayController.chooseSetupChoice(request)
