@@ -161,25 +161,30 @@ export interface CrossSourceCoverageEvaluation {
   blockerCodes: CrossSourceBlocker[];
 }
 
-const planPath = "config/runtime-coverage/cross-source-mechanics.json";
+const planPaths = [
+  "config/runtime-coverage/cross-source-mechanics.json",
+  "config/runtime-coverage/card-semantic-evidence.json",
+] as const;
 
 export function readCrossSourceCoveragePlan(
   rootDir: string
 ): Map<string, CrossSourceCoveragePlanEntry> {
-  const absolutePath = path.resolve(rootDir, planPath);
-  if (!existsSync(absolutePath)) {
-    return new Map();
-  }
-
-  const parsed = getRecord(JSON.parse(readFileSync(absolutePath, "utf8")));
-  const typedEvidence = (getNumber(parsed["schemaVersion"]) ?? 0) >= 2;
-  const entries = Array.isArray(parsed["entries"]) ? parsed["entries"] : [];
   const plan = new Map<string, CrossSourceCoveragePlanEntry>();
 
-  for (const entry of entries) {
-    const decoded = decodePlanEntry(entry, typedEvidence);
-    if (decoded !== undefined) {
-      plan.set(decoded.id, decoded);
+  for (const planPath of planPaths) {
+    const absolutePath = path.resolve(rootDir, planPath);
+    if (!existsSync(absolutePath)) {
+      continue;
+    }
+
+    const parsed = getRecord(JSON.parse(readFileSync(absolutePath, "utf8")));
+    const typedEvidence = (getNumber(parsed["schemaVersion"]) ?? 0) >= 2;
+    const entries = Array.isArray(parsed["entries"]) ? parsed["entries"] : [];
+    for (const entry of entries) {
+      const decoded = decodePlanEntry(entry, typedEvidence);
+      if (decoded !== undefined) {
+        plan.set(decoded.id, decoded);
+      }
     }
   }
 
@@ -831,6 +836,8 @@ function executionSubjectIsUsed(
         ) ||
         (call.name === "scoreGame" &&
           hasScoredDefinitionReference(testBody.slice(0, call.end), id)) ||
+        (call.name === "applyAction" &&
+          hasRuntimeCardInstanceReference(testBody, id, call)) ||
         ((call.name === "initializeGame" ||
           call.name === "createGameScenario") &&
           hasKnownRuntimeDefinitionReference(testBody, id)))
@@ -892,6 +899,31 @@ function hasKnownRuntimeDefinitionReference(
     "u"
   ).test(testBody);
   return knownCallReference || knownLookupReference || knownSetupFieldReference;
+}
+
+function hasRuntimeCardInstanceReference(
+  testBody: string,
+  id: string,
+  call: RuntimeSeamCall
+): boolean {
+  const setup = new RegExp(
+    `\\b(?:const|let)\\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*=\\s*givenRuntimeCard\\s*\\([\\s\\S]*?\\)`,
+    "u"
+  ).exec(testBody);
+  if (setup?.[1] === undefined) {
+    return false;
+  }
+  const escapedId = escapeRegExp(id);
+  if (
+    !new RegExp(`\\bdefinitionId\\s*:\\s*(["'])${escapedId}\\1`, "u").test(
+      setup[0]
+    )
+  ) {
+    return false;
+  }
+  return new RegExp(`\\b${escapeRegExp(setup[1])}\\.instanceId\\b`, "u").test(
+    call.invocation
+  );
 }
 
 function invocationUsesBinding(invocation: string, binding: string): boolean {
@@ -1124,7 +1156,16 @@ function validateComposition(
     (total, membership) => total + (membership.count ?? 0),
     0
   );
-  if (actualQuantity !== expectedQuantity) {
+  const starterTemplateUsesPerPlayerQuantity =
+    input.sourceGroupOrTokenKind === "starter" &&
+    appropriateMemberships.some(
+      (membership) => membership.role === "starterDeckTemplate"
+    ) &&
+    expectedQuantity === actualQuantity * 5;
+  if (
+    actualQuantity !== expectedQuantity &&
+    !starterTemplateUsesPerPlayerQuantity
+  ) {
     blockers.add(
       `composition quantity ${actualQuantity} does not match canonical quantity ${expectedQuantity}`
     );
@@ -1160,7 +1201,9 @@ function validateRuntime(
 
   const effects = getRawRuntimeEffects(input.runtime);
   if (effects.length === 0) {
-    blockers.add("runtime has no effects");
+    if (input.objectKind !== "card") {
+      blockers.add("runtime has no effects");
+    }
     return;
   }
   for (const [index, effect] of effects.entries()) {

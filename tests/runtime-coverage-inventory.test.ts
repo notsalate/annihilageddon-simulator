@@ -991,7 +991,7 @@ test("runtime coverage blocks every missing runtime definition from composition"
   ]);
 });
 
-test("repository cross-source registry assigns every wizard property and DWT to a primary cluster", () => {
+test("repository cross-source registry assigns every card, wizard property, and DWT to a primary cluster", () => {
   const report = createRuntimeCoverageInventory(process.cwd());
   const wizardProperties = report.items.filter(
     (item) => item.objectKind === "wizardProperty"
@@ -1013,8 +1013,9 @@ test("repository cross-source registry assigns every wizard property and DWT to 
       (item) => item.primaryMechanicCluster !== undefined
     )
   );
-  assert.equal(report.crossSourceSummary.blocked, 134);
-  assert.equal(report.crossSourceSummary.crossSourceComplete, 39);
+  assert.equal(report.crossSourceSummary.cardComplete, 134);
+  assert.equal(report.crossSourceSummary.blocked, 0);
+  assert.equal(report.crossSourceSummary.crossSourceComplete, 173);
   assert.ok(firstDeadWizardToken);
   assert.ok(wizardProperty004);
   assert.equal(wizardProperty004.crossSourceStatus, "crossSourceComplete");
@@ -1475,17 +1476,74 @@ test("semantic evidence keeps a required capability open when its evidence mappi
   );
 });
 
+test("semantic evidence rejects a card ID that is only mentioned outside a runtime seam", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-unrelated-test-")
+  );
+  const id = "esw2_dbg__main_001";
+  const testName = "mentions a card without executing it";
+
+  writeText(
+    rootDir,
+    "tests/unrelated-runtime.test.ts",
+    `test("${testName}", () => {
+  const cardId = "${id}";
+  assert.equal(cardId, "${id}");
+});
+`
+  );
+
+  const planEntry = createSemanticEvidencePlanEntry({
+    id,
+    testName,
+    testSubject: { kind: "binding", name: "cardId" },
+  });
+  const testRef = planEntry.semanticMappings[0]?.testRefs[0];
+  assert.ok(testRef);
+  testRef.file = "tests/unrelated-runtime.test.ts";
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "card",
+    sourceGroupOrTokenKind: "main",
+    draft: createSemanticEvidenceDraft(id),
+    runtime: createSemanticEvidenceRuntime(id),
+    compositionMembership: [{ role: "mainDeck", entryKind: "card", count: 1 }],
+    planEntry,
+  });
+
+  assert.equal(evaluation.status, "blocked");
+  assert.ok(
+    evaluation.blockerCodes.some(
+      (blocker) => blocker.code === "execution-seam-missing"
+    )
+  );
+});
+
+test("repository card semantic evidence covers every canonical card", () => {
+  const report = createRuntimeSemanticCompletionReport(process.cwd());
+  const cards = report.items.filter((item) => item.objectKind === "card");
+
+  assert.equal(cards.length, 134);
+  assert.equal(report.byKind.card.semanticComplete, 134);
+  assert.deepEqual(
+    cards.filter((item) => !item.semanticComplete).map((item) => item.id),
+    []
+  );
+});
+
 test("runtime semantic completion audit separates structural and semantic status", () => {
   const report = createRuntimeSemanticCompletionReport(process.cwd());
 
   assert.equal(report.structuralStatus, "complete");
-  assert.equal(report.status, "BLOCKED");
-  assert.equal(report.semanticStatus, "blocked");
+  assert.equal(report.status, "PASS");
+  assert.equal(report.semanticStatus, "complete");
   assert.deepEqual(report.byKind.card, {
     expected: 134,
     actual: 134,
     structuralComplete: 134,
-    semanticComplete: 0,
+    semanticComplete: 134,
   });
   assert.deepEqual(report.byKind.wizardProperty, {
     expected: 10,
@@ -1517,11 +1575,7 @@ test("runtime semantic completion audit separates structural and semantic status
         item.focusedTestEvidence.length > 0 && item.lifecycleClasses.length > 0
     )
   );
-  assert.ok(
-    report.blockers.some(
-      (blocker) => blocker.code === "false-semantic-evidence"
-    )
-  );
+  assert.equal(report.semanticStatus, "complete");
   const transferDwt = dwtItems.find((item) =>
     item.id.endsWith("dead_wizard_token_010")
   );
@@ -1530,11 +1584,6 @@ test("runtime semantic completion audit separates structural and semantic status
     item.id.endsWith("dead_wizard_token_026")
   );
   assert.ok(preRespawnDwt?.lifecycleClasses.includes("pre-respawn"));
-  assert.ok(
-    report.blockers.some(
-      (blocker) => blocker.code === "false-semantic-evidence"
-    )
-  );
   assert.deepEqual(
     dwtItems
       .filter((item) =>
@@ -1564,6 +1613,7 @@ test("runtime semantic completion audit separates structural and semantic status
     ),
     false
   );
+  assert.deepEqual(report.blockers, []);
 
   const markdown = formatRuntimeSemanticCompletionMarkdown(report);
   assert.match(markdown, /Structural status/);
