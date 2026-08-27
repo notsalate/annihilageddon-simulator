@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "draftKind": "deadWizardTokenDraft",
+  "tokenId": "esw2_dbg__dead_wizard_token_030",
+  "kind": "deadWizardToken",
+  "source": {
+    "image": "assets/dead-wizard-token/DWT-030.jpg",
+    "text": "data/import/tokens/dead-wizard-token/texts/esw2_dbg__dead_wizard_token_030.md"
+  },
+  "visible": {
+    "sourceLabel": "Получи 2 вялые палочки и положи их под низ своей колоды",
+    "textRu": "Получи 2 вялые палочки и положи их под низ своей колоды.",
+    "victoryPoints": null,
+    "uncertainty": []
+  },
+  "notes": [
+    "Игрок получает до 2 доступных вялых палочек в устойчивом порядке верхушки стопки.",
+    "Полученные вялые палочки кладутся под низ личной колоды.",
+    "Пустая колода становится колодой из полученных карт; перетасовка сброса не нужна.",
+    "Общий штраф -3 на лицевой стороне ЖДК является базовым штрафом, а не отдельным эффектом этого жетона."
+  ],
+  "composition": {
+    "quantity": 1
+  }
+}

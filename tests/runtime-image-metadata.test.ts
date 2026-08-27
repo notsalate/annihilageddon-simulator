@@ -40,7 +40,7 @@ test("current runtime cards preserve source.image metadata", () => {
 
 test("current runtime tokens preserve canonical source.image metadata", () => {
   const dataPack = loadCurrentRuntimeDataPack(rootDir);
-  assert.equal(dataPack.tokenDefinitions.size, 39);
+  assert.equal(dataPack.tokenDefinitions.size, 40);
 
   for (const definition of dataPack.tokenDefinitions.values()) {
     const source = (definition as { source?: { image?: unknown } }).source;
@@ -55,6 +55,14 @@ test("current runtime tokens preserve canonical source.image metadata", () => {
         | undefined
     )?.source?.image,
     "assets/dead-wizard-token/DWT_001.png"
+  );
+  assert.equal(
+    (
+      dataPack.tokenDefinitions.get("esw2_dbg__dead_wizard_token_030") as
+        | { source?: { image?: string } }
+        | undefined
+    )?.source?.image,
+    "assets/dead-wizard-token/DWT-030.jpg"
   );
   assert.equal(
     (

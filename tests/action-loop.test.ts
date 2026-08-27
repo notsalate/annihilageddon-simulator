@@ -4122,17 +4122,7 @@ test("Pokhotlivyi maiachok recalculates its controller power from controlled DWT
     seed: 60615,
   });
   const activePlayer = mustGetPlayer(state, state.activePlayerId);
-  const neutralTokens = state.common.deadWizardTokens.drawStack.filter(
-    (token) => token.definitionId === "esw2_dbg__dead_wizard_token_neutral"
-  );
-  assert.equal(neutralTokens.length >= 2, true);
-  state.common.deadWizardTokens.drawStack = [
-    ...neutralTokens.slice(0, 2),
-    ...state.common.deadWizardTokens.drawStack.filter(
-      (token) => token.definitionId !== "esw2_dbg__dead_wizard_token_neutral"
-    ),
-    ...neutralTokens.slice(2),
-  ];
+  setNeutralDeadWizardTokenStack(state, 2, "legend-025");
   const beacon = addRuntimeCardToHand(
     state,
     activePlayer,
@@ -8122,7 +8112,7 @@ test("play_top_card triggers wizard property on-play effects and cleans up to ow
   assert.equal(activePlayer.discard.includes(topPlayedCard), true);
 });
 
-test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affect scoring", () => {
+test("deal_damage can kill an opponent, give a fixture DWT, resurrect, and affect scoring", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -8137,6 +8127,7 @@ test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affec
   );
   assert.ok(targetPlayer);
   assert.equal(state.common.deadWizardTokens.status, "available");
+  setNeutralDeadWizardTokenStack(state, 1, "deal-damage");
   const neutralDwt = state.common.deadWizardTokens.drawStack[0];
   assert.ok(neutralDwt);
   const fixtureCardId = addFixtureCardToActiveHand(state, {
@@ -9864,9 +9855,8 @@ test("Palochka-Shlepalocka gains no chips when its attack is defended", () => {
 test("Palochka-Shlepalocka uses life-limited actual damage for its chip transfer", () => {
   const { state, activePlayer, targetPlayer, wand } =
     setupShlepalockaTestState();
-  const neutralDeadWizardToken = state.common.deadWizardTokens.drawStack.find(
-    (token) => token.definitionId === "esw2_dbg__dead_wizard_token_neutral"
-  );
+  setNeutralDeadWizardTokenStack(state, 1, "shlepalocka-life-limited");
+  const neutralDeadWizardToken = state.common.deadWizardTokens.drawStack[0];
   assert.ok(neutralDeadWizardToken);
   state.common.deadWizardTokens.drawStack = [neutralDeadWizardToken];
   targetPlayer.life.current = 1;
@@ -15463,6 +15453,7 @@ test("ТА САМАЯ Вялая Палочка не передаёт палоч
 
 test("ТА САМАЯ Вялая Палочка после убийства передаёт до трёх палочек из всех источников", () => {
   const state = initializeGame({ rootDir, seed: 244022 });
+  setNeutralDeadWizardTokenStack(state, 1, "limp-wand-transfer");
   const player = mustGetPlayer(state, state.activePlayerId);
   const foe = state.players.find(
     (candidate) => candidate.playerId !== player.playerId
@@ -15874,7 +15865,7 @@ test("смерть в незавершённой карте сначала вы�
   player.wizardProperties = [];
   foe.wizardProperties = [];
   foe.life.current = 1;
-  state.common.deadWizardTokens.drawStack.splice(1);
+  setNeutralDeadWizardTokenStack(state, 1, "unfinished-card-death");
   const returnedCard = player.hand.shift();
   assert.ok(returnedCard);
   player.discard.push(returnedCard);
@@ -18805,6 +18796,7 @@ test("#270 main treasure defense cannot spend the last life", () => {
     dataPackPath: playableRuntimeDataPackPath,
     seed: 270004,
   });
+  setNeutralDeadWizardTokenStack(state, 1, "main-treasure-defense");
   state.cardDefinitions = new Map([
     ...state.cardDefinitions,
     [defenseDefinition.cardId, defenseDefinition],

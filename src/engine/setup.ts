@@ -303,6 +303,7 @@ export type GameEventSourceType =
 export type GameEventDestination =
   | "discard"
   | "deckTop"
+  | "deckBottom"
   | "hand"
   | "discardSelf"
   | "topdeckSelf";
