@@ -46,7 +46,7 @@ import type {
   RuntimeEffectTarget,
   RuntimeEffectTargetSelector,
 } from "./runtime-effect.js";
-import { validateAttackSemantics } from "./runtime-effect.js";
+import { validateAttackSemanticsForEffect } from "./runtime-effect.js";
 import {
   allEffectRuntimeModes,
   type EffectRuntimeSupportedModes,
@@ -808,8 +808,9 @@ function resolvePlayerControlledAttackMapping(
     }
   | { ok: false; error: string } {
   const semantics = effect.attackSemantics ?? fallback;
-  const errors = validateAttackSemantics(
-    semantics,
+  const errors = validateAttackSemanticsForEffect(
+    effect.effectId,
+    { attackSemantics: semantics },
     `${effect.effectId}.attackSemantics`
   );
   if (errors.length > 0) {

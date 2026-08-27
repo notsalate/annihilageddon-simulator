@@ -95,6 +95,7 @@ import {
 import { recordGameEvent, recordTurnPowerChanged } from "./event-recorder.js";
 import {
   isRuntimeEffectId,
+  validateAttackSemanticsForEffect,
   type EffectTiming,
   type RuntimeEffect,
   type RuntimeEffectForId,
@@ -2388,6 +2389,16 @@ export function validateRuntimeEffectCatalogPayload<Id extends RuntimeEffectId>(
   const decoded = entry.decode(subjectId, effect);
   if (!decoded.ok) {
     return decoded;
+  }
+  if (mode === "combat") {
+    const attackSemanticsErrors = validateAttackSemanticsForEffect(
+      effectId,
+      decoded.value,
+      `${subjectId} effect ${effectId}.attackSemantics`
+    );
+    if (attackSemanticsErrors.length > 0) {
+      return { ok: false, errors: attackSemanticsErrors };
+    }
   }
   if (entry.unsupported) {
     return {

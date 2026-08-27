@@ -969,6 +969,122 @@ const attackBearingRuntimeEffectIdSet = new Set<string>(
   attackBearingRuntimeEffectIds
 );
 
+type AttackBearingRuntimeEffectId =
+  (typeof attackBearingRuntimeEffectIds)[number];
+type AttackSemanticsRequirement = Omit<
+  AttackSemantics,
+  "targetApplications"
+> & {
+  targetApplications: readonly AttackTargetApplications[];
+};
+
+const singleTargetApplication = ["single"] as const;
+const allTargetApplications = ["allInOneInstance"] as const;
+const eitherTargetApplication = ["single", "allInOneInstance"] as const;
+
+function playerControlledPerTargetRequirement(
+  targetApplications: readonly AttackTargetApplications[]
+): AttackSemanticsRequirement {
+  return {
+    resolver: "playerControlled",
+    instanceMode: "single",
+    defenseWindowMode: "PER_TARGET",
+    targetApplications,
+    attackText: "perTarget",
+    continuation: "none",
+  };
+}
+
+const playerControlledSharedRequirement: AttackSemanticsRequirement = {
+  resolver: "playerControlled",
+  instanceMode: "single",
+  defenseWindowMode: "COLLECT_ALL_FIRST",
+  targetApplications: singleTargetApplication,
+  attackText: "shared",
+  continuation: "none",
+};
+
+const mayhemRequirement: AttackSemanticsRequirement = {
+  resolver: "mayhem",
+  instanceMode: "single",
+  defenseWindowMode: "MAYHEM",
+  targetApplications: allTargetApplications,
+  attackText: "mayhem",
+  continuation: "none",
+};
+
+const attackSemanticsRequirements = {
+  attack_damage: playerControlledPerTargetRequirement(eitherTargetApplication),
+  attack_damage_per_controlled_dead_wizard_token:
+    playerControlledPerTargetRequirement(allTargetApplications),
+  attack_gain_dead_wizard_tokens: playerControlledPerTargetRequirement(
+    singleTargetApplication
+  ),
+  attack_transfer_controlled_dead_wizard_token:
+    playerControlledSharedRequirement,
+  attack_kill_and_replace_dead_wizard_token:
+    playerControlledPerTargetRequirement(singleTargetApplication),
+  attack_damage_equal_remembered_card_cost:
+    playerControlledPerTargetRequirement(allTargetApplications),
+  attack_damage_equal_to_controlled_card_cost:
+    playerControlledPerTargetRequirement(singleTargetApplication),
+  attack_destroy_top_legend_deck_then_damage_equal_cost:
+    playerControlledPerTargetRequirement(singleTargetApplication),
+  attack_damage_equal_random_discarded_hand_cost:
+    playerControlledPerTargetRequirement(allTargetApplications),
+  attack_reveal_and_play_foe_deck_card: playerControlledPerTargetRequirement(
+    singleTargetApplication
+  ),
+  attack_gain_limp_wand: playerControlledPerTargetRequirement(
+    eitherTargetApplication
+  ),
+  attack_gain_status: playerControlledPerTargetRequirement(
+    singleTargetApplication
+  ),
+  activation_attack_damage_per_controlled_card_type:
+    playerControlledPerTargetRequirement(allTargetApplications),
+  conditional_activation_attack_damage: playerControlledPerTargetRequirement(
+    singleTargetApplication
+  ),
+  directional_chain_attack: {
+    ...playerControlledPerTargetRequirement(singleTargetApplication),
+    instanceMode: "chain",
+    continuation: "onKill",
+  },
+  distributed_attack_damage: playerControlledPerTargetRequirement(
+    allTargetApplications
+  ),
+  sequential_attack_damage: {
+    ...playerControlledPerTargetRequirement(singleTargetApplication),
+    instanceMode: "sequential",
+    continuation: "fixedCount",
+  },
+  multi_target_attack: playerControlledPerTargetRequirement(
+    allTargetApplications
+  ),
+  multi_target_neighbor_attack: playerControlledPerTargetRequirement(
+    allTargetApplications
+  ),
+  optional_spend_chip_attack_damage: playerControlledPerTargetRequirement(
+    singleTargetApplication
+  ),
+  exchange_life_and_dingler_status: playerControlledSharedRequirement,
+  reveal_top_card_choose_destroy_or_attack_equal_cost:
+    playerControlledPerTargetRequirement(singleTargetApplication),
+  mayhem_attack: mayhemRequirement,
+  mayhem_attack_equal_highest_card_cost: mayhemRequirement,
+  mayhem_each_player_discard_half_controlled_permanents: mayhemRequirement,
+  mayhem_each_player_gain_chips_then_attack_for_current_chips:
+    mayhemRequirement,
+  mayhem_lowest_life_players_gain_dingler_and_set_to_max_life:
+    mayhemRequirement,
+  mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem:
+    mayhemRequirement,
+  mega_mayhem_each_player_gain_limp_wands_to_hand: mayhemRequirement,
+  mega_mayhem_each_player_toggle_dingler: mayhemRequirement,
+  mega_mayhem_set_life: mayhemRequirement,
+} satisfies Record<AttackBearingRuntimeEffectId, AttackSemanticsRequirement>;
+
 export function isAttackBearingRuntimeEffectId(
   value: string
 ): value is (typeof attackBearingRuntimeEffectIds)[number] {
@@ -1083,6 +1199,58 @@ export function validateAttackSemantics(
 
   return contradictions.map(
     (message) => `${label} is contradictory AttackSemantics: ${message}`
+  );
+}
+
+export function validateAttackSemanticsForEffect(
+  effectId: string,
+  effect: unknown,
+  label = `${effectId}.attackSemantics`
+): string[] {
+  if (!isAttackBearingRuntimeEffectId(effectId)) {
+    return [];
+  }
+  if (!isRuntimeEffectTargetRecord(effect)) {
+    return [`${label} must be an object`];
+  }
+
+  const semantics = effect["attackSemantics"];
+  if (semantics === undefined) {
+    return [`${label} must declare AttackSemantics`];
+  }
+
+  if (!isAttackSemantics(semantics)) {
+    return validateAttackSemantics(semantics, label);
+  }
+
+  const requirement = attackSemanticsRequirements[effectId];
+  const mismatches: string[] = [];
+  if (semantics.resolver !== requirement.resolver) {
+    mismatches.push(`resolver must be ${requirement.resolver}`);
+  }
+  if (semantics.instanceMode !== requirement.instanceMode) {
+    mismatches.push(`instanceMode must be ${requirement.instanceMode}`);
+  }
+  if (semantics.defenseWindowMode !== requirement.defenseWindowMode) {
+    mismatches.push(
+      `defenseWindowMode must be ${requirement.defenseWindowMode}`
+    );
+  }
+  if (!requirement.targetApplications.includes(semantics.targetApplications)) {
+    mismatches.push(
+      `targetApplications must be ${requirement.targetApplications.join(" or ")}`
+    );
+  }
+  if (semantics.attackText !== requirement.attackText) {
+    mismatches.push(`attackText must be ${requirement.attackText}`);
+  }
+  if (semantics.continuation !== requirement.continuation) {
+    mismatches.push(`continuation must be ${requirement.continuation}`);
+  }
+
+  return mismatches.map(
+    (message) =>
+      `${label} is incompatible with ${effectId} AttackSemantics: ${message}`
   );
 }
 

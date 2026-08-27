@@ -13,6 +13,7 @@ import type {
   RuntimeEffectPayload,
   AttackSemantics,
 } from "./runtime-effect.js";
+import { validateAttackSemanticsForEffect } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
 export interface AttackDefenseUsage {
@@ -478,6 +479,14 @@ export function resolvePlayerControlledAttack(
     };
   }
   if (intent.attackSemantics !== undefined) {
+    const attackSemanticsErrors = validateAttackSemanticsForEffect(
+      intent.effectId,
+      { attackSemantics: intent.attackSemantics },
+      `${intent.effectId}.attackSemantics`
+    );
+    if (attackSemanticsErrors.length > 0) {
+      return { ok: false, error: attackSemanticsErrors.join("; ") };
+    }
     if (
       intent.attackSemantics.resolver !== "playerControlled" ||
       intent.attackSemantics.defenseWindowMode !== intent.defenseWindowMode

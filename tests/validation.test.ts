@@ -45,6 +45,29 @@ import {
 
 const rootDir = process.cwd();
 
+const playerControlledPerTargetSingleAttackSemantics = {
+  resolver: "playerControlled",
+  instanceMode: "single",
+  defenseWindowMode: "PER_TARGET",
+  targetApplications: "single",
+  attackText: "perTarget",
+  continuation: "none",
+} as const;
+
+const playerControlledPerTargetAllAttackSemantics = {
+  ...playerControlledPerTargetSingleAttackSemantics,
+  targetApplications: "allInOneInstance",
+} as const;
+
+const mayhemAttackSemantics = {
+  resolver: "mayhem",
+  instanceMode: "single",
+  defenseWindowMode: "MAYHEM",
+  targetApplications: "allInOneInstance",
+  attackText: "mayhem",
+  continuation: "none",
+} as const;
+
 function validateRawRuntimeEffect<Id extends RuntimeEffectId>(
   effectId: Id,
   subjectId: string,
@@ -1775,6 +1798,7 @@ test("supported executable attack and defense effects pass executable effect val
                 target: {
                   selector: "opponentPlayer",
                 },
+                attackSemantics: playerControlledPerTargetSingleAttackSemantics,
               },
             ],
           },
@@ -1822,6 +1846,7 @@ test("supported executable multi-target attack passes executable effect validati
           target: {
             selector: "opponentPlayers",
           },
+          attackSemantics: playerControlledPerTargetAllAttackSemantics,
         },
       ],
     },
@@ -1847,6 +1872,7 @@ test("supported executable neighboring attack accepts only adjacent foes", () =>
           target: {
             selector: "leftAndRightFoes",
           },
+          attackSemantics: playerControlledPerTargetAllAttackSemantics,
         },
       ],
     },
@@ -1879,6 +1905,7 @@ test("supported executable Mayhem attack passes executable effect validation", (
           target: {
             selector: "allPlayers",
           },
+          attackSemantics: mayhemAttackSemantics,
         },
       ],
     },
@@ -1915,6 +1942,10 @@ test("multi-target and Mayhem attacks require one nested target representation",
       timing: "onPlay",
       amount: 4,
       target: { selector },
+      attackSemantics:
+        effectId === "mayhem_attack"
+          ? mayhemAttackSemantics
+          : playerControlledPerTargetAllAttackSemantics,
     };
 
     assert.deepEqual(
@@ -2228,6 +2259,7 @@ test("catalog decoders reject invalid Mega Mayhem life and status payloads", () 
       timing: "onMayhemResolve",
       lifeTotal: 5,
       targetSelector: "eachPlayerClockwiseFromActive",
+      attackSemantics: mayhemAttackSemantics,
     }),
     []
   );
@@ -2248,6 +2280,7 @@ test("catalog decoders reject invalid Mega Mayhem life and status payloads", () 
         effectId: "mega_mayhem_each_player_toggle_dingler",
         timing: "onMayhemResolve",
         targetSelector: "eachPlayerClockwiseFromActive",
+        attackSemantics: mayhemAttackSemantics,
       }
     ),
     []
@@ -2280,6 +2313,7 @@ test("catalog decoder rejects an invalid Mega Mayhem destroy-top payload", () =>
         cardKind: "mayhem",
       },
       destroyedCardSource: "mainDeck",
+      attackSemantics: mayhemAttackSemantics,
     }),
     []
   );
@@ -2463,6 +2497,7 @@ test("catalog decoders reject invalid Mayhem battle and vote payloads", () => {
       effectId: lowestLifeEffectId,
       timing: "onMayhemResolve",
       statusId: "dingler",
+      attackSemantics: mayhemAttackSemantics,
     }),
     []
   );

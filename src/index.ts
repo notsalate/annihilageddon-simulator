@@ -76,6 +76,7 @@ export {
   isAttackBearingRuntimeEffectId,
   isAttackSemantics,
   validateAttackSemantics,
+  validateAttackSemanticsForEffect,
 } from "./engine/runtime-effect.js";
 export {
   intakeRuntimeData,
