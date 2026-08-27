@@ -7,6 +7,8 @@ import test from "node:test";
 import {
   createRuntimeCoverageInventory,
   formatRuntimeCoverageInventoryMarkdown,
+  createRuntimeSemanticCompletionReport,
+  formatRuntimeSemanticCompletionMarkdown,
 } from "../src/index.js";
 import { evaluateCrossSourceCoverage } from "../src/import/cross-source-runtime-coverage.js";
 import type { CrossSourceCoveragePlanEntry } from "../src/import/cross-source-runtime-coverage.js";
@@ -1417,6 +1419,93 @@ test("semantic evidence keeps a required capability open when its evidence mappi
       (blocker) => blocker.code === "required-capability-uncovered"
     )
   );
+});
+
+test("runtime semantic completion audit separates structural and semantic status", () => {
+  const report = createRuntimeSemanticCompletionReport(process.cwd());
+
+  assert.equal(report.structuralStatus, "complete");
+  assert.equal(report.status, "BLOCKED");
+  assert.equal(report.semanticStatus, "blocked");
+  assert.deepEqual(report.byKind.card, {
+    expected: 134,
+    actual: 134,
+    structuralComplete: 134,
+    semanticComplete: 0,
+  });
+  assert.deepEqual(report.byKind.wizardProperty, {
+    expected: 10,
+    actual: 10,
+    structuralComplete: 10,
+    semanticComplete: 10,
+  });
+  assert.deepEqual(report.byKind.deadWizardToken, {
+    expected: 29,
+    actual: 29,
+    structuralComplete: 29,
+    semanticComplete: 26,
+  });
+  assert.deepEqual(report.productionStack, {
+    expectedPhysicalCount: 30,
+    physicalCount: 30,
+    namedDefinitionCount: 29,
+    neutralCount: 0,
+    dwt003Count: 2,
+    structuralStatus: "complete",
+  });
+  const dwtItems = report.items.filter(
+    (item) => item.objectKind === "deadWizardToken"
+  );
+  assert.equal(dwtItems.length, 29);
+  assert.ok(
+    dwtItems.every(
+      (item) =>
+        item.focusedTestEvidence.length > 0 && item.lifecycleClasses.length > 0
+    )
+  );
+  assert.ok(
+    report.blockers.some(
+      (blocker) => blocker.code === "false-semantic-evidence"
+    )
+  );
+  const transferDwt = dwtItems.find((item) =>
+    item.id.endsWith("dead_wizard_token_010")
+  );
+  assert.ok(transferDwt?.lifecycleClasses.includes("transfer"));
+  const preRespawnDwt = dwtItems.find((item) =>
+    item.id.endsWith("dead_wizard_token_026")
+  );
+  assert.ok(preRespawnDwt?.lifecycleClasses.includes("pre-respawn"));
+  assert.ok(
+    report.blockers.some(
+      (blocker) => blocker.code === "false-semantic-evidence"
+    )
+  );
+  assert.deepEqual(
+    dwtItems
+      .filter((item) =>
+        [
+          "esw2_dbg__dead_wizard_token_013",
+          "esw2_dbg__dead_wizard_token_014",
+          "esw2_dbg__dead_wizard_token_025",
+        ].includes(item.id)
+      )
+      .map((item) => item.semanticStatus),
+    ["blocked", "blocked", "blocked"]
+  );
+  assert.ok(
+    report.blockers.some(
+      (blocker) =>
+        blocker.code === "missing-lifecycle-evidence" &&
+        blocker.message.includes("contextual")
+    )
+  );
+
+  const markdown = formatRuntimeSemanticCompletionMarkdown(report);
+  assert.match(markdown, /Structural status/);
+  assert.match(markdown, /Semantic status/);
+  assert.match(markdown, /production physical DWT: 30/);
+  assert.match(markdown, /semanticComplete: \d+ /);
 });
 
 function createCardDraft(

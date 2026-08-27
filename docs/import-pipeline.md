@@ -295,6 +295,10 @@ Runtime JSON должен быть самодостаточным для engine.
 
 Пустой `effects: []`, stable ID, не переданный в вызов публичного игрового runtime seam и не связанный с assertion наблюдаемого результата, execution evidence с чужим source kind или недопустимым seam, вызов самого audit вместо игрового seam, несовпавшее количество в stack или любая composition reference без runtime definition всегда оставляют объект в статусе `blocked`. Старый `schemaVersion: 1` разрешён только для fixture-планов во время миграции и не считается typed semantic evidence.
 
+`npm run report:runtime-coverage` остаётся read-only: без `--write` он печатает обычный inventory и отдельный Runtime Semantic Completion Audit. В аудите structural и semantic статусы выводятся раздельно; `PASS` возможен только при закрытом cross-source evidence для каждого объекта. Карта не считается `semanticComplete` только по наличию runtime JSON, упоминанию ID в тесте или `AttackSemantics`: ей также нужны required capabilities, typed evidence, runtime references, canonical draft points, подходящая composition и исполняемый focused test. Поэтому текущий audit может вернуть `BLOCKED` с открытым backlog, не изменяя runtime data.
+
+Аудит дополнительно проверяет active pack, точные количества production DWT и применимые lifecycle-классы для всех DWT. Режим `npm run report:runtime-coverage -- --write <path>` по-прежнему записывает только карточный inventory; он не превращает semantic backlog в успешный результат и не является заменой read-only аудиту.
+
 Ссылки `source.draft`, `source.text` и `source.image` в runtime JSON допустимы только как metadata/traceability для ревью и сверки. Движок не должен читать эти ссылки во время партии и не должен выводить из них поведение карты. Draft JSON из `data/import/**` также не является executable engine input.
 
 После runtime mapping объект должен быть включен в нужный `deck`, `stack`, `pool` и `pack`. Шаблоны лежат в:

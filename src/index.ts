@@ -163,6 +163,22 @@ export {
   readCrossSourceCoveragePlan,
 } from "./import/cross-source-runtime-coverage.js";
 export type {
+  RuntimeLifecycleClass,
+  RuntimeSemanticActivePackSummary,
+  RuntimeSemanticCompletionBlocker,
+  RuntimeSemanticCompletionBlockerCode,
+  RuntimeSemanticCompletionItem,
+  RuntimeSemanticCompletionReport,
+  RuntimeSemanticCompletionStatus,
+  RuntimeSemanticKindSummary,
+  RuntimeSemanticObjectStatus,
+  RuntimeSemanticProductionStackSummary,
+} from "./import/runtime-semantic-completion.js";
+export {
+  createRuntimeSemanticCompletionReport,
+  formatRuntimeSemanticCompletionMarkdown,
+} from "./import/runtime-semantic-completion.js";
+export type {
   DraftImportBlocker,
   DraftImportGeneratedFile,
   DraftImportHarnessResult,
