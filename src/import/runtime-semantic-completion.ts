@@ -110,6 +110,12 @@ const expectedCounts: Record<RuntimeCoverageObjectKind, number> = {
   deadWizardToken: 29,
 };
 
+const contextualLifecycleEffectIds: ReadonlySet<string> = new Set([
+  "dead_wizard_token_damage_equal_chips",
+  "dead_wizard_token_damage_per_discard_legend",
+  "dead_wizard_token_damage_equal_highest_hand_cost",
+]);
+
 const lifecycleEvidenceByDwt: Readonly<
   Record<string, readonly RuntimeLifecycleClass[]>
 > = {
@@ -600,6 +606,15 @@ function getDwtLifecycleClasses(
     )
   ) {
     classes.add("ongoing");
+  }
+  if (
+    effects.some((effect) =>
+      contextualLifecycleEffectIds.has(
+        getString(getRecord(effect)["effectId"]) ?? ""
+      )
+    )
+  ) {
+    classes.add("contextual");
   }
   if (
     effects.some((effect) => {

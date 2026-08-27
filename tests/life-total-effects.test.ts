@@ -521,6 +521,27 @@ test("life-total DWT faces resolve through the public death lifecycle", () => {
         event.targetPlayerId === chipsin.foe.playerId
     )
   );
+  const noChips = createLethalDwtScenario(
+    30112,
+    "esw2_dbg__dead_wizard_token_013"
+  );
+  noChips.foe.chips = 0;
+  assert.deepEqual(
+    applyAction(noChips.scenario.state, {
+      type: "playCard",
+      cardInstanceId: noChips.card.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(noChips.foe.life.current, 20);
+  assert.equal(
+    noChips.scenario.state.eventLog.find(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.effectId === "dead_wizard_token_damage_equal_chips"
+    )?.amount,
+    0
+  );
 
   const discardLegend = createLethalDwtScenario(
     30109,
@@ -541,6 +562,34 @@ test("life-total DWT faces resolve through the public death lifecycle", () => {
     { ok: true }
   );
   assert.equal(discardLegend.foe.life.current, 16);
+
+  const noDiscardLegend = createLethalDwtScenario(
+    30113,
+    "esw2_dbg__dead_wizard_token_014"
+  );
+  givenRuntimeCard(noDiscardLegend.scenario, {
+    player: noDiscardLegend.foe,
+    zone: "discard",
+    cardKind: "normal",
+    cardTypes: ["treasure"],
+    effects: [],
+  });
+  assert.deepEqual(
+    applyAction(noDiscardLegend.scenario.state, {
+      type: "playCard",
+      cardInstanceId: noDiscardLegend.card.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(noDiscardLegend.foe.life.current, 20);
+  assert.equal(
+    noDiscardLegend.scenario.state.eventLog.find(
+      (event) =>
+        event.type === "effectDamageDealt" &&
+        event.effectId === "dead_wizard_token_damage_per_discard_legend"
+    )?.amount,
+    0
+  );
 
   const exchange = createLethalDwtScenario(
     30110,
