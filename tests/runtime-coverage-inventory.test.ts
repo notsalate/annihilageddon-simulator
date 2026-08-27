@@ -1105,6 +1105,60 @@ test("attack-effects cross-source evidence covers wizard property 009", () => {
   assert.deepEqual(item.crossSourceBlockers, []);
 });
 
+test("contextual DWT evidence requires the public lifecycle test reference", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-contextual-dwt-evidence-")
+  );
+  const tokenId = "esw2_dbg__dead_wizard_token_013";
+
+  writeJson(
+    rootDir,
+    `data/import/tokens/dead-wizard-token/drafts/${tokenId}.json`,
+    {
+      schemaVersion: 1,
+      draftKind: "deadWizardTokenDraft",
+      tokenId,
+      kind: "deadWizardToken",
+      source: { image: "assets/dead-wizard-token/DWT_013.png" },
+      visible: {
+        textRu: "Отхвати 1 урон за каждую свою чипсину.",
+        victoryPoints: null,
+        uncertainty: [],
+      },
+      notes: [],
+      composition: { quantity: 1 },
+    }
+  );
+  writeJson(rootDir, `data/tokens/dead-wizard/${tokenId}.json`, {
+    schemaVersion: 1,
+    tokenId,
+    kind: "deadWizardToken",
+    effects: [
+      {
+        effectId: "dead_wizard_token_damage_equal_chips",
+        timing: "onDeadWizardTokenFace",
+      },
+    ],
+  });
+  writeJson(rootDir, "data/stacks/tokens/v0-dead-wizard-token-stack.json", {
+    stackId: "v0-dead-wizard-token-stack",
+    entries: [{ tokenId, count: 1 }],
+  });
+  writeText(
+    rootDir,
+    "tests/unrelated-runtime.test.ts",
+    `test("mentions ${tokenId} without executing its lifecycle", () => "${tokenId}");`
+  );
+
+  const item = createRuntimeSemanticCompletionReport(rootDir).items.find(
+    (candidate) => candidate.id === tokenId
+  );
+
+  assert.ok(item);
+  assert.deepEqual(item.lifecycleClasses, ["deferred"]);
+  assert.ok(item.blockerCodes.includes("missing-lifecycle-evidence"));
+});
+
 test("semantic evidence rejects an ID that is present but not passed to the runtime seam", () => {
   const rootDir = mkdtempSync(
     path.join(tmpdir(), "krutagidon-semantic-evidence-unused-id-")
@@ -1443,7 +1497,7 @@ test("runtime semantic completion audit separates structural and semantic status
     expected: 29,
     actual: 29,
     structuralComplete: 29,
-    semanticComplete: 26,
+    semanticComplete: 29,
   });
   assert.deepEqual(report.productionStack, {
     expectedPhysicalCount: 30,
@@ -1491,14 +1545,24 @@ test("runtime semantic completion audit separates structural and semantic status
         ].includes(item.id)
       )
       .map((item) => item.semanticStatus),
-    ["blocked", "blocked", "blocked"]
+    ["complete", "complete", "complete"]
   );
   assert.ok(
+    dwtItems
+      .filter((item) =>
+        [
+          "esw2_dbg__dead_wizard_token_013",
+          "esw2_dbg__dead_wizard_token_014",
+          "esw2_dbg__dead_wizard_token_025",
+        ].includes(item.id)
+      )
+      .every((item) => item.lifecycleClasses.includes("contextual"))
+  );
+  assert.equal(
     report.blockers.some(
-      (blocker) =>
-        blocker.code === "missing-lifecycle-evidence" &&
-        blocker.message.includes("contextual")
-    )
+      (blocker) => blocker.code === "missing-lifecycle-evidence"
+    ),
+    false
   );
 
   const markdown = formatRuntimeSemanticCompletionMarkdown(report);

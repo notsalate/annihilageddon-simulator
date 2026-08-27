@@ -110,6 +110,28 @@ const expectedCounts: Record<RuntimeCoverageObjectKind, number> = {
   deadWizardToken: 29,
 };
 
+interface ContextualLifecycleEvidence {
+  effectId: string;
+  testRef: string;
+}
+
+const contextualLifecycleEvidenceByDwt: Readonly<
+  Record<string, ContextualLifecycleEvidence>
+> = {
+  esw2_dbg__dead_wizard_token_013: {
+    effectId: "dead_wizard_token_damage_equal_chips",
+    testRef: "tests/life-total-effects.test.ts",
+  },
+  esw2_dbg__dead_wizard_token_014: {
+    effectId: "dead_wizard_token_damage_per_discard_legend",
+    testRef: "tests/life-total-effects.test.ts",
+  },
+  esw2_dbg__dead_wizard_token_025: {
+    effectId: "dead_wizard_token_damage_equal_highest_hand_cost",
+    testRef: "tests/life-total-effects.test.ts",
+  },
+};
+
 const lifecycleEvidenceByDwt: Readonly<
   Record<string, readonly RuntimeLifecycleClass[]>
 > = {
@@ -444,7 +466,11 @@ function evaluateSemanticEvidence(input: {
 
   const lifecycleClasses =
     input.canonical.objectKind === "deadWizardToken"
-      ? getDwtLifecycleClasses(input.canonical.id, input.runtime)
+      ? getDwtLifecycleClasses(
+          input.canonical.id,
+          input.runtime,
+          focusedTestEvidence
+        )
       : [];
   const missingLifecycleClasses =
     input.canonical.objectKind === "deadWizardToken"
@@ -569,7 +595,8 @@ function validateRuntimeShape(
 
 function getDwtLifecycleClasses(
   id: string,
-  runtime: RuntimeRecord | undefined
+  runtime: RuntimeRecord | undefined,
+  focusedTestEvidence: readonly string[]
 ): RuntimeLifecycleClass[] {
   const effects = getArray(
     runtime === undefined ? undefined : runtime.value["effects"]
@@ -600,6 +627,17 @@ function getDwtLifecycleClasses(
     )
   ) {
     classes.add("ongoing");
+  }
+  const contextualEvidence = contextualLifecycleEvidenceByDwt[id];
+  if (
+    contextualEvidence !== undefined &&
+    focusedTestEvidence.includes(contextualEvidence.testRef) &&
+    effects.some(
+      (effect) =>
+        getString(getRecord(effect)["effectId"]) === contextualEvidence.effectId
+    )
+  ) {
+    classes.add("contextual");
   }
   if (
     effects.some((effect) => {
