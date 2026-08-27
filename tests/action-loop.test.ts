@@ -10398,6 +10398,60 @@ test("#358 stops only a proven two-player directional chain cycle", () => {
   );
 });
 
+test("proven directional cycle does not skip later effects of the same card", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 606165,
+    playerCount: 2,
+  });
+  const activePlayer = scenario.activePlayer;
+  const targetPlayer = scenario.foes[0];
+  assert.ok(targetPlayer);
+  for (const player of scenario.state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+    player.hand = [];
+    player.life.current = 20;
+  }
+  targetPlayer.life.current = 1;
+  scenario.state.common.deadWizardTokens.drawStack = [];
+  scenario.state.turn.power = 99;
+  givenRuntimeCard(scenario, {
+    player: activePlayer,
+    zone: "permanents",
+    definitionId: "esw2_dbg__legend_008",
+  });
+  const wand = givenRuntimeCard(scenario, {
+    player: activePlayer,
+    effects: [
+      {
+        effectId: "directional_chain_attack",
+        timing: "onPlay",
+        amount: 10,
+        targetSelector: "leftOrRightFoe",
+      },
+      { effectId: "add_power", timing: "onPlay", amount: 7 },
+    ],
+  });
+
+  const result = play(scenario, wand);
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(scenario.state.turn.power, 106);
+  const cycleIndex = scenario.state.eventLog.findIndex(
+    (event) => event.type === "attackChainCycleDetected"
+  );
+  const powerIndex = scenario.state.eventLog.findIndex(
+    (event) =>
+      event.type === "effectAddPowerApplied" &&
+      event.cardInstanceId === wand.instanceId &&
+      event.amount === 7
+  );
+  assert.notEqual(cycleIndex, -1);
+  assert.notEqual(powerIndex, -1);
+  assert.ok(cycleIndex < powerIndex);
+});
+
 test("directional chain does not infer a cycle from an opaque stateful choice policy", () => {
   const scenario = createGameScenario({
     rootDir,
