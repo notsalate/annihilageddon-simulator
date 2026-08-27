@@ -32,6 +32,7 @@ import {
   type SetupEffectSourceContext,
 } from "./effect-runtime-registry.js";
 import { filterWizardPropertySetupPoolForFamiliarCapacity } from "./effect-runtime-setup.js";
+import type { RuntimeEffectId } from "./runtime-effect.js";
 import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
@@ -202,7 +203,7 @@ export interface GameState {
         attackId?: AttackId;
         deathKillerPlayerId?: PlayerId;
         deadWizardTokenWasDinglerAtGain?: boolean;
-        deadWizardTokenProjectionEffectIds?: readonly string[];
+        deadWizardTokenProjectionEffectIds?: readonly RuntimeEffectId[];
       }>;
     }>;
   };

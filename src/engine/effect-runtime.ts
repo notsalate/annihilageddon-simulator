@@ -893,13 +893,6 @@ export function validateControlledCardStartOfControllerTurnEffects(
   });
 }
 
-export function resolveWithinDeadWizardTokenResolutionBoundary(
-  _state: GameState,
-  resolve: () => EffectExecutionResult
-): EffectExecutionResult {
-  return resolve();
-}
-
 function resolveDeadWizardTokenFace(
   state: GameState,
   face: DeadWizardTokenFace
@@ -1001,7 +994,7 @@ function createDeadWizardTokenFace(
     attackId?: EffectSourceContext["attackId"];
     deathKillerPlayerId?: PlayerState["playerId"];
     deadWizardTokenWasDinglerAtGain?: boolean;
-    deadWizardTokenProjectionEffectIds?: readonly string[];
+    deadWizardTokenProjectionEffectIds?: readonly RuntimeEffectId[];
   }
 ): DeadWizardTokenFace {
   return {
@@ -1482,47 +1475,15 @@ function executeRuntimeEffectAtTiming(
   services: EffectRuntimeServices,
   isApplicable?: (effect: RuntimeEffectPayload) => boolean
 ): EffectRuntimeOperationResult<EffectExecutionResult> {
-  let operationResult:
-    | EffectRuntimeOperationResult<EffectExecutionResult>
-    | undefined;
-  const boundaryResult = resolveWithinDeadWizardTokenResolutionBoundary(
+  return executeRuntimeEffectAtTimingInCatalog(
     state,
-    () => {
-      operationResult = executeRuntimeEffectAtTimingInCatalog(
-        state,
-        player,
-        effect,
-        timing,
-        source,
-        services,
-        isApplicable
-      );
-      if (operationResult.status === "error") {
-        return { ok: false, error: operationResult.error };
-      }
-      if (operationResult.status === "notApplicable") {
-        return { ok: true };
-      }
-      return operationResult.result;
-    }
+    player,
+    effect,
+    timing,
+    source,
+    services,
+    isApplicable
   );
-
-  if (!boundaryResult.ok) {
-    return { status: "error", error: boundaryResult.error };
-  }
-  if (operationResult === undefined) {
-    return {
-      status: "error",
-      error: `Effect ${effect.effectId} did not produce an execution result`,
-    };
-  }
-  if (operationResult.status === "notApplicable") {
-    return operationResult;
-  }
-  if (operationResult.status === "error") {
-    return operationResult;
-  }
-  return { status: "resolved", result: boundaryResult };
 }
 
 function cardTriggerMatches(
@@ -2922,9 +2883,7 @@ export function gainDeadWizardToken(
   state: GameState,
   player: PlayerState
 ): EffectExecutionResult {
-  return issueDeadWizardToken(state, player, undefined, {
-    resolveFaceImmediately: true,
-  });
+  return issueDeadWizardToken(state, player);
 }
 
 function gainDeadWizardTokens(
@@ -2972,123 +2931,60 @@ function transferControlledDeadWizardTokenLike(
   source: EffectSourceContext,
   options?: { reapplyFace?: boolean }
 ): EffectExecutionResult {
-  return resolveWithinDeadWizardTokenResolutionBoundary(state, () => {
-    const cards = getControlledDeadWizardTokenLikeCards(state, player);
-    const choices: EffectChoice[] = [
-      ...player.deadWizardTokens.map((token) => ({
-        choiceKind: "option" as const,
-        choiceId: getDeadWizardTokenChoiceId(token.instanceId),
-      })),
-      ...cards.map((card) => ({
-        choiceKind: "cardTarget" as const,
-        choiceId: getDeadWizardTokenLikeCardChoiceId(card.instanceId),
-        cards: [card],
-        amount: 1,
-      })),
-    ];
-    const choice = chooseEffectChoice(state, player, source, effectId, choices);
-    if (choice === undefined) {
-      return { ok: true };
-    }
+  const cards = getControlledDeadWizardTokenLikeCards(state, player);
+  const choices: EffectChoice[] = [
+    ...player.deadWizardTokens.map((token) => ({
+      choiceKind: "option" as const,
+      choiceId: getDeadWizardTokenChoiceId(token.instanceId),
+    })),
+    ...cards.map((card) => ({
+      choiceKind: "cardTarget" as const,
+      choiceId: getDeadWizardTokenLikeCardChoiceId(card.instanceId),
+      cards: [card],
+      amount: 1,
+    })),
+  ];
+  const choice = chooseEffectChoice(state, player, source, effectId, choices);
+  if (choice === undefined) {
+    return { ok: true };
+  }
 
-    if (choice.choiceKind === "option") {
-      const tokenInstanceId = choice.choiceId.startsWith("token:")
-        ? choice.choiceId.slice("token:".length)
-        : undefined;
-      if (tokenInstanceId === undefined) {
-        return {
-          ok: false,
-          error: "Invalid dead wizard token transfer choice",
-        };
-      }
-      const tokenBeforeRemoval = player.deadWizardTokens.find(
-        (candidate) => candidate.instanceId === tokenInstanceId
-      );
-      if (tokenBeforeRemoval === undefined) {
-        return {
-          ok: false,
-          error: `Dead wizard token ${tokenInstanceId} disappeared before transfer`,
-        };
-      }
-      const movementResult = runControlledPowerMutation(
-        state,
-        () => state.activePlayerId,
-        () => {
-          const token = removeDeadWizardToken(
-            player,
-            tokenBeforeRemoval.instanceId
-          );
-          if (token === undefined) {
-            return {
-              ok: false as const,
-              error: `Dead wizard token ${tokenInstanceId} disappeared before transfer`,
-            };
-          }
-          token.ownerId = targetPlayer.playerId;
-          targetPlayer.deadWizardTokens.push(token);
-          return { ok: true as const, token };
-        },
-        (result) => result.ok
-      );
-      if (!movementResult.ok) {
-        return movementResult;
-      }
-      if (!movementResult.value.ok) {
-        return movementResult.value;
-      }
-      if (options?.reapplyFace === true) {
-        const reapplyResult = reapplyDeadWizardTokenFace(
-          state,
-          targetPlayer,
-          movementResult.value.token,
-          source
-        );
-        if (!reapplyResult.ok || reapplyResult.gameEnd !== undefined) {
-          return reapplyResult;
-        }
-      }
-      return movementResult.gameEnd === undefined
-        ? { ok: true }
-        : { ok: true, gameEnd: movementResult.gameEnd };
-    }
-
-    if (choice.choiceKind !== "cardTarget") {
+  if (choice.choiceKind === "option") {
+    const tokenInstanceId = choice.choiceId.startsWith("token:")
+      ? choice.choiceId.slice("token:".length)
+      : undefined;
+    if (tokenInstanceId === undefined) {
       return {
         ok: false,
-        error: "Invalid dead wizard token transfer choice kind",
+        error: "Invalid dead wizard token transfer choice",
       };
     }
-    const card = cards.find(
-      (candidate) => candidate.instanceId === choice.cards[0]?.instanceId
+    const tokenBeforeRemoval = player.deadWizardTokens.find(
+      (candidate) => candidate.instanceId === tokenInstanceId
     );
-    if (card === undefined) {
+    if (tokenBeforeRemoval === undefined) {
       return {
         ok: false,
-        error:
-          "Controlled dead wizard token-like card disappeared before transfer",
+        error: `Dead wizard token ${tokenInstanceId} disappeared before transfer`,
       };
     }
     const movementResult = runControlledPowerMutation(
       state,
       () => state.activePlayerId,
       () => {
-        const moved = moveCardToPlayerZone(
-          state,
-          card,
-          targetPlayer,
-          targetPlayer.permanents,
-          `${targetPlayer.playerId}.permanents`,
-          effectId,
-          source
+        const token = removeDeadWizardToken(
+          player,
+          tokenBeforeRemoval.instanceId
         );
-        if (!moved) {
+        if (token === undefined) {
           return {
             ok: false as const,
-            error: `Cannot transfer controlled dead wizard token-like card ${card.instanceId}`,
+            error: `Dead wizard token ${tokenInstanceId} disappeared before transfer`,
           };
         }
-        removeTemporaryCardControl(state, card.instanceId);
-        return { ok: true as const };
+        token.ownerId = targetPlayer.playerId;
+        targetPlayer.deadWizardTokens.push(token);
+        return { ok: true as const, token };
       },
       (result) => result.ok
     );
@@ -3098,10 +2994,71 @@ function transferControlledDeadWizardTokenLike(
     if (!movementResult.value.ok) {
       return movementResult.value;
     }
+    if (options?.reapplyFace === true) {
+      const reapplyResult = reapplyDeadWizardTokenFace(
+        state,
+        targetPlayer,
+        movementResult.value.token,
+        source
+      );
+      if (!reapplyResult.ok || reapplyResult.gameEnd !== undefined) {
+        return reapplyResult;
+      }
+    }
     return movementResult.gameEnd === undefined
       ? { ok: true }
       : { ok: true, gameEnd: movementResult.gameEnd };
-  });
+  }
+
+  if (choice.choiceKind !== "cardTarget") {
+    return {
+      ok: false,
+      error: "Invalid dead wizard token transfer choice kind",
+    };
+  }
+  const card = cards.find(
+    (candidate) => candidate.instanceId === choice.cards[0]?.instanceId
+  );
+  if (card === undefined) {
+    return {
+      ok: false,
+      error:
+        "Controlled dead wizard token-like card disappeared before transfer",
+    };
+  }
+  const movementResult = runControlledPowerMutation(
+    state,
+    () => state.activePlayerId,
+    () => {
+      const moved = moveCardToPlayerZone(
+        state,
+        card,
+        targetPlayer,
+        targetPlayer.permanents,
+        `${targetPlayer.playerId}.permanents`,
+        effectId,
+        source
+      );
+      if (!moved) {
+        return {
+          ok: false as const,
+          error: `Cannot transfer controlled dead wizard token-like card ${card.instanceId}`,
+        };
+      }
+      removeTemporaryCardControl(state, card.instanceId);
+      return { ok: true as const };
+    },
+    (result) => result.ok
+  );
+  if (!movementResult.ok) {
+    return movementResult;
+  }
+  if (!movementResult.value.ok) {
+    return movementResult.value;
+  }
+  return movementResult.gameEnd === undefined
+    ? { ok: true }
+    : { ok: true, gameEnd: movementResult.gameEnd };
 }
 
 type ControlledDeadWizardTokenLikeSelection =
@@ -3122,161 +3079,159 @@ function exchangeControlledDeadWizardTokenLikes(
   source: EffectSourceContext,
   options?: { reapplyFace?: boolean }
 ): EffectExecutionResult {
-  return resolveWithinDeadWizardTokenResolutionBoundary(state, () => {
-    const playerObjects = getControlledDeadWizardTokenLikeSelections(
-      state,
-      player
-    );
-    const targetObjects = getControlledDeadWizardTokenLikeSelections(
-      state,
-      targetPlayer
-    );
-    if (playerObjects.length === 0 || targetObjects.length === 0) {
-      return { ok: true };
-    }
+  const playerObjects = getControlledDeadWizardTokenLikeSelections(
+    state,
+    player
+  );
+  const targetObjects = getControlledDeadWizardTokenLikeSelections(
+    state,
+    targetPlayer
+  );
+  if (playerObjects.length === 0 || targetObjects.length === 0) {
+    return { ok: true };
+  }
 
-    const exchangeChoice = chooseEffectChoice(state, player, source, effectId, [
-      { choiceKind: "option", choiceId: "decline" },
-      { choiceKind: "option", choiceId: "exchange" },
-    ]);
-    if (exchangeChoice === undefined || exchangeChoice.choiceId === "decline") {
-      return { ok: true };
-    }
-    if (
-      exchangeChoice.choiceKind !== "option" ||
-      exchangeChoice.choiceId !== "exchange"
-    ) {
-      return { ok: false, error: "Invalid dead wizard token exchange option" };
-    }
+  const exchangeChoice = chooseEffectChoice(state, player, source, effectId, [
+    { choiceKind: "option", choiceId: "decline" },
+    { choiceKind: "option", choiceId: "exchange" },
+  ]);
+  if (exchangeChoice === undefined || exchangeChoice.choiceId === "decline") {
+    return { ok: true };
+  }
+  if (
+    exchangeChoice.choiceKind !== "option" ||
+    exchangeChoice.choiceId !== "exchange"
+  ) {
+    return { ok: false, error: "Invalid dead wizard token exchange option" };
+  }
 
-    const playerChoice = chooseEffectChoice(
+  const playerChoice = chooseEffectChoice(
+    state,
+    player,
+    source,
+    effectId,
+    createDeadWizardTokenLikeChoices(playerObjects)
+  );
+  if (playerChoice === undefined) {
+    return { ok: true };
+  }
+  const playerSelection = resolveDeadWizardTokenLikeSelection(
+    playerObjects,
+    playerChoice
+  );
+  if (playerSelection === undefined) {
+    return {
+      ok: false,
+      error: "Invalid own dead wizard token exchange choice",
+    };
+  }
+
+  const targetChoice = chooseEffectChoice(
+    state,
+    player,
+    source,
+    effectId,
+    createDeadWizardTokenLikeChoices(targetObjects)
+  );
+  if (targetChoice === undefined) {
+    return { ok: true };
+  }
+  const targetSelection = resolveDeadWizardTokenLikeSelection(
+    targetObjects,
+    targetChoice
+  );
+  if (targetSelection === undefined) {
+    return {
+      ok: false,
+      error: "Invalid attacker dead wizard token exchange choice",
+    };
+  }
+  if (
+    playerSelection.kind === "card" &&
+    targetSelection.kind === "card" &&
+    playerSelection.card.instanceId === targetSelection.card.instanceId
+  ) {
+    return {
+      ok: false,
+      error: "Dead wizard token exchange selected the same card twice",
+    };
+  }
+  if (
+    !isControlledDeadWizardTokenLikeSelectionAvailable(
       state,
       player,
-      source,
-      effectId,
-      createDeadWizardTokenLikeChoices(playerObjects)
-    );
-    if (playerChoice === undefined) {
-      return { ok: true };
-    }
-    const playerSelection = resolveDeadWizardTokenLikeSelection(
-      playerObjects,
-      playerChoice
-    );
-    if (playerSelection === undefined) {
-      return {
-        ok: false,
-        error: "Invalid own dead wizard token exchange choice",
-      };
-    }
-
-    const targetChoice = chooseEffectChoice(
+      playerSelection
+    ) ||
+    !isControlledDeadWizardTokenLikeSelectionAvailable(
       state,
-      player,
-      source,
-      effectId,
-      createDeadWizardTokenLikeChoices(targetObjects)
-    );
-    if (targetChoice === undefined) {
-      return { ok: true };
-    }
-    const targetSelection = resolveDeadWizardTokenLikeSelection(
-      targetObjects,
-      targetChoice
-    );
-    if (targetSelection === undefined) {
-      return {
-        ok: false,
-        error: "Invalid attacker dead wizard token exchange choice",
-      };
-    }
-    if (
-      playerSelection.kind === "card" &&
-      targetSelection.kind === "card" &&
-      playerSelection.card.instanceId === targetSelection.card.instanceId
-    ) {
-      return {
-        ok: false,
-        error: "Dead wizard token exchange selected the same card twice",
-      };
-    }
-    if (
-      !isControlledDeadWizardTokenLikeSelectionAvailable(
+      targetPlayer,
+      targetSelection
+    )
+  ) {
+    return {
+      ok: false,
+      error: "Dead wizard token exchange target disappeared before movement",
+    };
+  }
+
+  const movementResult = runControlledPowerMutation(
+    state,
+    () => state.activePlayerId,
+    () => {
+      const playerMovement = moveControlledDeadWizardTokenLike(
         state,
         player,
-        playerSelection
-      ) ||
-      !isControlledDeadWizardTokenLikeSelectionAvailable(
+        targetPlayer,
+        playerSelection,
+        effectId,
+        source
+      );
+      if (!playerMovement.ok) {
+        return playerMovement;
+      }
+      const targetMovement = moveControlledDeadWizardTokenLike(
         state,
         targetPlayer,
-        targetSelection
-      )
-    ) {
-      return {
-        ok: false,
-        error: "Dead wizard token exchange target disappeared before movement",
-      };
-    }
-
-    const movementResult = runControlledPowerMutation(
-      state,
-      () => state.activePlayerId,
-      () => {
-        const playerMovement = moveControlledDeadWizardTokenLike(
-          state,
-          player,
-          targetPlayer,
-          playerSelection,
-          effectId,
-          source
-        );
-        if (!playerMovement.ok) {
-          return playerMovement;
-        }
-        const targetMovement = moveControlledDeadWizardTokenLike(
-          state,
-          targetPlayer,
-          player,
-          targetSelection,
-          effectId,
-          source
-        );
-        if (!targetMovement.ok) {
-          return targetMovement;
-        }
-        return { ok: true } as const;
-      },
-      (result) => result.ok
-    );
-    if (!movementResult.ok) {
-      return movementResult;
-    }
-    if (!movementResult.value.ok) {
-      return movementResult.value;
-    }
-    if (options?.reapplyFace === true) {
-      for (const [recipient, selection] of [
-        [targetPlayer, playerSelection],
-        [player, targetSelection],
-      ] as const) {
-        if (selection.kind !== "token") {
-          continue;
-        }
-        const reapplyResult = reapplyDeadWizardTokenFace(
-          state,
-          recipient,
-          selection.token,
-          source
-        );
-        if (!reapplyResult.ok || reapplyResult.gameEnd !== undefined) {
-          return reapplyResult;
-        }
+        player,
+        targetSelection,
+        effectId,
+        source
+      );
+      if (!targetMovement.ok) {
+        return targetMovement;
+      }
+      return { ok: true } as const;
+    },
+    (result) => result.ok
+  );
+  if (!movementResult.ok) {
+    return movementResult;
+  }
+  if (!movementResult.value.ok) {
+    return movementResult.value;
+  }
+  if (options?.reapplyFace === true) {
+    for (const [recipient, selection] of [
+      [targetPlayer, playerSelection],
+      [player, targetSelection],
+    ] as const) {
+      if (selection.kind !== "token") {
+        continue;
+      }
+      const reapplyResult = reapplyDeadWizardTokenFace(
+        state,
+        recipient,
+        selection.token,
+        source
+      );
+      if (!reapplyResult.ok || reapplyResult.gameEnd !== undefined) {
+        return reapplyResult;
       }
     }
-    return movementResult.gameEnd === undefined
-      ? { ok: true }
-      : { ok: true, gameEnd: movementResult.gameEnd };
-  });
+  }
+  return movementResult.gameEnd === undefined
+    ? { ok: true }
+    : { ok: true, gameEnd: movementResult.gameEnd };
 }
 
 function getControlledDeadWizardTokenLikeSelections(
@@ -3393,7 +3348,6 @@ function issueDeadWizardToken(
   deathKillerPlayerId?: PlayerState["playerId"],
   options?: {
     projectRespawn?: boolean;
-    resolveFaceImmediately?: boolean;
     attackId?: EffectSourceContext["attackId"];
     deferFace?: (face: DeadWizardTokenFace) => EffectExecutionResult;
   }
@@ -3468,8 +3422,6 @@ function issueDeadWizardToken(
         enqueueDeadWizardTokenFace(state, options.attackId, face);
       } else if (options?.deferFace !== undefined) {
         return options.deferFace(face);
-      } else if (options?.resolveFaceImmediately === true) {
-        return resolveDeadWizardTokenFace(state, face);
       } else {
         return resolveDeadWizardTokenFace(state, face);
       }
@@ -3487,7 +3439,7 @@ function applyDeadWizardTokenRespawnProjection(
   | {
       ok: true;
       deadWizardTokenWasDinglerAtGain: boolean;
-      deadWizardTokenProjectionEffectIds: readonly string[];
+      deadWizardTokenProjectionEffectIds: readonly RuntimeEffectId[];
     }
   | { ok: false; error: string } {
   const definition = state.tokenDefinitions.get(token.definitionId);
@@ -3500,7 +3452,7 @@ function applyDeadWizardTokenRespawnProjection(
   }
 
   const deadWizardTokenWasDinglerAtGain = hasDinglerStatus(player);
-  const deadWizardTokenProjectionEffectIds: string[] = [];
+  const deadWizardTokenProjectionEffectIds: RuntimeEffectId[] = [];
   const source: EffectSourceContext = {
     sourceType: "deadWizardToken",
     runtimeMode: state.runtimeMode,

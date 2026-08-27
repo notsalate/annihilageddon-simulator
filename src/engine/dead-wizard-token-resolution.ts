@@ -1,4 +1,5 @@
 import type { AttackId } from "../domain/types.js";
+import type { RuntimeEffectId } from "./runtime-effect.js";
 import type { TokenInstance } from "./setup.js";
 import type { GameState, PlayerState } from "./setup.js";
 
@@ -9,7 +10,7 @@ export interface DeadWizardTokenFace {
   attackId?: AttackId;
   deathKillerPlayerId?: PlayerState["playerId"];
   deadWizardTokenWasDinglerAtGain?: boolean;
-  deadWizardTokenProjectionEffectIds?: readonly string[];
+  deadWizardTokenProjectionEffectIds?: readonly RuntimeEffectId[];
 }
 
 export interface DeadWizardTokenAttackQueue {
@@ -64,5 +65,31 @@ export function takeDeadWizardTokenAttackFaces(
     queueIndex,
     1
   );
-  return queue?.faces ?? [];
+  const faces = queue?.faces ?? [];
+  const activePlayerIndex = state.players.findIndex(
+    (player) => player.playerId === state.activePlayerId
+  );
+  if (activePlayerIndex < 0 || state.players.length === 0) {
+    return faces;
+  }
+
+  const turnOrderByPlayerId = new Map(
+    state.players.map((player, playerIndex) => [
+      player.playerId,
+      (playerIndex - activePlayerIndex + state.players.length) %
+        state.players.length,
+    ])
+  );
+  return faces
+    .map((face, insertionIndex) => ({ face, insertionIndex }))
+    .sort((left, right) => {
+      const leftOrder =
+        turnOrderByPlayerId.get(left.face.playerId) ?? Number.MAX_SAFE_INTEGER;
+      const rightOrder =
+        turnOrderByPlayerId.get(right.face.playerId) ?? Number.MAX_SAFE_INTEGER;
+      return (
+        leftOrder - rightOrder || left.insertionIndex - right.insertionIndex
+      );
+    })
+    .map(({ face }) => face);
 }

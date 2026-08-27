@@ -143,7 +143,7 @@ export interface EffectSourceContext {
   tokenDefinitionId?: TokenDefinition["tokenId"];
   deadWizardTokenDeathKillerPlayerId?: PlayerState["playerId"];
   deadWizardTokenWasDinglerAtGain?: boolean;
-  deadWizardTokenProjectionEffectIds?: readonly string[];
+  deadWizardTokenProjectionEffectIds?: readonly RuntimeEffectId[];
   attackDeath?: boolean;
 }
 

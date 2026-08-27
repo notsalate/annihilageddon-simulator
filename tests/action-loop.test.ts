@@ -26,7 +26,6 @@ import {
 import {
   executeMayhemEffects,
   gainDeadWizardToken,
-  resolveWithinDeadWizardTokenResolutionBoundary,
 } from "../src/engine/effect-runtime.js";
 import {
   validateRuntimeEffectCatalogPayload,
@@ -17352,14 +17351,12 @@ test("прямая выдача ЖДК не воскрешает игрока и
     },
   ];
 
-  const result = resolveWithinDeadWizardTokenResolutionBoundary(state, () => {
-    const gained = gainDeadWizardToken(state, player);
-    assert.deepEqual(gained, { ok: true });
-    assert.equal(player.life.current, 3);
-    assert.equal(player.deadWizardTokens.length, 1);
-    assert.equal(player.deck[0], wand);
-    return { ok: true };
-  });
+  const gained = gainDeadWizardToken(state, player);
+  assert.deepEqual(gained, { ok: true });
+  assert.equal(player.life.current, 3);
+  assert.equal(player.deadWizardTokens.length, 1);
+  assert.equal(player.deck[0], wand);
+  const result = { ok: true };
 
   assert.deepEqual(result, { ok: true });
   assert.equal(player.deck[0], wand);
@@ -17384,7 +17381,7 @@ test("прямая выдача ЖДК не воскрешает игрока и
   );
 });
 
-test("ЖДК 015 выдаёт получателю одну чипсину сразу внутри внешней границы", () => {
+test("ЖДК 015 выдаёт получателю одну чипсину сразу", () => {
   const state = initializeGame({ rootDir, seed: 303015 });
   const player = mustGetPlayer(state, state.activePlayerId);
   player.chips = 0;
@@ -17396,11 +17393,9 @@ test("ЖДК 015 выдаёт получателю одну чипсину ср�
     },
   ];
 
-  const result = resolveWithinDeadWizardTokenResolutionBoundary(state, () => {
-    assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
-    assert.equal(player.chips, 1);
-    return { ok: true };
-  });
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+  assert.equal(player.chips, 1);
+  const result = { ok: true };
 
   assert.deepEqual(result, { ok: true });
   assert.equal(player.chips, 1);

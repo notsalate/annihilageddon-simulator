@@ -16,10 +16,16 @@ import { gainDeadWizardToken } from "../src/engine/effect-runtime.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
+  markAttackId,
   markTokenDefinitionId,
   markTokenInstanceId,
 } from "../src/domain/types.js";
 import { getControlledDeadWizardTokenCount } from "../src/engine/dead-wizard-token-like.js";
+import {
+  enqueueDeadWizardTokenFace,
+  registerDeadWizardTokenAttackInstance,
+  takeDeadWizardTokenAttackFaces,
+} from "../src/engine/dead-wizard-token-resolution.js";
 import { dispatchControlledCardOperation } from "../src/engine/trigger-dispatch.js";
 import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
@@ -644,6 +650,41 @@ test("Хахатальер завершает вложенный gain ЖДК д�
     [nestedToken.instanceId, outerToken.instanceId]
   );
   assert.equal(state.common.deadWizardTokens.drawStack.length, 0);
+});
+
+test("отложенные лица ЖДК идут по turn order и сохраняют порядок gain игрока", () => {
+  const state = initializeGame({ rootDir, seed: 343003, playerCount: 3 });
+  const [, nextPlayer, lastPlayer] = getPlayersInActiveOrder(state);
+  assert.ok(nextPlayer);
+  assert.ok(lastPlayer);
+  const attackId = markAttackId("attack-343003");
+  registerDeadWizardTokenAttackInstance(state, attackId);
+
+  const createFace = (player: PlayerState, suffix: string) => ({
+    playerId: player.playerId,
+    tokenInstanceId: markTokenInstanceId(`dwt-343-order-${suffix}`),
+    tokenDefinitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_001"),
+  });
+  const firstLastPlayerFace = createFace(lastPlayer, "last-first");
+  const nextPlayerFace = createFace(nextPlayer, "next");
+  const secondLastPlayerFace = createFace(lastPlayer, "last-second");
+  enqueueDeadWizardTokenFace(state, attackId, firstLastPlayerFace);
+  enqueueDeadWizardTokenFace(state, attackId, nextPlayerFace);
+  enqueueDeadWizardTokenFace(state, attackId, secondLastPlayerFace);
+
+  const orderedFaces = takeDeadWizardTokenAttackFaces(state, attackId);
+  assert.deepEqual(
+    orderedFaces.map((face) => face.playerId),
+    [nextPlayer.playerId, lastPlayer.playerId, lastPlayer.playerId]
+  );
+  assert.deepEqual(
+    orderedFaces.map((face) => face.tokenInstanceId),
+    [
+      nextPlayerFace.tokenInstanceId,
+      firstLastPlayerFace.tokenInstanceId,
+      secondLastPlayerFace.tokenInstanceId,
+    ]
+  );
 });
 
 test("свойство 003 спрашивает effective Legend в каждой точке текста DWT", () => {
