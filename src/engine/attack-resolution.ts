@@ -314,7 +314,7 @@ export interface PlayerControlledAttackAdapters {
     attribution: AttackDamageAttribution<EffectSourceContext>
   ): EffectExecutionResult;
 
-  closeAttackInstance?(
+  closeAttackInstance(
     state: GameState,
     attack: AttackInstance,
     result: EffectExecutionResult
@@ -506,8 +506,7 @@ export function resolvePlayerControlledAttack(
   const finish = (
     result: EffectExecutionResult
   ): PlayerControlledAttackExecutionResult =>
-    adapters.closeAttackInstance?.(intent.state, context.instance, result) ??
-    result;
+    adapters.closeAttackInstance(intent.state, context.instance, result);
   const firstTarget = targetResult.players[0];
   if (firstTarget === undefined) {
     return finish({ ok: true });

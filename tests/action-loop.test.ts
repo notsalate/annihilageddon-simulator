@@ -2717,6 +2717,16 @@ test("megaMayhem destroys top main deck cards in active-player order and kills p
     mayhemCard,
     thirdNormalCard
   );
+  const deathFace = {
+    instanceId: markTokenInstanceId("fixture-mega-mayhem-death-face"),
+    definitionId: markTokenDefinitionId("esw2_dbg__dead_wizard_token_015"),
+    ownerId: "common" as const,
+  };
+  state.common.deadWizardTokens.drawStack = [
+    deathFace,
+    ...state.common.deadWizardTokens.drawStack,
+  ];
+  const secondPlayerChipsBefore = secondPlayer.chips;
 
   const result = runMarketFlow(state, { mode: "turn" });
 
@@ -2761,6 +2771,35 @@ test("megaMayhem destroys top main deck cards in active-player order and kills p
         event.playerId === secondPlayer.playerId
     )
   );
+  const resolutionPhaseIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "mayhemResolutionPhaseStarted" &&
+      event.effectId ===
+        "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem"
+  );
+  const resurrectedIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "playerResurrected" &&
+      event.playerId === secondPlayer.playerId
+  );
+  const chipGainIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "effectChipsGained" &&
+      event.playerId === secondPlayer.playerId &&
+      event.cardInstanceId === deathFace.instanceId
+  );
+  const faceResolvedIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "deadWizardTokenFaceResolved" &&
+      event.playerId === secondPlayer.playerId &&
+      event.tokenInstanceId === deathFace.instanceId
+  );
+  assert.ok(resolutionPhaseIndex >= 0);
+  assert.ok(resurrectedIndex > resolutionPhaseIndex);
+  assert.ok(chipGainIndex > resurrectedIndex);
+  assert.ok(faceResolvedIndex > chipGainIndex);
+  assert.equal(secondPlayer.chips, secondPlayerChipsBefore + 1);
+  assert.deepEqual(state.deadWizardTokenResolution.attackQueues, []);
 });
 
 test("megaMayhem keeps a main-deck card when its destroy destination is invalid", () => {

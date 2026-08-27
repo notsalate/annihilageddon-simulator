@@ -607,6 +607,14 @@ export interface EffectRuntimeOnPlayCardOperationContext {
   readonly playedDefinition: CardDefinition;
 }
 
+export interface EffectRuntimeDeadWizardTokenFaceProjectionOperationContext {
+  readonly state: GameState;
+  readonly player: PlayerState;
+  readonly source: EffectSourceContext;
+  readonly services: EffectRuntimeServices;
+  readonly deadWizardTokenWasDinglerAtGain: boolean;
+}
+
 export interface EffectRuntimeAfterPlayerAttackDamageOperationContext {
   readonly state: GameState;
   readonly controller: PlayerState;
@@ -677,6 +685,10 @@ export interface EffectRuntimeCatalogOperationOverridesForTesting<
   readonly executeOnPlayCard?: (
     effect: RuntimeEffectForId<Id>,
     context: EffectRuntimeOnPlayCardOperationContext
+  ) => EffectRuntimeHandlerOperationResult<EffectExecutionResult>;
+  readonly projectDeadWizardTokenFace?: (
+    effect: RuntimeEffectForId<Id>,
+    context: EffectRuntimeDeadWizardTokenFaceProjectionOperationContext
   ) => EffectRuntimeHandlerOperationResult<EffectExecutionResult>;
   readonly applyAfterPlayerAttackDamage?: (
     effect: RuntimeEffectForId<Id>,
@@ -753,6 +765,11 @@ interface EffectRuntimeEntry<
     subjectId: string,
     effect: VerifiedRuntimeEffectForId<EffectId>,
     context: EffectRuntimeTimedExecutionOperationContext
+  ): EffectRuntimeOperationResult<EffectExecutionResult>;
+  projectDeadWizardTokenFaceVerified(
+    subjectId: string,
+    effect: VerifiedRuntimeEffectForId<EffectId>,
+    context: EffectRuntimeDeadWizardTokenFaceProjectionOperationContext
   ): EffectRuntimeOperationResult<EffectExecutionResult>;
   executeOnPlayCardVerified(
     subjectId: string,
@@ -1061,6 +1078,20 @@ function defineEffectRuntimeEntry<Id extends RuntimeEffectId>(
     executeVerified,
     evaluateAtTimingVerified,
     executeAtTimingVerified,
+    projectDeadWizardTokenFaceVerified(subjectId, effect, context) {
+      return evaluateAtTimingVerified(subjectId, effect, {
+        source: context.source,
+        timing: "onDeadWizardTokenFace",
+        evaluate(effect) {
+          const projectDeadWizardTokenFace =
+            operationOverrides?.projectDeadWizardTokenFace ??
+            config.handler.projectDeadWizardTokenFace;
+          return projectDeadWizardTokenFace === undefined
+            ? { status: "notApplicable" }
+            : projectDeadWizardTokenFace(effect, context);
+        },
+      });
+    },
     executeOnPlayCardVerified(subjectId, effect, context) {
       return evaluateAtTimingVerified(subjectId, effect, {
         source: context.source,
@@ -1707,6 +1738,20 @@ const gainStatusHandler: EffectRuntimeHandler<
 
     return { ok: true };
   },
+  projectDeadWizardTokenFace(effect, context) {
+    if (effect.statusId !== "dingler") {
+      return { status: "notApplicable" };
+    }
+    return {
+      status: "resolved",
+      result: context.services.gainDinglerStatus(
+        context.state,
+        context.player,
+        effect.effectId,
+        context.source
+      ),
+    };
+  },
 };
 
 const removeStatusHandler: EffectRuntimeHandler<
@@ -1798,6 +1843,25 @@ const toggleStatusHandler: EffectRuntimeHandler<
     }
 
     return { ok: true };
+  },
+  projectDeadWizardTokenFace(effect, context) {
+    if (effect.statusId !== "dingler") {
+      return { status: "notApplicable" };
+    }
+    const result = context.deadWizardTokenWasDinglerAtGain
+      ? context.services.removeDinglerStatus(
+          context.state,
+          context.player,
+          effect.effectId,
+          context.source
+        )
+      : context.services.gainDinglerStatus(
+          context.state,
+          context.player,
+          effect.effectId,
+          context.source
+        );
+    return { status: "resolved", result };
   },
 };
 
@@ -2609,6 +2673,19 @@ export function executeRuntimeEffectAtTiming(
       timing,
       ...(isApplicable === undefined ? {} : { isApplicable }),
     }
+  );
+}
+
+export function projectRuntimeEffectAtDeadWizardTokenFace(
+  effect: VerifiedRuntimeEffect,
+  context: EffectRuntimeDeadWizardTokenFaceProjectionOperationContext
+): EffectRuntimeOperationResult<EffectExecutionResult> {
+  return getVerifiedEffectRuntimeCatalogEntry(
+    effect
+  ).projectDeadWizardTokenFaceVerified(
+    `Effect ${effect.effectId}`,
+    effect,
+    context
   );
 }
 

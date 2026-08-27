@@ -79,6 +79,7 @@ import {
   evaluateRuntimeEffectBasicTrophyChipPayoutSuppression,
   executeRuntimeEffect,
   executeRuntimeEffectAtTiming as executeRuntimeEffectAtTimingInCatalog,
+  projectRuntimeEffectAtDeadWizardTokenFace,
   resolveResurrectionLifeTotal,
   type TargetChoice,
   type TargetChoiceResult,
@@ -3428,54 +3429,26 @@ function applyDeadWizardTokenRespawnProjection(
       continue;
     }
 
-    if (
-      verifiedEffect.effectId === "gain_status" &&
-      verifiedEffect.statusId === "dingler"
-    ) {
-      const result = gainDinglerStatus(
+    const projection = projectRuntimeEffectAtDeadWizardTokenFace(
+      verifiedEffect,
+      {
         state,
         player,
-        verifiedEffect.effectId,
-        source
-      );
-      if (!result.ok) {
-        return result;
+        source,
+        services: effectRuntimeServices,
+        deadWizardTokenWasDinglerAtGain,
       }
-      deadWizardTokenProjectionEffectIds.push(verifiedEffect.effectId);
+    );
+    if (projection.status === "error") {
+      return { ok: false, error: projection.error };
+    }
+    if (projection.status === "notApplicable") {
       continue;
     }
-
-    if (
-      verifiedEffect.effectId === "toggle_status" &&
-      verifiedEffect.statusId === "dingler"
-    ) {
-      const result = deadWizardTokenWasDinglerAtGain
-        ? removeDinglerStatus(state, player, verifiedEffect.effectId, source)
-        : gainDinglerStatus(state, player, verifiedEffect.effectId, source);
-      if (!result.ok) {
-        return result;
-      }
-      deadWizardTokenProjectionEffectIds.push(verifiedEffect.effectId);
-      continue;
+    if (!projection.result.ok) {
+      return projection.result;
     }
-
-    if (
-      verifiedEffect.effectId ===
-        "dead_wizard_token_gain_status_or_draw_face" &&
-      verifiedEffect.statusId === "dingler" &&
-      !deadWizardTokenWasDinglerAtGain
-    ) {
-      const result = gainDinglerStatus(
-        state,
-        player,
-        verifiedEffect.effectId,
-        source
-      );
-      if (!result.ok) {
-        return result;
-      }
-      deadWizardTokenProjectionEffectIds.push(verifiedEffect.effectId);
-    }
+    deadWizardTokenProjectionEffectIds.push(verifiedEffect.effectId);
   }
 
   return {

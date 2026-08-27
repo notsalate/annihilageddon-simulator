@@ -1210,6 +1210,23 @@ const gainStatusOrDrawFaceHandler: EffectRuntimeHandler<DeadWizardTokenGainStatu
       }
       return services.gainDinglerStatus(state, player, effect.effectId, source);
     },
+    projectDeadWizardTokenFace(effect, context) {
+      if (
+        effect.statusId !== "dingler" ||
+        context.deadWizardTokenWasDinglerAtGain
+      ) {
+        return { status: "notApplicable" };
+      }
+      return {
+        status: "resolved",
+        result: context.services.gainDinglerStatus(
+          context.state,
+          context.player,
+          effect.effectId,
+          context.source
+        ),
+      };
+    },
   };
 
 const gainLimpWandToDeckTopHandler: EffectRuntimeHandler<DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect> =
