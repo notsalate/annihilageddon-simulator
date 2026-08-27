@@ -6,6 +6,7 @@ import {
   type AttackInstance,
   type PlayerControlledAttackIntent,
   type PlayerControlledAttackExecutionResult,
+  type PlayerControlledSharedAttackImpact,
 } from "./attack-resolution.js";
 export { createAttackDefenseUsage } from "./attack-resolution.js";
 export type {
@@ -96,6 +97,7 @@ import { recordGameEvent, recordTurnPowerChanged } from "./event-recorder.js";
 import {
   isRuntimeEffectId,
   validateAttackSemanticsForEffect,
+  type AttackSemantics,
   type EffectTiming,
   type RuntimeEffect,
   type RuntimeEffectForId,
@@ -1657,28 +1659,68 @@ function exchangeLifeAndOrDinglerStatus(
   }
 
   const effectId = effect.effectId;
-  const targetResult = services.resolveTargetChoice(
-    state,
-    player,
-    effect,
-    source
-  );
-  if (!targetResult.ok) {
-    return targetResult;
-  }
-
-  if (targetResult.choice === undefined) {
-    return { ok: true };
-  }
-
-  if (targetResult.choice.choiceType !== "player") {
+  const attackSemantics: AttackSemantics | undefined =
+    "attackSemantics" in effect ? effect.attackSemantics : undefined;
+  if (
+    attackSemantics === undefined ||
+    attackSemantics.resolver !== "playerControlled" ||
+    attackSemantics.instanceMode !== "single" ||
+    attackSemantics.defenseWindowMode !== "COLLECT_ALL_FIRST" ||
+    attackSemantics.targetApplications !== "single" ||
+    attackSemantics.attackText !== "shared" ||
+    attackSemantics.continuation !== "none"
+  ) {
     return {
       ok: false,
-      error: "Life exchange effect requires a player target",
+      error: `${effectId} requires shared player-controlled AttackSemantics`,
     };
   }
 
-  const targetPlayer = targetResult.choice.player;
+  const impact: PlayerControlledSharedAttackImpact = {
+    kind: "shared",
+    resolve(currentState, attack) {
+      return resolveExchangeLifeAndDinglerStatus(
+        currentState,
+        attack,
+        effectId,
+        services,
+        exchangeLife,
+        exchangeDinglerStatus
+      );
+    },
+  };
+
+  return services.resolvePlayerControlledAttack({
+    state,
+    attackingPlayer: player,
+    source,
+    effectId,
+    defenseWindowMode: attackSemantics.defenseWindowMode,
+    attackSemantics,
+    unavoidable: false,
+    targetPlan: { kind: "runtimeSelector", effect },
+    impact,
+  });
+}
+
+function resolveExchangeLifeAndDinglerStatus(
+  state: GameState,
+  attack: AttackInstance,
+  effectId: RuntimeEffectId,
+  services: EffectRuntimeServices,
+  exchangeLife: boolean,
+  exchangeDinglerStatus: boolean
+): EffectExecutionResult {
+  const application = attack.applications.find(
+    (candidate) => candidate.resolution?.avoided === false
+  );
+  if (application === undefined) {
+    return { ok: true };
+  }
+
+  const player = attack.originalAttacker;
+  const targetPlayer = application.targetPlayer;
+  const source = attack.source;
   if (exchangeLife) {
     services.exchangePlayerLifeTotals(
       state,

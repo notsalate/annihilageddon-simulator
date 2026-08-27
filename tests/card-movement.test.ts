@@ -1188,6 +1188,19 @@ test("card movement: main_007 attacks for the revealed cost or destroys it", () 
     ),
     true
   );
+  const attackCreated = attackScenario.state.eventLog.find(
+    (event) =>
+      event.type === "attackCreated" &&
+      event.effectId === "reveal_top_card_choose_destroy_or_attack_equal_cost"
+  );
+  const attackTargetStarted = attackScenario.state.eventLog.find(
+    (event) =>
+      event.type === "attackTargetStarted" &&
+      event.effectId === "reveal_top_card_choose_destroy_or_attack_equal_cost"
+  );
+  assert.ok(attackCreated);
+  assert.ok(attackTargetStarted);
+  assert.equal(attackCreated.attackId, attackTargetStarted.attackId);
   assert.equal(attackScenario.activePlayer.deck[0], attackTarget);
 
   const differentCostScenario = createGameScenario({

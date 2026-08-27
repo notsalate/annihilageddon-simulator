@@ -11883,6 +11883,23 @@ test("Venerina Magolovka supports pass, life-only, Dingler-only, and full exchan
       hasDinglerStatus(targetPlayer),
       testCase.expectedTargetDingler
     );
+    const attackLifecycleEvents = state.eventLog.filter(
+      (event) =>
+        event.effectId === "exchange_life_and_dingler_status" &&
+        (event.type === "attackCreated" || event.type === "attackTargetStarted")
+    );
+    if (testCase.selectedChoiceId === "pass") {
+      assert.deepEqual(attackLifecycleEvents, []);
+    } else {
+      assert.deepEqual(
+        attackLifecycleEvents.map((event) => event.type),
+        ["attackCreated", "attackTargetStarted"]
+      );
+      const attackIds = attackLifecycleEvents.map((event) =>
+        "attackId" in event ? event.attackId : undefined
+      );
+      assert.equal(new Set(attackIds).size, 1);
+    }
     assert.ok(
       state.eventLog.some((event) => {
         return (
@@ -11899,6 +11916,66 @@ test("Venerina Magolovka supports pass, life-only, Dingler-only, and full exchan
       })
     );
   }
+});
+
+test("Venerina Magolovka does not exchange after an avoided AttackInstance", () => {
+  const state = initializeGame({ rootDir, seed: 60616 });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const targetPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(targetPlayer);
+  activePlayer.wizardProperties = [];
+  targetPlayer.wizardProperties = [];
+  activePlayer.life.current = 7;
+  targetPlayer.life.current = 13;
+  addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf");
+  state.effectChoiceStrategy = (request) => {
+    if (request.effectId !== "exchange_life_and_dingler_status") {
+      return selectFirstFixtureDefense(request);
+    }
+    const option = request.choices.find(
+      (choice) => choice.choiceId === "exchange_life_only"
+    );
+    if (option !== undefined) return { choiceId: option.choiceId };
+    const targetChoice = request.choices.find(
+      (choice) => choice.choiceId === targetPlayer.playerId
+    );
+    return targetChoice === undefined
+      ? undefined
+      : { choiceId: targetChoice.choiceId };
+  };
+  const card = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_002"
+  );
+
+  assert.deepEqual(
+    applyAction(state, { type: "playCard", cardInstanceId: card.instanceId }),
+    { ok: true }
+  );
+  assert.equal(activePlayer.life.current, 7);
+  assert.equal(targetPlayer.life.current, 13);
+  const attackEvents = state.eventLog.filter(
+    (event) =>
+      event.effectId === "exchange_life_and_dingler_status" &&
+      (event.type === "attackCreated" ||
+        event.type === "attackTargetStarted" ||
+        event.type === "attackAvoided")
+  );
+  assert.deepEqual(
+    attackEvents.map((event) => event.type),
+    ["attackCreated", "attackTargetStarted", "attackAvoided"]
+  );
+  assert.equal(
+    new Set(
+      attackEvents.map((event) =>
+        "attackId" in event ? event.attackId : undefined
+      )
+    ).size,
+    1
+  );
 });
 
 test("2H grants one chip to each non-Dingler in active-player order", () => {
