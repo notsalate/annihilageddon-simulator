@@ -8,7 +8,11 @@ import type {
 import type { RuntimeEffectId } from "./runtime-effect.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
-export type LimpWandGainDestination = "discard" | "hand" | "deckTop";
+export type LimpWandGainDestination =
+  | "discard"
+  | "hand"
+  | "deckTop"
+  | "deckBottom";
 
 export function gainLimpWandsFromCommonStack(
   state: GameState,
@@ -22,7 +26,7 @@ export function gainLimpWandsFromCommonStack(
   const destinationCards =
     destination === "hand"
       ? player.hand
-      : destination === "deckTop"
+      : destination === "deckTop" || destination === "deckBottom"
         ? player.deck
         : player.discard;
   const destinationZone = `${player.playerId}.${destination}`;

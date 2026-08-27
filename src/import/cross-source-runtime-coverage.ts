@@ -854,6 +854,8 @@ function hasKnownRuntimeDefinitionReference(
   const setupCallNames = [
     "givenWizardProperty",
     "givenDeadWizardToken",
+    "createDeadWizardToken",
+    "createDeadWizardTokenInStack",
     "givenRuntimeCard",
     "createCardInstance",
     "createToken",

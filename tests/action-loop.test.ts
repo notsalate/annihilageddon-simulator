@@ -52,6 +52,7 @@ import {
   removeCardFromLocation,
 } from "../src/engine/control-ledger.js";
 import { drawDeckCard, shuffleDeck } from "../src/engine/deck-lifecycle.js";
+import { createAttackChainRecurrenceKey } from "../src/engine/attack-cycle.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -4122,17 +4123,7 @@ test("Pokhotlivyi maiachok recalculates its controller power from controlled DWT
     seed: 60615,
   });
   const activePlayer = mustGetPlayer(state, state.activePlayerId);
-  const neutralTokens = state.common.deadWizardTokens.drawStack.filter(
-    (token) => token.definitionId === "esw2_dbg__dead_wizard_token_neutral"
-  );
-  assert.equal(neutralTokens.length >= 2, true);
-  state.common.deadWizardTokens.drawStack = [
-    ...neutralTokens.slice(0, 2),
-    ...state.common.deadWizardTokens.drawStack.filter(
-      (token) => token.definitionId !== "esw2_dbg__dead_wizard_token_neutral"
-    ),
-    ...neutralTokens.slice(2),
-  ];
+  setNeutralDeadWizardTokenStack(state, 2, "legend-025");
   const beacon = addRuntimeCardToHand(
     state,
     activePlayer,
@@ -8122,7 +8113,7 @@ test("play_top_card triggers wizard property on-play effects and cleans up to ow
   assert.equal(activePlayer.discard.includes(topPlayedCard), true);
 });
 
-test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affect scoring", () => {
+test("deal_damage can kill an opponent, give a fixture DWT, resurrect, and affect scoring", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
@@ -8137,6 +8128,7 @@ test("deal_damage can kill an opponent, give a neutral DWT, resurrect, and affec
   );
   assert.ok(targetPlayer);
   assert.equal(state.common.deadWizardTokens.status, "available");
+  setNeutralDeadWizardTokenStack(state, 1, "deal-damage");
   const neutralDwt = state.common.deadWizardTokens.drawStack[0];
   assert.ok(neutralDwt);
   const fixtureCardId = addFixtureCardToActiveHand(state, {
@@ -9864,9 +9856,8 @@ test("Palochka-Shlepalocka gains no chips when its attack is defended", () => {
 test("Palochka-Shlepalocka uses life-limited actual damage for its chip transfer", () => {
   const { state, activePlayer, targetPlayer, wand } =
     setupShlepalockaTestState();
-  const neutralDeadWizardToken = state.common.deadWizardTokens.drawStack.find(
-    (token) => token.definitionId === "esw2_dbg__dead_wizard_token_neutral"
-  );
+  setNeutralDeadWizardTokenStack(state, 1, "shlepalocka-life-limited");
+  const neutralDeadWizardToken = state.common.deadWizardTokens.drawStack[0];
   assert.ok(neutralDeadWizardToken);
   state.common.deadWizardTokens.drawStack = [neutralDeadWizardToken];
   targetPlayer.life.current = 1;
@@ -10321,6 +10312,233 @@ test("#287 directional chain wraps after a full circle", () => {
         event.cardInstanceId === wand.instanceId
     ).length,
     3
+  );
+});
+
+test("attack-chain recurrence key changes with rules-relevant state and RNG", () => {
+  const state = initializeGame({ rootDir, seed: 606162, playerCount: 2 });
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const cursor = {
+    direction: "left" as const,
+    targetIndex: 0,
+    targetPlayerId: targetPlayer.playerId,
+  };
+
+  const baseline = createAttackChainRecurrenceKey(state, cursor);
+  const fork = forkGameState(state);
+  assert.equal(createAttackChainRecurrenceKey(fork, cursor), baseline);
+
+  targetPlayer.life.current -= 1;
+  assert.notEqual(createAttackChainRecurrenceKey(state, cursor), baseline);
+  targetPlayer.life.current += 1;
+  targetPlayer.life.max -= 1;
+  assert.notEqual(createAttackChainRecurrenceKey(state, cursor), baseline);
+  targetPlayer.life.max += 1;
+  state.common.deadWizardTokens.drawStack = [];
+  assert.notEqual(createAttackChainRecurrenceKey(state, cursor), baseline);
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-cycle-key-dwt"),
+      definitionId: markTokenDefinitionId(
+        "esw2_dbg__dead_wizard_token_neutral"
+      ),
+      ownerId: "common",
+    },
+  ];
+  state.rng.next();
+  assert.notEqual(createAttackChainRecurrenceKey(state, cursor), baseline);
+});
+
+test("attack-chain recurrence key keeps distinct non-finite policy numbers distinct", () => {
+  const state = initializeGame({ rootDir, seed: 606162, playerCount: 2 });
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const cursor = {
+    direction: "left" as const,
+    targetIndex: 0,
+    targetPlayerId: targetPlayer.playerId,
+  };
+  const policyStates = [
+    0,
+    -0,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+  ];
+
+  const keys = policyStates.map((choicePolicyState) =>
+    createAttackChainRecurrenceKey(state, { ...cursor, choicePolicyState })
+  );
+
+  assert.equal(new Set(keys).size, policyStates.length);
+});
+
+test("#358 stops only a proven two-player directional chain cycle", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 606163,
+    playerCount: 2,
+  });
+  const activePlayer = scenario.activePlayer;
+  const targetPlayer = scenario.foes[0];
+  assert.ok(targetPlayer);
+  scenario.state.activePlayerId = activePlayer.playerId;
+  for (const player of scenario.state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+    player.hand = [];
+    player.life.current = 20;
+  }
+  targetPlayer.life.current = 1;
+  scenario.state.common.deadWizardTokens.drawStack = [];
+  scenario.state.turn.power = 99;
+  givenRuntimeCard(scenario, {
+    player: activePlayer,
+    zone: "permanents",
+    definitionId: "esw2_dbg__legend_008",
+  });
+  const wand = givenRuntimeCard(scenario, {
+    player: activePlayer,
+    definitionId: "esw2_dbg__legend_015",
+  });
+
+  const result = play(scenario, wand);
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 20);
+  assert.equal(
+    scenario.state.eventLog.filter(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.cardInstanceId === wand.instanceId
+    ).length,
+    2
+  );
+  assert.equal(
+    scenario.state.eventLog.filter(
+      (event) => event.type === "attackChainCycleDetected"
+    ).length,
+    1
+  );
+});
+
+test("proven directional cycle does not skip later effects of the same card", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 606165,
+    playerCount: 2,
+  });
+  const activePlayer = scenario.activePlayer;
+  const targetPlayer = scenario.foes[0];
+  assert.ok(targetPlayer);
+  for (const player of scenario.state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+    player.hand = [];
+    player.life.current = 20;
+  }
+  targetPlayer.life.current = 1;
+  scenario.state.common.deadWizardTokens.drawStack = [];
+  scenario.state.turn.power = 99;
+  givenRuntimeCard(scenario, {
+    player: activePlayer,
+    zone: "permanents",
+    definitionId: "esw2_dbg__legend_008",
+  });
+  const wand = givenRuntimeCard(scenario, {
+    player: activePlayer,
+    effects: [
+      {
+        effectId: "directional_chain_attack",
+        timing: "onPlay",
+        amount: 10,
+        targetSelector: "leftOrRightFoe",
+      },
+      { effectId: "add_power", timing: "onPlay", amount: 7 },
+    ],
+  });
+
+  const result = play(scenario, wand);
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(scenario.state.turn.power, 106);
+  const cycleIndex = scenario.state.eventLog.findIndex(
+    (event) => event.type === "attackChainCycleDetected"
+  );
+  const powerIndex = scenario.state.eventLog.findIndex(
+    (event) =>
+      event.type === "effectAddPowerApplied" &&
+      event.cardInstanceId === wand.instanceId &&
+      event.amount === 7
+  );
+  assert.notEqual(cycleIndex, -1);
+  assert.notEqual(powerIndex, -1);
+  assert.ok(cycleIndex < powerIndex);
+});
+
+test("directional chain does not infer a cycle from an opaque stateful choice policy", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 606164,
+    playerCount: 2,
+  });
+  const activePlayer = scenario.activePlayer;
+  const targetPlayer = scenario.foes[0];
+  assert.ok(targetPlayer);
+  scenario.state.activePlayerId = activePlayer.playerId;
+  for (const player of scenario.state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+    player.hand = [];
+    player.life.current = 20;
+  }
+  targetPlayer.life.current = 1;
+  scenario.state.common.deadWizardTokens.drawStack = [];
+  scenario.state.turn.power = 99;
+  const defense = addFixtureDefenseCardToHand(
+    scenario.state,
+    targetPlayer,
+    "discardSelf"
+  );
+  givenRuntimeCard(scenario, {
+    player: activePlayer,
+    zone: "permanents",
+    definitionId: "esw2_dbg__legend_008",
+  });
+  const wand = givenRuntimeCard(scenario, {
+    player: activePlayer,
+    definitionId: "esw2_dbg__legend_015",
+  });
+  let defenseChoiceCount = 0;
+  scenario.state.effectChoiceStrategy = (request) => {
+    if (request.effectId !== "avoid_attack") {
+      return undefined;
+    }
+    defenseChoiceCount += 1;
+    if (defenseChoiceCount < 3) {
+      return { choiceId: "decline" };
+    }
+    return { choiceId: defense.instanceId };
+  };
+
+  const result = play(scenario, wand);
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 20);
+  assert.equal(defenseChoiceCount, 3);
+  assert.equal(targetPlayer.discard.includes(defense), true);
+  assert.equal(
+    scenario.state.eventLog.filter(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.cardInstanceId === wand.instanceId
+    ).length,
+    3
+  );
+  assert.equal(
+    scenario.state.eventLog.filter(
+      (event) => event.type === "attackChainCycleDetected"
+    ).length,
+    0
   );
 });
 
@@ -15463,6 +15681,7 @@ test("ТА САМАЯ Вялая Палочка не передаёт палоч
 
 test("ТА САМАЯ Вялая Палочка после убийства передаёт до трёх палочек из всех источников", () => {
   const state = initializeGame({ rootDir, seed: 244022 });
+  setNeutralDeadWizardTokenStack(state, 1, "limp-wand-transfer");
   const player = mustGetPlayer(state, state.activePlayerId);
   const foe = state.players.find(
     (candidate) => candidate.playerId !== player.playerId
@@ -15874,7 +16093,7 @@ test("смерть в незавершённой карте сначала вы�
   player.wizardProperties = [];
   foe.wizardProperties = [];
   foe.life.current = 1;
-  state.common.deadWizardTokens.drawStack.splice(1);
+  setNeutralDeadWizardTokenStack(state, 1, "unfinished-card-death");
   const returnedCard = player.hand.shift();
   assert.ok(returnedCard);
   player.discard.push(returnedCard);
@@ -17333,6 +17552,77 @@ test("endTurn проверяет start-of-turn эффекты следующег
   assert.equal(state.turn.number, turnNumber);
   assert.deepEqual(activePlayer.hand, activeHand);
   assert.deepEqual(state.eventLog, eventLog);
+});
+
+test("empty DWT endTurn checkpoint precedes the next turn and its start effects", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 246031,
+    deadWizardTokenCount: 0,
+  });
+  const activePlayer = state.players.find(
+    (player) => player.playerId === state.activePlayerId
+  );
+  assert.ok(activePlayer);
+  const nextPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(nextPlayer);
+  const startEffect = {
+    effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand",
+    timing: "startOfControllerTurn",
+    destination: "hand",
+    amount: 1,
+    chooser: "controller",
+  } as const;
+  const definition = createFixtureCardDefinition(
+    "fixture-empty-dwt-start-of-turn",
+    [startEffect],
+    { isOngoing: true }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  nextPlayer.permanents.push({
+    instanceId: markCardInstanceId("fixture-empty-dwt-start-of-turn"),
+    definitionId: markCardDefinitionId(definition.cardId),
+    ownerId: nextPlayer.playerId,
+    marketChips: 0,
+  });
+  const limpWand = state.common.limpWandStack[0];
+  assert.ok(limpWand);
+  const nextHand = nextPlayer.hand.slice();
+  state.effectChoiceStrategy = ({ effectId, choices }) =>
+    effectId === startEffect.effectId
+      ? toChoiceSelection(choices[0])
+      : undefined;
+
+  const result = applyAction(state, { type: "endTurn" });
+
+  assert.deepEqual(result, {
+    ok: true,
+    gameEndReason: "deadWizardTokensExhausted",
+  });
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(state.turn.number, 2);
+  assert.deepEqual(nextPlayer.hand, nextHand);
+  assert.equal(state.common.limpWandStack.includes(limpWand), true);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "turnStarted" && event.playerId === nextPlayer.playerId
+    ),
+    false
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "effectChoiceSelected" &&
+        event.playerId === nextPlayer.playerId
+    ),
+    false
+  );
 });
 
 test("прямая выдача ЖДК не воскрешает игрока и разрешает лицо сразу", () => {
@@ -18805,6 +19095,7 @@ test("#270 main treasure defense cannot spend the last life", () => {
     dataPackPath: playableRuntimeDataPackPath,
     seed: 270004,
   });
+  setNeutralDeadWizardTokenStack(state, 1, "main-treasure-defense");
   state.cardDefinitions = new Map([
     ...state.cardDefinitions,
     [defenseDefinition.cardId, defenseDefinition],

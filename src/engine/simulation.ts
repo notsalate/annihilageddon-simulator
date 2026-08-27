@@ -4,9 +4,10 @@ import {
   type GameAction,
   type LegalAction,
 } from "./actions.js";
-import { assertNever } from "../common.js";
+import { assertNever, isPlainRecord } from "../common.js";
 import type {
   ChoicePolicy,
+  ChoicePolicyState,
   ChoiceRequest,
   ChoiceSelection,
   EffectChoiceRequest,
@@ -38,9 +39,13 @@ import {
 import { assertGameStateInvariants } from "./invariants.js";
 import { createPlayerDecisionView } from "./strategy-decision-view.js";
 import { intakeRuntimeData } from "./runtime-data-intake.js";
+import {
+  DEAD_WIZARD_TOKENS_EXHAUSTED_REASON,
+  isDeadWizardTokenStackExhausted,
+} from "./end-conditions.js";
 
 export type GameEndReason =
-  | "deadWizardTokensExhausted"
+  | typeof DEAD_WIZARD_TOKENS_EXHAUSTED_REASON
   | "mainDeckExhausted"
   | "legendDeckExhausted"
   | "playerDefeated"
@@ -51,6 +56,7 @@ export interface RunSingleGameOptions {
   seed: number;
   maxTurns: number;
   playerCount?: number;
+  deadWizardTokenCount?: number;
   dataPackPath?: string;
   dataPack?: LoadedDataPack;
   bot?: BotStrategy;
@@ -73,12 +79,14 @@ export type BotDecisionAction =
 export interface BotStrategy {
   chooseAction(context: BotDecisionContext): GameAction;
   chooseEffectChoice?: ChoicePolicy;
+  getChoicePolicyState?: () => ChoicePolicyState | undefined;
 }
 
 interface PlayerBotBinding {
   readonly strategy: BotStrategy;
   readonly chooseAction: BotStrategy["chooseAction"];
   readonly chooseEffectChoice: BotStrategy["chooseEffectChoice"];
+  readonly getChoicePolicyState: BotStrategy["getChoicePolicyState"];
 }
 
 export interface SetupCardSnapshot {
@@ -121,6 +129,7 @@ export interface SimulationFailureSetup {
   seed: number;
   maxTurns: number;
   playerCount?: number;
+  deadWizardTokenCount?: number;
   dataPackPath?: string;
   initialState: SetupStateSnapshot;
 }
@@ -216,6 +225,11 @@ interface SimulationFailureReplayChoiceCandidate {
   readonly chosenInstanceId?: unknown;
 }
 
+interface SimulationFailureSetupCandidate {
+  readonly playerCount?: unknown;
+  readonly deadWizardTokenCount?: unknown;
+}
+
 export function createSimulationFailureReplay(
   report: Pick<SimulationFailureReport, "actions" | "choices">
 ): SimulationFailureReplay {
@@ -292,6 +306,8 @@ function getReplaySetupCandidates(
 export function parseSimulationFailureReplayReport(reportText: string): {
   runtimeData: SimulationFailureReport["runtimeData"];
   replay: SimulationFailureReplay;
+  playerCount?: number;
+  deadWizardTokenCount?: number;
 } {
   const runtimeDataValue: unknown = JSON.parse(
     readJsonSection(reportText, "runtimeData")
@@ -305,6 +321,9 @@ export function parseSimulationFailureReplayReport(reportText: string): {
   if (!isGameActionArray(actionsValue)) {
     throw new Error("Report actions have an invalid shape");
   }
+  const setupValue = readReplaySetup(reportText);
+  const playerCount = readReplayPlayerCount(setupValue);
+  const deadWizardTokenCount = readReplayDeadWizardTokenCount(setupValue);
   const choicesValue: unknown = JSON.parse(
     readJsonSection(reportText, "choices")
   );
@@ -314,7 +333,74 @@ export function parseSimulationFailureReplayReport(reportText: string): {
       actions: actionsValue,
       choices: readReplayChoices(choicesValue),
     },
+    ...(playerCount === undefined ? {} : { playerCount }),
+    ...(deadWizardTokenCount === undefined ? {} : { deadWizardTokenCount }),
   };
+}
+
+function readReplaySetup(
+  reportText: string
+): SimulationFailureSetupCandidate | undefined {
+  const setupSection = readOptionalJsonSection(reportText, "setup");
+  if (setupSection === undefined) {
+    return undefined;
+  }
+
+  const setupValue: unknown = JSON.parse(setupSection);
+  if (!isSimulationFailureSetupCandidate(setupValue)) {
+    throw new Error("Report setup has an invalid shape");
+  }
+  return setupValue;
+}
+
+function readReplayPlayerCount(
+  setupValue: SimulationFailureSetupCandidate | undefined
+): number | undefined {
+  if (setupValue === undefined) {
+    return undefined;
+  }
+
+  const value = setupValue.playerCount;
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 2) {
+    throw new Error("Report setup playerCount has an invalid shape");
+  }
+  return value;
+}
+
+function readReplayDeadWizardTokenCount(
+  setupValue: SimulationFailureSetupCandidate | undefined
+): number | undefined {
+  if (setupValue === undefined) {
+    return undefined;
+  }
+
+  const value = setupValue.deadWizardTokenCount;
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error("Report setup deadWizardTokenCount has an invalid shape");
+  }
+  return value;
+}
+
+function isSimulationFailureSetupCandidate(
+  value: unknown
+): value is SimulationFailureSetupCandidate {
+  return isPlainRecord(value);
+}
+
+function readOptionalJsonSection(
+  reportText: string,
+  section: string
+): string | undefined {
+  const marker = `${section}:\n${"`".repeat(3)}json\n`;
+  return reportText.includes(marker)
+    ? readJsonSection(reportText, section)
+    : undefined;
 }
 
 function readJsonSection(reportText: string, section: string): string {
@@ -653,6 +739,7 @@ interface SimulationReplayController {
   nextAction(): GameAction;
   chooseSetupChoice(request: SetupChoiceRequest): ChoiceSelection | undefined;
   chooseEffectChoice(request: EffectChoiceRequest): ChoiceSelection | undefined;
+  getChoicePolicyState(): ChoicePolicyState;
   getIncompleteHistoryError(): SimulationReplayError | undefined;
 }
 
@@ -741,6 +828,9 @@ function createSimulationReplayController(
       }
       return { choiceId: expected.choiceId };
     },
+    getChoicePolicyState(): ChoicePolicyState {
+      return { actionIndex, choiceIndex };
+    },
     getIncompleteHistoryError(): SimulationReplayError | undefined {
       if (actionIndex !== replay.actions.length) {
         return new SimulationReplayError(
@@ -779,6 +869,7 @@ function createReplayBotFactory(
 ): (playerId: PlayerId) => BotStrategy {
   return () => ({
     chooseAction: () => replayController.nextAction(),
+    getChoicePolicyState: () => replayController.getChoicePolicyState(),
     chooseEffectChoice: (request) =>
       request.requestKind === "setup"
         ? replayController.chooseSetupChoice(request)
@@ -826,7 +917,8 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
   const playerIdByStrategy = new WeakMap<BotStrategy, PlayerId>();
   const playerIdByCallback = new Map<
     | BotStrategy["chooseAction"]
-    | NonNullable<BotStrategy["chooseEffectChoice"]>,
+    | NonNullable<BotStrategy["chooseEffectChoice"]>
+    | NonNullable<BotStrategy["getChoicePolicyState"]>,
     PlayerId
   >();
 
@@ -848,12 +940,14 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     }
     const chooseAction = strategy.chooseAction;
     const chooseEffectChoice = strategy.chooseEffectChoice;
+    const getChoicePolicyState = strategy.getChoicePolicyState;
     const callbacks: ReadonlyArray<
       readonly [
-        "chooseAction" | "chooseEffectChoice",
+        "chooseAction" | "chooseEffectChoice" | "getChoicePolicyState",
         (
           | BotStrategy["chooseAction"]
           | NonNullable<BotStrategy["chooseEffectChoice"]>
+          | NonNullable<BotStrategy["getChoicePolicyState"]>
         ),
       ]
     > = [
@@ -861,6 +955,9 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       ...(chooseEffectChoice === undefined
         ? []
         : ([["chooseEffectChoice", chooseEffectChoice]] as const)),
+      ...(getChoicePolicyState === undefined
+        ? []
+        : ([["getChoicePolicyState", getChoicePolicyState]] as const)),
     ];
     for (const [callbackName, callback] of callbacks) {
       const assignedPlayerId = playerIdByCallback.get(callback);
@@ -874,15 +971,49 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       playerIdByCallback.set(callback, playerId);
     }
     playerIdByStrategy.set(strategy, playerId);
-    const binding = { strategy, chooseAction, chooseEffectChoice };
+    const binding = {
+      strategy,
+      chooseAction,
+      chooseEffectChoice,
+      getChoicePolicyState,
+    };
     botBindingsByPlayerId.set(playerId, binding);
     return binding;
   }
 
-  const effectChoiceStrategy = (request: ChoiceRequest) => {
-    const binding = getBotBindingForPlayer(request.player.playerId);
-    return binding.chooseEffectChoice?.call(binding.strategy, request);
-  };
+  let initializedState: GameState | undefined;
+  const effectChoiceStrategy: ChoicePolicy = Object.assign(
+    (request: ChoiceRequest) => {
+      const binding = getBotBindingForPlayer(request.player.playerId);
+      return binding.chooseEffectChoice?.call(binding.strategy, request);
+    },
+    {
+      getState: (): ChoicePolicyState | undefined => {
+        if (initializedState === undefined) {
+          return undefined;
+        }
+        const policyStates: Array<{
+          readonly playerId: PlayerId;
+          readonly state: ChoicePolicyState;
+        }> = [];
+        for (const player of initializedState.players) {
+          const binding = getBotBindingForPlayer(player.playerId);
+          if (binding.chooseEffectChoice === undefined) {
+            continue;
+          }
+          if (binding.getChoicePolicyState === undefined) {
+            return undefined;
+          }
+          const state = binding.getChoicePolicyState.call(binding.strategy);
+          if (state === undefined) {
+            return undefined;
+          }
+          policyStates.push({ playerId: player.playerId, state });
+        }
+        return policyStates;
+      },
+    }
+  );
   const runtimeDataPack =
     dataPack === undefined
       ? intakeRuntimeData({
@@ -898,15 +1029,19 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     ...(options.playerCount === undefined
       ? {}
       : { playerCount: options.playerCount }),
+    ...(options.deadWizardTokenCount === undefined
+      ? {}
+      : { deadWizardTokenCount: options.deadWizardTokenCount }),
     effectChoiceStrategy,
   });
+  initializedState = state;
   const setupState = snapshotSetupState(state);
   if (options.validateInvariants) {
     assertGameStateInvariants(state);
   }
   const actionLimit = options.maxTurns * 200;
   let actionsApplied = 0;
-  let checkDeadWizardTokenExhaustion = true;
+  let checkDeadWizardTokenExhaustion = options.deadWizardTokenCount !== 0;
   const actionHistory: GameAction[] = [];
 
   while (true) {
@@ -1003,6 +1138,9 @@ function createSimulationExecutionError(
     ...(options.playerCount === undefined
       ? []
       : ["--playerCount", String(options.playerCount)]),
+    ...(options.deadWizardTokenCount === undefined
+      ? []
+      : ["--deadWizardTokenCount", String(options.deadWizardTokenCount)]),
     "--replayReport",
     "<report-path>",
   ];
@@ -1015,6 +1153,9 @@ function createSimulationExecutionError(
       ...(options.playerCount === undefined
         ? {}
         : { playerCount: options.playerCount }),
+      ...(options.deadWizardTokenCount === undefined
+        ? {}
+        : { deadWizardTokenCount: options.deadWizardTokenCount }),
       ...(options.dataPackPath === undefined
         ? {}
         : { dataPackPath: options.dataPackPath }),
@@ -1148,10 +1289,9 @@ export function getGameEndReason(
 ): GameEndReason | undefined {
   if (
     options.checkDeadWizardTokenExhaustion !== false &&
-    state.common.deadWizardTokens.status === "available" &&
-    state.common.deadWizardTokens.drawStack.length === 0
+    isDeadWizardTokenStackExhausted(state)
   ) {
-    return "deadWizardTokensExhausted";
+    return DEAD_WIZARD_TOKENS_EXHAUSTED_REASON;
   }
 
   return undefined;

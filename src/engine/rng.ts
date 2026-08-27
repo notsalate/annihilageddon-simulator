@@ -1,7 +1,13 @@
+export interface RandomSourceSnapshot {
+  readonly algorithm: "mulberry32";
+  readonly state: number;
+}
+
 export interface RandomSource {
   next(): number;
   nextInt(maxExclusive: number): number;
   fork(): RandomSource;
+  snapshot(): RandomSourceSnapshot;
 }
 
 export function createSeededRng(seed: number): RandomSource {
@@ -33,5 +39,9 @@ class Mulberry32 implements RandomSource {
 
   fork(): RandomSource {
     return new Mulberry32(this.state);
+  }
+
+  snapshot(): RandomSourceSnapshot {
+    return { algorithm: "mulberry32", state: this.state };
   }
 }

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   applyAction,
   getGameEndReason,
+  intakeRuntimeData,
   initializeGame,
   runMarketFlow,
   scoreGame,
@@ -31,6 +32,115 @@ import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
 const rootDir = process.cwd();
+
+test("production DWT stack contains 30 named physical tokens", () => {
+  const dataPack = intakeRuntimeData({ rootDir });
+  const stack = dataPack.tokenStacks.deadWizardTokens;
+  assert.ok(stack);
+
+  assert.equal(
+    stack.entries.reduce((total, entry) => total + entry.count, 0),
+    30
+  );
+  assert.equal(stack.entries.length, 29);
+  assert.equal(
+    stack.entries.find(
+      (entry) => entry.tokenId === "esw2_dbg__dead_wizard_token_003"
+    )?.count,
+    2
+  );
+  assert.equal(
+    stack.entries.some(
+      (entry) => entry.tokenId === "esw2_dbg__dead_wizard_token_neutral"
+    ),
+    false
+  );
+  assert.equal(
+    dataPack.tokenDefinitions.has("esw2_dbg__dead_wizard_token_030"),
+    true
+  );
+});
+
+test("DWT-030 puts up to two Limp Wands under the player's deck", () => {
+  const resolve = (seed: number, keepDeckCard: boolean, wandCount: number) => {
+    const state = initializeGame({ rootDir, seed });
+    const player = getActivePlayer(state);
+    const deckCard = player.deck[0];
+    player.deck = keepDeckCard && deckCard !== undefined ? [deckCard] : [];
+    const wands = state.common.limpWandStack.slice(0, wandCount);
+    state.common.limpWandStack = [...wands];
+    state.common.deadWizardTokens.drawStack = [
+      createDeadWizardTokenInStack(
+        `dwt-348-030-${seed}`,
+        "esw2_dbg__dead_wizard_token_030"
+      ),
+    ];
+
+    assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+    return { state, player, deckCard, wands };
+  };
+
+  const full = resolve(348001, true, 2);
+  assert.deepEqual(
+    full.player.deck.map((card) => card.instanceId),
+    [full.deckCard, ...full.wands].map((card) => card?.instanceId)
+  );
+  assert.equal(
+    full.state.eventLog.filter(
+      (event) =>
+        event.type === "effectCardGained" &&
+        event.effectId === "dead_wizard_token_gain_limp_wands_to_deck_bottom"
+    ).length,
+    2
+  );
+
+  const empty = resolve(348002, false, 2);
+  assert.deepEqual(
+    empty.player.deck.map((card) => card.instanceId),
+    empty.wands.map((card) => card.instanceId)
+  );
+
+  const shortage = resolve(348003, true, 1);
+  assert.deepEqual(
+    shortage.player.deck.map((card) => card.instanceId),
+    [shortage.deckCard, ...shortage.wands].map((card) => card?.instanceId)
+  );
+
+  const emptySupply = resolve(348005, true, 0);
+  assert.deepEqual(
+    emptySupply.player.deck.map((card) => card.instanceId),
+    [emptySupply.deckCard].map((card) => card?.instanceId)
+  );
+});
+
+test("DWT-002 keeps its extra -3 while DWT-030 scores only the base -3", () => {
+  const state = initializeGame({ rootDir, seed: 348004 });
+  const player = getActivePlayer(state);
+  player.hand = [];
+  player.deck = [];
+  player.discard = [];
+  player.permanents = [];
+  player.unboughtFamiliars = [];
+  player.wizardProperties = [];
+  player.deadWizardTokens = [
+    createDeadWizardToken(
+      player,
+      "dwt-348-scoring-002",
+      "esw2_dbg__dead_wizard_token_002"
+    ),
+    createDeadWizardToken(
+      player,
+      "dwt-348-scoring-030",
+      "esw2_dbg__dead_wizard_token_030"
+    ),
+  ];
+
+  const score = scoreGame(state).find(
+    (candidate) => candidate.playerId === player.playerId
+  );
+  assert.ok(score);
+  assert.equal(score.victoryPoints, -9);
+});
 
 test("ЖДК-дохляки считают себя ЖДК при розыгрыше", () => {
   for (const definitionId of [

@@ -53,6 +53,7 @@ export const deadWizardTokenEffectIds = [
   "dead_wizard_token_gain_chips",
   "dead_wizard_token_gain_limp_wands_per_discard_legend",
   "dead_wizard_token_gain_limp_wand_to_deck_top",
+  "dead_wizard_token_gain_limp_wands_to_deck_bottom",
   "dead_wizard_token_gain_status_or_draw_face",
   "dead_wizard_token_killer_optional_remove_dingler",
   "dead_wizard_token_lose_half_chips",
@@ -188,6 +189,13 @@ export type DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect = {
   destination: "deckTop";
 };
 
+export type DeadWizardTokenGainLimpWandsToDeckBottomRuntimeEffect = {
+  effectId: "dead_wizard_token_gain_limp_wands_to_deck_bottom";
+  timing: "onDeadWizardTokenFace";
+  amount: 2;
+  destination: "deckBottom";
+};
+
 export type DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect = {
   effectId: "suppress_basic_trophy_chip_payout";
   timing: "whileControlled";
@@ -206,6 +214,7 @@ export interface DeadWizardTokenEffectPayloadMap {
   dead_wizard_token_gain_chips: DeadWizardTokenGainChipsRuntimeEffect;
   dead_wizard_token_gain_limp_wands_per_discard_legend: DeadWizardTokenGainLimpWandsPerDiscardLegendRuntimeEffect;
   dead_wizard_token_gain_limp_wand_to_deck_top: DeadWizardTokenGainLimpWandToDeckTopRuntimeEffect;
+  dead_wizard_token_gain_limp_wands_to_deck_bottom: DeadWizardTokenGainLimpWandsToDeckBottomRuntimeEffect;
   dead_wizard_token_killer_optional_remove_dingler: DeadWizardTokenKillerOptionalRemoveDinglerRuntimeEffect;
   dead_wizard_token_gain_status_or_draw_face: DeadWizardTokenGainStatusOrDrawFaceRuntimeEffect;
   dead_wizard_token_lose_half_chips: DeadWizardTokenLoseHalfChipsRuntimeEffect;
@@ -435,6 +444,21 @@ export function createDeadWizardTokenEffectDecoders(
         effect.amount === 1
           ? []
           : [`${subjectId} must gain exactly one Limp Wand`]
+    ),
+    dead_wizard_token_gain_limp_wands_to_deck_bottom: defineDecoder(
+      "dead_wizard_token_gain_limp_wands_to_deck_bottom",
+      {
+        effectId: required(
+          literal("dead_wizard_token_gain_limp_wands_to_deck_bottom")
+        ),
+        timing: required(literal("onDeadWizardTokenFace")),
+        amount: required(literal(2)),
+        destination: required(literal("deckBottom")),
+      },
+      (subjectId, effect) =>
+        effect.amount === 2
+          ? []
+          : [`${subjectId} must gain exactly two Limp Wands`]
     ),
     suppress_basic_trophy_chip_payout: defineDecoder(
       "suppress_basic_trophy_chip_payout",
@@ -1261,6 +1285,22 @@ const gainLimpWandToDeckTopHandler: EffectRuntimeHandler<DeadWizardTokenGainLimp
     },
   };
 
+const gainLimpWandsToDeckBottomHandler: EffectRuntimeHandler<DeadWizardTokenGainLimpWandsToDeckBottomRuntimeEffect> =
+  {
+    effectId: "dead_wizard_token_gain_limp_wands_to_deck_bottom",
+    execute(state, player, effect, source, services) {
+      return gainLimpWandsFromCommonStack(
+        state,
+        player,
+        effect.amount,
+        effect.destination,
+        effect.effectId,
+        source,
+        services
+      );
+    },
+  };
+
 const suppressBasicTrophyChipPayoutHandler: EffectRuntimeHandler<DeadWizardTokenSuppressBasicTrophyChipPayoutRuntimeEffect> =
   {
     effectId: "suppress_basic_trophy_chip_payout",
@@ -1512,6 +1552,16 @@ export function createDeadWizardTokenEffectDefinitions(
       supportedModes,
       supportedSourceKinds,
       handler: gainLimpWandToDeckTopHandler,
+    },
+    {
+      effectId: "dead_wizard_token_gain_limp_wands_to_deck_bottom",
+      decoder: bindRuntimeEffectDecoder(
+        "dead_wizard_token_gain_limp_wands_to_deck_bottom"
+      ),
+      supportedTimings,
+      supportedModes,
+      supportedSourceKinds,
+      handler: gainLimpWandsToDeckBottomHandler,
     },
     {
       effectId: "suppress_basic_trophy_chip_payout",

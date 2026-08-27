@@ -58,8 +58,8 @@ test("single-game menu summary is Russian and includes seed, result, and scores"
 test("simulation menu handles invalid input and uses a generated seed for empty single-game seed", async () => {
   const prompts: string[] = [];
   const output: string[] = [];
-  const inputs = ["x", "1", "", "", "0"];
-  const usedSeeds: number[] = [];
+  const inputs = ["x", "1", "", "7", "", "0"];
+  const usedRuns: Array<{ seed: number; deadWizardTokenCount?: number }> = [];
 
   await runSimulationMenu({
     rootDir: process.cwd(),
@@ -78,7 +78,12 @@ test("simulation menu handles invalid input and uses a generated seed for empty 
       return 777;
     },
     runSingleGame(options) {
-      usedSeeds.push(options.seed);
+      usedRuns.push({
+        seed: options.seed,
+        ...(options.deadWizardTokenCount === undefined
+          ? {}
+          : { deadWizardTokenCount: options.deadWizardTokenCount }),
+      });
       return {
         seed: options.seed,
         endReason: "mainDeckExhausted",
@@ -108,7 +113,7 @@ test("simulation menu handles invalid input and uses a generated seed for empty 
     },
   });
 
-  assert.deepEqual(usedSeeds, [777]);
+  assert.deepEqual(usedRuns, [{ seed: 777, deadWizardTokenCount: 7 }]);
   assert.ok(
     prompts.some((prompt) => prompt.includes("Крутагидон 2: симулятор"))
   );
@@ -120,8 +125,12 @@ test("simulation menu handles invalid input and uses a generated seed for empty 
 
 test("simulation menu repeats invalid mass count input and runs numeric count with generated seed", async () => {
   const output: string[] = [];
-  const inputs = ["2", "bad", "3", "", "0"];
-  const massRuns: Array<{ firstSeed: number; gameCount: number }> = [];
+  const inputs = ["2", "bad", "3", "5", "", "0"];
+  const massRuns: Array<{
+    firstSeed: number;
+    gameCount: number;
+    deadWizardTokenCount?: number;
+  }> = [];
 
   await runSimulationMenu({
     rootDir: process.cwd(),
@@ -145,6 +154,9 @@ test("simulation menu repeats invalid mass count input and runs numeric count wi
       massRuns.push({
         firstSeed: options.firstSeed,
         gameCount: options.gameCount,
+        ...(options.deadWizardTokenCount === undefined
+          ? {}
+          : { deadWizardTokenCount: options.deadWizardTokenCount }),
       });
       return {
         firstSeed: options.firstSeed,
@@ -171,7 +183,9 @@ test("simulation menu repeats invalid mass count input and runs numeric count wi
     },
   });
 
-  assert.deepEqual(massRuns, [{ firstSeed: 900, gameCount: 3 }]);
+  assert.deepEqual(massRuns, [
+    { firstSeed: 900, gameCount: 3, deadWizardTokenCount: 5 },
+  ]);
   assert.ok(output.includes("Введите положительное целое число."));
   assert.ok(output.some((message) => message.includes("Seed: 900-902")));
 });
@@ -181,7 +195,7 @@ test("simulation menu writes a local technical report for unexpected single-game
     join(tmpdir(), "krutagidon-menu-errors-")
   );
   const output: string[] = [];
-  const inputs = ["1", "123", "", "0"];
+  const inputs = ["1", "123", "4", "", "0"];
 
   await runSimulationMenu({
     rootDir: process.cwd(),
@@ -218,6 +232,7 @@ test("simulation menu writes a local technical report for unexpected single-game
   assert.match(report, /mode: single-game/);
   assert.match(report, /seed: 123/);
   assert.match(report, /maxTurns: 200/);
+  assert.match(report, /deadWizardTokenCount: 4/);
   assert.match(report, /message: fixture failure/);
   assert.match(report, /stack:/);
 });
@@ -227,7 +242,7 @@ test("simulation menu writes seed range and game count for unexpected mass failu
     join(tmpdir(), "krutagidon-menu-errors-")
   );
   const output: string[] = [];
-  const inputs = ["2", "", "", "0"];
+  const inputs = ["2", "", "6", "", "0"];
 
   await runSimulationMenu({
     rootDir: process.cwd(),
@@ -267,6 +282,7 @@ test("simulation menu writes seed range and game count for unexpected mass failu
   assert.match(report, /mode: mass-simulation/);
   assert.match(report, /seedRange: 500-10499/);
   assert.match(report, /gameCount: 10000/);
+  assert.match(report, /deadWizardTokenCount: 6/);
   assert.match(report, /message: mass fixture failure/);
 });
 

@@ -50,6 +50,12 @@ npm run simulate:single -- --seed 60615 --maxTurns 200
 npm run simulate:mass -- --firstSeed 9000 --games 100 --maxTurns 200
 ```
 
+Для обеих команд можно явно задать размер стека ЖДК параметром
+`--deadWizardTokenCount N`. По умолчанию используются `4 * playerCount` ЖДК;
+допустим диапазон от `0` до 30, а выбор нужного количества из production stack
+выполняется детерминированно по seed. Нулевой стек проверяется обычным
+end-of-turn checkpoint.
+
 При одинаковых данных, коде и seed результат должен повторяться.
 
 ## Основные команды

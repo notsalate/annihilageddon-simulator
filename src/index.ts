@@ -21,8 +21,12 @@ export {
   markTokenDefinitionId,
   markTokenInstanceId,
 } from "./domain/types.js";
-export type { RandomSource } from "./engine/rng.js";
+export type { RandomSource, RandomSourceSnapshot } from "./engine/rng.js";
 export { createSeededRng } from "./engine/rng.js";
+export type {
+  EffectCycleOutcome,
+  ProvenAttackChainCycleOutcome,
+} from "./engine/effect-runtime-registry.js";
 export type {
   CardDefinition,
   RuntimeSourceMetadata,
@@ -163,6 +167,7 @@ export type {
   ChoicePlayerTargetView,
   ChoicePlayerView,
   ChoicePolicy,
+  ChoicePolicyState,
   ChoiceRequest,
   ChoiceSelection,
   ChoiceView,

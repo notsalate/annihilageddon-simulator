@@ -17,6 +17,7 @@ export interface RunMassSimulationOptions {
   gameCount: number;
   maxTurns: number;
   playerCount?: number;
+  deadWizardTokenCount?: number;
   dataPackPath?: string;
   dataPack?: LoadedDataPack;
 }
@@ -101,6 +102,9 @@ function toSingleGameOptions(
     ...(options.playerCount === undefined
       ? {}
       : { playerCount: options.playerCount }),
+    ...(options.deadWizardTokenCount === undefined
+      ? {}
+      : { deadWizardTokenCount: options.deadWizardTokenCount }),
   };
 }
 

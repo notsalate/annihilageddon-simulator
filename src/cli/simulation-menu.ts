@@ -63,11 +63,18 @@ export async function runSimulationMenu(
         "Seed партии [Enter = случайный]: ",
         createSeed
       );
+      const deadWizardTokenCount = await askOptionalNonNegativeSafeInteger(
+        options,
+        "Количество ЖДК [Enter = 4 × число игроков]: "
+      );
       try {
         const result = singleRunner({
           rootDir: options.rootDir,
           seed,
           maxTurns: options.maxTurns,
+          ...(deadWizardTokenCount === undefined
+            ? {}
+            : { deadWizardTokenCount }),
         });
         options.write(formatSingleGameSummary(result));
       } catch (error) {
@@ -75,6 +82,9 @@ export async function runSimulationMenu(
           mode: "single-game",
           seed,
           maxTurns: options.maxTurns,
+          ...(deadWizardTokenCount === undefined
+            ? {}
+            : { deadWizardTokenCount }),
         });
         options.write(
           `Симуляция остановлена из-за ошибки. Технический отчет сохранен: ${reportPath}`
@@ -90,6 +100,10 @@ export async function runSimulationMenu(
         "Количество партий [Enter = 10000]: ",
         () => 10000
       );
+      const deadWizardTokenCount = await askOptionalNonNegativeSafeInteger(
+        options,
+        "Количество ЖДК [Enter = 4 × число игроков]: "
+      );
       const firstSeed = createSeed();
       const startedAt = nowMs();
       try {
@@ -98,6 +112,9 @@ export async function runSimulationMenu(
           firstSeed,
           gameCount,
           maxTurns: options.maxTurns,
+          ...(deadWizardTokenCount === undefined
+            ? {}
+            : { deadWizardTokenCount }),
         });
         const elapsedSeconds = (nowMs() - startedAt) / 1000;
         options.write(formatMassSimulationSummary(result, elapsedSeconds));
@@ -107,6 +124,9 @@ export async function runSimulationMenu(
           seedRange: `${firstSeed}-${firstSeed + gameCount - 1}`,
           gameCount,
           maxTurns: options.maxTurns,
+          ...(deadWizardTokenCount === undefined
+            ? {}
+            : { deadWizardTokenCount }),
         });
         options.write(
           `Симуляция остановлена из-за ошибки. Технический отчет сохранен: ${reportPath}`
@@ -255,6 +275,25 @@ async function askPositiveSafeInteger(
     }
 
     options.write("Введите положительное целое число.");
+  }
+}
+
+async function askOptionalNonNegativeSafeInteger(
+  options: Pick<SimulationMenuOptions, "ask" | "write">,
+  prompt: string
+): Promise<number | undefined> {
+  while (true) {
+    const input = (await options.ask(prompt)).trim();
+    if (input === "") {
+      return undefined;
+    }
+
+    const parsed = Number(input);
+    if (Number.isSafeInteger(parsed) && parsed >= 0) {
+      return parsed;
+    }
+
+    options.write("Введите неотрицательное целое число.");
   }
 }
 

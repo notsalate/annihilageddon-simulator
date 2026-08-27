@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { applyAction } from "../src/index.js";
+import {
+  markTokenDefinitionId,
+  markTokenInstanceId,
+} from "../src/domain/types.js";
 import { getControlledCards } from "../src/engine/control-ledger.js";
 import {
   createGameScenario,
@@ -1948,6 +1952,15 @@ test("card movement: legend_032 cleans all revealed cards after a nested death",
   foe.deck.splice(0);
   foe.discard.splice(0);
   foe.life.current = 20;
+  scenario.state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-card-movement-neutral-dwt"),
+      definitionId: markTokenDefinitionId(
+        "esw2_dbg__dead_wizard_token_neutral"
+      ),
+      ownerId: "common",
+    },
+  ];
   const source = givenRuntimeCard(scenario, {
     definitionId: "esw2_dbg__legend_032",
   });

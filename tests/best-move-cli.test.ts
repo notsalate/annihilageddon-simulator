@@ -229,3 +229,54 @@ test("single-game CLI remains an independent baseline simulation command", () =>
   assert.equal(output.seed, 60615);
   assert.equal(output.turnsElapsed, 1);
 });
+
+test("single-game CLI forwards an explicit zero dead wizard token count", () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      path.join(process.cwd(), "dist", "src", "cli", "run-single-game.js"),
+      "--seed",
+      "349101",
+      "--maxTurns",
+      "1",
+      "--deadWizardTokenCount",
+      "0",
+    ],
+    { cwd: process.cwd(), encoding: "utf8" }
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout) as {
+    endReason: string;
+    turnsElapsed: number;
+  };
+  assert.equal(output.endReason, "deadWizardTokensExhausted");
+  assert.equal(output.turnsElapsed, 1);
+});
+
+test("mass CLI forwards an explicit zero dead wizard token count", () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      path.join(process.cwd(), "dist", "src", "cli", "run-mass-simulation.js"),
+      "--firstSeed",
+      "349102",
+      "--games",
+      "2",
+      "--maxTurns",
+      "1",
+      "--deadWizardTokenCount",
+      "0",
+    ],
+    { cwd: process.cwd(), encoding: "utf8" }
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout) as {
+    aggregate: { endReasonCounts: Record<string, number> };
+  };
+  assert.equal(
+    output.aggregate.endReasonCounts["deadWizardTokensExhausted"],
+    2
+  );
+});

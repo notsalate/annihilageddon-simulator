@@ -9054,6 +9054,202 @@
           "evidenceId": "evidence:esw2-dbg-dead-wizard-token-029-point-7"
         }
       ]
+    },
+    {
+      "id": "esw2_dbg__dead_wizard_token_030",
+      "objectKind": "deadWizardToken",
+      "primaryMechanicCluster": "card-movement",
+      "requiredCapabilities": [
+        "capability:esw2-dbg-dead-wizard-token-030-point-1",
+        "capability:esw2-dbg-dead-wizard-token-030-point-2",
+        "capability:esw2-dbg-dead-wizard-token-030-point-3",
+        "capability:esw2-dbg-dead-wizard-token-030-point-4",
+        "capability:esw2-dbg-dead-wizard-token-030-point-5"
+      ],
+      "unresolvedCapabilities": [],
+      "semanticMappings": [
+        {
+          "draftPoint": {
+            "path": "visible.textRu",
+            "value": "Получи 2 вялые палочки и положи их под низ своей колоды."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_gain_limp_wands_to_deck_bottom",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {
+                "amount": 2,
+                "destination": "deckBottom"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "DWT-030 puts up to two Limp Wands under the player's deck",
+              "execution": {
+                "seam": "initializeGame",
+                "objectKind": "deadWizardToken",
+                "subject": {
+                  "kind": "literal",
+                  "value": "esw2_dbg__dead_wizard_token_030"
+                }
+              },
+              "observation": {
+                "kind": "assertion",
+                "target": "player"
+              }
+            }
+          ],
+          "capabilityId": "capability:esw2-dbg-dead-wizard-token-030-point-1",
+          "evidenceId": "evidence:esw2-dbg-dead-wizard-token-030-point-1"
+        },
+        {
+          "draftPoint": {
+            "path": "notes[0]",
+            "value": "Игрок получает до 2 доступных вялых палочек в устойчивом порядке верхушки стопки."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_gain_limp_wands_to_deck_bottom",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {
+                "amount": 2,
+                "destination": "deckBottom"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "DWT-030 puts up to two Limp Wands under the player's deck",
+              "execution": {
+                "seam": "initializeGame",
+                "objectKind": "deadWizardToken",
+                "subject": {
+                  "kind": "literal",
+                  "value": "esw2_dbg__dead_wizard_token_030"
+                }
+              },
+              "observation": {
+                "kind": "assertion",
+                "target": "player"
+              }
+            }
+          ],
+          "capabilityId": "capability:esw2-dbg-dead-wizard-token-030-point-2",
+          "evidenceId": "evidence:esw2-dbg-dead-wizard-token-030-point-2"
+        },
+        {
+          "draftPoint": {
+            "path": "notes[1]",
+            "value": "Полученные вялые палочки кладутся под низ личной колоды."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_gain_limp_wands_to_deck_bottom",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {
+                "amount": 2,
+                "destination": "deckBottom"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "DWT-030 puts up to two Limp Wands under the player's deck",
+              "execution": {
+                "seam": "initializeGame",
+                "objectKind": "deadWizardToken",
+                "subject": {
+                  "kind": "literal",
+                  "value": "esw2_dbg__dead_wizard_token_030"
+                }
+              },
+              "observation": {
+                "kind": "assertion",
+                "target": "player"
+              }
+            }
+          ],
+          "capabilityId": "capability:esw2-dbg-dead-wizard-token-030-point-3",
+          "evidenceId": "evidence:esw2-dbg-dead-wizard-token-030-point-3"
+        },
+        {
+          "draftPoint": {
+            "path": "notes[2]",
+            "value": "Пустая колода становится колодой из полученных карт; перетасовка сброса не нужна."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "effect",
+              "effectId": "dead_wizard_token_gain_limp_wands_to_deck_bottom",
+              "timing": "onDeadWizardTokenFace",
+              "fields": {
+                "amount": 2,
+                "destination": "deckBottom"
+              }
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "DWT-030 puts up to two Limp Wands under the player's deck",
+              "execution": {
+                "seam": "initializeGame",
+                "objectKind": "deadWizardToken",
+                "subject": {
+                  "kind": "literal",
+                  "value": "esw2_dbg__dead_wizard_token_030"
+                }
+              },
+              "observation": {
+                "kind": "assertion",
+                "target": "player"
+              }
+            }
+          ],
+          "capabilityId": "capability:esw2-dbg-dead-wizard-token-030-point-4",
+          "evidenceId": "evidence:esw2-dbg-dead-wizard-token-030-point-4"
+        },
+        {
+          "draftPoint": {
+            "path": "notes[3]",
+            "value": "Общий штраф -3 на лицевой стороне ЖДК является базовым штрафом, а не отдельным эффектом этого жетона."
+          },
+          "runtimeRefs": [
+            {
+              "kind": "field",
+              "path": "victoryPoints",
+              "value": -3
+            }
+          ],
+          "testRefs": [
+            {
+              "file": "tests/dwt-interactions.test.ts",
+              "name": "DWT-002 keeps its extra -3 while DWT-030 scores only the base -3",
+              "execution": {
+                "seam": "initializeGame",
+                "objectKind": "deadWizardToken",
+                "subject": {
+                  "kind": "literal",
+                  "value": "esw2_dbg__dead_wizard_token_030"
+                }
+              },
+              "observation": {
+                "kind": "assertion",
+                "target": "score"
+              }
+            }
+          ],
+          "capabilityId": "capability:esw2-dbg-dead-wizard-token-030-point-5",
+          "evidenceId": "evidence:esw2-dbg-dead-wizard-token-030-point-5"
+        }
+      ]
     }
   ]
 }
