@@ -106,6 +106,7 @@ function createFixture(): GameState {
         },
       ],
       mainMarketCardHandReplacementSourceCardIds: ["replacement-source"],
+      pendingMarketFlowEndReasons: [],
       damagingAttackPlayerIds: [],
       nextAttackUnavoidablePlayerId: undefined,
       defenseDisabledPlayerIds: [],

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { initializeGame, runMarketFlow } from "../src/index.js";
+import { applyAction, initializeGame, runMarketFlow } from "../src/index.js";
 import type { EffectRuntimeCatalogOperationOverridesForTesting } from "../src/engine/effect-runtime-registry.js";
 import { createTerminalMarketEventFixture } from "./helpers/market-flow-fixtures.js";
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
@@ -61,6 +61,66 @@ test("terminal event fixture assigns unique IDs when reused in one state", () =>
   assert.notEqual(
     firstFixture.fillerCard.instanceId,
     secondFixture.fillerCard.instanceId
+  );
+});
+
+test("Market Flow keeps both failed refill reasons in main-to-legend order", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 47703,
+    playerCount: 3,
+  });
+  state.common.market.splice(0);
+  state.common.legendMarket.splice(0);
+  state.common.mainDeck.splice(0);
+  state.common.legendDeck.splice(0);
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.deepEqual(result, {
+    ok: true,
+    gameEndReason: "mainDeckExhausted",
+    gameEndReasons: ["mainDeckExhausted", "legendDeckExhausted"],
+  });
+  assert.deepEqual(state.turn.pendingMarketFlowEndReasons, [
+    "mainDeckExhausted",
+    "legendDeckExhausted",
+  ]);
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "marketFlowFailed")
+      .map((event) => event.destinationZone),
+    ["mainMarket", "legendMarket"]
+  );
+});
+
+test("failed turn-start refill still starts the next player's turn", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 47704,
+    playerCount: 3,
+  });
+  const previousActivePlayerId = state.activePlayerId;
+  const nextPlayer = state.players.find(
+    (player) => player.playerId !== previousActivePlayerId
+  );
+  assert.ok(nextPlayer);
+  state.common.market.splice(0, 1);
+  state.common.mainDeck.splice(0);
+
+  const result = applyAction(state, { type: "endTurn" });
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(state.activePlayerId, nextPlayer.playerId);
+  assert.deepEqual(state.turn.pendingMarketFlowEndReasons, [
+    "mainDeckExhausted",
+  ]);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "turnStarted" && event.playerId === nextPlayer.playerId
+    ),
+    true
   );
 });
 

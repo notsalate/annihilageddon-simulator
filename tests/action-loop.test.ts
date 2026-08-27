@@ -4818,12 +4818,17 @@ test("Market Flow interface keeps setup Mayhem passive and turn Mayhem active", 
   ]);
 });
 
-test("Market Flow reports main deck exhaustion without starting the next turn", () => {
+test("Market Flow defers main deck exhaustion until the next player's end turn", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
   });
+  const previousActivePlayerId = state.activePlayerId;
+  const nextPlayer = state.players.find(
+    (player) => player.playerId !== previousActivePlayerId
+  );
+  assert.ok(nextPlayer);
   state.common.market.splice(0, 1);
   state.common.mainDeck.splice(0);
 
@@ -4832,20 +4837,27 @@ test("Market Flow reports main deck exhaustion without starting the next turn", 
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.gameEndReason, "mainDeckExhausted");
-  assert.equal(state.eventLog.at(-1)?.type, "marketFlowFailed");
+  assert.equal(state.activePlayerId, nextPlayer.playerId);
+  assert.deepEqual(state.turn.pendingMarketFlowEndReasons, [
+    "mainDeckExhausted",
+  ]);
   assert.equal(
     state.eventLog.some((event) => event.type === "turnStarted"),
-    false
+    true
   );
 });
 
-test("Market Flow reports legend deck exhaustion without starting the next turn", () => {
+test("Market Flow defers legend deck exhaustion until the next player's end turn", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
   });
+  const previousActivePlayerId = state.activePlayerId;
+  const nextPlayer = state.players.find(
+    (player) => player.playerId !== previousActivePlayerId
+  );
+  assert.ok(nextPlayer);
   state.common.legendMarket.splice(0, 1);
   state.common.legendDeck.splice(0);
 
@@ -4854,11 +4866,13 @@ test("Market Flow reports legend deck exhaustion without starting the next turn"
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.gameEndReason, "legendDeckExhausted");
-  assert.equal(state.eventLog.at(-1)?.type, "marketFlowFailed");
+  assert.equal(state.activePlayerId, nextPlayer.playerId);
+  assert.deepEqual(state.turn.pendingMarketFlowEndReasons, [
+    "legendDeckExhausted",
+  ]);
   assert.equal(
     state.eventLog.some((event) => event.type === "turnStarted"),
-    false
+    true
   );
 });
 

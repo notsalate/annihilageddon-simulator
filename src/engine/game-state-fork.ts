@@ -20,6 +20,7 @@ export function forkGameState(source: GameState): GameState {
       mainMarketCardHandReplacementSourceCardIds: [
         ...source.turn.mainMarketCardHandReplacementSourceCardIds,
       ],
+      pendingMarketFlowEndReasons: [...source.turn.pendingMarketFlowEndReasons],
       rememberedDestroyedLegendCost: source.turn.rememberedDestroyedLegendCost,
       damagingAttackPlayerIds: [...source.turn.damagingAttackPlayerIds],
       nextAttackUnavoidablePlayerId: source.turn.nextAttackUnavoidablePlayerId,

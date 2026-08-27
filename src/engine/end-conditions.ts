@@ -1,5 +1,7 @@
 import type { GameState } from "./setup.js";
 
+export type MarketFlowEndReason = "mainDeckExhausted" | "legendDeckExhausted";
+
 export const DEAD_WIZARD_TOKENS_EXHAUSTED_REASON =
   "deadWizardTokensExhausted" as const;
 

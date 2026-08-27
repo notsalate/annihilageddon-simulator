@@ -531,6 +531,7 @@ function endTurn(state: GameState): ActionResult {
   releaseTemporaryControls(state);
   state.turn.gainedCards = [];
   state.turn.mainMarketCardHandReplacementSourceCardIds = [];
+  state.turn.pendingMarketFlowEndReasons = [];
   state.turn.rememberedDestroyedLegendCost = undefined;
   state.turn.damagingAttackPlayerIds = [];
   state.turn.nextAttackUnavoidablePlayerId = undefined;
@@ -552,9 +553,7 @@ function endTurn(state: GameState): ActionResult {
       return runMarketFlow(state, { mode: "turn" });
     },
     (marketFlowResult) =>
-      marketFlowResult.ok &&
-      marketFlowResult.gameEnd === undefined &&
-      marketFlowResult.gameEndReason === undefined
+      marketFlowResult.ok && marketFlowResult.gameEnd === undefined
   );
   if (!transitionResult.ok) {
     return transitionResult;
@@ -565,9 +564,6 @@ function endTurn(state: GameState): ActionResult {
   }
   if (marketFlowResult.gameEnd !== undefined) {
     return gameEndActionResult(marketFlowResult.gameEnd);
-  }
-  if (marketFlowResult.gameEndReason !== undefined) {
-    return marketFlowResult;
   }
   recordGameEvent(state, {
     type: "turnStarted",

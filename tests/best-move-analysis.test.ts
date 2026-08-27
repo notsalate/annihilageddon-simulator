@@ -657,7 +657,7 @@ test("victory-points policy ranks by score even when a lower-scoring line has a 
   assert.equal(ranking.best?.score, 101);
 });
 
-test("does not treat endTurn deck exhaustion as a perspective win", () => {
+test("does not treat deferred endTurn deck exhaustion as a perspective win", () => {
   const state = analysisFixtureState(132);
   state.common.market = [];
   state.common.legendMarket = [];
@@ -683,7 +683,7 @@ test("does not treat endTurn deck exhaustion as a perspective win", () => {
 
   assert.equal(lines.length, 1);
   assert.equal(lines[0]?.terminalReason, "endTurn");
-  assert.equal(lines[0]?.gameEndReason, "legendDeckExhausted");
+  assert.equal(lines[0]?.gameEndReason, undefined);
   assert.equal(lines[0]?.winnerPlayerId, undefined);
   assert.equal(
     ranking.best?.components?.["victoryPoints"],
@@ -801,7 +801,7 @@ test("preserves the root player and turn while exposing endTurn game-end metadat
 
   assert.equal(lines.length, 1);
   assert.equal(lines[0]?.terminalReason, "endTurn");
-  assert.equal(lines[0]?.gameEndReason, "legendDeckExhausted");
+  assert.equal(lines[0]?.gameEndReason, undefined);
   assert.equal(lines[0]?.initialPlayerId, initialPlayerId);
   assert.equal(lines[0]?.initialTurnNumber, initialTurnNumber);
   assert.notEqual(lines[0]?.terminalState.activePlayerId, initialPlayerId);
