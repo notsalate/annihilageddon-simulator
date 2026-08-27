@@ -10300,6 +10300,169 @@ test("#287 directional chain continues after a kill with an empty DWT stack", ()
   );
 });
 
+test("#354 directional chain does not cap continuation on post-close life state", () => {
+  const state = initializeGame({ rootDir, seed: 606166, playerCount: 2 });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+    player.hand = [];
+    player.life.current = 20;
+  }
+  targetPlayer.life.current = 1;
+  const dwt = createFixtureDeadWizardTokenDefinition(
+    "fixture-directional-chain-post-close-life",
+    [
+      {
+        effectId: "dead_wizard_token_gain_chips",
+        timing: "onDeadWizardTokenFace",
+        amount: 1,
+      },
+    ]
+  );
+  state.tokenDefinitions = new Map([
+    ...state.tokenDefinitions,
+    [dwt.tokenId, dwt],
+  ]);
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId(
+        "fixture-directional-chain-post-close-life"
+      ),
+      definitionId: markTokenDefinitionId(dwt.tokenId),
+      ownerId: "common",
+    },
+  ];
+  state.effectChoiceStrategy = (request) =>
+    request.effectId === "directional_chain_attack"
+      ? { choiceId: "left" }
+      : undefined;
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_015"
+  );
+  let mutatePostCloseLife = true;
+
+  const result = withTemporaryEffectRuntimeOperations(
+    "dead_wizard_token_gain_chips",
+    {
+      execute(_state, player) {
+        if (mutatePostCloseLife) {
+          player.life.current = 0;
+          mutatePostCloseLife = false;
+        }
+        return { ok: true };
+      },
+    },
+    () =>
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: wand.instanceId,
+      })
+  );
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(targetPlayer.life.current, 10);
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.cardInstanceId === wand.instanceId
+    ).length,
+    3
+  );
+});
+
+test("#354 sequential attacks resolve DWT state before the next AttackInstance", () => {
+  const state = initializeGame({ rootDir, seed: 606167, playerCount: 2 });
+  const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = activePlayer.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+    player.hand = [];
+    player.life.current = 20;
+  }
+  targetPlayer.life.current = 7;
+  const dwt = createFixtureDeadWizardTokenDefinition(
+    "fixture-sequential-attack-gain-status",
+    [
+      {
+        effectId: "gain_status",
+        timing: "onDeadWizardTokenFace",
+        statusId: "dingler",
+      },
+    ]
+  );
+  state.tokenDefinitions = new Map([
+    ...state.tokenDefinitions,
+    [dwt.tokenId, dwt],
+  ]);
+  const dwtToken = {
+    instanceId: markTokenInstanceId("fixture-sequential-attack-gain-status"),
+    definitionId: markTokenDefinitionId(dwt.tokenId),
+    ownerId: "common" as const,
+  };
+  state.common.deadWizardTokens.drawStack = [dwtToken];
+  state.effectChoiceStrategy = (request) =>
+    request.effectId === "sequential_attack_damage"
+      ? { choiceId: targetPlayer.playerId }
+      : undefined;
+  const wand = addRuntimeCardToHand(
+    state,
+    activePlayer,
+    "esw2_dbg__legend_023"
+  );
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: wand.instanceId,
+    }),
+    { ok: true }
+  );
+
+  const attackCreatedIndices = state.eventLog.flatMap((event, index) =>
+    event.type === "attackCreated" && event.cardInstanceId === wand.instanceId
+      ? [index]
+      : []
+  );
+  const attackTargetIndices = state.eventLog.flatMap((event, index) =>
+    event.type === "attackTargetStarted" &&
+    event.cardInstanceId === wand.instanceId
+      ? [index]
+      : []
+  );
+  const statusIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "dinglerStatusGained" &&
+      event.playerId === targetPlayer.playerId
+  );
+  const faceIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "deadWizardTokenFaceResolved" &&
+      event.tokenInstanceId === dwtToken.instanceId
+  );
+
+  assert.equal(attackCreatedIndices.length, 4);
+  assert.equal(attackTargetIndices.length, 4);
+  const attackIds = attackCreatedIndices.map((index) => {
+    const event = state.eventLog[index];
+    return event?.type === "attackCreated" ? event.attackId : undefined;
+  });
+  assert.equal(new Set(attackIds).size, 4);
+  assert.ok(statusIndex >= 0);
+  assert.ok(faceIndex > statusIndex);
+  assert.ok(attackTargetIndices[1] !== undefined);
+  assert.ok(faceIndex < attackTargetIndices[1]);
+  assert.equal(targetPlayer.life.current, 15);
+  assert.equal(hasDinglerStatus(targetPlayer), true);
+});
+
 test("#287 directional chain wraps after a full circle", () => {
   const state = initializeGame({ rootDir, seed: 606161, playerCount: 3 });
   const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));

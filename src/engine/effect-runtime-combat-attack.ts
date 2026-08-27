@@ -1403,9 +1403,6 @@ function directionalChainAttackHandler(
           return attackResult;
         }
 
-        if (targetPlayer.life.current < 1) {
-          return { ok: true };
-        }
         if (attackResult.requestedTargetKilled !== true) {
           return { ok: true };
         }
