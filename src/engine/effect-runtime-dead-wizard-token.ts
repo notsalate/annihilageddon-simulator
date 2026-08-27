@@ -1,7 +1,4 @@
-import {
-  cardMatchesTypeForPlayer,
-  getCardEffectiveTypeOptions,
-} from "./card-type-runtime.js";
+import { getCardEffectiveTypeOptions } from "./card-type-runtime.js";
 import {
   findCardLocation,
   getControlledCards,
@@ -456,7 +453,10 @@ const gainLimpWandsPerDiscardLegendHandler: EffectRuntimeHandler<DeadWizardToken
       const amount = countPlayerDiscardCardsMatchingType(
         state,
         player,
-        effect.countedCardType
+        effect.countedCardType,
+        source,
+        effect.effectId,
+        services
       );
       return gainLimpWandsFromCommonStack(
         state,
@@ -473,21 +473,63 @@ const gainLimpWandsPerDiscardLegendHandler: EffectRuntimeHandler<DeadWizardToken
 function countPlayerDiscardCardsMatchingType(
   state: GameState,
   player: PlayerState,
-  cardType: string
+  cardType: string,
+  source: EffectSourceContext,
+  effectId: RuntimeEffectId,
+  services: EffectRuntimeServices
 ): number {
-  return player.discard.filter((card) => {
-    const definition = state.cardDefinitions.get(card.definitionId);
-    return (
-      definition !== undefined &&
-      cardMatchesTypeForPlayer(
-        state,
-        player.playerId,
-        definition,
-        cardType,
-        card
-      )
-    );
-  }).length;
+  return player.discard.filter((card) =>
+    cardCountsAsTypeAtDeadWizardTokenResolution(
+      state,
+      player,
+      card,
+      cardType,
+      source,
+      effectId,
+      services
+    )
+  ).length;
+}
+
+function cardCountsAsTypeAtDeadWizardTokenResolution(
+  state: GameState,
+  player: PlayerState,
+  card: CardInstance,
+  cardType: string,
+  source: EffectSourceContext,
+  effectId: RuntimeEffectId,
+  services: EffectRuntimeServices
+): boolean {
+  const definition = state.cardDefinitions.get(card.definitionId);
+  if (definition === undefined) return false;
+  if (
+    definition.engine.cardTypes.includes(cardType) ||
+    definition.engine.tags?.includes("counts_as_every_card_type") === true
+  ) {
+    return true;
+  }
+  if (
+    !getCardEffectiveTypeOptions(state, player.playerId, card).includes(
+      cardType
+    )
+  ) {
+    return false;
+  }
+
+  const choice = services.chooseEffectChoice(state, player, source, effectId, [
+    {
+      choiceKind: "cardTarget",
+      choiceId: `count_as_${cardType}_${card.instanceId}`,
+      cards: [card],
+      amount: 1,
+    },
+    { choiceKind: "option", choiceId: "decline" },
+  ]);
+  return (
+    choice?.choiceKind === "cardTarget" &&
+    choice.cards.length === 1 &&
+    choice.cards[0]?.instanceId === card.instanceId
+  );
 }
 
 function applyOwnerlessDamage(
@@ -532,7 +574,10 @@ const damagePerDiscardLegendHandler: EffectRuntimeHandler<DeadWizardTokenDamageP
       const legendCount = countPlayerDiscardCardsMatchingType(
         state,
         player,
-        effect.countedCardType
+        effect.countedCardType,
+        source,
+        effect.effectId,
+        services
       );
       return applyOwnerlessDamage(
         state,
@@ -763,48 +808,17 @@ const shuffleHandLegendsHandler: EffectRuntimeHandler<DeadWizardTokenShuffleHand
     effectId: "dead_wizard_token_shuffle_hand_legends",
     execute(state, player, effect, source, services) {
       const hand = [...player.hand];
-      const effectiveLegendCards = hand.filter((card) => {
-        return getCardEffectiveTypeOptions(
-          state,
-          player.playerId,
-          card
-        ).includes("legend");
-      });
-      const selectedEffectiveLegends = new Set<string>();
-
-      for (const card of effectiveLegendCards) {
-        const choice = services.chooseEffectChoice(
+      const cardsToMove = hand.filter((card) =>
+        cardCountsAsTypeAtDeadWizardTokenResolution(
           state,
           player,
+          card,
+          "legend",
           source,
           effect.effectId,
-          [
-            {
-              choiceKind: "cardTarget",
-              choiceId: `count_as_legend_${card.instanceId}`,
-              cards: [card],
-              amount: 1,
-            },
-            { choiceKind: "option", choiceId: "decline" },
-          ]
-        );
-        if (
-          choice?.choiceKind === "cardTarget" &&
-          choice.cards.some((candidate) => candidate === card)
-        ) {
-          selectedEffectiveLegends.add(card.instanceId);
-        }
-      }
-
-      const cardsToMove = hand.filter((card) => {
-        const definition = state.cardDefinitions.get(card.definitionId);
-        return (
-          definition?.engine.cardTypes.includes("legend") === true ||
-          definition?.engine.tags?.includes("counts_as_every_card_type") ===
-            true ||
-          selectedEffectiveLegends.has(card.instanceId)
-        );
-      });
+          services
+        )
+      );
       if (cardsToMove.length === 0) return { ok: true };
 
       for (const card of cardsToMove) {
@@ -981,7 +995,7 @@ function revealCardAndMaybeGainDeadWizardToken(
   card: CardInstance | undefined,
   effectId: RuntimeEffectId,
   source: EffectSourceContext,
-  shouldGain: (definition: CardDefinition) => boolean,
+  shouldGain: (definition: CardDefinition, card: CardInstance) => boolean,
   services: EffectRuntimeServices
 ): EffectExecutionResult {
   if (card === undefined) {
@@ -1014,7 +1028,7 @@ function revealCardAndMaybeGainDeadWizardToken(
       error: `Missing revealed card definition ${card.definitionId}`,
     };
   }
-  return shouldGain(definition)
+  return shouldGain(definition, card)
     ? services.gainDeadWizardToken(state, player)
     : { ok: true };
 }
@@ -1046,13 +1060,15 @@ const revealPlayerDeckGainIfLegendHandler: EffectRuntimeHandler<DeadWizardTokenR
         card,
         effect.effectId,
         source,
-        (definition) =>
-          cardMatchesTypeForPlayer(
+        (_definition, revealedCard) =>
+          cardCountsAsTypeAtDeadWizardTokenResolution(
             state,
-            player.playerId,
-            definition,
+            player,
+            revealedCard,
             "legend",
-            card
+            source,
+            effect.effectId,
+            services
           ),
         services
       );

@@ -12,6 +12,7 @@ import {
   type PlayerState,
   type TokenInstance,
 } from "../src/index.js";
+import { gainDeadWizardToken } from "../src/engine/effect-runtime.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -643,6 +644,192 @@ test("Хахатальер завершает вложенный gain ЖДК д�
     [nestedToken.instanceId, outerToken.instanceId]
   );
   assert.equal(state.common.deadWizardTokens.drawStack.length, 0);
+});
+
+test("свойство 003 спрашивает effective Legend в каждой точке текста DWT", () => {
+  const state = initializeGame({ rootDir, seed: 347001 });
+  const player = getActivePlayer(state);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_003");
+  assert.ok(property);
+  player.wizardProperties = [
+    {
+      instanceId: markTokenInstanceId("dwt-347-property-003"),
+      definitionId: markTokenDefinitionId(property.tokenId),
+      ownerId: player.playerId,
+    },
+  ];
+  player.effectiveCardTypeSelections = [];
+  const familiar = createPlayerCard(
+    player,
+    "esw2_dbg__familiar_007",
+    "dwt-347-contextual-familiar"
+  );
+  const limpWand = state.common.limpWandStack[0];
+  assert.ok(limpWand);
+  state.common.limpWandStack = [limpWand];
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "dead_wizard_token_gain_limp_wands_per_discard_legend") {
+      return { choiceId: "dwt-347-stale-choice" };
+    }
+    if (effectId === "dead_wizard_token_damage_per_discard_legend") {
+      return { choiceId: "decline" };
+    }
+    if (effectId === "dead_wizard_token_shuffle_hand_legends") {
+      return { choiceId: "decline" };
+    }
+    if (effectId === "dead_wizard_token_reveal_player_deck_gain_if_legend") {
+      const countChoice = choices.find(
+        (choice) => choice.choiceId === `count_as_legend_${familiar.instanceId}`
+      );
+      return countChoice === undefined
+        ? undefined
+        : { choiceId: countChoice.choiceId };
+    }
+    return undefined;
+  };
+
+  player.discard = [familiar];
+  state.common.deadWizardTokens.drawStack = [
+    createDeadWizardTokenInStack(
+      "dwt-347-contextual-001",
+      "esw2_dbg__dead_wizard_token_001"
+    ),
+  ];
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+  assert.equal(player.discard.includes(familiar), true);
+  assert.equal(player.discard.includes(limpWand), true);
+
+  player.discard = [familiar];
+  player.life.current = 20;
+  state.common.deadWizardTokens.drawStack = [
+    createDeadWizardTokenInStack(
+      "dwt-347-contextual-014",
+      "esw2_dbg__dead_wizard_token_014"
+    ),
+  ];
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+  assert.equal(player.life.current, 20);
+
+  player.discard = [];
+  player.hand = [familiar];
+  state.common.deadWizardTokens.drawStack = [
+    createDeadWizardTokenInStack(
+      "dwt-347-contextual-008",
+      "esw2_dbg__dead_wizard_token_008"
+    ),
+  ];
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+  assert.deepEqual(player.hand, [familiar]);
+
+  player.hand = [];
+  player.deck = [familiar];
+  state.common.deadWizardTokens.drawStack = [
+    createDeadWizardTokenInStack(
+      "dwt-347-contextual-023",
+      "esw2_dbg__dead_wizard_token_023"
+    ),
+  ];
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+  assert.deepEqual(player.deck, [familiar]);
+
+  assert.deepEqual(player.effectiveCardTypeSelections, []);
+  assert.deepEqual(
+    state.eventLog
+      .filter(
+        (event) =>
+          event.type === "effectChoiceSelected" &&
+          event.effectId.startsWith("dead_wizard_token_")
+      )
+      .map((event) => [event.effectId, event.choiceId]),
+    [
+      [
+        "dead_wizard_token_gain_limp_wands_per_discard_legend",
+        `count_as_legend_${familiar.instanceId}`,
+      ],
+      ["dead_wizard_token_damage_per_discard_legend", "decline"],
+      ["dead_wizard_token_shuffle_hand_legends", "decline"],
+      [
+        "dead_wizard_token_reveal_player_deck_gain_if_legend",
+        `count_as_legend_${familiar.instanceId}`,
+      ],
+    ]
+  );
+});
+
+test("свойство 003 доступно владельцу DWT после attack-death в чужой ход", () => {
+  const state = initializeGame({ rootDir, seed: 347002 });
+  const attacker = getActivePlayer(state);
+  const target = state.players.find(
+    (candidate) => candidate.playerId !== attacker.playerId
+  );
+  assert.ok(target);
+  const property = state.tokenDefinitions.get("esw2_dbg__wizard_property_003");
+  assert.ok(property);
+  attacker.hand = [];
+  target.hand = [];
+  target.life.current = 5;
+  target.wizardProperties = [
+    {
+      instanceId: markTokenInstanceId("dwt-347-death-property-003"),
+      definitionId: markTokenDefinitionId(property.tokenId),
+      ownerId: target.playerId,
+    },
+  ];
+  const familiar = createPlayerCard(
+    target,
+    "esw2_dbg__familiar_007",
+    "dwt-347-death-familiar"
+  );
+  target.discard = [familiar];
+  const limpWand = state.common.limpWandStack[0];
+  assert.ok(limpWand);
+  state.common.limpWandStack = [limpWand];
+  state.common.deadWizardTokens.drawStack = [
+    createDeadWizardTokenInStack(
+      "dwt-347-death-token",
+      "esw2_dbg__dead_wizard_token_001"
+    ),
+  ];
+  const attackCard = addCardToHand(state, attacker, "esw2_dbg__main_030");
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "attack_damage") {
+      return { choiceId: target.playerId };
+    }
+    if (effectId === "dead_wizard_token_gain_limp_wands_per_discard_legend") {
+      const countChoice = choices.find(
+        (choice) => choice.choiceId === `count_as_legend_${familiar.instanceId}`
+      );
+      return countChoice === undefined
+        ? undefined
+        : { choiceId: countChoice.choiceId };
+    }
+    return undefined;
+  };
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: attackCard.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.equal(target.deadWizardTokens.length, 1);
+  assert.equal(target.discard.includes(limpWand), true);
+  const resurrectionIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "playerResurrected" && event.playerId === target.playerId
+  );
+  const contextualChoiceIndex = state.eventLog.findIndex(
+    (event) =>
+      event.type === "effectChoiceSelected" &&
+      event.effectId === "dead_wizard_token_gain_limp_wands_per_discard_legend"
+  );
+  assert.ok(resurrectionIndex >= 0);
+  assert.ok(contextualChoiceIndex > resurrectionIndex);
+  assert.equal(
+    state.eventLog[contextualChoiceIndex]?.playerId,
+    target.playerId
+  );
 });
 
 test("Мескалито добирает карту и получает мощь за физический и карточный ЖДК", () => {
@@ -1550,10 +1737,23 @@ test("ЖДК 023 пополняет личную колоду, сохраняе�
     );
     state.common.deadWizardTokens.drawStack = [outerToken, nestedToken];
     const attackCard = addCardToHand(state, attacker, "esw2_dbg__main_030");
-    state.effectChoiceStrategy = ({ effectId }) =>
-      effectId === "attack_damage"
-        ? { choiceId: defender.playerId }
-        : undefined;
+    state.effectChoiceStrategy = ({ effectId, choices }) => {
+      if (effectId === "attack_damage") {
+        return { choiceId: defender.playerId };
+      }
+      if (
+        effectId === "dead_wizard_token_reveal_player_deck_gain_if_legend" &&
+        scenario.definitionId === "esw2_dbg__familiar_007"
+      ) {
+        const choiceId = scenario.selected
+          ? `count_as_legend_${revealedCard.instanceId}`
+          : "decline";
+        return choices.some((choice) => choice.choiceId === choiceId)
+          ? { choiceId }
+          : undefined;
+      }
+      return undefined;
+    };
 
     assert.deepEqual(
       applyAction(state, {

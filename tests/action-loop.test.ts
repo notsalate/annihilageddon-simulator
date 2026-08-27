@@ -17190,12 +17190,22 @@ test("ЖДК 001 считает реальные и fixture-легенды в с
       },
     ])
   );
-  state.effectChoiceStrategy = ({ effectId, choices }) =>
-    effectId === "attack_damage"
-      ? toChoiceSelection(
-          choices.find((choice) => choice.choiceId === foe.playerId)
-        )
-      : undefined;
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId === "attack_damage") {
+      return toChoiceSelection(
+        choices.find((choice) => choice.choiceId === foe.playerId)
+      );
+    }
+    if (effectId === "dead_wizard_token_gain_limp_wands_per_discard_legend") {
+      return toChoiceSelection(
+        choices.find(
+          (choice) =>
+            choice.choiceId === `count_as_legend_${effectiveLegend.instanceId}`
+        ) ?? choices.find((choice) => choice.choiceId === "decline")
+      );
+    }
+    return undefined;
+  };
 
   assert.deepEqual(
     applyAction(state, { type: "playCard", cardInstanceId: attack.instanceId }),

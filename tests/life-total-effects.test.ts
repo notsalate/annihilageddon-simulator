@@ -283,13 +283,18 @@ test("DWT 014 counts selected effective Familiar types in discard", () => {
     effects: [],
   });
 
-  const typeResult = applyAction(state, {
-    type: "setCardEffectiveType",
-    cardInstanceId: selectedFamiliar.instanceId,
-    cardType: "legend",
-    enabled: true,
+  chooseEffect(scenario, (request) => {
+    if (request.effectId !== "dead_wizard_token_damage_per_discard_legend") {
+      return undefined;
+    }
+    const selectedChoice = request.choices.find(
+      (choice) =>
+        choice.choiceId === `count_as_legend_${selectedFamiliar.instanceId}`
+    );
+    return selectedChoice === undefined
+      ? { choiceId: "decline" }
+      : { choiceId: selectedChoice.choiceId };
   });
-  assert.equal(typeResult.ok, true);
   assert.ok(player.discard.includes(realLegend));
   state.common.deadWizardTokens.drawStack = [
     createToken("esw2_dbg__dead_wizard_token_014", "fixture-dwt-014"),
