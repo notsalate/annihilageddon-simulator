@@ -11,9 +11,10 @@ import type {
   GameState,
   PlayerState,
 } from "./setup.js";
+import type { MarketFlowEndReason as SharedMarketFlowEndReason } from "./end-conditions.js";
 
 export type MarketFlowMode = "setup" | "turn";
-export type MarketFlowEndReason = "mainDeckExhausted" | "legendDeckExhausted";
+export type MarketFlowEndReason = SharedMarketFlowEndReason;
 
 export type MarketFlowResult =
   | {
@@ -24,6 +25,7 @@ export type MarketFlowResult =
   | {
       ok: true;
       gameEndReason: MarketFlowEndReason;
+      gameEndReasons?: readonly MarketFlowEndReason[];
       gameEnd?: undefined;
     }
   | {
@@ -44,25 +46,7 @@ export function runMarketFlow(
   state: GameState,
   options: RunMarketFlowOptions
 ): MarketFlowResult {
-  const legendResult = fillMarket(state, {
-    sourceDeck: state.common.legendDeck,
-    market: state.common.legendMarket,
-    marketName: "legendMarket",
-    destroyedEvents: state.common.destroyedMegaMayhem,
-    targetSize: 3,
-    eventKind: "megaMayhem",
-    eventLogType: "megaMayhemDestroyed",
-    endReason: "legendDeckExhausted",
-    mode: options.mode,
-  });
-  if (
-    !legendResult.ok ||
-    legendResult.gameEndReason !== undefined ||
-    legendResult.gameEnd !== undefined
-  ) {
-    return legendResult;
-  }
-
+  const endReasons: MarketFlowEndReason[] = [];
   const mainResult = fillMarket(state, {
     sourceDeck: state.common.mainDeck,
     market: state.common.market,
@@ -74,35 +58,45 @@ export function runMarketFlow(
     endReason: "mainDeckExhausted",
     mode: options.mode,
   });
-  if (
-    !mainResult.ok ||
-    mainResult.gameEndReason !== undefined ||
-    mainResult.gameEnd !== undefined
-  ) {
+  if (!mainResult.ok || mainResult.gameEnd !== undefined) {
     return mainResult;
   }
+  if (mainResult.gameEndReason !== undefined) {
+    endReasons.push(mainResult.gameEndReason);
+  }
 
-  return { ok: true };
+  const legendResult = fillMarket(state, {
+    sourceDeck: state.common.legendDeck,
+    market: state.common.legendMarket,
+    marketName: "legendMarket",
+    destroyedEvents: state.common.destroyedMegaMayhem,
+    targetSize: 3,
+    eventKind: "megaMayhem",
+    eventLogType: "megaMayhemDestroyed",
+    endReason: "legendDeckExhausted",
+    mode: options.mode,
+  });
+  if (!legendResult.ok || legendResult.gameEnd !== undefined) {
+    return legendResult;
+  }
+  if (legendResult.gameEndReason !== undefined) {
+    endReasons.push(legendResult.gameEndReason);
+  }
+
+  if (endReasons.length === 0) {
+    return { ok: true };
+  }
+  return {
+    ok: true,
+    gameEndReason: endReasons[0]!,
+    ...(endReasons.length > 1 ? { gameEndReasons: endReasons } : {}),
+  };
 }
 
 export function validateMarketFlow(
   state: GameState,
   options: RunMarketFlowOptions
 ): { ok: true } | { ok: false; error: string } {
-  const legendValidation = validateMarketFlowDeck(state, {
-    sourceDeck: state.common.legendDeck,
-    market: state.common.legendMarket,
-    targetSize: 3,
-    eventKind: "megaMayhem",
-    mode: options.mode,
-  });
-  if (!legendValidation.ok) {
-    return legendValidation;
-  }
-  if (legendValidation.exhausted) {
-    return { ok: true };
-  }
-
   const mainValidation = validateMarketFlowDeck(state, {
     sourceDeck: state.common.mainDeck,
     market: state.common.market,
@@ -110,7 +104,18 @@ export function validateMarketFlow(
     eventKind: "mayhem",
     mode: options.mode,
   });
-  return mainValidation.ok ? { ok: true } : mainValidation;
+  if (!mainValidation.ok) {
+    return mainValidation;
+  }
+
+  const legendValidation = validateMarketFlowDeck(state, {
+    sourceDeck: state.common.legendDeck,
+    market: state.common.legendMarket,
+    targetSize: 3,
+    eventKind: "megaMayhem",
+    mode: options.mode,
+  });
+  return legendValidation.ok ? { ok: true } : legendValidation;
 }
 
 function validateMarketFlowDeck(
@@ -181,6 +186,9 @@ function fillMarket(
   while (options.market.length < options.targetSize) {
     const card = options.sourceDeck.shift();
     if (card === undefined) {
+      if (!state.turn.pendingMarketFlowEndReasons.includes(options.endReason)) {
+        state.turn.pendingMarketFlowEndReasons.push(options.endReason);
+      }
       recordGameEvent(state, {
         type: "marketFlowFailed",
         playerId: state.activePlayerId,

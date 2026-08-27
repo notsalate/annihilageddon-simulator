@@ -4818,12 +4818,17 @@ test("Market Flow interface keeps setup Mayhem passive and turn Mayhem active", 
   ]);
 });
 
-test("Market Flow reports main deck exhaustion without starting the next turn", () => {
+test("Market Flow defers main deck exhaustion until the next player's end turn", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
   });
+  const previousActivePlayerId = state.activePlayerId;
+  const nextPlayer = state.players.find(
+    (player) => player.playerId !== previousActivePlayerId
+  );
+  assert.ok(nextPlayer);
   state.common.market.splice(0, 1);
   state.common.mainDeck.splice(0);
 
@@ -4832,20 +4837,27 @@ test("Market Flow reports main deck exhaustion without starting the next turn", 
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.gameEndReason, "mainDeckExhausted");
-  assert.equal(state.eventLog.at(-1)?.type, "marketFlowFailed");
+  assert.equal(state.activePlayerId, nextPlayer.playerId);
+  assert.deepEqual(state.turn.pendingMarketFlowEndReasons, [
+    "mainDeckExhausted",
+  ]);
   assert.equal(
     state.eventLog.some((event) => event.type === "turnStarted"),
-    false
+    true
   );
 });
 
-test("Market Flow reports legend deck exhaustion without starting the next turn", () => {
+test("Market Flow defers legend deck exhaustion until the next player's end turn", () => {
   const state = initializeGame({
     rootDir,
     dataPackPath: playableRuntimeDataPackPath,
     seed: 60615,
   });
+  const previousActivePlayerId = state.activePlayerId;
+  const nextPlayer = state.players.find(
+    (player) => player.playerId !== previousActivePlayerId
+  );
+  assert.ok(nextPlayer);
   state.common.legendMarket.splice(0, 1);
   state.common.legendDeck.splice(0);
 
@@ -4854,11 +4866,13 @@ test("Market Flow reports legend deck exhaustion without starting the next turn"
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.gameEndReason, "legendDeckExhausted");
-  assert.equal(state.eventLog.at(-1)?.type, "marketFlowFailed");
+  assert.equal(state.activePlayerId, nextPlayer.playerId);
+  assert.deepEqual(state.turn.pendingMarketFlowEndReasons, [
+    "legendDeckExhausted",
+  ]);
   assert.equal(
     state.eventLog.some((event) => event.type === "turnStarted"),
-    false
+    true
   );
 });
 
@@ -10961,7 +10975,7 @@ test("#288 main_021 cancels its discard on avoidance and discards the redirected
   assert.equal(redirectedAttacker.discard.includes(redirectedCard), true);
 });
 
-test("#289 legend_024 wins when its original target is killed", () => {
+test("#356 legend_024 defers victory until the active player's end checkpoint", () => {
   const state = initializeGame({ rootDir, seed: 60622, playerCount: 2 });
   const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
   const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
@@ -10969,7 +10983,7 @@ test("#289 legend_024 wins when its original target is killed", () => {
   activePlayer.wizardProperties = [];
   targetPlayer.wizardProperties = [];
   targetPlayer.life.current = 1;
-  state.common.deadWizardTokens.drawStack = [];
+  setNeutralDeadWizardTokenStack(state, 2, "legend-024-pending");
   state.turn.power = 99;
   const wand = addRuntimeCardToHand(
     state,
@@ -10983,12 +10997,42 @@ test("#289 legend_024 wins when its original target is killed", () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.gameEndReason, "playerDefeated");
-  assert.equal(result.winnerPlayerId, activePlayer.playerId);
+  assert.equal(result.gameEndReason, undefined);
+  assert.equal(state.turn.pendingSpecialWinnerPlayerId, activePlayer.playerId);
   assert.equal(targetPlayer.life.current, 20);
+
+  const followUp = addFixtureDefinitionToActiveHand(
+    state,
+    createFixtureCardDefinition("fixture-legend-024-follow-up", [
+      { effectId: "add_power", timing: "onPlay", amount: 1 },
+    ])
+  );
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: followUp.instanceId,
+    }),
+    { ok: true }
+  );
+
+  state.turn.pendingMarketFlowEndReasons = [
+    "mainDeckExhausted",
+    "legendDeckExhausted",
+  ];
+  assert.deepEqual(applyAction(state, { type: "endTurn" }), {
+    ok: true,
+    gameEndReason: "playerDefeated",
+    gameEndReasons: [
+      "playerDefeated",
+      "mainDeckExhausted",
+      "legendDeckExhausted",
+    ],
+    winnerPlayerId: activePlayer.playerId,
+  });
+  assert.equal(state.activePlayerId, activePlayer.playerId);
 });
 
-test("#289 legend_024 does not win when a redirect kills another wizard", () => {
+test("#356 legend_024 credits a redirected lethal application to the redirector", () => {
   const state = initializeGame({ rootDir, seed: 60623, playerCount: 2 });
   const activePlayer = mustGetPlayer(state, markPlayerId("player-1"));
   const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
@@ -10997,7 +11041,7 @@ test("#289 legend_024 does not win when a redirect kills another wizard", () => 
   targetPlayer.wizardProperties = [];
   activePlayer.life.current = 1;
   targetPlayer.life.current = 20;
-  state.common.deadWizardTokens.drawStack = [];
+  setNeutralDeadWizardTokenStack(state, 2, "legend-024-redirect");
   state.turn.power = 99;
   addFixtureDefenseCardToHand(state, targetPlayer, "discardSelf", {
     redirectAttack: true,
@@ -11021,8 +11065,125 @@ test("#289 legend_024 does not win when a redirect kills another wizard", () => 
 
   assert.equal(result.ok, true);
   assert.equal(result.gameEndReason, undefined);
+  assert.equal(state.turn.pendingSpecialWinnerPlayerId, targetPlayer.playerId);
   assert.equal(targetPlayer.life.current, 20);
   assert.equal(activePlayer.life.current, 20);
+
+  assert.deepEqual(applyAction(state, { type: "endTurn" }), {
+    ok: true,
+    gameEndReason: "playerDefeated",
+    winnerPlayerId: targetPlayer.playerId,
+  });
+});
+
+test("#356 E2E Bartolomeo plays Revolt from Ass before redirected Usha victory", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 60625,
+    playerCount: 2,
+  });
+  const originalAttacker = mustGetPlayer(state, markPlayerId("player-1"));
+  const redirector = mustGetPlayer(state, markPlayerId("player-2"));
+  state.activePlayerId = originalAttacker.playerId;
+  for (const player of state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+    player.hand = [];
+    player.life.current = 20;
+  }
+  originalAttacker.life.current = 1;
+  setNeutralDeadWizardTokenStack(state, 2, "legend-024-e2e");
+  state.turn.power = 99;
+
+  const revealedRevolt = createRuntimeCardInstance(
+    originalAttacker,
+    "esw2_dbg__legend_016",
+    "legend-032-e2e-revolt"
+  );
+  const revealedFillers = originalAttacker.deck.slice(0, 3);
+  originalAttacker.deck.splice(
+    0,
+    originalAttacker.deck.length,
+    revealedRevolt,
+    ...revealedFillers
+  );
+  const firstRedirect = addFixtureDefenseCardToHand(
+    state,
+    redirector,
+    "discardSelf",
+    { redirectAttack: true }
+  );
+  const secondRedirect = addFixtureDefenseCardToHand(
+    state,
+    redirector,
+    "discardSelf",
+    { redirectAttack: true }
+  );
+  const originalDefense = addFixtureDefenseCardToHand(
+    state,
+    originalAttacker,
+    "discardSelf"
+  );
+  let originalDefenseChoiceCount = 0;
+  state.effectChoiceStrategy = (request) => {
+    if (
+      request.effectId === "avoid_attack" &&
+      request.player.playerId === originalAttacker.playerId
+    ) {
+      originalDefenseChoiceCount += 1;
+      return { choiceId: "decline" };
+    }
+    return selectFirstFixtureDefense(request);
+  };
+
+  const bartolomeo = addRuntimeCardToHand(
+    state,
+    originalAttacker,
+    "esw2_dbg__legend_032"
+  );
+  const bartolomeoResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: bartolomeo.instanceId,
+  });
+
+  assert.deepEqual(bartolomeoResult, { ok: true });
+  assert.equal(state.activePlayerId, originalAttacker.playerId);
+  assert.equal(
+    state.turn.defenseDisabledPlayerIds.includes(originalAttacker.playerId),
+    true
+  );
+  assert.equal(originalAttacker.hand.includes(originalDefense), true);
+  assert.equal(originalDefenseChoiceCount, 1);
+  assert.equal(originalAttacker.discard.includes(revealedRevolt), true);
+  assert.equal(
+    revealedFillers.every((card) => originalAttacker.discard.includes(card)),
+    true
+  );
+  assert.equal(redirector.discard.includes(firstRedirect), true);
+
+  const usha = addRuntimeCardToHand(
+    state,
+    originalAttacker,
+    "esw2_dbg__legend_024"
+  );
+  const ushaResult = applyAction(state, {
+    type: "playCard",
+    cardInstanceId: usha.instanceId,
+  });
+
+  assert.deepEqual(ushaResult, { ok: true });
+  assert.equal(state.turn.pendingSpecialWinnerPlayerId, redirector.playerId);
+  assert.equal(originalAttacker.life.current, 20);
+  assert.equal(originalAttacker.hand.includes(originalDefense), true);
+  assert.equal(originalDefenseChoiceCount, 1);
+  assert.equal(redirector.discard.includes(secondRedirect), true);
+
+  assert.deepEqual(applyAction(state, { type: "endTurn" }), {
+    ok: true,
+    gameEndReason: "playerDefeated",
+    winnerPlayerId: redirector.playerId,
+  });
+  assert.equal(state.activePlayerId, originalAttacker.playerId);
 });
 
 test("#289 main_025 draws exactly once for an avoided original target", () => {
@@ -17903,6 +18064,50 @@ test("endTurn проверяет start-of-turn эффекты следующег
   assert.equal(state.turn.number, turnNumber);
   assert.deepEqual(activePlayer.hand, activeHand);
   assert.deepEqual(state.eventLog, eventLog);
+});
+
+test("endTurn reaches the empty DWT checkpoint before validating the next turn", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 246032,
+    deadWizardTokenCount: 0,
+  });
+  const activePlayer = mustGetPlayer(state, state.activePlayerId);
+  const nextPlayer = state.players.find(
+    (player) => player.playerId !== activePlayer.playerId
+  );
+  assert.ok(nextPlayer);
+  const invalidStartEffect = {
+    effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand",
+    timing: "onPlay",
+    destination: "hand",
+    amount: 1,
+    chooser: "controller",
+  } as unknown as RuntimeEffect;
+  const definition = createFixtureCardDefinition(
+    "fixture-empty-dwt-invalid-next-start",
+    [invalidStartEffect],
+    { isOngoing: true }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [definition.cardId, definition],
+  ]);
+  nextPlayer.permanents.push({
+    instanceId: markCardInstanceId("fixture-empty-dwt-invalid-next-start"),
+    definitionId: markCardDefinitionId(definition.cardId),
+    ownerId: nextPlayer.playerId,
+    marketChips: 0,
+  });
+
+  const result = applyAction(state, { type: "endTurn" });
+
+  assert.deepEqual(result, {
+    ok: true,
+    gameEndReason: "deadWizardTokensExhausted",
+  });
+  assert.equal(state.activePlayerId, activePlayer.playerId);
+  assert.equal(state.turn.number, 2);
 });
 
 test("empty DWT endTurn checkpoint precedes the next turn and its start effects", () => {

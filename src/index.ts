@@ -248,6 +248,8 @@ export type {
   RunMarketFlowOptions,
 } from "./engine/market-flow.js";
 export { runMarketFlow } from "./engine/market-flow.js";
+export type { EndOfTurnCheckpoint } from "./engine/end-conditions.js";
+export { getEndOfTurnCheckpoint } from "./engine/end-conditions.js";
 export {
   calculateEffectiveCardCost,
   calculateEffectiveCardVictoryPoints,
@@ -285,7 +287,6 @@ export {
   baselineBot,
   createLoadedDataPackFromSimulationFailureReport,
   createSimulationFailureReplay,
-  getGameEndReason,
   SimulationExecutionError,
   runSingleGame,
 } from "./engine/simulation.js";

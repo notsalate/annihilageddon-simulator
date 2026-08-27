@@ -85,6 +85,12 @@ function projectTurn(state: GameState): unknown {
     gainedCards: state.turn.gainedCards,
     mainMarketCardHandReplacementSourceCardIds:
       state.turn.mainMarketCardHandReplacementSourceCardIds,
+    pendingMarketFlowEndReasons: state.turn.pendingMarketFlowEndReasons,
+    ...(state.turn.pendingSpecialWinnerPlayerId === undefined
+      ? {}
+      : {
+          pendingSpecialWinnerPlayerId: state.turn.pendingSpecialWinnerPlayerId,
+        }),
     ...(state.turn.rememberedDestroyedLegendCost === undefined
       ? {}
       : {

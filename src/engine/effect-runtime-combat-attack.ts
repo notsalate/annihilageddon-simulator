@@ -1721,10 +1721,7 @@ export function executeAttackOutcomeBranch(
   }
 
   if (branch.effectId === "end_game_if_original_target_killed") {
-    if (
-      !attackResult.killed ||
-      targetPlayer.playerId !== attackResult.originalTargetPlayerId
-    ) {
+    if (!attackResult.killed) {
       return { ok: true };
     }
     return {
@@ -1732,6 +1729,7 @@ export function executeAttackOutcomeBranch(
       gameEnd: {
         reason: "playerDefeated",
         winnerPlayerId: player.playerId,
+        resolution: "endOfTurn",
       },
     };
   }

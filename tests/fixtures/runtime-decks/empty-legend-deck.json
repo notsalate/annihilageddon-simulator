@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "deckId": "empty-legend-deck",
+  "runtimeSchema": "krutagidon.deckComposition.v0",
+  "role": "legendDeck",
+  "mappingStatus": "fixture",
+  "entries": []
+}

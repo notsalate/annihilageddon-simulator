@@ -31,6 +31,7 @@ import {
   type SetupDirective,
   type SetupEffectSourceContext,
 } from "./effect-runtime-registry.js";
+import type { MarketFlowEndReason } from "./end-conditions.js";
 import { filterWizardPropertySetupPoolForFamiliarCapacity } from "./effect-runtime-setup.js";
 import type { RuntimeEffectId } from "./runtime-effect.js";
 import { installGameEventLog } from "./game-events.js";
@@ -176,6 +177,8 @@ export interface GameState {
     activatedCardIds: string[];
     gainedCards: GainedCardRecord[];
     mainMarketCardHandReplacementSourceCardIds: string[];
+    pendingMarketFlowEndReasons: MarketFlowEndReason[];
+    pendingSpecialWinnerPlayerId?: PlayerId | undefined;
     rememberedDestroyedLegendCost?: number | undefined;
     damagingAttackPlayerIds: PlayerId[];
     nextAttackUnavoidablePlayerId?: PlayerId | undefined;
@@ -1016,6 +1019,8 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       activatedCardIds: [],
       gainedCards: [],
       mainMarketCardHandReplacementSourceCardIds: [],
+      pendingMarketFlowEndReasons: [],
+      pendingSpecialWinnerPlayerId: undefined,
       rememberedDestroyedLegendCost: undefined,
       damagingAttackPlayerIds: [],
       nextAttackUnavoidablePlayerId: undefined,

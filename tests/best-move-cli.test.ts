@@ -254,6 +254,36 @@ test("single-game CLI forwards an explicit zero dead wizard token count", () => 
   assert.equal(output.turnsElapsed, 1);
 });
 
+test("single-game CLI serializes all simultaneous end reasons", () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      path.join(process.cwd(), "dist", "src", "cli", "run-single-game.js"),
+      "--seed",
+      "349103",
+      "--maxTurns",
+      "1",
+      "--deadWizardTokenCount",
+      "0",
+      "--dataPackPath",
+      "tests/fixtures/empty-market-runtime-data-pack.json",
+    ],
+    { cwd: process.cwd(), encoding: "utf8" }
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout) as {
+    endReason: string;
+    gameEndReasons?: string[];
+  };
+  assert.equal(output.endReason, "mainDeckExhausted");
+  assert.deepEqual(output.gameEndReasons, [
+    "mainDeckExhausted",
+    "legendDeckExhausted",
+    "deadWizardTokensExhausted",
+  ]);
+});
+
 test("mass CLI forwards an explicit zero dead wizard token count", () => {
   const result = spawnSync(
     process.execPath,

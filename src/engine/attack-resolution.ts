@@ -3,6 +3,7 @@ import { createAttackId, type AttackId } from "../domain/types.js";
 import { registerDeadWizardTokenAttackInstance } from "./dead-wizard-token-resolution.js";
 import {
   collectAttackReplacementProfile,
+  type EffectGameEnd,
   type DamageResult,
   type EffectExecutionResult,
   type EffectSourceContext,
@@ -322,6 +323,7 @@ export interface PlayerControlledAttackAdapters {
     attack: AttackInstance,
     result: EffectExecutionResult
   ): EffectExecutionResult;
+  deferGameEnd?(state: GameState, gameEnd: EffectGameEnd): void;
 }
 
 interface PlayerControlledAttackContext {
@@ -1030,8 +1032,13 @@ function resolvePlayerControlledEffectsAttackTarget(
       effect,
       current.source
     );
-    if (!result.ok || result.gameEnd !== undefined) {
-      return result;
+    const terminalResult = continueAfterAttackEffect(
+      intent.state,
+      adapters,
+      result
+    );
+    if (terminalResult !== undefined) {
+      return terminalResult;
     }
   }
 
@@ -1085,8 +1092,13 @@ function executeResolvedAttackBranches(
       branch,
       branchContext
     );
-    if (!result.ok || result.gameEnd !== undefined) {
-      return result;
+    const terminalResult = continueAfterAttackEffect(
+      intent.state,
+      adapters,
+      result
+    );
+    if (terminalResult !== undefined) {
+      return terminalResult;
     }
   }
 
@@ -1099,8 +1111,13 @@ function executeResolvedAttackBranches(
         branch,
         branchContext
       );
-      if (!result.ok || result.gameEnd !== undefined) {
-        return result;
+      const terminalResult = continueAfterAttackEffect(
+        intent.state,
+        adapters,
+        result
+      );
+      if (terminalResult !== undefined) {
+        return terminalResult;
       }
     }
   }
@@ -1144,12 +1161,41 @@ function executeAvoidedAttackBranches(
       branch,
       branchContext
     );
-    if (!result.ok || result.gameEnd !== undefined) {
-      return result;
+    const terminalResult = continueAfterAttackEffect(
+      intent.state,
+      adapters,
+      result
+    );
+    if (terminalResult !== undefined) {
+      return terminalResult;
     }
   }
 
   return { ok: true };
+}
+
+function continueAfterAttackEffect(
+  state: GameState,
+  adapters: PlayerControlledAttackAdapters,
+  result: EffectExecutionResult
+): EffectExecutionResult | undefined {
+  if (!result.ok) {
+    return result;
+  }
+  if (result.gameEnd === undefined) {
+    return undefined;
+  }
+  if (result.gameEnd.resolution !== "endOfTurn") {
+    return result;
+  }
+  if (adapters.deferGameEnd === undefined) {
+    return {
+      ok: false,
+      error: "Attack adapters cannot defer an end-of-turn game end",
+    };
+  }
+  adapters.deferGameEnd(state, result.gameEnd);
+  return undefined;
 }
 
 function recordAttackTargetStarted(

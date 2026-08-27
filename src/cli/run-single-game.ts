@@ -50,6 +50,9 @@ console.log(
     {
       seed: result.seed,
       endReason: result.endReason,
+      ...(result.gameEndReasons === undefined
+        ? {}
+        : { gameEndReasons: result.gameEndReasons }),
       isGameEnd: result.isGameEnd,
       turnsElapsed: result.turnsElapsed,
       winnerIds: result.winnerIds,

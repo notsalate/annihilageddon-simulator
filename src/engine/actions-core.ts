@@ -42,15 +42,11 @@ import {
   isPlayerCardEffectiveTypeSelected,
   setPlayerCardEffectiveType,
 } from "./card-type-runtime.js";
-import {
-  runMarketFlow,
-  validateMarketFlow,
-  type MarketFlowEndReason,
-} from "./market-flow.js";
+import { runMarketFlow, validateMarketFlow } from "./market-flow.js";
 import { runControlledPowerMutation } from "./trigger-dispatch.js";
 import {
-  DEAD_WIZARD_TOKENS_EXHAUSTED_REASON,
-  isDeadWizardTokenStackExhausted,
+  getEndOfTurnCheckpoint,
+  type EndOfTurnGameEndReason,
 } from "./end-conditions.js";
 import type {
   CardInstance,
@@ -115,10 +111,8 @@ export interface EndTurnAction {
 export type ActionResult =
   | {
       ok: true;
-      gameEndReason?:
-        | MarketFlowEndReason
-        | EffectGameEnd["reason"]
-        | typeof DEAD_WIZARD_TOKENS_EXHAUSTED_REASON;
+      gameEndReason?: EndOfTurnGameEndReason;
+      gameEndReasons?: readonly EndOfTurnGameEndReason[];
       /** Present only when the action itself established a winner. */
       winnerPlayerId?: PlayerState["playerId"];
     }
@@ -428,7 +422,7 @@ export function preflightAction(
       }
       case "endTurn": {
         calculateEndTurnDrawCount(state, activePlayer);
-        if (isDeadWizardTokenStackExhausted(state)) {
+        if (getEndOfTurnCheckpoint(state) !== undefined) {
           return undefined;
         }
         const nextActivePlayer = getNextPlayer(state, activePlayer);
@@ -537,12 +531,23 @@ function endTurn(state: GameState): ActionResult {
   state.turn.defenseDisabledPlayerIds = [];
   state.turn.deadWizardTokenKillReplacement = undefined;
   state.turn.number += 1;
-  if (isDeadWizardTokenStackExhausted(state)) {
+
+  const endOfTurnCheckpoint = getEndOfTurnCheckpoint(state);
+  if (endOfTurnCheckpoint !== undefined) {
     return {
       ok: true,
-      gameEndReason: DEAD_WIZARD_TOKENS_EXHAUSTED_REASON,
+      gameEndReason: endOfTurnCheckpoint.gameEndReason,
+      ...(endOfTurnCheckpoint.gameEndReasons.length > 1
+        ? { gameEndReasons: [...endOfTurnCheckpoint.gameEndReasons] }
+        : {}),
+      ...(endOfTurnCheckpoint.winnerPlayerId === undefined
+        ? {}
+        : { winnerPlayerId: endOfTurnCheckpoint.winnerPlayerId }),
     };
   }
+
+  state.turn.pendingMarketFlowEndReasons = [];
+  state.turn.pendingSpecialWinnerPlayerId = undefined;
   const nextActivePlayer = getNextPlayer(state, activePlayer);
   const transitionResult = runControlledPowerMutation(
     state,
@@ -552,9 +557,7 @@ function endTurn(state: GameState): ActionResult {
       return runMarketFlow(state, { mode: "turn" });
     },
     (marketFlowResult) =>
-      marketFlowResult.ok &&
-      marketFlowResult.gameEnd === undefined &&
-      marketFlowResult.gameEndReason === undefined
+      marketFlowResult.ok && marketFlowResult.gameEnd === undefined
   );
   if (!transitionResult.ok) {
     return transitionResult;
@@ -565,9 +568,6 @@ function endTurn(state: GameState): ActionResult {
   }
   if (marketFlowResult.gameEnd !== undefined) {
     return gameEndActionResult(marketFlowResult.gameEnd);
-  }
-  if (marketFlowResult.gameEndReason !== undefined) {
-    return marketFlowResult;
   }
   recordGameEvent(state, {
     type: "turnStarted",

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "deckId": "empty-main-deck",
+  "runtimeSchema": "krutagidon.deckComposition.v0",
+  "role": "mainDeck",
+  "mappingStatus": "fixture",
+  "entries": []
+}

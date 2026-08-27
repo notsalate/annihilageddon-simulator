@@ -39,17 +39,9 @@ import {
 import { assertGameStateInvariants } from "./invariants.js";
 import { createPlayerDecisionView } from "./strategy-decision-view.js";
 import { intakeRuntimeData } from "./runtime-data-intake.js";
-import {
-  DEAD_WIZARD_TOKENS_EXHAUSTED_REASON,
-  isDeadWizardTokenStackExhausted,
-} from "./end-conditions.js";
+import type { EndOfTurnGameEndReason } from "./end-conditions.js";
 
-export type GameEndReason =
-  | typeof DEAD_WIZARD_TOKENS_EXHAUSTED_REASON
-  | "mainDeckExhausted"
-  | "legendDeckExhausted"
-  | "playerDefeated"
-  | "maxTurnsReached";
+export type GameEndReason = EndOfTurnGameEndReason | "maxTurnsReached";
 
 export interface RunSingleGameOptions {
   rootDir: string;
@@ -630,6 +622,7 @@ export interface SingleGameResult extends AdjudicationResult {
   endReason: GameEndReason;
   isGameEnd: boolean;
   turnsElapsed: number;
+  gameEndReasons?: GameEndReason[];
   eventLog: GameEvent[];
   setupState?: SetupStateSnapshot;
 }
@@ -1041,7 +1034,6 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
   }
   const actionLimit = options.maxTurns * 200;
   let actionsApplied = 0;
-  let checkDeadWizardTokenExhaustion = options.deadWizardTokenCount !== 0;
   const actionHistory: GameAction[] = [];
 
   while (true) {
@@ -1049,16 +1041,6 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       if (options.validateInvariants) {
         assertGameStateInvariants(state);
       }
-      const endReason = getGameEndReason(state, {
-        checkDeadWizardTokenExhaustion,
-      });
-      if (endReason !== undefined) {
-        return (
-          rejectSuccessfulReplay(replayController) ??
-          summarizeGame(state, endReason, true, setupState)
-        );
-      }
-
       if (state.turn.number > options.maxTurns) {
         return (
           rejectSuccessfulReplay(replayController) ??
@@ -1098,12 +1080,12 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
             result.gameEndReason,
             true,
             setupState,
-            result.winnerPlayerId
+            result.winnerPlayerId,
+            result.gameEndReasons
           )
         );
       }
       actionsApplied += 1;
-      checkDeadWizardTokenExhaustion = selectedAction.type === "endTurn";
     } catch (error) {
       const replayFailure =
         replayController === undefined || error instanceof SimulationReplayError
@@ -1223,7 +1205,8 @@ function summarizeGame(
   endReason: GameEndReason,
   isGameEnd: boolean,
   setupState: SetupStateSnapshot,
-  winnerPlayerId?: PlayerId
+  winnerPlayerId?: PlayerId,
+  endReasons?: readonly GameEndReason[]
 ): SingleGameResult {
   const adjudication = adjudicateGame(state);
   const winnerIds =
@@ -1234,6 +1217,9 @@ function summarizeGame(
     endReason,
     isGameEnd,
     turnsElapsed: state.turn.number - 1,
+    ...(endReasons === undefined || endReasons.length <= 1
+      ? {}
+      : { gameEndReasons: [...endReasons] }),
     players: adjudication.players,
     winnerIds,
     isTie: winnerIds.length > 1,
@@ -1281,20 +1267,6 @@ function snapshotToken(token: TokenInstance): SetupTokenSnapshot {
     instanceId: token.instanceId,
     definitionId: token.definitionId,
   };
-}
-
-export function getGameEndReason(
-  state: GameState,
-  options: { checkDeadWizardTokenExhaustion?: boolean } = {}
-): GameEndReason | undefined {
-  if (
-    options.checkDeadWizardTokenExhaustion !== false &&
-    isDeadWizardTokenStackExhausted(state)
-  ) {
-    return DEAD_WIZARD_TOKENS_EXHAUSTED_REASON;
-  }
-
-  return undefined;
 }
 
 function isLegalAction(

@@ -66,6 +66,7 @@ import {
   type DamageCause,
   type DeadWizardTokenDeathPolicy,
   type EffectChoice,
+  type EffectGameEnd,
   type EffectExecutionResult,
   type EffectRuntimeServices,
   type EffectSourceContext,
@@ -987,6 +988,13 @@ function closeAttackInstance(
   return result;
 }
 
+function deferGameEnd(state: GameState, gameEnd: EffectGameEnd): void {
+  if (gameEnd.resolution !== "endOfTurn") {
+    throw new Error("Only end-of-turn game ends can be deferred");
+  }
+  state.turn.pendingSpecialWinnerPlayerId ??= gameEnd.winnerPlayerId;
+}
+
 function createDeadWizardTokenFace(
   player: PlayerState,
   token: TokenInstance,
@@ -1725,6 +1733,7 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
     }
     return result;
   },
+  deferGameEnd,
 };
 
 function resolvePlayerControlledAttackTargets(
@@ -2012,6 +2021,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   collectAttackReplacementProfile,
   openAttackInstance: createAttackInstance,
   closeAttackInstance,
+  deferGameEnd,
   resolvePlayerControlledAttack:
     resolvePlayerControlledAttackWithRuntimeAdapters,
   resolveDefenseWindow,
