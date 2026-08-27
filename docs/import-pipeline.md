@@ -284,7 +284,9 @@ Runtime JSON должен быть самодостаточным для engine.
 
 `npm run report:runtime-coverage` сохраняет отдельный карточный статус `cardComplete` из `npm run report:card-runtime-clusters` и проверяет final `crossSourceComplete` для карт, свойств волшебников и жетонов дохлого волшебника.
 
-Реестр `config/runtime-coverage/cross-source-mechanics.json` для каждого объекта задаёт primary mechanic cluster, стабильные `capability:*` и `evidence:*` IDs, точные ссылки на canonical draft points, runtime effects и именованные focused tests. Typed evidence дополнительно фиксирует публичный execution seam, source kind объекта и наблюдаемое assertion. Это план и evidence для import tooling, а не executable engine input.
+Реестры `config/runtime-coverage/cross-source-mechanics.json` и `config/runtime-coverage/card-semantic-evidence.json` задают для каждого объекта primary mechanic cluster, стабильные `capability:*` и `evidence:*` IDs, точные ссылки на canonical draft points, runtime effects и именованные focused tests. Import tooling загружает оба typed evidence-реестра, объединяет записи по стабильному ID и блокирует дубли. Typed evidence дополнительно фиксирует публичный execution seam, source kind объекта и наблюдаемое assertion. Это план и evidence для import tooling, а не executable engine input.
+
+`card-semantic-evidence.json` является отдельным реестром semantic evidence для всех runtime-карт. Для каждой mapping-записи его focused test должен провести карту через публичный `applyAction` и наблюдать mapping-specific runtime assertion; одного упоминания ID или проверки `result.ok` недостаточно. При изменении карточного runtime или его evidence оба реестра и соответствующие focused tests должны оставаться согласованными.
 
 `crossSourceComplete` возможен только когда:
 

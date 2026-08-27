@@ -1,1751 +1,666 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { isDeepStrictEqual } from "node:util";
 
-import { applyAction } from "../src/index.js";
+import {
+  applyAction,
+  type CardDefinition,
+  type CardInstance,
+} from "../src/index.js";
+import {
+  readCrossSourceCoveragePlan,
+  type CrossSourceRuntimeRef,
+} from "../src/import/cross-source-runtime-coverage.js";
 import {
   createGameScenario,
   givenRuntimeCard,
+  type GameScenario,
 } from "./helpers/game-scenario.js";
 
 const rootDir = process.cwd();
 
-test("card esw2_dbg__familiar_001 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372001 });
+function runCardSemanticEvidence(definitionId: string, seed: number): void {
+  const scenario = createGameScenario({ rootDir, seed });
   const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__familiar_001",
-    instanceId: "esw2_dbg__familiar_001",
+    definitionId,
+    instanceId: definitionId,
   });
   const result = applyAction(scenario.state, {
     type: "playCard",
     cardInstanceId: card.instanceId,
   });
   assert.equal(result.ok, true);
+  assertCardRuntimeEvidence(scenario, card, definitionId);
+}
+
+function assertCardRuntimeEvidence(
+  scenario: GameScenario,
+  card: CardInstance,
+  definitionId: string
+): void {
+  const definition = scenario.state.cardDefinitions.get(definitionId);
+  assert.ok(definition, `runtime definition is missing for ${definitionId}`);
+  assert.equal(card.definitionId, definitionId);
+  assert.ok(
+    scenario.state.eventLog.some(
+      (event) =>
+        event.type === "cardPlayed" &&
+        event.cardInstanceId === card.instanceId &&
+        event.definitionId === definitionId
+    ),
+    `public play action did not record ${definitionId} as cardPlayed`
+  );
+
+  const planEntry = readCrossSourceCoveragePlan(rootDir).get(definitionId);
+  assert.ok(planEntry, `coverage plan is missing for ${definitionId}`);
+  assert.equal(planEntry.objectKind, "card");
+  assert.ok(planEntry.semanticMappings.length > 0);
+
+  for (const mapping of planEntry.semanticMappings) {
+    assert.ok(
+      mapping.runtimeRefs.length > 0,
+      `mapping ${mapping.draftPoint.path} has no runtime references`
+    );
+    for (const runtimeRef of mapping.runtimeRefs) {
+      assertCardRuntimeReference(
+        definition,
+        runtimeRef,
+        definitionId,
+        mapping.draftPoint.path
+      );
+    }
+  }
+}
+
+function assertCardRuntimeReference(
+  definition: CardDefinition,
+  runtimeRef: CrossSourceRuntimeRef,
+  definitionId: string,
+  draftPointPath: string
+): void {
+  if (runtimeRef.kind === "field") {
+    assert.deepEqual(
+      readRuntimeField(definition, runtimeRef.path),
+      normalizeRuntimeFieldValue(runtimeRef.path, runtimeRef.value),
+      `${definitionId} ${draftPointPath} does not match ${runtimeRef.path}`
+    );
+    return;
+  }
+
+  const matchingEffects = definition.engine.effects.filter(
+    (effect) =>
+      effect.effectId === runtimeRef.effectId &&
+      effect.timing === runtimeRef.timing
+  );
+  assert.ok(
+    matchingEffects.some((effect) =>
+      isDeepStrictEqual(runtimeEffectPayload(effect), runtimeRef.fields)
+    ),
+    `${definitionId} ${draftPointPath} does not match ${runtimeRef.effectId}@${runtimeRef.timing}`
+  );
+}
+
+function normalizeRuntimeFieldValue(
+  fieldPath: string,
+  value: unknown
+): unknown {
+  // The runtime intake represents a card with no printed cost as cost 0.
+  return fieldPath === "engine.cost" && value === null ? 0 : value;
+}
+
+function readRuntimeField(
+  definition: CardDefinition,
+  fieldPath: string
+): unknown {
+  return fieldPath.split(".").reduce<unknown>((value, segment) => {
+    if (value === null || typeof value !== "object") {
+      return undefined;
+    }
+    return (value as Record<string, unknown>)[segment];
+  }, definition);
+}
+
+function runtimeEffectPayload(
+  effect: CardDefinition["engine"]["effects"][number]
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(effect).filter(
+      ([fieldName]) => fieldName !== "effectId" && fieldName !== "timing"
+    )
+  );
+}
+
+test("card esw2_dbg__familiar_001 executes through the public play action", () => {
+  runCardSemanticEvidence("esw2_dbg__familiar_001", 372001);
 });
 test("card esw2_dbg__familiar_002 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372002 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__familiar_002",
-    instanceId: "esw2_dbg__familiar_002",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__familiar_002", 372002);
 });
 
 test("card esw2_dbg__familiar_003 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372003 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__familiar_003",
-    instanceId: "esw2_dbg__familiar_003",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__familiar_003", 372003);
 });
 
 test("card esw2_dbg__familiar_004 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372004 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__familiar_004",
-    instanceId: "esw2_dbg__familiar_004",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__familiar_004", 372004);
 });
 
 test("card esw2_dbg__familiar_005 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372005 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__familiar_005",
-    instanceId: "esw2_dbg__familiar_005",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__familiar_005", 372005);
 });
 
 test("card esw2_dbg__familiar_006 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372006 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__familiar_006",
-    instanceId: "esw2_dbg__familiar_006",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__familiar_006", 372006);
 });
 
 test("card esw2_dbg__familiar_007 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372007 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__familiar_007",
-    instanceId: "esw2_dbg__familiar_007",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__familiar_007", 372007);
 });
 
 test("card esw2_dbg__familiar_008 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372008 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__familiar_008",
-    instanceId: "esw2_dbg__familiar_008",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__familiar_008", 372008);
 });
 
 test("card esw2_dbg__familiar_009 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372009 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__familiar_009",
-    instanceId: "esw2_dbg__familiar_009",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__familiar_009", 372009);
 });
 
 test("card esw2_dbg__familiar_010 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372010 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__familiar_010",
-    instanceId: "esw2_dbg__familiar_010",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__familiar_010", 372010);
 });
 
 test("card esw2_dbg__legend_001 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372011 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_001",
-    instanceId: "esw2_dbg__legend_001",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_001", 372011);
 });
 
 test("card esw2_dbg__legend_002 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372012 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_002",
-    instanceId: "esw2_dbg__legend_002",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_002", 372012);
 });
 
 test("card esw2_dbg__legend_003 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372013 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_003",
-    instanceId: "esw2_dbg__legend_003",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_003", 372013);
 });
 
 test("card esw2_dbg__legend_004 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372014 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_004",
-    instanceId: "esw2_dbg__legend_004",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_004", 372014);
 });
 
 test("card esw2_dbg__legend_005 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372015 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_005",
-    instanceId: "esw2_dbg__legend_005",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_005", 372015);
 });
 
 test("card esw2_dbg__legend_006 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372016 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_006",
-    instanceId: "esw2_dbg__legend_006",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_006", 372016);
 });
 
 test("card esw2_dbg__legend_007 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372017 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_007",
-    instanceId: "esw2_dbg__legend_007",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_007", 372017);
 });
 
 test("card esw2_dbg__legend_008 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372018 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_008",
-    instanceId: "esw2_dbg__legend_008",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_008", 372018);
 });
 
 test("card esw2_dbg__legend_009 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372019 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_009",
-    instanceId: "esw2_dbg__legend_009",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_009", 372019);
 });
 
 test("card esw2_dbg__legend_010 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372020 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_010",
-    instanceId: "esw2_dbg__legend_010",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_010", 372020);
 });
 
 test("card esw2_dbg__legend_011 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372021 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_011",
-    instanceId: "esw2_dbg__legend_011",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_011", 372021);
 });
 
 test("card esw2_dbg__legend_012 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372022 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_012",
-    instanceId: "esw2_dbg__legend_012",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_012", 372022);
 });
 
 test("card esw2_dbg__legend_013 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372023 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_013",
-    instanceId: "esw2_dbg__legend_013",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_013", 372023);
 });
 
 test("card esw2_dbg__legend_014 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372024 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_014",
-    instanceId: "esw2_dbg__legend_014",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_014", 372024);
 });
 
 test("card esw2_dbg__legend_015 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372025 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_015",
-    instanceId: "esw2_dbg__legend_015",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_015", 372025);
 });
 
 test("card esw2_dbg__legend_016 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372026 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_016",
-    instanceId: "esw2_dbg__legend_016",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_016", 372026);
 });
 
 test("card esw2_dbg__legend_017 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372027 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_017",
-    instanceId: "esw2_dbg__legend_017",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_017", 372027);
 });
 
 test("card esw2_dbg__legend_018 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372028 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_018",
-    instanceId: "esw2_dbg__legend_018",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_018", 372028);
 });
 
 test("card esw2_dbg__legend_019 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372029 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_019",
-    instanceId: "esw2_dbg__legend_019",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_019", 372029);
 });
 
 test("card esw2_dbg__legend_020 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372030 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_020",
-    instanceId: "esw2_dbg__legend_020",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_020", 372030);
 });
 
 test("card esw2_dbg__legend_021 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372031 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_021",
-    instanceId: "esw2_dbg__legend_021",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_021", 372031);
 });
 
 test("card esw2_dbg__legend_022 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372032 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_022",
-    instanceId: "esw2_dbg__legend_022",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_022", 372032);
 });
 
 test("card esw2_dbg__legend_023 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372033 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_023",
-    instanceId: "esw2_dbg__legend_023",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_023", 372033);
 });
 
 test("card esw2_dbg__legend_024 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372034 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_024",
-    instanceId: "esw2_dbg__legend_024",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_024", 372034);
 });
 
 test("card esw2_dbg__legend_025 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372035 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_025",
-    instanceId: "esw2_dbg__legend_025",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_025", 372035);
 });
 
 test("card esw2_dbg__legend_026 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372036 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_026",
-    instanceId: "esw2_dbg__legend_026",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_026", 372036);
 });
 
 test("card esw2_dbg__legend_027 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372037 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_027",
-    instanceId: "esw2_dbg__legend_027",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_027", 372037);
 });
 
 test("card esw2_dbg__legend_028 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372038 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_028",
-    instanceId: "esw2_dbg__legend_028",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_028", 372038);
 });
 
 test("card esw2_dbg__legend_029 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372039 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_029",
-    instanceId: "esw2_dbg__legend_029",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_029", 372039);
 });
 
 test("card esw2_dbg__legend_030 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372040 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_030",
-    instanceId: "esw2_dbg__legend_030",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_030", 372040);
 });
 
 test("card esw2_dbg__legend_031 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372041 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_031",
-    instanceId: "esw2_dbg__legend_031",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_031", 372041);
 });
 
 test("card esw2_dbg__legend_032 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372042 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_032",
-    instanceId: "esw2_dbg__legend_032",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_032", 372042);
 });
 
 test("card esw2_dbg__legend_033 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372043 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__legend_033",
-    instanceId: "esw2_dbg__legend_033",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__legend_033", 372043);
 });
 
 test("card esw2_dbg__limp_wand executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372044 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__limp_wand",
-    instanceId: "esw2_dbg__limp_wand",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__limp_wand", 372044);
 });
 
 test("card esw2_dbg__main_001 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372045 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_001",
-    instanceId: "esw2_dbg__main_001",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_001", 372045);
 });
 
 test("card esw2_dbg__main_002 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372046 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_002",
-    instanceId: "esw2_dbg__main_002",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_002", 372046);
 });
 
 test("card esw2_dbg__main_003 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372047 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_003",
-    instanceId: "esw2_dbg__main_003",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_003", 372047);
 });
 
 test("card esw2_dbg__main_004 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372048 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_004",
-    instanceId: "esw2_dbg__main_004",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_004", 372048);
 });
 
 test("card esw2_dbg__main_005 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372049 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_005",
-    instanceId: "esw2_dbg__main_005",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_005", 372049);
 });
 
 test("card esw2_dbg__main_006 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372050 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_006",
-    instanceId: "esw2_dbg__main_006",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_006", 372050);
 });
 
 test("card esw2_dbg__main_007 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372051 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_007",
-    instanceId: "esw2_dbg__main_007",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_007", 372051);
 });
 
 test("card esw2_dbg__main_008 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372052 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_008",
-    instanceId: "esw2_dbg__main_008",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_008", 372052);
 });
 
 test("card esw2_dbg__main_009 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372053 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_009",
-    instanceId: "esw2_dbg__main_009",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_009", 372053);
 });
 
 test("card esw2_dbg__main_010 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372054 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_010",
-    instanceId: "esw2_dbg__main_010",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_010", 372054);
 });
 
 test("card esw2_dbg__main_011 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372055 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_011",
-    instanceId: "esw2_dbg__main_011",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_011", 372055);
 });
 
 test("card esw2_dbg__main_012 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372056 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_012",
-    instanceId: "esw2_dbg__main_012",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_012", 372056);
 });
 
 test("card esw2_dbg__main_013 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372057 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_013",
-    instanceId: "esw2_dbg__main_013",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_013", 372057);
 });
 
 test("card esw2_dbg__main_014 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372058 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_014",
-    instanceId: "esw2_dbg__main_014",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_014", 372058);
 });
 
 test("card esw2_dbg__main_015 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372059 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_015",
-    instanceId: "esw2_dbg__main_015",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_015", 372059);
 });
 
 test("card esw2_dbg__main_016 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372060 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_016",
-    instanceId: "esw2_dbg__main_016",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_016", 372060);
 });
 
 test("card esw2_dbg__main_017 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372061 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_017",
-    instanceId: "esw2_dbg__main_017",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_017", 372061);
 });
 
 test("card esw2_dbg__main_018 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372062 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_018",
-    instanceId: "esw2_dbg__main_018",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_018", 372062);
 });
 
 test("card esw2_dbg__main_019 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372063 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_019",
-    instanceId: "esw2_dbg__main_019",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_019", 372063);
 });
 
 test("card esw2_dbg__main_020 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372064 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_020",
-    instanceId: "esw2_dbg__main_020",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_020", 372064);
 });
 
 test("card esw2_dbg__main_021 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372065 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_021",
-    instanceId: "esw2_dbg__main_021",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_021", 372065);
 });
 
 test("card esw2_dbg__main_022 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372066 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_022",
-    instanceId: "esw2_dbg__main_022",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_022", 372066);
 });
 
 test("card esw2_dbg__main_023 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372067 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_023",
-    instanceId: "esw2_dbg__main_023",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_023", 372067);
 });
 
 test("card esw2_dbg__main_024 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372068 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_024",
-    instanceId: "esw2_dbg__main_024",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_024", 372068);
 });
 
 test("card esw2_dbg__main_025 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372069 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_025",
-    instanceId: "esw2_dbg__main_025",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_025", 372069);
 });
 
 test("card esw2_dbg__main_026 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372070 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_026",
-    instanceId: "esw2_dbg__main_026",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_026", 372070);
 });
 
 test("card esw2_dbg__main_027 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372071 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_027",
-    instanceId: "esw2_dbg__main_027",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_027", 372071);
 });
 
 test("card esw2_dbg__main_028 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372072 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_028",
-    instanceId: "esw2_dbg__main_028",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_028", 372072);
 });
 
 test("card esw2_dbg__main_029 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372073 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_029",
-    instanceId: "esw2_dbg__main_029",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_029", 372073);
 });
 
 test("card esw2_dbg__main_030 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372074 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_030",
-    instanceId: "esw2_dbg__main_030",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_030", 372074);
 });
 
 test("card esw2_dbg__main_031 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372075 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_031",
-    instanceId: "esw2_dbg__main_031",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_031", 372075);
 });
 
 test("card esw2_dbg__main_032 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372076 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_032",
-    instanceId: "esw2_dbg__main_032",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_032", 372076);
 });
 
 test("card esw2_dbg__main_033 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372077 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_033",
-    instanceId: "esw2_dbg__main_033",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_033", 372077);
 });
 
 test("card esw2_dbg__main_034 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372078 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_034",
-    instanceId: "esw2_dbg__main_034",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_034", 372078);
 });
 
 test("card esw2_dbg__main_035 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372079 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_035",
-    instanceId: "esw2_dbg__main_035",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_035", 372079);
 });
 
 test("card esw2_dbg__main_036 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372080 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_036",
-    instanceId: "esw2_dbg__main_036",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_036", 372080);
 });
 
 test("card esw2_dbg__main_037 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372081 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_037",
-    instanceId: "esw2_dbg__main_037",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_037", 372081);
 });
 
 test("card esw2_dbg__main_038 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372082 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_038",
-    instanceId: "esw2_dbg__main_038",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_038", 372082);
 });
 
 test("card esw2_dbg__main_039 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372083 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_039",
-    instanceId: "esw2_dbg__main_039",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_039", 372083);
 });
 
 test("card esw2_dbg__main_040 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372084 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_040",
-    instanceId: "esw2_dbg__main_040",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_040", 372084);
 });
 
 test("card esw2_dbg__main_041 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372085 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_041",
-    instanceId: "esw2_dbg__main_041",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_041", 372085);
 });
 
 test("card esw2_dbg__main_042 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372086 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_042",
-    instanceId: "esw2_dbg__main_042",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_042", 372086);
 });
 
 test("card esw2_dbg__main_043 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372087 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_043",
-    instanceId: "esw2_dbg__main_043",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_043", 372087);
 });
 
 test("card esw2_dbg__main_044 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372088 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_044",
-    instanceId: "esw2_dbg__main_044",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_044", 372088);
 });
 
 test("card esw2_dbg__main_045 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372089 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_045",
-    instanceId: "esw2_dbg__main_045",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_045", 372089);
 });
 
 test("card esw2_dbg__main_046 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372090 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_046",
-    instanceId: "esw2_dbg__main_046",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_046", 372090);
 });
 
 test("card esw2_dbg__main_047 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372091 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_047",
-    instanceId: "esw2_dbg__main_047",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_047", 372091);
 });
 
 test("card esw2_dbg__main_048 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372092 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_048",
-    instanceId: "esw2_dbg__main_048",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_048", 372092);
 });
 
 test("card esw2_dbg__main_049 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372093 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_049",
-    instanceId: "esw2_dbg__main_049",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_049", 372093);
 });
 
 test("card esw2_dbg__main_050 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372094 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_050",
-    instanceId: "esw2_dbg__main_050",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_050", 372094);
 });
 
 test("card esw2_dbg__main_051 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372095 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_051",
-    instanceId: "esw2_dbg__main_051",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_051", 372095);
 });
 
 test("card esw2_dbg__main_052 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372096 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_052",
-    instanceId: "esw2_dbg__main_052",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_052", 372096);
 });
 
 test("card esw2_dbg__main_053 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372097 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_053",
-    instanceId: "esw2_dbg__main_053",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_053", 372097);
 });
 
 test("card esw2_dbg__main_054 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372098 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_054",
-    instanceId: "esw2_dbg__main_054",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_054", 372098);
 });
 
 test("card esw2_dbg__main_055 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372099 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_055",
-    instanceId: "esw2_dbg__main_055",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_055", 372099);
 });
 
 test("card esw2_dbg__main_056 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372100 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_056",
-    instanceId: "esw2_dbg__main_056",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_056", 372100);
 });
 
 test("card esw2_dbg__main_057 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372101 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_057",
-    instanceId: "esw2_dbg__main_057",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_057", 372101);
 });
 
 test("card esw2_dbg__main_058 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372102 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_058",
-    instanceId: "esw2_dbg__main_058",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_058", 372102);
 });
 
 test("card esw2_dbg__main_059 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372103 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_059",
-    instanceId: "esw2_dbg__main_059",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_059", 372103);
 });
 
 test("card esw2_dbg__main_060 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372104 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_060",
-    instanceId: "esw2_dbg__main_060",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_060", 372104);
 });
 
 test("card esw2_dbg__main_061 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372105 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_061",
-    instanceId: "esw2_dbg__main_061",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_061", 372105);
 });
 
 test("card esw2_dbg__main_062 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372106 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_062",
-    instanceId: "esw2_dbg__main_062",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_062", 372106);
 });
 
 test("card esw2_dbg__main_063 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372107 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_063",
-    instanceId: "esw2_dbg__main_063",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_063", 372107);
 });
 
 test("card esw2_dbg__main_064 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372108 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_064",
-    instanceId: "esw2_dbg__main_064",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_064", 372108);
 });
 
 test("card esw2_dbg__main_065 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372109 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_065",
-    instanceId: "esw2_dbg__main_065",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_065", 372109);
 });
 
 test("card esw2_dbg__main_066 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372110 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_066",
-    instanceId: "esw2_dbg__main_066",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_066", 372110);
 });
 
 test("card esw2_dbg__main_067 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372111 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_067",
-    instanceId: "esw2_dbg__main_067",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_067", 372111);
 });
 
 test("card esw2_dbg__main_068 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372112 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_068",
-    instanceId: "esw2_dbg__main_068",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_068", 372112);
 });
 
 test("card esw2_dbg__main_069 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372113 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_069",
-    instanceId: "esw2_dbg__main_069",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_069", 372113);
 });
 
 test("card esw2_dbg__main_070 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372114 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_070",
-    instanceId: "esw2_dbg__main_070",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_070", 372114);
 });
 
 test("card esw2_dbg__main_071 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372115 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_071",
-    instanceId: "esw2_dbg__main_071",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_071", 372115);
 });
 
 test("card esw2_dbg__main_072 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372116 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_072",
-    instanceId: "esw2_dbg__main_072",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_072", 372116);
 });
 
 test("card esw2_dbg__main_073 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372117 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_073",
-    instanceId: "esw2_dbg__main_073",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_073", 372117);
 });
 
 test("card esw2_dbg__main_074 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372118 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_074",
-    instanceId: "esw2_dbg__main_074",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_074", 372118);
 });
 
 test("card esw2_dbg__main_075 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372119 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_075",
-    instanceId: "esw2_dbg__main_075",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_075", 372119);
 });
 
 test("card esw2_dbg__main_076 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372120 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_076",
-    instanceId: "esw2_dbg__main_076",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_076", 372120);
 });
 
 test("card esw2_dbg__main_077 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372121 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_077",
-    instanceId: "esw2_dbg__main_077",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_077", 372121);
 });
 
 test("card esw2_dbg__main_078 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372122 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__main_078",
-    instanceId: "esw2_dbg__main_078",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__main_078", 372122);
 });
 
 test("card esw2_dbg__mega_mayhem_001 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372123 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__mega_mayhem_001",
-    instanceId: "esw2_dbg__mega_mayhem_001",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__mega_mayhem_001", 372123);
 });
 
 test("card esw2_dbg__mega_mayhem_002 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372124 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__mega_mayhem_002",
-    instanceId: "esw2_dbg__mega_mayhem_002",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__mega_mayhem_002", 372124);
 });
 
 test("card esw2_dbg__mega_mayhem_003 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372125 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__mega_mayhem_003",
-    instanceId: "esw2_dbg__mega_mayhem_003",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__mega_mayhem_003", 372125);
 });
 
 test("card esw2_dbg__mega_mayhem_004 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372126 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__mega_mayhem_004",
-    instanceId: "esw2_dbg__mega_mayhem_004",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__mega_mayhem_004", 372126);
 });
 
 test("card esw2_dbg__mega_mayhem_005 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372127 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__mega_mayhem_005",
-    instanceId: "esw2_dbg__mega_mayhem_005",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__mega_mayhem_005", 372127);
 });
 
 test("card esw2_dbg__mega_mayhem_006 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372128 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__mega_mayhem_006",
-    instanceId: "esw2_dbg__mega_mayhem_006",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__mega_mayhem_006", 372128);
 });
 
 test("card esw2_dbg__mega_mayhem_007 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372129 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__mega_mayhem_007",
-    instanceId: "esw2_dbg__mega_mayhem_007",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__mega_mayhem_007", 372129);
 });
 
 test("card esw2_dbg__starter_001 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372130 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__starter_001",
-    instanceId: "esw2_dbg__starter_001",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__starter_001", 372130);
 });
 
 test("card esw2_dbg__starter_002 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372131 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__starter_002",
-    instanceId: "esw2_dbg__starter_002",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__starter_002", 372131);
 });
 
 test("card esw2_dbg__starter_003 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372132 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__starter_003",
-    instanceId: "esw2_dbg__starter_003",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__starter_003", 372132);
 });
 
 test("card esw2_dbg__starter_004 executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372133 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__starter_004",
-    instanceId: "esw2_dbg__starter_004",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__starter_004", 372133);
 });
 
 test("card esw2_dbg__wild_magic executes through the public play action", () => {
-  const scenario = createGameScenario({ rootDir, seed: 372134 });
-  const card = givenRuntimeCard(scenario, {
-    definitionId: "esw2_dbg__wild_magic",
-    instanceId: "esw2_dbg__wild_magic",
-  });
-  const result = applyAction(scenario.state, {
-    type: "playCard",
-    cardInstanceId: card.instanceId,
-  });
-  assert.equal(result.ok, true);
+  runCardSemanticEvidence("esw2_dbg__wild_magic", 372134);
 });

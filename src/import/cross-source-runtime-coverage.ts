@@ -758,7 +758,16 @@ function validateTypedTestReference(
     return false;
   }
 
-  const calls = findRuntimeSeamCalls(testBody).filter(
+  const observationTarget = observation.target.trim();
+  const cardEvidenceWrapper =
+    execution.objectKind === "card" &&
+    execution.seam === "applyAction" &&
+    observation.kind === "assertion" &&
+    observationTarget === "assertCardRuntimeEvidence"
+      ? findCardSemanticEvidenceWrapper(text, testBody, id)
+      : undefined;
+  const evidenceBody = cardEvidenceWrapper ?? testBody;
+  const calls = findRuntimeSeamCalls(evidenceBody).filter(
     (call) => call.name === execution.seam
   );
   if (calls.length === 0) {
@@ -770,7 +779,9 @@ function validateTypedTestReference(
   }
 
   const subjectUsed = calls.some((call) =>
-    executionSubjectIsUsed(testBody, id, call, execution.subject)
+    cardEvidenceWrapper !== undefined
+      ? hasParameterizedRuntimeCardInstanceReference(evidenceBody, call)
+      : executionSubjectIsUsed(testBody, id, call, execution.subject)
   );
   if (!subjectUsed) {
     addBlocker(
@@ -784,9 +795,11 @@ function validateTypedTestReference(
     execution.seam === "applyAction" &&
     !calls.some(
       (call) =>
-        executionSubjectIsUsed(testBody, id, call, execution.subject) &&
+        (cardEvidenceWrapper !== undefined
+          ? hasParameterizedRuntimeCardInstanceReference(evidenceBody, call)
+          : executionSubjectIsUsed(testBody, id, call, execution.subject)) &&
         isApplyActionPathAllowed(
-          testBody,
+          evidenceBody,
           call,
           execution.objectKind,
           (code, message) => addBlocker(code, message)
@@ -796,7 +809,6 @@ function validateTypedTestReference(
     valid = false;
   }
 
-  const observationTarget = observation.target.trim();
   if (observation.kind !== "assertion" || observationTarget === "") {
     addBlocker(
       "observation-evidence-missing",
@@ -804,20 +816,108 @@ function validateTypedTestReference(
     );
     return false;
   }
-  const normalizedTarget = normalizeSourceSnippet(observationTarget);
-  const observed = calls.some((call) =>
-    getAssertionsAfter(testBody, call.end).some((assertion) =>
-      normalizeSourceSnippet(assertion).includes(normalizedTarget)
-    )
-  );
+  const observed =
+    cardEvidenceWrapper !== undefined
+      ? hasCardSemanticEvidenceObservation(
+          text,
+          evidenceBody,
+          calls,
+          observationTarget,
+          (code, message) => addBlocker(code, message)
+        )
+      : (() => {
+          const normalizedTarget = normalizeSourceSnippet(observationTarget);
+          return calls.some((call) =>
+            getAssertionsAfter(testBody, call.end).some((assertion) =>
+              normalizeSourceSnippet(assertion).includes(normalizedTarget)
+            )
+          );
+        })();
   if (!observed) {
-    addBlocker(
-      "observation-assertion-missing",
-      `focused test ${testRef.file}#${testRef.name} does not assert ${observationTarget} after ${execution.seam}`
-    );
+    if (cardEvidenceWrapper === undefined) {
+      addBlocker(
+        "observation-assertion-missing",
+        `focused test ${testRef.file}#${testRef.name} does not assert ${observationTarget} after ${execution.seam}`
+      );
+    }
     valid = false;
   }
   return valid;
+}
+
+function findCardSemanticEvidenceWrapper(
+  sourceText: string,
+  testBody: string,
+  id: string
+): string | undefined {
+  const invocation = new RegExp(
+    `\\brunCardSemanticEvidence\\s*\\(\\s*(["'])${escapeRegExp(id)}\\1\\s*,`,
+    "u"
+  );
+  if (!invocation.test(testBody)) {
+    return undefined;
+  }
+  return findNamedFunctionBody(sourceText, "runCardSemanticEvidence");
+}
+
+function hasParameterizedRuntimeCardInstanceReference(
+  testBody: string,
+  call: RuntimeSeamCall
+): boolean {
+  const setup = new RegExp(
+    `\\b(?:const|let)\\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*=\\s*givenRuntimeCard\\s*\\([\\s\\S]*?\\)`,
+    "u"
+  ).exec(testBody);
+  if (setup?.[1] === undefined || !/\bdefinitionId\b/u.test(setup[0])) {
+    return false;
+  }
+  return new RegExp(`\\b${escapeRegExp(setup[1])}\\.instanceId\\b`, "u").test(
+    call.invocation
+  );
+}
+
+function hasCardSemanticEvidenceObservation(
+  sourceText: string,
+  wrapperBody: string,
+  calls: RuntimeSeamCall[],
+  observationTarget: string,
+  addBlocker: (code: CrossSourceBlockerCode, message: string) => void
+): boolean {
+  const applyAction = calls.find((call) => call.name === "applyAction");
+  const observesAfterAction =
+    applyAction !== undefined &&
+    new RegExp(
+      `\\b${escapeRegExp(observationTarget)}\\s*\\(\\s*scenario\\s*,\\s*card\\s*,\\s*definitionId\\s*\\)`,
+      "u"
+    ).test(wrapperBody.slice(applyAction.end));
+  if (!observesAfterAction) {
+    addBlocker(
+      "observation-assertion-missing",
+      `card semantic evidence helper does not call ${observationTarget} after applyAction`
+    );
+    return false;
+  }
+
+  const helperBody = findNamedFunctionBody(
+    sourceText,
+    "assertCardRuntimeEvidence"
+  );
+  const helperHasMappingAssertions =
+    helperBody !== undefined &&
+    /\breadCrossSourceCoveragePlan\s*\(/u.test(helperBody) &&
+    /\bsemanticMappings\b/u.test(helperBody) &&
+    /\bruntimeRefs\b/u.test(helperBody) &&
+    /\bcardDefinitions\b/u.test(helperBody) &&
+    /\beventLog\b/u.test(helperBody) &&
+    /\bassert\.(?:ok|equal|deepEqual)\b/u.test(helperBody);
+  if (!helperHasMappingAssertions) {
+    addBlocker(
+      "observation-assertion-missing",
+      "card semantic evidence helper does not assert mapped runtime references"
+    );
+    return false;
+  }
+  return true;
 }
 
 function executionSubjectIsUsed(
@@ -1515,6 +1615,32 @@ function findNamedTestBody(text: string, name: string): string | undefined {
     return undefined;
   }
   const bodyStart = testStart.index + testStart[0].length - 1;
+  let depth = 0;
+  for (let index = bodyStart; index < text.length; index += 1) {
+    if (text[index] === "{") depth += 1;
+    if (text[index] === "}") depth -= 1;
+    if (depth === 0) {
+      return text.slice(bodyStart + 1, index);
+    }
+  }
+  return undefined;
+}
+
+function findNamedFunctionBody(text: string, name: string): string | undefined {
+  const functionStart = new RegExp(
+    `\\bfunction\\s+${escapeRegExp(name)}\\s*\\(`,
+    "u"
+  ).exec(text);
+  if (functionStart === null) {
+    return undefined;
+  }
+  const bodyStart = text.indexOf(
+    "{",
+    functionStart.index + functionStart[0].length
+  );
+  if (bodyStart < 0) {
+    return undefined;
+  }
   let depth = 0;
   for (let index = bodyStart; index < text.length; index += 1) {
     if (text[index] === "{") depth += 1;

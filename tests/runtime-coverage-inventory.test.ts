@@ -1521,6 +1521,53 @@ test("semantic evidence rejects a card ID that is only mentioned outside a runti
   );
 });
 
+test("semantic evidence rejects a card smoke test without mapped runtime assertions", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-card-smoke-test-")
+  );
+  const id = "esw2_dbg__main_001";
+  const testName = "card only reports a successful action";
+
+  writeText(
+    rootDir,
+    "tests/semantic-evidence.test.ts",
+    `test("${testName}", () => {
+  const cardId = "${id}";
+  const state = initializeGame({ rootDir });
+  applyAction(state, { type: "playCard", cardId });
+  assert.equal(true, true);
+});
+`
+  );
+
+  const planEntry = createSemanticEvidencePlanEntry({
+    id,
+    testName,
+    testSubject: { kind: "binding", name: "cardId" },
+  });
+  const testRef = planEntry.semanticMappings[0]?.testRefs[0];
+  assert.ok(testRef?.observation);
+  testRef.observation.target = "assertCardRuntimeEvidence";
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "card",
+    sourceGroupOrTokenKind: "main",
+    draft: createSemanticEvidenceDraft(id),
+    runtime: createSemanticEvidenceRuntime(id),
+    compositionMembership: [{ role: "mainDeck", entryKind: "card", count: 1 }],
+    planEntry,
+  });
+
+  assert.equal(evaluation.status, "blocked");
+  assert.ok(
+    evaluation.blockerCodes.some(
+      (blocker) => blocker.code === "observation-assertion-missing"
+    )
+  );
+});
+
 test("repository card semantic evidence covers every canonical card", () => {
   const report = createRuntimeSemanticCompletionReport(process.cwd());
   const cards = report.items.filter((item) => item.objectKind === "card");
