@@ -10398,6 +10398,73 @@ test("#358 stops only a proven two-player directional chain cycle", () => {
   );
 });
 
+test("directional chain does not infer a cycle from an opaque stateful choice policy", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 606164,
+    playerCount: 2,
+  });
+  const activePlayer = scenario.activePlayer;
+  const targetPlayer = scenario.foes[0];
+  assert.ok(targetPlayer);
+  scenario.state.activePlayerId = activePlayer.playerId;
+  for (const player of scenario.state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+    player.hand = [];
+    player.life.current = 20;
+  }
+  targetPlayer.life.current = 1;
+  scenario.state.common.deadWizardTokens.drawStack = [];
+  scenario.state.turn.power = 99;
+  const defense = addFixtureDefenseCardToHand(
+    scenario.state,
+    targetPlayer,
+    "discardSelf"
+  );
+  givenRuntimeCard(scenario, {
+    player: activePlayer,
+    zone: "permanents",
+    definitionId: "esw2_dbg__legend_008",
+  });
+  const wand = givenRuntimeCard(scenario, {
+    player: activePlayer,
+    definitionId: "esw2_dbg__legend_015",
+  });
+  let defenseChoiceCount = 0;
+  scenario.state.effectChoiceStrategy = (request) => {
+    if (request.effectId !== "avoid_attack") {
+      return undefined;
+    }
+    defenseChoiceCount += 1;
+    if (defenseChoiceCount < 3) {
+      return { choiceId: "decline" };
+    }
+    return { choiceId: defense.instanceId };
+  };
+
+  const result = play(scenario, wand);
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 20);
+  assert.equal(defenseChoiceCount, 3);
+  assert.equal(targetPlayer.discard.includes(defense), true);
+  assert.equal(
+    scenario.state.eventLog.filter(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.cardInstanceId === wand.instanceId
+    ).length,
+    3
+  );
+  assert.equal(
+    scenario.state.eventLog.filter(
+      (event) => event.type === "attackChainCycleDetected"
+    ).length,
+    0
+  );
+});
+
 test("#288 legend_019 attacks each unique adjacent foe with separate defense windows", () => {
   const state = initializeGame({
     rootDir,

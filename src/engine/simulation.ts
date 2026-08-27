@@ -7,6 +7,7 @@ import {
 import { assertNever, isPlainRecord } from "../common.js";
 import type {
   ChoicePolicy,
+  ChoicePolicyState,
   ChoiceRequest,
   ChoiceSelection,
   EffectChoiceRequest,
@@ -74,12 +75,14 @@ export type BotDecisionAction =
 export interface BotStrategy {
   chooseAction(context: BotDecisionContext): GameAction;
   chooseEffectChoice?: ChoicePolicy;
+  getChoicePolicyState?: () => ChoicePolicyState | undefined;
 }
 
 interface PlayerBotBinding {
   readonly strategy: BotStrategy;
   readonly chooseAction: BotStrategy["chooseAction"];
   readonly chooseEffectChoice: BotStrategy["chooseEffectChoice"];
+  readonly getChoicePolicyState: BotStrategy["getChoicePolicyState"];
 }
 
 export interface SetupCardSnapshot {
@@ -864,7 +867,8 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
   const playerIdByStrategy = new WeakMap<BotStrategy, PlayerId>();
   const playerIdByCallback = new Map<
     | BotStrategy["chooseAction"]
-    | NonNullable<BotStrategy["chooseEffectChoice"]>,
+    | NonNullable<BotStrategy["chooseEffectChoice"]>
+    | NonNullable<BotStrategy["getChoicePolicyState"]>,
     PlayerId
   >();
 
@@ -886,12 +890,14 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
     }
     const chooseAction = strategy.chooseAction;
     const chooseEffectChoice = strategy.chooseEffectChoice;
+    const getChoicePolicyState = strategy.getChoicePolicyState;
     const callbacks: ReadonlyArray<
       readonly [
-        "chooseAction" | "chooseEffectChoice",
+        "chooseAction" | "chooseEffectChoice" | "getChoicePolicyState",
         (
           | BotStrategy["chooseAction"]
           | NonNullable<BotStrategy["chooseEffectChoice"]>
+          | NonNullable<BotStrategy["getChoicePolicyState"]>
         ),
       ]
     > = [
@@ -899,6 +905,9 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       ...(chooseEffectChoice === undefined
         ? []
         : ([["chooseEffectChoice", chooseEffectChoice]] as const)),
+      ...(getChoicePolicyState === undefined
+        ? []
+        : ([["getChoicePolicyState", getChoicePolicyState]] as const)),
     ];
     for (const [callbackName, callback] of callbacks) {
       const assignedPlayerId = playerIdByCallback.get(callback);
@@ -912,15 +921,49 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       playerIdByCallback.set(callback, playerId);
     }
     playerIdByStrategy.set(strategy, playerId);
-    const binding = { strategy, chooseAction, chooseEffectChoice };
+    const binding = {
+      strategy,
+      chooseAction,
+      chooseEffectChoice,
+      getChoicePolicyState,
+    };
     botBindingsByPlayerId.set(playerId, binding);
     return binding;
   }
 
-  const effectChoiceStrategy = (request: ChoiceRequest) => {
-    const binding = getBotBindingForPlayer(request.player.playerId);
-    return binding.chooseEffectChoice?.call(binding.strategy, request);
-  };
+  let initializedState: GameState | undefined;
+  const effectChoiceStrategy: ChoicePolicy = Object.assign(
+    (request: ChoiceRequest) => {
+      const binding = getBotBindingForPlayer(request.player.playerId);
+      return binding.chooseEffectChoice?.call(binding.strategy, request);
+    },
+    {
+      getState: (): ChoicePolicyState | undefined => {
+        if (initializedState === undefined) {
+          return undefined;
+        }
+        const policyStates: Array<{
+          readonly playerId: PlayerId;
+          readonly state: ChoicePolicyState;
+        }> = [];
+        for (const player of initializedState.players) {
+          const binding = getBotBindingForPlayer(player.playerId);
+          if (binding.chooseEffectChoice === undefined) {
+            continue;
+          }
+          if (binding.getChoicePolicyState === undefined) {
+            return undefined;
+          }
+          const state = binding.getChoicePolicyState.call(binding.strategy);
+          if (state === undefined) {
+            return undefined;
+          }
+          policyStates.push({ playerId: player.playerId, state });
+        }
+        return policyStates;
+      },
+    }
+  );
   const runtimeDataPack =
     dataPack === undefined
       ? intakeRuntimeData({
@@ -941,6 +984,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
       : { deadWizardTokenCount: options.deadWizardTokenCount }),
     effectChoiceStrategy,
   });
+  initializedState = state;
   const setupState = snapshotSetupState(state);
   if (options.validateInvariants) {
     assertGameStateInvariants(state);

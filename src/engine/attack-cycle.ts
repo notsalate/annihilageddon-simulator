@@ -1,4 +1,5 @@
 import { isPlainRecord } from "../common.js";
+import type { ChoicePolicyState } from "./choice-policy.js";
 import type { EffectSourceContext } from "./effect-runtime-registry.js";
 import type {
   CardInstance,
@@ -15,6 +16,7 @@ export interface AttackChainRecurrenceCursor {
   readonly direction: AttackChainDirection;
   readonly targetIndex: number;
   readonly targetPlayerId: PlayerState["playerId"];
+  readonly choicePolicyState?: ChoicePolicyState;
 }
 
 /**

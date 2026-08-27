@@ -141,9 +141,24 @@ export type SetupChoiceRequest =
 
 export type ChoiceRequest = EffectChoiceRequest | SetupChoiceRequest;
 
-export type ChoicePolicy = (
+/** JSON-like state a policy may expose for deterministic cycle proofs. */
+export type ChoicePolicyState =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly ChoicePolicyState[]
+  | { readonly [key: string]: ChoicePolicyState };
+
+export type ChoicePolicy = ((
   request: ChoiceRequest
-) => ChoiceSelection | undefined;
+) => ChoiceSelection | undefined) & {
+  /**
+   * Returns all mutable policy state that can affect its next choice.
+   * Policies without this hook are opaque to attack-chain cycle detection.
+   */
+  readonly getState?: () => ChoicePolicyState | undefined;
+};
 
 export function isChoiceSelection(value: unknown): value is ChoiceSelection {
   if (

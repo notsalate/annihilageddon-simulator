@@ -53,6 +53,8 @@ import {
 import { getDistinctAdjacentFoes } from "./player-targets.js";
 import type { CardInstance, GameState, PlayerState } from "./setup.js";
 
+const MAX_UNPROVEN_DIRECTIONAL_CHAIN_ITERATIONS = 1024;
+
 export type CombatAttackEffectId =
   | "attack_damage"
   | "attack_damage_per_controlled_dead_wizard_token"
@@ -1223,39 +1225,56 @@ function directionalChainAttackHandler(
           : "left";
       let targetIndex = 0;
       const seenRecurrences = new Set<string>();
+      let unprovenIterationCount = 0;
       while (true) {
         const targetPlayer = chosenFoes[targetIndex];
         if (targetPlayer === undefined) {
           return { ok: true };
         }
 
-        const recurrenceKey = createAttackChainRecurrenceKey(
-          state,
-          {
-            direction: chosenDirection,
-            targetIndex,
-            targetPlayerId: targetPlayer.playerId,
-          },
-          source
-        );
-        if (seenRecurrences.has(recurrenceKey)) {
-          recordGameEvent(state, {
-            type: "attackChainCycleDetected",
-            playerId: player.playerId,
-            cardInstanceId: source.cardInstanceId,
-            definitionId: source.definitionId,
-            effectId: effect.effectId,
-            sourceType: source.sourceType,
-          });
-          return {
-            ok: true,
-            cycleOutcome: {
-              kind: "provenAttackChainCycle",
-              effectId: effect.effectId,
+        const choicePolicyState =
+          state.effectChoiceStrategy === undefined
+            ? null
+            : state.effectChoiceStrategy.getState?.();
+        if (choicePolicyState === undefined) {
+          unprovenIterationCount += 1;
+          if (
+            unprovenIterationCount > MAX_UNPROVEN_DIRECTIONAL_CHAIN_ITERATIONS
+          ) {
+            throw new Error(
+              "Directional attack chain exceeded the diagnostic limit before its ChoicePolicy cycle state could be proven"
+            );
+          }
+        } else {
+          const recurrenceKey = createAttackChainRecurrenceKey(
+            state,
+            {
+              direction: chosenDirection,
+              targetIndex,
+              targetPlayerId: targetPlayer.playerId,
+              choicePolicyState,
             },
-          };
+            source
+          );
+          if (seenRecurrences.has(recurrenceKey)) {
+            recordGameEvent(state, {
+              type: "attackChainCycleDetected",
+              playerId: player.playerId,
+              cardInstanceId: source.cardInstanceId,
+              definitionId: source.definitionId,
+              effectId: effect.effectId,
+              sourceType: source.sourceType,
+            });
+            return {
+              ok: true,
+              cycleOutcome: {
+                kind: "provenAttackChainCycle",
+                effectId: effect.effectId,
+              },
+            };
+          }
+          seenRecurrences.add(recurrenceKey);
         }
-        seenRecurrences.add(recurrenceKey);
 
         const attackProfileResult = collectAttackReplacementProfile(
           state,

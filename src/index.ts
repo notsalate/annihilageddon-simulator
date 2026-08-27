@@ -167,6 +167,7 @@ export type {
   ChoicePlayerTargetView,
   ChoicePlayerView,
   ChoicePolicy,
+  ChoicePolicyState,
   ChoiceRequest,
   ChoiceSelection,
   ChoiceView,
