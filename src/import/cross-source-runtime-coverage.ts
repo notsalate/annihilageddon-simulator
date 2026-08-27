@@ -103,6 +103,14 @@ export interface CrossSourceCoveragePlanEntry {
   evidenceMode?: "legacy" | "typed" | undefined;
 }
 
+/** The merged coverage plan preserves duplicate IDs so the audit can block them. */
+export class CrossSourceCoveragePlan extends Map<
+  string,
+  CrossSourceCoveragePlanEntry
+> {
+  readonly duplicateIds = new Set<string>();
+}
+
 export interface CrossSourceSemanticMapping {
   capabilityId?: CrossSourceCapabilityId | undefined;
   evidenceId?: CrossSourceEvidenceId | undefined;
@@ -168,8 +176,8 @@ const planPaths = [
 
 export function readCrossSourceCoveragePlan(
   rootDir: string
-): Map<string, CrossSourceCoveragePlanEntry> {
-  const plan = new Map<string, CrossSourceCoveragePlanEntry>();
+): CrossSourceCoveragePlan {
+  const plan = new CrossSourceCoveragePlan();
 
   for (const planPath of planPaths) {
     const absolutePath = path.resolve(rootDir, planPath);
@@ -183,6 +191,10 @@ export function readCrossSourceCoveragePlan(
     for (const entry of entries) {
       const decoded = decodePlanEntry(entry, typedEvidence);
       if (decoded !== undefined) {
+        if (plan.has(decoded.id)) {
+          plan.duplicateIds.add(decoded.id);
+          continue;
+        }
         plan.set(decoded.id, decoded);
       }
     }
@@ -749,7 +761,13 @@ function validateTypedTestReference(
     return false;
   }
   const text = readFileSync(absolutePath, "utf8");
-  const testBody = findNamedTestBody(text, testRef.name);
+  const namedTestBody = findNamedTestBody(text, testRef.name);
+  const cardSemanticEvidenceCase =
+    execution.objectKind === "card" && execution.seam === "applyAction"
+      ? findCardSemanticEvidenceCase(text, id, testRef.name)
+      : false;
+  const testBody =
+    namedTestBody ?? (cardSemanticEvidenceCase ? text : undefined);
   if (testBody === undefined) {
     addBlocker(
       "focused-test-not-found",
@@ -764,7 +782,9 @@ function validateTypedTestReference(
     execution.seam === "applyAction" &&
     observation.kind === "assertion" &&
     observationTarget === "assertCardRuntimeEvidence"
-      ? findCardSemanticEvidenceWrapper(text, testBody, id)
+      ? namedTestBody === undefined && cardSemanticEvidenceCase
+        ? findNamedFunctionBody(text, "runCardSemanticEvidence")
+        : findCardSemanticEvidenceWrapper(text, testBody, id)
       : undefined;
   const evidenceBody = cardEvidenceWrapper ?? testBody;
   const calls = findRuntimeSeamCalls(evidenceBody).filter(
@@ -860,6 +880,17 @@ function findCardSemanticEvidenceWrapper(
   return findNamedFunctionBody(sourceText, "runCardSemanticEvidence");
 }
 
+function findCardSemanticEvidenceCase(
+  sourceText: string,
+  id: string,
+  testName: string
+): boolean {
+  return new RegExp(
+    `\\{\\s*definitionId\\s*:\\s*(["'])${escapeRegExp(id)}\\1\\s*,\\s*seed\\s*:\\s*\\d+\\s*,\\s*testName\\s*:\\s*(["'])${escapeRegExp(testName)}\\2\\s*,?\\s*\\}`,
+    "u"
+  ).test(sourceText);
+}
+
 function hasParameterizedRuntimeCardInstanceReference(
   testBody: string,
   call: RuntimeSeamCall
@@ -904,6 +935,7 @@ function hasCardSemanticEvidenceObservation(
   );
   const helperHasMappingAssertions =
     helperBody !== undefined &&
+    /\bassertCardRuntimeExecutionEvidence\s*\(/u.test(helperBody) &&
     /\breadCrossSourceCoveragePlan\s*\(/u.test(helperBody) &&
     /\bsemanticMappings\b/u.test(helperBody) &&
     /\bruntimeRefs\b/u.test(helperBody) &&
@@ -1276,6 +1308,7 @@ function validateRuntime(
   input: {
     id: string;
     objectKind: CrossSourceObjectKind;
+    draft: unknown;
     runtime: Record<string, unknown> | undefined;
   },
   blockers: Set<string>
@@ -1301,7 +1334,7 @@ function validateRuntime(
 
   const effects = getRawRuntimeEffects(input.runtime);
   if (effects.length === 0) {
-    if (input.objectKind !== "card") {
+    if (!isExplicitNoEffectCard(input)) {
       blockers.add("runtime has no effects");
     }
     return;
@@ -1328,6 +1361,26 @@ function validateRuntime(
       }
     }
   }
+}
+
+function isExplicitNoEffectCard(input: {
+  objectKind: CrossSourceObjectKind;
+  draft: unknown;
+  runtime: Record<string, unknown> | undefined;
+}): boolean {
+  if (input.objectKind !== "card") {
+    return false;
+  }
+  const draft = getRecord(input.draft);
+  const visible = getRecord(draft["visible"]);
+  if (getString(visible["textRu"])?.trim() === "(Эффекта нет.)") {
+    return true;
+  }
+  const notes = Array.isArray(draft["notes"]) ? draft["notes"] : [];
+  return notes.some(
+    (note) =>
+      typeof note === "string" && /карта не содержит действий/iu.test(note)
+  );
 }
 
 function collectDraftSemanticPoints(draft: unknown): CrossSourceDraftPoint[] {

@@ -10,7 +10,10 @@ import {
   createRuntimeSemanticCompletionReport,
   formatRuntimeSemanticCompletionMarkdown,
 } from "../src/index.js";
-import { evaluateCrossSourceCoverage } from "../src/import/cross-source-runtime-coverage.js";
+import {
+  evaluateCrossSourceCoverage,
+  readCrossSourceCoveragePlan,
+} from "../src/import/cross-source-runtime-coverage.js";
 import type { CrossSourceCoveragePlanEntry } from "../src/import/cross-source-runtime-coverage.js";
 
 test("runtime coverage inventory reports drafts, runtime, composition, legacy v0 facts, and review-needed status", () => {
@@ -989,6 +992,36 @@ test("runtime coverage blocks every missing runtime definition from composition"
   assert.deepEqual(report.crossSourceIntegrityBlockers, [
     `composition reference has no runtime definition: ${missingCardId}`,
   ]);
+});
+
+test("cross-source coverage plan preserves duplicate IDs for the audit", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-cross-source-duplicate-plan-")
+  );
+  const cardId = "esw2_dbg__main_001";
+  const first = createSemanticEvidencePlanEntry({
+    id: cardId,
+    testName: "first mapping",
+    testSubject: { kind: "binding", name: "cardId" },
+  });
+  const second = {
+    ...first,
+    primaryMechanicCluster: "second-mapping",
+  };
+
+  writeJson(rootDir, "config/runtime-coverage/cross-source-mechanics.json", {
+    schemaVersion: 2,
+    entries: [first],
+  });
+  writeJson(rootDir, "config/runtime-coverage/card-semantic-evidence.json", {
+    schemaVersion: 2,
+    entries: [second],
+  });
+
+  const plan = readCrossSourceCoveragePlan(rootDir);
+
+  assert.deepEqual([...plan.duplicateIds], [cardId]);
+  assert.equal(plan.get(cardId)?.primaryMechanicCluster, "scoring");
 });
 
 test("repository cross-source registry assigns every card, wizard property, and DWT to a primary cluster", () => {

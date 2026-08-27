@@ -14,7 +14,7 @@ import {
   hasAppropriateRuntimeComposition,
   readCrossSourceCoveragePlan,
   type CrossSourceBlocker,
-  type CrossSourceCoveragePlanEntry,
+  type CrossSourceCoveragePlan,
 } from "./cross-source-runtime-coverage.js";
 import { createCardRuntimeClusterReport } from "./card-runtime-clusters.js";
 
@@ -132,7 +132,7 @@ export interface RuntimeCoverageSnapshot {
   compositionReferences: RuntimeCoverageCompositionReference[];
   productionDwtStack: RuntimeCoverageProductionDwtStackData;
   focusedTestRefsById: Map<string, string[]>;
-  crossSourcePlan: Map<string, CrossSourceCoveragePlanEntry>;
+  crossSourcePlan: CrossSourceCoveragePlan;
   cardCompletionById: Map<string, CardCompletionStatus>;
   activePack: RuntimeCoverageActivePackData;
 }
@@ -204,7 +204,8 @@ export function createRuntimeCoverageInventory(
   const summary = summarizeStatuses(items);
   const crossSourceIntegrityBlockers = collectCrossSourceIntegrityBlockers(
     snapshot.runtimeById,
-    snapshot.compositionsById
+    snapshot.compositionsById,
+    snapshot.crossSourcePlan
   );
 
   const report = {
@@ -538,9 +539,13 @@ function collectCanonicalRecords(rootDir: string): RuntimeCoverageRawRecord[] {
 
 function collectCrossSourceIntegrityBlockers(
   runtimeById: Map<string, Record<string, unknown>>,
-  compositionsById: Map<string, RuntimeCoverageCompositionMembership[]>
+  compositionsById: Map<string, RuntimeCoverageCompositionMembership[]>,
+  crossSourcePlan: CrossSourceCoveragePlan
 ): string[] {
   const blockers = new Set<string>();
+  for (const id of crossSourcePlan.duplicateIds) {
+    blockers.add(`duplicate cross-source coverage plan ID: ${id}`);
+  }
   for (const [id, memberships] of compositionsById) {
     if (memberships.length > 0 && !runtimeById.has(id)) {
       blockers.add(`composition reference has no runtime definition: ${id}`);
