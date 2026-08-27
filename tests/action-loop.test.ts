@@ -11119,7 +11119,22 @@ test("#356 E2E Bartolomeo plays Revolt from Ass before redirected Usha victory",
     "discardSelf",
     { redirectAttack: true }
   );
-  state.effectChoiceStrategy = selectFirstFixtureDefense;
+  const originalDefense = addFixtureDefenseCardToHand(
+    state,
+    originalAttacker,
+    "discardSelf"
+  );
+  let originalDefenseChoiceCount = 0;
+  state.effectChoiceStrategy = (request) => {
+    if (
+      request.effectId === "avoid_attack" &&
+      request.player.playerId === originalAttacker.playerId
+    ) {
+      originalDefenseChoiceCount += 1;
+      return { choiceId: "decline" };
+    }
+    return selectFirstFixtureDefense(request);
+  };
 
   const bartolomeo = addRuntimeCardToHand(
     state,
@@ -11137,6 +11152,8 @@ test("#356 E2E Bartolomeo plays Revolt from Ass before redirected Usha victory",
     state.turn.defenseDisabledPlayerIds.includes(originalAttacker.playerId),
     true
   );
+  assert.equal(originalAttacker.hand.includes(originalDefense), true);
+  assert.equal(originalDefenseChoiceCount, 1);
   assert.equal(originalAttacker.discard.includes(revealedRevolt), true);
   assert.equal(
     revealedFillers.every((card) => originalAttacker.discard.includes(card)),
@@ -11157,6 +11174,8 @@ test("#356 E2E Bartolomeo plays Revolt from Ass before redirected Usha victory",
   assert.deepEqual(ushaResult, { ok: true });
   assert.equal(state.turn.pendingSpecialWinnerPlayerId, redirector.playerId);
   assert.equal(originalAttacker.life.current, 20);
+  assert.equal(originalAttacker.hand.includes(originalDefense), true);
+  assert.equal(originalDefenseChoiceCount, 1);
   assert.equal(redirector.discard.includes(secondRedirect), true);
 
   assert.deepEqual(applyAction(state, { type: "endTurn" }), {

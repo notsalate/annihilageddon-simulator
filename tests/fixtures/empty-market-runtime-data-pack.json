@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "packId": "empty-market-runtime-test-data-pack",
+  "runtimeSchema": "krutagidon.dataPack.v0",
+  "mappingStatus": "incomplete-full-only",
+  "cardDefinitionPaths": ["data/cards/special"],
+  "decks": {
+    "starterDeck": "tests/fixtures/runtime-decks/empty-starter-deck.json",
+    "mainDeck": "tests/fixtures/runtime-decks/empty-main-deck.json",
+    "legendDeck": "tests/fixtures/runtime-decks/empty-legend-deck.json"
+  },
+  "cardStacks": {
+    "wildMagicStack": "data/stacks/cards/wild-magic-stack.json",
+    "limpWandStack": "data/stacks/cards/limp-wand-stack.json"
+  },
+  "needsData": []
+}
