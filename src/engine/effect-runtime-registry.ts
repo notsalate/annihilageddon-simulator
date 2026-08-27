@@ -161,6 +161,8 @@ export interface AttackReplacementProfile {
 export interface PlayerDefeatGameEnd {
   reason: "playerDefeated";
   winnerPlayerId: PlayerState["playerId"];
+  /** A deferred terminal result is committed at the end-of-turn checkpoint. */
+  resolution?: "endOfTurn";
 }
 
 export type EffectGameEnd = PlayerDefeatGameEnd;
@@ -547,6 +549,7 @@ export interface EffectRuntimeServices {
     attack: AttackInstance,
     result: EffectExecutionResult
   ): EffectExecutionResult;
+  deferGameEnd(state: GameState, gameEnd: EffectGameEnd): void;
   resolvePlayerControlledAttack(
     intent: PlayerControlledAttackIntent
   ): PlayerControlledAttackExecutionResult;

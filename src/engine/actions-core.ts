@@ -422,6 +422,9 @@ export function preflightAction(
       }
       case "endTurn": {
         calculateEndTurnDrawCount(state, activePlayer);
+        if (getEndOfTurnCheckpoint(state) !== undefined) {
+          return undefined;
+        }
         const nextActivePlayer = getNextPlayer(state, activePlayer);
         const startOfTurnValidation =
           validateControlledCardStartOfControllerTurnEffects(

@@ -1724,8 +1724,14 @@ export function executeAttackOutcomeBranch(
     if (!attackResult.killed) {
       return { ok: true };
     }
-    state.turn.pendingSpecialWinnerPlayerId ??= player.playerId;
-    return { ok: true };
+    return {
+      ok: true,
+      gameEnd: {
+        reason: "playerDefeated",
+        winnerPlayerId: player.playerId,
+        resolution: "endOfTurn",
+      },
+    };
   }
 
   if (branch.effectId === "attack_discard_cards") {
