@@ -215,6 +215,7 @@ export type GameEventType =
   | "activatePermanent"
   | "activateWizardProperty"
   | "attackAvoided"
+  | "attackChainCycleDetected"
   | "attackCreated"
   | "attackTargetStarted"
   | "botActionSelected"
@@ -457,6 +458,7 @@ type GameEventOf<
 type CardEffectEvent = GameEventOf<
   | "dinglerStatusGained"
   | "dinglerStatusRemoved"
+  | "attackChainCycleDetected"
   | "attackCreated"
   | "attackTargetStarted"
   | "effectChipsChanged"

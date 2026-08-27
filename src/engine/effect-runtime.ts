@@ -777,7 +777,11 @@ export function executeWizardPropertyOnPlayCardEffects(
       },
       (effect) => cardTriggerMatches(effect, playedDefinition)
     );
-    if (!result.ok || result.gameEnd !== undefined) {
+    if (
+      !result.ok ||
+      result.gameEnd !== undefined ||
+      result.cycleOutcome !== undefined
+    ) {
       return result;
     }
   }
@@ -1458,7 +1462,11 @@ function executeEffects(
     }
 
     const result = operationResult.result;
-    if (!result.ok || result.gameEnd !== undefined) {
+    if (
+      !result.ok ||
+      result.gameEnd !== undefined ||
+      result.cycleOutcome !== undefined
+    ) {
       return result;
     }
   }

@@ -9,6 +9,7 @@ import type {
   PlayerControlledSharedAttackImpact,
   ResolvedAttackBranchContext,
 } from "./attack-resolution.js";
+import { createAttackChainRecurrenceKey } from "./attack-cycle.js";
 import { countControlledCardsOfType } from "./card-type-runtime.js";
 import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
 import { recordGameEvent, recordTurnPowerChanged } from "./event-recorder.js";
@@ -1216,12 +1217,45 @@ function directionalChainAttackHandler(
         return { ok: true };
       }
 
+      const chosenDirection =
+        directionChoice?.choiceKind === "directionalPlayerTarget"
+          ? directionChoice.direction
+          : "left";
       let targetIndex = 0;
+      const seenRecurrences = new Set<string>();
       while (true) {
         const targetPlayer = chosenFoes[targetIndex];
         if (targetPlayer === undefined) {
           return { ok: true };
         }
+
+        const recurrenceKey = createAttackChainRecurrenceKey(
+          state,
+          {
+            direction: chosenDirection,
+            targetIndex,
+            targetPlayerId: targetPlayer.playerId,
+          },
+          source
+        );
+        if (seenRecurrences.has(recurrenceKey)) {
+          recordGameEvent(state, {
+            type: "attackChainCycleDetected",
+            playerId: player.playerId,
+            cardInstanceId: source.cardInstanceId,
+            definitionId: source.definitionId,
+            effectId: effect.effectId,
+            sourceType: source.sourceType,
+          });
+          return {
+            ok: true,
+            cycleOutcome: {
+              kind: "provenAttackChainCycle",
+              effectId: effect.effectId,
+            },
+          };
+        }
+        seenRecurrences.add(recurrenceKey);
 
         const attackProfileResult = collectAttackReplacementProfile(
           state,

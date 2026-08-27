@@ -162,10 +162,18 @@ export interface PlayerDefeatGameEnd {
 
 export type EffectGameEnd = PlayerDefeatGameEnd;
 
+export interface ProvenAttackChainCycleOutcome {
+  readonly kind: "provenAttackChainCycle";
+  readonly effectId: "directional_chain_attack";
+}
+
+export type EffectCycleOutcome = ProvenAttackChainCycleOutcome;
+
 export type EffectExecutionResult =
   | {
       ok: true;
       gameEnd?: EffectGameEnd;
+      cycleOutcome?: EffectCycleOutcome;
     }
   | {
       ok: false;

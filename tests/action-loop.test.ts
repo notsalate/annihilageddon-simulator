@@ -52,6 +52,7 @@ import {
   removeCardFromLocation,
 } from "../src/engine/control-ledger.js";
 import { drawDeckCard, shuffleDeck } from "../src/engine/deck-lifecycle.js";
+import { createAttackChainRecurrenceKey } from "../src/engine/attack-cycle.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -10311,6 +10312,89 @@ test("#287 directional chain wraps after a full circle", () => {
         event.cardInstanceId === wand.instanceId
     ).length,
     3
+  );
+});
+
+test("attack-chain recurrence key changes with rules-relevant state and RNG", () => {
+  const state = initializeGame({ rootDir, seed: 606162, playerCount: 2 });
+  const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const cursor = {
+    direction: "left" as const,
+    targetIndex: 0,
+    targetPlayerId: targetPlayer.playerId,
+  };
+
+  const baseline = createAttackChainRecurrenceKey(state, cursor);
+  const fork = forkGameState(state);
+  assert.equal(createAttackChainRecurrenceKey(fork, cursor), baseline);
+
+  targetPlayer.life.current -= 1;
+  assert.notEqual(createAttackChainRecurrenceKey(state, cursor), baseline);
+  targetPlayer.life.current += 1;
+  targetPlayer.life.max -= 1;
+  assert.notEqual(createAttackChainRecurrenceKey(state, cursor), baseline);
+  targetPlayer.life.max += 1;
+  state.common.deadWizardTokens.drawStack = [];
+  assert.notEqual(createAttackChainRecurrenceKey(state, cursor), baseline);
+  state.common.deadWizardTokens.drawStack = [
+    {
+      instanceId: markTokenInstanceId("fixture-cycle-key-dwt"),
+      definitionId: markTokenDefinitionId(
+        "esw2_dbg__dead_wizard_token_neutral"
+      ),
+      ownerId: "common",
+    },
+  ];
+  state.rng.next();
+  assert.notEqual(createAttackChainRecurrenceKey(state, cursor), baseline);
+});
+
+test("#358 stops only a proven two-player directional chain cycle", () => {
+  const scenario = createGameScenario({
+    rootDir,
+    seed: 606163,
+    playerCount: 2,
+  });
+  const activePlayer = scenario.activePlayer;
+  const targetPlayer = scenario.foes[0];
+  assert.ok(targetPlayer);
+  scenario.state.activePlayerId = activePlayer.playerId;
+  for (const player of scenario.state.players) {
+    player.wizardProperties = [];
+    player.statuses = [];
+    player.hand = [];
+    player.life.current = 20;
+  }
+  targetPlayer.life.current = 1;
+  scenario.state.common.deadWizardTokens.drawStack = [];
+  scenario.state.turn.power = 99;
+  givenRuntimeCard(scenario, {
+    player: activePlayer,
+    zone: "permanents",
+    definitionId: "esw2_dbg__legend_008",
+  });
+  const wand = givenRuntimeCard(scenario, {
+    player: activePlayer,
+    definitionId: "esw2_dbg__legend_015",
+  });
+
+  const result = play(scenario, wand);
+
+  assert.equal(result.ok, true);
+  assert.equal(targetPlayer.life.current, 20);
+  assert.equal(
+    scenario.state.eventLog.filter(
+      (event) =>
+        event.type === "attackTargetStarted" &&
+        event.cardInstanceId === wand.instanceId
+    ).length,
+    2
+  );
+  assert.equal(
+    scenario.state.eventLog.filter(
+      (event) => event.type === "attackChainCycleDetected"
+    ).length,
+    1
   );
 });
 
