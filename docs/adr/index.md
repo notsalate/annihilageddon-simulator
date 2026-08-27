@@ -10,4 +10,4 @@
 | ADR-0006 | accepted   | Trigger Dispatch для контролируемых объектов  | [ADR-0006](0006-trigger-dispatch.md)                         | restored      | —        | —             |
 | ADR-0007 | accepted   | Typed Decoder и typed Effect Runtime Catalog  | [ADR-0007](0007-typed-effect-catalog.md)                     | restored      | —        | —             |
 | ADR-0008 | accepted   | Attack Instance, режимы Defense и граница ЖДК | [ADR-0008](0008-attack-instance-defense-and-dwt-boundary.md) | new           | ADR-0004 | —             |
-| ADR-0009 | accepted   | Доказательство цикла цепочки ATTACK           | [ADR-0009](0009-attack-chain-cycle-proof.md)                 | new           | —        | —             |
+| ADR-0009 | accepted   | Доказательство цикла цепочки ATTACK           | [ADR-0009 / RQ-001](0009-attack-chain-cycle-proof.md)        | new           | —        | —             |
