@@ -10520,10 +10520,17 @@ test("#287 directional chain wraps after a full circle", () => {
 test("attack-chain recurrence key changes with rules-relevant state and RNG", () => {
   const state = initializeGame({ rootDir, seed: 606162, playerCount: 2 });
   const targetPlayer = mustGetPlayer(state, markPlayerId("player-2"));
+  const chainEffect = {
+    effectId: "directional_chain_attack" as const,
+    timing: "onPlay" as const,
+    amount: 10,
+    targetSelector: "leftOrRightFoe" as const,
+  };
   const cursor = {
     direction: "left" as const,
     targetIndex: 0,
     targetPlayerId: targetPlayer.playerId,
+    effect: chainEffect,
   };
 
   const baseline = createAttackChainRecurrenceKey(state, cursor);
@@ -10550,16 +10557,7 @@ test("attack-chain recurrence key changes with rules-relevant state and RNG", ()
   state.rng.next();
   assert.notEqual(createAttackChainRecurrenceKey(state, cursor), baseline);
 
-  const chainEffect = {
-    effectId: "directional_chain_attack" as const,
-    timing: "onPlay" as const,
-    amount: 10,
-    targetSelector: "leftOrRightFoe" as const,
-  };
-  const effectKey = createAttackChainRecurrenceKey(state, {
-    ...cursor,
-    effect: chainEffect,
-  });
+  const effectKey = createAttackChainRecurrenceKey(state, cursor);
   assert.notEqual(
     createAttackChainRecurrenceKey(state, {
       ...cursor,
@@ -10576,6 +10574,12 @@ test("attack-chain recurrence key keeps distinct non-finite policy numbers disti
     direction: "left" as const,
     targetIndex: 0,
     targetPlayerId: targetPlayer.playerId,
+    effect: {
+      effectId: "directional_chain_attack" as const,
+      timing: "onPlay" as const,
+      amount: 10,
+      targetSelector: "leftOrRightFoe" as const,
+    },
   };
   const policyStates = [
     0,

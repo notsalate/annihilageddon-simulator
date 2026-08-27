@@ -17,7 +17,7 @@ export interface AttackChainRecurrenceCursor {
   readonly direction: AttackChainDirection;
   readonly targetIndex: number;
   readonly targetPlayerId: PlayerState["playerId"];
-  readonly effect?: RuntimeEffectForId<"directional_chain_attack">;
+  readonly effect: RuntimeEffectForId<"directional_chain_attack">;
   readonly choicePolicyState?: ChoicePolicyState;
 }
 
