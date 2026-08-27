@@ -1,6 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-
 import { isPlainRecord } from "../common.js";
 import {
   isAttackBearingRuntimeEffectId,
@@ -12,6 +9,7 @@ import {
   type RuntimeCoverageInventory,
   type RuntimeCoverageInventoryItem,
   type RuntimeCoverageRawRecord,
+  type RuntimeCoverageProductionDwtStackData,
   type RuntimeCoverageObjectKind,
 } from "./runtime-coverage-inventory.js";
 import { type CrossSourceCoveragePlanEntry } from "./cross-source-runtime-coverage.js";
@@ -271,7 +269,9 @@ export function createRuntimeSemanticCompletionReport(
     });
   }
 
-  const productionStack = collectProductionStackSummary(rootDir);
+  const productionStack = collectProductionStackSummary(
+    snapshot.productionDwtStack
+  );
   blockers.push(...productionStack.blockers);
 
   const byKind = createKindSummaries(items);
@@ -615,16 +615,13 @@ function getDwtLifecycleClasses(
   return [...classes];
 }
 
-function collectProductionStackSummary(rootDir: string): {
+function collectProductionStackSummary(
+  stack: RuntimeCoverageProductionDwtStackData
+): {
   summary: RuntimeSemanticProductionStackSummary;
   blockers: RuntimeSemanticCompletionBlocker[];
 } {
-  const filePath = path.resolve(
-    rootDir,
-    "data/stacks/tokens/v0-dead-wizard-token-stack.json"
-  );
-  const value = existsSync(filePath) ? getRecord(readJson(filePath)) : {};
-  const entries = getArray(value["entries"]);
+  const entries = stack.entries;
   const counts = new Map<string, number>();
   const blockers: RuntimeSemanticCompletionBlocker[] = [];
   for (const entry of entries) {
@@ -877,8 +874,4 @@ function getStringArray(value: unknown): string[] {
         (candidate): candidate is string => typeof candidate === "string"
       )
     : [];
-}
-
-function readJson(filePath: string): unknown {
-  return JSON.parse(readFileSync(filePath, "utf8"));
 }

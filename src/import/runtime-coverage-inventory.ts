@@ -119,12 +119,18 @@ export interface RuntimeCoverageActivePackData {
   missingReferences: string[];
 }
 
+export interface RuntimeCoverageProductionDwtStackData {
+  exists: boolean;
+  entries: unknown[];
+}
+
 export interface RuntimeCoverageSnapshot {
   canonicalRecords: RuntimeCoverageRawRecord[];
   runtimeRecords: RuntimeCoverageRawRecord[];
   runtimeById: Map<string, Record<string, unknown>>;
   compositionsById: Map<string, RuntimeCoverageCompositionMembership[]>;
   compositionReferences: RuntimeCoverageCompositionReference[];
+  productionDwtStack: RuntimeCoverageProductionDwtStackData;
   focusedTestRefsById: Map<string, string[]>;
   crossSourcePlan: Map<string, CrossSourceCoveragePlanEntry>;
   cardCompletionById: Map<string, CardCompletionStatus>;
@@ -458,6 +464,7 @@ function createRuntimeCoverageSnapshot(
     runtimeById,
     compositionsById: compositionData.memberships,
     compositionReferences: compositionData.references,
+    productionDwtStack: compositionData.productionDwtStack,
     focusedTestRefsById: collectFocusedTestRefs(rootDir),
     crossSourcePlan: readCrossSourceCoveragePlan(rootDir),
     cardCompletionById: collectCardCompletionById(rootDir),
@@ -545,9 +552,14 @@ function collectCrossSourceIntegrityBlockers(
 function collectCompositionData(rootDir: string): {
   memberships: Map<string, RuntimeCoverageCompositionMembership[]>;
   references: RuntimeCoverageCompositionReference[];
+  productionDwtStack: RuntimeCoverageProductionDwtStackData;
 } {
   const memberships = new Map<string, RuntimeCoverageCompositionMembership[]>();
   const references: RuntimeCoverageCompositionReference[] = [];
+  let productionDwtStack: RuntimeCoverageProductionDwtStackData = {
+    exists: false,
+    entries: [],
+  };
   const compositionFiles = collectRuntimeCoverageFiles(
     rootDir,
     ["data/decks", "data/stacks", "data/pools"],
@@ -556,6 +568,15 @@ function collectCompositionData(rootDir: string): {
 
   for (const filePath of compositionFiles) {
     const parsed = getRecord(readJson(filePath));
+    if (
+      path.relative(rootDir, filePath).replaceAll("\\", "/") ===
+      "data/stacks/tokens/v0-dead-wizard-token-stack.json"
+    ) {
+      productionDwtStack = {
+        exists: true,
+        entries: getArray(parsed["entries"]),
+      };
+    }
     const label = `${getCompositionPrefix(filePath)}:${getString(parsed["deckId"]) ?? getString(parsed["stackId"]) ?? path.basename(filePath, ".json")}`;
     const role = getString(parsed["role"]);
     const entries = Array.isArray(parsed["entries"]) ? parsed["entries"] : [];
@@ -620,7 +641,7 @@ function collectCompositionData(rootDir: string): {
     }
   }
 
-  return { memberships, references };
+  return { memberships, references, productionDwtStack };
 }
 
 function collectActivePackData(rootDir: string): RuntimeCoverageActivePackData {
