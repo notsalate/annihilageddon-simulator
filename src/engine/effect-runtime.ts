@@ -1718,7 +1718,8 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
         attackingPlayer,
         targetPlayer,
         effect.effectId,
-        source
+        source,
+        { reapplyFace: true }
       );
     }
     if (effect.effectId === "attack_kill_and_replace_dead_wizard_token") {
@@ -2048,6 +2049,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   removeDinglerStatus,
   hasDinglerStatus,
   gainDeadWizardToken,
+  reapplyDeadWizardTokenFace,
   transferControlledDeadWizardTokenLike,
   exchangeControlledDeadWizardTokenLikes,
   collectAttackReplacementProfile,
@@ -2929,12 +2931,36 @@ export function gainDeadWizardToken(
   });
 }
 
+function reapplyDeadWizardTokenFace(
+  state: GameState,
+  player: PlayerState,
+  token: PlayerState["deadWizardTokens"][number],
+  source: EffectSourceContext
+): EffectExecutionResult {
+  const controlledToken = player.deadWizardTokens.find(
+    (candidate) => candidate.instanceId === token.instanceId
+  );
+  if (controlledToken === undefined) {
+    return {
+      ok: false,
+      error: `Dead wizard token ${token.instanceId} disappeared before reapply`,
+    };
+  }
+  return resolveDeadWizardTokenFace(
+    state,
+    createDeadWizardTokenFace(player, controlledToken, {
+      attackId: source.attackId,
+    })
+  );
+}
+
 function transferControlledDeadWizardTokenLike(
   state: GameState,
   player: PlayerState,
   targetPlayer: PlayerState,
   effectId: RuntimeEffectId,
-  source: EffectSourceContext
+  source: EffectSourceContext,
+  options?: { reapplyFace?: boolean }
 ): EffectExecutionResult {
   return resolveWithinDeadWizardTokenResolutionBoundary(state, () => {
     const cards = getControlledDeadWizardTokenLikeCards(state, player);
@@ -3000,13 +3026,19 @@ function transferControlledDeadWizardTokenLike(
       if (!movementResult.value.ok) {
         return movementResult.value;
       }
-      const face = createDeadWizardTokenFace(
-        targetPlayer,
-        movementResult.value.token,
-        { attackId: source.attackId }
-      );
+      if (options?.reapplyFace === true) {
+        const reapplyResult = reapplyDeadWizardTokenFace(
+          state,
+          targetPlayer,
+          movementResult.value.token,
+          source
+        );
+        if (!reapplyResult.ok || reapplyResult.gameEnd !== undefined) {
+          return reapplyResult;
+        }
+      }
       return movementResult.gameEnd === undefined
-        ? resolveDeadWizardTokenFace(state, face)
+        ? { ok: true }
         : { ok: true, gameEnd: movementResult.gameEnd };
     }
 
@@ -3077,7 +3109,8 @@ function exchangeControlledDeadWizardTokenLikes(
   player: PlayerState,
   targetPlayer: PlayerState,
   effectId: RuntimeEffectId,
-  source: EffectSourceContext
+  source: EffectSourceContext,
+  options?: { reapplyFace?: boolean }
 ): EffectExecutionResult {
   return resolveWithinDeadWizardTokenResolutionBoundary(state, () => {
     const playerObjects = getControlledDeadWizardTokenLikeSelections(
@@ -3211,6 +3244,25 @@ function exchangeControlledDeadWizardTokenLikes(
     if (!movementResult.value.ok) {
       return movementResult.value;
     }
+    if (options?.reapplyFace === true) {
+      for (const [recipient, selection] of [
+        [targetPlayer, playerSelection],
+        [player, targetSelection],
+      ] as const) {
+        if (selection.kind !== "token") {
+          continue;
+        }
+        const reapplyResult = reapplyDeadWizardTokenFace(
+          state,
+          recipient,
+          selection.token,
+          source
+        );
+        if (!reapplyResult.ok || reapplyResult.gameEnd !== undefined) {
+          return reapplyResult;
+        }
+      }
+    }
     return movementResult.gameEnd === undefined
       ? { ok: true }
       : { ok: true, gameEnd: movementResult.gameEnd };
@@ -3303,12 +3355,7 @@ function moveControlledDeadWizardTokenLike(
     }
     token.ownerId = targetPlayer.playerId;
     targetPlayer.deadWizardTokens.push(token);
-    return resolveDeadWizardTokenFace(
-      state,
-      createDeadWizardTokenFace(targetPlayer, token, {
-        attackId: source.attackId,
-      })
-    );
+    return { ok: true };
   }
 
   const moved = moveCardToPlayerZone(

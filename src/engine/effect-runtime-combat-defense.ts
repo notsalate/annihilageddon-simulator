@@ -157,7 +157,8 @@ const exchangeControlledDeadWizardTokensHandler: EffectRuntimeHandler<
       player,
       attacker,
       effect.effectId,
-      source
+      source,
+      { reapplyFace: true }
     );
   },
 };

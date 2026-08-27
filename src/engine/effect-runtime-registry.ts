@@ -494,19 +494,27 @@ export interface EffectRuntimeServices {
     state: GameState,
     player: PlayerState
   ): EffectExecutionResult;
+  reapplyDeadWizardTokenFace(
+    state: GameState,
+    player: PlayerState,
+    token: PlayerState["deadWizardTokens"][number],
+    source: EffectSourceContext
+  ): EffectExecutionResult;
   transferControlledDeadWizardTokenLike(
     state: GameState,
     player: PlayerState,
     targetPlayer: PlayerState,
     effectId: RuntimeEffectId,
-    source: EffectSourceContext
+    source: EffectSourceContext,
+    options?: { reapplyFace?: boolean }
   ): EffectExecutionResult;
   exchangeControlledDeadWizardTokenLikes(
     state: GameState,
     player: PlayerState,
     targetPlayer: PlayerState,
     effectId: RuntimeEffectId,
-    source: EffectSourceContext
+    source: EffectSourceContext,
+    options?: { reapplyFace?: boolean }
   ): EffectExecutionResult;
   collectAttackReplacementProfile(
     state: GameState,

@@ -395,6 +395,22 @@ test("Жница Любви передаёт физический ЖДК выб�
     ),
     true
   );
+  assert.equal(
+    state.eventLog.filter(
+      (event) =>
+        event.type === "deadWizardTokenFaceResolved" &&
+        event.tokenInstanceId === token.instanceId
+    ).length,
+    1
+  );
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "deadWizardTokenGained" &&
+        event.tokenInstanceId === token.instanceId
+    ),
+    false
+  );
 });
 
 test("Жница Любви передаёт Дохляка с постоянным контролем", () => {
@@ -568,6 +584,11 @@ test("Мескалито обменивает физические ЖДК при
       .filter((event) => event.type === "deadWizardTokenFaceResolved")
       .map((event) => event.tokenInstanceId),
     [defenderToken.instanceId, attackerToken.instanceId]
+  );
+  assert.equal(
+    state.eventLog.filter((event) => event.type === "deadWizardTokenGained")
+      .length,
+    0
   );
   assert.equal(attacker.chips, 1);
   assert.equal(defender.chips, 1);
