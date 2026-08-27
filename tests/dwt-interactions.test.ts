@@ -508,6 +508,143 @@ test("Хахатальер выдаёт ЖДК выбранному врагу, 
   assert.equal(target.hand.includes(drawnCard), true);
 });
 
+test("Хахатальер выдаёт новые ЖДК последовательно, с depth-first лицом и без placeholder", () => {
+  for (const availableCount of [0, 1, 2]) {
+    const state = initializeGame({
+      rootDir,
+      seed: 276007 + availableCount,
+    });
+    const attacker = getActivePlayer(state);
+    const target = state.players.find(
+      (candidate) => candidate.playerId !== attacker.playerId
+    );
+    assert.ok(target);
+    attacker.hand = [];
+    target.hand = [];
+    target.statuses = [
+      {
+        instanceId: `dwt-346-dingler-${availableCount}`,
+        statusId: "dingler",
+        ownerId: target.playerId,
+        effects: [],
+      },
+    ];
+    const stack = Array.from({ length: availableCount }, (_, index) =>
+      createDeadWizardTokenInStack(
+        `dwt-346-${availableCount}-${index}`,
+        "esw2_dbg__dead_wizard_token_015"
+      )
+    );
+    state.common.deadWizardTokens.drawStack = [...stack];
+    const attackCard = addCardToHand(state, attacker, "esw2_dbg__legend_027");
+    state.effectChoiceStrategy = ({ effectId, choices }) => {
+      if (effectId !== "attack_gain_dead_wizard_tokens") {
+        return undefined;
+      }
+      const targetChoice = choices.find(
+        (choice) =>
+          choice.choiceKind === "playerTarget" &&
+          choice.choiceId === target.playerId
+      );
+      return targetChoice === undefined
+        ? undefined
+        : { choiceId: targetChoice.choiceId };
+    };
+
+    assert.deepEqual(
+      applyAction(state, {
+        type: "playCard",
+        cardInstanceId: attackCard.instanceId,
+      }),
+      { ok: true }
+    );
+    assert.deepEqual(
+      target.deadWizardTokens.map((token) => token.instanceId),
+      stack.map((token) => token.instanceId)
+    );
+    assert.deepEqual(
+      state.eventLog
+        .filter((event) => event.type === "deadWizardTokenGained")
+        .map((event) => event.tokenInstanceId),
+      stack.map((token) => token.instanceId)
+    );
+    assert.deepEqual(
+      state.eventLog
+        .filter((event) => event.type === "deadWizardTokenFaceResolved")
+        .map((event) => event.tokenInstanceId),
+      stack.map((token) => token.instanceId)
+    );
+    assert.equal(state.common.deadWizardTokens.drawStack.length, 0);
+  }
+});
+
+test("Хахатальер завершает вложенный gain ЖДК до следующего прямого gain", () => {
+  const state = initializeGame({ rootDir, seed: 276010 });
+  const attacker = getActivePlayer(state);
+  const target = state.players.find(
+    (candidate) => candidate.playerId !== attacker.playerId
+  );
+  assert.ok(target);
+  attacker.hand = [];
+  target.hand = [];
+  target.statuses = [
+    {
+      instanceId: "dwt-346-nested-dingler",
+      statusId: "dingler",
+      ownerId: target.playerId,
+      effects: [],
+    },
+  ];
+  const outerToken = createDeadWizardTokenInStack(
+    "dwt-346-nested-outer",
+    "esw2_dbg__dead_wizard_token_027"
+  );
+  const nestedToken = createDeadWizardTokenInStack(
+    "dwt-346-nested-inner",
+    "esw2_dbg__dead_wizard_token_015"
+  );
+  state.common.deadWizardTokens.drawStack = [outerToken, nestedToken];
+  const attackCard = addCardToHand(state, attacker, "esw2_dbg__legend_027");
+  state.effectChoiceStrategy = ({ effectId, choices }) => {
+    if (effectId !== "attack_gain_dead_wizard_tokens") {
+      return undefined;
+    }
+    const targetChoice = choices.find(
+      (choice) =>
+        choice.choiceKind === "playerTarget" &&
+        choice.choiceId === target.playerId
+    );
+    return targetChoice === undefined
+      ? undefined
+      : { choiceId: targetChoice.choiceId };
+  };
+
+  assert.deepEqual(
+    applyAction(state, {
+      type: "playCard",
+      cardInstanceId: attackCard.instanceId,
+    }),
+    { ok: true }
+  );
+  assert.deepEqual(
+    target.deadWizardTokens.map((token) => token.instanceId),
+    [outerToken.instanceId, nestedToken.instanceId]
+  );
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "deadWizardTokenGained")
+      .map((event) => event.tokenInstanceId),
+    [outerToken.instanceId, nestedToken.instanceId]
+  );
+  assert.deepEqual(
+    state.eventLog
+      .filter((event) => event.type === "deadWizardTokenFaceResolved")
+      .map((event) => event.tokenInstanceId),
+    [nestedToken.instanceId, outerToken.instanceId]
+  );
+  assert.equal(state.common.deadWizardTokens.drawStack.length, 0);
+});
+
 test("Мескалито добирает карту и получает мощь за физический и карточный ЖДК", () => {
   const state = initializeGame({ rootDir, seed: 277001 });
   const player = getActivePlayer(state);

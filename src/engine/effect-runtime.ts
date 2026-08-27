@@ -1701,16 +1701,11 @@ const playerControlledAttackAdapters: PlayerControlledAttackAdapters = {
       );
     }
     if (effect.effectId === "attack_gain_dead_wizard_tokens") {
-      for (let index = 0; index < effect.amount; index += 1) {
-        const result = effectRuntimeServices.gainDeadWizardToken(
-          state,
-          targetPlayer
-        );
-        if (!result.ok || result.gameEnd !== undefined) {
-          return result;
-        }
-      }
-      return { ok: true };
+      return effectRuntimeServices.gainDeadWizardTokens(
+        state,
+        targetPlayer,
+        effect.amount
+      );
     }
     if (effect.effectId === "attack_transfer_controlled_dead_wizard_token") {
       return effectRuntimeServices.transferControlledDeadWizardTokenLike(
@@ -2049,6 +2044,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   removeDinglerStatus,
   hasDinglerStatus,
   gainDeadWizardToken,
+  gainDeadWizardTokens,
   reapplyDeadWizardTokenFace,
   transferControlledDeadWizardTokenLike,
   exchangeControlledDeadWizardTokenLikes,
@@ -2929,6 +2925,20 @@ export function gainDeadWizardToken(
   return issueDeadWizardToken(state, player, undefined, {
     resolveFaceImmediately: true,
   });
+}
+
+function gainDeadWizardTokens(
+  state: GameState,
+  player: PlayerState,
+  amount: number
+): EffectExecutionResult {
+  for (let index = 0; index < amount; index += 1) {
+    const result = gainDeadWizardToken(state, player);
+    if (!result.ok || result.gameEnd !== undefined) {
+      return result;
+    }
+  }
+  return { ok: true };
 }
 
 function reapplyDeadWizardTokenFace(

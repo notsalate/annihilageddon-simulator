@@ -494,6 +494,11 @@ export interface EffectRuntimeServices {
     state: GameState,
     player: PlayerState
   ): EffectExecutionResult;
+  gainDeadWizardTokens(
+    state: GameState,
+    player: PlayerState,
+    amount: number
+  ): EffectExecutionResult;
   reapplyDeadWizardTokenFace(
     state: GameState,
     player: PlayerState,
