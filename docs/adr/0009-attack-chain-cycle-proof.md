@@ -54,6 +54,7 @@ type AttackChainRecurrenceProjection = {
     cardInstanceId: string;
     definitionId: string;
   };
+  effect: DirectionalChainAttackRuntimeEffect;
   rulesState: unknown;
   pendingAttackBoundDwt: unknown;
   rng: RandomSourceSnapshot;
