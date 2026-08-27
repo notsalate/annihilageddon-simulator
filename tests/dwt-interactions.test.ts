@@ -1100,7 +1100,7 @@ test("Браталити истекает в конце хода", () => {
   assert.equal(state.turn.deadWizardTokenKillReplacement, undefined);
 });
 
-test("ЖДК 022 раскрывает верх Main Deck и ставит вложенное лицо в FIFO", () => {
+test("ЖДК 022 раскрывает верх Main Deck и разрешает вложенное лицо сразу", () => {
   for (const revealedDefinitionId of [
     "esw2_dbg__main_059",
     "esw2_dbg__main_002",
@@ -1155,7 +1155,7 @@ test("ЖДК 022 раскрывает верх Main Deck и ставит вло�
         .filter((event) => event.type === "deadWizardTokenFaceResolved")
         .map((event) => event.tokenInstanceId),
       isMayhem
-        ? [outerToken.instanceId, nestedToken.instanceId]
+        ? [nestedToken.instanceId, outerToken.instanceId]
         : [outerToken.instanceId]
     );
     assert.equal(
@@ -1175,7 +1175,7 @@ test("ЖДК 022 раскрывает верх Main Deck и ставит вло�
   }
 });
 
-test("ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и учитывает WP003", () => {
+test("ЖДК 023 пополняет личную колоду, сохраняет верхнюю карту и сразу разрешает вложенное лицо", () => {
   const scenarios = [
     {
       name: "легенда после refill",
@@ -1286,7 +1286,7 @@ test("ЖДК 023 пополняет личную колоду, сохраняе�
         .filter((event) => event.type === "deadWizardTokenFaceResolved")
         .map((event) => event.tokenInstanceId),
       scenario.qualifies
-        ? [outerToken.instanceId, nestedToken.instanceId]
+        ? [nestedToken.instanceId, outerToken.instanceId]
         : [outerToken.instanceId]
     );
     assert.equal(

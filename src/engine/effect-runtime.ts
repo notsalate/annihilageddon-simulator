@@ -919,93 +919,123 @@ function resolveQueuedDeadWizardTokenFaces(
 ): EffectExecutionResult {
   let face = dequeueDeadWizardTokenFace(state);
   while (face !== undefined) {
-    const currentFace = face;
-    const player = state.players.find(
-      (candidate) => candidate.playerId === currentFace.playerId
-    );
-    if (player === undefined) {
-      return {
-        ok: false,
-        error: `Missing dead wizard token player ${currentFace.playerId}`,
-      };
-    }
-    const token = player.deadWizardTokens.find(
-      (candidate) => candidate.instanceId === currentFace.tokenInstanceId
-    );
-    if (
-      token === undefined ||
-      token.definitionId !== currentFace.tokenDefinitionId
-    ) {
-      return {
-        ok: false,
-        error: `Missing dead wizard token ${currentFace.tokenInstanceId}`,
-      };
-    }
-    const definition = state.tokenDefinitions.get(
-      currentFace.tokenDefinitionId
-    );
-    if (definition?.kind !== "deadWizardToken") {
-      return {
-        ok: false,
-        error: `Missing dead wizard token definition ${currentFace.tokenDefinitionId}`,
-      };
-    }
-
-    const source: EffectSourceContext = {
-      sourceType: "deadWizardToken",
-      runtimeMode: state.runtimeMode,
-      playerId: player.playerId,
-      cardInstanceId: token.instanceId,
-      definitionId: definition.tokenId,
-      tokenInstanceId: token.instanceId,
-      tokenDefinitionId: definition.tokenId,
-      ...(currentFace.deathKillerPlayerId === undefined
-        ? {}
-        : {
-            deadWizardTokenDeathKillerPlayerId: currentFace.deathKillerPlayerId,
-          }),
-      ...(currentFace.deadWizardTokenWasDinglerAtGain === undefined
-        ? {}
-        : {
-            deadWizardTokenWasDinglerAtGain:
-              currentFace.deadWizardTokenWasDinglerAtGain,
-          }),
-      ...(currentFace.deadWizardTokenProjectionEffectIds === undefined
-        ? {}
-        : {
-            deadWizardTokenProjectionEffectIds:
-              currentFace.deadWizardTokenProjectionEffectIds,
-          }),
-    };
-    beginDeadWizardTokenResolutionBoundary(state);
-    let result: EffectExecutionResult;
-    try {
-      result = executeEffects(
-        state,
-        player,
-        definition.effects,
-        "onDeadWizardTokenFace",
-        source,
-        (decodedEffect) =>
-          !currentFace.deadWizardTokenProjectionEffectIds?.includes(
-            decodedEffect.effectId
-          )
-      );
-    } finally {
-      endDeadWizardTokenResolutionBoundary(state);
-    }
+    const result = resolveDeadWizardTokenFace(state, face);
     if (!result.ok || result.gameEnd !== undefined) {
       return result;
     }
-    recordGameEvent(state, {
-      type: "deadWizardTokenFaceResolved",
-      playerId: player.playerId,
-      tokenInstanceId: token.instanceId,
-      tokenDefinitionId: token.definitionId,
-    });
     face = dequeueDeadWizardTokenFace(state);
   }
   return { ok: true };
+}
+
+type DeadWizardTokenFace =
+  ReturnType<typeof dequeueDeadWizardTokenFace> extends infer Face
+    ? Exclude<Face, undefined>
+    : never;
+
+function resolveDeadWizardTokenFace(
+  state: GameState,
+  face: DeadWizardTokenFace
+): EffectExecutionResult {
+  const player = state.players.find(
+    (candidate) => candidate.playerId === face.playerId
+  );
+  if (player === undefined) {
+    return {
+      ok: false,
+      error: `Missing dead wizard token player ${face.playerId}`,
+    };
+  }
+  const token = player.deadWizardTokens.find(
+    (candidate) => candidate.instanceId === face.tokenInstanceId
+  );
+  if (token === undefined || token.definitionId !== face.tokenDefinitionId) {
+    return {
+      ok: false,
+      error: `Missing dead wizard token ${face.tokenInstanceId}`,
+    };
+  }
+  const definition = state.tokenDefinitions.get(face.tokenDefinitionId);
+  if (definition?.kind !== "deadWizardToken") {
+    return {
+      ok: false,
+      error: `Missing dead wizard token definition ${face.tokenDefinitionId}`,
+    };
+  }
+
+  const source: EffectSourceContext = {
+    sourceType: "deadWizardToken",
+    runtimeMode: state.runtimeMode,
+    playerId: player.playerId,
+    cardInstanceId: token.instanceId,
+    definitionId: definition.tokenId,
+    tokenInstanceId: token.instanceId,
+    tokenDefinitionId: definition.tokenId,
+    ...(face.deathKillerPlayerId === undefined
+      ? {}
+      : { deadWizardTokenDeathKillerPlayerId: face.deathKillerPlayerId }),
+    ...(face.deadWizardTokenWasDinglerAtGain === undefined
+      ? {}
+      : {
+          deadWizardTokenWasDinglerAtGain: face.deadWizardTokenWasDinglerAtGain,
+        }),
+    ...(face.deadWizardTokenProjectionEffectIds === undefined
+      ? {}
+      : {
+          deadWizardTokenProjectionEffectIds:
+            face.deadWizardTokenProjectionEffectIds,
+        }),
+  };
+  beginDeadWizardTokenResolutionBoundary(state);
+  let result: EffectExecutionResult;
+  try {
+    result = executeEffects(
+      state,
+      player,
+      definition.effects,
+      "onDeadWizardTokenFace",
+      source,
+      (decodedEffect) =>
+        !face.deadWizardTokenProjectionEffectIds?.includes(
+          decodedEffect.effectId
+        )
+    );
+  } finally {
+    endDeadWizardTokenResolutionBoundary(state);
+  }
+  if (!result.ok || result.gameEnd !== undefined) {
+    return result;
+  }
+  recordGameEvent(state, {
+    type: "deadWizardTokenFaceResolved",
+    playerId: player.playerId,
+    tokenInstanceId: token.instanceId,
+    tokenDefinitionId: token.definitionId,
+  });
+  return result;
+}
+
+function resolveQueuedDeadWizardTokenFaceForToken(
+  state: GameState,
+  playerId: PlayerState["playerId"],
+  tokenInstanceId: TokenInstance["instanceId"]
+): EffectExecutionResult {
+  const faceIndex = state.deadWizardTokenResolution.pendingFaces.findIndex(
+    (candidate) =>
+      candidate.playerId === playerId &&
+      candidate.tokenInstanceId === tokenInstanceId
+  );
+  if (faceIndex < 0) {
+    return { ok: true };
+  }
+  const [face] = state.deadWizardTokenResolution.pendingFaces.splice(
+    faceIndex,
+    1
+  );
+  if (face === undefined) {
+    return { ok: false, error: "Queued dead wizard token face disappeared" };
+  }
+  return resolveDeadWizardTokenFace(state, face);
 }
 
 export function moveGainedCardToPlayerDestination(
@@ -2030,8 +2060,15 @@ const effectRuntimeServices: EffectRuntimeServices = {
   resolveDefenseWindow,
   resolveMayhemAttack,
   resolveMayhemAttackPlan,
-  resolvePlayerDeath(state, player) {
-    return resolvePlayerDeath(state, player, player.life.current, undefined);
+  resolvePlayerDeath(state, player, source) {
+    return resolvePlayerDeath(
+      state,
+      player,
+      player.life.current,
+      undefined,
+      source?.attackId,
+      source
+    );
   },
   peekTopDeckCard,
   drawTopDeckCard,
@@ -2652,9 +2689,11 @@ function resolvePlayerDeath(
         effectId: RuntimeEffectId;
         source: EffectSourceContext;
         deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy;
+        attackDeath?: boolean;
       }
     | undefined,
-  attackId?: EffectSourceContext["attackId"]
+  attackId?: EffectSourceContext["attackId"],
+  deathSource?: EffectSourceContext
 ): EffectExecutionResult {
   recordGameEvent(state, {
     type: "playerDied",
@@ -2674,6 +2713,7 @@ function resolvePlayerDeath(
   }
 
   let issueResult: EffectExecutionResult = { ok: true };
+  const tokenCountBeforeIssue = player.deadWizardTokens.length;
   const hasPendingReplacement =
     killCredit !== undefined &&
     state.turn.deadWizardTokenKillReplacement?.playerId ===
@@ -2684,7 +2724,10 @@ function resolvePlayerDeath(
       state,
       player,
       killCredit?.killer.playerId,
-      { projectRespawn: true }
+      {
+        projectRespawn: true,
+        resolveFaceImmediately: false,
+      }
     );
     if (!issueResult.ok) {
       return issueResult;
@@ -2715,6 +2758,24 @@ function resolvePlayerDeath(
     if (replacementResult !== undefined) {
       return replacementResult;
     }
+  }
+
+  const gainedToken =
+    !hasPendingReplacement &&
+    player.deadWizardTokens.length > tokenCountBeforeIssue
+      ? player.deadWizardTokens[tokenCountBeforeIssue]
+      : undefined;
+  const attackDeath =
+    killCredit?.attackDeath ??
+    deathSource?.attackDeath ??
+    (deathSource?.sourceType !== "deadWizardToken" &&
+      deathSource?.attackId !== undefined);
+  if (!attackDeath && gainedToken !== undefined && issueResult.ok) {
+    return resolveQueuedDeadWizardTokenFaceForToken(
+      state,
+      player.playerId,
+      gainedToken.instanceId
+    );
   }
   return issueResult;
 }
@@ -2816,9 +2877,9 @@ export function gainDeadWizardToken(
   state: GameState,
   player: PlayerState
 ): EffectExecutionResult {
-  return resolveWithinDeadWizardTokenResolutionBoundary(state, () =>
-    issueDeadWizardToken(state, player)
-  );
+  return issueDeadWizardToken(state, player, undefined, {
+    resolveFaceImmediately: true,
+  });
 }
 
 function transferControlledDeadWizardTokenLike(
@@ -3218,7 +3279,10 @@ function issueDeadWizardToken(
   state: GameState,
   player: PlayerState,
   deathKillerPlayerId?: PlayerState["playerId"],
-  options?: { projectRespawn?: boolean }
+  options?: {
+    projectRespawn?: boolean;
+    resolveFaceImmediately?: boolean;
+  }
 ): EffectExecutionResult {
   if (
     state.common.deadWizardTokens.status === "available" &&
@@ -3267,6 +3331,27 @@ function issueDeadWizardToken(
             };
       if (!projection.ok) {
         return projection;
+      }
+      const face: DeadWizardTokenFace = {
+        playerId: player.playerId,
+        tokenInstanceId: token.instanceId,
+        tokenDefinitionId: token.definitionId,
+        ...(deathKillerPlayerId === undefined ? {} : { deathKillerPlayerId }),
+        ...(projection.deadWizardTokenWasDinglerAtGain === undefined
+          ? {}
+          : {
+              deadWizardTokenWasDinglerAtGain:
+                projection.deadWizardTokenWasDinglerAtGain,
+            }),
+        ...(projection.deadWizardTokenProjectionEffectIds === undefined
+          ? {}
+          : {
+              deadWizardTokenProjectionEffectIds:
+                projection.deadWizardTokenProjectionEffectIds,
+            }),
+      };
+      if (options?.resolveFaceImmediately === true) {
+        return resolveDeadWizardTokenFace(state, face);
       }
       enqueueDeadWizardTokenFace(
         state,
@@ -3521,9 +3606,13 @@ function dealDamage(
             ...(cause.deadWizardTokenPolicy === undefined
               ? {}
               : { deadWizardTokenPolicy: cause.deadWizardTokenPolicy }),
+            ...(cause.attackDeath === undefined
+              ? {}
+              : { attackDeath: cause.attackDeath }),
           }
         : undefined,
-      source.attackId
+      source.attackId,
+      source
     );
     if (!deathResult.ok || deathResult.gameEnd !== undefined) {
       return deathResult;

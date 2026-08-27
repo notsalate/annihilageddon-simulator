@@ -143,6 +143,7 @@ export interface EffectSourceContext {
   deadWizardTokenDeathKillerPlayerId?: PlayerState["playerId"];
   deadWizardTokenWasDinglerAtGain?: boolean;
   deadWizardTokenProjectionEffectIds?: readonly string[];
+  attackDeath?: boolean;
 }
 
 export interface AttackReplacementProfile {
@@ -300,8 +301,9 @@ export type DamageCause =
       kind: "playerControlled";
       player: PlayerState;
       deadWizardTokenPolicy?: DeadWizardTokenDeathPolicy;
+      attackDeath?: boolean;
     }
-  | { kind: "ownerless" };
+  | { kind: "ownerless"; attackDeath?: boolean };
 
 export interface EffectRuntimeServices {
   resolveTargetChoice(
@@ -530,7 +532,8 @@ export interface EffectRuntimeServices {
   ): EffectExecutionResult;
   resolvePlayerDeath(
     state: GameState,
-    player: PlayerState
+    player: PlayerState,
+    source?: EffectSourceContext
   ): EffectExecutionResult;
   peekTopDeckCard(
     player: PlayerState,
@@ -1470,7 +1473,11 @@ const setLifeHandler: EffectRuntimeHandler<RuntimeEffectForId<"set_life">> = {
       sourceType: source.sourceType,
     });
     if (lifeChange.lifeAfter < 1) {
-      return services.resolvePlayerDeath(state, targetResult.choice.player);
+      return services.resolvePlayerDeath(
+        state,
+        targetResult.choice.player,
+        source
+      );
     }
     return { ok: true };
   },

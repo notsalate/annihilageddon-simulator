@@ -17192,7 +17192,7 @@ test("endTurn проверяет start-of-turn эффекты следующег
   assert.deepEqual(state.eventLog, eventLog);
 });
 
-test("прямая выдача ЖДК не воскрешает игрока и ждёт границы источника", () => {
+test("прямая выдача ЖДК не воскрешает игрока и разрешает лицо сразу", () => {
   const state = initializeGame({ rootDir, seed: 301018 });
   const player = mustGetPlayer(state, state.activePlayerId);
   player.life.current = 3;
@@ -17213,7 +17213,7 @@ test("прямая выдача ЖДК не воскрешает игрока и
     assert.deepEqual(gained, { ok: true });
     assert.equal(player.life.current, 3);
     assert.equal(player.deadWizardTokens.length, 1);
-    assert.equal(player.deck.includes(wand), false);
+    assert.equal(player.deck[0], wand);
     return { ok: true };
   });
 
@@ -17240,7 +17240,7 @@ test("прямая выдача ЖДК не воскрешает игрока и
   );
 });
 
-test("ЖДК 015 выдаёт получателю одну чипсину после границы текущего источника", () => {
+test("ЖДК 015 выдаёт получателю одну чипсину сразу внутри внешней границы", () => {
   const state = initializeGame({ rootDir, seed: 303015 });
   const player = mustGetPlayer(state, state.activePlayerId);
   player.chips = 0;
@@ -17254,7 +17254,7 @@ test("ЖДК 015 выдаёт получателю одну чипсину по�
 
   const result = resolveWithinDeadWizardTokenResolutionBoundary(state, () => {
     assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
-    assert.equal(player.chips, 0);
+    assert.equal(player.chips, 1);
     return { ok: true };
   });
 
@@ -17270,6 +17270,76 @@ test("ЖДК 015 выдаёт получателю одну чипсину по�
         event.definitionId === "esw2_dbg__dead_wizard_token_015"
     )
   );
+});
+
+test("не-ATTACK смерть лица ЖДК разрешает следующий gain вложенно", () => {
+  const state = initializeGame({ rootDir, seed: 301019 });
+  const player = mustGetPlayer(state, state.activePlayerId);
+  player.wizardProperties = [];
+  player.life.current = 20;
+  const deathFace = createFixtureDeadWizardTokenDefinition(
+    "fixture-dwt-direct-non-attack-death",
+    [
+      {
+        effectId: "set_life",
+        timing: "onDeadWizardTokenFace",
+        lifeTotal: 0,
+        target: { selector: "activePlayer" },
+      },
+    ]
+  );
+  const followupFace = createFixtureDeadWizardTokenDefinition(
+    "fixture-dwt-direct-non-attack-followup",
+    [
+      {
+        effectId: "dead_wizard_token_gain_chips",
+        timing: "onDeadWizardTokenFace",
+        amount: 1,
+      },
+    ]
+  );
+  state.tokenDefinitions = new Map([
+    ...state.tokenDefinitions,
+    [deathFace.tokenId, deathFace],
+    [followupFace.tokenId, followupFace],
+  ]);
+  const firstToken = {
+    instanceId: markTokenInstanceId("fixture-dwt-direct-non-attack-first"),
+    definitionId: markTokenDefinitionId(deathFace.tokenId),
+    ownerId: "common" as const,
+  };
+  const secondToken = {
+    instanceId: markTokenInstanceId("fixture-dwt-direct-non-attack-second"),
+    definitionId: markTokenDefinitionId(followupFace.tokenId),
+    ownerId: "common" as const,
+  };
+  state.common.deadWizardTokens.drawStack = [firstToken, secondToken];
+
+  assert.deepEqual(gainDeadWizardToken(state, player), { ok: true });
+  assert.equal(player.life.current, 20);
+  assert.equal(player.chips, 1);
+  assert.deepEqual(
+    player.deadWizardTokens.map((token) => token.instanceId),
+    [firstToken.instanceId, secondToken.instanceId]
+  );
+  assertEventOrder(state, [
+    (event) =>
+      event.type === "deadWizardTokenGained" &&
+      event.tokenInstanceId === firstToken.instanceId,
+    (event) =>
+      event.type === "playerDied" && event.playerId === player.playerId,
+    (event) =>
+      event.type === "deadWizardTokenGained" &&
+      event.tokenInstanceId === secondToken.instanceId,
+    (event) =>
+      event.type === "playerResurrected" && event.playerId === player.playerId,
+    (event) =>
+      event.type === "deadWizardTokenFaceResolved" &&
+      event.tokenInstanceId === secondToken.instanceId,
+    (event) =>
+      event.type === "deadWizardTokenFaceResolved" &&
+      event.tokenInstanceId === firstToken.instanceId,
+  ]);
 });
 
 test("ЖДК 012 выдаёт по одной чипсине противникам в порядке рассадки", () => {
