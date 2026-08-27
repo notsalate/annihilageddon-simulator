@@ -266,6 +266,10 @@ test("simulation failure replay accepts setCardEffectiveType actions", () => {
       tokenStacks: {},
     }),
     "```",
+    "setup:",
+    "```json",
+    JSON.stringify({ deadWizardTokenCount: 6 }),
+    "```",
     "actions:",
     "```json",
     JSON.stringify([action]),
@@ -279,4 +283,5 @@ test("simulation failure replay accepts setCardEffectiveType actions", () => {
   const parsed = parseSimulationFailureReplayReport(report);
 
   assert.deepEqual(parsed.replay.actions, [action]);
+  assert.equal(parsed.deadWizardTokenCount, 6);
 });

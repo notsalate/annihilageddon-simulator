@@ -22,6 +22,8 @@ const replayData =
     : parseSimulationFailureReplayReport(
         readFileSync(options.replayReport, "utf8")
       );
+const deadWizardTokenCount =
+  options.deadWizardTokenCount ?? replayData?.deadWizardTokenCount;
 const dataSource =
   replayData === undefined
     ? options.dataPackPath === undefined
@@ -40,9 +42,7 @@ const result = runSingleGame({
   ...(options.playerCount === undefined
     ? {}
     : { playerCount: options.playerCount }),
-  ...(options.deadWizardTokenCount === undefined
-    ? {}
-    : { deadWizardTokenCount: options.deadWizardTokenCount }),
+  ...(deadWizardTokenCount === undefined ? {} : { deadWizardTokenCount }),
   ...dataSource,
 });
 

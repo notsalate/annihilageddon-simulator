@@ -251,7 +251,7 @@ test("single-game CLI forwards an explicit zero dead wizard token count", () => 
     turnsElapsed: number;
   };
   assert.equal(output.endReason, "deadWizardTokensExhausted");
-  assert.equal(output.turnsElapsed, 0);
+  assert.equal(output.turnsElapsed, 1);
 });
 
 test("mass CLI forwards an explicit zero dead wizard token count", () => {

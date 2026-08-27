@@ -105,6 +105,12 @@ test("DWT-030 puts up to two Limp Wands under the player's deck", () => {
     shortage.player.deck.map((card) => card.instanceId),
     [shortage.deckCard, ...shortage.wands].map((card) => card?.instanceId)
   );
+
+  const emptySupply = resolve(348005, true, 0);
+  assert.deepEqual(
+    emptySupply.player.deck.map((card) => card.instanceId),
+    [emptySupply.deckCard].map((card) => card?.instanceId)
+  );
 });
 
 test("DWT-002 keeps its extra -3 while DWT-030 scores only the base -3", () => {

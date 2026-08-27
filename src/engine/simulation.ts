@@ -4,7 +4,7 @@ import {
   type GameAction,
   type LegalAction,
 } from "./actions.js";
-import { assertNever } from "../common.js";
+import { assertNever, isPlainRecord } from "../common.js";
 import type {
   ChoicePolicy,
   ChoiceRequest,
@@ -294,6 +294,7 @@ function getReplaySetupCandidates(
 export function parseSimulationFailureReplayReport(reportText: string): {
   runtimeData: SimulationFailureReport["runtimeData"];
   replay: SimulationFailureReplay;
+  deadWizardTokenCount?: number;
 } {
   const runtimeDataValue: unknown = JSON.parse(
     readJsonSection(reportText, "runtimeData")
@@ -307,6 +308,7 @@ export function parseSimulationFailureReplayReport(reportText: string): {
   if (!isGameActionArray(actionsValue)) {
     throw new Error("Report actions have an invalid shape");
   }
+  const deadWizardTokenCount = readReplayDeadWizardTokenCount(reportText);
   const choicesValue: unknown = JSON.parse(
     readJsonSection(reportText, "choices")
   );
@@ -316,7 +318,41 @@ export function parseSimulationFailureReplayReport(reportText: string): {
       actions: actionsValue,
       choices: readReplayChoices(choicesValue),
     },
+    ...(deadWizardTokenCount === undefined ? {} : { deadWizardTokenCount }),
   };
+}
+
+function readReplayDeadWizardTokenCount(
+  reportText: string
+): number | undefined {
+  const setupSection = readOptionalJsonSection(reportText, "setup");
+  if (setupSection === undefined) {
+    return undefined;
+  }
+
+  const setupValue: unknown = JSON.parse(setupSection);
+  if (!isPlainRecord(setupValue)) {
+    throw new Error("Report setup has an invalid shape");
+  }
+
+  const value = setupValue["deadWizardTokenCount"];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error("Report setup deadWizardTokenCount has an invalid shape");
+  }
+  return value;
+}
+
+function readOptionalJsonSection(
+  reportText: string,
+  section: string
+): string | undefined {
+  const marker = `${section}:\n${"`".repeat(3)}json\n`;
+  return reportText.includes(marker)
+    ? readJsonSection(reportText, section)
+    : undefined;
 }
 
 function readJsonSection(reportText: string, section: string): string {
@@ -911,7 +947,7 @@ export function runSingleGame(options: RunSingleGameOptions): SingleGameResult {
   }
   const actionLimit = options.maxTurns * 200;
   let actionsApplied = 0;
-  let checkDeadWizardTokenExhaustion = true;
+  let checkDeadWizardTokenExhaustion = options.deadWizardTokenCount !== 0;
   const actionHistory: GameAction[] = [];
 
   while (true) {
