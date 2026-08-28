@@ -895,7 +895,15 @@ function hasParameterizedRuntimeCardInstanceReference(
   testBody: string,
   call: RuntimeSeamCall
 ): boolean {
-  const binding = findGivenRuntimeCardBinding(testBody);
+  return hasRuntimeCardInstanceReference(testBody, undefined, call);
+}
+
+function hasRuntimeCardInstanceReference(
+  testBody: string,
+  id: string | undefined,
+  call: RuntimeSeamCall
+): boolean {
+  const binding = findGivenRuntimeCardBinding(testBody, id);
   if (binding === undefined) {
     return false;
   }
@@ -1052,21 +1060,6 @@ function hasKnownRuntimeDefinitionReference(
     "u"
   ).test(testBody);
   return knownCallReference || knownLookupReference || knownSetupFieldReference;
-}
-
-function hasRuntimeCardInstanceReference(
-  testBody: string,
-  id: string,
-  call: RuntimeSeamCall
-): boolean {
-  const binding = findGivenRuntimeCardBinding(testBody, id);
-  if (binding === undefined) {
-    return false;
-  }
-  return new RegExp(
-    "\\b" + escapeRegExp(binding) + "\\.instanceId\\b",
-    "u"
-  ).test(call.invocation);
 }
 
 function invocationUsesBinding(invocation: string, binding: string): boolean {
