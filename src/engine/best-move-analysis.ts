@@ -5,8 +5,9 @@ import {
   type ActionResult,
   type LegalAction,
 } from "./actions.js";
-import { forkGameState } from "./game-state-fork.js";
-import type { EffectChoiceRequest } from "./choice-policy.js";
+import { isTrustedReadOnlyPolicy } from "./best-move-policy-trust.js";
+import { forkGameState, forkGameStateForAnalyzer } from "./game-state-fork.js";
+import type { ChoicePolicy, EffectChoiceRequest } from "./choice-policy.js";
 import type { GameState } from "./setup.js";
 
 export interface AnalysisLimits {
@@ -106,16 +107,16 @@ export class AnalyzerDiagnosticsSession {
   };
 
   private readonly now: () => number;
-  private currentPhase: AnalyzerDiagnosticPhase | "evaluationPolicy" | undefined;
+  private currentPhase:
+    | AnalyzerDiagnosticPhase
+    | "evaluationPolicy"
+    | undefined;
 
   constructor(options: AnalyzerDiagnosticsOptions = {}) {
     this.now = options.now ?? Date.now;
   }
 
-  withPhase<T>(
-    phase: AnalyzerDiagnosticPhase,
-    operation: () => T
-  ): T {
+  withPhase<T>(phase: AnalyzerDiagnosticPhase, operation: () => T): T {
     const previousPhase = this.currentPhase;
     this.currentPhase = phase;
     try {
@@ -155,10 +156,16 @@ export class AnalyzerDiagnosticsSession {
 
   recordGameStateClone(
     source: Readonly<GameState>,
-    isolatedForEvaluationPolicy = false
+    isolatedForEvaluationPolicy = false,
+    eventLogWasCloned = true
   ): void {
     this.incrementOperation("gameStateClones");
-    this.recordEventLogCopy(source.eventLog.length, isolatedForEvaluationPolicy);
+    if (eventLogWasCloned) {
+      this.recordEventLogCopy(
+        source.eventLog.length,
+        isolatedForEvaluationPolicy
+      );
+    }
     if (isolatedForEvaluationPolicy) {
       this.counters.phases.evaluationPolicy.isolatedStateClones += 1;
     }
@@ -168,7 +175,10 @@ export class AnalyzerDiagnosticsSession {
     this.incrementOperation(terminal ? "terminalStates" : "intermediateStates");
   }
 
-  recordPathCopy(itemsCopied: number, isolatedForEvaluationPolicy = false): void {
+  recordPathCopy(
+    itemsCopied: number,
+    isolatedForEvaluationPolicy = false
+  ): void {
     this.incrementOperation("pathCopyOperations");
     this.incrementOperation("pathItemsCopied", itemsCopied);
     if (isolatedForEvaluationPolicy) {
@@ -471,7 +481,10 @@ function enumerateActionBranchesCore(
       );
       diagnostics?.recordChoicePathExpansion(next.length);
       diagnostics?.recordPathCopy(
-        next.reduce((total, candidate) => total + candidate.selections.length, 0)
+        next.reduce(
+          (total, candidate) => total + candidate.selections.length,
+          0
+        )
       );
       generatedBranches += next.length;
       if (generatedBranches > limits.maxBranchesPerAction) {
@@ -616,6 +629,90 @@ export function enumerateTurnLines(
     : diagnostics.withPhase("enumeration", operation);
 }
 
+/** Replays one analyzed line from its original state and selected choices. */
+export function replayAnalyzedTurnLine(
+  source: GameState,
+  line: AnalyzedTurnLine
+): GameState {
+  if (
+    source.activePlayerId !== line.initialPlayerId ||
+    source.turn.number !== line.initialTurnNumber
+  ) {
+    throw new AnalysisError(
+      "Analysis replay requires the source player and turn to match the line"
+    );
+  }
+
+  const replay = forkGameState(source);
+  for (const [stepIndex, step] of line.steps.entries()) {
+    replayActionStep(replay, step.action, step.selectedChoices, stepIndex);
+  }
+  return replay;
+}
+
+function replayActionStep(
+  state: GameState,
+  action: LegalAction,
+  selections: readonly AnalysisChoiceSelection[],
+  stepIndex: number
+): Extract<ActionResult, { ok: true }> {
+  let requestIndex = 0;
+  const replayChoicePolicy: ChoicePolicy = (request) => {
+    if (request.requestKind === "setup") {
+      throw new AnalysisError(
+        `Analysis replay reached setup choice at step ${stepIndex}`
+      );
+    }
+
+    const currentRequestIndex = requestIndex;
+    const selection = selections[requestIndex];
+    requestIndex += 1;
+    if (selection === undefined) {
+      if (request.choices.length === 0) {
+        return undefined;
+      }
+      throw replayError(
+        action,
+        { selections: [] },
+        "choice path ended before the request was consumed"
+      );
+    }
+
+    validateSelection(selection, request, action, currentRequestIndex);
+    return {
+      choiceId: selection.choiceId,
+      choiceIndex: selection.choiceIndex,
+    };
+  };
+  state.effectChoiceStrategy = replayChoicePolicy;
+
+  let result: ActionResult;
+  try {
+    result = applyAction(state, action);
+  } catch (error) {
+    if (error instanceof ActionExecutionError) {
+      throw new AnalysisError(
+        `Analysis replay failed at step ${stepIndex} for action ${describeAction(action)}: ${error.message}`,
+        { cause: error }
+      );
+    }
+    throw error;
+  }
+  if (!result.ok) {
+    throw new AnalysisError(
+      `Analysis replay failed at step ${stepIndex} for action ${describeAction(action)}: ${result.error}`
+    );
+  }
+  if (requestIndex !== selections.length) {
+    throw replayError(
+      action,
+      { selections: [...selections] },
+      "choice path was not fully consumed"
+    );
+  }
+  return result;
+}
+
 export function rankTurnLines(
   sourceState: GameState,
   lines: readonly AnalyzedTurnLine[],
@@ -624,15 +721,16 @@ export function rankTurnLines(
   diagnostics?: AnalyzerDiagnosticsSession
 ): RankedTurnLinesResult {
   const operation = (): RankedTurnLinesResult => {
+    const policyIsTrustedReadOnly = isTrustedReadOnlyPolicy(policy);
     const ranked = lines.map((line, enumerationIndex) => {
       const evaluate = () =>
         policy.evaluate({
-          sourceState: forkAnalyzerState(
-            sourceState,
-            diagnostics,
-            true
-          ),
-          line: cloneAnalyzedTurnLine(line, diagnostics),
+          sourceState: policyIsTrustedReadOnly
+            ? sourceState
+            : forkAnalyzerState(sourceState, diagnostics, true),
+          line: policyIsTrustedReadOnly
+            ? line
+            : cloneAnalyzedTurnLine(line, diagnostics),
           perspectivePlayerId,
         });
       const evaluation =
@@ -694,9 +792,12 @@ function forkAnalyzerState(
 ): GameState {
   diagnostics?.recordGameStateClone(
     source,
+    isolatedForEvaluationPolicy,
     isolatedForEvaluationPolicy
   );
-  return forkGameState(source);
+  return isolatedForEvaluationPolicy
+    ? forkGameState(source)
+    : forkGameStateForAnalyzer(source);
 }
 
 function cloneAnalyzedTurnLine(

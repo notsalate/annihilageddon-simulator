@@ -110,16 +110,17 @@ test("diagnostic session counts enumeration and ranking work without changing li
   assert.deepEqual(lineSignature(instrumentedLines), lineSignature(plainLines));
   assert.equal(ranked.rankedLines.length, instrumentedLines.length);
   assert.equal(report.total.actionApplications, 1);
-  assert.equal(report.total.gameStateClones, 3);
+  assert.equal(report.total.gameStateClones, 1);
   assert.equal(report.total.choicePathReplays, 0);
   assert.equal(report.total.intermediateStates, 0);
   assert.equal(report.total.terminalStates, 1);
   assert.equal(report.phases.enumeration.terminalStates, 1);
   assert.equal(report.phases.ranking.gameStateClones, 0);
   assert.equal(report.phases.evaluationPolicy.invocations, 1);
-  assert.equal(report.phases.evaluationPolicy.operations.gameStateClones, 2);
+  assert.equal(report.phases.evaluationPolicy.operations.gameStateClones, 0);
   assert.ok(report.total.pathItemsCopied > 0);
-  assert.ok(report.total.eventLogEntriesCopied > 0);
+  assert.equal(report.phases.enumeration.eventLogCopyOperations, 0);
+  assert.equal(report.phases.enumeration.eventLogEntriesCopied, 0);
 });
 
 test("diagnostic session counts choice-path replays and generated branches", () => {

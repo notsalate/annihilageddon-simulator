@@ -5,6 +5,7 @@ import {
   enumerateTurnLines,
   enumerateImmediateActionBranches,
   initializeGame,
+  replayAnalyzedTurnLine,
   rankTurnLines,
   type CardDefinition,
   type AnalysisLimits,
@@ -777,6 +778,16 @@ test("continues every choice branch to its own endTurn line", () => {
   assert.ok(
     choiceLines.every((line) => line.steps.at(-1)?.action.type === "endTurn")
   );
+  for (const line of choiceLines) {
+    const replayed = replayAnalyzedTurnLine(state, line);
+    assert.deepEqual(replayed.eventLog, line.terminalState.eventLog);
+    assert.deepEqual(replayed.players, line.terminalState.players);
+    assert.deepEqual(replayed.turn, line.terminalState.turn);
+    assert.deepEqual(
+      replayed.rng.snapshot(),
+      line.terminalState.rng.snapshot()
+    );
+  }
 });
 
 test("preserves the root player and turn while exposing endTurn game-end metadata", () => {
@@ -1307,6 +1318,17 @@ test("victory-points policy evaluates the perspective player in terminal state",
   assert.equal(result.criterionId, "victory-points");
   assert.equal(result.best?.components?.["victoryPoints"], result.best?.score);
   assert.equal(result.perspectivePlayerId, state.activePlayerId);
+});
+
+test("trusted built-in policies cannot be replaced after registration", () => {
+  const originalEvaluate = victoryPointsPolicy.evaluate;
+
+  assert.equal(Object.isFrozen(victoryPointsPolicy), true);
+  assert.equal(
+    Reflect.set(victoryPointsPolicy, "evaluate", () => ({ score: 0 })),
+    false
+  );
+  assert.equal(victoryPointsPolicy.evaluate, originalEvaluate);
 });
 
 test("isolates policy mutations from source state and analyzed lines", () => {

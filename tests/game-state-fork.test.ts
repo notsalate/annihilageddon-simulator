@@ -12,7 +12,10 @@ import {
 import { calculateEffectivePlayerVictoryPoints } from "../src/engine/effective-values.js";
 import { createAttackInstance } from "../src/engine/attack-resolution.js";
 import type { EffectSourceContext } from "../src/engine/effect-runtime-registry.js";
-import { recordBotActionSelected } from "../src/engine/event-recorder.js";
+import {
+  recordBotActionSelected,
+  setAttackCreatedTargetPlayer,
+} from "../src/engine/event-recorder.js";
 import {
   markCardDefinitionId,
   markCardInstanceId,
@@ -22,6 +25,7 @@ import {
   markTokenInstanceId,
 } from "../src/domain/types.js";
 import { clonePhysicalCardLedger } from "../src/engine/control-ledger.js";
+import { forkGameStateForAnalyzer } from "../src/engine/game-state-fork.js";
 import { verifiedTestRuntimeEffect } from "./helpers/verified-runtime-effect.js";
 
 function createFixture(): GameState {
@@ -243,6 +247,28 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
   assert.equal(fork.tokenDefinitions, source.tokenDefinitions);
   assert.equal(fork.effectChoiceStrategy, source.effectChoiceStrategy);
   assert.notEqual(fork.eventLog, source.eventLog);
+});
+
+test("shared event-log forks isolate mutations to existing events", () => {
+  const source = createFixture();
+  const playerId = source.players[0]!.playerId;
+  source.eventLog.push({
+    type: "attackCreated",
+    playerId,
+    attackId: markAttackId("attack-1"),
+    cardInstanceId: "attack-card",
+    definitionId: "attack-definition",
+    effectId: "attack_damage",
+    sourceType: "card",
+  });
+
+  const first = forkGameStateForAnalyzer(source);
+  const second = forkGameStateForAnalyzer(source);
+  setAttackCreatedTargetPlayer(first, 1, markPlayerId("player-2"));
+
+  assert.equal(first.eventLog[1]?.targetPlayerId, markPlayerId("player-2"));
+  assert.equal(second.eventLog[1]?.targetPlayerId, undefined);
+  assert.equal(source.eventLog[1]?.targetPlayerId, undefined);
 });
 
 test("fork preserves independent AttackId sequences", () => {

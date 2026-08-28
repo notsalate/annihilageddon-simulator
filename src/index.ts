@@ -253,6 +253,7 @@ export {
   enumerateActionBranches,
   enumerateImmediateActionBranches,
   enumerateTurnLines,
+  replayAnalyzedTurnLine,
   rankTurnLines,
 } from "./engine/best-move-analysis.js";
 export type {

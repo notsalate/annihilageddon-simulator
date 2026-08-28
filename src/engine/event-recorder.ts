@@ -17,7 +17,7 @@ export function recordGameEvent(
   event: GameEventDraft
 ): number {
   const eventIndex = state.eventLog.length;
-  state.eventLog.push(enrichGameEvent(state, event));
+  state.eventLog.push(freezeGameEvent(enrichGameEvent(state, event)));
   return eventIndex;
 }
 
@@ -38,7 +38,10 @@ export function setAttackCreatedTargetPlayer(
 ): void {
   const event = state.eventLog[eventIndex];
   if (event?.type === "attackCreated") {
-    event.targetPlayerId = targetPlayerId;
+    state.eventLog[eventIndex] = freezeGameEvent({
+      ...event,
+      targetPlayerId,
+    });
   }
 }
 
@@ -46,7 +49,16 @@ export function recordSetupChoiceSelected(
   eventLog: GameEvent[],
   event: GameEventDraftFor<"setupChoiceSelected">
 ): void {
-  eventLog.push(event);
+  eventLog.push(freezeGameEvent(event));
+}
+
+export function freezeGameEvent<TEvent extends object>(event: TEvent): TEvent {
+  for (const value of Object.values(event)) {
+    if (Array.isArray(value)) {
+      Object.freeze(value);
+    }
+  }
+  return Object.freeze(event);
 }
 
 export function recordBotActionSelected(

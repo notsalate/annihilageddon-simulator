@@ -1,8 +1,9 @@
 import { adjudicateGame } from "./adjudication.js";
 import type { TurnLineEvaluationPolicy } from "./best-move-analysis.js";
+import { registerTrustedReadOnlyPolicy } from "./best-move-policy-trust.js";
 
 /** Исследовательский критерий, а не универсальное определение лучшего хода. */
-export const victoryPointsPolicy: TurnLineEvaluationPolicy = {
+export const victoryPointsPolicy = registerTrustedReadOnlyPolicy({
   id: "victory-points",
   evaluate: ({ line, perspectivePlayerId }) => {
     const player = adjudicateGame(line.terminalState).players.find(
@@ -15,7 +16,7 @@ export const victoryPointsPolicy: TurnLineEvaluationPolicy = {
       components: { victoryPoints: player.victoryPoints },
     };
   },
-};
+} satisfies TurnLineEvaluationPolicy);
 
 export const BEST_MOVE_POLICIES = {
   "victory-points": victoryPointsPolicy,
