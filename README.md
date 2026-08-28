@@ -72,6 +72,7 @@ end-of-turn checkpoint.
 | `npm run simulate`                                 | Открывает CLI-меню симулятора                                                                           |
 | `npm run simulate:single`                          | Запускает одну партию                                                                                   |
 | `npm run simulate:mass`                            | Запускает массовую симуляцию                                                                            |
+| `npm run diagnose:analyzer`                       | Последовательно запускает clean benchmark, счётчики Analyzer и CPU profile                            |
 | `npm run validate:drafts`                          | Проверяет draft JSON импорта                                                                            |
 | `npm run validate:adr`                             | Проверяет структуру, индекс и связи Architecture Decision Records                                       |
 | `npm run report:import`                            | Показывает полноту import pipeline                                                                      |
@@ -101,6 +102,8 @@ npm run
 `baselineBot` — временная простая `BotStrategy`: он разыгрывает первую допустимую карту, иначе покупает самую дорогую допустимую карту рынка, иначе завершает ход. Он не оптимизирует линию. Будущие aggressive/defensive стратегии будут моделировать решения игрока с ограниченным наблюдением.
 
 `Best-Move Analyzer` — отдельный инструмент анализа текущего хода. Запуск: `npm run analyze:best-move -- --seed 60615 --criterion victory-points --top 3`. Он перебирает линии до `endTurn` и печатает JSON; `victory-points` — один исследовательский критерий эффективных победных очков root-игрока, а не универсальное определение лучшего хода. Ограничения `--maxChoiceDepth`, `--maxBranchesPerAction`, `--maxActionsPerLine`, `--maxTurnLines` защищают от combinatorial роста. Analyzer не является стратегией игрока и не заменяет `simulate:single`.
+
+Для разбора объёма работы Analyzer используй `npm run diagnose:analyzer -- --profile light|typical|heavy`. По умолчанию команда использует `reference` workload; `--role current` запускает отдельный анализ текущего набора данных без сравнения clean timing с E1. Команда последовательно выполняет чистый benchmark, одно инструментированное измерение счётчиков и отдельный CPU profile; `--format json` и `--output` сохраняют машинную сводку, `--artifacts` задаёт каталог артефактов. Только clean benchmark `reference` workload с протоколом и fingerprint, совпадающими с принятым E1 baseline, сопоставим с `ADR-0001/E1`; при несовпадении отчёт указывает `incomparable`, а времена инструментированного и профилируемого запусков остаются диагностическими. По умолчанию артефакты попадают в `.scratch/tmp/analyzer-diagnostics/` и не добавляются в репозиторий.
 
 ## Структура проекта
 

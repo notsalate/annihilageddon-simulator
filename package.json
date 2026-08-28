@@ -11,6 +11,7 @@
     "simulate:mass": "npm run build -- --pretty false && node dist/src/cli/run-mass-simulation.js",
     "simulate:single": "npm run build -- --pretty false && node dist/src/cli/run-single-game.js",
     "analyze:best-move": "npm run build -- --pretty false && node dist/src/cli/run-best-move-analysis.js",
+    "diagnose:analyzer": "npm run build -- --pretty false && node scripts/run-analyzer-diagnostics.mjs",
     "benchmark:simulation": "npm run build -- --pretty false && node dist/src/cli/run-benchmark.js --kind simulation",
     "benchmark:analyzer": "npm run build -- --pretty false && node dist/src/cli/run-benchmark.js --kind analyzer",
     "benchmark:effect-runtime": "npm run build -- --pretty false && node scripts/run-effect-runtime-benchmark.mjs",
