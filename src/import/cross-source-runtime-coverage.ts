@@ -947,7 +947,7 @@ function hasCardSemanticEvidenceObservation(
   const observesAfterAction =
     applyAction !== undefined &&
     new RegExp(
-      `\\b${escapeRegExp(observationTarget)}\\s*\\(\\s*scenario\\s*,\\s*card\\s*,\\s*definitionId\\s*\\)`,
+      `\\b${escapeRegExp(observationTarget)}\\s*\\(\\s*scenario\\s*,\\s*card\\s*,\\s*definitionId(?:\\s*,\\s*[^)]*)?\\s*\\)`,
       "u"
     ).test(wrapperBody.slice(applyAction.end));
   if (!observesAfterAction) {

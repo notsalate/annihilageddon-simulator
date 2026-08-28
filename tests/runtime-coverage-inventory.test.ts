@@ -1601,6 +1601,92 @@ test("semantic evidence rejects a card smoke test without mapped runtime asserti
   );
 });
 
+test("card semantic evidence accepts an assertion helper with a snapshot argument", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-card-snapshot-")
+  );
+  const id = "esw2_dbg__main_001";
+  const testName = "card uses the public play seam with a snapshot";
+
+  writeText(
+    rootDir,
+    "tests/card-runtime-semantic-evidence.test.ts",
+    `function runCardSemanticEvidence(definitionId: string, seed: number): void {
+  const scenario = createGameScenario({ rootDir, seed });
+  const card = givenRuntimeCard(scenario, {
+    definitionId,
+    instanceId: definitionId,
+  });
+  const beforePlaySnapshot = snapshotExternallyObservableState(scenario, card);
+  const result = applyAction(scenario.state, {
+    type: "playCard",
+    cardInstanceId: card.instanceId,
+  });
+  assert.equal(result.ok, true);
+  assertCardRuntimeEvidence(scenario, card, definitionId, beforePlaySnapshot);
+}
+
+function assertCardRuntimeEvidence(
+  scenario: GameScenario,
+  card: CardInstance,
+  definitionId: string,
+  beforePlaySnapshot: string
+): void {
+  const definition = scenario.state.cardDefinitions.get(definitionId);
+  assert.ok(definition);
+  const planEntry = readCrossSourceCoveragePlan(rootDir).get(definitionId);
+  assert.ok(planEntry?.semanticMappings.length);
+  for (const mapping of planEntry.semanticMappings) {
+    assert.ok(mapping.runtimeRefs.length > 0);
+  }
+  assert.ok(scenario.state.eventLog.length > 0);
+  assertCardRuntimeExecutionEvidence(
+    scenario,
+    card,
+    definition,
+    beforePlaySnapshot
+  );
+}
+
+test("${testName}", () => {
+  runCardSemanticEvidence("${id}", 1);
+});
+`
+  );
+
+  const planEntry = createSemanticEvidencePlanEntry({
+    id,
+    testName,
+    testSubject: { kind: "binding", name: "definitionId" },
+  });
+  const testRef = planEntry.semanticMappings[0]?.testRefs[0];
+  assert.ok(testRef?.observation);
+  testRef.file = "tests/card-runtime-semantic-evidence.test.ts";
+  testRef.observation.target = "assertCardRuntimeEvidence";
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "card",
+    sourceGroupOrTokenKind: "main",
+    draft: {
+      cardId: id,
+      visible: { textRu: "Получи чипсину." },
+      composition: { quantity: 1 },
+    },
+    runtime: createSemanticEvidenceRuntime(id),
+    compositionMembership: [{ role: "mainDeck", entryKind: "card", count: 1 }],
+    planEntry,
+  });
+
+  assert.equal(
+    evaluation.status,
+    "crossSourceComplete",
+    evaluation.blockers.join("; ")
+  );
+  assert.deepEqual(evaluation.blockers, []);
+});
+
 test("repository card semantic evidence covers every canonical card", () => {
   const report = createRuntimeSemanticCompletionReport(process.cwd());
   const cards = report.items.filter((item) => item.objectKind === "card");
