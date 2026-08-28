@@ -17,6 +17,7 @@ interface DiagnosticsCliModule {
       selfTimeMs: number;
     }[];
   };
+  assertAnalyzerDiagnosticDeterminism(fingerprints: readonly string[]): void;
 }
 
 const cliModule: unknown = await import(
@@ -32,9 +33,11 @@ function isDiagnosticsCliModule(
     typeof value === "object" &&
     value !== null &&
     "parseAnalyzerDiagnosticsArgs" in value &&
-    typeof value.parseAnalyzerDiagnosticsArgs === "function"
-    && "summarizeCpuProfile" in value
-    && typeof value.summarizeCpuProfile === "function"
+    typeof value.parseAnalyzerDiagnosticsArgs === "function" &&
+    "summarizeCpuProfile" in value &&
+    typeof value.summarizeCpuProfile === "function" &&
+    "assertAnalyzerDiagnosticDeterminism" in value &&
+    typeof value.assertAnalyzerDiagnosticDeterminism === "function"
   );
 }
 
@@ -143,4 +146,14 @@ test("CPU profile summary separates JavaScript, V8, native and GC samples", () =
   assert.equal(summary.sampledTimeMs, 10);
   assert.equal(summary.sampleCount, 4);
   assert.equal(summary.hotspots[0]?.functionName, "(garbage collector)");
+});
+
+test("analyzer diagnostics reject mismatched result fingerprints", () => {
+  assert.doesNotThrow(() =>
+    cliModule.assertAnalyzerDiagnosticDeterminism(["same", "same", "same"])
+  );
+  assert.throws(
+    () => cliModule.assertAnalyzerDiagnosticDeterminism(["same", "different"]),
+    /different result fingerprints/
+  );
 });

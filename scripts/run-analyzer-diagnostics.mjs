@@ -131,6 +131,18 @@ export function formatAnalyzerDiagnosticsSummary(summary) {
   ].join("\n");
 }
 
+export function assertAnalyzerDiagnosticDeterminism(fingerprints) {
+  const expected = fingerprints[0];
+  if (
+    typeof expected !== "string" ||
+    fingerprints.some((fingerprint) => fingerprint !== expected)
+  ) {
+    throw new Error(
+      `Analyzer diagnostic runs produced different result fingerprints: ${fingerprints.join(", ")}`
+    );
+  }
+}
+
 export function summarizeCpuProfile(profile) {
   const nodes = Array.isArray(profile?.nodes) ? profile.nodes : [];
   const samples = Array.isArray(profile?.samples) ? profile.samples : [];
@@ -412,6 +424,7 @@ function runCommand(args) {
     diagnosticRun.resultFingerprint,
     cpuRun.workerRun?.resultFingerprint,
   ].filter((value) => typeof value === "string");
+  assertAnalyzerDiagnosticDeterminism(fingerprints);
   const resultFingerprint = cleanBenchmark.resultFingerprint;
   const summary = {
     schemaVersion: "analyzer-diagnostic-report-v1",
@@ -456,9 +469,7 @@ function runCommand(args) {
       runArtifact: cpuRun.workerRun === null ? null : artifacts.cpuRun,
     },
     determinism: {
-      allMatch:
-        fingerprints.length > 0 &&
-        fingerprints.every((fingerprint) => fingerprint === resultFingerprint),
+      allMatch: true,
       fingerprints: {
         cleanBenchmark: cleanBenchmark.resultFingerprint,
         diagnosticRun: diagnosticRun.resultFingerprint,
