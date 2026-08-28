@@ -51,7 +51,9 @@ npm run diagnose:analyzer -- --profile light --format human
 npm run diagnose:analyzer -- --profile typical --format json --artifacts .scratch/tmp/analyzer-typical
 ```
 
-The command runs three processes in order: the clean Analyzer benchmark, an instrumented semantic-counter run, and a separate Node CPU-profile run. The clean benchmark is the only timing comparable with ADR-0001/E1. Instrumented and profiled timings are explicitly diagnostic-only and must not update the accepted baseline, performance epoch, or CI gate.
+The command defaults to the `reference` workload, which is the workload eligible for E1 comparison. Pass `--role current` to inspect the current data set separately; its clean timing remains diagnostic and is not compared with E1.
+
+The command runs three processes in order: the clean Analyzer benchmark, an instrumented semantic-counter run, and a separate Node CPU-profile run. For the `reference` workload, the clean benchmark is the only timing comparable with ADR-0001/E1; the `current` workload has no E1 comparison. Instrumented and profiled timings are explicitly diagnostic-only and must not update the accepted baseline, performance epoch, or CI gate.
 
 The summary contains the selected profile, workload/environment and result fingerprints, clean phase timings, semantic counters, CPU category totals, hotspots, and paths to the generated artifacts. Counters use array-item units for copied paths and event-log entries; phase counters separate enumeration, ranking, and evaluation-policy isolation. All three runs must report the same result fingerprint.
 

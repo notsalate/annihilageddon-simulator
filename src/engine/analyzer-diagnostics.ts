@@ -285,5 +285,3 @@ export function runAnalyzerDiagnostic(
     resultFingerprint: run.resultFingerprint,
   };
 }
-
-export const runAnalyzerDiagnostics = runAnalyzerDiagnostic;

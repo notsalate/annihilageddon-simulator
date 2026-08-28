@@ -78,10 +78,10 @@ test("analyzer diagnostics CLI parses profile and artifact options", () => {
   );
 });
 
-test("analyzer diagnostics CLI defaults to a current light-profile run", () => {
+test("analyzer diagnostics CLI defaults to a reference light-profile run", () => {
   assert.deepEqual(cliModule.parseAnalyzerDiagnosticsArgs([]), {
     profile: "light",
-    role: "current",
+    role: "reference",
     format: "human",
     dataPackPath: undefined,
     commit: undefined,

@@ -49,6 +49,8 @@ npm run diagnose:analyzer -- --profile light --format human
 npm run diagnose:analyzer -- --profile heavy --format json --artifacts .scratch/tmp/analyzer-heavy
 ```
 
+По умолчанию команда использует `reference` workload, сопоставимый с E1. Для отдельного анализа текущего набора данных укажи `--role current`; его clean timing остаётся диагностическим и с E1 не сравнивается.
+
 Команда последовательно выполняет три независимых запуска одного workload:
 
 1. `clean benchmark` — обычный benchmark с одним прогревом и тремя измерениями;
@@ -57,7 +59,7 @@ npm run diagnose:analyzer -- --profile heavy --format json --artifacts .scratch/
 
 Счётчики показывают применения действий, клоны `GameState`, повторные исполнения для choice paths, промежуточные и терминальные состояния, а также число операций и элементов, скопированных в paths и event log. В `phases` отдельно видны enumeration, ranking и вызовы evaluation policy; клоны и копирование, созданные для изоляции policy, отмечены в `evaluationPolicy`.
 
-Только время и fingerprint `clean benchmark` сопоставимы с контрактом `ADR-0001` и E1. Инструментированное и профилируемое время помечены `diagnostic-only`: они не меняют baseline, performance epoch или CI gate. Все три запуска обязаны дать один `resultFingerprint`.
+Только время и fingerprint `clean benchmark` для `reference` workload сопоставимы с контрактом `ADR-0001` и E1. Для `current` workload clean timing не сравнивается с E1. Инструментированное и профилируемое время помечены `diagnostic-only`: они не меняют baseline, performance epoch или CI gate. Все три запуска обязаны дать один `resultFingerprint`.
 
 Артефакты (`clean-benchmark.json`, `diagnostic-run.json`, `cpu-run.json`, `*.cpuprofile`, `summary.json` и `summary.txt`) сохраняются в `.scratch/tmp/analyzer-diagnostics/` либо в каталог из `--artifacts`; они не являются исходными данными проекта. Путь к итоговой JSON-сводке можно задать через `--output`.
 

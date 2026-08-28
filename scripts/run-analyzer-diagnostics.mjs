@@ -68,7 +68,7 @@ export function parseAnalyzerDiagnosticsArgs(args) {
     "profile"
   );
   const role = parseChoice(
-    values.get("role") ?? "current",
+    values.get("role") ?? "reference",
     ANALYZER_ROLES,
     "role"
   );
@@ -107,7 +107,7 @@ export function formatAnalyzerDiagnosticsSummary(summary) {
     `parameters: seeds ${summary.workload.seeds.join(", ")}, players ${summary.workload.playerCount}, criterion ${summary.workload.criterionId}`,
     `fingerprints: workload ${summary.workloadFingerprint}, volume ${summary.workloadVolumeFingerprint}, result ${summary.resultFingerprint}`,
     "",
-    "clean benchmark (comparable to ADR-0001/E1):",
+    `clean benchmark (${clean.comparableTo}):`,
     `  time ${formatMilliseconds(clean.timings.totalMs)}, enumeration ${formatMilliseconds(clean.timings.enumerationMs)}, ranking ${formatMilliseconds(clean.timings.rankingMs)}`,
     `  result fingerprint ${clean.resultFingerprint}`,
     "",
@@ -439,7 +439,10 @@ function runCommand(args) {
     resultFingerprint,
     cleanBenchmark: {
       timingClass: "clean-benchmark",
-      comparableTo: "ADR-0001/E1",
+      comparableTo:
+        args.role === "reference"
+          ? "ADR-0001/E1"
+          : "not comparable to E1 for current role",
       timings: cleanBenchmark.timings,
       metrics: cleanBenchmark.metrics,
       resultFingerprint: cleanBenchmark.resultFingerprint,

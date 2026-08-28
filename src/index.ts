@@ -263,7 +263,6 @@ export type {
 export {
   ANALYZER_DIAGNOSTIC_CONTRACT_VERSION,
   runAnalyzerDiagnostic,
-  runAnalyzerDiagnostics,
   runAnalyzerWorkloadOnce,
 } from "./engine/analyzer-diagnostics.js";
 export { assertGameStateInvariants } from "./engine/invariants.js";
