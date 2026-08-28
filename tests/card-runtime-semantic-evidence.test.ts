@@ -16,6 +16,7 @@ import {
 import { gainDeadWizardToken } from "../src/engine/effect-runtime.js";
 import {
   readCrossSourceCoveragePlan,
+  type CrossSourceSemanticMapping,
   type CrossSourceRuntimeRef,
 } from "../src/import/cross-source-runtime-coverage.js";
 import {
@@ -71,26 +72,118 @@ function assertCardRuntimeEvidence(
   assert.equal(planEntry.objectKind, "card");
   assert.ok(planEntry.semanticMappings.length > 0);
 
-  for (const mapping of planEntry.semanticMappings) {
-    assert.ok(
-      mapping.runtimeRefs.length > 0,
-      `mapping ${mapping.draftPoint.path} has no runtime references`
-    );
-    for (const runtimeRef of mapping.runtimeRefs) {
-      assertCardRuntimeReference(
-        definition,
-        runtimeRef,
-        definitionId,
-        mapping.draftPoint.path
-      );
-    }
-  }
-
-  assertCardRuntimeExecutionEvidence(
+  const observedEffectKeys = assertCardRuntimeExecutionEvidence(
     scenario,
     card,
     definition,
     beforePlaySnapshot
+  );
+
+  for (const mapping of planEntry.semanticMappings) {
+    assertCardRuntimeMappingEvidence(
+      definition,
+      definitionId,
+      mapping,
+      observedEffectKeys
+    );
+  }
+}
+
+function assertCardRuntimeMappingEvidence(
+  definition: CardDefinition,
+  definitionId: string,
+  mapping: CrossSourceSemanticMapping,
+  observedEffectKeys: ReadonlySet<string>
+): void {
+  assert.ok(
+    mapping.runtimeRefs.length > 0,
+    `mapping ${mapping.draftPoint.path} has no runtime references`
+  );
+
+  for (const runtimeRef of mapping.runtimeRefs) {
+    assertCardRuntimeReference(
+      definition,
+      runtimeRef,
+      definitionId,
+      mapping.draftPoint.path
+    );
+    if (runtimeRef.kind !== "effect") {
+      continue;
+    }
+
+    const effectKey = runtimeEffectKey(runtimeRef);
+    assert.ok(
+      observedEffectKeys.has(effectKey),
+      `${definitionId} ${mapping.draftPoint.path} has no mapping-specific external observation for ${effectKey}`
+    );
+    if (effectKey === "add_power@onPlay") {
+      assertMappedAddPowerOutcome(definition, mapping, mapping.draftPoint.path);
+    }
+  }
+}
+
+function runtimeEffectKey(effect: {
+  effectId: string;
+  timing: string;
+}): string {
+  return `${effect.effectId}@${effect.timing}`;
+}
+
+function assertMappedAddPowerOutcome(
+  definition: CardDefinition,
+  mapping: CrossSourceSemanticMapping,
+  draftPointPath: string
+): void {
+  const expectedAmounts = mapping.runtimeRefs
+    .filter(
+      (
+        runtimeRef
+      ): runtimeRef is Extract<CrossSourceRuntimeRef, { kind: "effect" }> =>
+        runtimeRef.kind === "effect" &&
+        runtimeRef.effectId === "add_power" &&
+        runtimeRef.timing === "onPlay"
+    )
+    .map((runtimeRef) => runtimeRef.fields["amount"]);
+  assert.ok(
+    expectedAmounts.every((amount) => typeof amount === "number"),
+    `${definition.cardId} ${draftPointPath} add_power mapping has a non-numeric amount`
+  );
+  const expectedTotal = expectedAmounts.reduce(
+    (total, amount) => total + Number(amount),
+    0
+  );
+  const addPowerEffects = definition.engine.effects.filter(
+    (effect) => effect.effectId === "add_power" && effect.timing === "onPlay"
+  );
+  const isolatedScenario = createGameScenario({
+    rootDir,
+    seed: 389000 + definition.cardId.length,
+  });
+  const isolatedCard = givenRuntimeCard(isolatedScenario, {
+    cardId: `${definition.cardId}__mapped-add-power`,
+    effects: addPowerEffects,
+    cardKind: definition.engine.cardKind,
+    cardTypes: definition.engine.cardTypes,
+  });
+  if (
+    addPowerEffects.some(
+      (effect) => "condition" in effect && effect.condition !== undefined
+    )
+  ) {
+    for (let index = 0; index < 2; index += 1) {
+      givenRuntimeCard(isolatedScenario, {
+        player: isolatedScenario.activePlayer,
+        zone: "permanents",
+        definitionId: definition.cardId,
+      });
+    }
+  }
+  const beforePower = isolatedScenario.state.turn.power;
+  assert.deepEqual(play(isolatedScenario, isolatedCard), { ok: true });
+  assert.equal(
+    isolatedScenario.state.turn.power - beforePower,
+    expectedTotal,
+    `${definition.cardId} ${draftPointPath} did not apply mapped add_power amount ${String(expectedTotal)}`
   );
 }
 
@@ -99,7 +192,8 @@ function assertCardRuntimeExecutionEvidence(
   card: CardInstance,
   definition: CardDefinition,
   beforePlaySnapshot: string
-): void {
+): Set<string> {
+  const observedEffectKeys = new Set<string>();
   const effects = definition.engine.effects;
   const onPlayEffects = effects.filter(
     (candidate) => candidate.timing === "onPlay"
@@ -114,53 +208,133 @@ function assertCardRuntimeExecutionEvidence(
       if (!hasSourceEffectEvent(scenario, card, effect.effectId)) {
         assertOnPlayEffectEvidence(definition.cardId, effect.effectId);
       }
+      observedEffectKeys.add(runtimeEffectKey(effect));
     }
   }
 
   if (effects.some((effect) => effect.timing === "onDefense")) {
     assertDefenseEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "onDefense"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
   if (effects.some((effect) => effect.timing === "activation")) {
     assertActivationEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "activation"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
   if (effects.some((effect) => effect.timing === "onGain")) {
     assertOnGainEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "onGain"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
   if (effects.some((effect) => effect.timing === "onGainCard")) {
     assertOnGainCardEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "onGainCard"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
   if (effects.some((effect) => effect.timing === "onPlayCard")) {
     assertOnPlayCardEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "onPlayCard"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
   if (effects.some((effect) => effect.timing === "attackReplacement")) {
     assertAttackReplacementEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "attackReplacement"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
   if (effects.some((effect) => effect.timing === "afterDamageDealt")) {
     assertAfterDamageEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "afterDamageDealt"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
   if (
     effects.some((effect) => effect.timing === "afterFirstAttackDamageEachTurn")
   ) {
     assertFirstAttackEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "afterFirstAttackDamageEachTurn"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
   if (effects.some((effect) => effect.timing === "endTurn")) {
     assertEndTurnEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "endTurn"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
   if (effects.some((effect) => effect.timing === "startOfControllerTurn")) {
     assertStartOfTurnEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "startOfControllerTurn"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
+  }
+  if (effects.some((effect) => effect.timing === "afterControllerPlaysCard")) {
+    assertAfterControllerPlaysCardEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "afterControllerPlaysCard"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
   if (effects.some((effect) => effect.timing === "whileControlled")) {
     assertWhileControlledEffectEvidence(scenario, definition);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "whileControlled"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
   if (effects.some((effect) => effect.timing === "whileScoring")) {
     assertWhileScoringEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "whileScoring"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
   if (effects.some((effect) => effect.timing === "scoring")) {
     assertScoringEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "scoring"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
   if (effects.some((effect) => effect.timing === "onMayhemResolve")) {
     assertMayhemEffectEvidence(definition.cardId);
+    for (const effect of effects.filter(
+      (candidate) => candidate.timing === "onMayhemResolve"
+    )) {
+      observedEffectKeys.add(runtimeEffectKey(effect));
+    }
   }
+  return observedEffectKeys;
 }
 
 function hasSourceEffectEvent(
@@ -761,6 +935,26 @@ function assertStartOfTurnEffectEvidence(definitionId: string): void {
     scenario,
     source,
     "ongoing_add_power_when_playing_limp_wand"
+  );
+}
+
+function assertAfterControllerPlaysCardEffectEvidence(
+  definitionId: string
+): void {
+  const { scenario, card: source } = createCardEvidenceScenario(
+    definitionId,
+    383500 + definitionId.length
+  );
+  assert.deepEqual(play(scenario, source), { ok: true });
+  const beforePower = scenario.state.turn.power;
+  const limpWand = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__limp_wand",
+  });
+  assert.deepEqual(play(scenario, limpWand), { ok: true });
+  assert.equal(
+    scenario.state.turn.power,
+    beforePower + 3,
+    `${definitionId} did not apply the mapped power bonus after playing a limp wand`
   );
 }
 

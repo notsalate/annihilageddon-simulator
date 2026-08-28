@@ -1059,15 +1059,30 @@ function hasCardSemanticEvidenceObservation(
     sourceText,
     "assertCardRuntimeEvidence"
   );
+  const mappingHelperBody = findNamedFunctionBody(
+    sourceText,
+    "assertCardRuntimeMappingEvidence"
+  );
+  const mappingHelperHasMappingAssertions =
+    mappingHelperBody !== undefined &&
+    /\bruntimeRefs\b/u.test(mappingHelperBody) &&
+    /\bassertCardRuntimeReference\s*\(/u.test(mappingHelperBody) &&
+    /\bobservedEffectKeys\b/u.test(mappingHelperBody) &&
+    /\bassertMappedAddPowerOutcome\s*\(/u.test(mappingHelperBody) &&
+    /\bassert\.(?:ok|equal|deepEqual)\b/u.test(mappingHelperBody);
+  const helperHasDirectMappingAssertions =
+    helperBody !== undefined && /\bruntimeRefs\b/u.test(helperBody);
   const helperHasMappingAssertions =
     helperBody !== undefined &&
     /\bassertCardRuntimeExecutionEvidence\s*\(/u.test(helperBody) &&
     /\breadCrossSourceCoveragePlan\s*\(/u.test(helperBody) &&
     /\bsemanticMappings\b/u.test(helperBody) &&
-    /\bruntimeRefs\b/u.test(helperBody) &&
     /\bcardDefinitions\b/u.test(helperBody) &&
     /\beventLog\b/u.test(helperBody) &&
-    /\bassert\.(?:ok|equal|deepEqual)\b/u.test(helperBody);
+    /\bassert\.(?:ok|equal|deepEqual)\b/u.test(helperBody) &&
+    (helperHasDirectMappingAssertions ||
+      (/\bassertCardRuntimeMappingEvidence\s*\(/u.test(helperBody) &&
+        mappingHelperHasMappingAssertions));
   if (!helperHasMappingAssertions) {
     addBlocker(
       "observation-assertion-missing",
