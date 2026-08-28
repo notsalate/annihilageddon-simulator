@@ -45,6 +45,15 @@ const cliModule: unknown = await import(
   ).href
 );
 
+const analyzerEnvironment = {
+  nodeVersion: "v22.15.0",
+  platform: "linux",
+  arch: "x64",
+  runner: "github:Linux:X64:ubuntu:24.04",
+  cpuModel: "fixture-cpu",
+  cpuCount: 4,
+};
+
 function isDiagnosticsCliModule(value: unknown): value is DiagnosticsCliModule {
   return (
     typeof value === "object" &&
@@ -197,6 +206,8 @@ test("analyzer diagnostics reject an E1 workload fingerprint mismatch", () => {
       workloadVolumeFingerprint: "current-volume",
       warmupCount: 1,
       measurementCount: 3,
+      environment: analyzerEnvironment,
+      comparisonPairId: "fixture-pair",
     },
     role: "reference",
     profile: "light",
@@ -208,6 +219,8 @@ test("analyzer diagnostics reject an E1 workload fingerprint mismatch", () => {
       workloadVolumeFingerprint: "accepted-volume",
       warmupCount: 1,
       measurementCount: 3,
+      environment: analyzerEnvironment,
+      comparisonPairId: "fixture-pair",
     },
     baselinePath: "docs/benchmarks/performance-epoch-e1.json",
   });
@@ -217,6 +230,81 @@ test("analyzer diagnostics reject an E1 workload fingerprint mismatch", () => {
   assert.deepEqual(
     result.mismatches.map(({ field }) => field),
     ["workloadFingerprint", "workloadVolumeFingerprint"]
+  );
+});
+
+test("analyzer diagnostics does not compare an unpaired E1 run", () => {
+  const result = cliModule.assessAnalyzerE1Comparability({
+    cleanBenchmark: {
+      workload: {
+        epoch: "E1",
+        contractVersion: "analyzer-benchmark-v1",
+        playerCount: 2,
+      },
+      workloadFingerprint: "same-workload",
+      workloadVolumeFingerprint: "same-volume",
+      warmupCount: 1,
+      measurementCount: 3,
+      environment: analyzerEnvironment,
+    },
+    role: "reference",
+    profile: "light",
+    acceptedReference: {
+      epoch: "E1",
+      contractVersion: "analyzer-benchmark-v1",
+      playerCount: 2,
+      workloadFingerprint: "same-workload",
+      workloadVolumeFingerprint: "same-volume",
+      warmupCount: 1,
+      measurementCount: 3,
+      environment: analyzerEnvironment,
+    },
+    baselinePath: "docs/benchmarks/performance-epoch-e1.json",
+  });
+
+  assert.equal(result.status, "not-measured");
+  assert.match(result.comparableTo, /comparisonPairId/iu);
+  assert.deepEqual(
+    result.mismatches.map(({ field }) => field),
+    ["comparisonPairId"]
+  );
+});
+
+test("analyzer diagnostics rejects a paired E1 run from another environment", () => {
+  const result = cliModule.assessAnalyzerE1Comparability({
+    cleanBenchmark: {
+      workload: {
+        epoch: "E1",
+        contractVersion: "analyzer-benchmark-v1",
+        playerCount: 2,
+      },
+      workloadFingerprint: "same-workload",
+      workloadVolumeFingerprint: "same-volume",
+      warmupCount: 1,
+      measurementCount: 3,
+      environment: { ...analyzerEnvironment, cpuModel: "other-cpu" },
+      comparisonPairId: "fixture-pair",
+    },
+    role: "reference",
+    profile: "light",
+    acceptedReference: {
+      epoch: "E1",
+      contractVersion: "analyzer-benchmark-v1",
+      playerCount: 2,
+      workloadFingerprint: "same-workload",
+      workloadVolumeFingerprint: "same-volume",
+      warmupCount: 1,
+      measurementCount: 3,
+      environment: analyzerEnvironment,
+      comparisonPairId: "fixture-pair",
+    },
+    baselinePath: "docs/benchmarks/performance-epoch-e1.json",
+  });
+
+  assert.equal(result.status, "incomparable");
+  assert.deepEqual(
+    result.mismatches.map(({ field }) => field),
+    ["environment"]
   );
 });
 

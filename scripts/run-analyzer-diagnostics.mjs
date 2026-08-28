@@ -23,6 +23,14 @@ const E1_BASELINE_RELATIVE_PATH = path.join(
   "performance-epoch-e1.json"
 );
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
+const ANALYZER_ENVIRONMENT_FIELDS = [
+  "nodeVersion",
+  "platform",
+  "arch",
+  "runner",
+  "cpuModel",
+  "cpuCount",
+];
 
 export function parseAnalyzerDiagnosticsArgs(args) {
   const values = new Map();
@@ -199,6 +207,8 @@ export function assessAnalyzerE1Comparability({
     workloadVolumeFingerprint: cleanBenchmark.workloadVolumeFingerprint,
     warmupCount: cleanBenchmark.warmupCount,
     measurementCount: cleanBenchmark.measurementCount,
+    environment: cleanBenchmark.environment ?? null,
+    comparisonPairId: cleanBenchmark.comparisonPairId ?? null,
   };
   const base = {
     profile,
@@ -232,14 +242,54 @@ export function assessAnalyzerE1Comparability({
     workloadVolumeFingerprint: acceptedReference.workloadVolumeFingerprint,
     warmupCount: acceptedReference.warmupCount,
     measurementCount: acceptedReference.measurementCount,
+    environment: acceptedReference.environment ?? null,
+    comparisonPairId: acceptedReference.comparisonPairId ?? null,
   };
   const mismatches = Object.keys(expected)
-    .filter((field) => actual[field] !== expected[field])
+    .filter(
+      (field) =>
+        field !== "environment" &&
+        field !== "comparisonPairId" &&
+        actual[field] !== expected[field]
+    )
     .map((field) => ({
       field,
       expected: expected[field],
       actual: actual[field],
     }));
+  if (!sameAnalyzerEnvironment(actual.environment, expected.environment)) {
+    mismatches.push({
+      field: "environment",
+      expected: expected.environment,
+      actual: actual.environment,
+    });
+  }
+  if (
+    !isNonEmptyString(actual.comparisonPairId) ||
+    !isNonEmptyString(expected.comparisonPairId) ||
+    actual.comparisonPairId !== expected.comparisonPairId
+  ) {
+    mismatches.push({
+      field: "comparisonPairId",
+      expected: expected.comparisonPairId,
+      actual: actual.comparisonPairId,
+    });
+  }
+  const missingPhysicalPairing =
+    !hasAnalyzerEnvironment(actual.environment) ||
+    !hasAnalyzerEnvironment(expected.environment) ||
+    !isNonEmptyString(actual.comparisonPairId) ||
+    !isNonEmptyString(expected.comparisonPairId);
+  if (missingPhysicalPairing) {
+    return {
+      ...base,
+      status: "not-measured",
+      comparableTo:
+        "not measured: exact environment and comparisonPairId are required",
+      accepted: expected,
+      mismatches,
+    };
+  }
   if (mismatches.length > 0) {
     return {
       ...base,
@@ -258,6 +308,29 @@ export function assessAnalyzerE1Comparability({
     accepted: expected,
     mismatches: [],
   };
+}
+
+function hasAnalyzerEnvironment(value) {
+  return (
+    isRecord(value) &&
+    ANALYZER_ENVIRONMENT_FIELDS.every((field) =>
+      field === "cpuCount"
+        ? isFiniteNumber(value[field])
+        : typeof value[field] === "string" && value[field].length > 0
+    )
+  );
+}
+
+function sameAnalyzerEnvironment(left, right) {
+  return (
+    hasAnalyzerEnvironment(left) &&
+    hasAnalyzerEnvironment(right) &&
+    ANALYZER_ENVIRONMENT_FIELDS.every((field) => left[field] === right[field])
+  );
+}
+
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.length > 0;
 }
 
 export function summarizeCpuProfile(profile) {
