@@ -38,18 +38,20 @@ function runCardSemanticEvidence(definitionId: string, seed: number): void {
     definitionId,
     instanceId: definitionId,
   });
+  const beforePlaySnapshot = snapshotExternallyObservableState(scenario, card);
   const result = applyAction(scenario.state, {
     type: "playCard",
     cardInstanceId: card.instanceId,
   });
   assert.equal(result.ok, true);
-  assertCardRuntimeEvidence(scenario, card, definitionId);
+  assertCardRuntimeEvidence(scenario, card, definitionId, beforePlaySnapshot);
 }
 
 function assertCardRuntimeEvidence(
   scenario: GameScenario,
   card: CardInstance,
-  definitionId: string
+  definitionId: string,
+  beforePlaySnapshot: string
 ): void {
   const definition = scenario.state.cardDefinitions.get(definitionId);
   assert.ok(definition, `runtime definition is missing for ${definitionId}`);
@@ -84,20 +86,34 @@ function assertCardRuntimeEvidence(
     }
   }
 
-  assertCardRuntimeExecutionEvidence(scenario, card, definition);
+  assertCardRuntimeExecutionEvidence(
+    scenario,
+    card,
+    definition,
+    beforePlaySnapshot
+  );
 }
 
 function assertCardRuntimeExecutionEvidence(
   scenario: GameScenario,
   card: CardInstance,
-  definition: CardDefinition
+  definition: CardDefinition,
+  beforePlaySnapshot: string
 ): void {
   const effects = definition.engine.effects;
-  for (const effect of effects.filter(
+  const onPlayEffects = effects.filter(
     (candidate) => candidate.timing === "onPlay"
-  )) {
-    if (!hasSourceEffectEvent(scenario, card, effect.effectId)) {
-      assertOnPlayEffectEvidence(definition.cardId, effect.effectId);
+  );
+  if (onPlayEffects.length > 0) {
+    assert.notEqual(
+      beforePlaySnapshot,
+      snapshotExternallyObservableState(scenario, card),
+      `${definition.cardId} did not change an externally observable result when played`
+    );
+    for (const effect of onPlayEffects) {
+      if (!hasSourceEffectEvent(scenario, card, effect.effectId)) {
+        assertOnPlayEffectEvidence(definition.cardId, effect.effectId);
+      }
     }
   }
 
@@ -160,6 +176,41 @@ function hasSourceEffectEvent(
   );
 }
 
+function snapshotExternallyObservableState(
+  scenario: GameScenario,
+  source: CardInstance
+): string {
+  const snapshot = JSON.stringify(scenario.state, (key, value: unknown) => {
+    if (
+      key === "eventLog" ||
+      key === "rng" ||
+      key === "cardDefinitions" ||
+      key === "tokenDefinitions" ||
+      key === "effectChoiceStrategy"
+    ) {
+      return undefined;
+    }
+    if (isSourceCardSnapshot(value, source)) {
+      return undefined;
+    }
+    return value;
+  });
+  assert.ok(snapshot !== undefined);
+  return snapshot;
+}
+
+function isSourceCardSnapshot(value: unknown, source: CardInstance): boolean {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    record["instanceId"] === source.instanceId &&
+    record["definitionId"] === source.definitionId &&
+    "marketChips" in record
+  );
+}
+
 function assertSourceEffectEvent(
   scenario: GameScenario,
   source: CardInstance,
@@ -199,13 +250,20 @@ function chooseFoeTarget(scenario: GameScenario): void {
   });
 }
 
-function chooseCardTarget(scenario: GameScenario, effectId: string): void {
+function chooseCardTarget(
+  scenario: GameScenario,
+  effectId: string,
+  targetInstanceId?: string
+): void {
   chooseEffect(scenario, (request) => {
     if (request.requestKind !== "effect" || request.effectId !== effectId) {
       return undefined;
     }
     const choice = request.choices.find(
-      (candidate) => candidate.choiceKind === "cardTarget"
+      (candidate) =>
+        candidate.choiceKind === "cardTarget" &&
+        (targetInstanceId === undefined ||
+          candidate.targetCardInstanceIds.includes(targetInstanceId))
     );
     return choice === undefined ? undefined : { choiceId: choice.choiceId };
   });
@@ -245,41 +303,49 @@ function assertOnPlayEffectEvidence(
         active.playerId
       );
       return;
-    case "add_power_per_controlled_dead_wizard_token":
+    case "add_power_per_controlled_dead_wizard_token": {
       addDeadWizardToken(scenario, active);
+      const beforePower = scenario.state.turn.power;
       assert.deepEqual(play(scenario, card), { ok: true });
-      assertSourceEffectEvent(scenario, card, effectId);
+      assert.ok(scenario.state.turn.power > beforePower);
       return;
-    case "distributed_attack_damage":
+    }
+    case "distributed_attack_damage": {
       foe.hand = [];
       givenRuntimeCard(scenario, {
         player: active,
         zone: "permanents",
         definitionId: "esw2_dbg__legend_005",
       });
+      const beforeLife = foe.life.current;
       chooseFoeTarget(scenario);
       assert.deepEqual(play(scenario, card), { ok: true });
-      assertSourceEffectEvent(scenario, card, effectId);
+      assert.ok(foe.life.current < beforeLife);
       return;
-    case "attack_damage_equal_to_controlled_card_cost":
+    }
+    case "attack_damage_equal_to_controlled_card_cost": {
       givenRuntimeCard(scenario, {
         player: active,
         zone: "permanents",
         definitionId: "esw2_dbg__legend_005",
       });
+      const beforeLife = foe.life.current;
       chooseFoeTarget(scenario);
       assert.deepEqual(play(scenario, card), { ok: true });
-      assertSourceEffectEvent(scenario, card, effectId);
+      assert.ok(foe.life.current < beforeLife);
       return;
-    case "destroy_own_cards":
-      givenRuntimeCard(scenario, {
+    }
+    case "destroy_own_cards": {
+      const target = givenRuntimeCard(scenario, {
         player: active,
         zone: "discard",
         definitionId: "esw2_dbg__main_002",
       });
+      chooseCardTarget(scenario, effectId, target.instanceId);
       assert.deepEqual(play(scenario, card), { ok: true });
-      assertSourceEffectEvent(scenario, card, effectId);
+      assert.ok(!hasCardInPlayerZones(active, target.instanceId));
       return;
+    }
     case "optional_gain_market_cards_to_hand_this_turn": {
       assert.deepEqual(play(scenario, card), { ok: true });
       const gained = givenRuntimeCard(scenario, {
@@ -303,12 +369,14 @@ function assertOnPlayEffectEvidence(
       );
       return;
     }
-    case "attack_damage_per_controlled_dead_wizard_token":
+    case "attack_damage_per_controlled_dead_wizard_token": {
       addDeadWizardToken(scenario, active);
+      const beforeLife = foe.life.current;
       chooseFoeTarget(scenario);
       assert.deepEqual(play(scenario, card), { ok: true });
-      assertSourceEffectEvent(scenario, card, effectId);
+      assert.ok(foe.life.current < beforeLife);
       return;
+    }
     case "arm_dead_wizard_token_kill_replacement":
       assert.deepEqual(play(scenario, card), { ok: true });
       assert.equal(
@@ -316,22 +384,38 @@ function assertOnPlayEffectEvidence(
         card.instanceId
       );
       return;
-    case "optional_spend_chip_destroy_own_cards":
+    case "optional_spend_chip_destroy_own_cards": {
       scenario.activePlayer.chips = 10;
-      givenRuntimeCard(scenario, {
+      const target = givenRuntimeCard(scenario, {
         player: active,
         zone: "discard",
         definitionId: "esw2_dbg__main_002",
       });
-      chooseCardTarget(scenario, effectId);
+      const beforeChips = active.chips;
+      chooseCardTarget(scenario, effectId, target.instanceId);
       assert.deepEqual(play(scenario, card), { ok: true });
-      assertSourceEffectEvent(scenario, card, effectId);
+      assert.ok(active.chips < beforeChips);
+      assert.ok(!hasCardInPlayerZones(active, target.instanceId));
       return;
+    }
     default:
       throw new Error(
         `${definitionId} has no positive execution witness for onPlay effect ${effectId}`
       );
   }
+}
+
+function hasCardInPlayerZones(
+  player: PlayerState,
+  instanceId: CardInstance["instanceId"]
+): boolean {
+  return [
+    ...player.deck,
+    ...player.hand,
+    ...player.discard,
+    ...player.playedThisTurn,
+    ...player.permanents,
+  ].some((card) => card.instanceId === instanceId);
 }
 
 function assertDefenseEffectEvidence(definitionId: string): void {
