@@ -51,11 +51,11 @@ npm run diagnose:analyzer -- --profile light --format human
 npm run diagnose:analyzer -- --profile typical --format json --artifacts .scratch/tmp/analyzer-typical
 ```
 
-The command defaults to the `reference` workload, which is the workload eligible for E1 comparison. Pass `--role current` to inspect the current data set separately; its clean timing remains diagnostic and is not compared with E1.
+The command defaults to the `reference` workload, which is eligible for E1 comparison only when its protocol and fingerprints match the accepted E1 baseline. A mismatch is reported as `incomparable`. Pass `--role current` to inspect the current data set separately; its clean timing remains diagnostic and is not compared with E1.
 
-The command runs three processes in order: the clean Analyzer benchmark, an instrumented semantic-counter run, and a separate Node CPU-profile run. For the `reference` workload, the clean benchmark is the only timing comparable with ADR-0001/E1; the `current` workload has no E1 comparison. Instrumented and profiled timings are explicitly diagnostic-only and must not update the accepted baseline, performance epoch, or CI gate.
+The command runs three processes in order: the clean Analyzer benchmark, an instrumented semantic-counter run, and a separate Node CPU-profile run. For a `reference` workload whose protocol and fingerprints match the accepted E1 baseline, the clean benchmark is the only timing comparable with ADR-0001/E1; a mismatch is reported as `incomparable`, and the `current` workload has no E1 comparison. Instrumented and profiled timings are explicitly diagnostic-only and must not update the accepted baseline, performance epoch, or CI gate.
 
-The summary contains the selected profile, workload/environment and result fingerprints, clean phase timings, semantic counters, CPU category totals, hotspots, and paths to the generated artifacts. Counters use array-item units for copied paths and event-log entries; phase counters separate enumeration, ranking, and evaluation-policy isolation. All three runs must report the same result fingerprint.
+The summary contains the selected profile, workload/environment and result fingerprints, clean phase timings, semantic counters, CPU category totals, hotspots, and paths to the generated artifacts. Counters use array-item units for copied paths and event-log entries; non-overlapping phase counters separate enumeration, ranking, and evaluation-policy operations/isolation. All three runs must report the same result fingerprint.
 
 CPU hotspots retain generated JavaScript URL, line, and column information. Generated `dist/**/*.js.map` files provide the TypeScript source-mapping hint. CPU profiling is a sampled CPU view only; it does not measure allocations and is not a heap snapshot.
 

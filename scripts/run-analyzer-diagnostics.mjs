@@ -17,6 +17,11 @@ import { ANALYZER_BENCHMARK_PROFILES } from "../dist/src/engine/analyzer-benchma
 
 const ANALYZER_ROLES = ["reference", "current"];
 const OUTPUT_FORMATS = ["human", "json"];
+const E1_BASELINE_RELATIVE_PATH = path.join(
+  "docs",
+  "benchmarks",
+  "performance-epoch-e1.json"
+);
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 
 export function parseAnalyzerDiagnosticsArgs(args) {
@@ -116,7 +121,7 @@ export function formatAnalyzerDiagnosticsSummary(summary) {
     `  actions ${counterTotals.actionApplications}, state clones ${counterTotals.gameStateClones}, choice replays ${counterTotals.choicePathReplays}`,
     `  states intermediate ${counterTotals.intermediateStates}, terminal ${counterTotals.terminalStates}`,
     `  path copies ${counterTotals.pathCopyOperations} operations/${counterTotals.pathItemsCopied} items, event-log copies ${counterTotals.eventLogCopyOperations} operations/${counterTotals.eventLogEntriesCopied} entries`,
-    `  phases: enumeration ${phaseCounters.enumeration.actionApplications} actions, ranking ${phaseCounters.ranking.gameStateClones} clones, policy ${phaseCounters.evaluationPolicy.invocations} calls/${formatMilliseconds(phaseCounters.evaluationPolicy.timeMs)}`,
+    `  phases: enumeration ${phaseCounters.enumeration.actionApplications} actions, ranking ${phaseCounters.ranking.gameStateClones} clones, policy ${phaseCounters.evaluationPolicy.invocations} calls/${formatMilliseconds(phaseCounters.evaluationPolicy.timeMs)}, policy operations ${phaseCounters.evaluationPolicy.operations.actionApplications} actions/${phaseCounters.evaluationPolicy.operations.gameStateClones} clones`,
     "",
     "CPU profile (diagnostic-only, not comparable to E1):",
     `  sampled ${formatMilliseconds(cpu.sampledTimeMs ?? 0)}, categories JS ${formatMilliseconds(cpu.categoryTotals.javascript)}, V8 ${formatMilliseconds(cpu.categoryTotals.v8)}, native ${formatMilliseconds(cpu.categoryTotals.native)}, GC ${formatMilliseconds(cpu.categoryTotals.gc)}`,
@@ -141,6 +146,129 @@ export function assertAnalyzerDiagnosticDeterminism(fingerprints) {
       `Analyzer diagnostic runs produced different result fingerprints: ${fingerprints.join(", ")}`
     );
   }
+}
+
+export function assertAnalyzerCleanBenchmarkArtifactConsistency(
+  cleanBenchmark,
+  persistedArtifact
+) {
+  const timingNames = [
+    "totalMs",
+    "dataLoadMs",
+    "preparationMs",
+    "enumerationMs",
+    "rankingMs",
+    "resultPreparationMs",
+  ];
+  for (const timingName of timingNames) {
+    if (
+      cleanBenchmark.timings?.[timingName] !==
+      persistedArtifact.timings?.[timingName]
+    ) {
+      throw new Error(
+        `Clean benchmark artifact changed ${timingName} while it was being written: ${String(cleanBenchmark.timings?.[timingName])} -> ${String(persistedArtifact.timings?.[timingName])}`
+      );
+    }
+  }
+  for (const fingerprintName of [
+    "workloadFingerprint",
+    "workloadVolumeFingerprint",
+    "resultFingerprint",
+  ]) {
+    if (
+      cleanBenchmark[fingerprintName] !== persistedArtifact[fingerprintName]
+    ) {
+      throw new Error(
+        `Clean benchmark artifact changed ${fingerprintName} while it was being written: ${String(cleanBenchmark[fingerprintName])} -> ${String(persistedArtifact[fingerprintName])}`
+      );
+    }
+  }
+}
+
+export function assertAnalyzerDiagnosticReportConsistency(
+  summary,
+  persistedCleanBenchmark
+) {
+  assertAnalyzerCleanBenchmarkArtifactConsistency(
+    persistedCleanBenchmark,
+    summary.cleanBenchmark
+  );
+}
+
+export function assessAnalyzerE1Comparability({
+  cleanBenchmark,
+  role,
+  profile,
+  acceptedReference,
+  baselinePath,
+}) {
+  const actual = {
+    epoch: cleanBenchmark.workload?.epoch,
+    contractVersion: cleanBenchmark.workload?.contractVersion,
+    playerCount: cleanBenchmark.workload?.playerCount,
+    workloadFingerprint: cleanBenchmark.workloadFingerprint,
+    workloadVolumeFingerprint: cleanBenchmark.workloadVolumeFingerprint,
+    warmupCount: cleanBenchmark.warmupCount,
+    measurementCount: cleanBenchmark.measurementCount,
+  };
+  const base = {
+    profile,
+    baselinePath: baselinePath ?? null,
+    actual,
+  };
+  if (role !== "reference") {
+    return {
+      ...base,
+      status: "not-applicable",
+      comparableTo: "not comparable to E1 for current role",
+      accepted: null,
+      mismatches: [],
+    };
+  }
+  if (acceptedReference === null || acceptedReference === undefined) {
+    return {
+      ...base,
+      status: "not-measured",
+      comparableTo: "not measured: accepted E1 baseline is unavailable",
+      accepted: null,
+      mismatches: [],
+    };
+  }
+
+  const expected = {
+    epoch: acceptedReference.epoch,
+    contractVersion: acceptedReference.contractVersion,
+    playerCount: acceptedReference.playerCount,
+    workloadFingerprint: acceptedReference.workloadFingerprint,
+    workloadVolumeFingerprint: acceptedReference.workloadVolumeFingerprint,
+    warmupCount: acceptedReference.warmupCount,
+    measurementCount: acceptedReference.measurementCount,
+  };
+  const mismatches = Object.keys(expected)
+    .filter((field) => actual[field] !== expected[field])
+    .map((field) => ({
+      field,
+      expected: expected[field],
+      actual: actual[field],
+    }));
+  if (mismatches.length > 0) {
+    return {
+      ...base,
+      status: "incomparable",
+      comparableTo: `incomparable to ADR-0001/E1: ${mismatches
+        .map(({ field }) => field)
+        .join(", ")} differs`,
+      accepted: expected,
+      mismatches,
+    };
+  }
+  return {
+    ...base,
+    status: "comparable",
+    comparableTo: "ADR-0001/E1",
+    accepted: expected,
+    mismatches: [],
+  };
 }
 
 export function summarizeCpuProfile(profile) {
@@ -229,6 +357,31 @@ function createWorkloadOptions(args) {
     ...(args.commit === undefined
       ? {}
       : { dependencies: { commit: args.commit } }),
+  };
+}
+
+function readAcceptedAnalyzerE1Reference(profile) {
+  const baselinePath = path.resolve(
+    process.cwd(),
+    E1_BASELINE_RELATIVE_PATH
+  );
+  if (!existsSync(baselinePath)) {
+    return { baselinePath, reference: null };
+  }
+  const baseline = readJson(baselinePath);
+  const entry = Array.isArray(baseline.entries)
+    ? baseline.entries.find(
+        (candidate) =>
+          candidate?.benchmark === "analyzer" &&
+          candidate?.id === `analyzer:${profile}`
+      )
+    : undefined;
+  return {
+    baselinePath,
+    reference:
+      entry !== undefined && typeof entry.reference === "object"
+        ? entry.reference
+        : null,
   };
 }
 
@@ -416,36 +569,50 @@ function runCommand(args) {
     ),
   };
   writeJson(artifacts.cleanBenchmark, cleanBenchmark);
+  const persistedCleanBenchmark = readJson(artifacts.cleanBenchmark);
+  assertAnalyzerCleanBenchmarkArtifactConsistency(
+    cleanBenchmark,
+    persistedCleanBenchmark
+  );
   writeJson(artifacts.diagnosticRun, diagnosticRun);
   if (cpuRun.workerRun !== null) writeJson(artifacts.cpuRun, cpuRun.workerRun);
 
   const fingerprints = [
-    cleanBenchmark.resultFingerprint,
+    persistedCleanBenchmark.resultFingerprint,
     diagnosticRun.resultFingerprint,
     cpuRun.workerRun?.resultFingerprint,
   ].filter((value) => typeof value === "string");
   assertAnalyzerDiagnosticDeterminism(fingerprints);
-  const resultFingerprint = cleanBenchmark.resultFingerprint;
+  const resultFingerprint = persistedCleanBenchmark.resultFingerprint;
+  const e1Baseline = readAcceptedAnalyzerE1Reference(args.profile);
+  const e1Comparison = assessAnalyzerE1Comparability({
+    cleanBenchmark: persistedCleanBenchmark,
+    role: args.role,
+    profile: args.profile,
+    acceptedReference: e1Baseline.reference,
+    baselinePath: e1Baseline.baselinePath,
+  });
   const summary = {
     schemaVersion: "analyzer-diagnostic-report-v1",
     benchmark: "analyzer",
     diagnostic: "analyzer-workload",
     profile: args.profile,
     role: args.role,
-    environment: cleanBenchmark.environment,
+    environment: persistedCleanBenchmark.environment,
     workload: diagnosticRun.workload,
     workloadFingerprint: diagnosticRun.workloadFingerprint,
     workloadVolumeFingerprint: diagnosticRun.workloadVolumeFingerprint,
     resultFingerprint,
+    e1Comparison,
     cleanBenchmark: {
       timingClass: "clean-benchmark",
-      comparableTo:
-        args.role === "reference"
-          ? "ADR-0001/E1"
-          : "not comparable to E1 for current role",
-      timings: cleanBenchmark.timings,
-      metrics: cleanBenchmark.metrics,
-      resultFingerprint: cleanBenchmark.resultFingerprint,
+      comparableTo: e1Comparison.comparableTo,
+      timings: persistedCleanBenchmark.timings,
+      metrics: persistedCleanBenchmark.metrics,
+      resultFingerprint: persistedCleanBenchmark.resultFingerprint,
+      workloadFingerprint: persistedCleanBenchmark.workloadFingerprint,
+      workloadVolumeFingerprint:
+        persistedCleanBenchmark.workloadVolumeFingerprint,
       artifact: artifacts.cleanBenchmark,
     },
     diagnosticRun: {
@@ -474,7 +641,7 @@ function runCommand(args) {
     determinism: {
       allMatch: true,
       fingerprints: {
-        cleanBenchmark: cleanBenchmark.resultFingerprint,
+        cleanBenchmark: persistedCleanBenchmark.resultFingerprint,
         diagnosticRun: diagnosticRun.resultFingerprint,
         cpuProfile: cpuRun.workerRun?.resultFingerprint ?? null,
       },
@@ -482,6 +649,10 @@ function runCommand(args) {
     artifacts,
   };
   writeJson(artifacts.summary, summary);
+  assertAnalyzerDiagnosticReportConsistency(
+    readJson(artifacts.summary),
+    persistedCleanBenchmark
+  );
   writeFileSync(
     path.join(artifactDir, "summary.txt"),
     `${formatAnalyzerDiagnosticsSummary(summary)}\n`,

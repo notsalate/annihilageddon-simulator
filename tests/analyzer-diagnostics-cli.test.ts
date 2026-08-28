@@ -18,6 +18,25 @@ interface DiagnosticsCliModule {
     }[];
   };
   assertAnalyzerDiagnosticDeterminism(fingerprints: readonly string[]): void;
+  assertAnalyzerCleanBenchmarkArtifactConsistency(
+    cleanBenchmark: Record<string, unknown>,
+    persistedArtifact: Record<string, unknown>
+  ): void;
+  assessAnalyzerE1Comparability(options: {
+    cleanBenchmark: Record<string, unknown>;
+    role: "reference" | "current";
+    profile: "light" | "typical" | "heavy";
+    acceptedReference: Record<string, unknown> | null;
+    baselinePath: string;
+  }): {
+    status: string;
+    comparableTo: string;
+    mismatches: readonly {
+      field: string;
+      expected: unknown;
+      actual: unknown;
+    }[];
+  };
 }
 
 const cliModule: unknown = await import(
@@ -37,7 +56,12 @@ function isDiagnosticsCliModule(
     "summarizeCpuProfile" in value &&
     typeof value.summarizeCpuProfile === "function" &&
     "assertAnalyzerDiagnosticDeterminism" in value &&
-    typeof value.assertAnalyzerDiagnosticDeterminism === "function"
+    typeof value.assertAnalyzerDiagnosticDeterminism === "function" &&
+    "assertAnalyzerCleanBenchmarkArtifactConsistency" in value &&
+    typeof value.assertAnalyzerCleanBenchmarkArtifactConsistency ===
+      "function" &&
+    "assessAnalyzerE1Comparability" in value &&
+    typeof value.assessAnalyzerE1Comparability === "function"
   );
 }
 
@@ -155,5 +179,77 @@ test("analyzer diagnostics reject mismatched result fingerprints", () => {
   assert.throws(
     () => cliModule.assertAnalyzerDiagnosticDeterminism(["same", "different"]),
     /different result fingerprints/
+  );
+});
+
+test("analyzer diagnostics reject an E1 workload fingerprint mismatch", () => {
+  const result = cliModule.assessAnalyzerE1Comparability({
+    cleanBenchmark: {
+      workload: {
+        epoch: "E1",
+        contractVersion: "analyzer-benchmark-v1",
+        playerCount: 2,
+      },
+      workloadFingerprint: "current-workload",
+      workloadVolumeFingerprint: "current-volume",
+      warmupCount: 1,
+      measurementCount: 3,
+    },
+    role: "reference",
+    profile: "light",
+    acceptedReference: {
+      epoch: "E1",
+      contractVersion: "analyzer-benchmark-v1",
+      playerCount: 2,
+      workloadFingerprint: "accepted-workload",
+      workloadVolumeFingerprint: "accepted-volume",
+      warmupCount: 1,
+      measurementCount: 3,
+    },
+    baselinePath: "docs/benchmarks/performance-epoch-e1.json",
+  });
+
+  assert.equal(result.status, "incomparable");
+  assert.match(result.comparableTo, /incomparable/iu);
+  assert.deepEqual(
+    result.mismatches.map(({ field }) => field),
+    ["workloadFingerprint", "workloadVolumeFingerprint"]
+  );
+});
+
+test("analyzer diagnostics verify clean timing after artifact serialization", () => {
+  const cleanBenchmark = {
+    timings: {
+      totalMs: 5_003,
+      dataLoadMs: 10,
+      preparationMs: 1,
+      enumerationMs: 4_000,
+      rankingMs: 900,
+      resultPreparationMs: 92,
+    },
+    workloadFingerprint: "workload",
+    workloadVolumeFingerprint: "volume",
+    resultFingerprint: "result",
+  };
+  const persistedArtifact = {
+    timings: { ...cleanBenchmark.timings },
+    workloadFingerprint: cleanBenchmark.workloadFingerprint,
+    workloadVolumeFingerprint: cleanBenchmark.workloadVolumeFingerprint,
+    resultFingerprint: cleanBenchmark.resultFingerprint,
+  };
+
+  assert.doesNotThrow(() =>
+    cliModule.assertAnalyzerCleanBenchmarkArtifactConsistency(
+      cleanBenchmark,
+      persistedArtifact
+    )
+  );
+  assert.throws(
+    () =>
+      cliModule.assertAnalyzerCleanBenchmarkArtifactConsistency(
+        cleanBenchmark,
+        { ...persistedArtifact, timings: { ...persistedArtifact.timings, totalMs: 5_683 } }
+      ),
+    /changed totalMs/
   );
 });

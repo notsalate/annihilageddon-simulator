@@ -35,6 +35,7 @@ export interface AnalyzerDiagnosticOperationCounters {
 export interface AnalyzerDiagnosticEvaluationPolicyCounters {
   invocations: number;
   timeMs: number;
+  operations: AnalyzerDiagnosticOperationCounters;
   isolatedStateClones: number;
   isolatedPathCopyOperations: number;
   isolatedPathItemsCopied: number;
@@ -84,6 +85,7 @@ function createEvaluationPolicyCounters(): AnalyzerDiagnosticEvaluationPolicyCou
   return {
     invocations: 0,
     timeMs: 0,
+    operations: createOperationCounters(),
     isolatedStateClones: 0,
     isolatedPathCopyOperations: 0,
     isolatedPathItemsCopied: 0,
@@ -182,7 +184,10 @@ export class AnalyzerDiagnosticsSession {
       phases: {
         enumeration: { ...this.counters.phases.enumeration },
         ranking: { ...this.counters.phases.ranking },
-        evaluationPolicy: { ...this.counters.phases.evaluationPolicy },
+        evaluationPolicy: {
+          ...this.counters.phases.evaluationPolicy,
+          operations: { ...this.counters.phases.evaluationPolicy.operations },
+        },
       },
     };
   }
@@ -207,11 +212,10 @@ export class AnalyzerDiagnosticsSession {
     this.counters.total[name] += amount;
     if (this.currentPhase === "enumeration") {
       this.counters.phases.enumeration[name] += amount;
-    } else if (
-      this.currentPhase === "ranking" ||
-      this.currentPhase === "evaluationPolicy"
-    ) {
+    } else if (this.currentPhase === "ranking") {
       this.counters.phases.ranking[name] += amount;
+    } else if (this.currentPhase === "evaluationPolicy") {
+      this.counters.phases.evaluationPolicy.operations[name] += amount;
     }
   }
 }

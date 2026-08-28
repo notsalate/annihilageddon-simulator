@@ -115,8 +115,9 @@ test("diagnostic session counts enumeration and ranking work without changing li
   assert.equal(report.total.intermediateStates, 0);
   assert.equal(report.total.terminalStates, 1);
   assert.equal(report.phases.enumeration.terminalStates, 1);
-  assert.equal(report.phases.ranking.gameStateClones, 2);
+  assert.equal(report.phases.ranking.gameStateClones, 0);
   assert.equal(report.phases.evaluationPolicy.invocations, 1);
+  assert.equal(report.phases.evaluationPolicy.operations.gameStateClones, 2);
   assert.ok(report.total.pathItemsCopied > 0);
   assert.ok(report.total.eventLogEntriesCopied > 0);
 });
