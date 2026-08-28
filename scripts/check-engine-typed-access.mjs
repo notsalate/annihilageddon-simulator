@@ -146,6 +146,7 @@ const publicEntrypoints = new Set([
   "src/cli/report-card-runtime-clusters.ts",
   "src/cli/report-import-completeness.ts",
   "src/cli/report-runtime-coverage.ts",
+  "src/cli/check-runtime-semantic-completion.ts",
   "src/cli/run-best-move-analysis.ts",
   "src/cli/run-benchmark.ts",
   "src/cli/run-mass-simulation.ts",

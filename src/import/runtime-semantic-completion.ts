@@ -20,6 +20,7 @@ export type RuntimeSemanticObjectStatus = "complete" | "blocked";
 export type RuntimeSemanticCompletionBlockerCode =
   | "duplicate-canonical-id"
   | "duplicate-runtime-id"
+  | "duplicate-coverage-plan-id"
   | "missing-canonical-draft"
   | "runtime-without-canonical-draft"
   | "missing-runtime-definition"
@@ -101,6 +102,25 @@ export interface RuntimeSemanticCompletionReport {
   inventory: RuntimeCoverageInventory;
 }
 
+export function assertRuntimeSemanticCompletionPass(
+  report: Pick<RuntimeSemanticCompletionReport, "status" | "blockers">
+): void {
+  if (report.status === "PASS") {
+    return;
+  }
+
+  const blockerLines =
+    report.blockers.length === 0
+      ? "- unknown blocker"
+      : report.blockers
+          .map(
+            (blocker) =>
+              `- [${blocker.code}]${blocker.id === undefined ? "" : ` ${blocker.id}:`} ${blocker.message}`
+          )
+          .join("\n");
+  throw new Error(`Runtime semantic completion gate blocked:\n${blockerLines}`);
+}
+
 type CanonicalRecord = RuntimeCoverageRawRecord & { id: string };
 type RuntimeRecord = RuntimeCoverageRawRecord & { id: string };
 
@@ -176,6 +196,13 @@ export function createRuntimeSemanticCompletionReport(
 
   addDuplicateBlockers(canonicalRecords, "duplicate-canonical-id", blockers);
   addDuplicateBlockers(runtimeRecords, "duplicate-runtime-id", blockers);
+  for (const id of snapshot.crossSourcePlan.duplicateIds) {
+    blockers.push({
+      code: "duplicate-coverage-plan-id",
+      message: `cross-source coverage plan ID ${id} appears more than once`,
+      id,
+    });
+  }
 
   for (const [id, records] of groupById(canonicalRecords)) {
     if (records.length !== 1) {

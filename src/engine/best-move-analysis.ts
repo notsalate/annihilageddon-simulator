@@ -16,6 +16,216 @@ export interface AnalysisLimits {
   maxTurnLines: number;
 }
 
+export type AnalyzerDiagnosticPhase = "enumeration" | "ranking";
+
+export interface AnalyzerDiagnosticOperationCounters {
+  actionApplications: number;
+  gameStateClones: number;
+  choicePathReplays: number;
+  choicePathExpansions: number;
+  choiceBranchesGenerated: number;
+  intermediateStates: number;
+  terminalStates: number;
+  pathCopyOperations: number;
+  pathItemsCopied: number;
+  eventLogCopyOperations: number;
+  eventLogEntriesCopied: number;
+}
+
+export interface AnalyzerDiagnosticEvaluationPolicyCounters {
+  invocations: number;
+  timeMs: number;
+  operations: AnalyzerDiagnosticOperationCounters;
+  isolatedStateClones: number;
+  isolatedPathCopyOperations: number;
+  isolatedPathItemsCopied: number;
+  isolatedEventLogCopyOperations: number;
+  isolatedEventLogEntriesCopied: number;
+}
+
+export interface AnalyzerDiagnosticCounters {
+  total: AnalyzerDiagnosticOperationCounters;
+  phases: {
+    enumeration: AnalyzerDiagnosticOperationCounters;
+    ranking: AnalyzerDiagnosticOperationCounters;
+    evaluationPolicy: AnalyzerDiagnosticEvaluationPolicyCounters;
+  };
+}
+
+export interface AnalyzerDiagnosticsOptions {
+  now?: () => number;
+}
+
+type MutableAnalyzerDiagnosticCounters = {
+  total: AnalyzerDiagnosticOperationCounters;
+  phases: {
+    enumeration: AnalyzerDiagnosticOperationCounters;
+    ranking: AnalyzerDiagnosticOperationCounters;
+    evaluationPolicy: AnalyzerDiagnosticEvaluationPolicyCounters;
+  };
+};
+
+function createOperationCounters(): AnalyzerDiagnosticOperationCounters {
+  return {
+    actionApplications: 0,
+    gameStateClones: 0,
+    choicePathReplays: 0,
+    choicePathExpansions: 0,
+    choiceBranchesGenerated: 0,
+    intermediateStates: 0,
+    terminalStates: 0,
+    pathCopyOperations: 0,
+    pathItemsCopied: 0,
+    eventLogCopyOperations: 0,
+    eventLogEntriesCopied: 0,
+  };
+}
+
+function createEvaluationPolicyCounters(): AnalyzerDiagnosticEvaluationPolicyCounters {
+  return {
+    invocations: 0,
+    timeMs: 0,
+    operations: createOperationCounters(),
+    isolatedStateClones: 0,
+    isolatedPathCopyOperations: 0,
+    isolatedPathItemsCopied: 0,
+    isolatedEventLogCopyOperations: 0,
+    isolatedEventLogEntriesCopied: 0,
+  };
+}
+
+/** Collects optional Analyzer work counters without changing the analysis contract. */
+export class AnalyzerDiagnosticsSession {
+  private readonly counters: MutableAnalyzerDiagnosticCounters = {
+    total: createOperationCounters(),
+    phases: {
+      enumeration: createOperationCounters(),
+      ranking: createOperationCounters(),
+      evaluationPolicy: createEvaluationPolicyCounters(),
+    },
+  };
+
+  private readonly now: () => number;
+  private currentPhase: AnalyzerDiagnosticPhase | "evaluationPolicy" | undefined;
+
+  constructor(options: AnalyzerDiagnosticsOptions = {}) {
+    this.now = options.now ?? Date.now;
+  }
+
+  withPhase<T>(
+    phase: AnalyzerDiagnosticPhase,
+    operation: () => T
+  ): T {
+    const previousPhase = this.currentPhase;
+    this.currentPhase = phase;
+    try {
+      return operation();
+    } finally {
+      this.currentPhase = previousPhase;
+    }
+  }
+
+  measureEvaluationPolicy<T>(operation: () => T): T {
+    const previousPhase = this.currentPhase;
+    this.currentPhase = "evaluationPolicy";
+    const startedAt = this.now();
+    this.counters.phases.evaluationPolicy.invocations += 1;
+    try {
+      return operation();
+    } finally {
+      this.counters.phases.evaluationPolicy.timeMs += Math.max(
+        0,
+        this.now() - startedAt
+      );
+      this.currentPhase = previousPhase;
+    }
+  }
+
+  recordActionApplication(isChoicePathReplay: boolean): void {
+    this.incrementOperation("actionApplications");
+    if (isChoicePathReplay) {
+      this.incrementOperation("choicePathReplays");
+    }
+  }
+
+  recordChoicePathExpansion(branchCount: number): void {
+    this.incrementOperation("choicePathExpansions");
+    this.incrementOperation("choiceBranchesGenerated", branchCount);
+  }
+
+  recordGameStateClone(
+    source: Readonly<GameState>,
+    isolatedForEvaluationPolicy = false
+  ): void {
+    this.incrementOperation("gameStateClones");
+    this.recordEventLogCopy(source.eventLog.length, isolatedForEvaluationPolicy);
+    if (isolatedForEvaluationPolicy) {
+      this.counters.phases.evaluationPolicy.isolatedStateClones += 1;
+    }
+  }
+
+  recordStateResult(terminal: boolean): void {
+    this.incrementOperation(terminal ? "terminalStates" : "intermediateStates");
+  }
+
+  recordPathCopy(itemsCopied: number, isolatedForEvaluationPolicy = false): void {
+    this.incrementOperation("pathCopyOperations");
+    this.incrementOperation("pathItemsCopied", itemsCopied);
+    if (isolatedForEvaluationPolicy) {
+      this.counters.phases.evaluationPolicy.isolatedPathCopyOperations += 1;
+      this.counters.phases.evaluationPolicy.isolatedPathItemsCopied +=
+        itemsCopied;
+    }
+  }
+
+  snapshot(): AnalyzerDiagnosticCounters {
+    return {
+      total: { ...this.counters.total },
+      phases: {
+        enumeration: { ...this.counters.phases.enumeration },
+        ranking: { ...this.counters.phases.ranking },
+        evaluationPolicy: {
+          ...this.counters.phases.evaluationPolicy,
+          operations: { ...this.counters.phases.evaluationPolicy.operations },
+        },
+      },
+    };
+  }
+
+  private recordEventLogCopy(
+    entriesCopied: number,
+    isolatedForEvaluationPolicy: boolean
+  ): void {
+    this.incrementOperation("eventLogCopyOperations");
+    this.incrementOperation("eventLogEntriesCopied", entriesCopied);
+    if (isolatedForEvaluationPolicy) {
+      this.counters.phases.evaluationPolicy.isolatedEventLogCopyOperations += 1;
+      this.counters.phases.evaluationPolicy.isolatedEventLogEntriesCopied +=
+        entriesCopied;
+    }
+  }
+
+  private incrementOperation(
+    name: keyof AnalyzerDiagnosticOperationCounters,
+    amount = 1
+  ): void {
+    this.counters.total[name] += amount;
+    if (this.currentPhase === "enumeration") {
+      this.counters.phases.enumeration[name] += amount;
+    } else if (this.currentPhase === "ranking") {
+      this.counters.phases.ranking[name] += amount;
+    } else if (this.currentPhase === "evaluationPolicy") {
+      this.counters.phases.evaluationPolicy.operations[name] += amount;
+    }
+  }
+}
+
+export function createAnalyzerDiagnostics(
+  options: AnalyzerDiagnosticsOptions = {}
+): AnalyzerDiagnosticsSession {
+  return new AnalyzerDiagnosticsSession(options);
+}
+
 export interface AnalysisChoiceSelection {
   requestIndex: number;
   effectId: EffectChoiceRequest["effectId"];
@@ -120,7 +330,28 @@ export function enumerateActionBranches(
   source: GameState,
   action: LegalAction,
   legalActionIndex: number,
-  limits: AnalysisLimits = DEFAULT_ANALYSIS_LIMITS
+  limits: AnalysisLimits = DEFAULT_ANALYSIS_LIMITS,
+  diagnostics?: AnalyzerDiagnosticsSession
+): CompletedActionBranch[] {
+  const operation = () =>
+    enumerateActionBranchesCore(
+      source,
+      action,
+      legalActionIndex,
+      limits,
+      diagnostics
+    );
+  return diagnostics === undefined
+    ? operation()
+    : diagnostics.withPhase("enumeration", operation);
+}
+
+function enumerateActionBranchesCore(
+  source: GameState,
+  action: LegalAction,
+  legalActionIndex: number,
+  limits: AnalysisLimits,
+  diagnostics: AnalyzerDiagnosticsSession | undefined
 ): CompletedActionBranch[] {
   validateLimits(limits);
   const pending: ChoicePrefix[] = [{ selections: [] }];
@@ -129,7 +360,8 @@ export function enumerateActionBranches(
 
   while (pending.length > 0) {
     const prefix = pending.pop()!;
-    const fork = forkGameState(source);
+    diagnostics?.recordActionApplication(prefix.selections.length > 0);
+    const fork = forkAnalyzerState(source, diagnostics);
     const consumed = new Set<number>();
     let requestIndex = 0;
     fork.effectChoiceStrategy = (request) => {
@@ -189,6 +421,9 @@ export function enumerateActionBranches(
         result,
         resultingState: fork,
       });
+      diagnostics?.recordStateResult(
+        action.type === "endTurn" || result.gameEndReason !== undefined
+      );
     } catch (error) {
       const choiceExpansion =
         error instanceof ActionExecutionError &&
@@ -234,6 +469,10 @@ export function enumerateActionBranches(
           ],
         })
       );
+      diagnostics?.recordChoicePathExpansion(next.length);
+      diagnostics?.recordPathCopy(
+        next.reduce((total, candidate) => total + candidate.selections.length, 0)
+      );
       generatedBranches += next.length;
       if (generatedBranches > limits.maxBranchesPerAction) {
         throw new AnalysisLimitError(
@@ -250,174 +489,227 @@ export function enumerateActionBranches(
 
 export function enumerateImmediateActionBranches(
   state: GameState,
-  limits: AnalysisLimits = DEFAULT_ANALYSIS_LIMITS
+  limits: AnalysisLimits = DEFAULT_ANALYSIS_LIMITS,
+  diagnostics?: AnalyzerDiagnosticsSession
 ): CompletedActionBranch[] {
   return listLegalActions(state).flatMap((action, legalActionIndex) =>
-    enumerateActionBranches(state, action, legalActionIndex, limits)
+    enumerateActionBranches(
+      state,
+      action,
+      legalActionIndex,
+      limits,
+      diagnostics
+    )
   );
 }
 
 /** Enumerates the current player's legal histories until endTurn or game end. */
 export function enumerateTurnLines(
   source: GameState,
-  limits: AnalysisLimits = DEFAULT_ANALYSIS_LIMITS
+  limits: AnalysisLimits = DEFAULT_ANALYSIS_LIMITS,
+  diagnostics?: AnalyzerDiagnosticsSession
 ): AnalyzedTurnLine[] {
-  validateLimits(limits);
-  const initialPlayerId = source.activePlayerId;
-  const initialTurnNumber = source.turn.number;
-  const lines: AnalyzedTurnLine[] = [];
+  const operation = (): AnalyzedTurnLine[] => {
+    validateLimits(limits);
+    const initialPlayerId = source.activePlayerId;
+    const initialTurnNumber = source.turn.number;
+    const lines: AnalyzedTurnLine[] = [];
 
-  const visit = (
-    state: GameState,
-    steps: AnalysisActionStep[],
-    visitedEffectiveTypeSelections: ReadonlySet<string> | undefined
-  ): void => {
-    for (const [legalActionIndex, action] of listLegalActions(
-      state
-    ).entries()) {
-      if (steps.length + 1 > limits.maxActionsPerLine) {
-        throw new AnalysisLimitError(
-          `Analysis action limit exceeded ${limits.maxActionsPerLine} after ${steps.length} steps; last action ${describeAction(action)}`
-        );
-      }
-      const branches = enumerateActionBranches(
-        state,
-        action,
-        legalActionIndex,
-        limits
-      );
-      for (const branch of branches) {
-        const nextSteps = [
-          ...steps,
-          {
-            legalActionIndex: branch.legalActionIndex,
-            action: branch.legalAction,
-            selectedChoices: branch.selectedChoices,
-          },
-        ];
-        if (
-          action.type !== "endTurn" &&
-          (branch.resultingState.activePlayerId !== initialPlayerId ||
-            branch.resultingState.turn.number !== initialTurnNumber)
-        ) {
-          throw new AnalysisError(
-            `Analysis engine contract violated after action ${describeAction(action)}: active player or turn changed`
+    const visit = (
+      state: GameState,
+      steps: AnalysisActionStep[],
+      visitedEffectiveTypeSelections: ReadonlySet<string> | undefined
+    ): void => {
+      for (const [legalActionIndex, action] of listLegalActions(
+        state
+      ).entries()) {
+        if (steps.length + 1 > limits.maxActionsPerLine) {
+          throw new AnalysisLimitError(
+            `Analysis action limit exceeded ${limits.maxActionsPerLine} after ${steps.length} steps; last action ${describeAction(action)}`
           );
         }
-        const terminalReason =
-          action.type === "endTurn"
-            ? "endTurn"
-            : branch.result.gameEndReason !== undefined
-              ? "gameEnd"
-              : undefined;
-        if (terminalReason !== undefined) {
-          if (lines.length >= limits.maxTurnLines) {
-            throw new AnalysisLimitError(
-              `Analysis turn-line limit exceeded ${limits.maxTurnLines}; last action ${describeAction(action)}`
+        const branches = enumerateActionBranches(
+          state,
+          action,
+          legalActionIndex,
+          limits,
+          diagnostics
+        );
+        for (const branch of branches) {
+          const nextSteps = [
+            ...steps,
+            {
+              legalActionIndex: branch.legalActionIndex,
+              action: branch.legalAction,
+              selectedChoices: branch.selectedChoices,
+            },
+          ];
+          diagnostics?.recordPathCopy(nextSteps.length);
+          if (
+            action.type !== "endTurn" &&
+            (branch.resultingState.activePlayerId !== initialPlayerId ||
+              branch.resultingState.turn.number !== initialTurnNumber)
+          ) {
+            throw new AnalysisError(
+              `Analysis engine contract violated after action ${describeAction(action)}: active player or turn changed`
             );
           }
-          lines.push({
-            initialPlayerId,
-            initialTurnNumber,
-            steps: nextSteps,
-            terminalReason,
-            ...(branch.result.gameEndReason === undefined
-              ? {}
-              : { gameEndReason: branch.result.gameEndReason }),
-            ...(branch.result.gameEndReasons === undefined
-              ? {}
-              : { gameEndReasons: [...branch.result.gameEndReasons] }),
-            ...(branch.result.winnerPlayerId === undefined
-              ? {}
-              : { winnerPlayerId: branch.result.winnerPlayerId }),
-            terminalState: branch.resultingState,
-          });
-          continue;
-        }
+          const terminalReason =
+            action.type === "endTurn"
+              ? "endTurn"
+              : branch.result.gameEndReason !== undefined
+                ? "gameEnd"
+                : undefined;
+          if (terminalReason !== undefined) {
+            if (lines.length >= limits.maxTurnLines) {
+              throw new AnalysisLimitError(
+                `Analysis turn-line limit exceeded ${limits.maxTurnLines}; last action ${describeAction(action)}`
+              );
+            }
+            lines.push({
+              initialPlayerId,
+              initialTurnNumber,
+              steps: nextSteps,
+              terminalReason,
+              ...(branch.result.gameEndReason === undefined
+                ? {}
+                : { gameEndReason: branch.result.gameEndReason }),
+              ...(branch.result.gameEndReasons === undefined
+                ? {}
+                : { gameEndReasons: [...branch.result.gameEndReasons] }),
+              ...(branch.result.winnerPlayerId === undefined
+                ? {}
+                : { winnerPlayerId: branch.result.winnerPlayerId }),
+              terminalState: branch.resultingState,
+            });
+            continue;
+          }
 
-        // Effective-type changes are the only reversible non-terminal action;
-        // track only their contiguous run so cycle protection stays cheap.
-        if (action.type !== "setCardEffectiveType") {
-          visit(branch.resultingState, nextSteps, undefined);
-          continue;
-        }
+          // Effective-type changes are the only reversible non-terminal action;
+          // track only their contiguous run so cycle protection stays cheap.
+          if (action.type !== "setCardEffectiveType") {
+            visit(branch.resultingState, nextSteps, undefined);
+            continue;
+          }
 
-        const currentSelectionKey = getEffectiveTypeSelectionKey(state);
-        const nextSelectionKey = getEffectiveTypeSelectionKey(
-          branch.resultingState
-        );
-        const currentPathSelections =
-          visitedEffectiveTypeSelections ?? new Set([currentSelectionKey]);
-        if (currentPathSelections.has(nextSelectionKey)) {
-          continue;
+          const currentSelectionKey = getEffectiveTypeSelectionKey(state);
+          const nextSelectionKey = getEffectiveTypeSelectionKey(
+            branch.resultingState
+          );
+          const currentPathSelections =
+            visitedEffectiveTypeSelections ?? new Set([currentSelectionKey]);
+          if (currentPathSelections.has(nextSelectionKey)) {
+            continue;
+          }
+          const nextPathSelections = new Set(currentPathSelections);
+          nextPathSelections.add(nextSelectionKey);
+          visit(branch.resultingState, nextSteps, nextPathSelections);
         }
-        const nextPathSelections = new Set(currentPathSelections);
-        nextPathSelections.add(nextSelectionKey);
-        visit(branch.resultingState, nextSteps, nextPathSelections);
       }
-    }
-  };
+    };
 
-  visit(source, [], undefined);
-  return lines;
+    visit(source, [], undefined);
+    return lines;
+  };
+  return diagnostics === undefined
+    ? operation()
+    : diagnostics.withPhase("enumeration", operation);
 }
 
 export function rankTurnLines(
   sourceState: GameState,
   lines: readonly AnalyzedTurnLine[],
   policy: TurnLineEvaluationPolicy,
-  perspectivePlayerId: GameState["activePlayerId"]
+  perspectivePlayerId: GameState["activePlayerId"],
+  diagnostics?: AnalyzerDiagnosticsSession
 ): RankedTurnLinesResult {
-  const ranked = lines.map((line, enumerationIndex) => {
-    const evaluation = policy.evaluate({
-      sourceState: forkGameState(sourceState),
-      line: cloneAnalyzedTurnLine(line),
-      perspectivePlayerId,
-    });
-    assertFiniteEvaluation(
-      policy.id,
-      enumerationIndex,
-      evaluation.score,
-      "score"
-    );
-    if (evaluation.components !== undefined) {
-      for (const [name, value] of Object.entries(evaluation.components)) {
-        assertFiniteEvaluation(
-          policy.id,
-          enumerationIndex,
-          value,
-          `component ${name}`
-        );
+  const operation = (): RankedTurnLinesResult => {
+    const ranked = lines.map((line, enumerationIndex) => {
+      const evaluate = () =>
+        policy.evaluate({
+          sourceState: forkAnalyzerState(
+            sourceState,
+            diagnostics,
+            true
+          ),
+          line: cloneAnalyzedTurnLine(line, diagnostics),
+          perspectivePlayerId,
+        });
+      const evaluation =
+        diagnostics === undefined
+          ? evaluate()
+          : diagnostics.measureEvaluationPolicy(evaluate);
+      assertFiniteEvaluation(
+        policy.id,
+        enumerationIndex,
+        evaluation.score,
+        "score"
+      );
+      if (evaluation.components !== undefined) {
+        for (const [name, value] of Object.entries(evaluation.components)) {
+          assertFiniteEvaluation(
+            policy.id,
+            enumerationIndex,
+            value,
+            `component ${name}`
+          );
+        }
       }
-    }
-    return {
-      line,
-      enumerationIndex,
-      score: evaluation.score,
-      ...(evaluation.components === undefined
-        ? {}
-        : { components: evaluation.components }),
-      rank: 0,
-    } satisfies RankedTurnLine;
-  });
+      return {
+        line,
+        enumerationIndex,
+        score: evaluation.score,
+        ...(evaluation.components === undefined
+          ? {}
+          : { components: evaluation.components }),
+        rank: 0,
+      } satisfies RankedTurnLine;
+    });
 
-  ranked.sort(
-    (left, right) =>
-      right.score - left.score || left.enumerationIndex - right.enumerationIndex
-  );
-  const rankedLines = ranked.map((entry, index) => ({
-    ...entry,
-    rank: index + 1,
-  }));
-  return {
-    criterionId: policy.id,
-    perspectivePlayerId,
-    rankedLines,
-    best: rankedLines[0],
+    ranked.sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.enumerationIndex - right.enumerationIndex
+    );
+    const rankedLines = ranked.map((entry, index) => ({
+      ...entry,
+      rank: index + 1,
+    }));
+    return {
+      criterionId: policy.id,
+      perspectivePlayerId,
+      rankedLines,
+      best: rankedLines[0],
+    };
   };
+  return diagnostics === undefined
+    ? operation()
+    : diagnostics.withPhase("ranking", operation);
 }
 
-function cloneAnalyzedTurnLine(line: AnalyzedTurnLine): AnalyzedTurnLine {
+function forkAnalyzerState(
+  source: GameState,
+  diagnostics: AnalyzerDiagnosticsSession | undefined,
+  isolatedForEvaluationPolicy = false
+): GameState {
+  diagnostics?.recordGameStateClone(
+    source,
+    isolatedForEvaluationPolicy
+  );
+  return forkGameState(source);
+}
+
+function cloneAnalyzedTurnLine(
+  line: AnalyzedTurnLine,
+  diagnostics?: AnalyzerDiagnosticsSession
+): AnalyzedTurnLine {
+  diagnostics?.recordPathCopy(
+    line.steps.reduce(
+      (total, step) => total + 1 + step.selectedChoices.length,
+      0
+    ),
+    true
+  );
   return {
     initialPlayerId: line.initialPlayerId,
     initialTurnNumber: line.initialTurnNumber,
@@ -436,7 +728,7 @@ function cloneAnalyzedTurnLine(line: AnalyzedTurnLine): AnalyzedTurnLine {
     ...(line.winnerPlayerId === undefined
       ? {}
       : { winnerPlayerId: line.winnerPlayerId }),
-    terminalState: forkGameState(line.terminalState),
+    terminalState: forkAnalyzerState(line.terminalState, diagnostics, true),
   };
 }
 

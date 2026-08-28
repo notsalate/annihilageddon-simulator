@@ -40,6 +40,31 @@ Reference seed фиксирован по профилям:
 
 Сложность профиля определяется seed-набором и лимитами поиска, а не измеренным временем. Analyzer работает только с двумя игроками и критерием `victory-points`; оптимизация алгоритма и изменение критерия в этот контракт не входят.
 
+### Диагностический запуск Analyzer
+
+Для одного профиля запусти:
+
+```powershell
+npm run diagnose:analyzer -- --profile light --format human
+npm run diagnose:analyzer -- --profile heavy --format json --artifacts .scratch/tmp/analyzer-heavy
+```
+
+По умолчанию команда использует `reference` workload; сопоставимым с E1 он считается только при совпадении протокола и fingerprints с принятым baseline, точного environment fingerprint и одного общего непустого `comparisonPairId`. При несовпадении отчёт указывает `incomparable`; исторический или одиночный артефакт без физической пары получает `not-measured` и остаётся диагностическим. Для отдельного анализа текущего набора данных укажи `--role current`; его clean timing остаётся диагностическим и с E1 не сравнивается.
+
+Команда последовательно выполняет три независимых запуска одного workload:
+
+1. `clean benchmark` — обычный benchmark с одним прогревом и тремя измерениями;
+2. `diagnostic run` — один запуск с фактическими счётчиками Analyzer;
+3. `CPU profile` — отдельный запуск Node с `--cpu-prof`, без счётчиков.
+
+Счётчики показывают применения действий, клоны `GameState`, повторные исполнения для choice paths, промежуточные и терминальные состояния, а также число операций и элементов, скопированных в paths и event log. В `phases` отдельно видны непересекающиеся enumeration, ranking и evaluation policy; операции и время вызовов policy находятся в `evaluationPolicy`, а клоны и копирование изоляции дополнительно отмечены там же.
+
+Только время и fingerprint `clean benchmark` для `reference` workload, чьи protocol, fingerprints, exact environment и общий `comparisonPairId` совпадают с принятым E1 baseline, сопоставимы с контрактом `ADR-0001` и E1. Если fingerprint или environment отличается, отчёт явно помечает запуск как `incomparable`; если физическая пара отсутствует, он указывает `not-measured`; для `current` workload clean timing не сравнивается с E1. Инструментированное и профилируемое время помечены `diagnostic-only`: они не меняют baseline, performance epoch или CI gate. Все три запуска обязаны дать один `resultFingerprint`.
+
+Артефакты (`clean-benchmark.json`, `diagnostic-run.json`, `cpu-run.json`, `*.cpuprofile`, `summary.json` и `summary.txt`) сохраняются в `.scratch/tmp/analyzer-diagnostics/` либо в каталог из `--artifacts`; они не являются исходными данными проекта. Путь к итоговой JSON-сводке можно задать через `--output`.
+
+CPU-сводка группирует sampled self-time по JavaScript (включая скомпилированный TypeScript), V8, native operations и GC, а также показывает первые hotspots с URL, строкой и столбцом generated JavaScript. Это помогает выбрать кандидата для оптимизации; CPU profile не является allocation profile и не заменяет heap snapshot.
+
 ## Сравнение PR и калибровка
 
 Запуск benchmark с `--output path.json` сохраняет нормализованный машинный артефакт. Для PR нужны одинаковые артефакты `base`, `head` и повторного `head`:

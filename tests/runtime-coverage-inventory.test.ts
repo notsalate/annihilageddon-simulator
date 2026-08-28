@@ -7,10 +7,14 @@ import test from "node:test";
 import {
   createRuntimeCoverageInventory,
   formatRuntimeCoverageInventoryMarkdown,
+  assertRuntimeSemanticCompletionPass,
   createRuntimeSemanticCompletionReport,
   formatRuntimeSemanticCompletionMarkdown,
 } from "../src/index.js";
-import { evaluateCrossSourceCoverage } from "../src/import/cross-source-runtime-coverage.js";
+import {
+  evaluateCrossSourceCoverage,
+  readCrossSourceCoveragePlan,
+} from "../src/import/cross-source-runtime-coverage.js";
 import type { CrossSourceCoveragePlanEntry } from "../src/import/cross-source-runtime-coverage.js";
 
 test("runtime coverage inventory reports drafts, runtime, composition, legacy v0 facts, and review-needed status", () => {
@@ -991,7 +995,37 @@ test("runtime coverage blocks every missing runtime definition from composition"
   ]);
 });
 
-test("repository cross-source registry assigns every wizard property and DWT to a primary cluster", () => {
+test("cross-source coverage plan preserves duplicate IDs for the audit", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-cross-source-duplicate-plan-")
+  );
+  const cardId = "esw2_dbg__main_001";
+  const first = createSemanticEvidencePlanEntry({
+    id: cardId,
+    testName: "first mapping",
+    testSubject: { kind: "binding", name: "cardId" },
+  });
+  const second = {
+    ...first,
+    primaryMechanicCluster: "second-mapping",
+  };
+
+  writeJson(rootDir, "config/runtime-coverage/cross-source-mechanics.json", {
+    schemaVersion: 2,
+    entries: [first],
+  });
+  writeJson(rootDir, "config/runtime-coverage/card-semantic-evidence.json", {
+    schemaVersion: 2,
+    entries: [second],
+  });
+
+  const plan = readCrossSourceCoveragePlan(rootDir);
+
+  assert.deepEqual([...plan.duplicateIds], [cardId]);
+  assert.equal(plan.get(cardId)?.primaryMechanicCluster, "scoring");
+});
+
+test("repository cross-source registry assigns every card, wizard property, and DWT to a primary cluster", () => {
   const report = createRuntimeCoverageInventory(process.cwd());
   const wizardProperties = report.items.filter(
     (item) => item.objectKind === "wizardProperty"
@@ -1013,8 +1047,9 @@ test("repository cross-source registry assigns every wizard property and DWT to 
       (item) => item.primaryMechanicCluster !== undefined
     )
   );
-  assert.equal(report.crossSourceSummary.blocked, 134);
-  assert.equal(report.crossSourceSummary.crossSourceComplete, 39);
+  assert.equal(report.crossSourceSummary.cardComplete, 134);
+  assert.equal(report.crossSourceSummary.blocked, 0);
+  assert.equal(report.crossSourceSummary.crossSourceComplete, 173);
   assert.ok(firstDeadWizardToken);
   assert.ok(wizardProperty004);
   assert.equal(wizardProperty004.crossSourceStatus, "crossSourceComplete");
@@ -1475,17 +1510,312 @@ test("semantic evidence keeps a required capability open when its evidence mappi
   );
 });
 
+test("semantic evidence rejects an explicitly empty required capability list", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-empty-capabilities-")
+  );
+  const id = "esw2_dbg__main_001";
+  const testName = "runtime seam is present without declared capabilities";
+
+  writeText(
+    rootDir,
+    "tests/semantic-evidence.test.ts",
+    `test("${testName}", () => {
+  const cardId = "${id}";
+  const state = initializeGame({ rootDir });
+  applyAction(state, { type: "playCard", cardId });
+  assert.equal(state.players[0]?.chips, 1);
+});
+`
+  );
+
+  const planEntry = createSemanticEvidencePlanEntry({
+    id,
+    testName,
+    testSubject: { kind: "binding", name: "cardId" },
+  });
+  planEntry.requiredCapabilities = [];
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "card",
+    sourceGroupOrTokenKind: "main",
+    draft: createSemanticEvidenceDraft(id),
+    runtime: createSemanticEvidenceRuntime(id),
+    compositionMembership: [{ role: "mainDeck", entryKind: "card", count: 1 }],
+    planEntry,
+  });
+
+  assert.equal(evaluation.status, "blocked");
+  assert.ok(
+    evaluation.blockerCodes.some(
+      (blocker) =>
+        blocker.code === "required-capability-uncovered" &&
+        blocker.message.includes("at least one required capability")
+    )
+  );
+});
+
+test("semantic evidence rejects a card ID that is only mentioned outside a runtime seam", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-unrelated-test-")
+  );
+  const id = "esw2_dbg__main_001";
+  const testName = "mentions a card without executing it";
+
+  writeText(
+    rootDir,
+    "tests/unrelated-runtime.test.ts",
+    `test("${testName}", () => {
+  const cardId = "${id}";
+  assert.equal(cardId, "${id}");
+});
+`
+  );
+
+  const planEntry = createSemanticEvidencePlanEntry({
+    id,
+    testName,
+    testSubject: { kind: "binding", name: "cardId" },
+  });
+  const testRef = planEntry.semanticMappings[0]?.testRefs[0];
+  assert.ok(testRef);
+  testRef.file = "tests/unrelated-runtime.test.ts";
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "card",
+    sourceGroupOrTokenKind: "main",
+    draft: createSemanticEvidenceDraft(id),
+    runtime: createSemanticEvidenceRuntime(id),
+    compositionMembership: [{ role: "mainDeck", entryKind: "card", count: 1 }],
+    planEntry,
+  });
+
+  assert.equal(evaluation.status, "blocked");
+  assert.ok(
+    evaluation.blockerCodes.some(
+      (blocker) => blocker.code === "execution-seam-missing"
+    )
+  );
+});
+
+test("semantic evidence rejects a card smoke test without mapped runtime assertions", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-card-smoke-test-")
+  );
+  const id = "esw2_dbg__main_001";
+  const testName = "card only reports a successful action";
+
+  writeText(
+    rootDir,
+    "tests/semantic-evidence.test.ts",
+    `test("${testName}", () => {
+  const cardId = "${id}";
+  const state = initializeGame({ rootDir });
+  applyAction(state, { type: "playCard", cardId });
+  assert.equal(true, true);
+});
+`
+  );
+
+  const planEntry = createSemanticEvidencePlanEntry({
+    id,
+    testName,
+    testSubject: { kind: "binding", name: "cardId" },
+  });
+  const testRef = planEntry.semanticMappings[0]?.testRefs[0];
+  assert.ok(testRef?.observation);
+  testRef.observation.target = "assertCardRuntimeEvidence";
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "card",
+    sourceGroupOrTokenKind: "main",
+    draft: createSemanticEvidenceDraft(id),
+    runtime: createSemanticEvidenceRuntime(id),
+    compositionMembership: [{ role: "mainDeck", entryKind: "card", count: 1 }],
+    planEntry,
+  });
+
+  assert.equal(evaluation.status, "blocked");
+  assert.ok(
+    evaluation.blockerCodes.some(
+      (blocker) => blocker.code === "observation-assertion-missing"
+    )
+  );
+});
+
+test("card semantic evidence accepts an assertion helper with a snapshot argument", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-card-snapshot-")
+  );
+  const id = "esw2_dbg__main_001";
+  const testName = "card uses the public play seam with a snapshot";
+
+  writeText(
+    rootDir,
+    "tests/card-runtime-semantic-evidence.test.ts",
+    `function runCardSemanticEvidence(definitionId: string, seed: number): void {
+  const scenario = createGameScenario({ rootDir, seed });
+  const card = givenRuntimeCard(scenario, {
+    definitionId,
+    instanceId: definitionId,
+  });
+  const beforePlaySnapshot = snapshotExternallyObservableState(scenario, card);
+  const result = applyAction(scenario.state, {
+    type: "playCard",
+    cardInstanceId: card.instanceId,
+  });
+  assert.equal(result.ok, true);
+  assertCardRuntimeEvidence(scenario, card, definitionId, beforePlaySnapshot);
+}
+
+function assertCardRuntimeEvidence(
+  scenario: GameScenario,
+  card: CardInstance,
+  definitionId: string,
+  beforePlaySnapshot: string
+): void {
+  const definition = scenario.state.cardDefinitions.get(definitionId);
+  assert.ok(definition);
+  const planEntry = readCrossSourceCoveragePlan(rootDir).get(definitionId);
+  assert.ok(planEntry?.semanticMappings.length);
+  for (const mapping of planEntry.semanticMappings) {
+    assert.ok(mapping.runtimeRefs.length > 0);
+  }
+  assert.ok(scenario.state.eventLog.length > 0);
+  assertCardRuntimeExecutionEvidence(
+    scenario,
+    card,
+    definition,
+    beforePlaySnapshot
+  );
+}
+
+test("${testName}", () => {
+  runCardSemanticEvidence("${id}", 1);
+});
+`
+  );
+
+  const planEntry = createSemanticEvidencePlanEntry({
+    id,
+    testName,
+    testSubject: { kind: "binding", name: "definitionId" },
+  });
+  const testRef = planEntry.semanticMappings[0]?.testRefs[0];
+  assert.ok(testRef?.observation);
+  testRef.file = "tests/card-runtime-semantic-evidence.test.ts";
+  testRef.observation.target = "assertCardRuntimeEvidence";
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "card",
+    sourceGroupOrTokenKind: "main",
+    draft: {
+      cardId: id,
+      visible: { textRu: "Получи чипсину." },
+      composition: { quantity: 1 },
+    },
+    runtime: createSemanticEvidenceRuntime(id),
+    compositionMembership: [{ role: "mainDeck", entryKind: "card", count: 1 }],
+    planEntry,
+  });
+
+  assert.equal(
+    evaluation.status,
+    "crossSourceComplete",
+    evaluation.blockers.join("; ")
+  );
+  assert.deepEqual(evaluation.blockers, []);
+});
+
+test("card semantic evidence rejects an uninvoked dynamic case", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-uninvoked-case-")
+  );
+  const id = "esw2_dbg__main_001";
+  const testName = "card case is registered without invoking its runner";
+
+  writeText(
+    rootDir,
+    "tests/card-runtime-semantic-evidence.test.ts",
+    `const cardSemanticEvidenceCases = [
+  {
+    definitionId: "${id}",
+    seed: 1,
+    testName: "${testName}",
+  },
+] as const;
+
+function runCardSemanticEvidence(definitionId: string, seed: number): void {
+  void definitionId;
+  void seed;
+}
+
+for (const cardCase of cardSemanticEvidenceCases) {
+  test(cardCase.testName, () => {});
+}
+`
+  );
+
+  const planEntry = createSemanticEvidencePlanEntry({
+    id,
+    testName,
+    testSubject: { kind: "binding", name: "definitionId" },
+  });
+  const testRef = planEntry.semanticMappings[0]?.testRefs[0];
+  assert.ok(testRef?.observation);
+  testRef.file = "tests/card-runtime-semantic-evidence.test.ts";
+  testRef.observation.target = "assertCardRuntimeEvidence";
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "card",
+    sourceGroupOrTokenKind: "main",
+    draft: createSemanticEvidenceDraft(id),
+    runtime: createSemanticEvidenceRuntime(id),
+    compositionMembership: [{ role: "mainDeck", entryKind: "card", count: 1 }],
+    planEntry,
+  });
+
+  assert.equal(evaluation.status, "blocked");
+  assert.ok(
+    evaluation.blockerCodes.some(
+      (blocker) => blocker.code === "focused-test-not-found"
+    )
+  );
+});
+
+test("repository card semantic evidence covers every canonical card", () => {
+  const report = createRuntimeSemanticCompletionReport(process.cwd());
+  const cards = report.items.filter((item) => item.objectKind === "card");
+
+  assert.equal(cards.length, 134);
+  assert.equal(report.byKind.card.semanticComplete, 134);
+  assert.deepEqual(
+    cards.filter((item) => !item.semanticComplete).map((item) => item.id),
+    []
+  );
+});
+
 test("runtime semantic completion audit separates structural and semantic status", () => {
   const report = createRuntimeSemanticCompletionReport(process.cwd());
 
   assert.equal(report.structuralStatus, "complete");
-  assert.equal(report.status, "BLOCKED");
-  assert.equal(report.semanticStatus, "blocked");
+  assert.equal(report.status, "PASS");
+  assert.equal(report.semanticStatus, "complete");
   assert.deepEqual(report.byKind.card, {
     expected: 134,
     actual: 134,
     structuralComplete: 134,
-    semanticComplete: 0,
+    semanticComplete: 134,
   });
   assert.deepEqual(report.byKind.wizardProperty, {
     expected: 10,
@@ -1517,11 +1847,7 @@ test("runtime semantic completion audit separates structural and semantic status
         item.focusedTestEvidence.length > 0 && item.lifecycleClasses.length > 0
     )
   );
-  assert.ok(
-    report.blockers.some(
-      (blocker) => blocker.code === "false-semantic-evidence"
-    )
-  );
+  assert.equal(report.semanticStatus, "complete");
   const transferDwt = dwtItems.find((item) =>
     item.id.endsWith("dead_wizard_token_010")
   );
@@ -1530,11 +1856,6 @@ test("runtime semantic completion audit separates structural and semantic status
     item.id.endsWith("dead_wizard_token_026")
   );
   assert.ok(preRespawnDwt?.lifecycleClasses.includes("pre-respawn"));
-  assert.ok(
-    report.blockers.some(
-      (blocker) => blocker.code === "false-semantic-evidence"
-    )
-  );
   assert.deepEqual(
     dwtItems
       .filter((item) =>
@@ -1564,12 +1885,35 @@ test("runtime semantic completion audit separates structural and semantic status
     ),
     false
   );
+  assert.deepEqual(report.blockers, []);
 
   const markdown = formatRuntimeSemanticCompletionMarkdown(report);
   assert.match(markdown, /Structural status/);
   assert.match(markdown, /Semantic status/);
   assert.match(markdown, /production physical DWT: 30/);
   assert.match(markdown, /semanticComplete: \d+ /);
+});
+
+test("runtime semantic completion gate accepts a passing audit", () => {
+  assert.doesNotThrow(() =>
+    assertRuntimeSemanticCompletionPass({ status: "PASS", blockers: [] })
+  );
+});
+
+test("runtime semantic completion gate rejects a blocked audit", () => {
+  assert.throws(
+    () =>
+      assertRuntimeSemanticCompletionPass({
+        status: "BLOCKED",
+        blockers: [
+          {
+            code: "false-semantic-evidence",
+            message: "fixture semantic evidence is false",
+          },
+        ],
+      }),
+    /Runtime semantic completion gate blocked[\s\S]*fixture semantic evidence is false/
+  );
 });
 
 function createCardDraft(

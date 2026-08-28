@@ -103,6 +103,14 @@ export interface CrossSourceCoveragePlanEntry {
   evidenceMode?: "legacy" | "typed" | undefined;
 }
 
+/** The merged coverage plan preserves duplicate IDs so the audit can block them. */
+export class CrossSourceCoveragePlan extends Map<
+  string,
+  CrossSourceCoveragePlanEntry
+> {
+  readonly duplicateIds = new Set<string>();
+}
+
 export interface CrossSourceSemanticMapping {
   capabilityId?: CrossSourceCapabilityId | undefined;
   evidenceId?: CrossSourceEvidenceId | undefined;
@@ -161,25 +169,34 @@ export interface CrossSourceCoverageEvaluation {
   blockerCodes: CrossSourceBlocker[];
 }
 
-const planPath = "config/runtime-coverage/cross-source-mechanics.json";
+const planPaths = [
+  "config/runtime-coverage/cross-source-mechanics.json",
+  "config/runtime-coverage/card-semantic-evidence.json",
+] as const;
 
 export function readCrossSourceCoveragePlan(
   rootDir: string
-): Map<string, CrossSourceCoveragePlanEntry> {
-  const absolutePath = path.resolve(rootDir, planPath);
-  if (!existsSync(absolutePath)) {
-    return new Map();
-  }
+): CrossSourceCoveragePlan {
+  const plan = new CrossSourceCoveragePlan();
 
-  const parsed = getRecord(JSON.parse(readFileSync(absolutePath, "utf8")));
-  const typedEvidence = (getNumber(parsed["schemaVersion"]) ?? 0) >= 2;
-  const entries = Array.isArray(parsed["entries"]) ? parsed["entries"] : [];
-  const plan = new Map<string, CrossSourceCoveragePlanEntry>();
+  for (const planPath of planPaths) {
+    const absolutePath = path.resolve(rootDir, planPath);
+    if (!existsSync(absolutePath)) {
+      continue;
+    }
 
-  for (const entry of entries) {
-    const decoded = decodePlanEntry(entry, typedEvidence);
-    if (decoded !== undefined) {
-      plan.set(decoded.id, decoded);
+    const parsed = getRecord(JSON.parse(readFileSync(absolutePath, "utf8")));
+    const typedEvidence = (getNumber(parsed["schemaVersion"]) ?? 0) >= 2;
+    const entries = Array.isArray(parsed["entries"]) ? parsed["entries"] : [];
+    for (const entry of entries) {
+      const decoded = decodePlanEntry(entry, typedEvidence);
+      if (decoded !== undefined) {
+        if (plan.has(decoded.id)) {
+          plan.duplicateIds.add(decoded.id);
+          continue;
+        }
+        plan.set(decoded.id, decoded);
+      }
     }
   }
 
@@ -263,7 +280,7 @@ export function evaluateCrossSourceCoverage(input: {
   }
 
   validateComposition(input, blockers);
-  validateRuntime(input, blockers);
+  validateRuntime(input, blockers, planEntry);
 
   const blockerCodes = [
     ...typedBlockers,
@@ -486,11 +503,13 @@ function validateTypedPlanEntry(
   blockers: CrossSourceBlocker[]
 ): void {
   const requiredCapabilities = planEntry.requiredCapabilities;
-  if (requiredCapabilities === undefined) {
+  if (requiredCapabilities === undefined || requiredCapabilities.length === 0) {
     blockers.push(
       createBlocker(
         "required-capability-uncovered",
-        "typed evidence plan does not declare required capabilities"
+        requiredCapabilities === undefined
+          ? "typed evidence plan does not declare required capabilities"
+          : "typed evidence plan must declare at least one required capability"
       )
     );
   }
@@ -744,7 +763,13 @@ function validateTypedTestReference(
     return false;
   }
   const text = readFileSync(absolutePath, "utf8");
-  const testBody = findNamedTestBody(text, testRef.name);
+  const namedTestBody = findNamedTestBody(text, testRef.name);
+  const cardSemanticEvidenceCase =
+    execution.objectKind === "card" && execution.seam === "applyAction"
+      ? findCardSemanticEvidenceCase(text, id, testRef.name)
+      : false;
+  const testBody =
+    namedTestBody ?? (cardSemanticEvidenceCase ? text : undefined);
   if (testBody === undefined) {
     addBlocker(
       "focused-test-not-found",
@@ -753,7 +778,18 @@ function validateTypedTestReference(
     return false;
   }
 
-  const calls = findRuntimeSeamCalls(testBody).filter(
+  const observationTarget = observation.target.trim();
+  const cardEvidenceWrapper =
+    execution.objectKind === "card" &&
+    execution.seam === "applyAction" &&
+    observation.kind === "assertion" &&
+    observationTarget === "assertCardRuntimeEvidence"
+      ? namedTestBody === undefined && cardSemanticEvidenceCase
+        ? findNamedFunctionBody(text, "runCardSemanticEvidence")
+        : findCardSemanticEvidenceWrapper(text, testBody, id)
+      : undefined;
+  const evidenceBody = cardEvidenceWrapper ?? testBody;
+  const calls = findRuntimeSeamCalls(evidenceBody).filter(
     (call) => call.name === execution.seam
   );
   if (calls.length === 0) {
@@ -765,7 +801,9 @@ function validateTypedTestReference(
   }
 
   const subjectUsed = calls.some((call) =>
-    executionSubjectIsUsed(testBody, id, call, execution.subject)
+    cardEvidenceWrapper !== undefined
+      ? hasParameterizedRuntimeCardInstanceReference(evidenceBody, call)
+      : executionSubjectIsUsed(testBody, id, call, execution.subject)
   );
   if (!subjectUsed) {
     addBlocker(
@@ -779,9 +817,11 @@ function validateTypedTestReference(
     execution.seam === "applyAction" &&
     !calls.some(
       (call) =>
-        executionSubjectIsUsed(testBody, id, call, execution.subject) &&
+        (cardEvidenceWrapper !== undefined
+          ? hasParameterizedRuntimeCardInstanceReference(evidenceBody, call)
+          : executionSubjectIsUsed(testBody, id, call, execution.subject)) &&
         isApplyActionPathAllowed(
-          testBody,
+          evidenceBody,
           call,
           execution.objectKind,
           (code, message) => addBlocker(code, message)
@@ -791,7 +831,6 @@ function validateTypedTestReference(
     valid = false;
   }
 
-  const observationTarget = observation.target.trim();
   if (observation.kind !== "assertion" || observationTarget === "") {
     addBlocker(
       "observation-evidence-missing",
@@ -799,20 +838,259 @@ function validateTypedTestReference(
     );
     return false;
   }
-  const normalizedTarget = normalizeSourceSnippet(observationTarget);
-  const observed = calls.some((call) =>
-    getAssertionsAfter(testBody, call.end).some((assertion) =>
-      normalizeSourceSnippet(assertion).includes(normalizedTarget)
-    )
-  );
+  const observed =
+    cardEvidenceWrapper !== undefined
+      ? hasCardSemanticEvidenceObservation(
+          text,
+          evidenceBody,
+          calls,
+          observationTarget,
+          (code, message) => addBlocker(code, message)
+        )
+      : (() => {
+          const normalizedTarget = normalizeSourceSnippet(observationTarget);
+          return calls.some((call) =>
+            getAssertionsAfter(testBody, call.end).some((assertion) =>
+              normalizeSourceSnippet(assertion).includes(normalizedTarget)
+            )
+          );
+        })();
   if (!observed) {
-    addBlocker(
-      "observation-assertion-missing",
-      `focused test ${testRef.file}#${testRef.name} does not assert ${observationTarget} after ${execution.seam}`
-    );
+    if (cardEvidenceWrapper === undefined) {
+      addBlocker(
+        "observation-assertion-missing",
+        `focused test ${testRef.file}#${testRef.name} does not assert ${observationTarget} after ${execution.seam}`
+      );
+    }
     valid = false;
   }
   return valid;
+}
+
+function findCardSemanticEvidenceWrapper(
+  sourceText: string,
+  testBody: string,
+  id: string
+): string | undefined {
+  const invocation = new RegExp(
+    `\\brunCardSemanticEvidence\\s*\\(\\s*(["'])${escapeRegExp(id)}\\1\\s*,`,
+    "u"
+  );
+  if (!invocation.test(testBody)) {
+    return undefined;
+  }
+  return findNamedFunctionBody(sourceText, "runCardSemanticEvidence");
+}
+
+function findCardSemanticEvidenceCase(
+  sourceText: string,
+  id: string,
+  testName: string
+): boolean {
+  const casesDeclaration =
+    /\b(?:const|let)\s+cardSemanticEvidenceCases\s*=\s*\[/u.exec(sourceText);
+  if (casesDeclaration === null) {
+    return false;
+  }
+  const casesBodyStart = sourceText.indexOf(
+    "[",
+    casesDeclaration.index + casesDeclaration[0].length - 1
+  );
+  if (casesBodyStart < 0) {
+    return false;
+  }
+  const casesBody = findBalancedDelimitedBody(
+    sourceText,
+    casesBodyStart,
+    "[",
+    "]"
+  );
+  if (casesBody === undefined) {
+    return false;
+  }
+  const declaredCase = new RegExp(
+    `\\{\\s*definitionId\\s*:\\s*(["'])${escapeRegExp(id)}\\1\\s*,\\s*seed\\s*:\\s*\\d+\\s*,\\s*testName\\s*:\\s*(["'])${escapeRegExp(testName)}\\2\\s*,?\\s*\\}`,
+    "u"
+  ).test(casesBody);
+  return declaredCase && hasCardSemanticEvidenceTestInvocation(sourceText);
+}
+
+function hasCardSemanticEvidenceTestInvocation(sourceText: string): boolean {
+  const loopStart =
+    /\bfor\s*\(\s*const\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s+of\s+cardSemanticEvidenceCases\s*\)\s*\{/u.exec(
+      sourceText
+    );
+  if (loopStart === null || loopStart[1] === undefined) {
+    return false;
+  }
+  const loopBodyStart = sourceText.indexOf(
+    "{",
+    loopStart.index + loopStart[0].length - 1
+  );
+  if (loopBodyStart < 0) {
+    return false;
+  }
+  const loopBody = findBalancedBlockBody(sourceText, loopBodyStart);
+  if (loopBody === undefined) {
+    return false;
+  }
+
+  const caseBinding = escapeRegExp(loopStart[1]);
+  const testStart = new RegExp(
+    `\\btest\\s*\\(\\s*${caseBinding}\\.testName\\s*,`,
+    "u"
+  ).exec(loopBody);
+  if (testStart === null) {
+    return false;
+  }
+  const testOpening = loopBody.indexOf("(", testStart.index);
+  const testEnd =
+    testOpening < 0 ? undefined : findInvocationEnd(loopBody, testOpening);
+  const callbackArrow = loopBody.indexOf(
+    "=>",
+    testStart.index + testStart[0].length
+  );
+  if (testEnd === undefined || callbackArrow < 0 || callbackArrow >= testEnd) {
+    return false;
+  }
+
+  let callbackStart = callbackArrow + 2;
+  while (/\s/u.test(loopBody[callbackStart] ?? "")) {
+    callbackStart += 1;
+  }
+  const callbackBody =
+    loopBody[callbackStart] === "{"
+      ? findBalancedBlockBody(loopBody, callbackStart)
+      : loopBody.slice(callbackStart, testEnd);
+  return (
+    callbackBody !== undefined &&
+    new RegExp(
+      `\\brunCardSemanticEvidence\\s*\\(\\s*${caseBinding}\\.definitionId\\s*,\\s*${caseBinding}\\.seed\\s*\\)`,
+      "u"
+    ).test(callbackBody)
+  );
+}
+
+function findBalancedDelimitedBody(
+  text: string,
+  openingIndex: number,
+  opening: string,
+  closing: string
+): string | undefined {
+  let depth = 0;
+  for (let index = openingIndex; index < text.length; index += 1) {
+    if (text[index] === opening) depth += 1;
+    if (text[index] === closing) depth -= 1;
+    if (depth === 0) {
+      return text.slice(openingIndex + 1, index);
+    }
+  }
+  return undefined;
+}
+
+function hasParameterizedRuntimeCardInstanceReference(
+  testBody: string,
+  call: RuntimeSeamCall
+): boolean {
+  return hasRuntimeCardInstanceReference(testBody, undefined, call);
+}
+
+function hasRuntimeCardInstanceReference(
+  testBody: string,
+  id: string | undefined,
+  call: RuntimeSeamCall
+): boolean {
+  const binding = findGivenRuntimeCardBinding(testBody, id);
+  if (binding === undefined) {
+    return false;
+  }
+  return new RegExp(
+    "\\b" + escapeRegExp(binding) + "\\.instanceId\\b",
+    "u"
+  ).test(call.invocation);
+}
+
+function findGivenRuntimeCardBinding(
+  testBody: string,
+  id?: string
+): string | undefined {
+  const setup = new RegExp(
+    "\\b(?:const|let)\\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*=\\s*givenRuntimeCard\\s*\\([\\s\\S]*?\\)",
+    "u"
+  ).exec(testBody);
+  if (setup?.[1] === undefined || !/\bdefinitionId\b/u.test(setup[0])) {
+    return undefined;
+  }
+  if (
+    id !== undefined &&
+    !new RegExp(
+      "\\bdefinitionId\\s*:\\s*([\"'])" + escapeRegExp(id) + "\\1",
+      "u"
+    ).test(setup[0])
+  ) {
+    return undefined;
+  }
+  return setup[1];
+}
+
+function hasCardSemanticEvidenceObservation(
+  sourceText: string,
+  wrapperBody: string,
+  calls: RuntimeSeamCall[],
+  observationTarget: string,
+  addBlocker: (code: CrossSourceBlockerCode, message: string) => void
+): boolean {
+  const applyAction = calls.find((call) => call.name === "applyAction");
+  const observesAfterAction =
+    applyAction !== undefined &&
+    new RegExp(
+      `\\b${escapeRegExp(observationTarget)}\\s*\\(\\s*scenario\\s*,\\s*card\\s*,\\s*definitionId(?:\\s*,\\s*[^)]*)?\\s*\\)`,
+      "u"
+    ).test(wrapperBody.slice(applyAction.end));
+  if (!observesAfterAction) {
+    addBlocker(
+      "observation-assertion-missing",
+      `card semantic evidence helper does not call ${observationTarget} after applyAction`
+    );
+    return false;
+  }
+
+  const helperBody = findNamedFunctionBody(
+    sourceText,
+    "assertCardRuntimeEvidence"
+  );
+  const mappingHelperBody = findNamedFunctionBody(
+    sourceText,
+    "assertCardRuntimeMappingEvidence"
+  );
+  const mappingHelperHasMappingAssertions =
+    mappingHelperBody !== undefined &&
+    /\bruntimeRefs\b/u.test(mappingHelperBody) &&
+    /\bassertCardRuntimeReference\s*\(/u.test(mappingHelperBody) &&
+    /\bobservedEffectKeys\b/u.test(mappingHelperBody) &&
+    /\bassertMappedAddPowerOutcome\s*\(/u.test(mappingHelperBody) &&
+    /\bassert\.(?:ok|equal|deepEqual)\b/u.test(mappingHelperBody);
+  const helperHasDirectMappingAssertions =
+    helperBody !== undefined && /\bruntimeRefs\b/u.test(helperBody);
+  const helperHasMappingAssertions =
+    helperBody !== undefined &&
+    /\bassertCardRuntimeExecutionEvidence\s*\(/u.test(helperBody) &&
+    /\breadCrossSourceCoveragePlan\s*\(/u.test(helperBody) &&
+    /\bsemanticMappings\b/u.test(helperBody) &&
+    /\bcardDefinitions\b/u.test(helperBody) &&
+    /\beventLog\b/u.test(helperBody) &&
+    /\bassert\.(?:ok|equal|deepEqual)\b/u.test(helperBody) &&
+    (helperHasDirectMappingAssertions ||
+      (/\bassertCardRuntimeMappingEvidence\s*\(/u.test(helperBody) &&
+        mappingHelperHasMappingAssertions));
+  if (!helperHasMappingAssertions) {
+    addBlocker(
+      "observation-assertion-missing",
+      "card semantic evidence helper does not assert mapped runtime references"
+    );
+    return false;
+  }
+  return true;
 }
 
 function executionSubjectIsUsed(
@@ -831,6 +1109,8 @@ function executionSubjectIsUsed(
         ) ||
         (call.name === "scoreGame" &&
           hasScoredDefinitionReference(testBody.slice(0, call.end), id)) ||
+        (call.name === "applyAction" &&
+          hasRuntimeCardInstanceReference(testBody, id, call)) ||
         ((call.name === "initializeGame" ||
           call.name === "createGameScenario") &&
           hasKnownRuntimeDefinitionReference(testBody, id)))
@@ -1124,7 +1404,16 @@ function validateComposition(
     (total, membership) => total + (membership.count ?? 0),
     0
   );
-  if (actualQuantity !== expectedQuantity) {
+  const starterTemplateUsesPerPlayerQuantity =
+    input.sourceGroupOrTokenKind === "starter" &&
+    appropriateMemberships.some(
+      (membership) => membership.role === "starterDeckTemplate"
+    ) &&
+    expectedQuantity === actualQuantity * 5;
+  if (
+    actualQuantity !== expectedQuantity &&
+    !starterTemplateUsesPerPlayerQuantity
+  ) {
     blockers.add(
       `composition quantity ${actualQuantity} does not match canonical quantity ${expectedQuantity}`
     );
@@ -1137,7 +1426,8 @@ function validateRuntime(
     objectKind: CrossSourceObjectKind;
     runtime: Record<string, unknown> | undefined;
   },
-  blockers: Set<string>
+  blockers: Set<string>,
+  planEntry: CrossSourceCoveragePlanEntry
 ): void {
   if (input.runtime === undefined) {
     blockers.add("missing runtime mapping");
@@ -1160,7 +1450,9 @@ function validateRuntime(
 
   const effects = getRawRuntimeEffects(input.runtime);
   if (effects.length === 0) {
-    blockers.add("runtime has no effects");
+    if (!isExplicitNoEffectCard(input.objectKind, planEntry)) {
+      blockers.add("runtime has no effects");
+    }
     return;
   }
   for (const [index, effect] of effects.entries()) {
@@ -1185,6 +1477,24 @@ function validateRuntime(
       }
     }
   }
+}
+
+function isExplicitNoEffectCard(
+  objectKind: CrossSourceObjectKind,
+  planEntry: CrossSourceCoveragePlanEntry
+): boolean {
+  if (objectKind !== "card") {
+    return false;
+  }
+  return planEntry.semanticMappings.some((mapping) =>
+    mapping.runtimeRefs.some(
+      (runtimeRef) =>
+        runtimeRef.kind === "field" &&
+        runtimeRef.path === "engine.effects" &&
+        Array.isArray(runtimeRef.value) &&
+        runtimeRef.value.length === 0
+    )
+  );
 }
 
 function collectDraftSemanticPoints(draft: unknown): CrossSourceDraftPoint[] {
@@ -1472,6 +1782,13 @@ function findNamedTestBody(text: string, name: string): string | undefined {
     return undefined;
   }
   const bodyStart = testStart.index + testStart[0].length - 1;
+  return findBalancedBlockBody(text, bodyStart);
+}
+
+function findBalancedBlockBody(
+  text: string,
+  bodyStart: number
+): string | undefined {
   let depth = 0;
   for (let index = bodyStart; index < text.length; index += 1) {
     if (text[index] === "{") depth += 1;
@@ -1481,6 +1798,24 @@ function findNamedTestBody(text: string, name: string): string | undefined {
     }
   }
   return undefined;
+}
+
+function findNamedFunctionBody(text: string, name: string): string | undefined {
+  const functionStart = new RegExp(
+    `\\bfunction\\s+${escapeRegExp(name)}\\s*\\(`,
+    "u"
+  ).exec(text);
+  if (functionStart === null) {
+    return undefined;
+  }
+  const bodyStart = text.indexOf(
+    "{",
+    functionStart.index + functionStart[0].length
+  );
+  if (bodyStart < 0) {
+    return undefined;
+  }
+  return findBalancedBlockBody(text, bodyStart);
 }
 
 function sameDraftPoint(

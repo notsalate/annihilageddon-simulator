@@ -284,7 +284,9 @@ Runtime JSON должен быть самодостаточным для engine.
 
 `npm run report:runtime-coverage` сохраняет отдельный карточный статус `cardComplete` из `npm run report:card-runtime-clusters` и проверяет final `crossSourceComplete` для карт, свойств волшебников и жетонов дохлого волшебника.
 
-Реестр `config/runtime-coverage/cross-source-mechanics.json` для каждого объекта задаёт primary mechanic cluster, стабильные `capability:*` и `evidence:*` IDs, точные ссылки на canonical draft points, runtime effects и именованные focused tests. Typed evidence дополнительно фиксирует публичный execution seam, source kind объекта и наблюдаемое assertion. Это план и evidence для import tooling, а не executable engine input.
+Реестры `config/runtime-coverage/cross-source-mechanics.json` и `config/runtime-coverage/card-semantic-evidence.json` задают для каждого объекта primary mechanic cluster, стабильные `capability:*` и `evidence:*` IDs, точные ссылки на canonical draft points, runtime effects и именованные focused tests. Import tooling загружает оба typed evidence-реестра, объединяет записи по стабильному ID и блокирует дубли. Typed evidence дополнительно фиксирует публичный execution seam, source kind объекта и наблюдаемое assertion. Это план и evidence для import tooling, а не executable engine input.
+
+`card-semantic-evidence.json` является отдельным реестром semantic evidence для всех runtime-карт. Для каждой mapping-записи его focused test должен провести карту через публичный `applyAction` и наблюдать mapping-specific runtime assertion; одного упоминания ID или проверки `result.ok` недостаточно. При изменении карточного runtime или его evidence оба реестра и соответствующие focused tests должны оставаться согласованными.
 
 `crossSourceComplete` возможен только когда:
 
@@ -293,9 +295,11 @@ Runtime JSON должен быть самодостаточным для engine.
 - runtime definition имеет effects, проходит policy `sourceKind × timing` и включён в правильный stack с canonical количеством и подходящим видом entry (`card` или `token`);
 - runtime reference и test reference существуют.
 
-Пустой `effects: []`, stable ID, не переданный в вызов публичного игрового runtime seam и не связанный с assertion наблюдаемого результата, execution evidence с чужим source kind или недопустимым seam, вызов самого audit вместо игрового seam, несовпавшее количество в stack или любая composition reference без runtime definition всегда оставляют объект в статусе `blocked`. Старый `schemaVersion: 1` разрешён только для fixture-планов во время миграции и не считается typed semantic evidence.
+Пустой `effects: []` разрешён только для canonical card, чей typed coverage plan содержит явную ссылку на `engine.effects` со значением `[]` (сейчас это `starter_002`, `limp_wand` и `legend_009`); для DWT и карт с заявленной игровой логикой он оставляет объект в статусе `blocked`. Stable ID, не переданный в вызов публичного игрового runtime seam и не связанный с assertion наблюдаемого результата, execution evidence с чужим source kind или недопустимым seam, вызов самого audit вместо игрового seam, несовпавшее количество в stack или любая composition reference без runtime definition также всегда оставляют объект в статусе `blocked`. Старый `schemaVersion: 1` разрешён только для fixture-планов во время миграции и не считается typed semantic evidence.
 
 `npm run report:runtime-coverage` остаётся read-only: без `--write` он печатает обычный inventory и отдельный Runtime Semantic Completion Audit. В аудите structural и semantic статусы выводятся раздельно; `PASS` возможен только при закрытом cross-source evidence для каждого объекта. Карта не считается `semanticComplete` только по наличию runtime JSON, упоминанию ID в тесте или `AttackSemantics`: ей также нужны required capabilities, typed evidence, runtime references, canonical draft points, подходящая composition и исполняемый focused test. Поэтому текущий audit может вернуть `BLOCKED` с открытым backlog, не изменяя runtime data.
+
+`npm run check:runtime-semantic-completion` — отдельный blocking gate поверх этого аудита. Он завершается с ненулевым кодом при `BLOCKED`, входит в `npm run check` после сборки и до полного набора тестов, а дорогие simulation/performance benchmarks не запускает. Обычный `report:runtime-coverage` при этом остаётся диагностическим read-only отчётом и может успешно показать незакрытый backlog.
 
 Аудит дополнительно проверяет active pack, точные количества production DWT и применимые lifecycle-классы для всех DWT. Режим `npm run report:runtime-coverage -- --write <path>` по-прежнему записывает только карточный inventory; он не превращает semantic backlog в успешный результат и не является заменой read-only аудиту.
 

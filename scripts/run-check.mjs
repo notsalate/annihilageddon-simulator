@@ -46,9 +46,13 @@ if (
 ) {
   process.exitCode = 1;
 } else {
-  process.exitCode = await runChild([
-    path.join("dist", "tests", "run-tests.js"),
+  const semanticCompletionStatus = await runChild([
+    path.join("dist", "src", "cli", "check-runtime-semantic-completion.js"),
   ]);
+  process.exitCode =
+    semanticCompletionStatus === 0
+      ? await runChild([path.join("dist", "tests", "run-tests.js")])
+      : semanticCompletionStatus;
 }
 
 function runChild(args) {

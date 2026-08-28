@@ -3,8 +3,10 @@ import {
   enumerateTurnLines,
   rankTurnLines,
   type AnalysisLimits,
+  type AnalyzerDiagnosticsSession,
   type AnalyzedTurnLine,
   type RankedTurnLine,
+  type TurnLineEvaluationPolicy,
 } from "./best-move-analysis.js";
 import {
   getBestMovePolicy,
@@ -22,7 +24,7 @@ import {
   type BenchmarkClock,
   type BenchmarkEnvironmentFingerprint,
 } from "./benchmark-support.js";
-import { initializeGame } from "./setup.js";
+import { initializeGame, type GameState } from "./setup.js";
 import { PERFORMANCE_EPOCH } from "./performance-epoch.js";
 import { intakeRuntimeData } from "./runtime-data-intake.js";
 
@@ -130,6 +132,34 @@ export interface AnalyzerBenchmarkMetrics {
   limitKindCounts: Record<string, number>;
 }
 
+export interface AnalyzerSeedFingerprint {
+  seed: number;
+  limitReached: boolean;
+  limitError?: string;
+  lineCount: number;
+  rankedLines: AnalyzerLineFingerprint[];
+}
+
+export interface AnalyzerLineFingerprint {
+  rank: number;
+  score: number;
+  components?: Readonly<Record<string, number>>;
+  terminalReason: AnalyzedTurnLine["terminalReason"];
+  gameEndReason?: string;
+  steps: AnalyzerStepFingerprint[];
+}
+
+export interface AnalyzerStepFingerprint {
+  action: Record<string, string>;
+  selectedChoices: readonly {
+    requestIndex: number;
+    effectId: string;
+    choiceIndex: number;
+    choiceId: string;
+    choiceKind: string;
+  }[];
+}
+
 export interface AnalyzerBenchmarkSample {
   sampleIndex: number;
   timings: AnalyzerBenchmarkTimings;
@@ -173,8 +203,85 @@ export interface RunAnalyzerBenchmarkOptions extends CreateAnalyzerBenchmarkWork
   dependencies?: AnalyzerBenchmarkDependencies;
 }
 
+export interface AnalyzerWorkloadExecutionOptions {
+  workload: AnalyzerBenchmarkWorkload;
+  rootDir: string;
+  clock: BenchmarkClock;
+  intakeDataPack: (rootDir: string, manifestPath: string) => LoadedDataPack;
+  initialize: typeof initializeGame;
+  enumerate: (
+    source: GameState,
+    limits: AnalysisLimits,
+    diagnostics?: AnalyzerDiagnosticsSession
+  ) => AnalyzedTurnLine[];
+  rank: (
+    sourceState: GameState,
+    lines: readonly AnalyzedTurnLine[],
+    policy: TurnLineEvaluationPolicy,
+    perspectivePlayerId: GameState["activePlayerId"],
+    diagnostics?: AnalyzerDiagnosticsSession
+  ) => { readonly rankedLines: readonly RankedTurnLine[] };
+  diagnostics?: AnalyzerDiagnosticsSession;
+  readPeakMemoryBytes?: () => number;
+  warmupPeakMemoryBytes?: number;
+}
+
+export interface AnalyzerWorkloadExecutionResult {
+  timings: AnalyzerBenchmarkTimings;
+  metrics: AnalyzerBenchmarkMetrics;
+  seedResults: readonly AnalyzerSeedFingerprint[];
+  peakMemoryBytes: number;
+  runtimeDataPackId: string;
+  workloadFingerprint: string;
+  workloadVolumeFingerprint: string;
+  resultFingerprint: string;
+}
+
 const MEASUREMENT_COUNT = 3 as const;
 const DEFAULT_MANIFEST_PATH = "data/packs/current-runtime.json";
+
+export function createAnalyzerWorkloadFingerprint(
+  workload: AnalyzerBenchmarkWorkload,
+  runtimeDataPackId: string
+): string {
+  return sha256(
+    JSON.stringify({
+      contractVersion: workload.contractVersion,
+      epoch: workload.epoch,
+      profile: workload.profile,
+      seeds: workload.seeds,
+      playerCount: workload.playerCount,
+      criterionId: workload.criterionId,
+      limits: workload.limits,
+      runtimeDataPackId,
+    })
+  );
+}
+
+export function createAnalyzerWorkloadVolumeFingerprint(
+  workloadFingerprint: string,
+  metrics: AnalyzerBenchmarkMetrics
+): string {
+  return sha256(
+    JSON.stringify({
+      workloadFingerprint,
+      lineCount: metrics.lineCount,
+      rankedLineCount: metrics.rankedLineCount,
+      actionCount: metrics.actionCount,
+      branchCount: metrics.branchCount,
+      choiceBranchCount: metrics.choiceBranchCount,
+      limitsReached: metrics.limitsReached,
+      limitKindCounts: metrics.limitKindCounts,
+    })
+  );
+}
+
+export function createAnalyzerResultFingerprint(
+  workloadFingerprint: string,
+  seedResults: readonly AnalyzerSeedFingerprint[]
+): string {
+  return sha256(JSON.stringify({ workloadFingerprint, seedResults }));
+}
 
 export function createAnalyzerBenchmarkWorkload(
   options: CreateAnalyzerBenchmarkWorkloadOptions = {}
@@ -305,23 +412,27 @@ export function runAnalyzerBenchmark(
   };
 }
 
-function executeAnalyzerTrial(
-  workload: AnalyzerBenchmarkWorkload,
-  rootDir: string,
-  sampleIndex: number,
-  clock: BenchmarkClock,
-  intakeDataPack: NonNullable<AnalyzerBenchmarkDependencies["intakeDataPack"]>,
-  initialize: NonNullable<AnalyzerBenchmarkDependencies["initialize"]>,
-  enumerate: NonNullable<AnalyzerBenchmarkDependencies["enumerate"]>,
-  rank: NonNullable<AnalyzerBenchmarkDependencies["rank"]>,
-  warmupPeakMemoryBytes = 0
-): AnalyzerBenchmarkSample {
+export function executeAnalyzerWorkload(
+  options: AnalyzerWorkloadExecutionOptions
+): AnalyzerWorkloadExecutionResult {
+  const {
+    workload,
+    rootDir,
+    clock,
+    intakeDataPack,
+    initialize,
+    enumerate,
+    rank,
+    diagnostics,
+  } = options;
+  const readPeakMemoryBytes = options.readPeakMemoryBytes ?? (() => 0);
+  const warmupPeakMemoryBytes = options.warmupPeakMemoryBytes ?? 0;
   const startedAt = clock.now();
-  let peakMemoryBytes = clock.readPeakMemoryBytes();
+  let peakMemoryBytes = readPeakMemoryBytes();
   const dataLoadStartedAt = clock.now();
   const dataPack = intakeDataPack(rootDir, workload.dataPackPath);
   const dataLoadMs = elapsedMs(clock, dataLoadStartedAt);
-  peakMemoryBytes = Math.max(peakMemoryBytes, clock.readPeakMemoryBytes());
+  peakMemoryBytes = Math.max(peakMemoryBytes, readPeakMemoryBytes());
 
   let preparationMs = 0;
   let enumerationMs = 0;
@@ -343,12 +454,12 @@ function executeAnalyzerTrial(
       playerCount: workload.playerCount,
     });
     preparationMs += elapsedMs(clock, preparationStartedAt);
-    peakMemoryBytes = Math.max(peakMemoryBytes, clock.readPeakMemoryBytes());
+    peakMemoryBytes = Math.max(peakMemoryBytes, readPeakMemoryBytes());
 
     const enumerationStartedAt = clock.now();
     let lines: AnalyzedTurnLine[];
     try {
-      lines = enumerate(state, workload.limits);
+      lines = enumerate(state, workload.limits, diagnostics);
     } catch (error) {
       enumerationMs += elapsedMs(clock, enumerationStartedAt);
       if (!(error instanceof AnalysisLimitError)) {
@@ -366,16 +477,22 @@ function executeAnalyzerTrial(
         lineCount: 0,
         rankedLines: [],
       });
-      peakMemoryBytes = Math.max(peakMemoryBytes, clock.readPeakMemoryBytes());
+      peakMemoryBytes = Math.max(peakMemoryBytes, readPeakMemoryBytes());
       continue;
     }
     enumerationMs += elapsedMs(clock, enumerationStartedAt);
-    peakMemoryBytes = Math.max(peakMemoryBytes, clock.readPeakMemoryBytes());
+    peakMemoryBytes = Math.max(peakMemoryBytes, readPeakMemoryBytes());
 
     const rankingStartedAt = clock.now();
-    const ranked = rank(state, lines, policy, state.activePlayerId);
+    const ranked = rank(
+      state,
+      lines,
+      policy,
+      state.activePlayerId,
+      diagnostics
+    );
     rankingMs += elapsedMs(clock, rankingStartedAt);
-    peakMemoryBytes = Math.max(peakMemoryBytes, clock.readPeakMemoryBytes());
+    peakMemoryBytes = Math.max(peakMemoryBytes, readPeakMemoryBytes());
 
     const rankedLines = ranked.rankedLines.map(toAnalyzerLineFingerprint);
     lineCount += lines.length;
@@ -384,9 +501,10 @@ function executeAnalyzerTrial(
     choiceBranchCount += lines.reduce(
       (total, line) =>
         total +
-        line.steps.reduce((stepTotal, step) => {
-          return stepTotal + step.selectedChoices.length;
-        }, 0),
+        line.steps.reduce(
+          (stepTotal, step) => stepTotal + step.selectedChoices.length,
+          0
+        ),
       0
     );
     seedResults.push({
@@ -409,38 +527,22 @@ function executeAnalyzerTrial(
     limitsReached,
     limitKindCounts: toSortedRecord(limitKindCounts),
   };
-  const workloadFingerprint = sha256(
-    JSON.stringify({
-      contractVersion: workload.contractVersion,
-      epoch: workload.epoch,
-      profile: workload.profile,
-      seeds: workload.seeds,
-      playerCount: workload.playerCount,
-      criterionId: workload.criterionId,
-      limits: workload.limits,
-      runtimeDataPackId,
-    })
+  const workloadFingerprint = createAnalyzerWorkloadFingerprint(
+    workload,
+    runtimeDataPackId
   );
-  const workloadVolumeFingerprint = sha256(
-    JSON.stringify({
-      workloadFingerprint,
-      lineCount: metrics.lineCount,
-      rankedLineCount: metrics.rankedLineCount,
-      actionCount: metrics.actionCount,
-      branchCount: metrics.branchCount,
-      choiceBranchCount: metrics.choiceBranchCount,
-      limitsReached: metrics.limitsReached,
-      limitKindCounts: metrics.limitKindCounts,
-    })
+  const workloadVolumeFingerprint = createAnalyzerWorkloadVolumeFingerprint(
+    workloadFingerprint,
+    metrics
   );
-  const resultFingerprint = sha256(
-    JSON.stringify({ workloadFingerprint, seedResults })
+  const resultFingerprint = createAnalyzerResultFingerprint(
+    workloadFingerprint,
+    seedResults
   );
   const resultPreparationMs = elapsedMs(clock, resultPreparationStartedAt);
   const totalMs = elapsedMs(clock, startedAt);
 
   return {
-    sampleIndex,
     timings: {
       totalMs,
       dataLoadMs,
@@ -450,6 +552,7 @@ function executeAnalyzerTrial(
       resultPreparationMs,
     },
     metrics,
+    seedResults,
     peakMemoryBytes: Math.max(0, peakMemoryBytes - warmupPeakMemoryBytes),
     runtimeDataPackId,
     workloadFingerprint,
@@ -458,35 +561,32 @@ function executeAnalyzerTrial(
   };
 }
 
-interface AnalyzerSeedFingerprint {
-  seed: number;
-  limitReached: boolean;
-  limitError?: string;
-  lineCount: number;
-  rankedLines: AnalyzerLineFingerprint[];
+function executeAnalyzerTrial(
+  workload: AnalyzerBenchmarkWorkload,
+  rootDir: string,
+  sampleIndex: number,
+  clock: BenchmarkClock,
+  intakeDataPack: NonNullable<AnalyzerBenchmarkDependencies["intakeDataPack"]>,
+  initialize: NonNullable<AnalyzerBenchmarkDependencies["initialize"]>,
+  enumerate: NonNullable<AnalyzerBenchmarkDependencies["enumerate"]>,
+  rank: NonNullable<AnalyzerBenchmarkDependencies["rank"]>,
+  warmupPeakMemoryBytes = 0
+): AnalyzerBenchmarkSample {
+  const execution = executeAnalyzerWorkload({
+    workload,
+    rootDir,
+    clock,
+    intakeDataPack,
+    initialize,
+    enumerate,
+    rank,
+    readPeakMemoryBytes: () => clock.readPeakMemoryBytes(),
+    warmupPeakMemoryBytes,
+  });
+  return { sampleIndex, ...execution };
 }
 
-interface AnalyzerLineFingerprint {
-  rank: number;
-  score: number;
-  components?: Readonly<Record<string, number>>;
-  terminalReason: AnalyzedTurnLine["terminalReason"];
-  gameEndReason?: string;
-  steps: AnalyzerStepFingerprint[];
-}
-
-interface AnalyzerStepFingerprint {
-  action: Record<string, string>;
-  selectedChoices: readonly {
-    requestIndex: number;
-    effectId: string;
-    choiceIndex: number;
-    choiceId: string;
-    choiceKind: string;
-  }[];
-}
-
-function toAnalyzerLineFingerprint(
+export function toAnalyzerLineFingerprint(
   entry: RankedTurnLine
 ): AnalyzerLineFingerprint {
   return {
