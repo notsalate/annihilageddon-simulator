@@ -102,6 +102,25 @@ export interface RuntimeSemanticCompletionReport {
   inventory: RuntimeCoverageInventory;
 }
 
+export function assertRuntimeSemanticCompletionPass(
+  report: Pick<RuntimeSemanticCompletionReport, "status" | "blockers">
+): void {
+  if (report.status === "PASS") {
+    return;
+  }
+
+  const blockerLines =
+    report.blockers.length === 0
+      ? "- unknown blocker"
+      : report.blockers
+          .map(
+            (blocker) =>
+              `- [${blocker.code}]${blocker.id === undefined ? "" : ` ${blocker.id}:`} ${blocker.message}`
+          )
+          .join("\n");
+  throw new Error(`Runtime semantic completion gate blocked:\n${blockerLines}`);
+}
+
 type CanonicalRecord = RuntimeCoverageRawRecord & { id: string };
 type RuntimeRecord = RuntimeCoverageRawRecord & { id: string };
 

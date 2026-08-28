@@ -299,6 +299,8 @@ Runtime JSON должен быть самодостаточным для engine.
 
 `npm run report:runtime-coverage` остаётся read-only: без `--write` он печатает обычный inventory и отдельный Runtime Semantic Completion Audit. В аудите structural и semantic статусы выводятся раздельно; `PASS` возможен только при закрытом cross-source evidence для каждого объекта. Карта не считается `semanticComplete` только по наличию runtime JSON, упоминанию ID в тесте или `AttackSemantics`: ей также нужны required capabilities, typed evidence, runtime references, canonical draft points, подходящая composition и исполняемый focused test. Поэтому текущий audit может вернуть `BLOCKED` с открытым backlog, не изменяя runtime data.
 
+`npm run check:runtime-semantic-completion` — отдельный blocking gate поверх этого аудита. Он завершается с ненулевым кодом при `BLOCKED`, входит в `npm run check` после сборки и до полного набора тестов, а дорогие simulation/performance benchmarks не запускает. Обычный `report:runtime-coverage` при этом остаётся диагностическим read-only отчётом и может успешно показать незакрытый backlog.
+
 Аудит дополнительно проверяет active pack, точные количества production DWT и применимые lifecycle-классы для всех DWT. Режим `npm run report:runtime-coverage -- --write <path>` по-прежнему записывает только карточный inventory; он не превращает semantic backlog в успешный результат и не является заменой read-only аудиту.
 
 Ссылки `source.draft`, `source.text` и `source.image` в runtime JSON допустимы только как metadata/traceability для ревью и сверки. Движок не должен читать эти ссылки во время партии и не должен выводить из них поведение карты. Draft JSON из `data/import/**` также не является executable engine input.

@@ -176,6 +176,7 @@ export type {
   RuntimeSemanticProductionStackSummary,
 } from "./import/runtime-semantic-completion.js";
 export {
+  assertRuntimeSemanticCompletionPass,
   createRuntimeSemanticCompletionReport,
   formatRuntimeSemanticCompletionMarkdown,
 } from "./import/runtime-semantic-completion.js";

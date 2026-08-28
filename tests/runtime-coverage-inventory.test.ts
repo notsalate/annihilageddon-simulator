@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   createRuntimeCoverageInventory,
   formatRuntimeCoverageInventoryMarkdown,
+  assertRuntimeSemanticCompletionPass,
   createRuntimeSemanticCompletionReport,
   formatRuntimeSemanticCompletionMarkdown,
 } from "../src/index.js";
@@ -1891,6 +1892,28 @@ test("runtime semantic completion audit separates structural and semantic status
   assert.match(markdown, /Semantic status/);
   assert.match(markdown, /production physical DWT: 30/);
   assert.match(markdown, /semanticComplete: \d+ /);
+});
+
+test("runtime semantic completion gate accepts a passing audit", () => {
+  assert.doesNotThrow(() =>
+    assertRuntimeSemanticCompletionPass({ status: "PASS", blockers: [] })
+  );
+});
+
+test("runtime semantic completion gate rejects a blocked audit", () => {
+  assert.throws(
+    () =>
+      assertRuntimeSemanticCompletionPass({
+        status: "BLOCKED",
+        blockers: [
+          {
+            code: "false-semantic-evidence",
+            message: "fixture semantic evidence is false",
+          },
+        ],
+      }),
+    /Runtime semantic completion gate blocked[\s\S]*fixture semantic evidence is false/
+  );
 });
 
 function createCardDraft(
