@@ -16,9 +16,7 @@ import {
 import { gainDeadWizardToken } from "../src/engine/effect-runtime.js";
 import {
   findCardLocation,
-  listPhysicalCardLocations,
   movePhysicalCard,
-  removeCardFromLocation,
   setCardOwner,
 } from "../src/engine/control-ledger.js";
 import {
@@ -27,6 +25,7 @@ import {
 } from "../src/import/cross-source-runtime-coverage.js";
 import {
   createGameScenario,
+  clearPhysicalCardZone,
   endTurn,
   givenRuntimeCard,
   chooseEffect,
@@ -855,8 +854,8 @@ function assertMayhemMarketChipEvidence(): void {
     388063
   );
   assert.deepEqual(play(scenario, source), { ok: true });
-  clearPhysicalZone(scenario, "mainDeck");
-  clearPhysicalZone(scenario, "mainMarket");
+  clearPhysicalCardZone(scenario, "mainDeck");
+  clearPhysicalCardZone(scenario, "mainMarket");
   const target = givenRuntimeCard(scenario, {
     definitionId: "esw2_dbg__main_002",
   });
@@ -894,16 +893,6 @@ function moveCardToCommonZone(
   );
   assert.equal(moved.ok, true);
   setCardOwner(card, "common");
-}
-
-function clearPhysicalZone(scenario: GameScenario, zoneName: string): void {
-  for (const location of listPhysicalCardLocations(scenario.state)) {
-    if (location.zoneName === zoneName) {
-      assert.ok(
-        removeCardFromLocation(scenario.state, location.card.instanceId)
-      );
-    }
-  }
 }
 
 function assertCardRuntimeReference(

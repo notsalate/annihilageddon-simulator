@@ -267,7 +267,10 @@ export function putOnCommonDeck(
   setCardOwner(card, "common");
 }
 
-function clearPhysicalCardZone(scenario: GameScenario, zoneName: string): void {
+export function clearPhysicalCardZone(
+  scenario: GameScenario,
+  zoneName: string
+): void {
   const cards = listPhysicalCardLocations(scenario.state)
     .filter((location) => location.zoneName === zoneName)
     .map((location) => location.card);
