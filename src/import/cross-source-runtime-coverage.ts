@@ -885,10 +885,105 @@ function findCardSemanticEvidenceCase(
   id: string,
   testName: string
 ): boolean {
-  return new RegExp(
+  const casesDeclaration =
+    /\b(?:const|let)\s+cardSemanticEvidenceCases\s*=\s*\[/u.exec(sourceText);
+  if (casesDeclaration === null) {
+    return false;
+  }
+  const casesBodyStart = sourceText.indexOf(
+    "[",
+    casesDeclaration.index + casesDeclaration[0].length - 1
+  );
+  if (casesBodyStart < 0) {
+    return false;
+  }
+  const casesBody = findBalancedDelimitedBody(
+    sourceText,
+    casesBodyStart,
+    "[",
+    "]"
+  );
+  if (casesBody === undefined) {
+    return false;
+  }
+  const declaredCase = new RegExp(
     `\\{\\s*definitionId\\s*:\\s*(["'])${escapeRegExp(id)}\\1\\s*,\\s*seed\\s*:\\s*\\d+\\s*,\\s*testName\\s*:\\s*(["'])${escapeRegExp(testName)}\\2\\s*,?\\s*\\}`,
     "u"
-  ).test(sourceText);
+  ).test(casesBody);
+  return declaredCase && hasCardSemanticEvidenceTestInvocation(sourceText);
+}
+
+function hasCardSemanticEvidenceTestInvocation(sourceText: string): boolean {
+  const loopStart =
+    /\bfor\s*\(\s*const\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s+of\s+cardSemanticEvidenceCases\s*\)\s*\{/u.exec(
+      sourceText
+    );
+  if (loopStart === null || loopStart[1] === undefined) {
+    return false;
+  }
+  const loopBodyStart = sourceText.indexOf(
+    "{",
+    loopStart.index + loopStart[0].length - 1
+  );
+  if (loopBodyStart < 0) {
+    return false;
+  }
+  const loopBody = findBalancedBlockBody(sourceText, loopBodyStart);
+  if (loopBody === undefined) {
+    return false;
+  }
+
+  const caseBinding = escapeRegExp(loopStart[1]);
+  const testStart = new RegExp(
+    `\\btest\\s*\\(\\s*${caseBinding}\\.testName\\s*,`,
+    "u"
+  ).exec(loopBody);
+  if (testStart === null) {
+    return false;
+  }
+  const testOpening = loopBody.indexOf("(", testStart.index);
+  const testEnd =
+    testOpening < 0 ? undefined : findInvocationEnd(loopBody, testOpening);
+  const callbackArrow = loopBody.indexOf(
+    "=>",
+    testStart.index + testStart[0].length
+  );
+  if (testEnd === undefined || callbackArrow < 0 || callbackArrow >= testEnd) {
+    return false;
+  }
+
+  let callbackStart = callbackArrow + 2;
+  while (/\s/u.test(loopBody[callbackStart] ?? "")) {
+    callbackStart += 1;
+  }
+  const callbackBody =
+    loopBody[callbackStart] === "{"
+      ? findBalancedBlockBody(loopBody, callbackStart)
+      : loopBody.slice(callbackStart, testEnd);
+  return (
+    callbackBody !== undefined &&
+    new RegExp(
+      `\\brunCardSemanticEvidence\\s*\\(\\s*${caseBinding}\\.definitionId\\s*,\\s*${caseBinding}\\.seed\\s*\\)`,
+      "u"
+    ).test(callbackBody)
+  );
+}
+
+function findBalancedDelimitedBody(
+  text: string,
+  openingIndex: number,
+  opening: string,
+  closing: string
+): string | undefined {
+  let depth = 0;
+  for (let index = openingIndex; index < text.length; index += 1) {
+    if (text[index] === opening) depth += 1;
+    if (text[index] === closing) depth -= 1;
+    if (depth === 0) {
+      return text.slice(openingIndex + 1, index);
+    }
+  }
+  return undefined;
 }
 
 function hasParameterizedRuntimeCardInstanceReference(

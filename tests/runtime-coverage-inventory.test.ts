@@ -1687,6 +1687,64 @@ test("${testName}", () => {
   assert.deepEqual(evaluation.blockers, []);
 });
 
+test("card semantic evidence rejects an uninvoked dynamic case", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-uninvoked-case-")
+  );
+  const id = "esw2_dbg__main_001";
+  const testName = "card case is registered without invoking its runner";
+
+  writeText(
+    rootDir,
+    "tests/card-runtime-semantic-evidence.test.ts",
+    `const cardSemanticEvidenceCases = [
+  {
+    definitionId: "${id}",
+    seed: 1,
+    testName: "${testName}",
+  },
+] as const;
+
+function runCardSemanticEvidence(definitionId: string, seed: number): void {
+  void definitionId;
+  void seed;
+}
+
+for (const cardCase of cardSemanticEvidenceCases) {
+  test(cardCase.testName, () => {});
+}
+`
+  );
+
+  const planEntry = createSemanticEvidencePlanEntry({
+    id,
+    testName,
+    testSubject: { kind: "binding", name: "definitionId" },
+  });
+  const testRef = planEntry.semanticMappings[0]?.testRefs[0];
+  assert.ok(testRef?.observation);
+  testRef.file = "tests/card-runtime-semantic-evidence.test.ts";
+  testRef.observation.target = "assertCardRuntimeEvidence";
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "card",
+    sourceGroupOrTokenKind: "main",
+    draft: createSemanticEvidenceDraft(id),
+    runtime: createSemanticEvidenceRuntime(id),
+    compositionMembership: [{ role: "mainDeck", entryKind: "card", count: 1 }],
+    planEntry,
+  });
+
+  assert.equal(evaluation.status, "blocked");
+  assert.ok(
+    evaluation.blockerCodes.some(
+      (blocker) => blocker.code === "focused-test-not-found"
+    )
+  );
+});
+
 test("repository card semantic evidence covers every canonical card", () => {
   const report = createRuntimeSemanticCompletionReport(process.cwd());
   const cards = report.items.filter((item) => item.objectKind === "card");
