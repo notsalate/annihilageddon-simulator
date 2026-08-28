@@ -130,6 +130,34 @@ export interface AnalyzerBenchmarkMetrics {
   limitKindCounts: Record<string, number>;
 }
 
+export interface AnalyzerSeedFingerprint {
+  seed: number;
+  limitReached: boolean;
+  limitError?: string;
+  lineCount: number;
+  rankedLines: AnalyzerLineFingerprint[];
+}
+
+export interface AnalyzerLineFingerprint {
+  rank: number;
+  score: number;
+  components?: Readonly<Record<string, number>>;
+  terminalReason: AnalyzedTurnLine["terminalReason"];
+  gameEndReason?: string;
+  steps: AnalyzerStepFingerprint[];
+}
+
+export interface AnalyzerStepFingerprint {
+  action: Record<string, string>;
+  selectedChoices: readonly {
+    requestIndex: number;
+    effectId: string;
+    choiceIndex: number;
+    choiceId: string;
+    choiceKind: string;
+  }[];
+}
+
 export interface AnalyzerBenchmarkSample {
   sampleIndex: number;
   timings: AnalyzerBenchmarkTimings;
@@ -175,6 +203,49 @@ export interface RunAnalyzerBenchmarkOptions extends CreateAnalyzerBenchmarkWork
 
 const MEASUREMENT_COUNT = 3 as const;
 const DEFAULT_MANIFEST_PATH = "data/packs/current-runtime.json";
+
+export function createAnalyzerWorkloadFingerprint(
+  workload: AnalyzerBenchmarkWorkload,
+  runtimeDataPackId: string
+): string {
+  return sha256(
+    JSON.stringify({
+      contractVersion: workload.contractVersion,
+      epoch: workload.epoch,
+      profile: workload.profile,
+      seeds: workload.seeds,
+      playerCount: workload.playerCount,
+      criterionId: workload.criterionId,
+      limits: workload.limits,
+      runtimeDataPackId,
+    })
+  );
+}
+
+export function createAnalyzerWorkloadVolumeFingerprint(
+  workloadFingerprint: string,
+  metrics: AnalyzerBenchmarkMetrics
+): string {
+  return sha256(
+    JSON.stringify({
+      workloadFingerprint,
+      lineCount: metrics.lineCount,
+      rankedLineCount: metrics.rankedLineCount,
+      actionCount: metrics.actionCount,
+      branchCount: metrics.branchCount,
+      choiceBranchCount: metrics.choiceBranchCount,
+      limitsReached: metrics.limitsReached,
+      limitKindCounts: metrics.limitKindCounts,
+    })
+  );
+}
+
+export function createAnalyzerResultFingerprint(
+  workloadFingerprint: string,
+  seedResults: readonly AnalyzerSeedFingerprint[]
+): string {
+  return sha256(JSON.stringify({ workloadFingerprint, seedResults }));
+}
 
 export function createAnalyzerBenchmarkWorkload(
   options: CreateAnalyzerBenchmarkWorkloadOptions = {}
@@ -409,32 +480,17 @@ function executeAnalyzerTrial(
     limitsReached,
     limitKindCounts: toSortedRecord(limitKindCounts),
   };
-  const workloadFingerprint = sha256(
-    JSON.stringify({
-      contractVersion: workload.contractVersion,
-      epoch: workload.epoch,
-      profile: workload.profile,
-      seeds: workload.seeds,
-      playerCount: workload.playerCount,
-      criterionId: workload.criterionId,
-      limits: workload.limits,
-      runtimeDataPackId,
-    })
+  const workloadFingerprint = createAnalyzerWorkloadFingerprint(
+    workload,
+    runtimeDataPackId
   );
-  const workloadVolumeFingerprint = sha256(
-    JSON.stringify({
-      workloadFingerprint,
-      lineCount: metrics.lineCount,
-      rankedLineCount: metrics.rankedLineCount,
-      actionCount: metrics.actionCount,
-      branchCount: metrics.branchCount,
-      choiceBranchCount: metrics.choiceBranchCount,
-      limitsReached: metrics.limitsReached,
-      limitKindCounts: metrics.limitKindCounts,
-    })
+  const workloadVolumeFingerprint = createAnalyzerWorkloadVolumeFingerprint(
+    workloadFingerprint,
+    metrics
   );
-  const resultFingerprint = sha256(
-    JSON.stringify({ workloadFingerprint, seedResults })
+  const resultFingerprint = createAnalyzerResultFingerprint(
+    workloadFingerprint,
+    seedResults
   );
   const resultPreparationMs = elapsedMs(clock, resultPreparationStartedAt);
   const totalMs = elapsedMs(clock, startedAt);
@@ -458,35 +514,7 @@ function executeAnalyzerTrial(
   };
 }
 
-interface AnalyzerSeedFingerprint {
-  seed: number;
-  limitReached: boolean;
-  limitError?: string;
-  lineCount: number;
-  rankedLines: AnalyzerLineFingerprint[];
-}
-
-interface AnalyzerLineFingerprint {
-  rank: number;
-  score: number;
-  components?: Readonly<Record<string, number>>;
-  terminalReason: AnalyzedTurnLine["terminalReason"];
-  gameEndReason?: string;
-  steps: AnalyzerStepFingerprint[];
-}
-
-interface AnalyzerStepFingerprint {
-  action: Record<string, string>;
-  selectedChoices: readonly {
-    requestIndex: number;
-    effectId: string;
-    choiceIndex: number;
-    choiceId: string;
-    choiceKind: string;
-  }[];
-}
-
-function toAnalyzerLineFingerprint(
+export function toAnalyzerLineFingerprint(
   entry: RankedTurnLine
 ): AnalyzerLineFingerprint {
   return {

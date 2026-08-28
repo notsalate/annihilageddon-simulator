@@ -232,6 +232,15 @@ export type {
   AnalysisLimits,
   AnalysisLimitError,
   CompletedActionBranch,
+  AnalyzerDiagnosticCounters,
+  AnalyzerDiagnosticEvaluationPolicyCounters,
+  AnalyzerDiagnosticOperationCounters,
+  AnalyzerDiagnosticPhase,
+  AnalyzerDiagnosticsOptions,
+} from "./engine/best-move-analysis.js";
+export {
+  AnalyzerDiagnosticsSession,
+  createAnalyzerDiagnostics,
 } from "./engine/best-move-analysis.js";
 export {
   victoryPointsPolicy,
@@ -244,6 +253,19 @@ export {
   enumerateTurnLines,
   rankTurnLines,
 } from "./engine/best-move-analysis.js";
+export type {
+  AnalyzerDiagnosticDependencies,
+  AnalyzerDiagnosticResult,
+  AnalyzerDiagnosticTimings,
+  AnalyzerWorkloadRunResult,
+  RunAnalyzerWorkloadOptions,
+} from "./engine/analyzer-diagnostics.js";
+export {
+  ANALYZER_DIAGNOSTIC_CONTRACT_VERSION,
+  runAnalyzerDiagnostic,
+  runAnalyzerDiagnostics,
+  runAnalyzerWorkloadOnce,
+} from "./engine/analyzer-diagnostics.js";
 export { assertGameStateInvariants } from "./engine/invariants.js";
 export type {
   ActionExecutionContext,

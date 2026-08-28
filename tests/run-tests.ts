@@ -53,6 +53,8 @@ const testSuites = [
   "effect-choice-routing.test.js",
   "best-move-analysis.test.js",
   "best-move-cli.test.js",
+  "analyzer-diagnostics.test.js",
+  "analyzer-diagnostics-cli.test.js",
   "benchmark.test.js",
   "benchmark-cli.test.js",
   "performance-epoch.test.js",

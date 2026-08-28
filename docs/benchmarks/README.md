@@ -15,6 +15,7 @@ npm run benchmark:effect-runtime
 npm run benchmark:epoch
 npm run benchmark:epoch:calibrate
 npm run benchmark:artifacts:download -- <run-id>
+npm run diagnose:analyzer -- --profile light
 ```
 
 Use `benchmark:artifacts:download` for local copies of GitHub Actions benchmark reports. Do not download them into the repository root or directly under `.scratch/`.
@@ -40,6 +41,23 @@ The command stores each requested run under:
 - Blocking measurements for one workload must share the exact environment fingerprint and one comparison-pair ID produced by a single runner session.
 - A historical measurement without that physical pairing is diagnostic only.
 - Workload changes, missing calibration, and uncalibrated environments produce non-blocking reports.
+
+## Analyzer diagnostics
+
+Run one supported Analyzer profile with:
+
+```powershell
+npm run diagnose:analyzer -- --profile light --format human
+npm run diagnose:analyzer -- --profile typical --format json --artifacts .scratch/tmp/analyzer-typical
+```
+
+The command runs three processes in order: the clean Analyzer benchmark, an instrumented semantic-counter run, and a separate Node CPU-profile run. The clean benchmark is the only timing comparable with ADR-0001/E1. Instrumented and profiled timings are explicitly diagnostic-only and must not update the accepted baseline, performance epoch, or CI gate.
+
+The summary contains the selected profile, workload/environment and result fingerprints, clean phase timings, semantic counters, CPU category totals, hotspots, and paths to the generated artifacts. Counters use array-item units for copied paths and event-log entries; phase counters separate enumeration, ranking, and evaluation-policy isolation. All three runs must report the same result fingerprint.
+
+CPU hotspots retain generated JavaScript URL, line, and column information. Generated `dist/**/*.js.map` files provide the TypeScript source-mapping hint. CPU profiling is a sampled CPU view only; it does not measure allocations and is not a heap snapshot.
+
+Artifacts are written under `.scratch/tmp/analyzer-diagnostics/` by default or under the explicit `--artifacts` directory. They are diagnostic run products, not tracked runtime data.
 
 ## PR Gate
 
