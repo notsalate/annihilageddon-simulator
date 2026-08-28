@@ -254,13 +254,22 @@ export function putOnCommonDeck(
   card: CardInstance,
   deck: "mainDeck" | "legendDeck"
 ): void {
+  moveCardToCommonZone(scenario, card, deck, "front");
+}
+
+export function moveCardToCommonZone(
+  scenario: GameScenario,
+  card: CardInstance,
+  destinationZone: "mainMarket" | "legendMarket" | "mainDeck" | "legendDeck",
+  placement: "front" | "back" = "back"
+): void {
   const sourceLocation = findCardLocation(scenario.state, card.instanceId);
   assert.ok(sourceLocation);
   const moved = movePhysicalCard(
     scenario.state,
     card.instanceId,
-    deck,
-    "front",
+    destinationZone,
+    placement,
     sourceLocation.zoneName
   );
   assert.deepEqual(moved.ok, true);

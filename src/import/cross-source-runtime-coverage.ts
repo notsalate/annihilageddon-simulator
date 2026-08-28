@@ -1677,6 +1677,13 @@ function findNamedTestBody(text: string, name: string): string | undefined {
     return undefined;
   }
   const bodyStart = testStart.index + testStart[0].length - 1;
+  return findBalancedBlockBody(text, bodyStart);
+}
+
+function findBalancedBlockBody(
+  text: string,
+  bodyStart: number
+): string | undefined {
   let depth = 0;
   for (let index = bodyStart; index < text.length; index += 1) {
     if (text[index] === "{") depth += 1;
@@ -1703,15 +1710,7 @@ function findNamedFunctionBody(text: string, name: string): string | undefined {
   if (bodyStart < 0) {
     return undefined;
   }
-  let depth = 0;
-  for (let index = bodyStart; index < text.length; index += 1) {
-    if (text[index] === "{") depth += 1;
-    if (text[index] === "}") depth -= 1;
-    if (depth === 0) {
-      return text.slice(bodyStart + 1, index);
-    }
-  }
-  return undefined;
+  return findBalancedBlockBody(text, bodyStart);
 }
 
 function sameDraftPoint(

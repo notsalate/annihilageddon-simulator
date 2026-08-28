@@ -15,11 +15,6 @@ import {
 } from "../src/index.js";
 import { gainDeadWizardToken } from "../src/engine/effect-runtime.js";
 import {
-  findCardLocation,
-  movePhysicalCard,
-  setCardOwner,
-} from "../src/engine/control-ledger.js";
-import {
   readCrossSourceCoveragePlan,
   type CrossSourceRuntimeRef,
 } from "../src/import/cross-source-runtime-coverage.js";
@@ -29,6 +24,7 @@ import {
   endTurn,
   givenRuntimeCard,
   chooseEffect,
+  moveCardToCommonZone,
   resolveMayhemThroughMarket,
   type GameScenario,
   play,
@@ -874,25 +870,6 @@ function getCardDefinition(
   const definition = scenario.state.cardDefinitions.get(definitionId);
   assert.ok(definition);
   return definition;
-}
-
-function moveCardToCommonZone(
-  scenario: GameScenario,
-  card: CardInstance,
-  destinationZone: "mainMarket" | "legendMarket" | "mainDeck",
-  placement: "front" | "back" = "back"
-): void {
-  const location = findCardLocation(scenario.state, card.instanceId);
-  assert.ok(location);
-  const moved = movePhysicalCard(
-    scenario.state,
-    card.instanceId,
-    destinationZone,
-    placement,
-    location.zoneName
-  );
-  assert.equal(moved.ok, true);
-  setCardOwner(card, "common");
 }
 
 function assertCardRuntimeReference(
