@@ -105,6 +105,7 @@ export function formatAnalyzerDiagnosticsSummary(summary) {
   const cpu = summary.cpuProfile;
   const counterTotals = diagnostic.counters.total;
   const phaseCounters = diagnostic.counters.phases;
+  const branchSearchDistribution = diagnostic.counters.branchSearchDistribution;
   const hotspotLines = (cpu.hotspots ?? [])
     .slice(0, 5)
     .map(
@@ -126,6 +127,8 @@ export function formatAnalyzerDiagnosticsSummary(summary) {
     `  actions ${counterTotals.actionApplications}, state clones ${counterTotals.gameStateClones}, choice replays ${counterTotals.choicePathReplays}`,
     `  states intermediate ${counterTotals.intermediateStates}, terminal ${counterTotals.terminalStates}`,
     `  path copies ${counterTotals.pathCopyOperations} operations/${counterTotals.pathItemsCopied} items, event-log copies ${counterTotals.eventLogCopyOperations} operations/${counterTotals.eventLogEntriesCopied} entries`,
+    `  locations: point searches ${counterTotals.pointLocationSearches}, physical zone passes ${counterTotals.physicalZonePasses}, cards viewed ${counterTotals.physicalCardsViewed}, full lists ${counterTotals.fullLocationListsBuilt}, records ${counterTotals.locationRecordsCreated}, location changes ${counterTotals.physicalLocationChanges}`,
+    `  branch point-searches: ${branchSearchDistribution.branchAttempts} attempts, average ${branchSearchDistribution.averagePointLocationSearches.toFixed(2)}, buckets 0=${branchSearchDistribution.buckets.zero}, 1=${branchSearchDistribution.buckets.one}, 2-3=${branchSearchDistribution.buckets.twoToThree}, 4-7=${branchSearchDistribution.buckets.fourToSeven}, 8+=${branchSearchDistribution.buckets.eightOrMore}`,
     `  phases: enumeration ${phaseCounters.enumeration.actionApplications} actions, ranking ${phaseCounters.ranking.gameStateClones} clones, policy ${phaseCounters.evaluationPolicy.invocations} calls/${formatMilliseconds(phaseCounters.evaluationPolicy.timeMs)}, policy operations ${phaseCounters.evaluationPolicy.operations.actionApplications} actions/${phaseCounters.evaluationPolicy.operations.gameStateClones} clones`,
     "",
     "CPU profile (diagnostic-only, not comparable to E1):",

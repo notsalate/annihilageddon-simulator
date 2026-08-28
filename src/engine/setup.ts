@@ -33,6 +33,7 @@ import {
 } from "./effect-runtime-registry.js";
 import type { MarketFlowEndReason } from "./end-conditions.js";
 import { filterWizardPropertySetupPoolForFamiliarCapacity } from "./effect-runtime-setup.js";
+import type { PhysicalCardDiagnosticsSink } from "./physical-card-diagnostics.js";
 import type { RuntimeEffectId } from "./runtime-effect.js";
 import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
@@ -212,6 +213,7 @@ export interface GameState {
   };
   eventLog: GameEvent[];
   effectChoiceStrategy?: ChoicePolicy;
+  physicalCardDiagnostics?: PhysicalCardDiagnosticsSink;
 }
 
 export type GameEventType =

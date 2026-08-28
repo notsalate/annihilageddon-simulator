@@ -17,6 +17,7 @@ interface DiagnosticsCliModule {
       selfTimeMs: number;
     }[];
   };
+  formatAnalyzerDiagnosticsSummary(summary: unknown): string;
   assertAnalyzerDiagnosticDeterminism(fingerprints: readonly string[]): void;
   assertAnalyzerCleanBenchmarkArtifactConsistency(
     cleanBenchmark: Record<string, unknown>,
@@ -62,6 +63,8 @@ function isDiagnosticsCliModule(value: unknown): value is DiagnosticsCliModule {
     typeof value.parseAnalyzerDiagnosticsArgs === "function" &&
     "summarizeCpuProfile" in value &&
     typeof value.summarizeCpuProfile === "function" &&
+    "formatAnalyzerDiagnosticsSummary" in value &&
+    typeof value.formatAnalyzerDiagnosticsSummary === "function" &&
     "assertAnalyzerDiagnosticDeterminism" in value &&
     typeof value.assertAnalyzerDiagnosticDeterminism === "function" &&
     "assertAnalyzerCleanBenchmarkArtifactConsistency" in value &&
@@ -127,6 +130,109 @@ test("analyzer diagnostics CLI does not allow skipping the CPU profile", () => {
     () => cliModule.parseAnalyzerDiagnosticsArgs(["--no-cpu-profile"]),
     /Unsupported argument/
   );
+});
+
+test("analyzer diagnostics human summary includes location counters and branch buckets", () => {
+  const operationCounters = {
+    actionApplications: 0,
+    gameStateClones: 0,
+    choicePathReplays: 0,
+    choicePathExpansions: 0,
+    choiceBranchesGenerated: 0,
+    intermediateStates: 0,
+    terminalStates: 0,
+    pathCopyOperations: 0,
+    pathItemsCopied: 0,
+    eventLogCopyOperations: 0,
+    eventLogEntriesCopied: 0,
+    pointLocationSearches: 4,
+    physicalZonePasses: 5,
+    physicalCardsViewed: 6,
+    fullLocationListsBuilt: 7,
+    locationRecordsCreated: 8,
+    physicalLocationChanges: 9,
+  };
+  const summary = {
+    workload: {
+      role: "reference",
+      workloadId: "analyzer-reference-v1",
+      profile: "light",
+      seeds: [1],
+      playerCount: 2,
+      criterionId: "victory-points",
+    },
+    workloadFingerprint: "workload",
+    workloadVolumeFingerprint: "volume",
+    resultFingerprint: "result",
+    cleanBenchmark: {
+      comparableTo: "not comparable",
+      timings: { totalMs: 1, enumerationMs: 2, rankingMs: 3 },
+      resultFingerprint: "result",
+    },
+    diagnosticRun: {
+      timings: {
+        totalMs: 4,
+        enumerationMs: 5,
+        rankingMs: 6,
+        evaluationPolicyMs: 7,
+      },
+      counters: {
+        total: operationCounters,
+        branchSearchDistribution: {
+          branchAttempts: 15,
+          totalPointLocationSearches: 16,
+          averagePointLocationSearches: 16 / 15,
+          buckets: {
+            zero: 1,
+            one: 2,
+            twoToThree: 3,
+            fourToSeven: 4,
+            eightOrMore: 5,
+          },
+        },
+        phases: {
+          enumeration: operationCounters,
+          ranking: operationCounters,
+          evaluationPolicy: {
+            invocations: 0,
+            timeMs: 0,
+            operations: operationCounters,
+            isolatedStateClones: 0,
+            isolatedPathCopyOperations: 0,
+            isolatedPathItemsCopied: 0,
+            isolatedEventLogCopyOperations: 0,
+            isolatedEventLogEntriesCopied: 0,
+          },
+        },
+      },
+    },
+    cpuProfile: {
+      sampledTimeMs: 0,
+      categoryTotals: { javascript: 0, v8: 0, native: 0, gc: 0 },
+      hotspots: [],
+    },
+    allocationProfile: {
+      sampledBytes: 0,
+      sampleCount: 0,
+      categoryTotals: { javascript: 0, v8: 0, native: 0, gc: 0 },
+      applicationHotspots: [],
+    },
+    determinism: { allMatch: true },
+    artifacts: {
+      cleanBenchmark: "clean.json",
+      diagnosticRun: "diagnostic.json",
+      cpuProfile: "cpu.cpuprofile",
+      allocationProfile: "allocation.heapprofile",
+      summary: "summary.json",
+    },
+  };
+
+  const rendered = cliModule.formatAnalyzerDiagnosticsSummary(summary);
+
+  assert.match(rendered, /point searches 4/);
+  assert.match(rendered, /physical zone passes 5/);
+  assert.match(rendered, /location changes 9/);
+  assert.match(rendered, /buckets 0=1, 1=2, 2-3=3, 4-7=4, 8\+=5/);
 });
 
 test("CPU profile summary separates JavaScript, V8, native and GC samples", () => {

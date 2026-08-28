@@ -6,6 +6,10 @@ import {
   type LegalAction,
 } from "./actions.js";
 import { isTrustedReadOnlyPolicy } from "./best-move-policy-trust.js";
+import {
+  capturePhysicalCardLocationSnapshot,
+  countPhysicalCardLocationChanges,
+} from "./control-ledger.js";
 import { forkGameState, forkGameStateForAnalyzer } from "./game-state-fork.js";
 import type { ChoicePolicy, EffectChoiceRequest } from "./choice-policy.js";
 import type { GameState } from "./setup.js";
@@ -31,6 +35,25 @@ export interface AnalyzerDiagnosticOperationCounters {
   pathItemsCopied: number;
   eventLogCopyOperations: number;
   eventLogEntriesCopied: number;
+  pointLocationSearches: number;
+  physicalZonePasses: number;
+  physicalCardsViewed: number;
+  fullLocationListsBuilt: number;
+  locationRecordsCreated: number;
+  physicalLocationChanges: number;
+}
+
+export interface AnalyzerDiagnosticBranchSearchDistribution {
+  branchAttempts: number;
+  totalPointLocationSearches: number;
+  averagePointLocationSearches: number;
+  buckets: {
+    zero: number;
+    one: number;
+    twoToThree: number;
+    fourToSeven: number;
+    eightOrMore: number;
+  };
 }
 
 export interface AnalyzerDiagnosticEvaluationPolicyCounters {
@@ -46,6 +69,7 @@ export interface AnalyzerDiagnosticEvaluationPolicyCounters {
 
 export interface AnalyzerDiagnosticCounters {
   total: AnalyzerDiagnosticOperationCounters;
+  branchSearchDistribution: AnalyzerDiagnosticBranchSearchDistribution;
   phases: {
     enumeration: AnalyzerDiagnosticOperationCounters;
     ranking: AnalyzerDiagnosticOperationCounters;
@@ -79,6 +103,12 @@ function createOperationCounters(): AnalyzerDiagnosticOperationCounters {
     pathItemsCopied: 0,
     eventLogCopyOperations: 0,
     eventLogEntriesCopied: 0,
+    pointLocationSearches: 0,
+    physicalZonePasses: 0,
+    physicalCardsViewed: 0,
+    fullLocationListsBuilt: 0,
+    locationRecordsCreated: 0,
+    physicalLocationChanges: 0,
   };
 }
 
@@ -107,6 +137,16 @@ export class AnalyzerDiagnosticsSession {
   };
 
   private readonly now: () => number;
+  private branchSearchAttempts = 0;
+  private branchSearchTotal = 0;
+  private readonly branchSearchBuckets = {
+    zero: 0,
+    one: 0,
+    twoToThree: 0,
+    fourToSeven: 0,
+    eightOrMore: 0,
+  };
+  private activeBranchPointLocationSearches: number | undefined;
   private currentPhase:
     | AnalyzerDiagnosticPhase
     | "evaluationPolicy"
@@ -143,10 +183,38 @@ export class AnalyzerDiagnosticsSession {
   }
 
   recordActionApplication(isChoicePathReplay: boolean): void {
+    this.activeBranchPointLocationSearches = 0;
     this.incrementOperation("actionApplications");
     if (isChoicePathReplay) {
       this.incrementOperation("choicePathReplays");
     }
+  }
+
+  completeActionApplication(): void {
+    if (this.activeBranchPointLocationSearches === undefined) return;
+    this.recordBranchSearchCount(this.activeBranchPointLocationSearches);
+    this.activeBranchPointLocationSearches = undefined;
+  }
+
+  recordPointLocationSearch(): void {
+    this.incrementOperation("pointLocationSearches");
+    if (this.activeBranchPointLocationSearches !== undefined) {
+      this.activeBranchPointLocationSearches += 1;
+    }
+  }
+
+  recordPhysicalZonePass(cardsViewed: number): void {
+    this.incrementOperation("physicalZonePasses");
+    this.incrementOperation("physicalCardsViewed", cardsViewed);
+  }
+
+  recordFullLocationList(locationRecords: number): void {
+    this.incrementOperation("fullLocationListsBuilt");
+    this.incrementOperation("locationRecordsCreated", locationRecords);
+  }
+
+  recordPhysicalLocationChanges(changes: number): void {
+    this.incrementOperation("physicalLocationChanges", changes);
   }
 
   recordChoicePathExpansion(branchCount: number): void {
@@ -189,8 +257,26 @@ export class AnalyzerDiagnosticsSession {
   }
 
   snapshot(): AnalyzerDiagnosticCounters {
+    const activeBranch = this.activeBranchPointLocationSearches;
+    const branchAttempts =
+      this.branchSearchAttempts + (activeBranch === undefined ? 0 : 1);
+    const totalPointLocationSearches =
+      this.branchSearchTotal + (activeBranch ?? 0);
+    const buckets = { ...this.branchSearchBuckets };
+    if (activeBranch !== undefined) {
+      incrementBranchSearchBucket(buckets, activeBranch);
+    }
     return {
       total: { ...this.counters.total },
+      branchSearchDistribution: {
+        branchAttempts,
+        totalPointLocationSearches,
+        averagePointLocationSearches:
+          branchAttempts === 0
+            ? 0
+            : totalPointLocationSearches / branchAttempts,
+        buckets,
+      },
       phases: {
         enumeration: { ...this.counters.phases.enumeration },
         ranking: { ...this.counters.phases.ranking },
@@ -227,6 +313,29 @@ export class AnalyzerDiagnosticsSession {
     } else if (this.currentPhase === "evaluationPolicy") {
       this.counters.phases.evaluationPolicy.operations[name] += amount;
     }
+  }
+
+  private recordBranchSearchCount(searches: number): void {
+    this.branchSearchAttempts += 1;
+    this.branchSearchTotal += searches;
+    incrementBranchSearchBucket(this.branchSearchBuckets, searches);
+  }
+}
+
+function incrementBranchSearchBucket(
+  buckets: AnalyzerDiagnosticBranchSearchDistribution["buckets"],
+  searches: number
+): void {
+  if (searches === 0) {
+    buckets.zero += 1;
+  } else if (searches === 1) {
+    buckets.one += 1;
+  } else if (searches <= 3) {
+    buckets.twoToThree += 1;
+  } else if (searches <= 7) {
+    buckets.fourToSeven += 1;
+  } else {
+    buckets.eightOrMore += 1;
   }
 }
 
@@ -371,7 +480,16 @@ function enumerateActionBranchesCore(
   while (pending.length > 0) {
     const prefix = pending.pop()!;
     diagnostics?.recordActionApplication(prefix.selections.length > 0);
-    const fork = forkAnalyzerState(source, diagnostics);
+    const fork =
+      diagnostics === undefined
+        ? forkAnalyzerState(source, diagnostics)
+        : withPhysicalCardDiagnostics([source], diagnostics, () =>
+            forkAnalyzerState(source, diagnostics)
+          );
+    const locationSnapshot =
+      diagnostics === undefined
+        ? undefined
+        : capturePhysicalCardLocationSnapshot(fork);
     const consumed = new Set<number>();
     let requestIndex = 0;
     fork.effectChoiceStrategy = (request) => {
@@ -494,6 +612,22 @@ function enumerateActionBranchesCore(
       }
       // Stack order is reversed so pop() processes the stable array order.
       pending.push(...next.reverse());
+    } finally {
+      try {
+        if (diagnostics !== undefined && locationSnapshot !== undefined) {
+          diagnostics.recordPhysicalLocationChanges(
+            countPhysicalCardLocationChanges(
+              locationSnapshot,
+              capturePhysicalCardLocationSnapshot(fork)
+            )
+          );
+        }
+      } finally {
+        if (diagnostics !== undefined) {
+          delete fork.physicalCardDiagnostics;
+        }
+        diagnostics?.completeActionApplication();
+      }
     }
   }
 
@@ -505,7 +639,13 @@ export function enumerateImmediateActionBranches(
   limits: AnalysisLimits = DEFAULT_ANALYSIS_LIMITS,
   diagnostics?: AnalyzerDiagnosticsSession
 ): CompletedActionBranch[] {
-  return listLegalActions(state).flatMap((action, legalActionIndex) =>
+  const legalActions =
+    diagnostics === undefined
+      ? listLegalActions(state)
+      : withPhysicalCardDiagnostics([state], diagnostics, () =>
+          listLegalActions(state)
+        );
+  return legalActions.flatMap((action, legalActionIndex) =>
     enumerateActionBranches(
       state,
       action,
@@ -533,9 +673,13 @@ export function enumerateTurnLines(
       steps: AnalysisActionStep[],
       visitedEffectiveTypeSelections: ReadonlySet<string> | undefined
     ): void => {
-      for (const [legalActionIndex, action] of listLegalActions(
-        state
-      ).entries()) {
+      const legalActions =
+        diagnostics === undefined
+          ? listLegalActions(state)
+          : withPhysicalCardDiagnostics([state], diagnostics, () =>
+              listLegalActions(state)
+            );
+      for (const [legalActionIndex, action] of legalActions.entries()) {
         if (steps.length + 1 > limits.maxActionsPerLine) {
           throw new AnalysisLimitError(
             `Analysis action limit exceeded ${limits.maxActionsPerLine} after ${steps.length} steps; last action ${describeAction(action)}`
@@ -723,16 +867,27 @@ export function rankTurnLines(
   const operation = (): RankedTurnLinesResult => {
     const policyIsTrustedReadOnly = isTrustedReadOnlyPolicy(policy);
     const ranked = lines.map((line, enumerationIndex) => {
-      const evaluate = () =>
-        policy.evaluate({
-          sourceState: policyIsTrustedReadOnly
-            ? sourceState
-            : forkAnalyzerState(sourceState, diagnostics, true),
-          line: policyIsTrustedReadOnly
-            ? line
-            : cloneAnalyzedTurnLine(line, diagnostics),
-          perspectivePlayerId,
-        });
+      const evaluate = () => {
+        const evaluationSourceState = policyIsTrustedReadOnly
+          ? sourceState
+          : forkAnalyzerState(sourceState, diagnostics, true);
+        const evaluationLine = policyIsTrustedReadOnly
+          ? line
+          : cloneAnalyzedTurnLine(line, diagnostics);
+        const evaluatePolicy = () =>
+          policy.evaluate({
+            sourceState: evaluationSourceState,
+            line: evaluationLine,
+            perspectivePlayerId,
+          });
+        return diagnostics === undefined
+          ? evaluatePolicy()
+          : measurePhysicalCardLocationChanges(
+              [evaluationSourceState, evaluationLine.terminalState],
+              diagnostics,
+              evaluatePolicy
+            );
+      };
       const evaluation =
         diagnostics === undefined
           ? evaluate()
@@ -782,7 +937,60 @@ export function rankTurnLines(
   };
   return diagnostics === undefined
     ? operation()
-    : diagnostics.withPhase("ranking", operation);
+    : withPhysicalCardDiagnostics(
+        [sourceState, ...lines.map((line) => line.terminalState)],
+        diagnostics,
+        () => diagnostics.withPhase("ranking", operation)
+      );
+}
+
+function withPhysicalCardDiagnostics<T>(
+  states: readonly GameState[],
+  diagnostics: AnalyzerDiagnosticsSession,
+  operation: () => T
+): T {
+  const uniqueStates = [...new Set(states)];
+  const previousDiagnostics = uniqueStates.map(
+    (state) => state.physicalCardDiagnostics
+  );
+  for (const state of uniqueStates) {
+    state.physicalCardDiagnostics = diagnostics;
+  }
+  try {
+    return operation();
+  } finally {
+    for (const [index, state] of uniqueStates.entries()) {
+      const previous = previousDiagnostics[index];
+      if (previous === undefined) {
+        delete state.physicalCardDiagnostics;
+      } else {
+        state.physicalCardDiagnostics = previous;
+      }
+    }
+  }
+}
+
+function measurePhysicalCardLocationChanges<T>(
+  states: readonly GameState[],
+  diagnostics: AnalyzerDiagnosticsSession,
+  operation: () => T
+): T {
+  const uniqueStates = [...new Set(states)];
+  const snapshots = uniqueStates.map(capturePhysicalCardLocationSnapshot);
+  try {
+    return operation();
+  } finally {
+    for (const [index, state] of uniqueStates.entries()) {
+      const before = snapshots[index];
+      if (before === undefined) continue;
+      diagnostics.recordPhysicalLocationChanges(
+        countPhysicalCardLocationChanges(
+          before,
+          capturePhysicalCardLocationSnapshot(state)
+        )
+      );
+    }
+  }
 }
 
 function forkAnalyzerState(

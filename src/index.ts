@@ -235,6 +235,7 @@ export type {
   AnalysisLimitError,
   CompletedActionBranch,
   AnalyzerDiagnosticCounters,
+  AnalyzerDiagnosticBranchSearchDistribution,
   AnalyzerDiagnosticEvaluationPolicyCounters,
   AnalyzerDiagnosticOperationCounters,
   AnalyzerDiagnosticPhase,

@@ -14,6 +14,7 @@ import {
   type CardDefinition,
   type GameState,
   type RuntimeEffect,
+  type TurnLineEvaluationPolicy,
 } from "../src/index.js";
 import { victoryPointsPolicy } from "../src/engine/best-move-policies.js";
 import { addFixtureDefinitionToActiveHand } from "./helpers/fixture-cards.js";
@@ -123,6 +124,60 @@ test("diagnostic session counts enumeration and ranking work without changing li
   assert.equal(report.phases.enumeration.eventLogEntriesCopied, 0);
 });
 
+test("diagnostic instrumentation does not remain on analyzer states", () => {
+  const state = emptyTurnState();
+  const diagnostics = createAnalyzerDiagnostics();
+
+  const lines = enumerateTurnLines(state, limits, diagnostics);
+  rankTurnLines(
+    state,
+    lines,
+    victoryPointsPolicy,
+    state.activePlayerId,
+    diagnostics
+  );
+
+  assert.equal(state.physicalCardDiagnostics, undefined);
+  for (const line of lines) {
+    assert.equal(line.terminalState.physicalCardDiagnostics, undefined);
+  }
+});
+
+test("diagnostic session counts physical changes made by evaluation policy", () => {
+  const state = emptyTurnState();
+  state.runtimeMode = "fixture";
+  addFixtureDefinitionToActiveHand(state, choiceCardDefinition());
+  const diagnostics = createAnalyzerDiagnostics();
+  const lines = enumerateTurnLines(state, limits, diagnostics);
+  const mutatingPolicy: TurnLineEvaluationPolicy = {
+    id: "fixture-mutating-policy",
+    evaluate: ({ sourceState }) => {
+      const player = sourceState.players.find(
+        (candidate) => candidate.playerId === sourceState.activePlayerId
+      );
+      const card = player?.hand[0];
+      if (player !== undefined && card !== undefined) {
+        player.hand = player.hand.slice(1);
+        player.discard = [...player.discard, card];
+      }
+      return { score: 0 };
+    },
+  };
+
+  rankTurnLines(
+    state,
+    lines,
+    mutatingPolicy,
+    state.activePlayerId,
+    diagnostics
+  );
+
+  assert.ok(
+    diagnostics.snapshot().phases.evaluationPolicy.operations
+      .physicalLocationChanges > 0
+  );
+});
+
 test("diagnostic session counts choice-path replays and generated branches", () => {
   const state = emptyTurnState();
   state.runtimeMode = "fixture";
@@ -138,6 +193,92 @@ test("diagnostic session counts choice-path replays and generated branches", () 
   assert.equal(report.total.choicePathReplays, 2);
   assert.equal(report.total.intermediateStates, 2);
   assert.equal(report.total.terminalStates, 3);
+});
+
+test("diagnostic session reports physical location work for every branch attempt", () => {
+  const state = emptyTurnState();
+  state.runtimeMode = "fixture";
+  addFixtureDefinitionToActiveHand(state, choiceCardDefinition());
+  const diagnostics = createAnalyzerDiagnostics();
+
+  const lines = enumerateTurnLines(state, limits, diagnostics);
+  const report = diagnostics.snapshot();
+  const distribution = report.branchSearchDistribution;
+
+  assert.ok(lines.length > 1);
+  assert.deepEqual(report.total, {
+    actionApplications: 6,
+    gameStateClones: 6,
+    choicePathReplays: 2,
+    choicePathExpansions: 1,
+    choiceBranchesGenerated: 2,
+    intermediateStates: 2,
+    terminalStates: 3,
+    pathCopyOperations: 6,
+    pathItemsCopied: 9,
+    eventLogCopyOperations: 0,
+    eventLogEntriesCopied: 0,
+    pointLocationSearches: 21,
+    physicalZonePasses: 609,
+    physicalCardsViewed: 841,
+    fullLocationListsBuilt: 23,
+    locationRecordsCreated: 667,
+    physicalLocationChanges: 5,
+  });
+  assert.equal(distribution.branchAttempts, report.total.actionApplications);
+  assert.ok(
+    distribution.totalPointLocationSearches <=
+      report.total.pointLocationSearches
+  );
+  assert.deepEqual(distribution, {
+    branchAttempts: 6,
+    totalPointLocationSearches: 19,
+    averagePointLocationSearches: 19 / 6,
+    buckets: {
+      zero: 1,
+      one: 0,
+      twoToThree: 3,
+      fourToSeven: 2,
+      eightOrMore: 0,
+    },
+  });
+  assert.equal(
+    distribution.buckets.zero +
+      distribution.buckets.one +
+      distribution.buckets.twoToThree +
+      distribution.buckets.fourToSeven +
+      distribution.buckets.eightOrMore,
+    distribution.branchAttempts
+  );
+  assert.equal(
+    distribution.averagePointLocationSearches,
+    distribution.branchAttempts === 0
+      ? 0
+      : distribution.totalPointLocationSearches / distribution.branchAttempts
+  );
+  for (const metric of [
+    "actionApplications",
+    "gameStateClones",
+    "choicePathReplays",
+    "choicePathExpansions",
+    "choiceBranchesGenerated",
+    "intermediateStates",
+    "terminalStates",
+    "pathCopyOperations",
+    "pathItemsCopied",
+    "eventLogCopyOperations",
+    "eventLogEntriesCopied",
+    "pointLocationSearches",
+    "physicalZonePasses",
+    "physicalCardsViewed",
+    "fullLocationListsBuilt",
+    "locationRecordsCreated",
+    "physicalLocationChanges",
+  ] as const) {
+    assert.equal(report.phases.enumeration[metric], report.total[metric]);
+    assert.equal(report.phases.ranking[metric], 0);
+    assert.equal(report.phases.evaluationPolicy.operations[metric], 0);
+  }
 });
 
 test("diagnostic workload preserves the clean Analyzer result fingerprint", () => {

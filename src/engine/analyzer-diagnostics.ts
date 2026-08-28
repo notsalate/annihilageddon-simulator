@@ -30,7 +30,7 @@ import { initializeGame, type GameState } from "./setup.js";
 import { intakeRuntimeData } from "./runtime-data-intake.js";
 
 export const ANALYZER_DIAGNOSTIC_CONTRACT_VERSION =
-  "analyzer-diagnostics-v1" as const;
+  "analyzer-diagnostics-v2" as const;
 
 export interface AnalyzerDiagnosticTimings {
   totalMs: number;

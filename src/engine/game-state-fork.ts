@@ -76,6 +76,9 @@ function createFork(
     ...(source.effectChoiceStrategy === undefined
       ? {}
       : { effectChoiceStrategy: source.effectChoiceStrategy }),
+    ...(source.physicalCardDiagnostics === undefined
+      ? {}
+      : { physicalCardDiagnostics: source.physicalCardDiagnostics }),
   };
 
   installGameEventLog(fork);
