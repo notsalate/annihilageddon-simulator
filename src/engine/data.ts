@@ -70,6 +70,7 @@ export interface CardDefinition {
     victoryPoints: number;
     isOngoing: boolean;
     marketChipMarker: boolean;
+    isEffectless?: boolean;
     effects: RuntimeEffect[];
     unsupportedMechanics: string[];
   };
@@ -1227,6 +1228,12 @@ function decodeCardDefinition(value: unknown): DecodeResult<CardDefinition> {
       errors,
       "marketChipMarker"
     );
+    const isEffectless = optionalBooleanField(
+      engine,
+      "engine.isEffectless",
+      errors,
+      "isEffectless"
+    );
     const effects = requireRuntimeEffectArrayField(
       engine,
       "engine.effects",
@@ -1263,6 +1270,7 @@ function decodeCardDefinition(value: unknown): DecodeResult<CardDefinition> {
         victoryPoints,
         isOngoing,
         marketChipMarker,
+        ...(isEffectless === undefined ? {} : { isEffectless }),
         effects,
         unsupportedMechanics,
       };
@@ -1951,6 +1959,23 @@ function requireBooleanField(
     return undefined;
   }
 
+  return value;
+}
+
+function optionalBooleanField(
+  record: Record<string, unknown>,
+  label: string,
+  errors: string[],
+  key = label
+): boolean | undefined {
+  const value = record[key];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "boolean") {
+    errors.push(`${label} must be a boolean`);
+    return undefined;
+  }
   return value;
 }
 

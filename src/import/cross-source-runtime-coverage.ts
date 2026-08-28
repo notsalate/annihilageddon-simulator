@@ -895,16 +895,37 @@ function hasParameterizedRuntimeCardInstanceReference(
   testBody: string,
   call: RuntimeSeamCall
 ): boolean {
+  const binding = findGivenRuntimeCardBinding(testBody);
+  if (binding === undefined) {
+    return false;
+  }
+  return new RegExp(
+    "\\b" + escapeRegExp(binding) + "\\.instanceId\\b",
+    "u"
+  ).test(call.invocation);
+}
+
+function findGivenRuntimeCardBinding(
+  testBody: string,
+  id?: string
+): string | undefined {
   const setup = new RegExp(
-    `\\b(?:const|let)\\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*=\\s*givenRuntimeCard\\s*\\([\\s\\S]*?\\)`,
+    "\\b(?:const|let)\\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*=\\s*givenRuntimeCard\\s*\\([\\s\\S]*?\\)",
     "u"
   ).exec(testBody);
   if (setup?.[1] === undefined || !/\bdefinitionId\b/u.test(setup[0])) {
-    return false;
+    return undefined;
   }
-  return new RegExp(`\\b${escapeRegExp(setup[1])}\\.instanceId\\b`, "u").test(
-    call.invocation
-  );
+  if (
+    id !== undefined &&
+    !new RegExp(
+      "\\bdefinitionId\\s*:\\s*([\"'])" + escapeRegExp(id) + "\\1",
+      "u"
+    ).test(setup[0])
+  ) {
+    return undefined;
+  }
+  return setup[1];
 }
 
 function hasCardSemanticEvidenceObservation(
@@ -1038,24 +1059,14 @@ function hasRuntimeCardInstanceReference(
   id: string,
   call: RuntimeSeamCall
 ): boolean {
-  const setup = new RegExp(
-    `\\b(?:const|let)\\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*=\\s*givenRuntimeCard\\s*\\([\\s\\S]*?\\)`,
+  const binding = findGivenRuntimeCardBinding(testBody, id);
+  if (binding === undefined) {
+    return false;
+  }
+  return new RegExp(
+    "\\b" + escapeRegExp(binding) + "\\.instanceId\\b",
     "u"
-  ).exec(testBody);
-  if (setup?.[1] === undefined) {
-    return false;
-  }
-  const escapedId = escapeRegExp(id);
-  if (
-    !new RegExp(`\\bdefinitionId\\s*:\\s*(["'])${escapedId}\\1`, "u").test(
-      setup[0]
-    )
-  ) {
-    return false;
-  }
-  return new RegExp(`\\b${escapeRegExp(setup[1])}\\.instanceId\\b`, "u").test(
-    call.invocation
-  );
+  ).test(call.invocation);
 }
 
 function invocationUsesBinding(invocation: string, binding: string): boolean {
@@ -1365,22 +1376,12 @@ function validateRuntime(
 
 function isExplicitNoEffectCard(input: {
   objectKind: CrossSourceObjectKind;
-  draft: unknown;
   runtime: Record<string, unknown> | undefined;
 }): boolean {
-  if (input.objectKind !== "card") {
+  if (input.objectKind !== "card" || input.runtime === undefined) {
     return false;
   }
-  const draft = getRecord(input.draft);
-  const visible = getRecord(draft["visible"]);
-  if (getString(visible["textRu"])?.trim() === "(Эффекта нет.)") {
-    return true;
-  }
-  const notes = Array.isArray(draft["notes"]) ? draft["notes"] : [];
-  return notes.some(
-    (note) =>
-      typeof note === "string" && /карта не содержит действий/iu.test(note)
-  );
+  return getRecord(input.runtime["engine"])["isEffectless"] === true;
 }
 
 function collectDraftSemanticPoints(draft: unknown): CrossSourceDraftPoint[] {

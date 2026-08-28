@@ -28,6 +28,7 @@
     "victoryPoints": 0,
     "isOngoing": false,
     "marketChipMarker": false,
+    "isEffectless": true,
     "effects": [],
     "unsupportedMechanics": []
   }
