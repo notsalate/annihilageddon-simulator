@@ -45,9 +45,7 @@ const cliModule: unknown = await import(
   ).href
 );
 
-function isDiagnosticsCliModule(
-  value: unknown
-): value is DiagnosticsCliModule {
+function isDiagnosticsCliModule(value: unknown): value is DiagnosticsCliModule {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -95,7 +93,6 @@ test("analyzer diagnostics CLI parses profile and artifact options", () => {
       commit: "head-sha",
       artifactDir: "tmp/analyzer",
       outputPath: "summary.json",
-      cpuProfile: true,
       worker: false,
       diagnosticWorker: false,
     }
@@ -111,10 +108,16 @@ test("analyzer diagnostics CLI defaults to a reference light-profile run", () =>
     commit: undefined,
     artifactDir: undefined,
     outputPath: undefined,
-    cpuProfile: true,
     worker: false,
     diagnosticWorker: false,
   });
+});
+
+test("analyzer diagnostics CLI does not allow skipping the CPU profile", () => {
+  assert.throws(
+    () => cliModule.parseAnalyzerDiagnosticsArgs(["--no-cpu-profile"]),
+    /Unsupported argument/
+  );
 });
 
 test("CPU profile summary separates JavaScript, V8, native and GC samples", () => {
@@ -248,7 +251,10 @@ test("analyzer diagnostics verify clean timing after artifact serialization", ()
     () =>
       cliModule.assertAnalyzerCleanBenchmarkArtifactConsistency(
         cleanBenchmark,
-        { ...persistedArtifact, timings: { ...persistedArtifact.timings, totalMs: 5_683 } }
+        {
+          ...persistedArtifact,
+          timings: { ...persistedArtifact.timings, totalMs: 5_683 },
+        }
       ),
     /changed totalMs/
   );

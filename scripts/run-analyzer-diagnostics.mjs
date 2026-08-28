@@ -28,7 +28,6 @@ export function parseAnalyzerDiagnosticsArgs(args) {
   const values = new Map();
   let worker = false;
   let diagnosticWorker = false;
-  let cpuProfile = true;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -38,10 +37,6 @@ export function parseAnalyzerDiagnosticsArgs(args) {
     }
     if (arg === "--diagnostic-worker") {
       diagnosticWorker = true;
-      continue;
-    }
-    if (arg === "--no-cpu-profile") {
-      cpuProfile = false;
       continue;
     }
     if (
@@ -91,7 +86,6 @@ export function parseAnalyzerDiagnosticsArgs(args) {
     commit: values.get("commit"),
     artifactDir: values.get("artifacts"),
     outputPath: values.get("output"),
-    cpuProfile,
     worker,
     diagnosticWorker,
   };
@@ -103,9 +97,12 @@ export function formatAnalyzerDiagnosticsSummary(summary) {
   const cpu = summary.cpuProfile;
   const counterTotals = diagnostic.counters.total;
   const phaseCounters = diagnostic.counters.phases;
-  const hotspotLines = (cpu.hotspots ?? []).slice(0, 5).map((hotspot) =>
-    `  - ${hotspot.category}: ${hotspot.functionName} ${hotspot.selfTimeMs.toFixed(2)} ms (${hotspot.url || "native"})`
-  );
+  const hotspotLines = (cpu.hotspots ?? [])
+    .slice(0, 5)
+    .map(
+      (hotspot) =>
+        `  - ${hotspot.category}: ${hotspot.functionName} ${hotspot.selfTimeMs.toFixed(2)} ms (${hotspot.url || "native"})`
+    );
   return [
     "Analyzer diagnostics",
     `workload: ${summary.workload.role} (${summary.workload.workloadId}), profile ${summary.workload.profile}`,
@@ -125,7 +122,9 @@ export function formatAnalyzerDiagnosticsSummary(summary) {
     "",
     "CPU profile (diagnostic-only, not comparable to E1):",
     `  sampled ${formatMilliseconds(cpu.sampledTimeMs ?? 0)}, categories JS ${formatMilliseconds(cpu.categoryTotals.javascript)}, V8 ${formatMilliseconds(cpu.categoryTotals.v8)}, native ${formatMilliseconds(cpu.categoryTotals.native)}, GC ${formatMilliseconds(cpu.categoryTotals.gc)}`,
-    ...(hotspotLines.length === 0 ? ["  hotspots: none"] : ["  hotspots:", ...hotspotLines]),
+    ...(hotspotLines.length === 0
+      ? ["  hotspots: none"]
+      : ["  hotspots:", ...hotspotLines]),
     "",
     `determinism: ${summary.determinism.allMatch ? "all runs have the same result fingerprint" : "fingerprints differ"}`,
     "artifacts:",
@@ -183,16 +182,6 @@ export function assertAnalyzerCleanBenchmarkArtifactConsistency(
       );
     }
   }
-}
-
-export function assertAnalyzerDiagnosticReportConsistency(
-  summary,
-  persistedCleanBenchmark
-) {
-  assertAnalyzerCleanBenchmarkArtifactConsistency(
-    persistedCleanBenchmark,
-    summary.cleanBenchmark
-  );
 }
 
 export function assessAnalyzerE1Comparability({
@@ -299,7 +288,8 @@ export function summarizeCpuProfile(profile) {
     const callFrame = getCallFrame(node);
     const category = classifyCallFrame(callFrame);
     const rawDelta = timeDeltas[index];
-    const durationMs = isFiniteNumber(rawDelta) && rawDelta >= 0 ? rawDelta / 1_000 : 0;
+    const durationMs =
+      isFiniteNumber(rawDelta) && rawDelta >= 0 ? rawDelta / 1_000 : 0;
     sampledTimeMs += durationMs;
     categoryTotals[category] += durationMs;
 
@@ -361,10 +351,7 @@ function createWorkloadOptions(args) {
 }
 
 function readAcceptedAnalyzerE1Reference(profile) {
-  const baselinePath = path.resolve(
-    process.cwd(),
-    E1_BASELINE_RELATIVE_PATH
-  );
+  const baselinePath = path.resolve(process.cwd(), E1_BASELINE_RELATIVE_PATH);
   if (!existsSync(baselinePath)) {
     return { baselinePath, reference: null };
   }
@@ -446,7 +433,14 @@ function runCpuProfile(args, artifactDir) {
     artifactDir,
     `cpu-profile-${args.profile}.cpuprofile`
   );
-  const workerArgs = [SCRIPT_PATH, "--worker", "--profile", args.profile, "--role", args.role];
+  const workerArgs = [
+    SCRIPT_PATH,
+    "--worker",
+    "--profile",
+    args.profile,
+    "--role",
+    args.role,
+  ];
   if (args.dataPackPath !== undefined) {
     workerArgs.push("--dataPackPath", args.dataPackPath);
   }
@@ -545,19 +539,7 @@ function runCommand(args) {
 
   const cleanBenchmark = runCleanBenchmark(args);
   const diagnosticRun = runDiagnosticProcess(args);
-  const cpuRun = args.cpuProfile
-    ? runCpuProfile(args, artifactDir)
-    : {
-        workerRun: null,
-        profilePath: null,
-        profile: {
-          sampledTimeMs: 0,
-          sampleCount: 0,
-          categoryTotals: { javascript: 0, v8: 0, native: 0, gc: 0 },
-          hotspots: [],
-          sourceLinkage: "not run",
-        },
-      };
+  const cpuRun = runCpuProfile(args, artifactDir);
 
   const artifacts = {
     cleanBenchmark: path.join(artifactDir, "clean-benchmark.json"),
@@ -575,13 +557,13 @@ function runCommand(args) {
     persistedCleanBenchmark
   );
   writeJson(artifacts.diagnosticRun, diagnosticRun);
-  if (cpuRun.workerRun !== null) writeJson(artifacts.cpuRun, cpuRun.workerRun);
+  writeJson(artifacts.cpuRun, cpuRun.workerRun);
 
   const fingerprints = [
     persistedCleanBenchmark.resultFingerprint,
     diagnosticRun.resultFingerprint,
-    cpuRun.workerRun?.resultFingerprint,
-  ].filter((value) => typeof value === "string");
+    cpuRun.workerRun.resultFingerprint,
+  ];
   assertAnalyzerDiagnosticDeterminism(fingerprints);
   const resultFingerprint = persistedCleanBenchmark.resultFingerprint;
   const e1Baseline = readAcceptedAnalyzerE1Reference(args.profile);
@@ -628,30 +610,27 @@ function runCommand(args) {
       timingClass: "diagnostic-only",
       comparableTo: "not comparable to E1",
       ...cpuRun.profile,
-      ...(cpuRun.workerRun === null
-        ? { resultFingerprint: null }
-        : {
-            resultFingerprint: cpuRun.workerRun.resultFingerprint,
-            workloadFingerprint: cpuRun.workerRun.workloadFingerprint,
-            workloadVolumeFingerprint: cpuRun.workerRun.workloadVolumeFingerprint,
-          }),
+      resultFingerprint: cpuRun.workerRun.resultFingerprint,
+      workloadFingerprint: cpuRun.workerRun.workloadFingerprint,
+      workloadVolumeFingerprint: cpuRun.workerRun.workloadVolumeFingerprint,
       artifact: artifacts.cpuProfile,
-      runArtifact: cpuRun.workerRun === null ? null : artifacts.cpuRun,
+      runArtifact: artifacts.cpuRun,
     },
     determinism: {
       allMatch: true,
       fingerprints: {
         cleanBenchmark: persistedCleanBenchmark.resultFingerprint,
         diagnosticRun: diagnosticRun.resultFingerprint,
-        cpuProfile: cpuRun.workerRun?.resultFingerprint ?? null,
+        cpuProfile: cpuRun.workerRun.resultFingerprint,
       },
     },
     artifacts,
   };
   writeJson(artifacts.summary, summary);
-  assertAnalyzerDiagnosticReportConsistency(
-    readJson(artifacts.summary),
-    persistedCleanBenchmark
+  const persistedSummary = readJson(artifacts.summary);
+  assertAnalyzerCleanBenchmarkArtifactConsistency(
+    persistedCleanBenchmark,
+    persistedSummary.cleanBenchmark
   );
   writeFileSync(
     path.join(artifactDir, "summary.txt"),
@@ -666,11 +645,11 @@ function getCallFrame(node) {
   const frame = isRecord(node?.callFrame) ? node.callFrame : node;
   return {
     functionName:
-      typeof frame?.functionName === "string" ? frame.functionName : "<anonymous>",
+      typeof frame?.functionName === "string"
+        ? frame.functionName
+        : "<anonymous>",
     url: typeof frame?.url === "string" ? frame.url : "",
-    lineNumber: isFiniteNumber(frame?.lineNumber)
-      ? frame.lineNumber + 1
-      : null,
+    lineNumber: isFiniteNumber(frame?.lineNumber) ? frame.lineNumber + 1 : null,
     columnNumber: isFiniteNumber(frame?.columnNumber)
       ? frame.columnNumber + 1
       : null,
@@ -701,7 +680,10 @@ function isRecord(value) {
   return typeof value === "object" && value !== null;
 }
 
-if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === path.resolve(SCRIPT_PATH)) {
+if (
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === path.resolve(SCRIPT_PATH)
+) {
   try {
     const args = parseAnalyzerDiagnosticsArgs(process.argv.slice(2));
     if (args.worker || args.diagnosticWorker) {
