@@ -85,7 +85,7 @@ data/cards/
 
 Visible card types (`wizardCard`, `creature`, `spell`, `treasure`, `location`) остаются в данных карты, но не определяют путь файла.
 
-Пустой runtime `engine.effects` допустим только при явном `engine.isEffectless: true`; это структурированный признак карты без игрового эффекта, а не вывод из её текста или заметок.
+Пустой runtime `engine.effects` допустим только когда typed coverage plan содержит явную ссылку на поле `engine.effects` со значением `[]`; это структурированное audit-доказательство, а не вывод из текста или заметок.
 
 ## Runtime Tokens
 

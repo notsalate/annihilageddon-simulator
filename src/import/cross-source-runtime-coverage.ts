@@ -280,7 +280,7 @@ export function evaluateCrossSourceCoverage(input: {
   }
 
   validateComposition(input, blockers);
-  validateRuntime(input, blockers);
+  validateRuntime(input, blockers, planEntry);
 
   const blockerCodes = [
     ...typedBlockers,
@@ -1319,10 +1319,10 @@ function validateRuntime(
   input: {
     id: string;
     objectKind: CrossSourceObjectKind;
-    draft: unknown;
     runtime: Record<string, unknown> | undefined;
   },
-  blockers: Set<string>
+  blockers: Set<string>,
+  planEntry: CrossSourceCoveragePlanEntry
 ): void {
   if (input.runtime === undefined) {
     blockers.add("missing runtime mapping");
@@ -1345,7 +1345,7 @@ function validateRuntime(
 
   const effects = getRawRuntimeEffects(input.runtime);
   if (effects.length === 0) {
-    if (!isExplicitNoEffectCard(input)) {
+    if (!isExplicitNoEffectCard(input.objectKind, planEntry)) {
       blockers.add("runtime has no effects");
     }
     return;
@@ -1374,14 +1374,22 @@ function validateRuntime(
   }
 }
 
-function isExplicitNoEffectCard(input: {
-  objectKind: CrossSourceObjectKind;
-  runtime: Record<string, unknown> | undefined;
-}): boolean {
-  if (input.objectKind !== "card" || input.runtime === undefined) {
+function isExplicitNoEffectCard(
+  objectKind: CrossSourceObjectKind,
+  planEntry: CrossSourceCoveragePlanEntry
+): boolean {
+  if (objectKind !== "card") {
     return false;
   }
-  return getRecord(input.runtime["engine"])["isEffectless"] === true;
+  return planEntry.semanticMappings.some((mapping) =>
+    mapping.runtimeRefs.some(
+      (runtimeRef) =>
+        runtimeRef.kind === "field" &&
+        runtimeRef.path === "engine.effects" &&
+        Array.isArray(runtimeRef.value) &&
+        runtimeRef.value.length === 0
+    )
+  );
 }
 
 function collectDraftSemanticPoints(draft: unknown): CrossSourceDraftPoint[] {
