@@ -503,11 +503,13 @@ function validateTypedPlanEntry(
   blockers: CrossSourceBlocker[]
 ): void {
   const requiredCapabilities = planEntry.requiredCapabilities;
-  if (requiredCapabilities === undefined) {
+  if (requiredCapabilities === undefined || requiredCapabilities.length === 0) {
     blockers.push(
       createBlocker(
         "required-capability-uncovered",
-        "typed evidence plan does not declare required capabilities"
+        requiredCapabilities === undefined
+          ? "typed evidence plan does not declare required capabilities"
+          : "typed evidence plan must declare at least one required capability"
       )
     );
   }

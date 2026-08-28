@@ -1509,6 +1509,53 @@ test("semantic evidence keeps a required capability open when its evidence mappi
   );
 });
 
+test("semantic evidence rejects an explicitly empty required capability list", () => {
+  const rootDir = mkdtempSync(
+    path.join(tmpdir(), "krutagidon-semantic-evidence-empty-capabilities-")
+  );
+  const id = "esw2_dbg__main_001";
+  const testName = "runtime seam is present without declared capabilities";
+
+  writeText(
+    rootDir,
+    "tests/semantic-evidence.test.ts",
+    `test("${testName}", () => {
+  const cardId = "${id}";
+  const state = initializeGame({ rootDir });
+  applyAction(state, { type: "playCard", cardId });
+  assert.equal(state.players[0]?.chips, 1);
+});
+`
+  );
+
+  const planEntry = createSemanticEvidencePlanEntry({
+    id,
+    testName,
+    testSubject: { kind: "binding", name: "cardId" },
+  });
+  planEntry.requiredCapabilities = [];
+
+  const evaluation = evaluateCrossSourceCoverage({
+    rootDir,
+    id,
+    objectKind: "card",
+    sourceGroupOrTokenKind: "main",
+    draft: createSemanticEvidenceDraft(id),
+    runtime: createSemanticEvidenceRuntime(id),
+    compositionMembership: [{ role: "mainDeck", entryKind: "card", count: 1 }],
+    planEntry,
+  });
+
+  assert.equal(evaluation.status, "blocked");
+  assert.ok(
+    evaluation.blockerCodes.some(
+      (blocker) =>
+        blocker.code === "required-capability-uncovered" &&
+        blocker.message.includes("at least one required capability")
+    )
+  );
+});
+
 test("semantic evidence rejects a card ID that is only mentioned outside a runtime seam", () => {
   const rootDir = mkdtempSync(
     path.join(tmpdir(), "krutagidon-semantic-evidence-unrelated-test-")
