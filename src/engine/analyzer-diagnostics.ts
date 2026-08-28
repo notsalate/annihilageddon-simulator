@@ -1,5 +1,4 @@
 import {
-  AnalysisLimitError,
   createAnalyzerDiagnostics,
   enumerateTurnLines,
   rankTurnLines,
@@ -12,19 +11,14 @@ import {
 } from "./best-move-analysis.js";
 import {
   createAnalyzerBenchmarkWorkload,
-  createAnalyzerResultFingerprint,
-  createAnalyzerWorkloadFingerprint,
-  createAnalyzerWorkloadVolumeFingerprint,
-  toAnalyzerLineFingerprint,
+  executeAnalyzerWorkload,
   type AnalyzerBenchmarkMetrics,
   type AnalyzerBenchmarkProfileId,
   type AnalyzerBenchmarkRole,
   type AnalyzerBenchmarkWorkload,
   type AnalyzerSeedFingerprint,
 } from "./analyzer-benchmark.js";
-import { getBestMovePolicy } from "./best-move-policies.js";
 import {
-  elapsedMs,
   getBenchmarkCommit,
   getBenchmarkEnvironmentFingerprint,
   systemBenchmarkClock,
@@ -119,138 +113,33 @@ export function runAnalyzerWorkloadOnce(
   const initialize = dependencies.initialize ?? initializeGame;
   const enumerate = dependencies.enumerate ?? enumerateTurnLines;
   const rank = dependencies.rank ?? rankTurnLines;
-  const startedAt = clock.now();
-
-  const dataLoadStartedAt = clock.now();
-  const dataPack = intakeDataPack(options.rootDir, workload.dataPackPath);
-  const dataLoadMs = elapsedMs(clock, dataLoadStartedAt);
-
-  let preparationMs = 0;
-  let enumerationMs = 0;
-  let rankingMs = 0;
-  let lineCount = 0;
-  let rankedLineCount = 0;
-  let actionCount = 0;
-  let choiceBranchCount = 0;
-  let limitsReached = 0;
-  const limitKindCounts = new Map<string, number>();
-  const seedResults: AnalyzerSeedFingerprint[] = [];
-  const policy = getBestMovePolicy(workload.criterionId);
-
-  for (const seed of workload.seeds) {
-    const preparationStartedAt = clock.now();
-    const state = initialize({
-      dataPack,
-      seed,
-      playerCount: workload.playerCount,
-    });
-    preparationMs += elapsedMs(clock, preparationStartedAt);
-
-    const enumerationStartedAt = clock.now();
-    let lines: AnalyzedTurnLine[];
-    try {
-      lines = enumerate(state, workload.limits, options.diagnostics);
-    } catch (error) {
-      enumerationMs += elapsedMs(clock, enumerationStartedAt);
-      if (!(error instanceof AnalysisLimitError)) {
-        throw error;
-      }
-      limitsReached += 1;
-      limitKindCounts.set(
-        error.name,
-        (limitKindCounts.get(error.name) ?? 0) + 1
-      );
-      seedResults.push({
-        seed,
-        limitReached: true,
-        limitError: error.name,
-        lineCount: 0,
-        rankedLines: [],
-      });
-      continue;
-    }
-    enumerationMs += elapsedMs(clock, enumerationStartedAt);
-
-    const rankingStartedAt = clock.now();
-    const ranked = rank(
-      state,
-      lines,
-      policy,
-      state.activePlayerId,
-      options.diagnostics
-    );
-    rankingMs += elapsedMs(clock, rankingStartedAt);
-
-    const rankedLines = ranked.rankedLines.map(toAnalyzerLineFingerprint);
-    lineCount += lines.length;
-    rankedLineCount += ranked.rankedLines.length;
-    actionCount += lines.reduce((total, line) => total + line.steps.length, 0);
-    choiceBranchCount += lines.reduce(
-      (total, line) =>
-        total +
-        line.steps.reduce(
-          (stepTotal, step) => stepTotal + step.selectedChoices.length,
-          0
-        ),
-      0
-    );
-    seedResults.push({
-      seed,
-      limitReached: false,
-      lineCount: lines.length,
-      rankedLines,
-    });
-  }
-
-  const resultPreparationStartedAt = clock.now();
-  const runtimeDataPackId = dataPack.manifest.packId;
-  const metrics: AnalyzerBenchmarkMetrics = {
-    totalSeeds: workload.seeds.length,
-    lineCount,
-    rankedLineCount,
-    actionCount,
-    branchCount: lineCount + choiceBranchCount,
-    choiceBranchCount,
-    limitsReached,
-    limitKindCounts: Object.fromEntries(
-      [...limitKindCounts.entries()].sort(([left], [right]) =>
-        left.localeCompare(right)
-      )
-    ),
-  };
-  const workloadFingerprint = createAnalyzerWorkloadFingerprint(
+  const execution = executeAnalyzerWorkload({
     workload,
-    runtimeDataPackId
-  );
-  const workloadVolumeFingerprint = createAnalyzerWorkloadVolumeFingerprint(
-    workloadFingerprint,
-    metrics
-  );
-  const resultFingerprint = createAnalyzerResultFingerprint(
-    workloadFingerprint,
-    seedResults
-  );
-  const resultPreparationMs = elapsedMs(clock, resultPreparationStartedAt);
+    rootDir: options.rootDir,
+    clock,
+    intakeDataPack,
+    initialize,
+    enumerate,
+    rank,
+    ...(options.diagnostics === undefined
+      ? {}
+      : { diagnostics: options.diagnostics }),
+  });
   const timings: AnalyzerDiagnosticTimings = {
-    totalMs: elapsedMs(clock, startedAt),
-    dataLoadMs,
-    preparationMs,
-    enumerationMs,
-    rankingMs,
+    ...execution.timings,
     evaluationPolicyMs:
       options.diagnostics?.snapshot().phases.evaluationPolicy.timeMs ?? 0,
-    resultPreparationMs,
   };
 
   return {
     workload,
     timings,
-    metrics,
-    seedResults,
-    runtimeDataPackId,
-    workloadFingerprint,
-    workloadVolumeFingerprint,
-    resultFingerprint,
+    metrics: execution.metrics,
+    seedResults: execution.seedResults,
+    runtimeDataPackId: execution.runtimeDataPackId,
+    workloadFingerprint: execution.workloadFingerprint,
+    workloadVolumeFingerprint: execution.workloadVolumeFingerprint,
+    resultFingerprint: execution.resultFingerprint,
   };
 }
 
