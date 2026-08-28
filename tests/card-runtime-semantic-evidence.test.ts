@@ -81,6 +81,8 @@ function assertCardRuntimeEvidence(
 
   for (const mapping of planEntry.semanticMappings) {
     assertCardRuntimeMappingEvidence(
+      scenario,
+      card,
       definition,
       definitionId,
       mapping,
@@ -90,6 +92,8 @@ function assertCardRuntimeEvidence(
 }
 
 function assertCardRuntimeMappingEvidence(
+  scenario: GameScenario,
+  card: CardInstance,
   definition: CardDefinition,
   definitionId: string,
   mapping: CrossSourceSemanticMapping,
@@ -112,10 +116,20 @@ function assertCardRuntimeMappingEvidence(
     }
 
     const effectKey = runtimeEffectKey(runtimeRef);
-    assert.ok(
-      observedEffectKeys.has(effectKey),
-      `${definitionId} ${mapping.draftPoint.path} has no mapping-specific external observation for ${effectKey}`
-    );
+    if (runtimeRef.timing === "onPlay") {
+      assertCardRuntimeOnPlayMappingOutcome(
+        scenario,
+        card,
+        runtimeRef,
+        definitionId,
+        mapping.draftPoint.path
+      );
+    } else {
+      assert.ok(
+        observedEffectKeys.has(effectKey),
+        `${definitionId} ${mapping.draftPoint.path} has no mapping-specific external observation for ${effectKey}`
+      );
+    }
     if (effectKey === "add_power@onPlay") {
       assertMappedAddPowerOutcome(definition, mapping, mapping.draftPoint.path);
     }
@@ -127,6 +141,423 @@ function runtimeEffectKey(effect: {
   timing: string;
 }): string {
   return `${effect.effectId}@${effect.timing}`;
+}
+
+function assertCardRuntimeOnPlayMappingOutcome(
+  scenario: GameScenario,
+  card: CardInstance,
+  runtimeRef: Extract<CrossSourceRuntimeRef, { kind: "effect" }>,
+  definitionId: string,
+  draftPointPath: string
+): void {
+  const events = scenario.state.eventLog.filter(
+    (event) =>
+      event.cardInstanceId === card.instanceId &&
+      event.definitionId === card.definitionId &&
+      event.effectId === runtimeRef.effectId
+  );
+
+  if (events.length === 0) {
+    assertOnPlayEffectEvidence(
+      definitionId,
+      runtimeRef.effectId,
+      runtimeRef.fields
+    );
+    return;
+  }
+
+  const eventRecords = events.map(
+    (event) => event as unknown as Record<string, unknown>
+  );
+  const fields = runtimeRef.fields;
+  const label = `${definitionId} ${draftPointPath} ${runtimeEffectKey(runtimeRef)}`;
+
+  switch (runtimeRef.effectId) {
+    case "add_power":
+    case "add_power_if_no_controlled_dead_wizard_token": {
+      const expectedAmount = fields["amount"];
+      assert.equal(
+        typeof expectedAmount,
+        "number",
+        `${label} has no expected power amount`
+      );
+      assertEventAmount(
+        eventRecords,
+        expectedAmount as number,
+        "effectAddPowerApplied",
+        label
+      );
+      return;
+    }
+    case "draw_cards":
+    case "discard_hand_then_draw_cards": {
+      const expectedAmount = fields["amount"] ?? fields["drawAmount"];
+      assert.equal(
+        typeof expectedAmount,
+        "number",
+        `${label} has no expected draw amount`
+      );
+      assertEventAmount(
+        eventRecords,
+        expectedAmount as number,
+        "effectDrawCardsApplied",
+        label
+      );
+      return;
+    }
+    case "draw_cards_for_each_player": {
+      const expectedAmount = fields["amount"];
+      assert.equal(
+        typeof expectedAmount,
+        "number",
+        `${label} has no expected draw amount`
+      );
+      const drawEvents = eventRecords.filter(
+        (event) => event["type"] === "effectDrawCardsApplied"
+      );
+      assert.equal(drawEvents.length, scenario.state.players.length, label);
+      for (const event of drawEvents) {
+        assert.equal(event["amount"], expectedAmount, label);
+      }
+      return;
+    }
+    case "draw_cards_for_self_and_chosen_foe": {
+      const expectedAmount = fields["amount"];
+      assert.equal(
+        typeof expectedAmount,
+        "number",
+        `${label} has no expected draw amount`
+      );
+      const drawEvents = eventRecords.filter(
+        (event) => event["type"] === "effectDrawCardsApplied"
+      );
+      assert.equal(drawEvents.length, 2, label);
+      for (const event of drawEvents) {
+        assert.equal(event["amount"], expectedAmount, label);
+      }
+      assertMappingHasPlayerTarget(eventRecords, label);
+      return;
+    }
+    case "discard_random_hand_cards": {
+      const expectedAmount = fields["amount"];
+      assert.equal(
+        typeof expectedAmount,
+        "number",
+        `${label} has no expected discard amount`
+      );
+      assert.equal(
+        eventRecords.filter((event) => event["type"] === "effectCardDiscarded")
+          .length,
+        expectedAmount,
+        label
+      );
+      assertMappingHasPlayerTarget(eventRecords, label);
+      return;
+    }
+    case "attack_gain_limp_wand": {
+      const expectedAmount = fields["amount"];
+      assert.equal(
+        typeof expectedAmount,
+        "number",
+        `${label} has no expected limp-wand amount`
+      );
+      assertMappingHasAttack(eventRecords, label);
+      const gainEvents = eventRecords.filter(
+        (event) => event["type"] === "effectCardGained"
+      );
+      assert.equal(gainEvents.length, expectedAmount, label);
+      for (const event of gainEvents) {
+        assert.equal(event["targetDefinitionId"], "esw2_dbg__limp_wand", label);
+        assert.equal(event["destination"], "discard", label);
+      }
+      return;
+    }
+    case "attack_damage":
+    case "distributed_attack_damage":
+    case "directional_chain_attack":
+    case "multi_target_attack":
+    case "multi_target_neighbor_attack":
+    case "sequential_attack_damage":
+    case "optional_spend_chip_attack_damage": {
+      if (runtimeRef.effectId === "optional_spend_chip_attack_damage") {
+        assertOnPlayEffectEvidence(
+          definitionId,
+          runtimeRef.effectId,
+          runtimeRef.fields
+        );
+        assert.ok(
+          eventRecords.some(
+            (event) => event["type"] === "effectChoiceSelected"
+          ),
+          `${label} did not record the optional attack choice`
+        );
+        if (eventRecords.every((event) => event["type"] !== "attackCreated")) {
+          return;
+        }
+      }
+      assertMappingHasAttack(eventRecords, label);
+      const expectedAmount = fields["amount"];
+      if (typeof expectedAmount === "number") {
+        const attackEvents = eventRecords.filter(
+          (event) => event["type"] === "attackCreated"
+        );
+        assert.ok(
+          attackEvents.some(
+            (event) =>
+              typeof event["amount"] === "number" &&
+              event["amount"] >= expectedAmount
+          ),
+          `${label} has no attack with base amount ${String(expectedAmount)}`
+        );
+      }
+      assertMappingHasDeclaredTarget(eventRecords, fields, label);
+      return;
+    }
+    case "attack_damage_equal_to_controlled_card_cost":
+    case "attack_damage_equal_remembered_card_cost":
+    case "attack_damage_equal_random_discarded_hand_cost":
+    case "attack_damage_per_controlled_dead_wizard_token":
+    case "attack_reveal_and_play_foe_deck_card":
+    case "attack_destroy_top_legend_deck_then_damage_equal_cost":
+    case "attack_gain_dead_wizard_tokens":
+    case "attack_kill_and_replace_dead_wizard_token":
+    case "attack_transfer_controlled_dead_wizard_token":
+    case "attack_gain_status": {
+      assertMappingHasAttack(eventRecords, label);
+      assertMappingHasDeclaredTarget(eventRecords, fields, label);
+      if (runtimeRef.effectId === "attack_reveal_and_play_foe_deck_card") {
+        const expectedAmount = fields["amount"];
+        assert.equal(typeof expectedAmount, "number", label);
+        assert.equal(
+          eventRecords.filter((event) => event["type"] === "effectCardRevealed")
+            .length,
+          expectedAmount,
+          label
+        );
+        assert.ok(
+          eventRecords.some(
+            (event) => event["type"] === "effectFoeDeckCardPlayed"
+          ),
+          `${label} did not play a revealed foe-deck card`
+        );
+      }
+      if (
+        runtimeRef.effectId === "attack_damage_equal_random_discarded_hand_cost"
+      ) {
+        const expectedAmount = fields["discardAmount"];
+        assert.equal(typeof expectedAmount, "number", label);
+        assert.equal(
+          eventRecords.filter(
+            (event) => event["type"] === "effectCardDiscarded"
+          ).length,
+          expectedAmount,
+          label
+        );
+      }
+      if (runtimeRef.effectId === "attack_kill_and_replace_dead_wizard_token") {
+        assert.ok(
+          eventRecords.some((event) => {
+            const choiceId = event["choiceId"];
+            return (
+              event["type"] === "effectChoiceSelected" &&
+              typeof choiceId === "string" &&
+              choiceId.startsWith("token:")
+            );
+          }),
+          `${label} did not select a replacement token`
+        );
+      }
+      if (runtimeRef.effectId === "attack_gain_status") {
+        assert.ok(
+          eventRecords.some((event) => event["type"] === "dinglerStatusGained"),
+          `${label} did not apply the mapped status`
+        );
+      }
+      return;
+    }
+    case "gain_chips": {
+      const expectedAmount = fields["amount"];
+      assert.equal(typeof expectedAmount, "number", label);
+      assertEventAmount(
+        eventRecords,
+        expectedAmount as number,
+        undefined,
+        label
+      );
+      return;
+    }
+    case "gain_chips_per_player_with_status":
+    case "gain_chips_per_controlled_dead_wizard_token": {
+      const chipEvent = eventRecords.find(
+        (event) => event["type"] === "effectChipsGained"
+      );
+      assert.ok(chipEvent, `${label} has no chip result event`);
+      const chipsBefore = chipEvent["chipsBefore"];
+      const chipsAfter = chipEvent["chipsAfter"];
+      const amount = chipEvent["amount"];
+      const numericChipsBefore = requireNumber(chipsBefore, label);
+      const numericChipsAfter = requireNumber(chipsAfter, label);
+      const numericAmount = requireNumber(amount, label);
+      assert.equal(
+        numericChipsAfter,
+        numericChipsBefore + numericAmount,
+        label
+      );
+      return;
+    }
+    case "add_power_per_player_with_status":
+    case "add_power_per_controlled_object":
+    case "add_power_per_controlled_dead_wizard_token": {
+      const powerEvent = eventRecords.find(
+        (event) => event["type"] === "effectAddPowerApplied"
+      );
+      assert.ok(powerEvent, `${label} has no power result event`);
+      const powerBefore = requireNumber(powerEvent["powerBefore"], label);
+      const powerAfter = requireNumber(powerEvent["powerAfter"], label);
+      const powerAmount = requireNumber(powerEvent["amount"], label);
+      assert.equal(powerAfter, powerBefore + powerAmount, label);
+      assert.ok(
+        typeof fields["amountPerPlayer"] === "number" ||
+          typeof fields["amount"] === "number" ||
+          typeof fields["amountPerDeadWizardToken"] === "number",
+        `${label} has no mapped power multiplier`
+      );
+      return;
+    }
+    case "destroy_random_legend_market_card": {
+      assert.equal(
+        eventRecords.filter((event) => event["type"] === "effectCardDestroyed")
+          .length,
+        1,
+        label
+      );
+      return;
+    }
+    case "destroy_top_main_deck_cards_then_optional_play_mayhem": {
+      const expectedAmount = fields["amount"];
+      assert.equal(typeof expectedAmount, "number", label);
+      assert.equal(
+        eventRecords.filter(
+          (event) => event["type"] === "effectTopMainDeckCardDestroyed"
+        ).length,
+        expectedAmount,
+        label
+      );
+      return;
+    }
+    case "reveal_top_card_choose_destroy_or_power":
+    case "reveal_top_card_choose_destroy_or_attack_equal_cost": {
+      assert.ok(
+        eventRecords.some((event) => event["type"] === "effectCardRevealed"),
+        `${label} did not reveal the mapped top card`
+      );
+      assert.ok(
+        eventRecords.some((event) => event["type"] === "effectChoiceSelected"),
+        `${label} did not record the mapped choice`
+      );
+      return;
+    }
+    case "destroy_own_cards":
+    case "optional_destroy_controlled_dead_wizard_token":
+    case "optional_gain_market_cards_to_hand_this_turn":
+    case "prevent_defense_this_turn":
+    case "exchange_life_and_dingler_status":
+    case "wild_magic_choice":
+    case "arm_next_attack_unavoidable":
+    case "arm_dead_wizard_token_kill_replacement":
+    case "optional_spend_chip_destroy_own_cards": {
+      assert.ok(
+        eventRecords.some(
+          (event) =>
+            event["type"] === "effectChoiceSelected" ||
+            event["type"] === "effectChoiceSkipped"
+        ) || events.some((event) => event.effectId === runtimeRef.effectId),
+        `${label} has no mapped choice or state result`
+      );
+      if (runtimeRef.effectId === "wild_magic_choice") {
+        const choices = eventRecords.filter(
+          (event) => event["type"] === "effectChoiceSelected"
+        );
+        assert.ok(choices.length > 0, `${label} has no wild-magic choice`);
+        assert.equal(
+          choices[0]?.["legalChoiceCount"],
+          Array.isArray(fields["options"]) ? fields["options"].length : 0,
+          label
+        );
+      }
+      return;
+    }
+    default:
+      assert.ok(
+        eventRecords.some((event) => event["type"] !== "effectChoiceSkipped"),
+        `${label} has no observable effect result`
+      );
+  }
+}
+
+function assertEventAmount(
+  events: readonly Record<string, unknown>[],
+  expectedAmount: number,
+  eventType: string | undefined,
+  label: string
+): void {
+  assert.ok(
+    events.some(
+      (event) =>
+        (eventType === undefined || event["type"] === eventType) &&
+        event["amount"] === expectedAmount
+    ),
+    `${label} has no ${eventType ?? "event"} with amount ${String(expectedAmount)}`
+  );
+}
+
+function requireNumber(value: unknown, label: string): number {
+  if (typeof value !== "number") {
+    throw new Error(`${label} expected a numeric result`);
+  }
+  return value;
+}
+
+function assertMappingHasAttack(
+  events: readonly Record<string, unknown>[],
+  label: string
+): void {
+  assert.ok(
+    events.some((event) => event["type"] === "attackCreated"),
+    `${label} did not create an attack instance`
+  );
+  assert.ok(
+    events.some((event) => event["type"] === "attackTargetStarted"),
+    `${label} did not start an attack target`
+  );
+}
+
+function assertMappingHasPlayerTarget(
+  events: readonly Record<string, unknown>[],
+  label: string
+): void {
+  assert.ok(
+    events.some(
+      (event) =>
+        typeof event["targetPlayerId"] === "string" ||
+        event["targetPlayerIds"] !== undefined
+    ),
+    `${label} has no selected player target`
+  );
+}
+
+function assertMappingHasDeclaredTarget(
+  events: readonly Record<string, unknown>[],
+  fields: Record<string, unknown>,
+  label: string
+): void {
+  if (
+    typeof fields["targetSelector"] !== "string" &&
+    fields["target"] === undefined
+  ) {
+    return;
+  }
+  assertMappingHasPlayerTarget(events, label);
 }
 
 function assertMappedAddPowerOutcome(
@@ -206,7 +637,11 @@ function assertCardRuntimeExecutionEvidence(
     );
     for (const effect of onPlayEffects) {
       if (!hasSourceEffectEvent(scenario, card, effect.effectId)) {
-        assertOnPlayEffectEvidence(definition.cardId, effect.effectId);
+        assertOnPlayEffectEvidence(
+          definition.cardId,
+          effect.effectId,
+          runtimeEffectPayload(effect)
+        );
       }
       observedEffectKeys.add(runtimeEffectKey(effect));
     }
@@ -459,7 +894,8 @@ function addDeadWizardToken(scenario: GameScenario, player: PlayerState): void {
 
 function assertOnPlayEffectEvidence(
   definitionId: string,
-  effectId: string
+  effectId: string,
+  expectedFields: Record<string, unknown> = {}
 ): void {
   const { scenario, card } = createCardEvidenceScenario(
     definitionId,
@@ -481,7 +917,9 @@ function assertOnPlayEffectEvidence(
       addDeadWizardToken(scenario, active);
       const beforePower = scenario.state.turn.power;
       assert.deepEqual(play(scenario, card), { ok: true });
-      assert.ok(scenario.state.turn.power > beforePower);
+      const expectedAmount = expectedFields["amountPerDeadWizardToken"];
+      assert.equal(typeof expectedAmount, "number");
+      assert.equal(scenario.state.turn.power - beforePower, expectedAmount);
       return;
     }
     case "distributed_attack_damage": {
@@ -494,7 +932,9 @@ function assertOnPlayEffectEvidence(
       const beforeLife = foe.life.current;
       chooseFoeTarget(scenario);
       assert.deepEqual(play(scenario, card), { ok: true });
-      assert.ok(foe.life.current < beforeLife);
+      const expectedAmount = expectedFields["amount"];
+      assert.equal(typeof expectedAmount, "number");
+      assert.equal(beforeLife - foe.life.current, expectedAmount);
       return;
     }
     case "attack_damage_equal_to_controlled_card_cost": {
@@ -548,7 +988,9 @@ function assertOnPlayEffectEvidence(
       const beforeLife = foe.life.current;
       chooseFoeTarget(scenario);
       assert.deepEqual(play(scenario, card), { ok: true });
-      assert.ok(foe.life.current < beforeLife);
+      const expectedAmount = expectedFields["amountPerDeadWizardToken"];
+      assert.equal(typeof expectedAmount, "number");
+      assert.equal(beforeLife - foe.life.current, expectedAmount);
       return;
     }
     case "arm_dead_wizard_token_kill_replacement":
@@ -559,6 +1001,14 @@ function assertOnPlayEffectEvidence(
       );
       return;
     case "optional_spend_chip_destroy_own_cards": {
+      const expectedChipCost = requireNumber(
+        expectedFields["chipCost"],
+        `${definitionId} ${effectId} chipCost`
+      );
+      requireNumber(
+        expectedFields["amount"],
+        `${definitionId} ${effectId} amount`
+      );
       scenario.activePlayer.chips = 10;
       const target = givenRuntimeCard(scenario, {
         player: active,
@@ -568,8 +1018,46 @@ function assertOnPlayEffectEvidence(
       const beforeChips = active.chips;
       chooseCardTarget(scenario, effectId, target.instanceId);
       assert.deepEqual(play(scenario, card), { ok: true });
-      assert.ok(active.chips < beforeChips);
+      assert.equal(active.chips, beforeChips - expectedChipCost);
       assert.ok(!hasCardInPlayerZones(active, target.instanceId));
+      return;
+    }
+    case "optional_spend_chip_attack_damage": {
+      const expectedChipCost = requireNumber(
+        expectedFields["chipCost"],
+        `${definitionId} ${effectId} chipCost`
+      );
+      const expectedAmount = requireNumber(
+        expectedFields["amount"],
+        `${definitionId} ${effectId} amount`
+      );
+      active.chips = expectedChipCost;
+      const beforeChips = active.chips;
+      const beforeLife = foe.life.current;
+      chooseEffect(scenario, (request) => {
+        if (request.requestKind !== "effect" || request.effectId !== effectId) {
+          return undefined;
+        }
+        const targetChoice = request.choices.find(
+          (candidate) =>
+            candidate.choiceKind === "playerTarget" &&
+            candidate.targetPlayerIds.includes(foe.playerId)
+        );
+        if (targetChoice !== undefined) {
+          return { choiceId: targetChoice.choiceId };
+        }
+        const payChoice = request.choices.find(
+          (candidate) =>
+            candidate.choiceKind === "option" &&
+            candidate.choiceId === "pay_optional_cost"
+        );
+        return payChoice === undefined
+          ? undefined
+          : { choiceId: payChoice.choiceId };
+      });
+      assert.deepEqual(play(scenario, card), { ok: true });
+      assert.equal(active.chips, beforeChips - expectedChipCost);
+      assert.equal(beforeLife - foe.life.current, expectedAmount);
       return;
     }
     default:
