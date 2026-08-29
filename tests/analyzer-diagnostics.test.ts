@@ -266,10 +266,10 @@ test("diagnostic session reports physical location work for every branch attempt
     physicalCardRemovalSearches: 0,
     physicalCardReorderSearches: 0,
     physicalCardMoveSearches: 0,
-    physicalZonePasses: 42,
-    physicalCardsViewed: 58,
-    fullLocationListsBuilt: 2,
-    locationRecordsCreated: 58,
+    physicalZonePasses: 0,
+    physicalCardsViewed: 0,
+    fullLocationListsBuilt: 0,
+    locationRecordsCreated: 0,
     physicalLocationChanges: 5,
   });
   assert.equal(distribution.branchAttempts, report.total.actionApplications);

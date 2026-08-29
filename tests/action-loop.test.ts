@@ -2843,6 +2843,94 @@ test("megaMayhem destroys top main deck cards in active-player order and kills p
   assert.deepEqual(state.deadWizardTokenResolution.attackQueues, []);
 });
 
+test("Market Flow does not reprocess cards destroyed by a nested Mega Mayhem", () => {
+  const state = initializeGame({
+    rootDir,
+    seed: 60616,
+    playerCount: 2,
+  });
+  const megaMayhemDefinition = createFixtureCardDefinition(
+    "fixture-ledger-nested-mega-mayhem",
+    [
+      {
+        effectId:
+          "mega_mayhem_each_player_destroy_top_main_deck_death_if_mayhem",
+        timing: "onMayhemResolve",
+        targetSelector: "eachPlayerClockwiseFromActive",
+        deathCondition: {
+          effectId: "destroyed_card_kind_is",
+          cardKind: "mayhem",
+        },
+        destroyedCardSource: "mainDeck",
+      },
+    ],
+    { cardKind: "megaMayhem" }
+  );
+  state.cardDefinitions = new Map([
+    ...state.cardDefinitions,
+    [megaMayhemDefinition.cardId, megaMayhemDefinition],
+  ]);
+
+  const createCard = (definitionId: string, suffix: string): CardInstance =>
+    cloneCardWithInstanceId(
+      createCommonRuntimeCard(definitionId),
+      `fixture-ledger-nested-${suffix}`
+    );
+  const outerMayhem = createCommonRuntimeCard("esw2_dbg__main_073");
+  const removedCardA = createCard("esw2_dbg__main_003", "removed-a");
+  const removedCardB = createCard("esw2_dbg__main_003", "removed-b");
+  const marketCards = Array.from({ length: 5 }, (_, index) =>
+    createCard("esw2_dbg__main_003", `market-${index + 1}`)
+  );
+  const megaMayhem = createCard(megaMayhemDefinition.cardId, "mega-mayhem");
+  const legendCards = [
+    createCard("esw2_dbg__legend_019", "legend-1"),
+    createCard("esw2_dbg__legend_019", "legend-2"),
+    createCard("esw2_dbg__legend_019", "legend-3"),
+  ];
+
+  state.common.market.splice(0);
+  state.common.legendMarket.splice(0);
+  state.common.mainDeck.splice(
+    0,
+    state.common.mainDeck.length,
+    outerMayhem,
+    removedCardA,
+    removedCardB,
+    ...marketCards
+  );
+  state.common.legendDeck.splice(
+    0,
+    state.common.legendDeck.length,
+    megaMayhem,
+    ...legendCards
+  );
+
+  const result = runMarketFlow(state, { mode: "turn" });
+
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(
+    state.common.market.map((card) => card.instanceId),
+    marketCards.map((card) => card.instanceId)
+  );
+  assert.equal(state.common.destroyedPile.includes(removedCardA), true);
+  assert.equal(state.common.destroyedPile.includes(removedCardB), true);
+  assert.equal(
+    state.eventLog.some(
+      (event) =>
+        event.type === "marketEventCardOpened" &&
+        (event.cardInstanceId === removedCardA.instanceId ||
+          event.cardInstanceId === removedCardB.instanceId)
+    ),
+    false
+  );
+  assert.equal(
+    state.common.destroyedMayhem.filter((card) => card === outerMayhem).length,
+    1
+  );
+  getPhysicalCardLedger(state).assertConsistent();
+});
+
 test("megaMayhem keeps a main-deck card when its destroy destination is invalid", () => {
   const state = initializeGame({
     rootDir,

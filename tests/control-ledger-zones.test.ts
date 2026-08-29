@@ -214,6 +214,24 @@ test("Ledger rejects duplicate objects and preserves the source on wrong-zone re
   assert.deepEqual(ledger.readZone(handZone), handBefore);
 });
 
+test("Ledger rejects adding a card already registered in another zone", () => {
+  const state = initializeGame({ rootDir, seed: 47612 });
+  const player = state.players[0]!;
+  const ledger = getPhysicalCardLedger(state);
+  const handZone = `${player.playerId}.hand`;
+  const discardZone = `${player.playerId}.discard`;
+  const card = ledger.readZone(handZone)[0];
+  assert.ok(card);
+  const discardBefore = [...ledger.readZone(discardZone)];
+
+  assert.throws(
+    () => ledger.addCards(discardZone, [card]),
+    /already belongs to .*hand/
+  );
+  assert.deepEqual(ledger.readZone(discardZone), discardBefore);
+  assert.equal(ledger.locateCard(card)?.zoneName, handZone);
+});
+
 test("Ledger prevents a card from crossing into another fork", () => {
   const state = initializeGame({ rootDir, seed: 47610 });
   const player = state.players[0]!;

@@ -14,6 +14,7 @@ import {
   markTokenDefinitionId,
   markTokenInstanceId,
 } from "../src/domain/types.js";
+import { executeActivationEffects } from "../src/engine/effect-runtime.js";
 import {
   addFixtureDefenseCardToHand,
   selectFirstFixtureDefense,
@@ -370,6 +371,35 @@ test("activation-effects #266 destroys the source before choosing up to two hand
     }).ok,
     false
   );
+});
+
+test("activation self-destruction requires the live source card reference", () => {
+  const scenario = createGameScenario({ rootDir, seed: 266034 });
+  const source = givenRuntimeCard(scenario, {
+    definitionId: "esw2_dbg__main_033",
+  });
+  assert.equal(play(scenario, source).ok, true);
+  const definition = scenario.state.cardDefinitions.get(source.definitionId);
+  assert.ok(definition);
+
+  const result = executeActivationEffects(
+    scenario.state,
+    scenario.activePlayer,
+    definition,
+    {
+      sourceType: "card",
+      runtimeMode: scenario.state.runtimeMode,
+      playerId: scenario.activePlayer.playerId,
+      cardInstanceId: source.instanceId,
+      definitionId: source.definitionId,
+    }
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: `Cannot find live source card ${source.instanceId} for self-destruction`,
+  });
+  assert.equal(scenario.activePlayer.permanents.includes(source), true);
 });
 
 test("activation-effects #266 heals after declined status removal and caps at effective max life", () => {

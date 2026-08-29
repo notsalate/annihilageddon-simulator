@@ -73,6 +73,9 @@ test("failed defense branch restores committed payment, events, usage, and RNG",
   const paymentCard = defender.deck.shift();
   assert.ok(paymentCard);
   defender.hand.push(paymentCard);
+  const replacementSourceCard = attacker.deck[0];
+  assert.ok(replacementSourceCard);
+  state.turn.mainMarketCardHandReplacementSourceCards = [replacementSourceCard];
   defender.chips = 5;
   defender.life.current = 8;
   const attack = redirectableAttack(attacker);
@@ -95,6 +98,9 @@ test("failed defense branch restores committed payment, events, usage, and RNG",
       assert.equal(player.chips, 3);
       assert.equal(player.life.current, 6);
       assert.equal(player.discard.includes(paymentCard), true);
+      branchState.turn.mainMarketCardHandReplacementSourceCards.push(
+        defenseCard
+      );
       assert.equal(
         branchState.eventLog.filter((event) => event.type === "defenseCostPaid")
           .length,
@@ -115,6 +121,9 @@ test("failed defense branch restores committed payment, events, usage, and RNG",
   assert.equal(defender.chips, 5);
   assert.equal(defender.life.current, 8);
   assert.deepEqual(snapshotZoneMembership(state), zoneMembershipBefore);
+  assert.deepEqual(state.turn.mainMarketCardHandReplacementSourceCards, [
+    replacementSourceCard,
+  ]);
   assert.deepEqual(state.eventLog, eventLogBefore);
   assert.equal(state.rng.next(), expectedRng.next());
   assert.deepEqual(

@@ -2580,10 +2580,12 @@ function buildLegalTargetChoices(
   if (selector === "mainMarketCard") {
     return {
       ok: true,
-      choices: state.common.market.map((card) => ({
-        choiceType: "card" as const,
-        card,
-      })),
+      choices: getPhysicalCardLedger(state)
+        .readZone("mainMarket")
+        .map((card) => ({
+          choiceType: "card" as const,
+          card,
+        })),
     };
   }
 
@@ -2865,14 +2867,14 @@ function resolveDeadWizardTokenKillReplacement(
     return killerTokenResult;
   }
 
-  const legendChoices: EffectChoice[] = state.common.legendMarket.map(
-    (card) => ({
+  const legendChoices: EffectChoice[] = getPhysicalCardLedger(state)
+    .readZone("legendMarket")
+    .map((card) => ({
       choiceKind: "cardTarget" as const,
       choiceId: card.instanceId,
       cards: [card],
       amount: 1,
-    })
-  );
+    }));
   if (legendChoices.length === 0) {
     return { ok: true };
   }
@@ -2887,9 +2889,9 @@ function resolveDeadWizardTokenKillReplacement(
   if (legendChoice?.choiceKind !== "cardTarget") {
     return { ok: true };
   }
-  const legend = state.common.legendMarket.find(
-    (card) => card.instanceId === legendChoice.cards[0]?.instanceId
-  );
+  const legend = getPhysicalCardLedger(state)
+    .readZone("legendMarket")
+    .find((card) => card.instanceId === legendChoice.cards[0]?.instanceId);
   if (legend === undefined) {
     return {
       ok: false,

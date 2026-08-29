@@ -106,7 +106,17 @@ export function restorePhysicalCardZoneState(
     }
   }
 
-  const errors: string[] = [];
+  try {
+    ledger.replaceZones(
+      snapshot.zones.map((zone) => ({
+        zoneName: zone.descriptor.zoneName,
+        cards: zone.cards,
+      }))
+    );
+  } catch (error) {
+    return { ok: false, reason: describePhysicalCardZoneError(error) };
+  }
+
   for (const zone of snapshot.zones) {
     const descriptor = descriptorsByName.get(zone.descriptor.zoneName);
     if (descriptor === undefined) {
@@ -115,24 +125,18 @@ export function restorePhysicalCardZoneState(
         reason: `Physical card zone restore is missing zone ${zone.descriptor.zoneName}`,
       };
     }
-    try {
-      ledger.replaceZone(descriptor.zoneName, zone.cards);
-      const restoredCards = ledger.readZone(descriptor.zoneName);
-      if (
-        restoredCards.length !== zone.cards.length ||
-        restoredCards.some((card, index) => card !== zone.cards[index])
-      ) {
-        errors.push(`Cannot restore physical card zone ${descriptor.zoneName}`);
-      }
-    } catch (error) {
-      errors.push(
-        `${descriptor.zoneName}: ${describePhysicalCardZoneError(error)}`
-      );
+    const restoredCards = ledger.readZone(descriptor.zoneName);
+    if (
+      restoredCards.length !== zone.cards.length ||
+      restoredCards.some((card, index) => card !== zone.cards[index])
+    ) {
+      return {
+        ok: false,
+        reason: `Cannot restore physical card zone ${descriptor.zoneName}`,
+      };
     }
   }
-  return errors.length === 0
-    ? { ok: true }
-    : { ok: false, reason: errors.join("; ") };
+  return { ok: true };
 }
 
 function describePhysicalCardZoneError(error: unknown): string {

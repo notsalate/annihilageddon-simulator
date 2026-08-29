@@ -1292,7 +1292,7 @@ const revealTopCardHandler: EffectRuntimeHandler<
   execute(state, player, effect, source, services) {
     const card =
       effect.source === "mainDeck"
-        ? state.common.mainDeck[0]
+        ? getPhysicalCardLedger(state).readZone("mainDeck")[0]
         : services.peekTopDeckCard(player, state);
     if (card === undefined) {
       recordGameEvent(state, {

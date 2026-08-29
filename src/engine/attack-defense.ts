@@ -255,8 +255,9 @@ function cloneDefenseTurn(turn: GameState["turn"]): GameState["turn"] {
   cloned.temporaryCardControls = turn.temporaryCardControls.map(
     ({ card, controllerId }) => ({ card, controllerId })
   );
-  cloned.mainMarketCardHandReplacementSourceCards =
-    turn.mainMarketCardHandReplacementSourceCards;
+  cloned.mainMarketCardHandReplacementSourceCards = [
+    ...turn.mainMarketCardHandReplacementSourceCards,
+  ];
   cloned.gainedCards = turn.gainedCards.map((record) => ({ ...record }));
   cloned.deadWizardTokenKillReplacement =
     turn.deadWizardTokenKillReplacement === undefined

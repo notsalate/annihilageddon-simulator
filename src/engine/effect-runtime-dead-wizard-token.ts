@@ -1065,7 +1065,7 @@ const revealMainDeckGainIfMayhemHandler: EffectRuntimeHandler<DeadWizardTokenRev
       return revealCardAndMaybeGainDeadWizardToken(
         state,
         player,
-        state.common.mainDeck[0],
+        getPhysicalCardLedger(state).readZone("mainDeck")[0],
         effect.effectId,
         source,
         (definition) => definition.engine.cardKind === "mayhem",
