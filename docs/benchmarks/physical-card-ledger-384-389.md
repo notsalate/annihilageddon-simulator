@@ -117,8 +117,14 @@ baseline и исправления поведения как изменения 
 npm run diagnose:analyzer -- --profile light --format json --artifacts .scratch/tmp/analyzer-ledger-light
 npm run diagnose:analyzer -- --profile typical --format json --artifacts .scratch/tmp/analyzer-ledger-typical
 npm run diagnose:analyzer -- --profile heavy --format json --artifacts .scratch/tmp/analyzer-ledger-heavy
+npm run build -- --pretty false
+node .scratch/tmp/run-ledger-matched-benchmark.mjs
+powershell -NoProfile -ExecutionPolicy Bypass -File .scratch/tmp/run-ledger-simulation-paired.ps1
+node --expose-gc .scratch/tmp/terminal-retention-probe.mjs . current light
+node --expose-gc .scratch/tmp/terminal-retention-probe.mjs . current typical
 ```
 
-Полный парный протокол и probe удерживаемых состояний находятся во временных
-файлах `.scratch/tmp/`; они не являются частью runtime-данных и не должны
-попадать в commit.
+Полный парный протокол, Simulation и probe удерживаемых состояний находятся во
+временных файлах `.scratch/tmp/`; они не являются частью runtime-данных и не
+должны попадать в commit. Перед запуском нужно собрать `dist/` и заменить в
+скриптах reference/current commit на сравниваемые ревизии, если они изменились.

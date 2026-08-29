@@ -232,6 +232,26 @@ test("Ledger rejects adding a card already registered in another zone", () => {
   assert.equal(ledger.locateCard(card)?.zoneName, handZone);
 });
 
+test("Ledger rejects a detached card with an occupied instance ID", () => {
+  const state = initializeGame({ rootDir, seed: 47613 });
+  const player = state.players[0]!;
+  const ledger = getPhysicalCardLedger(state);
+  const handZone = `${player.playerId}.hand`;
+  const discardZone = `${player.playerId}.discard`;
+  const existingCard = ledger.readZone(handZone)[0];
+  assert.ok(existingCard);
+  const duplicateCard = { ...existingCard };
+  const handBefore = [...ledger.readZone(handZone)];
+  const discardBefore = [...ledger.readZone(discardZone)];
+
+  assert.throws(
+    () => ledger.insertDetachedCard(duplicateCard, discardZone, "back"),
+    /Duplicate physical card instance ID/
+  );
+  assert.deepEqual(ledger.readZone(handZone), handBefore);
+  assert.deepEqual(ledger.readZone(discardZone), discardBefore);
+});
+
 test("Ledger prevents a card from crossing into another fork", () => {
   const state = initializeGame({ rootDir, seed: 47610 });
   const player = state.players[0]!;

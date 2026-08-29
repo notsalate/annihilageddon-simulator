@@ -116,7 +116,9 @@ const physicalCardLedgersByCommonState = new WeakMap<
   object,
   PhysicalCardLedger
 >();
-const physicalCardBranchOwners = new WeakMap<CardInstance, object>();
+const physicalCardZoneTagStride = 1024;
+let nextPhysicalCardBranchIdentity = 1;
+const physicalCardLedgerTags = new WeakMap<CardInstance, number>();
 
 /**
  * Owns physical card membership and all runtime mutations of built-in card
@@ -129,8 +131,8 @@ export class PhysicalCardLedger {
     string,
     PhysicalCardZoneStorageDescriptor
   >;
-  private readonly cardZones = new WeakMap<CardInstance, string>();
-  private readonly branchIdentity: object = {};
+  private readonly branchIdentity = nextPhysicalCardBranchIdentity++;
+  private readonly zoneIndexesByName: ReadonlyMap<string, number>;
   private readonly state: PhysicalCardLedgerState;
 
   constructor(
@@ -147,6 +149,9 @@ export class PhysicalCardLedger {
     );
     this.descriptorsByName = new Map(
       this.descriptors.map((descriptor) => [descriptor.zoneName, descriptor])
+    );
+    this.zoneIndexesByName = new Map(
+      this.descriptors.map((descriptor, index) => [descriptor.zoneName, index])
     );
     if (clonedMembership !== undefined) {
       if (cardZoneBindings !== undefined) {
@@ -196,7 +201,7 @@ export class PhysicalCardLedger {
           }
           cardsByObject.set(card, descriptor.zoneName);
           cardsById.set(card.instanceId, descriptor.zoneName);
-          this.cardZones.set(card, descriptor.zoneName);
+          this.setCardZone(card, descriptor.zoneName);
         }
       }
       if (cardsByObject.size !== bindingZonesByCard.size) {
@@ -222,7 +227,7 @@ export class PhysicalCardLedger {
 
   /** Returns whether a registered card currently occupies a scoring zone. */
   isCardInScoringZone(card: CardInstance): boolean {
-    const zoneName = this.cardZones.get(card);
+    const zoneName = this.getCardZone(card);
     return (
       zoneName !== undefined &&
       this.descriptorsByName.get(zoneName)?.scoringEligible === true
@@ -250,7 +255,7 @@ export class PhysicalCardLedger {
     card: CardInstance,
     expectedZoneName?: string
   ): CardLocation | undefined {
-    const knownZoneName = this.cardZones.get(card);
+    const knownZoneName = this.getCardZone(card);
     if (
       knownZoneName !== undefined &&
       (expectedZoneName === undefined || knownZoneName === expectedZoneName)
@@ -258,7 +263,7 @@ export class PhysicalCardLedger {
       if (this.readZone(knownZoneName).includes(card)) {
         return { card, zoneName: knownZoneName };
       }
-      this.cardZones.delete(card);
+      this.clearCardZone(card);
     }
 
     // This fallback keeps hand-built fixtures usable; production mutations are
@@ -271,7 +276,7 @@ export class PhysicalCardLedger {
         continue;
       }
       if (descriptor.readRaw().includes(card)) {
-        this.cardZones.set(card, descriptor.zoneName);
+        this.setCardZone(card, descriptor.zoneName);
         return { card, zoneName: descriptor.zoneName };
       }
     }
@@ -289,7 +294,7 @@ export class PhysicalCardLedger {
       this.state.physicalCardDiagnostics?.recordPhysicalZonePass(cards.length);
       for (const card of cards) {
         if (card.instanceId === cardInstanceId) {
-          this.cardZones.set(card, descriptor.zoneName);
+          this.setCardZone(card, descriptor.zoneName);
           return { card, zoneName: descriptor.zoneName };
         }
       }
@@ -338,20 +343,36 @@ export class PhysicalCardLedger {
 
   /** Replaces one zone and refreshes object-identity membership metadata. */
   replaceZone(zoneName: string, cards: readonly CardInstance[]): void {
+    this.replaceZoneInternal(zoneName, cards);
+  }
+
+  private replaceZoneInternal(
+    zoneName: string,
+    cards: readonly CardInstance[],
+    knownDetachedCard?: CardInstance
+  ): void {
     const descriptor = this.requireDescriptor(zoneName);
     if (descriptor.cardinality === "zeroOrOne" && cards.length > 1) {
       throw new Error(`Destination zone ${zoneName} is already occupied`);
     }
     const normalizedZoneName = descriptor.zoneName;
     const seenCards = new Set<CardInstance>();
+    const seenCardInstanceIds = new Set<CardInstance["instanceId"]>();
     const staleBindings = new Set<CardInstance>();
     const cardsToRegister: CardInstance[] = [];
     for (const card of cards) {
+      this.ensureBranchCardOwnership(card);
       if (seenCards.has(card)) {
         throw new Error(`Duplicate physical card object ${card.instanceId}`);
       }
+      if (seenCardInstanceIds.has(card.instanceId)) {
+        throw new Error(
+          `Duplicate physical card instance ID ${card.instanceId}`
+        );
+      }
       seenCards.add(card);
-      const registeredZoneName = this.cardZones.get(card);
+      seenCardInstanceIds.add(card.instanceId);
+      const registeredZoneName = this.getCardZone(card);
       if (
         registeredZoneName !== undefined &&
         registeredZoneName !== normalizedZoneName
@@ -366,23 +387,24 @@ export class PhysicalCardLedger {
         // against this direct mutation.
         staleBindings.add(card);
       }
+      if (registeredZoneName === undefined && card !== knownDetachedCard) {
+        this.assertNoDuplicateInstanceId(card, normalizedZoneName);
+      }
       if (registeredZoneName === undefined || staleBindings.has(card)) {
         cardsToRegister.push(card);
       }
     }
     for (const card of cardsToRegister) this.assertBranchCard(card);
-    for (const card of staleBindings) this.cardZones.delete(card);
+    for (const card of staleBindings) this.clearCardZone(card);
     const previousCards = [...this.readZone(normalizedZoneName)];
     descriptor.replace(cards);
     for (const card of previousCards) {
       if (!seenCards.has(card)) {
-        if (this.cardZones.get(card) === normalizedZoneName) {
-          this.cardZones.delete(card);
-        }
+        this.clearCardZone(card);
       }
     }
     for (const card of cards) {
-      this.cardZones.set(card, normalizedZoneName);
+      this.setCardZone(card, normalizedZoneName);
     }
   }
 
@@ -391,6 +413,7 @@ export class PhysicalCardLedger {
     const zoneNames = this.listZoneNames();
     const replacementsByName = new Map<string, PhysicalCardZoneReplacement>();
     const seenCards = new Set<CardInstance>();
+    const seenCardInstanceIds = new Set<CardInstance["instanceId"]>();
     const cardsToRegister: CardInstance[] = [];
     for (const replacement of replacements) {
       const zoneName = this.requireZoneName(replacement.zoneName);
@@ -409,7 +432,12 @@ export class PhysicalCardLedger {
         if (seenCards.has(card)) {
           throw new Error(`Duplicate physical card object ${card.instanceId}`);
         }
-        const existingOwner = physicalCardBranchOwners.get(card);
+        if (seenCardInstanceIds.has(card.instanceId)) {
+          throw new Error(
+            `Duplicate physical card instance ID ${card.instanceId}`
+          );
+        }
+        const existingOwner = this.getCardBranchIdentity(card);
         if (
           existingOwner !== undefined &&
           existingOwner !== this.branchIdentity
@@ -419,6 +447,7 @@ export class PhysicalCardLedger {
           );
         }
         seenCards.add(card);
+        seenCardInstanceIds.add(card.instanceId);
         cardsToRegister.push(card);
       }
     }
@@ -444,10 +473,10 @@ export class PhysicalCardLedger {
       }
       this.requireDescriptor(zoneName).replace(replacement.cards);
     }
-    for (const card of previousCards) this.cardZones.delete(card);
+    for (const card of previousCards) this.clearCardZone(card);
     for (const replacement of replacements) {
       for (const card of replacement.cards) {
-        this.cardZones.set(card, replacement.zoneName);
+        this.setCardZone(card, replacement.zoneName);
       }
     }
   }
@@ -562,11 +591,12 @@ export class PhysicalCardLedger {
       ...sourceCards.slice(0, sourceIndex),
       ...sourceCards.slice(sourceIndex + 1),
     ]);
-    this.replaceZone(
+    this.replaceZoneInternal(
       destinationZoneName,
       placement === "front"
         ? [card, ...destinationCards]
-        : [...destinationCards, card]
+        : [...destinationCards, card],
+      card
     );
     return {
       ok: true,
@@ -607,12 +637,15 @@ export class PhysicalCardLedger {
         reason: `Destination zone ${destinationZoneName} is already occupied`,
       };
     }
+    this.ensureBranchCardOwnership(card);
+    this.assertNoDuplicateInstanceId(card, destinationZoneName);
     clearFaceUpState(card);
-    this.replaceZone(
+    this.replaceZoneInternal(
       destinationZoneName,
       placement === "front"
         ? [card, ...destinationCards]
-        : [...destinationCards, card]
+        : [...destinationCards, card],
+      card
     );
     return {
       ok: true,
@@ -725,6 +758,26 @@ export class PhysicalCardLedger {
     return descriptor;
   }
 
+  private assertNoDuplicateInstanceId(
+    card: CardInstance,
+    destinationZoneName: string
+  ): void {
+    for (const descriptor of this.descriptors) {
+      for (const existingCard of descriptor.readRaw()) {
+        if (existingCard.instanceId !== card.instanceId) continue;
+        if (existingCard === card) {
+          if (descriptor.zoneName === destinationZoneName) return;
+          throw new Error(
+            `Physical card ${card.instanceId} already belongs to ${descriptor.zoneName}`
+          );
+        }
+        throw new Error(
+          `Duplicate physical card instance ID ${card.instanceId}`
+        );
+      }
+    }
+  }
+
   private seedClonedMembership(
     clonedMembership: PhysicalCardLedgerClonedMembership
   ): void {
@@ -737,7 +790,7 @@ export class PhysicalCardLedger {
         throw new Error(`Missing cloned Ledger zone for ${card.instanceId}`);
       }
       this.requireDescriptor(zoneName);
-      if (this.cardZones.has(card)) {
+      if (this.hasCardLedgerTag(card)) {
         throw new Error(
           `Duplicate physical card binding for ${card.instanceId}`
         );
@@ -745,7 +798,7 @@ export class PhysicalCardLedger {
       // clonePhysicalCardLedger has already materialized fresh card objects;
       // they cannot belong to another branch, so the clone fast-path only
       // needs to seed the local zone index.
-      this.cardZones.set(card, zoneName);
+      this.setCardZone(card, zoneName);
     }
   }
 
@@ -761,7 +814,7 @@ export class PhysicalCardLedger {
         idZones.push(descriptor.zoneName);
         zonesById.set(card.instanceId, idZones);
         this.assertBranchCard(card);
-        this.cardZones.set(card, descriptor.zoneName);
+        this.setCardZone(card, descriptor.zoneName);
       }
     }
     for (const [card, zones] of zonesByCard) {
@@ -781,13 +834,72 @@ export class PhysicalCardLedger {
   }
 
   private assertBranchCard(card: CardInstance): void {
-    const existingOwner = physicalCardBranchOwners.get(card);
+    this.ensureBranchCardOwnership(card);
+    if (!this.hasCardLedgerTag(card)) {
+      this.writeCardLedgerTag(
+        card,
+        this.branchIdentity * physicalCardZoneTagStride
+      );
+    }
+  }
+
+  private ensureBranchCardOwnership(card: CardInstance): void {
+    const existingOwner = this.getCardBranchIdentity(card);
     if (existingOwner !== undefined && existingOwner !== this.branchIdentity) {
       throw new Error(
         `Physical card ${card.instanceId} belongs to another Ledger branch`
       );
     }
-    physicalCardBranchOwners.set(card, this.branchIdentity);
+  }
+
+  private getCardBranchIdentity(card: CardInstance): number | undefined {
+    const tag = physicalCardLedgerTags.get(card);
+    return tag === undefined
+      ? undefined
+      : Math.floor(tag / physicalCardZoneTagStride);
+  }
+
+  private hasCardLedgerTag(card: CardInstance): boolean {
+    return this.getCardBranchIdentity(card) === this.branchIdentity;
+  }
+
+  private getCardZone(card: CardInstance): string | undefined {
+    const tag = physicalCardLedgerTags.get(card);
+    if (
+      tag === undefined ||
+      Math.floor(tag / physicalCardZoneTagStride) !== this.branchIdentity
+    ) {
+      return undefined;
+    }
+    const zoneIndex = tag % physicalCardZoneTagStride;
+    return zoneIndex === 0
+      ? undefined
+      : this.descriptors[zoneIndex - 1]?.zoneName;
+  }
+
+  private setCardZone(card: CardInstance, zoneName: string): void {
+    this.ensureBranchCardOwnership(card);
+    const zoneIndex = this.zoneIndexesByName.get(zoneName);
+    if (zoneIndex === undefined) {
+      throw new Error(`Missing physical card zone ${zoneName}`);
+    }
+    this.writeCardLedgerTag(
+      card,
+      this.branchIdentity * physicalCardZoneTagStride + zoneIndex + 1
+    );
+  }
+
+  private clearCardZone(card: CardInstance): void {
+    if (this.hasCardLedgerTag(card)) {
+      this.writeCardLedgerTag(
+        card,
+        this.branchIdentity * physicalCardZoneTagStride
+      );
+    }
+  }
+
+  private writeCardLedgerTag(card: CardInstance, tag: number): void {
+    physicalCardLedgerTags.set(card, tag);
   }
 }
 

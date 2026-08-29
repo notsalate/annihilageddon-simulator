@@ -63,6 +63,13 @@ import {
 const rootDir = process.cwd();
 const playableRuntimeDataPackPath =
   "tests/fixtures/playable-runtime-data-pack.json";
+const fixtureCardInstanceCounters = new WeakMap<GameState, number>();
+
+function nextFixtureCardInstanceNumber(state: GameState): number {
+  const nextNumber = (fixtureCardInstanceCounters.get(state) ?? 0) + 1;
+  fixtureCardInstanceCounters.set(state, nextNumber);
+  return nextNumber;
+}
 
 test("late foe-deck cleanup errors stop playing after card placement", () => {
   const scenario = createGameScenario({
@@ -15238,6 +15245,7 @@ function addFixtureCardToActiveHand(
     (player) => player.playerId === state.activePlayerId
   );
   assert.ok(activePlayer);
+  const fixtureNumber = nextFixtureCardInstanceNumber(state);
   const definition = createFixtureCardDefinition(
     `fixture-targeted-effect-card-${activePlayer.hand.length + 1}`,
     [effect as RuntimeEffect],
@@ -15246,7 +15254,7 @@ function addFixtureCardToActiveHand(
 
   return addFixtureDefinitionToActiveHand(state, definition, {
     instanceId: markCardInstanceId(
-      `fixture-card-${activePlayer.hand.length + 1}`
+      `fixture-card-${activePlayer.playerId}-${fixtureNumber}`
     ),
   }).instanceId;
 }
@@ -15389,10 +15397,11 @@ function addRuntimeCardToHand(
   definitionId: string
 ): CardInstance {
   assert.ok(state.cardDefinitions.has(definitionId));
+  const fixtureNumber = nextFixtureCardInstanceNumber(state);
   const card = createRuntimeCardInstance(
     player,
     definitionId,
-    `${definitionId}-${player.hand.length + 1}`
+    `${definitionId}-${player.playerId}-${fixtureNumber}`
   );
   player.hand.push(card);
   return card;
@@ -15607,7 +15616,7 @@ function createFixtureCardInstances(
   count: number
 ): CardInstance[] {
   return Array.from({ length: count }, (_, index) => ({
-    instanceId: markCardInstanceId(`${definitionId}-${index + 1}`),
+    instanceId: markCardInstanceId(`${definitionId}-${ownerId}-${index + 1}`),
     definitionId: markCardDefinitionId(definitionId),
     ownerId,
     marketChips: 0,
