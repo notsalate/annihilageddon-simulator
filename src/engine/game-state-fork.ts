@@ -1,9 +1,25 @@
 import { clonePhysicalCardLedger } from "./control-ledger.js";
+import { freezeGameEvent } from "./event-recorder.js";
 import { installGameEventLog } from "./game-events.js";
 import type { GameState } from "./setup.js";
 
 /** Create an isolated analysis state at the exact current RNG position. */
 export function forkGameState(source: GameState): GameState {
+  return createFork(source, "clone");
+}
+
+/**
+ * Create an Analyzer branch that shares the append-only event-log prefix.
+ * Existing events are immutable; event-recorder updates replace an entry.
+ */
+export function forkGameStateForAnalyzer(source: GameState): GameState {
+  return createFork(source, "shared");
+}
+
+function createFork(
+  source: GameState,
+  eventLogMode: "clone" | "shared"
+): GameState {
   const ledger = clonePhysicalCardLedger(source);
   const fork: GameState = {
     seed: source.seed,
@@ -53,10 +69,16 @@ export function forkGameState(source: GameState): GameState {
         })
       ),
     },
-    eventLog: structuredClone([...source.eventLog]),
+    eventLog:
+      eventLogMode === "shared"
+        ? source.eventLog.map((event) => freezeGameEvent(event))
+        : structuredClone([...source.eventLog]),
     ...(source.effectChoiceStrategy === undefined
       ? {}
       : { effectChoiceStrategy: source.effectChoiceStrategy }),
+    ...(source.physicalCardDiagnostics === undefined
+      ? {}
+      : { physicalCardDiagnostics: source.physicalCardDiagnostics }),
   };
 
   installGameEventLog(fork);

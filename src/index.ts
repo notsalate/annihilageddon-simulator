@@ -235,6 +235,7 @@ export type {
   AnalysisLimitError,
   CompletedActionBranch,
   AnalyzerDiagnosticCounters,
+  AnalyzerDiagnosticBranchSearchDistribution,
   AnalyzerDiagnosticEvaluationPolicyCounters,
   AnalyzerDiagnosticOperationCounters,
   AnalyzerDiagnosticPhase,
@@ -253,6 +254,7 @@ export {
   enumerateActionBranches,
   enumerateImmediateActionBranches,
   enumerateTurnLines,
+  replayAnalyzedTurnLine,
   rankTurnLines,
 } from "./engine/best-move-analysis.js";
 export type {

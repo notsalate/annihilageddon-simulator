@@ -144,6 +144,10 @@ _Avoid_: card-only effect runtime, token mini-runtime
 A human-readable projection over one deterministic game's event log. It explains game terms such as card play, target choice, zone movement, death, DWT, and Trophy movement without requiring the reader to inspect raw event objects. Current trace output is incomplete where event logs lack turn numbers or before/after state.
 _Avoid_: raw event log, full replay file
 
+**Visual Step**:
+A single advance in a visual game review that presents one coherent game effect, including ordered automatic transitions needed to finish it, such as refilling the deck during a draw. Revealing a new card may end the current step, while playing and resolving that card begins the next step.
+_Avoid_: raw event, animation frame, player action
+
 **Effect Helper**:
 A shared engine operation that applies an effect consequence immediately and records the resulting typed events. Effects are resolved sequentially through helpers rather than by building a separate pending-event queue.
 _Avoid_: pending effect queue, event-only effect execution
@@ -175,6 +179,14 @@ _Avoid_: smoke simulation, baseline run, single mass summary
 **Best-Move Analyzer** (short: **Analyzer**):
 An analysis component outside `BotStrategy` that receives complete engine state, including hidden information, and may fork seeded RNG to replay future branches reproducibly. It enumerates legal lines and ranks them only with an evaluation policy supplied by its caller; it does not act as a player, choose a universal definition of “best”, or alter effect resolution. The first implementation slice covers complete lines of the current turn through `endTurn`; multi-turn lookahead is a future extension.
 _Avoid_: Best-Move Strategy, BestStrategy, BestBot, starting build analysis, first move analysis
+
+**First-Place Analysis Policy**:
+An Analyzer evaluation objective that treats finishing first as the only successful game outcome. Lower finishing places have no independent value, so the policy may accept a worse likely placement when that preserves a chance to win.
+_Avoid_: rational policy, universal best-move policy, guaranteed-placement policy
+
+**Best-Finish Analysis Policy**:
+An Analyzer evaluation objective that values improvements in final placement as well as victory. It may prefer a reliable higher non-winning place over a small chance to win with a much worse likely finish.
+_Avoid_: rational policy, universal best-move policy, first-place policy
 
 **Starting Build**:
 The initial combination of wizard properties and familiar assigned to a player before the game begins. Starting builds are compared separately from strategies.

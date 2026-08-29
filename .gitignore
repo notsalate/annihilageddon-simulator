@@ -4,6 +4,7 @@ dist/
 .scratch/tmp_*
 .scratch/runs/
 .claude/worktrees/
+.worktrees/
 *.log
 *.db
 *.sqlite

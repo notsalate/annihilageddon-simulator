@@ -1548,7 +1548,11 @@ function countGainedCardsMatchingEffect(
   return state.turn.gainedCards.filter((record) => {
     if (record.playerId !== player.playerId) return false;
     const definition = state.cardDefinitions.get(record.definitionId);
-    const card = findCardLocation(state, record.cardInstanceId)?.card;
+    const card = findCardLocation(
+      state,
+      record.cardInstanceId,
+      "gainedCardRecord"
+    )?.card;
     return (
       definition !== undefined &&
       cardTriggerMatches(effect, definition, state, player, card)
@@ -3317,7 +3321,8 @@ function isControlledDeadWizardTokenLikeSelectionAvailable(
   }
 
   return (
-    findCardLocation(state, selection.card.instanceId) !== undefined &&
+    findCardLocation(state, selection.card.instanceId, "knownCard") !==
+      undefined &&
     getControlledDeadWizardTokenLikeCards(state, player).some(
       (card) => card.instanceId === selection.card.instanceId
     )
@@ -4114,7 +4119,7 @@ function moveCardToZonePreservingOwner(
   placeOnTop = false
 ): boolean {
   const ownerBefore = card.ownerId;
-  const sourceLocation = findCardLocation(state, card.instanceId);
+  const sourceLocation = findCardLocation(state, card.instanceId, "knownCard");
   if (sourceLocation === undefined) {
     return false;
   }

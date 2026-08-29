@@ -1835,7 +1835,7 @@ export function executeRevealAndPlayFoeDeckCard(
   const ownerDiscardDestination = `${foe.playerId}.discard`;
   const cleanup = (): EffectExecutionResult => {
     for (const card of revealedCards) {
-      const location = findCardLocation(state, card.instanceId);
+      const location = findCardLocation(state, card.instanceId, "knownCard");
       if (location === undefined) {
         const restored = services.restoreDetachedCardToZone(
           state,

@@ -874,7 +874,7 @@ const shuffleOwnedPermanentsHandler: EffectRuntimeHandler<DeadWizardTokenShuffle
       const ownedPermanents = getControlledCards(state, player).filter(
         (card) =>
           card.ownerId === player.playerId &&
-          findCardLocation(state, card.instanceId)?.zoneName ===
+          findCardLocation(state, card.instanceId, "knownCard")?.zoneName ===
             `${player.playerId}.permanents`
       );
       if (ownedPermanents.length === 0) return { ok: true };
