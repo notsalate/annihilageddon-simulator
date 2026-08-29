@@ -12,6 +12,7 @@ import {
 } from "./control-ledger.js";
 import { forkGameState, forkGameStateForAnalyzer } from "./game-state-fork.js";
 import type { ChoicePolicy, EffectChoiceRequest } from "./choice-policy.js";
+import type { PhysicalCardPointSearchReason } from "./physical-card-diagnostics.js";
 import type { GameState } from "./setup.js";
 
 export interface AnalysisLimits {
@@ -36,6 +37,15 @@ export interface AnalyzerDiagnosticOperationCounters {
   eventLogCopyOperations: number;
   eventLogEntriesCopied: number;
   pointLocationSearches: number;
+  temporaryControlLocationSearches: number;
+  knownCardLocationSearches: number;
+  effectiveTypeSelectionLocationSearches: number;
+  gainedCardRecordLocationSearches: number;
+  effectSourceLocationSearches: number;
+  unclassifiedIdLocationSearches: number;
+  physicalCardRemovalSearches: number;
+  physicalCardReorderSearches: number;
+  physicalCardMoveSearches: number;
   physicalZonePasses: number;
   physicalCardsViewed: number;
   fullLocationListsBuilt: number;
@@ -104,6 +114,15 @@ function createOperationCounters(): AnalyzerDiagnosticOperationCounters {
     eventLogCopyOperations: 0,
     eventLogEntriesCopied: 0,
     pointLocationSearches: 0,
+    temporaryControlLocationSearches: 0,
+    knownCardLocationSearches: 0,
+    effectiveTypeSelectionLocationSearches: 0,
+    gainedCardRecordLocationSearches: 0,
+    effectSourceLocationSearches: 0,
+    unclassifiedIdLocationSearches: 0,
+    physicalCardRemovalSearches: 0,
+    physicalCardReorderSearches: 0,
+    physicalCardMoveSearches: 0,
     physicalZonePasses: 0,
     physicalCardsViewed: 0,
     fullLocationListsBuilt: 0,
@@ -196,8 +215,9 @@ export class AnalyzerDiagnosticsSession {
     this.activeBranchPointLocationSearches = undefined;
   }
 
-  recordPointLocationSearch(): void {
+  recordPointLocationSearch(reason: PhysicalCardPointSearchReason): void {
     this.incrementOperation("pointLocationSearches");
+    this.incrementOperation(pointSearchCounterFor(reason));
     if (this.activeBranchPointLocationSearches !== undefined) {
       this.activeBranchPointLocationSearches += 1;
     }
@@ -319,6 +339,40 @@ export class AnalyzerDiagnosticsSession {
     this.branchSearchAttempts += 1;
     this.branchSearchTotal += searches;
     incrementBranchSearchBucket(this.branchSearchBuckets, searches);
+  }
+}
+
+function pointSearchCounterFor(
+  reason: PhysicalCardPointSearchReason
+):
+  | "temporaryControlLocationSearches"
+  | "knownCardLocationSearches"
+  | "effectiveTypeSelectionLocationSearches"
+  | "gainedCardRecordLocationSearches"
+  | "effectSourceLocationSearches"
+  | "unclassifiedIdLocationSearches"
+  | "physicalCardRemovalSearches"
+  | "physicalCardReorderSearches"
+  | "physicalCardMoveSearches" {
+  switch (reason) {
+    case "temporaryControl":
+      return "temporaryControlLocationSearches";
+    case "knownCard":
+      return "knownCardLocationSearches";
+    case "effectiveTypeSelection":
+      return "effectiveTypeSelectionLocationSearches";
+    case "gainedCardRecord":
+      return "gainedCardRecordLocationSearches";
+    case "effectSource":
+      return "effectSourceLocationSearches";
+    case "unclassifiedId":
+      return "unclassifiedIdLocationSearches";
+    case "removeById":
+      return "physicalCardRemovalSearches";
+    case "reorderById":
+      return "physicalCardReorderSearches";
+    case "moveById":
+      return "physicalCardMoveSearches";
   }
 }
 

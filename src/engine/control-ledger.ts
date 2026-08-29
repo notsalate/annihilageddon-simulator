@@ -10,7 +10,10 @@ import type {
   TrophyLikeInstance,
 } from "./setup.js";
 import { clearFaceUpState } from "./deck-lifecycle.js";
-import type { PhysicalCardDiagnosticsSink } from "./physical-card-diagnostics.js";
+import type {
+  PhysicalCardDiagnosticsSink,
+  PhysicalCardPointSearchReason,
+} from "./physical-card-diagnostics.js";
 import { copyRuntimeEffectVerification } from "./runtime-effect-verification.js";
 
 const physicalCardZoneDescriptorCache = new WeakMap<
@@ -202,7 +205,11 @@ export function getControlledCards(
       continue;
     }
 
-    const location = findCardLocation(state, control.cardInstanceId);
+    const location = findCardLocation(
+      state,
+      control.cardInstanceId,
+      "temporaryControl"
+    );
     if (location === undefined) {
       continue;
     }
@@ -779,9 +786,10 @@ export function listDefenseCardLocations(
 
 export function findCardLocation(
   state: GameState,
-  cardInstanceId: string
+  cardInstanceId: string,
+  reason: PhysicalCardPointSearchReason = "unclassifiedId"
 ): CardLocation | undefined {
-  state.physicalCardDiagnostics?.recordPointLocationSearch();
+  state.physicalCardDiagnostics?.recordPointLocationSearch(reason);
   const location = listPhysicalCardLocations(state).find(
     (candidate) => candidate.card.instanceId === cardInstanceId
   );
@@ -795,7 +803,7 @@ export function removeCardFromLocation(
   state: GameState,
   cardInstanceId: string
 ): CardLocation | undefined {
-  state.physicalCardDiagnostics?.recordPointLocationSearch();
+  state.physicalCardDiagnostics?.recordPointLocationSearch("removeById");
   for (const descriptor of listPhysicalCardZoneDescriptors(state)) {
     const cards = descriptor.read();
     const index = cards.findIndex(
@@ -823,7 +831,7 @@ export function reorderPhysicalCard(
   zoneName: string,
   placement: "front" | "back"
 ): PhysicalCardMoveResult {
-  state.physicalCardDiagnostics?.recordPointLocationSearch();
+  state.physicalCardDiagnostics?.recordPointLocationSearch("reorderById");
   const descriptor = listPhysicalCardZoneDescriptors(state).find(
     (candidate) => candidate.zoneName === zoneName
   );
@@ -864,7 +872,7 @@ export function movePhysicalCard(
   placement: "front" | "back",
   expectedSourceZoneName?: string
 ): PhysicalCardMoveResult {
-  state.physicalCardDiagnostics?.recordPointLocationSearch();
+  state.physicalCardDiagnostics?.recordPointLocationSearch("moveById");
   const descriptors = listPhysicalCardZoneDescriptors(state);
   const destination = descriptors.find(
     (descriptor) => descriptor.zoneName === destinationZoneName
@@ -973,7 +981,7 @@ export function insertDetachedCard(
   placement: "front" | "back"
 ): PhysicalCardMoveResult {
   const descriptors = listPhysicalCardZoneDescriptors(state);
-  if (findCardLocation(state, card.instanceId) !== undefined) {
+  if (findCardLocation(state, card.instanceId, "knownCard") !== undefined) {
     return {
       ok: false,
       reason: `Card ${card.instanceId} is already registered in a physical zone`,

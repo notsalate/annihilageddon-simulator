@@ -2652,7 +2652,11 @@ export function collectAttackReplacementProfile(
 
   if (!includeSourceOwnerModifiers || source.sourceType !== "card")
     return { status: "resolved", result: profile };
-  const sourceCard = findCardLocation(state, source.cardInstanceId)?.card;
+  const sourceCard = findCardLocation(
+    state,
+    source.cardInstanceId,
+    "effectSource"
+  )?.card;
   if (sourceCard === undefined || sourceCard.ownerId === "common") {
     return { status: "resolved", result: profile };
   }

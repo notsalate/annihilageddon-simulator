@@ -51,19 +51,24 @@ npm run diagnose:analyzer -- --profile heavy --format json --artifacts .scratch/
 
 По умолчанию команда использует `reference` workload; сопоставимым с E1 он считается только при совпадении протокола и fingerprints с принятым baseline, точного environment fingerprint и одного общего непустого `comparisonPairId`. При несовпадении отчёт указывает `incomparable`; исторический или одиночный артефакт без физической пары получает `not-measured` и остаётся диагностическим. Для отдельного анализа текущего набора данных укажи `--role current`; его clean timing остаётся диагностическим и с E1 не сравнивается.
 
-Команда последовательно выполняет три независимых запуска одного workload:
+Команда последовательно выполняет четыре независимых запуска одного workload:
 
 1. `clean benchmark` — обычный benchmark с одним прогревом и тремя измерениями;
 2. `diagnostic run` — один запуск с фактическими счётчиками Analyzer;
 3. `CPU profile` — отдельный запуск Node с `--cpu-prof`, без счётчиков.
+4. `allocation profile` — отдельный запуск Node с `--heap-prof`, без счётчиков.
 
-Счётчики показывают применения действий, клоны `GameState`, повторные исполнения для choice paths, промежуточные и терминальные состояния, а также число операций и элементов, скопированных в paths и event log. В `phases` отдельно видны непересекающиеся enumeration, ranking и evaluation policy; операции и время вызовов policy находятся в `evaluationPolicy`, а клоны и копирование изоляции дополнительно отмечены там же.
+Счётчики показывают применения действий, клоны `GameState`, повторные исполнения для choice paths, промежуточные и терминальные состояния, а также число операций и элементов, скопированных в paths и event log. Дополнительный блок location work содержит point-searches карточек, проходы по физическим зонам, просмотренные карты, построенные полные списки и созданные записи расположений. `physicalLocationChanges` — число карточек, чьи zone или index изменились между началом и концом попытки ветки; это ориентир для будущего обновления постоянного индекса, а не изменение runtime-модели.
 
-Только время и fingerprint `clean benchmark` для `reference` workload, чьи protocol, fingerprints, exact environment и общий `comparisonPairId` совпадают с принятым E1 baseline, сопоставимы с контрактом `ADR-0001` и E1. Если fingerprint или environment отличается, отчёт явно помечает запуск как `incomparable`; если физическая пара отсутствует, он указывает `not-measured`; для `current` workload clean timing не сравнивается с E1. Инструментированное и профилируемое время помечены `diagnostic-only`: они не меняют baseline, performance epoch или CI gate. Все три запуска обязаны дать один `resultFingerprint`.
+Распределение branch point-searches считает только searches внутри action-attempt. В него входят попытки, прерванные новым запросом выбора; searches, выполненные при предварительном построении списка legal actions, остаются в общем `pointLocationSearches`, но не приписываются конкретной попытке. Среднее считается по всем attempts, включая нулевые; группы: `0`, `1`, `2–3`, `4–7`, `8+`.
 
-Артефакты (`clean-benchmark.json`, `diagnostic-run.json`, `cpu-run.json`, `*.cpuprofile`, `summary.json` и `summary.txt`) сохраняются в `.scratch/tmp/analyzer-diagnostics/` либо в каталог из `--artifacts`; они не являются исходными данными проекта. Путь к итоговой JSON-сводке можно задать через `--output`.
+В `phases` отдельно видны непересекающиеся enumeration, ranking и evaluation policy; операции и время вызовов policy находятся в `evaluationPolicy`, а клоны, копирование изоляции и location work дополнительно отмечены там же.
 
-CPU-сводка группирует sampled self-time по JavaScript (включая скомпилированный TypeScript), V8, native operations и GC, а также показывает первые hotspots с URL, строкой и столбцом generated JavaScript. Это помогает выбрать кандидата для оптимизации; CPU profile не является allocation profile и не заменяет heap snapshot.
+Только время и fingerprint `clean benchmark` для `reference` workload, чьи protocol, fingerprints, exact environment и общий `comparisonPairId` совпадают с принятым E1 baseline, сопоставимы с контрактом `ADR-0001` и E1. Если fingerprint или environment отличается, отчёт явно помечает запуск как `incomparable`; если физическая пара отсутствует, он указывает `not-measured`; для `current` workload clean timing не сравнивается с E1. Инструментированное и профилируемое время помечены `diagnostic-only`: они не меняют baseline, performance epoch или CI gate. Все четыре запуска обязаны дать один `resultFingerprint`.
+
+Артефакты (`clean-benchmark.json`, `diagnostic-run.json`, `cpu-run.json`, `allocation-run.json`, `*.cpuprofile`, `*.heapprofile`, `summary.json` и `summary.txt`) сохраняются в `.scratch/tmp/analyzer-diagnostics/` либо в каталог из `--artifacts`; они не являются исходными данными проекта. Путь к итоговой JSON-сводке можно задать через `--output`.
+
+CPU-сводка группирует sampled self-time по JavaScript (включая скомпилированный TypeScript), V8, native operations и GC. Allocation-сводка использует sampling interval 64 KiB и группирует sampled bytes по тем же категориям; для native/V8 leaf она по возможности показывает ближайший JavaScript caller. Текстовая сводка отдаёт приоритет hotspots кода проекта, а JSON сохраняет и общий список с затратами запуска Node. Обе сводки показывают URL, строку и столбец generated JavaScript. Allocation profile не равен точному общему объёму выделений и не заменяет heap snapshot. Для отдельной оценки стоимости сканирования и будущего индекса сначала используй location counters, а затем сопоставляй их с CPU/allocation profile; эти инструменты измеряют разные величины.
 
 ## Сравнение PR и калибровка
 

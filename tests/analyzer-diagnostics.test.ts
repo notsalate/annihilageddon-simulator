@@ -143,6 +143,44 @@ test("diagnostic instrumentation does not remain on analyzer states", () => {
   }
 });
 
+test("diagnostic session classifies every physical card point search", () => {
+  const diagnostics = createAnalyzerDiagnostics();
+
+  diagnostics.recordPointLocationSearch("temporaryControl");
+  diagnostics.recordPointLocationSearch("knownCard");
+  diagnostics.recordPointLocationSearch("effectiveTypeSelection");
+  diagnostics.recordPointLocationSearch("gainedCardRecord");
+  diagnostics.recordPointLocationSearch("effectSource");
+  diagnostics.recordPointLocationSearch("unclassifiedId");
+  diagnostics.recordPointLocationSearch("removeById");
+  diagnostics.recordPointLocationSearch("reorderById");
+  diagnostics.recordPointLocationSearch("moveById");
+
+  const total = diagnostics.snapshot().total;
+  assert.equal(total.pointLocationSearches, 9);
+  assert.equal(total.temporaryControlLocationSearches, 1);
+  assert.equal(total.knownCardLocationSearches, 1);
+  assert.equal(total.effectiveTypeSelectionLocationSearches, 1);
+  assert.equal(total.gainedCardRecordLocationSearches, 1);
+  assert.equal(total.effectSourceLocationSearches, 1);
+  assert.equal(total.unclassifiedIdLocationSearches, 1);
+  assert.equal(total.physicalCardRemovalSearches, 1);
+  assert.equal(total.physicalCardReorderSearches, 1);
+  assert.equal(total.physicalCardMoveSearches, 1);
+  assert.equal(
+    total.temporaryControlLocationSearches +
+      total.knownCardLocationSearches +
+      total.effectiveTypeSelectionLocationSearches +
+      total.gainedCardRecordLocationSearches +
+      total.effectSourceLocationSearches +
+      total.unclassifiedIdLocationSearches +
+      total.physicalCardRemovalSearches +
+      total.physicalCardReorderSearches +
+      total.physicalCardMoveSearches,
+    total.pointLocationSearches
+  );
+});
+
 test("diagnostic session counts physical changes made by evaluation policy", () => {
   const state = emptyTurnState();
   state.runtimeMode = "fixture";
@@ -219,6 +257,15 @@ test("diagnostic session reports physical location work for every branch attempt
     eventLogCopyOperations: 0,
     eventLogEntriesCopied: 0,
     pointLocationSearches: 21,
+    temporaryControlLocationSearches: 18,
+    knownCardLocationSearches: 0,
+    effectiveTypeSelectionLocationSearches: 0,
+    gainedCardRecordLocationSearches: 0,
+    effectSourceLocationSearches: 3,
+    unclassifiedIdLocationSearches: 0,
+    physicalCardRemovalSearches: 0,
+    physicalCardReorderSearches: 0,
+    physicalCardMoveSearches: 0,
     physicalZonePasses: 609,
     physicalCardsViewed: 841,
     fullLocationListsBuilt: 23,
@@ -269,6 +316,15 @@ test("diagnostic session reports physical location work for every branch attempt
     "eventLogCopyOperations",
     "eventLogEntriesCopied",
     "pointLocationSearches",
+    "temporaryControlLocationSearches",
+    "knownCardLocationSearches",
+    "effectiveTypeSelectionLocationSearches",
+    "gainedCardRecordLocationSearches",
+    "effectSourceLocationSearches",
+    "unclassifiedIdLocationSearches",
+    "physicalCardRemovalSearches",
+    "physicalCardReorderSearches",
+    "physicalCardMoveSearches",
     "physicalZonePasses",
     "physicalCardsViewed",
     "fullLocationListsBuilt",

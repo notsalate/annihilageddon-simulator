@@ -17,6 +17,7 @@ import { ANALYZER_BENCHMARK_PROFILES } from "../dist/src/engine/analyzer-benchma
 
 const ANALYZER_ROLES = ["reference", "current"];
 const OUTPUT_FORMATS = ["human", "json"];
+const ALLOCATION_PROFILE_INTERVAL_BYTES = 64 * 1024;
 const E1_BASELINE_RELATIVE_PATH = path.join(
   "docs",
   "benchmarks",
@@ -103,6 +104,7 @@ export function formatAnalyzerDiagnosticsSummary(summary) {
   const clean = summary.cleanBenchmark;
   const diagnostic = summary.diagnosticRun;
   const cpu = summary.cpuProfile;
+  const allocation = summary.allocationProfile;
   const counterTotals = diagnostic.counters.total;
   const phaseCounters = diagnostic.counters.phases;
   const branchSearchDistribution = diagnostic.counters.branchSearchDistribution;
@@ -111,6 +113,12 @@ export function formatAnalyzerDiagnosticsSummary(summary) {
     .map(
       (hotspot) =>
         `  - ${hotspot.category}: ${hotspot.functionName} ${hotspot.selfTimeMs.toFixed(2)} ms (${hotspot.url || "native"})`
+    );
+  const allocationHotspotLines = (allocation.applicationHotspots ?? [])
+    .slice(0, 5)
+    .map(
+      (hotspot) =>
+        `  - ${hotspot.category}: ${hotspot.functionName} ${formatBytes(hotspot.sampledBytes)} (${hotspot.url || "native"})`
     );
   return [
     "Analyzer diagnostics",
@@ -128,6 +136,7 @@ export function formatAnalyzerDiagnosticsSummary(summary) {
     `  states intermediate ${counterTotals.intermediateStates}, terminal ${counterTotals.terminalStates}`,
     `  path copies ${counterTotals.pathCopyOperations} operations/${counterTotals.pathItemsCopied} items, event-log copies ${counterTotals.eventLogCopyOperations} operations/${counterTotals.eventLogEntriesCopied} entries`,
     `  locations: point searches ${counterTotals.pointLocationSearches}, physical zone passes ${counterTotals.physicalZonePasses}, cards viewed ${counterTotals.physicalCardsViewed}, full lists ${counterTotals.fullLocationListsBuilt}, records ${counterTotals.locationRecordsCreated}, location changes ${counterTotals.physicalLocationChanges}`,
+    `  point-search reasons: temporary control ${counterTotals.temporaryControlLocationSearches}, known card ${counterTotals.knownCardLocationSearches}, effective-type selection ${counterTotals.effectiveTypeSelectionLocationSearches}, gained-card record ${counterTotals.gainedCardRecordLocationSearches}, effect source ${counterTotals.effectSourceLocationSearches}, unclassified id ${counterTotals.unclassifiedIdLocationSearches}, removal ${counterTotals.physicalCardRemovalSearches}, reorder ${counterTotals.physicalCardReorderSearches}, move ${counterTotals.physicalCardMoveSearches}`,
     `  branch point-searches: ${branchSearchDistribution.branchAttempts} attempts, average ${branchSearchDistribution.averagePointLocationSearches.toFixed(2)}, buckets 0=${branchSearchDistribution.buckets.zero}, 1=${branchSearchDistribution.buckets.one}, 2-3=${branchSearchDistribution.buckets.twoToThree}, 4-7=${branchSearchDistribution.buckets.fourToSeven}, 8+=${branchSearchDistribution.buckets.eightOrMore}`,
     `  phases: enumeration ${phaseCounters.enumeration.actionApplications} actions, ranking ${phaseCounters.ranking.gameStateClones} clones, policy ${phaseCounters.evaluationPolicy.invocations} calls/${formatMilliseconds(phaseCounters.evaluationPolicy.timeMs)}, policy operations ${phaseCounters.evaluationPolicy.operations.actionApplications} actions/${phaseCounters.evaluationPolicy.operations.gameStateClones} clones`,
     "",
@@ -137,11 +146,18 @@ export function formatAnalyzerDiagnosticsSummary(summary) {
       ? ["  hotspots: none"]
       : ["  hotspots:", ...hotspotLines]),
     "",
+    "Allocation profile (sampled; diagnostic-only, not comparable to E1):",
+    `  sampled ${formatBytes(allocation.sampledBytes ?? 0)} across ${allocation.sampleCount ?? 0} samples, categories JS ${formatBytes(allocation.categoryTotals.javascript)}, V8 ${formatBytes(allocation.categoryTotals.v8)}, native ${formatBytes(allocation.categoryTotals.native)}, GC ${formatBytes(allocation.categoryTotals.gc)}`,
+    ...(allocationHotspotLines.length === 0
+      ? ["  project hotspots: none"]
+      : ["  project hotspots:", ...allocationHotspotLines]),
+    "",
     `determinism: ${summary.determinism.allMatch ? "all runs have the same result fingerprint" : "fingerprints differ"}`,
     "artifacts:",
     `  clean benchmark: ${summary.artifacts.cleanBenchmark}`,
     `  counters: ${summary.artifacts.diagnosticRun}`,
     `  CPU profile: ${summary.artifacts.cpuProfile}`,
+    `  allocation profile: ${summary.artifacts.allocationProfile}`,
     `  summary: ${summary.artifacts.summary}`,
   ].join("\n");
 }
@@ -203,9 +219,12 @@ export function assessAnalyzerE1Comparability({
   baselinePath,
 }) {
   const actual = {
-    epoch: cleanBenchmark.workload?.epoch,
-    contractVersion: cleanBenchmark.workload?.contractVersion,
-    playerCount: cleanBenchmark.workload?.playerCount,
+    epoch: cleanBenchmark.workload?.epoch ?? cleanBenchmark.epoch,
+    contractVersion:
+      cleanBenchmark.workload?.contractVersion ??
+      cleanBenchmark.contractVersion,
+    playerCount:
+      cleanBenchmark.workload?.playerCount ?? cleanBenchmark.playerCount,
     workloadFingerprint: cleanBenchmark.workloadFingerprint,
     workloadVolumeFingerprint: cleanBenchmark.workloadVolumeFingerprint,
     warmupCount: cleanBenchmark.warmupCount,
@@ -401,6 +420,89 @@ export function summarizeCpuProfile(profile) {
   };
 }
 
+export function summarizeAllocationProfile(profile) {
+  const samples = Array.isArray(profile?.samples) ? profile.samples : [];
+  const nodesById = new Map();
+  const parentIds = new Map();
+  const stack = isRecord(profile?.head)
+    ? [{ node: profile.head, parentId: undefined }]
+    : [];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!isRecord(current?.node) || !isFiniteNumber(current.node.id)) continue;
+    nodesById.set(current.node.id, current.node);
+    if (isFiniteNumber(current.parentId)) {
+      parentIds.set(current.node.id, current.parentId);
+    }
+    const children = Array.isArray(current.node.children)
+      ? current.node.children
+      : [];
+    for (const child of children) {
+      stack.push({ node: child, parentId: current.node.id });
+    }
+  }
+
+  const categoryTotals = {
+    javascript: 0,
+    v8: 0,
+    native: 0,
+    gc: 0,
+  };
+  const hotspots = new Map();
+  let sampledBytes = 0;
+  let sampleCount = 0;
+
+  for (const sample of samples) {
+    if (
+      !isRecord(sample) ||
+      !isFiniteNumber(sample.nodeId) ||
+      !isFiniteNumber(sample.size) ||
+      sample.size < 0
+    ) {
+      continue;
+    }
+    const frame = resolveAllocationFrame(sample.nodeId, nodesById, parentIds);
+    const category = classifyCallFrame(frame);
+    sampledBytes += sample.size;
+    sampleCount += 1;
+    categoryTotals[category] += sample.size;
+
+    const key = `${category}|${frame.functionName}|${frame.url}|${frame.lineNumber}|${frame.columnNumber}`;
+    const current = hotspots.get(key) ?? {
+      category,
+      functionName: frame.functionName,
+      url: frame.url,
+      lineNumber: frame.lineNumber,
+      columnNumber: frame.columnNumber,
+      sampledBytes: 0,
+      samples: 0,
+    };
+    current.sampledBytes += sample.size;
+    current.samples += 1;
+    hotspots.set(key, current);
+  }
+
+  const sortedHotspots = [...hotspots.values()].sort(
+    (left, right) =>
+      right.sampledBytes - left.sampledBytes ||
+      right.samples - left.samples ||
+      left.functionName.localeCompare(right.functionName)
+  );
+  return {
+    sampledBytes,
+    sampleCount,
+    categoryTotals,
+    hotspots: sortedHotspots.slice(0, 20),
+    applicationHotspots: sortedHotspots
+      .filter((hotspot) => hotspot.url.includes("/dist/src/"))
+      .slice(0, 20),
+    sourceLinkage:
+      "sample leaf, or nearest JavaScript caller for a native/V8 leaf; use generated dist/**/*.js.map in the same build for TypeScript mapping",
+    interpretation:
+      "sampled allocation bytes captured by Node --heap-prof; not exact total allocation volume and not a heap snapshot",
+  };
+}
+
 function parseChoice(value, choices, name) {
   if (!choices.includes(value)) {
     throw new Error(`${name} must be one of ${choices.join(", ")}`);
@@ -410,6 +512,12 @@ function parseChoice(value, choices, name) {
 
 function formatMilliseconds(value) {
   return `${value.toFixed(2)} ms`;
+}
+
+function formatBytes(value) {
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(2)} MiB`;
+  if (value >= 1024) return `${(value / 1024).toFixed(2)} KiB`;
+  return `${value.toFixed(0)} B`;
 }
 
 function createWorkloadOptions(args) {
@@ -448,7 +556,7 @@ function readAcceptedAnalyzerE1Reference(profile) {
   };
 }
 
-function runCleanBenchmark(args) {
+function runCleanBenchmark(args, artifactPath) {
   const benchmarkCli = path.join(
     process.cwd(),
     "dist",
@@ -465,7 +573,9 @@ function runCleanBenchmark(args) {
     "--profile",
     args.profile,
     "--format",
-    "json",
+    "human",
+    "--output",
+    artifactPath,
   ];
   if (args.dataPackPath !== undefined) {
     benchmarkArgs.push("--dataPackPath", args.dataPackPath);
@@ -478,7 +588,8 @@ function runCleanBenchmark(args) {
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
   });
-  return parseChildJson(result, "clean benchmark");
+  assertChildSuccess(result, "clean benchmark");
+  return readJson(artifactPath);
 }
 
 function runDiagnosticProcess(args) {
@@ -538,7 +649,11 @@ function runCpuProfile(args, artifactDir) {
     }
   );
   const workerRun = parseChildJson(result, "CPU profile workload");
-  const profilePath = resolveCpuProfilePath(artifactDir, expectedPath);
+  const profilePath = resolveGeneratedProfilePath(
+    artifactDir,
+    expectedPath,
+    ".cpuprofile"
+  );
   if (profilePath === undefined) {
     throw new Error(`CPU profile was not created in ${artifactDir}`);
   }
@@ -549,15 +664,65 @@ function runCpuProfile(args, artifactDir) {
   };
 }
 
-function resolveCpuProfilePath(artifactDir, expectedPath) {
+function runAllocationProfile(args, artifactDir) {
+  const expectedPath = path.join(
+    artifactDir,
+    `allocation-profile-${args.profile}.heapprofile`
+  );
+  const workerArgs = [
+    SCRIPT_PATH,
+    "--worker",
+    "--profile",
+    args.profile,
+    "--role",
+    args.role,
+  ];
+  if (args.dataPackPath !== undefined) {
+    workerArgs.push("--dataPackPath", args.dataPackPath);
+  }
+  if (args.commit !== undefined) {
+    workerArgs.push("--commit", args.commit);
+  }
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--heap-prof",
+      `--heap-prof-interval=${ALLOCATION_PROFILE_INTERVAL_BYTES}`,
+      `--heap-prof-dir=${artifactDir}`,
+      `--heap-prof-name=${path.basename(expectedPath)}`,
+      ...workerArgs,
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+    }
+  );
+  const workerRun = parseChildJson(result, "allocation profile workload");
+  const profilePath = resolveGeneratedProfilePath(
+    artifactDir,
+    expectedPath,
+    ".heapprofile"
+  );
+  if (profilePath === undefined) {
+    throw new Error(`Allocation profile was not created in ${artifactDir}`);
+  }
+  return {
+    workerRun,
+    profilePath,
+    profile: summarizeAllocationProfile(readJson(profilePath)),
+  };
+}
+
+function resolveGeneratedProfilePath(artifactDir, expectedPath, extension) {
   if (existsSync(expectedPath)) return expectedPath;
   const candidates = readdirSync(artifactDir)
-    .filter((entry) => entry.endsWith(".cpuprofile"))
+    .filter((entry) => entry.endsWith(extension))
     .map((entry) => path.join(artifactDir, entry));
   return candidates.length === 0 ? undefined : candidates.at(-1);
 }
 
-function parseChildJson(result, label) {
+function assertChildSuccess(result, label) {
   if (result.error !== undefined) {
     throw new Error(`${label} failed: ${result.error.message}`);
   }
@@ -566,6 +731,10 @@ function parseChildJson(result, label) {
       `${label} failed with status ${String(result.status)}: ${String(result.stderr).trim()}`
     );
   }
+}
+
+function parseChildJson(result, label) {
+  assertChildSuccess(result, label);
   try {
     return JSON.parse(String(result.stdout));
   } catch (error) {
@@ -613,20 +782,29 @@ function runCommand(args) {
   );
   mkdirSync(artifactDir, { recursive: true });
 
-  const cleanBenchmark = runCleanBenchmark(args);
-  const diagnosticRun = runDiagnosticProcess(args);
-  const cpuRun = runCpuProfile(args, artifactDir);
-
   const artifacts = {
     cleanBenchmark: path.join(artifactDir, "clean-benchmark.json"),
     diagnosticRun: path.join(artifactDir, "diagnostic-run.json"),
-    cpuProfile: cpuRun.profilePath,
+    cpuProfile: path.join(
+      artifactDir,
+      `cpu-profile-${args.profile}.cpuprofile`
+    ),
     cpuRun: path.join(artifactDir, "cpu-run.json"),
+    allocationProfile: path.join(
+      artifactDir,
+      `allocation-profile-${args.profile}.heapprofile`
+    ),
+    allocationRun: path.join(artifactDir, "allocation-run.json"),
     summary: path.resolve(
       args.outputPath ?? path.join(artifactDir, "summary.json")
     ),
   };
-  writeJson(artifacts.cleanBenchmark, cleanBenchmark);
+  const cleanBenchmark = runCleanBenchmark(args, artifacts.cleanBenchmark);
+  const diagnosticRun = runDiagnosticProcess(args);
+  const cpuRun = runCpuProfile(args, artifactDir);
+  const allocationRun = runAllocationProfile(args, artifactDir);
+  artifacts.cpuProfile = cpuRun.profilePath;
+  artifacts.allocationProfile = allocationRun.profilePath;
   const persistedCleanBenchmark = readJson(artifacts.cleanBenchmark);
   assertAnalyzerCleanBenchmarkArtifactConsistency(
     cleanBenchmark,
@@ -634,11 +812,13 @@ function runCommand(args) {
   );
   writeJson(artifacts.diagnosticRun, diagnosticRun);
   writeJson(artifacts.cpuRun, cpuRun.workerRun);
+  writeJson(artifacts.allocationRun, allocationRun.workerRun);
 
   const fingerprints = [
     persistedCleanBenchmark.resultFingerprint,
     diagnosticRun.resultFingerprint,
     cpuRun.workerRun.resultFingerprint,
+    allocationRun.workerRun.resultFingerprint,
   ];
   assertAnalyzerDiagnosticDeterminism(fingerprints);
   const resultFingerprint = persistedCleanBenchmark.resultFingerprint;
@@ -692,12 +872,25 @@ function runCommand(args) {
       artifact: artifacts.cpuProfile,
       runArtifact: artifacts.cpuRun,
     },
+    allocationProfile: {
+      timingClass: "diagnostic-only",
+      comparableTo: "not comparable to E1",
+      ...allocationRun.profile,
+      samplingIntervalBytes: ALLOCATION_PROFILE_INTERVAL_BYTES,
+      resultFingerprint: allocationRun.workerRun.resultFingerprint,
+      workloadFingerprint: allocationRun.workerRun.workloadFingerprint,
+      workloadVolumeFingerprint:
+        allocationRun.workerRun.workloadVolumeFingerprint,
+      artifact: artifacts.allocationProfile,
+      runArtifact: artifacts.allocationRun,
+    },
     determinism: {
       allMatch: true,
       fingerprints: {
         cleanBenchmark: persistedCleanBenchmark.resultFingerprint,
         diagnosticRun: diagnosticRun.resultFingerprint,
         cpuProfile: cpuRun.workerRun.resultFingerprint,
+        allocationProfile: allocationRun.workerRun.resultFingerprint,
       },
     },
     artifacts,
@@ -730,6 +923,17 @@ function getCallFrame(node) {
       ? frame.columnNumber + 1
       : null,
   };
+}
+
+function resolveAllocationFrame(nodeId, nodesById, parentIds) {
+  let currentId = nodeId;
+  const fallback = getCallFrame(nodesById.get(currentId));
+  while (isFiniteNumber(currentId)) {
+    const frame = getCallFrame(nodesById.get(currentId));
+    if (classifyCallFrame(frame) === "javascript") return frame;
+    currentId = parentIds.get(currentId);
+  }
+  return fallback;
 }
 
 function classifyCallFrame(frame) {

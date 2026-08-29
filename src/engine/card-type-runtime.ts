@@ -303,7 +303,11 @@ export function setPlayerCardEffectiveType(
   cardType: string
 ): void {
   const player = requirePlayer(state, playerId);
-  const location = findCardLocation(state, cardInstanceId);
+  const location = findCardLocation(
+    state,
+    cardInstanceId,
+    "effectiveTypeSelection"
+  );
   if (location === undefined || location.card.ownerId !== playerId) {
     throw new Error(
       `Card ${cardInstanceId} is not owned by player ${playerId}`
@@ -341,7 +345,11 @@ export function clearPlayerCardEffectiveType(
   cardType: string
 ): void {
   const player = requirePlayer(state, playerId);
-  const location = findCardLocation(state, cardInstanceId);
+  const location = findCardLocation(
+    state,
+    cardInstanceId,
+    "effectiveTypeSelection"
+  );
   if (location === undefined || location.card.ownerId !== playerId) {
     throw new Error(
       `Card ${cardInstanceId} is not owned by player ${playerId}`

@@ -267,7 +267,7 @@ function moveResolvedNonOngoingCardToDestination(
   }
 
   const expectedSourceZone = `${controller.playerId}.playedThisTurn`;
-  const currentLocation = findCardLocation(state, card.instanceId);
+  const currentLocation = findCardLocation(state, card.instanceId, "knownCard");
   if (currentLocation?.zoneName !== expectedSourceZone) {
     return {
       ok: false,
