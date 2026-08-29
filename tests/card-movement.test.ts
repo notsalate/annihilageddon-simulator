@@ -449,7 +449,7 @@ test("card movement: main_057 pays one chip only with a valid hand or discard de
   );
   assert.equal(
     controlScenario.state.turn.temporaryCardControls.some(
-      (control) => control.cardInstanceId === controlledCard.instanceId
+      (control) => control.card === controlledCard
     ),
     false
   );
@@ -2070,7 +2070,7 @@ test("card movement: legend_032 cleans all revealed cards after a nested death",
   );
   assert.equal(
     scenario.state.turn.temporaryCardControls.some(
-      (control) => control.cardInstanceId === lethal.instanceId
+      (control) => control.card === lethal
     ),
     false
   );

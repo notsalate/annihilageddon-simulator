@@ -221,6 +221,18 @@ export type {
 } from "./engine/setup.js";
 export { initializeGame } from "./engine/setup.js";
 export { forkGameState } from "./engine/game-state-fork.js";
+export {
+  getPhysicalCardLedger,
+  installPhysicalCardLedger,
+  PhysicalCardLedger,
+} from "./engine/control-ledger.js";
+export type {
+  PhysicalCardLedgerCardZoneBinding,
+  PhysicalCardLedgerClone,
+  PhysicalCardMove,
+  PhysicalCardMoveResult,
+  PhysicalCardRemoveResult,
+} from "./engine/control-ledger.js";
 export type {
   AnalysisChoiceSelection,
   AnalysisActionStep,

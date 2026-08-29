@@ -226,7 +226,10 @@ test("game state invariants reject stale temporary-control card references", () 
   assert.ok(controller);
 
   state.turn.temporaryCardControls.push({
-    cardInstanceId: markCardInstanceId("missing-controlled-card"),
+    card: {
+      ...controller.hand[0]!,
+      instanceId: markCardInstanceId("missing-controlled-card"),
+    },
     controllerId: controller.playerId,
   });
 
@@ -246,7 +249,7 @@ test("game state invariants reject temporary control by a missing player", () =>
   assert.ok(card);
 
   state.turn.temporaryCardControls.push({
-    cardInstanceId: card.instanceId,
+    card,
     controllerId: markPlayerId("player-99"),
   });
 
@@ -268,8 +271,8 @@ test("game state invariants reject duplicate temporary-control entries", () => {
   assert.ok(card);
 
   state.turn.temporaryCardControls.push(
-    { cardInstanceId: card.instanceId, controllerId: controller.playerId },
-    { cardInstanceId: card.instanceId, controllerId: controller.playerId }
+    { card, controllerId: controller.playerId },
+    { card, controllerId: controller.playerId }
   );
 
   assert.throws(

@@ -922,6 +922,7 @@ test("enumerates each card target as a completed branch", () => {
   const secondTarget = state.common.mainDeck[0];
   assert.ok(target);
   assert.ok(secondTarget);
+  state.common.mainDeck = state.common.mainDeck.slice(1);
   state.common.market = [target, secondTarget];
   state.common.legendMarket = [];
   state.common.wildMagicStack = [];
@@ -978,6 +979,7 @@ test("limits the total generated branches across sequential choices", () => {
   const secondTarget = state.common.mainDeck[0];
   assert.ok(target);
   assert.ok(secondTarget);
+  state.common.mainDeck = state.common.mainDeck.slice(1);
   state.common.market = [target, secondTarget];
   state.common.legendMarket = [];
   state.common.wildMagicStack = [];
@@ -1027,6 +1029,7 @@ test("enumerates the Cartesian product of sequential choices", () => {
   const secondTarget = state.common.mainDeck[0];
   assert.ok(target);
   assert.ok(secondTarget);
+  state.common.mainDeck = state.common.mainDeck.slice(1);
   state.common.market = [target, secondTarget];
   state.common.legendMarket = [];
   state.common.wildMagicStack = [];

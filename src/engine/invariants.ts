@@ -1,4 +1,7 @@
-import { listPhysicalCardLocations } from "./control-ledger.js";
+import {
+  getPhysicalCardLedger,
+  listPhysicalCardLocations,
+} from "./control-ledger.js";
 import type {
   CardInstance,
   CommonOwner,
@@ -19,6 +22,7 @@ type TokenZoneEntry = {
 type OwnedEntry = StatusInstance | TrophyLikeInstance;
 
 export function assertGameStateInvariants(state: GameState): void {
+  getPhysicalCardLedger(state).assertConsistent();
   assertSafeInteger(state.seed, "seed");
   assertSafeInteger(state.turn.number, "turn.number");
   assertTrue(state.turn.number >= 1, "turn.number must be >= 1");
@@ -41,6 +45,7 @@ export function assertGameStateInvariants(state: GameState): void {
   );
 
   const cardLocations = new Map<string, string[]>();
+  const cardObjects = new Set<CardInstance>();
   const tokenLocations = new Map<string, string[]>();
   const playerIds = new Set(state.players.map((player) => player.playerId));
 
@@ -76,18 +81,20 @@ export function assertGameStateInvariants(state: GameState): void {
     const locations = cardLocations.get(location.card.instanceId) ?? [];
     locations.push(location.zoneName);
     cardLocations.set(location.card.instanceId, locations);
+    cardObjects.add(location.card);
   }
 
   registerTokenZones(tokenLocations, getCommonTokenZones(state));
 
   assertSingleZoneMembership(cardLocations, "card");
   assertSingleZoneMembership(tokenLocations, "token");
-  assertTemporaryCardControls(state, cardLocations);
+  assertTemporaryCardControls(state, cardLocations, cardObjects);
 }
 
 function assertTemporaryCardControls(
   state: GameState,
-  cardLocations: ReadonlyMap<string, readonly string[]>
+  cardLocations: ReadonlyMap<string, readonly string[]>,
+  cardObjects: ReadonlySet<CardInstance>
 ): void {
   const playerIds = new Set(state.players.map((player) => player.playerId));
   const controlledCardIds = new Set<string>();
@@ -98,15 +105,17 @@ function assertTemporaryCardControls(
       `temporary control references missing controller ${control.controllerId}`
     );
     assertTrue(
-      !controlledCardIds.has(control.cardInstanceId),
-      `duplicate temporary control for ${control.cardInstanceId}`
+      !controlledCardIds.has(control.card.instanceId),
+      `duplicate temporary control for ${control.card.instanceId}`
     );
-    controlledCardIds.add(control.cardInstanceId);
+    controlledCardIds.add(control.card.instanceId);
 
-    const locations = cardLocations.get(control.cardInstanceId);
+    const locations = cardLocations.get(control.card.instanceId);
     assertTrue(
-      locations !== undefined && locations.length === 1,
-      `temporary control references missing card ${control.cardInstanceId}`
+      cardObjects.has(control.card) &&
+        locations !== undefined &&
+        locations.length === 1,
+      `temporary control references missing card ${control.card.instanceId}`
     );
   }
 }

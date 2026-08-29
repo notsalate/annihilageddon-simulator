@@ -1,7 +1,7 @@
 import {
+  getPhysicalCardLedger,
   listDefenseCardLocations,
   listPhysicalCardLocations,
-  movePhysicalCard,
 } from "./control-ledger.js";
 import { clearFaceUpState } from "./deck-lifecycle.js";
 import { installGameEventLog } from "./game-events.js";
@@ -151,7 +151,7 @@ function createDefenseMutationSnapshot(
     ok: true,
     snapshot: {
       activePlayerId: state.activePlayerId,
-      turn: structuredClone(state.turn),
+      turn: cloneDefenseTurn(state.turn),
       physicalCardZones: physicalCardZoneResult.snapshot,
       players: state.players.map((player) => ({
         player,
@@ -206,7 +206,7 @@ function restoreDefenseMutationSnapshot(
     Object.assign(mutableObject.object, structuredClone(mutableObject.value));
   }
   state.activePlayerId = snapshot.activePlayerId;
-  state.turn = structuredClone(snapshot.turn);
+  state.turn = cloneDefenseTurn(snapshot.turn);
   for (const playerSnapshot of snapshot.players) {
     const { player } = playerSnapshot;
     player.deadWizardTokens = [...playerSnapshot.deadWizardTokens];
@@ -247,6 +247,22 @@ function restoreDefenseMutationSnapshot(
         ok: false,
         error: `Defense card-zone rollback failed: ${physicalCardZoneResult.reason}`,
       };
+}
+
+/** Clone turn metadata while retaining Ledger-owned card identity. */
+function cloneDefenseTurn(turn: GameState["turn"]): GameState["turn"] {
+  const cloned = structuredClone(turn);
+  cloned.temporaryCardControls = turn.temporaryCardControls.map(
+    ({ card, controllerId }) => ({ card, controllerId })
+  );
+  cloned.mainMarketCardHandReplacementSourceCards =
+    turn.mainMarketCardHandReplacementSourceCards;
+  cloned.gainedCards = turn.gainedCards.map((record) => ({ ...record }));
+  cloned.deadWizardTokenKillReplacement =
+    turn.deadWizardTokenKillReplacement === undefined
+      ? undefined
+      : { ...turn.deadWizardTokenKillReplacement };
+  return cloned;
 }
 
 function rollbackDefenseFailure(
@@ -325,6 +341,7 @@ export function resolveDefenseWindow(
     ...(attack.kind === "redirectable"
       ? { currentAttackerPlayerId: attack.attackingPlayer.playerId }
       : {}),
+    card: defense.card,
     cardInstanceId: defense.card.instanceId,
     definitionId: defense.card.definitionId,
   };
@@ -521,9 +538,8 @@ function moveDefenseCard(
   if (destinationZoneName === undefined) {
     return false;
   }
-  const moveResult = movePhysicalCard(
-    state,
-    defense.card.instanceId,
+  const moveResult = getPhysicalCardLedger(state).moveCard(
+    defense.card,
     destinationZoneName,
     defense.destination === "discardSelf" ? "back" : "front"
   );
@@ -729,9 +745,19 @@ function commitDefensePaymentPlan(
             error: "Defense payment plan could not select a hand card",
           };
         }
-        const moveResult = movePhysicalCard(
-          state,
-          paidCardInstanceId,
+        const ledger = getPhysicalCardLedger(state);
+        const selectedPaidCard = ledger.findCardInZone(
+          `${defendingPlayer.playerId}.hand`,
+          paidCardInstanceId
+        );
+        if (selectedPaidCard === undefined) {
+          return {
+            ok: false,
+            error: `Defense payment plan could not find card ${step.cardInstanceId}`,
+          };
+        }
+        const moveResult = ledger.moveCard(
+          selectedPaidCard,
           `${defendingPlayer.playerId}.discard`,
           "back",
           `${defendingPlayer.playerId}.hand`

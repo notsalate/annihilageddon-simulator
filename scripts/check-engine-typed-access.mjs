@@ -12,6 +12,7 @@ const rootDir = path.resolve(rootPath);
 const engineDir = path.join(rootDir, "src", "engine");
 const violations = [];
 const physicalCardZoneOwnershipViolations = [];
+const physicalCardZoneMutationViolations = [];
 const attackLifecycleOwnershipViolations = [];
 const attackResolutionOwner = "src/engine/attack-resolution.ts";
 const forbiddenNormalAttackOrchestrationSymbols = new Set([
@@ -55,6 +56,9 @@ const physicalInventorySeamApiNames = new Set([
   "listPhysicalCardZoneDescriptors",
 ]);
 const controlLedgerOwner = "src/engine/control-ledger.ts";
+// Setup constructs arrays before GameState and its Ledger exist. Those writes
+// are bootstrap assembly, not runtime zone mutations.
+const physicalCardBootstrapOwners = new Set(["src/engine/setup.ts"]);
 const physicalCardZonePaths = collectPhysicalCardZonePaths();
 const configuredAllowedViolations = [
   ["src/engine/data.ts", 1293, 3, "decodeRuntimeSourceMetadata"],
@@ -281,6 +285,7 @@ for (const filePath of listTypeScriptFiles(engineDir)) {
     }
   }
   checkPhysicalCardZoneOwnership(relativePath, sourceFile);
+  checkPhysicalCardZoneMutations(relativePath, sourceFile);
   if (relativePath === attackResolutionOwner) {
     attackResolutionOwnerPresent = true;
   }
@@ -1165,6 +1170,119 @@ function checkPhysicalCardZoneOwnership(relativePath, sourceFile) {
   }
 }
 
+function checkPhysicalCardZoneMutations(relativePath, sourceFile) {
+  if (
+    relativePath === controlLedgerOwner ||
+    physicalCardBootstrapOwners.has(relativePath)
+  ) {
+    return;
+  }
+
+  const aliases = new Map();
+  const mutationMethods = new Set([
+    "copyWithin",
+    "fill",
+    "pop",
+    "push",
+    "reverse",
+    "shift",
+    "sort",
+    "splice",
+    "unshift",
+  ]);
+
+  function report(node, pathName, operation) {
+    const position = sourceFile.getLineAndCharacterOfPosition(
+      node.getStart(sourceFile)
+    );
+    physicalCardZoneMutationViolations.push(
+      `${relativePath}:${position.line + 1}:${position.character + 1} directly ${operation} ${pathName}; use PhysicalCardLedger`
+    );
+  }
+
+  function getZonePath(node) {
+    if (ts.isIdentifier(node)) return aliases.get(node.text);
+    if (ts.isPropertyAccessExpression(node)) {
+      const pathName = getSemanticPropertyAccessPath(node, sourceFile, true);
+      return pathName !== undefined && physicalCardZonePaths.has(pathName)
+        ? pathName
+        : undefined;
+    }
+    if (
+      ts.isElementAccessExpression(node) &&
+      ts.isStringLiteral(node.argumentExpression)
+    ) {
+      const basePath = getZonePath(node.expression);
+      return basePath === undefined
+        ? undefined
+        : `${basePath}.${node.argumentExpression.text}`;
+    }
+    return undefined;
+  }
+
+  function isAssignmentOperator(kind) {
+    return new Set([
+      ts.SyntaxKind.EqualsToken,
+      ts.SyntaxKind.PlusEqualsToken,
+      ts.SyntaxKind.MinusEqualsToken,
+      ts.SyntaxKind.AsteriskEqualsToken,
+      ts.SyntaxKind.SlashEqualsToken,
+      ts.SyntaxKind.PercentEqualsToken,
+      ts.SyntaxKind.AsteriskAsteriskEqualsToken,
+      ts.SyntaxKind.LessThanLessThanEqualsToken,
+      ts.SyntaxKind.GreaterThanGreaterThanEqualsToken,
+      ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
+      ts.SyntaxKind.AmpersandEqualsToken,
+      ts.SyntaxKind.BarEqualsToken,
+      ts.SyntaxKind.CaretEqualsToken,
+      ts.SyntaxKind.QuestionQuestionEqualsToken,
+      ts.SyntaxKind.BarBarEqualsToken,
+      ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+    ]).has(kind);
+  }
+
+  function visit(node) {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined
+    ) {
+      const pathName = getZonePath(node.initializer);
+      if (pathName !== undefined) aliases.set(node.name.text, pathName);
+    }
+
+    if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
+      const pathName = getZonePath(node.left);
+      if (pathName !== undefined) report(node.left, pathName, "assigns to");
+    }
+
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      mutationMethods.has(node.expression.name.text)
+    ) {
+      const pathName = getZonePath(node.expression.expression);
+      if (pathName !== undefined) {
+        report(node.expression, pathName, `calls ${node.expression.name.text} on`);
+      }
+    }
+
+    if (ts.isDeleteExpression(node)) {
+      const pathName = getZonePath(node.expression);
+      if (pathName !== undefined) report(node, pathName, "deletes from");
+    }
+
+    if (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) {
+      const pathName = getZonePath(node.operand);
+      if (pathName !== undefined) report(node, pathName, "updates");
+    }
+
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+}
+
 function collectPhysicalCardZonePaths() {
   const ledgerPath = path.join(engineDir, "control-ledger.ts");
   if (!statSync(ledgerPath, { throwIfNoEntry: false })) {
@@ -1607,6 +1725,11 @@ if (attackLifecycleOwnershipViolations.length > 0) {
 if (physicalCardZoneOwnershipViolations.length > 0) {
   throw new Error(
     `Physical card zone ownership violation(s): ${physicalCardZoneOwnershipViolations.join("; ")}`
+  );
+}
+if (physicalCardZoneMutationViolations.length > 0) {
+  throw new Error(
+    `Physical card zone mutation violation(s): ${physicalCardZoneMutationViolations.join("; ")}`
   );
 }
 if (triggerDispatchOwnerPresent && triggerDispatchOwnerDeclarationCount !== 1) {

@@ -19,15 +19,9 @@ import {
 } from "./attack-resolution.js";
 import {
   getControlledCards,
-  findCardLocation,
-  insertDetachedCard,
-  listMainDeckCards,
-  listPlayerDeckCards,
-  listPlayerDiscardCards,
-  removeCardFromLocation,
+  getPhysicalCardLedger,
   removeDeadWizardToken,
   removeTemporaryCardControl,
-  reorderPhysicalCard,
 } from "./control-ledger.js";
 import {
   getControlledDeadWizardTokenLikeCards,
@@ -50,12 +44,7 @@ import {
   type CardPlayResolutionServices,
 } from "./card-play-resolution.js";
 import { calculateEffectivePlayerMaxLife } from "./effective-value-runtime.js";
-import {
-  clearFaceUpState,
-  drawDeckCard,
-  previewDeckCard,
-  refillDeckFromDiscard,
-} from "./deck-lifecycle.js";
+import { clearFaceUpState, previewDeckCard } from "./deck-lifecycle.js";
 import {
   recordCardMoved,
   recordDeckReshuffle,
@@ -218,6 +207,7 @@ export function validateGainedCardEffects(
       sourceType: "card",
       runtimeMode: state.runtimeMode,
       playerId: player.playerId,
+      card,
       cardInstanceId: card.instanceId,
       definitionId: definition.cardId,
     }
@@ -280,6 +270,7 @@ export function validateGainedCardEffects(
         sourceType: "card",
         runtimeMode: state.runtimeMode,
         playerId: player.playerId,
+        card: controlledCard,
         cardInstanceId: controlledCard.instanceId,
         definitionId: controlledDefinition.cardId,
       },
@@ -306,6 +297,7 @@ export function validateRevealTopCardGainEffects(
     sourceType: "card",
     runtimeMode: state.runtimeMode,
     playerId: player.playerId,
+    card: playedCard,
     cardInstanceId: playedCard.instanceId,
     definitionId: playedDefinition.cardId,
   };
@@ -359,11 +351,13 @@ function validateRevealTopCardGainEffectsAtTiming(
   excludedCardInstanceId: CardInstance["instanceId"]
 ): EffectExecutionResult {
   let activeDeckPreview = {
-    deck: [...listPlayerDeckCards(player)],
-    discard: [...listPlayerDiscardCards(player)],
+    deck: [...getPhysicalCardLedger(state).readZone(`${player.playerId}.deck`)],
+    discard: [
+      ...getPhysicalCardLedger(state).readZone(`${player.playerId}.discard`),
+    ],
     rng: state.rng,
   };
-  let mainDeckPreview = [...listMainDeckCards(state)];
+  let mainDeckPreview = [...getPhysicalCardLedger(state).readZone("mainDeck")];
 
   for (const effect of effects) {
     const revealResult = evaluateRuntimeEffectAtTiming(
@@ -1056,7 +1050,8 @@ export function moveGainedCardToPlayerDestination(
   }
 
   const ownerBefore = card.ownerId;
-  const sourceLocation = removeCardFromLocation(state, card.instanceId);
+  const ledger = getPhysicalCardLedger(state);
+  const sourceLocation = ledger.locateCard(card);
   if (sourceLocation === undefined) {
     return {
       ok: false,
@@ -1064,6 +1059,13 @@ export function moveGainedCardToPlayerDestination(
     };
   }
   const sourceZone = sourceLocation.zoneName;
+  const removed = ledger.removeCard(card, sourceZone);
+  if (!removed.ok) {
+    return {
+      ok: false,
+      error: `Cannot move card ${card.instanceId}`,
+    };
+  }
 
   moveMarketChipsToPlayer(state, player, card);
   card.ownerId = player.playerId;
@@ -1071,6 +1073,7 @@ export function moveGainedCardToPlayerDestination(
     playerId: player.playerId,
     definitionId: card.definitionId,
     cardInstanceId: card.instanceId,
+    card,
   });
   const onGainCardResult = runOnGainCardEffects(
     state,
@@ -1098,21 +1101,23 @@ export function moveGainedCardToPlayerDestination(
   const destination = destinationResult.destination;
   clearFaceUpState(card);
 
-  if (destination === "deckTop") {
-    player.deck.unshift(card);
-  } else if (destination === "hand") {
-    player.hand.push(card);
-  } else {
-    player.discard.push(card);
-  }
+  const destinationZone =
+    destination === "deckTop"
+      ? `${player.playerId}.deck`
+      : destination === "hand"
+        ? `${player.playerId}.hand`
+        : `${player.playerId}.discard`;
+  ledger.addCards(
+    destinationZone,
+    [card],
+    destination === "deckTop" ? "front" : "back"
+  );
   recordCardMoved(state, player, card, {
     sourceZone,
     destinationZone:
       destination === "deckTop"
         ? `${player.playerId}.deckTop`
-        : destination === "hand"
-          ? `${player.playerId}.hand`
-          : `${player.playerId}.discard`,
+        : destinationZone,
     ownerBefore,
     ownerAfter: card.ownerId,
     ...(movementSource === undefined
@@ -1146,6 +1151,7 @@ function executeGainedCardOnGainEffects(
     sourceType: "card",
     runtimeMode: state.runtimeMode,
     playerId: player.playerId,
+    card,
     cardInstanceId: card.instanceId,
     definitionId: definition.cardId,
   };
@@ -1221,6 +1227,7 @@ function runOnGainCardEffects(
         sourceType: "card",
         runtimeMode: state.runtimeMode,
         playerId: player.playerId,
+        card: controlledCard,
         cardInstanceId: controlledCard.instanceId,
         definitionId: definition.cardId,
       },
@@ -1548,14 +1555,9 @@ function countGainedCardsMatchingEffect(
   return state.turn.gainedCards.filter((record) => {
     if (record.playerId !== player.playerId) return false;
     const definition = state.cardDefinitions.get(record.definitionId);
-    const card = findCardLocation(
-      state,
-      record.cardInstanceId,
-      "gainedCardRecord"
-    )?.card;
     return (
       definition !== undefined &&
-      cardTriggerMatches(effect, definition, state, player, card)
+      cardTriggerMatches(effect, definition, state, player, record.card)
     );
   }).length;
 }
@@ -2829,6 +2831,7 @@ function resolveDeadWizardTokenKillReplacement(
     sourceType: "card",
     runtimeMode: state.runtimeMode,
     playerId: pending.playerId,
+    ...(pending.card === undefined ? {} : { card: pending.card }),
     cardInstanceId: pending.cardInstanceId,
     definitionId: pending.definitionId,
   };
@@ -3060,7 +3063,6 @@ function transferControlledDeadWizardTokenLike(
         state,
         card,
         targetPlayer,
-        targetPlayer.permanents,
         `${targetPlayer.playerId}.permanents`,
         effectId,
         source
@@ -3071,7 +3073,7 @@ function transferControlledDeadWizardTokenLike(
           error: `Cannot transfer controlled dead wizard token-like card ${card.instanceId}`,
         };
       }
-      removeTemporaryCardControl(state, card.instanceId);
+      removeTemporaryCardControl(state, card);
       return { ok: true as const };
     },
     (result) => result.ok
@@ -3321,8 +3323,7 @@ function isControlledDeadWizardTokenLikeSelectionAvailable(
   }
 
   return (
-    findCardLocation(state, selection.card.instanceId, "knownCard") !==
-      undefined &&
+    getPhysicalCardLedger(state).locateCard(selection.card) !== undefined &&
     getControlledDeadWizardTokenLikeCards(state, player).some(
       (card) => card.instanceId === selection.card.instanceId
     )
@@ -3354,7 +3355,6 @@ function moveControlledDeadWizardTokenLike(
     state,
     selection.card,
     targetPlayer,
-    targetPlayer.permanents,
     `${targetPlayer.playerId}.permanents`,
     effectId,
     source
@@ -3365,7 +3365,7 @@ function moveControlledDeadWizardTokenLike(
       error: `Cannot exchange controlled dead wizard token-like card ${selection.card.instanceId}`,
     };
   }
-  removeTemporaryCardControl(state, selection.card.instanceId);
+  removeTemporaryCardControl(state, selection.card);
   return { ok: true };
 }
 
@@ -4061,26 +4061,26 @@ function moveCardToPlayerZone(
   state: GameState,
   card: CardInstance,
   player: PlayerState,
-  destination: CardInstance[],
   destinationZone: string,
   effectId: RuntimeEffectId,
   source: EffectSourceContext,
   placeOnTop = false
 ): boolean {
   const ownerBefore = card.ownerId;
-  const sourceLocation = removeCardFromLocation(state, card.instanceId);
+  const ledger = getPhysicalCardLedger(state);
+  const sourceLocation = ledger.locateCard(card);
   if (sourceLocation === undefined) {
     return false;
   }
   const sourceZone = sourceLocation.zoneName;
 
+  const removed = ledger.removeCard(card, sourceZone);
+  if (!removed.ok) {
+    return false;
+  }
   moveMarketChipsToPlayer(state, player, card);
   card.ownerId = player.playerId;
-  if (placeOnTop) {
-    destination.unshift(card);
-  } else {
-    destination.push(card);
-  }
+  ledger.addCards(destinationZone, [card], placeOnTop ? "front" : "back");
   recordCardMoved(state, player, card, {
     sourceZone,
     destinationZone,
@@ -4112,22 +4112,21 @@ function moveCardToZonePreservingOwner(
   state: GameState,
   player: PlayerState,
   card: CardInstance,
-  destination: CardInstance[],
   destinationZone: string,
   effectId: RuntimeEffectId,
   source: EffectSourceContext,
   placeOnTop = false
 ): boolean {
   const ownerBefore = card.ownerId;
-  const sourceLocation = findCardLocation(state, card.instanceId, "knownCard");
+  const ledger = getPhysicalCardLedger(state);
+  const sourceLocation = ledger.locateCard(card);
   if (sourceLocation === undefined) {
     return false;
   }
 
   if (sourceLocation.zoneName === destinationZone) {
-    const reordered = reorderPhysicalCard(
-      state,
-      card.instanceId,
+    const reordered = ledger.reorderCard(
+      card,
       destinationZone,
       placeOnTop ? "front" : "back"
     );
@@ -4145,17 +4144,13 @@ function moveCardToZonePreservingOwner(
     return true;
   }
 
-  const removedLocation = removeCardFromLocation(state, card.instanceId);
-  if (removedLocation === undefined) {
+  const removed = ledger.removeCard(card, sourceLocation.zoneName);
+  if (!removed.ok) {
     return false;
   }
-  const sourceZone = removedLocation.zoneName;
+  const sourceZone = removed.sourceZoneName;
 
-  if (placeOnTop) {
-    destination.unshift(card);
-  } else {
-    destination.push(card);
-  }
+  ledger.addCards(destinationZone, [card], placeOnTop ? "front" : "back");
   recordCardMoved(state, player, card, {
     sourceZone,
     destinationZone,
@@ -4177,8 +4172,7 @@ function restoreDetachedCardToZone(
   placeOnTop = false
 ): boolean {
   const ownerBefore = card.ownerId;
-  const restored = insertDetachedCard(
-    state,
+  const restored = getPhysicalCardLedger(state).insertDetachedCard(
     card,
     destinationZone,
     placeOnTop ? "front" : "back"
@@ -4200,9 +4194,7 @@ function restoreDetachedCardToZone(
 function getDestroyDestination(
   state: GameState,
   card: CardInstance
-):
-  | { ok: true; zone: CardInstance[]; zoneName: string }
-  | { ok: false; error: string } {
+): { ok: true; zoneName: string } | { ok: false; error: string } {
   const definition = state.cardDefinitions.get(card.definitionId);
   if (definition === undefined) {
     return {
@@ -4214,7 +4206,6 @@ function getDestroyDestination(
   if (definition.engine.cardKind === "wildMagic") {
     return {
       ok: true,
-      zone: state.common.wildMagicStack,
       zoneName: "wildMagicStack",
     };
   }
@@ -4222,7 +4213,6 @@ function getDestroyDestination(
   if (definition.engine.cardKind === "limpWand") {
     return {
       ok: true,
-      zone: state.common.limpWandStack,
       zoneName: "limpWandStack",
     };
   }
@@ -4230,7 +4220,6 @@ function getDestroyDestination(
   if (definition.engine.cardKind === "megaMayhem") {
     return {
       ok: true,
-      zone: state.common.destroyedMegaMayhem,
       zoneName: "destroyedMegaMayhem",
     };
   }
@@ -4238,14 +4227,12 @@ function getDestroyDestination(
   if (definition.engine.cardKind === "mayhem") {
     return {
       ok: true,
-      zone: state.common.destroyedMayhem,
       zoneName: "destroyedMayhem",
     };
   }
 
   return {
     ok: true,
-    zone: state.common.destroyedPile,
     zoneName: "destroyedPile",
   };
 }
@@ -4260,18 +4247,13 @@ function discardTopDeckCards(
   count: number
 ): CardInstance[] {
   const discardedCards: CardInstance[] = [];
+  const ledger = getPhysicalCardLedger(state);
   for (let index = 0; index < count; index += 1) {
-    const result = drawDeckCard(player.deck, player.discard, state.rng);
-    if (result.reshuffled) {
-      recordDeckReshuffle(state, player.playerId);
-    }
-
-    const card = result.card;
-    if (card === undefined) {
-      return discardedCards;
-    }
-
-    player.discard.push(card);
+    const card = ledger.drawCards(player.playerId, 1, state.rng, () =>
+      recordDeckReshuffle(state, player.playerId)
+    ).cards[0];
+    if (card === undefined) break;
+    ledger.addCards(`${player.playerId}.discard`, [card]);
     discardedCards.push(card);
   }
 
@@ -4387,21 +4369,23 @@ function drawTopDeckCard(
   player: PlayerState,
   state: GameState
 ): CardInstance | undefined {
-  const result = drawDeckCard(player.deck, player.discard, state.rng);
-  if (result.reshuffled) {
-    recordDeckReshuffle(state, player.playerId);
-  }
-  return result.card;
+  return getPhysicalCardLedger(state).drawCards(
+    player.playerId,
+    1,
+    state.rng,
+    () => recordDeckReshuffle(state, player.playerId)
+  ).cards[0];
 }
 
 function peekTopDeckCard(
   player: PlayerState,
   state: GameState
 ): CardInstance | undefined {
-  if (refillDeckFromDiscard(player.deck, player.discard, state.rng)) {
+  const ledger = getPhysicalCardLedger(state);
+  if (ledger.refillDeck(player.playerId, state.rng)) {
     recordDeckReshuffle(state, player.playerId);
   }
-  return player.deck[0];
+  return ledger.readZone(`${player.playerId}.deck`)[0];
 }
 
 function playResolvedCard(

@@ -15,15 +15,7 @@ import type {
   PhysicalCardPointSearchReason,
 } from "./physical-card-diagnostics.js";
 import { copyRuntimeEffectVerification } from "./runtime-effect-verification.js";
-
-const physicalCardZoneDescriptorCache = new WeakMap<
-  object,
-  readonly PhysicalCardZoneDescriptor[]
->();
-const instrumentedPhysicalCardZoneDescriptorCache = new WeakMap<
-  object,
-  readonly PhysicalCardZoneDescriptor[]
->();
+import type { RandomSource } from "./rng.js";
 
 export interface ControlledObjectView {
   playerId: PlayerId;
@@ -59,6 +51,11 @@ export interface PhysicalCardZoneDescriptor {
   readonly scoringEligible: boolean;
   readonly expectedOwnerId?: CardInstance["ownerId"];
   read(instrument?: boolean): readonly CardInstance[];
+}
+
+interface PhysicalCardZoneStorageDescriptor extends PhysicalCardZoneDescriptor {
+  /** Internal raw view used by the Ledger; callers must not mutate it. */
+  readRaw(): readonly CardInstance[];
   replace(cards: readonly CardInstance[]): void;
 }
 
@@ -85,6 +82,640 @@ export interface PhysicalCardMove {
 export type PhysicalCardMoveResult =
   | { readonly ok: true; readonly move: PhysicalCardMove }
   | { readonly ok: false; readonly reason: string };
+
+export type PhysicalCardRemoveResult =
+  | {
+      readonly ok: true;
+      readonly card: CardInstance;
+      readonly sourceZoneName: string;
+    }
+  | { readonly ok: false; readonly reason: string };
+
+type PhysicalCardLedgerState = Pick<
+  GameState,
+  "players" | "common" | "physicalCardDiagnostics"
+>;
+
+export interface PhysicalCardLedgerCardZoneBinding {
+  readonly card: CardInstance;
+  readonly zoneName: string;
+}
+
+interface PhysicalCardLedgerClonedMembership {
+  readonly cards: readonly CardInstance[];
+  readonly zoneNames: readonly string[];
+}
+
+const physicalCardLedgers = new WeakMap<object, PhysicalCardLedger>();
+const physicalCardLedgersByCommonState = new WeakMap<
+  object,
+  PhysicalCardLedger
+>();
+const physicalCardBranchOwners = new WeakMap<CardInstance, object>();
+
+/**
+ * Owns physical card membership and all runtime mutations of built-in card
+ * zones. Stable IDs enter this module only at explicit external boundaries;
+ * internal operations use the live CardInstance reference.
+ */
+export class PhysicalCardLedger {
+  private readonly descriptors: readonly PhysicalCardZoneStorageDescriptor[];
+  private readonly descriptorsByName: ReadonlyMap<
+    string,
+    PhysicalCardZoneStorageDescriptor
+  >;
+  private readonly cardZones = new WeakMap<CardInstance, string>();
+  private readonly branchIdentity: object = {};
+  private readonly state: PhysicalCardLedgerState;
+
+  constructor(
+    state: PhysicalCardLedgerState,
+    cardZoneBindings?: readonly PhysicalCardLedgerCardZoneBinding[],
+    clonedMembership?: PhysicalCardLedgerClonedMembership
+  ) {
+    this.state = state;
+    this.descriptors = listBuiltinPhysicalCardZoneDescriptors(
+      state,
+      state.physicalCardDiagnostics === undefined
+        ? undefined
+        : () => state.physicalCardDiagnostics
+    );
+    this.descriptorsByName = new Map(
+      this.descriptors.map((descriptor) => [descriptor.zoneName, descriptor])
+    );
+    if (clonedMembership !== undefined) {
+      if (cardZoneBindings !== undefined) {
+        throw new Error("Cloned Ledger membership cannot include bindings");
+      }
+      this.seedClonedMembership(clonedMembership);
+    } else if (cardZoneBindings === undefined) {
+      this.rebuildMembership();
+    } else {
+      const bindingZonesByCard = new Map<CardInstance, string>();
+      for (const binding of cardZoneBindings) {
+        this.assertBranchCard(binding.card);
+        const descriptor = this.requireDescriptor(binding.zoneName);
+        if (bindingZonesByCard.has(binding.card)) {
+          throw new Error(
+            `Duplicate physical card binding for ${binding.card.instanceId}`
+          );
+        }
+        bindingZonesByCard.set(binding.card, descriptor.zoneName);
+      }
+      const cardsByObject = new Map<CardInstance, string>();
+      const cardsById = new Map<string, string>();
+      for (const descriptor of this.descriptors) {
+        for (const card of descriptor.readRaw()) {
+          const boundZoneName = bindingZonesByCard.get(card);
+          if (boundZoneName === undefined) {
+            throw new Error(
+              `Physical card ${card.instanceId} is missing from ${descriptor.zoneName}`
+            );
+          }
+          if (boundZoneName !== descriptor.zoneName) {
+            throw new Error(
+              `Physical card ${card.instanceId} is bound to ${boundZoneName}, not ${descriptor.zoneName}`
+            );
+          }
+          const previousObjectZone = cardsByObject.get(card);
+          if (previousObjectZone !== undefined) {
+            throw new Error(
+              `card ${card.instanceId} appears in multiple zones: ${previousObjectZone}, ${descriptor.zoneName}`
+            );
+          }
+          const previousIdZone = cardsById.get(card.instanceId);
+          if (previousIdZone !== undefined) {
+            throw new Error(
+              `card ${card.instanceId} appears in multiple zones: ${previousIdZone}, ${descriptor.zoneName}`
+            );
+          }
+          cardsByObject.set(card, descriptor.zoneName);
+          cardsById.set(card.instanceId, descriptor.zoneName);
+          this.cardZones.set(card, descriptor.zoneName);
+        }
+      }
+      if (cardsByObject.size !== bindingZonesByCard.size) {
+        for (const [card, zoneName] of bindingZonesByCard) {
+          if (!cardsByObject.has(card)) {
+            throw new Error(
+              `Physical card ${card.instanceId} is missing from ${zoneName}`
+            );
+          }
+        }
+      }
+    }
+  }
+
+  get zoneDescriptors(): readonly PhysicalCardZoneDescriptor[] {
+    return this.descriptors;
+  }
+
+  /** Returns the live array owned by one named zone as a readonly view. */
+  readZone(zoneName: string): readonly CardInstance[] {
+    return this.requireDescriptor(zoneName).readRaw();
+  }
+
+  /** Lists one player's six physical card zones without visiting other players. */
+  listPlayerCards(playerId: PlayerId): readonly CardInstance[] {
+    const player = this.state.players.find(
+      (candidate) => candidate.playerId === playerId
+    );
+    if (player === undefined) return [];
+    return [
+      ...this.readZone(`${playerId}.deck`),
+      ...this.readZone(`${playerId}.hand`),
+      ...this.readZone(`${playerId}.discard`),
+      ...this.readZone(`${playerId}.playedThisTurn`),
+      ...this.readZone(`${playerId}.permanents`),
+      ...this.readZone(`${playerId}.unboughtFamiliars`),
+    ];
+  }
+
+  /** Resolves a known branch-local card without consulting its stable ID. */
+  locateCard(
+    card: CardInstance,
+    expectedZoneName?: string
+  ): CardLocation | undefined {
+    const knownZoneName = this.cardZones.get(card);
+    if (
+      knownZoneName !== undefined &&
+      (expectedZoneName === undefined || knownZoneName === expectedZoneName)
+    ) {
+      const knownZone = this.descriptorsByName.get(knownZoneName);
+      if (knownZone !== undefined && knownZone.readRaw().includes(card)) {
+        return { card, zoneName: knownZoneName };
+      }
+      this.cardZones.delete(card);
+    }
+
+    // This fallback keeps hand-built fixtures usable; production mutations are
+    // guarded and update cardZones through the Ledger operations below.
+    for (const descriptor of this.descriptors) {
+      if (
+        expectedZoneName !== undefined &&
+        descriptor.zoneName !== expectedZoneName
+      ) {
+        continue;
+      }
+      if (descriptor.readRaw().includes(card)) {
+        this.cardZones.set(card, descriptor.zoneName);
+        return { card, zoneName: descriptor.zoneName };
+      }
+    }
+    return undefined;
+  }
+
+  /** Resolves an externally supplied stable ID without materializing locations. */
+  resolveCardLocation(
+    cardInstanceId: string,
+    reason: PhysicalCardPointSearchReason = "unclassifiedId"
+  ): CardLocation | undefined {
+    this.state.physicalCardDiagnostics?.recordPointLocationSearch(reason);
+    for (const descriptor of this.descriptors) {
+      const cards = descriptor.readRaw();
+      this.state.physicalCardDiagnostics?.recordPhysicalZonePass(cards.length);
+      for (const card of cards) {
+        if (card.instanceId === cardInstanceId) {
+          this.cardZones.set(card, descriptor.zoneName);
+          return { card, zoneName: descriptor.zoneName };
+        }
+      }
+    }
+    return undefined;
+  }
+
+  /** Resolves an ID in one explicitly named zone at an input boundary. */
+  findCardInZone(
+    zoneName: string,
+    cardInstanceId: string
+  ): CardInstance | undefined {
+    for (const card of this.readZone(zoneName)) {
+      if (card.instanceId === cardInstanceId) return card;
+    }
+    return undefined;
+  }
+
+  /** Resolves an ID at a player-scoped input boundary without creating locations. */
+  findPlayerCard(
+    playerId: PlayerId,
+    cardInstanceId: string,
+    reason: PhysicalCardPointSearchReason = "unclassifiedId"
+  ): CardInstance | undefined {
+    this.state.physicalCardDiagnostics?.recordPointLocationSearch(reason);
+    const player = this.state.players.find(
+      (candidate) => candidate.playerId === playerId
+    );
+    if (player === undefined) return undefined;
+    for (const zoneName of [
+      `${playerId}.deck`,
+      `${playerId}.hand`,
+      `${playerId}.discard`,
+      `${playerId}.playedThisTurn`,
+      `${playerId}.permanents`,
+      `${playerId}.unboughtFamiliars`,
+    ]) {
+      const cards = this.readZone(zoneName);
+      this.state.physicalCardDiagnostics?.recordPhysicalZonePass(cards.length);
+      for (const card of cards) {
+        if (card.instanceId === cardInstanceId) return card;
+      }
+    }
+    return undefined;
+  }
+
+  /** Replaces one zone and refreshes object-identity membership metadata. */
+  replaceZone(zoneName: string, cards: readonly CardInstance[]): void {
+    const descriptor = this.requireDescriptor(zoneName);
+    if (descriptor.cardinality === "zeroOrOne" && cards.length > 1) {
+      throw new Error(`Destination zone ${zoneName} is already occupied`);
+    }
+    const seenCards = new Set<CardInstance>();
+    for (const card of cards) {
+      if (seenCards.has(card)) {
+        throw new Error(`Duplicate physical card object ${card.instanceId}`);
+      }
+      seenCards.add(card);
+      if (!this.cardZones.has(card)) {
+        this.assertBranchCard(card);
+      }
+    }
+    const previousCards = [...descriptor.readRaw()];
+    descriptor.replace(cards);
+    for (const card of previousCards) {
+      if (!seenCards.has(card) && this.cardZones.get(card) === zoneName) {
+        this.cardZones.delete(card);
+      }
+    }
+    for (const card of cards) {
+      this.cardZones.set(card, zoneName);
+    }
+  }
+
+  /** Removes a known card from its current zone without an ID lookup. */
+  removeCard(
+    card: CardInstance,
+    expectedSourceZoneName?: string
+  ): PhysicalCardRemoveResult {
+    const location = this.locateCard(card, expectedSourceZoneName);
+    if (location === undefined) {
+      return {
+        ok: false,
+        reason:
+          expectedSourceZoneName === undefined
+            ? `Missing card ${card.instanceId}`
+            : `Missing card ${card.instanceId} in ${expectedSourceZoneName}`,
+      };
+    }
+    const cards = this.readZone(location.zoneName);
+    const index = cards.indexOf(card);
+    if (index < 0) {
+      return { ok: false, reason: `Missing card ${card.instanceId}` };
+    }
+    clearFaceUpState(card);
+    this.replaceZone(location.zoneName, [
+      ...cards.slice(0, index),
+      ...cards.slice(index + 1),
+    ]);
+    return { ok: true, card, sourceZoneName: location.zoneName };
+  }
+
+  /** Reorders a known card inside one Ledger-owned zone. */
+  reorderCard(
+    card: CardInstance,
+    zoneName: string,
+    placement: "front" | "back"
+  ): PhysicalCardMoveResult {
+    const descriptor = this.descriptorsByName.get(zoneName);
+    if (descriptor === undefined) {
+      return { ok: false, reason: `Missing destination zone ${zoneName}` };
+    }
+    const location = this.locateCard(card, zoneName);
+    if (location === undefined) {
+      return { ok: false, reason: `Missing card ${card.instanceId}` };
+    }
+    const remaining = descriptor
+      .readRaw()
+      .filter((candidate) => candidate !== card);
+    clearFaceUpState(card);
+    this.replaceZone(
+      zoneName,
+      placement === "front" ? [card, ...remaining] : [...remaining, card]
+    );
+    return {
+      ok: true,
+      move: {
+        card,
+        sourceZoneName: zoneName,
+        destinationZoneName: zoneName,
+      },
+    };
+  }
+
+  /** Moves a known card between Ledger-owned zones. */
+  moveCard(
+    card: CardInstance,
+    destinationZoneName: string,
+    placement: "front" | "back",
+    expectedSourceZoneName?: string
+  ): PhysicalCardMoveResult {
+    const destination = this.descriptorsByName.get(destinationZoneName);
+    if (destination === undefined) {
+      return {
+        ok: false,
+        reason: `Missing destination zone ${destinationZoneName}`,
+      };
+    }
+    const source = this.locateCard(card, expectedSourceZoneName);
+    if (source === undefined) {
+      return {
+        ok: false,
+        reason:
+          expectedSourceZoneName === undefined
+            ? `Missing card ${card.instanceId}`
+            : `Missing card ${card.instanceId} in ${expectedSourceZoneName}`,
+      };
+    }
+    if (source.zoneName === destinationZoneName) {
+      return {
+        ok: false,
+        reason: `Card ${card.instanceId} already belongs to ${destinationZoneName}`,
+      };
+    }
+    const destinationCards = destination.readRaw();
+    if (
+      destination.cardinality === "zeroOrOne" &&
+      destinationCards.length > 0
+    ) {
+      return {
+        ok: false,
+        reason: `Destination zone ${destinationZoneName} is already occupied`,
+      };
+    }
+    const sourceCards = this.readZone(source.zoneName);
+    const sourceIndex = sourceCards.indexOf(card);
+    if (sourceIndex < 0) {
+      return { ok: false, reason: `Missing card ${card.instanceId}` };
+    }
+    clearFaceUpState(card);
+    this.replaceZone(source.zoneName, [
+      ...sourceCards.slice(0, sourceIndex),
+      ...sourceCards.slice(sourceIndex + 1),
+    ]);
+    this.replaceZone(
+      destinationZoneName,
+      placement === "front"
+        ? [card, ...destinationCards]
+        : [...destinationCards, card]
+    );
+    return {
+      ok: true,
+      move: {
+        card,
+        sourceZoneName: source.zoneName,
+        destinationZoneName,
+      },
+    };
+  }
+
+  /** Inserts a detached branch-local card into a Ledger zone. */
+  insertDetachedCard(
+    card: CardInstance,
+    destinationZoneName: string,
+    placement: "front" | "back"
+  ): PhysicalCardMoveResult {
+    if (this.locateCard(card) !== undefined) {
+      return {
+        ok: false,
+        reason: `Card ${card.instanceId} is already registered in a physical zone`,
+      };
+    }
+    const destination = this.descriptorsByName.get(destinationZoneName);
+    if (destination === undefined) {
+      return {
+        ok: false,
+        reason: `Missing destination zone ${destinationZoneName}`,
+      };
+    }
+    const destinationCards = destination.readRaw();
+    if (
+      destination.cardinality === "zeroOrOne" &&
+      destinationCards.length > 0
+    ) {
+      return {
+        ok: false,
+        reason: `Destination zone ${destinationZoneName} is already occupied`,
+      };
+    }
+    clearFaceUpState(card);
+    this.replaceZone(
+      destinationZoneName,
+      placement === "front"
+        ? [card, ...destinationCards]
+        : [...destinationCards, card]
+    );
+    return {
+      ok: true,
+      move: {
+        card,
+        sourceZoneName: "detached",
+        destinationZoneName,
+      },
+    };
+  }
+
+  takeAll(zoneName: string): CardInstance[] {
+    const cards = [...this.readZone(zoneName)];
+    for (const card of cards) clearFaceUpState(card);
+    this.replaceZone(zoneName, []);
+    return cards;
+  }
+
+  takeTop(zoneName: string): CardInstance | undefined {
+    const card = this.readZone(zoneName)[0];
+    if (card === undefined) return undefined;
+    const removed = this.removeCard(card, zoneName);
+    if (!removed.ok) throw new Error(removed.reason);
+    return card;
+  }
+
+  addCards(
+    zoneName: string,
+    cards: readonly CardInstance[],
+    placement: "front" | "back" = "back"
+  ): void {
+    const current = this.readZone(zoneName);
+    this.replaceZone(
+      zoneName,
+      placement === "front" ? [...cards, ...current] : [...current, ...cards]
+    );
+  }
+
+  shuffleZone(zoneName: string, rng: RandomSource): void {
+    const cards = [...this.readZone(zoneName)];
+    for (const card of cards) clearFaceUpState(card);
+    for (let index = cards.length - 1; index > 0; index -= 1) {
+      const swapIndex = rng.nextInt(index + 1);
+      const card = cards[index];
+      const swapCard = cards[swapIndex];
+      if (card === undefined || swapCard === undefined) {
+        throw new Error("Unexpected sparse array during shuffle");
+      }
+      cards[index] = swapCard;
+      cards[swapIndex] = card;
+    }
+    this.replaceZone(zoneName, cards);
+  }
+
+  refillDeck(playerId: PlayerId, rng: RandomSource): boolean {
+    const deckZoneName = `${playerId}.deck`;
+    const discardZoneName = `${playerId}.discard`;
+    if (
+      this.readZone(deckZoneName).length > 0 ||
+      this.readZone(discardZoneName).length === 0
+    ) {
+      return false;
+    }
+    this.addCards(deckZoneName, this.takeAll(discardZoneName));
+    this.shuffleZone(deckZoneName, rng);
+    return true;
+  }
+
+  drawCards(
+    playerId: PlayerId,
+    count: number,
+    rng: RandomSource,
+    onReshuffle?: () => void
+  ): { readonly cards: CardInstance[]; readonly reshuffleCount: number } {
+    const deckZoneName = `${playerId}.deck`;
+    const cards: CardInstance[] = [];
+    let reshuffleCount = 0;
+    for (let index = 0; index < count; index += 1) {
+      if (this.refillDeck(playerId, rng)) {
+        reshuffleCount += 1;
+        onReshuffle?.();
+      }
+      const card = this.takeTop(deckZoneName);
+      if (card === undefined) break;
+      cards.push(card);
+    }
+    return { cards, reshuffleCount };
+  }
+
+  /** Checks exact object membership, stable-ID uniqueness, and zone metadata. */
+  assertConsistent(): void {
+    this.rebuildMembership();
+  }
+
+  private requireDescriptor(
+    zoneName: string
+  ): PhysicalCardZoneStorageDescriptor {
+    const descriptor = this.descriptorsByName.get(zoneName);
+    if (descriptor === undefined) {
+      throw new Error(`Missing physical card zone ${zoneName}`);
+    }
+    return descriptor;
+  }
+
+  private seedClonedMembership(
+    clonedMembership: PhysicalCardLedgerClonedMembership
+  ): void {
+    if (clonedMembership.cards.length !== clonedMembership.zoneNames.length) {
+      throw new Error("Cloned Ledger membership has mismatched lengths");
+    }
+    for (const [index, card] of clonedMembership.cards.entries()) {
+      const zoneName = clonedMembership.zoneNames[index];
+      if (zoneName === undefined) {
+        throw new Error(`Missing cloned Ledger zone for ${card.instanceId}`);
+      }
+      this.requireDescriptor(zoneName);
+      if (this.cardZones.has(card)) {
+        throw new Error(
+          `Duplicate physical card binding for ${card.instanceId}`
+        );
+      }
+      this.cardZones.set(card, zoneName);
+    }
+  }
+
+  private rebuildMembership(): void {
+    const zonesByCard = new Map<CardInstance, string[]>();
+    const zonesById = new Map<string, string[]>();
+    for (const descriptor of this.descriptors) {
+      for (const card of descriptor.readRaw()) {
+        const cardZones = zonesByCard.get(card) ?? [];
+        cardZones.push(descriptor.zoneName);
+        zonesByCard.set(card, cardZones);
+        const idZones = zonesById.get(card.instanceId) ?? [];
+        idZones.push(descriptor.zoneName);
+        zonesById.set(card.instanceId, idZones);
+        this.assertBranchCard(card);
+        this.cardZones.set(card, descriptor.zoneName);
+      }
+    }
+    for (const [card, zones] of zonesByCard) {
+      if (zones.length > 1) {
+        throw new Error(
+          `card ${card.instanceId} appears in multiple zones: ${zones.join(", ")}`
+        );
+      }
+    }
+    for (const [cardInstanceId, zones] of zonesById) {
+      if (zones.length > 1) {
+        throw new Error(
+          `card ${cardInstanceId} appears in multiple zones: ${zones.join(", ")}`
+        );
+      }
+    }
+  }
+
+  private assertBranchCard(card: CardInstance): void {
+    const existingOwner = physicalCardBranchOwners.get(card);
+    if (existingOwner !== undefined && existingOwner !== this.branchIdentity) {
+      throw new Error(
+        `Physical card ${card.instanceId} belongs to another Ledger branch`
+      );
+    }
+    physicalCardBranchOwners.set(card, this.branchIdentity);
+  }
+}
+
+export function getPhysicalCardLedger(
+  state: PhysicalCardLedgerState
+): PhysicalCardLedger {
+  const existing = physicalCardLedgers.get(state);
+  if (existing !== undefined) return existing;
+  const commonStateLedger = physicalCardLedgersByCommonState.get(state.common);
+  if (commonStateLedger !== undefined) {
+    physicalCardLedgers.set(state, commonStateLedger);
+    return commonStateLedger;
+  }
+  const ledger = new PhysicalCardLedger(state);
+  physicalCardLedgers.set(state, ledger);
+  physicalCardLedgersByCommonState.set(state.common, ledger);
+  return ledger;
+}
+
+export function installPhysicalCardLedger(
+  state: GameState,
+  cardZoneBindings?: readonly PhysicalCardLedgerCardZoneBinding[]
+): PhysicalCardLedger {
+  const ledger = new PhysicalCardLedger(state, cardZoneBindings);
+  physicalCardLedgers.set(state, ledger);
+  physicalCardLedgersByCommonState.set(state.common, ledger);
+  return ledger;
+}
+
+/** Installs membership already produced while cloning a Ledger branch. */
+export function installClonedPhysicalCardLedger(
+  state: GameState,
+  cards: readonly CardInstance[],
+  zoneNames: readonly string[]
+): PhysicalCardLedger {
+  const ledger = new PhysicalCardLedger(state, undefined, { cards, zoneNames });
+  physicalCardLedgers.set(state, ledger);
+  physicalCardLedgersByCommonState.set(state.common, ledger);
+  return ledger;
+}
 
 export function buildControlledObjectView(
   state: GameState,
@@ -121,18 +752,22 @@ export function buildControlledObjectView(
 
 export function grantTemporaryControl(
   state: GameState,
-  cardInstanceId: CardInstance["instanceId"],
+  card: CardInstance,
   controllerId: PlayerId
 ): void {
+  const location = getPhysicalCardLedger(state).locateCard(card);
+  if (location === undefined) {
+    throw new Error(`Cannot control detached card ${card.instanceId}`);
+  }
   const existing = state.turn.temporaryCardControls.find(
-    (control) => control.cardInstanceId === cardInstanceId
+    (control) => control.card === card
   );
   if (existing !== undefined) {
     existing.controllerId = controllerId;
     return;
   }
 
-  state.turn.temporaryCardControls.push({ cardInstanceId, controllerId });
+  state.turn.temporaryCardControls.push({ card, controllerId });
 }
 
 /** Assigns the scoring owner of a card through the Ledger ownership seam. */
@@ -157,10 +792,10 @@ export function releaseTemporaryControls(state: GameState): void {
 
 export function removeTemporaryCardControl(
   state: GameState,
-  cardInstanceId: CardInstance["instanceId"]
+  card: CardInstance
 ): void {
   state.turn.temporaryCardControls = state.turn.temporaryCardControls.filter(
-    (control) => control.cardInstanceId !== cardInstanceId
+    (control) => control.card !== card
   );
 }
 
@@ -200,16 +835,12 @@ export function getControlledCards(
   for (const control of state.turn.temporaryCardControls) {
     if (
       control.controllerId !== player.playerId ||
-      controlledIds.has(control.cardInstanceId)
+      controlledIds.has(control.card.instanceId)
     ) {
       continue;
     }
 
-    const location = findCardLocation(
-      state,
-      control.cardInstanceId,
-      "temporaryControl"
-    );
+    const location = getPhysicalCardLedger(state).locateCard(control.card);
     if (location === undefined) {
       continue;
     }
@@ -276,7 +907,7 @@ export function replaceOwnedCardDefinitionInPlayerZones(
 function listPlayerPhysicalCardZoneDescriptors(
   player: PlayerState,
   getDiagnostics?: () => PhysicalCardDiagnosticsSink | undefined
-): readonly PhysicalCardZoneDescriptor[] {
+): readonly PhysicalCardZoneStorageDescriptor[] {
   return [
     createArrayCardZoneDescriptor(
       `${player.playerId}.deck`,
@@ -344,27 +975,13 @@ function listPlayerPhysicalCardZoneDescriptors(
 export function listPhysicalCardZoneDescriptors(
   state: Pick<GameState, "players" | "common" | "physicalCardDiagnostics">
 ): readonly PhysicalCardZoneDescriptor[] {
-  const cache =
-    state.physicalCardDiagnostics === undefined
-      ? physicalCardZoneDescriptorCache
-      : instrumentedPhysicalCardZoneDescriptorCache;
-  const cached = cache.get(state);
-  if (cached !== undefined) return cached;
-
-  const descriptors = listBuiltinPhysicalCardZoneDescriptors(
-    state,
-    state.physicalCardDiagnostics === undefined
-      ? undefined
-      : () => state.physicalCardDiagnostics
-  );
-  cache.set(state, descriptors);
-  return descriptors;
+  return getPhysicalCardLedger(state).zoneDescriptors;
 }
 
 function listBuiltinPhysicalCardZoneDescriptors(
   state: Pick<GameState, "players" | "common" | "physicalCardDiagnostics">,
   getDiagnostics?: () => PhysicalCardDiagnosticsSink | undefined
-): readonly PhysicalCardZoneDescriptor[] {
+): readonly PhysicalCardZoneStorageDescriptor[] {
   return [
     ...state.players.flatMap((player) =>
       listPlayerPhysicalCardZoneDescriptors(player, getDiagnostics)
@@ -481,26 +1098,61 @@ export function listOwnedScoringCards(
 export interface PhysicalCardLedgerClone {
   readonly players: GameState["players"];
   readonly common: GameState["common"];
+  readonly mainMarketCardHandReplacementSourceCards: GameState["turn"]["mainMarketCardHandReplacementSourceCards"];
+  readonly gainedCards: GameState["turn"]["gainedCards"];
+  readonly deadWizardTokenKillReplacement: GameState["turn"]["deadWizardTokenKillReplacement"];
   readonly temporaryCardControls: TemporaryCardControl[];
+  readonly physicalCards: readonly CardInstance[];
+  readonly physicalCardZoneNames: readonly string[];
 }
 
 /** Creates an isolated clone of the Ledger-owned cards and control metadata. */
 export function clonePhysicalCardLedger(
   source: GameState
 ): PhysicalCardLedgerClone {
-  const physicalCards = new Set(
-    listPhysicalCardZoneDescriptors(source).flatMap((descriptor) =>
-      descriptor.read()
-    )
-  );
-  return cloneLedgerValue(
+  const sourceLedger = getPhysicalCardLedger(source);
+  const sourcePhysicalCards: CardInstance[] = [];
+  const sourcePhysicalCardZoneNames: string[] = [];
+  for (const descriptor of sourceLedger.zoneDescriptors) {
+    for (const card of sourceLedger.readZone(descriptor.zoneName)) {
+      sourcePhysicalCards.push(card);
+      sourcePhysicalCardZoneNames.push(descriptor.zoneName);
+    }
+  }
+  const physicalCards = new Set(sourcePhysicalCards);
+  const clones = new Map<object, object>();
+  const clone: Omit<
+    PhysicalCardLedgerClone,
+    "physicalCards" | "physicalCardZoneNames"
+  > = cloneLedgerValue(
     {
       players: source.players,
       common: source.common,
+      mainMarketCardHandReplacementSourceCards:
+        source.turn.mainMarketCardHandReplacementSourceCards,
+      gainedCards: source.turn.gainedCards,
+      deadWizardTokenKillReplacement:
+        source.turn.deadWizardTokenKillReplacement,
       temporaryCardControls: source.turn.temporaryCardControls,
     },
-    physicalCards
+    physicalCards,
+    clones
   );
+  const clonedPhysicalCards: CardInstance[] = [];
+  for (const sourceCard of sourcePhysicalCards) {
+    const clonedCard = clones.get(sourceCard);
+    if (clonedCard === undefined) {
+      throw new Error(
+        `Physical card ${sourceCard.instanceId} was not cloned with its zone`
+      );
+    }
+    clonedPhysicalCards.push(clonedCard as CardInstance);
+  }
+  return {
+    ...clone,
+    physicalCards: clonedPhysicalCards,
+    physicalCardZoneNames: sourcePhysicalCardZoneNames,
+  };
 }
 
 type LedgerCloneValue =
@@ -623,12 +1275,15 @@ export function listPhysicalCardLocations(
 export function capturePhysicalCardLocationSnapshot(
   state: GameState
 ): PhysicalCardLocationSnapshot {
+  const ledger = getPhysicalCardLedger(state);
   const positions = new Map<
     CardInstance["instanceId"],
     { readonly zoneName: string; readonly index: number }
   >();
-  for (const descriptor of listPhysicalCardZoneDescriptors(state)) {
-    for (const [index, card] of descriptor.read(false).entries()) {
+  for (const descriptor of ledger.zoneDescriptors) {
+    for (const [index, card] of ledger
+      .readZone(descriptor.zoneName)
+      .entries()) {
       positions.set(card.instanceId, { zoneName: descriptor.zoneName, index });
     }
   }
@@ -673,103 +1328,6 @@ export function listOwnedPlayerPhysicalCards(
     .map((location) => location.card);
 }
 
-/** Lists one player's owned physical cards without scanning other Ledger zones. */
-export function listPlayerOwnedPhysicalCards(
-  player: PlayerState
-): readonly CardInstance[] {
-  return [
-    ...player.deck,
-    ...player.hand,
-    ...player.discard,
-    ...player.playedThisTurn,
-    ...player.permanents,
-    ...player.unboughtFamiliars,
-  ].filter((card) => card.ownerId === player.playerId);
-}
-
-/** Lists the active player's unbought familiar slot cards through the Ledger. */
-export function listPlayerUnboughtFamiliarCards(
-  player: PlayerState
-): readonly CardInstance[] {
-  return player.unboughtFamiliars;
-}
-
-/** Finds one unbought familiar through the Ledger-owned slot. */
-export function findPlayerUnboughtFamiliarCard(
-  player: PlayerState,
-  cardInstanceId: string
-): CardInstance | undefined {
-  return listPlayerUnboughtFamiliarCards(player).find(
-    (card) => card.instanceId === cardInstanceId
-  );
-}
-
-/** Returns the current player's played cards through the Ledger-owned zone. */
-export function listPlayerPlayedThisTurnCards(
-  player: PlayerState
-): readonly CardInstance[] {
-  return player.playedThisTurn;
-}
-
-/** Finds one card in the current player's Ledger-owned played zone. */
-export function findPlayerPlayedThisTurnCard(
-  player: PlayerState,
-  cardInstanceId: string
-): CardInstance | undefined {
-  return listPlayerPlayedThisTurnCards(player).find(
-    (card) => card.instanceId === cardInstanceId
-  );
-}
-
-/** Lists the current main-market cards through the Ledger-owned zone. */
-export function listMainMarketCards(
-  state: Pick<GameState, "common">
-): readonly CardInstance[] {
-  return state.common.market;
-}
-
-/** Lists the current legend-market cards through the Ledger-owned zone. */
-export function listLegendMarketCards(
-  state: Pick<GameState, "common">
-): readonly CardInstance[] {
-  return state.common.legendMarket;
-}
-
-/** Returns the next legend-deck card through the Ledger-owned zone. */
-export function peekLegendDeckCard(
-  state: Pick<GameState, "common">
-): CardInstance | undefined {
-  return state.common.legendDeck[0];
-}
-
-/** Returns one player's draw pile through the Ledger-owned zone. */
-export function listPlayerDeckCards(
-  player: PlayerState
-): readonly CardInstance[] {
-  return player.deck;
-}
-
-/** Returns one player's discard pile through the Ledger-owned zone. */
-export function listPlayerDiscardCards(
-  player: PlayerState
-): readonly CardInstance[] {
-  return player.discard;
-}
-
-/** Returns the next main-deck card through the Ledger-owned zone. */
-export function peekMainDeckCard(
-  state: Pick<GameState, "common">
-): CardInstance | undefined {
-  return state.common.mainDeck[0];
-}
-
-/** Returns the main-deck cards through the Ledger-owned zone. */
-export function listMainDeckCards(
-  state: Pick<GameState, "common">
-): readonly CardInstance[] {
-  return state.common.mainDeck;
-}
-
 /** Lists locations that can supply a voluntary Defense for one player. */
 export function listDefenseCardLocations(
   state: GameState,
@@ -784,195 +1342,6 @@ export function listDefenseCardLocations(
     .map(({ card, zoneName }) => ({ card, zoneName }));
 }
 
-export function findCardLocation(
-  state: GameState,
-  cardInstanceId: string,
-  reason: PhysicalCardPointSearchReason = "unclassifiedId"
-): CardLocation | undefined {
-  state.physicalCardDiagnostics?.recordPointLocationSearch(reason);
-  const location = listPhysicalCardLocations(state).find(
-    (candidate) => candidate.card.instanceId === cardInstanceId
-  );
-  if (location === undefined) {
-    return undefined;
-  }
-  return { card: location.card, zoneName: location.zoneName };
-}
-
-export function removeCardFromLocation(
-  state: GameState,
-  cardInstanceId: string
-): CardLocation | undefined {
-  state.physicalCardDiagnostics?.recordPointLocationSearch("removeById");
-  for (const descriptor of listPhysicalCardZoneDescriptors(state)) {
-    const cards = descriptor.read();
-    const index = cards.findIndex(
-      (candidate) => candidate.instanceId === cardInstanceId
-    );
-    if (index < 0) {
-      continue;
-    }
-    const card = cards[index];
-    if (card === undefined) {
-      continue;
-    }
-    clearFaceUpState(card);
-    descriptor.replace([...cards.slice(0, index), ...cards.slice(index + 1)]);
-    return { card, zoneName: descriptor.zoneName };
-  }
-
-  return undefined;
-}
-
-/** Reorders one card inside its current descriptor-owned physical zone. */
-export function reorderPhysicalCard(
-  state: GameState,
-  cardInstanceId: CardInstance["instanceId"],
-  zoneName: string,
-  placement: "front" | "back"
-): PhysicalCardMoveResult {
-  state.physicalCardDiagnostics?.recordPointLocationSearch("reorderById");
-  const descriptor = listPhysicalCardZoneDescriptors(state).find(
-    (candidate) => candidate.zoneName === zoneName
-  );
-  if (descriptor === undefined) {
-    return { ok: false, reason: `Missing destination zone ${zoneName}` };
-  }
-  const cards = descriptor.read();
-  const cardIndex = cards.findIndex(
-    (card) => card.instanceId === cardInstanceId
-  );
-  const card = cards[cardIndex];
-  if (card === undefined) {
-    return { ok: false, reason: `Missing card ${cardInstanceId}` };
-  }
-  const remaining = [
-    ...cards.slice(0, cardIndex),
-    ...cards.slice(cardIndex + 1),
-  ];
-  clearFaceUpState(card);
-  descriptor.replace(
-    placement === "front" ? [card, ...remaining] : [...remaining, card]
-  );
-  return {
-    ok: true,
-    move: {
-      card,
-      sourceZoneName: zoneName,
-      destinationZoneName: zoneName,
-    },
-  };
-}
-
-/** Moves one physical card through descriptor-owned source and destination zones. */
-export function movePhysicalCard(
-  state: GameState,
-  cardInstanceId: CardInstance["instanceId"],
-  destinationZoneName: string,
-  placement: "front" | "back",
-  expectedSourceZoneName?: string
-): PhysicalCardMoveResult {
-  state.physicalCardDiagnostics?.recordPointLocationSearch("moveById");
-  const descriptors = listPhysicalCardZoneDescriptors(state);
-  const destination = descriptors.find(
-    (descriptor) => descriptor.zoneName === destinationZoneName
-  );
-  if (destination === undefined) {
-    return {
-      ok: false,
-      reason: `Missing destination zone ${destinationZoneName}`,
-    };
-  }
-
-  let source:
-    | {
-        descriptor: PhysicalCardZoneDescriptor;
-        cards: readonly CardInstance[];
-      }
-    | undefined;
-  for (const descriptor of descriptors) {
-    if (
-      expectedSourceZoneName !== undefined &&
-      descriptor.zoneName !== expectedSourceZoneName
-    ) {
-      continue;
-    }
-    let cards: readonly CardInstance[];
-    try {
-      cards = descriptor.read();
-    } catch (error) {
-      return {
-        ok: false,
-        reason: describePhysicalCardMoveError(error),
-      };
-    }
-    if (cards.some((card) => card.instanceId === cardInstanceId)) {
-      source = { descriptor, cards };
-      break;
-    }
-  }
-  if (source === undefined) {
-    return {
-      ok: false,
-      reason:
-        expectedSourceZoneName === undefined
-          ? `Missing card ${cardInstanceId}`
-          : `Missing card ${cardInstanceId} in ${expectedSourceZoneName}`,
-    };
-  }
-  if (source.descriptor.zoneName === destination.zoneName) {
-    return {
-      ok: false,
-      reason: `Card ${cardInstanceId} already belongs to ${destinationZoneName}`,
-    };
-  }
-
-  let destinationCards: readonly CardInstance[];
-  try {
-    destinationCards = destination.read();
-  } catch (error) {
-    return {
-      ok: false,
-      reason: describePhysicalCardMoveError(error),
-    };
-  }
-  if (destination.cardinality === "zeroOrOne" && destinationCards.length > 0) {
-    return {
-      ok: false,
-      reason: `Destination zone ${destinationZoneName} is already occupied`,
-    };
-  }
-
-  const cardIndex = source.cards.findIndex(
-    (card) => card.instanceId === cardInstanceId
-  );
-  const card = source.cards[cardIndex];
-  if (card === undefined) {
-    return { ok: false, reason: `Missing card ${cardInstanceId}` };
-  }
-
-  const sourceAfter = [
-    ...source.cards.slice(0, cardIndex),
-    ...source.cards.slice(cardIndex + 1),
-  ];
-  const destinationAfter =
-    placement === "front"
-      ? [card, ...destinationCards]
-      : [...destinationCards, card];
-  clearFaceUpState(card);
-  source.descriptor.replace(sourceAfter);
-  destination.replace(destinationAfter);
-
-  return {
-    ok: true,
-    move: {
-      card,
-      sourceZoneName: source.descriptor.zoneName,
-      destinationZoneName,
-    },
-  };
-}
-
 /** Restores a card detached by a committed nested resolution into a Ledger zone. */
 export function insertDetachedCard(
   state: GameState,
@@ -980,58 +1349,11 @@ export function insertDetachedCard(
   destinationZoneName: string,
   placement: "front" | "back"
 ): PhysicalCardMoveResult {
-  const descriptors = listPhysicalCardZoneDescriptors(state);
-  if (findCardLocation(state, card.instanceId, "knownCard") !== undefined) {
-    return {
-      ok: false,
-      reason: `Card ${card.instanceId} is already registered in a physical zone`,
-    };
-  }
-
-  const destination = descriptors.find(
-    (descriptor) => descriptor.zoneName === destinationZoneName
+  return getPhysicalCardLedger(state).insertDetachedCard(
+    card,
+    destinationZoneName,
+    placement
   );
-  if (destination === undefined) {
-    return {
-      ok: false,
-      reason: `Missing destination zone ${destinationZoneName}`,
-    };
-  }
-
-  let destinationCards: readonly CardInstance[];
-  try {
-    destinationCards = destination.read();
-  } catch (error) {
-    return {
-      ok: false,
-      reason: describePhysicalCardMoveError(error),
-    };
-  }
-  if (destination.cardinality === "zeroOrOne" && destinationCards.length > 0) {
-    return {
-      ok: false,
-      reason: `Destination zone ${destinationZoneName} is already occupied`,
-    };
-  }
-
-  clearFaceUpState(card);
-  destination.replace(
-    placement === "front"
-      ? [card, ...destinationCards]
-      : [...destinationCards, card]
-  );
-  return {
-    ok: true,
-    move: {
-      card,
-      sourceZoneName: "detached",
-      destinationZoneName,
-    },
-  };
-}
-
-function describePhysicalCardMoveError(error: unknown): string {
-  return error instanceof Error ? error.message : "Cannot move physical card";
 }
 
 function createArrayCardZoneDescriptor(
@@ -1041,8 +1363,8 @@ function createArrayCardZoneDescriptor(
   expectedOwnerId?: CardInstance["ownerId"],
   scoringEligible = false,
   getDiagnostics?: () => PhysicalCardDiagnosticsSink | undefined
-): PhysicalCardZoneDescriptor {
-  const read: PhysicalCardZoneDescriptor["read"] =
+): PhysicalCardZoneStorageDescriptor {
+  const read: PhysicalCardZoneStorageDescriptor["read"] =
     getDiagnostics === undefined
       ? () => readStorage().map((card) => card)
       : (instrument = true) => {
@@ -1052,14 +1374,17 @@ function createArrayCardZoneDescriptor(
           }
           return cards;
         };
-  const descriptor: PhysicalCardZoneDescriptor = {
+  const descriptor: PhysicalCardZoneStorageDescriptor = {
     zoneName,
     cardinality: "many",
     scoringEligible,
     ...(expectedOwnerId === undefined ? {} : { expectedOwnerId }),
     read,
+    readRaw: readStorage,
     replace(cards) {
-      replaceStorage([...cards]);
+      const storage = readStorage();
+      Array.prototype.splice.call(storage, 0, storage.length, ...cards);
+      replaceStorage(storage);
     },
   };
   return descriptor;

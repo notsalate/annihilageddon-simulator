@@ -14,6 +14,7 @@ import {
 } from "../src/engine/attack-defense.js";
 import { createAttackAmountState } from "../src/engine/attack-resolution.js";
 import {
+  getPhysicalCardLedger,
   listPhysicalCardZoneDescriptors,
   type PhysicalCardZoneDescriptor,
 } from "../src/engine/control-ledger.js";
@@ -271,13 +272,14 @@ test("failed defense branches restore membership and mutable cards in every phys
         },
         executeDefenseEffects(branchState) {
           const descriptor = mustGetDescriptor(branchState, zoneName);
-          const cards = descriptor.read();
+          const ledger = getPhysicalCardLedger(branchState);
+          const cards = ledger.readZone(zoneName);
           const card = cards[0];
           assert.ok(card);
           card.ownerId =
             card.ownerId === "common" ? attacker.playerId : "common";
           card.marketChips += 17;
-          descriptor.replace([
+          ledger.replaceZone(zoneName, [
             {
               instanceId: markCardInstanceId(
                 `fixture-branch-replacement-${index}`
@@ -361,10 +363,11 @@ function createRollbackScenario(seed: number): {
   for (const [index, descriptor] of listPhysicalCardZoneDescriptors(
     state
   ).entries()) {
-    if (descriptor.read().length > 0) {
+    const ledger = getPhysicalCardLedger(state);
+    if (ledger.readZone(descriptor.zoneName).length > 0) {
       continue;
     }
-    descriptor.replace([
+    ledger.replaceZone(descriptor.zoneName, [
       {
         instanceId: markCardInstanceId(`fixture-zone-card-${seed}-${index}`),
         definitionId: defenseCard.definitionId,

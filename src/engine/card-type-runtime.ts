@@ -6,7 +6,7 @@ import type {
   PlayerState,
   TokenInstance,
 } from "./setup.js";
-import { findCardLocation, getControlledCards } from "./control-ledger.js";
+import { getControlledCards, getPhysicalCardLedger } from "./control-ledger.js";
 import {
   isOwnedCardsCountAsCardTypeRuntimeEffect,
   type OwnedCardsCountAsCardTypeRuntimeEffect,
@@ -303,26 +303,22 @@ export function setPlayerCardEffectiveType(
   cardType: string
 ): void {
   const player = requirePlayer(state, playerId);
-  const location = findCardLocation(
-    state,
+  const card = getPhysicalCardLedger(state).findPlayerCard(
+    playerId,
     cardInstanceId,
     "effectiveTypeSelection"
   );
-  if (location === undefined || location.card.ownerId !== playerId) {
+  if (card === undefined || card.ownerId !== playerId) {
     throw new Error(
       `Card ${cardInstanceId} is not owned by player ${playerId}`
     );
   }
 
-  const definition = state.cardDefinitions.get(location.card.definitionId);
+  const definition = state.cardDefinitions.get(card.definitionId);
   if (definition === undefined) {
-    throw new Error(`Missing card definition ${location.card.definitionId}`);
+    throw new Error(`Missing card definition ${card.definitionId}`);
   }
-  if (
-    !getCardEffectiveTypeOptions(state, playerId, location.card).includes(
-      cardType
-    )
-  ) {
+  if (!getCardEffectiveTypeOptions(state, playerId, card).includes(cardType)) {
     throw new Error(
       `Player ${playerId} has no wizard property that counts ${cardInstanceId} as ${cardType}`
     );
@@ -345,12 +341,12 @@ export function clearPlayerCardEffectiveType(
   cardType: string
 ): void {
   const player = requirePlayer(state, playerId);
-  const location = findCardLocation(
-    state,
+  const card = getPhysicalCardLedger(state).findPlayerCard(
+    playerId,
     cardInstanceId,
     "effectiveTypeSelection"
   );
-  if (location === undefined || location.card.ownerId !== playerId) {
+  if (card === undefined || card.ownerId !== playerId) {
     throw new Error(
       `Card ${cardInstanceId} is not owned by player ${playerId}`
     );

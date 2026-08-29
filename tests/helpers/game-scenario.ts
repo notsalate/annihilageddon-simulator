@@ -19,11 +19,8 @@ import {
   markCardInstanceId,
 } from "../../src/domain/types.js";
 import {
-  findCardLocation,
+  getPhysicalCardLedger,
   grantTemporaryControl,
-  listPhysicalCardLocations,
-  movePhysicalCard,
-  removeCardFromLocation,
   setCardOwner,
 } from "../../src/engine/control-ledger.js";
 import { verifiedTestRuntimeEffect } from "./verified-runtime-effect.js";
@@ -183,7 +180,13 @@ function givenRuntimeCardInternal(
     ownerId: player.playerId,
     marketChips: 0,
   };
-  player[options.zone ?? "hand"].push(card);
+  const zone = options.zone ?? "hand";
+  const inserted = getPhysicalCardLedger(scenario.state).insertDetachedCard(
+    card,
+    `${player.playerId}.${zone}`,
+    "back"
+  );
+  assert.equal(inserted.ok, true);
   return card;
 }
 
@@ -192,7 +195,7 @@ export function givenTemporaryControl(
   card: CardInstance,
   controller: PlayerState
 ): CardInstance {
-  grantTemporaryControl(scenario.state, card.instanceId, controller.playerId);
+  grantTemporaryControl(scenario.state, card, controller.playerId);
   return card;
 }
 
@@ -230,16 +233,11 @@ export function resolveMayhemThroughMarket(
   source: CardInstance,
   deck: "mainDeck" | "legendDeck"
 ) {
-  const sourceLocation = findCardLocation(scenario.state, source.instanceId);
+  const ledger = getPhysicalCardLedger(scenario.state);
+  const sourceLocation = ledger.locateCard(source);
   assert.ok(sourceLocation);
   clearPhysicalCardZone(scenario, deck);
-  const moved = movePhysicalCard(
-    scenario.state,
-    source.instanceId,
-    deck,
-    "front",
-    sourceLocation.zoneName
-  );
+  const moved = ledger.moveCard(source, deck, "front", sourceLocation.zoneName);
   assert.deepEqual(moved.ok, true);
   clearPhysicalCardZone(
     scenario,
@@ -263,11 +261,11 @@ export function moveCardToCommonZone(
   destinationZone: "mainMarket" | "legendMarket" | "mainDeck" | "legendDeck",
   placement: "front" | "back" = "back"
 ): void {
-  const sourceLocation = findCardLocation(scenario.state, card.instanceId);
+  const ledger = getPhysicalCardLedger(scenario.state);
+  const sourceLocation = ledger.locateCard(card);
   assert.ok(sourceLocation);
-  const moved = movePhysicalCard(
-    scenario.state,
-    card.instanceId,
+  const moved = ledger.moveCard(
+    card,
     destinationZone,
     placement,
     sourceLocation.zoneName
@@ -280,12 +278,7 @@ export function clearPhysicalCardZone(
   scenario: GameScenario,
   zoneName: string
 ): void {
-  const cards = listPhysicalCardLocations(scenario.state)
-    .filter((location) => location.zoneName === zoneName)
-    .map((location) => location.card);
-  for (const card of cards) {
-    assert.ok(removeCardFromLocation(scenario.state, card.instanceId));
-  }
+  getPhysicalCardLedger(scenario.state).takeAll(zoneName);
 }
 
 export function play(

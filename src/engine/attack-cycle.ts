@@ -84,9 +84,17 @@ function projectTurn(state: GameState): unknown {
     power: state.turn.power,
     controlledPowerBonus: state.turn.controlledPowerBonus,
     activatedCardIds: state.turn.activatedCardIds,
-    gainedCards: state.turn.gainedCards,
+    gainedCards: state.turn.gainedCards.map(
+      ({ playerId, definitionId, cardInstanceId }) => ({
+        playerId,
+        definitionId,
+        cardInstanceId,
+      })
+    ),
     mainMarketCardHandReplacementSourceCardIds:
-      state.turn.mainMarketCardHandReplacementSourceCardIds,
+      state.turn.mainMarketCardHandReplacementSourceCards.map(
+        (card) => card.instanceId
+      ),
     pendingMarketFlowEndReasons: state.turn.pendingMarketFlowEndReasons,
     ...(state.turn.pendingSpecialWinnerPlayerId === undefined
       ? {}
@@ -110,10 +118,20 @@ function projectTurn(state: GameState): unknown {
     ...(state.turn.deadWizardTokenKillReplacement === undefined
       ? {}
       : {
-          deadWizardTokenKillReplacement:
-            state.turn.deadWizardTokenKillReplacement,
+          deadWizardTokenKillReplacement: {
+            playerId: state.turn.deadWizardTokenKillReplacement.playerId,
+            cardInstanceId:
+              state.turn.deadWizardTokenKillReplacement.cardInstanceId,
+            definitionId:
+              state.turn.deadWizardTokenKillReplacement.definitionId,
+          },
         }),
-    temporaryCardControls: state.turn.temporaryCardControls,
+    temporaryCardControls: state.turn.temporaryCardControls.map(
+      ({ card, controllerId }) => ({
+        cardInstanceId: card.instanceId,
+        controllerId,
+      })
+    ),
   };
 }
 

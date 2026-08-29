@@ -12,6 +12,7 @@ import type {
   PlayerState,
 } from "./setup.js";
 import type { MarketFlowEndReason as SharedMarketFlowEndReason } from "./end-conditions.js";
+import { getPhysicalCardLedger } from "./control-ledger.js";
 
 export type MarketFlowMode = "setup" | "turn";
 export type MarketFlowEndReason = SharedMarketFlowEndReason;
@@ -48,10 +49,9 @@ export function runMarketFlow(
 ): MarketFlowResult {
   const endReasons: MarketFlowEndReason[] = [];
   const mainResult = fillMarket(state, {
-    sourceDeck: state.common.mainDeck,
-    market: state.common.market,
+    sourceDeckName: "mainDeck",
     marketName: "mainMarket",
-    destroyedEvents: state.common.destroyedMayhem,
+    destroyedEventsZone: "destroyedMayhem",
     targetSize: 5,
     eventKind: "mayhem",
     eventLogType: "mayhemDestroyed",
@@ -66,10 +66,9 @@ export function runMarketFlow(
   }
 
   const legendResult = fillMarket(state, {
-    sourceDeck: state.common.legendDeck,
-    market: state.common.legendMarket,
+    sourceDeckName: "legendDeck",
     marketName: "legendMarket",
-    destroyedEvents: state.common.destroyedMegaMayhem,
+    destroyedEventsZone: "destroyedMegaMayhem",
     targetSize: 3,
     eventKind: "megaMayhem",
     eventLogType: "megaMayhemDestroyed",
@@ -98,8 +97,8 @@ export function validateMarketFlow(
   options: RunMarketFlowOptions
 ): { ok: true } | { ok: false; error: string } {
   const mainValidation = validateMarketFlowDeck(state, {
-    sourceDeck: state.common.mainDeck,
-    market: state.common.market,
+    sourceDeck: getPhysicalCardLedger(state).readZone("mainDeck"),
+    market: getPhysicalCardLedger(state).readZone("mainMarket"),
     targetSize: 5,
     eventKind: "mayhem",
     mode: options.mode,
@@ -109,8 +108,8 @@ export function validateMarketFlow(
   }
 
   const legendValidation = validateMarketFlowDeck(state, {
-    sourceDeck: state.common.legendDeck,
-    market: state.common.legendMarket,
+    sourceDeck: getPhysicalCardLedger(state).readZone("legendDeck"),
+    market: getPhysicalCardLedger(state).readZone("legendMarket"),
     targetSize: 3,
     eventKind: "megaMayhem",
     mode: options.mode,
@@ -149,6 +148,7 @@ function validateMarketFlowDeck(
             sourceType: "card",
             runtimeMode: state.runtimeMode,
             playerId: activePlayer.playerId,
+            card,
             cardInstanceId: card.instanceId,
             definitionId: card.definitionId,
           }
@@ -169,10 +169,9 @@ function validateMarketFlowDeck(
 function fillMarket(
   state: GameState,
   options: {
-    sourceDeck: CardInstance[];
-    market: CardInstance[];
+    sourceDeckName: "mainDeck" | "legendDeck";
     marketName: "mainMarket" | "legendMarket";
-    destroyedEvents: CardInstance[];
+    destroyedEventsZone: "destroyedMayhem" | "destroyedMegaMayhem";
     targetSize: number;
     eventKind: CardDefinition["engine"]["cardKind"];
     eventLogType: Extract<
@@ -183,8 +182,9 @@ function fillMarket(
     mode: MarketFlowMode;
   }
 ): MarketFlowResult {
-  while (options.market.length < options.targetSize) {
-    const card = options.sourceDeck.shift();
+  const ledger = getPhysicalCardLedger(state);
+  while (ledger.readZone(options.marketName).length < options.targetSize) {
+    const card = ledger.takeTop(options.sourceDeckName);
     if (card === undefined) {
       if (!state.turn.pendingMarketFlowEndReasons.includes(options.endReason)) {
         state.turn.pendingMarketFlowEndReasons.push(options.endReason);
@@ -218,7 +218,7 @@ function fillMarket(
         gameEnd = mayhemResult.gameEnd;
       }
 
-      options.destroyedEvents.push(card);
+      ledger.addCards(options.destroyedEventsZone, [card]);
       if (gameEnd !== undefined) {
         return { ok: true, gameEnd };
       }
@@ -244,7 +244,7 @@ function fillMarket(
       continue;
     }
 
-    options.market.push(card);
+    ledger.addCards(options.marketName, [card]);
     recordGameEvent(state, {
       type: "marketFlowCardAdded",
       playerId: state.activePlayerId,
@@ -253,7 +253,12 @@ function fillMarket(
       cardInstanceId: card.instanceId,
       definitionId: card.definitionId,
     });
-    applyMarketChipMarker(state, options.market, definition, options.mode);
+    applyMarketChipMarker(
+      state,
+      ledger.readZone(options.marketName),
+      definition,
+      options.mode
+    );
   }
 
   return { ok: true };
@@ -269,6 +274,7 @@ function executeMayhemCard(
     sourceType: "card",
     runtimeMode: state.runtimeMode,
     playerId: activePlayer.playerId,
+    card,
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
   });
@@ -290,7 +296,7 @@ function executeMayhemCard(
 
 function applyMarketChipMarker(
   state: GameState,
-  market: CardInstance[],
+  market: readonly CardInstance[],
   addedDefinition: CardDefinition,
   mode: MarketFlowMode
 ): void {

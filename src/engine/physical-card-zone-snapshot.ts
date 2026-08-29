@@ -1,5 +1,5 @@
 import {
-  listPhysicalCardZoneDescriptors,
+  getPhysicalCardLedger,
   type PhysicalCardZoneDescriptor,
 } from "./control-ledger.js";
 import type { CardInstance, GameState } from "./setup.js";
@@ -25,9 +25,10 @@ export type PhysicalCardZoneStateRestoreResult =
 export function capturePhysicalCardZoneState(
   state: GameState
 ): PhysicalCardZoneStateSnapshotResult {
-  let descriptors: readonly PhysicalCardZoneDescriptor[];
+  const ledger = getPhysicalCardLedger(state);
+  const descriptors = ledger.zoneDescriptors;
   try {
-    descriptors = listPhysicalCardZoneDescriptors(state);
+    for (const descriptor of descriptors) ledger.readZone(descriptor.zoneName);
   } catch (error) {
     return { ok: false, reason: describePhysicalCardZoneError(error) };
   }
@@ -43,11 +44,10 @@ export function capturePhysicalCardZoneState(
 
   const zones: PhysicalCardZoneMoveSnapshot[] = [];
   for (const descriptor of descriptors) {
-    const snapshotResult = createPhysicalCardZoneMoveSnapshot(descriptor);
-    if (!snapshotResult.ok) {
-      return snapshotResult;
-    }
-    zones.push(snapshotResult.snapshot);
+    zones.push({
+      descriptor,
+      cards: [...ledger.readZone(descriptor.zoneName)],
+    });
   }
   return { ok: true, snapshot: { zones } };
 }
@@ -57,9 +57,10 @@ export function restorePhysicalCardZoneState(
   state: GameState,
   snapshot: PhysicalCardZoneStateSnapshot
 ): PhysicalCardZoneStateRestoreResult {
-  let descriptors: readonly PhysicalCardZoneDescriptor[];
+  const ledger = getPhysicalCardLedger(state);
+  const descriptors = ledger.zoneDescriptors;
   try {
-    descriptors = listPhysicalCardZoneDescriptors(state);
+    for (const descriptor of descriptors) ledger.readZone(descriptor.zoneName);
   } catch (error) {
     return { ok: false, reason: describePhysicalCardZoneError(error) };
   }
@@ -114,54 +115,24 @@ export function restorePhysicalCardZoneState(
         reason: `Physical card zone restore is missing zone ${zone.descriptor.zoneName}`,
       };
     }
-    const error = restorePhysicalCardZoneMoveSnapshot(zone, descriptor);
-    if (error !== undefined) {
-      errors.push(error);
+    try {
+      ledger.replaceZone(descriptor.zoneName, zone.cards);
+      const restoredCards = ledger.readZone(descriptor.zoneName);
+      if (
+        restoredCards.length !== zone.cards.length ||
+        restoredCards.some((card, index) => card !== zone.cards[index])
+      ) {
+        errors.push(`Cannot restore physical card zone ${descriptor.zoneName}`);
+      }
+    } catch (error) {
+      errors.push(
+        `${descriptor.zoneName}: ${describePhysicalCardZoneError(error)}`
+      );
     }
   }
   return errors.length === 0
     ? { ok: true }
     : { ok: false, reason: errors.join("; ") };
-}
-
-function createPhysicalCardZoneMoveSnapshot(
-  descriptor: PhysicalCardZoneDescriptor,
-  existingCards?: readonly CardInstance[]
-):
-  | { readonly ok: true; readonly snapshot: PhysicalCardZoneMoveSnapshot }
-  | { readonly ok: false; readonly reason: string } {
-  let cards: readonly CardInstance[];
-  try {
-    cards = existingCards ?? descriptor.read();
-  } catch (error) {
-    return { ok: false, reason: describePhysicalCardZoneError(error) };
-  }
-  return {
-    ok: true,
-    snapshot: {
-      descriptor,
-      cards: [...cards],
-    },
-  };
-}
-
-function restorePhysicalCardZoneMoveSnapshot(
-  snapshot: PhysicalCardZoneMoveSnapshot,
-  descriptor = snapshot.descriptor
-): string | undefined {
-  try {
-    descriptor.replace(snapshot.cards);
-    const restoredCards = descriptor.read();
-    if (
-      restoredCards.length !== snapshot.cards.length ||
-      restoredCards.some((card, index) => card !== snapshot.cards[index])
-    ) {
-      return `Cannot restore physical card zone ${descriptor.zoneName}`;
-    }
-    return undefined;
-  } catch (error) {
-    return `${descriptor.zoneName}: ${describePhysicalCardZoneError(error)}`;
-  }
 }
 
 function describePhysicalCardZoneError(error: unknown): string {

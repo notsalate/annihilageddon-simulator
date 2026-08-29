@@ -1,4 +1,4 @@
-import { drawDeckCards } from "./deck-lifecycle.js";
+import { getPhysicalCardLedger } from "./control-ledger.js";
 import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import type { EffectSourceContext } from "./effect-runtime-registry.js";
@@ -261,14 +261,16 @@ export function drawCardsForPlayer(
   effectId: RuntimeEffectId,
   source: EffectSourceContext
 ): void {
-  const drawResult = drawDeckCards(
-    player.deck,
-    player.discard,
+  const drawResult = getPhysicalCardLedger(state).drawCards(
+    player.playerId,
     amount,
     state.rng,
     () => recordDeckReshuffle(state, player.playerId)
   );
-  player.hand.push(...drawResult.cards);
+  getPhysicalCardLedger(state).addCards(
+    `${player.playerId}.hand`,
+    drawResult.cards
+  );
   recordGameEvent(state, {
     type: "effectDrawCardsApplied",
     playerId: player.playerId,

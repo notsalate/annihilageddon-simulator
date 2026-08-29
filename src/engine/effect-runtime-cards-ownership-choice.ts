@@ -1,16 +1,10 @@
-import { shuffleDeck } from "./deck-lifecycle.js";
 import {
   recordDeckReshuffle,
   recordGameEvent,
   recordTurnPowerChanged,
 } from "./event-recorder.js";
 import {
-  findCardLocation,
-  findPlayerPlayedThisTurnCard,
-  listLegendMarketCards,
-  movePhysicalCard,
-  peekMainDeckCard,
-  removeCardFromLocation,
+  getPhysicalCardLedger,
   removeTemporaryCardControl,
 } from "./control-ledger.js";
 import type { CardDefinition, CardKind } from "./data.js";
@@ -502,7 +496,8 @@ const destroyRandomLegendMarketCardHandler: EffectRuntimeHandler<
   effectId: "destroy_random_legend_market_card",
   execute(state, player, effect, source, services) {
     state.turn.rememberedDestroyedLegendCost = undefined;
-    const legendMarketCards = listLegendMarketCards(state);
+    const legendMarketCards =
+      getPhysicalCardLedger(state).readZone("legendMarket");
     if (legendMarketCards.length === 0) {
       return { ok: true };
     }
@@ -520,9 +515,8 @@ const destroyRandomLegendMarketCardHandler: EffectRuntimeHandler<
     }
     const destination = services.getDestroyDestination(state, targetCard);
     if (!destination.ok) return destination;
-    const moved = movePhysicalCard(
-      state,
-      targetCard.instanceId,
+    const moved = getPhysicalCardLedger(state).moveCard(
+      targetCard,
       destination.zoneName,
       "back",
       "legendMarket"
@@ -551,13 +545,10 @@ const optionalGainMarketCardsToHandThisTurnHandler: EffectRuntimeHandler<
   effectId: "optional_gain_market_cards_to_hand_this_turn",
   execute(state, _player, _effect, source) {
     if (
-      !state.turn.mainMarketCardHandReplacementSourceCardIds.includes(
-        source.cardInstanceId
-      )
+      source.card !== undefined &&
+      !state.turn.mainMarketCardHandReplacementSourceCards.includes(source.card)
     ) {
-      state.turn.mainMarketCardHandReplacementSourceCardIds.push(
-        source.cardInstanceId
-      );
+      state.turn.mainMarketCardHandReplacementSourceCards.push(source.card);
     }
     return { ok: true };
   },
@@ -594,13 +585,13 @@ export function resolveMainMarketGainDestination(
   }
 
   let destination: "discard" | "deckTop" | "hand" = initialDestination;
-  for (const sourceCardInstanceId of state.turn
-    .mainMarketCardHandReplacementSourceCardIds) {
-    const playedCard = findPlayerPlayedThisTurnCard(
-      player,
-      sourceCardInstanceId
-    );
-    if (playedCard === undefined) {
+  for (const playedCard of state.turn
+    .mainMarketCardHandReplacementSourceCards) {
+    if (
+      !getPhysicalCardLedger(state)
+        .readZone(`${player.playerId}.playedThisTurn`)
+        .includes(playedCard)
+    ) {
       continue;
     }
     const playedDefinition = state.cardDefinitions.get(playedCard.definitionId);
@@ -614,6 +605,7 @@ export function resolveMainMarketGainDestination(
       sourceType: "card",
       runtimeMode: state.runtimeMode,
       playerId: player.playerId,
+      card: playedCard,
       cardInstanceId: playedCard.instanceId,
       definitionId: playedDefinition.cardId,
     };
@@ -698,7 +690,6 @@ const discardCardHandler: EffectRuntimeHandler<
       state,
       choice.card,
       player,
-      player.discard,
       `${player.playerId}.discard`,
       effect.effectId,
       source
@@ -754,7 +745,6 @@ const discardRandomHandCardsHandler: EffectRuntimeHandler<
         state,
         card,
         targetPlayer,
-        targetPlayer.discard,
         `${targetPlayer.playerId}.discard`,
         effect.effectId,
         source
@@ -787,11 +777,15 @@ const discardHandThenDrawCardsHandler: EffectRuntimeHandler<
 > = {
   effectId: "discard_hand_then_draw_cards",
   execute(state, player, effect, source, services) {
-    if (
-      effect.firstCardOfTurn === true &&
-      player.playedThisTurn[0]?.instanceId !== source.cardInstanceId
-    ) {
-      return { ok: true };
+    if (effect.firstCardOfTurn === true) {
+      const firstPlayedCard = getPhysicalCardLedger(state).readZone(
+        `${player.playerId}.playedThisTurn`
+      )[0];
+      const isSourceCard =
+        source.card === undefined
+          ? firstPlayedCard?.instanceId === source.cardInstanceId
+          : firstPlayedCard === source.card;
+      if (!isSourceCard) return { ok: true };
     }
 
     const choice = services.chooseEffectChoice(
@@ -811,7 +805,6 @@ const discardHandThenDrawCardsHandler: EffectRuntimeHandler<
         state,
         player,
         card,
-        player.discard,
         `${player.playerId}.discard`,
         effect.effectId,
         source
@@ -832,7 +825,6 @@ const discardHandThenDrawCardsHandler: EffectRuntimeHandler<
             state,
             player,
             card,
-            player.deck,
             `${player.playerId}.deck`,
             effect.effectId,
             source
@@ -844,7 +836,10 @@ const discardHandThenDrawCardsHandler: EffectRuntimeHandler<
             };
           }
         }
-        shuffleDeck(player.deck, state.rng);
+        getPhysicalCardLedger(state).shuffleZone(
+          `${player.playerId}.deck`,
+          state.rng
+        );
         recordDeckReshuffle(state, player.playerId);
       }
 
@@ -854,7 +849,6 @@ const discardHandThenDrawCardsHandler: EffectRuntimeHandler<
         state,
         player,
         card,
-        player.hand,
         `${player.playerId}.hand`,
         effect.effectId,
         source
@@ -905,7 +899,6 @@ const destroyCardHandler: EffectRuntimeHandler<
       state,
       player,
       choice.card,
-      destination.zone,
       destination.zoneName,
       effect.effectId,
       source
@@ -977,7 +970,6 @@ export function executeReturnDiscardToHand(
         state,
         card,
         player,
-        player.hand,
         `${player.playerId}.hand`,
         "return_discard_to_hand",
         source
@@ -1024,7 +1016,6 @@ export function executeReturnDiscardToHand(
       state,
       card,
       player,
-      player.hand,
       `${player.playerId}.hand`,
       "return_discard_to_hand",
       source
@@ -1115,7 +1106,6 @@ export function destroyOwnedCard(
     state,
     player,
     card,
-    destination.zone,
     destination.zoneName,
     effectId,
     source
@@ -1126,7 +1116,7 @@ export function destroyOwnedCard(
       error: `Cannot destroy card ${card.instanceId}`,
     };
   }
-  removeTemporaryCardControl(state, card.instanceId);
+  removeTemporaryCardControl(state, card);
   recordGameEvent(state, {
     type: "effectCardDestroyed",
     playerId: player.playerId,
@@ -1147,7 +1137,7 @@ export function destroyTopMainDeckCard(
   source: EffectSourceContext,
   services: EffectRuntimeServices
 ): { ok: true; card: CardInstance | undefined } | { ok: false; error: string } {
-  const card = peekMainDeckCard(state);
+  const card = getPhysicalCardLedger(state).readZone("mainDeck")[0];
   if (card === undefined) {
     recordGameEvent(state, {
       type: "effectDestroyTopMainDeckSkipped",
@@ -1166,7 +1156,6 @@ export function destroyTopMainDeckCard(
     state,
     player,
     card,
-    destination.zone,
     destination.zoneName,
     effectId,
     source
@@ -1806,7 +1795,6 @@ export function executeRevealAndPlayFoeDeckCard(
       state,
       player,
       card,
-      foe.discard,
       `${foe.playerId}.discard`,
       effect.effectId,
       source
@@ -1835,7 +1823,7 @@ export function executeRevealAndPlayFoeDeckCard(
   const ownerDiscardDestination = `${foe.playerId}.discard`;
   const cleanup = (): EffectExecutionResult => {
     for (const card of revealedCards) {
-      const location = findCardLocation(state, card.instanceId, "knownCard");
+      const location = getPhysicalCardLedger(state).locateCard(card);
       if (location === undefined) {
         const restored = services.restoreDetachedCardToZone(
           state,
@@ -1851,7 +1839,7 @@ export function executeRevealAndPlayFoeDeckCard(
             error: `Cannot restore detached revealed foe card ${card.instanceId}`,
           };
         }
-        removeTemporaryCardControl(state, card.instanceId);
+        removeTemporaryCardControl(state, card);
         continue;
       }
       if (location.zoneName !== ownerDiscardDestination) {
@@ -1859,7 +1847,6 @@ export function executeRevealAndPlayFoeDeckCard(
           state,
           player,
           card,
-          foe.discard,
           ownerDiscardDestination,
           effect.effectId,
           source
@@ -1871,7 +1858,7 @@ export function executeRevealAndPlayFoeDeckCard(
           };
         }
       }
-      removeTemporaryCardControl(state, card.instanceId);
+      removeTemporaryCardControl(state, card);
     }
     return { ok: true };
   };
@@ -1907,8 +1894,8 @@ export function executeRevealAndPlayFoeDeckCard(
   }
 
   let playedResult: EffectExecutionResult = { ok: true };
-  const removed = removeCardFromLocation(state, selectedCard.instanceId);
-  if (removed === undefined) {
+  const removed = getPhysicalCardLedger(state).removeCard(selectedCard);
+  if (!removed.ok) {
     playedResult = {
       ok: false,
       error: `Cannot play revealed foe card ${selectedCard.instanceId}`,
@@ -1918,7 +1905,7 @@ export function executeRevealAndPlayFoeDeckCard(
     zone: "ownerDiscardAfterResolution" as const,
     ownerId: foe.playerId,
   };
-  if (removed !== undefined) {
+  if (removed.ok) {
     playedResult = services.playResolvedCard(state, player, selectedCard, {
       nonOngoingDestination: ownerDiscard,
       forceOngoingDiscard: ownerDiscard,

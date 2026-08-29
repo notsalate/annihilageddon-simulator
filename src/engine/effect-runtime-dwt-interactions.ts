@@ -284,7 +284,6 @@ const optionalDestroyControlledDeadWizardTokenHandler: EffectRuntimeHandler<Opti
             state,
             player,
             card,
-            destination.zone,
             destination.zoneName,
             effect.effectId,
             source
@@ -329,6 +328,7 @@ const armDeadWizardTokenKillReplacementHandler: EffectRuntimeHandler<ArmDeadWiza
         playerId: player.playerId,
         cardInstanceId: markCardInstanceId(source.cardInstanceId),
         definitionId: markCardDefinitionId(source.definitionId),
+        ...(source.card === undefined ? {} : { card: source.card }),
       };
       return { ok: true };
     },

@@ -1,4 +1,7 @@
-import { clonePhysicalCardLedger } from "./control-ledger.js";
+import {
+  clonePhysicalCardLedger,
+  installClonedPhysicalCardLedger,
+} from "./control-ledger.js";
 import { freezeGameEvent } from "./event-recorder.js";
 import { installGameEventLog } from "./game-events.js";
 import type { GameState } from "./setup.js";
@@ -32,20 +35,16 @@ function createFork(
       power: source.turn.power,
       controlledPowerBonus: source.turn.controlledPowerBonus,
       activatedCardIds: [...source.turn.activatedCardIds],
-      gainedCards: source.turn.gainedCards.map((record) => ({ ...record })),
-      mainMarketCardHandReplacementSourceCardIds: [
-        ...source.turn.mainMarketCardHandReplacementSourceCardIds,
-      ],
+      gainedCards: ledger.gainedCards,
+      mainMarketCardHandReplacementSourceCards:
+        ledger.mainMarketCardHandReplacementSourceCards,
       pendingMarketFlowEndReasons: [...source.turn.pendingMarketFlowEndReasons],
       pendingSpecialWinnerPlayerId: source.turn.pendingSpecialWinnerPlayerId,
       rememberedDestroyedLegendCost: source.turn.rememberedDestroyedLegendCost,
       damagingAttackPlayerIds: [...source.turn.damagingAttackPlayerIds],
       nextAttackUnavoidablePlayerId: source.turn.nextAttackUnavoidablePlayerId,
       defenseDisabledPlayerIds: [...source.turn.defenseDisabledPlayerIds],
-      deadWizardTokenKillReplacement:
-        source.turn.deadWizardTokenKillReplacement === undefined
-          ? undefined
-          : { ...source.turn.deadWizardTokenKillReplacement },
+      deadWizardTokenKillReplacement: ledger.deadWizardTokenKillReplacement,
       temporaryCardControls: ledger.temporaryCardControls,
     },
     players: ledger.players,
@@ -81,6 +80,11 @@ function createFork(
       : { physicalCardDiagnostics: source.physicalCardDiagnostics }),
   };
 
+  installClonedPhysicalCardLedger(
+    fork,
+    ledger.physicalCards,
+    ledger.physicalCardZoneNames
+  );
   installGameEventLog(fork);
   return fork;
 }

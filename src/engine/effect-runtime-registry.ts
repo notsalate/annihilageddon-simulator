@@ -27,7 +27,6 @@ import {
 } from "../domain/types.js";
 import {
   buildControlledObjectView,
-  findCardLocation,
   getControlledOngoingCards,
 } from "./control-ledger.js";
 import {
@@ -140,6 +139,8 @@ export interface EffectSourceContext {
   attackId?: AttackId;
   currentAttackerPlayerId?: PlayerState["playerId"];
   playerControlledAttackPlayerId?: PlayerState["playerId"];
+  /** Live card reference for a physical card source; never serialized. */
+  card?: CardInstance;
   cardInstanceId: string;
   definitionId: string;
   tokenInstanceId?: TokenInstance["instanceId"];
@@ -363,7 +364,6 @@ export interface EffectRuntimeServices {
     state: GameState,
     card: CardInstance,
     player: PlayerState,
-    destination: CardInstance[],
     destinationZone: string,
     effectId: RuntimeEffectId,
     source: EffectSourceContext,
@@ -373,7 +373,6 @@ export interface EffectRuntimeServices {
     state: GameState,
     player: PlayerState,
     card: CardInstance,
-    destination: CardInstance[],
     destinationZone: string,
     effectId: RuntimeEffectId,
     source: EffectSourceContext,
@@ -403,9 +402,7 @@ export interface EffectRuntimeServices {
   getDestroyDestination(
     state: GameState,
     card: CardInstance
-  ):
-    | { ok: true; zone: CardInstance[]; zoneName: string }
-    | { ok: false; error: string };
+  ): { ok: true; zoneName: string } | { ok: false; error: string };
   getOpponentsInSeatingOrder(
     state: GameState,
     player: PlayerState
@@ -2621,6 +2618,7 @@ export function collectAttackReplacementProfile(
         sourceType: "card",
         runtimeMode: source.runtimeMode,
         playerId: attackingPlayer.playerId,
+        card,
         cardInstanceId: card.instanceId,
         definitionId: card.definitionId,
       },
@@ -2652,11 +2650,7 @@ export function collectAttackReplacementProfile(
 
   if (!includeSourceOwnerModifiers || source.sourceType !== "card")
     return { status: "resolved", result: profile };
-  const sourceCard = findCardLocation(
-    state,
-    source.cardInstanceId,
-    "effectSource"
-  )?.card;
+  const sourceCard = source.card;
   if (sourceCard === undefined || sourceCard.ownerId === "common") {
     return { status: "resolved", result: profile };
   }
@@ -2699,6 +2693,7 @@ export function collectAttackReplacementProfile(
           sourceType: "card",
           runtimeMode: source.runtimeMode,
           playerId: sourceOwner.playerId,
+          card,
           cardInstanceId: card.instanceId,
           definitionId: card.definitionId,
         },

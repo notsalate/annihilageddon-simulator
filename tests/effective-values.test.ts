@@ -1271,11 +1271,7 @@ test("scoreGame counts owned player-zone cards without scoring common locations 
     player.playerId
   );
   otherPlayer.permanents.push(controlledTower);
-  grantTemporaryControl(
-    state,
-    controlledTower.instanceId,
-    otherPlayer.playerId
-  );
+  grantTemporaryControl(state, controlledTower, otherPlayer.playerId);
   state.common.market.push(
     createCardInstance("fixture-market-tower", tower.cardId, player.playerId)
   );
@@ -1305,7 +1301,7 @@ test("scoreGame counts owned player-zone cards without scoring common locations 
   );
   assert.deepEqual(state.turn.temporaryCardControls, [
     {
-      cardInstanceId: controlledTower.instanceId,
+      card: controlledTower,
       controllerId: otherPlayer.playerId,
     },
   ]);

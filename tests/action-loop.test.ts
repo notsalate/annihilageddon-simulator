@@ -48,8 +48,7 @@ import {
 import { withTemporaryEffectRuntimeOperations } from "./helpers/with-temporary-effect-runtime-operations.js";
 import {
   buildControlledObjectView,
-  movePhysicalCard,
-  removeCardFromLocation,
+  getPhysicalCardLedger,
 } from "../src/engine/control-ledger.js";
 import { drawDeckCard, shuffleDeck } from "../src/engine/deck-lifecycle.js";
 import { createAttackChainRecurrenceKey } from "../src/engine/attack-cycle.js";
@@ -96,7 +95,8 @@ test("late foe-deck cleanup errors stop playing after card placement", () => {
         "add_power",
         {
           execute(state, _player, _effect, source) {
-            removeCardFromLocation(state, source.cardInstanceId);
+            assert.ok(source.card);
+            getPhysicalCardLedger(state).removeCard(source.card);
             return { ok: true };
           },
         },
@@ -138,9 +138,14 @@ test("late foe-deck cleanup errors preserve a card moved by the effect", () => {
         "add_power",
         {
           execute(state, _player, _effect, source) {
-            const moved = removeCardFromLocation(state, source.cardInstanceId);
-            assert.ok(moved);
-            foe.deck.push(moved.card);
+            assert.ok(source.card);
+            const moved = getPhysicalCardLedger(state).removeCard(source.card);
+            assert.equal(moved.ok, true);
+            if (moved.ok) {
+              getPhysicalCardLedger(state).addCards(`${foe.playerId}.deck`, [
+                moved.card,
+              ]);
+            }
             return { ok: true };
           },
         },
@@ -1190,7 +1195,6 @@ test("controlled-object attack cards use controlled card costs", () => {
     activePlayer,
     "esw2_dbg__legend_011"
   );
-  activePlayer.permanents.push(throne);
   lifeBefore = targetPlayer.life.current;
   result = applyAction(state, {
     type: "playCard",
@@ -2323,7 +2327,7 @@ test("#295 main_069 preserves ownership and releases temporary control", () => {
   assert.equal(state.turn.controlledPowerBonus, 0);
   assert.equal(
     state.turn.temporaryCardControls.some(
-      (control) => control.cardInstanceId === temporarilyControlled.instanceId
+      (control) => control.card === temporarilyControlled
     ),
     false
   );
@@ -2528,8 +2532,12 @@ test("megaMayhem revealed during Market Flow executes its mapped onMayhemResolve
     ownerId: "common",
     marketChips: 0,
   };
-  const legendFiller = state.common.legendMarket[0];
-  assert.ok(legendFiller);
+  const legendFillerSource = state.common.legendMarket[0];
+  assert.ok(legendFillerSource);
+  const legendFiller = cloneCardWithInstanceId(
+    legendFillerSource,
+    "fixture-mega-mayhem-set-life-filler"
+  );
   state.common.legendMarket.splice(
     0,
     state.common.legendMarket.length,
@@ -2608,8 +2616,12 @@ test("megaMayhem Dingler toggle resolves for each player in active-player order"
     ownerId: "common",
     marketChips: 0,
   };
-  const legendFiller = state.common.legendMarket[0];
-  assert.ok(legendFiller);
+  const legendFillerSource = state.common.legendMarket[0];
+  assert.ok(legendFillerSource);
+  const legendFiller = cloneCardWithInstanceId(
+    legendFillerSource,
+    "fixture-mega-mayhem-toggle-dingler-filler"
+  );
   state.common.legendMarket.splice(
     0,
     state.common.legendMarket.length,
@@ -2722,8 +2734,12 @@ test("megaMayhem destroys top main deck cards in active-player order and kills p
     ownerId: "common",
     marketChips: 0,
   };
-  const legendFiller = state.common.legendMarket[0];
-  assert.ok(legendFiller);
+  const legendFillerSource = state.common.legendMarket[0];
+  assert.ok(legendFillerSource);
+  const legendFiller = cloneCardWithInstanceId(
+    legendFillerSource,
+    "fixture-mega-mayhem-destroy-top-filler"
+  );
   state.common.legendMarket.splice(
     0,
     state.common.legendMarket.length,
@@ -4569,8 +4585,12 @@ test("MegaMayhem MD skips a defended player and still toggles undefended players
   );
   chooseFirstFixtureDefense(state);
   const megaMayhem = createCommonRuntimeCard("esw2_dbg__mega_mayhem_004");
-  const legendFiller = state.common.legendMarket[0];
-  assert.ok(legendFiller);
+  const legendFillerSource = state.common.legendMarket[0];
+  assert.ok(legendFillerSource);
+  const legendFiller = cloneCardWithInstanceId(
+    legendFillerSource,
+    "fixture-mega-mayhem-md-filler"
+  );
   state.common.legendMarket.splice(
     0,
     state.common.legendMarket.length,
@@ -7712,6 +7732,7 @@ test("reveal_top_card taking a real Wizard runs the gain lifecycle once", () => 
       playerId: player.playerId,
       definitionId: wizard.definitionId,
       cardInstanceId: wizard.instanceId,
+      card: wizard,
     },
   ]);
   assert.equal(
@@ -7963,6 +7984,7 @@ test("reveal_top_card taking a real Spell contributes to the gained-card hand li
       playerId: player.playerId,
       definitionId: spell.definitionId,
       cardInstanceId: spell.instanceId,
+      card: spell,
     },
   ]);
   assert.equal(applyAction(state, { type: "endTurn" }).ok, true);
@@ -8035,6 +8057,7 @@ test("reveal_top_card keeps the hand destination for real Creature and Ongoing c
         playerId: player.playerId,
         definitionId: card.definitionId,
         cardInstanceId: card.instanceId,
+        card,
       },
     ]);
     assert.equal(topdeckChoiceRequested, false);
@@ -8984,9 +9007,8 @@ test("#316 wizard property 009 replaces a real starter and buffs its temporary c
 
   const wand = findOwnedCard(propertyOwner, "esw2_dbg__starter_004");
   assert.ok(wand);
-  const moved = movePhysicalCard(
-    state,
-    wand.instanceId,
+  const moved = getPhysicalCardLedger(state).moveCard(
+    wand,
     `${controller.playerId}.hand`,
     "front"
   );
@@ -9040,9 +9062,8 @@ test("#316 wizard property 009 uses ownership and tags instead of names", () => 
     targetPlayer,
     "esw2_dbg__starter_004"
   );
-  const movedForeignWand = movePhysicalCard(
-    state,
-    foreignWand.instanceId,
+  const movedForeignWand = getPhysicalCardLedger(state).moveCard(
+    foreignWand,
     `${propertyOwner.playerId}.hand`,
     "front"
   );
@@ -13366,8 +13387,12 @@ test("Mega Mayhem ME sets every wizard life to 5", () => {
     player.life.current = 17;
   }
   const megaMayhem = createCommonRuntimeCard("esw2_dbg__mega_mayhem_005");
-  const legendFiller = state.common.legendMarket[0];
-  assert.ok(legendFiller);
+  const legendFillerSource = state.common.legendMarket[0];
+  assert.ok(legendFillerSource);
+  const legendFiller = cloneCardWithInstanceId(
+    legendFillerSource,
+    "fixture-mega-mayhem-me-filler"
+  );
   state.common.legendMarket.splice(
     0,
     state.common.legendMarket.length,
@@ -15305,6 +15330,16 @@ function createCommonRuntimeCard(definitionId: string): CardInstance {
     definitionId: markCardDefinitionId(definitionId),
     ownerId: "common",
     marketChips: 0,
+  };
+}
+
+function cloneCardWithInstanceId(
+  card: CardInstance,
+  instanceId: string
+): CardInstance {
+  return {
+    ...card,
+    instanceId: markCardInstanceId(instanceId),
   };
 }
 
@@ -17600,9 +17635,9 @@ test("ЖДК 009 замешивает только свои активные п�
   foreignOwner.permanents = [foreignPermanent];
   player.deck = [deckCard];
   state.turn.temporaryCardControls = [
-    { cardInstanceId: ownPermanent.instanceId, controllerId: player.playerId },
+    { card: ownPermanent, controllerId: player.playerId },
     {
-      cardInstanceId: foreignPermanent.instanceId,
+      card: foreignPermanent,
       controllerId: player.playerId,
     },
   ];
@@ -17628,13 +17663,13 @@ test("ЖДК 009 замешивает только свои активные п�
   assert.equal(foreignPermanent.ownerId, foreignOwner.playerId);
   assert.equal(
     state.turn.temporaryCardControls.some(
-      (control) => control.cardInstanceId === ownPermanent.instanceId
+      (control) => control.card === ownPermanent
     ),
     false
   );
   assert.equal(
     state.turn.temporaryCardControls.some(
-      (control) => control.cardInstanceId === foreignPermanent.instanceId
+      (control) => control.card === foreignPermanent
     ),
     true
   );
@@ -19876,9 +19911,8 @@ test("#271 defense topdecks an observable face-up card and clears it after forke
   assert.notEqual(forkDefenseCard, defenseCard);
   assert.equal(forkDefenseCard.faceUp, true);
 
-  const moved = movePhysicalCard(
-    fork,
-    forkDefenseCard.instanceId,
+  const moved = getPhysicalCardLedger(fork).moveCard(
+    forkDefenseCard,
     `${forkDefender.playerId}.discard`,
     "back"
   );

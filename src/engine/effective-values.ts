@@ -7,7 +7,7 @@ import type {
 } from "./setup.js";
 import {
   buildControlledObjectView,
-  listPlayerPlayedThisTurnCards,
+  getPhysicalCardLedger,
   listOwnedScoringCards,
   type ControlledCardObject,
   type ControlledObjectView,
@@ -406,7 +406,9 @@ function calculateEffectiveValue(options: {
           ) {
             return true;
           }
-          return source.cardInstanceId === options.scoredCard.instanceId;
+          return source.card === undefined
+            ? source.cardInstanceId === options.scoredCard.instanceId
+            : source.card === options.scoredCard;
         },
         countOwnedScoringCards: (countedCardTypes) =>
           countOwnedScoringCards(getScoringCardTypeIndex(), countedCardTypes),
@@ -485,7 +487,9 @@ function getControlledObjectEffects(
   if (player === undefined) {
     throw new Error(`Missing player ${playerId}`);
   }
-  const playedThisTurnCards = listPlayerPlayedThisTurnCards(player);
+  const playedThisTurnCards = getPhysicalCardLedger(state).readZone(
+    `${player.playerId}.playedThisTurn`
+  );
   const playedThisTurnIds = new Set(
     playedThisTurnCards.map((card) => card.instanceId)
   );
@@ -495,7 +499,7 @@ function getControlledObjectEffects(
       const definition = mustGetCardDefinition(state, card.definitionId);
       return toEffectiveValueEffects(
         definition.engine.effects,
-        cardEffectSource(state, playerId, card.instanceId, definition.cardId)
+        cardEffectSource(state, playerId, card, definition.cardId)
       );
     }),
     ...view.cards
@@ -506,7 +510,7 @@ function getControlledObjectEffects(
           cardEffectSource(
             state,
             playerId,
-            object.card.instanceId,
+            object.card,
             object.definition.cardId
           )
         )
@@ -540,13 +544,13 @@ function getControlledObjectEffects(
     ...view.statuses.flatMap((status) =>
       toEffectiveValueEffects(
         status.effects,
-        cardEffectSource(state, playerId, status.instanceId, status.statusId)
+        cardEffectSource(state, playerId, undefined, status.statusId)
       )
     ),
     ...view.trophyLikeObjects.flatMap((trophy) =>
       toEffectiveValueEffects(
         trophy.effects,
-        cardEffectSource(state, playerId, trophy.instanceId, trophy.trophyId)
+        cardEffectSource(state, playerId, undefined, trophy.trophyId)
       )
     ),
   ];
@@ -560,12 +564,7 @@ function getScoringCardEffects(
   return scoringCards.flatMap((object) => {
     return toEffectiveValueEffects(
       object.definition.engine.effects,
-      cardEffectSource(
-        state,
-        playerId,
-        object.card.instanceId,
-        object.definition.cardId
-      ),
+      cardEffectSource(state, playerId, object.card, object.definition.cardId),
       "whileScoring"
     );
   });
@@ -595,15 +594,16 @@ function toEffectiveValueEffects(
 function cardEffectSource(
   state: GameState,
   playerId: PlayerId,
-  cardInstanceId: string,
+  card: CardInstance | undefined,
   definitionId: string
 ): EffectiveValueSource {
   return {
     sourceType: "card",
     runtimeMode: state.runtimeMode,
     playerId,
-    cardInstanceId,
+    cardInstanceId: card?.instanceId ?? definitionId,
     definitionId,
+    ...(card === undefined ? {} : { card }),
   };
 }
 

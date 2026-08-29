@@ -314,9 +314,11 @@ export function createActivationEffectDefinitions(
     {
       effectId: "activation_destroy_self_then_destroy_own_cards",
       execute(state, player, effect, source, services) {
-        const sourceCard = getControlledCards(state, player).find(
-          (card) => card.instanceId === source.cardInstanceId
-        );
+        const sourceCard =
+          source.card ??
+          getControlledCards(state, player).find(
+            (card) => card.instanceId === source.cardInstanceId
+          );
         if (sourceCard === undefined) {
           return {
             ok: false,
@@ -508,8 +510,7 @@ export function createActivationEffectDefinitions(
           state,
           selected,
           player,
-          player.deck,
-          `${player.playerId}.deckTop`,
+          `${player.playerId}.deck`,
           effect.effectId,
           source,
           true
@@ -526,7 +527,6 @@ export function createActivationEffectDefinitions(
             state,
             player,
             card,
-            state.common.legendDeck,
             "legendDeck",
             effect.effectId,
             source,
