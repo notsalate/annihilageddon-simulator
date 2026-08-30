@@ -118,7 +118,14 @@ const physicalCardLedgersByCommonState = new WeakMap<
 >();
 const physicalCardZoneTagStride = 1024;
 let nextPhysicalCardBranchIdentity = 1;
-const physicalCardLedgerTags = new WeakMap<CardInstance, number>();
+// Keep membership metadata on the card so its lifetime matches the branch.
+// Non-enumerability prevents JSON and the fork clone's object spread from
+// carrying a parent branch tag into the child.
+const physicalCardLedgerTag = Symbol("physicalCardLedgerTag");
+
+type PhysicalCardLedgerTaggedCard = CardInstance & {
+  [physicalCardLedgerTag]?: number;
+};
 
 /**
  * Owns physical card membership and all runtime mutations of built-in card
@@ -853,7 +860,7 @@ export class PhysicalCardLedger {
   }
 
   private getCardBranchIdentity(card: CardInstance): number | undefined {
-    const tag = physicalCardLedgerTags.get(card);
+    const tag = this.readCardLedgerTag(card);
     return tag === undefined
       ? undefined
       : Math.floor(tag / physicalCardZoneTagStride);
@@ -864,7 +871,7 @@ export class PhysicalCardLedger {
   }
 
   private getCardZone(card: CardInstance): string | undefined {
-    const tag = physicalCardLedgerTags.get(card);
+    const tag = this.readCardLedgerTag(card);
     if (
       tag === undefined ||
       Math.floor(tag / physicalCardZoneTagStride) !== this.branchIdentity
@@ -899,7 +906,21 @@ export class PhysicalCardLedger {
   }
 
   private writeCardLedgerTag(card: CardInstance, tag: number): void {
-    physicalCardLedgerTags.set(card, tag);
+    const taggedCard = card as PhysicalCardLedgerTaggedCard;
+    if (Object.hasOwn(taggedCard, physicalCardLedgerTag)) {
+      taggedCard[physicalCardLedgerTag] = tag;
+      return;
+    }
+    Object.defineProperty(taggedCard, physicalCardLedgerTag, {
+      configurable: false,
+      enumerable: false,
+      value: tag,
+      writable: true,
+    });
+  }
+
+  private readCardLedgerTag(card: CardInstance): number | undefined {
+    return (card as PhysicalCardLedgerTaggedCard)[physicalCardLedgerTag];
   }
 }
 

@@ -252,6 +252,37 @@ test("Ledger rejects a detached card with an occupied instance ID", () => {
   assert.deepEqual(ledger.readZone(discardZone), discardBefore);
 });
 
+test("Ledger membership metadata stays out of serialized and copied cards", () => {
+  const firstState = initializeGame({ rootDir, seed: 47614 });
+  const firstPlayer = firstState.players[0]!;
+  const firstLedger = getPhysicalCardLedger(firstState);
+  const detachedCard = createCard("hidden-ledger-tag", firstPlayer.playerId);
+  const serializedCard = JSON.stringify(detachedCard);
+
+  const inserted = firstLedger.insertDetachedCard(
+    detachedCard,
+    `${firstPlayer.playerId}.discard`,
+    "back"
+  );
+  assert.equal(inserted.ok, true);
+  assert.equal(JSON.stringify(detachedCard), serializedCard);
+
+  const secondState = initializeGame({ rootDir, seed: 47615 });
+  const secondPlayer = secondState.players[0]!;
+  const copiedCard = {
+    ...detachedCard,
+    instanceId: markCardInstanceId("fixture-physical-zone-copied-card"),
+    ownerId: secondPlayer.playerId,
+  };
+  const copiedInsert = getPhysicalCardLedger(secondState).insertDetachedCard(
+    copiedCard,
+    `${secondPlayer.playerId}.discard`,
+    "back"
+  );
+
+  assert.equal(copiedInsert.ok, true);
+});
+
 test("Ledger prevents a card from crossing into another fork", () => {
   const state = initializeGame({ rootDir, seed: 47610 });
   const player = state.players[0]!;
