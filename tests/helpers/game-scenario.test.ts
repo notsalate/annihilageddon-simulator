@@ -101,7 +101,7 @@ test("temporary control preserves ownership and physical location", () => {
   assert.ok(owner.discard.includes(card));
   assert.deepEqual(scenario.state.turn.temporaryCardControls, [
     {
-      cardInstanceId: card.instanceId,
+      card,
       controllerId: controller.playerId,
     },
   ]);

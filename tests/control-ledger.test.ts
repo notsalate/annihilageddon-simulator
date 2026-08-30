@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   applyAction,
   forkGameState,
+  getPhysicalCardLedger,
   initializeGame,
   listLegalActions,
   type CardDefinition,
@@ -15,11 +16,8 @@ import {
 import {
   buildControlledObjectView,
   cloneTemporaryControls,
-  findCardLocation,
-  findPlayerPlayedThisTurnCard,
   getControlledCards,
   grantTemporaryControl,
-  listPlayerPlayedThisTurnCards,
   releaseTemporaryControls,
 } from "../src/engine/control-ledger.js";
 import {
@@ -45,6 +43,44 @@ import {
 
 const rootDir = process.cwd();
 
+test("PhysicalCardLedger keeps live branch-local card identity for known-card operations", () => {
+  const state = initializeGame({ rootDir, seed: 22000 });
+  const sourceCard = state.players[0]?.hand[0];
+  assert.ok(sourceCard);
+
+  const ledger = getPhysicalCardLedger(state);
+  assert.equal(ledger.locateCard(sourceCard)?.card, sourceCard);
+  assert.equal(
+    ledger.resolveCardLocation(sourceCard.instanceId)?.card,
+    sourceCard
+  );
+
+  const removed = ledger.removeCard(
+    sourceCard,
+    `${state.players[0]!.playerId}.hand`
+  );
+  assert.equal(removed.ok, true);
+  assert.equal(ledger.locateCard(sourceCard), undefined);
+
+  const restored = ledger.insertDetachedCard(
+    sourceCard,
+    `${state.players[0]!.playerId}.hand`,
+    "front"
+  );
+  assert.equal(restored.ok, true);
+  assert.equal(ledger.locateCard(sourceCard)?.card, sourceCard);
+
+  const fork = forkGameState(state);
+  const forkCard = fork.players[0]?.hand[0];
+  assert.ok(forkCard);
+  assert.notEqual(forkCard, sourceCard);
+  assert.equal(
+    getPhysicalCardLedger(fork).locateCard(forkCard)?.card,
+    forkCard
+  );
+  assert.equal(getPhysicalCardLedger(fork).locateCard(sourceCard), undefined);
+});
+
 test("Control Ledger resolves controlled cards across permanent, played, and owner discard zones", () => {
   const state = initializeGame({ rootDir, seed: 22001 });
   const controller = state.players[0];
@@ -58,21 +94,26 @@ test("Control Ledger resolves controlled cards across permanent, played, and own
   assert.ok(permanent);
   assert.ok(played);
   assert.ok(ownerDiscard);
+  const staleControlCard: CardInstance = {
+    ...played,
+    instanceId: markCardInstanceId("stale-control-reference"),
+  };
+  const ledger = getPhysicalCardLedger(state);
 
   controller.permanents.push(permanent);
   controller.playedThisTurn.push(played);
   owner.discard.push(ownerDiscard);
   state.turn.temporaryCardControls.push(
     {
-      cardInstanceId: played.instanceId,
+      card: played,
       controllerId: controller.playerId,
     },
     {
-      cardInstanceId: ownerDiscard.instanceId,
+      card: ownerDiscard,
       controllerId: controller.playerId,
     },
     {
-      cardInstanceId: markCardInstanceId("stale-control-reference"),
+      card: staleControlCard,
       controllerId: controller.playerId,
     }
   );
@@ -82,19 +123,19 @@ test("Control Ledger resolves controlled cards across permanent, played, and own
     [permanent.instanceId, played.instanceId, ownerDiscard.instanceId]
   );
   assert.equal(
-    findCardLocation(state, permanent.instanceId)?.zoneName,
+    ledger.locateCard(permanent)?.zoneName,
     `${controller.playerId}.permanents`
   );
   assert.equal(
-    findCardLocation(state, played.instanceId)?.zoneName,
+    ledger.locateCard(played)?.zoneName,
     `${controller.playerId}.playedThisTurn`
   );
   assert.equal(
-    findCardLocation(state, ownerDiscard.instanceId)?.zoneName,
+    ledger.locateCard(ownerDiscard)?.zoneName,
     `${owner.playerId}.discard`
   );
   assert.equal(
-    findCardLocation(state, markCardInstanceId("missing-card")),
+    ledger.resolveCardLocation(markCardInstanceId("missing-card")),
     undefined
   );
 
@@ -120,11 +161,11 @@ test("Control Ledger locates player singleton and common card zones", () => {
   assert.ok(marketCard);
 
   assert.equal(
-    findCardLocation(state, familiar.instanceId)?.zoneName,
+    getPhysicalCardLedger(state).locateCard(familiar)?.zoneName,
     `${player.playerId}.unboughtFamiliars`
   );
   assert.equal(
-    findCardLocation(state, marketCard.instanceId)?.zoneName,
+    getPhysicalCardLedger(state).locateCard(marketCard)?.zoneName,
     "mainMarket"
   );
 });
@@ -142,13 +183,22 @@ test("Control Ledger reads a player's played cards without traversing other zone
   player.playedThisTurn.push(playedCard);
   otherPlayer.playedThisTurn.push(otherPlayedCard);
 
-  assert.deepEqual(listPlayerPlayedThisTurnCards(player), [playedCard]);
+  assert.deepEqual(
+    getPhysicalCardLedger(state).readZone(`${player.playerId}.playedThisTurn`),
+    [playedCard]
+  );
   assert.equal(
-    findPlayerPlayedThisTurnCard(player, playedCard.instanceId),
+    getPhysicalCardLedger(state).findCardInZone(
+      `${player.playerId}.playedThisTurn`,
+      playedCard.instanceId
+    ),
     playedCard
   );
   assert.equal(
-    findPlayerPlayedThisTurnCard(player, otherPlayedCard.instanceId),
+    getPhysicalCardLedger(state).findCardInZone(
+      `${player.playerId}.playedThisTurn`,
+      otherPlayedCard.instanceId
+    ),
     undefined
   );
 });
@@ -187,19 +237,19 @@ test("temporary control lifecycle is idempotent, transferable, releasable, and f
   assert.ok(card);
   firstController.playedThisTurn.push(card);
 
-  grantTemporaryControl(state, card.instanceId, firstController.playerId);
-  grantTemporaryControl(state, card.instanceId, firstController.playerId);
+  grantTemporaryControl(state, card, firstController.playerId);
+  grantTemporaryControl(state, card, firstController.playerId);
   assert.deepEqual(state.turn.temporaryCardControls, [
     {
-      cardInstanceId: card.instanceId,
+      card,
       controllerId: firstController.playerId,
     },
   ]);
 
-  grantTemporaryControl(state, card.instanceId, secondController.playerId);
+  grantTemporaryControl(state, card, secondController.playerId);
   assert.deepEqual(state.turn.temporaryCardControls, [
     {
-      cardInstanceId: card.instanceId,
+      card,
       controllerId: secondController.playerId,
     },
   ]);
@@ -446,7 +496,7 @@ test("temporarily controlled ongoing attack modifiers and triggers work outside 
     "wand",
     controller.playedThisTurn
   );
-  grantTemporaryControl(state, wand.instanceId, controller.playerId);
+  grantTemporaryControl(state, wand, controller.playerId);
 
   state.turn.power = 0;
   const playTriggerResult = executeControlledCardOnPlayCardEffects(
@@ -496,7 +546,7 @@ function addTemporarilyControlledCard(
   suffix: string
 ): CardInstance {
   const card = addCardToZone(state, owner, definitionId, suffix, owner.discard);
-  grantTemporaryControl(state, card.instanceId, controller.playerId);
+  grantTemporaryControl(state, card, controller.playerId);
   return card;
 }
 

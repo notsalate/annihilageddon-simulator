@@ -1,4 +1,5 @@
 import { recordGameEvent } from "./event-recorder.js";
+import { getPhysicalCardLedger } from "./control-ledger.js";
 import type {
   EffectChoice,
   EffectExecutionResult,
@@ -23,16 +24,14 @@ export function gainLimpWandsFromCommonStack(
   source: EffectSourceContext,
   services: Pick<EffectRuntimeServices, "moveCardToPlayerZone">
 ): EffectExecutionResult {
-  const destinationCards =
-    destination === "hand"
-      ? player.hand
-      : destination === "deckTop" || destination === "deckBottom"
-        ? player.deck
-        : player.discard;
-  const destinationZone = `${player.playerId}.${destination}`;
+  const destinationZone = `${player.playerId}.${
+    destination === "deckTop" || destination === "deckBottom"
+      ? "deck"
+      : destination
+  }`;
 
   for (let index = 0; index < amount; index += 1) {
-    const limpWand = state.common.limpWandStack[0];
+    const limpWand = getPhysicalCardLedger(state).readZone("limpWandStack")[0];
     if (limpWand === undefined) {
       break;
     }
@@ -41,7 +40,6 @@ export function gainLimpWandsFromCommonStack(
       state,
       limpWand,
       player,
-      destinationCards,
       destinationZone,
       effectId,
       source,
@@ -82,11 +80,12 @@ export function transferUpToLimpWandsToPlayer(
     "chooseEffectChoice" | "moveCardToPlayerZone"
   >
 ): EffectExecutionResult {
+  const ledger = getPhysicalCardLedger(state);
   for (let index = 0; index < amount; index += 1) {
     const cards = [
-      ...sourcePlayer.hand,
-      ...sourcePlayer.discard,
-      ...state.common.limpWandStack,
+      ...ledger.readZone(`${sourcePlayer.playerId}.hand`),
+      ...ledger.readZone(`${sourcePlayer.playerId}.discard`),
+      ...ledger.readZone("limpWandStack"),
     ].filter((card) => isLimpWand(state, card));
     const choice = services.chooseEffectChoice(
       state,
@@ -106,7 +105,6 @@ export function transferUpToLimpWandsToPlayer(
       state,
       limpWand,
       targetPlayer,
-      targetPlayer.discard,
       `${targetPlayer.playerId}.discard`,
       effectId,
       source

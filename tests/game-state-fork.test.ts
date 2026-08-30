@@ -44,6 +44,7 @@ function createFixture(): GameState {
     definitionId: markTokenDefinitionId("fixture-token"),
     ownerId: playerId,
   });
+  const playedCard = card("played-card");
   const choiceStrategy = () => undefined;
   const cardDefinition: CardDefinition = {
     schemaVersion: 1,
@@ -109,14 +110,14 @@ function createFixture(): GameState {
           cardInstanceId: markCardInstanceId("gained-instance-2"),
         },
       ],
-      mainMarketCardHandReplacementSourceCardIds: ["replacement-source"],
+      mainMarketCardHandReplacementSourceCards: [playedCard],
       pendingMarketFlowEndReasons: [],
       damagingAttackPlayerIds: [],
       nextAttackUnavoidablePlayerId: undefined,
       defenseDisabledPlayerIds: [],
       temporaryCardControls: [
         {
-          cardInstanceId: markCardInstanceId("played-card"),
+          card: playedCard,
           controllerId: playerId,
         },
       ],
@@ -127,7 +128,7 @@ function createFixture(): GameState {
         deck: [],
         hand: [card("hand-card")],
         discard: [card("discard-1"), card("discard-2"), card("discard-3")],
-        playedThisTurn: [card("played-card")],
+        playedThisTurn: [playedCard],
         permanents: [card("permanent-card")],
         unboughtFamiliars: [card("familiar-card")],
         effectiveCardTypeSelections: [],
@@ -208,7 +209,7 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
   });
   fork.turn.temporaryCardControls[0]!.controllerId = markPlayerId("player-2");
   fork.turn.temporaryCardControls.push({
-    cardInstanceId: markCardInstanceId("fork-controlled-card"),
+    card: forkPlayer.hand[0]!,
     controllerId: markPlayerId("player-2"),
   });
   forkPlayer.chips += 3;
@@ -226,12 +227,15 @@ test("forkGameState isolates mutable state and preserves shared definitions", ()
     source.turn.gainedCards.map((record) => record.definitionId),
     ["gained-card", "gained-card"]
   );
-  assert.deepEqual(source.turn.temporaryCardControls, [
-    {
-      cardInstanceId: markCardInstanceId("played-card"),
-      controllerId: markPlayerId("player-1"),
-    },
-  ]);
+  assert.equal(source.turn.temporaryCardControls.length, 1);
+  assert.equal(
+    source.turn.temporaryCardControls[0]!.card,
+    sourcePlayer.playedThisTurn[0]
+  );
+  assert.equal(
+    source.turn.temporaryCardControls[0]!.controllerId,
+    markPlayerId("player-1")
+  );
   assert.equal(sourcePlayer.chips, 2);
   assert.equal(sourcePlayer.life.current, 5);
   assert.equal(sourcePlayer.hand[0]!.marketChips, 0);

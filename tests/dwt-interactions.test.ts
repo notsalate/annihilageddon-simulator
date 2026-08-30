@@ -329,6 +329,10 @@ test("МегаБеспредел MC выдаёт чипсины каждому �
   );
   const legendFiller = state.common.legendMarket[0];
   assert.ok(legendFiller);
+  const legendFillerForDeck = {
+    ...legendFiller,
+    instanceId: markCardInstanceId("mega-mayhem-003-filler"),
+  };
   state.common.legendMarket.splice(
     0,
     state.common.legendMarket.length,
@@ -338,7 +342,7 @@ test("МегаБеспредел MC выдаёт чипсины каждому �
     0,
     state.common.legendDeck.length,
     megaMayhem,
-    legendFiller
+    legendFillerForDeck
   );
 
   const result = runMarketFlow(state, { mode: "turn" });

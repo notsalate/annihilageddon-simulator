@@ -1,4 +1,5 @@
 import type { PlayerId, TokenInstanceId } from "../domain/types.js";
+import type { CardInstance } from "./setup.js";
 import type {
   EffectiveValueModifierId,
   EffectiveValueModifierEffectPayloadMap,
@@ -28,6 +29,8 @@ export interface EffectiveValueModifierSource {
   readonly sourceType: EffectiveValueModifierSourceKind;
   readonly runtimeMode: EffectiveValueModifierRuntimeMode;
   readonly playerId: PlayerId;
+  /** Live branch-local reference for a physical card source. */
+  readonly card?: CardInstance;
   readonly cardInstanceId: string;
   readonly definitionId: string;
   readonly tokenInstanceId?: TokenInstanceId;

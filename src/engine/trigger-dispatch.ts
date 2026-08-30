@@ -311,6 +311,7 @@ function buildControlledCardEffectCandidates(
       sourceType: "card",
       runtimeMode: state.runtimeMode,
       playerId: controller.playerId,
+      card,
       cardInstanceId: card.instanceId,
       definitionId: card.definitionId,
     };

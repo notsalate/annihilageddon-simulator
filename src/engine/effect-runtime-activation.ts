@@ -1,5 +1,5 @@
 import { countControlledCardsOfType } from "./card-type-runtime.js";
-import { getControlledCards } from "./control-ledger.js";
+import { getPhysicalCardLedger } from "./control-ledger.js";
 import { destroyOwnedCard } from "./effect-runtime-cards-ownership-choice.js";
 import {
   recordEffectChipsChanged,
@@ -314,13 +314,11 @@ export function createActivationEffectDefinitions(
     {
       effectId: "activation_destroy_self_then_destroy_own_cards",
       execute(state, player, effect, source, services) {
-        const sourceCard = getControlledCards(state, player).find(
-          (card) => card.instanceId === source.cardInstanceId
-        );
+        const sourceCard = source.card;
         if (sourceCard === undefined) {
           return {
             ok: false,
-            error: `Cannot find source card ${source.cardInstanceId} for self-destruction`,
+            error: `Cannot find live source card ${source.cardInstanceId} for self-destruction`,
           };
         }
 
@@ -436,9 +434,10 @@ export function createActivationEffectDefinitions(
     {
       effectId: "activation_look_choose_reorder_legend_deck",
       execute(state, player, effect, source, services) {
-        const lookedCards = state.common.legendDeck.slice(
+        const legendDeck = getPhysicalCardLedger(state).readZone("legendDeck");
+        const lookedCards = legendDeck.slice(
           0,
-          Math.min(effect.lookAmount, state.common.legendDeck.length)
+          Math.min(effect.lookAmount, legendDeck.length)
         );
         if (lookedCards.length === 0) return { ok: true };
 
@@ -508,8 +507,7 @@ export function createActivationEffectDefinitions(
           state,
           selected,
           player,
-          player.deck,
-          `${player.playerId}.deckTop`,
+          `${player.playerId}.deck`,
           effect.effectId,
           source,
           true
@@ -526,7 +524,6 @@ export function createActivationEffectDefinitions(
             state,
             player,
             card,
-            state.common.legendDeck,
             "legendDeck",
             effect.effectId,
             source,

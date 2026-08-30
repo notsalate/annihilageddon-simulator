@@ -1,12 +1,8 @@
-import { drawDeckCards } from "./deck-lifecycle.js";
 import type { AttackInstance } from "./attack-resolution.js";
 import {
   findCardOwner,
   getControlledOngoingCards,
-  listLegendMarketCards,
-  listMainMarketCards,
-  movePhysicalCard,
-  peekLegendDeckCard,
+  getPhysicalCardLedger,
   removeTemporaryCardControl,
 } from "./control-ledger.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
@@ -882,7 +878,7 @@ const mayhemAddChipsToMainMarketHandler: EffectRuntimeHandler<
 > = {
   effectId: "mayhem_add_chips_to_main_market",
   execute(state, player, effect, source) {
-    for (const card of listMainMarketCards(state)) {
+    for (const card of getPhysicalCardLedger(state).readZone("mainMarket")) {
       card.marketChips += effect.amount;
       recordGameEvent(state, {
         type: "marketChipAdded",
@@ -1094,7 +1090,6 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler<
             state,
             targetPlayer,
             discardedCard,
-            destination.zone,
             destination.zoneName,
             effect.effectId,
             source
@@ -1496,16 +1491,19 @@ const mayhemEachPlayerHandRedrawChoiceHandler: EffectRuntimeHandler<
         if (!("damageDealt" in damageResult)) return damageResult;
         continue;
       }
-      const discardedCount = targetPlayer.hand.length;
-      targetPlayer.discard.push(...targetPlayer.hand.splice(0));
-      const drawResult = drawDeckCards(
-        targetPlayer.deck,
-        targetPlayer.discard,
+      const ledger = getPhysicalCardLedger(state);
+      const handZone = `${targetPlayer.playerId}.hand`;
+      const discardZone = `${targetPlayer.playerId}.discard`;
+      const discardedCards = ledger.takeAll(handZone);
+      const discardedCount = discardedCards.length;
+      ledger.addCards(discardZone, discardedCards);
+      const drawResult = ledger.drawCards(
+        targetPlayer.playerId,
         redrawOption.drawAmount,
         state.rng,
         () => recordDeckReshuffle(state, targetPlayer.playerId)
       );
-      targetPlayer.hand.push(...drawResult.cards);
+      ledger.addCards(handZone, drawResult.cards);
       recordGameEvent(state, {
         type: "mayhemHandDiscardedAndRedrawn",
         playerId: targetPlayer.playerId,
@@ -1618,10 +1616,11 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
 > = {
   effectId: "mayhem_refresh_legend_market",
   execute(state, player, effect, source, services) {
-    for (const card of [...listLegendMarketCards(state)]) {
-      const moved = movePhysicalCard(
-        state,
-        card.instanceId,
+    for (const card of [
+      ...getPhysicalCardLedger(state).readZone("legendMarket"),
+    ]) {
+      const moved = getPhysicalCardLedger(state).moveCard(
+        card,
         "destroyedPile",
         "back",
         "legendMarket"
@@ -1641,8 +1640,11 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
       });
     }
 
-    while (listLegendMarketCards(state).length < effect.targetSize) {
-      const card = peekLegendDeckCard(state);
+    while (
+      getPhysicalCardLedger(state).readZone("legendMarket").length <
+      effect.targetSize
+    ) {
+      const card = getPhysicalCardLedger(state).readZone("legendDeck")[0];
       if (card === undefined) {
         return { ok: true };
       }
@@ -1672,6 +1674,7 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
               sourceType: "card",
               runtimeMode: state.runtimeMode,
               playerId: player.playerId,
+              card,
               cardInstanceId: card.instanceId,
               definitionId: card.definitionId,
             }
@@ -1689,9 +1692,8 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
             });
           }
         }
-        const moved = movePhysicalCard(
-          state,
-          card.instanceId,
+        const moved = getPhysicalCardLedger(state).moveCard(
+          card,
           "destroyedMegaMayhem",
           "back",
           "legendDeck"
@@ -1712,9 +1714,8 @@ const mayhemRefreshLegendMarketHandler: EffectRuntimeHandler<
         });
         continue;
       }
-      const moved = movePhysicalCard(
-        state,
-        card.instanceId,
+      const moved = getPhysicalCardLedger(state).moveCard(
+        card,
         "legendMarket",
         "back",
         "legendDeck"
@@ -1843,19 +1844,20 @@ const mayhemEachPlayerBattleHighestHandCostHandler: EffectRuntimeHandler<
       .filter((participant) => participant.handCost === highestCost)
       .map((participant) => participant.player);
     const winnerIds = winners.map((winner) => winner.playerId);
+    const ledger = getPhysicalCardLedger(state);
     for (const winner of winners) {
-      const drawResult = drawDeckCards(
-        winner.deck,
-        winner.discard,
+      const drawResult = ledger.drawCards(
+        winner.playerId,
         effect.winnerDrawAmount,
         state.rng,
         () => recordDeckReshuffle(state, winner.playerId)
       );
-      winner.hand.push(...drawResult.cards);
+      ledger.addCards(`${winner.playerId}.hand`, drawResult.cards);
     }
     for (const participant of participants) {
       if (winnerIds.includes(participant.player.playerId)) continue;
-      participant.player.discard.push(...participant.player.hand.splice(0));
+      const discarded = ledger.takeAll(`${participant.player.playerId}.hand`);
+      ledger.addCards(`${participant.player.playerId}.discard`, discarded);
     }
     recordGameEvent(state, {
       type: "mayhemBattleResolved",
@@ -2108,7 +2110,6 @@ function discardControlledPermanent(
     state,
     player,
     card,
-    owner.discard,
     `${owner.playerId}.discard`,
     effectId,
     source
@@ -2119,7 +2120,7 @@ function discardControlledPermanent(
       error: `Cannot discard controlled permanent ${card.instanceId}`,
     };
   }
-  removeTemporaryCardControl(state, card.instanceId);
+  removeTemporaryCardControl(state, card);
   recordGameEvent(state, {
     type: "effectCardDiscarded",
     playerId: player.playerId,
@@ -2273,7 +2274,7 @@ function createMayhemAttackEqualHighestCardCostHandler(
         const marketCost = calculateHighestEffectiveCardCost(
           state,
           player.playerId,
-          listLegendMarketCards(state),
+          getPhysicalCardLedger(state).readZone("legendMarket"),
           calculateEffectiveCardCost
         );
         if (!marketCost.ok) return marketCost;

@@ -1,7 +1,7 @@
 import type { CardDefinition } from "./data.js";
 import {
   buildControlledObjectView,
-  peekLegendDeckCard,
+  getPhysicalCardLedger,
 } from "./control-ledger.js";
 import type {
   AttackInstance,
@@ -499,7 +499,7 @@ export interface CombatAttackCatalogTools {
 }
 
 type AttackCostPaymentStep =
-  | { kind: "discardOtherHandCard"; cardInstanceId: CardInstance["instanceId"] }
+  | { kind: "discardOtherHandCard"; card: CardInstance }
   | { kind: "spendChips"; amount: number; chipsAfter: number }
   | { kind: "payLife"; amount: number; lifeAfter: number };
 
@@ -515,22 +515,22 @@ function planAttackCosts(
 ): { ok: true; value: AttackCostPaymentPlan } | { ok: false; error: string } {
   let remainingChips = player.chips;
   let remainingLife = player.life.current;
-  const reservedCardInstanceIds = new Set<CardInstance["instanceId"]>();
+  const reservedCards = new Set<CardInstance>();
   const steps: AttackCostPaymentStep[] = [];
 
   for (const cost of costs) {
     switch (cost.costId) {
       case "discard_other_hand_card": {
         const card = player.hand.find(
-          (candidate) => !reservedCardInstanceIds.has(candidate.instanceId)
+          (candidate) => !reservedCards.has(candidate)
         );
         if (card === undefined) {
           return { ok: false, error: "Cannot discard another hand card" };
         }
-        reservedCardInstanceIds.add(card.instanceId);
+        reservedCards.add(card);
         steps.push({
           kind: "discardOtherHandCard",
-          cardInstanceId: card.instanceId,
+          card,
         });
         break;
       }
@@ -589,8 +589,7 @@ function commitAttackCostPlan(
     player.life.current !== plan.startingLife ||
     plan.steps.some(
       (step) =>
-        step.kind === "discardOtherHandCard" &&
-        !player.hand.some((card) => card.instanceId === step.cardInstanceId)
+        step.kind === "discardOtherHandCard" && !player.hand.includes(step.card)
     )
   ) {
     return { ok: false, error: "Attack cost plan changed before payment" };
@@ -599,14 +598,24 @@ function commitAttackCostPlan(
   for (const step of plan.steps) {
     switch (step.kind) {
       case "discardOtherHandCard": {
-        const cardIndex = player.hand.findIndex(
-          (card) => card.instanceId === step.cardInstanceId
-        );
-        const [card] = player.hand.splice(cardIndex, 1);
-        if (card === undefined) {
+        const card = step.card;
+        if (
+          !getPhysicalCardLedger(state)
+            .readZone(`${player.playerId}.hand`)
+            .includes(card)
+        ) {
           return { ok: false, error: "Attack cost plan lost discard card" };
         }
-        player.discard.push(card);
+        const removed = getPhysicalCardLedger(state).removeCard(
+          card,
+          `${player.playerId}.hand`
+        );
+        if (!removed.ok) {
+          return { ok: false, error: "Attack cost plan lost discard card" };
+        }
+        getPhysicalCardLedger(state).addCards(`${player.playerId}.discard`, [
+          card,
+        ]);
         recordGameEvent(state, {
           type: "effectCostPaid",
           playerId: player.playerId,
@@ -1172,7 +1181,6 @@ function createAttackDamageEqualRandomDiscardedHandCostHandler(
                 stateBeforeDamage,
                 card,
                 targetPlayer,
-                targetPlayer.discard,
                 `${targetPlayer.playerId}.discard`,
                 effect.effectId,
                 attackSource
@@ -1248,7 +1256,6 @@ export function executeAttackDiscardCards(
       state,
       card,
       targetPlayer,
-      targetPlayer.discard,
       `${targetPlayer.playerId}.discard`,
       "attack_discard_cards",
       source
@@ -1927,7 +1934,7 @@ export function createCombatAttackEffectDefinitions(
         return { ok: false, error: "Attack effect requires a player target" };
       }
 
-      const legendCard = peekLegendDeckCard(state);
+      const legendCard = getPhysicalCardLedger(state).readZone("legendDeck")[0];
       if (legendCard === undefined) return { ok: true };
       const legendDefinition = state.cardDefinitions.get(
         legendCard.definitionId
@@ -1990,7 +1997,10 @@ export function createCombatAttackEffectDefinitions(
             targetPlayer,
             attackSource
           ) {
-            const currentLegendCard = peekLegendDeckCard(stateBeforeDamage);
+            const currentLegendCard =
+              getPhysicalCardLedger(stateBeforeDamage).readZone(
+                "legendDeck"
+              )[0];
             if (currentLegendCard === undefined) {
               return {
                 ok: false,

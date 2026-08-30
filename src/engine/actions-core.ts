@@ -29,14 +29,11 @@ import type {
 } from "./effect-runtime-registry.js";
 import { assertNever } from "../common.js";
 import {
-  findPlayerUnboughtFamiliarCard,
   getControlledCards,
-  listPlayerOwnedPhysicalCards,
-  listPlayerUnboughtFamiliarCards,
+  getPhysicalCardLedger,
   releaseTemporaryControls,
 } from "./control-ledger.js";
 import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
-import { drawDeckCards } from "./deck-lifecycle.js";
 import { recordDeckReshuffle, recordGameEvent } from "./event-recorder.js";
 import {
   cardMatchesTypeForPlayer,
@@ -141,19 +138,23 @@ interface CleanupMoveRecord {
 
 export function listLegalActions(state: GameState): LegalAction[] {
   const activePlayer = mustGetActivePlayer(state);
+  const ledger = getPhysicalCardLedger(state);
+  const hand = ledger.readZone(`${activePlayer.playerId}.hand`);
+  const mainMarket = ledger.readZone("mainMarket");
+  const legendMarket = ledger.readZone("legendMarket");
   return [
-    ...activePlayer.hand.map((card) => ({
+    ...hand.map((card) => ({
       type: "playCard" as const,
       cardInstanceId: card.instanceId,
     })),
-    ...state.common.market
+    ...mainMarket
       .filter((card) => canAfford(state, activePlayer, card))
       .map((card) => ({
         type: "buyMarketCard" as const,
         cardInstanceId: card.instanceId,
         source: "mainMarket" as const,
       })),
-    ...state.common.legendMarket
+    ...legendMarket
       .filter((card) => canAffordWithChips(state, activePlayer, card))
       .map((card) => ({
         type: "buyMarketCard" as const,
@@ -208,8 +209,9 @@ export function preflightAction(
   try {
     switch (action.type) {
       case "playCard": {
-        const card = activePlayer.hand.find(
-          (candidate) => candidate.instanceId === action.cardInstanceId
+        const card = getPhysicalCardLedger(state).findCardInZone(
+          `${activePlayer.playerId}.hand`,
+          action.cardInstanceId
         );
         if (card === undefined) {
           return {
@@ -286,8 +288,10 @@ export function preflightAction(
         return undefined;
       }
       case "activatePermanent": {
-        const card = getControlledCards(state, activePlayer).find(
-          (candidate) => candidate.instanceId === action.cardInstanceId
+        const card = findControlledCard(
+          state,
+          activePlayer,
+          action.cardInstanceId
         );
         if (card === undefined) {
           return {
@@ -483,10 +487,13 @@ export function applyAction(
 
 function endTurn(state: GameState): ActionResult {
   const activePlayer = mustGetActivePlayer(state);
+  const ledger = getPhysicalCardLedger(state);
   grantBasicTrophyChipAtEndOfTurn(state, activePlayer);
 
-  const cleanedHandCards = activePlayer.hand.splice(0);
-  activePlayer.discard.push(...cleanedHandCards);
+  const handZone = `${activePlayer.playerId}.hand`;
+  const discardZone = `${activePlayer.playerId}.discard`;
+  const cleanedHandCards = ledger.takeAll(handZone);
+  ledger.addCards(discardZone, cleanedHandCards);
   recordEndTurnCleanup(
     state,
     activePlayer,
@@ -509,14 +516,13 @@ function endTurn(state: GameState): ActionResult {
   });
 
   const drawCount = calculateEndTurnDrawCount(state, activePlayer);
-  const drawResult = drawDeckCards(
-    activePlayer.deck,
-    activePlayer.discard,
+  const drawResult = ledger.drawCards(
+    activePlayer.playerId,
     drawCount,
     state.rng,
     () => recordDeckReshuffle(state, activePlayer.playerId)
   );
-  activePlayer.hand.push(...drawResult.cards);
+  ledger.addCards(handZone, drawResult.cards);
   recordGameEvent(state, {
     type: "handDrawn",
     playerId: activePlayer.playerId,
@@ -530,7 +536,7 @@ function endTurn(state: GameState): ActionResult {
 
   releaseTemporaryControls(state);
   state.turn.gainedCards = [];
-  state.turn.mainMarketCardHandReplacementSourceCardIds = [];
+  state.turn.mainMarketCardHandReplacementSourceCards = [];
   state.turn.rememberedDestroyedLegendCost = undefined;
   state.turn.damagingAttackPlayerIds = [];
   state.turn.nextAttackUnavoidablePlayerId = undefined;
@@ -599,9 +605,7 @@ function activatePermanent(
   cardInstanceId: string
 ): ActionResult {
   const activePlayer = mustGetActivePlayer(state);
-  const card = getControlledCards(state, activePlayer).find(
-    (card) => card.instanceId === cardInstanceId
-  );
+  const card = findControlledCard(state, activePlayer, cardInstanceId);
   if (card === undefined) {
     return {
       ok: false,
@@ -625,6 +629,7 @@ function activatePermanent(
       sourceType: "card",
       runtimeMode: state.runtimeMode,
       playerId: activePlayer.playerId,
+      card,
       cardInstanceId: card.instanceId,
       definitionId: card.definitionId,
     }
@@ -916,13 +921,16 @@ function cleanupPlayedCards(
   state: GameState,
   activePlayer: PlayerState
 ): CleanupMoveRecord[] {
+  const ledger = getPhysicalCardLedger(state);
   const cleanedCards: CleanupMoveRecord[] = [];
-  for (const card of activePlayer.playedThisTurn.splice(0)) {
+  for (const card of ledger.takeAll(
+    `${activePlayer.playerId}.playedThisTurn`
+  )) {
     const owner = state.players.find(
       (player) => player.playerId === card.ownerId
     );
     const destinationPlayer = owner ?? activePlayer;
-    destinationPlayer.discard.push(card);
+    ledger.addCards(`${destinationPlayer.playerId}.discard`, [card]);
     cleanedCards.push({
       card,
       sourceZone: `${activePlayer.playerId}.playedThisTurn`,
@@ -968,17 +976,9 @@ function recordEndTurnCleanup(
 
 function playCard(state: GameState, cardInstanceId: string): ActionResult {
   const activePlayer = mustGetActivePlayer(state);
-  const cardIndex = activePlayer.hand.findIndex(
-    (card) => card.instanceId === cardInstanceId
-  );
-  if (cardIndex < 0) {
-    return {
-      ok: false,
-      error: "Card is not in the active player's hand",
-    };
-  }
-
-  const card = activePlayer.hand[cardIndex];
+  const ledger = getPhysicalCardLedger(state);
+  const handZone = `${activePlayer.playerId}.hand`;
+  const card = ledger.findCardInZone(handZone, cardInstanceId);
   if (card === undefined) {
     return {
       ok: false,
@@ -986,7 +986,10 @@ function playCard(state: GameState, cardInstanceId: string): ActionResult {
     };
   }
 
-  activePlayer.hand.splice(cardIndex, 1);
+  const removed = ledger.removeCard(card, handZone);
+  if (!removed.ok) {
+    return { ok: false, error: removed.reason };
+  }
   const ownerBefore = card.ownerId;
   const effectResult = resolveCardPlay(
     state,
@@ -1118,9 +1121,20 @@ function canActivatePermanent(
     sourceType: "card",
     runtimeMode: state.runtimeMode,
     playerId: player.playerId,
+    card,
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
   });
+}
+
+function findControlledCard(
+  state: GameState,
+  player: PlayerState,
+  cardInstanceId: string
+): CardInstance | undefined {
+  return getControlledCards(state, player).find(
+    (card) => card.instanceId === cardInstanceId
+  );
 }
 
 function canActivateWizardProperty(
@@ -1164,7 +1178,7 @@ function canActivateDeadWizardToken(
 }
 
 function getWildMagicBuyAction(state: GameState): BuyMarketCardAction[] {
-  const topCard = state.common.wildMagicStack[0];
+  const topCard = getPhysicalCardLedger(state).readZone("wildMagicStack")[0];
   if (topCard === undefined || state.turn.power < 3) {
     return [];
   }
@@ -1182,7 +1196,8 @@ function getFamiliarBuyAction(
   state: GameState,
   player: PlayerState
 ): BuyMarketCardAction[] {
-  return listPlayerUnboughtFamiliarCards(player)
+  return getPhysicalCardLedger(state)
+    .readZone(`${player.playerId}.unboughtFamiliars`)
     .filter((familiar) => canAffordFamiliar(state, player, familiar))
     .map((familiar) => ({
       type: "buyMarketCard" as const,
@@ -1248,11 +1263,13 @@ function getOwnedFamiliarCards(
   state: GameState,
   player: PlayerState
 ): CardInstance[] {
-  return listPlayerOwnedPhysicalCards(player).filter(
-    (card) =>
-      state.cardDefinitions.get(card.definitionId)?.engine.cardKind ===
-      "familiar"
-  );
+  return getPhysicalCardLedger(state)
+    .listPlayerCards(player.playerId)
+    .filter(
+      (card) =>
+        state.cardDefinitions.get(card.definitionId)?.engine.cardKind ===
+        "familiar"
+    );
 }
 
 function getBuyCard(
@@ -1260,28 +1277,18 @@ function getBuyCard(
   activePlayer: PlayerState,
   action: BuyMarketCardAction
 ): CardInstance | undefined {
-  if (action.source === "familiar") {
-    return findPlayerUnboughtFamiliarCard(activePlayer, action.cardInstanceId);
-  }
-
-  return getBuySourceZone(state, action.source).find(
-    (card) => card.instanceId === action.cardInstanceId
+  const sourceZoneName =
+    action.source === "mainMarket"
+      ? "mainMarket"
+      : action.source === "legendMarket"
+        ? "legendMarket"
+        : action.source === "wildMagicStack"
+          ? "wildMagicStack"
+          : `${activePlayer.playerId}.unboughtFamiliars`;
+  return getPhysicalCardLedger(state).findCardInZone(
+    sourceZoneName,
+    action.cardInstanceId
   );
-}
-
-function getBuySourceZone(state: GameState, source: BuySource): CardInstance[] {
-  switch (source) {
-    case "mainMarket":
-      return state.common.market;
-    case "legendMarket":
-      return state.common.legendMarket;
-    case "wildMagicStack":
-      return state.common.wildMagicStack;
-    case "familiar":
-      return [];
-    default:
-      return assertNever(source);
-  }
 }
 
 function calculatePayment(
@@ -1389,6 +1396,7 @@ function createCardSource(
     sourceType: "card" as const,
     runtimeMode: state.runtimeMode,
     playerId: player.playerId,
+    card,
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
   };

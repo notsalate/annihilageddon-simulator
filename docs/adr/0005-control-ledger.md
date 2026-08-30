@@ -1,15 +1,19 @@
 ---
 id: ADR-0005
 title: Control Ledger для контроля и физических зон
-status: accepted
+status: superseded
 origin: restored
 recorded: 2026-08-21
 decision_date: unknown
 supersedes: none
-superseded_by: none
+superseded_by: ADR-0010
 ---
 
 # ADR-0005: Control Ledger для контроля и физических зон
+
+> Эта запись сохранена для истории. Решение о физических зонах и выборе
+> resolver заменено [ADR-0010](0010-physical-card-ledger.md); раздел о
+> контроле остаётся историческим контекстом.
 
 ## Контекст
 

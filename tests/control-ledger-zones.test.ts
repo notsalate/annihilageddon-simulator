@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { initializeGame, type CardInstance } from "../src/index.js";
 import {
-  findCardLocation,
+  forkGameState,
+  initializeGame,
+  type CardInstance,
+} from "../src/index.js";
+import {
+  clonePhysicalCardLedger,
+  getPhysicalCardLedger,
   listDefenseCardLocations,
   listPhysicalCardLocations,
   listPhysicalCardZoneDescriptors,
-  movePhysicalCard,
-  removeCardFromLocation,
 } from "../src/engine/control-ledger.js";
 import {
   markCardDefinitionId,
@@ -31,6 +34,7 @@ test("Control Ledger describes its physical card inventory in deterministic orde
   const state = initializeGame({ rootDir, seed: 47600 });
   const firstPlayer = state.players[0];
   assert.ok(firstPlayer);
+  const ledger = getPhysicalCardLedger(state);
 
   const descriptors = listPhysicalCardZoneDescriptors(state);
   assert.ok(descriptors.length > 0);
@@ -54,7 +58,7 @@ test("Control Ledger describes its physical card inventory in deterministic orde
         ),
       true
     );
-    descriptor.replace([]);
+    ledger.replaceZone(descriptor.zoneName, []);
   }
 
   const cardsByZone = new Map<string, CardInstance>();
@@ -63,7 +67,7 @@ test("Control Ledger describes its physical card inventory in deterministic orde
       String(index),
       descriptor.expectedOwnerId ?? firstPlayer.playerId
     );
-    descriptor.replace([card]);
+    ledger.replaceZone(descriptor.zoneName, [card]);
     assert.deepEqual(descriptor.read(), [card]);
     cardsByZone.set(descriptor.zoneName, card);
   }
@@ -86,15 +90,19 @@ test("Control Ledger describes its physical card inventory in deterministic orde
   for (const descriptor of descriptors) {
     const card = cardsByZone.get(descriptor.zoneName);
     assert.ok(card);
-    assert.deepEqual(findCardLocation(state, card.instanceId), {
+    assert.deepEqual(ledger.locateCard(card), {
       card,
       zoneName: descriptor.zoneName,
     });
 
     const before = snapshotZoneMembership(state);
-    const removed = removeCardFromLocation(state, card.instanceId);
-    assert.deepEqual(removed, { card, zoneName: descriptor.zoneName });
-    assert.equal(findCardLocation(state, card.instanceId), undefined);
+    const removed = ledger.removeCard(card, descriptor.zoneName);
+    assert.deepEqual(removed, {
+      ok: true,
+      card,
+      sourceZoneName: descriptor.zoneName,
+    });
+    assert.equal(ledger.locateCard(card), undefined);
 
     const after = snapshotZoneMembership(state);
     for (const [zoneName, instanceIds] of before) {
@@ -107,7 +115,7 @@ test("Control Ledger describes its physical card inventory in deterministic orde
     }
   }
 
-  assert.equal(removeCardFromLocation(state, "missing-card"), undefined);
+  assert.equal(ledger.resolveCardLocation("missing-card"), undefined);
 });
 
 test("familiar physical card descriptor supports multiple cards", () => {
@@ -119,24 +127,25 @@ test("familiar physical card descriptor supports multiple cards", () => {
   );
   assert.ok(descriptor);
   assert.equal(descriptor.cardinality, "many");
+  const ledger = getPhysicalCardLedger(state);
 
   const first = createCard("singleton-first", player.playerId);
   const second = createCard("singleton-second", player.playerId);
 
-  descriptor.replace([]);
+  ledger.replaceZone(descriptor.zoneName, []);
   assert.deepEqual(player.unboughtFamiliars, []);
   assert.deepEqual(descriptor.read(), []);
 
-  descriptor.replace([first]);
+  ledger.replaceZone(descriptor.zoneName, [first]);
   assert.deepEqual(player.unboughtFamiliars, [first]);
   assert.deepEqual(descriptor.read(), [first]);
 
-  descriptor.replace([first, second]);
+  ledger.replaceZone(descriptor.zoneName, [first, second]);
   assert.deepEqual(player.unboughtFamiliars, [first, second]);
 
-  descriptor.replace([]);
+  ledger.replaceZone(descriptor.zoneName, []);
   assert.deepEqual(player.unboughtFamiliars, []);
-  descriptor.replace([second]);
+  ledger.replaceZone(descriptor.zoneName, [second]);
   assert.deepEqual(player.unboughtFamiliars, [second]);
 });
 
@@ -163,9 +172,8 @@ test("built-in card movement appends to the multi-card familiar zone", () => {
   player.hand = [sourceCard];
   player.unboughtFamiliars = [destinationCard];
 
-  const result = movePhysicalCard(
-    state,
-    sourceCard.instanceId,
+  const result = getPhysicalCardLedger(state).moveCard(
+    sourceCard,
     `${player.playerId}.unboughtFamiliars`,
     "back"
   );
@@ -180,6 +188,142 @@ test("built-in card movement appends to the multi-card familiar zone", () => {
   });
   assert.deepEqual(player.hand, []);
   assert.deepEqual(player.unboughtFamiliars, [destinationCard, sourceCard]);
+});
+
+test("Ledger rejects duplicate objects and preserves the source on wrong-zone removal", () => {
+  const state = initializeGame({ rootDir, seed: 47609 });
+  const player = state.players[0]!;
+  const ledger = getPhysicalCardLedger(state);
+  const handZone = `${player.playerId}.hand`;
+  const discardZone = `${player.playerId}.discard`;
+  const card = ledger.readZone(handZone)[0];
+  assert.ok(card);
+  const handBefore = [...ledger.readZone(handZone)];
+
+  assert.throws(
+    () => ledger.replaceZone(handZone, [card, card]),
+    /Duplicate physical card object/
+  );
+  assert.deepEqual(ledger.readZone(handZone), handBefore);
+
+  const removed = ledger.removeCard(card, discardZone);
+  assert.deepEqual(removed, {
+    ok: false,
+    reason: `Missing card ${card.instanceId} in ${discardZone}`,
+  });
+  assert.deepEqual(ledger.readZone(handZone), handBefore);
+});
+
+test("Ledger rejects adding a card already registered in another zone", () => {
+  const state = initializeGame({ rootDir, seed: 47612 });
+  const player = state.players[0]!;
+  const ledger = getPhysicalCardLedger(state);
+  const handZone = `${player.playerId}.hand`;
+  const discardZone = `${player.playerId}.discard`;
+  const card = ledger.readZone(handZone)[0];
+  assert.ok(card);
+  const discardBefore = [...ledger.readZone(discardZone)];
+
+  assert.throws(
+    () => ledger.addCards(discardZone, [card]),
+    /already belongs to .*hand/
+  );
+  assert.deepEqual(ledger.readZone(discardZone), discardBefore);
+  assert.equal(ledger.locateCard(card)?.zoneName, handZone);
+});
+
+test("Ledger rejects a detached card with an occupied instance ID", () => {
+  const state = initializeGame({ rootDir, seed: 47613 });
+  const player = state.players[0]!;
+  const ledger = getPhysicalCardLedger(state);
+  const handZone = `${player.playerId}.hand`;
+  const discardZone = `${player.playerId}.discard`;
+  const existingCard = ledger.readZone(handZone)[0];
+  assert.ok(existingCard);
+  const duplicateCard = { ...existingCard };
+  const handBefore = [...ledger.readZone(handZone)];
+  const discardBefore = [...ledger.readZone(discardZone)];
+
+  assert.throws(
+    () => ledger.insertDetachedCard(duplicateCard, discardZone, "back"),
+    /Duplicate physical card instance ID/
+  );
+  assert.deepEqual(ledger.readZone(handZone), handBefore);
+  assert.deepEqual(ledger.readZone(discardZone), discardBefore);
+});
+
+test("Ledger membership metadata stays out of serialized and copied cards", () => {
+  const firstState = initializeGame({ rootDir, seed: 47614 });
+  const firstPlayer = firstState.players[0]!;
+  const firstLedger = getPhysicalCardLedger(firstState);
+  const detachedCard = createCard("hidden-ledger-tag", firstPlayer.playerId);
+  const serializedCard = JSON.stringify(detachedCard);
+
+  const inserted = firstLedger.insertDetachedCard(
+    detachedCard,
+    `${firstPlayer.playerId}.discard`,
+    "back"
+  );
+  assert.equal(inserted.ok, true);
+  assert.equal(JSON.stringify(detachedCard), serializedCard);
+
+  const secondState = initializeGame({ rootDir, seed: 47615 });
+  const secondPlayer = secondState.players[0]!;
+  const copiedCard = {
+    ...detachedCard,
+    instanceId: markCardInstanceId("fixture-physical-zone-copied-card"),
+    ownerId: secondPlayer.playerId,
+  };
+  const copiedInsert = getPhysicalCardLedger(secondState).insertDetachedCard(
+    copiedCard,
+    `${secondPlayer.playerId}.discard`,
+    "back"
+  );
+
+  assert.equal(copiedInsert.ok, true);
+});
+
+test("Ledger prevents a card from crossing into another fork", () => {
+  const state = initializeGame({ rootDir, seed: 47610 });
+  const player = state.players[0]!;
+  const card = getPhysicalCardLedger(state).readZone(
+    `${player.playerId}.hand`
+  )[0];
+  assert.ok(card);
+
+  const fork = forkGameState(state);
+  assert.throws(
+    () =>
+      getPhysicalCardLedger(fork).insertDetachedCard(
+        card,
+        `${fork.players[0]!.playerId}.hand`,
+        "back"
+      ),
+    /belongs to another Ledger branch/
+  );
+});
+
+test("Ledger clone carries membership metadata for eager fork installation", () => {
+  const state = initializeGame({ rootDir, seed: 47611 });
+  const clone = clonePhysicalCardLedger(state);
+  const physicalCards = listPhysicalCardLocations(state).map(
+    (location) => location.card
+  );
+
+  assert.equal(clone.physicalCards.length, physicalCards.length);
+  assert.deepEqual(
+    clone.physicalCardZoneNames,
+    listPhysicalCardLocations(state).map((location) => location.zoneName)
+  );
+  assert.ok(
+    clone.physicalCards.every((clonedCard) =>
+      physicalCards.some(
+        (sourceCard) =>
+          sourceCard !== clonedCard &&
+          sourceCard.instanceId === clonedCard.instanceId
+      )
+    )
+  );
 });
 
 function snapshotZoneMembership(

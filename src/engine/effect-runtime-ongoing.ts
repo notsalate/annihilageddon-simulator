@@ -1,6 +1,7 @@
 import { recordTurnPowerChanged } from "./event-recorder.js";
 import { getControlledDeadWizardTokenCount } from "./dead-wizard-token-like.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
+import { getPhysicalCardLedger } from "./control-ledger.js";
 import type {
   EffectExecutionResult,
   EffectSourceContext,
@@ -321,7 +322,7 @@ const ongoingStartTurnOptionalGainLimpWandToHandHandler: EffectRuntimeHandler<
 > = {
   effectId: "ongoing_start_turn_optional_gain_limp_wand_to_hand",
   execute(state, player, effect, source, services) {
-    if (state.common.limpWandStack.length === 0) {
+    if (getPhysicalCardLedger(state).readZone("limpWandStack").length === 0) {
       return { ok: true };
     }
     const choice = services.chooseEffectChoice(

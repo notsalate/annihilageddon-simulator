@@ -1080,6 +1080,22 @@ test("typed-access guard rejects a concat inventory", () => {
   assert.match(result.stderr, /PlayerState.hand, PlayerState.deck/);
 });
 
+test("typed-access guard rejects direct physical-zone mutations", () => {
+  const fixtureRoot = createPhysicalZoneFixture(`
+    interface PlayerState { hand: unknown[]; deck: unknown[] }
+    export function mutate(player: PlayerState) {
+      player.hand.push("card");
+      player.deck = player.deck.slice(1);
+      player.hand.splice(0, 1);
+    }
+  `);
+  const result = run("check-engine-typed-access.mjs", fixtureRoot);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Physical card zone mutation violation/);
+  assert.match(result.stderr, /PlayerState\.hand/);
+  assert.match(result.stderr, /PlayerState\.deck/);
+});
+
 test("typed-access guard follows an object map consumed as an inventory", () => {
   const fixtureRoot = createPhysicalZoneFixture(`
     interface PlayerState { hand: unknown[]; deck: unknown[] }

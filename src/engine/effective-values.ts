@@ -7,7 +7,7 @@ import type {
 } from "./setup.js";
 import {
   buildControlledObjectView,
-  listPlayerPlayedThisTurnCards,
+  getPhysicalCardLedger,
   listOwnedScoringCards,
   type ControlledCardObject,
   type ControlledObjectView,
@@ -158,7 +158,8 @@ export function calculateEffectiveCardVictoryPoints(
   playerId: PlayerId,
   definition: CardDefinition,
   card: CardInstance | undefined,
-  cardTypeMatcher: CardTypeMatcher = matchesDeclaredCardType
+  cardTypeMatcher: CardTypeMatcher = matchesDeclaredCardType,
+  scoringCards?: readonly ControlledCardObject[]
 ): number {
   return calculateEffectiveValue({
     state,
@@ -169,7 +170,7 @@ export function calculateEffectiveCardVictoryPoints(
       definitionId: definition.cardId,
     },
     baseValue: definition.engine.victoryPoints,
-    scoringCards: getOwnedScoringCards(state, playerId),
+    scoringCards: scoringCards ?? getOwnedScoringCards(state, playerId),
     ...(card === undefined ? {} : { scoredCard: card }),
     cardTypeMatcher,
   });
@@ -179,7 +180,8 @@ export function calculateEffectiveTokenVictoryPoints(
   state: GameState,
   playerId: PlayerId,
   definition: TokenDefinition,
-  cardTypeMatcher: CardTypeMatcher = matchesDeclaredCardType
+  cardTypeMatcher: CardTypeMatcher = matchesDeclaredCardType,
+  scoringCards?: readonly ControlledCardObject[]
 ): number {
   if (definition.kind !== "deadWizardToken") {
     throw new Error(`Token ${definition.tokenId} does not have victory points`);
@@ -194,7 +196,7 @@ export function calculateEffectiveTokenVictoryPoints(
       definitionId: definition.tokenId,
     },
     baseValue: getDeclaredDeadWizardTokenVictoryPoints(definition),
-    scoringCards: getOwnedScoringCards(state, playerId),
+    scoringCards: scoringCards ?? getOwnedScoringCards(state, playerId),
     cardTypeMatcher,
   });
 }
@@ -236,7 +238,8 @@ export function calculateEffectivePlayerVictoryPoints(
   state: GameState,
   playerId: PlayerId,
   baseValue: number,
-  cardTypeMatcher: CardTypeMatcher = matchesDeclaredCardType
+  cardTypeMatcher: CardTypeMatcher = matchesDeclaredCardType,
+  scoringCards?: readonly ControlledCardObject[]
 ): number {
   return calculateEffectiveValue({
     state,
@@ -246,7 +249,7 @@ export function calculateEffectivePlayerVictoryPoints(
       targetType: "player",
     },
     baseValue,
-    scoringCards: getOwnedScoringCards(state, playerId),
+    scoringCards: scoringCards ?? getOwnedScoringCards(state, playerId),
     cardTypeMatcher,
   });
 }
@@ -294,40 +297,46 @@ export function calculateEffectiveCardVictoryPointsForPlayer(
   state: GameState,
   playerId: PlayerId,
   definition: CardDefinition,
-  card: CardInstance | undefined
+  card: CardInstance | undefined,
+  scoringCards?: readonly ControlledCardObject[]
 ): number {
   return calculateEffectiveCardVictoryPoints(
     state,
     playerId,
     definition,
     card,
-    playerCardTypeMatcher
+    playerCardTypeMatcher,
+    scoringCards
   );
 }
 
 export function calculateEffectiveTokenVictoryPointsForPlayer(
   state: GameState,
   playerId: PlayerId,
-  definition: TokenDefinition
+  definition: TokenDefinition,
+  scoringCards?: readonly ControlledCardObject[]
 ): number {
   return calculateEffectiveTokenVictoryPoints(
     state,
     playerId,
     definition,
-    playerCardTypeMatcher
+    playerCardTypeMatcher,
+    scoringCards
   );
 }
 
 export function calculateEffectivePlayerVictoryPointsForPlayer(
   state: GameState,
   playerId: PlayerId,
-  baseValue: number
+  baseValue: number,
+  scoringCards?: readonly ControlledCardObject[]
 ): number {
   return calculateEffectivePlayerVictoryPoints(
     state,
     playerId,
     baseValue,
-    playerCardTypeMatcher
+    playerCardTypeMatcher,
+    scoringCards
   );
 }
 
@@ -406,7 +415,9 @@ function calculateEffectiveValue(options: {
           ) {
             return true;
           }
-          return source.cardInstanceId === options.scoredCard.instanceId;
+          return source.card === undefined
+            ? source.cardInstanceId === options.scoredCard.instanceId
+            : source.card === options.scoredCard;
         },
         countOwnedScoringCards: (countedCardTypes) =>
           countOwnedScoringCards(getScoringCardTypeIndex(), countedCardTypes),
@@ -485,7 +496,9 @@ function getControlledObjectEffects(
   if (player === undefined) {
     throw new Error(`Missing player ${playerId}`);
   }
-  const playedThisTurnCards = listPlayerPlayedThisTurnCards(player);
+  const playedThisTurnCards = getPhysicalCardLedger(state).readZone(
+    `${player.playerId}.playedThisTurn`
+  );
   const playedThisTurnIds = new Set(
     playedThisTurnCards.map((card) => card.instanceId)
   );
@@ -495,7 +508,7 @@ function getControlledObjectEffects(
       const definition = mustGetCardDefinition(state, card.definitionId);
       return toEffectiveValueEffects(
         definition.engine.effects,
-        cardEffectSource(state, playerId, card.instanceId, definition.cardId)
+        cardEffectSource(state, playerId, card, definition.cardId)
       );
     }),
     ...view.cards
@@ -506,7 +519,7 @@ function getControlledObjectEffects(
           cardEffectSource(
             state,
             playerId,
-            object.card.instanceId,
+            object.card,
             object.definition.cardId
           )
         )
@@ -540,13 +553,13 @@ function getControlledObjectEffects(
     ...view.statuses.flatMap((status) =>
       toEffectiveValueEffects(
         status.effects,
-        cardEffectSource(state, playerId, status.instanceId, status.statusId)
+        cardEffectSource(state, playerId, undefined, status.statusId)
       )
     ),
     ...view.trophyLikeObjects.flatMap((trophy) =>
       toEffectiveValueEffects(
         trophy.effects,
-        cardEffectSource(state, playerId, trophy.instanceId, trophy.trophyId)
+        cardEffectSource(state, playerId, undefined, trophy.trophyId)
       )
     ),
   ];
@@ -560,12 +573,7 @@ function getScoringCardEffects(
   return scoringCards.flatMap((object) => {
     return toEffectiveValueEffects(
       object.definition.engine.effects,
-      cardEffectSource(
-        state,
-        playerId,
-        object.card.instanceId,
-        object.definition.cardId
-      ),
+      cardEffectSource(state, playerId, object.card, object.definition.cardId),
       "whileScoring"
     );
   });
@@ -595,15 +603,16 @@ function toEffectiveValueEffects(
 function cardEffectSource(
   state: GameState,
   playerId: PlayerId,
-  cardInstanceId: string,
+  card: CardInstance | undefined,
   definitionId: string
 ): EffectiveValueSource {
   return {
     sourceType: "card",
     runtimeMode: state.runtimeMode,
     playerId,
-    cardInstanceId,
+    cardInstanceId: card?.instanceId ?? definitionId,
     definitionId,
+    ...(card === undefined ? {} : { card }),
   };
 }
 

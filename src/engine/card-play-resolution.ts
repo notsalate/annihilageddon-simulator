@@ -1,8 +1,7 @@
 import type { CardDefinition } from "./data.js";
 import {
-  findCardLocation,
+  getPhysicalCardLedger,
   grantTemporaryControl,
-  removeCardFromLocation,
 } from "./control-ledger.js";
 import { recordCardMoved } from "./event-recorder.js";
 import type {
@@ -103,6 +102,7 @@ export function resolveCardPlay(
     sourceType: "card",
     runtimeMode: state.runtimeMode,
     playerId: player.playerId,
+    card,
     cardInstanceId: card.instanceId,
     definitionId: card.definitionId,
   };
@@ -208,12 +208,16 @@ function placeResolvedCard(
     options.forceOngoingDiscard === undefined
   ) {
     card.ownerId = options.ongoingOwnerId ?? card.ownerId;
-    player.permanents.push(card);
+    getPhysicalCardLedger(state).addCards(`${player.playerId}.permanents`, [
+      card,
+    ]);
     return `${player.playerId}.permanents`;
   }
 
-  player.playedThisTurn.push(card);
-  grantTemporaryControl(state, card.instanceId, player.playerId);
+  getPhysicalCardLedger(state).addCards(`${player.playerId}.playedThisTurn`, [
+    card,
+  ]);
+  grantTemporaryControl(state, card, player.playerId);
   return `${player.playerId}.playedThisTurn`;
 }
 
@@ -267,7 +271,8 @@ function moveResolvedNonOngoingCardToDestination(
   }
 
   const expectedSourceZone = `${controller.playerId}.playedThisTurn`;
-  const currentLocation = findCardLocation(state, card.instanceId, "knownCard");
+  const ledger = getPhysicalCardLedger(state);
+  const currentLocation = ledger.locateCard(card);
   if (currentLocation?.zoneName !== expectedSourceZone) {
     return {
       ok: false,
@@ -275,20 +280,20 @@ function moveResolvedNonOngoingCardToDestination(
     };
   }
 
-  const sourceLocation = removeCardFromLocation(state, card.instanceId);
-  if (sourceLocation === undefined) {
+  const removed = ledger.removeCard(card, expectedSourceZone);
+  if (!removed.ok) {
     return {
       ok: false,
       error: `Cannot move resolved card ${card.instanceId}`,
     };
   }
 
-  owner.discard.push(sourceLocation.card);
-  recordCardMoved(state, controller, sourceLocation.card, {
-    sourceZone: sourceLocation.zoneName,
+  ledger.addCards(`${owner.playerId}.discard`, [card]);
+  recordCardMoved(state, controller, card, {
+    sourceZone: removed.sourceZoneName,
     destinationZone: `${owner.playerId}.discard`,
-    ownerBefore: sourceLocation.card.ownerId,
-    ownerAfter: sourceLocation.card.ownerId,
+    ownerBefore: currentLocation.card.ownerId,
+    ownerAfter: currentLocation.card.ownerId,
   });
   return { ok: true };
 }

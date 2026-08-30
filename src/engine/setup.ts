@@ -39,6 +39,7 @@ import { installGameEventLog } from "./game-events.js";
 import { runMarketFlow } from "./market-flow.js";
 import { createSeededRng, type RandomSource } from "./rng.js";
 import { drawDeckCards, shuffleDeck } from "./deck-lifecycle.js";
+import { installPhysicalCardLedger } from "./control-ledger.js";
 import { requireVerifiedRuntimeEffect } from "./runtime-effect-verification.js";
 import {
   intakeRuntimeData,
@@ -75,11 +76,13 @@ export interface GainedCardRecord {
   playerId: PlayerId;
   definitionId: CardDefinitionId;
   cardInstanceId: CardInstanceId;
+  /** Live branch-local reference; the ID fields remain the serializable view. */
+  card?: CardInstance;
 }
 
 /** A card controlled outside permanent storage until the current turn ends. */
 export interface TemporaryCardControl {
-  cardInstanceId: CardInstanceId;
+  card: CardInstance;
   controllerId: PlayerId;
 }
 
@@ -177,7 +180,7 @@ export interface GameState {
     controlledPowerBonus: number;
     activatedCardIds: string[];
     gainedCards: GainedCardRecord[];
-    mainMarketCardHandReplacementSourceCardIds: string[];
+    mainMarketCardHandReplacementSourceCards: CardInstance[];
     pendingMarketFlowEndReasons: MarketFlowEndReason[];
     pendingSpecialWinnerPlayerId?: PlayerId | undefined;
     rememberedDestroyedLegendCost?: number | undefined;
@@ -189,6 +192,8 @@ export interface GameState {
           playerId: PlayerId;
           cardInstanceId: CardInstanceId;
           definitionId: CardDefinitionId;
+          /** Live branch-local reference; omitted by serialized projections. */
+          card?: CardInstance;
         }
       | undefined;
     temporaryCardControls: TemporaryCardControl[];
@@ -1020,7 +1025,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       controlledPowerBonus: 0,
       activatedCardIds: [],
       gainedCards: [],
-      mainMarketCardHandReplacementSourceCardIds: [],
+      mainMarketCardHandReplacementSourceCards: [],
       pendingMarketFlowEndReasons: [],
       pendingSpecialWinnerPlayerId: undefined,
       rememberedDestroyedLegendCost: undefined,
@@ -1042,6 +1047,7 @@ export function initializeGame(options: InitializeGameOptions): GameState {
       ? {}
       : { effectChoiceStrategy: options.effectChoiceStrategy }),
   };
+  installPhysicalCardLedger(state);
   installGameEventLog(state);
 
   const marketFlowResult = runMarketFlow(state, { mode: "setup" });
@@ -1221,7 +1227,7 @@ function assignStartingWizardProperties(
     );
 
     selectedCandidate.ownerId = player.playerId;
-    player.wizardProperties.push(selectedCandidate);
+    player.wizardProperties = [...player.wizardProperties, selectedCandidate];
   }
 }
 
@@ -1309,9 +1315,10 @@ function assignStartingFamiliars(
   for (const { player, candidates, retainsBothFamiliars } of startingPairs) {
     if (retainsBothFamiliars) {
       for (const candidate of candidates) {
-        player.unboughtFamiliars.push(
-          transferSetupCardToPlayer(candidate, player.playerId)
-        );
+        player.unboughtFamiliars = [
+          ...player.unboughtFamiliars,
+          transferSetupCardToPlayer(candidate, player.playerId),
+        ];
         assignedInstanceIds.add(candidate.instanceId);
       }
     } else {
@@ -1322,9 +1329,13 @@ function assignStartingFamiliars(
         choicePolicy,
         eventLog
       );
-      player.unboughtFamiliars.push(
-        transferSetupCardToPlayer(selectedPairChoice.candidate, player.playerId)
-      );
+      player.unboughtFamiliars = [
+        ...player.unboughtFamiliars,
+        transferSetupCardToPlayer(
+          selectedPairChoice.candidate,
+          player.playerId
+        ),
+      ];
       assignedInstanceIds.add(selectedPairChoice.candidate.instanceId);
     }
   }
@@ -1352,9 +1363,10 @@ function assignStartingFamiliars(
         `Deck ${familiarPool.deckId} must contain only familiar cards`
       );
     }
-    player.unboughtFamiliars.push(
-      transferSetupCardToPlayer(thirdCandidate, player.playerId)
-    );
+    player.unboughtFamiliars = [
+      ...player.unboughtFamiliars,
+      transferSetupCardToPlayer(thirdCandidate, player.playerId),
+    ];
     assignedInstanceIds.add(thirdCandidate.instanceId);
   }
 }
@@ -1565,11 +1577,13 @@ function createPlayers(
     );
     shuffleDeck(deck, rng);
 
+    const discard: CardInstance[] = [];
+    const openingHand = drawDeckCards(deck, discard, 5, rng).cards;
     const player: PlayerState = {
       playerId,
       deck,
-      hand: [],
-      discard: [],
+      hand: openingHand,
+      discard,
       playedThisTurn: [],
       permanents: [],
       unboughtFamiliars: [],
@@ -1585,9 +1599,6 @@ function createPlayers(
       },
     };
 
-    player.hand.push(
-      ...drawDeckCards(player.deck, player.discard, 5, rng).cards
-    );
     return player;
   });
 }

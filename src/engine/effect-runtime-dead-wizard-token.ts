@@ -1,7 +1,7 @@
 import { getCardEffectiveTypeOptions } from "./card-type-runtime.js";
 import {
-  findCardLocation,
   getControlledCards,
+  getPhysicalCardLedger,
   removeDeadWizardToken,
   removeTemporaryCardControl,
 } from "./control-ledger.js";
@@ -12,7 +12,6 @@ import {
 } from "./effect-runtime-cards-ownership-choice.js";
 import { changePlayerChips } from "./effect-runtime-resources-draw.js";
 import { gainLimpWandsFromCommonStack } from "./effect-runtime-special-card-stack.js";
-import { shuffleDeck } from "./deck-lifecycle.js";
 import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
 import { recordGameEvent } from "./event-recorder.js";
 import type { CardDefinition } from "./data.js";
@@ -800,7 +799,6 @@ const eachFoeOptionalTransferSignHandler: EffectRuntimeHandler<DeadWizardTokenEa
           state,
           selectedCard,
           player,
-          player.hand,
           `${player.playerId}.hand`,
           effect.effectId,
           source
@@ -850,7 +848,6 @@ const shuffleHandLegendsHandler: EffectRuntimeHandler<DeadWizardTokenShuffleHand
           state,
           card,
           player,
-          player.deck,
           `${player.playerId}.deck`,
           effect.effectId,
           source
@@ -862,7 +859,10 @@ const shuffleHandLegendsHandler: EffectRuntimeHandler<DeadWizardTokenShuffleHand
           };
         }
       }
-      shuffleDeck(player.deck, state.rng);
+      getPhysicalCardLedger(state).shuffleZone(
+        `${player.playerId}.deck`,
+        state.rng
+      );
       return { ok: true };
     },
   };
@@ -874,7 +874,7 @@ const shuffleOwnedPermanentsHandler: EffectRuntimeHandler<DeadWizardTokenShuffle
       const ownedPermanents = getControlledCards(state, player).filter(
         (card) =>
           card.ownerId === player.playerId &&
-          findCardLocation(state, card.instanceId, "knownCard")?.zoneName ===
+          getPhysicalCardLedger(state).locateCard(card)?.zoneName ===
             `${player.playerId}.permanents`
       );
       if (ownedPermanents.length === 0) return { ok: true };
@@ -884,7 +884,6 @@ const shuffleOwnedPermanentsHandler: EffectRuntimeHandler<DeadWizardTokenShuffle
           state,
           player,
           card,
-          player.deck,
           `${player.playerId}.deck`,
           effect.effectId,
           source
@@ -895,9 +894,12 @@ const shuffleOwnedPermanentsHandler: EffectRuntimeHandler<DeadWizardTokenShuffle
             error: `Cannot move permanent ${card.instanceId} to deck`,
           };
         }
-        removeTemporaryCardControl(state, card.instanceId);
+        removeTemporaryCardControl(state, card);
       }
-      shuffleDeck(player.deck, state.rng);
+      getPhysicalCardLedger(state).shuffleZone(
+        `${player.playerId}.deck`,
+        state.rng
+      );
       return { ok: true };
     },
   };
@@ -962,7 +964,6 @@ const eachFoeOptionalDiscardHandler: EffectRuntimeHandler<DeadWizardTokenEachFoe
           state,
           card,
           player,
-          player.discard,
           `${player.playerId}.discard`,
           effect.effectId,
           source
@@ -1064,7 +1065,7 @@ const revealMainDeckGainIfMayhemHandler: EffectRuntimeHandler<DeadWizardTokenRev
       return revealCardAndMaybeGainDeadWizardToken(
         state,
         player,
-        state.common.mainDeck[0],
+        getPhysicalCardLedger(state).readZone("mainDeck")[0],
         effect.effectId,
         source,
         (definition) => definition.engine.cardKind === "mayhem",

@@ -21,11 +21,7 @@ import type {
 import { calculateEffectiveCardCost } from "./effective-value-runtime.js";
 import { recordBotActionSelected } from "./event-recorder.js";
 import { adjudicateGame, type AdjudicationResult } from "./adjudication.js";
-import {
-  findPlayerUnboughtFamiliarCard,
-  listLegendMarketCards,
-  listMainMarketCards,
-} from "./control-ledger.js";
+import { getPhysicalCardLedger } from "./control-ledger.js";
 import {
   initializeGame,
   type CardInstance,
@@ -692,16 +688,16 @@ function getBuyActionCost(
   if (action.source === "wildMagicStack") {
     return 3;
   }
-  const card =
+  const sourceZoneName =
     action.source === "mainMarket"
-      ? listMainMarketCards(state).find(
-          (candidate) => candidate.instanceId === action.cardInstanceId
-        )
+      ? "mainMarket"
       : action.source === "legendMarket"
-        ? listLegendMarketCards(state).find(
-            (candidate) => candidate.instanceId === action.cardInstanceId
-          )
-        : findPlayerUnboughtFamiliarCard(activePlayer, action.cardInstanceId);
+        ? "legendMarket"
+        : `${activePlayer.playerId}.unboughtFamiliars`;
+  const card = getPhysicalCardLedger(state).findCardInZone(
+    sourceZoneName,
+    action.cardInstanceId
+  );
   if (card === undefined) {
     throw new Error(`Legal buy target ${action.cardInstanceId} is missing`);
   }

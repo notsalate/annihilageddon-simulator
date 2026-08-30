@@ -54,7 +54,8 @@ export function scoreGame(state: GameState): PlayerScore[] {
               state,
               player.playerId,
               object.definition,
-              object.card
+              object.card,
+              scoringCards
             )
           );
         }, 0) +
@@ -64,11 +65,17 @@ export function scoreGame(state: GameState): PlayerScore[] {
             calculateEffectiveTokenVictoryPoints(
               state,
               player.playerId,
-              definition
+              definition,
+              scoringCards
             )
           );
         }, 0) +
-        calculateEffectivePlayerVictoryPoints(state, player.playerId, 0),
+        calculateEffectivePlayerVictoryPoints(
+          state,
+          player.playerId,
+          0,
+          scoringCards
+        ),
       legendCount: scoringCards.filter((object) =>
         cardMatchesTypeForPlayer(
           state,
