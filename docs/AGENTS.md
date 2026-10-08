@@ -7,18 +7,13 @@ This folder contains durable project documentation for rules, runtime layout, im
 ## Ownership
 
 - Owns Markdown docs directly under `docs/`.
-- `docs/agents/AGENTS.md` owns local agent process docs.
-- `docs/superpowers/AGENTS.md` owns durable design specifications and implementation plans.
-- `docs/templates/AGENTS.md` owns JSON templates.
-- Root `README.md`, root `CONTEXT.md`, and root `AGENTS.md` remain owned by root `AGENTS.md`.
+- Root `README.md`, `CONTEXT.md`, `CODING_STANDARDS.md`, and `AGENTS.md` remain owned by root `AGENTS.md`.
 
 ## Local Contracts
 
-- Keep docs concise, current, and operational.
 - Treat `docs/agents/*` as process guidance, not domain truth.
 - For engine rules and data contracts, align docs with `README.md`, `CONTEXT.md`, focused source, tests, and current data.
 - Delete stale or contradictory notes instead of adding historical explanations.
-- Do not claim a command, status, or behavior unless it exists in the repo or was verified.
 
 ## Work Guidance
 
@@ -29,7 +24,7 @@ This folder contains durable project documentation for rules, runtime layout, im
 ## Verification
 
 - For docs-only edits, run `git diff --check`.
-- If a doc changes command behavior, data contracts, or runtime claims, run the narrowest relevant command from the owning source/data area.
+- For changed command behavior, data contracts, or runtime claims, follow [CODING_STANDARDS.md](../CODING_STANDARDS.md) and the owning source/data checks.
 
 ## Child DOX Index
 

@@ -11,11 +11,7 @@ This folder contains TypeScript tests, deterministic fixtures, and test helpers.
 
 ## Local Contracts
 
-- Prefer deterministic focused tests over broad random simulations.
-- Keep fixtures small and explicit.
-- Do not mutate shared fixture definitions in ways that leak between tests.
-- When behavior changes, test the externally relevant result, not only implementation internals.
-- Use stable IDs in test data and assertions.
+- Follow [CODING_STANDARDS.md](../CODING_STANDARDS.md) for shared testing rules and verification.
 - Register every compiled test suite exactly once in `tests/run-tests.ts`; `npm test` clears `dist` before compilation, then the runner validates the recursive `dist/tests/**/*.test.js` inventory before execution.
 - Keep `tests/run-tests.ts` as a closed executable registry: its three runtime imports are followed only by the top-level `testSuites` and `compiledTestsRoot` declarations, the direct completeness call, and one `spawnSync` result with its direct failure handling. The spawn must pass every registered suite to one `node --test --test-concurrency=4` process with only the standard `{ stdio: "inherit" }` option, throw `result.error`, and exit nonzero for a failed status. Do not alias, mutate, conditionally replace, skip, precede, or swallow failures from that registry.
 - Keep `tests/test-suite-registry.ts` free of top-level side effects. Completion evidence pins its exact canonical source at `manifest.codeSha`; intentional helper changes require an explicit validator-policy update and regression.
@@ -32,13 +28,3 @@ This folder contains TypeScript tests, deterministic fixtures, and test helpers.
 - Put static JSON fixtures in `tests/fixtures/`.
 - Keep issue-specific regression tests close to the existing test file for that behavior.
 - Do not create cross-domain `review-findings` suites. Use behavior-named focused suites such as `trigger-dispatch-ongoing.test.ts`, `attack-replacement-ongoing.test.ts`, `control-ledger-zones.test.ts`, `market-flow-terminal.test.ts`, and `attack-defense-snapshot.test.ts`.
-
-## Verification
-
-- Run focused tests when possible.
-- Run `npm test` before reporting broad behavior changes.
-- Run `npm run typecheck` when helper or fixture typing changes.
-
-## Child DOX Index
-
-None.
