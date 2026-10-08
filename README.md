@@ -137,7 +137,7 @@ assets/    карточные изображения и другие исход�
 - [Глоссарий правил](docs/rules-glossary.md)
 - [Открытые вопросы правил](docs/rules-open-questions.md)
 
-Локальный агентский workflow описан отдельно в [AGENTS.md](AGENTS.md).
+Общие требования к коду, данным и проверкам собраны в [CODING_STANDARDS.md](CODING_STANDARDS.md). Порядок работы агента и ссылки на инструкции по задаче — в [AGENTS.md](AGENTS.md).
 
 Для card runtime planning актуальным источником остаются dynamic report и generated matrix из `.scratch/krutagidon-card-runtime-clusters/`. Старый committed snapshot runtime coverage в `docs/` больше не используется как planning artifact.
 

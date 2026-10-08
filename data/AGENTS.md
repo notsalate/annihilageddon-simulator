@@ -7,29 +7,18 @@ This folder contains runtime data consumed by the simulator and source import da
 ## Ownership
 
 - Owns runtime JSON under `data/cards/`, `data/tokens/`, `data/decks/`, `data/stacks/`, `data/pools/`, and `data/packs/`.
-- `data/import/AGENTS.md` owns import drafts, extracted text, and source-oriented import material.
 - Runtime layout contracts are documented in `docs/runtime-layout.md`.
 
 ## Local Contracts
 
-- Runtime data is executable simulator input; keep it deterministic, explicit, and schema-like.
-- Use stable IDs as primary identifiers. Localized names are display/source fields only.
-- Keep runtime mappings separate from import drafts and extracted text.
-- Runtime card and token behavior must point at explicit typed handlers/effects, not natural-language parsing.
+- Follow [CODING_STANDARDS.md](../CODING_STANDARDS.md) for shared runtime/import rules and verification. Runtime JSON is executable simulator input; keep its structure explicit and aligned with the schema.
 - Update deck, stack, pool, and pack composition when a runtime object must become playable. A card reachable only through an explicit `replace_starting_card` setup effect is the exception: do not duplicate it in the canonical starter template; keep the replacement token/runtime path and focused coverage aligned.
 - Every runtime card, dead wizard token, and wizard property definition must include `source.image`, a non-empty path to an existing asset under `assets/`. Token image metadata is canonical only in `source.image`; `visible.sourceImage` is forbidden.
 
 ## Work Guidance
 
 - Prefer editing the smallest JSON object set needed for the issue.
-- Keep `data/cards` and `data/tokens` aligned with composition files when playability changes; for an explicit setup replacement, the token effect is the composition path.
 - Use templates from `docs/templates/` when adding new runtime object shapes.
-
-## Verification
-
-- Run `npm run build` after runtime data shape changes.
-- Run focused tests or `npm test` when runtime data affects behavior.
-- Run `npm run report:runtime-coverage` when runtime coverage status or playable mappings change.
 
 ## Child DOX Index
 

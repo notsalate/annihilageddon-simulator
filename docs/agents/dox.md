@@ -4,11 +4,20 @@
 
 DOX keeps repository instructions aligned with the directory structure and current working contracts.
 
-Read this document when creating, moving, deleting, or substantially changing an `AGENTS.md`, or when a task changes durable ownership, workflow, constraints, or repository structure.
+Read this document when creating, moving, deleting, or substantially changing instruction files (including `AGENTS.md` and `CODING_STANDARDS.md`), or when a task changes durable ownership, workflow, constraints, or repository structure.
+
+## Instruction Ownership
+
+- Root `AGENTS.md` owns task routing, permissions, context boundaries, completion, and the direct-child map.
+- Root [CODING_STANDARDS.md](../../CODING_STANDARDS.md) owns shared engineering rules and verification. Child `AGENTS.md` files add local contracts, exceptions, and checks without copying shared standards.
+- `docs/agents/` owns process details reached through task-specific pointers. Domain facts remain in `CONTEXT.md`, ADRs, and focused project docs.
+- Give each reference an explicit condition and action: when to read it, and what it governs. Confirm the route still reaches every moved rule before removing the original.
+- Keep one authoritative statement of each rule. Remove self-description, config/script inventories that are cheap to look up, and instructions that add no repository-specific behavior.
+- Record only explicitly requested project-specific durable preferences here; global user preferences belong in user-level instructions.
 
 ## Instruction Chain
 
-1. Identify every path the task may change.
+1. Identify every path the task may change or review.
 2. Start with the root `AGENTS.md`.
 3. Walk from the repository root to each target path.
 4. Read every `AGENTS.md` found on that route.
@@ -46,9 +55,10 @@ Use this section order when it helps; omit empty sections:
 5. Verification
 6. Child DOX Index
 
-Keep broad rules in the parent and concrete local rules in the child. Do not duplicate a parent rule unless the local version adds necessary detail.
+Keep shared engineering rules in `CODING_STANDARDS.md` and concrete local rules in the child. Keep other broad rules in the parent. Repeat a rule only when the local version adds necessary detail.
 
 Each parent index lists direct child `AGENTS.md` files and their responsibility. It does not need to repeat each child’s descendants.
+List each child once; an Ownership section need not repeat the child index.
 
 ## Closeout
 
