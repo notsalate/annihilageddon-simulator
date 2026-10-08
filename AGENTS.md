@@ -33,7 +33,8 @@ Read a reference when its condition applies, before the corresponding work.
 - Use local databases or packaged artifacts as source context only when the user explicitly asks and the task requires it. The same condition applies to reading or editing `*.db`, `*.sqlite`, and `*.sqlite3`.
 - Install, remove, or upgrade dependencies only when the task requires it and the user approves.
 - Before an unauthorized risky action, ask and state the risk, affected target, rollback, and intended checks. This covers destructive data/schema changes, file deletion, dependency/lockfile rewrites, CI/release/packaging changes, `git reset`, `git clean`, `git rebase`, `git push`, force push, and branch deletion.
-- Delete user data only with explicit confirmation of the exact target. Commit or push only when the user explicitly asks.
+- Delete user data only with explicit confirmation of the exact target.
+- Commit or push only when the user explicitly asks. A request to create or update a PR authorizes the commits and non-force pushes of task changes to that PR's branch without another confirmation. Merging the PR requires a separate explicit request.
 
 ## Completion
 
