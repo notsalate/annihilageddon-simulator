@@ -369,7 +369,7 @@ export interface EffectRuntimeServices {
     source: EffectSourceContext,
     placeOnTop?: boolean
   ): boolean;
-  moveCardToZonePreservingOwner(
+  moveCardToZone(
     state: GameState,
     player: PlayerState,
     card: CardInstance,

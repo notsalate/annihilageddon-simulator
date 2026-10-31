@@ -520,7 +520,7 @@ export function createActivationEffectDefinitions(
         }
 
         for (const card of [...returned].reverse()) {
-          const returnedCard = services.moveCardToZonePreservingOwner(
+          const returnedCard = services.moveCardToZone(
             state,
             player,
             card,
