@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyAction } from "../src/index.js";
+import {
+  applyAction,
+  assertGameStateInvariants,
+  forkGameState,
+  getPhysicalCardLedger,
+  initializeGame,
+  type CardInstance,
+  type GameState,
+} from "../src/index.js";
 import {
   markTokenDefinitionId,
   markTokenInstanceId,
@@ -19,6 +27,359 @@ import {
 import { addFixtureDefenseCardToHand } from "./helpers/defense-fixtures.js";
 
 const rootDir = process.cwd();
+
+function assertDestroyedCard(
+  state: GameState,
+  card: CardInstance,
+  instanceId: CardInstance["instanceId"],
+  ownerBefore: CardInstance["ownerId"],
+  destinationZone: string,
+  previousDestination: readonly CardInstance[]
+): void {
+  const ledger = getPhysicalCardLedger(state);
+  const ownerAfter =
+    destinationZone === "destroyedPile" ? ownerBefore : "common";
+  assertGameStateInvariants(state);
+  assert.equal(card.instanceId, instanceId);
+  assert.equal(card.ownerId, ownerAfter);
+  assert.equal(ledger.findCardInZone(destinationZone, instanceId), card);
+  assert.deepEqual(ledger.readZone(destinationZone), [
+    ...previousDestination,
+    card,
+  ]);
+  assert.equal(
+    ledger.zoneDescriptors
+      .flatMap((zone) => zone.read())
+      .filter((entry) => entry.instanceId === instanceId).length,
+    1
+  );
+  const moves = state.eventLog.filter(
+    (event) =>
+      event.type === "cardMoved" &&
+      event.cardInstanceId === instanceId &&
+      event.destinationZone === destinationZone
+  );
+  assert.equal(moves.length, 1);
+  assert.equal(moves[0]?.ownerBefore, ownerBefore);
+  assert.equal(moves[0]?.ownerAfter, ownerAfter);
+}
+
+test("card movement: Mayhem returns purchased Wild Magic to common ownership (audit F-001)", () => {
+  // Minimal saved replay: scenario 47, game 42, two players and eight DWTs.
+  const setupChoices = ["token-3", "token-9", "card-31", "card-23"];
+  const state = initializeGame({
+    rootDir,
+    dataPackPath: "tests/fixtures/playable-runtime-data-pack.json",
+    seed: 42,
+    playerCount: 2,
+    deadWizardTokenCount: 8,
+    effectChoiceStrategy: (request) => {
+      const choiceId = setupChoices.shift();
+      assert.ok(choiceId);
+      assert.ok(request.choices.some((choice) => choice.choiceId === choiceId));
+      return { choiceId };
+    },
+  });
+  assert.equal(setupChoices.length, 0);
+  assertGameStateInvariants(state);
+  const buyerId = state.activePlayerId;
+  const ledger = getPhysicalCardLedger(state);
+  const wildMagic = ledger.findCardInZone("wildMagicStack", "card-78");
+  assert.ok(wildMagic);
+  const instanceId = wildMagic.instanceId;
+  const choices = [
+    "player-2",
+    "player-2",
+    "destroy_card-78",
+    "destroy_card-65",
+  ];
+  state.effectChoiceStrategy = (request) => {
+    const choiceId = choices.shift();
+    assert.ok(choiceId);
+    assert.ok(request.choices.some((choice) => choice.choiceId === choiceId));
+    return { choiceId };
+  };
+  const actions: Parameters<typeof applyAction>[1][] = [
+    { type: "playCard", cardInstanceId: "card-6" },
+    { type: "playCard", cardInstanceId: "card-3" },
+    { type: "playCard", cardInstanceId: "card-1" },
+    {
+      type: "buyMarketCard",
+      cardInstanceId: "card-78",
+      source: "wildMagicStack",
+    },
+    { type: "playCard", cardInstanceId: "card-8" },
+    { type: "playCard", cardInstanceId: "card-4" },
+    { type: "endTurn" },
+    { type: "playCard", cardInstanceId: "card-17" },
+    { type: "playCard", cardInstanceId: "card-21" },
+    { type: "playCard", cardInstanceId: "card-20" },
+    { type: "playCard", cardInstanceId: "card-11" },
+    { type: "buyMarketCard", cardInstanceId: "card-65", source: "mainMarket" },
+    { type: "endTurn" },
+  ];
+
+  for (const action of actions) {
+    assert.deepEqual(applyAction(state, action), { ok: true });
+    assertGameStateInvariants(state);
+  }
+  assert.equal(choices.length, 0);
+  assert.equal(ledger.findCardInZone("wildMagicStack", instanceId), wildMagic);
+  assert.equal(wildMagic.ownerId, "common");
+  assert.equal(wildMagic.instanceId, instanceId);
+  assert.equal(
+    ledger.zoneDescriptors
+      .flatMap((zone) => zone.read())
+      .filter((card) => card.instanceId === instanceId).length,
+    1
+  );
+  assert.ok(
+    state.eventLog.some(
+      (event) =>
+        event.type === "cardMoved" &&
+        event.cardInstanceId === instanceId &&
+        event.destinationZone === "wildMagicStack" &&
+        event.ownerBefore === buyerId &&
+        event.ownerAfter === "common"
+    )
+  );
+});
+
+for (const [definitionId, destinationZone] of [
+  ["esw2_dbg__wild_magic", "wildMagicStack"],
+  ["esw2_dbg__limp_wand", "limpWandStack"],
+  ["esw2_dbg__starter_001", "destroyedPile"],
+] as const) {
+  for (const effectId of ["destroy_own_cards", "destroy_card"] as const) {
+    test(`card movement: ${effectId} returns ${definitionId} with destination ownership in an isolated branch`, () => {
+      const scenario = createGameScenario({
+        rootDir,
+        seed: 424701,
+        dataPackPath: "tests/fixtures/playable-runtime-data-pack.json",
+      });
+      const target = givenRuntimeCard(scenario, { definitionId });
+      const ownerBefore = target.ownerId;
+      const source = givenRuntimeCard(scenario, {
+        effects: [
+          effectId === "destroy_own_cards"
+            ? { effectId, timing: "onPlay", amount: 1, sourceZones: ["hand"] }
+            : {
+                effectId,
+                timing: "onPlay",
+                target: { selector: "activePlayerHandCard" },
+              },
+        ],
+      });
+      const foe = scenario.foes[0];
+      assert.ok(foe);
+      const borrowed = givenRuntimeCard(scenario, {
+        player: foe,
+        zone: "permanents",
+        effects: [],
+        isOngoing: true,
+      });
+      givenTemporaryControl(scenario, borrowed, scenario.activePlayer);
+      chooseEffect(scenario, (request) =>
+        request.effectId === effectId
+          ? {
+              choiceId:
+                effectId === "destroy_card"
+                  ? target.instanceId
+                  : `destroy_${target.instanceId}`,
+            }
+          : undefined
+      );
+      assertGameStateInvariants(scenario.state);
+      const rngBefore = scenario.state.rng.snapshot();
+      const eventsBefore = [...scenario.state.eventLog];
+      const branch = forkGameState(scenario.state);
+      const ledger = getPhysicalCardLedger(branch);
+      const branchTarget = ledger.findCardInZone(
+        `${ownerBefore}.hand`,
+        target.instanceId
+      );
+      assert.ok(branchTarget);
+      assert.notEqual(branchTarget, target);
+      const previousDestination = [...ledger.readZone(destinationZone)];
+      const controlsBefore = [...branch.turn.temporaryCardControls];
+
+      assert.deepEqual(
+        applyAction(branch, {
+          type: "playCard",
+          cardInstanceId: source.instanceId,
+        }),
+        { ok: true }
+      );
+      assertDestroyedCard(
+        branch,
+        branchTarget,
+        target.instanceId,
+        ownerBefore,
+        destinationZone,
+        previousDestination
+      );
+      assert.deepEqual(branch.rng.snapshot(), rngBefore);
+      assert.equal(
+        branch.turn.temporaryCardControls.find(
+          (control) => control.card.instanceId === borrowed.instanceId
+        ),
+        controlsBefore[0]
+      );
+      assert.equal(
+        controlsBefore[0]?.card,
+        ledger.resolveCardLocation(borrowed.instanceId)?.card
+      );
+      assert.notEqual(controlsBefore[0]?.card, borrowed);
+      assert.equal(
+        getPhysicalCardLedger(scenario.state).findCardInZone(
+          `${ownerBefore}.hand`,
+          target.instanceId
+        ),
+        target
+      );
+      assert.equal(target.ownerId, ownerBefore);
+      assert.deepEqual(scenario.state.eventLog, eventsBefore);
+      assert.deepEqual(scenario.state.rng.snapshot(), rngBefore);
+      assertGameStateInvariants(scenario.state);
+    });
+  }
+}
+
+for (const mode of [
+  "destroy_both",
+  "destroy_none",
+  "destroy_from_discard",
+] as const) {
+  test(`card movement: Mayhem ${mode} preserves special-stack ownership and order through endTurn`, () => {
+    const scenario = createGameScenario({
+      rootDir,
+      seed: 424702,
+      dataPackPath: "tests/fixtures/playable-runtime-data-pack.json",
+    });
+    const { state } = scenario;
+    const ledger = getPhysicalCardLedger(state);
+    for (let index = 0; index < 2; index += 1) {
+      givenRuntimeCard(scenario, {
+        zone: "deck",
+        definitionId: "esw2_dbg__starter_001",
+      });
+    }
+    const foe = scenario.foes[0];
+    assert.ok(foe);
+    const ownerBefore = foe.playerId;
+    const wildMagic = givenRuntimeCard(scenario, {
+      player: foe,
+      zone: "deck",
+      definitionId: "esw2_dbg__wild_magic",
+    });
+    const limpWand = givenRuntimeCard(scenario, {
+      player: foe,
+      zone: "deck",
+      definitionId: "esw2_dbg__limp_wand",
+    });
+    const wildMagicId = wildMagic.instanceId;
+    const limpWandId = limpWand.instanceId;
+    assert.equal(
+      ledger.reorderCard(limpWand, `${foe.playerId}.deck`, "front").ok,
+      true
+    );
+    assert.equal(
+      ledger.reorderCard(wildMagic, `${foe.playerId}.deck`, "front").ok,
+      true
+    );
+    const wildMagicBefore = [...state.common.wildMagicStack];
+    const limpWandBefore = [...state.common.limpWandStack];
+    const source = givenRuntimeCard(scenario, {
+      cardKind: "mayhem",
+      effects: [
+        mode === "destroy_from_discard"
+          ? {
+              effectId:
+                "mayhem_each_player_discard_deck_then_destroy_from_discard",
+              timing: "onMayhemResolve",
+              targetSelector: "eachPlayerClockwiseFromActive",
+              chooser: "affectedPlayer",
+              destroyAmount: 1,
+              discardSourceZone: "deck",
+              destroySourceZone: "discard",
+            }
+          : {
+              effectId:
+                "mayhem_each_player_discard_top_deck_cards_choose_destroy_all_or_none",
+              timing: "onMayhemResolve",
+              targetSelector: "eachPlayerClockwiseFromActive",
+              chooser: "affectedPlayer",
+              choice: "destroyBothOrDestroyNone",
+              amount: 2,
+              sourceZone: "deck",
+            },
+      ],
+    });
+    // Make one market vacancy, with its previous card ready to refill after Mayhem.
+    const marketCard = state.common.market[0];
+    assert.ok(marketCard);
+    assert.equal(ledger.moveCard(marketCard, "mainDeck", "front").ok, true);
+    putOnCommonDeck(scenario, source, "mainDeck");
+    chooseEffect(scenario, (request) => {
+      if (request.player.playerId !== foe.playerId) return undefined;
+      const choiceId =
+        mode === "destroy_from_discard"
+          ? `destroy_${limpWand.instanceId}`
+          : mode;
+      assert.ok(request.choices.some((choice) => choice.choiceId === choiceId));
+      return { choiceId };
+    });
+    assertGameStateInvariants(state);
+    const rngBefore = state.rng.snapshot();
+
+    assert.deepEqual(applyAction(state, { type: "endTurn" }), { ok: true });
+    assertGameStateInvariants(state);
+    assert.deepEqual(state.rng.snapshot(), rngBefore);
+    if (mode === "destroy_none") {
+      assert.equal(wildMagic.ownerId, ownerBefore);
+      assert.equal(limpWand.ownerId, ownerBefore);
+      assert.equal(
+        ledger.findCardInZone(`${foe.playerId}.discard`, wildMagic.instanceId),
+        wildMagic
+      );
+      assert.equal(
+        ledger.findCardInZone(`${foe.playerId}.discard`, limpWand.instanceId),
+        limpWand
+      );
+      assert.deepEqual(foe.discard.slice(0, 2), [wildMagic, limpWand]);
+      assert.deepEqual(state.common.wildMagicStack, wildMagicBefore);
+      assert.deepEqual(state.common.limpWandStack, limpWandBefore);
+    } else {
+      assertDestroyedCard(
+        state,
+        limpWand,
+        limpWandId,
+        ownerBefore,
+        "limpWandStack",
+        limpWandBefore
+      );
+      if (mode === "destroy_both") {
+        assertDestroyedCard(
+          state,
+          wildMagic,
+          wildMagicId,
+          ownerBefore,
+          "wildMagicStack",
+          wildMagicBefore
+        );
+      } else {
+        assert.equal(wildMagic.ownerId, ownerBefore);
+        assert.equal(
+          ledger.findCardInZone(
+            `${foe.playerId}.discard`,
+            wildMagic.instanceId
+          ),
+          wildMagic
+        );
+      }
+    }
+  });
+}
 
 test("card movement: main_019 lets the active player and another wizard draw", () => {
   const scenario = createGameScenario({

@@ -1086,7 +1086,7 @@ const mayhemEachPlayerDiscardTopDeckDestroyHandler: EffectRuntimeHandler<
         );
         if (!destination.ok) return destination;
         if (
-          !services.moveCardToZonePreservingOwner(
+          !services.moveCardToZone(
             state,
             targetPlayer,
             discardedCard,
@@ -2106,7 +2106,7 @@ function discardControlledPermanent(
       error: `Cannot find owner for controlled permanent ${card.instanceId}`,
     };
   }
-  const moved = services.moveCardToZonePreservingOwner(
+  const moved = services.moveCardToZone(
     state,
     player,
     card,

@@ -801,7 +801,7 @@ const discardHandThenDrawCardsHandler: EffectRuntimeHandler<
     if (choice?.choiceId !== "apply") return { ok: true };
 
     for (const card of [...player.hand]) {
-      const moved = services.moveCardToZonePreservingOwner(
+      const moved = services.moveCardToZone(
         state,
         player,
         card,
@@ -821,7 +821,7 @@ const discardHandThenDrawCardsHandler: EffectRuntimeHandler<
     for (let index = 0; index < effect.drawAmount; index += 1) {
       if (player.deck.length === 0 && player.discard.length > 0) {
         for (const card of [...player.discard]) {
-          const moved = services.moveCardToZonePreservingOwner(
+          const moved = services.moveCardToZone(
             state,
             player,
             card,
@@ -845,7 +845,7 @@ const discardHandThenDrawCardsHandler: EffectRuntimeHandler<
 
       const card = player.deck[0];
       if (card === undefined) break;
-      const moved = services.moveCardToZonePreservingOwner(
+      const moved = services.moveCardToZone(
         state,
         player,
         card,
@@ -895,7 +895,7 @@ const destroyCardHandler: EffectRuntimeHandler<
     if (!choice.ok) return choice;
     const destination = services.getDestroyDestination(state, choice.card);
     if (!destination.ok) return destination;
-    const moved = services.moveCardToZonePreservingOwner(
+    const moved = services.moveCardToZone(
       state,
       player,
       choice.card,
@@ -1102,7 +1102,7 @@ export function destroyOwnedCard(
 ): EffectExecutionResult {
   const destination = services.getDestroyDestination(state, card);
   if (!destination.ok) return destination;
-  const moved = services.moveCardToZonePreservingOwner(
+  const moved = services.moveCardToZone(
     state,
     player,
     card,
@@ -1152,7 +1152,7 @@ export function destroyTopMainDeckCard(
 
   const destination = services.getDestroyDestination(state, card);
   if (!destination.ok) return destination;
-  const moved = services.moveCardToZonePreservingOwner(
+  const moved = services.moveCardToZone(
     state,
     player,
     card,
@@ -1791,7 +1791,7 @@ export function executeRevealAndPlayFoeDeckCard(
     if (card === undefined) {
       break;
     }
-    const moved = services.moveCardToZonePreservingOwner(
+    const moved = services.moveCardToZone(
       state,
       player,
       card,
@@ -1843,7 +1843,7 @@ export function executeRevealAndPlayFoeDeckCard(
         continue;
       }
       if (location.zoneName !== ownerDiscardDestination) {
-        const moved = services.moveCardToZonePreservingOwner(
+        const moved = services.moveCardToZone(
           state,
           player,
           card,

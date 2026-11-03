@@ -280,7 +280,7 @@ const optionalDestroyControlledDeadWizardTokenHandler: EffectRuntimeHandler<Opti
         state,
         () => state.activePlayerId,
         () => {
-          const moved = services.moveCardToZonePreservingOwner(
+          const moved = services.moveCardToZone(
             state,
             player,
             card,

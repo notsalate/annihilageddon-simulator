@@ -22,6 +22,7 @@ import {
   getPhysicalCardLedger,
   removeDeadWizardToken,
   removeTemporaryCardControl,
+  setCardOwner,
 } from "./control-ledger.js";
 import {
   getControlledDeadWizardTokenLikeCards,
@@ -2010,7 +2011,7 @@ const effectRuntimeServices: EffectRuntimeServices = {
   requireCardChoice,
   moveGainedCardToPlayerDestination,
   moveCardToPlayerZone,
-  moveCardToZonePreservingOwner,
+  moveCardToZone,
   restoreDetachedCardToZone,
   discardTopDeckCards,
   drawCards: drawCardsForPlayer,
@@ -4110,7 +4111,7 @@ function moveMarketChipsToPlayer(
   recordMarketChipsGained(state, player, card, chipsBefore, player.chips);
 }
 
-function moveCardToZonePreservingOwner(
+function moveCardToZone(
   state: GameState,
   player: PlayerState,
   card: CardInstance,
@@ -4152,6 +4153,12 @@ function moveCardToZonePreservingOwner(
   }
   const sourceZone = removed.sourceZoneName;
 
+  if (
+    destinationZone === "wildMagicStack" ||
+    destinationZone === "limpWandStack"
+  ) {
+    setCardOwner(card, "common");
+  }
   ledger.addCards(destinationZone, [card], placeOnTop ? "front" : "back");
   recordCardMoved(state, player, card, {
     sourceZone,

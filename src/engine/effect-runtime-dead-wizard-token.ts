@@ -880,7 +880,7 @@ const shuffleOwnedPermanentsHandler: EffectRuntimeHandler<DeadWizardTokenShuffle
       if (ownedPermanents.length === 0) return { ok: true };
 
       for (const card of ownedPermanents) {
-        const moved = services.moveCardToZonePreservingOwner(
+        const moved = services.moveCardToZone(
           state,
           player,
           card,
