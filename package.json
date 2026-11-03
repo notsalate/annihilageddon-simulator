@@ -37,6 +37,9 @@
     "test": "npm run clean:dist && npm run build -- --pretty false && node dist/tests/run-tests.js",
     "prepare": "husky"
   },
+  "overrides": {
+    "minimatch@^10.2.0": "11.0.1"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.15.30",
